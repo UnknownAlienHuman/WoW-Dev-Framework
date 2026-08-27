@@ -1,0 +1,51 @@
+name: Feature proposal
+description: Propose a capability tied to a concrete correctness responsibility or measured agent benefit.
+title: "proposal: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Describe the user task or correctness failure, not only the desired implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: current
+    attributes:
+      label: Current behavior and gap
+      description: State which existing component or contract is insufficient.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed capability
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance experiment
+      description: Define a fixture, task set, metric, or correctness gate that can reject the proposal.
+    validations:
+      required: true
+  - type: textarea
+    id: contracts
+    attributes:
+      label: Affected contracts and migration impact
+  - type: checkboxes
+    id: boundaries
+    attributes:
+      label: Architectural boundaries
+      options:
+        - label: The proposal does not require a second correctness-path Lua parser.
+        - label: The proposal does not require direct Codebase Memory database writes.
+        - label: The proposal does not introduce addon-name branches.
+        - label: The proposal has a unique correctness responsibility or measurable benefit.

@@ -1,0 +1,45 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# Generated framework state
+/.wow/
+/.wow-corpus/
+/generated/
+/reference-packs/
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite-journal
+
+# Coverage, benchmarks, and logs
+/coverage/
+/criterion/
+*.profraw
+*.log
+
+# Local environment and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Editors
+.idea/
+.vscode/settings.json
+.vscode/*.local.json
+*.swp
+*.swo
+*~
+
+# OS metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Temporary files
+/tmp/
+*.tmp
+*.bak
+
+# Cargo.lock is intentionally not ignored: this repository will ship applications.

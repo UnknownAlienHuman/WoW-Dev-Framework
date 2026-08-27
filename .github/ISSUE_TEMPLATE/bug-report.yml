@@ -1,0 +1,70 @@
+name: Bug report
+description: Report incorrect behavior, nondeterminism, a false diagnostic, or a contract violation.
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Report exact generations, profile identity, coverage, and reproducible evidence. A stale or partial profile is not equivalent to a product bug.
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - Reference builder / Reference Pack
+        - EmmyLua host / diagnostics
+        - Project index / graph
+        - Search / lineage / skeletons
+        - Secret / restriction analysis
+        - Codebase Memory bridge
+        - CLI / MCP / LSP
+        - Documentation / schema
+        - Unknown
+    validations:
+      required: true
+  - type: input
+    id: revision
+    attributes:
+      label: Framework revision
+      placeholder: commit SHA or branch
+    validations:
+      required: true
+  - type: input
+    id: profile
+    attributes:
+      label: Reference profile and build
+      placeholder: profile ID, Interface, build, source digest
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Include files, command/request, and deterministic steps.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence, coverage, and logs
+      description: Include source handles, generation IDs, rule/extractor IDs, and raw output. Remove credentials and private paths.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Confirmation
+      options:
+        - label: I did not execute untrusted repository code merely to produce this report.
+          required: true
+        - label: I have not included access tokens, credentials, or private user data.
+          required: true

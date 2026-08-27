@@ -1,0 +1,49 @@
+name: Research or coverage gap
+description: Record an unresolved upstream field, profile gap, conflicting oracle, or missing runtime evidence.
+title: "research: "
+body:
+  - type: input
+    id: subject
+    attributes:
+      label: Entity or capability
+      placeholder: API, event, template, field, restriction facet, extractor partition
+    validations:
+      required: true
+  - type: input
+    id: profile
+    attributes:
+      label: Profile/build/source digest
+    validations:
+      required: true
+  - type: textarea
+    id: claim
+    attributes:
+      label: Claim or question
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Existing evidence and exact source handles
+    validations:
+      required: true
+  - type: dropdown
+    id: status
+    attributes:
+      label: Current evidence status
+      options:
+        - Source-confirmed but unsupported by current schema
+        - Conflicting source/oracle evidence
+        - Partial coverage
+        - Runtime confirmation required
+        - Historical/unverified lead
+        - Unknown
+    validations:
+      required: true
+  - type: textarea
+    id: next
+    attributes:
+      label: Smallest decisive experiment
+      description: State what result would close or reclassify the gap.
+    validations:
+      required: true

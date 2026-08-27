@@ -1,0 +1,20 @@
+* text=auto eol=lf
+
+*.md text diff=markdown
+*.rs text diff=rust
+*.toml text
+*.json text
+*.yml text
+*.yaml text
+*.lua text
+*.xml text
+*.toc text
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.zip binary
+*.zst binary
+*.sqlite binary
