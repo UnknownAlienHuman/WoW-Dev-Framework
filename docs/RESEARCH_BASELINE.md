@@ -64,7 +64,6 @@ These snapshots were used to demonstrate that semantic symbols may survive while
 |---|---|---|
 | [WoWUIDev/Ace3](https://github.com/WoWUIDev/Ace3) | `d295b12f8b889a30e86e0e901c5494df4b149c49` | addon/module factories, lifecycle, embedded libraries, events/messages |
 | [oUF-wow/oUF](https://github.com/oUF-wow/oUF) | `b6d1005ea6b6e4cdf1e2d7729ada8d3a08986074` | style/element registries, frame factory, prototype, lifecycle |
-| [tukui-org/ElvUI](https://github.com/tukui-org/ElvUI) | `bfc542d437f7e5e58234c0180c56a02502a6b758` | engine/modules, state roots, services, flavor partitions, callbacks |
 | [WeakAuras/WeakAuras2](https://github.com/WeakAuras/WeakAuras2) | `7bb9d239987921e41166dc2395f6e31ec78c94d7` | namespaces, schemas, registries, triggers, factories, state machines |
 | [BigWigsMods/BigWigs](https://github.com/BigWigsMods/BigWigs) | `2b8efea7b77801ed8b93e9a1720feb5b96eeb4d5` | domain modules, lifecycle, events, messages, declarative data |
 | [Tercioo/Details-Damage-Meter](https://github.com/Tercioo/Details-Damage-Meter) | `c139bf364e92455a69933b242a1b743e7a696d6b` | plugin factories, registries, persistence, lifecycle, compatibility |
