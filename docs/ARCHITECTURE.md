@@ -123,7 +123,7 @@ receiver.NewModule("Name")
 → owner/load evidence
 ```
 
-A pack may be named after a calibration corpus such as Ace3 or oUF, but its contents are declarative structural patterns. Removing a pack may reduce coverage; it must not change core semantics. Production code never contains `if repository == "ElvUI"`-style branches.
+A pack may be named after a calibration corpus such as Ace3 or oUF, but its contents are declarative structural patterns. Removing a pack may reduce coverage; it must not change core semantics. Production code never contains repository-name-specific branches.
 
 The correctness path uses one Lua parser: Emmy. Tree-sitter or ast-grep may exist in external discovery systems but cannot produce canonical WoW facts without verification.
 
