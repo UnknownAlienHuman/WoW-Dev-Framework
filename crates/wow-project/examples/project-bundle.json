@@ -1,0 +1,233 @@
+{
+  "schema_version": 1,
+  "bundle_id": "wow-project-e0-d-fixture-v1",
+  "state": "documentation-only-pending-prerequisite-and-byte-freeze",
+  "project_configuration": {
+    "project_id": "fixture-project-e0-v1",
+    "project_kind": "fixture",
+    "release_eligible": false,
+    "configuration_schema_version": 1,
+    "workspace_id": "workspace:main:e0",
+    "source_origin_id": "project-origin:fixture-project-e0-v1",
+    "logical_root": "fixtures/e0/project/main",
+    "selected_profile_id": "fixture-retail-120100-e0-v1",
+    "reference_generation_id": null,
+    "analyzer_contract_id": "wow-emmy/e0-c/1",
+    "analyzer_upstream_pin_id": null,
+    "analyzer_compatibility_probe_report_id": null,
+    "analyzer_configuration_digest": null,
+    "analyzer_fixture_contract_id": "wow-emmy-e0-c-workspace-v1",
+    "project_generation_schema_version": 1
+  },
+  "source_origin": {
+    "origin_id": "project-origin:fixture-project-e0-v1",
+    "origin_kind": "fixture_project",
+    "project_id": "fixture-project-e0-v1",
+    "workspace_id": "workspace:main:e0",
+    "logical_root": "fixtures/e0/project/main",
+    "revision_identity": "contract:e0-d-v1",
+    "project_generation_id": null
+  },
+  "capability_policy": {
+    "mandatory_for_publication": [
+      "project.fixture.configuration.valid",
+      "project.fixture.files.complete",
+      "project.source.registry.complete",
+      "project.generation.coherent",
+      "emmy.session.ready",
+      "emmy.source_coordinates.exact"
+    ],
+    "degradable_for_publication": [
+      "emmy.file.diagnostics",
+      "emmy.fact.references",
+      "emmy.fact.calls",
+      "emmy.fact.local_bindings",
+      "emmy.fact.local_flow",
+      "emmy.fact.operations",
+      "emmy.fact.guards",
+      "emmy.fact.control_flow"
+    ],
+    "explicitly_deferred": [
+      "project.toc.complete",
+      "project.xml.complete",
+      "project.load_graph.complete",
+      "project.state_index.complete",
+      "project.event_hook_index.complete",
+      "project.graph.complete",
+      "project.persistence.available",
+      "project.installed_runtime_universe.available"
+    ]
+  },
+  "budget_policy": {
+    "max_files": 16,
+    "max_total_source_bytes": 262144,
+    "max_single_file_bytes": 65536,
+    "max_update_operations": 16,
+    "max_analyzer_facts": 4096,
+    "max_generic_findings": 256,
+    "max_output_bytes": 1048576,
+    "included_in_project_generation_identity": true
+  },
+  "input_inventory": {
+    "declared_file_order": [
+      "project-file:main/clean.lua",
+      "project-file:main/generic-error.lua",
+      "project-file:main/missing-api.lua",
+      "project-file:main/secret-local.lua"
+    ],
+    "files": [
+      {
+        "file_id": "project-file:main/clean.lua",
+        "source_origin_id": "project-origin:fixture-project-e0-v1",
+        "workspace_id": "workspace:main:e0",
+        "normalized_relative_path": "main/clean.lua",
+        "language_kind": "lua",
+        "role": "first_party_main",
+        "source_fixture_ref": "crates/wow-emmy/examples/workspace-fixture.json#main/clean.lua",
+        "content_sha256": null,
+        "byte_length": null
+      },
+      {
+        "file_id": "project-file:main/generic-error.lua",
+        "source_origin_id": "project-origin:fixture-project-e0-v1",
+        "workspace_id": "workspace:main:e0",
+        "normalized_relative_path": "main/generic-error.lua",
+        "language_kind": "lua",
+        "role": "first_party_main",
+        "source_fixture_ref": "crates/wow-emmy/examples/workspace-fixture.json#main/generic-error.lua",
+        "content_sha256": null,
+        "byte_length": null
+      },
+      {
+        "file_id": "project-file:main/missing-api.lua",
+        "source_origin_id": "project-origin:fixture-project-e0-v1",
+        "workspace_id": "workspace:main:e0",
+        "normalized_relative_path": "main/missing-api.lua",
+        "language_kind": "lua",
+        "role": "first_party_main",
+        "source_fixture_ref": "crates/wow-emmy/examples/workspace-fixture.json#main/missing-api.lua",
+        "content_sha256": null,
+        "byte_length": null
+      },
+      {
+        "file_id": "project-file:main/secret-local.lua",
+        "source_origin_id": "project-origin:fixture-project-e0-v1",
+        "workspace_id": "workspace:main:e0",
+        "normalized_relative_path": "main/secret-local.lua",
+        "language_kind": "lua",
+        "role": "first_party_main",
+        "source_fixture_ref": "crates/wow-emmy/examples/workspace-fixture.json#main/secret-local.lua",
+        "content_sha256": null,
+        "byte_length": null
+      }
+    ],
+    "inventory_sha256": null
+  },
+  "analyzer_binding": {
+    "required_workspace_role": "Main",
+    "expected_main_workspace_id": "workspace:main:e0",
+    "expected_library_contract_id": "wow-emmy-e0-c-workspace-v1",
+    "accepted_pin_id": null,
+    "probe_report_id": null,
+    "configuration_digest": null,
+    "required_capabilities": [
+      "emmy.session.ready",
+      "emmy.library.loaded",
+      "emmy.file.parsed",
+      "emmy.file.diagnostics",
+      "emmy.fact.references",
+      "emmy.fact.calls",
+      "emmy.fact.local_bindings",
+      "emmy.fact.local_flow",
+      "emmy.fact.operations",
+      "emmy.fact.guards",
+      "emmy.fact.control_flow",
+      "emmy.source_coordinates.exact",
+      "emmy.incremental.update"
+    ]
+  },
+  "baseline_generation": {
+    "derivation_domain": "wow-project:project-generation:e0-d:1",
+    "derivation_inputs": [
+      "canonical-project-configuration",
+      "selected-profile-and-reference-generation",
+      "accepted-analyzer-pin-probe-configuration",
+      "canonical-first-party-file-manifest",
+      "capability-policy",
+      "output-affecting-budget-policy",
+      "project-generation-schema-version"
+    ],
+    "project_generation_id": null,
+    "expected_analyzer_snapshot_id": null,
+    "expected_project_snapshot_sha256": null
+  },
+  "expected_project_coverage": [
+    {
+      "capability_id": "project.fixture.configuration.valid",
+      "partition_id": "project.configuration",
+      "status": "Complete"
+    },
+    {
+      "capability_id": "project.fixture.files.complete",
+      "partition_id": "project.workspace:workspace:main:e0",
+      "status": "Complete"
+    },
+    {
+      "capability_id": "project.source.registry.complete",
+      "partition_id": "project.source-origin:project-origin:fixture-project-e0-v1",
+      "status": "Complete"
+    },
+    {
+      "capability_id": "project.generation.coherent",
+      "partition_id": "project.generation:<freeze-required>",
+      "status": "Complete"
+    },
+    {
+      "capability_id": "project.analyzer.snapshot.available",
+      "partition_id": "project.analyzer:<freeze-required>",
+      "status": "Complete"
+    }
+  ],
+  "expected_deferred_capabilities": [
+    {
+      "capability_id": "project.toc.complete",
+      "status": "NotEvaluated",
+      "reason": "operation_not_implemented_for_milestone"
+    },
+    {
+      "capability_id": "project.xml.complete",
+      "status": "NotEvaluated",
+      "reason": "operation_not_implemented_for_milestone"
+    },
+    {
+      "capability_id": "project.load_graph.complete",
+      "status": "NotEvaluated",
+      "reason": "operation_not_implemented_for_milestone"
+    },
+    {
+      "capability_id": "project.graph.complete",
+      "status": "NotEvaluated",
+      "reason": "operation_not_implemented_for_milestone"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "must_match_wow_emmy_fixture_bytes": true,
+    "required_non_null_fields": [
+      "project_configuration.reference_generation_id",
+      "project_configuration.analyzer_upstream_pin_id",
+      "project_configuration.analyzer_compatibility_probe_report_id",
+      "project_configuration.analyzer_configuration_digest",
+      "source_origin.project_generation_id",
+      "input_inventory.files[*].content_sha256",
+      "input_inventory.files[*].byte_length",
+      "input_inventory.inventory_sha256",
+      "analyzer_binding.accepted_pin_id",
+      "analyzer_binding.probe_report_id",
+      "analyzer_binding.configuration_digest",
+      "baseline_generation.project_generation_id",
+      "baseline_generation.expected_analyzer_snapshot_id",
+      "baseline_generation.expected_project_snapshot_sha256"
+    ]
+  }
+}
