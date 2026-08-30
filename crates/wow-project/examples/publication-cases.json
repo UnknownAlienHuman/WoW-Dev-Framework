@@ -1,0 +1,258 @@
+{
+  "schema_version": 1,
+  "case_set_id": "wow-project-e0-d-publication-v1",
+  "state": "documentation-only-pending-prerequisite-and-byte-freeze",
+  "project_id": "fixture-project-e0-v1",
+  "baseline_project_generation_id": null,
+  "baseline_analyzer_snapshot_id": null,
+  "baseline_project_snapshot_sha256": null,
+  "cases": [
+    {
+      "case_id": "publication.initial-baseline",
+      "candidate": {
+        "project_generation_id": null,
+        "file_manifest_id": null,
+        "source_registry_id": null
+      },
+      "analyzer_snapshot": {
+        "analyzer_snapshot_id": null,
+        "project_generation_id": null,
+        "profile_id": "fixture-retail-120100-e0-v1",
+        "reference_generation_id": null,
+        "pin_id": null,
+        "configuration_digest": null,
+        "main_manifest_matches_project": true,
+        "mandatory_capabilities_available": true
+      },
+      "expected": {
+        "outcome": "published",
+        "publication_count": 1,
+        "current_pointer_changes_once": true,
+        "published_snapshot_immutable": true,
+        "project_generation_coherent": true,
+        "deferred_capabilities_not_evaluated": true
+      }
+    },
+    {
+      "case_id": "publication.degraded-one-file-facts",
+      "candidate": {
+        "project_generation_id": null
+      },
+      "analyzer_snapshot_mutation": {
+        "file_id": "project-file:main/secret-local.lua",
+        "capability": "emmy.fact.control_flow",
+        "status": "Failed",
+        "reason": "fixture-control-flow-capability-unavailable"
+      },
+      "policy": {
+        "capability_is_degradable": true,
+        "snapshot_structurally_coherent": true
+      },
+      "expected": {
+        "outcome": "published",
+        "project_snapshot_state": "degraded",
+        "failed_capability_visible": true,
+        "empty-control-flow-facts-treated-clean": false,
+        "dependent-rules-will-receive-not-evaluated": true,
+        "other-file-capabilities-preserved": true
+      }
+    },
+    {
+      "case_id": "publication.mandatory-source-coordinate-failure",
+      "analyzer_snapshot_mutation": {
+        "capability": "emmy.source_coordinates.exact",
+        "status": "Failed"
+      },
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "project_mandatory_capability_unavailable",
+        "current_pointer_changes": false,
+        "partial_target_snapshot_visible": false
+      }
+    },
+    {
+      "case_id": "publication.analyzer-project-generation-mismatch",
+      "candidate": {
+        "project_generation_id": null
+      },
+      "analyzer_snapshot": {
+        "project_generation_id": "project-generation:wrong-fixture-value"
+      },
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "analyzer_snapshot_project_generation_mismatch",
+        "current_pointer_changes": false,
+        "last_known_good_relabelled": false
+      }
+    },
+    {
+      "case_id": "publication.analyzer-profile-reference-mismatch",
+      "analyzer_snapshot": {
+        "profile_id": "fixture-retail-other-profile",
+        "reference_generation_id": "reference-generation:wrong-fixture-value"
+      },
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "analyzer_snapshot_profile_or_reference_mismatch",
+        "current_pointer_changes": false
+      }
+    },
+    {
+      "case_id": "publication.analyzer-pin-configuration-mismatch",
+      "analyzer_snapshot": {
+        "pin_id": "pin:wrong-fixture-value",
+        "configuration_digest": "sha256:wrong-fixture-value"
+      },
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "analyzer_snapshot_pin_or_configuration_mismatch",
+        "current_pointer_changes": false
+      }
+    },
+    {
+      "case_id": "publication.analyzer-main-manifest-extra-file",
+      "analyzer_snapshot_mutation": {
+        "extra_main_file": "main/undeclared.lua"
+      },
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "analyzer_file_manifest_mismatch",
+        "undeclared-file-promoted-to-project": false
+      }
+    },
+    {
+      "case_id": "publication.analyzer-main-manifest-wrong-digest",
+      "analyzer_snapshot_mutation": {
+        "file_id": "project-file:main/clean.lua",
+        "content_sha256": "sha256:wrong-fixture-value"
+      },
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "analyzer_file_manifest_mismatch",
+        "old-facts-reused": false
+      }
+    },
+    {
+      "case_id": "publication.library-handle-claims-project-origin",
+      "analyzer_snapshot_mutation": {
+        "library_file": "library/C_E0Fixture.lua",
+        "source_origin_id": "project-origin:fixture-project-e0-v1",
+        "source_role": "first_party_main"
+      },
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "project_source_handle_role_mismatch"
+      }
+    },
+    {
+      "case_id": "publication.snapshot-digest-mismatch",
+      "candidate": {
+        "declared_snapshot_sha256": "sha256:wrong-fixture-value"
+      },
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "project_snapshot_digest_mismatch",
+        "current_pointer_changes": false
+      }
+    },
+    {
+      "case_id": "publication.partial-state-exposed-before-commit",
+      "implementation_mutation": "publish-file-manifest-before-analyzer-validation",
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "project_partial_publication_forbidden",
+        "mutation-test-must-fail": true
+      }
+    },
+    {
+      "case_id": "publication.last-known-good-after-failed-target",
+      "precondition": {
+        "baseline_snapshot_published": true,
+        "baseline_project_generation_id": null
+      },
+      "target_mutation": "analyzer-update-fails-before-target-snapshot",
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "project_analyzer_update_failed",
+        "current_published_generation": null,
+        "failed_target_generation": null,
+        "last_known_good_generation": null,
+        "last_known_good_equals-baseline": true,
+        "last_known_good_equals-target": false,
+        "mixed-old-new-state": false
+      }
+    },
+    {
+      "case_id": "publication.last-known-good-substitution-for-required-target",
+      "precondition": {
+        "baseline_snapshot_published": true,
+        "target_generation_failed": true
+      },
+      "request": {
+        "required_project_generation_id": null
+      },
+      "implementation_mutation": "return-baseline-as-if-target",
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "project_last_known_good_relabel_forbidden",
+        "mutation-test-must-fail": true
+      }
+    },
+    {
+      "case_id": "publication.cancelled-before-commit",
+      "cancellation_phase": "after-project-snapshot-validation-before-current-pointer-swap",
+      "expected": {
+        "outcome": "cancelled",
+        "target_snapshot_published": false,
+        "current_pointer_changes": false,
+        "background_continuation": false,
+        "previous_snapshot_identity_unchanged": true
+      }
+    },
+    {
+      "case_id": "publication.deferred-capabilities",
+      "requested_capabilities": [
+        "project.toc.complete",
+        "project.xml.complete",
+        "project.load_graph.complete",
+        "project.graph.complete"
+      ],
+      "expected": {
+        "publication_can-succeed-for-e0": true,
+        "capability_statuses": [
+          "NotEvaluated",
+          "NotEvaluated",
+          "NotEvaluated",
+          "NotEvaluated"
+        ],
+        "reason": "operation_not_implemented_for_milestone",
+        "empty-complete-results": false
+      }
+    },
+    {
+      "case_id": "publication.randomized-order-determinism",
+      "mutations": [
+        "permute-project-file-enumeration",
+        "permute-project-owned-coverage-record-insertion",
+        "permute-analyzer-fact-finding-return-order",
+        "change-temporary-root",
+        "change-worker-scheduling"
+      ],
+      "expected": {
+        "same_project_generation_id": true,
+        "same_project_snapshot_sha256": true,
+        "same_public-source-identities": true,
+        "same-deferred-capability-order": true
+      }
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "fields_to_freeze": [
+      "baseline_project_generation_id",
+      "baseline_analyzer_snapshot_id",
+      "baseline_project_snapshot_sha256",
+      "all null candidate/analyzer/current/target/last-known-good generation and snapshot IDs"
+    ]
+  }
+}

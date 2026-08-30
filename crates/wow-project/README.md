@@ -1,186 +1,359 @@
 # `wow-project` implementation contract
 
-**Status:** minimal E0 slice active; full implementation deferred to E2.
+**Status:** E0-D implementation-ready contract; no Rust code yet. Full TOC/XML/load/project-graph indexing remains an E2 responsibility.
 
 ## Mission
 
-`wow-project` owns the normalized model of an addon workspace: configured roots, file identity, TOC/XML/load structure, declared dependencies, SavedVariables roots, incremental invalidation, and coherent project-generation publication. It coordinates analyzer and recognizer inputs without owning their internals.
+`wow-project` owns the coherent first-party project state consumed by analysis and rules. It validates one explicit workspace/input manifest, derives the canonical project generation, coordinates analyzer updates against that target generation, and publishes one immutable `ProjectSnapshot` only when the project file state and analyzer snapshot agree.
+
+E0-D is intentionally narrow: one closed Lua workspace, one selected fixture profile/reference generation, one analyzer adapter snapshot, and deterministic update/publication semantics. It does not parse TOC or XML, build a graph, infer addon ownership, scan installed addons, or persist project state.
+
+## E0-D outcome
+
+A future implementation agent must prove this seam:
+
+```text
+closed ProjectInputBundle
+    + exact ProfileIdentity / ReferenceGenerationId
+    + exact accepted wow-emmy pin/configuration identity
+    -> validate project configuration and first-party file inventory
+    -> derive target ProjectGenerationId
+    -> register project source origin and files
+    -> submit one generation-bound AnalyzerUpdateBatch to wow-emmy
+    -> receive one validated AnalyzerSnapshot for the same generation
+    -> assemble and publish immutable ProjectSnapshot
+    -> update one file into a new coherent generation
+    -> reject partial/mixed/stale publication
+```
+
+The published snapshot is the only E0 project read surface for `wow-rules` and `wow-service`.
 
 ## Owned responsibilities
 
-- project configuration and root identity;
-- first-party/dependency/external/runtime universe separation;
-- normalized file inventory and content digests;
-- TOC parsing, variants, flavor/interface metadata, dependencies, optional dependencies, load-on-demand units, SavedVariables, and declared file order;
-- structural XML parsing for includes, scripts, frames, templates, inheritance, children, and source spans;
-- workspace assembly inputs for `wow-emmy`;
-- project-generation state and affected-partition invalidation;
-- load/reachability facts and use-before-load prerequisites;
-- invocation of universal recognizers over normalized facts;
-- project snapshot read interfaces;
-- generated project metadata inputs for Project Map/context.
+- project/workspace identity and configuration;
+- first-party source-root registration;
+- explicit project input inventory;
+- normalized project file identity, relative path, content digest, and role;
+- canonical `ProjectGenerationId` derivation;
+- project update-set validation;
+- analyzer-update request assembly for the target project generation;
+- analyzer-snapshot compatibility validation;
+- immutable `ProjectSnapshot` publication;
+- project-side source-file registry used by exact span handles;
+- project capability/coverage records;
+- generation-coherent read views for analyzer facts and generic findings;
+- publication failure isolation and previous-snapshot retention;
+- deterministic project manifest/snapshot serialization;
+- E2 expansion into TOC/XML/load/dependency/state/event/hook facts when that milestone activates.
 
 ## Explicit non-responsibilities
 
 `wow-project` does not:
 
-- implement the Lua parser/analyzer;
-- define reference/API truth;
-- own generic graph storage/query algorithms;
-- implement diagnostics or search ranking;
-- load arbitrary installed addons without explicit configuration;
-- infer runtime load state from directory presence;
-- execute addon code, TOC directives, XML scripts, repository hooks, or generators;
-- mutate editor settings;
-- copy project-specific behavior into framework-wide hardcoded branches.
+- decide whether a WoW API exists;
+- store reference/restriction facts;
+- implement generic or WoW diagnostic algorithms;
+- normalize upstream Emmy diagnostics or semantic facts;
+- parse TOC/XML in E0-D;
+- build graph nodes/edges or recognizer roles in E0-D;
+- persist SQLite/project databases;
+- rank search results;
+- call Codebase Memory or external repositories;
+- select a floating current profile;
+- discover arbitrary repositories or installed addons;
+- mutate editor configuration;
+- execute Lua, repository hooks, build scripts, or tests;
+- claim in-client/runtime behavior;
+- expose mutable analyzer or project internals;
+- publish a snapshot whose analyzer state belongs to another generation.
 
-## Universe model
+## Required reading
 
-Every source file belongs to exactly one configured universe:
+Before implementation, read:
 
-```text
-workspace       writable first-party addon files
-dependency      declared library/addon inputs, read-only
-external        selected example repositories, read-only candidate evidence
-runtime         optional SavedVariables/log/probe records, explicit opt-in
-reference       selected Blizzard Reference Pack, separate from project files
-```
+1. [`../AGENTS.md`](../AGENTS.md)
+2. [`../DEPENDENCY_GRAPH.md`](../DEPENDENCY_GRAPH.md)
+3. [`../WORKSTREAMS.md`](../WORKSTREAMS.md)
+4. [`../wow-core/CONSUMER_GUIDE.md`](../wow-core/CONSUMER_GUIDE.md)
+5. [`../wow-emmy/CONTRACT.json`](../wow-emmy/CONTRACT.json)
+6. [`../wow-emmy/SESSION_MODEL.md`](../wow-emmy/SESSION_MODEL.md)
+7. [`AGENTS.md`](AGENTS.md)
+8. [`DECISIONS.md`](DECISIONS.md)
+9. [`DATA_MODEL.md`](DATA_MODEL.md)
+10. [`GENERATION_AND_PUBLICATION.md`](GENERATION_AND_PUBLICATION.md)
+11. [`UPDATE_MODEL.md`](UPDATE_MODEL.md)
+12. [`SOURCE_REGISTRY.md`](SOURCE_REGISTRY.md)
+13. [`ERROR_MODEL.md`](ERROR_MODEL.md)
+14. [`TEST_MATRIX.md`](TEST_MATRIX.md)
+15. [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md)
+16. [`CONTRACT.json`](CONTRACT.json)
+17. current `AGENTS.md` and `INDEX_MINI.md` in the external [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb)
 
-Universe identity participates in source handles and must not be inferred from path naming alone.
-
-## Project generation
-
-A project generation binds:
-
-```text
-project configuration digest
-selected reference profile/generation
-file inventory and digests
-TOC/XML parse partitions
-Emmy analyzer snapshot token
-recognizer versions and output partitions
-project graph/index generation
-capability/coverage report
-```
-
-One generation is published atomically. Partial updates remain private until all mandatory participating slices agree on the same generation context.
-
-## Required operations
-
-| Operation | Required behavior |
-|---|---|
-| `load_project_config` | Parse explicit project roots/flavor/profile/dependency configuration without filesystem-wide guessing. |
-| `inventory_project_files` | Classify files by universe/type/TOC reachability and record normalized digests. |
-| `parse_toc_manifest` | Preserve ordered entries, metadata, flavor/interface scope, dependencies, LOD, SavedVariables, and unsupported directives. |
-| `resolve_toc_variants` | Produce separate variant/load units; never merge flavors implicitly. |
-| `parse_xml_document` | Structurally parse includes/templates/frames/scripts/inheritance/children with strict bounds and source spans. |
-| `assemble_emmy_workspace` | Produce explicit first-party/library file sets for `wow-emmy`; no editor mutation. |
-| `plan_project_update` | Compare old/new inventory and identify affected files/TOC/XML/recognizer/graph/rule partitions. |
-| `apply_project_update` | Drive analyzer/recognizer updates under one unpublished generation transaction. |
-| `build_load_graph_facts` | Emit package/file/dependency/order/reachability facts with evidence and coverage. |
-| `build_state_root_facts` | Emit declared SavedVariables roots and literal path facts without reading persisted values. |
-| `run_project_recognizers` | Invoke approved recognizer packs over normalized facts and capture producer/version/coverage. |
-| `publish_project_generation` | Publish one coherent snapshot or keep the last-known-good generation. |
-| `open_project_view` | Expose files, owners, load facts, registrations, state roots, and capability status through narrow reads. |
-| `resolve_project_source_handle` | Resolve only within registered project roots/generation and validate digest/span. |
-
-## TOC rules
-
-1. File order is semantic and preserved.
-2. Missing files, duplicate entries, unsupported directives, and dependency cycles are explicit findings/coverage states.
-3. `Dependencies` and `OptionalDeps` remain distinct.
-4. Load-on-demand units are not treated as startup-reachable.
-5. Flavor/Interface variants remain separate.
-6. Embedded libraries are classified by declared/project evidence, not directory-name heuristics alone.
-7. SavedVariables declarations establish state roots, not permission to parse live user data.
-8. A path present on disk but absent from the active load graph is not automatically reachable.
-
-## XML rules
-
-- use a structural parser with external entities/network disabled;
-- preserve document/include order and source spans;
-- bound depth, attributes, children, text, and include recursion;
-- distinguish templates, concrete frames, inheritance, object parentage, and script bodies;
-- Lua bodies inside XML become source facts for Emmy; they are never executed;
-- unknown elements/attributes are preserved or reported, not guessed;
-- cross-file template resolution is generation/profile scoped.
-
-## Incremental invalidation
-
-The invalidation planner must distinguish:
-
-```text
-content-only Lua change
-TOC metadata/order/dependency change
-XML include/template/inheritance change
-project configuration/profile change
-recognizer pack/version change
-reference profile/generation change
-file add/remove/rename
-```
-
-A reference/profile change invalidates every dependent project fact even when source files are unchanged. A local comment-only change must not force unrelated graph partitions to rebuild if the analyzer confirms no semantic effect.
-
-## E0 minimal slice
-
-Implement only:
-
-- one explicit project root and one fixture Lua file set;
-- normalized file IDs/digests;
-- analyzer workspace assembly;
-- one coherent project generation token;
-- update/publish/last-known-good behavior sufficient for the E0 golden test;
-- capability reporting for unsupported TOC/XML/project features.
-
-E0 does not require general TOC/XML parsing, persistent graph storage, filesystem watch mode, multi-root workspaces, or SavedVariables.
-
-## Full E2 implementation sequence
-
-1. project config and file inventory;
-2. TOC parser/variants/load facts;
-3. XML parser/include/template facts;
-4. graph partition emission;
-5. core recognizer invocation;
-6. incremental invalidation and generation publication;
-7. Project Map inputs;
-8. launch addon corpus and false-positive evaluation.
-
-## Required tests
-
-### E0
-
-- one project generation binds exact file/analyzer/profile identities;
-- changed digest produces a new generation;
-- failed analyzer update leaves last-known-good active;
-- cross-generation input rejected;
-- deterministic inventory order.
-
-### E2
-
-- TOC order, dependencies, optional deps, LOD, variants, missing file, duplicate entry;
-- XML include order, inheritance, templates, scripts, unknown nodes, entity expansion rejection;
-- unreachable/use-before-load facts;
-- SavedVariables root extraction without reading persisted data;
-- universe separation;
-- update invalidation matrix;
-- profile change invalidation;
-- malformed file partition isolation;
-- no code execution;
-- deterministic project snapshot.
-
-## Documentation sources
+Normative repository sources:
 
 - [`../../docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md)
 - [`../../docs/EMMYLUA_AND_DIAGNOSTICS.md`](../../docs/EMMYLUA_AND_DIAGNOSTICS.md)
-- [`../../docs/GRAPH_SEARCH_AND_PLANNING.md`](../../docs/GRAPH_SEARCH_AND_PLANNING.md)
-- [`../../docs/AGENT_WORKFLOW.md`](../../docs/AGENT_WORKFLOW.md)
+- [`../../docs/PROVENANCE_AND_COVERAGE.md`](../../docs/PROVENANCE_AND_COVERAGE.md)
 - [`../../docs/SECURITY_MODEL.md`](../../docs/SECURITY_MODEL.md)
-- [Current WoW addon development workflow](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb/blob/main/KB/core/BlizzardUI_DevWorkflow.md)
-- [Current Blizzard subsystem/source router](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb/blob/main/KB/core/BlizzardUI_SubsystemRouter.md)
-- [Current LOD/bootstrap route](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb/blob/main/KB/core/BlizzardUI_Lifecycle_LoadOnDemand.md)
-- [Current XML/templates/pools route](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb/blob/main/KB/core/BlizzardUI_XMLTemplates_Pools.md)
-- [Current TOC reference](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb/blob/main/KB/addon/Addon_TOC_Reference.md)
+- [`../../docs/TEST_STRATEGY.md`](../../docs/TEST_STRATEGY.md)
+
+## Direct dependencies in E0-D
+
+The E0-D Rust slice may depend directly only on:
+
+```text
+wow-core
+wow-emmy
+```
+
+Although the long-term dependency graph permits `wow-store`, `wow-graph`, and `wow-recognizers`, those edges remain inactive in E0-D.
+
+Do not activate a dependency merely because it appears in the maximum-permitted graph.
+
+## E0 project fixture
+
+E0-D uses one project fixture identity:
+
+```text
+project_id: fixture-project-e0-v1
+workspace_id: workspace:main:e0
+project_kind: fixture
+selected_profile_id: fixture-retail-120100-e0-v1
+source_origin_id: project-origin:fixture-project-e0-v1
+```
+
+The project file set binds to the Main files declared by the merged E0-C analyzer fixture:
+
+```text
+main/clean.lua
+main/generic-error.lua
+main/missing-api.lua
+main/secret-local.lua
+```
+
+The source text has one logical owner in the fixture bundle selected before implementation. E0-D references exact file content IDs/digests; it does not maintain an independent divergent copy.
+
+## Project configuration
+
+```text
+ProjectConfiguration
+    project_id
+    project_kind
+    workspace declarations
+    source roots
+    selected ProfileIdentity
+    selected ReferenceGenerationId
+    accepted analyzer pin/probe identity
+    analyzer configuration digest
+    project schema version
+    capability policy
+    input and output budgets
+```
+
+No field is inferred from the local machine, installed WoW client, editor, or floating branch.
+
+## Project generation
+
+The E0 `ProjectGenerationId` is derived from canonical:
+
+```text
+project configuration identity
+selected profile/reference generation
+accepted analyzer pin/probe identity
+analyzer configuration digest
+ordered normalized project file manifest and content digests
+project schema version
+```
+
+It excludes:
+
+```text
+wall-clock time
+temporary checkout path
+worker/thread ID
+hash-map iteration
+session memory address
+Git credentials
+rendered diagnostic text
+```
+
+A change to any generation input produces a different target project generation. This includes analyzer pin/configuration changes because they can change project semantic results.
+
+## Source registry
+
+`wow-project` owns one registered first-party source origin and file manifest. `wow-emmy` may construct exact span handles only against this registry and the supplied target generation.
+
+Every project file record contains:
+
+```text
+ProjectFileId
+workspace ID
+source origin ID
+normalized relative path
+content digest
+byte length
+language kind
+first-party role
+selected project generation
+```
+
+No absolute host path, symlink escape, tokenized URL, or Library file can masquerade as first-party project source.
+
+## Analyzer integration
+
+E0-D calls only the normalized `wow-emmy` adapter seam.
+
+Publication protocol:
+
+```text
+validate project update and derive target generation
+-> build analyzer update batch with target ProjectGenerationId
+-> apply/index through wow-emmy
+-> receive AnalyzerSnapshot
+-> verify snapshot project/profile/reference/pin/config/file identities
+-> assemble ProjectSnapshot
+-> publish atomically
+```
+
+If analyzer update/index/snapshot validation fails:
+
+- the target generation is not published;
+- no mixed/partial project snapshot is exposed;
+- the prior immutable snapshot may remain last-known-good under its original generation;
+- the failure and affected capabilities are explicit.
+
+## Project snapshot
+
+```text
+ProjectSnapshot
+    project generation identity
+    selected profile/reference generation
+    project configuration digest
+    project file manifest
+    source registry
+    accepted analyzer pin/probe/config identity
+    analyzer snapshot ID and validated read view
+    project capability/coverage records
+    publication status and canonical digest
+```
+
+The snapshot does not copy or reinterpret analyzer facts/findings. It validates and exposes generation-bound views/handles.
+
+## E0 project capabilities
+
+```text
+project.fixture.configuration.valid
+project.fixture.files.complete
+project.generation.coherent
+project.source.registry.complete
+project.analyzer.snapshot.available
+project.analyzer.facts.available
+project.analyzer.generic_diagnostics.available
+```
+
+E2 capabilities such as the following are absent or explicitly `NotEvaluated`, never fake-complete:
+
+```text
+project.toc.complete
+project.xml.complete
+project.load_graph.complete
+project.state_index.complete
+project.event_hook_index.complete
+project.graph.complete
+```
+
+## Update model
+
+E0 supports a closed set of file updates:
+
+```text
+add first-party Lua file within registered root
+update exact file with expected old digest
+remove exact first-party file
+replace analyzer configuration/pin only through explicit project configuration change
+```
+
+One update transaction targets one new project generation. Stale expected generation/file digest rejects the update.
+
+No hidden filesystem watch, background scan, editor callback, or automatic repository discovery exists in E0-D.
+
+## Required operations
+
+Concrete Rust names may change only with a matching contract update. Required semantics are defined in the component documents:
+
+```text
+validate_project_configuration
+inventory_project_inputs
+register_project_source_origin
+normalize_project_file
+build_project_file_manifest
+derive_project_generation_id
+validate_project_update
+build_analyzer_update_batch
+validate_analyzer_snapshot_for_project
+assemble_project_snapshot
+validate_project_snapshot
+publish_project_snapshot
+open_project_view
+project_file_by_id
+project_file_by_path
+analyzer_facts_for_file
+analyzer_generic_findings
+project_capability_records
+canonicalize_project_manifest
+canonicalize_project_snapshot
+retain_last_known_good_snapshot
+```
+
+## E0-D hard stops
+
+- No `Cargo.toml` or Rust source in this documentation phase.
+- No TOC/XML parser or load graph.
+- No `wow-store`, `wow-graph`, or `wow-recognizers` dependency.
+- No repository-wide filesystem scan/watch.
+- No installed-addon or SavedVariables universe.
+- No automatic Git/branch/profile discovery.
+- No arbitrary source or repository code execution.
+- No editor-setting mutation.
+- No diagnostic/rule logic.
+- No API/restriction authority.
+- No snapshot publication after analyzer failure/mismatch.
+- No prior snapshot relabeled as the target generation.
+- No empty-success placeholders for deferred E2 capabilities.
+
+## Normative fixtures
+
+The closed examples under [`examples/`](examples/README.md) define:
+
+- project configuration and explicit file inventory;
+- initial project-generation derivation inputs;
+- successful baseline snapshot binding;
+- file update/remove/add cases;
+- analyzer failure and generation-mismatch publication cases;
+- last-known-good behavior;
+- pending byte/generation checksum freeze.
+
+Actual source digests, analyzer pin/config identity, project-generation IDs, and bundle SHA-256 values are frozen after E0-A/E0-C implementation exists and before the first `wow-project` Rust commit.
 
 ## Definition of done
 
-The E0 slice is complete when one workspace publishes a coherent reproducible generation. Full E2 is complete when TOC/XML/load/project facts are exact, incrementally replaceable, profile-isolated, safely parsed, and sufficient for reachability diagnostics and a bounded Project Map without executing addon content.
+E0-D implementation is complete only when:
+
+```text
+one explicit project configuration validates
+one first-party source origin and exact four-file manifest publish
+one canonical ProjectGenerationId is derived deterministically
+wow-emmy receives and returns the same target project generation
+one AnalyzerSnapshot validates against project/profile/reference/pin/config/files
+one immutable ProjectSnapshot publishes atomically
+one file update produces a new coherent generation
+stale digest/generation and analyzer mismatch reject publication
+failed analyzer update leaves prior snapshot under its old generation only
+project and library source roles never mix
+all deferred TOC/XML/graph capabilities remain explicit unavailable/NotEvaluated
+randomized input/update order leading to the same final state yields byte-identical canonical snapshot output
+no project source/repository code executes
+all TEST_MATRIX cases pass
+```
+
+Until then, this directory remains an implementation-ready project-generation contract, not a functioning project index.
