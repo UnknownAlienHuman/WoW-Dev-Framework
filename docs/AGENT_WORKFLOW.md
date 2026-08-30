@@ -21,17 +21,20 @@ known failed or partial partitions
 
 Do not interpret a search miss until the relevant coverage is known.
 
-## 2. Read project structure first
+## 2. Read project structure and current KB routing first
 
-For an addon task:
+For every World of Warcraft engineering task:
 
-1. inspect repository instructions and TOC files;
-2. identify first-party code, declared libraries, XML, SavedVariables, and load-on-demand units;
-3. obtain the generated Project Map;
-4. locate the owner/load chain for the target subsystem;
-5. search existing abstractions before designing a new one.
+1. read the current [`AGENTS.md`](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb/blob/main/AGENTS.md) and [`INDEX_MINI.md`](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb/blob/main/INDEX_MINI.md) in the separate WoW Addon Engineering Knowledge Base;
+2. select the current task-specific route from that index;
+3. for a concrete addon, resolve the actual repository under [UnknownAlienHuman repositories](https://github.com/UnknownAlienHuman?tab=repositories);
+4. read that repository's instructions and TOC files;
+5. identify first-party code, declared libraries, XML, SavedVariables, and load-on-demand units;
+6. obtain the generated Project Map;
+7. locate the owner/load chain for the target subsystem;
+8. search existing abstractions before designing a new one.
 
-The separate [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb) provides living WoW research. Project behavior still comes from the actual repository and selected source profile.
+The knowledge base provides living WoW research and routing. Project behavior still comes from the actual repository and selected source profile. This framework links to the KB and does not duplicate its changing patch, security, field-note, or upstream-bug content.
 
 ## 3. Resolve current platform facts
 

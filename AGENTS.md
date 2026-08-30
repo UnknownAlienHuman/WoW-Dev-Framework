@@ -24,7 +24,15 @@ Before editing, read in this order:
 6. `docs/ROADMAP.md`
 7. the task-specific document
 
-For live WoW API, security, patch, and field-note research, consult the separate [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb). Do not copy its living notes into this repository. Promote a conclusion only as a contract, ADR, schema, fixture, test, or pinned release input.
+For every World of Warcraft engineering task, also read the current external routes before drawing platform or addon conclusions:
+
+1. [WoW Addon Engineering KB — `AGENTS.md`](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb/blob/main/AGENTS.md)
+2. [WoW Addon Engineering KB — `INDEX_MINI.md`](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb/blob/main/INDEX_MINI.md)
+3. the current task-specific KB route selected by that index
+
+For work on a concrete addon, first resolve the actual repository under [UnknownAlienHuman repositories](https://github.com/UnknownAlienHuman?tab=repositories), then read its current `AGENTS.md`, `CLAUDE.md`, TOC, and local documentation before applying framework-wide guidance.
+
+The knowledge base owns living WoW API, patch, security, field-note, and upstream-bug guidance. Link to it; do not copy its changing content into this repository. Promote a conclusion here only as a contract, ADR, schema, fixture, test, or pinned release input.
 
 ## Authority order
 
