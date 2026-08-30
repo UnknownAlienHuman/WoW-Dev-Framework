@@ -1,0 +1,347 @@
+{
+  "schema_version": 1,
+  "case_set_id": "wow-project-e0-d-updates-v1",
+  "state": "documentation-only-pending-prerequisite-and-byte-freeze",
+  "project_id": "fixture-project-e0-v1",
+  "baseline_project_generation_id": null,
+  "baseline_project_snapshot_sha256": null,
+  "cases": [
+    {
+      "case_id": "update.generic-error-to-clean",
+      "expected_current_project_generation": null,
+      "operations": [
+        {
+          "operation": "Update",
+          "file_id": "project-file:main/generic-error.lua",
+          "expected_old_content_sha256": null,
+          "new_source_fixture_ref": "crates/wow-emmy/examples/workspace-fixture.json#main/clean.lua",
+          "new_content_sha256": null,
+          "new_byte_length": null
+        }
+      ],
+      "expected": {
+        "outcome": "published",
+        "target_project_generation_id": null,
+        "target_analyzer_snapshot_id": null,
+        "target_project_snapshot_sha256": null,
+        "logical_file_id_preserved": true,
+        "generic_fixture_error_finding_present": false,
+        "old_source_handles_current": false,
+        "previous_snapshot_retained_under_old_generation": true
+      }
+    },
+    {
+      "case_id": "update.missing-api-to-known-api",
+      "expected_current_project_generation": null,
+      "operations": [
+        {
+          "operation": "Update",
+          "file_id": "project-file:main/missing-api.lua",
+          "expected_old_content_sha256": null,
+          "new_source_text": "return C_E0Fixture.KnownApi(\"ok\")\n",
+          "new_content_sha256": null,
+          "new_byte_length": null
+        }
+      ],
+      "expected": {
+        "outcome": "published",
+        "target_project_generation_id": null,
+        "target_analyzer_snapshot_id": null,
+        "target_project_snapshot_sha256": null,
+        "removed_api_unresolved_fact_present": false,
+        "known_api_resolved_fact_present": true,
+        "platform_api_conclusion_present": false
+      }
+    },
+    {
+      "case_id": "update.add-optional-lua-file",
+      "expected_current_project_generation": null,
+      "operations": [
+        {
+          "operation": "Add",
+          "file": {
+            "file_id": "project-file:main/optional.lua",
+            "source_origin_id": "project-origin:fixture-project-e0-v1",
+            "workspace_id": "workspace:main:e0",
+            "normalized_relative_path": "main/optional.lua",
+            "language_kind": "lua",
+            "role": "first_party_main",
+            "source_text": "return C_E0Fixture.KnownApi(\"optional\")\n",
+            "content_sha256": null,
+            "byte_length": null
+          }
+        }
+      ],
+      "expected": {
+        "outcome": "published",
+        "target_project_generation_id": null,
+        "target_analyzer_snapshot_id": null,
+        "file_present_in_project_and_analyzer_manifests": true,
+        "source_handle_origin": "project-origin:fixture-project-e0-v1"
+      }
+    },
+    {
+      "case_id": "update.remove-optional-lua-file",
+      "base_case_id": "update.add-optional-lua-file",
+      "expected_current_project_generation": null,
+      "operations": [
+        {
+          "operation": "Remove",
+          "file_id": "project-file:main/optional.lua",
+          "expected_old_content_sha256": null
+        }
+      ],
+      "expected": {
+        "outcome": "published",
+        "target_project_generation_id": null,
+        "target_analyzer_snapshot_id": null,
+        "file_present_in_current_project_manifest": false,
+        "file_present_in_current_analyzer_manifest": false,
+        "current_facts_or_findings_for_file": [],
+        "old_snapshot_may_resolve_file_under_old_generation": true
+      }
+    },
+    {
+      "case_id": "update.no-change",
+      "expected_current_project_generation": null,
+      "operations": [
+        {
+          "operation": "Update",
+          "file_id": "project-file:main/clean.lua",
+          "expected_old_content_sha256": null,
+          "new_source_fixture_ref": "crates/wow-emmy/examples/workspace-fixture.json#main/clean.lua",
+          "new_content_sha256": null,
+          "new_byte_length": null
+        }
+      ],
+      "expected": {
+        "outcome": "no_change",
+        "new_project_generation_created": false,
+        "analyzer_mutated": false,
+        "current_snapshot_identity_unchanged": true
+      }
+    },
+    {
+      "case_id": "update.stale-project-generation",
+      "expected_current_project_generation": "project-generation:stale-fixture-value",
+      "operations": [
+        {
+          "operation": "Update",
+          "file_id": "project-file:main/clean.lua",
+          "expected_old_content_sha256": null,
+          "new_source_text": "return C_E0Fixture.KnownApi(\"changed\")\n",
+          "new_content_sha256": null,
+          "new_byte_length": null
+        }
+      ],
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "expected_project_generation_mismatch",
+        "analyzer_mutated": false,
+        "current_snapshot_identity_unchanged": true
+      }
+    },
+    {
+      "case_id": "update.stale-file-digest",
+      "expected_current_project_generation": null,
+      "operations": [
+        {
+          "operation": "Update",
+          "file_id": "project-file:main/clean.lua",
+          "expected_old_content_sha256": "sha256:stale-fixture-value",
+          "new_source_text": "return C_E0Fixture.KnownApi(\"changed\")\n",
+          "new_content_sha256": null,
+          "new_byte_length": null
+        }
+      ],
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "project_update_expected_digest_mismatch",
+        "analyzer_mutated": false
+      }
+    },
+    {
+      "case_id": "update.conflicting-same-file-operations",
+      "expected_current_project_generation": null,
+      "operations": [
+        {
+          "operation": "Update",
+          "file_id": "project-file:main/clean.lua",
+          "expected_old_content_sha256": null,
+          "new_source_text": "return true\n",
+          "new_content_sha256": null,
+          "new_byte_length": null
+        },
+        {
+          "operation": "Remove",
+          "file_id": "project-file:main/clean.lua",
+          "expected_old_content_sha256": null
+        }
+      ],
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "project_update_conflicting_operations",
+        "analyzer_mutated": false,
+        "operation_order_winner_selected": false
+      }
+    },
+    {
+      "case_id": "update.path-scope-escape",
+      "expected_current_project_generation": null,
+      "operations": [
+        {
+          "operation": "Add",
+          "file": {
+            "file_id": "project-file:../escape.lua",
+            "normalized_relative_path": "../escape.lua",
+            "language_kind": "lua",
+            "role": "first_party_main",
+            "source_text": "return true\n",
+            "content_sha256": null,
+            "byte_length": null
+          }
+        }
+      ],
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "project_update_path_scope_escape",
+        "analyzer_mutated": false
+      }
+    },
+    {
+      "case_id": "update-library-role-forbidden",
+      "expected_current_project_generation": null,
+      "operations": [
+        {
+          "operation": "Add",
+          "file": {
+            "file_id": "project-file:main/not-project.lua",
+            "normalized_relative_path": "main/not-project.lua",
+            "language_kind": "lua",
+            "role": "Library",
+            "source_text": "return true\n",
+            "content_sha256": null,
+            "byte_length": null
+          }
+        }
+      ],
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "project_file_role_invalid",
+        "analyzer_mutated": false
+      }
+    },
+    {
+      "case_id": "update-budget-exceeded",
+      "expected_current_project_generation": null,
+      "operations_generator": {
+        "kind": "add-files",
+        "count": 17,
+        "pattern": "main/generated-{n}.lua"
+      },
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "project_update_budget_exceeded",
+        "analyzer_mutated": false
+      }
+    },
+    {
+      "case_id": "update-analyzer-failure",
+      "expected_current_project_generation": null,
+      "operations": [
+        {
+          "operation": "Update",
+          "file_id": "project-file:main/clean.lua",
+          "expected_old_content_sha256": null,
+          "new_source_text": "return C_E0Fixture.KnownApi(\"changed\")\n",
+          "new_content_sha256": null,
+          "new_byte_length": null
+        }
+      ],
+      "analyzer_mutation": "fail-update-or-index-before-snapshot-publication",
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "project_analyzer_update_failed",
+        "target_project_snapshot_published": false,
+        "last_known_good_generation": null,
+        "last_known_good_relabelled": false
+      }
+    },
+    {
+      "case_id": "update-analyzer-wrong-generation",
+      "expected_current_project_generation": null,
+      "operations": [
+        {
+          "operation": "Update",
+          "file_id": "project-file:main/clean.lua",
+          "expected_old_content_sha256": null,
+          "new_source_text": "return C_E0Fixture.KnownApi(\"changed\")\n",
+          "new_content_sha256": null,
+          "new_byte_length": null
+        }
+      ],
+      "analyzer_mutation": "return-valid-snapshot-bound-to-different-project-generation",
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "analyzer_snapshot_project_generation_mismatch",
+        "target_project_snapshot_published": false
+      }
+    },
+    {
+      "case_id": "update-cancelled",
+      "expected_current_project_generation": null,
+      "operations": [
+        {
+          "operation": "Update",
+          "file_id": "project-file:main/clean.lua",
+          "expected_old_content_sha256": null,
+          "new_source_text": "return C_E0Fixture.KnownApi(\"changed\")\n",
+          "new_content_sha256": null,
+          "new_byte_length": null
+        }
+      ],
+      "cancellation_phase": "after-candidate-before-project-publication",
+      "expected": {
+        "outcome": "cancelled",
+        "target_project_snapshot_published": false,
+        "current_snapshot_identity_unchanged": true,
+        "background_continuation": false
+      }
+    },
+    {
+      "case_id": "update-independent-order-determinism",
+      "base_mutations": [
+        "add main/a.lua",
+        "add main/b.lua"
+      ],
+      "permutations": [
+        [
+          "add main/a.lua",
+          "add main/b.lua"
+        ],
+        [
+          "add main/b.lua",
+          "add main/a.lua"
+        ]
+      ],
+      "expected": {
+        "same_final_project_generation_id": true,
+        "same_analyzer_snapshot_output": true,
+        "same_project_snapshot_sha256": true
+      }
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "fields_to_freeze": [
+      "baseline_project_generation_id",
+      "baseline_project_snapshot_sha256",
+      "all expected_current_project_generation nulls in baseline-derived cases",
+      "all expected old/new content digests and byte lengths",
+      "all target project generation IDs",
+      "all target analyzer snapshot IDs",
+      "all target project snapshot digests",
+      "all last-known-good generation IDs"
+    ]
+  }
+}
