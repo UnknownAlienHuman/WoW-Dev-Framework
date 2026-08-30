@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "manifest_id": "wow-project-e0-d-checksums-v1",
+  "algorithm": "sha256",
+  "canonicalization_contract": "wow-core-json/e0-1",
+  "state": "pending-prerequisite-pin-generation-and-byte-freeze-before-first-rust-implementation",
+  "freeze_required": true,
+  "selected_profile_id": "fixture-retail-120100-e0-v1",
+  "reference_generation_id": null,
+  "analyzer_upstream_pin_id": null,
+  "analyzer_probe_report_id": null,
+  "analyzer_configuration_digest": null,
+  "baseline_project_generation_id": null,
+  "baseline_analyzer_snapshot_id": null,
+  "baseline_project_snapshot_sha256": null,
+  "rules": [
+    "E0-A canonicalization and E0-C accepted pin/probe are required before implementation starts.",
+    "Project Main-file bytes and SHA-256 values must equal the frozen E0-C Main fixture values.",
+    "All prerequisite identities and normative member digests must be non-null before wow-project implementation_state changes from not-started.",
+    "Digests cover canonical UTF-8 bytes with LF line endings and one final newline.",
+    "Baseline/update ProjectGenerationId vectors and snapshot digests must be frozen with the member digests.",
+    "Tests verify this manifest and never rewrite it automatically.",
+    "A semantic fixture change requires contract, analyzer binding, update/publication cases, test, and digest review in the same change."
+  ],
+  "members": [
+    {
+      "path": "crates/wow-project/CONTRACT.json",
+      "sha256": null
+    },
+    {
+      "path": "crates/wow-project/examples/project-bundle.json",
+      "sha256": null
+    },
+    {
+      "path": "crates/wow-project/examples/update-cases.json",
+      "sha256": null
+    },
+    {
+      "path": "crates/wow-project/examples/publication-cases.json",
+      "sha256": null
+    }
+  ],
+  "shared_source_members": [
+    {
+      "project_file_id": "project-file:main/clean.lua",
+      "source_fixture_ref": "crates/wow-emmy/examples/workspace-fixture.json#main/clean.lua",
+      "sha256": null,
+      "byte_length": null
+    },
+    {
+      "project_file_id": "project-file:main/generic-error.lua",
+      "source_fixture_ref": "crates/wow-emmy/examples/workspace-fixture.json#main/generic-error.lua",
+      "sha256": null,
+      "byte_length": null
+    },
+    {
+      "project_file_id": "project-file:main/missing-api.lua",
+      "source_fixture_ref": "crates/wow-emmy/examples/workspace-fixture.json#main/missing-api.lua",
+      "sha256": null,
+      "byte_length": null
+    },
+    {
+      "project_file_id": "project-file:main/secret-local.lua",
+      "source_fixture_ref": "crates/wow-emmy/examples/workspace-fixture.json#main/secret-local.lua",
+      "sha256": null,
+      "byte_length": null
+    }
+  ],
+  "bundle_sha256": null,
+  "freeze_gate": {
+    "required_work_package": "E0-D-implementation",
+    "invalid_after_implementation_starts_when_any_required_value_is_null": true,
+    "required_non_null_values": [
+      "reference_generation_id",
+      "analyzer_upstream_pin_id",
+      "analyzer_probe_report_id",
+      "analyzer_configuration_digest",
+      "baseline_project_generation_id",
+      "baseline_analyzer_snapshot_id",
+      "baseline_project_snapshot_sha256",
+      "members[*].sha256",
+      "shared_source_members[*].sha256",
+      "shared_source_members[*].byte_length",
+      "bundle_sha256"
+    ],
+    "required_checks": [
+      "accepted-wow-emmy-compatibility-probe",
+      "shared-project-analyzer-source-byte-equality",
+      "canonical-json-validation",
+      "member-byte-digest-validation",
+      "bundle-digest-validation",
+      "baseline-project-generation-vector",
+      "update-project-generation-vectors",
+      "project-snapshot-digest-vectors",
+      "update-case-execution",
+      "publication-case-execution",
+      "randomized-final-state-determinism"
+    ]
+  }
+}
