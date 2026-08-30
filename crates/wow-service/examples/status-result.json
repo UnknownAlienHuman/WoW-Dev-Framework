@@ -1,0 +1,212 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e0-status-v1",
+  "state": "documentation-only-pending-prerequisite-and-byte-freeze",
+  "operation": "status",
+  "operation_state": "available",
+  "result_id": null,
+  "canonical_sha256": null,
+  "service": {
+    "service_id": "wow-service-e0",
+    "contract_id": "wow-service/e0-f/1",
+    "implementation_identity": null,
+    "service_configuration_id": null,
+    "component_registry_id": null,
+    "output_contract_version": "wow-service-result/e0-f/1"
+  },
+  "configured_target": {
+    "project_id": "fixture-project-e0-v1",
+    "project_generation_id": null,
+    "project_snapshot_id": null,
+    "profile_id": "fixture-retail-120100-e0-v1",
+    "reference_generation_id": null,
+    "reference_view_id": null,
+    "analyzer_upstream_pin_id": null,
+    "analyzer_probe_report_id": null,
+    "analyzer_configuration_digest": null,
+    "analyzer_snapshot_id": null,
+    "rule_registry_id": null,
+    "rule_fixture_policy_id": "wow-rules-e0-fixture-policy/1"
+  },
+  "components": [
+    {
+      "component_id": "wow-core",
+      "contract_id": "wow-core/e0-a/1",
+      "implementation_identity": null,
+      "health": "Ready",
+      "capability_summary_ids": [],
+      "snapshot_or_generation_ids": []
+    },
+    {
+      "component_id": "wow-reference",
+      "contract_id": "wow-reference/e0-b/1",
+      "implementation_identity": null,
+      "health": "Ready",
+      "capability_summary_ids": [],
+      "snapshot_or_generation_ids": [
+        null
+      ],
+      "release_eligible": false
+    },
+    {
+      "component_id": "wow-emmy",
+      "contract_id": "wow-emmy/e0-c/1",
+      "implementation_identity": null,
+      "health": "Ready",
+      "capability_summary_ids": [],
+      "snapshot_or_generation_ids": [
+        null
+      ]
+    },
+    {
+      "component_id": "wow-project",
+      "contract_id": "wow-project/e0-d/1",
+      "implementation_identity": null,
+      "health": "Ready",
+      "capability_summary_ids": [],
+      "snapshot_or_generation_ids": [
+        null,
+        null
+      ],
+      "project_file_count": 4
+    },
+    {
+      "component_id": "wow-rules",
+      "contract_id": "wow-rules/e0-e/1",
+      "implementation_identity": null,
+      "health": "Ready",
+      "capability_summary_ids": [],
+      "snapshot_or_generation_ids": [
+        null
+      ],
+      "active_rules": [
+        {
+          "rule_id": "wow.api.exists",
+          "rule_version": 1,
+          "technical_severity": "error",
+          "rollout_policy": "advisory"
+        },
+        {
+          "rule_id": "wow.secret.local_operation",
+          "rule_version": 1,
+          "technical_severity": "error",
+          "rollout_policy": "advisory"
+        }
+      ]
+    },
+    {
+      "component_id": "wow-service",
+      "contract_id": "wow-service/e0-f/1",
+      "implementation_identity": null,
+      "health": "Ready",
+      "capability_summary_ids": [],
+      "snapshot_or_generation_ids": []
+    }
+  ],
+  "project_state": {
+    "current_published_project_generation_id": null,
+    "current_project_snapshot_id": null,
+    "last_known_good_project_generation_id": null,
+    "failed_target_project_generation_id": null,
+    "failed_target_error_code": null,
+    "is_current_for_failed_target": null
+  },
+  "capability_summaries": [],
+  "important_blockers": [],
+  "warnings": [
+    {
+      "code": "fixture_not_release_eligible",
+      "component_id": "wow-reference",
+      "arguments": {
+        "profile_id": "fixture-retail-120100-e0-v1"
+      }
+    }
+  ],
+  "deferred_operations": [
+    {
+      "operation": "index_repo",
+      "state": "Deferred",
+      "first_milestone": "E2",
+      "error_code": "operation_not_implemented_for_milestone"
+    },
+    {
+      "operation": "tree",
+      "state": "Deferred",
+      "first_milestone": "E3",
+      "error_code": "operation_not_implemented_for_milestone"
+    },
+    {
+      "operation": "skeleton",
+      "state": "Deferred",
+      "first_milestone": "E3",
+      "error_code": "operation_not_implemented_for_milestone"
+    },
+    {
+      "operation": "plan",
+      "state": "Deferred",
+      "first_milestone": "E3",
+      "error_code": "operation_not_implemented_for_milestone"
+    },
+    {
+      "operation": "lookup",
+      "state": "Deferred",
+      "first_milestone": "E4",
+      "error_code": "operation_not_implemented_for_milestone"
+    },
+    {
+      "operation": "search",
+      "state": "Deferred",
+      "first_milestone": "E4",
+      "error_code": "operation_not_implemented_for_milestone"
+    },
+    {
+      "operation": "patch_impact",
+      "state": "Deferred",
+      "first_milestone": "E4",
+      "error_code": "operation_not_implemented_for_milestone"
+    },
+    {
+      "operation": "runtime_review",
+      "state": "Deferred",
+      "first_milestone": "E7",
+      "error_code": "operation_not_implemented_for_milestone"
+    },
+    {
+      "operation": "lsp",
+      "state": "Deferred",
+      "first_milestone": "E7",
+      "error_code": "operation_not_implemented_for_milestone"
+    },
+    {
+      "operation": "mcp",
+      "state": "Deferred",
+      "first_milestone": "E7",
+      "error_code": "operation_not_implemented_for_milestone"
+    },
+    {
+      "operation": "release_packaging",
+      "state": "Deferred",
+      "first_milestone": "E7",
+      "error_code": "operation_not_implemented_for_milestone"
+    }
+  ],
+  "prohibited_validation_claims_absent": [
+    "project_clean",
+    "check_passed",
+    "tests_passed",
+    "runtime_verified",
+    "safe",
+    "working",
+    "release_ready"
+  ],
+  "budget": {
+    "spec_id": null,
+    "usage_id": null,
+    "truncated": false
+  },
+  "producer_versions": [],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "all_null_identity-and-digest-fields-must-be-frozen": true
+  }
+}
