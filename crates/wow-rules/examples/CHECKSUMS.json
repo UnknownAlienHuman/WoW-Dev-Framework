@@ -1,0 +1,152 @@
+{
+  "schema_version": 1,
+  "manifest_id": "wow-rules-e0-e-checksums-v1",
+  "algorithm": "sha256",
+  "canonicalization_contract": "wow-core-json/e0-1",
+  "state": "pending-prerequisite-input-output-and-byte-freeze-before-first-rust-implementation",
+  "freeze_required": true,
+  "profile_id": "fixture-retail-120100-e0-v1",
+  "reference_generation_id": null,
+  "project_generation_id": null,
+  "analyzer_snapshot_id": null,
+  "rule_registry_id": null,
+  "rule_execution_context_id": null,
+  "prerequisites": [
+    {
+      "contract_id": "wow-core/e0-a/1",
+      "implementation_identity": null,
+      "fixture_bundle_sha256": null
+    },
+    {
+      "contract_id": "wow-reference/e0-b/1",
+      "implementation_identity": null,
+      "reference_generation_id": null,
+      "fixture_bundle_sha256": null
+    },
+    {
+      "contract_id": "wow-emmy/e0-c/1",
+      "implementation_identity": null,
+      "analyzer_upstream_pin_id": null,
+      "analyzer_snapshot_id": null,
+      "fixture_bundle_sha256": null
+    },
+    {
+      "contract_id": "wow-project/e0-d/1",
+      "implementation_identity": null,
+      "project_generation_id": null,
+      "project_snapshot_id": null,
+      "fixture_bundle_sha256": null
+    }
+  ],
+  "output_vectors": {
+    "fixture_policy_id": "wow-rules-e0-fixture-policy/1",
+    "fixture_policy_sha256": null,
+    "rule_registry_id": null,
+    "rule_registry_sha256": null,
+    "rule_execution_context_id": null,
+    "api_authoritative_absence_evaluation_id": null,
+    "api_authoritative_absence_finding_id": null,
+    "api_authoritative_absence_root_cause_key": null,
+    "api_authoritative_absence_remediation_id": null,
+    "api_partial_not_evaluated_id": null,
+    "secret_unsafe_evaluation_id": null,
+    "secret_unsafe_finding_id": null,
+    "secret_unsafe_root_cause_key": null,
+    "secret_unsafe_remediation_id": null,
+    "secret_guarded_clean_evaluation_id": null,
+    "secret_after_use_finding_id": null,
+    "secret_different_value_finding_id": null,
+    "secret_facet_conflict_not_evaluated_id": null,
+    "complete_execution_report_id": null,
+    "complete_execution_report_sha256": null
+  },
+  "members": [
+    {
+      "path": "crates/wow-rules/CONTRACT.json",
+      "sha256": null
+    },
+    {
+      "path": "crates/wow-rules/examples/rule-fixture.json",
+      "sha256": null
+    },
+    {
+      "path": "crates/wow-rules/examples/api-exists-cases.json",
+      "sha256": null
+    },
+    {
+      "path": "crates/wow-rules/examples/secret-local-cases.json",
+      "sha256": null
+    },
+    {
+      "path": "crates/wow-rules/examples/execution-cases.json",
+      "sha256": null
+    }
+  ],
+  "bundle_sha256": null,
+  "rules": [
+    "E0-A through E0-D implementations and their frozen fixture bundles are prerequisites for the E0-E byte freeze.",
+    "All prerequisite implementation, generation, snapshot, source, fact, lookup, facet, evidence, coverage, conflict, and bundle identities must resolve before the first wow-rules Rust commit.",
+    "All rule registry, fixture policy, execution context, evaluation, finding, clean, NotEvaluated, root-cause, causal-hint, remediation, report, and member digest fields must be non-null after implementation starts.",
+    "Digests cover canonical UTF-8 bytes with LF line endings and one final newline.",
+    "Project source facts and reference authority inputs remain independently verifiable and may not be collapsed into one prerequisite digest.",
+    "Tests verify this manifest and never rewrite it automatically.",
+    "A semantic rule, capability, fixture, or output change requires contract, case, test, prerequisite vector, output vector, and checksum review in the same change."
+  ],
+  "freeze_gate": {
+    "required_work_package": "E0-E-implementation",
+    "invalid_after_implementation_starts_when_any_required_value_is_null": true,
+    "required_non_null_values": [
+      "reference_generation_id",
+      "project_generation_id",
+      "analyzer_snapshot_id",
+      "rule_registry_id",
+      "rule_execution_context_id",
+      "prerequisites[*].implementation_identity",
+      "prerequisites[*].fixture_bundle_sha256",
+      "prerequisites[1].reference_generation_id",
+      "prerequisites[2].analyzer_upstream_pin_id",
+      "prerequisites[2].analyzer_snapshot_id",
+      "prerequisites[3].project_generation_id",
+      "prerequisites[3].project_snapshot_id",
+      "output_vectors.fixture_policy_sha256",
+      "output_vectors.rule_registry_id",
+      "output_vectors.rule_registry_sha256",
+      "output_vectors.rule_execution_context_id",
+      "output_vectors.api_authoritative_absence_evaluation_id",
+      "output_vectors.api_authoritative_absence_finding_id",
+      "output_vectors.api_authoritative_absence_root_cause_key",
+      "output_vectors.api_authoritative_absence_remediation_id",
+      "output_vectors.api_partial_not_evaluated_id",
+      "output_vectors.secret_unsafe_evaluation_id",
+      "output_vectors.secret_unsafe_finding_id",
+      "output_vectors.secret_unsafe_root_cause_key",
+      "output_vectors.secret_unsafe_remediation_id",
+      "output_vectors.secret_guarded_clean_evaluation_id",
+      "output_vectors.secret_after_use_finding_id",
+      "output_vectors.secret_different_value_finding_id",
+      "output_vectors.secret_facet_conflict_not_evaluated_id",
+      "output_vectors.complete_execution_report_id",
+      "output_vectors.complete_execution_report_sha256",
+      "members[*].sha256",
+      "bundle_sha256"
+    ],
+    "required_checks": [
+      "all-prerequisite-contracts-and-fixtures-frozen",
+      "project-source-fact-and-reference-authority-input-separation",
+      "canonical-json-validation",
+      "member-byte-digest-validation",
+      "bundle-digest-validation",
+      "rule-registry-and-fixture-policy-vectors",
+      "api-finding-clean-not-evaluated-vectors",
+      "secret-finding-clean-not-evaluated-vectors",
+      "root-cause-and-remediation-vectors",
+      "execution-report-vector",
+      "api-case-execution",
+      "secret-case-execution",
+      "execution-case-execution",
+      "authority-coverage-guard-mutation-tests",
+      "randomized-order-determinism",
+      "security-no-io-no-mutation-no-edit-tests"
+    ]
+  }
+}
