@@ -1,0 +1,356 @@
+{
+  "schema_version": 1,
+  "case_set_id": "wow-emmy-e0-c-compatibility-probe-v1",
+  "state": "documentation-only-no-candidate-pin-selected",
+  "upstream_repository": "EmmyLuaLs/emmylua-analyzer-rust",
+  "candidate_pin": null,
+  "rollback_pin": null,
+  "probe_contract_version": "wow-emmy-probe/e0-c-1",
+  "activation_default": "rejected-until-all-mandatory-cases-pass",
+  "sections": [
+    {
+      "section_id": "P1",
+      "name": "build-and-public-api",
+      "mandatory": true,
+      "cases": [
+        {
+          "case_id": "PROBE-P1-001",
+          "requirement": "Exact commit and crate versions build on the declared toolchain.",
+          "expected": "pass"
+        },
+        {
+          "case_id": "PROBE-P1-002",
+          "requirement": "Required analysis/session/configuration/workspace/file/index/diagnostic/semantic APIs are public.",
+          "expected": "pass"
+        },
+        {
+          "case_id": "PROBE-P1-003",
+          "requirement": "No private module access, permanent fork, or dynamic plugin ABI is required.",
+          "expected": "pass"
+        },
+        {
+          "case_id": "PROBE-P1-004",
+          "requirement": "License, feature set, Rust edition, MSRV/toolchain, and relevant dependency identity are recorded.",
+          "expected": "pass"
+        }
+      ]
+    },
+    {
+      "section_id": "P2",
+      "name": "configuration-isolation",
+      "mandatory": true,
+      "cases": [
+        {
+          "case_id": "PROBE-P2-001",
+          "requirement": "Analyzer configuration is supplied explicitly through owned data.",
+          "expected": "pass"
+        },
+        {
+          "case_id": "PROBE-P2-002",
+          "requirement": "No user, workspace, or editor configuration is read or mutated for correctness.",
+          "expected": "pass"
+        },
+        {
+          "case_id": "PROBE-P2-003",
+          "requirement": "Main and Library workspaces remain distinguishable.",
+          "expected": "pass"
+        }
+      ]
+    },
+    {
+      "section_id": "P3",
+      "name": "workspace-and-file-lifecycle",
+      "mandatory": true,
+      "cases": [
+        {
+          "case_id": "PROBE-P3-001",
+          "requirement": "All closed fixture files can be added deterministically.",
+          "expected": "pass"
+        },
+        {
+          "case_id": "PROBE-P3-002",
+          "requirement": "File update and removal change analyzer state and published facts correctly.",
+          "expected": "pass"
+        },
+        {
+          "case_id": "PROBE-P3-003",
+          "requirement": "Public file/source identity does not expose temporary or absolute host paths.",
+          "expected": "pass"
+        },
+        {
+          "case_id": "PROBE-P3-004",
+          "requirement": "Duplicate or conflicting file registrations are rejected or explicitly classified.",
+          "expected": "pass"
+        }
+      ]
+    },
+    {
+      "section_id": "P4",
+      "name": "annotation-library",
+      "mandatory": true,
+      "cases": [
+        {
+          "case_id": "PROBE-P4-001",
+          "requirement": "The closed C_E0Fixture declaration file loads as Library content.",
+          "expected": "pass"
+        },
+        {
+          "case_id": "PROBE-P4-002",
+          "requirement": "KnownApi and SecretText resolve from Main files through the Library workspace.",
+          "expected": "pass"
+        },
+        {
+          "case_id": "PROBE-P4-003",
+          "requirement": "Library declarations are not emitted as first-party project findings.",
+          "expected": "pass"
+        },
+        {
+          "case_id": "PROBE-P4-004",
+          "requirement": "A broken Library fixture produces an explicit root capability failure and invalidates dependent resolution.",
+          "expected": "pass"
+        }
+      ]
+    },
+    {
+      "section_id": "P5",
+      "name": "generic-diagnostics",
+      "mandatory": true,
+      "cases": [
+        {
+          "case_id": "PROBE-P5-001",
+          "requirement": "The dedicated generic-error fixture produces one stable built-in semantic category through the public API.",
+          "expected": "pass-and-freeze-upstream-code"
+        },
+        {
+          "case_id": "PROBE-P5-002",
+          "requirement": "The clean counterpart does not produce the selected category under complete diagnostics coverage.",
+          "expected": "pass"
+        },
+        {
+          "case_id": "PROBE-P5-003",
+          "requirement": "Upstream code, upstream severity, normalized severity, source span, and structured arguments can be recorded.",
+          "expected": "pass"
+        },
+        {
+          "case_id": "PROBE-P5-004",
+          "requirement": "Rendered message text is not required as diagnostic identity.",
+          "expected": "pass"
+        },
+        {
+          "case_id": "PROBE-P5-005",
+          "requirement": "Every additional diagnostic family emitted by the fixture set is inventoried and classified.",
+          "expected": "pass"
+        }
+      ]
+    },
+    {
+      "section_id": "P6",
+      "name": "reference-and-call-facts",
+      "mandatory": true,
+      "cases": [
+        {
+          "case_id": "PROBE-P6-001",
+          "requirement": "KnownApi yields exact resolved global/member/call facts.",
+          "expected": "pass"
+        },
+        {
+          "case_id": "PROBE-P6-002",
+          "requirement": "RemovedApi yields unresolved member/call observations without a platform-absence conclusion.",
+          "expected": "pass"
+        },
+        {
+          "case_id": "PROBE-P6-003",
+          "requirement": "Receiver, member-name, full-reference, callee, argument, and call spans are obtainable or exact required subsets are documented.",
+          "expected": "pass-or-contract-revision"
+        }
+      ]
+    },
+    {
+      "section_id": "P7",
+      "name": "local-flow-facts",
+      "mandatory": true,
+      "cases": [
+        {
+          "case_id": "PROBE-P7-001",
+          "requirement": "SecretText producer call and local initializer binding are identifiable.",
+          "expected": "pass"
+        },
+        {
+          "case_id": "PROBE-P7-002",
+          "requirement": "The selected direct local concatenation operation is identifiable for the exact binding.",
+          "expected": "pass"
+        },
+        {
+          "case_id": "PROBE-P7-003",
+          "requirement": "canaccessvalue call arguments and the guarded binding can be identified structurally.",
+          "expected": "pass"
+        },
+        {
+          "case_id": "PROBE-P7-004",
+          "requirement": "Dominance or an equivalent exact control-flow relation can distinguish guarded, after-use, and different-value cases.",
+          "expected": "pass-or-explicit-contract-revision-before-implementation"
+        },
+        {
+          "case_id": "PROBE-P7-005",
+          "requirement": "No emitted fact contains a Secret or safety verdict.",
+          "expected": "pass"
+        }
+      ]
+    },
+    {
+      "section_id": "P8",
+      "name": "source-coordinates",
+      "mandatory": true,
+      "cases": [
+        {
+          "case_id": "PROBE-P8-001",
+          "requirement": "ASCII LF ranges convert exactly to UTF-8 byte half-open spans.",
+          "expected": "pass"
+        },
+        {
+          "case_id": "PROBE-P8-002",
+          "requirement": "CRLF ranges convert against exact supplied bytes.",
+          "expected": "pass"
+        },
+        {
+          "case_id": "PROBE-P8-003",
+          "requirement": "Multibyte UTF-8, emoji, and combining sequences preserve exact byte and derived UTF-16 positions.",
+          "expected": "pass"
+        },
+        {
+          "case_id": "PROBE-P8-004",
+          "requirement": "Empty-file and EOF spans have explicit tested semantics.",
+          "expected": "pass"
+        },
+        {
+          "case_id": "PROBE-P8-005",
+          "requirement": "Spans are recomputed after updates and stale spans are rejected.",
+          "expected": "pass"
+        }
+      ]
+    },
+    {
+      "section_id": "P9",
+      "name": "incrementality",
+      "mandatory": true,
+      "cases": [
+        {
+          "case_id": "PROBE-P9-001",
+          "requirement": "Changing one Main file updates its diagnostics and facts.",
+          "expected": "pass"
+        },
+        {
+          "case_id": "PROBE-P9-002",
+          "requirement": "Removing a file removes all current facts and findings for that file.",
+          "expected": "pass"
+        },
+        {
+          "case_id": "PROBE-P9-003",
+          "requirement": "Changing the Library invalidates dependent reference facts.",
+          "expected": "pass"
+        },
+        {
+          "case_id": "PROBE-P9-004",
+          "requirement": "Unchanged outputs are reused only when their currency is proven.",
+          "expected": "pass"
+        },
+        {
+          "case_id": "PROBE-P9-005",
+          "requirement": "Different update orders leading to identical final content produce identical canonical output.",
+          "expected": "pass"
+        }
+      ]
+    },
+    {
+      "section_id": "P10",
+      "name": "determinism",
+      "mandatory": true,
+      "cases": [
+        {
+          "case_id": "PROBE-P10-001",
+          "requirement": "File discovery order does not alter canonical snapshots, facts, or diagnostics.",
+          "expected": "pass"
+        },
+        {
+          "case_id": "PROBE-P10-002",
+          "requirement": "Temporary root path does not alter public handles or canonical identity.",
+          "expected": "pass"
+        },
+        {
+          "case_id": "PROBE-P10-003",
+          "requirement": "Worker scheduling and upstream diagnostic return order do not alter canonical output.",
+          "expected": "pass"
+        }
+      ]
+    },
+    {
+      "section_id": "P11",
+      "name": "scale-sanity",
+      "mandatory": true,
+      "cases": [
+        {
+          "case_id": "PROBE-P11-001",
+          "requirement": "Record fixture file count, bytes, cold session/index latency, update latency, fact/diagnostic counts, and memory when practical.",
+          "expected": "observations-recorded-not-release-claim"
+        },
+        {
+          "case_id": "PROBE-P11-002",
+          "requirement": "Run a bounded synthetic library expansion to detect pathological scaling without loading full Blizzard source.",
+          "expected": "pass-with-recorded-bounds"
+        }
+      ]
+    },
+    {
+      "section_id": "P12",
+      "name": "failure-isolation",
+      "mandatory": true,
+      "cases": [
+        {
+          "case_id": "PROBE-P12-001",
+          "requirement": "One malformed Main file produces no fabricated semantic facts.",
+          "expected": "pass"
+        },
+        {
+          "case_id": "PROBE-P12-002",
+          "requirement": "A broken Library blocks dependent resolution but preserves explicitly independent capabilities.",
+          "expected": "pass"
+        },
+        {
+          "case_id": "PROBE-P12-003",
+          "requirement": "Simulated upstream panic/session corruption publishes no new partial snapshot.",
+          "expected": "pass"
+        },
+        {
+          "case_id": "PROBE-P12-004",
+          "requirement": "Budget/cancellation failure has typed state and cannot appear as clean output.",
+          "expected": "pass"
+        }
+      ]
+    }
+  ],
+  "activation_decisions": [
+    "accepted",
+    "accepted_with_adapter_change",
+    "rejected_missing_capability",
+    "rejected_unclassified_diagnostics",
+    "rejected_nondeterministic",
+    "rejected_source_coordinate_failure",
+    "rejected_security_or_private_api_dependency"
+  ],
+  "required_report_fields": [
+    "candidate_pin",
+    "rollback_pin",
+    "crate_versions",
+    "cargo_features",
+    "rust_toolchain",
+    "license",
+    "case_results",
+    "observed_upstream_diagnostic_families",
+    "source_coordinate_report",
+    "incremental_update_report",
+    "determinism_report",
+    "performance_observations",
+    "missing_or_changed_capabilities",
+    "activation_decision"
+  ]
+}
