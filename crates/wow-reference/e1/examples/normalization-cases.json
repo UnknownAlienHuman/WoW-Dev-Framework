@@ -1,0 +1,308 @@
+{
+  "schema_version": 1,
+  "case_set_id": "wow-reference-e1-normalization-v1",
+  "state": "documentation-only-pending-raw-normalizer-and-byte-freeze",
+  "profile_id": null,
+  "reference_generation_id": null,
+  "field_registry_id": null,
+  "normalizer_version": null,
+  "raw_value_contract_id": null,
+  "entity_identity_contract_id": null,
+  "type_model_contract_id": null,
+  "cases": [
+    {
+      "case_id": "normalization.raw-state-distinction",
+      "inputs": [
+        "field-missing",
+        "field-explicit-nil",
+        "unknown-field-with-supported-raw-value",
+        "known-field-with-unsupported-value-shape",
+        "accepted-default-from-explicit-absence",
+        "known-exact-value"
+      ],
+      "expected_states": [
+        "Missing",
+        "ExplicitNull",
+        "UnknownField",
+        "UnsupportedValue",
+        "DefaultedProjection",
+        "KnownValue"
+      ],
+      "raw_observation_ids": [],
+      "normalized_fact_ids": [],
+      "all-states-distinct": true
+    },
+    {
+      "case_id": "normalization.api-callable",
+      "input_shape": "system-function-with-ordered-parameters-returns-restriction-and-predicate-fields",
+      "expected": {
+        "entity_id": null,
+        "entity_key": null,
+        "callable_fact_id": null,
+        "parameter_ids": [],
+        "return_ids": [],
+        "restriction_facet_ids": [],
+        "predicate_ids": [],
+        "raw_observation_ids": [],
+        "source_handle_ids": [],
+        "member-order-preserved": true
+      }
+    },
+    {
+      "case_id": "normalization.event",
+      "input_shape": "system-event-with-ordered-payload-fields-and-restriction-metadata",
+      "expected": {
+        "entity_id": null,
+        "event_fact_id": null,
+        "payload_field_ids": [],
+        "restriction_facet_ids": [],
+        "raw_observation_ids": [],
+        "payload-order-preserved": true
+      }
+    },
+    {
+      "case_id": "normalization.table-structure",
+      "input_shape": "named-structure-with-ordered-fields-types-nilability-and-unknown-extra-field",
+      "expected": {
+        "entity_id": null,
+        "table_fact_id": null,
+        "field_ids": [],
+        "unknown_field_ids": [],
+        "known-field-projections-complete-as-declared": true,
+        "unknown-field-raw-preserved": true
+      }
+    },
+    {
+      "case_id": "normalization.enum-cvar-widget",
+      "input_shape": "enum-values-cvar-record-widget-and-exact-method",
+      "expected": {
+        "enum_entity_id": null,
+        "enum_value_ids": [],
+        "cvar_entity_id": null,
+        "widget_entity_id": null,
+        "widget_method_entity_id": null,
+        "raw_observation_ids": [],
+        "no-community-or-external-inference": true
+      }
+    },
+    {
+      "case_id": "normalization.restriction-open-facet",
+      "input_shape": "known-secret-return-facet-plus-unknown-new-restriction-field",
+      "expected": {
+        "known_facet_id": null,
+        "unknown_field_id": null,
+        "raw_known_payload_id": null,
+        "raw_unknown_payload_id": null,
+        "dependent-safety-capability-complete": false,
+        "unknown-field-silently-ignored": false
+      }
+    },
+    {
+      "case_id": "normalization.explicit-deprecation-transition",
+      "input_shape": "exact-deprecation-and-explicit-replacement-or-moved-to-source-field",
+      "expected": {
+        "deprecation_fact_id": null,
+        "transition_fact_id": null,
+        "target_entity_id": null,
+        "replacement_entity_id": null,
+        "source_evidence_ids": [],
+        "replacement-confidence-from-source-only": true
+      }
+    },
+    {
+      "case_id": "normalization.no-prose-or-fuzzy-replacement",
+      "input_shape": "documentation-prose-and-similar-name-without-explicit-transition-field",
+      "expected": {
+        "transition_fact_emitted": false,
+        "fuzzy_alias_emitted": false,
+        "candidate-or-search-result-emitted": false,
+        "raw_documentation_preserved": true
+      }
+    },
+    {
+      "case_id": "normalization.exact-duplicate",
+      "input_shape": "two-exact-equivalent-observations-for-one-entity-fact",
+      "expected": {
+        "normalized_entity_count": 1,
+        "normalized_fact_count": 1,
+        "all_raw_occurrence_ids": [],
+        "all_source_evidence_ids": [],
+        "conflict_record_id": null,
+        "conflict_expected": false
+      }
+    },
+    {
+      "case_id": "normalization.conflicting-duplicate",
+      "input_shape": "same-exact-entity-key-with-different-signature-or-field-value",
+      "expected": {
+        "competing_raw_observation_ids": [],
+        "conflict_record_id": null,
+        "one-value-silently-selected": false,
+        "dependent-coverage-complete": false
+      }
+    },
+    {
+      "case_id": "normalization.same-name-distinct-scopes",
+      "input_shape": "same-name-across-different-kinds-systems-owners-or-signatures",
+      "expected": {
+        "entity_ids": [],
+        "entity_keys": [],
+        "all-distinct": true,
+        "path-only-or-name-only-identity": false
+      }
+    },
+    {
+      "case_id": "normalization.unresolved-type",
+      "input_shape": "named-type-reference-with-no-exact-target-in-selected-generation",
+      "expected": {
+        "type_reference_id": null,
+        "resolution_state": "Unresolved",
+        "silent-any-or-string-substitution": false,
+        "dependent-coverage-complete": false
+      }
+    },
+    {
+      "case_id": "normalization.ambiguous-type",
+      "input_shape": "named-type-reference-with-multiple-exact-candidates",
+      "expected": {
+        "type_reference_id": null,
+        "candidate_entity_ids": [],
+        "conflict_record_id": null,
+        "resolution_state": "Ambiguous",
+        "first-row-selected": false
+      }
+    },
+    {
+      "case_id": "normalization.cross-profile-link",
+      "input_shape": "reference-target-exists-only-in-another-profile-generation",
+      "expected": {
+        "cross-profile-link-emitted": false,
+        "error_or_conflict_code": "reference_cross_profile_generation_mix_forbidden"
+      }
+    },
+    {
+      "case_id": "normalization.derived-signature",
+      "input_shape": "ordered-parameter-and-return-facts",
+      "expected": {
+        "derived_signature_id": null,
+        "derivation_input_ids": [],
+        "producer_version": null,
+        "confidence": "Derived",
+        "authority-not-stronger-than-inputs": true
+      }
+    },
+    {
+      "case_id": "normalization.raw-projection-closure",
+      "mutation": "remove-raw-observation-or-source-evidence-reference-from-normalized-fact",
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "reference_raw_projection_closure_invalid"
+      }
+    },
+    {
+      "case_id": "normalization.unknown-as-default",
+      "mutation": "coerce-unknown-or-unsupported-source-field-to-absence-default",
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "unknown_as_absent_or_default_forbidden"
+      }
+    },
+    {
+      "case_id": "normalization.raw-observation-loss",
+      "mutation": "drop-duplicate-unknown-or-unsupported-raw-observation",
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "raw_observation_loss_forbidden"
+      }
+    },
+    {
+      "case_id": "normalization.deterministic-output",
+      "mutations": [
+        "permute-independent-file-and-registration-processing",
+        "permute-raw-observation-input-for-unordered-sets",
+        "permute-sql-insertion-order",
+        "change-worker-scheduling",
+        "change-temp-root-and-provider-checkout-path",
+        "change-human-documentation-rendering"
+      ],
+      "expected": {
+        "raw_value_ids_equal": true,
+        "raw_observation_ids_equal": true,
+        "entity_and_fact_ids_equal": true,
+        "unknown_unsupported_conflict_ids_equal": true,
+        "restriction_predicate_deprecation_ids_equal": true,
+        "raw_and_normalized_manifest_digests_equal": true
+      }
+    }
+  ],
+  "expected_manifests": {
+    "raw_manifest_id": null,
+    "normalized_manifest_id": null,
+    "unknown_field_manifest_id": null,
+    "unsupported_manifest_id": null,
+    "conflict_manifest_id": null,
+    "restriction_manifest_id": null,
+    "predicate_manifest_id": null,
+    "deprecation_transition_manifest_id": null
+  },
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "profile_id",
+      "reference_generation_id",
+      "field_registry_id",
+      "normalizer_version",
+      "raw_value_contract_id",
+      "entity_identity_contract_id",
+      "type_model_contract_id",
+      "cases[0].raw_observation_ids",
+      "cases[0].normalized_fact_ids",
+      "cases[1].expected.entity_id",
+      "cases[1].expected.entity_key",
+      "cases[1].expected.callable_fact_id",
+      "cases[1].expected.parameter_ids",
+      "cases[1].expected.return_ids",
+      "cases[1].expected.restriction_facet_ids",
+      "cases[1].expected.predicate_ids",
+      "cases[1].expected.raw_observation_ids",
+      "cases[1].expected.source_handle_ids",
+      "cases[2].expected.entity_id",
+      "cases[2].expected.event_fact_id",
+      "cases[2].expected.payload_field_ids",
+      "cases[3].expected.entity_id",
+      "cases[3].expected.table_fact_id",
+      "cases[3].expected.field_ids",
+      "cases[3].expected.unknown_field_ids",
+      "cases[4].expected.enum_entity_id",
+      "cases[4].expected.enum_value_ids",
+      "cases[4].expected.cvar_entity_id",
+      "cases[4].expected.widget_entity_id",
+      "cases[4].expected.widget_method_entity_id",
+      "cases[5].expected.known_facet_id",
+      "cases[5].expected.unknown_field_id",
+      "cases[6].expected.deprecation_fact_id",
+      "cases[6].expected.transition_fact_id",
+      "cases[8].expected.all_raw_occurrence_ids",
+      "cases[8].expected.all_source_evidence_ids",
+      "cases[9].expected.competing_raw_observation_ids",
+      "cases[9].expected.conflict_record_id",
+      "cases[10].expected.entity_ids",
+      "cases[10].expected.entity_keys",
+      "cases[11].expected.type_reference_id",
+      "cases[12].expected.type_reference_id",
+      "cases[12].expected.candidate_entity_ids",
+      "cases[12].expected.conflict_record_id",
+      "cases[14].expected.derived_signature_id",
+      "cases[14].expected.derivation_input_ids",
+      "cases[14].expected.producer_version",
+      "expected_manifests.raw_manifest_id",
+      "expected_manifests.normalized_manifest_id",
+      "expected_manifests.unknown_field_manifest_id",
+      "expected_manifests.unsupported_manifest_id",
+      "expected_manifests.conflict_manifest_id",
+      "expected_manifests.restriction_manifest_id",
+      "expected_manifests.predicate_manifest_id",
+      "expected_manifests.deprecation_transition_manifest_id"
+    ]
+  }
+}
