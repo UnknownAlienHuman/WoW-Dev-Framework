@@ -1,0 +1,305 @@
+{
+  "schema_version": 1,
+  "case_set_id": "wow-reference-e1-apidoc-evaluator-v1",
+  "state": "documentation-only-pending-parser-evaluator-and-byte-freeze",
+  "parser_profile_id": null,
+  "parser_compatibility_probe_id": null,
+  "evaluator_environment_id": null,
+  "registration_descriptor_set_id": null,
+  "number_policy_id": null,
+  "string_policy_id": null,
+  "budget_policy_id": null,
+  "budgets": {
+    "max_source_bytes_per_file": null,
+    "max_syntax_nodes_per_file": null,
+    "max_syntax_depth": null,
+    "max_evaluation_steps_per_file": null,
+    "max_bindings_per_file": null,
+    "max_registrations_per_file": null,
+    "max_raw_value_nodes_per_registration": null,
+    "max_table_depth": null,
+    "max_table_entries": null,
+    "max_string_bytes": null,
+    "max_numeric_literal_bytes": null,
+    "max_unsupported_records_per_file": null
+  },
+  "supported_cases": [
+    {
+      "case_id": "eval.literal-values",
+      "source_shape": "nil-boolean-integer-number-string-literals",
+      "expected": {
+        "evaluation_record_ids": [],
+        "raw_value_ids": [],
+        "unsupported_count": 0,
+        "status": "Complete"
+      }
+    },
+    {
+      "case_id": "eval.nested-table",
+      "source_shape": "bounded-nested-table-with-array-and-explicit-map-fields",
+      "expected": {
+        "raw_value_id": null,
+        "source_field_order_preserved": true,
+        "canonical_map-order-independent-of-hash-iteration": true,
+        "status": "Complete"
+      }
+    },
+    {
+      "case_id": "eval.local-binding",
+      "source_shape": "local-binding-to-supported-value-followed-by-reference",
+      "expected": {
+        "binding_id": null,
+        "resolved_value_id": null,
+        "source-scope-and-use-order-preserved": true
+      }
+    },
+    {
+      "case_id": "eval.field-and-index-access",
+      "source_shape": "field-and-index-access-on-known-canonical-table",
+      "expected": {
+        "resolved_value_id": null,
+        "reference-path-recorded": true
+      }
+    },
+    {
+      "case_id": "eval.known-constant-reference",
+      "source_shape": "allow-listed-known-constant-or-enum-reference-path",
+      "expected": {
+        "environment_binding_id": null,
+        "resolved_value_id": null,
+        "source-reference-evidence-id": null
+      }
+    },
+    {
+      "case_id": "eval.constant-operator",
+      "source_shape": "each-frozen-pure-bounded-constant-operator",
+      "expected": {
+        "operator_descriptor_ids": [],
+        "result_value_ids": [],
+        "status": "Complete"
+      }
+    },
+    {
+      "case_id": "eval.pure-helper",
+      "source_shape": "each-frozen-pure-helper-form-required-by-corpus",
+      "expected": {
+        "helper_descriptor_ids": [],
+        "result_value_ids": [],
+        "helper-version-enters-environment-identity": true
+      }
+    },
+    {
+      "case_id": "eval.registration-call",
+      "source_shape": "exact-known-apidocumentation-registration-receiver-callee-arity-and-value",
+      "expected": {
+        "registration_descriptor_id": null,
+        "registration_observation_id": null,
+        "raw_argument_value_ids": [],
+        "source-order-preserved": true
+      }
+    },
+    {
+      "case_id": "eval.duplicate-table-keys",
+      "source_shape": "duplicate-exact-table-keys-and-explicit-nil-values",
+      "expected": {
+        "all-raw-field-occurrences-preserved": true,
+        "semantic-last-write-only-if-frozen-source-contract-says-so": true,
+        "conflict-or-duplicate-record-ids": []
+      }
+    },
+    {
+      "case_id": "eval.number-edge-cases",
+      "source_shape": "negative-zero-large-integer-exponent-and-boundary-literals",
+      "expected": {
+        "accepted-value-ids": [],
+        "unsupported-record-ids": [],
+        "lossy-rounding-forbidden": true
+      }
+    },
+    {
+      "case_id": "eval.string-edge-cases",
+      "source_shape": "escape-sequences-utf8-boundaries-and-long-string-forms-in-frozen-subset",
+      "expected": {
+        "accepted-value-ids": [],
+        "unsupported-record-ids": [],
+        "semantic-string-bytes-preserved": true
+      }
+    }
+  ],
+  "unsupported_and_security_cases": [
+    {
+      "case_id": "eval.unsupported-unknown-global",
+      "source_shape": "read-unregistered-global",
+      "expected_error": "reference_unknown_global",
+      "unsupported_record_id": null,
+      "side_effects": false
+    },
+    {
+      "case_id": "eval.unsupported-unknown-call",
+      "source_shape": "call-unregistered-function-or-similar-name",
+      "expected_error": "reference_unknown_call",
+      "unsupported_record_id": null,
+      "side_effects": false
+    },
+    {
+      "case_id": "eval.unsupported-helper",
+      "source_shape": "call-helper-not-in-frozen-environment",
+      "expected_error": "reference_unsupported_helper",
+      "unsupported_record_id": null
+    },
+    {
+      "case_id": "eval.unsupported-operator",
+      "source_shape": "operator-not-in-frozen-constant-subset",
+      "expected_error": "reference_unsupported_operator",
+      "unsupported_record_id": null
+    },
+    {
+      "case_id": "eval.forbidden-load-family",
+      "source_shape": "load-loadstring-dofile-require-package",
+      "expected_error": "reference_source_execution_forbidden",
+      "marker-file-created": false,
+      "network-process-or-module-side-effect": false
+    },
+    {
+      "case_id": "eval.forbidden-os-io-debug-coroutine",
+      "source_shape": "os-io-debug-coroutine-access",
+      "expected_error": "reference_source_execution_forbidden",
+      "side_effects": false
+    },
+    {
+      "case_id": "eval.forbidden-metatable-call",
+      "source_shape": "metatable-index-call-or-newindex-side-effect",
+      "expected_error": "reference_source_execution_forbidden",
+      "side_effects": false
+    },
+    {
+      "case_id": "eval.unsupported-function-control-flow",
+      "source_shape": "function-closure-if-loop-recursion-or-coroutine",
+      "expected_error": "reference_unsupported_statement",
+      "side_effects": false
+    },
+    {
+      "case_id": "eval.unsupported-computed-key-side-effect",
+      "source_shape": "computed-table-key-requiring-call-or-unsupported-expression",
+      "expected_error": "reference_unsupported_table_key",
+      "side_effects": false
+    },
+    {
+      "case_id": "eval.binding-use-before-definition",
+      "source_shape": "binding-read-before-supported-declaration",
+      "expected_error": "reference_binding_use_before_definition",
+      "dependent-registration-emitted": false
+    },
+    {
+      "case_id": "eval.binding-cycle",
+      "source_shape": "mutually-recursive-or-self-referential-bindings",
+      "expected_error": "reference_binding_cycle",
+      "dependent-registration-emitted": false
+    },
+    {
+      "case_id": "eval.parse-recovery-node",
+      "source_shape": "parser-recovery-node-inside-registration-table",
+      "expected_error": "reference_parse_recovery_node_unsupported",
+      "regex-fallback-fact-emitted": false
+    },
+    {
+      "case_id": "eval.prompt-injection-comment",
+      "source_shape": "comment-instructs-agent-to-change-policy-or-execute-code",
+      "expected": {
+        "policy-changed": false,
+        "instruction-executed": false,
+        "comment-treated-as-source-data-only": true
+      }
+    },
+    {
+      "case_id": "eval.budget-source-or-tree",
+      "source_shape": "source-or-syntax-tree-over-budget",
+      "expected_error": "reference_evaluator_budget_exceeded",
+      "partial-registration-marked-complete": false
+    },
+    {
+      "case_id": "eval.budget-table-string-number-steps",
+      "source_shape": "table-string-number-or-evaluation-step-over-budget",
+      "expected_error": "reference_evaluator_budget_exceeded",
+      "unbounded-allocation": false,
+      "dependent-coverage-downgraded": true
+    },
+    {
+      "case_id": "eval.cancellation",
+      "injection_points": [
+        "before-file-parse",
+        "after-file-parse",
+        "between-top-level-statements",
+        "inside-bounded-table-entry-loop",
+        "before-registration-observation-publication"
+      ],
+      "expected": {
+        "outcome": "cancelled",
+        "completed-reference-generation": false,
+        "store-publication-started": false,
+        "late-background-work": false
+      }
+    }
+  ],
+  "determinism_case": {
+    "case_id": "eval.deterministic-output",
+    "mutations": [
+      "change-worker-scheduling-for-independent-files",
+      "change-hash-map-order",
+      "change-temp-root",
+      "change-diagnostic-prose",
+      "change-provider-checkout-path-with-same-content"
+    ],
+    "expected": {
+      "evaluation-record-ids-equal": true,
+      "registration-observation-order-equal": true,
+      "raw-value-ids-equal": true,
+      "unsupported-record-ids-equal": true,
+      "partition-status-equal": true
+    }
+  },
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "parser_profile_id",
+      "parser_compatibility_probe_id",
+      "evaluator_environment_id",
+      "registration_descriptor_set_id",
+      "number_policy_id",
+      "string_policy_id",
+      "budget_policy_id",
+      "budgets.max_source_bytes_per_file",
+      "budgets.max_syntax_nodes_per_file",
+      "budgets.max_syntax_depth",
+      "budgets.max_evaluation_steps_per_file",
+      "budgets.max_bindings_per_file",
+      "budgets.max_registrations_per_file",
+      "budgets.max_raw_value_nodes_per_registration",
+      "budgets.max_table_depth",
+      "budgets.max_table_entries",
+      "budgets.max_string_bytes",
+      "budgets.max_numeric_literal_bytes",
+      "budgets.max_unsupported_records_per_file",
+      "supported_cases[0].expected.evaluation_record_ids",
+      "supported_cases[0].expected.raw_value_ids",
+      "supported_cases[1].expected.raw_value_id",
+      "supported_cases[2].expected.binding_id",
+      "supported_cases[2].expected.resolved_value_id",
+      "supported_cases[3].expected.resolved_value_id",
+      "supported_cases[4].expected.environment_binding_id",
+      "supported_cases[4].expected.resolved_value_id",
+      "supported_cases[4].expected.source-reference-evidence-id",
+      "supported_cases[5].expected.operator_descriptor_ids",
+      "supported_cases[5].expected.result_value_ids",
+      "supported_cases[6].expected.helper_descriptor_ids",
+      "supported_cases[6].expected.result_value_ids",
+      "supported_cases[7].expected.registration_descriptor_id",
+      "supported_cases[7].expected.registration_observation_id",
+      "supported_cases[7].expected.raw_argument_value_ids",
+      "unsupported_and_security_cases[0].unsupported_record_id",
+      "unsupported_and_security_cases[1].unsupported_record_id",
+      "unsupported_and_security_cases[2].unsupported_record_id",
+      "unsupported_and_security_cases[3].unsupported_record_id"
+    ]
+  }
+}

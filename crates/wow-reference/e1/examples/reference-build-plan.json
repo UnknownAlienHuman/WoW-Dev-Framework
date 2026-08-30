@@ -1,0 +1,368 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-reference-e1-build-plan-v1",
+  "state": "documentation-only-pending-build-store-and-byte-freeze",
+  "prerequisites": {
+    "wow_core_contract_id": "wow-core/e0-a/1",
+    "wow_core_implementation_id": null,
+    "wow_core_fixture_bundle_sha256": null,
+    "wow_store_contract_id": "wow-store/e1-a/1",
+    "wow_store_implementation_id": null,
+    "wow_store_fixture_bundle_sha256": null
+  },
+  "inputs": {
+    "reference_build_request_id": null,
+    "source_snapshot_id": null,
+    "source_content_sha256": null,
+    "profile_id": null,
+    "input_partition_policy_id": null,
+    "parser_profile_id": null,
+    "evaluator_environment_id": null,
+    "field_registry_id": null,
+    "normalizer_version": null,
+    "correction_set_id": null,
+    "capability_registry_id": null,
+    "schema_bundle_id": null,
+    "write_operation_catalog_id": null,
+    "read_operation_catalog_id": null,
+    "validation_catalog_id": null,
+    "migration_graph_id": null,
+    "store_configuration_id": null,
+    "store_runtime_profile_id": null,
+    "object_store_configuration_id": null,
+    "budget_policy_id": null,
+    "requested_durability_level": null
+  },
+  "stage_state_machine": [
+    "Requested",
+    "SnapshotVerified",
+    "ProfileValidated",
+    "InputsResolved",
+    "Parsed",
+    "Evaluated",
+    "RawPreserved",
+    "Normalized",
+    "CorrectionsEvaluated",
+    "ConflictsResolvedOrRecorded",
+    "CoverageFinalized",
+    "StorePlanFinalized",
+    "StoreBuiltAndValidated",
+    "StorePublishedAndReopened",
+    "ReferenceViewValidated",
+    "ReferenceDataManifestFinalized",
+    "Completed"
+  ],
+  "partition_outcomes": [
+    {
+      "partition_id": null,
+      "kind": "apidoc.systems",
+      "status": "Complete",
+      "source_file_ids": [],
+      "parse_record_ids": [],
+      "evaluation_record_ids": [],
+      "coverage_record_ids": []
+    },
+    {
+      "partition_id": null,
+      "kind": "apidoc.generated",
+      "status": "Complete",
+      "source_file_ids": [],
+      "parse_record_ids": [],
+      "evaluation_record_ids": [],
+      "coverage_record_ids": []
+    },
+    {
+      "partition_id": null,
+      "kind": "apidoc.deprecated",
+      "status": "NotApplicable",
+      "source_file_ids": [],
+      "parse_record_ids": [],
+      "evaluation_record_ids": [],
+      "coverage_record_ids": []
+    }
+  ],
+  "raw_and_normalized_manifests": {
+    "raw_value_manifest_id": null,
+    "raw_observation_manifest_id": null,
+    "unknown_field_manifest_id": null,
+    "unsupported_construct_manifest_id": null,
+    "normalized_entity_manifest_id": null,
+    "normalized_fact_manifest_id": null,
+    "restriction_predicate_manifest_id": null,
+    "deprecation_transition_manifest_id": null,
+    "conflict_manifest_id": null,
+    "correction_application_manifest_id": null,
+    "coverage_capability_manifest_id": null,
+    "raw_value_count": null,
+    "raw_observation_count": null,
+    "unknown_field_count": null,
+    "unsupported_construct_count": null,
+    "normalized_entity_count": null,
+    "normalized_fact_count": null,
+    "conflict_count": null,
+    "correction_application_count": null,
+    "coverage_record_count": null
+  },
+  "reference_generation": {
+    "reference_generation_id": null,
+    "generation_input_manifest_id": null,
+    "generation_input_manifest_sha256": null,
+    "profile_id": null,
+    "source_snapshot_id": null,
+    "parser_evaluator_normalizer_identity_digest": null,
+    "correction_set_id": null,
+    "schema_bundle_id": null,
+    "build_contract_version": "wow-reference/e1-persistent-schema-and-build-plan"
+  },
+  "store_build_plan": {
+    "reference_store_build_plan_id": null,
+    "store_build_request_id": null,
+    "store_candidate_build_id": null,
+    "operation_phases": [
+      {
+        "phase": "profile-source-partitions-files",
+        "operation_invocation_ids": []
+      },
+      {
+        "phase": "parsed-raw-values-registrations-observations",
+        "operation_invocation_ids": []
+      },
+      {
+        "phase": "entities-facts-members-links",
+        "operation_invocation_ids": []
+      },
+      {
+        "phase": "corrections-applications",
+        "operation_invocation_ids": []
+      },
+      {
+        "phase": "conflicts-coverage-capabilities-not-evaluated",
+        "operation_invocation_ids": []
+      },
+      {
+        "phase": "build-report-manifest-generation-finalization",
+        "operation_invocation_ids": []
+      }
+    ],
+    "object_write_requests": [],
+    "object_reference_plan_id": null,
+    "validation_invocation_ids": [],
+    "expected_logical_record_manifest_id": null,
+    "expected_logical_record_manifest_sha256": null,
+    "expected_object_reference_set_digest": null,
+    "canonical_sha256": null,
+    "contains_raw_sql": false,
+    "contains_hidden_callbacks_or_source_paths_as_sql-identifiers": false
+  },
+  "store_result": {
+    "store_id": null,
+    "store_generation_id": null,
+    "store_manifest_id": null,
+    "store_manifest_sha256": null,
+    "sqlite_file_sha256": null,
+    "integrity_report_id": null,
+    "final_path_open_validation_report_id": null,
+    "active_pointer_id": null,
+    "publication_record_id": null,
+    "published_read_only": true,
+    "released_sidecars": []
+  },
+  "reference_view_validation": {
+    "reference_view_id": null,
+    "known_found_result_ids": [],
+    "authoritative_absence_result_id": null,
+    "partial_absence_result_id": null,
+    "conflict_result_id": null,
+    "profile_mismatch_result_id": null,
+    "raw_metadata_result_id": null,
+    "capability_manifest_result_id": null,
+    "all-results-match-build-manifests": true
+  },
+  "reference_data_output": {
+    "reference_data_build_report_id": null,
+    "reference_data_build_report_sha256": null,
+    "reference_data_manifest_id": null,
+    "reference_data_manifest_sha256": null,
+    "release_eligibility": "fixture",
+    "raw_metadata_object_manifest_id": null,
+    "source_map_object_manifest_id": null,
+    "license_provenance_manifest_id": null,
+    "annotation_artifact_id": null,
+    "annotation_artifact_owned_here": false,
+    "full_ui_graph_claimed": false,
+    "search_or_runtime_claimed": false
+  },
+  "failure_and_cancellation_cases": [
+    {
+      "case_id": "build.snapshot-preflight-failure",
+      "injection_stage": "SnapshotVerified",
+      "expected": {
+        "reference_generation_created": false,
+        "store_plan_created": false,
+        "store_publication_started": false,
+        "completed_manifest_created": false
+      }
+    },
+    {
+      "case_id": "build.mandatory-partition-failure",
+      "injection_stage": "ParsedOrEvaluated",
+      "expected": {
+        "release_eligible": false,
+        "partial-independent-facts-may-be-retained-in-candidate-report": true,
+        "completed-release-manifest-created": false
+      }
+    },
+    {
+      "case_id": "build.store-publication-failure",
+      "injection_stage": "StoreBuiltAndValidatedOrPublished",
+      "expected": {
+        "reference_data_manifest_completed": false,
+        "previous_active_store_unchanged": true,
+        "old-generation-relabelled": false
+      }
+    },
+    {
+      "case_id": "build.published-store-view-validation-failure",
+      "injection_stage": "ReferenceViewValidated",
+      "expected": {
+        "reference_data_manifest_completed": false,
+        "published-store-may-remain-inactive-and-recoverable": true,
+        "exact-revalidation-required": true
+      }
+    },
+    {
+      "case_id": "build.cancel-every-stage",
+      "injection_stages": [
+        "before-snapshot-preflight",
+        "between-files",
+        "inside-bounded-evaluator-work",
+        "before-normalization",
+        "before-corrections",
+        "before-coverage-finalization",
+        "before-store-handoff",
+        "during-store-handoff-before-publication",
+        "after-store-generation-published-before-reference-manifest-finalization"
+      ],
+      "expected": {
+        "late-background-work": false,
+        "partial-active-reference-data-generation": false,
+        "previous-active-store-unchanged-unless-wow-store-atomic-state-proves-pointer-already-committed": true,
+        "recovery-state-exactly-classified": true
+      }
+    }
+  ],
+  "determinism_case": {
+    "mutations": [
+      "permute-independent-file-worker-order",
+      "permute-unordered-raw-fact-correction-record-input",
+      "permute-sql-insertion-order",
+      "change-temp-root-provider-checkout-path-host-time-and-log-order",
+      "change-worker-count-1-2-N"
+    ],
+    "expected": {
+      "reference_generation_id_equal": true,
+      "raw_normalized_correction_conflict_coverage_manifest_ids_equal": true,
+      "reference_store_build_plan_id_equal": true,
+      "logical_store_generation_and-reference-data-manifest-references-equal": true,
+      "reference_view-result-ids-and-order-equal": true,
+      "raw-sqlite-byte-equality-required-only-if-wow-store-classification-proves-it": true
+    }
+  },
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "prerequisites.wow_core_implementation_id",
+      "prerequisites.wow_core_fixture_bundle_sha256",
+      "prerequisites.wow_store_implementation_id",
+      "prerequisites.wow_store_fixture_bundle_sha256",
+      "inputs.reference_build_request_id",
+      "inputs.source_snapshot_id",
+      "inputs.source_content_sha256",
+      "inputs.profile_id",
+      "inputs.input_partition_policy_id",
+      "inputs.parser_profile_id",
+      "inputs.evaluator_environment_id",
+      "inputs.field_registry_id",
+      "inputs.normalizer_version",
+      "inputs.correction_set_id",
+      "inputs.capability_registry_id",
+      "inputs.schema_bundle_id",
+      "inputs.write_operation_catalog_id",
+      "inputs.read_operation_catalog_id",
+      "inputs.validation_catalog_id",
+      "inputs.migration_graph_id",
+      "inputs.store_configuration_id",
+      "inputs.store_runtime_profile_id",
+      "inputs.object_store_configuration_id",
+      "inputs.budget_policy_id",
+      "inputs.requested_durability_level",
+      "partition_outcomes[*].partition_id",
+      "partition_outcomes[*].source_file_ids",
+      "partition_outcomes[*].parse_record_ids",
+      "partition_outcomes[*].evaluation_record_ids",
+      "partition_outcomes[*].coverage_record_ids",
+      "raw_and_normalized_manifests.raw_value_manifest_id",
+      "raw_and_normalized_manifests.raw_observation_manifest_id",
+      "raw_and_normalized_manifests.unknown_field_manifest_id",
+      "raw_and_normalized_manifests.unsupported_construct_manifest_id",
+      "raw_and_normalized_manifests.normalized_entity_manifest_id",
+      "raw_and_normalized_manifests.normalized_fact_manifest_id",
+      "raw_and_normalized_manifests.restriction_predicate_manifest_id",
+      "raw_and_normalized_manifests.deprecation_transition_manifest_id",
+      "raw_and_normalized_manifests.conflict_manifest_id",
+      "raw_and_normalized_manifests.correction_application_manifest_id",
+      "raw_and_normalized_manifests.coverage_capability_manifest_id",
+      "raw_and_normalized_manifests.raw_value_count",
+      "raw_and_normalized_manifests.raw_observation_count",
+      "raw_and_normalized_manifests.unknown_field_count",
+      "raw_and_normalized_manifests.unsupported_construct_count",
+      "raw_and_normalized_manifests.normalized_entity_count",
+      "raw_and_normalized_manifests.normalized_fact_count",
+      "raw_and_normalized_manifests.conflict_count",
+      "raw_and_normalized_manifests.correction_application_count",
+      "raw_and_normalized_manifests.coverage_record_count",
+      "reference_generation.reference_generation_id",
+      "reference_generation.generation_input_manifest_id",
+      "reference_generation.generation_input_manifest_sha256",
+      "reference_generation.profile_id",
+      "reference_generation.source_snapshot_id",
+      "reference_generation.parser_evaluator_normalizer_identity_digest",
+      "reference_generation.correction_set_id",
+      "reference_generation.schema_bundle_id",
+      "store_build_plan.reference_store_build_plan_id",
+      "store_build_plan.store_build_request_id",
+      "store_build_plan.store_candidate_build_id",
+      "store_build_plan.operation_phases[*].operation_invocation_ids",
+      "store_build_plan.object_reference_plan_id",
+      "store_build_plan.validation_invocation_ids",
+      "store_build_plan.expected_logical_record_manifest_id",
+      "store_build_plan.expected_logical_record_manifest_sha256",
+      "store_build_plan.expected_object_reference_set_digest",
+      "store_build_plan.canonical_sha256",
+      "store_result.store_id",
+      "store_result.store_generation_id",
+      "store_result.store_manifest_id",
+      "store_result.store_manifest_sha256",
+      "store_result.sqlite_file_sha256",
+      "store_result.integrity_report_id",
+      "store_result.final_path_open_validation_report_id",
+      "store_result.active_pointer_id",
+      "store_result.publication_record_id",
+      "reference_view_validation.reference_view_id",
+      "reference_view_validation.known_found_result_ids",
+      "reference_view_validation.authoritative_absence_result_id",
+      "reference_view_validation.partial_absence_result_id",
+      "reference_view_validation.conflict_result_id",
+      "reference_view_validation.profile_mismatch_result_id",
+      "reference_view_validation.raw_metadata_result_id",
+      "reference_view_validation.capability_manifest_result_id",
+      "reference_data_output.reference_data_build_report_id",
+      "reference_data_output.reference_data_build_report_sha256",
+      "reference_data_output.reference_data_manifest_id",
+      "reference_data_output.reference_data_manifest_sha256",
+      "reference_data_output.raw_metadata_object_manifest_id",
+      "reference_data_output.source_map_object_manifest_id",
+      "reference_data_output.license_provenance_manifest_id"
+    ]
+  }
+}

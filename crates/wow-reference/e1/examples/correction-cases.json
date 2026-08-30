@@ -1,0 +1,284 @@
+{
+  "schema_version": 1,
+  "case_set_id": "wow-reference-e1-corrections-v1",
+  "state": "documentation-only-pending-correction-and-byte-freeze",
+  "profile_id": null,
+  "source_snapshot_id": null,
+  "source_content_sha256": null,
+  "normalizer_version": null,
+  "field_registry_id": null,
+  "correction_set": {
+    "correction_set_id": null,
+    "version": 1,
+    "applicable_profile_ids": [],
+    "correction_ids": [],
+    "dependency_graph_id": null,
+    "canonical_sha256": null
+  },
+  "cases": [
+    {
+      "case_id": "correction.apply-exact",
+      "correction": {
+        "correction_id": null,
+        "target_entity_id": null,
+        "target_raw_observation_id": null,
+        "target_field_path_id": null,
+        "expected_source_file_sha256": null,
+        "expected_raw_value_sha256": null,
+        "expected_normalizer_version": null,
+        "operation_kind": "replace-supported-field-value",
+        "replacement_value_id": null,
+        "evidence_ids": [],
+        "reviewer_id": null,
+        "review_record_id": null
+      },
+      "expected": {
+        "status": "Applied",
+        "application_id": null,
+        "before_fact_id": null,
+        "after_fact_id": null,
+        "raw_observation_id_unchanged": true,
+        "affected_coverage_ids": [],
+        "generation_identity_includes-correction-set": true
+      }
+    },
+    {
+      "case_id": "correction.expired-source-file-digest",
+      "mutation": "change-source-file-content-digest",
+      "expected": {
+        "status": "Expired",
+        "application_id": null,
+        "normalized_projection_changed": false,
+        "raw_observation_changed": false,
+        "dependent-negative-authority-blocked": true
+      }
+    },
+    {
+      "case_id": "correction.expired-raw-value-digest",
+      "mutation": "same-target-field-but-different-raw-value-digest",
+      "expected": {
+        "status": "Expired",
+        "application_id": null,
+        "best-effort-application": false,
+        "expected-digest-auto-updated": false
+      }
+    },
+    {
+      "case_id": "correction.expired-normalizer-shape",
+      "mutation": "normalizer-or-field-shape-changed",
+      "expected": {
+        "status": "Expired",
+        "application_id": null,
+        "re-review-required": true
+      }
+    },
+    {
+      "case_id": "correction.not-applicable-profile",
+      "mutation": "build-different-profile-or-flavor",
+      "expected": {
+        "status": "NotApplicable",
+        "application_id": null,
+        "other-profile-coverage-downgraded": false
+      }
+    },
+    {
+      "case_id": "correction.rejected-missing-evidence-reviewer",
+      "mutation": "remove-evidence-or-reviewer",
+      "expected": {
+        "status": "Rejected",
+        "error_code": "correction_record_invalid",
+        "application_id": null
+      }
+    },
+    {
+      "case_id": "correction.rejected-unsupported-operation",
+      "mutations": [
+        "wildcard-target",
+        "fuzzy-name-target",
+        "execute-code-or-sql",
+        "delete-raw-observation",
+        "runtime-spell-whitelist",
+        "hide-unsupported-or-conflict"
+      ],
+      "expected": {
+        "status": "Rejected",
+        "error_code": "correction_operation_unsupported"
+      }
+    },
+    {
+      "case_id": "correction.conflicting-replacements",
+      "mutation": "two-applicable-corrections-same-target-field-different-replacement",
+      "expected": {
+        "status": "Conflict",
+        "conflict_record_id": null,
+        "application_ids": [],
+        "first-or-last-selected": false,
+        "dependent-coverage-complete": false
+      }
+    },
+    {
+      "case_id": "correction.dependency-order",
+      "input_shape": "correction-b-depends-on-exact-output-of-correction-a",
+      "expected": {
+        "dependency_edge_ids": [],
+        "ordered_correction_ids": [],
+        "application_ids": [],
+        "status": "Applied"
+      }
+    },
+    {
+      "case_id": "correction.dependency-cycle",
+      "mutation": "a-depends-on-b-and-b-depends-on-a",
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "correction_dependency_cycle"
+      }
+    },
+    {
+      "case_id": "correction.invalid-replacement-shape",
+      "mutation": "replacement-violates-field-type-entity-link-or-restriction-invariant",
+      "expected": {
+        "status": "Rejected",
+        "error_code": "correction_replacement_invalid",
+        "raw_observation_unchanged": true
+      }
+    },
+    {
+      "case_id": "correction.identity-collision",
+      "mutation": "replacement-creates-duplicate-exact-entity-or-member-key",
+      "expected": {
+        "status": "Conflict",
+        "conflict_record_id": null,
+        "colliding-facts-preserved": true
+      }
+    },
+    {
+      "case_id": "correction.restore-declared-capability",
+      "precondition": "exact-reviewed-correction-is-the-only-declared-projection-gap-and-all-other-inputs-complete",
+      "expected": {
+        "status": "Applied",
+        "application_id": null,
+        "affected_coverage_ids": [],
+        "capability_complete_only-under-frozen-policy": true,
+        "authority-stronger-than-evidence": false
+      }
+    },
+    {
+      "case_id": "correction.expired-blocks-release",
+      "precondition": "mandatory-release-capability-depends-on-correction",
+      "mutation": "source-digest-changed",
+      "expected": {
+        "status": "Expired",
+        "release_eligible": false,
+        "negative_authority_available": false,
+        "review_report_id": null
+      }
+    },
+    {
+      "case_id": "correction.source-provider-equivalence",
+      "mutation": "same-materialized-source-bytes-from-different-provider-provenance",
+      "expected": {
+        "application_status_equal": true,
+        "before_after_fact_ids_equal": true,
+        "provider_provenance-records-distinct": true
+      }
+    },
+    {
+      "case_id": "correction.set-change-generation-identity",
+      "mutation": "same-source-and-schema-but-different-accepted-correction-set",
+      "expected": {
+        "reference_generation_id_equal": false,
+        "raw_observation_manifest_equal": true,
+        "normalized_or-correction-manifest-may-differ": true
+      }
+    },
+    {
+      "case_id": "correction.deterministic-order",
+      "mutations": [
+        "permute-independent-correction-record-order",
+        "change-reviewer-prose-formatting",
+        "change-created-at-timestamps",
+        "change-worker-scheduling"
+      ],
+      "expected": {
+        "correction_set_id_equal": true,
+        "dependency_graph_id_equal": true,
+        "application_statuses-and-ids-equal": true,
+        "normalized-result-and-coverage-equal": true,
+        "application_manifest_digest_equal": true
+      }
+    },
+    {
+      "case_id": "correction.raw-mutation",
+      "mutation": "rewrite-or-delete-original-raw-observation-after-apply",
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "correction_raw_mutation_forbidden"
+      }
+    },
+    {
+      "case_id": "correction.auto-digest-update",
+      "mutation": "implementation-updates-expected-digest-to-current-source-and-applies",
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "correction_best_effort_or_auto_digest_update_forbidden"
+      }
+    }
+  ],
+  "expected_manifests": {
+    "correction_set_manifest_id": null,
+    "correction_application_manifest_id": null,
+    "correction_review_report_id": null,
+    "coverage_impact_manifest_id": null,
+    "conflict_manifest_id": null
+  },
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "profile_id",
+      "source_snapshot_id",
+      "source_content_sha256",
+      "normalizer_version",
+      "field_registry_id",
+      "correction_set.correction_set_id",
+      "correction_set.applicable_profile_ids",
+      "correction_set.correction_ids",
+      "correction_set.dependency_graph_id",
+      "correction_set.canonical_sha256",
+      "cases[0].correction.correction_id",
+      "cases[0].correction.target_entity_id",
+      "cases[0].correction.target_raw_observation_id",
+      "cases[0].correction.target_field_path_id",
+      "cases[0].correction.expected_source_file_sha256",
+      "cases[0].correction.expected_raw_value_sha256",
+      "cases[0].correction.expected_normalizer_version",
+      "cases[0].correction.replacement_value_id",
+      "cases[0].correction.evidence_ids",
+      "cases[0].correction.reviewer_id",
+      "cases[0].correction.review_record_id",
+      "cases[0].expected.application_id",
+      "cases[0].expected.before_fact_id",
+      "cases[0].expected.after_fact_id",
+      "cases[0].expected.affected_coverage_ids",
+      "cases[1].expected.application_id",
+      "cases[2].expected.application_id",
+      "cases[3].expected.application_id",
+      "cases[4].expected.application_id",
+      "cases[5].expected.application_id",
+      "cases[7].expected.conflict_record_id",
+      "cases[7].expected.application_ids",
+      "cases[8].expected.dependency_edge_ids",
+      "cases[8].expected.ordered_correction_ids",
+      "cases[8].expected.application_ids",
+      "cases[11].expected.conflict_record_id",
+      "cases[12].expected.application_id",
+      "cases[12].expected.affected_coverage_ids",
+      "cases[13].expected.review_report_id",
+      "expected_manifests.correction_set_manifest_id",
+      "expected_manifests.correction_application_manifest_id",
+      "expected_manifests.correction_review_report_id",
+      "expected_manifests.coverage_impact_manifest_id",
+      "expected_manifests.conflict_manifest_id"
+    ]
+  }
+}

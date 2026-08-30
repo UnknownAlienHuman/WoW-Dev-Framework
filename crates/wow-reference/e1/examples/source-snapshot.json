@@ -1,0 +1,173 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-reference-e1-source-profile-v1",
+  "state": "documentation-only-pending-source-profile-and-byte-freeze",
+  "provider_provenance": [
+    {
+      "provider_id": null,
+      "provider_kind": "materialized-source-provider",
+      "provider_name": null,
+      "repository_or_export_identity": null,
+      "revision": null,
+      "acquisition_tool_id": null,
+      "license_notice_ids": []
+    }
+  ],
+  "materialized_content": {
+    "snapshot_id": null,
+    "logical_content_manifest_id": null,
+    "logical_content_sha256": null,
+    "file_count": null,
+    "total_bytes": null,
+    "private_absolute_root_in_canonical_identity": false
+  },
+  "profile": {
+    "profile_id": null,
+    "eligibility": "fixture",
+    "flavor_or_edition": "Retail",
+    "interface": null,
+    "client_version": null,
+    "client_build": null,
+    "source_snapshot_id": null,
+    "source_content_sha256": null,
+    "parser_profile_id": null,
+    "evaluator_environment_id": null,
+    "field_registry_id": null,
+    "correction_set_id": null,
+    "schema_bundle_id": null,
+    "release_eligible": false
+  },
+  "partition_policy": {
+    "policy_id": null,
+    "version": 1,
+    "partitions": [
+      {
+        "partition_id": null,
+        "kind": "apidoc.systems",
+        "required": true,
+        "semantic_order": 10,
+        "capabilities": [
+          "apidoc.systems",
+          "apidoc.callables",
+          "apidoc.signatures"
+        ],
+        "source_file_ids": []
+      },
+      {
+        "partition_id": null,
+        "kind": "apidoc.generated",
+        "required": true,
+        "semantic_order": 20,
+        "capabilities": [
+          "apidoc.tables_structures",
+          "apidoc.events",
+          "apidoc.widgets_script_objects",
+          "restriction.facets"
+        ],
+        "source_file_ids": []
+      },
+      {
+        "partition_id": null,
+        "kind": "apidoc.deprecated",
+        "required": false,
+        "semantic_order": 30,
+        "capabilities": [
+          "deprecation.explicit",
+          "transition.explicit"
+        ],
+        "source_file_ids": []
+      }
+    ]
+  },
+  "files": [
+    {
+      "source_file_id": null,
+      "partition_kind": "apidoc.systems",
+      "normalized_relative_path": "Interface/AddOns/Blizzard_APIDocumentation/FixtureSystem.lua",
+      "semantic_order": 10,
+      "required": true,
+      "content_sha256": null,
+      "byte_length": null,
+      "encoding": "utf-8",
+      "bom": false,
+      "line_endings": "lf",
+      "file_kind": "lua-apidocumentation",
+      "license_notice_ids": []
+    },
+    {
+      "source_file_id": null,
+      "partition_kind": "apidoc.generated",
+      "normalized_relative_path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/FixtureGenerated.lua",
+      "semantic_order": 20,
+      "required": true,
+      "content_sha256": null,
+      "byte_length": null,
+      "encoding": "utf-8",
+      "bom": false,
+      "line_endings": "lf",
+      "file_kind": "lua-apidocumentation-generated",
+      "license_notice_ids": []
+    }
+  ],
+  "ordering_rules": [
+    "partition semantic_order",
+    "file semantic_order",
+    "source span order within file",
+    "canonical ID order only for explicitly unordered sets"
+  ],
+  "negative_cases": [
+    {
+      "case_id": "source.changed-provider-same-bytes",
+      "expected_content_identity_equal": true,
+      "expected_provider_provenance_equal": false
+    },
+    {
+      "case_id": "source.same-provider-changed-bytes",
+      "expected_content_identity_equal": false
+    },
+    {
+      "case_id": "source.path-traversal-or-link-escape",
+      "expected_error": "source_snapshot_path_escape_forbidden"
+    },
+    {
+      "case_id": "source.fixture-release-masquerade",
+      "expected_error": "reference_fixture_release_masquerade_forbidden"
+    },
+    {
+      "case_id": "source.filesystem-order-randomized",
+      "expected_semantic_order_unchanged": true
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "provider_provenance[*].provider_id",
+      "provider_provenance[*].provider_name",
+      "provider_provenance[*].repository_or_export_identity",
+      "provider_provenance[*].revision",
+      "provider_provenance[*].acquisition_tool_id",
+      "materialized_content.snapshot_id",
+      "materialized_content.logical_content_manifest_id",
+      "materialized_content.logical_content_sha256",
+      "materialized_content.file_count",
+      "materialized_content.total_bytes",
+      "profile.profile_id",
+      "profile.interface",
+      "profile.client_version",
+      "profile.client_build",
+      "profile.source_snapshot_id",
+      "profile.source_content_sha256",
+      "profile.parser_profile_id",
+      "profile.evaluator_environment_id",
+      "profile.field_registry_id",
+      "profile.correction_set_id",
+      "profile.schema_bundle_id",
+      "partition_policy.policy_id",
+      "partition_policy.partitions[*].partition_id",
+      "partition_policy.partitions[*].source_file_ids",
+      "files[*].source_file_id",
+      "files[*].content_sha256",
+      "files[*].byte_length"
+    ]
+  }
+}
