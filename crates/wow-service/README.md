@@ -1,250 +1,434 @@
 # `wow-service` implementation contract
 
-**Status:** E0-active contract scaffold; no Rust code yet.
+**Status:** E0-F implementation-ready contract; no Rust code yet. Only `status` and `check` activate in E0.
 
 ## Mission
 
-`wow-service` owns transport-independent use cases and orchestration across reference, analyzer, project, graph, rules, search, context, and optional external candidate components. It is the only production layer allowed to coordinate multiple domain crates into one public operation/result generation.
+`wow-service` is the only production layer allowed to coordinate multiple framework crates into one user-facing operation. It acquires one coherent immutable reference/project/analyzer/rule context, executes the selected use case, preserves exact capability and `NotEvaluated` state, constructs deterministic presentation/root-cause views without deleting raw findings, and returns one transport-independent result envelope.
+
+E0-F proves two operations:
+
+```text
+status
+    -> exact configured component/profile/generation/capability state
+    -> no implication that analysis or tests passed
+
+check
+    -> one coherent reference + project + analyzer + rule context
+    -> generic Emmy findings
+    -> two E0 WoW rules
+    -> structured clean/findings/NotEvaluated/failure outcomes
+    -> deterministic root-cause presentation graph
+    -> one canonical result envelope
+```
+
+A thin `apps/wow` CLI serializes these service results. It does not bypass service or reconstruct domain logic.
 
 ## Owned responsibilities
 
-- service configuration and component capability assembly;
-- `status`, `lookup`, `search`, `tree`, `skeleton`, `plan`, `check`, `patch_impact`, `index_repo`, and `runtime_review` use cases;
-- profile/reference/project/external generation coherence;
-- operation-level capability checks and partial-degradation policy;
-- transaction/orchestration order across components;
-- diagnostic provider execution and root-cause folding;
-- optional CBM candidate lane merge;
-- result envelope construction, budgets, cancellation, and deterministic ordering;
+- service configuration and component registry;
+- explicit project/profile/generation selection policy;
+- coherent immutable context acquisition/lease;
+- component identity and capability validation;
+- `status` use case;
+- `check` use case;
+- generic finding collection from the selected project/analyzer snapshot;
+- E0 rule registry/execution invocation;
+- rule `Findings`, `EvaluatedClean`, `NotEvaluated`, `Failed`, and `Cancelled` aggregation;
+- deterministic root-cause/causal presentation graph;
+- raw-finding preservation;
+- service-level semantic result status;
+- canonical result-envelope construction and validation;
+- operation budgets, cancellation, and partial-degradation policy;
+- explicit deferred-operation reporting;
 - transport-neutral request/response contracts;
-- application-facing errors and health/status;
-- last-known-good component activation policy.
+- last-known-good component status without generation substitution;
+- application-facing typed errors and health state;
+- deterministic serialization handoff to `apps/wow`.
 
 ## Explicit non-responsibilities
 
 `wow-service` does not:
 
-- implement parser, storage, graph, rule, ranking, or skeleton algorithms;
-- expose raw database/analyzer/MCP handles to applications;
-- duplicate CLI/LSP/MCP serialization behavior;
-- select a floating current profile;
-- hide `NotEvaluated`, partial coverage, conflicts, or stale external generations;
-- execute addon/external repository code;
-- mutate editor settings;
-- turn optional component failure into false local failure;
-- perform automatic edits without an owning proven remediation contract.
+- parse Lua, TOC, XML, or source text;
+- implement reference ingestion, analyzer facts, project publication, or rule algorithms;
+- perform source discovery, indexing, search ranking, lineage, graph traversal, or skeleton generation in E0;
+- expose raw database, analyzer, actor, or mutable project handles;
+- mutate source, editor configuration, component state, or the WoW client;
+- execute analyzed Lua, repository hooks, build scripts, tests, or generators;
+- silently select another profile/generation after mismatch;
+- upgrade candidate/partial evidence;
+- infer replacement/autofix/runtime behavior;
+- discard raw generic/WoW findings during presentation folding;
+- use message text as causal/dedup identity;
+- treat component installation/readiness as a passing check;
+- return empty/default success for deferred operations;
+- own CLI parsing, stdout/stderr, or exit-code projection.
 
-## Public use-case surface
+## Required reading
 
-The long-term public surface remains compact:
+Before implementation, read:
 
-```text
-wow_status
-wow_lookup
-wow_search
-wow_tree
-wow_skeleton
-wow_plan
-wow_check
-wow_patch_impact
-wow_index_repo
-wow_runtime_review
-```
+1. [`../AGENTS.md`](../AGENTS.md)
+2. [`../DEPENDENCY_GRAPH.md`](../DEPENDENCY_GRAPH.md)
+3. [`../WORKSTREAMS.md`](../WORKSTREAMS.md)
+4. [`../wow-core/CONSUMER_GUIDE.md`](../wow-core/CONSUMER_GUIDE.md)
+5. [`../wow-reference/CONTRACT.json`](../wow-reference/CONTRACT.json)
+6. [`../wow-emmy/CONTRACT.json`](../wow-emmy/CONTRACT.json)
+7. [`../wow-project/CONTRACT.json`](../wow-project/CONTRACT.json)
+8. [`../wow-rules/CONTRACT.json`](../wow-rules/CONTRACT.json)
+9. [`AGENTS.md`](AGENTS.md)
+10. [`DECISIONS.md`](DECISIONS.md)
+11. [`DATA_MODEL.md`](DATA_MODEL.md)
+12. [`CONTEXT_ACQUISITION.md`](CONTEXT_ACQUISITION.md)
+13. [`STATUS_OPERATION.md`](STATUS_OPERATION.md)
+14. [`CHECK_OPERATION.md`](CHECK_OPERATION.md)
+15. [`ROOT_CAUSE_FOLDING.md`](ROOT_CAUSE_FOLDING.md)
+16. [`RESULT_ENVELOPE.md`](RESULT_ENVELOPE.md)
+17. [`ERROR_MODEL.md`](ERROR_MODEL.md)
+18. [`TEST_MATRIX.md`](TEST_MATRIX.md)
+19. [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md)
+20. [`CONTRACT.json`](CONTRACT.json)
+21. [`../../apps/wow/README.md`](../../apps/wow/README.md)
+22. current `AGENTS.md` and `INDEX_MINI.md` in the external [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb)
 
-CLI, MCP, and LSP frontends call these same use cases. A transport-specific convenience is not a reason to add a new domain operation.
-
-## Required operations
-
-| Operation | Required behavior |
-|---|---|
-| `status` | Report exact component/profile/generation/capability state without implying validation success. |
-| `lookup` | Perform exact profile/universe-scoped lookup with evidence and negative-authority state. |
-| `search` | Coordinate deterministic local lanes and optional candidate lanes without confidence upgrades. |
-| `tree` | Return one bounded explicit graph-axis projection. |
-| `skeleton` | Resolve L0/L1/L2 detail through validated handles and budgets. |
-| `plan` | Build an evidence-backed implementation/study/test plan. |
-| `check` | Merge generic and WoW diagnostics for one coherent generation. |
-| `patch_impact` | Intersect reference deltas with project facts and return a bounded impact/test plan. |
-| `index_repo` | Index one explicit repository/universe/revision under security and license policy. |
-| `runtime_review` | Validate/import scenario-scoped runtime evidence without globalizing it. |
-
-### `status`
-
-Return:
-
-```text
-service/tool versions
-selected/available profiles and reference generations
-project generation and indexed roots
-component capabilities/coverage
-analyzer compatibility state
-optional CBM status/generation
-last-known-good/failed components
-budgets and public schema versions
-```
-
-No status field may imply a check passed merely because a component is installed.
-
-### `lookup`
-
-Perform exact entity/reference/project lookup under an explicit profile/universe and return evidence/coverage/source handles. No fuzzy fallback is hidden inside exact lookup.
-
-### `search`
-
-Coordinate local exact/historical/text/graph lanes and optionally merge CBM candidates. Preserve lane/evidence separation and negative-authority semantics.
-
-### `tree`
-
-Request one explicit graph axis/view, generation, root, relation filter, and budget. Return bounded evidence-bearing projection.
-
-### `skeleton`
-
-Resolve entity/source handles through `wow-context` at explicit L0/L1/L2 detail and budget.
-
-### `plan`
-
-Combine target entities, owner/load chains, exact contracts, known restrictions, smallest source handles, files likely to change, required checks, and runtime scenarios. Plans distinguish facts from candidates.
-
-### `check`
-
-Assemble one coherent project/analyzer/reference context, select runnable rules, execute generic and WoW diagnostics, record `NotEvaluated`, fold known root causes, sort deterministically, and return one result envelope.
-
-### `patch_impact`
-
-Coordinate reference delta/lineage with project uses/hooks/templates/state/load facts, then return direct/derived/possible/candidate/not-evaluated impact and a bounded study/test plan.
-
-### `index_repo`
-
-Index only an explicitly configured repository/universe/revision with security/license/root/budget policy. External repositories remain read-only candidate evidence.
-
-### `runtime_review`
-
-Validate/import structured runtime evidence tied to build/profile/addon revision/scenario and relate it to static findings without generalizing beyond the observed context.
-
-## Orchestration rules
-
-1. Resolve explicit profile/reference generation before project/query/check work.
-2. Acquire coherent immutable component snapshots/leases before executing a request.
-3. Reject cross-generation inputs rather than retrying silently against a different generation.
-4. Check capabilities before invoking dependent rules/lanes.
-5. Optional component failure degrades only its lane.
-6. Cancellation propagates; unpublished writes are aborted and late responses discarded.
-7. Final ordering/folding is deterministic and based on structured IDs/causes, not message text.
-8. Every result reports used/skipped/failed lanes and coverage.
-9. Service orchestration cannot upgrade evidence confidence.
-10. Applications never bypass service to reconstruct a richer answer.
-
-## E0 service scope
-
-E0 implements only:
-
-```text
-status
-check
-```
-
-### E0 `status`
-
-Reports exact fixture profile/reference generation, minimal project generation, pinned analyzer compatibility state, active rules/capabilities, and unsupported later capabilities.
-
-### E0 `check` sequence
-
-```text
-validate request/profile
-acquire fixture ReferenceView
-acquire minimal ProjectGeneration + Emmy snapshot
-normalize built-in Emmy diagnostics
-select E0 rules
-emit NotEvaluated for missing rule capabilities
-run wow.api.exists
-run wow.secret.local_operation
-fold only explicitly known root causes
-canonical sort
-validate/build one result envelope
-hand to apps/wow serializer
-```
-
-E0 excludes lookup/search/tree/skeleton/plan/impact/index/runtime APIs except explicit typed unavailable status in `status`. Do not implement fake empty success responses.
-
-## Root-cause folding
-
-Service may fold descendants only when a deterministic causal relation is supplied, for example:
-
-```text
-profile unavailable -> dependent API rules NotEvaluated
-annotation library failed -> downstream unknown globals grouped
-TOC partition failed -> reachability rules NotEvaluated
-unknown restriction facet -> dependent Secret rules NotEvaluated
-```
-
-Raw findings remain inspectable. Independent errors are never hidden merely because their messages look similar.
-
-## Application boundary
-
-Applications under `apps/` own:
-
-- CLI arguments/stdin/stdout/exit codes;
-- MCP/LSP transport/session protocols;
-- user-facing serialization format selection;
-- process startup/config loading.
-
-They call `wow-service` and do not import lower crates to perform richer logic.
-
-## Failure taxonomy
-
-Service-level states include:
-
-```text
-profile_required_or_unavailable
-reference_generation_unavailable
-project_generation_mismatch
-component_capability_unavailable
-operation_not_implemented
-request_budget_exceeded
-request_cancelled
-partial_result
-optional_lane_unavailable
-result_contract_violation
-```
-
-A partial result carries useful completed lanes plus explicit failures. It is not automatically an overall success.
-
-## Required tests
-
-### E0
-
-- status exposes exact fixture/analyzer/project/rule capability state;
-- check returns generic + API + Secret findings under one context;
-- clean fixture remains clean;
-- partial capability produces `NotEvaluated` and no false pass;
-- profile/generation mismatch rejected;
-- root-cause folding preserves raw descendants;
-- repeated output byte-identical after canonical serialization;
-- cancellation and failed project update preserve last-known-good;
-- unimplemented operations return typed unavailable, not empty success;
-- application CLI uses service only.
-
-### Later
-
-- optional CBM failure isolation;
-- bounded tree/context/search/impact;
-- stale external generation;
-- runtime evidence scenario scoping;
-- multi-transport normalized equivalence;
-- operation authorization/root path/security constraints;
-- last-known-good dependency update rollback.
-
-## Documentation sources
+Normative repository sources:
 
 - [`../../docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md)
-- [`../../docs/AGENT_WORKFLOW.md`](../../docs/AGENT_WORKFLOW.md)
+- [`../../docs/EMMYLUA_AND_DIAGNOSTICS.md`](../../docs/EMMYLUA_AND_DIAGNOSTICS.md)
 - [`../../docs/PROVENANCE_AND_COVERAGE.md`](../../docs/PROVENANCE_AND_COVERAGE.md)
-- [`../../docs/ROADMAP.md`](../../docs/ROADMAP.md)
+- [`../../docs/AGENT_WORKFLOW.md`](../../docs/AGENT_WORKFLOW.md)
 - [`../../docs/TEST_STRATEGY.md`](../../docs/TEST_STRATEGY.md)
-- [`../../docs/SECURITY_MODEL.md`](../../docs/SECURITY_MODEL.md)
-- [Current WoW addon agent workflow](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb/blob/main/KB/core/BlizzardUI_DevWorkflow.md)
-- [Current KB task router](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb/blob/main/INDEX_MINI.md)
+
+## Direct dependencies in E0-F
+
+```text
+wow-core
+wow-reference
+wow-emmy
+wow-project
+wow-rules
+```
+
+All later production crates remain inactive:
+
+```text
+wow-store
+wow-annotations
+wow-graph
+wow-recognizers
+wow-search
+wow-cbm
+wow-context
+```
+
+The long-term maximum dependency graph does not authorize loading them in E0-F.
+
+## E0 service configuration
+
+```text
+ServiceConfiguration
+    service schema/version
+    configured fixture project ID
+    configured fixture ProfileIdentity / ReferenceGenerationId
+    reference-view provider identity
+    project-snapshot provider identity
+    analyzer pin/probe/config identity
+    rule-registry identity
+    generation selection policy
+    operation budgets
+    cancellation policy
+    canonical output schema/version
+    deferred-operation registry
+```
+
+No field is inferred from the local WoW installation, editor, current Git branch, floating upstream branch, or environment credentials.
+
+## Generation selection
+
+E0 requests use an explicit selector:
+
+```text
+Exact(ProjectGenerationId)
+CurrentPublished(ProjectId)
+```
+
+`CurrentPublished` is an operation selector scoped to one project registry, not a durable identity. The service atomically acquires one immutable snapshot and immediately records the exact selected `ProjectGenerationId` in the context/result.
+
+Rules:
+
+- no unscoped `latest`;
+- no silent retry/switch after acquisition;
+- exact selector mismatch fails;
+- last-known-good cannot satisfy a request for another target generation;
+- canonical result identity uses the exact selected generation, never the selector token.
+
+Deterministic golden fixtures use `Exact` after IDs are frozen.
+
+## Coherent service context
+
+```text
+ServiceContextLease
+    service configuration identity
+    selected ProfileIdentity
+    ReferenceGenerationId / ReferenceView identity
+    ProjectGenerationId / ProjectSnapshot / ProjectView identity
+    AnalyzerSnapshot and accepted pin/config identity
+    E0 RuleRegistry identity
+    core schema/tool versions
+    capability/coverage/conflict registries
+    operation budget/cancellation state
+```
+
+All identities must agree before an operation runs. The lease is immutable for the request. E0 may implement it synchronously without an async runtime.
+
+## `status`
+
+`status` reports exact configured/available state:
+
+```text
+service/tool/schema versions
+configured project/profile/reference identities
+current published project generation and snapshot
+accepted analyzer pin/probe/config/snapshot
+active rule registry and rule rollout
+component health
+capability and coverage summaries
+last-known-good identities and failed target identities separately
+deferred operation/capability registry
+operation budgets
+```
+
+It does not:
+
+- run diagnostics;
+- claim tests passed;
+- convert Ready into clean;
+- hide degraded/failed partitions;
+- select a different profile/project;
+- report unimplemented operations as available.
+
+See [`STATUS_OPERATION.md`](STATUS_OPERATION.md).
+
+## `check`
+
+E0 sequence:
+
+```text
+validate CheckRequest and service configuration
+-> acquire one coherent ServiceContextLease
+-> validate reference/project/analyzer/rule identities and capabilities
+-> collect generic findings from ProjectView for exact scope
+-> invoke E0 RuleRegistry/Executor for exact scope
+-> retain every rule outcome and NotEvaluated record
+-> validate findings/evidence/source/generation
+-> construct structured causal presentation graph
+-> preserve raw findings unchanged
+-> derive service semantic status
+-> build/validate/canonicalize ResultEnvelope
+-> hand transport-neutral result to apps/wow
+```
+
+No component is re-read against another generation during the request.
+
+See [`CHECK_OPERATION.md`](CHECK_OPERATION.md).
+
+## Service semantic status
+
+```text
+clean
+    coherent complete requested scope; no raw findings; no NotEvaluated/failure/truncation
+
+findings
+    coherent complete requested scope; one or more raw findings; no blocking unavailable scopes
+
+partial
+    coherent useful result exists, but one or more requested rule/diagnostic/capability scopes are NotEvaluated, failed-degradable, or truncated; findings may also be present
+
+failed
+    request/context/mandatory component/internal result contract failed; no coherent check result
+
+cancelled
+    operation cancelled before result publication
+```
+
+Status is semantic and independent of CLI exit-code policy.
+
+Precedence:
+
+```text
+failed
+cancelled
+partial
+findings
+clean
+```
+
+A result with findings plus `NotEvaluated` is `partial`, with findings retained.
+
+## Raw findings and presentation graph
+
+The result stores:
+
+```text
+raw_findings[]
+    every generic and WoW finding unchanged
+
+presentation_graph
+    display_root_ids[]
+    causal/blocked/duplicate relations[]
+    child ordering
+```
+
+Folding never deletes raw findings or alters finding identities.
+
+Allowed E0 relations derive only from structured provider/component evidence:
+
+```text
+causes_or_explains
+blocked_by
+exact_duplicate_of
+```
+
+Examples:
+
+- authoritative `wow.api.exists` root can explain the exact same-source generic unresolved-member symptom when `wow-rules` supplies a proven causal hint;
+- annotation-library failure blocks API/Secret rules and becomes the presented root for their `NotEvaluated` records;
+- unrelated generic/Secret/API findings remain independent roots.
+
+Message similarity is prohibited. See [`ROOT_CAUSE_FOLDING.md`](ROOT_CAUSE_FOLDING.md).
+
+## Result envelope
+
+One canonical envelope contains:
+
+```text
+operation and request identity
+service semantic status
+exact GenerationContext and component snapshot identities
+selected scope
+component health/capability summary
+raw findings
+presentation graph
+rule outcomes and clean records
+NotEvaluated records
+warnings/failures when coherent partial result exists
+budget/truncation/cancellation state
+deferred operations/capabilities
+schema/tool/producer versions
+canonical ordering and digest
+```
+
+No timestamp, temp path, process/thread ID, memory address, rendered-text ordering, or local credential enters canonical identity.
+
+See [`RESULT_ENVELOPE.md`](RESULT_ENVELOPE.md).
+
+## E0 baseline check fixture
+
+The full closed project scope is expected to contain, after prerequisite freeze:
+
+```text
+accepted generic Emmy fixture diagnostic: 1
+wow.api.exists findings: 1
+wow.secret.local_operation findings:
+    unsafe_concat
+    guard_after_use
+    different_value_guard
+wow.secret.local_operation clean evaluations:
+    guarded_concat
+```
+
+A same-source generic unresolved-member symptom may be present only if the accepted upstream diagnostic mapping emits it; that optional family must be frozen by E0-C and folded only through an exact causal hint. The service contract does not invent it.
+
+Expected full-scope status without blockers: `findings`.
+
+## Deferred operations
+
+E0 reports typed `operation_not_implemented_for_milestone` for:
+
+```text
+lookup
+search
+tree
+skeleton
+plan
+patch_impact
+index_repo
+runtime_review
+LSP
+MCP
+release/pack publication
+```
+
+`status` lists them as Deferred. They never return empty/default success.
+
+## Last-known-good behavior
+
+Service may report or allow an explicitly requested old published snapshot, but:
+
+- it retains original generation/reference/analyzer identity;
+- it is never substituted for a requested failed target;
+- status separates current published, failed candidate/target, and last-known-good;
+- check result records the exact snapshot actually acquired;
+- no mixed old/new context.
+
+## Cancellation and budgets
+
+- validate cheap request/context/budget preconditions first;
+- propagate cancellation to rule execution and bounded component reads;
+- no result envelope published after cancellation;
+- no background continuation;
+- budget/truncation cannot become clean;
+- partial result is explicit and includes completed/blocked scopes;
+- E0 defaults to whole-request publication only after coherent result validation.
+
+## E0-F hard stops
+
+- No `Cargo.toml` or Rust source in this documentation phase.
+- No later crate activation.
+- No parser/index/rule/search/domain algorithm in service.
+- No source/editor/client mutation or analyzed-code execution.
+- No hidden snapshot/profile retry.
+- No raw finding deletion during folding.
+- No message-text causal grouping.
+- No `status = pass` from component readiness.
+- No empty success for deferred operations.
+- No transport/CLI parsing inside service.
+- No timestamp/temp path in canonical output.
+- No runtime/client validation claim.
+- No CI.
+
+## Normative fixtures
+
+The closed examples under [`examples/`](examples/README.md) define:
+
+- status result;
+- clean check scope;
+- complete findings check;
+- partial check with blockers and retained findings;
+- context failure;
+- cancellation;
+- root-cause presentation graph;
+- canonical result and checksum freeze.
+
+Actual prerequisite/component/snapshot/finding/outcome/graph/envelope IDs and SHA-256 values freeze after E0-A through E0-E implementations exist and before the first `wow-service` Rust commit.
 
 ## Definition of done
 
-The E0 service is complete when one `status` and one `check` path produce coherent, deterministic, evidence-bearing output through a thin CLI, with honest unsupported/NotEvaluated states and no domain algorithm duplicated in the orchestration or transport layer.
+E0-F implementation is complete only when:
+
+```text
+status reports exact component/profile/generation/capability/deferred state without claiming checks passed
+check acquires one coherent immutable context and never switches it
+one full-scope check preserves generic + API + Secret raw findings and guarded clean outcome
+all rule NotEvaluated/failure/cancellation states survive aggregation
+root-cause presentation uses structured hints and preserves raw findings
+service status precedence classifies clean/findings/partial/failed/cancelled exactly
+one canonical ResultEnvelope validates and serializes byte-identically
+last-known-good is never substituted/relabelled
+all deferred operations fail explicitly
+apps/wow consumes only service contracts and maps exact CLI exit behavior
+all TEST_MATRIX cases pass
+```
+
+Until then, this directory remains an implementation-ready orchestration contract, not a running service.
