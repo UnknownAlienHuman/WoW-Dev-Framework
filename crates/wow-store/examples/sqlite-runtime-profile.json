@@ -1,0 +1,243 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-store-e1-runtime-profile-v1",
+  "state": "documentation-only-pending-runtime-probe-and-byte-freeze",
+  "runtime": {
+    "sqlite_version": null,
+    "sqlite_source_id": null,
+    "rust_binding_name": null,
+    "rust_binding_version": null,
+    "rust_binding_features": [],
+    "compile_options": [],
+    "compile_options_digest": null,
+    "platform": null,
+    "filesystem_class": null,
+    "platform_adapter_id": null,
+    "probe_report_id": null,
+    "runtime_profile_id": null,
+    "canonical_sha256": null
+  },
+  "required_capability_results": [
+    {
+      "capability": "uri-or-equivalent-read-only-open",
+      "status": null,
+      "evidence_test_id": "SQLITE-001"
+    },
+    {
+      "capability": "query-only-reference-mode",
+      "status": null,
+      "evidence_test_id": "SQLITE-007"
+    },
+    {
+      "capability": "immutable-hint-if-safe",
+      "status": null,
+      "required": false,
+      "policy": "use-only-when-file-truly-immutable-and-binding-semantics-tested"
+    },
+    {
+      "capability": "foreign-keys-enabled-and-enforced",
+      "status": null,
+      "evidence_test_id": "SQLITE-004"
+    },
+    {
+      "capability": "transactions-savepoints-and-rollback",
+      "status": null,
+      "evidence_test_id": "SQLITE-001"
+    },
+    {
+      "capability": "prepared-statements-and-bound-parameters",
+      "status": null,
+      "evidence_test_id": "SCHEMA-006"
+    },
+    {
+      "capability": "schema-inspection",
+      "status": null,
+      "evidence_test_id": "SCHEMA-009"
+    },
+    {
+      "capability": "foreign-key-check",
+      "status": null,
+      "evidence_test_id": "VALIDATE-003"
+    },
+    {
+      "capability": "quick-check-and-integrity-check",
+      "status": null,
+      "evidence_test_id": "VALIDATE-004"
+    },
+    {
+      "capability": "extension-loading-disabled",
+      "status": null,
+      "evidence_test_id": "SQLITE-005"
+    },
+    {
+      "capability": "arbitrary-attach-unavailable",
+      "status": null,
+      "evidence_test_id": "SQLITE-006"
+    },
+    {
+      "capability": "trusted-schema-or-defensive-control",
+      "status": null,
+      "required_when_supported": true
+    },
+    {
+      "capability": "runtime-limits-or-outer-bounds",
+      "status": null,
+      "evidence_test_id": "SQLITE-009"
+    },
+    {
+      "capability": "same-volume-atomic-publication-adapter",
+      "status": null,
+      "evidence_test_id": "PUB-001"
+    }
+  ],
+  "connection_profiles": {
+    "staging_reference_writer": {
+      "open_mode": "read-write-create-private-staging",
+      "journal_mode": null,
+      "synchronous": null,
+      "foreign_keys": true,
+      "query_only": false,
+      "trusted_schema": false,
+      "extension_loading": false,
+      "attach_allowed": false,
+      "busy_policy": null,
+      "runtime_limits_profile_id": null,
+      "sidecars_must_be_finalized_before_seal": true
+    },
+    "sealed_reference_reader": {
+      "open_mode": "read-only",
+      "query_only": true,
+      "immutable_hint": null,
+      "foreign_keys": true,
+      "trusted_schema": false,
+      "extension_loading": false,
+      "attach_allowed": false,
+      "journal_sidecars_allowed": [],
+      "write_or_ddl_attempt_must_fail": true,
+      "file_digest_must_remain_unchanged": true
+    },
+    "project_store_writer": {
+      "state": "Deferred",
+      "first_milestone": "E2",
+      "planned_journal_mode": "WAL-after-probe",
+      "active_in_e1_a": false
+    }
+  },
+  "pragma_effective_values": {
+    "foreign_keys": null,
+    "query_only_staging": null,
+    "query_only_sealed_reader": null,
+    "trusted_schema": null,
+    "journal_mode_staging": null,
+    "synchronous_staging": null,
+    "busy_timeout_or_policy": null,
+    "page_size": null,
+    "auto_vacuum": null,
+    "application_id": null,
+    "user_version": null
+  },
+  "runtime_limits": {
+    "max_database_bytes": null,
+    "max_page_count": null,
+    "max_sql_bytes": null,
+    "max_bound_variables": null,
+    "max_columns": null,
+    "max_expression_depth": null,
+    "max_trigger_depth": null,
+    "max_result_rows_per_operation": null,
+    "max_result_bytes_per_operation": null,
+    "max_attached_databases": 0
+  },
+  "integrity_policy": {
+    "staging_before_seal": [
+      "schema-registry-and-ledger-validation",
+      "foreign_key_check",
+      "quick_check-or-integrity_check-as-frozen",
+      "registered-domain-validation",
+      "file-and-object-manifest-validation"
+    ],
+    "final_path_before_active_pointer": [
+      "read-only-open-profile",
+      "manifest-generation-profile-schema-validation",
+      "configured-integrity-check-set",
+      "no-sidecars"
+    ],
+    "runtime_open": [
+      "fast-manifest-schema-runtime-generation-validation",
+      "retained-full-validation-evidence"
+    ]
+  },
+  "publication_adapter": {
+    "adapter_id": null,
+    "same_volume_check": null,
+    "atomic_no_replace_supported": null,
+    "atomic_replace_supported": null,
+    "file_flush_supported": null,
+    "directory_flush_supported": null,
+    "no_follow_or_equivalent_path_safety": null,
+    "tested_durability_level": null,
+    "power_loss_test_evidence_id": null
+  },
+  "physical_reproducibility": {
+    "classification": null,
+    "allowed_values": [
+      "byte_reproducible_proven",
+      "logical_reproducible_only",
+      "unresolved"
+    ],
+    "evidence_report_id": null,
+    "raw_sqlite_byte_identity_is_not_assumed": true
+  },
+  "upgrade_policy": {
+    "candidate_update_must_rerun_all_capability_and-security_probes": true,
+    "lost_mandatory_capability_blocks_activation": true,
+    "last_known_good_runtime_profile_id": null
+  },
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "runtime.sqlite_version",
+      "runtime.sqlite_source_id",
+      "runtime.rust_binding_name",
+      "runtime.rust_binding_version",
+      "runtime.compile_options_digest",
+      "runtime.platform",
+      "runtime.filesystem_class",
+      "runtime.platform_adapter_id",
+      "runtime.probe_report_id",
+      "runtime.runtime_profile_id",
+      "runtime.canonical_sha256",
+      "required_capability_results[*].status",
+      "connection_profiles.staging_reference_writer.journal_mode",
+      "connection_profiles.staging_reference_writer.synchronous",
+      "connection_profiles.staging_reference_writer.busy_policy",
+      "connection_profiles.sealed_reference_reader.immutable_hint",
+      "pragma_effective_values.foreign_keys",
+      "pragma_effective_values.query_only_staging",
+      "pragma_effective_values.query_only_sealed_reader",
+      "pragma_effective_values.trusted_schema",
+      "pragma_effective_values.journal_mode_staging",
+      "pragma_effective_values.synchronous_staging",
+      "pragma_effective_values.busy_timeout_or_policy",
+      "runtime_limits.max_database_bytes",
+      "runtime_limits.max_page_count",
+      "runtime_limits.max_sql_bytes",
+      "runtime_limits.max_bound_variables",
+      "runtime_limits.max_columns",
+      "runtime_limits.max_expression_depth",
+      "runtime_limits.max_trigger_depth",
+      "runtime_limits.max_result_rows_per_operation",
+      "runtime_limits.max_result_bytes_per_operation",
+      "publication_adapter.adapter_id",
+      "publication_adapter.same_volume_check",
+      "publication_adapter.atomic_no_replace_supported",
+      "publication_adapter.atomic_replace_supported",
+      "publication_adapter.file_flush_supported",
+      "publication_adapter.directory_flush_supported",
+      "publication_adapter.no_follow_or_equivalent_path_safety",
+      "publication_adapter.tested_durability_level",
+      "physical_reproducibility.classification",
+      "physical_reproducibility.evidence_report_id"
+    ]
+  }
+}

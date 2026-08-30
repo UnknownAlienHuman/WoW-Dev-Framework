@@ -1,0 +1,238 @@
+{
+  "schema_version": 1,
+  "case_set_id": "wow-store-e1-schema-migrations-v1",
+  "state": "documentation-only-pending-schema-and-byte-freeze",
+  "runtime_profile_id": null,
+  "schema_registry_id": null,
+  "standard_metadata_bundle_id": null,
+  "reference_domain_bundle_id": null,
+  "migration_graph_id": null,
+  "prepared_operation_catalog_ids": [],
+  "cases": [
+    {
+      "case_id": "schema.empty-to-target-valid",
+      "source_state": {
+        "database_state": "empty-staging-file",
+        "schema_versions": []
+      },
+      "target_state": {
+        "bundles": [
+          {
+            "bundle_id": null,
+            "namespace": "wow-store-metadata",
+            "version": 1
+          },
+          {
+            "bundle_id": null,
+            "namespace": "wow-reference",
+            "version": null
+          }
+        ]
+      },
+      "expected": {
+        "migration_plan_id": null,
+        "ordered_migration_edge_ids": [],
+        "migration_ledger_ids": [],
+        "target_schema_digest": null,
+        "validation_report_id": null,
+        "outcome": "success"
+      }
+    },
+    {
+      "case_id": "schema.graph-cycle",
+      "mutation": "add-edge-from-target-back-to-ancestor",
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "migration_graph_invalid",
+        "database_modified": false
+      }
+    },
+    {
+      "case_id": "schema.missing-parent-version",
+      "mutation": "declare-migration-from-unknown-version",
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "migration_graph_invalid"
+      }
+    },
+    {
+      "case_id": "schema.ambiguous-path",
+      "mutation": "two-source-to-target-paths-without-registered-selection-policy",
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "migration_graph_invalid"
+      }
+    },
+    {
+      "case_id": "schema.unknown-edge",
+      "mutation": "ledger-includes-unregistered-migration-id",
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "migration_unknown_or_tampered_edge"
+      }
+    },
+    {
+      "case_id": "schema.skipped-edge",
+      "mutation": "advance-target-version-without-intermediate-registered-edge",
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "migration_skip_forbidden"
+      }
+    },
+    {
+      "case_id": "schema.bundle-digest-tampered",
+      "mutation": "change-static-schema-or-operation-without-bundle-id-digest-update",
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "schema_bundle_digest_mismatch"
+      }
+    },
+    {
+      "case_id": "schema.migration-digest-tampered",
+      "mutation": "change-edge-operation-catalog-after-ledger-freeze",
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "migration_unknown_or_tampered_edge"
+      }
+    },
+    {
+      "case_id": "schema.target-metadata-advanced-early",
+      "mutation": "write-target-version-before-schema-data-operation-commit",
+      "expected": {
+        "outcome": "rejected-or-rolled-back",
+        "error_code": "migration_target_metadata_advanced_early_forbidden",
+        "target_metadata_persisted": false,
+        "candidate_publishable": false
+      }
+    },
+    {
+      "case_id": "schema.ledger-order-mismatch",
+      "mutation": "reorder-or-duplicate-applied-ledger-entries",
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "migration_ledger_invalid"
+      }
+    },
+    {
+      "case_id": "schema.schema-object-mismatch",
+      "mutation": "remove-required-index-or-add-unexpected-trigger",
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "migration_target_schema_mismatch"
+      }
+    },
+    {
+      "case_id": "schema.user-version-only",
+      "mutation": "change-pragma-user-version-without-ledger-or-schema",
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "migration_source_state_unknown"
+      }
+    },
+    {
+      "case_id": "schema.required-sqlite-capability-missing",
+      "mutation": "remove-runtime-capability-required-by-bundle",
+      "expected": {
+        "outcome": "rejected-before-migration",
+        "error_code": "schema_required_sqlite_capability_unavailable"
+      }
+    },
+    {
+      "case_id": "schema.nontransactional-operation-unprobed",
+      "mutation": "migration-operation-implicitly-auto-commits-without-staged-contract",
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "migration_nontransactional_operation_unprobed"
+      }
+    },
+    {
+      "case_id": "schema.edge-failure-rollback",
+      "mutation": "fail-middle-operation-in-transactional-edge",
+      "expected": {
+        "outcome": "failed",
+        "error_code": "migration_apply_failed",
+        "schema_change_persisted": false,
+        "migration_ledger_entry_persisted": false,
+        "active_pointer_changed": false
+      }
+    },
+    {
+      "case_id": "schema.cancellation-rollback",
+      "mutation": "cancel-between-bounded-operation-batches",
+      "expected": {
+        "outcome": "cancelled",
+        "error_code": "store_cancelled",
+        "schema_change_persisted": false,
+        "migration_ledger_entry_persisted": false,
+        "candidate_sealed": false,
+        "active_pointer_changed": false,
+        "late_work": false
+      }
+    },
+    {
+      "case_id": "schema.released-reference-in-place",
+      "source_state": {
+        "store_kind": "Reference",
+        "store_state": "SealedAndPublished"
+      },
+      "mutation": "attempt-alter-or-migration-on-released-file",
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "migration_released_reference_in_place_forbidden",
+        "file_digest_unchanged": true
+      }
+    },
+    {
+      "case_id": "schema.force-or-repair-unknown-state",
+      "mutation": "request-force-skip-or-auto-repair",
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "migration_force_or_repair_forbidden"
+      }
+    },
+    {
+      "case_id": "schema.dynamic-source-sql",
+      "mutation": "provide-ddl-or-query-from-analyzed-source-user-or-transport",
+      "expected": {
+        "outcome": "rejected-no-execution-surface",
+        "error_code": "raw_sql_surface_forbidden"
+      }
+    },
+    {
+      "case_id": "schema.deterministic-order",
+      "mutations": [
+        "permute-schema-bundle-registration-order",
+        "permute-object-declaration-order",
+        "permute-operation-catalog-order",
+        "change-temp-root",
+        "change-worker-scheduling",
+        "change-static-sql-whitespace-and-comments-with-same-normalized-declaration"
+      ],
+      "expected": {
+        "schema_registry_id_equal": true,
+        "migration_graph_id_equal": true,
+        "migration_plan_id_equal": true,
+        "target_schema_digest_equal": true,
+        "migration_ledger_semantic_digest_equal": true
+      }
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "runtime_profile_id",
+      "schema_registry_id",
+      "standard_metadata_bundle_id",
+      "reference_domain_bundle_id",
+      "migration_graph_id",
+      "prepared_operation_catalog_ids",
+      "cases[0].target_state.bundles[*].bundle_id",
+      "cases[0].target_state.bundles[1].version",
+      "cases[0].expected.migration_plan_id",
+      "cases[0].expected.ordered_migration_edge_ids",
+      "cases[0].expected.migration_ledger_ids",
+      "cases[0].expected.target_schema_digest",
+      "cases[0].expected.validation_report_id"
+    ]
+  }
+}
