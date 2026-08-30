@@ -1,0 +1,350 @@
+{
+  "schema_version": 1,
+  "case_set_id": "wow-emmy-e0-c-facts-v1",
+  "state": "documentation-only-pending-upstream-probe-and-byte-freeze",
+  "profile_id": "fixture-retail-120100-e0-v1",
+  "project_generation_id": null,
+  "analyzer_snapshot_id": null,
+  "upstream_pin_id": null,
+  "cases": [
+    {
+      "case_id": "facts.clean-known-api",
+      "workspace_file": "main/clean.lua",
+      "required_capabilities": [
+        "emmy.file.parsed",
+        "emmy.library.loaded",
+        "emmy.fact.references",
+        "emmy.fact.calls",
+        "emmy.fact.local_bindings"
+      ],
+      "expected_facts": [
+        {
+          "fact_kind": "reference",
+          "reference_kind": "global",
+          "spelling": "C_E0Fixture",
+          "resolution_status": "resolved",
+          "workspace_role": "Main",
+          "source_span": null
+        },
+        {
+          "fact_kind": "reference",
+          "reference_kind": "member",
+          "receiver_spelling": "C_E0Fixture",
+          "member_spelling": "KnownApi",
+          "resolution_status": "resolved",
+          "resolved_symbol_key": "function:C_E0Fixture.KnownApi",
+          "workspace_role": "Main",
+          "source_span": null
+        },
+        {
+          "fact_kind": "call",
+          "call_kind": "direct_member",
+          "resolved_callable_key": "function:C_E0Fixture.KnownApi",
+          "result_use_kind": "assigned_local",
+          "argument_count": 1,
+          "source_span": null
+        },
+        {
+          "fact_kind": "local-binding",
+          "name": "accepted",
+          "initializer_resolved_callable_key": "function:C_E0Fixture.KnownApi",
+          "source_span": null
+        }
+      ],
+      "prohibited_conclusions": [
+        "known-api-is-valid-for-every-profile",
+        "platform-contract-proven-by-library-alone"
+      ]
+    },
+    {
+      "case_id": "facts.missing-api-unresolved",
+      "workspace_file": "main/missing-api.lua",
+      "required_capabilities": [
+        "emmy.file.parsed",
+        "emmy.library.loaded",
+        "emmy.fact.references",
+        "emmy.fact.calls"
+      ],
+      "expected_facts": [
+        {
+          "fact_kind": "reference",
+          "reference_kind": "global",
+          "spelling": "C_E0Fixture",
+          "resolution_status": "resolved",
+          "workspace_role": "Main",
+          "source_span": null
+        },
+        {
+          "fact_kind": "reference",
+          "reference_kind": "member",
+          "receiver_spelling": "C_E0Fixture",
+          "member_spelling": "RemovedApi",
+          "resolution_status": "unresolved",
+          "resolved_symbol_key": null,
+          "workspace_role": "Main",
+          "source_span": null
+        },
+        {
+          "fact_kind": "call",
+          "call_kind": "direct_member",
+          "resolved_callable_key": null,
+          "result_use_kind": "returned",
+          "argument_count": 0,
+          "source_span": null
+        }
+      ],
+      "prohibited_conclusions": [
+        "api-absent-from-selected-wow-profile",
+        "replacement-candidate",
+        "wow.api.exists-finding",
+        "platform-source-evidence"
+      ]
+    },
+    {
+      "case_id": "facts.secret-local-unsafe-concat",
+      "workspace_file": "main/secret-local.lua",
+      "function_name": "unsafe_concat",
+      "required_capabilities": [
+        "emmy.file.parsed",
+        "emmy.library.loaded",
+        "emmy.fact.references",
+        "emmy.fact.calls",
+        "emmy.fact.local_bindings",
+        "emmy.fact.local_flow",
+        "emmy.fact.operations",
+        "emmy.fact.control_flow"
+      ],
+      "expected_facts": [
+        {
+          "fact_kind": "reference",
+          "reference_kind": "member",
+          "member_spelling": "SecretText",
+          "resolution_status": "resolved",
+          "resolved_symbol_key": "function:C_E0Fixture.SecretText"
+        },
+        {
+          "fact_kind": "call",
+          "call_kind": "direct_member",
+          "resolved_callable_key": "function:C_E0Fixture.SecretText",
+          "result_use_kind": "assigned_local"
+        },
+        {
+          "fact_kind": "local-binding",
+          "name": "text",
+          "initializer_resolved_callable_key": "function:C_E0Fixture.SecretText",
+          "binding_key": null
+        },
+        {
+          "fact_kind": "local-use",
+          "binding_name": "text",
+          "binding_key": null,
+          "operation_kind": "concatenation"
+        },
+        {
+          "fact_kind": "operation",
+          "operation_kind": "concatenation",
+          "operand_binding_names": [
+            "text"
+          ]
+        }
+      ],
+      "expected_guard_relations": [],
+      "prohibited_conclusions": [
+        "text-is-secret",
+        "concatenation-is-unsafe",
+        "runtime-context-known"
+      ]
+    },
+    {
+      "case_id": "facts.secret-local-guarded-concat",
+      "workspace_file": "main/secret-local.lua",
+      "function_name": "guarded_concat",
+      "required_capabilities": [
+        "emmy.fact.references",
+        "emmy.fact.calls",
+        "emmy.fact.local_bindings",
+        "emmy.fact.operations",
+        "emmy.fact.guards",
+        "emmy.fact.control_flow"
+      ],
+      "expected_facts": [
+        {
+          "fact_kind": "local-binding",
+          "name": "text",
+          "initializer_resolved_callable_key": "function:C_E0Fixture.SecretText",
+          "binding_key": null
+        },
+        {
+          "fact_kind": "guard",
+          "guard_kind": "access_single",
+          "callee_spelling": "canaccessvalue",
+          "guarded_binding_names": [
+            "text"
+          ],
+          "guarded_value_keys": null
+        },
+        {
+          "fact_kind": "operation",
+          "operation_kind": "concatenation",
+          "operand_binding_names": [
+            "text"
+          ],
+          "operation_fact_id": null
+        }
+      ],
+      "expected_guard_relations": [
+        {
+          "relation_kind": "dominates",
+          "guarded_binding_name": "text",
+          "target_operation_kind": "concatenation",
+          "source_and_target_ids": null
+        }
+      ],
+      "prohibited_conclusions": [
+        "operation-is-safe",
+        "guard-is-valid-for-every-profile",
+        "text-is-secret"
+      ]
+    },
+    {
+      "case_id": "facts.secret-local-guard-after-use",
+      "workspace_file": "main/secret-local.lua",
+      "function_name": "guard_after_use",
+      "required_capabilities": [
+        "emmy.fact.local_bindings",
+        "emmy.fact.operations",
+        "emmy.fact.guards",
+        "emmy.fact.control_flow"
+      ],
+      "expected_facts": [
+        {
+          "fact_kind": "operation",
+          "operation_kind": "concatenation",
+          "operand_binding_names": [
+            "text"
+          ],
+          "operation_fact_id": null
+        },
+        {
+          "fact_kind": "guard",
+          "guard_kind": "access_single",
+          "guarded_binding_names": [
+            "text"
+          ]
+        }
+      ],
+      "expected_guard_relations": [
+        {
+          "relation_kind": "precedes_without_dominance",
+          "ordering": "operation-before-guard",
+          "source_and_target_ids": null
+        }
+      ],
+      "forbidden_relations": [
+        "guard-dominates-concatenation"
+      ]
+    },
+    {
+      "case_id": "facts.secret-local-different-value-guard",
+      "workspace_file": "main/secret-local.lua",
+      "function_name": "different_value_guard",
+      "required_capabilities": [
+        "emmy.fact.local_bindings",
+        "emmy.fact.operations",
+        "emmy.fact.guards",
+        "emmy.fact.control_flow"
+      ],
+      "expected_facts": [
+        {
+          "fact_kind": "local-binding",
+          "name": "text",
+          "binding_key": null
+        },
+        {
+          "fact_kind": "local-binding",
+          "name": "ordinary",
+          "binding_key": null
+        },
+        {
+          "fact_kind": "guard",
+          "guard_kind": "access_single",
+          "guarded_binding_names": [
+            "ordinary"
+          ]
+        },
+        {
+          "fact_kind": "operation",
+          "operation_kind": "concatenation",
+          "operand_binding_names": [
+            "text"
+          ]
+        }
+      ],
+      "forbidden_relations": [
+        "ordinary-guard-dominates-text-as-the-same-value",
+        "text-has-access-guard"
+      ]
+    },
+    {
+      "case_id": "facts.shadowed-binding-identity",
+      "workspace_mutation": {
+        "target": "main/secret-local.lua",
+        "mutation": "add-nested-shadowed-local-named-text"
+      },
+      "expected": {
+        "distinct_binding_keys": true,
+        "uses-resolve-to-lexically-correct-binding": true,
+        "name-equality-does-not-merge-values": true
+      }
+    },
+    {
+      "case_id": "facts.copy-and-conversion-no-declassification",
+      "workspace_mutation": {
+        "target": "main/secret-local.lua",
+        "mutation": "copy-text-then-call-tostring"
+      },
+      "expected": {
+        "flow_kinds": [
+          "copy",
+          "conversion_call"
+        ],
+        "declassification_fact": false,
+        "safety_verdict": false
+      }
+    },
+    {
+      "case_id": "facts.broken-library-resolution-unavailable",
+      "workspace_mutation": {
+        "target": "library/C_E0Fixture.lua",
+        "mutation": "make-library-invalid"
+      },
+      "expected": {
+        "library_capability": "Failed",
+        "reference_fact_capability": "NotEvaluated",
+        "resolved-member-facts": [],
+        "unresolved-members-not-treated-as-platform-absence": true,
+        "root_cause_code": "root:annotation-library-failed"
+      }
+    },
+    {
+      "case_id": "facts.randomized-order-determinism",
+      "input_mutation": "permute-file-and-fact-discovery-order",
+      "expected": {
+        "canonical_fact_sets_equal_to_baseline": true,
+        "canonical_snapshot_equal_to_baseline": true
+      }
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "fields_to_freeze": [
+      "project_generation_id",
+      "analyzer_snapshot_id",
+      "upstream_pin_id",
+      "all source_span fields",
+      "all binding_key/value_key/fact_id fields",
+      "all source_and_target_ids fields"
+    ],
+    "rule": "Null identity/span fields describe semantic expectations only and become invalid once implementation starts."
+  }
+}
