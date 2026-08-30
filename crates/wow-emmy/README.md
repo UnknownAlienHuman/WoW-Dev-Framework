@@ -1,177 +1,339 @@
 # `wow-emmy` implementation contract
 
-**Status:** E0-active contract scaffold; no Rust code yet.
+**Status:** E0-C implementation-ready contract; no Rust code yet and no upstream dependency is pinned by this documentation change.
 
 ## Mission
 
-`wow-emmy` isolates the pinned upstream EmmyLua analyzer behind one adapter, owns the single-writer analyzer actor, exposes normalized syntax/semantic facts and generic diagnostics, and prevents analyzer version/configuration behavior from leaking through the rest of the framework.
+`wow-emmy` is the single adapter around upstream EmmyLua Rust analysis. It owns analyzer-session lifecycle, main/library workspace assembly, file updates, generic diagnostic normalization, and the smallest normalized syntax/semantic fact surface required by E0 rules.
+
+It does not own WoW platform truth. API existence and restriction facets come from `wow-reference`; project generation and repository structure come from `wow-project`; rule algorithms come from `wow-rules`; cross-component orchestration comes from `wow-service`.
+
+## E0-C outcome
+
+A future implementation agent must be able to prove this seam:
+
+```text
+explicit candidate upstream commit + compatibility probe
+    -> one isolated analyzer session
+    -> one main fixture workspace
+    -> one annotation-library fixture workspace
+    -> deterministic file update/index
+    -> one normalized generic Emmy diagnostic
+    -> exact project source handles/spans
+    -> exact resolved/unresolved API-reference facts
+    -> one direct local producer/use/guard fact slice
+    -> immutable analyzer snapshot bound to one supplied project generation
+```
+
+No LSP, MCP, editor extension, full Blizzard source library, or WoW diagnostic provider is implemented in E0-C.
 
 ## Owned responsibilities
 
-- upstream dependency pin and compatibility identity;
-- analyzer configuration and WoW library/workspace assembly inputs;
-- single-writer analyzer session/actor lifecycle;
-- VFS add/update/remove and index lifecycle;
-- immutable analyzer snapshot identity for a higher-level project generation;
-- source URI/path/span normalization;
-- built-in diagnostic normalization;
-- normalized syntax/semantic facts required by recognizers and rules;
-- diagnostic provider interface/registry contract, without implementing WoW rules;
-- analyzer compatibility probes and last-known-good selection;
-- bounded library/workspace behavior and cancellation.
+- one upstream dependency pin behind one adapter;
+- compatibility-probe execution and report;
+- analyzer configuration derived from explicit inputs;
+- analyzer-session actor/lifecycle;
+- main versus library workspace separation;
+- deterministic normalized file identity/content updates;
+- annotation-library loading and health state;
+- built-in generic diagnostic execution;
+- normalization of upstream diagnostics into `wow-core` findings;
+- canonical source-span conversion;
+- normalized API/member/call/reference facts;
+- normalized local binding, use-operation, call, and guard/control-flow facts required by E0;
+- immutable analyzer snapshot/read view;
+- per-file/per-capability analyzer coverage;
+- incremental update invalidation and last-known-good behavior for unaffected files;
+- upstream-version/source-span/diagnostic compatibility reporting.
 
 ## Explicit non-responsibilities
 
 `wow-emmy` does not:
 
-- fork the upstream analyzer by default;
-- own APIDocumentation/reference truth;
+- decide whether a WoW API exists in a selected build;
+- store Secret/restriction facets;
+- run `wow.api.exists` or `wow.secret.local_operation`;
 - parse TOC or XML;
-- implement WoW-specific diagnostic algorithms;
-- mutate user/editor settings;
-- load the full Blizzard UI implementation into the normal library workspace;
-- own graph persistence, search, context rendering, or transport;
-- infer runtime Secret state;
-- expose upstream internal types as public framework contracts without an adapter.
+- publish the repository's canonical `ProjectGenerationId`;
+- build the project/load graph;
+- persist project/reference databases;
+- search external repositories or Codebase Memory;
+- generate Reference Packs or annotations;
+- mutate user/workspace editor settings;
+- expose raw upstream analyzer internals as the framework contract;
+- add an external diagnostic plugin system during E0;
+- start an LSP/MCP server;
+- execute analyzed Lua or repository tools;
+- claim in-client behavior.
 
-## Analyzer actor model
+## Required reading
 
-One actor/session owns one mutable upstream analysis instance. Writes are serialized. Readers receive an immutable analyzer snapshot token/fact view tied to:
+Before implementation, read:
+
+1. [`../AGENTS.md`](../AGENTS.md)
+2. [`../DEPENDENCY_GRAPH.md`](../DEPENDENCY_GRAPH.md)
+3. [`../WORKSTREAMS.md`](../WORKSTREAMS.md)
+4. [`../wow-core/CONSUMER_GUIDE.md`](../wow-core/CONSUMER_GUIDE.md)
+5. [`AGENTS.md`](AGENTS.md)
+6. [`DECISIONS.md`](DECISIONS.md)
+7. [`PIN_AND_PROBE.md`](PIN_AND_PROBE.md)
+8. [`SESSION_MODEL.md`](SESSION_MODEL.md)
+9. [`FACT_MODEL.md`](FACT_MODEL.md)
+10. [`DIAGNOSTIC_NORMALIZATION.md`](DIAGNOSTIC_NORMALIZATION.md)
+11. [`SOURCE_COORDINATES.md`](SOURCE_COORDINATES.md)
+12. [`ERROR_MODEL.md`](ERROR_MODEL.md)
+13. [`TEST_MATRIX.md`](TEST_MATRIX.md)
+14. [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md)
+15. [`CONTRACT.json`](CONTRACT.json)
+16. current `AGENTS.md` and `INDEX_MINI.md` in the external [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb)
+
+Normative repository sources:
+
+- [`../../docs/EMMYLUA_AND_DIAGNOSTICS.md`](../../docs/EMMYLUA_AND_DIAGNOSTICS.md)
+- [`../../docs/PROVENANCE_AND_COVERAGE.md`](../../docs/PROVENANCE_AND_COVERAGE.md)
+- [`../../docs/SECURITY_MODEL.md`](../../docs/SECURITY_MODEL.md)
+- [`../../docs/TEST_STRATEGY.md`](../../docs/TEST_STRATEGY.md)
+- [`../../docs/RESEARCH_BASELINE.md`](../../docs/RESEARCH_BASELINE.md)
+
+Upstream source to inspect at implementation time:
+
+- [EmmyLuaLs/emmylua-analyzer-rust](https://github.com/EmmyLuaLs/emmylua-analyzer-rust)
+
+The revision recorded in `RESEARCH_BASELINE.md` is historical research input, not the automatic E0-C pin.
+
+## Dependency and pin policy
+
+E0-C depends directly only on `wow-core` plus the smallest approved upstream/analyzer-support dependencies.
+
+The implementation must:
+
+1. select an exact upstream commit, not a floating branch;
+2. record repository, commit, crate versions, features, Rust/MSRV requirements, and license;
+3. run the compatibility probe in [`PIN_AND_PROBE.md`](PIN_AND_PROBE.md);
+4. retain the previous last-known-good candidate until the new pin passes;
+5. isolate upstream names/types inside the adapter;
+6. update the pin only with probe fixtures and observed behavior changes.
+
+No fork is introduced by default. An optional upstream provider API proposal cannot block E0.
+
+## E0-C fixture workspace
+
+The closed fixture uses four first-party Lua files and one library annotation file:
 
 ```text
-upstream version/commit
-configuration digest
-library roots and digests
-workspace roots and file digests
-index epoch
-profile/reference identity supplied by the caller
+main/
+    clean.lua
+    generic-error.lua
+    missing-api.lua
+    secret-local.lua
+
+library/
+    C_E0Fixture.lua
 ```
 
-The broader `ProjectGeneration` is owned/coordinated with `wow-project`/`wow-service`; `wow-emmy` must provide enough identity to prove that its facts belong to that generation.
+Conceptual cases:
 
-## Workspace contract
+- `clean.lua` resolves `C_E0Fixture.KnownApi` cleanly;
+- `generic-error.lua` produces one selected built-in generic analyzer diagnostic;
+- `missing-api.lua` exposes an exact unresolved member/call fact for `C_E0Fixture.RemovedApi` without deciding platform absence;
+- `secret-local.lua` exposes a producer call to `C_E0Fixture.SecretText`, a local binding, a direct unsafe operation, and guarded variants;
+- `C_E0Fixture.lua` declares only the E0 fixture namespace/signatures required for analyzer resolution.
+
+The annotation fixture does not carry canonical Secret metadata. The reference facet remains owned by `wow-reference`.
+
+## Workspace assembly
 
 ```text
 main workspace
-    first-party addon Lua files only
+    first-party E0 Lua fixture files only
 
 library workspace
-    generated WoW annotations
-    project-declared libraries
-    narrow explicit Blizzard stubs when required
+    closed C_E0Fixture annotation file only
 
-excluded by default
-    full Blizzard UI source
-    unrelated installed addons
-    arbitrary generated bodies
+excluded
+    full Blizzard UI implementation
+    unrelated addons/libraries
     user editor configuration
+    generated source bodies not required by E0
 ```
 
-All roots are explicit and normalized. Repository content cannot add analyzer libraries or commands implicitly.
+Workspace roots are explicit logical roots supplied by the harness. Source handles remain repository-relative and never expose local host paths.
 
-## Required operations
+## Session and snapshot model
 
-| Operation | Required behavior |
-|---|---|
-| `create_analyzer_session` | Construct one isolated analyzer actor from explicit config/library/workspace inputs. |
-| `load_library_snapshot` | Load generated annotations/libraries with digests and report parse/coverage failures. |
-| `set_workspace_files` | Establish the first-party file set without filesystem-wide discovery. |
-| `update_file` | Apply one content/digest update and return affected analyzer partitions. |
-| `remove_file` | Remove one known file and invalidate dependent analyzer facts explicitly. |
-| `build_or_update_index` | Produce a new analyzer snapshot token; cancellation cannot publish partial state. |
-| `diagnose_file` | Run upstream built-in diagnostics and normalize IDs/severity/spans/messages. |
-| `extract_syntax_facts` | Return normalized correctness-path syntax facts needed by higher crates. |
-| `extract_semantic_facts` | Return symbols/types/references/calls/expressions through stable framework records. |
-| `resolve_analyzer_span` | Convert upstream coordinates to a stable project source handle input. |
-| `register_provider_descriptor` | Register capability/rule metadata and an invocation seam without depending on `wow-rules`. |
-| `run_compatibility_probe` | Measure config keys, diagnostics, inference, updates, spans, determinism, and performance. |
-| `select_last_known_good` | Reject activation when a mandatory compatibility capability is lost. |
-| `shutdown_session` | Cancel work and release resources deterministically. |
+One analyzer actor owns one mutable upstream analysis instance. Writes are serialized. Readers consume an immutable `AnalyzerSnapshot` that is bound to:
+
+```text
+one ProfileIdentity
+one ReferenceGenerationId
+one caller-supplied ProjectGenerationId
+one analyzer pin/probe identity
+one workspace/configuration digest
+one ordered file-content digest set
+one analyzer snapshot ID
+one capability/coverage set
+```
+
+`wow-emmy` validates the supplied project generation but does not invent the canonical project generation. `wow-project` owns that identity when E0-D activates.
+
+A snapshot never mixes facts or diagnostics from different file/configuration generations.
+
+## Required analyzer operations
+
+Concrete Rust names may change only with a matching contract update. Required E0 semantics are defined in [`SESSION_MODEL.md`](SESSION_MODEL.md):
+
+```text
+select_candidate_pin
+run_compatibility_probe
+build_analyzer_configuration
+create_analyzer_session
+add_main_workspace
+add_library_workspace
+update_file
+remove_file
+build_or_refresh_index
+publish_analyzer_snapshot
+validate_analyzer_snapshot
+run_builtin_diagnostics
+extract_reference_facts
+extract_local_flow_facts
+resolve_project_source_handle
+report_analyzer_capabilities
+close_analyzer_session
+```
 
 ## Normalized fact boundary
 
-Higher crates must not pattern-match upstream AST/CST internals directly. `wow-emmy` publishes only facts that have stable semantics and source coordinates, for example:
+E0-C emits facts, not rule conclusions:
 
 ```text
-file/chunk identity
-function/method declarations
-parameters/returns
-local/global/table/member declarations
-call expressions and receiver shape
-literal table/field accesses
-branches/loops/returns
-assignment and data-flow-local expression facts
-comments/annotations as untrusted source records
-built-in type/symbol resolution status
+FileFact
+ResolvedReferenceFact
+CallFact
+LocalBindingFact
+LocalUseFact
+OperationFact
+GuardFact
+ControlFlowRelation
+GenericDiagnosticObservation
+AnalyzerCoverageRecord
 ```
 
-When upstream cannot provide a required fact, expose a capability gap. Do not synthesize it with a second parser.
+Examples:
+
+- `C_E0Fixture.KnownApi` can be resolved as a member/call reference;
+- `C_E0Fixture.RemovedApi` can be reported as unresolved/unknown to the analyzer;
+- `SecretText()` can be linked to a local value and concatenation/branch/logging use;
+- `canaccessvalue(value)` can be represented as a guard/control-flow fact;
+- no fact states that `SecretText` is actually Secret—that join occurs in `wow-rules` using `wow-reference`.
+
+See [`FACT_MODEL.md`](FACT_MODEL.md).
 
 ## Generic diagnostic normalization
 
-Normalization preserves:
+E0-C selects one stable generic diagnostic category through the compatibility probe. Upstream diagnostic IDs/messages may change; the adapter records both:
 
-- upstream diagnostic identity/version;
-- original severity and framework policy severity separately;
-- primary and related spans;
-- structured message arguments where available;
-- analyzer snapshot/generation identity;
-- suppression/configuration provenance;
-- whether the diagnostic family is classified or shadow-only.
+```text
+stable framework category
+upstream diagnostic ID/code/version
+normalized severity
+exact project source span
+structured message arguments
+producer/version
+project generation and analyzer snapshot
+coverage
+```
 
-Do not deduplicate by message text.
+The framework category cannot hide materially different upstream behavior. A pin update must classify any changed diagnostic family before activation.
 
-## E0 deliverable
+See [`DIAGNOSTIC_NORMALIZATION.md`](DIAGNOSTIC_NORMALIZATION.md).
 
-Implement only:
+## Source coordinates
 
-- one pinned upstream analyzer revision;
-- one explicit fixture workspace;
-- one generated annotation fixture as library input;
-- file update/index lifecycle;
-- one generic diagnostic family normalized into `wow-core` findings;
-- syntax/semantic facts required by `wow.api.exists` and one local Secret rule;
-- deterministic repeated runs;
-- compatibility report for the exact used surface.
+Canonical framework coordinates use validated UTF-8 byte half-open ranges. Derived line/column values are supplementary.
 
-E0 excludes LSP, multi-root discovery, broad incrementality optimization, full compatibility matrix, and dynamic provider loading.
+The adapter must prove conversions for:
 
-## Invariants
+- LF and CRLF;
+- ASCII and multibyte UTF-8;
+- empty files and EOF spans;
+- upstream zero/one-based indexing;
+- UTF-16 LSP positions when a future transport requires them;
+- update/reindex span stability.
 
-1. One writer owns analyzer mutation.
-2. No result after cancellation is published as a new snapshot.
-3. No editor configuration mutation.
-4. No second correctness-path Lua parser.
-5. No full Blizzard source library by default.
-6. Upstream version/configuration is part of result identity.
-7. Parse failure is partitioned; unaffected files remain identifiable.
-8. New upstream diagnostics default to shadow until classified.
-9. Source spans are validated against the exact file digest.
-10. Upstream update activation is reversible.
+No consumer receives a raw upstream range type. See [`SOURCE_COORDINATES.md`](SOURCE_COORDINATES.md).
 
-## Required tests
+## Coverage and failure isolation
 
-- session create/update/remove/shutdown;
-- valid annotation fixture resolves a known API;
-- generic diagnostic normalization and stable ID/span;
-- malformed library/input reports partial capability;
-- randomized update ordering produces the same canonical snapshot result;
-- cancellation does not publish partial index;
-- source span/digest mismatch rejection;
-- user editor config remains untouched;
-- full Blizzard tree is not included by default;
-- compatibility probe detects changed diagnostic/config/span behavior;
-- last-known-good fallback.
+Coverage is explicit per file/capability/producer.
 
-## Documentation sources
+Examples:
 
-- [`../../docs/EMMYLUA_AND_DIAGNOSTICS.md`](../../docs/EMMYLUA_AND_DIAGNOSTICS.md)
-- [`../../docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md)
-- [`../../docs/PROVENANCE_AND_COVERAGE.md`](../../docs/PROVENANCE_AND_COVERAGE.md)
-- [`../../docs/TEST_STRATEGY.md`](../../docs/TEST_STRATEGY.md)
-- [`../../docs/SECURITY_MODEL.md`](../../docs/SECURITY_MODEL.md)
-- [`../../docs/RESEARCH_BASELINE.md`](../../docs/RESEARCH_BASELINE.md)
+```text
+emmy.session.ready
+emmy.library.loaded
+emmy.file.parsed:<file>
+emmy.file.diagnostics:<file>
+emmy.fact.references:<file>
+emmy.fact.local_flow:<file>
+```
+
+Rules:
+
+- an annotation-library failure blocks dependent resolution but not unrelated parser diagnostics;
+- a parse failure in one file does not fabricate facts for that file;
+- unaffected files may remain usable in the same coherent snapshot only when the actor can prove their state;
+- an upstream panic/session corruption invalidates the session/snapshot rather than becoming partial success;
+- missing capability produces `NotEvaluated` in higher layers.
+
+## E0-C hard stops
+
+- No `Cargo.toml` or Rust source in this documentation phase.
+- No floating upstream dependency.
+- No direct dependency on `wow-reference`, `wow-project`, or `wow-rules`.
+- No external diagnostic plugin framework.
+- No LSP/MCP/CLI server.
+- No editor-setting mutation.
+- No full Blizzard source workspace.
+- No runtime Lua execution.
+- No WoW API/restriction authority claims.
+- No project-generation invention.
+- No raw upstream type leakage as public contract.
+- No fake clean result when library/parse/fact capability failed.
+
+## Normative fixtures
+
+The closed examples under [`examples/`](examples/README.md) define:
+
+- workspace and file declarations;
+- annotation-library declaration;
+- expected generic diagnostic normalization;
+- expected resolved/unresolved reference facts;
+- expected local binding/use/guard facts;
+- compatibility-probe cases;
+- pending canonical byte-freeze manifest.
+
+As with E0-B, actual byte digests are frozen after E0-A canonicalization is implemented and before the first `wow-emmy` Rust commit.
 
 ## Definition of done
 
-The E0 adapter is complete when a caller can reproduce one analyzer snapshot, obtain normalized generic diagnostics and required semantic facts, prove exact source/generation identity, and upgrade/rollback the upstream dependency through an executable compatibility probe rather than undocumented assumptions.
+E0-C implementation is complete only when:
+
+```text
+one exact upstream commit is pinned and licensed
+compatibility probe passes and is committed
+one isolated session loads main/library fixtures without editor mutation
+KnownApi resolves to exact project reference/call facts
+generic-error yields one normalized generic finding
+RemovedApi yields unresolved analyzer facts but no platform-absence conclusion
+SecretText local binding/use/guard facts match fixtures
+all spans/source handles are exact and stable
+all public outputs carry one supplied project generation and analyzer snapshot
+partial/failed capabilities remain explicit
+randomized update/input order yields deterministic canonical snapshot output
+incremental update invalidates only proven affected facts
+no analyzed Lua or repository code executes
+all TEST_MATRIX cases pass
+```
+
+Until then, this directory remains an implementation-ready adapter contract, not a functioning analyzer integration.
