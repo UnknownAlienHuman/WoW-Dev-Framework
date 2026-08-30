@@ -1,0 +1,214 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-rules-e0-registry-v1",
+  "state": "documentation-only-pending-prerequisite-and-byte-freeze",
+  "profile_id": "fixture-retail-120100-e0-v1",
+  "reference_generation_id": null,
+  "project_generation_id": null,
+  "analyzer_snapshot_id": null,
+  "reference_view_id": null,
+  "project_snapshot_id": null,
+  "project_view_id": null,
+  "registry": {
+    "registry_id": null,
+    "registry_schema_version": 1,
+    "active_rules": [
+      {
+        "rule_id": "wow.api.exists",
+        "rule_version": 1,
+        "semantic_category": "wow.api.missing",
+        "technical_severity": "error",
+        "rollout_policy": "advisory",
+        "remediation_tiers": [
+          "plan_only"
+        ],
+        "supported_profile_id": "fixture-retail-120100-e0-v1",
+        "supported_scope": "direct-main-project-member-or-call-use",
+        "fixture_case_set_id": "wow-rules-e0-api-exists-v1"
+      },
+      {
+        "rule_id": "wow.secret.local_operation",
+        "rule_version": 1,
+        "semantic_category": "wow.secret.unsafe_local_operation",
+        "technical_severity": "error",
+        "rollout_policy": "advisory",
+        "remediation_tiers": [
+          "plan_only"
+        ],
+        "supported_profile_id": "fixture-retail-120100-e0-v1",
+        "supported_scope": "one-function-local-secret-return-to-concatenation-flow",
+        "fixture_case_set_id": "wow-rules-e0-secret-local-v1"
+      }
+    ],
+    "inactive_rules": [
+      "wow.api.deprecated",
+      "wow.api.arguments",
+      "wow.event.exists_payload",
+      "wow.widget.method",
+      "wow.toc.reachable",
+      "wow.load.use_before_load",
+      "wow.secret.unsafe_log",
+      "wow.overlay.direct_blizzard_override",
+      "wow.framework.duplicate_registration"
+    ],
+    "canonical_sha256": null
+  },
+  "fixture_policy": {
+    "policy_id": "wow-rules-e0-fixture-policy/1",
+    "canonical_sha256": null,
+    "production_authority": false,
+    "rule_versions": [
+      "wow.api.exists@1",
+      "wow.secret.local_operation@1"
+    ],
+    "accepted_guard_semantics": [
+      {
+        "callee_spelling": "canaccessvalue",
+        "guard_kind": "access_single",
+        "target_arity": 1,
+        "value_identity_requirement": "exact",
+        "required_control_flow_relation": "dominates"
+      }
+    ],
+    "supported_operations": [
+      "concatenation"
+    ],
+    "supported_facets": [
+      {
+        "entity_key": "function:C_E0Fixture.SecretText",
+        "facet_kind": "secret.return",
+        "target": "return_position:1",
+        "applicability": "unconditional_fixture"
+      }
+    ],
+    "scope_limits": [
+      "one-function-local-flow",
+      "direct-producer-call",
+      "direct-local-binding-use",
+      "bounded-guard-control-flow"
+    ]
+  },
+  "prerequisite_contracts": [
+    {
+      "contract_id": "wow-core/e0-a/1",
+      "implementation_identity": null,
+      "fixture_bundle_sha256": null
+    },
+    {
+      "contract_id": "wow-reference/e0-b/1",
+      "implementation_identity": null,
+      "profile_id": "fixture-retail-120100-e0-v1",
+      "reference_generation_id": null,
+      "fixture_bundle_sha256": null
+    },
+    {
+      "contract_id": "wow-emmy/e0-c/1",
+      "implementation_identity": null,
+      "analyzer_upstream_pin_id": null,
+      "analyzer_snapshot_id": null,
+      "fixture_bundle_sha256": null
+    },
+    {
+      "contract_id": "wow-project/e0-d/1",
+      "implementation_identity": null,
+      "project_generation_id": null,
+      "project_snapshot_id": null,
+      "fixture_bundle_sha256": null
+    }
+  ],
+  "api_exists_requirements": {
+    "entity_key": "function:C_E0Fixture.RemovedApi",
+    "project_file_id": "project-file:main/missing-api.lua",
+    "project_source_handle_id": null,
+    "unresolved_reference_fact_id": null,
+    "call_fact_id": null,
+    "same_source_generic_finding_id": null,
+    "reference_exact_lookup_result_id": null,
+    "reference_coverage_ids": [],
+    "reference_conflict_ids": [],
+    "negative_authority_decision_id": null,
+    "required_capabilities": [
+      "project.generation.coherent",
+      "project.source.registry.complete",
+      "project.analyzer.snapshot.available",
+      "emmy.library.loaded",
+      "emmy.file.parsed",
+      "emmy.fact.references",
+      "emmy.fact.calls",
+      "emmy.source_coordinates.exact",
+      "reference.fixture.profile.valid",
+      "reference.symbol.exact_lookup"
+    ]
+  },
+  "secret_local_requirements": {
+    "producer_entity_key": "function:C_E0Fixture.SecretText",
+    "producer_return_position": 1,
+    "project_file_id": "project-file:main/secret-local.lua",
+    "producer_reference_fact_id": null,
+    "producer_call_fact_id": null,
+    "restriction_facet_id": null,
+    "restriction_facet_evidence_ids": [],
+    "restriction_coverage_ids": [],
+    "required_capabilities": [
+      "project.generation.coherent",
+      "project.source.registry.complete",
+      "project.analyzer.snapshot.available",
+      "emmy.library.loaded",
+      "emmy.file.parsed",
+      "emmy.fact.references",
+      "emmy.fact.calls",
+      "emmy.fact.local_bindings",
+      "emmy.fact.local_flow",
+      "emmy.fact.operations",
+      "emmy.fact.guards",
+      "emmy.fact.control_flow",
+      "emmy.source_coordinates.exact",
+      "reference.fixture.profile.valid",
+      "reference.symbol.exact_lookup",
+      "reference.restriction.facets",
+      "reference.source_handle.resolve"
+    ]
+  },
+  "execution_budget": {
+    "max_rule_scopes": 64,
+    "max_facts_per_scope": 128,
+    "max_reference_lookups": 64,
+    "max_findings": 64,
+    "max_related_evidence_per_finding": 32,
+    "max_output_bytes": 262144
+  },
+  "canonical_output_order": [
+    "rule_id",
+    "rule_version",
+    "outcome_status",
+    "primary_project_source_path",
+    "primary_byte_start",
+    "primary_byte_end",
+    "canonical_subject_entity_key",
+    "operation_or_use_kind",
+    "evaluation_or_finding_id"
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_fields": [
+      "reference_generation_id",
+      "project_generation_id",
+      "analyzer_snapshot_id",
+      "reference_view_id",
+      "project_snapshot_id",
+      "project_view_id",
+      "registry.registry_id",
+      "registry.canonical_sha256",
+      "fixture_policy.canonical_sha256",
+      "prerequisite_contracts[*].implementation_identity",
+      "prerequisite_contracts[*].fixture_bundle_sha256",
+      "api_exists_requirements.project_source_handle_id",
+      "api_exists_requirements.unresolved_reference_fact_id",
+      "api_exists_requirements.reference_exact_lookup_result_id",
+      "api_exists_requirements.negative_authority_decision_id",
+      "secret_local_requirements.producer_reference_fact_id",
+      "secret_local_requirements.producer_call_fact_id",
+      "secret_local_requirements.restriction_facet_id"
+    ]
+  }
+}

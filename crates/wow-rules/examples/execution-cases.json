@@ -1,0 +1,373 @@
+{
+  "schema_version": 1,
+  "case_set_id": "wow-rules-e0-execution-v1",
+  "state": "documentation-only-pending-prerequisite-and-byte-freeze",
+  "profile_id": "fixture-retail-120100-e0-v1",
+  "reference_generation_id": null,
+  "project_generation_id": null,
+  "analyzer_snapshot_id": null,
+  "rule_registry_id": null,
+  "fixture_policy_id": "wow-rules-e0-fixture-policy/1",
+  "execution_context_id": null,
+  "cases": [
+    {
+      "case_id": "execution.both-rules-canonical-selection",
+      "request": {
+        "requested_rules": [
+          "wow.secret.local_operation@1",
+          "wow.api.exists@1"
+        ],
+        "scope": "all-closed-e0-project-use-scopes",
+        "rollout_filter": [
+          "advisory"
+        ]
+      },
+      "expected": {
+        "selected_rules": [
+          "wow.api.exists@1",
+          "wow.secret.local_operation@1"
+        ],
+        "selection_order_is_canonical": true,
+        "inactive_rules_selected": [],
+        "execution_report_id": null,
+        "execution_report_sha256": null
+      }
+    },
+    {
+      "case_id": "execution.single-rule-selection",
+      "request": {
+        "requested_rules": [
+          "wow.api.exists@1"
+        ],
+        "scope": "project-file:main/missing-api.lua"
+      },
+      "expected": {
+        "selected_rules": [
+          "wow.api.exists@1"
+        ],
+        "secret_rule_executed": false,
+        "execution_report_id": null
+      }
+    },
+    {
+      "case_id": "execution.complete-findings-and-clean-aggregation",
+      "request": {
+        "requested_rules": [
+          "wow.api.exists@1",
+          "wow.secret.local_operation@1"
+        ],
+        "scope": "all-closed-e0-project-use-scopes"
+      },
+      "prerequisite_cases": [
+        "api.removed-authoritative-absent",
+        "secret.unsafe-concat",
+        "secret.guarded-concat",
+        "secret.guard-after-use",
+        "secret.different-value-guard"
+      ],
+      "expected": {
+        "primary_outcomes": {
+          "Findings": 4,
+          "EvaluatedClean": 1,
+          "NotEvaluated": 0,
+          "Failed": 0,
+          "Cancelled": 0
+        },
+        "api_finding_count": 1,
+        "secret_finding_count": 3,
+        "secret_clean_count": 1,
+        "canonical_outcome_order": true,
+        "generic_findings_are_not-suppressed-by-rule-executor": true,
+        "execution_report_id": null,
+        "execution_report_sha256": null
+      }
+    },
+    {
+      "case_id": "execution.capability-block-before-provider",
+      "request": {
+        "requested_rules": [
+          "wow.secret.local_operation@1"
+        ],
+        "scope": "secret.guarded-concat"
+      },
+      "context_mutation": {
+        "capability_id": "emmy.fact.control_flow",
+        "coverage_status": "Failed"
+      },
+      "expected": {
+        "provider_body_executed": false,
+        "primary_outcome": "NotEvaluated",
+        "not_evaluated_id": null,
+        "blocker_kinds": [
+          "failed_coverage",
+          "unsupported_control_flow"
+        ],
+        "finding_ids": [],
+        "clean_record_id": null
+      }
+    },
+    {
+      "case_id": "execution.profile-context-mismatch",
+      "request": {
+        "requested_rules": [
+          "wow.api.exists@1"
+        ]
+      },
+      "context_mutation": {
+        "project_profile_id": "fixture-retail-other-profile"
+      },
+      "expected": {
+        "primary_outcome": "Failed",
+        "error_code": "rule_profile_mismatch",
+        "providers_executed": [],
+        "not_evaluated_id": null
+      }
+    },
+    {
+      "case_id": "execution.project-generation-mismatch",
+      "request": {
+        "requested_rules": [
+          "wow.api.exists@1",
+          "wow.secret.local_operation@1"
+        ]
+      },
+      "context_mutation": {
+        "project_view_generation_id": "project-generation:wrong-fixture-value"
+      },
+      "expected": {
+        "primary_outcome": "Failed",
+        "error_code": "rule_project_generation_mismatch",
+        "providers_executed": []
+      }
+    },
+    {
+      "case_id": "execution.last-known-good-substitution-forbidden",
+      "request": {
+        "required_project_generation_id": null,
+        "requested_rules": [
+          "wow.api.exists@1"
+        ]
+      },
+      "context_mutation": {
+        "project_view_is_retained_last_known_good_for_another_generation": true
+      },
+      "expected": {
+        "primary_outcome": "Failed",
+        "error_code": "rule_last_known_good_substitution_forbidden",
+        "providers_executed": []
+      }
+    },
+    {
+      "case_id": "execution.outcome-exclusivity-violation",
+      "provider_mutation": {
+        "rule_id": "wow.api.exists",
+        "return_primary_outcomes": [
+          "Findings",
+          "EvaluatedClean"
+        ]
+      },
+      "expected": {
+        "execution_report_rejected": true,
+        "error_code": "rule_outcome_exclusivity_violation",
+        "partial_finding_published": false
+      }
+    },
+    {
+      "case_id": "execution.empty-findings-without-explicit-clean",
+      "provider_mutation": {
+        "rule_id": "wow.api.exists",
+        "return_findings": [],
+        "return_clean_record": null,
+        "return_not_evaluated": null
+      },
+      "expected": {
+        "execution_report_rejected": true,
+        "error_code": "rule_empty_findings_not_clean"
+      }
+    },
+    {
+      "case_id": "execution.budget-exceeded-before-complete-scope",
+      "request": {
+        "requested_rules": [
+          "wow.api.exists@1",
+          "wow.secret.local_operation@1"
+        ],
+        "budget_mutation": "max-rule-scopes-smaller-than-discovered-scopes"
+      },
+      "expected": {
+        "clean_outcomes": 0,
+        "blocked_scopes_are_explicit": true,
+        "error_or_blocker": "rule_execution_budget_exceeded",
+        "execution_report_marks_incomplete": true,
+        "partial_output_not-presented-as-complete": true
+      }
+    },
+    {
+      "case_id": "execution.output-budget-exceeded",
+      "request": {
+        "requested_rules": [
+          "wow.api.exists@1",
+          "wow.secret.local_operation@1"
+        ],
+        "budget_mutation": "max-output-bytes-below-one-complete-report"
+      },
+      "expected": {
+        "error_code": "rule_output_budget_exceeded",
+        "canonical_complete_report_published": false,
+        "clean_result_allowed": false
+      }
+    },
+    {
+      "case_id": "execution.cancel-before-provider",
+      "request": {
+        "requested_rules": [
+          "wow.api.exists@1"
+        ],
+        "cancellation_state": "cancelled-before-selection"
+      },
+      "expected": {
+        "primary_outcome": "Cancelled",
+        "providers_executed": [],
+        "late_or_background_output": false
+      }
+    },
+    {
+      "case_id": "execution.cancel-between-scopes",
+      "request": {
+        "requested_rules": [
+          "wow.secret.local_operation@1"
+        ],
+        "scope": "all-secret-local-functions",
+        "cancellation_state": "cancel-after-first-canonical-scope-before-next"
+      },
+      "expected": {
+        "primary_outcome": "Cancelled",
+        "default_partial-execution-report-published": false,
+        "late_or_background_output": false
+      }
+    },
+    {
+      "case_id": "execution.late-result-after-cancel-mutation",
+      "provider_mutation": "publish-finding-after-cancellation",
+      "expected": {
+        "execution_report_rejected": true,
+        "error_code": "rule_late_result_after_cancel_forbidden"
+      }
+    },
+    {
+      "case_id": "execution.randomized-order-determinism",
+      "mutations": [
+        "permute-requested-rule-order",
+        "permute-scope-order",
+        "permute-fact-order",
+        "permute-coverage-order",
+        "permute-conflict-order",
+        "permute-reference-result-internal-order",
+        "permute-generic-finding-order",
+        "change-worker-scheduling",
+        "change-temporary-root",
+        "change-rendered-message-wording-only"
+      ],
+      "expected": {
+        "registry_id_equal": true,
+        "execution_context_id_equal": true,
+        "evaluation_ids_equal": true,
+        "finding_ids_equal": true,
+        "root_cause_keys_equal": true,
+        "remediation_equal": true,
+        "execution_report_id_equal": true,
+        "execution_report_sha256_equal": true
+      }
+    },
+    {
+      "case_id": "execution.hidden-mutable-cache-nondeterminism",
+      "provider_mutation": "reuse-cross-request-state-not-keyed-by-context",
+      "expected": {
+        "execution_report_rejected": true,
+        "error_code": "rule_hidden_global_state_forbidden",
+        "determinism_mutation_test_fails": true
+      }
+    },
+    {
+      "case_id": "execution.inactive-rule-request",
+      "request": {
+        "requested_rules": [
+          "wow.api.arguments@1"
+        ]
+      },
+      "expected": {
+        "outcome": "Failed",
+        "error_code": "operation_not_implemented_for_milestone",
+        "default_or_empty-success": false
+      }
+    },
+    {
+      "case_id": "execution.graph-dependent-provider-request",
+      "request": {
+        "requested_rules": [
+          "wow.load.use_before_load@1"
+        ]
+      },
+      "expected": {
+        "outcome": "Failed",
+        "error_code": "rule_dependency_inactive",
+        "wow_graph_loaded": false
+      }
+    },
+    {
+      "case_id": "execution.provider-io-forbidden",
+      "provider_mutation": "open-project-file-directly",
+      "expected": {
+        "execution_report_rejected": true,
+        "error_code": "rule_io_forbidden",
+        "finding_or_clean_published": false
+      }
+    },
+    {
+      "case_id": "execution.provider-source-edit-forbidden",
+      "provider_mutation": "apply-remediation-edit-to-source",
+      "expected": {
+        "execution_report_rejected": true,
+        "error_code": "rule_source_mutation_forbidden",
+        "source_changed": false
+      }
+    },
+    {
+      "case_id": "execution.provider-runtime-access-forbidden",
+      "provider_mutation": "query-wow-client-or-runtime-probe-directly",
+      "expected": {
+        "execution_report_rejected": true,
+        "error_code": "rule_editor_or_client_access_forbidden"
+      }
+    },
+    {
+      "case_id": "execution.final-folding-forbidden",
+      "provider_or_executor_mutation": "suppress-generic-finding-and-return-only-root-finding",
+      "expected": {
+        "execution_report_rejected": true,
+        "error_code": "rule_final_folding_forbidden",
+        "raw-generic-finding-remains-service-input": true
+      }
+    },
+    {
+      "case_id": "execution.security-source-payload-leak",
+      "provider_mutation": "embed-raw-produced-value-or-local-absolute-path-in-error-or-finding",
+      "expected": {
+        "execution_report_rejected": true,
+        "error_code": "rule_source_or_secret_payload_leak_forbidden"
+      }
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "fields_to_freeze": [
+      "reference_generation_id",
+      "project_generation_id",
+      "analyzer_snapshot_id",
+      "rule_registry_id",
+      "execution_context_id",
+      "all null execution/evaluation/finding/clean/NotEvaluated/root-cause/remediation/report IDs and digests",
+      "all null required target and last-known-good generation IDs"
+    ]
+  }
+}
