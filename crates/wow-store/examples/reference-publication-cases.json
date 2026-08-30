@@ -1,0 +1,321 @@
+{
+  "schema_version": 1,
+  "case_set_id": "wow-store-e1-reference-publication-v1",
+  "state": "documentation-only-pending-store-and-byte-freeze",
+  "store_kind": "Reference",
+  "store_id": null,
+  "previous_active_generation_id": null,
+  "target_profile_id": null,
+  "target_reference_generation_id": null,
+  "runtime_profile_id": null,
+  "schema_registry_id": null,
+  "cases": [
+    {
+      "case_id": "publication.complete-success",
+      "request": {
+        "store_build_request_id": null,
+        "candidate_build_id": null,
+        "requested_durability_level": null
+      },
+      "expected_transitions": [
+        "Candidate",
+        "StagingCreated",
+        "SchemaApplied",
+        "DataWritten",
+        "ObjectsVerified",
+        "SchemaValidated",
+        "DataValidated",
+        "IntegrityValidated",
+        "ManifestFinalized",
+        "Sealed",
+        "GenerationPublished",
+        "ActivePointerPublished"
+      ],
+      "expected": {
+        "staging_store_id": null,
+        "validation_report_id": null,
+        "store_manifest_id": null,
+        "sealed_generation_id": null,
+        "store_generation_id": null,
+        "generation_publication_record_id": null,
+        "active_pointer_id": null,
+        "active_pointer_digest": null,
+        "sqlite_file_sha256": null,
+        "logical_data_manifest_digest": null,
+        "object_reference_set_digest": null,
+        "final_path_open_validation_report_id": null,
+        "publication_durability_level": null,
+        "active_generation_id": null,
+        "previous_active_generation_preserved_as_retained": true,
+        "released_sidecars": []
+      }
+    },
+    {
+      "case_id": "publication.fail-before-staging",
+      "injection_point": "before-StagingCreated",
+      "expected": {
+        "outcome": "failed",
+        "active_generation_id": null,
+        "active_generation_must_equal_previous_active": true,
+        "candidate_published": false,
+        "pointer_changed": false
+      }
+    },
+    {
+      "case_id": "publication.fail-mid-migration",
+      "injection_point": "during-SchemaApplied",
+      "expected": {
+        "outcome": "failed",
+        "error_code": "migration_apply_failed",
+        "candidate_transaction_rolled_back": true,
+        "candidate_sealed": false,
+        "generation_published": false,
+        "pointer_changed": false,
+        "previous_active_unchanged": true
+      }
+    },
+    {
+      "case_id": "publication.cancel-mid-domain-write",
+      "injection_point": "during-DataWritten-operation-batch",
+      "expected": {
+        "outcome": "cancelled",
+        "error_code": "store_cancelled",
+        "candidate_transaction_rolled_back": true,
+        "candidate_sealed": false,
+        "generation_published": false,
+        "pointer_changed": false,
+        "late_or_background_work": false
+      }
+    },
+    {
+      "case_id": "publication.fail-mid-object-write",
+      "injection_point": "during-ObjectsVerified",
+      "expected": {
+        "outcome": "failed",
+        "candidate_sealed": false,
+        "generation_published": false,
+        "pointer_changed": false,
+        "existing-shared-valid-objects-intact": true,
+        "candidate-retained-object-references-created": false
+      }
+    },
+    {
+      "case_id": "publication.db-committed-before-validation-fails",
+      "injection_point": "after-DataWritten-before-SchemaValidated",
+      "mutation": "registered-domain-validation-fails",
+      "expected": {
+        "outcome": "failed",
+        "error_code": "store_domain_validation_failed",
+        "candidate_sealed": false,
+        "generation_published": false,
+        "pointer_changed": false,
+        "previous_active_unchanged": true
+      }
+    },
+    {
+      "case_id": "publication.mandatory-integrity-unavailable",
+      "injection_point": "IntegrityValidated",
+      "mutation": "mandatory-integrity-check-skipped-or-unavailable",
+      "expected": {
+        "outcome": "failed",
+        "error_code": "store_mandatory_check_unavailable",
+        "candidate_sealed": false,
+        "pointer_changed": false
+      }
+    },
+    {
+      "case_id": "publication.fail-mid-manifest-finalization",
+      "injection_point": "during-ManifestFinalized-temp-write-before-atomic-rename",
+      "expected": {
+        "outcome": "failed",
+        "store_generation_id_active": false,
+        "candidate_sealed": false,
+        "generation_published": false,
+        "pointer_changed": false,
+        "partial-manifest-not-treated-as-final": true
+      }
+    },
+    {
+      "case_id": "publication.sealed-not-published",
+      "injection_point": "after-Sealed-before-GenerationPublished",
+      "expected": {
+        "outcome": "failed-or-cancelled",
+        "sealed_generation_id": null,
+        "final_generation_path_exists": false,
+        "pointer_changed": false,
+        "previous_active_unchanged": true,
+        "sealed-candidate-cleanup-or-recovery-classified": true
+      }
+    },
+    {
+      "case_id": "publication.generation-published-pointer-not-updated",
+      "injection_point": "after-GenerationPublished-before-ActivePointerPublished",
+      "expected": {
+        "outcome": "failed-or-cancelled",
+        "store_generation_id": null,
+        "generation_exists-at-final-path": true,
+        "final-path-validation-passed-before-pointer-attempt": true,
+        "pointer_changed": false,
+        "active_generation_must_equal_previous_active": true,
+        "orphan-published-generation-recoverable-after-revalidation": true
+      }
+    },
+    {
+      "case_id": "publication.pointer-temp-written-not-replaced",
+      "injection_point": "during-ActivePointerPublished-after-temp-flush-before-replace",
+      "expected": {
+        "outcome": "failed",
+        "generation_exists-at-final-path": true,
+        "old-pointer-remains-authoritative": true,
+        "active_generation_must_equal_previous_active": true,
+        "retry-same-pointer-publication-allowed-after-revalidation": true
+      }
+    },
+    {
+      "case_id": "publication.pointer-replace-state-uncertain",
+      "injection_point": "after-pointer-replace-before-directory-flush-or-reopen-validation",
+      "expected": {
+        "outcome": "exact-platform-adapter-classification-required",
+        "error_code": "store_active_pointer_publish_failed",
+        "must-reopen-and-classify-current-pointer": true,
+        "must-not-guess-active-generation": true,
+        "durability-level-not-overstated": true
+      }
+    },
+    {
+      "case_id": "publication.final-path-reopen-fails",
+      "injection_point": "after-generation-publication-before-pointer",
+      "mutation": "final-path-file-or-manifest-validation-fails",
+      "expected": {
+        "outcome": "failed",
+        "error_code": "store_final_path_revalidation_failed",
+        "pointer_changed": false,
+        "previous_active_unchanged": true,
+        "published-target-quarantined-or-retained-for-investigation": true
+      }
+    },
+    {
+      "case_id": "publication.existing-equivalent-generation",
+      "precondition": "final-generation-path-already-exists-with-exact-equivalent-manifest-file-object-set",
+      "expected": {
+        "outcome": "idempotent-success",
+        "overwrite_performed": false,
+        "existing-generation-revalidated": true,
+        "pointer-publication-can-proceed-after-revalidation": true
+      }
+    },
+    {
+      "case_id": "publication.existing-generation-mismatch",
+      "precondition": "same-store-generation-id-or-path-exists-with-different-manifest-file-or-object-content",
+      "expected": {
+        "outcome": "failed",
+        "error_code": "store_generation_existing_mismatch",
+        "overwrite_performed": false,
+        "pointer_changed": false,
+        "existing-and-candidate-classified-as-corruption-or-collision": true
+      }
+    },
+    {
+      "case_id": "publication.write-after-seal",
+      "mutation": "attempt-db-object-or-manifest-mutation-after-Sealed",
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "store_write_after_seal_forbidden",
+        "sealed-generation-digests-unchanged": true
+      }
+    },
+    {
+      "case_id": "publication.pointer-to-partial-generation",
+      "mutation": "construct-pointer-to-staging-or-missing-final-generation",
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "store_pointer_to_missing_or_partial_generation_forbidden",
+        "old-pointer-remains-authoritative": true
+      }
+    },
+    {
+      "case_id": "publication.reader-retains-old-generation",
+      "precondition": "reader-opens-previous-active-generation-before-new-pointer-publication",
+      "expected": {
+        "reader-generation-id": null,
+        "new-active-generation-id": null,
+        "reader-generation-does-not-switch": true,
+        "old-generation-retention-or-lease-protects-files-and-objects": true
+      }
+    },
+    {
+      "case_id": "publication.read-only-sealed-open",
+      "precondition": "complete-published-generation",
+      "mutations": [
+        "attempt-insert-update-delete",
+        "attempt-create-drop-alter",
+        "attempt-persistent-pragma-change"
+      ],
+      "expected": {
+        "all-mutations-fail": true,
+        "sqlite-file-digest-unchanged": true,
+        "journal-wal-shm-sidecars-created": false,
+        "open-validation-report-id": null
+      }
+    },
+    {
+      "case_id": "publication.last-known-good-relabel",
+      "mutation": "report-previous-active-generation-under-failed-target-generation-id",
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "store_last_known_good_relabel_forbidden"
+      }
+    },
+    {
+      "case_id": "publication.deterministic-semantics",
+      "mutations": [
+        "permute-unordered-domain-operation-and-row-input",
+        "permute-object-reference-input",
+        "change-staging-temp-name-and-root",
+        "change-worker-scheduling",
+        "change-build-time-host-and-operational-log-order"
+      ],
+      "expected": {
+        "store_generation_id_equal": true,
+        "store_manifest_id_equal": true,
+        "logical_data_manifest_digest_equal": true,
+        "object_reference_set_digest_equal": true,
+        "publication-record-semantic-digest-equal": true,
+        "raw-sqlite-file-byte-equality-required-only-if-frozen-classification-is-byte-reproducible-proven": true
+      }
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "store_id",
+      "previous_active_generation_id",
+      "target_profile_id",
+      "target_reference_generation_id",
+      "runtime_profile_id",
+      "schema_registry_id",
+      "cases[0].request.store_build_request_id",
+      "cases[0].request.candidate_build_id",
+      "cases[0].request.requested_durability_level",
+      "cases[0].expected.staging_store_id",
+      "cases[0].expected.validation_report_id",
+      "cases[0].expected.store_manifest_id",
+      "cases[0].expected.sealed_generation_id",
+      "cases[0].expected.store_generation_id",
+      "cases[0].expected.generation_publication_record_id",
+      "cases[0].expected.active_pointer_id",
+      "cases[0].expected.active_pointer_digest",
+      "cases[0].expected.sqlite_file_sha256",
+      "cases[0].expected.logical_data_manifest_digest",
+      "cases[0].expected.object_reference_set_digest",
+      "cases[0].expected.final_path_open_validation_report_id",
+      "cases[0].expected.publication_durability_level",
+      "cases[0].expected.active_generation_id",
+      "cases[8].expected.sealed_generation_id",
+      "cases[9].expected.store_generation_id",
+      "cases[18].expected.reader-generation-id",
+      "cases[18].expected.new-active-generation-id",
+      "cases[19].expected.open-validation-report-id"
+    ]
+  }
+}
