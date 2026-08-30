@@ -1,0 +1,423 @@
+{
+  "schema_version": 1,
+  "case_set_id": "wow-reference-e1-view-v1",
+  "state": "documentation-only-pending-view-result-and-byte-freeze",
+  "view_context": {
+    "reference_view_id": null,
+    "profile_id": null,
+    "reference_generation_id": null,
+    "store_id": null,
+    "store_generation_id": null,
+    "store_manifest_id": null,
+    "schema_bundle_id": null,
+    "read_operation_catalog_id": null,
+    "capability_manifest_id": null,
+    "coverage_manifest_id": null,
+    "conflict_manifest_id": null,
+    "correction_application_manifest_id": null,
+    "open_validation_report_id": null
+  },
+  "cases": [
+    {
+      "case_id": "view.found-callable",
+      "request": {
+        "request_id": null,
+        "operation": "lookup_api_callable",
+        "exact_key_id": null,
+        "detail_mask_id": null,
+        "budget_id": null
+      },
+      "expected": {
+        "variant": "Found",
+        "result_id": null,
+        "entity_id": null,
+        "callable_fact_id": null,
+        "parameter_ids": [],
+        "return_ids": [],
+        "restriction_facet_ids": [],
+        "predicate_ids": [],
+        "evidence_ids": [],
+        "source_handle_ids": [],
+        "coverage_record_ids": [],
+        "truncated": false
+      }
+    },
+    {
+      "case_id": "view.same-name-distinct-kind-system-owner-signature",
+      "request_variants": [
+        "exact-function-key",
+        "exact-method-owner-key",
+        "same-name-different-system-key",
+        "same-name-different-signature-discriminator"
+      ],
+      "expected": {
+        "result_ids": [],
+        "entity_ids": [],
+        "all-selected-exactly": true,
+        "string-only-or-first-row-fallback": false
+      }
+    },
+    {
+      "case_id": "view.authoritative-absence",
+      "request": {
+        "request_id": null,
+        "operation": "lookup_exact_entity",
+        "exact_key_id": null,
+        "negative_authority_request_id": null
+      },
+      "preconditions": [
+        "all-relevant-partitions-and-capabilities-complete",
+        "no-relevant-conflict-unknown-unsupported-correction-truncation-runtime-gap",
+        "store-read-and-integrity-complete",
+        "exact-lookup-found-no-record"
+      ],
+      "expected": {
+        "variant": "AbsentAuthoritative",
+        "result_id": null,
+        "negative_authority_decision_id": null,
+        "authoritative": true,
+        "decisive_coverage_record_ids": [],
+        "blocker_ids": []
+      }
+    },
+    {
+      "case_id": "view.not-found-partial",
+      "request": {
+        "request_id": null,
+        "operation": "lookup_exact_entity",
+        "exact_key_id": null,
+        "negative_authority_request_id": null
+      },
+      "mutation": "make-one-relevant-partition-Partial-or-truncated",
+      "expected": {
+        "variant": "NotFoundPartial",
+        "result_id": null,
+        "negative_authority_decision_id": null,
+        "authoritative": false,
+        "blocker_ids": [],
+        "empty-result-rendered-as-absent": false
+      }
+    },
+    {
+      "case_id": "view.conflict",
+      "request": {
+        "request_id": null,
+        "operation": "lookup_exact_entity",
+        "exact_key_id": null
+      },
+      "precondition": "multiple-nonidentical-records-or-competing-source-correction-for-unique-key",
+      "expected": {
+        "variant": "Conflict",
+        "result_id": null,
+        "conflict_record_ids": [],
+        "competing_entity_or_fact_ids": [],
+        "first-or-last-row-selected": false
+      }
+    },
+    {
+      "case_id": "view.not-evaluated",
+      "request": {
+        "request_id": null,
+        "operation": "lookup_restriction_facets",
+        "exact_key_id": null
+      },
+      "precondition": "required-capability-or-runtime-contract-not-run-or-unavailable",
+      "expected": {
+        "variant": "NotEvaluated",
+        "result_id": null,
+        "not_evaluated_record_ids": [],
+        "missing_capability_ids": [],
+        "rendered-as-clean-safe-or-absent": false
+      }
+    },
+    {
+      "case_id": "view.invalid-request",
+      "request_shape": "ambiguous-string-only-key-or-wrong-kind-profile-generation-view",
+      "expected": {
+        "variant": "InvalidRequest",
+        "result_id": null,
+        "error_code": "reference_lookup_request_invalid"
+      }
+    },
+    {
+      "case_id": "view.found-with-partial-field",
+      "request": {
+        "request_id": null,
+        "operation": "lookup_api_callable",
+        "exact_key_id": null,
+        "detail_mask_id": null
+      },
+      "precondition": "entity-and-core-signature-found-but-one-requested-unknown-or-unsupported-metadata-field",
+      "expected": {
+        "variant": "Found",
+        "result_id": null,
+        "entity_id": null,
+        "partial_field_path_ids": [],
+        "unknown_or_unsupported_record_ids": [],
+        "coverage_blocker_ids": [],
+        "all-fields-claimed-complete": false
+      }
+    },
+    {
+      "case_id": "view.raw-metadata-unknown-unsupported-correction",
+      "request": {
+        "request_id": null,
+        "operation": "read_raw_metadata",
+        "entity_id": null,
+        "raw_observation_id": null,
+        "field_path_id": null,
+        "budget_id": null
+      },
+      "expected": {
+        "variant": "Found",
+        "result_id": null,
+        "raw_value_id": null,
+        "unknown_field_ids": [],
+        "unsupported_record_ids": [],
+        "correction_application_ids": [],
+        "source_handle_ids": [],
+        "truncated": false,
+        "whole-store-or-source-dump": false
+      }
+    },
+    {
+      "case_id": "view.restriction-known-plus-unknown-runtime-gap",
+      "request": {
+        "request_id": null,
+        "operation": "lookup_restriction_facets",
+        "exact_key_id": null
+      },
+      "expected": {
+        "variant": "Found",
+        "result_id": null,
+        "known_facet_ids": [],
+        "raw_unknown_field_ids": [],
+        "predicate_ids": [],
+        "runtime_gap_record_ids": [],
+        "blanket-safe-or-unsafe-boolean": false
+      }
+    },
+    {
+      "case_id": "view.explicit-transition-only",
+      "request": {
+        "request_id": null,
+        "operation": "lookup_deprecation_or_explicit_transition",
+        "exact_key_id": null
+      },
+      "expected": {
+        "variant": "Found",
+        "result_id": null,
+        "deprecation_fact_ids": [],
+        "explicit_transition_fact_ids": [],
+        "fuzzy-or-semantic-candidate-ids": [],
+        "inferred-replacement": false
+      }
+    },
+    {
+      "case_id": "view.no-explicit-transition-recorded",
+      "request": {
+        "request_id": null,
+        "operation": "lookup_deprecation_or_explicit_transition",
+        "exact_key_id": null,
+        "negative_authority_request_id": null
+      },
+      "expected": {
+        "result_variant": null,
+        "result_id": null,
+        "claim-limited-to-selected-explicit-input-and-coverage": true,
+        "replacement-candidate-emitted": false
+      }
+    },
+    {
+      "case_id": "view.bounded-list-truncation",
+      "request": {
+        "request_id": null,
+        "operation": "list_exact_scope_entities_bounded",
+        "exact_scope_id": null,
+        "budget_id": null
+      },
+      "expected": {
+        "variant": "Found",
+        "result_id": null,
+        "returned_entity_ids": [],
+        "returned_count": null,
+        "known_total_count": null,
+        "truncated": true,
+        "continuation_or_detail_handle_id": null,
+        "omitted-entities-claimed-absent": false
+      }
+    },
+    {
+      "case_id": "view.raw-metadata-truncation",
+      "request": {
+        "request_id": null,
+        "operation": "read_raw_metadata",
+        "entity_id": null,
+        "budget_id": null
+      },
+      "expected": {
+        "variant": "Found",
+        "result_id": null,
+        "truncated": true,
+        "returned_node_count": null,
+        "omitted_node_count_or-unknown-state": null,
+        "negative-authority-survives-truncation": false
+      }
+    },
+    {
+      "case_id": "view.active-pointer-changes",
+      "precondition": "view-opened-on-old-exact-store-generation-then-active-pointer-updated",
+      "expected": {
+        "opened_view_generation_id": null,
+        "new_active_store_generation_id": null,
+        "view-generation-switches": false,
+        "cached-and-new-queries-use-opened-view-generation": true,
+        "old-generation-retention-or-lease-protected": true
+      }
+    },
+    {
+      "case_id": "view.profile-generation-mismatch",
+      "mutation": "query-or-cache-key-from-another-profile-reference-or-store-generation",
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "reference_view_profile_or_generation_mismatch"
+      }
+    },
+    {
+      "case_id": "view.hidden-fallback",
+      "mutation": "exact-miss-falls-back-to-other-kind-system-profile-generation-or-external-source",
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "reference_lookup_hidden_fallback_forbidden"
+      }
+    },
+    {
+      "case_id": "view.fuzzy-search-lane",
+      "mutation": "use-like-fts-trigram-semantic-or-similarity-ranking",
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "reference_lookup_fuzzy_or_search_forbidden"
+      }
+    },
+    {
+      "case_id": "view.query-cancellation",
+      "injection_points": [
+        "before-store-read",
+        "between-bounded-result-batches",
+        "during-object-backed-raw-metadata-read"
+      ],
+      "expected": {
+        "variant": "Cancelled",
+        "result_id": null,
+        "partial-clean-or-absent-result": false,
+        "late-background-query": false
+      }
+    },
+    {
+      "case_id": "view.deterministic-results",
+      "mutations": [
+        "change-sqlite-row-page-insertion-order",
+        "change-read-connection-and-thread-scheduling",
+        "change-active-pointer-after-view-open",
+        "change-temp-root-and-human-prose",
+        "repeat-1-2-N-workers"
+      ],
+      "expected": {
+        "result-variants-equal": true,
+        "entity-fact-member-raw-evidence-coverage-conflict-order-equal": true,
+        "negative-authority-decisions-and-reasons-equal": true,
+        "result-ids-and-canonical-digests-equal": true
+      }
+    },
+    {
+      "case_id": "view.private-path-or-raw-sql-leak",
+      "mutation": "result-or-error-includes-raw-sql-absolute-store-root-token-private-url-excessive-source-or-runtime-secret-capable-value",
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "reference_private_path_or_payload_leak_forbidden"
+      }
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "view_context.reference_view_id",
+      "view_context.profile_id",
+      "view_context.reference_generation_id",
+      "view_context.store_id",
+      "view_context.store_generation_id",
+      "view_context.store_manifest_id",
+      "view_context.schema_bundle_id",
+      "view_context.read_operation_catalog_id",
+      "view_context.capability_manifest_id",
+      "view_context.coverage_manifest_id",
+      "view_context.conflict_manifest_id",
+      "view_context.correction_application_manifest_id",
+      "view_context.open_validation_report_id",
+      "cases[0].request.request_id",
+      "cases[0].request.exact_key_id",
+      "cases[0].request.detail_mask_id",
+      "cases[0].request.budget_id",
+      "cases[0].expected.result_id",
+      "cases[0].expected.entity_id",
+      "cases[0].expected.callable_fact_id",
+      "cases[0].expected.parameter_ids",
+      "cases[0].expected.return_ids",
+      "cases[0].expected.restriction_facet_ids",
+      "cases[0].expected.predicate_ids",
+      "cases[0].expected.evidence_ids",
+      "cases[0].expected.source_handle_ids",
+      "cases[0].expected.coverage_record_ids",
+      "cases[1].expected.result_ids",
+      "cases[1].expected.entity_ids",
+      "cases[2].request.request_id",
+      "cases[2].request.exact_key_id",
+      "cases[2].request.negative_authority_request_id",
+      "cases[2].expected.result_id",
+      "cases[2].expected.negative_authority_decision_id",
+      "cases[2].expected.decisive_coverage_record_ids",
+      "cases[3].expected.result_id",
+      "cases[3].expected.negative_authority_decision_id",
+      "cases[3].expected.blocker_ids",
+      "cases[4].expected.result_id",
+      "cases[4].expected.conflict_record_ids",
+      "cases[4].expected.competing_entity_or_fact_ids",
+      "cases[5].expected.result_id",
+      "cases[5].expected.not_evaluated_record_ids",
+      "cases[5].expected.missing_capability_ids",
+      "cases[6].expected.result_id",
+      "cases[7].expected.result_id",
+      "cases[7].expected.entity_id",
+      "cases[7].expected.partial_field_path_ids",
+      "cases[7].expected.unknown_or_unsupported_record_ids",
+      "cases[7].expected.coverage_blocker_ids",
+      "cases[8].expected.result_id",
+      "cases[8].expected.raw_value_id",
+      "cases[8].expected.unknown_field_ids",
+      "cases[8].expected.unsupported_record_ids",
+      "cases[8].expected.correction_application_ids",
+      "cases[8].expected.source_handle_ids",
+      "cases[9].expected.result_id",
+      "cases[9].expected.known_facet_ids",
+      "cases[9].expected.raw_unknown_field_ids",
+      "cases[9].expected.predicate_ids",
+      "cases[9].expected.runtime_gap_record_ids",
+      "cases[10].expected.result_id",
+      "cases[10].expected.deprecation_fact_ids",
+      "cases[10].expected.explicit_transition_fact_ids",
+      "cases[11].expected.result_variant",
+      "cases[11].expected.result_id",
+      "cases[12].expected.result_id",
+      "cases[12].expected.returned_entity_ids",
+      "cases[12].expected.returned_count",
+      "cases[12].expected.known_total_count",
+      "cases[12].expected.continuation_or_detail_handle_id",
+      "cases[13].expected.result_id",
+      "cases[13].expected.returned_node_count",
+      "cases[13].expected.omitted_node_count_or-unknown-state",
+      "cases[14].expected.opened_view_generation_id",
+      "cases[14].expected.new_active_store_generation_id",
+      "cases[18].expected.result_id"
+    ]
+  }
+}
