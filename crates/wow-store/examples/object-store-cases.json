@@ -1,0 +1,390 @@
+{
+  "schema_version": 1,
+  "case_set_id": "wow-store-e1-object-store-v1",
+  "state": "documentation-only-pending-codec-object-and-byte-freeze",
+  "object_store_configuration_id": null,
+  "platform_adapter_id": null,
+  "codec_profile": {
+    "codec_id": null,
+    "codec_version": null,
+    "parameters": null,
+    "deterministic_payload_bytes": null,
+    "profile_id": null
+  },
+  "known_vector": {
+    "logical_type": "application/octet-stream;contract=wow-store-test-vector/1",
+    "canonical_logical_bytes_base64": "V29XIERldiBGcmFtZXdvcmsgT2JqZWN0IFZlY3RvciB2MQo=",
+    "logical_length": 35,
+    "expected_object_id_sha256": null,
+    "expected_payload_id": null,
+    "expected_payload_sha256": null,
+    "expected_encoded_length": null,
+    "object_manifest_id": null
+  },
+  "cases": [
+    {
+      "case_id": "object.known-vector",
+      "input_ref": "known_vector",
+      "expected": {
+        "object_id": null,
+        "payload_id": null,
+        "object_manifest_id": null,
+        "write_result_id": null,
+        "read_report_id": null,
+        "logical-and-payload-verification": "pass"
+      }
+    },
+    {
+      "case_id": "object.same-bytes-different-chunking",
+      "mutation": "stream-canonical-logical-bytes-in-different-chunk-boundaries",
+      "expected": {
+        "object_id-equal-to-known-vector": true,
+        "payload-id-equal-if-codec-stream-is-canonical-deterministic": null,
+        "logical-bytes-equal": true
+      }
+    },
+    {
+      "case_id": "object.different-codec-or-parameters",
+      "mutation": "encode-same-logical-bytes-with-another-registered-codec-profile",
+      "expected": {
+        "object_id-equal": true,
+        "payload_id-different-when-encoding-different": true,
+        "both-payloads-decode-to-object-id": true,
+        "multiple-encodings-active-e1": false
+      }
+    },
+    {
+      "case_id": "object.atomic-write-read",
+      "expected": {
+        "temp-path-private-and-same-volume": true,
+        "final-path-derived-only-after-id-validation": true,
+        "file-and-directory-durability-steps-executed-per-profile": true,
+        "final-read-validates-manifest-payload-logical-digests": true,
+        "write_result_id": null,
+        "read_report_id": null
+      }
+    },
+    {
+      "case_id": "object.existing-valid-dedup",
+      "precondition": "exact-valid-object-manifest-and-payload-already-exist",
+      "expected": {
+        "outcome": "idempotent-dedup-success",
+        "overwrite_performed": false,
+        "existing-object-revalidated": true,
+        "candidate-temp-removed": true
+      }
+    },
+    {
+      "case_id": "object.existing-same-id-payload-mismatch",
+      "precondition": "same-object-id-or-payload-path-exists-with-different-bytes-or-manifest",
+      "expected": {
+        "outcome": "failed",
+        "error_code": "object_existing_mismatch",
+        "overwrite_performed": false,
+        "quarantine_record_id": null,
+        "store-publication-requiring-object-blocked": true
+      }
+    },
+    {
+      "case_id": "object.logical-digest-mismatch",
+      "mutation": "provided-expected-object-id-does-not-match-logical-bytes",
+      "expected": {
+        "outcome": "failed",
+        "error_code": "object_logical_digest_or_length_mismatch",
+        "final-object-published": false
+      }
+    },
+    {
+      "case_id": "object.payload-digest-mismatch",
+      "mutation": "encoded-payload-corrupted-before-final-verification",
+      "expected": {
+        "outcome": "failed",
+        "error_code": "object_payload_digest_or_length_mismatch",
+        "final-object-published": false
+      }
+    },
+    {
+      "case_id": "object.path-traversal-or-malformed-id",
+      "mutations": [
+        "object-id-with-non-hex",
+        "object-id-wrong-length",
+        "absolute-or-parent-component",
+        "device-or-reserved-component",
+        "nul-or-invalid-encoding"
+      ],
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "object_path_invalid_or_escape_forbidden",
+        "filesystem-write-outside-root": false
+      }
+    },
+    {
+      "case_id": "object.symlink-reparse-preplacement",
+      "mutation": "preplace-unsafe-link-in-object-fanout-or-final-target",
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "store_path_link_race_forbidden",
+        "external-target-read-or-written": false
+      }
+    },
+    {
+      "case_id": "object.interrupt-before-temp-write-complete",
+      "injection_point": "mid-logical-stream-or-encoder-write",
+      "expected": {
+        "outcome": "failed-or-cancelled",
+        "final-object-published": false,
+        "temp-cleaned-or-quarantined": true,
+        "generation-reference-created": false
+      }
+    },
+    {
+      "case_id": "object.interrupt-after-temp-flush-before-rename",
+      "injection_point": "after-temp-payload-flush-before-atomic-publish",
+      "expected": {
+        "outcome": "failed-or-cancelled",
+        "final-object-published": false,
+        "temp-cleaned-or-recoverably-classified": true,
+        "generation-reference-created": false
+      }
+    },
+    {
+      "case_id": "object.interrupt-after-payload-before-manifest",
+      "injection_point": "after-final-payload-published-before-object-manifest-finalized",
+      "expected": {
+        "outcome": "failed-or-cancelled",
+        "orphan-payload-not-treated-as-valid-object": true,
+        "generation-reference-created": false,
+        "orphan-recovery-classification-required": true
+      }
+    },
+    {
+      "case_id": "object.unknown-codec",
+      "mutation": "manifest-or-request-references-unregistered-codec-profile",
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "object_codec_unregistered_or_unsupported"
+      }
+    },
+    {
+      "case_id": "object.decompression-bomb-or-size-limit",
+      "mutations": [
+        "declared-logical-size-over-limit",
+        "actual-decoded-size-over-limit",
+        "compression-ratio-over-limit",
+        "codec-memory-window-over-limit",
+        "malformed-truncated-or-trailing-data"
+      ],
+      "expected": {
+        "outcome": "rejected-bounded",
+        "error_code": "object_expansion_or_resource_limit_exceeded",
+        "unbounded-allocation": false,
+        "trusted-logical-bytes-returned": false
+      }
+    },
+    {
+      "case_id": "object.reference-set-deterministic",
+      "input": {
+        "store_generation_id": null,
+        "object_references": [
+          {
+            "object_id": null,
+            "opaque-owner-key": "record-b"
+          },
+          {
+            "object_id": null,
+            "opaque-owner-key": "record-a"
+          }
+        ]
+      },
+      "mutations": [
+        "permute-reference-input-order",
+        "change-worker-scheduling"
+      ],
+      "expected": {
+        "reference_set_id": null,
+        "reference_set_digest": null,
+        "reference_order-canonical": true,
+        "store-does-not-interpret-owner-key": true
+      }
+    },
+    {
+      "case_id": "object.candidate-failure-no-retained-reference",
+      "precondition": "valid-object-published-or-deduplicated-during-candidate-build",
+      "mutation": "candidate-store-validation-fails-before-seal",
+      "expected": {
+        "retained-generation-reference-created": false,
+        "existing-shared-valid-object-deleted": false,
+        "object-gc-eligibility-requires-complete-scan": true
+      }
+    },
+    {
+      "case_id": "object.gc-active-generation-reference",
+      "gc_input": {
+        "object_id": null,
+        "active-generation-reference-count": 1,
+        "lease-state": "none",
+        "reference-scan-complete": true
+      },
+      "expected": {
+        "eligibility": "no",
+        "reason": "active-or-retained-generation-reference",
+        "deleted": false
+      }
+    },
+    {
+      "case_id": "object.gc-last-known-good-or-historical-reference",
+      "gc_input": {
+        "object_id": null,
+        "retained-generation-reference-count": 1,
+        "retention-class": "last-known-good-or-configured-historical",
+        "lease-state": "none",
+        "reference-scan-complete": true
+      },
+      "expected": {
+        "eligibility": "no",
+        "deleted": false
+      }
+    },
+    {
+      "case_id": "object.gc-active-reader-lease",
+      "gc_input": {
+        "object_id": null,
+        "retained-generation-reference-count": 0,
+        "lease-state": "active",
+        "reference-scan-complete": true
+      },
+      "expected": {
+        "eligibility": "no",
+        "reason": "active-lease",
+        "deleted": false
+      }
+    },
+    {
+      "case_id": "object.gc-incomplete-scan",
+      "gc_input": {
+        "object_id": null,
+        "retained-generation-reference-count": 0,
+        "lease-state": "none-or-unknown",
+        "reference-scan-complete": false
+      },
+      "expected": {
+        "eligibility": "unknown",
+        "error_code": "object_gc_reference_state_incomplete",
+        "deleted": false
+      }
+    },
+    {
+      "case_id": "object.gc-age-only",
+      "gc_input": {
+        "object_id": null,
+        "file-age-indicates-old": true,
+        "reference-scan-complete": false
+      },
+      "expected": {
+        "eligibility": "unknown",
+        "error_code": "object_gc_age_only_decision_forbidden",
+        "deleted": false
+      }
+    },
+    {
+      "case_id": "object.gc-proven-unreferenced",
+      "gc_input": {
+        "object_id": null,
+        "retained-generation-reference-count": 0,
+        "active-pointer-reference": false,
+        "published-protected-recovery-reference": false,
+        "lease-state": "none",
+        "reference-scan-complete": true,
+        "quarantine-or-investigation": false,
+        "object-manifest-and-path-revalidated": true
+      },
+      "expected": {
+        "eligibility": "yes",
+        "deleted": true,
+        "gc_decision_id": null,
+        "gc_report_id": null
+      }
+    },
+    {
+      "case_id": "object.gc-toctou-target-change",
+      "mutation": "replace-or-link-target-between-eligibility-scan-and-delete",
+      "expected": {
+        "outcome": "rejected-or-skipped-after-revalidation",
+        "error_code": "object_gc_delete_forbidden",
+        "wrong-target-deleted": false
+      }
+    },
+    {
+      "case_id": "object.gc-cancel-mid-run",
+      "mutation": "cancel-after-one-eligible-delete-before-next",
+      "expected": {
+        "completed-deletions-recorded": true,
+        "future-deletions-stop": true,
+        "late-background-delete": false,
+        "gc_report_id": null
+      }
+    },
+    {
+      "case_id": "object.deterministic-identity-and-reports",
+      "mutations": [
+        "change-input-chunking",
+        "change-temp-root-and-temp-name",
+        "change-source-filename-and-path",
+        "permute-object-reference-input",
+        "change-worker-scheduling",
+        "change-operational-log-and-time"
+      ],
+      "expected": {
+        "object_id_equal": true,
+        "object_manifest_id_equal": true,
+        "reference_set_digest_equal": true,
+        "gc-semantic-report-digest-equal-for-equivalent-decision-set": true,
+        "payload-id-equality-conditioned-on-frozen-deterministic-codec-profile": true
+      }
+    },
+    {
+      "case_id": "object.private-path-or-payload-leak",
+      "mutation": "error-manifest-or-public-report-includes-absolute-root-source-path-token-or-raw-secret-capable-payload",
+      "expected": {
+        "outcome": "rejected",
+        "error_code": "store_private_path_or_payload_leak_forbidden"
+      }
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "object_store_configuration_id",
+      "platform_adapter_id",
+      "codec_profile.codec_id",
+      "codec_profile.codec_version",
+      "codec_profile.parameters",
+      "codec_profile.deterministic_payload_bytes",
+      "codec_profile.profile_id",
+      "known_vector.expected_object_id_sha256",
+      "known_vector.expected_payload_id",
+      "known_vector.expected_payload_sha256",
+      "known_vector.expected_encoded_length",
+      "known_vector.object_manifest_id",
+      "cases[0].expected.object_id",
+      "cases[0].expected.payload_id",
+      "cases[0].expected.object_manifest_id",
+      "cases[0].expected.write_result_id",
+      "cases[0].expected.read_report_id",
+      "cases[5].expected.quarantine_record_id",
+      "cases[15].input.store_generation_id",
+      "cases[15].input.object_references[*].object_id",
+      "cases[15].expected.reference_set_id",
+      "cases[15].expected.reference_set_digest",
+      "cases[17].gc_input.object_id",
+      "cases[18].gc_input.object_id",
+      "cases[19].gc_input.object_id",
+      "cases[20].gc_input.object_id",
+      "cases[21].gc_input.object_id",
+      "cases[22].gc_input.object_id",
+      "cases[22].expected.gc_decision_id",
+      "cases[22].expected.gc_report_id",
+      "cases[24].expected.gc_report_id"
+    ]
+  }
+}
