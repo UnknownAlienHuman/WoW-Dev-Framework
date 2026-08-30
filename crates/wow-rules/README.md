@@ -1,237 +1,324 @@
 # `wow-rules` implementation contract
 
-**Status:** E0-active contract scaffold; no Rust code yet.
+**Status:** E0-E implementation-ready contract; no Rust code yet. Only two closed fixture rules activate in E0.
 
 ## Mission
 
-`wow-rules` implements capability-declared World of Warcraft diagnostic providers over exact reference facts, normalized Emmy facts, project snapshots, and graph views. It emits evidence-bearing findings and remediation classifications without performing persistence, transport, or hidden source discovery.
+`wow-rules` implements deterministic, capability-declared World of Warcraft diagnostic providers over immutable project/analyzer facts and exact reference facts. It joins independent project and platform evidence, evaluates one narrowly defined rule, and emits evidence-bearing findings or explicit `NotEvaluated` records.
+
+The crate does not parse, index, persist, search, mutate source, or decide which project/reference snapshot is current. It receives one coherent execution context assembled later by `wow-service`.
+
+## E0-E outcome
+
+A future implementation agent must prove two vertical rules:
+
+```text
+wow.api.exists@1
+    project unresolved member/call fact + exact project span
+    + E0-B ReferenceView exact lookup
+    + complete authoritative negative coverage
+    -> one project-located finding
+
+wow.secret.local_operation@1
+    project producer/binding/use/operation/guard/control-flow facts
+    + E0-B secret.return facet
+    + closed E0 guard-semantics fixture
+    + complete required capabilities
+    -> finding | evaluated-clean | NotEvaluated
+```
+
+No other planned rule family is implemented in E0-E.
 
 ## Owned responsibilities
 
-- rule/provider registry and versioned descriptors;
+- stable rule/provider IDs and versions;
+- rule descriptors and rollout metadata;
 - rule capability requirements;
-- deterministic execution over immutable check contexts;
-- rule-specific findings, related evidence, and root-cause keys;
-- API, event, widget, TOC/load, Secret/restriction, overlay/hook, and project consistency diagnostics;
-- remediation tier classification;
-- shadow/evaluation/default rollout policy metadata;
-- per-rule fixtures and false-blocking measurement;
-- rule documentation and stable IDs.
+- immutable rule execution context validation;
+- applicable-rule selection;
+- deterministic provider execution;
+- rule-specific evidence joins;
+- rule evaluation outcomes: findings, clean, `NotEvaluated`, failed;
+- normalized finding construction through `wow-core`;
+- root-cause keys and deterministic causal relation hints;
+- remediation-tier classification;
+- per-rule coverage/evaluation reports;
+- fixture corpus and false-blocking measurement inputs;
+- exact E0 rule algorithms and non-goals.
 
 ## Explicit non-responsibilities
 
 `wow-rules` does not:
 
-- parse or index source;
-- mutate Emmy/project/graph/reference state;
-- open files, databases, networks, processes, editors, or the WoW client;
+- parse Lua, TOC, XML, JSON, or upstream analyzer objects;
+- mutate `wow-emmy`, `wow-project`, reference, graph, or source state;
+- open files/databases/networks/processes/editors/client data;
+- derive project/reference generations;
+- select a profile or current snapshot;
+- execute analyzed Lua or repository code;
 - rank general search results;
-- infer current profile/build;
-- call external repositories or Codebase Memory;
-- execute autofixes selected by fuzzy/semantic similarity;
-- suppress upstream analyzer diagnostics to hide missing capabilities;
-- claim runtime confirmation.
+- infer aliases, replacements, migrations, or autofixes from similarity;
+- fold the final cross-rule/service finding stream;
+- suppress generic diagnostics by message text;
+- claim runtime/client/combat behavior;
+- implement graph-dependent rules in E0;
+- return clean success when capabilities are partial, failed, conflicted, stale, or missing.
 
-## Provider contract
+## Required reading
 
-Each provider declares:
+Before implementation, read:
+
+1. [`../AGENTS.md`](../AGENTS.md)
+2. [`../DEPENDENCY_GRAPH.md`](../DEPENDENCY_GRAPH.md)
+3. [`../WORKSTREAMS.md`](../WORKSTREAMS.md)
+4. [`../wow-core/CONSUMER_GUIDE.md`](../wow-core/CONSUMER_GUIDE.md)
+5. [`../wow-reference/CONTRACT.json`](../wow-reference/CONTRACT.json)
+6. [`../wow-reference/LOOKUP_AND_COVERAGE.md`](../wow-reference/LOOKUP_AND_COVERAGE.md)
+7. [`../wow-emmy/FACT_MODEL.md`](../wow-emmy/FACT_MODEL.md)
+8. [`../wow-project/CONTRACT.json`](../wow-project/CONTRACT.json)
+9. [`AGENTS.md`](AGENTS.md)
+10. [`DECISIONS.md`](DECISIONS.md)
+11. [`DATA_MODEL.md`](DATA_MODEL.md)
+12. [`PROVIDER_EXECUTION.md`](PROVIDER_EXECUTION.md)
+13. [`CAPABILITY_AND_COVERAGE.md`](CAPABILITY_AND_COVERAGE.md)
+14. [`API_EXISTS_RULE.md`](API_EXISTS_RULE.md)
+15. [`SECRET_LOCAL_RULE.md`](SECRET_LOCAL_RULE.md)
+16. [`FINDING_AND_REMEDIATION.md`](FINDING_AND_REMEDIATION.md)
+17. [`ERROR_MODEL.md`](ERROR_MODEL.md)
+18. [`TEST_MATRIX.md`](TEST_MATRIX.md)
+19. [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md)
+20. [`CONTRACT.json`](CONTRACT.json)
+21. current `AGENTS.md` and `INDEX_MINI.md` in the external [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb)
+
+Normative repository sources:
+
+- [`../../docs/EMMYLUA_AND_DIAGNOSTICS.md`](../../docs/EMMYLUA_AND_DIAGNOSTICS.md)
+- [`../../docs/PROVENANCE_AND_COVERAGE.md`](../../docs/PROVENANCE_AND_COVERAGE.md)
+- [`../../docs/SECRET_VALUES_AND_RESTRICTIONS.md`](../../docs/SECRET_VALUES_AND_RESTRICTIONS.md)
+- [`../../docs/TEST_STRATEGY.md`](../../docs/TEST_STRATEGY.md)
+- current Secret/event/hook guidance in the external knowledge base.
+
+## Direct dependencies in E0-E
 
 ```text
-stable rule ID and rule version
-default rollout = shadow | advisory | blocking
-required capabilities
-accepted entity/file scopes
-input fact kinds
-finding and root-cause kinds
-remediation tier(s)
+wow-core
+wow-reference
+wow-emmy
+wow-project
+```
+
+The long-term graph permits `wow-graph`, but that edge remains inactive in E0-E. If a rule needs graph facts, it is not an E0 rule.
+
+## Rule descriptor
+
+Every provider declares:
+
+```text
+stable RuleId and version
+semantic category
+technical severity
+rollout policy: shadow | advisory | blocking
 profile/flavor applicability
-budget and cancellation behavior
+accepted source/entity scopes
+required capabilities and partitions
+required fact/lookup kinds
+execution and output budgets
+root-cause and remediation policy
 fixture/evaluation set
 ```
 
-Providers read one immutable check context and append structured findings. They cannot mutate shared state or depend on execution order unless a root-cause pipeline explicitly defines that order.
+A descriptor is configuration/contract data, not permission to run when capabilities are unavailable.
 
-## Required operations
+## Rule execution context
 
-| Operation | Required behavior |
-|---|---|
-| `register_rule_descriptor` | Reject duplicate/incompatible IDs and record version/capabilities/rollout. |
-| `select_applicable_rules` | Filter by profile, scope, enabled policy, and available fact families. |
-| `evaluate_rule_capabilities` | Return runnable or `NotEvaluated` with exact missing/failed partitions. |
-| `run_rule` | Execute one deterministic provider under budget/cancellation. |
-| `normalize_rule_finding` | Bind source/evidence/generation/coverage/root-cause/remediation metadata. |
-| `group_root_cause_keys` | Emit deterministic causal grouping keys; final stream folding is orchestrated by service. |
-| `classify_remediation` | Return `exact_edit`, `validated_recipe`, `plan_only`, or `candidate_only`. |
-| `build_rule_coverage_report` | Report files/entities checked, skipped scopes, capability gaps, and truncation. |
-| `evaluate_rule_corpus` | Produce false-positive/false-blocking/NotEvaluated/coverage metrics. |
-
-## Initial rule families
-
-Planned rule IDs include:
+E0 context contains exactly:
 
 ```text
-wow.api.exists
-wow.api.deprecated
-wow.api.arguments
-wow.event.exists_payload
-wow.widget.method
-wow.toc.reachable
-wow.load.use_before_load
-wow.secret.local_operation
-wow.secret.unsafe_log
-wow.overlay.direct_blizzard_override
-wow.framework.duplicate_registration
+one ProfileIdentity / ReferenceGenerationId
+one immutable ReferenceView
+one immutable ProjectSnapshot / ProjectView
+one ProjectGenerationId
+one accepted AnalyzerSnapshot identity
+normalized analyzer fact sets and generic findings for selected files
+rule fixture policy for E0-only guard semantics
+exact coverage/conflict records
+execution budget and cancellation state
 ```
 
-No rule is implemented merely because it appears in this list. Each activates at the milestone where required facts and fixtures exist.
+All context identities must agree. Cross-generation/profile input is rejected before provider execution.
 
-## E0 rule: `wow.api.exists`
-
-### Purpose
-
-Detect a direct resolved/global/member API reference that is absent from the selected fixture profile when the relevant reference and semantic partitions are complete.
-
-### Required inputs
+## Rule evaluation outcomes
 
 ```text
-one selected fixture profile/reference generation
-normalized exact reference lookup
-resolved source reference/member fact and span
-project/analyzer generation
-complete/partial capability state
+RuleEvaluationOutcome
+    Findings(Finding[])
+    EvaluatedClean(CleanEvaluationRecord)
+    NotEvaluated(NotEvaluatedRecord)
+    Failed(RuleFailure)
+    Cancelled
 ```
 
-### Algorithm contract
+`EvaluatedClean` is valid only when every required capability/partition is usable and the rule examined its declared scope. An empty findings list alone is not clean.
 
-1. Ignore unresolved syntax that the generic analyzer already reports as a root cause unless the rule has an exact API candidate.
-2. Normalize the API identity according to the reference contract; do not use fuzzy matching.
-3. Query the exact active profile.
-4. If found, emit no absence finding; optional migration/deprecation work belongs to later rules.
-5. If absent under complete relevant coverage, emit one `wow.api.exists` finding.
-6. If coverage is partial/failed/unknown, emit `NotEvaluated`, not an error or clean pass.
-7. Attach reference lookup evidence/coverage and exact source span.
-8. Do not propose a replacement in E0.
+## E0 rule descriptors
 
-### Required E0 cases
-
-- known valid API: clean;
-- known absent API: one finding;
-- absent under partial reference coverage: `NotEvaluated`;
-- unresolved non-API local/global: no duplicate WoW finding;
-- profile mismatch: root generation/profile error, not API absence;
-- deterministic duplicate reference uses follow documented per-use/per-symbol policy.
-
-## E0 rule: `wow.secret.local_operation`
-
-### Purpose
-
-Detect one direct local operation on a value whose selected profile contract marks it Secret/inaccessible for the fixture case, without pretending to solve full runtime or interprocedural secrecy.
-
-### Required inputs
+### `wow.api.exists@1`
 
 ```text
-exact producer API/facet fact
-normalized local expression/use facts
-control-flow/guard facts supplied by wow-emmy
-selected profile/generation
-facet and predicate capability coverage
+severity: error
+rollout: advisory during E0 evaluation
+remediation: plan_only
+scope: direct unresolved member/call references in Main project source
+reference lane: exact lookup only
 ```
 
-### E0 supported pattern
+Required high-level behavior:
 
-The fixture must select one explicit producer and one direct operation, such as comparison, concatenation, arithmetic, branch use, or unsafe logging. The exact operation is fixed by the golden fixture and documented in the test.
+- project unresolved member/call fact identifies `C_E0Fixture.RemovedApi` and exact project span;
+- exact reference lookup returns `authoritative_absent` under complete unconflicted coverage;
+- emit one finding at project member/reference span;
+- include project evidence plus exact reference coverage/authority decision;
+- no replacement, alias, fuzzy search, or edit;
+- partial/conflict/profile mismatch/library failure -> `NotEvaluated`, not finding/clean.
 
-### Algorithm contract
+See [`API_EXISTS_RULE.md`](API_EXISTS_RULE.md).
 
-1. Trace only within the current function/local fact slice supported by the analyzer adapter.
-2. Bind the producer result to the exact restriction facet from the selected profile.
-3. Check whether an approved access guard dominates the operation for that exact value.
-4. Emit a finding only for the supported direct operation without a valid dominating guard.
-5. Copies/conversions/`pcall`/serialization do not declassify the value.
-6. Unknown facet/predicate/control-flow capability returns `NotEvaluated`.
-7. Runtime-dependent conditional secrecy not represented by the fixture remains `NotEvaluated` or outside E0 scope.
-8. Remediation is `plan_only` unless an exact mechanically proven guard insertion precondition is defined later.
-
-### Required E0 cases
-
-- direct unsafe operation: finding;
-- correctly dominating access guard: clean;
-- guard after use: finding;
-- different value guarded: finding;
-- unknown facet or missing control-flow fact: `NotEvaluated`;
-- conversion/copy false scrub: finding when supported by fixture;
-- ordinary non-secret value: clean;
-- no permanent spell whitelist.
-
-## General Secret/restriction rules
-
-All later Secret rules must follow the current external KB security model:
-
-- gate before use;
-- distinguish `issecretvalue` from access predicates;
-- treat scrubbing as lossy nil substitution, not recovery;
-- avoid private/forbidden managed-object side channels;
-- keep runtime/build/context-specific state out of permanent static whitelists;
-- never fabricate combat/runtime safety.
-
-## Remediation tiers
+### `wow.secret.local_operation@1`
 
 ```text
-exact_edit
-    exact proven source precondition and deterministic edit
-
-validated_recipe
-    structured transformation requiring post-check and possibly runtime smoke test
-
-plan_only
-    evidence-backed steps; no automatic mutation
-
-candidate_only
-    investigation options without sufficient proof
+severity: error
+rollout: advisory during E0 evaluation
+remediation: plan_only
+scope: one function-local producer -> binding -> direct concatenation use
+reference lane: exact producer facet lookup
 ```
 
-A `Candidate` fact cannot authorize `exact_edit`.
+Required high-level behavior:
 
-## Rollout policy
+- exact producer call resolves to `C_E0Fixture.SecretText`;
+- reference lookup returns unconflicted fixture `secret.return` on return 1;
+- analyzer facts bind the returned value to a local and exact concatenation operation;
+- accepted E0 guard semantics and proven dominance for the same value make the case clean;
+- no guard, guard after use, or guard on another value -> finding;
+- facet/control-flow/guard/reference capability partial/conflict -> `NotEvaluated`;
+- copy/conversion does not declassify;
+- no runtime or broad interprocedural claim.
 
-- New rule families start `shadow` unless enforcing a proven invariant with established corpus.
-- Promotion requires capability/coverage behavior, positive/negative/partial fixtures, deterministic output, false-blocking measurement, and documented remediation.
-- Blocking policy is separate from technical severity.
-- An upstream analyzer diagnostic change does not silently change WoW rule rollout.
+See [`SECRET_LOCAL_RULE.md`](SECRET_LOCAL_RULE.md).
 
-## Required tests
+## Evidence separation
 
-### E0
+### API rule
 
-- all cases listed for the two E0 rules;
-- same profile/project generation on every finding;
-- deterministic order and root-cause key;
-- rule capability gap produces `NotEvaluated`;
-- clean file stays clean;
-- target path execution assertion.
+```text
+project evidence
+    unresolved member/call source facts and project SourceHandle
 
-### Later rules
+reference authority inputs
+    exact query result, coverage IDs, conflict IDs, generation context
 
-- profile/flavor matrix;
-- false-positive launch corpus;
-- duplicate/downstream root-cause behavior;
-- exact remediation precondition invalidation after source digest change;
-- budget/cancellation;
-- rule version partition identity;
-- runtime-required case remains explicit.
+rule derivation evidence
+    provider version and deterministic join inputs
+```
 
-## Documentation sources
+No absent symbol source handle is fabricated.
 
-- [`../../docs/EMMYLUA_AND_DIAGNOSTICS.md`](../../docs/EMMYLUA_AND_DIAGNOSTICS.md)
-- [`../../docs/SECRET_VALUES_AND_RESTRICTIONS.md`](../../docs/SECRET_VALUES_AND_RESTRICTIONS.md)
-- [`../../docs/PROVENANCE_AND_COVERAGE.md`](../../docs/PROVENANCE_AND_COVERAGE.md)
-- [`../../docs/TEST_STRATEGY.md`](../../docs/TEST_STRATEGY.md)
-- [Current WoW KB agent rules](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb/blob/main/AGENTS.md)
-- [Current Secret/taint guidance](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb/blob/main/KB/core/BlizzardUI_security.md)
-- [Current event/callback rules](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb/blob/main/KB/core/BlizzardUI_EventPatterns.md)
-- [Current hook decision tree](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb/blob/main/KB/core/BlizzardUI_HookDecisionTree.md)
-- [Current subsystem router](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb/blob/main/KB/core/BlizzardUI_SubsystemRouter.md)
+### Secret rule
+
+```text
+project evidence
+    producer call, binding, use, operation, guard/control-flow source facts
+
+reference evidence
+    exact secret.return facet and its raw/source/coverage evidence
+
+rule derivation evidence
+    provider version, fixture guard policy, exact value/operation relation
+```
+
+Project and reference evidence retain independent provenance.
+
+## Capability gating
+
+Before a provider runs:
+
+1. validate profile/reference/project/analyzer generation coherence;
+2. select exact required capabilities/partitions;
+3. inspect partial/failed/unknown/conflict/truncation blockers;
+4. build `NotEvaluated` with exact missing/blocking inputs when any requirement is unavailable;
+5. run the provider only over immutable facts/lookups;
+6. report examined scope and output budget.
+
+No provider implements a local weaker coverage boolean.
+
+## Root-cause semantics
+
+Providers emit deterministic structured root-cause keys and optional causal relation hints. Final folding remains `wow-service` responsibility.
+
+Examples:
+
+```text
+api absence finding can be the root for a same-span generic unresolved-member symptom
+reference profile unavailable blocks the API rule
+restriction facet conflict blocks the Secret rule
+annotation library failure blocks resolution-dependent rules
+control-flow capability failure blocks guard evaluation
+```
+
+Message-text similarity is never causal proof.
+
+## Remediation
+
+E0 findings are `plan_only`.
+
+- API absence: confirm selected profile and locate a proven current contract; no replacement proposed.
+- Secret local operation: restructure evaluation/use around an accepted access contract or native sink after project/runtime review; no automatic guard insertion.
+
+No E0 provider emits an edit. See [`FINDING_AND_REMEDIATION.md`](FINDING_AND_REMEDIATION.md).
+
+## E0-E hard stops
+
+- No `Cargo.toml` or Rust source in this documentation phase.
+- No graph dependency/rules.
+- No additional planned rule family.
+- No IO/network/process/editor/client access.
+- No source mutation or autofix application.
+- No alias/fuzzy/semantic/replacement lane.
+- No static permanent spell whitelist.
+- No conversion/copy/serialization/`pcall` declassification.
+- No rule clean result under partial/conflicted/missing capability.
+- No generic diagnostic suppression/folding in this crate.
+- No runtime/client/combat validation claim.
+
+## Normative fixtures
+
+The closed examples under [`examples/`](examples/README.md) define:
+
+- provider registry/descriptors and E0 guard fixture policy;
+- API exact-found/authoritative-absent/partial/conflict/profile/library cases;
+- Secret unsafe/guarded/after-use/different-value/copy/conversion/partial/conflict cases;
+- provider selection, clean, findings, `NotEvaluated`, failure, cancellation, and deterministic ordering;
+- pending prerequisite IDs and byte/checksum freeze.
+
+Actual profile/reference/project/analyzer/fact/evidence/finding IDs and SHA-256 values are frozen after E0-A through E0-D implementation exists and before the first `wow-rules` Rust commit.
 
 ## Definition of done
 
-E0 rules are complete when the golden fixture produces one generic analyzer finding, one exact API absence finding, and one direct Secret-local finding under a single coherent generation; clean/partial cases behave correctly; and no rule performs hidden IO, fuzzy replacement, or runtime overclaiming.
+E0-E implementation is complete only when:
+
+```text
+both rule descriptors validate and are the only active E0 providers
+all context generations/profile identities match
+wow.api.exists emits exactly one finding only for authoritative exact absence
+partial/conflict/profile/library states produce NotEvaluated
+wow.secret.local_operation distinguishes unsafe, dominating guard, after-use guard, and different-value guard
+copy/conversion never declassifies
+all findings preserve separate project/reference/derivation evidence
+clean outcomes prove evaluated scope and complete capabilities
+root-cause keys are deterministic and message-independent
+all E0 remediation is plan_only and no edit is emitted
+randomized provider/fact/coverage order yields byte-identical outputs
+all TEST_MATRIX cases pass
+```
+
+Until then, this directory remains an implementation-ready rule contract, not a functioning diagnostic engine.
