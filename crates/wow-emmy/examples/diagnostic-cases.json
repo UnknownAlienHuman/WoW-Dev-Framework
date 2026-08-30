@@ -1,0 +1,187 @@
+{
+  "schema_version": 1,
+  "case_set_id": "wow-emmy-e0-c-diagnostics-v1",
+  "state": "documentation-only-pending-upstream-probe-and-byte-freeze",
+  "profile_id": "fixture-retail-120100-e0-v1",
+  "project_generation_id": null,
+  "analyzer_snapshot_id": null,
+  "upstream_pin_id": null,
+  "framework_category": "emmy.generic.fixture_error",
+  "upstream_diagnostic_mapping": {
+    "code": null,
+    "name": null,
+    "upstream_severity": null,
+    "normalized_severity": null,
+    "rollout_policy": null,
+    "state": "must-be-frozen-by-compatibility-probe-before-first-rust-implementation"
+  },
+  "cases": [
+    {
+      "case_id": "diagnostic.clean",
+      "workspace_file": "main/clean.lua",
+      "required_capabilities": [
+        "emmy.session.ready",
+        "emmy.file.parsed",
+        "emmy.file.diagnostics"
+      ],
+      "expected": {
+        "diagnostics_capability": "Complete",
+        "accepted_categories": [],
+        "shadow_categories": [],
+        "not_evaluated": false,
+        "primary_source_role": null,
+        "platform_evidence_ids": []
+      }
+    },
+    {
+      "case_id": "diagnostic.generic-error",
+      "workspace_file": "main/generic-error.lua",
+      "required_capabilities": [
+        "emmy.session.ready",
+        "emmy.file.parsed",
+        "emmy.file.diagnostics",
+        "emmy.source_coordinates.exact"
+      ],
+      "expected": {
+        "diagnostics_capability": "Complete",
+        "accepted_categories": [
+          "emmy.generic.fixture_error"
+        ],
+        "accepted_count": 1,
+        "upstream_code": null,
+        "upstream_code_freeze_required": true,
+        "normalized_severity": null,
+        "rollout_policy": null,
+        "primary_source_role": "Main",
+        "primary_source_path": "main/generic-error.lua",
+        "primary_byte_span": null,
+        "primary_span_freeze_required": true,
+        "content_digest_required": true,
+        "structured_arguments_required": true,
+        "rendered_message_is_identity": false,
+        "platform_evidence_ids": [],
+        "wow_rule_ids": []
+      }
+    },
+    {
+      "case_id": "diagnostic.broken-library-root-cause",
+      "workspace_mutation": {
+        "target": "library/C_E0Fixture.lua",
+        "mutation": "make-annotation-library-invalid"
+      },
+      "required_capabilities": [
+        "emmy.session.ready",
+        "emmy.library.loaded",
+        "emmy.file.diagnostics",
+        "emmy.fact.references"
+      ],
+      "expected": {
+        "library_capability": "Failed",
+        "reference_fact_capability": "NotEvaluated",
+        "root_cause_code": "root:annotation-library-failed",
+        "dependent_unknown_symbol_diagnostics": "related-or-shadowed-not-independent-platform-errors",
+        "api_absence_findings": [],
+        "project_primary_findings_from_library": [],
+        "partial_success_allowed_only_for_unrelated_capabilities": true
+      }
+    },
+    {
+      "case_id": "diagnostic.unexpected-family",
+      "workspace_file": "main/generic-error.lua",
+      "upstream_mutation": "emit-one-additional-unmapped-family",
+      "expected": {
+        "classification": "unclassified",
+        "activation_decision": "rejected-or-shadow-required",
+        "default_blocking_change": false,
+        "mapping_update_required": true,
+        "test_update_required": true
+      }
+    },
+    {
+      "case_id": "diagnostic.return-order-permutation",
+      "workspace_file": "main/generic-error.lua",
+      "upstream_mutation": "permute-diagnostic-return-order",
+      "expected": {
+        "canonical_output_equal_to_baseline": true,
+        "finding_identity_uses_message_text": false,
+        "ordering_inputs": [
+          "framework-category",
+          "upstream-code-family",
+          "source-handle",
+          "byte-span",
+          "structured-arguments",
+          "project-generation",
+          "producer-version"
+        ]
+      }
+    },
+    {
+      "case_id": "diagnostic.message-wording-only-change",
+      "workspace_file": "main/generic-error.lua",
+      "upstream_mutation": "change-rendered-message-without-changing-structured-semantics",
+      "expected": {
+        "canonical_finding_identity_equal_to_baseline": true,
+        "probe_records_wording_change": true,
+        "message_text_is_supplemental": true
+      }
+    },
+    {
+      "case_id": "diagnostic.material-upstream-code-change",
+      "workspace_file": "main/generic-error.lua",
+      "upstream_mutation": "change-upstream-diagnostic-code-or-semantic-category",
+      "expected": {
+        "compatibility_difference": true,
+        "automatic_activation": false,
+        "probe_and_mapping_review_required": true
+      }
+    },
+    {
+      "case_id": "diagnostic.budget-truncation",
+      "workspace_mutation": {
+        "target": "main/generic-error.lua",
+        "mutation": "repeat-error-beyond-diagnostic-budget"
+      },
+      "expected": {
+        "diagnostics_capability": "Partial",
+        "budget_usage_required": true,
+        "observed_count_required": true,
+        "clean_result_allowed": false,
+        "error_or_warning_code": "diagnostic_budget_partial"
+      }
+    },
+    {
+      "case_id": "diagnostic.no-wow-authority",
+      "workspace_file": "main/missing-api.lua",
+      "expected": {
+        "generic_or_unresolved_observations_may_exist": true,
+        "wow_api_absence_conclusion": false,
+        "reference_generation_authority_claim": false,
+        "replacement_candidates": [],
+        "platform_source_evidence": []
+      }
+    },
+    {
+      "case_id": "diagnostic.library-source-role-separation",
+      "workspace_file": "library/C_E0Fixture.lua",
+      "expected": {
+        "library_health_observations_allowed": true,
+        "first_party_project_primary_finding_allowed": false,
+        "source_role": "Library"
+      }
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "fields_to_freeze": [
+      "upstream_pin_id",
+      "upstream_diagnostic_mapping.code",
+      "upstream_diagnostic_mapping.name",
+      "upstream_diagnostic_mapping.upstream_severity",
+      "upstream_diagnostic_mapping.normalized_severity",
+      "upstream_diagnostic_mapping.rollout_policy",
+      "diagnostic.generic-error.expected.primary_byte_span",
+      "project_generation_id",
+      "analyzer_snapshot_id"
+    ]
+  }
+}

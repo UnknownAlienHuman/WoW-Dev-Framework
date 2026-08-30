@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-emmy-e0-c-workspace-v1",
+  "state": "documentation-only-pending-pin-and-byte-freeze",
+  "profile_id": "fixture-retail-120100-e0-v1",
+  "reference_generation_id": null,
+  "project_generation_id": null,
+  "upstream_pin_id": null,
+  "workspace_declarations": [
+    {
+      "workspace_id": "workspace:main:e0",
+      "role": "Main",
+      "logical_root": "fixtures/e0/emmy/main",
+      "files": [
+        "main/clean.lua",
+        "main/generic-error.lua",
+        "main/missing-api.lua",
+        "main/secret-local.lua"
+      ]
+    },
+    {
+      "workspace_id": "workspace:library:e0",
+      "role": "Library",
+      "logical_root": "fixtures/e0/emmy/library",
+      "files": [
+        "library/C_E0Fixture.lua"
+      ]
+    }
+  ],
+  "files": [
+    {
+      "logical_path": "library/C_E0Fixture.lua",
+      "workspace_id": "workspace:library:e0",
+      "role": "Library",
+      "content_sha256": null,
+      "canonical_byte_length": null,
+      "source_text": "---@meta\n\nC_E0Fixture = {}\n\n---@param value string\n---@return boolean accepted\nfunction C_E0Fixture.KnownApi(value) end\n\n---@return string text\nfunction C_E0Fixture.SecretText() end\n\n---@param value any\n---@return boolean accessible\nfunction canaccessvalue(value) end\n"
+    },
+    {
+      "logical_path": "main/clean.lua",
+      "workspace_id": "workspace:main:e0",
+      "role": "Main",
+      "content_sha256": null,
+      "canonical_byte_length": null,
+      "source_text": "local accepted = C_E0Fixture.KnownApi(\"ok\")\nreturn accepted\n"
+    },
+    {
+      "logical_path": "main/generic-error.lua",
+      "workspace_id": "workspace:main:e0",
+      "role": "Main",
+      "content_sha256": null,
+      "canonical_byte_length": null,
+      "source_text": "---@type string\nlocal value = 42\nreturn value\n",
+      "freeze_note": "The exact upstream diagnostic family/code must be selected by the compatibility probe. If this source does not produce a stable built-in diagnostic through the chosen public API, revise this dedicated file and all affected contracts before code activation."
+    },
+    {
+      "logical_path": "main/missing-api.lua",
+      "workspace_id": "workspace:main:e0",
+      "role": "Main",
+      "content_sha256": null,
+      "canonical_byte_length": null,
+      "source_text": "return C_E0Fixture.RemovedApi()\n"
+    },
+    {
+      "logical_path": "main/secret-local.lua",
+      "workspace_id": "workspace:main:e0",
+      "role": "Main",
+      "content_sha256": null,
+      "canonical_byte_length": null,
+      "source_text": "local function unsafe_concat()\n    local text = C_E0Fixture.SecretText()\n    return text .. \"!\"\nend\n\nlocal function guarded_concat()\n    local text = C_E0Fixture.SecretText()\n    if canaccessvalue(text) then\n        return text .. \"!\"\n    end\nend\n\nlocal function guard_after_use()\n    local text = C_E0Fixture.SecretText()\n    local rendered = text .. \"!\"\n    if canaccessvalue(text) then\n        return rendered\n    end\nend\n\nlocal function different_value_guard()\n    local text = C_E0Fixture.SecretText()\n    local ordinary = \"ok\"\n    if canaccessvalue(ordinary) then\n        return text .. \"!\"\n    end\nend\n\nreturn unsafe_concat, guarded_concat, guard_after_use, different_value_guard\n"
+    }
+  ],
+  "required_workspace_invariants": [
+    "All public paths are logical and relative.",
+    "Library declarations are not project implementation sources.",
+    "No file is registered under both roles.",
+    "Source is inert fixture data and is never executed.",
+    "The annotation fixture contains no canonical Secret facet metadata.",
+    "The final upstream pin and all byte digests must be frozen before implementation starts."
+  ]
+}

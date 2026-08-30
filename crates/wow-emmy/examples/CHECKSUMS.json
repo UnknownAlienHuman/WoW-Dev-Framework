@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "manifest_id": "wow-emmy-e0-c-checksums-v1",
+  "algorithm": "sha256",
+  "canonicalization_contract": "wow-core-json/e0-1",
+  "state": "pending-pin-and-byte-freeze-before-first-rust-implementation",
+  "freeze_required": true,
+  "upstream_pin": null,
+  "generic_diagnostic_upstream_code": null,
+  "rules": [
+    "An exact official upstream commit and accepted compatibility probe are required before implementation starts.",
+    "All normative member digests must be non-null before wow-emmy implementation_state changes from not-started.",
+    "Digests cover canonical UTF-8 bytes with LF line endings and one final newline.",
+    "The generic diagnostic upstream mapping and exact fixture source spans must be frozen with the byte digests.",
+    "Tests verify this manifest and never rewrite it automatically.",
+    "A semantic fixture change requires contract, probe, diagnostic/fact cases, test, and digest review in the same change."
+  ],
+  "members": [
+    {
+      "path": "crates/wow-emmy/CONTRACT.json",
+      "sha256": null
+    },
+    {
+      "path": "crates/wow-emmy/examples/workspace-fixture.json",
+      "sha256": null
+    },
+    {
+      "path": "crates/wow-emmy/examples/diagnostic-cases.json",
+      "sha256": null
+    },
+    {
+      "path": "crates/wow-emmy/examples/fact-cases.json",
+      "sha256": null
+    },
+    {
+      "path": "crates/wow-emmy/examples/probe-cases.json",
+      "sha256": null
+    }
+  ],
+  "bundle_sha256": null,
+  "freeze_gate": {
+    "required_work_package": "E0-C-implementation",
+    "invalid_after_implementation_starts_when_any_required_value_is_null": true,
+    "required_non_null_values": [
+      "upstream_pin",
+      "generic_diagnostic_upstream_code",
+      "members[*].sha256",
+      "bundle_sha256"
+    ],
+    "required_checks": [
+      "accepted-upstream-compatibility-probe",
+      "canonical-json-validation",
+      "member-byte-digest-validation",
+      "bundle-digest-validation",
+      "source-coordinate-freeze",
+      "generic-diagnostic-mapping-freeze",
+      "diagnostic-case-execution",
+      "fact-case-execution",
+      "randomized-order-determinism"
+    ]
+  }
+}
