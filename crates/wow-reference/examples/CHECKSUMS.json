@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "manifest_id": "wow-reference-e0-b-checksums-v1",
+  "algorithm": "sha256",
+  "canonicalization_contract": "wow-core-json/e0-1",
+  "state": "pending-byte-freeze-before-first-rust-implementation",
+  "freeze_required": true,
+  "rules": [
+    "All normative member digests must be non-null before wow-reference implementation_state changes from not-started.",
+    "Digests cover canonical UTF-8 bytes with LF line endings and one final newline.",
+    "A semantic fixture change requires contract, lookup-case, test, and digest review in the same change.",
+    "Tests must verify declared digests; they must not rewrite this manifest automatically."
+  ],
+  "members": [
+    {
+      "path": "crates/wow-reference/examples/fixture-bundle.json",
+      "sha256": null
+    },
+    {
+      "path": "crates/wow-reference/examples/lookup-cases.json",
+      "sha256": null
+    },
+    {
+      "path": "crates/wow-reference/CONTRACT.json",
+      "sha256": null
+    }
+  ],
+  "bundle_sha256": null,
+  "freeze_gate": {
+    "required_work_package": "E0-B-implementation",
+    "required_checks": [
+      "canonical-json-validation",
+      "member-byte-digest-validation",
+      "bundle-digest-validation",
+      "lookup-case-execution",
+      "randomized-order-determinism"
+    ],
+    "invalid_after_implementation_starts_when_any_digest_is_null": true
+  }
+}
