@@ -1,0 +1,484 @@
+{
+  "schema_version": 1,
+  "bundle_id": "wow-reference-e0-b-fixture-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "profile": {
+    "profile_id": "fixture-retail-120100-e0-v1",
+    "profile_kind": "fixture",
+    "release_eligible": false,
+    "flavor": "retail",
+    "interface": 120100,
+    "client_build": "12.1.0.69497",
+    "source_repository": "Gethe/wow-ui-source",
+    "source_revision": "027d26c3406d3de2cbd2b1f67d468fe033a1bcd4",
+    "source_verification_date": "2026-08-27",
+    "fixture_catalog_id": "C_E0Fixture",
+    "fixture_schema_version": 1,
+    "reference_generation_seed": "profile+inventory+policy+variant+schema",
+    "reference_generation_id": null
+  },
+  "evaluator_policy": {
+    "policy_id": "wow-reference-e0-declarative/1",
+    "max_input_bytes": 65536,
+    "max_records": 64,
+    "max_table_depth": 16,
+    "max_table_entries": 1024,
+    "max_expression_steps": 4096,
+    "allowed_value_forms": [
+      "null",
+      "boolean",
+      "integer",
+      "string",
+      "array",
+      "object",
+      "local_binding",
+      "known_local_field_access",
+      "allow_listed_registration"
+    ],
+    "forbidden_capabilities": [
+      "arbitrary_call",
+      "filesystem_io",
+      "network_io",
+      "environment_access",
+      "module_loading",
+      "metatable_execution",
+      "debug_library",
+      "loop",
+      "recursion",
+      "callback_execution"
+    ]
+  },
+  "partitions": [
+    {
+      "partition_id": "reference.fixture.profile",
+      "capability_ids": [
+        "reference.fixture.profile.valid"
+      ]
+    },
+    {
+      "partition_id": "reference.fixture.inventory",
+      "capability_ids": [
+        "reference.fixture.inputs.complete"
+      ]
+    },
+    {
+      "partition_id": "reference.fixture.apidoc.system:C_E0Fixture",
+      "capability_ids": [
+        "reference.symbol.exact_lookup",
+        "reference.source_handle.resolve"
+      ]
+    },
+    {
+      "partition_id": "reference.fixture.restriction:C_E0Fixture.SecretText",
+      "capability_ids": [
+        "reference.restriction.facets",
+        "reference.source_handle.resolve"
+      ]
+    }
+  ],
+  "input_inventory": {
+    "declared_order": [
+      "input:fixture-profile",
+      "input:fixture-registration-source",
+      "input:fixture-variant-declarations",
+      "input:lookup-cases"
+    ],
+    "inputs": [
+      {
+        "input_id": "input:fixture-profile",
+        "kind": "fixture_inventory",
+        "provider": "UnknownAlienHuman/WoW-Dev-Framework",
+        "revision": "contract:e0-b-v1",
+        "normalized_path": "fixtures/e0/reference/profile.json",
+        "content_sha256": null,
+        "canonical_byte_length": null,
+        "license_class": "MIT-project-owned",
+        "order_index": 0,
+        "declared_partition_ids": [
+          "reference.fixture.profile",
+          "reference.fixture.inventory"
+        ]
+      },
+      {
+        "input_id": "input:fixture-registration-source",
+        "kind": "fixture_registration_source",
+        "provider": "UnknownAlienHuman/WoW-Dev-Framework",
+        "revision": "contract:e0-b-v1",
+        "normalized_path": "fixtures/e0/reference/C_E0Fixture.apidoc.json",
+        "content_sha256": null,
+        "canonical_byte_length": null,
+        "license_class": "MIT-project-owned-synthetic",
+        "order_index": 1,
+        "declared_partition_ids": [
+          "reference.fixture.apidoc.system:C_E0Fixture",
+          "reference.fixture.restriction:C_E0Fixture.SecretText"
+        ]
+      },
+      {
+        "input_id": "input:fixture-variant-declarations",
+        "kind": "fixture_variant_overlay",
+        "provider": "UnknownAlienHuman/WoW-Dev-Framework",
+        "revision": "contract:e0-b-v1",
+        "normalized_path": "fixtures/e0/reference/variants.json",
+        "content_sha256": null,
+        "canonical_byte_length": null,
+        "license_class": "MIT-project-owned",
+        "order_index": 2,
+        "declared_partition_ids": [
+          "reference.fixture.inventory",
+          "reference.fixture.apidoc.system:C_E0Fixture",
+          "reference.fixture.restriction:C_E0Fixture.SecretText"
+        ]
+      },
+      {
+        "input_id": "input:lookup-cases",
+        "kind": "fixture_inventory",
+        "provider": "UnknownAlienHuman/WoW-Dev-Framework",
+        "revision": "contract:e0-b-v1",
+        "normalized_path": "fixtures/e0/reference/lookup-cases.json",
+        "content_sha256": null,
+        "canonical_byte_length": null,
+        "license_class": "MIT-project-owned",
+        "order_index": 3,
+        "declared_partition_ids": []
+      }
+    ]
+  },
+  "registration_order": [
+    "raw:system:C_E0Fixture",
+    "raw:function:C_E0Fixture.KnownApi",
+    "raw:function:C_E0Fixture.SecretText"
+  ],
+  "raw_records": [
+    {
+      "raw_record_id": "raw:system:C_E0Fixture",
+      "input_id": "input:fixture-registration-source",
+      "registration_index": 0,
+      "registration_kind": "system",
+      "source": {
+        "logical_origin": "fixture-reference-input",
+        "normalized_path": "fixtures/e0/reference/C_E0Fixture.apidoc.json",
+        "logical_span": "records[0]"
+      },
+      "raw_payload": {
+        "Name": "C_E0Fixture",
+        "Type": "System",
+        "Documentation": "Synthetic E0 reference fixture system."
+      },
+      "unknown_fields": []
+    },
+    {
+      "raw_record_id": "raw:function:C_E0Fixture.KnownApi",
+      "input_id": "input:fixture-registration-source",
+      "registration_index": 1,
+      "registration_kind": "function",
+      "source": {
+        "logical_origin": "fixture-reference-input",
+        "normalized_path": "fixtures/e0/reference/C_E0Fixture.apidoc.json",
+        "logical_span": "records[1]"
+      },
+      "raw_payload": {
+        "System": "C_E0Fixture",
+        "Name": "KnownApi",
+        "Type": "Function",
+        "Arguments": [
+          {
+            "Name": "value",
+            "Type": "string",
+            "Nilable": false,
+            "Optional": false
+          }
+        ],
+        "Returns": [
+          {
+            "Name": "accepted",
+            "Type": "boolean",
+            "Nilable": false
+          }
+        ],
+        "Documentation": "Ordinary synthetic function used for exact lookup."
+      },
+      "unknown_fields": []
+    },
+    {
+      "raw_record_id": "raw:function:C_E0Fixture.SecretText",
+      "input_id": "input:fixture-registration-source",
+      "registration_index": 2,
+      "registration_kind": "function",
+      "source": {
+        "logical_origin": "fixture-reference-input",
+        "normalized_path": "fixtures/e0/reference/C_E0Fixture.apidoc.json",
+        "logical_span": "records[2]"
+      },
+      "raw_payload": {
+        "System": "C_E0Fixture",
+        "Name": "SecretText",
+        "Type": "Function",
+        "Arguments": [],
+        "Returns": [
+          {
+            "Name": "text",
+            "Type": "string",
+            "Nilable": false
+          }
+        ],
+        "SecretReturns": [
+          1
+        ],
+        "Documentation": "Synthetic Secret producer used only by E0 local-flow tests.",
+        "E0UnknownMetadata": {
+          "classification_hint": "preserve",
+          "revision": 1
+        }
+      },
+      "unknown_fields": [
+        {
+          "canonical_field_path": "E0UnknownMetadata",
+          "raw_value": {
+            "classification_hint": "preserve",
+            "revision": 1
+          },
+          "classification": "preserved_uninterpreted",
+          "affected_capability_ids": []
+        }
+      ]
+    }
+  ],
+  "expected_lowered_facts": {
+    "systems": [
+      {
+        "entity_key": "system:C_E0Fixture",
+        "canonical_name": "C_E0Fixture",
+        "raw_record_id": "raw:system:C_E0Fixture"
+      }
+    ],
+    "functions": [
+      {
+        "entity_key": "function:C_E0Fixture.KnownApi",
+        "system_entity_key": "system:C_E0Fixture",
+        "arguments": [
+          {
+            "position": 1,
+            "name": "value",
+            "type_name": "string",
+            "nullable": false,
+            "optional": false
+          }
+        ],
+        "returns": [
+          {
+            "position": 1,
+            "name": "accepted",
+            "type_name": "boolean",
+            "nullable": false
+          }
+        ],
+        "raw_record_id": "raw:function:C_E0Fixture.KnownApi"
+      },
+      {
+        "entity_key": "function:C_E0Fixture.SecretText",
+        "system_entity_key": "system:C_E0Fixture",
+        "arguments": [],
+        "returns": [
+          {
+            "position": 1,
+            "name": "text",
+            "type_name": "string",
+            "nullable": false
+          }
+        ],
+        "raw_record_id": "raw:function:C_E0Fixture.SecretText"
+      }
+    ],
+    "restriction_facets": [
+      {
+        "facet_logical_id": "facet:secret.return:function:C_E0Fixture.SecretText:return:1",
+        "facet_kind": "secret.return",
+        "subject_entity_key": "function:C_E0Fixture.SecretText",
+        "target_slot": {
+          "kind": "return_position",
+          "position": 1
+        },
+        "applicability": "unconditional_fixture",
+        "raw_field_path": "SecretReturns[0]",
+        "raw_record_id": "raw:function:C_E0Fixture.SecretText",
+        "coverage_partition_id": "reference.fixture.restriction:C_E0Fixture.SecretText"
+      }
+    ]
+  },
+  "variants": [
+    {
+      "variant_id": "complete",
+      "overlay": {
+        "missing_input_ids": [],
+        "additional_raw_records": [],
+        "forced_unknown_fields": []
+      },
+      "expected_coverage": [
+        {
+          "capability_id": "reference.fixture.profile.valid",
+          "partition_id": "reference.fixture.profile",
+          "status": "Complete",
+          "blockers": []
+        },
+        {
+          "capability_id": "reference.fixture.inputs.complete",
+          "partition_id": "reference.fixture.inventory",
+          "status": "Complete",
+          "blockers": []
+        },
+        {
+          "capability_id": "reference.symbol.exact_lookup",
+          "partition_id": "reference.fixture.apidoc.system:C_E0Fixture",
+          "status": "Complete",
+          "blockers": []
+        },
+        {
+          "capability_id": "reference.restriction.facets",
+          "partition_id": "reference.fixture.restriction:C_E0Fixture.SecretText",
+          "status": "Complete",
+          "blockers": []
+        }
+      ],
+      "expected_conflicts": []
+    },
+    {
+      "variant_id": "partial",
+      "overlay": {
+        "missing_input_ids": [
+          "input:fixture-registration-extension"
+        ],
+        "additional_raw_records": [],
+        "forced_unknown_fields": [
+          {
+            "canonical_field_path": "FutureSymbolDomainMetadata",
+            "raw_value": {
+              "unsupported": true
+            },
+            "classification": "preserved_capability_blocking",
+            "affected_capability_ids": [
+              "reference.symbol.exact_lookup"
+            ]
+          }
+        ]
+      },
+      "expected_coverage": [
+        {
+          "capability_id": "reference.fixture.profile.valid",
+          "partition_id": "reference.fixture.profile",
+          "status": "Complete",
+          "blockers": []
+        },
+        {
+          "capability_id": "reference.fixture.inputs.complete",
+          "partition_id": "reference.fixture.inventory",
+          "status": "Partial",
+          "blockers": [
+            "missing_declared_input"
+          ]
+        },
+        {
+          "capability_id": "reference.symbol.exact_lookup",
+          "partition_id": "reference.fixture.apidoc.system:C_E0Fixture",
+          "status": "Partial",
+          "blockers": [
+            "missing_declared_input",
+            "unknown_field_blocks_capability"
+          ]
+        },
+        {
+          "capability_id": "reference.restriction.facets",
+          "partition_id": "reference.fixture.restriction:C_E0Fixture.SecretText",
+          "status": "Complete",
+          "blockers": []
+        }
+      ],
+      "expected_conflicts": []
+    },
+    {
+      "variant_id": "conflict",
+      "overlay": {
+        "missing_input_ids": [],
+        "additional_raw_records": [
+          {
+            "raw_record_id": "raw:function:C_E0Fixture.SecretText:conflict-observation",
+            "input_id": "input:fixture-variant-declarations",
+            "registration_index": 3,
+            "registration_kind": "function",
+            "source": {
+              "logical_origin": "fixture-reference-input",
+              "normalized_path": "fixtures/e0/reference/variants.json",
+              "logical_span": "conflict.records[0]"
+            },
+            "raw_payload": {
+              "System": "C_E0Fixture",
+              "Name": "SecretText",
+              "Type": "Function",
+              "Arguments": [],
+              "Returns": [
+                {
+                  "Name": "text",
+                  "Type": "string",
+                  "Nilable": false
+                }
+              ],
+              "SecretReturns": []
+            },
+            "unknown_fields": []
+          }
+        ],
+        "forced_unknown_fields": []
+      },
+      "expected_coverage": [
+        {
+          "capability_id": "reference.fixture.profile.valid",
+          "partition_id": "reference.fixture.profile",
+          "status": "Complete",
+          "blockers": []
+        },
+        {
+          "capability_id": "reference.fixture.inputs.complete",
+          "partition_id": "reference.fixture.inventory",
+          "status": "Complete",
+          "blockers": []
+        },
+        {
+          "capability_id": "reference.symbol.exact_lookup",
+          "partition_id": "reference.fixture.apidoc.system:C_E0Fixture",
+          "status": "Complete",
+          "blockers": []
+        },
+        {
+          "capability_id": "reference.restriction.facets",
+          "partition_id": "reference.fixture.restriction:C_E0Fixture.SecretText",
+          "status": "Complete",
+          "blockers": [
+            "unresolved_registration_conflict"
+          ]
+        }
+      ],
+      "expected_conflicts": [
+        {
+          "conflict_code": "duplicate_registration_conflict",
+          "subject_key": "function:C_E0Fixture.SecretText#restriction:secret.return:return:1",
+          "observation_raw_record_ids": [
+            "raw:function:C_E0Fixture.SecretText",
+            "raw:function:C_E0Fixture.SecretText:conflict-observation"
+          ],
+          "affected_capability_ids": [
+            "reference.restriction.facets"
+          ],
+          "affected_partition_ids": [
+            "reference.fixture.restriction:C_E0Fixture.SecretText"
+          ]
+        }
+      ]
+    }
+  ],
+  "checksum_freeze": {
+    "algorithm": "sha256",
+    "required_before_first_rust_commit": true,
+    "canonicalization_contract": "wow-core-json/e0-1",
+    "bundle_sha256": null
+  }
+}

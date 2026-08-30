@@ -91,14 +91,43 @@
         "wow-store"
       ],
       "owns": [
-        "reference-profile",
-        "apidoc-ingestion",
-        "raw-metadata",
-        "corrections",
-        "reference-view",
-        "capability-report"
+        "fixture-profile-validation",
+        "reference-input-inventory",
+        "restricted-declarative-evaluation",
+        "raw-canonical-value-preservation",
+        "unknown-field-preservation-and-impact",
+        "system-function-restriction-lowering",
+        "duplicate-and-conflict-classification",
+        "reference-side-source-and-evidence",
+        "per-partition-coverage",
+        "exact-reference-view",
+        "negative-authority-inputs",
+        "closed-fixture-validation",
+        "deterministic-reference-model"
       ],
-      "active_scope": "fixture-backed exact ReferenceView only; no full pack builder or storage"
+      "active_scope": "one closed synthetic fixture profile, exact symbol/restriction lookups, complete/partial/conflict coverage, no full pack builder or storage",
+      "work_package": "E0-B",
+      "contract_detail": "implementation-ready",
+      "implementation_state": "not-started",
+      "contract_manifest": "crates/wow-reference/CONTRACT.json",
+      "contract_files": [
+        "crates/wow-reference/AGENTS.md",
+        "crates/wow-reference/DECISIONS.md",
+        "crates/wow-reference/DATA_MODEL.md",
+        "crates/wow-reference/OPERATIONS.md",
+        "crates/wow-reference/LOOKUP_AND_COVERAGE.md",
+        "crates/wow-reference/FIXTURE_PROFILE.md",
+        "crates/wow-reference/ERROR_MODEL.md",
+        "crates/wow-reference/TEST_MATRIX.md",
+        "crates/wow-reference/IMPLEMENTATION_PLAN.md"
+      ],
+      "fixture_profile_id": "fixture-retail-120100-e0-v1",
+      "normative_examples": [
+        "crates/wow-reference/examples/fixture-bundle.json",
+        "crates/wow-reference/examples/lookup-cases.json",
+        "crates/wow-reference/examples/CHECKSUMS.json"
+      ],
+      "byte_freeze_state": "required-before-first-rust-implementation"
     },
     {
       "name": "wow-annotations",
