@@ -1,208 +1,217 @@
 # `wow-core` implementation contract
 
-**Status:** E0-active contract scaffold; no Rust code yet.
+**Status:** E0-A implementation-ready contract pack; no Rust code or `Cargo.toml` yet.
+
+`wow-core` owns the smallest transport-, storage-, parser-, and product-independent contracts required to describe an exact WoW analysis result. Every production crate may eventually depend on it, so its API must remain narrow, deterministic, typed, and free of domain workflows.
+
+## Start here
+
+A coding agent must read this package in order:
+
+1. [`AGENTS.md`](AGENTS.md) — local scope and change rules.
+2. [`DECISIONS.md`](DECISIONS.md) — frozen E0-A design decisions.
+3. [`DATA_MODEL.md`](DATA_MODEL.md) — fields, grammars, states, and invariants.
+4. [`OPERATIONS.md`](OPERATIONS.md) — function-level input/output/error contracts.
+5. [`CANONICALIZATION.md`](CANONICALIZATION.md) — ordering, JSON bytes, hashing, and identity projections.
+6. [`ERROR_MODEL.md`](ERROR_MODEL.md) — stable error taxonomy and safety rules.
+7. [`TEST_MATRIX.md`](TEST_MATRIX.md) — mandatory executable cases and mutation gates.
+8. [`CONSUMER_GUIDE.md`](CONSUMER_GUIDE.md) — minimal downstream E0 seams and anti-leak rules.
+9. [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) — module/order/dependency/review handoff.
+10. [`CONTRACT.json`](CONTRACT.json) — machine-readable type/operation routing.
+11. [`examples/`](examples/) — strict E0 envelopes and normative hash vectors.
+
+Parent contracts still apply:
+
+- [`../AGENTS.md`](../AGENTS.md)
+- [`../DEPENDENCY_GRAPH.md`](../DEPENDENCY_GRAPH.md)
+- [`../WORKSTREAMS.md`](../WORKSTREAMS.md)
+- [`../../docs/PROVENANCE_AND_COVERAGE.md`](../../docs/PROVENANCE_AND_COVERAGE.md)
+- [`../../docs/TEST_STRATEGY.md`](../../docs/TEST_STRATEGY.md)
+
+Before implementation, also read the current [`AGENTS.md`](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb/blob/main/AGENTS.md) and [`INDEX_MINI.md`](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb/blob/main/INDEX_MINI.md) in the WoW Addon Engineering Knowledge Base. Patch-sensitive facts remain there; they are not copied into this crate.
 
 ## Mission
 
-`wow-core` owns the smallest transport-, storage-, parser-, and product-independent contracts required to describe an exact WoW analysis result. Every other crate may depend on these contracts; therefore this crate must remain narrow, deterministic, and free of domain workflows.
-
-## Owned responsibilities
+`wow-core` defines validated values and pure operations for:
 
 - exact profile identity;
 - immutable reference/project/external generation identity;
-- stable entity, rule, producer, capability, partition, and handle identifiers;
-- normalized source locations and content digests;
-- evidence provenance and confidence;
-- coverage and `NotEvaluated` state;
-- normalized findings and result envelopes;
-- deterministic ordering keys and canonical text-safe representations;
-- common bounded-size/count types used at crate boundaries.
+- stable identifiers and content digests;
+- source handles and canonical byte spans;
+- evidence provenance, confidence, claim scope, and conflicts;
+- coverage, capability availability, `NotEvaluated`, and negative authority;
+- normalized findings, root-cause keys, and remediation classification;
+- explicit budgets and truncation;
+- deterministic ordering, hashing, and E0 result envelopes;
+- structured safe boundary errors.
+
+## Owned responsibilities
+
+- family-specific canonical identifier grammars;
+- fixture/release profile-kind separation;
+- generation-context validation and explicit merge modes;
+- repository-relative UTF-8 path normalization without filesystem access;
+- end-exclusive UTF-8 byte-range semantics;
+- SHA-256 domain-separated identity derivation for E0;
+- evidence/coverage/finding/envelope invariants;
+- conservative coverage aggregation;
+- typed negative-authority decisions;
+- byte-identical canonical JSON result generation;
+- common bounded count/size contracts at crate boundaries.
 
 ## Explicit non-responsibilities
 
 `wow-core` does not:
 
-- parse Lua, XML, TOC, JSON, or SQLite;
-- access the filesystem, network, process environment, editor, or WoW client;
-- know API names, addon frameworks, rule algorithms, search ranking, graph semantics, or database schemas;
-- decide which profile is current;
-- perform persistence or logging;
-- own application configuration;
-- contain convenience helpers that import higher-layer semantics.
+- parse Lua, XML, TOC, JSON source documents, or SQLite databases as domain inputs;
+- access filesystem, network, environment, editor, process, clock, randomness, or WoW client;
+- choose a current/latest profile;
+- validate that a Blizzard Interface/build relationship is historically correct;
+- know API names, addon frameworks, Secret algorithms, rule algorithms, graph semantics, search ranking, or database schemas;
+- perform persistence, logging, telemetry, retries, transport serialization policy, or configuration discovery;
+- resolve a source handle to host content;
+- execute rules, searches, graph queries, project indexing, or Reference Pack ingestion;
+- expose unbounded generic metadata/JSON extension bags.
 
-## Conceptual data contracts
+## E0-A public value set
 
-### Identity
-
-Required value types:
-
-```text
-ProfileId
-ReferenceGenerationId
-ProjectGenerationId
-ExternalGenerationId
-EntityKey
-RuleId
-ProducerId
-CapabilityId
-CoveragePartitionId
-StableHandleId
-ContentDigest
-SchemaVersion
-ToolVersion
-```
-
-Every identifier must have a canonical string form, validation rules, and deterministic equality/order semantics. IDs must not contain unnormalized absolute local paths or secret data.
-
-### Profile identity
-
-A profile identity carries, as available:
+The implementation may refine concrete Rust names, but the semantic set is fixed by [`CONTRACT.json`](CONTRACT.json):
 
 ```text
-profile ID
-flavor/edition
-Interface number
-client build
-source revision and logical content digest
-builder/schema/correction-set versions
+all identifier families listed in `DATA_MODEL.md` and `CONTRACT.json`
+ProfileIdentity / GenerationContext / ExternalGeneration
+SourceSpan / SourceHandle
+EvidenceRecord / CoverageReference / ConflictRecord
+CoverageRecord / CapabilitySummary / NotEvaluatedRecord
+NegativeAuthorityDecision
+Finding / MessageArgument / Remediation / WarningRecord
+BudgetLimits / BudgetUsage / TruncationState
+CoreError
+E0CheckResultEnvelope / E0OperationErrorEnvelope
 ```
 
-The type must distinguish an incomplete fixture identity from a release-grade profile manifest. A fixture profile cannot masquerade as a released pack.
+Invalid-empty semantic values must not be constructible through the normal public API.
 
-### Generation context
+## E0-A operation groups
 
-A result context carries exactly one reference generation and at most one project generation, plus explicitly separated external generations. Combining mismatched contexts must fail rather than silently selecting one.
-
-### Source handle
-
-A stable source handle contains:
+Function-level contracts are in [`OPERATIONS.md`](OPERATIONS.md). E0-A must cover:
 
 ```text
-repository or pack identity
-revision/profile/generation
-normalized repository-relative path
-byte and line span when known
-content digest
-optional symbol/entity key
+identifier and digest parsing
+typed/domain-separated ID derivation
+profile structural validation/comparison
+path/span normalization
+source-handle construction/verification/comparison
+generation-context ID/validation/merge/strict guard
+evidence validation/ID/acyclic derivation
+conflict construction/ID/validation
+coverage-record validation/ID/conservative combination
+capability-summary validation, availability, and NotEvaluated construction
+negative-authority evaluation
+message/root-cause/finding fingerprint/context binding
+finding ordering/deduplication
+warning construction/ID/validation
+budget/usage/truncation
+result-envelope validation/order/digest/finalization
+schema-version validation
 ```
 
-Unknown spans are explicit. Paths are slash-normalized and root-relative. A handle is an identity, not permission to read arbitrary host paths.
+No placeholder success result is permitted. An unavailable capability is absent, typed unavailable, or represented by `NotEvaluated` according to the owning operation.
 
-### Evidence and confidence
+## Core invariants
 
-Provenance classes and confidence levels follow [`../../docs/PROVENANCE_AND_COVERAGE.md`](../../docs/PROVENANCE_AND_COVERAGE.md). Candidate systems cannot construct `Proven` evidence without an owning trusted producer path.
+1. No floating `current`, `latest`, `live`, `head`, `default`, or implicit identity.
+2. Profile labels never substitute for structured profile identity.
+3. Fixture identities cannot masquerade as release profiles.
+4. No mixed reference/project generations in one result.
+5. External generations remain explicitly separate.
+6. No absolute/escaping/non-UTF-8 E0 public source path.
+7. Canonical source spans are zero-based end-exclusive UTF-8 byte ranges.
+8. No confidence upgrade through merge, popularity, similarity, or model inference.
+9. `Derived` evidence has explicit inputs and producer identity.
+10. No authoritative negative without exact scope, complete coverage, matching context, and no affecting conflict/truncation.
+11. `NotEvaluated` is not success and carries exact blockers.
+12. Severity and rollout policy are separate.
+13. Message prose does not define identity/dedup/root cause.
+14. No volatile fields in canonical E0 results.
+15. Public ordering is total and deterministic.
+16. Serialization round-trip preserves semantic identity.
+17. Unknown internal E0 fields are rejected, not silently dropped.
+18. Budgets/truncation are explicit truth, never silent clipping.
+19. The source-handle → evidence → conflict → coverage → evaluation/finding reference graph is fully resolved and acyclic.
+20. Exact coverage records remain present; a capability summary never replaces or rewrites them.
+21. Source location and evidence authority are separate: a project finding span cannot stand in for Reference Pack proof.
 
-### Coverage
+## Canonical examples
 
-Coverage records:
-
-```text
-partition
-capability
-status = Complete | Partial | Unknown | Failed | NotApplicable | NotEvaluated
-missing inputs/capabilities
-producer/generation
-optional conflict references
-```
-
-Negative authority is a derived decision over explicit complete coverage, not a boolean stored without evidence.
-
-### Finding and result envelope
-
-A normalized finding carries machine-readable rule identity, message arguments, severity/policy, source/evidence references, capability requirements, coverage status, generation context, root-cause key, and optional remediation class.
-
-A result envelope carries:
-
-- one coherent generation context;
-- capability summary;
-- ordered findings/data;
-- warnings and `NotEvaluated` records;
-- deterministic schema/version metadata;
-- truncation/budget status.
-
-## Required operations
-
-Concrete Rust naming may differ only with an accompanying contract update. Required semantics:
-
-| Operation | Required behavior |
+| File | Purpose |
 |---|---|
-| `parse_profile_id` | Validate and canonicalize a profile identifier without consulting external state. |
-| `validate_profile_identity` | Reject contradictory Interface/build/revision/digest combinations. |
-| `build_source_handle` | Normalize path/span/digest and reject host-path escape or invalid spans. |
-| `verify_source_handle_content` | Compare a handle digest with supplied content identity; no filesystem read. |
-| `merge_generation_context` | Combine compatible contexts or return an explicit mismatch. |
-| `require_same_generation` | Guard a multi-input operation against cross-generation mixing. |
-| `combine_coverage` | Compute conservative capability coverage from named partitions. |
-| `evaluate_negative_authority` | Return authoritative/partial/failed/conflict state with reasons. |
-| `canonical_finding_key` | Produce stable ordering/deduplication identity from structured fields. |
-| `canonical_result_order` | Order outputs independently of hash iteration, thread order, or filesystem order. |
-| `validate_result_envelope` | Ensure every item belongs to the envelope context and required fields are present. |
+| [`examples/e0-clean-result.json`](examples/e0-clean-result.json) | Complete evaluated check with no findings. |
+| [`examples/e0-findings-result.json`](examples/e0-findings-result.json) | Complete evaluated check with generic, API, and Secret-local fixture findings. |
+| [`examples/e0-not-evaluated-result.json`](examples/e0-not-evaluated-result.json) | Partial result with an exact missing capability and blocking partition. |
+| [`examples/e0-conflict-not-evaluated-result.json`](examples/e0-conflict-not-evaluated-result.json) | Complete source coverage that remains non-authoritative because an unresolved conflict blocks evaluation. |
+| [`examples/e0-generation-mismatch-error.json`](examples/e0-generation-mismatch-error.json) | Structured boundary error, separate from findings. |
+| [`examples/HASH_VECTORS.json`](examples/HASH_VECTORS.json) | Normative canonical JSON and SHA-256 vectors. |
 
-## Invariants
+The profiles and source data in these files are synthetic fixtures. They do not claim a released Reference Pack or live-client verification.
 
-1. No floating `current`, `latest`, or implicit profile identity.
-2. No mixed reference/project generations in one result.
-3. No authoritative negative without complete relevant coverage.
-4. No confidence upgrade based on source popularity or model inference.
-5. No absolute host paths in public handles by default.
-6. No timestamps or random IDs in canonical result digests.
-7. Unknown fields/states remain distinguishable from absent fields/states.
-8. Serialization round-trips must preserve semantic identity.
-9. `NotEvaluated` is not success and is not a diagnostic false negative.
-10. Public ordering is total and deterministic.
+## E0-A error taxonomy
 
-## Error taxonomy
-
-The crate owns generic boundary errors only:
+The stable catalog is in [`ERROR_MODEL.md`](ERROR_MODEL.md). Broad families:
 
 ```text
-invalid_identifier
-invalid_profile_identity
-generation_mismatch
-invalid_source_handle
-digest_mismatch
-coverage_conflict
-negative_authority_unavailable
-result_context_violation
-budget_invalid
-schema_version_unsupported
+identifier/digest validation
+profile/source-handle validation
+generation/context mismatch
+evidence authority/reference errors
+coverage/negative-authority errors
+finding/envelope invariant errors
+budget/schema/canonicalization errors
 ```
 
-Errors must be structured. Human messages are projections, not the contract.
+Errors, findings, and `NotEvaluated` remain separate output channels.
 
-## E0 deliverable
+## E0-A tests
 
-E0 implements only the types and operations required by:
+The executable implementation must preserve the case IDs in [`TEST_MATRIX.md`](TEST_MATRIX.md). Mandatory classes include:
 
-- one fixture profile;
-- one project generation;
-- generic and WoW findings in one envelope;
-- `Complete`, `Partial`, `Failed`, and `NotEvaluated` coverage cases;
-- deterministic JSON/golden output handoff.
+- valid/invalid/noncanonical identifier cases;
+- fixture/release profile separation;
+- traversal/absolute/non-UTF-8 path rejection;
+- byte-span state and exclusion of presentation-only line/column fields;
+- complete context merge matrix;
+- candidate-evidence authority rejection and derivation-cycle rejection;
+- conflict-record resolution and scope validation;
+- coverage-record/summary reconciliation and aggregation truth table;
+- negative-authority denial reason matrix;
+- finding fingerprint versus context-bound ID and warning identity;
+- explicit truncation and budget overflow;
+- strict schema/unknown-field behavior;
+- randomized input-order byte determinism;
+- committed hash vectors and exact JSON golden files;
+- mutations proving the target invariant can fail.
 
-Do not implement a generalized plugin system, database IDs, distributed tracing, or compatibility framework in E0.
+## E0-A implementation boundary
 
-## Required tests
+Activate only `wow-core` first. Do not activate every planned crate in Cargo.
 
-- valid/invalid/canonical profile IDs;
-- contradictory profile identity rejection;
-- source path normalization and traversal rejection;
-- generation compatibility matrix;
-- complete versus partial negative authority;
-- candidate evidence cannot become proven through merge;
-- deterministic finding/result ordering under randomized input order;
-- serialization round-trip;
-- no volatile field changes canonical digest;
-- malformed spans and digest mismatch.
+After core passes its contract, it hands a stable narrow boundary to:
 
-## Documentation sources
+- `wow-reference` E0-B fixture view;
+- `wow-emmy` E0-C adapter;
+- later E0 project/rules/service packages.
 
-- [`../../docs/PROVENANCE_AND_COVERAGE.md`](../../docs/PROVENANCE_AND_COVERAGE.md)
-- [`../../docs/GLOSSARY.md`](../../docs/GLOSSARY.md)
-- [`../../docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md)
-- [`../../docs/SECURITY_MODEL.md`](../../docs/SECURITY_MODEL.md)
-- [`../../docs/TEST_STRATEGY.md`](../../docs/TEST_STRATEGY.md)
+No downstream implementation should start against draft/unmerged core names.
 
 ## Definition of done
 
-`wow-core` E0 is complete when every other E0 crate can express its inputs/results without unstructured identity strings, all cross-generation mistakes fail deterministically, and the same logical findings serialize byte-identically after canonicalization.
+`wow-core` E0-A is implementation-complete when:
+
+- all required operations in `CONTRACT.json` are implemented or removed through a same-change contract revision;
+- every applicable `TEST_MATRIX.md` case is executable and green;
+- all example envelopes and hash vectors pass byte-exactly;
+- randomized-order runs produce identical canonical bytes;
+- public API review finds no speculative surface or responsibility leak;
+- fresh format/lint/test/dependency checks are reported;
+- `wow-reference` and `wow-emmy` can consume the boundary without raw identity strings;
+- `crates/MANIFEST.json` is updated from contract-ready to implementation-complete only after those gates.

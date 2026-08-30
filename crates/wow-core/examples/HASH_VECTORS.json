@@ -1,0 +1,513 @@
+{
+  "canonicalization_version": "wow-core-json/e0-1",
+  "digest_algorithm": "sha256",
+  "notes": [
+    "canonical_utf8 is exact compact JSON for the domain-separated material object",
+    "all schema object keys are ASCII and sorted ascending",
+    "all identity-critical numbers are integers",
+    "typed_id is omitted when the vector tests a raw digest only"
+  ],
+  "vectors": [
+    {
+      "canonical_utf8": "{\"domain\":\"wow-core/test/e0-1\",\"value\":{}}",
+      "domain": "wow-core/test/e0-1",
+      "sha256": "a5b546c8b8a738bf5d7483dd556c3018f02a8fad5b1569836e054eb0273730e2",
+      "value": {},
+      "vector_id": "empty-object-domain"
+    },
+    {
+      "canonical_utf8": "{\"domain\":\"wow-core/source-handle/e0-1\",\"value\":{\"content_digest\":\"sha256:0202020202020202020202020202020202020202020202020202020202020202\",\"entity_key\":\"entity:api:C_Fixture.Missing\",\"origin_id\":\"fixture:e0-addon\",\"origin_kind\":\"fixture\",\"path\":\"Addon/Core.lua\",\"project_generation\":\"generation:project:sha256:e606bd7594eb932275741dbe51afbd46ecdf59388f370b71eaa1422dd0259463\",\"reference_generation\":\"generation:reference:sha256:8e56faa8b5c7efae0e0c8468c48101ed8d2cfef206b40e6e96106993096d2786\",\"revision\":\"fixture:e0-rev1\",\"span\":{\"byte_end\":31,\"byte_start\":20,\"kind\":\"byte_range\"}}}",
+      "domain": "wow-core/source-handle/e0-1",
+      "sha256": "a78c656122272558469d3b3bff87aeba8537211ee51c2bf7e0c9b24fa1502664",
+      "typed_id": "handle:sha256:a78c656122272558469d3b3bff87aeba8537211ee51c2bf7e0c9b24fa1502664",
+      "value": {
+        "content_digest": "sha256:0202020202020202020202020202020202020202020202020202020202020202",
+        "entity_key": "entity:api:C_Fixture.Missing",
+        "origin_id": "fixture:e0-addon",
+        "origin_kind": "fixture",
+        "path": "Addon/Core.lua",
+        "project_generation": "generation:project:sha256:e606bd7594eb932275741dbe51afbd46ecdf59388f370b71eaa1422dd0259463",
+        "reference_generation": "generation:reference:sha256:8e56faa8b5c7efae0e0c8468c48101ed8d2cfef206b40e6e96106993096d2786",
+        "revision": "fixture:e0-rev1",
+        "span": {
+          "byte_end": 31,
+          "byte_start": 20,
+          "kind": "byte_range"
+        }
+      },
+      "vector_id": "fixture-source-handle"
+    },
+    {
+      "canonical_utf8": "{\"domain\":\"wow-core/generation-context/e0-1\",\"value\":{\"external_generations\":[],\"producer_versions\":[{\"producer_id\":\"wow.core\",\"version\":\"0.0.0-e0\"},{\"producer_id\":\"wow.emmy\",\"version\":\"0.0.0-e0\"},{\"producer_id\":\"wow.project\",\"version\":\"0.0.0-e0\"},{\"producer_id\":\"wow.reference\",\"version\":\"0.0.0-e0\"},{\"producer_id\":\"wow.rules\",\"version\":\"0.0.0-e0\"},{\"producer_id\":\"wow.service\",\"version\":\"0.0.0-e0\"}],\"profile\":{\"client_build\":69497,\"client_version\":\"12.1.0\",\"fixture_scope\":\"e0 vertical slice only\",\"flavor_id\":\"retail\",\"interface\":120100,\"profile_id\":\"profile:fixture:e0-retail-120100\",\"profile_kind\":\"fixture\",\"schema_versions\":[{\"schema_id\":\"schema:wow:fixture-profile\",\"version\":\"0.1.0\"}],\"source_kind\":\"synthetic_fixture\",\"source_logical_digest\":\"sha256:0101010101010101010101010101010101010101010101010101010101010101\",\"source_revision\":\"fixture:e0-rev1\"},\"project_generation\":\"generation:project:sha256:e606bd7594eb932275741dbe51afbd46ecdf59388f370b71eaa1422dd0259463\",\"reference_generation\":\"generation:reference:sha256:8e56faa8b5c7efae0e0c8468c48101ed8d2cfef206b40e6e96106993096d2786\",\"schema_versions\":[{\"schema_id\":\"schema:wow:check-result\",\"version\":\"0.1.0\"},{\"schema_id\":\"schema:wow:core-contract\",\"version\":\"0.1.0\"}]}}",
+      "domain": "wow-core/generation-context/e0-1",
+      "sha256": "bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871",
+      "typed_id": "context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871",
+      "value": {
+        "external_generations": [],
+        "producer_versions": [
+          {
+            "producer_id": "wow.core",
+            "version": "0.0.0-e0"
+          },
+          {
+            "producer_id": "wow.emmy",
+            "version": "0.0.0-e0"
+          },
+          {
+            "producer_id": "wow.project",
+            "version": "0.0.0-e0"
+          },
+          {
+            "producer_id": "wow.reference",
+            "version": "0.0.0-e0"
+          },
+          {
+            "producer_id": "wow.rules",
+            "version": "0.0.0-e0"
+          },
+          {
+            "producer_id": "wow.service",
+            "version": "0.0.0-e0"
+          }
+        ],
+        "profile": {
+          "client_build": 69497,
+          "client_version": "12.1.0",
+          "fixture_scope": "e0 vertical slice only",
+          "flavor_id": "retail",
+          "interface": 120100,
+          "profile_id": "profile:fixture:e0-retail-120100",
+          "profile_kind": "fixture",
+          "schema_versions": [
+            {
+              "schema_id": "schema:wow:fixture-profile",
+              "version": "0.1.0"
+            }
+          ],
+          "source_kind": "synthetic_fixture",
+          "source_logical_digest": "sha256:0101010101010101010101010101010101010101010101010101010101010101",
+          "source_revision": "fixture:e0-rev1"
+        },
+        "project_generation": "generation:project:sha256:e606bd7594eb932275741dbe51afbd46ecdf59388f370b71eaa1422dd0259463",
+        "reference_generation": "generation:reference:sha256:8e56faa8b5c7efae0e0c8468c48101ed8d2cfef206b40e6e96106993096d2786",
+        "schema_versions": [
+          {
+            "schema_id": "schema:wow:check-result",
+            "version": "0.1.0"
+          },
+          {
+            "schema_id": "schema:wow:core-contract",
+            "version": "0.1.0"
+          }
+        ]
+      },
+      "vector_id": "fixture-generation-context"
+    },
+    {
+      "canonical_utf8": "{\"domain\":\"wow-core/coverage/e0-1\",\"value\":{\"capability_id\":\"reference.api.exact_lookup\",\"conflict_ids\":[],\"context_id\":\"context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871\",\"missing_input_ids\":[],\"partition_id\":\"partition:apidoc.fixture:e0\",\"producer_id\":\"wow.reference\",\"producer_version\":\"0.0.0-e0\",\"status\":\"complete\",\"truncation_refs\":[]}}",
+      "domain": "wow-core/coverage/e0-1",
+      "sha256": "52a37d43ed3d2d4fad757ddb79e6da00ce76a5015cea8a2cded999dc3c7f1a99",
+      "typed_id": "coverage:sha256:52a37d43ed3d2d4fad757ddb79e6da00ce76a5015cea8a2cded999dc3c7f1a99",
+      "value": {
+        "capability_id": "reference.api.exact_lookup",
+        "conflict_ids": [],
+        "context_id": "context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871",
+        "missing_input_ids": [],
+        "partition_id": "partition:apidoc.fixture:e0",
+        "producer_id": "wow.reference",
+        "producer_version": "0.0.0-e0",
+        "status": "complete",
+        "truncation_refs": []
+      },
+      "vector_id": "fixture-coverage"
+    },
+    {
+      "canonical_utf8": "{\"domain\":\"wow-core/evidence/e0-1\",\"value\":{\"claim_scope\":\"platform_contract\",\"confidence\":\"derived\",\"context_id\":\"context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871\",\"coverage_refs\":[{\"capability_id\":\"reference.api.exact_lookup\",\"partition_id\":\"partition:apidoc.fixture:e0\",\"producer_id\":\"wow.reference\"}],\"derivation_input_ids\":[\"evidence:sha256:a87bcd3c2901a0d2b52cfd85a7e87d62065ba2326425faefc0d248b11477d7e1\"],\"producer_id\":\"wow.reference\",\"producer_version\":\"0.0.0-e0\",\"provenance\":\"platform_source\",\"source_handle_ids\":[\"handle:sha256:cdf9c0c60b034a287267bf069bab9bc27b68a16176d652d2a5e5efb3a02bab79\"]}}",
+      "domain": "wow-core/evidence/e0-1",
+      "sha256": "3de89ca1b41f90cb894982d2d9b4bdbee09d2bb005b545db0c4905e283eeb3ff",
+      "typed_id": "evidence:sha256:3de89ca1b41f90cb894982d2d9b4bdbee09d2bb005b545db0c4905e283eeb3ff",
+      "value": {
+        "claim_scope": "platform_contract",
+        "confidence": "derived",
+        "context_id": "context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871",
+        "coverage_refs": [
+          {
+            "capability_id": "reference.api.exact_lookup",
+            "partition_id": "partition:apidoc.fixture:e0",
+            "producer_id": "wow.reference"
+          }
+        ],
+        "derivation_input_ids": [
+          "evidence:sha256:a87bcd3c2901a0d2b52cfd85a7e87d62065ba2326425faefc0d248b11477d7e1"
+        ],
+        "producer_id": "wow.reference",
+        "producer_version": "0.0.0-e0",
+        "provenance": "platform_source",
+        "source_handle_ids": [
+          "handle:sha256:cdf9c0c60b034a287267bf069bab9bc27b68a16176d652d2a5e5efb3a02bab79"
+        ]
+      },
+      "vector_id": "fixture-evidence"
+    },
+    {
+      "canonical_utf8": "{\"domain\":\"wow-core/conflict/e0-1\",\"value\":{\"affected_refs\":[{\"capability_id\":\"reference.api.exact_lookup\",\"partition_id\":\"partition:apidoc.fixture:e0\"}],\"conflict_code\":\"reference.api.catalog_disagreement\",\"context_id\":\"context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871\",\"evidence_ids\":[\"evidence:sha256:556c55ca6b39f200dbf355b7023f4c247bb24447a44eb04e4a39040405bf5f75\",\"evidence:sha256:ef297f3eab0299970873be6b55b3d11658b6b56e4a7fbde5c8ab8c97f9893cb0\"],\"subject_entity_key\":\"entity:api:C_Fixture.Disputed\"}}",
+      "domain": "wow-core/conflict/e0-1",
+      "sha256": "33008098c23cec83053c52d22f37acce7303b67c25c430c6caa5c12acbaaa93e",
+      "typed_id": "conflict:sha256:33008098c23cec83053c52d22f37acce7303b67c25c430c6caa5c12acbaaa93e",
+      "value": {
+        "affected_refs": [
+          {
+            "capability_id": "reference.api.exact_lookup",
+            "partition_id": "partition:apidoc.fixture:e0"
+          }
+        ],
+        "conflict_code": "reference.api.catalog_disagreement",
+        "context_id": "context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871",
+        "evidence_ids": [
+          "evidence:sha256:556c55ca6b39f200dbf355b7023f4c247bb24447a44eb04e4a39040405bf5f75",
+          "evidence:sha256:ef297f3eab0299970873be6b55b3d11658b6b56e4a7fbde5c8ab8c97f9893cb0"
+        ],
+        "subject_entity_key": "entity:api:C_Fixture.Disputed"
+      },
+      "vector_id": "fixture-conflict"
+    },
+    {
+      "canonical_utf8": "{\"domain\":\"wow-core/warning/e0-1\",\"value\":{\"context_id\":\"context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871\",\"evidence_ids\":[],\"message_arguments\":[{\"identity_relevant\":true,\"kind\":\"identifier\",\"name\":\"lane\",\"value\":\"fixture.optional\"}],\"producer_id\":\"wow.service\",\"producer_version\":\"0.0.0-e0\",\"related_source_handle_ids\":[],\"subject_id\":\"fixture.optional\",\"subject_kind\":\"lane\",\"warning_code\":\"fixture.optional_lane_unavailable\"}}",
+      "domain": "wow-core/warning/e0-1",
+      "sha256": "fa036d949df8c4f479cf577a2e9cbf39fe8d0c78c18ec8de76403ba06207bded",
+      "typed_id": "warning:sha256:fa036d949df8c4f479cf577a2e9cbf39fe8d0c78c18ec8de76403ba06207bded",
+      "value": {
+        "context_id": "context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871",
+        "evidence_ids": [],
+        "message_arguments": [
+          {
+            "identity_relevant": true,
+            "kind": "identifier",
+            "name": "lane",
+            "value": "fixture.optional"
+          }
+        ],
+        "producer_id": "wow.service",
+        "producer_version": "0.0.0-e0",
+        "related_source_handle_ids": [],
+        "subject_id": "fixture.optional",
+        "subject_kind": "lane",
+        "warning_code": "fixture.optional_lane_unavailable"
+      },
+      "vector_id": "fixture-warning"
+    },
+    {
+      "canonical_utf8": "{\"domain\":\"wow-core/not-evaluated/e0-1\",\"value\":{\"blocking_capability_ids\":[\"restriction.facets.readable\"],\"blocking_partitions\":[{\"capability_id\":\"restriction.facets.readable\",\"coverage_id\":\"coverage:sha256:68050b2b852b3a8552f6b2332e6ca5d268f289ae27be2ed06a904a797c0ed275\",\"partition_id\":\"partition:restriction.fixture:e0\",\"status\":\"unknown\"}],\"conflict_ids\":[],\"context_id\":\"context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871\",\"producer_id\":\"wow.service\",\"producer_version\":\"0.0.0-e0\",\"reason_code\":\"capability_unavailable\",\"subject_id\":\"wow.secret.local_operation\",\"subject_kind\":\"rule\"}}",
+      "domain": "wow-core/not-evaluated/e0-1",
+      "sha256": "00cc2896aeb833eb70758ee79ebfbf18ec959bef7f9dc8babbfdeb74dafa95ed",
+      "typed_id": "not-evaluated:sha256:00cc2896aeb833eb70758ee79ebfbf18ec959bef7f9dc8babbfdeb74dafa95ed",
+      "value": {
+        "blocking_capability_ids": [
+          "restriction.facets.readable"
+        ],
+        "blocking_partitions": [
+          {
+            "capability_id": "restriction.facets.readable",
+            "coverage_id": "coverage:sha256:68050b2b852b3a8552f6b2332e6ca5d268f289ae27be2ed06a904a797c0ed275",
+            "partition_id": "partition:restriction.fixture:e0",
+            "status": "unknown"
+          }
+        ],
+        "conflict_ids": [],
+        "context_id": "context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871",
+        "producer_id": "wow.service",
+        "producer_version": "0.0.0-e0",
+        "reason_code": "capability_unavailable",
+        "subject_id": "wow.secret.local_operation",
+        "subject_kind": "rule"
+      },
+      "vector_id": "fixture-not-evaluated"
+    },
+    {
+      "canonical_utf8": "{\"domain\":\"wow-core/finding-fingerprint/e0-1\",\"value\":{\"finding_code\":\"wow.api.missing\",\"identity_message_arguments\":[{\"identity_relevant\":true,\"kind\":\"identifier\",\"name\":\"api\",\"value\":\"C_Fixture.Missing\"}],\"primary_source_handle_id\":\"handle:sha256:a78c656122272558469d3b3bff87aeba8537211ee51c2bf7e0c9b24fa1502664\",\"root_cause_key\":\"root-cause:sha256:c6052b31017c3f8f53c64e17606953ed2d41cbec673a091f629d6c26acdd2b2c\",\"rule_id\":\"wow.api.exists\",\"rule_version\":\"0.0.0-e0\",\"subject_entity_key\":\"entity:api:C_Fixture.Missing\"}}",
+      "domain": "wow-core/finding-fingerprint/e0-1",
+      "sha256": "b5245c3cd8e4358c4764c85193c99018ece465179c12daedd80b95e9c4b9e284",
+      "typed_id": "finding-fingerprint:sha256:b5245c3cd8e4358c4764c85193c99018ece465179c12daedd80b95e9c4b9e284",
+      "value": {
+        "finding_code": "wow.api.missing",
+        "identity_message_arguments": [
+          {
+            "identity_relevant": true,
+            "kind": "identifier",
+            "name": "api",
+            "value": "C_Fixture.Missing"
+          }
+        ],
+        "primary_source_handle_id": "handle:sha256:a78c656122272558469d3b3bff87aeba8537211ee51c2bf7e0c9b24fa1502664",
+        "root_cause_key": "root-cause:sha256:c6052b31017c3f8f53c64e17606953ed2d41cbec673a091f629d6c26acdd2b2c",
+        "rule_id": "wow.api.exists",
+        "rule_version": "0.0.0-e0",
+        "subject_entity_key": "entity:api:C_Fixture.Missing"
+      },
+      "vector_id": "fixture-finding-fingerprint"
+    },
+    {
+      "canonical_utf8": "{\"domain\":\"wow-core/finding/e0-1\",\"value\":{\"context_id\":\"context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871\",\"finding_fingerprint\":\"finding-fingerprint:sha256:b5245c3cd8e4358c4764c85193c99018ece465179c12daedd80b95e9c4b9e284\"}}",
+      "domain": "wow-core/finding/e0-1",
+      "sha256": "e369020b3a5b76763c8e87667a66ff09a28514a4841602af2c8adce98f2d24b3",
+      "typed_id": "finding:sha256:e369020b3a5b76763c8e87667a66ff09a28514a4841602af2c8adce98f2d24b3",
+      "value": {
+        "context_id": "context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871",
+        "finding_fingerprint": "finding-fingerprint:sha256:b5245c3cd8e4358c4764c85193c99018ece465179c12daedd80b95e9c4b9e284"
+      },
+      "vector_id": "fixture-finding-id"
+    },
+    {
+      "canonical_utf8": "{\"domain\":\"wow-core/result/e0-1\",\"value\":{\"budget\":{\"limits\":{\"max_capability_summaries\":128,\"max_conflicts\":128,\"max_coverage_records\":256,\"max_evidence_records\":256,\"max_findings\":128,\"max_not_evaluated\":128,\"max_output_bytes\":524288,\"max_source_handles\":256,\"max_warnings\":128},\"truncation\":{\"status\":\"not_truncated\"},\"usage\":{\"capability_summaries\":5,\"conflicts\":0,\"coverage_records\":5,\"evidence_records\":0,\"findings\":0,\"not_evaluated\":0,\"output_bytes\":6549,\"source_handles\":0,\"warnings\":0}},\"canonicalization_version\":\"wow-core-json/e0-1\",\"capability_summaries\":[{\"capability_id\":\"emmy.api_reference_facts\",\"conflict_ids\":[],\"context_id\":\"context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871\",\"partition_refs\":[{\"coverage_id\":\"coverage:sha256:eeef19b04051de258d46c11d8f916d1cc36dbf73ead6a681a7274d4b39422a24\",\"partition_id\":\"partition:project.file:Addon%2FCore.lua\",\"status\":\"complete\"}],\"producer_id\":\"wow.service\",\"producer_version\":\"0.0.0-e0\",\"status\":\"complete\",\"truncation_refs\":[]},{\"capability_id\":\"emmy.generic_diagnostics\",\"conflict_ids\":[],\"context_id\":\"context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871\",\"partition_refs\":[{\"coverage_id\":\"coverage:sha256:1857bd63d348953af880ef5642c93813bf5168061ffbac2eee8dd045aa2417b0\",\"partition_id\":\"partition:project.file:Addon%2FCore.lua\",\"status\":\"complete\"}],\"producer_id\":\"wow.service\",\"producer_version\":\"0.0.0-e0\",\"status\":\"complete\",\"truncation_refs\":[]},{\"capability_id\":\"emmy.local_expression_facts\",\"conflict_ids\":[],\"context_id\":\"context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871\",\"partition_refs\":[{\"coverage_id\":\"coverage:sha256:bd315ae8e458d2658551327742002e6b11b88bfc326faa4f26c8286cfaf43f5e\",\"partition_id\":\"partition:project.file:Addon%2FCore.lua\",\"status\":\"complete\"}],\"producer_id\":\"wow.service\",\"producer_version\":\"0.0.0-e0\",\"status\":\"complete\",\"truncation_refs\":[]},{\"capability_id\":\"reference.api.exact_lookup\",\"conflict_ids\":[],\"context_id\":\"context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871\",\"partition_refs\":[{\"coverage_id\":\"coverage:sha256:52a37d43ed3d2d4fad757ddb79e6da00ce76a5015cea8a2cded999dc3c7f1a99\",\"partition_id\":\"partition:apidoc.fixture:e0\",\"status\":\"complete\"}],\"producer_id\":\"wow.service\",\"producer_version\":\"0.0.0-e0\",\"status\":\"complete\",\"truncation_refs\":[]},{\"capability_id\":\"restriction.facets.readable\",\"conflict_ids\":[],\"context_id\":\"context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871\",\"partition_refs\":[{\"coverage_id\":\"coverage:sha256:f0b00fc72bcc81fa4b3a2e2134d3e1c3259dfa8ef4ae6f7e81027c1df344a3cc\",\"partition_id\":\"partition:restriction.fixture:e0\",\"status\":\"complete\"}],\"producer_id\":\"wow.service\",\"producer_version\":\"0.0.0-e0\",\"status\":\"complete\",\"truncation_refs\":[]}],\"conflicts\":[],\"context\":{\"context_id\":\"context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871\",\"external_generations\":[],\"producer_versions\":[{\"producer_id\":\"wow.core\",\"version\":\"0.0.0-e0\"},{\"producer_id\":\"wow.emmy\",\"version\":\"0.0.0-e0\"},{\"producer_id\":\"wow.project\",\"version\":\"0.0.0-e0\"},{\"producer_id\":\"wow.reference\",\"version\":\"0.0.0-e0\"},{\"producer_id\":\"wow.rules\",\"version\":\"0.0.0-e0\"},{\"producer_id\":\"wow.service\",\"version\":\"0.0.0-e0\"}],\"profile\":{\"client_build\":69497,\"client_version\":\"12.1.0\",\"fixture_scope\":\"e0 vertical slice only\",\"flavor_id\":\"retail\",\"interface\":120100,\"profile_id\":\"profile:fixture:e0-retail-120100\",\"profile_kind\":\"fixture\",\"schema_versions\":[{\"schema_id\":\"schema:wow:fixture-profile\",\"version\":\"0.1.0\"}],\"source_kind\":\"synthetic_fixture\",\"source_logical_digest\":\"sha256:0101010101010101010101010101010101010101010101010101010101010101\",\"source_revision\":\"fixture:e0-rev1\"},\"project_generation\":\"generation:project:sha256:e606bd7594eb932275741dbe51afbd46ecdf59388f370b71eaa1422dd0259463\",\"reference_generation\":\"generation:reference:sha256:8e56faa8b5c7efae0e0c8468c48101ed8d2cfef206b40e6e96106993096d2786\",\"schema_versions\":[{\"schema_id\":\"schema:wow:check-result\",\"version\":\"0.1.0\"},{\"schema_id\":\"schema:wow:core-contract\",\"version\":\"0.1.0\"}]},\"coverage_records\":[{\"capability_id\":\"emmy.api_reference_facts\",\"conflict_ids\":[],\"context_id\":\"context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871\",\"coverage_id\":\"coverage:sha256:eeef19b04051de258d46c11d8f916d1cc36dbf73ead6a681a7274d4b39422a24\",\"missing_input_ids\":[],\"partition_id\":\"partition:project.file:Addon%2FCore.lua\",\"producer_id\":\"wow.emmy\",\"producer_version\":\"0.0.0-e0\",\"status\":\"complete\",\"truncation_refs\":[]},{\"capability_id\":\"emmy.generic_diagnostics\",\"conflict_ids\":[],\"context_id\":\"context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871\",\"coverage_id\":\"coverage:sha256:1857bd63d348953af880ef5642c93813bf5168061ffbac2eee8dd045aa2417b0\",\"missing_input_ids\":[],\"partition_id\":\"partition:project.file:Addon%2FCore.lua\",\"producer_id\":\"wow.emmy\",\"producer_version\":\"0.0.0-e0\",\"status\":\"complete\",\"truncation_refs\":[]},{\"capability_id\":\"emmy.local_expression_facts\",\"conflict_ids\":[],\"context_id\":\"context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871\",\"coverage_id\":\"coverage:sha256:bd315ae8e458d2658551327742002e6b11b88bfc326faa4f26c8286cfaf43f5e\",\"missing_input_ids\":[],\"partition_id\":\"partition:project.file:Addon%2FCore.lua\",\"producer_id\":\"wow.emmy\",\"producer_version\":\"0.0.0-e0\",\"status\":\"complete\",\"truncation_refs\":[]},{\"capability_id\":\"reference.api.exact_lookup\",\"conflict_ids\":[],\"context_id\":\"context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871\",\"coverage_id\":\"coverage:sha256:52a37d43ed3d2d4fad757ddb79e6da00ce76a5015cea8a2cded999dc3c7f1a99\",\"missing_input_ids\":[],\"partition_id\":\"partition:apidoc.fixture:e0\",\"producer_id\":\"wow.reference\",\"producer_version\":\"0.0.0-e0\",\"status\":\"complete\",\"truncation_refs\":[]},{\"capability_id\":\"restriction.facets.readable\",\"conflict_ids\":[],\"context_id\":\"context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871\",\"coverage_id\":\"coverage:sha256:f0b00fc72bcc81fa4b3a2e2134d3e1c3259dfa8ef4ae6f7e81027c1df344a3cc\",\"missing_input_ids\":[],\"partition_id\":\"partition:restriction.fixture:e0\",\"producer_id\":\"wow.reference\",\"producer_version\":\"0.0.0-e0\",\"status\":\"complete\",\"truncation_refs\":[]}],\"evidence_records\":[],\"findings\":[],\"not_evaluated\":[],\"operation_id\":\"wow.check\",\"schema\":{\"schema_id\":\"schema:wow:check-result\",\"version\":\"0.1.0\"},\"source_handles\":[],\"status\":\"complete\",\"warnings\":[]}}",
+      "domain": "wow-core/result/e0-1",
+      "sha256": "1f8bcce01cbb2c7f552542f7a4a2744350847bde62729aa6014f28db190b99fd",
+      "value": {
+        "budget": {
+          "limits": {
+            "max_capability_summaries": 128,
+            "max_conflicts": 128,
+            "max_coverage_records": 256,
+            "max_evidence_records": 256,
+            "max_findings": 128,
+            "max_not_evaluated": 128,
+            "max_output_bytes": 524288,
+            "max_source_handles": 256,
+            "max_warnings": 128
+          },
+          "truncation": {
+            "status": "not_truncated"
+          },
+          "usage": {
+            "capability_summaries": 5,
+            "conflicts": 0,
+            "coverage_records": 5,
+            "evidence_records": 0,
+            "findings": 0,
+            "not_evaluated": 0,
+            "output_bytes": 6549,
+            "source_handles": 0,
+            "warnings": 0
+          }
+        },
+        "canonicalization_version": "wow-core-json/e0-1",
+        "capability_summaries": [
+          {
+            "capability_id": "emmy.api_reference_facts",
+            "conflict_ids": [],
+            "context_id": "context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871",
+            "partition_refs": [
+              {
+                "coverage_id": "coverage:sha256:eeef19b04051de258d46c11d8f916d1cc36dbf73ead6a681a7274d4b39422a24",
+                "partition_id": "partition:project.file:Addon%2FCore.lua",
+                "status": "complete"
+              }
+            ],
+            "producer_id": "wow.service",
+            "producer_version": "0.0.0-e0",
+            "status": "complete",
+            "truncation_refs": []
+          },
+          {
+            "capability_id": "emmy.generic_diagnostics",
+            "conflict_ids": [],
+            "context_id": "context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871",
+            "partition_refs": [
+              {
+                "coverage_id": "coverage:sha256:1857bd63d348953af880ef5642c93813bf5168061ffbac2eee8dd045aa2417b0",
+                "partition_id": "partition:project.file:Addon%2FCore.lua",
+                "status": "complete"
+              }
+            ],
+            "producer_id": "wow.service",
+            "producer_version": "0.0.0-e0",
+            "status": "complete",
+            "truncation_refs": []
+          },
+          {
+            "capability_id": "emmy.local_expression_facts",
+            "conflict_ids": [],
+            "context_id": "context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871",
+            "partition_refs": [
+              {
+                "coverage_id": "coverage:sha256:bd315ae8e458d2658551327742002e6b11b88bfc326faa4f26c8286cfaf43f5e",
+                "partition_id": "partition:project.file:Addon%2FCore.lua",
+                "status": "complete"
+              }
+            ],
+            "producer_id": "wow.service",
+            "producer_version": "0.0.0-e0",
+            "status": "complete",
+            "truncation_refs": []
+          },
+          {
+            "capability_id": "reference.api.exact_lookup",
+            "conflict_ids": [],
+            "context_id": "context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871",
+            "partition_refs": [
+              {
+                "coverage_id": "coverage:sha256:52a37d43ed3d2d4fad757ddb79e6da00ce76a5015cea8a2cded999dc3c7f1a99",
+                "partition_id": "partition:apidoc.fixture:e0",
+                "status": "complete"
+              }
+            ],
+            "producer_id": "wow.service",
+            "producer_version": "0.0.0-e0",
+            "status": "complete",
+            "truncation_refs": []
+          },
+          {
+            "capability_id": "restriction.facets.readable",
+            "conflict_ids": [],
+            "context_id": "context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871",
+            "partition_refs": [
+              {
+                "coverage_id": "coverage:sha256:f0b00fc72bcc81fa4b3a2e2134d3e1c3259dfa8ef4ae6f7e81027c1df344a3cc",
+                "partition_id": "partition:restriction.fixture:e0",
+                "status": "complete"
+              }
+            ],
+            "producer_id": "wow.service",
+            "producer_version": "0.0.0-e0",
+            "status": "complete",
+            "truncation_refs": []
+          }
+        ],
+        "conflicts": [],
+        "context": {
+          "context_id": "context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871",
+          "external_generations": [],
+          "producer_versions": [
+            {
+              "producer_id": "wow.core",
+              "version": "0.0.0-e0"
+            },
+            {
+              "producer_id": "wow.emmy",
+              "version": "0.0.0-e0"
+            },
+            {
+              "producer_id": "wow.project",
+              "version": "0.0.0-e0"
+            },
+            {
+              "producer_id": "wow.reference",
+              "version": "0.0.0-e0"
+            },
+            {
+              "producer_id": "wow.rules",
+              "version": "0.0.0-e0"
+            },
+            {
+              "producer_id": "wow.service",
+              "version": "0.0.0-e0"
+            }
+          ],
+          "profile": {
+            "client_build": 69497,
+            "client_version": "12.1.0",
+            "fixture_scope": "e0 vertical slice only",
+            "flavor_id": "retail",
+            "interface": 120100,
+            "profile_id": "profile:fixture:e0-retail-120100",
+            "profile_kind": "fixture",
+            "schema_versions": [
+              {
+                "schema_id": "schema:wow:fixture-profile",
+                "version": "0.1.0"
+              }
+            ],
+            "source_kind": "synthetic_fixture",
+            "source_logical_digest": "sha256:0101010101010101010101010101010101010101010101010101010101010101",
+            "source_revision": "fixture:e0-rev1"
+          },
+          "project_generation": "generation:project:sha256:e606bd7594eb932275741dbe51afbd46ecdf59388f370b71eaa1422dd0259463",
+          "reference_generation": "generation:reference:sha256:8e56faa8b5c7efae0e0c8468c48101ed8d2cfef206b40e6e96106993096d2786",
+          "schema_versions": [
+            {
+              "schema_id": "schema:wow:check-result",
+              "version": "0.1.0"
+            },
+            {
+              "schema_id": "schema:wow:core-contract",
+              "version": "0.1.0"
+            }
+          ]
+        },
+        "coverage_records": [
+          {
+            "capability_id": "emmy.api_reference_facts",
+            "conflict_ids": [],
+            "context_id": "context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871",
+            "coverage_id": "coverage:sha256:eeef19b04051de258d46c11d8f916d1cc36dbf73ead6a681a7274d4b39422a24",
+            "missing_input_ids": [],
+            "partition_id": "partition:project.file:Addon%2FCore.lua",
+            "producer_id": "wow.emmy",
+            "producer_version": "0.0.0-e0",
+            "status": "complete",
+            "truncation_refs": []
+          },
+          {
+            "capability_id": "emmy.generic_diagnostics",
+            "conflict_ids": [],
+            "context_id": "context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871",
+            "coverage_id": "coverage:sha256:1857bd63d348953af880ef5642c93813bf5168061ffbac2eee8dd045aa2417b0",
+            "missing_input_ids": [],
+            "partition_id": "partition:project.file:Addon%2FCore.lua",
+            "producer_id": "wow.emmy",
+            "producer_version": "0.0.0-e0",
+            "status": "complete",
+            "truncation_refs": []
+          },
+          {
+            "capability_id": "emmy.local_expression_facts",
+            "conflict_ids": [],
+            "context_id": "context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871",
+            "coverage_id": "coverage:sha256:bd315ae8e458d2658551327742002e6b11b88bfc326faa4f26c8286cfaf43f5e",
+            "missing_input_ids": [],
+            "partition_id": "partition:project.file:Addon%2FCore.lua",
+            "producer_id": "wow.emmy",
+            "producer_version": "0.0.0-e0",
+            "status": "complete",
+            "truncation_refs": []
+          },
+          {
+            "capability_id": "reference.api.exact_lookup",
+            "conflict_ids": [],
+            "context_id": "context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871",
+            "coverage_id": "coverage:sha256:52a37d43ed3d2d4fad757ddb79e6da00ce76a5015cea8a2cded999dc3c7f1a99",
+            "missing_input_ids": [],
+            "partition_id": "partition:apidoc.fixture:e0",
+            "producer_id": "wow.reference",
+            "producer_version": "0.0.0-e0",
+            "status": "complete",
+            "truncation_refs": []
+          },
+          {
+            "capability_id": "restriction.facets.readable",
+            "conflict_ids": [],
+            "context_id": "context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871",
+            "coverage_id": "coverage:sha256:f0b00fc72bcc81fa4b3a2e2134d3e1c3259dfa8ef4ae6f7e81027c1df344a3cc",
+            "missing_input_ids": [],
+            "partition_id": "partition:restriction.fixture:e0",
+            "producer_id": "wow.reference",
+            "producer_version": "0.0.0-e0",
+            "status": "complete",
+            "truncation_refs": []
+          }
+        ],
+        "evidence_records": [],
+        "findings": [],
+        "not_evaluated": [],
+        "operation_id": "wow.check",
+        "schema": {
+          "schema_id": "schema:wow:check-result",
+          "version": "0.1.0"
+        },
+        "source_handles": [],
+        "status": "complete",
+        "warnings": []
+      },
+      "vector_id": "e0-clean-result-digest"
+    }
+  ]
+}

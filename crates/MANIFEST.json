@@ -30,11 +30,41 @@
         "generation-context",
         "source-handles",
         "evidence",
-        "coverage",
+        "conflicts",
+        "coverage-records",
+        "capability-summaries",
+        "not-evaluated",
         "findings",
+        "warnings",
+        "budgets",
+        "canonicalization",
         "result-envelopes"
       ],
-      "active_scope": "identity, evidence, coverage, findings, deterministic result envelope"
+      "active_scope": "identity, evidence/conflict, exact coverage plus summaries/evaluation, findings/warnings, budgets, canonicalization, deterministic result envelopes",
+      "work_package": "E0-A",
+      "contract_detail": "implementation-ready",
+      "implementation_state": "not-started",
+      "contract_manifest": "crates/wow-core/CONTRACT.json",
+      "contract_files": [
+        "crates/wow-core/AGENTS.md",
+        "crates/wow-core/DECISIONS.md",
+        "crates/wow-core/DATA_MODEL.md",
+        "crates/wow-core/OPERATIONS.md",
+        "crates/wow-core/CANONICALIZATION.md",
+        "crates/wow-core/ERROR_MODEL.md",
+        "crates/wow-core/TEST_MATRIX.md",
+        "crates/wow-core/IMPLEMENTATION_PLAN.md",
+        "crates/wow-core/CONSUMER_GUIDE.md"
+      ],
+      "canonicalization_version": "wow-core-json/e0-1",
+      "normative_examples": [
+        "crates/wow-core/examples/e0-clean-result.json",
+        "crates/wow-core/examples/e0-findings-result.json",
+        "crates/wow-core/examples/e0-not-evaluated-result.json",
+        "crates/wow-core/examples/e0-conflict-not-evaluated-result.json",
+        "crates/wow-core/examples/e0-generation-mismatch-error.json",
+        "crates/wow-core/examples/HASH_VECTORS.json"
+      ]
     },
     {
       "name": "wow-store",

@@ -1,0 +1,271 @@
+{
+  "budget": {
+    "limits": {
+      "max_capability_summaries": 128,
+      "max_conflicts": 128,
+      "max_coverage_records": 256,
+      "max_evidence_records": 256,
+      "max_findings": 128,
+      "max_not_evaluated": 128,
+      "max_output_bytes": 524288,
+      "max_source_handles": 256,
+      "max_warnings": 128
+    },
+    "truncation": {
+      "status": "not_truncated"
+    },
+    "usage": {
+      "capability_summaries": 5,
+      "conflicts": 0,
+      "coverage_records": 5,
+      "evidence_records": 0,
+      "findings": 0,
+      "not_evaluated": 1,
+      "output_bytes": 7265,
+      "source_handles": 0,
+      "warnings": 0
+    }
+  },
+  "canonical_digest": "sha256:ec942d14210f26e01ffb4ade5fc7208df935445c37d775cb85ab76f4bb7d471c",
+  "canonicalization_version": "wow-core-json/e0-1",
+  "capability_summaries": [
+    {
+      "capability_id": "emmy.api_reference_facts",
+      "conflict_ids": [],
+      "context_id": "context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871",
+      "partition_refs": [
+        {
+          "coverage_id": "coverage:sha256:eeef19b04051de258d46c11d8f916d1cc36dbf73ead6a681a7274d4b39422a24",
+          "partition_id": "partition:project.file:Addon%2FCore.lua",
+          "status": "complete"
+        }
+      ],
+      "producer_id": "wow.service",
+      "producer_version": "0.0.0-e0",
+      "status": "complete",
+      "truncation_refs": []
+    },
+    {
+      "capability_id": "emmy.generic_diagnostics",
+      "conflict_ids": [],
+      "context_id": "context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871",
+      "partition_refs": [
+        {
+          "coverage_id": "coverage:sha256:1857bd63d348953af880ef5642c93813bf5168061ffbac2eee8dd045aa2417b0",
+          "partition_id": "partition:project.file:Addon%2FCore.lua",
+          "status": "complete"
+        }
+      ],
+      "producer_id": "wow.service",
+      "producer_version": "0.0.0-e0",
+      "status": "complete",
+      "truncation_refs": []
+    },
+    {
+      "capability_id": "emmy.local_expression_facts",
+      "conflict_ids": [],
+      "context_id": "context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871",
+      "partition_refs": [
+        {
+          "coverage_id": "coverage:sha256:bd315ae8e458d2658551327742002e6b11b88bfc326faa4f26c8286cfaf43f5e",
+          "partition_id": "partition:project.file:Addon%2FCore.lua",
+          "status": "complete"
+        }
+      ],
+      "producer_id": "wow.service",
+      "producer_version": "0.0.0-e0",
+      "status": "complete",
+      "truncation_refs": []
+    },
+    {
+      "capability_id": "reference.api.exact_lookup",
+      "conflict_ids": [],
+      "context_id": "context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871",
+      "partition_refs": [
+        {
+          "coverage_id": "coverage:sha256:52a37d43ed3d2d4fad757ddb79e6da00ce76a5015cea8a2cded999dc3c7f1a99",
+          "partition_id": "partition:apidoc.fixture:e0",
+          "status": "complete"
+        }
+      ],
+      "producer_id": "wow.service",
+      "producer_version": "0.0.0-e0",
+      "status": "complete",
+      "truncation_refs": []
+    },
+    {
+      "capability_id": "restriction.facets.readable",
+      "conflict_ids": [],
+      "context_id": "context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871",
+      "partition_refs": [
+        {
+          "coverage_id": "coverage:sha256:68050b2b852b3a8552f6b2332e6ca5d268f289ae27be2ed06a904a797c0ed275",
+          "partition_id": "partition:restriction.fixture:e0",
+          "status": "unknown"
+        }
+      ],
+      "producer_id": "wow.service",
+      "producer_version": "0.0.0-e0",
+      "status": "unknown",
+      "truncation_refs": []
+    }
+  ],
+  "conflicts": [],
+  "context": {
+    "context_id": "context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871",
+    "external_generations": [],
+    "producer_versions": [
+      {
+        "producer_id": "wow.core",
+        "version": "0.0.0-e0"
+      },
+      {
+        "producer_id": "wow.emmy",
+        "version": "0.0.0-e0"
+      },
+      {
+        "producer_id": "wow.project",
+        "version": "0.0.0-e0"
+      },
+      {
+        "producer_id": "wow.reference",
+        "version": "0.0.0-e0"
+      },
+      {
+        "producer_id": "wow.rules",
+        "version": "0.0.0-e0"
+      },
+      {
+        "producer_id": "wow.service",
+        "version": "0.0.0-e0"
+      }
+    ],
+    "profile": {
+      "client_build": 69497,
+      "client_version": "12.1.0",
+      "fixture_scope": "e0 vertical slice only",
+      "flavor_id": "retail",
+      "interface": 120100,
+      "profile_id": "profile:fixture:e0-retail-120100",
+      "profile_kind": "fixture",
+      "schema_versions": [
+        {
+          "schema_id": "schema:wow:fixture-profile",
+          "version": "0.1.0"
+        }
+      ],
+      "source_kind": "synthetic_fixture",
+      "source_logical_digest": "sha256:0101010101010101010101010101010101010101010101010101010101010101",
+      "source_revision": "fixture:e0-rev1"
+    },
+    "project_generation": "generation:project:sha256:e606bd7594eb932275741dbe51afbd46ecdf59388f370b71eaa1422dd0259463",
+    "reference_generation": "generation:reference:sha256:8e56faa8b5c7efae0e0c8468c48101ed8d2cfef206b40e6e96106993096d2786",
+    "schema_versions": [
+      {
+        "schema_id": "schema:wow:check-result",
+        "version": "0.1.0"
+      },
+      {
+        "schema_id": "schema:wow:core-contract",
+        "version": "0.1.0"
+      }
+    ]
+  },
+  "coverage_records": [
+    {
+      "capability_id": "emmy.api_reference_facts",
+      "conflict_ids": [],
+      "context_id": "context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871",
+      "coverage_id": "coverage:sha256:eeef19b04051de258d46c11d8f916d1cc36dbf73ead6a681a7274d4b39422a24",
+      "missing_input_ids": [],
+      "partition_id": "partition:project.file:Addon%2FCore.lua",
+      "producer_id": "wow.emmy",
+      "producer_version": "0.0.0-e0",
+      "status": "complete",
+      "truncation_refs": []
+    },
+    {
+      "capability_id": "emmy.generic_diagnostics",
+      "conflict_ids": [],
+      "context_id": "context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871",
+      "coverage_id": "coverage:sha256:1857bd63d348953af880ef5642c93813bf5168061ffbac2eee8dd045aa2417b0",
+      "missing_input_ids": [],
+      "partition_id": "partition:project.file:Addon%2FCore.lua",
+      "producer_id": "wow.emmy",
+      "producer_version": "0.0.0-e0",
+      "status": "complete",
+      "truncation_refs": []
+    },
+    {
+      "capability_id": "emmy.local_expression_facts",
+      "conflict_ids": [],
+      "context_id": "context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871",
+      "coverage_id": "coverage:sha256:bd315ae8e458d2658551327742002e6b11b88bfc326faa4f26c8286cfaf43f5e",
+      "missing_input_ids": [],
+      "partition_id": "partition:project.file:Addon%2FCore.lua",
+      "producer_id": "wow.emmy",
+      "producer_version": "0.0.0-e0",
+      "status": "complete",
+      "truncation_refs": []
+    },
+    {
+      "capability_id": "reference.api.exact_lookup",
+      "conflict_ids": [],
+      "context_id": "context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871",
+      "coverage_id": "coverage:sha256:52a37d43ed3d2d4fad757ddb79e6da00ce76a5015cea8a2cded999dc3c7f1a99",
+      "missing_input_ids": [],
+      "partition_id": "partition:apidoc.fixture:e0",
+      "producer_id": "wow.reference",
+      "producer_version": "0.0.0-e0",
+      "status": "complete",
+      "truncation_refs": []
+    },
+    {
+      "capability_id": "restriction.facets.readable",
+      "conflict_ids": [],
+      "context_id": "context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871",
+      "coverage_id": "coverage:sha256:68050b2b852b3a8552f6b2332e6ca5d268f289ae27be2ed06a904a797c0ed275",
+      "missing_input_ids": [
+        "input:restriction.fixture:facet-registry"
+      ],
+      "partition_id": "partition:restriction.fixture:e0",
+      "producer_id": "wow.reference",
+      "producer_version": "0.0.0-e0",
+      "status": "unknown",
+      "truncation_refs": []
+    }
+  ],
+  "evidence_records": [],
+  "findings": [],
+  "not_evaluated": [
+    {
+      "blocking_capability_ids": [
+        "restriction.facets.readable"
+      ],
+      "blocking_partitions": [
+        {
+          "capability_id": "restriction.facets.readable",
+          "coverage_id": "coverage:sha256:68050b2b852b3a8552f6b2332e6ca5d268f289ae27be2ed06a904a797c0ed275",
+          "partition_id": "partition:restriction.fixture:e0",
+          "status": "unknown"
+        }
+      ],
+      "conflict_ids": [],
+      "context_id": "context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871",
+      "not_evaluated_id": "not-evaluated:sha256:00cc2896aeb833eb70758ee79ebfbf18ec959bef7f9dc8babbfdeb74dafa95ed",
+      "producer_id": "wow.service",
+      "producer_version": "0.0.0-e0",
+      "reason_code": "capability_unavailable",
+      "subject_id": "wow.secret.local_operation",
+      "subject_kind": "rule"
+    }
+  ],
+  "operation_id": "wow.check",
+  "schema": {
+    "schema_id": "schema:wow:check-result",
+    "version": "0.1.0"
+  },
+  "source_handles": [],
+  "status": "partial",
+  "warnings": []
+}

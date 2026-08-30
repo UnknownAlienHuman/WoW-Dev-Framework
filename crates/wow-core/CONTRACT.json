@@ -1,0 +1,1190 @@
+{
+  "schema_version": 1,
+  "crate": "wow-core",
+  "work_package": "E0-A",
+  "state": "implementation-ready-contract-no-rust-code",
+  "current_milestone": "E0",
+  "canonicalization_version": "wow-core-json/e0-1",
+  "digest_algorithm": "sha256",
+  "normative_documents": [
+    "README.md",
+    "DECISIONS.md",
+    "DATA_MODEL.md",
+    "OPERATIONS.md",
+    "CANONICALIZATION.md",
+    "ERROR_MODEL.md",
+    "TEST_MATRIX.md",
+    "CONSUMER_GUIDE.md",
+    "IMPLEMENTATION_PLAN.md"
+  ],
+  "repository_documents": [
+    "../../docs/PROVENANCE_AND_COVERAGE.md",
+    "../../docs/GLOSSARY.md",
+    "../../docs/ARCHITECTURE.md",
+    "../../docs/SECURITY_MODEL.md",
+    "../../docs/TEST_STRATEGY.md",
+    "../DEPENDENCY_GRAPH.md",
+    "../WORKSTREAMS.md"
+  ],
+  "external_routes": [
+    "https://github.com/UnknownAlienHuman/wow-addon-engineering-kb/blob/main/AGENTS.md",
+    "https://github.com/UnknownAlienHuman/wow-addon-engineering-kb/blob/main/INDEX_MINI.md"
+  ],
+  "decisions": [
+    "CORE-001",
+    "CORE-002",
+    "CORE-003",
+    "CORE-004",
+    "CORE-005",
+    "CORE-006",
+    "CORE-007",
+    "CORE-008",
+    "CORE-009",
+    "CORE-010",
+    "CORE-011",
+    "CORE-012",
+    "CORE-013",
+    "CORE-014",
+    "CORE-015",
+    "CORE-016",
+    "CORE-017",
+    "CORE-018",
+    "CORE-019",
+    "CORE-020",
+    "CORE-021",
+    "CORE-022",
+    "CORE-023"
+  ],
+  "identifier_families": [
+    {
+      "id": "ProfileId",
+      "canonical_form": "profile:<namespace>:<slug>",
+      "kind": "parsed",
+      "doc": "DATA_MODEL.md#2-identifier-families"
+    },
+    {
+      "id": "ReferenceGenerationId",
+      "canonical_form": "generation:reference:sha256:<64-lower-hex>",
+      "kind": "derived",
+      "hash_domain": "wow-core/reference-generation/e0-1",
+      "doc": "DATA_MODEL.md#2-identifier-families"
+    },
+    {
+      "id": "ProjectGenerationId",
+      "canonical_form": "generation:project:sha256:<64-lower-hex>",
+      "kind": "derived",
+      "hash_domain": "wow-core/project-generation/e0-1",
+      "doc": "DATA_MODEL.md#2-identifier-families"
+    },
+    {
+      "id": "ExternalGenerationId",
+      "canonical_form": "generation:external:<provider>:sha256:<64-lower-hex>",
+      "kind": "derived",
+      "hash_domain": "wow-core/external-generation/e0-1",
+      "doc": "DATA_MODEL.md#2-identifier-families"
+    },
+    {
+      "id": "ContentDigest",
+      "canonical_form": "sha256:<64-lower-hex>",
+      "kind": "content_digest",
+      "doc": "DATA_MODEL.md#3-digest-values-and-purposes"
+    },
+    {
+      "id": "StableHandleId",
+      "canonical_form": "handle:sha256:<64-lower-hex>",
+      "kind": "derived",
+      "hash_domain": "wow-core/source-handle/e0-1",
+      "doc": "DATA_MODEL.md#2-identifier-families"
+    },
+    {
+      "id": "EvidenceId",
+      "canonical_form": "evidence:sha256:<64-lower-hex>",
+      "kind": "derived",
+      "hash_domain": "wow-core/evidence/e0-1",
+      "doc": "DATA_MODEL.md#2-identifier-families"
+    },
+    {
+      "id": "ConflictId",
+      "canonical_form": "conflict:sha256:<64-lower-hex>",
+      "kind": "derived",
+      "hash_domain": "wow-core/conflict/e0-1",
+      "doc": "DATA_MODEL.md#2-identifier-families"
+    },
+    {
+      "id": "CoverageId",
+      "canonical_form": "coverage:sha256:<64-lower-hex>",
+      "kind": "derived",
+      "hash_domain": "wow-core/coverage/e0-1",
+      "doc": "DATA_MODEL.md#2-identifier-families"
+    },
+    {
+      "id": "FindingFingerprint",
+      "canonical_form": "finding-fingerprint:sha256:<64-lower-hex>",
+      "kind": "derived",
+      "hash_domain": "wow-core/finding-fingerprint/e0-1",
+      "doc": "DATA_MODEL.md#2-identifier-families"
+    },
+    {
+      "id": "FindingId",
+      "canonical_form": "finding:sha256:<64-lower-hex>",
+      "kind": "derived",
+      "hash_domain": "wow-core/finding/e0-1",
+      "doc": "DATA_MODEL.md#2-identifier-families"
+    },
+    {
+      "id": "GenerationContextId",
+      "canonical_form": "context:sha256:<64-lower-hex>",
+      "kind": "derived",
+      "hash_domain": "wow-core/generation-context/e0-1",
+      "doc": "DATA_MODEL.md#2-identifier-families"
+    },
+    {
+      "id": "RootCauseKey",
+      "canonical_form": "root-cause:sha256:<64-lower-hex>",
+      "kind": "derived",
+      "hash_domain": "wow-core/root-cause/e0-1",
+      "doc": "DATA_MODEL.md#2-identifier-families"
+    },
+    {
+      "id": "NotEvaluatedId",
+      "canonical_form": "not-evaluated:sha256:<64-lower-hex>",
+      "kind": "derived",
+      "hash_domain": "wow-core/not-evaluated/e0-1",
+      "doc": "DATA_MODEL.md#2-identifier-families"
+    },
+    {
+      "id": "WarningId",
+      "canonical_form": "warning:sha256:<64-lower-hex>",
+      "kind": "derived",
+      "hash_domain": "wow-core/warning/e0-1",
+      "doc": "DATA_MODEL.md#2-identifier-families"
+    },
+    {
+      "id": "RuleId",
+      "canonical_form": "dotted_id",
+      "kind": "parsed",
+      "doc": "DATA_MODEL.md#2-identifier-families"
+    },
+    {
+      "id": "ProducerId",
+      "canonical_form": "dotted_id",
+      "kind": "parsed",
+      "doc": "DATA_MODEL.md#2-identifier-families"
+    },
+    {
+      "id": "CapabilityId",
+      "canonical_form": "dotted_id",
+      "kind": "parsed",
+      "doc": "DATA_MODEL.md#2-identifier-families"
+    },
+    {
+      "id": "OperationId",
+      "canonical_form": "dotted_id",
+      "kind": "parsed",
+      "doc": "DATA_MODEL.md#2-identifier-families"
+    },
+    {
+      "id": "MessageCode",
+      "canonical_form": "dotted_id",
+      "kind": "parsed",
+      "doc": "DATA_MODEL.md#2-identifier-families"
+    },
+    {
+      "id": "SchemaId",
+      "canonical_form": "schema:<namespace>:<slug>",
+      "kind": "parsed",
+      "doc": "DATA_MODEL.md#2-identifier-families"
+    },
+    {
+      "id": "ToolVersion",
+      "canonical_form": "semantic-version",
+      "kind": "parsed",
+      "doc": "DATA_MODEL.md#2-identifier-families"
+    },
+    {
+      "id": "EntityKey",
+      "canonical_form": "entity:<kind>:<percent-encoded-key>",
+      "kind": "structured_exact",
+      "doc": "DATA_MODEL.md#2-identifier-families"
+    },
+    {
+      "id": "CoveragePartitionId",
+      "canonical_form": "partition:<scope>[:<percent-encoded-key>]",
+      "kind": "structured_exact",
+      "doc": "DATA_MODEL.md#2-identifier-families"
+    }
+  ],
+  "enum_families": [
+    {
+      "id": "ProfileKind",
+      "values": [
+        "fixture",
+        "release"
+      ],
+      "doc": "DATA_MODEL.md#4-profile-identity"
+    },
+    {
+      "id": "SourceKind",
+      "values": [
+        "synthetic_fixture",
+        "blizzard_snapshot"
+      ],
+      "doc": "DATA_MODEL.md#4-profile-identity"
+    },
+    {
+      "id": "SourceOriginKind",
+      "values": [
+        "repository",
+        "reference_pack",
+        "generated_artifact",
+        "fixture"
+      ],
+      "doc": "DATA_MODEL.md#6-source-handle"
+    },
+    {
+      "id": "SourceSpanKind",
+      "values": [
+        "unknown",
+        "whole_file",
+        "byte_range"
+      ],
+      "doc": "DATA_MODEL.md#6-source-handle"
+    },
+    {
+      "id": "ProvenanceClass",
+      "values": [
+        "platform_source",
+        "project_source",
+        "runtime_probe",
+        "curated_correction",
+        "differential_oracle",
+        "external_implementation",
+        "semantic_candidate",
+        "historical_record",
+        "model_inference"
+      ],
+      "doc": "DATA_MODEL.md#7-evidence-and-conflicts"
+    },
+    {
+      "id": "EvidenceLevel",
+      "values": [
+        "proven",
+        "derived",
+        "possible",
+        "candidate"
+      ],
+      "doc": "DATA_MODEL.md#7-evidence-and-conflicts"
+    },
+    {
+      "id": "ClaimScope",
+      "values": [
+        "source_observation",
+        "platform_contract",
+        "project_fact",
+        "runtime_scenario",
+        "historical_relation",
+        "candidate_relation"
+      ],
+      "doc": "DATA_MODEL.md#7-evidence-and-conflicts"
+    },
+    {
+      "id": "CoverageStatus",
+      "values": [
+        "complete",
+        "partial",
+        "unknown",
+        "failed",
+        "not_applicable"
+      ],
+      "doc": "DATA_MODEL.md#8-coverage-capability-summaries-and-evaluation"
+    },
+    {
+      "id": "EvaluationDisposition",
+      "values": [
+        "not_evaluated"
+      ],
+      "doc": "DATA_MODEL.md#8-coverage-capability-summaries-and-evaluation"
+    },
+    {
+      "id": "NegativeAuthorityOutcome",
+      "values": [
+        "authoritative_absent",
+        "not_authoritative",
+        "not_applicable"
+      ],
+      "doc": "DATA_MODEL.md#9-negative-authority-decision"
+    },
+    {
+      "id": "NegativeAuthorityReason",
+      "values": [
+        "profile_unavailable",
+        "reference_generation_unavailable",
+        "generation_mismatch",
+        "partition_partial",
+        "partition_unknown",
+        "partition_failed",
+        "unresolved_conflict",
+        "capability_not_evaluated",
+        "candidate_only_evidence",
+        "scope_unknown",
+        "result_truncated"
+      ],
+      "doc": "DATA_MODEL.md#9-negative-authority-decision"
+    },
+    {
+      "id": "Severity",
+      "values": [
+        "error",
+        "warning",
+        "information",
+        "hint"
+      ],
+      "doc": "DATA_MODEL.md#10-structured-finding"
+    },
+    {
+      "id": "RolloutPolicy",
+      "values": [
+        "shadow",
+        "advisory",
+        "blocking"
+      ],
+      "doc": "DATA_MODEL.md#10-structured-finding"
+    },
+    {
+      "id": "RemediationClass",
+      "values": [
+        "exact_edit",
+        "validated_recipe",
+        "plan_only",
+        "candidate_only"
+      ],
+      "doc": "DATA_MODEL.md#10-structured-finding"
+    },
+    {
+      "id": "TruncationStatus",
+      "values": [
+        "not_truncated",
+        "truncated"
+      ],
+      "doc": "DATA_MODEL.md#12-budget-and-truncation"
+    },
+    {
+      "id": "ResultStatus",
+      "values": [
+        "complete",
+        "partial",
+        "failed"
+      ],
+      "doc": "DATA_MODEL.md#13-e0-check-result-envelope"
+    },
+    {
+      "id": "ErrorCategory",
+      "values": [
+        "validation",
+        "mismatch",
+        "unsupported",
+        "budget",
+        "invariant"
+      ],
+      "doc": "ERROR_MODEL.md#1-error-record"
+    },
+    {
+      "id": "RetryClass",
+      "values": [
+        "never",
+        "after_input_change",
+        "after_dependency_recovery"
+      ],
+      "doc": "ERROR_MODEL.md#3-retry-classes"
+    }
+  ],
+  "nested_value_types": [
+    {
+      "id": "SchemaVersionEntry",
+      "doc": "DATA_MODEL.md#5-generation-context"
+    },
+    {
+      "id": "ProducerVersionEntry",
+      "doc": "DATA_MODEL.md#5-generation-context"
+    },
+    {
+      "id": "ExternalGeneration",
+      "doc": "DATA_MODEL.md#5-generation-context"
+    },
+    {
+      "id": "SourceSpan",
+      "doc": "DATA_MODEL.md#6-source-handle"
+    },
+    {
+      "id": "CoverageReference",
+      "doc": "DATA_MODEL.md#7-evidence-and-conflicts"
+    },
+    {
+      "id": "ConflictAffectedRef",
+      "doc": "DATA_MODEL.md#7-evidence-and-conflicts"
+    },
+    {
+      "id": "CoveragePartitionRef",
+      "doc": "DATA_MODEL.md#8-coverage-capability-summaries-and-evaluation"
+    },
+    {
+      "id": "BlockingPartitionRef",
+      "doc": "DATA_MODEL.md#8-coverage-capability-summaries-and-evaluation"
+    },
+    {
+      "id": "MessageArgument",
+      "doc": "DATA_MODEL.md#10-structured-finding"
+    },
+    {
+      "id": "Remediation",
+      "doc": "DATA_MODEL.md#10-structured-finding"
+    },
+    {
+      "id": "BudgetLimits",
+      "doc": "DATA_MODEL.md#12-budget-and-truncation"
+    },
+    {
+      "id": "BudgetUsage",
+      "doc": "DATA_MODEL.md#12-budget-and-truncation"
+    },
+    {
+      "id": "TruncationEntry",
+      "doc": "DATA_MODEL.md#12-budget-and-truncation"
+    }
+  ],
+  "e0_types": [
+    {
+      "id": "ProfileId",
+      "doc": "DATA_MODEL.md#2-identifier-families"
+    },
+    {
+      "id": "ProfileIdentity",
+      "doc": "DATA_MODEL.md#4-profile-identity"
+    },
+    {
+      "id": "ReferenceGenerationId",
+      "doc": "DATA_MODEL.md#2-identifier-families"
+    },
+    {
+      "id": "ProjectGenerationId",
+      "doc": "DATA_MODEL.md#2-identifier-families"
+    },
+    {
+      "id": "ExternalGenerationId",
+      "doc": "DATA_MODEL.md#2-identifier-families"
+    },
+    {
+      "id": "GenerationContext",
+      "doc": "DATA_MODEL.md#5-generation-context"
+    },
+    {
+      "id": "ContentDigest",
+      "doc": "DATA_MODEL.md#3-digest-values-and-purposes"
+    },
+    {
+      "id": "EntityKey",
+      "doc": "DATA_MODEL.md#2-identifier-families"
+    },
+    {
+      "id": "RuleId",
+      "doc": "DATA_MODEL.md#2-identifier-families"
+    },
+    {
+      "id": "ProducerId",
+      "doc": "DATA_MODEL.md#2-identifier-families"
+    },
+    {
+      "id": "CapabilityId",
+      "doc": "DATA_MODEL.md#2-identifier-families"
+    },
+    {
+      "id": "CoveragePartitionId",
+      "doc": "DATA_MODEL.md#2-identifier-families"
+    },
+    {
+      "id": "SourceHandle",
+      "doc": "DATA_MODEL.md#6-source-handle"
+    },
+    {
+      "id": "EvidenceRecord",
+      "doc": "DATA_MODEL.md#7-evidence-and-conflicts"
+    },
+    {
+      "id": "CoverageRecord",
+      "doc": "DATA_MODEL.md#8-coverage-capability-summaries-and-evaluation"
+    },
+    {
+      "id": "NotEvaluatedRecord",
+      "doc": "DATA_MODEL.md#8-coverage-capability-summaries-and-evaluation"
+    },
+    {
+      "id": "NegativeAuthorityDecision",
+      "doc": "DATA_MODEL.md#9-negative-authority-decision"
+    },
+    {
+      "id": "Finding",
+      "doc": "DATA_MODEL.md#10-structured-finding"
+    },
+    {
+      "id": "Budget",
+      "doc": "DATA_MODEL.md#12-budget-and-truncation"
+    },
+    {
+      "id": "TruncationState",
+      "doc": "DATA_MODEL.md#12-budget-and-truncation"
+    },
+    {
+      "id": "CoreError",
+      "doc": "ERROR_MODEL.md#1-error-record"
+    },
+    {
+      "id": "E0CheckResultEnvelope",
+      "doc": "DATA_MODEL.md#13-e0-check-result-envelope"
+    },
+    {
+      "id": "E0OperationErrorEnvelope",
+      "doc": "DATA_MODEL.md#11-warnings-and-operation-error-envelope"
+    },
+    {
+      "id": "ConflictId",
+      "doc": "DATA_MODEL.md#2-identifier-families"
+    },
+    {
+      "id": "CoverageId",
+      "doc": "DATA_MODEL.md#2-identifier-families"
+    },
+    {
+      "id": "WarningId",
+      "doc": "DATA_MODEL.md#2-identifier-families"
+    },
+    {
+      "id": "ConflictRecord",
+      "doc": "DATA_MODEL.md#7-evidence-and-conflicts"
+    },
+    {
+      "id": "CapabilitySummary",
+      "doc": "DATA_MODEL.md#8-coverage-capability-summaries-and-evaluation"
+    },
+    {
+      "id": "WarningRecord",
+      "doc": "DATA_MODEL.md#11-warnings-and-operation-error-envelope"
+    }
+  ],
+  "e0_operations": [
+    {
+      "id": "parse_profile_id",
+      "status": "required",
+      "doc": "OPERATIONS.md#parse_profile_id",
+      "errors": [
+        "invalid_identifier",
+        "reserved_identifier_segment",
+        "identifier_too_long"
+      ]
+    },
+    {
+      "id": "parse_rule_id",
+      "status": "required",
+      "doc": "OPERATIONS.md#parse_rule_id-parse_producer_id-parse_capability_id-parse_operation_id",
+      "errors": [
+        "invalid_identifier",
+        "reserved_identifier_segment",
+        "identifier_too_long"
+      ]
+    },
+    {
+      "id": "parse_producer_id",
+      "status": "required",
+      "doc": "OPERATIONS.md#parse_rule_id-parse_producer_id-parse_capability_id-parse_operation_id",
+      "errors": [
+        "invalid_identifier",
+        "reserved_identifier_segment",
+        "identifier_too_long"
+      ]
+    },
+    {
+      "id": "parse_capability_id",
+      "status": "required",
+      "doc": "OPERATIONS.md#parse_rule_id-parse_producer_id-parse_capability_id-parse_operation_id",
+      "errors": [
+        "invalid_identifier",
+        "reserved_identifier_segment",
+        "identifier_too_long"
+      ]
+    },
+    {
+      "id": "parse_operation_id",
+      "status": "required",
+      "doc": "OPERATIONS.md#parse_rule_id-parse_producer_id-parse_capability_id-parse_operation_id",
+      "errors": [
+        "invalid_identifier",
+        "reserved_identifier_segment",
+        "identifier_too_long"
+      ]
+    },
+    {
+      "id": "parse_entity_key",
+      "status": "required",
+      "doc": "OPERATIONS.md#parse_entity_key",
+      "errors": [
+        "invalid_identifier",
+        "invalid_entity_key",
+        "noncanonical_percent_encoding"
+      ]
+    },
+    {
+      "id": "parse_coverage_partition_id",
+      "status": "required",
+      "doc": "OPERATIONS.md#parse_coverage_partition_id",
+      "errors": [
+        "invalid_identifier",
+        "invalid_entity_key",
+        "noncanonical_percent_encoding"
+      ]
+    },
+    {
+      "id": "parse_content_digest",
+      "status": "required",
+      "doc": "OPERATIONS.md#parse_content_digest",
+      "errors": [
+        "invalid_digest",
+        "unsupported_digest_algorithm",
+        "digest_purpose_mismatch"
+      ]
+    },
+    {
+      "id": "derive_typed_digest_id",
+      "status": "required",
+      "doc": "OPERATIONS.md#derive_typed_digest_id",
+      "errors": [
+        "canonicalization_failure",
+        "unsupported_identifier_family"
+      ]
+    },
+    {
+      "id": "validate_profile_identity",
+      "status": "required",
+      "doc": "OPERATIONS.md#validate_profile_identity",
+      "errors": [
+        "invalid_profile_identity",
+        "profile_kind_violation",
+        "duplicate_schema_id"
+      ]
+    },
+    {
+      "id": "compare_profile_identity",
+      "status": "required",
+      "doc": "OPERATIONS.md#compare_profile_identity",
+      "errors": []
+    },
+    {
+      "id": "require_profile_identity_match",
+      "status": "required",
+      "doc": "OPERATIONS.md#require_profile_identity_match",
+      "errors": [
+        "profile_mismatch"
+      ]
+    },
+    {
+      "id": "normalize_source_path",
+      "status": "required",
+      "doc": "OPERATIONS.md#normalize_source_path",
+      "errors": [
+        "invalid_source_path",
+        "path_escape",
+        "absolute_path_forbidden",
+        "unsupported_non_utf8_path"
+      ]
+    },
+    {
+      "id": "validate_source_span",
+      "status": "required",
+      "doc": "OPERATIONS.md#validate_source_span",
+      "errors": [
+        "invalid_source_span",
+        "span_state_conflict"
+      ]
+    },
+    {
+      "id": "build_source_handle",
+      "status": "required",
+      "doc": "OPERATIONS.md#build_source_handle",
+      "errors": [
+        "invalid_source_handle",
+        "invalid_identifier",
+        "invalid_source_path",
+        "invalid_source_span",
+        "invalid_digest"
+      ]
+    },
+    {
+      "id": "verify_source_handle_content",
+      "status": "required",
+      "doc": "OPERATIONS.md#verify_source_handle_content",
+      "errors": [
+        "digest_mismatch",
+        "digest_purpose_mismatch"
+      ]
+    },
+    {
+      "id": "compare_source_handles",
+      "status": "required",
+      "doc": "OPERATIONS.md#compare_source_handles",
+      "errors": []
+    },
+    {
+      "id": "derive_generation_context_id",
+      "status": "required",
+      "doc": "OPERATIONS.md#derive_generation_context_id",
+      "errors": [
+        "invalid_profile_identity",
+        "generation_mismatch",
+        "duplicate_external_generation_scope",
+        "canonicalization_failure"
+      ]
+    },
+    {
+      "id": "validate_generation_context",
+      "status": "required",
+      "doc": "OPERATIONS.md#validate_generation_context",
+      "errors": [
+        "generation_mismatch",
+        "duplicate_external_generation_scope",
+        "duplicate_schema_id",
+        "duplicate_producer_id"
+      ]
+    },
+    {
+      "id": "merge_generation_context",
+      "status": "required",
+      "doc": "OPERATIONS.md#merge_generation_context",
+      "errors": [
+        "generation_mismatch",
+        "profile_mismatch",
+        "duplicate_external_generation_scope",
+        "merge_mode_violation"
+      ]
+    },
+    {
+      "id": "require_same_generation",
+      "status": "required",
+      "doc": "OPERATIONS.md#require_same_generation",
+      "errors": [
+        "generation_mismatch"
+      ]
+    },
+    {
+      "id": "validate_evidence_record",
+      "status": "required",
+      "doc": "OPERATIONS.md#validate_evidence_record",
+      "errors": [
+        "evidence_authority_violation",
+        "evidence_context_mismatch",
+        "missing_source_handle",
+        "coverage_record_missing",
+        "missing_evidence_reference",
+        "derived_evidence_missing_inputs",
+        "duplicate_evidence_reference"
+      ]
+    },
+    {
+      "id": "derive_evidence_id",
+      "status": "required",
+      "doc": "OPERATIONS.md#derive_evidence_id",
+      "errors": [
+        "canonicalization_failure"
+      ]
+    },
+    {
+      "id": "validate_evidence_derivation_graph",
+      "status": "required",
+      "doc": "OPERATIONS.md#validate_evidence_derivation_graph",
+      "errors": [
+        "missing_evidence_reference",
+        "evidence_derivation_cycle"
+      ]
+    },
+    {
+      "id": "relate_evidence_conflict",
+      "status": "required",
+      "doc": "OPERATIONS.md#relate_evidence_conflict",
+      "errors": [
+        "missing_evidence_reference",
+        "conflict_context_mismatch",
+        "conflict_scope_empty",
+        "duplicate_evidence_reference"
+      ]
+    },
+    {
+      "id": "derive_conflict_id",
+      "status": "required",
+      "doc": "OPERATIONS.md#derive_conflict_id",
+      "errors": [
+        "canonicalization_failure"
+      ]
+    },
+    {
+      "id": "validate_conflict_record",
+      "status": "required",
+      "doc": "OPERATIONS.md#validate_conflict_record",
+      "errors": [
+        "conflict_context_mismatch",
+        "conflict_scope_empty",
+        "missing_evidence_reference",
+        "duplicate_evidence_reference",
+        "canonicalization_failure"
+      ]
+    },
+    {
+      "id": "derive_evidence",
+      "status": "required",
+      "doc": "OPERATIONS.md#derive_evidence",
+      "errors": [
+        "derived_evidence_missing_inputs",
+        "evidence_authority_violation",
+        "evidence_context_mismatch",
+        "missing_evidence_reference",
+        "evidence_derivation_cycle"
+      ]
+    },
+    {
+      "id": "validate_coverage_record",
+      "status": "required",
+      "doc": "OPERATIONS.md#validate_coverage_record",
+      "errors": [
+        "coverage_conflict",
+        "missing_conflict_reference",
+        "duplicate_conflict_reference",
+        "invalid_identifier",
+        "canonicalization_failure"
+      ]
+    },
+    {
+      "id": "derive_coverage_id",
+      "status": "required",
+      "doc": "OPERATIONS.md#derive_coverage_id",
+      "errors": [
+        "canonicalization_failure"
+      ]
+    },
+    {
+      "id": "combine_coverage",
+      "status": "required",
+      "doc": "OPERATIONS.md#combine_coverage",
+      "errors": [
+        "coverage_record_missing",
+        "coverage_conflict",
+        "duplicate_coverage_record",
+        "result_context_violation"
+      ]
+    },
+    {
+      "id": "validate_capability_summary",
+      "status": "required",
+      "doc": "OPERATIONS.md#validate_capability_summary",
+      "errors": [
+        "coverage_record_missing",
+        "coverage_conflict",
+        "result_context_violation"
+      ]
+    },
+    {
+      "id": "evaluate_capability_availability",
+      "status": "required",
+      "doc": "OPERATIONS.md#evaluate_capability_availability",
+      "errors": [
+        "coverage_record_missing",
+        "missing_conflict_reference",
+        "result_context_violation"
+      ]
+    },
+    {
+      "id": "derive_not_evaluated_id",
+      "status": "required",
+      "doc": "OPERATIONS.md#derive_not_evaluated_id",
+      "errors": [
+        "canonicalization_failure"
+      ]
+    },
+    {
+      "id": "validate_not_evaluated_record",
+      "status": "required",
+      "doc": "OPERATIONS.md#validate_not_evaluated_record",
+      "errors": [
+        "coverage_record_missing",
+        "missing_conflict_reference",
+        "result_context_violation",
+        "canonicalization_failure"
+      ]
+    },
+    {
+      "id": "evaluate_negative_authority",
+      "status": "required",
+      "doc": "OPERATIONS.md#evaluate_negative_authority",
+      "errors": [
+        "result_context_violation",
+        "coverage_record_missing",
+        "missing_conflict_reference"
+      ]
+    },
+    {
+      "id": "validate_message_arguments",
+      "status": "required",
+      "doc": "OPERATIONS.md#validate_message_arguments",
+      "errors": [
+        "invalid_message_argument"
+      ]
+    },
+    {
+      "id": "derive_root_cause_key",
+      "status": "required",
+      "doc": "OPERATIONS.md#derive_root_cause_key",
+      "errors": [
+        "canonicalization_failure"
+      ]
+    },
+    {
+      "id": "derive_finding_fingerprint",
+      "status": "required",
+      "doc": "OPERATIONS.md#derive_finding_fingerprint",
+      "errors": [
+        "canonicalization_failure"
+      ]
+    },
+    {
+      "id": "bind_finding_to_context",
+      "status": "required",
+      "doc": "OPERATIONS.md#bind_finding_to_context",
+      "errors": [
+        "finding_context_mismatch",
+        "missing_source_handle",
+        "missing_evidence_reference",
+        "remediation_authority_violation"
+      ]
+    },
+    {
+      "id": "canonical_finding_order",
+      "status": "required",
+      "doc": "OPERATIONS.md#canonical_finding_order",
+      "errors": []
+    },
+    {
+      "id": "deduplicate_findings",
+      "status": "required",
+      "doc": "OPERATIONS.md#deduplicate_findings",
+      "errors": [
+        "result_duplicate_id"
+      ]
+    },
+    {
+      "id": "derive_warning_id",
+      "status": "required",
+      "doc": "OPERATIONS.md#derive_warning_id",
+      "errors": [
+        "canonicalization_failure"
+      ]
+    },
+    {
+      "id": "validate_warning_record",
+      "status": "required",
+      "doc": "OPERATIONS.md#validate_warning_record",
+      "errors": [
+        "warning_context_mismatch",
+        "missing_source_handle",
+        "missing_evidence_reference",
+        "invalid_message_argument",
+        "canonicalization_failure"
+      ]
+    },
+    {
+      "id": "validate_budget",
+      "status": "required",
+      "doc": "OPERATIONS.md#validate_budget",
+      "errors": [
+        "budget_invalid"
+      ]
+    },
+    {
+      "id": "accumulate_budget_usage",
+      "status": "required",
+      "doc": "OPERATIONS.md#accumulate_budget_usage",
+      "errors": [
+        "usage_overflow"
+      ]
+    },
+    {
+      "id": "classify_truncation",
+      "status": "required",
+      "doc": "OPERATIONS.md#classify_truncation",
+      "errors": [
+        "budget_invalid",
+        "contract_violation"
+      ]
+    },
+    {
+      "id": "validate_result_envelope",
+      "status": "required",
+      "doc": "OPERATIONS.md#validate_result_envelope",
+      "errors": [
+        "invalid_profile_identity",
+        "generation_mismatch",
+        "result_context_violation",
+        "result_reference_violation",
+        "result_status_violation",
+        "missing_source_handle",
+        "missing_evidence_reference",
+        "missing_conflict_reference",
+        "result_duplicate_id",
+        "evidence_derivation_cycle",
+        "coverage_conflict",
+        "budget_invalid",
+        "schema_version_unsupported",
+        "unknown_field",
+        "duplicate_field",
+        "canonical_digest_mismatch",
+        "contract_violation"
+      ]
+    },
+    {
+      "id": "canonical_result_order",
+      "status": "required",
+      "doc": "OPERATIONS.md#canonical_result_order",
+      "errors": [
+        "result_duplicate_id"
+      ]
+    },
+    {
+      "id": "canonical_result_digest",
+      "status": "required",
+      "doc": "OPERATIONS.md#canonical_result_digest",
+      "errors": [
+        "canonicalization_failure",
+        "contract_violation"
+      ]
+    },
+    {
+      "id": "finalize_result_envelope",
+      "status": "required",
+      "doc": "OPERATIONS.md#finalize_result_envelope",
+      "errors": [
+        "canonicalization_failure",
+        "budget_exceeded",
+        "contract_violation"
+      ]
+    },
+    {
+      "id": "validate_schema_version",
+      "status": "required",
+      "doc": "OPERATIONS.md#validate_schema_version",
+      "errors": [
+        "schema_version_unsupported"
+      ]
+    }
+  ],
+  "forbidden_operations": [
+    "get_current_profile",
+    "read_source_handle",
+    "resolve_repository",
+    "fetch_url",
+    "open_database",
+    "log_finding",
+    "search_entity",
+    "infer_api_name",
+    "is_secret_value_safe",
+    "run_rule",
+    "load_configuration",
+    "now",
+    "random_id",
+    "best_effort_merge"
+  ],
+  "examples": [
+    "examples/e0-clean-result.json",
+    "examples/e0-findings-result.json",
+    "examples/e0-not-evaluated-result.json",
+    "examples/e0-conflict-not-evaluated-result.json",
+    "examples/e0-generation-mismatch-error.json",
+    "examples/HASH_VECTORS.json"
+  ],
+  "handoff_consumers": {
+    "wow-reference": [
+      "ProfileIdentity",
+      "ReferenceGenerationId",
+      "GenerationContext",
+      "ContentDigest",
+      "EntityKey",
+      "ProducerId",
+      "CapabilityId",
+      "CoveragePartitionId",
+      "SourceHandle",
+      "EvidenceRecord",
+      "ConflictRecord",
+      "CoverageRecord",
+      "NegativeAuthorityDecision"
+    ],
+    "wow-emmy": [
+      "ProfileIdentity",
+      "ReferenceGenerationId",
+      "ProjectGenerationId",
+      "GenerationContext",
+      "ContentDigest",
+      "ProducerId",
+      "RuleId",
+      "CapabilityId",
+      "CoveragePartitionId",
+      "SourceHandle",
+      "EvidenceRecord",
+      "CoverageRecord",
+      "Finding"
+    ],
+    "wow-project": [
+      "ProfileIdentity",
+      "ReferenceGenerationId",
+      "ProjectGenerationId",
+      "GenerationContext",
+      "ContentDigest",
+      "ProducerId",
+      "CapabilityId",
+      "CoveragePartitionId",
+      "SourceHandle",
+      "EvidenceRecord",
+      "CoverageRecord"
+    ],
+    "wow-rules": [
+      "GenerationContext",
+      "EntityKey",
+      "RuleId",
+      "ProducerId",
+      "CapabilityId",
+      "CoveragePartitionId",
+      "SourceHandle",
+      "EvidenceRecord",
+      "ConflictRecord",
+      "CoverageRecord",
+      "CapabilitySummary",
+      "NotEvaluatedRecord",
+      "Finding",
+      "NegativeAuthorityDecision"
+    ],
+    "wow-service": [
+      "GenerationContext",
+      "CapabilitySummary",
+      "NotEvaluatedRecord",
+      "Finding",
+      "WarningRecord",
+      "Budget",
+      "TruncationState",
+      "CoreError",
+      "E0CheckResultEnvelope",
+      "E0OperationErrorEnvelope"
+    ]
+  },
+  "completion_gate": [
+    "All active operation IDs are implemented or removed through a same-change contract update.",
+    "All applicable TEST_MATRIX case IDs execute and pass.",
+    "All committed examples and hash vectors validate byte-exactly.",
+    "Randomized ordering and mutation tests pass.",
+    "No IO, clock, random, async-runtime, parser, database, graph, rule, search, or transport behavior exists in wow-core.",
+    "Fresh fmt, clippy, test, and dependency-policy results are reported.",
+    "coverage records and capability summaries reconcile exactly",
+    "evidence/conflict/coverage reference graph is acyclic and fully resolved"
+  ]
+}

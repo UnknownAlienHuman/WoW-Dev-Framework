@@ -1,0 +1,29 @@
+{
+  "canonical_digest": "sha256:42f2bd05ff0d22fdd53030c798bdfde911d1d8af75140cdeef0b4f70761fdea2",
+  "canonicalization_version": "wow-core-json/e0-1",
+  "error": {
+    "category": "mismatch",
+    "code": "generation_mismatch",
+    "field_path": "context.project_generation",
+    "operation_id": "wow.check",
+    "reason_arguments": [
+      {
+        "kind": "identifier",
+        "name": "left_context_id",
+        "value": "context:sha256:bb8a207574e382f9c102613a9c24c5dc1923e1fe8b3e0434b67bd695877d1871"
+      },
+      {
+        "kind": "identifier",
+        "name": "right_context_id",
+        "value": "context:sha256:f809193ddd1b18ff53dc04be0910f4193d89828c637c5eb85f43e5b6ec39c8c0"
+      }
+    ],
+    "retry_class": "after_input_change",
+    "subject_kind": "context"
+  },
+  "operation_id": "wow.check",
+  "schema": {
+    "schema_id": "schema:wow:operation-error",
+    "version": "0.1.0"
+  }
+}

@@ -20,10 +20,42 @@ Owns:
 
 - profile and generation identity;
 - source handles;
-- provenance, confidence, capability, and coverage state;
-- normalized findings and deterministic result envelopes.
+- provenance, confidence, evidence derivation, and explicit conflicts;
+- exact coverage records, derived capability summaries, and `NotEvaluated` blockers;
+- normalized findings, warnings, budgets, and deterministic result envelopes.
 
-Blocks all other E0 packages. Merge first.
+Implementation starts from the detailed contract pack under [`wow-core/`](wow-core/):
+
+```text
+AGENTS.md
+DECISIONS.md
+DATA_MODEL.md
+OPERATIONS.md
+CANONICALIZATION.md
+ERROR_MODEL.md
+TEST_MATRIX.md
+CONSUMER_GUIDE.md
+IMPLEMENTATION_PLAN.md
+CONTRACT.json
+examples/*.json
+```
+
+E0-A contract state is **implementation-ready / code not started**. Its committed examples and hash vectors are normative. A coding agent must not change their semantics while writing code merely to simplify serialization or APIs.
+
+Blocks all other E0 packages. Merge implementation first.
+
+E0-A handoff gate:
+
+```text
+all required wow-core operations implemented or contract-revised in the same change
+all applicable TEST_MATRIX case IDs executable
+all example envelopes, including conflict-blocked evaluation, and hash vectors pass byte-exactly
+all internal references resolve and evidence derivation remains acyclic
+coverage records reconcile exactly with capability summaries
+randomized order produces identical canonical bytes
+no IO/clock/random/async/domain workflow in wow-core
+public API inventory reviewed and frozen for E0 consumers
+```
 
 ### E0-B — `wow-reference` fixture view
 
@@ -34,7 +66,7 @@ Owns:
 - exact lookup and capability reporting;
 - no full builder, SQLite, corrections engine, or profile downloader.
 
-May proceed after the `wow-core` contract is frozen.
+May proceed only after the E0-A implementation and consumer handoff are merged. Do not code against draft names from documentation alone.
 
 ### E0-C — `wow-emmy` adapter
 
@@ -46,7 +78,7 @@ Owns:
 - one generic diagnostic normalization path;
 - semantic/source span extraction required by the E0 rule.
 
-May proceed in parallel with E0-B after `wow-core`.
+May proceed in parallel with E0-B only after the implemented `wow-core` boundary is merged.
 
 ### E0-D — `wow-project` minimal generation
 
@@ -83,7 +115,7 @@ Owns:
 
 Begins after E0-A through E0-E. Merge last.
 
-## E0 merge gates
+## E0 integration gates
 
 Each package must pass its local tests before integration. The integration agent then verifies:
 
