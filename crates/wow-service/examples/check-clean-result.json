@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e0-check-clean-v1",
+  "state": "documentation-only-pending-prerequisite-and-byte-freeze",
+  "operation": "check",
+  "request": {
+    "request_id": null,
+    "project_id": "fixture-project-e0-v1",
+    "generation_selector": {
+      "kind": "Exact",
+      "project_generation_id": null
+    },
+    "scope": {
+      "kind": "ExplicitScopes",
+      "scope_ids": [
+        "api-known-found-use",
+        "secret-guarded-concat-use"
+      ]
+    },
+    "requested_rules": [
+      "wow.api.exists@1",
+      "wow.secret.local_operation@1"
+    ]
+  },
+  "semantic_status": "clean",
+  "result_id": null,
+  "canonical_sha256": null,
+  "service_context": {
+    "service_configuration_id": null,
+    "service_context_lease_id": null,
+    "profile_id": "fixture-retail-120100-e0-v1",
+    "reference_generation_id": null,
+    "reference_view_id": null,
+    "project_generation_id": null,
+    "project_snapshot_id": null,
+    "project_view_id": null,
+    "analyzer_snapshot_id": null,
+    "rule_registry_id": null
+  },
+  "raw_findings": [],
+  "clean_evaluations": [
+    {
+      "rule_id": "wow.api.exists",
+      "rule_version": 1,
+      "evaluation_id": null,
+      "clean_claim_kind": "api_exists_for_exact_use",
+      "scope_id": "api-known-found-use",
+      "input_fact_ids": [],
+      "reference_lookup_ids": [],
+      "coverage_ids": [],
+      "budget_usage_id": null
+    },
+    {
+      "rule_id": "wow.secret.local_operation",
+      "rule_version": 1,
+      "evaluation_id": null,
+      "clean_claim_kind": "secret_fixture_operation_guarded_for_exact_value_and_scope",
+      "scope_id": "secret-guarded-concat-use",
+      "input_fact_ids": [],
+      "reference_lookup_ids": [],
+      "coverage_ids": [],
+      "budget_usage_id": null
+    }
+  ],
+  "not_evaluated": [],
+  "rule_failures": [],
+  "warnings": [],
+  "presentation_graph": {
+    "graph_id": null,
+    "raw_problem_record_ids": [],
+    "display_root_ids": [],
+    "nodes": [],
+    "edges": [],
+    "canonical_sha256": null
+  },
+  "rule_execution_report_id": null,
+  "generic_finding_set_id": null,
+  "capability_summary_ids": [],
+  "coverage_ids": [],
+  "conflict_ids": [],
+  "deferred_operations": [
+    "lookup",
+    "search",
+    "tree",
+    "skeleton",
+    "plan",
+    "patch_impact",
+    "index_repo",
+    "runtime_review",
+    "lsp",
+    "mcp",
+    "release_packaging"
+  ],
+  "budget": {
+    "spec_id": null,
+    "usage_id": null,
+    "truncated": false,
+    "all_requested_scopes_complete": true
+  },
+  "status_proof": {
+    "raw_finding_count": 0,
+    "clean_evaluation_count": 2,
+    "not_evaluated_count": 0,
+    "failure_count": 0,
+    "truncation_count": 0,
+    "all_requested_scopes_completed": true
+  },
+  "producer_versions": [],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "all_null_identity-and-digest-fields-must-be-frozen": true
+  }
+}

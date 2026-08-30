@@ -1,0 +1,173 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e0-check-partial-v1",
+  "state": "documentation-only-pending-prerequisite-and-byte-freeze",
+  "operation": "check",
+  "request": {
+    "request_id": null,
+    "project_id": "fixture-project-e0-v1",
+    "generation_selector": {
+      "kind": "Exact",
+      "project_generation_id": null
+    },
+    "scope": {
+      "kind": "AllProjectFiles"
+    },
+    "requested_rules": [
+      "wow.api.exists@1",
+      "wow.secret.local_operation@1"
+    ]
+  },
+  "semantic_status": "partial",
+  "result_id": null,
+  "canonical_sha256": null,
+  "service_context": {
+    "service_configuration_id": null,
+    "service_context_lease_id": null,
+    "profile_id": "fixture-retail-120100-e0-v1",
+    "reference_generation_id": null,
+    "reference_view_id": null,
+    "project_generation_id": null,
+    "project_snapshot_id": null,
+    "project_view_id": null,
+    "analyzer_snapshot_id": null,
+    "rule_registry_id": null,
+    "context_is_structurally_coherent": true
+  },
+  "partial_scenario": {
+    "scenario_id": "annotation-library-failed-resolution-dependent-rules-blocked",
+    "component_failure_id": null,
+    "component_id": "wow-emmy",
+    "error_code": "analyzer_library_load_failed",
+    "failed_capability_ids": [
+      "emmy.library.loaded"
+    ],
+    "blocking_partition_ids": [],
+    "independent_generic_fixture_finding_can-remain": true
+  },
+  "generic_finding_set": {
+    "set_id": null,
+    "finding_ids": [],
+    "finding_count": null,
+    "coverage_ids": [],
+    "completed_scopes": [],
+    "blocked_scopes": [],
+    "truncated": false
+  },
+  "rule_outcomes": {
+    "execution_report_id": null,
+    "findings": [],
+    "clean_evaluations": [],
+    "not_evaluated": [
+      {
+        "record_id": null,
+        "rule_id": "wow.api.exists",
+        "rule_version": 1,
+        "attempted_scope": "main/missing-api.lua",
+        "blocker_kinds": [
+          "annotation_library_unavailable",
+          "failed_coverage"
+        ],
+        "missing_capability_ids": [
+          "emmy.library.loaded",
+          "emmy.fact.references"
+        ],
+        "blocking_coverage_ids": [],
+        "conflict_ids": []
+      },
+      {
+        "record_id": null,
+        "rule_id": "wow.secret.local_operation",
+        "rule_version": 1,
+        "attempted_scope": "main/secret-local.lua",
+        "blocker_kinds": [
+          "annotation_library_unavailable",
+          "failed_coverage"
+        ],
+        "missing_capability_ids": [
+          "emmy.library.loaded",
+          "emmy.fact.references",
+          "emmy.fact.calls",
+          "emmy.fact.local_flow"
+        ],
+        "blocking_coverage_ids": [],
+        "conflict_ids": []
+      }
+    ],
+    "failures": [],
+    "cancelled": false
+  },
+  "raw_findings": {
+    "finding_ids": [],
+    "raw_finding_count": null,
+    "all-completed-scope-findings-preserved": true
+  },
+  "presentation_graph": {
+    "graph_id": null,
+    "nodes": [],
+    "edges": [
+      {
+        "edge_id": null,
+        "from_record_id": null,
+        "to_record_id": null,
+        "relation_kind": "blocked_by",
+        "evidence_ids": [],
+        "is_primary_parent": true
+      },
+      {
+        "edge_id": null,
+        "from_record_id": null,
+        "to_record_id": null,
+        "relation_kind": "blocked_by",
+        "evidence_ids": [],
+        "is_primary_parent": true
+      }
+    ],
+    "display_root_ids": [
+      null
+    ],
+    "raw_problem_record_count": null,
+    "display_root_count": null,
+    "canonical_sha256": null,
+    "raw-records-preserved": true,
+    "acyclic": true,
+    "max-primary-parents-per-child": 1
+  },
+  "not_evaluated": [
+    null,
+    null
+  ],
+  "component_failures": [
+    null
+  ],
+  "warnings": [],
+  "capability_summary_ids": [],
+  "coverage_ids": [],
+  "conflict_ids": [],
+  "budget": {
+    "spec_id": null,
+    "usage_id": null,
+    "truncated": false,
+    "completed_scope_count": null,
+    "blocked_scope_count": 2
+  },
+  "status_proof": {
+    "coherent_useful_result": true,
+    "not_evaluated_count": 2,
+    "findings-may-coexist": true,
+    "not-evaluated-precedence-over-findings": true,
+    "clean-forbidden": true
+  },
+  "producer_versions": [],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_frozen_values": [
+      "all component/context/generation IDs",
+      "component failure and capability coverage IDs",
+      "generic finding IDs/counts for still-available scopes",
+      "NotEvaluated IDs/blockers",
+      "presentation graph nodes/edges/roots",
+      "result ID and canonical SHA-256"
+    ]
+  }
+}

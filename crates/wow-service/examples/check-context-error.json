@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e0-check-failure-v1",
+  "state": "documentation-only-pending-prerequisite-and-byte-freeze",
+  "operation": "check",
+  "result_kind": "ServiceFailureResult",
+  "result_id": null,
+  "canonical_sha256": null,
+  "request": {
+    "request_id": null,
+    "project_id": "fixture-project-e0-v1",
+    "generation_selector": {
+      "kind": "Exact",
+      "project_generation_id": null
+    },
+    "scope": {
+      "kind": "AllProjectFiles"
+    }
+  },
+  "failure": {
+    "error_code": "service_project_generation_mismatch",
+    "operation_phase": "context-acquisition",
+    "requested_project_generation_id": null,
+    "observed_project_snapshot_generation_id": "project-generation:wrong-fixture-value",
+    "profile_id": "fixture-retail-120100-e0-v1",
+    "reference_generation_id": null,
+    "project_snapshot_id": null,
+    "analyzer_snapshot_id": null,
+    "rule_registry_id": null,
+    "component_ids": [
+      "wow-project",
+      "wow-emmy"
+    ],
+    "capability_ids": [],
+    "coverage_ids": [],
+    "conflict_ids": [],
+    "failed_target_ids": [],
+    "last_known_good_ids": [],
+    "recovery_class": "after_reacquire_exact_context"
+  },
+  "check_envelope": null,
+  "semantic_check_status": null,
+  "providers_executed": [],
+  "raw_findings": [],
+  "presentation_graph": null,
+  "fallback_or_retry": {
+    "another_generation_selected": false,
+    "last_known_good_substituted": false,
+    "current_pointer_reread": false
+  },
+  "payload_safety": {
+    "raw_source_present": false,
+    "absolute_local_path_present": false,
+    "credential_or_private_url_present": false
+  },
+  "producer_versions": [],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_frozen_values": [
+      "request and exact expected project generation IDs",
+      "observed component/snapshot identities",
+      "failure result ID/digest",
+      "producer/tool versions"
+    ]
+  }
+}

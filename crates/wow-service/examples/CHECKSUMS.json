@@ -1,0 +1,181 @@
+{
+  "schema_version": 1,
+  "manifest_id": "wow-service-e0-f-checksums-v1",
+  "algorithm": "sha256",
+  "canonicalization_contract": "wow-core-json/e0-1",
+  "state": "pending-prerequisite-context-result-cli-and-byte-freeze-before-first-rust-implementation",
+  "freeze_required": true,
+  "profile_id": "fixture-retail-120100-e0-v1",
+  "reference_generation_id": null,
+  "project_generation_id": null,
+  "analyzer_snapshot_id": null,
+  "rule_registry_id": null,
+  "service_configuration_id": null,
+  "service_component_registry_id": null,
+  "service_context_lease_id": null,
+  "prerequisites": [
+    {
+      "contract_id": "wow-core/e0-a/1",
+      "implementation_identity": null,
+      "fixture_bundle_sha256": null
+    },
+    {
+      "contract_id": "wow-reference/e0-b/1",
+      "implementation_identity": null,
+      "reference_generation_id": null,
+      "fixture_bundle_sha256": null
+    },
+    {
+      "contract_id": "wow-emmy/e0-c/1",
+      "implementation_identity": null,
+      "analyzer_upstream_pin_id": null,
+      "analyzer_snapshot_id": null,
+      "fixture_bundle_sha256": null
+    },
+    {
+      "contract_id": "wow-project/e0-d/1",
+      "implementation_identity": null,
+      "project_generation_id": null,
+      "project_snapshot_id": null,
+      "fixture_bundle_sha256": null
+    },
+    {
+      "contract_id": "wow-rules/e0-e/1",
+      "implementation_identity": null,
+      "rule_registry_id": null,
+      "fixture_bundle_sha256": null
+    }
+  ],
+  "result_vectors": {
+    "status_result_id": null,
+    "status_result_sha256": null,
+    "clean_check_result_id": null,
+    "clean_check_result_sha256": null,
+    "findings_check_result_id": null,
+    "findings_check_result_sha256": null,
+    "partial_check_result_id": null,
+    "partial_check_result_sha256": null,
+    "context_failure_result_id": null,
+    "context_failure_result_sha256": null,
+    "cancelled_result_id": null,
+    "cancelled_result_sha256": null,
+    "findings_raw_finding_set_id": null,
+    "findings_presentation_graph_id": null,
+    "findings_presentation_graph_sha256": null,
+    "partial_presentation_graph_id": null,
+    "partial_presentation_graph_sha256": null,
+    "service_status_cli_stdout_sha256": null,
+    "service_clean_cli_stdout_sha256": null,
+    "service_findings_cli_stdout_sha256": null,
+    "service_partial_cli_stdout_sha256": null,
+    "service_failure_cli_stdout_sha256": null,
+    "service_cancelled_cli_stdout_sha256": null
+  },
+  "members": [
+    {
+      "path": "crates/wow-service/CONTRACT.json",
+      "sha256": null
+    },
+    {
+      "path": "crates/wow-service/examples/status-result.json",
+      "sha256": null
+    },
+    {
+      "path": "crates/wow-service/examples/check-clean-result.json",
+      "sha256": null
+    },
+    {
+      "path": "crates/wow-service/examples/check-findings-result.json",
+      "sha256": null
+    },
+    {
+      "path": "crates/wow-service/examples/check-partial-result.json",
+      "sha256": null
+    },
+    {
+      "path": "crates/wow-service/examples/check-context-error.json",
+      "sha256": null
+    },
+    {
+      "path": "crates/wow-service/examples/check-cancelled-result.json",
+      "sha256": null
+    },
+    {
+      "path": "apps/wow/CONTRACT.json",
+      "sha256": null
+    }
+  ],
+  "bundle_sha256": null,
+  "rules": [
+    "E0-A through E0-E implementations and fixture bundles must be frozen before E0-F implementation starts.",
+    "The service configuration, component registry, context lease, raw finding set, rule outcome set, presentation graph, semantic status, result envelope, and CLI JSON vectors must all be non-null after implementation activation.",
+    "Digests cover canonical UTF-8 bytes with LF line endings and one final newline.",
+    "Raw findings and presentation graph are separate vectors; folding must not alter raw finding IDs or bytes.",
+    "Status vectors may not contain check/test/runtime validation claims.",
+    "CLI canonical JSON stdout must equal the corresponding service result canonical bytes.",
+    "Tests verify this manifest and never rewrite it automatically.",
+    "A semantic orchestration, folding, status, envelope, CLI, or prerequisite change requires contract, example, test, output vector, and checksum review in the same change."
+  ],
+  "freeze_gate": {
+    "required_work_package": "E0-F-implementation",
+    "invalid_after_implementation_starts_when_any_required_value_is_null": true,
+    "required_non_null_values": [
+      "reference_generation_id",
+      "project_generation_id",
+      "analyzer_snapshot_id",
+      "rule_registry_id",
+      "service_configuration_id",
+      "service_component_registry_id",
+      "service_context_lease_id",
+      "prerequisites[*].implementation_identity",
+      "prerequisites[*].fixture_bundle_sha256",
+      "prerequisites[1].reference_generation_id",
+      "prerequisites[2].analyzer_upstream_pin_id",
+      "prerequisites[2].analyzer_snapshot_id",
+      "prerequisites[3].project_generation_id",
+      "prerequisites[3].project_snapshot_id",
+      "prerequisites[4].rule_registry_id",
+      "result_vectors.status_result_id",
+      "result_vectors.status_result_sha256",
+      "result_vectors.clean_check_result_id",
+      "result_vectors.clean_check_result_sha256",
+      "result_vectors.findings_check_result_id",
+      "result_vectors.findings_check_result_sha256",
+      "result_vectors.partial_check_result_id",
+      "result_vectors.partial_check_result_sha256",
+      "result_vectors.context_failure_result_id",
+      "result_vectors.context_failure_result_sha256",
+      "result_vectors.cancelled_result_id",
+      "result_vectors.cancelled_result_sha256",
+      "result_vectors.findings_raw_finding_set_id",
+      "result_vectors.findings_presentation_graph_id",
+      "result_vectors.findings_presentation_graph_sha256",
+      "result_vectors.partial_presentation_graph_id",
+      "result_vectors.partial_presentation_graph_sha256",
+      "result_vectors.service_status_cli_stdout_sha256",
+      "result_vectors.service_clean_cli_stdout_sha256",
+      "result_vectors.service_findings_cli_stdout_sha256",
+      "result_vectors.service_partial_cli_stdout_sha256",
+      "result_vectors.service_failure_cli_stdout_sha256",
+      "result_vectors.service_cancelled_cli_stdout_sha256",
+      "members[*].sha256",
+      "bundle_sha256"
+    ],
+    "required_checks": [
+      "all-prerequisite-contracts-and-fixtures-frozen",
+      "canonical-json-validation",
+      "member-byte-digest-validation",
+      "bundle-digest-validation",
+      "service-configuration-and-context-vectors",
+      "status-honesty-and-deferred-operation-vectors",
+      "clean-findings-partial-failure-cancelled-status-vectors",
+      "raw-finding-preservation-vector",
+      "presentation-graph-acyclic-primary-parent-vectors",
+      "result-reference-closure-and-digest-vectors",
+      "cli-json-byte-equality-and-exit-mapping-vectors",
+      "context-fallback-status-folding-mutation-tests",
+      "randomized-order-determinism",
+      "security-no-execution-no-mutation-no-lower-bypass-tests"
+    ]
+  }
+}

@@ -1,0 +1,188 @@
+{
+  "schema_version": 1,
+  "contract_id": "apps/wow/e0-f/1",
+  "state": "implementation-ready-documentation-no-rust-code",
+  "application": "wow",
+  "work_package": "E0-F",
+  "framework_dependencies": [
+    "wow-service"
+  ],
+  "forbidden_framework_dependencies": [
+    "wow-core",
+    "wow-reference",
+    "wow-annotations",
+    "wow-emmy",
+    "wow-project",
+    "wow-graph",
+    "wow-recognizers",
+    "wow-search",
+    "wow-rules",
+    "wow-cbm",
+    "wow-context",
+    "wow-store"
+  ],
+  "active_commands": [
+    "status",
+    "check"
+  ],
+  "status_options": [
+    "--project <ProjectId>",
+    "--detail summary|capabilities",
+    "--format json|text"
+  ],
+  "check_options": [
+    "--project <ProjectId>",
+    "--generation current|<ProjectGenerationId>",
+    "--file <ProjectFileId>",
+    "--rule <RuleId>@<version>",
+    "--format json|text"
+  ],
+  "defaults": {
+    "status_detail": "summary",
+    "check_generation": "current",
+    "check_scope": "AllProjectFiles",
+    "check_rules": "E0-service-default",
+    "include_generic_findings": true,
+    "presentation_mode": "raw_and_roots",
+    "format": "json"
+  },
+  "forbidden_options": [
+    "filesystem-path-or-glob-source-scope",
+    "source-stdin",
+    "apply-or-fix",
+    "search-or-replacement",
+    "runtime-probe",
+    "client-or-editor-discovery",
+    "plugin-or-shell-command",
+    "daemon-lsp-mcp",
+    "release-or-publish"
+  ],
+  "formats": {
+    "json": {
+      "canonical": true,
+      "stdout": "exact canonical service result JSON plus one final newline",
+      "stderr": "empty for valid service operation results",
+      "adds_semantic_fields": false,
+      "removes_semantic_fields": false,
+      "reorders_semantic_fields": false
+    },
+    "text": {
+      "canonical": false,
+      "source": "service result records only",
+      "must_show": [
+        "operation or semantic status",
+        "exact project/profile/generation",
+        "raw finding count",
+        "presentation root and child state",
+        "NotEvaluated blockers",
+        "deferred state when relevant"
+      ],
+      "forbidden_claims": [
+        "safe",
+        "working",
+        "runtime verified",
+        "tests passed",
+        "release ready"
+      ]
+    }
+  },
+  "exit_codes": {
+    "0": [
+      "status available",
+      "check clean"
+    ],
+    "1": [
+      "check findings"
+    ],
+    "2": [
+      "status partial",
+      "check partial"
+    ],
+    "3": [
+      "structured request/context/generation/deferred/unavailable failure"
+    ],
+    "4": [
+      "internal component/provider/presentation/envelope/serialization failure"
+    ],
+    "64": [
+      "CLI syntax/argument/config-loading failure before service invocation"
+    ],
+    "130": [
+      "cancelled"
+    ]
+  },
+  "stdout_stderr_policy": [
+    "valid JSON operation result is written to stdout only",
+    "valid text operation result is written to stdout",
+    "parser/startup error is written to stderr only",
+    "no banner/progress/log on JSON stdout",
+    "no partial or double result after cancellation or broken pipe",
+    "no raw source, Secret-capable value, absolute path, credential, or private URL leak"
+  ],
+  "owned_responsibilities": [
+    "argument-parsing",
+    "service-request-construction",
+    "canonical-json-result-serialization",
+    "noncanonical-text-projection",
+    "stdout-stderr-discipline",
+    "exit-code-projection",
+    "signal-and-cancellation-projection"
+  ],
+  "forbidden_responsibilities": [
+    "lower-crate-or-upstream-type-access",
+    "reference-analyzer-project-rule-or-service-algorithm-reimplementation",
+    "current-generation-resolution-outside-service",
+    "source-reading-parsing-indexing-or-mutation",
+    "profile-reference-project-discovery-from-environment",
+    "source-or-repository-code-execution",
+    "search-replacement-autofix-runtime-client-editor-behavior",
+    "semantic-result-field-mutation",
+    "exit-policy-derived-from-hidden-environment",
+    "background-daemon-work"
+  ],
+  "service_result_types_consumed": [
+    "ServiceStatusResult",
+    "CheckResultEnvelope",
+    "ServiceFailureResult",
+    "ServiceCancelledResult"
+  ],
+  "required_tests": [
+    "status-json-exact-bytes",
+    "check-json-exact-bytes-clean-findings-partial-failure-cancelled",
+    "current-selector-delegated-and-exact-generation-visible",
+    "exact-selector-preserved",
+    "exit-code-mapping",
+    "syntax-error-exit-64-without-service-invocation",
+    "json-stdout-only",
+    "text-projection-preserves-counts-blockers-generations",
+    "no-lower-framework-dependency",
+    "no-source-path-glob-stdin-update-autofix-flags",
+    "deferred-command-non-success-policy",
+    "broken-pipe-and-cancellation-no-double-output",
+    "no-private-source-secret-path-token-leak",
+    "terminal-time-locale-temp-root-independence"
+  ],
+  "checksum_contract": {
+    "algorithm": "sha256",
+    "owner_manifest": "crates/wow-service/examples/CHECKSUMS.json",
+    "required_stdout_vectors": [
+      "service_status_cli_stdout_sha256",
+      "service_clean_cli_stdout_sha256",
+      "service_findings_cli_stdout_sha256",
+      "service_partial_cli_stdout_sha256",
+      "service_failure_cli_stdout_sha256",
+      "service_cancelled_cli_stdout_sha256"
+    ],
+    "state": "pending-service-implementation-and-result-freeze"
+  },
+  "implementation_gate": [
+    "wow-service E0-F implementation and result vectors frozen",
+    "only status/check commands active",
+    "only wow-service framework dependency",
+    "canonical JSON stdout byte-equal to service result",
+    "text projection contains no extra semantic inference",
+    "all exit codes map exactly",
+    "no source/lower-crate/runtime/edit behavior",
+    "all required tests pass"
+  ]
+}
