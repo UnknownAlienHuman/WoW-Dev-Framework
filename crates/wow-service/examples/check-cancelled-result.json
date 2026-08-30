@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e0-check-cancelled-v1",
+  "state": "documentation-only-pending-prerequisite-and-byte-freeze",
+  "operation": "check",
+  "result_kind": "ServiceCancelledResult",
+  "result_id": null,
+  "canonical_sha256": null,
+  "request": {
+    "request_id": null,
+    "project_id": "fixture-project-e0-v1",
+    "generation_selector": {
+      "kind": "Exact",
+      "project_generation_id": null
+    },
+    "scope": {
+      "kind": "AllProjectFiles"
+    }
+  },
+  "selected_context": {
+    "service_context_lease_id": null,
+    "profile_id": "fixture-retail-120100-e0-v1",
+    "reference_generation_id": null,
+    "project_generation_id": null,
+    "project_snapshot_id": null,
+    "analyzer_snapshot_id": null,
+    "rule_registry_id": null
+  },
+  "cancellation": {
+    "phase": "after-rule-execution-before-presentation-publication",
+    "completed_but_unpublished_stages": [
+      "context-acquisition",
+      "scope-resolution",
+      "generic-finding-collection",
+      "rule-execution"
+    ],
+    "published_check_envelope": false,
+    "published_partial_raw_findings": false,
+    "late_or_background_result": false,
+    "component_mutation_performed": false
+  },
+  "check_envelope": null,
+  "semantic_check_status": null,
+  "raw_findings": [],
+  "presentation_graph": null,
+  "recovery_class": "retry_same_request_if_cancelled_and-context-still-current",
+  "payload_safety": {
+    "raw_source_present": false,
+    "absolute_local_path_present": false,
+    "credential_or_private_url_present": false
+  },
+  "producer_versions": [],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_frozen_values": [
+      "request/context/component identities",
+      "cancellation result ID/digest",
+      "producer/tool versions"
+    ]
+  }
+}
