@@ -1,0 +1,298 @@
+{
+  "schema_version": 1,
+  "case_set_id": "wow-rules-e0-api-exists-v1",
+  "state": "documentation-only-pending-prerequisite-and-byte-freeze",
+  "rule_id": "wow.api.exists",
+  "rule_version": 1,
+  "profile_id": "fixture-retail-120100-e0-v1",
+  "reference_generation_id": null,
+  "project_generation_id": null,
+  "analyzer_snapshot_id": null,
+  "cases": [
+    {
+      "case_id": "api.known-found",
+      "project_input": {
+        "file_id": "project-file:main/clean.lua",
+        "source_handle_id": null,
+        "reference_fact_id": null,
+        "call_fact_id": null,
+        "entity_key": "function:C_E0Fixture.KnownApi",
+        "resolution_status": "resolved"
+      },
+      "reference_input": {
+        "lookup_result_id": null,
+        "outcome": "found",
+        "coverage_ids": [],
+        "conflict_ids": []
+      },
+      "expected": {
+        "outcome": "EvaluatedClean",
+        "clean_claim_kind": "api_exists_for_exact_use",
+        "finding_ids": [],
+        "not_evaluated_id": null,
+        "replacement_candidates": [],
+        "autofix": null,
+        "evaluation_id": null
+      }
+    },
+    {
+      "case_id": "api.removed-authoritative-absent",
+      "project_input": {
+        "file_id": "project-file:main/missing-api.lua",
+        "source_handle_id": null,
+        "member_source_span": null,
+        "reference_fact_id": null,
+        "call_fact_id": null,
+        "entity_key": "function:C_E0Fixture.RemovedApi",
+        "resolution_status": "unresolved",
+        "generic_finding_id": null
+      },
+      "reference_input": {
+        "lookup_result_id": null,
+        "outcome": "authoritative_absent",
+        "negative_authority_decision_id": null,
+        "coverage_ids": [],
+        "conflict_ids": []
+      },
+      "expected": {
+        "outcome": "Findings",
+        "finding_count": 1,
+        "finding_id": null,
+        "semantic_category": "wow.api.missing",
+        "technical_severity": "error",
+        "rollout_policy": "advisory",
+        "primary_source_handle_id": null,
+        "primary_span_policy": "exact-member-name-then-full-member-reference",
+        "project_evidence_ids": [],
+        "reference_authority_input_ids": [],
+        "rule_derivation_evidence_ids": [],
+        "root_cause_key": null,
+        "remediation_tier": "plan_only",
+        "remediation_code": "verify-current-api-contract",
+        "replacement_candidates": [],
+        "autofix": null,
+        "absent_reference_source_handle": null,
+        "causal_hint_to_generic_finding_id": null
+      }
+    },
+    {
+      "case_id": "api.removed-partial",
+      "project_input_ref": "api.removed-authoritative-absent.project_input",
+      "reference_input": {
+        "lookup_result_id": null,
+        "outcome": "absent_without_authority",
+        "negative_authority_decision_id": null,
+        "coverage_ids": [],
+        "coverage_status": "Partial",
+        "conflict_ids": []
+      },
+      "expected": {
+        "outcome": "NotEvaluated",
+        "finding_ids": [],
+        "clean_record_id": null,
+        "not_evaluated_id": null,
+        "blocker_kinds": [
+          "reference_absence_non_authoritative",
+          "partial_coverage"
+        ]
+      }
+    },
+    {
+      "case_id": "api.removed-conflict",
+      "project_input_ref": "api.removed-authoritative-absent.project_input",
+      "reference_input": {
+        "lookup_result_id": null,
+        "outcome": "conflict",
+        "coverage_status": "Complete",
+        "coverage_ids": [],
+        "conflict_ids": [
+          null
+        ]
+      },
+      "expected": {
+        "outcome": "NotEvaluated",
+        "finding_ids": [],
+        "not_evaluated_id": null,
+        "blocker_kinds": [
+          "relevant_conflict"
+        ],
+        "complete-ingestion-does-not-bypass-conflict": true
+      }
+    },
+    {
+      "case_id": "api.profile-mismatch",
+      "project_input_ref": "api.removed-authoritative-absent.project_input",
+      "reference_input": {
+        "outcome": "profile_mismatch",
+        "profile_id": "fixture-retail-other-profile"
+      },
+      "expected": {
+        "outcome": "Failed",
+        "error_code": "rule_profile_mismatch",
+        "finding_ids": [],
+        "not_evaluated_id": null
+      }
+    },
+    {
+      "case_id": "api.library-failure",
+      "project_input": {
+        "file_id": "project-file:main/missing-api.lua",
+        "resolution_status": "not_evaluated",
+        "reference_fact_id": null,
+        "blocking_capability": "emmy.library.loaded",
+        "blocking_coverage_status": "Failed"
+      },
+      "expected": {
+        "outcome": "NotEvaluated",
+        "finding_ids": [],
+        "blocker_kinds": [
+          "annotation_library_unavailable",
+          "failed_coverage"
+        ]
+      }
+    },
+    {
+      "case_id": "api.dynamic-computed-member",
+      "project_input": {
+        "file_id": "project-file:main/missing-api.lua",
+        "reference_kind": "member",
+        "resolution_status": "dynamic",
+        "member_spelling": null,
+        "reference_fact_id": null
+      },
+      "expected": {
+        "outcome": "NotEvaluated",
+        "finding_ids": [],
+        "blocker_kinds": [
+          "fact_resolution_ambiguous_or_dynamic"
+        ],
+        "alternate_search_performed": false
+      }
+    },
+    {
+      "case_id": "api.ordinary-unresolved-symbol-nonapplicable",
+      "project_input": {
+        "file_id": "project-file:main/missing-api.lua",
+        "reference_kind": "local",
+        "spelling": "ordinary_missing_local",
+        "resolution_status": "unresolved",
+        "reference_fact_id": null
+      },
+      "expected": {
+        "outcome": "SkippedNonApplicable",
+        "finding_ids": [],
+        "reference_lookup_performed": false
+      }
+    },
+    {
+      "case_id": "api.no-fuzzy-fallback",
+      "project_input_ref": "api.removed-authoritative-absent.project_input",
+      "reference_input": {
+        "outcome": "absent_without_authority",
+        "similar_available_entity": "function:C_E0Fixture.KnownApi"
+      },
+      "expected": {
+        "outcome": "NotEvaluated",
+        "fuzzy_or_similarity_lane_used": false,
+        "replacement_candidates": [],
+        "finding_ids": []
+      }
+    },
+    {
+      "case_id": "api.duplicate-same-span",
+      "project_input": {
+        "duplicate_observations": 2,
+        "same_file_content_span_entity_fact": true
+      },
+      "reference_input_ref": "api.removed-authoritative-absent.reference_input",
+      "expected": {
+        "outcome": "Findings",
+        "finding_count": 1,
+        "deduplication_uses_structured_identity": true
+      }
+    },
+    {
+      "case_id": "api.distinct-use-spans",
+      "project_input": {
+        "uses": [
+          {
+            "source_handle_id": null,
+            "span": null,
+            "reference_fact_id": null
+          },
+          {
+            "source_handle_id": null,
+            "span": null,
+            "reference_fact_id": null
+          }
+        ],
+        "same_entity_key": "function:C_E0Fixture.RemovedApi"
+      },
+      "reference_input_ref": "api.removed-authoritative-absent.reference_input",
+      "expected": {
+        "outcome": "Findings",
+        "finding_count": 2,
+        "repository_level_collapse": false
+      }
+    },
+    {
+      "case_id": "api.generic-causal-hint",
+      "project_input_ref": "api.removed-authoritative-absent.project_input",
+      "generic_finding": {
+        "finding_id": null,
+        "same_project_generation": true,
+        "same_analyzer_snapshot": true,
+        "same_file_content_span_reference_fact": true,
+        "compatible_semantic_category": true
+      },
+      "reference_input_ref": "api.removed-authoritative-absent.reference_input",
+      "expected": {
+        "outcome": "Findings",
+        "causal_hint_id": null,
+        "relation_kind": "causes_or_explains",
+        "generic_finding_suppressed_by_rules": false
+      }
+    },
+    {
+      "case_id": "api.generic-no-unproven-causal-hint",
+      "project_input_ref": "api.removed-authoritative-absent.project_input",
+      "generic_finding": {
+        "finding_id": null,
+        "same_project_generation": true,
+        "same_file_content_span_reference_fact": false,
+        "message_text_similar": true
+      },
+      "reference_input_ref": "api.removed-authoritative-absent.reference_input",
+      "expected": {
+        "outcome": "Findings",
+        "causal_hint_id": null,
+        "causal_hint_present": false
+      }
+    },
+    {
+      "case_id": "api.budget-truncation",
+      "project_input_ref": "api.removed-authoritative-absent.project_input",
+      "reference_input_ref": "api.removed-authoritative-absent.reference_input",
+      "budget_mutation": "selected-scope-not-fully-evaluated",
+      "expected": {
+        "outcome": "NotEvaluated",
+        "blocker_kinds": [
+          "budget_incomplete",
+          "truncated_input"
+        ],
+        "finding_ids": [],
+        "clean_record_id": null
+      }
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "fields_to_freeze": [
+      "reference_generation_id",
+      "project_generation_id",
+      "analyzer_snapshot_id",
+      "all null source/fact/finding/lookup/authority/coverage/conflict/evaluation/root/remediation/causal IDs",
+      "all null source spans and content digests"
+    ]
+  }
+}
