@@ -1,0 +1,265 @@
+{
+  "schema_version": 1,
+  "repository": "UnknownAlienHuman/WoW-Dev-Framework",
+  "current_milestone": "E0",
+  "contract_state": "documentation-only-no-rust-code",
+  "required_reading": [
+    "AGENTS.md",
+    "crates/AGENTS.md",
+    "crates/DEPENDENCY_GRAPH.md",
+    "crates/WORKSTREAMS.md",
+    "target crate brief",
+    "current wow-addon-engineering-kb routes"
+  ],
+  "rules": [
+    "Directory presence does not activate a crate.",
+    "Allowed dependencies are maximum permitted edges, not mandatory dependencies.",
+    "Implement only the active workstream and its executable fixtures.",
+    "Do not create empty placeholder crates or fake successful operations.",
+    "Cross-crate contract changes must update this manifest and the dependency graph."
+  ],
+  "crates": [
+    {
+      "name": "wow-core",
+      "status": "e0-active",
+      "first_milestone": "E0",
+      "brief": "crates/wow-core/README.md",
+      "allowed_dependencies": [],
+      "owns": [
+        "identity",
+        "generation-context",
+        "source-handles",
+        "evidence",
+        "coverage",
+        "findings",
+        "result-envelopes"
+      ],
+      "active_scope": "identity, evidence, coverage, findings, deterministic result envelope"
+    },
+    {
+      "name": "wow-store",
+      "status": "deferred",
+      "first_milestone": "E1",
+      "brief": "crates/wow-store/README.md",
+      "allowed_dependencies": [
+        "wow-core"
+      ],
+      "owns": [
+        "sqlite-lifecycle",
+        "migrations",
+        "generation-transactions",
+        "content-addressed-objects"
+      ]
+    },
+    {
+      "name": "wow-reference",
+      "status": "e0-fixture-slice",
+      "first_milestone": "E0",
+      "brief": "crates/wow-reference/README.md",
+      "allowed_dependencies": [
+        "wow-core",
+        "wow-store"
+      ],
+      "owns": [
+        "reference-profile",
+        "apidoc-ingestion",
+        "raw-metadata",
+        "corrections",
+        "reference-view",
+        "capability-report"
+      ],
+      "active_scope": "fixture-backed exact ReferenceView only; no full pack builder or storage"
+    },
+    {
+      "name": "wow-annotations",
+      "status": "deferred",
+      "first_milestone": "E1",
+      "brief": "crates/wow-annotations/README.md",
+      "allowed_dependencies": [
+        "wow-core",
+        "wow-reference"
+      ],
+      "owns": [
+        "annotation-projection",
+        "wow-dialect-projection",
+        "semantic-parity",
+        "projection-loss-report"
+      ]
+    },
+    {
+      "name": "wow-emmy",
+      "status": "e0-active",
+      "first_milestone": "E0",
+      "brief": "crates/wow-emmy/README.md",
+      "allowed_dependencies": [
+        "wow-core"
+      ],
+      "owns": [
+        "upstream-adapter",
+        "analyzer-actor",
+        "syntax-semantic-facts",
+        "generic-diagnostic-normalization",
+        "compatibility-probe"
+      ],
+      "active_scope": "one pinned analyzer adapter, annotation fixture, generic diagnostic and required semantic facts"
+    },
+    {
+      "name": "wow-project",
+      "status": "e0-minimal-slice",
+      "first_milestone": "E0",
+      "brief": "crates/wow-project/README.md",
+      "allowed_dependencies": [
+        "wow-core",
+        "wow-store",
+        "wow-emmy",
+        "wow-graph",
+        "wow-recognizers"
+      ],
+      "owns": [
+        "workspace-model",
+        "toc-xml-load-model",
+        "project-generation",
+        "incremental-invalidation",
+        "project-view"
+      ],
+      "active_scope": "single configured workspace and coherent project generation only"
+    },
+    {
+      "name": "wow-graph",
+      "status": "deferred",
+      "first_milestone": "E2",
+      "brief": "crates/wow-graph/README.md",
+      "allowed_dependencies": [
+        "wow-core",
+        "wow-store"
+      ],
+      "owns": [
+        "entity-relation-registry",
+        "typed-graph",
+        "parent-axes",
+        "lineage-primitives",
+        "bounded-queries"
+      ]
+    },
+    {
+      "name": "wow-recognizers",
+      "status": "deferred",
+      "first_milestone": "E2",
+      "brief": "crates/wow-recognizers/README.md",
+      "allowed_dependencies": [
+        "wow-core",
+        "wow-emmy",
+        "wow-graph"
+      ],
+      "owns": [
+        "recognizer-schema",
+        "universal-role-matching",
+        "calibration-packs",
+        "mutation-evaluation"
+      ]
+    },
+    {
+      "name": "wow-search",
+      "status": "deferred",
+      "first_milestone": "E4",
+      "brief": "crates/wow-search/README.md",
+      "allowed_dependencies": [
+        "wow-core",
+        "wow-store",
+        "wow-reference",
+        "wow-graph"
+      ],
+      "owns": [
+        "query-normalization",
+        "exact-migration-shape-fts-graph-lanes",
+        "deterministic-ranking",
+        "search-explanations"
+      ]
+    },
+    {
+      "name": "wow-rules",
+      "status": "e0-active",
+      "first_milestone": "E0",
+      "brief": "crates/wow-rules/README.md",
+      "allowed_dependencies": [
+        "wow-core",
+        "wow-reference",
+        "wow-emmy",
+        "wow-project",
+        "wow-graph"
+      ],
+      "owns": [
+        "diagnostic-providers",
+        "capability-declarations",
+        "rule-findings",
+        "remediation-tiers",
+        "rule-evaluation"
+      ],
+      "active_scope": "wow.api.exists and one direct wow.secret.local_operation rule only"
+    },
+    {
+      "name": "wow-cbm",
+      "status": "deferred",
+      "first_milestone": "E6",
+      "brief": "crates/wow-cbm/README.md",
+      "allowed_dependencies": [
+        "wow-core"
+      ],
+      "owns": [
+        "optional-mcp-bridge",
+        "semantic-candidates",
+        "external-generation",
+        "candidate-normalization"
+      ]
+    },
+    {
+      "name": "wow-context",
+      "status": "deferred",
+      "first_milestone": "E3",
+      "brief": "crates/wow-context/README.md",
+      "allowed_dependencies": [
+        "wow-core",
+        "wow-reference",
+        "wow-emmy",
+        "wow-project",
+        "wow-graph",
+        "wow-search"
+      ],
+      "owns": [
+        "l0-l1-skeletons",
+        "project-map",
+        "context-budgets",
+        "detail-negotiation",
+        "context-metrics"
+      ]
+    },
+    {
+      "name": "wow-service",
+      "status": "e0-active",
+      "first_milestone": "E0",
+      "brief": "crates/wow-service/README.md",
+      "allowed_dependencies": [
+        "wow-core",
+        "wow-store",
+        "wow-reference",
+        "wow-annotations",
+        "wow-emmy",
+        "wow-project",
+        "wow-graph",
+        "wow-recognizers",
+        "wow-search",
+        "wow-rules",
+        "wow-cbm",
+        "wow-context"
+      ],
+      "owns": [
+        "use-case-orchestration",
+        "generation-coherence",
+        "status",
+        "check",
+        "public-operation-envelopes"
+      ],
+      "active_scope": "status and check orchestration only"
+    }
+  ]
+}
