@@ -1,0 +1,312 @@
+{
+  "schema_version": 1,
+  "case_set_id": "wow-reference-e0-b-lookups-v1",
+  "profile_id": "fixture-retail-120100-e0-v1",
+  "reference_generation_policy": "derive-per-variant-before-byte-freeze",
+  "cases": [
+    {
+      "case_id": "lookup.complete.known-api",
+      "variant_id": "complete",
+      "query_kind": "symbol_exact",
+      "query": {
+        "entity_key": "function:C_E0Fixture.KnownApi",
+        "expected_entity_kind": "function"
+      },
+      "expected": {
+        "outcome": "found",
+        "entity_keys": [
+          "function:C_E0Fixture.KnownApi"
+        ],
+        "facet_kinds": [],
+        "required_coverage": [
+          {
+            "capability_id": "reference.symbol.exact_lookup",
+            "partition_id": "reference.fixture.apidoc.system:C_E0Fixture",
+            "status": "Complete"
+          }
+        ],
+        "negative_authority": "not_applicable",
+        "blocker_codes": [],
+        "conflict_codes": []
+      }
+    },
+    {
+      "case_id": "lookup.complete.secret-text-symbol",
+      "variant_id": "complete",
+      "query_kind": "symbol_exact",
+      "query": {
+        "entity_key": "function:C_E0Fixture.SecretText",
+        "expected_entity_kind": "function"
+      },
+      "expected": {
+        "outcome": "found",
+        "entity_keys": [
+          "function:C_E0Fixture.SecretText"
+        ],
+        "facet_kinds": [],
+        "required_coverage": [
+          {
+            "capability_id": "reference.symbol.exact_lookup",
+            "partition_id": "reference.fixture.apidoc.system:C_E0Fixture",
+            "status": "Complete"
+          }
+        ],
+        "negative_authority": "not_applicable",
+        "blocker_codes": [],
+        "conflict_codes": []
+      }
+    },
+    {
+      "case_id": "lookup.complete.removed-api",
+      "variant_id": "complete",
+      "query_kind": "symbol_exact",
+      "query": {
+        "entity_key": "function:C_E0Fixture.RemovedApi",
+        "expected_entity_kind": "function"
+      },
+      "expected": {
+        "outcome": "authoritative_absent",
+        "entity_keys": [],
+        "facet_kinds": [],
+        "required_coverage": [
+          {
+            "capability_id": "reference.symbol.exact_lookup",
+            "partition_id": "reference.fixture.apidoc.system:C_E0Fixture",
+            "status": "Complete"
+          }
+        ],
+        "negative_authority": "authoritative",
+        "blocker_codes": [],
+        "conflict_codes": [],
+        "replacement_candidates": []
+      }
+    },
+    {
+      "case_id": "lookup.partial.known-api",
+      "variant_id": "partial",
+      "query_kind": "symbol_exact",
+      "query": {
+        "entity_key": "function:C_E0Fixture.KnownApi",
+        "expected_entity_kind": "function"
+      },
+      "expected": {
+        "outcome": "found",
+        "entity_keys": [
+          "function:C_E0Fixture.KnownApi"
+        ],
+        "facet_kinds": [],
+        "required_coverage": [
+          {
+            "capability_id": "reference.symbol.exact_lookup",
+            "partition_id": "reference.fixture.apidoc.system:C_E0Fixture",
+            "status": "Partial"
+          }
+        ],
+        "negative_authority": "not_applicable",
+        "blocker_codes": [
+          "missing_declared_input",
+          "unknown_field_blocks_capability"
+        ],
+        "conflict_codes": []
+      }
+    },
+    {
+      "case_id": "lookup.partial.removed-api",
+      "variant_id": "partial",
+      "query_kind": "symbol_exact",
+      "query": {
+        "entity_key": "function:C_E0Fixture.RemovedApi",
+        "expected_entity_kind": "function"
+      },
+      "expected": {
+        "outcome": "absent_without_authority",
+        "entity_keys": [],
+        "facet_kinds": [],
+        "required_coverage": [
+          {
+            "capability_id": "reference.symbol.exact_lookup",
+            "partition_id": "reference.fixture.apidoc.system:C_E0Fixture",
+            "status": "Partial"
+          }
+        ],
+        "negative_authority": "unavailable",
+        "blocker_codes": [
+          "query_partition_partial",
+          "missing_declared_input",
+          "unknown_field_blocks_capability"
+        ],
+        "conflict_codes": [],
+        "replacement_candidates": []
+      }
+    },
+    {
+      "case_id": "lookup.conflict.secret-text-symbol",
+      "variant_id": "conflict",
+      "query_kind": "symbol_exact",
+      "query": {
+        "entity_key": "function:C_E0Fixture.SecretText",
+        "expected_entity_kind": "function"
+      },
+      "expected": {
+        "outcome": "found",
+        "entity_keys": [
+          "function:C_E0Fixture.SecretText"
+        ],
+        "facet_kinds": [],
+        "required_coverage": [
+          {
+            "capability_id": "reference.symbol.exact_lookup",
+            "partition_id": "reference.fixture.apidoc.system:C_E0Fixture",
+            "status": "Complete"
+          }
+        ],
+        "negative_authority": "not_applicable",
+        "blocker_codes": [],
+        "conflict_codes": [
+          "duplicate_registration_conflict"
+        ]
+      }
+    },
+    {
+      "case_id": "facet.complete.secret-text",
+      "variant_id": "complete",
+      "query_kind": "restriction_facets",
+      "query": {
+        "entity_key": "function:C_E0Fixture.SecretText",
+        "facet_kind_filter": [
+          "secret.return"
+        ]
+      },
+      "expected": {
+        "outcome": "found",
+        "entity_keys": [
+          "function:C_E0Fixture.SecretText"
+        ],
+        "facet_kinds": [
+          "secret.return"
+        ],
+        "facet_targets": [
+          "return_position:1"
+        ],
+        "facet_applicability": [
+          "unconditional_fixture"
+        ],
+        "required_coverage": [
+          {
+            "capability_id": "reference.restriction.facets",
+            "partition_id": "reference.fixture.restriction:C_E0Fixture.SecretText",
+            "status": "Complete"
+          }
+        ],
+        "blocker_codes": [],
+        "conflict_codes": []
+      }
+    },
+    {
+      "case_id": "facet.complete.known-api-none",
+      "variant_id": "complete",
+      "query_kind": "restriction_facets",
+      "query": {
+        "entity_key": "function:C_E0Fixture.KnownApi",
+        "facet_kind_filter": [
+          "secret.return"
+        ]
+      },
+      "expected": {
+        "outcome": "none_authoritatively",
+        "entity_keys": [
+          "function:C_E0Fixture.KnownApi"
+        ],
+        "facet_kinds": [],
+        "required_coverage": [
+          {
+            "capability_id": "reference.restriction.facets",
+            "partition_id": "reference.fixture.restriction:C_E0Fixture.SecretText",
+            "status": "Complete",
+            "scope_note": "E0 closed catalog declares complete secret.return coverage for both fixture functions"
+          }
+        ],
+        "blocker_codes": [],
+        "conflict_codes": []
+      }
+    },
+    {
+      "case_id": "facet.conflict.secret-text",
+      "variant_id": "conflict",
+      "query_kind": "restriction_facets",
+      "query": {
+        "entity_key": "function:C_E0Fixture.SecretText",
+        "facet_kind_filter": [
+          "secret.return"
+        ]
+      },
+      "expected": {
+        "outcome": "conflict",
+        "entity_keys": [
+          "function:C_E0Fixture.SecretText"
+        ],
+        "facet_kinds": [],
+        "required_coverage": [
+          {
+            "capability_id": "reference.restriction.facets",
+            "partition_id": "reference.fixture.restriction:C_E0Fixture.SecretText",
+            "status": "Complete"
+          }
+        ],
+        "blocker_codes": [
+          "unresolved_registration_conflict"
+        ],
+        "conflict_codes": [
+          "duplicate_registration_conflict"
+        ]
+      }
+    },
+    {
+      "case_id": "lookup.profile-mismatch",
+      "variant_id": "complete",
+      "query_kind": "symbol_exact",
+      "query": {
+        "profile_id_override": "fixture-retail-other-profile",
+        "entity_key": "function:C_E0Fixture.KnownApi",
+        "expected_entity_kind": "function"
+      },
+      "expected": {
+        "outcome": "profile_mismatch",
+        "entity_keys": [],
+        "facet_kinds": [],
+        "required_coverage": [],
+        "negative_authority": "not_evaluated",
+        "blocker_codes": [
+          "profile_mismatch"
+        ],
+        "conflict_codes": []
+      }
+    },
+    {
+      "case_id": "lookup.no-fuzzy-fallback",
+      "variant_id": "complete",
+      "query_kind": "symbol_exact",
+      "query": {
+        "entity_key": "function:C_E0Fixture.KnownAPI",
+        "expected_entity_kind": "function",
+        "note": "Case differs from KnownApi and must not be corrected."
+      },
+      "expected": {
+        "outcome": "authoritative_absent",
+        "entity_keys": [],
+        "facet_kinds": [],
+        "required_coverage": [
+          {
+            "capability_id": "reference.symbol.exact_lookup",
+            "partition_id": "reference.fixture.apidoc.system:C_E0Fixture",
+            "status": "Complete"
+          }
+        ],
+        "negative_authority": "authoritative",
+        "blocker_codes": [],
+        "conflict_codes": [],
+        "replacement_candidates": []
+      }
+    }
+  ]
+}
