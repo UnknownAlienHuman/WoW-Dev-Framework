@@ -1,0 +1,183 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e0-check-findings-v1",
+  "state": "documentation-only-pending-prerequisite-and-byte-freeze",
+  "operation": "check",
+  "request": {
+    "request_id": null,
+    "project_id": "fixture-project-e0-v1",
+    "generation_selector": {
+      "kind": "Exact",
+      "project_generation_id": null
+    },
+    "scope": {
+      "kind": "AllProjectFiles"
+    },
+    "requested_rules": [
+      "wow.api.exists@1",
+      "wow.secret.local_operation@1"
+    ],
+    "presentation_mode": "raw_and_roots"
+  },
+  "semantic_status": "findings",
+  "result_id": null,
+  "canonical_sha256": null,
+  "service_context": {
+    "service_configuration_id": null,
+    "service_context_lease_id": null,
+    "profile_id": "fixture-retail-120100-e0-v1",
+    "reference_generation_id": null,
+    "reference_view_id": null,
+    "project_generation_id": null,
+    "project_snapshot_id": null,
+    "project_view_id": null,
+    "analyzer_snapshot_id": null,
+    "rule_registry_id": null
+  },
+  "generic_finding_set": {
+    "set_id": null,
+    "accepted_generic_finding_ids": [],
+    "accepted_generic_finding_count": null,
+    "required_dedicated_fixture_error_count": 1,
+    "optional_same_source_removed_api_symptom_count": null,
+    "coverage_ids": [],
+    "truncated": false,
+    "freeze_owner": "wow-emmy/e0-c/1"
+  },
+  "rule_outcomes": {
+    "execution_report_id": null,
+    "api_findings": [
+      {
+        "finding_id": null,
+        "rule_id": "wow.api.exists",
+        "rule_version": 1,
+        "semantic_category": "wow.api.missing",
+        "technical_severity": "error",
+        "rollout_policy": "advisory",
+        "primary_source_handle_id": null,
+        "root_cause_key": null,
+        "remediation_id": null
+      }
+    ],
+    "secret_findings": [
+      {
+        "finding_id": null,
+        "scope": "unsafe_concat",
+        "guard_state": "absent",
+        "primary_source_handle_id": null,
+        "root_cause_key": null,
+        "remediation_id": null
+      },
+      {
+        "finding_id": null,
+        "scope": "guard_after_use",
+        "guard_state": "after_use",
+        "primary_source_handle_id": null,
+        "root_cause_key": null,
+        "remediation_id": null
+      },
+      {
+        "finding_id": null,
+        "scope": "different_value_guard",
+        "guard_state": "different_value",
+        "primary_source_handle_id": null,
+        "root_cause_key": null,
+        "remediation_id": null
+      }
+    ],
+    "clean_evaluations": [
+      {
+        "evaluation_id": null,
+        "rule_id": "wow.secret.local_operation",
+        "rule_version": 1,
+        "scope": "guarded_concat",
+        "clean_claim_kind": "secret_fixture_operation_guarded_for_exact_value_and_scope"
+      }
+    ],
+    "not_evaluated": [],
+    "failures": [],
+    "cancelled": false
+  },
+  "raw_findings": {
+    "finding_ids": [],
+    "raw_finding_count": null,
+    "fixed_rule_finding_count": 4,
+    "all_generic-and-rule-findings-preserved": true,
+    "canonical_exact_identity_dedup_only": true
+  },
+  "presentation_graph": {
+    "graph_id": null,
+    "nodes": [],
+    "edges": [],
+    "display_root_ids": [],
+    "independent_root_ids": [],
+    "raw_problem_record_count": null,
+    "display_root_count": null,
+    "child_relation_count": null,
+    "canonical_sha256": null,
+    "optional_api_generic_folding": {
+      "enabled_only_if_frozen_causal_hint_exists": true,
+      "api_finding_is_root": true,
+      "same_source_generic_symptom_is_child": true,
+      "raw_both_preserved": true
+    },
+    "independent_expected_roots": [
+      "dedicated-generic-fixture-error",
+      "api-missing-root",
+      "secret-unsafe-concat-root",
+      "secret-guard-after-use-root",
+      "secret-different-value-root"
+    ]
+  },
+  "clean_evaluations": [
+    null
+  ],
+  "not_evaluated": [],
+  "component_failures": [],
+  "warnings": [],
+  "capability_summary_ids": [],
+  "coverage_ids": [],
+  "conflict_ids": [],
+  "deferred_operations": [
+    "lookup",
+    "search",
+    "tree",
+    "skeleton",
+    "plan",
+    "patch_impact",
+    "index_repo",
+    "runtime_review",
+    "lsp",
+    "mcp",
+    "release_packaging"
+  ],
+  "budget": {
+    "spec_id": null,
+    "usage_id": null,
+    "truncated": false,
+    "all_requested_scopes_complete": true
+  },
+  "status_proof": {
+    "fixed_api_finding_count": 1,
+    "fixed_secret_finding_count": 3,
+    "fixed_secret_clean_count": 1,
+    "generic_finding_count": null,
+    "not_evaluated_count": 0,
+    "failure_count": 0,
+    "truncation_count": 0,
+    "all_requested_scopes_completed": true,
+    "advisory-findings-are-still-semantic-findings": true
+  },
+  "producer_versions": [],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_frozen_values": [
+      "all service/context/component IDs",
+      "generic finding family/count/IDs",
+      "all rule finding/clean/root/remediation IDs",
+      "raw finding count/order/IDs",
+      "presentation graph nodes/edges/roots/selection IDs",
+      "result ID and canonical SHA-256"
+    ]
+  }
+}
