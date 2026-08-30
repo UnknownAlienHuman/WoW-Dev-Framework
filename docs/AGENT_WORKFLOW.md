@@ -74,6 +74,8 @@ Only after current Blizzard/project facts are understood:
 
 External code is implementation evidence, not platform authority.
 
+When repository writes are required, follow the GitHub connector capability-verification procedure in [`AGENTS.md`](../AGENTS.md). Lack of local network access, Git credentials, or an authenticated `gh` session does not establish that connector write actions are unavailable.
+
 ## 6. Implement the smallest coherent change
 
 - preserve current architecture and project conventions;

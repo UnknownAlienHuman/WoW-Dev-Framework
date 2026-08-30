@@ -132,7 +132,7 @@ Use the vocabulary in `docs/PROVENANCE_AND_COVERAGE.md`. A result can be source-
 ## Documentation rules
 
 - English is the canonical repository language.
-- The archived Russian v8.0 source document is historical input, not the current navigation surface.
+- The v8.0 archive path is a retired-source tombstone; use Git history for architecture archaeology.
 - `docs/ARCHITECTURE.md`, `docs/PROVENANCE_AND_COVERAGE.md`, public schemas, and accepted ADRs are normative.
 - `docs/IDEAS.md` is explicitly non-normative.
 - Avoid duplicated truth. Link to the owning document.
@@ -146,6 +146,17 @@ Use the vocabulary in `docs/PROVENANCE_AND_COVERAGE.md`. A result can be source-
 - Store only manifests, checksums, fixtures permitted by license, and stable source handles.
 
 ## GitHub and automation
+
+### Connector capability verification
+
+Before claiming that GitHub is read-only or that a write cannot be performed:
+
+1. reload the complete GitHub tool catalog without a query filter;
+2. call `get_repo` and verify `permissions.push == true` for the target repository;
+3. if write capability is still uncertain, call `create_blob` as a harmless probe and do not attach that blob to a tree or commit;
+4. use GitHub API write actions even when the local VM has no network route, Git credentials, or authenticated `gh` session.
+
+Never infer connector capabilities from a filtered or partially loaded tool list. Local Git failure is not evidence that connector writes are unavailable.
 
 - Do not add decorative CI. A workflow must execute a real local command, have a defined owner, and correspond to a roadmap gate.
 - Do not enable scheduled jobs, release automation, CodeQL, Dependabot, or publishing merely by convention during bootstrap.

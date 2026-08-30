@@ -10,7 +10,7 @@ English documentation in this directory is the canonical navigation surface for 
 | **Operational** | Defines how contributors, agents, tests, and releases apply the normative contracts. |
 | **Research** | Pins external inputs and records verified observations. It is not automatically a product contract. |
 | **Candidate** | Contains ideas that require an experiment or ADR before implementation. |
-| **Archive** | Preserved source material. It may explain history but does not control current routing. |
+| **Archive** | Retired routing tombstones. Superseded source content is available only through Git history and does not control current routing. |
 
 ## Read first
 
@@ -44,9 +44,9 @@ English documentation in this directory is the canonical navigation surface for 
 
 ## Archive
 
-- [Architecture v8.0 source document (Russian)](archive/WOW_EMMY_COGNITIVE_PLATFORM_ARCHITECTURE_V8_0_RU.md)
+- [Retired v8.0 architecture source tombstone](archive/WOW_EMMY_COGNITIVE_PLATFORM_ARCHITECTURE_V8_0_RU.md)
 
-The archived document supplied the initial system model and decision register. The English contracts in this directory are the maintained repository surface.
+The original v8.0 source was retired from the working tree. Use Git history only for architecture archaeology; the English contracts in this directory are the maintained repository surface.
 
 ## Update rules
 

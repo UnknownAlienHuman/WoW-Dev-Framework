@@ -60,7 +60,7 @@ A user should be able to:
 - execution or injection inside the WoW client;
 - a graph database server or vector database;
 - full interprocedural proof of every dynamic Lua behavior;
-- repository-specific product modes for ElvUI, oUF, WeakAuras, or any other addon;
+- repository-specific product modes for any named addon or framework;
 - redistribution of third-party addon repositories;
 - automatic code fixes based only on fuzzy or semantic similarity;
 - pretending that static analysis can determine all runtime Secret or protected-state behavior.

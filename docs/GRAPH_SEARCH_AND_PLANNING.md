@@ -89,7 +89,7 @@ flavor/edition partitions
 Secret guards and unsafe sinks
 ```
 
-Named calibration packs may encode structural patterns observed in Ace3, oUF, ElvUI, WeakAuras, BigWigs, Details, or Plater. They emit only universal roles.
+Named calibration packs may encode structural patterns observed in Ace3, oUF, WeakAuras, BigWigs, Details, or Plater. They emit only universal roles.
 
 Recognizer changes require corpus fixtures and mutation tests that demonstrate precision beyond the named source repository.
 

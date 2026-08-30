@@ -142,7 +142,7 @@ no partial profile produces an authoritative miss
 
 - declarative recognizer DSL over canonical facts;
 - core TOC/XML/factory/registry/state/hook recognizers;
-- Ace3/oUF/ElvUI/WeakAuras/BigWigs/Details/Plater calibration packs;
+- Ace3/oUF/WeakAuras/BigWigs/Details/Plater calibration packs;
 - external repository manifests and official GitHub workflow.
 
 ### Gate

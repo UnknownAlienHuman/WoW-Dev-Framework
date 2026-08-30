@@ -137,7 +137,7 @@ This register converts the v8.0 architecture decisions into stable English repos
 
 **Decision:** the tool and generated templates use MIT, with visible/unobfuscated public development as the release target.
 
-**Consequence:** third-party notices and source provenance are retained; private bootstrap status does not change the intended license.
+**Consequence:** third-party notices and source provenance are retained; repository visibility does not alter the license or release contract.
 
 ### ADR-022 — No default component without justification
 

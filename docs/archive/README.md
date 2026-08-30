@@ -1,7 +1,7 @@
 # Archive
 
-Files in this directory are preserved source material. They may explain the origin of decisions but are not the maintained repository navigation surface.
+This directory contains retired routing tombstones, not maintained source material.
 
-- `WOW_EMMY_COGNITIVE_PLATFORM_ARCHITECTURE_V8_0_RU.md` — Russian architecture source document supplied during repository bootstrap.
+- `WOW_EMMY_COGNITIVE_PLATFORM_ARCHITECTURE_V8_0_RU.md` — tombstone for the superseded v8.0 architecture source removed from the working tree.
 
-Current English contracts live one directory above. When archive material conflicts with an accepted English ADR or public schema, the maintained English contract controls.
+Use Git history only when architecture archaeology is explicitly required. Current English contracts live one directory above and control implementation, review, and navigation.

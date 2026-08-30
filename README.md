@@ -2,9 +2,9 @@
 
 **Rust-first, editor-independent code intelligence and agent tooling for World of Warcraft addon development.**
 
-> **Status:** private architecture and repository bootstrap. Implementation has not started.
+> **Status:** architecture and repository bootstrap. Implementation has not started.
 >
-> **Compatibility model:** every result is evaluated against one exact World of Warcraft reference profile. The first planned compatibility fixtures cover Midnight-era Interface `120001` and `120005`; newer live profiles are added only from pinned Blizzard builds and source digests.
+> **Compatibility model:** every result is evaluated against one exact World of Warcraft reference profile. The repository does not embed a floating “latest” baseline; E0 must pin a concrete fixture profile, while live patch guidance remains in the separate [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb).
 >
 > **Immediate milestone:** build the E0 vertical slice. Do not replace it with another architecture rewrite.
 
