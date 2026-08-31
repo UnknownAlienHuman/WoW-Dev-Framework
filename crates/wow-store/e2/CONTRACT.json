@@ -1,0 +1,130 @@
+{
+  "schema_version": 1,
+  "contract_id": "wow-store/e2-d/project-store-generation-publication",
+  "state": "implementation-ready-documentation-no-rust-code",
+  "work_package": "E2-D",
+  "crate": "wow-store",
+  "direct_framework_dependencies": [
+    "wow-core"
+  ],
+  "prerequisites": [
+    {
+      "contract_id": "wow-core/e0-a/1",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-store/e1-a/1",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-graph/e2-a/typed-assertion-partition-query-core",
+      "logical_bundle_freeze_required_before_integrated_fixture": true
+    },
+    {
+      "contract_id": "wow-project/e2-c/toc-xml-load-incremental-index",
+      "candidate_contract_freeze_required_before_integrated_fixture": true
+    }
+  ],
+  "selected_physical_model": {
+    "profile_kind": "immutable-file-per-generation-sqlite",
+    "shared_content_addressed_object_store": true,
+    "staging_wal_permitted": true,
+    "published_writable_wal_permitted": false,
+    "one_writer": true,
+    "one_coherent_head_record": true,
+    "row_versioned_single_database": "deferred"
+  },
+  "active_scope": [
+    "project-store-physical-profile",
+    "owned-root-and-filesystem-capability",
+    "registered-schema-operation-read-validation-bundles",
+    "one-writer-staging-generation-transaction",
+    "project-and-graph-logical-partitions-in-one-store-generation",
+    "content-addressed-object-write-and-reference-manifests",
+    "checkpoint-close-seal-atomic-materialization",
+    "sealed-generation-read-only-open-and-independent-validation",
+    "opaque-typed-coherent-publication-head-compare-and-swap",
+    "generation-read-leases",
+    "recovery-inventory-and-sealed-inactive-revalidation",
+    "retention-roots-generation-object-mark-and-sweep-gc",
+    "security-budgets-cancellation-fault-injection-determinism"
+  ],
+  "deferred_scope": [
+    "domain-project-graph-semantic-orchestration",
+    "row-versioned-single-database-project-store",
+    "remote-or-multi-host-store",
+    "online-in-place-migration-repair-compaction",
+    "search-fts-profile",
+    "source-acquisition-parsing-analysis-recognition",
+    "editor-client-network-process-access",
+    "release-publication-ci"
+  ],
+  "operations": [
+    "validate_project_store_profile",
+    "validate_registered_bundle_set",
+    "begin_project_store_generation",
+    "execute_registered_generation_plan",
+    "validate_staging_generation",
+    "commit_and_seal_generation",
+    "open_sealed_generation",
+    "validate_open_generation",
+    "compare_and_swap_publication_head",
+    "acquire_generation_lease",
+    "release_generation_lease",
+    "classify_recovery_inventory",
+    "recover_or_quarantine_generation",
+    "compute_retention_roots",
+    "plan_generation_and_object_gc",
+    "execute_validated_gc_plan"
+  ],
+  "hard_rules": [
+    "wow-store depends only on wow-core",
+    "store executes registered bounded operations and never caller SQL callbacks PRAGMAs tables extensions or UDFs",
+    "all domain writes for one publication use one staging generation transaction",
+    "commit checkpoint close seal and read-only validation precede head CAS",
+    "published generations are immutable",
+    "one coherent head replaces separate project and graph current pointers",
+    "head updates use exact compare-and-swap and never silently rebase",
+    "read handles bind one exact generation lease and never follow a new head",
+    "recovery classifies and revalidates but never edits sealed generations",
+    "retention is root based and age alone never authorizes deletion",
+    "object GC follows retained generation reference manifests",
+    "logical and physical determinism are reported separately",
+    "no arbitrary filesystem database network process editor client source execution or CI"
+  ],
+  "normative_files": [
+    "crates/wow-store/README.md",
+    "crates/wow-store/e2/README.md",
+    "crates/wow-store/e2/AGENTS.md",
+    "crates/wow-store/e2/DECISIONS.md",
+    "crates/wow-store/e2/DATA_MODEL.md",
+    "crates/wow-store/e2/PHYSICAL_MODEL.md",
+    "crates/wow-store/e2/LOGICAL_SCHEMA_AND_REGISTERED_OPERATIONS.md",
+    "crates/wow-store/e2/PUBLICATION_TRANSACTION.md",
+    "crates/wow-store/e2/READ_SNAPSHOTS_AND_LEASES.md",
+    "crates/wow-store/e2/RECOVERY_RETENTION_AND_GC.md",
+    "crates/wow-store/e2/INTEGRITY_VALIDATION_AND_SECURITY.md",
+    "crates/wow-store/e2/ERROR_MODEL.md",
+    "crates/wow-store/e2/TEST_MATRIX.md",
+    "crates/wow-store/e2/IMPLEMENTATION_PLAN.md",
+    "crates/wow-store/e2/CONTRACT.json",
+    "crates/wow-store/e2/examples/README.md",
+    "crates/wow-store/e2/examples/physical-profile.json",
+    "crates/wow-store/e2/examples/store-generation.json",
+    "crates/wow-store/e2/examples/publication-cases.json",
+    "crates/wow-store/e2/examples/read-lease-cases.json",
+    "crates/wow-store/e2/examples/recovery-gc-cases.json",
+    "crates/wow-store/e2/examples/CHECKSUMS.json"
+  ],
+  "freeze_gate": {
+    "implementation_state": "not-started",
+    "required_before_first_rust_implementation": [
+      "wow-core and E1-A store implementation commits and fixture digests",
+      "SQLite runtime compile-option filesystem durability and physical-profile pins",
+      "registered schema operation read and validation bundle IDs",
+      "staging transaction object seal open head lease recovery retention and GC vectors",
+      "integrated project and graph logical bundle vectors",
+      "all member and bundle SHA-256 values"
+    ]
+  }
+}
