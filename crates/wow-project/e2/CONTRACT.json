@@ -1,0 +1,153 @@
+{
+  "schema_version": 1,
+  "contract_id": "wow-project/e2-c/toc-xml-load-incremental-index",
+  "state": "implementation-ready-documentation-no-rust-code",
+  "work_package": "E2-C",
+  "crate": "wow-project",
+  "direct_framework_dependencies": [
+    "wow-core",
+    "wow-emmy",
+    "wow-graph",
+    "wow-recognizers"
+  ],
+  "inactive_dependency_until_e2_d": "wow-store",
+  "prerequisites": [
+    {
+      "contract_id": "wow-core/e0-a/1",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-emmy/e0-c/1",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-graph/e2-a/typed-assertion-partition-query-core",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-recognizers/e2-b/core-structural-rules",
+      "implementation_and_fixture_freeze_required": true
+    }
+  ],
+  "active_scope": [
+    "materialized-project-source-snapshot",
+    "root-universe-package-and-file-inventory",
+    "bounded-toc-parser-variants-directives-files-dependencies-lod-bootstrap-savedvariables",
+    "bounded-streaming-xml-parser-includes-templates-objects-inheritance-scripts",
+    "source-mapped-xml-inline-lua-virtual-units",
+    "static-package-file-unit-load-model-and-reachability",
+    "generation-bound-wow-emmy-workspace-update-and-snapshot",
+    "project-to-recognizer-fact-adapters",
+    "recognizer-execution-orchestration",
+    "project-and-recognizer-graph-proposal-validation",
+    "dependency-driven-incremental-invalidation-and-reuse",
+    "project-index-candidate-and-read-view",
+    "coverage-conflict-truncation-not-evaluated-security-budgets-determinism",
+    "e2-d-publication-bundle-boundary"
+  ],
+  "deferred_scope": [
+    "persistent-projectstore-sqlite-wal-migrations-transactions",
+    "atomic-projectsnapshot-graphsnapshot-current-publication",
+    "retention-checkpoint-backup-recovery-gc",
+    "floating-repository-or-installed-addon-discovery",
+    "savedvariables-contents-logs-runtime-event-payloads",
+    "automatic-dependency-download-or-full-source-index",
+    "blizzard-ui-source-graph-and-skeletons",
+    "diagnostics-severity-remediation-autofix",
+    "search-lineage-impact-codebase-memory-runtime",
+    "source-mutation-editor-client-process-network",
+    "ci"
+  ],
+  "operations": [
+    "validate_project_index_request",
+    "validate_project_source_snapshot",
+    "select_project_toc_variants",
+    "parse_toc_partition",
+    "parse_xml_partition",
+    "build_project_load_model",
+    "materialize_project_lua_units",
+    "build_project_analyzer_update",
+    "validate_project_analyzer_snapshot",
+    "build_recognizer_fact_bundles",
+    "run_project_recognizers",
+    "validate_project_graph_proposals",
+    "plan_project_incremental_invalidation",
+    "assemble_project_index_candidate",
+    "validate_project_index_candidate",
+    "open_project_index_candidate_view"
+  ],
+  "candidate_statuses": [
+    "CompleteCandidate",
+    "PartialCandidate",
+    "Failed",
+    "Cancelled",
+    "NoChange"
+  ],
+  "source_universes": [
+    "first_party_project",
+    "declared_dependency_metadata",
+    "declared_dependency_source",
+    "analyzer_library"
+  ],
+  "hard_rules": [
+    "one exact materialized source snapshot and selected profile",
+    "one selected TOC variant per package with no cross-variant merge",
+    "unknown TOC and XML records are preserved with narrow coverage impact",
+    "TOC order is semantic and filesystem order is never substituted",
+    "LOD and Bootstrap are static metadata not runtime readiness proof",
+    "XML DTD external entities network and execution are disabled",
+    "inline XML Lua becomes source-mapped virtual input for wow-emmy",
+    "wow-emmy is the only Lua parser and analyzer",
+    "static load model is not runtime load success frame readiness or callback accessibility",
+    "SavedVariables roots require TOC declarations and contents are never read",
+    "fact adapters report all unsupported or lossy mappings",
+    "native custom EventRegistry bridge and CVar signals remain distinct",
+    "hook and event structures never claim taint combat protected managed or runtime safety",
+    "recognizers emit proposals and project never mutates their rules",
+    "graph independently validates every proposal and rejections remain visible",
+    "incremental reuse requires exact dependency proof and unknown impact widens conservatively",
+    "removed inputs remove all target derived facts matches proposals and handles",
+    "E2-C produces NotPublishedE2C candidates only and no ProjectStore or GraphGeneration publication",
+    "first party dependency library reference external and runtime universes never collapse",
+    "no source repository hook build test Lua XML TOC or generated code execution",
+    "no filesystem discovery network process editor client SQL or CI in the library contract"
+  ],
+  "normative_files": [
+    "crates/wow-project/e2/README.md",
+    "crates/wow-project/e2/AGENTS.md",
+    "crates/wow-project/e2/DECISIONS.md",
+    "crates/wow-project/e2/DATA_MODEL.md",
+    "crates/wow-project/e2/PROJECT_ROOTS_AND_UNIVERSES.md",
+    "crates/wow-project/e2/TOC_MODEL.md",
+    "crates/wow-project/e2/XML_MODEL.md",
+    "crates/wow-project/e2/LOAD_MODEL.md",
+    "crates/wow-project/e2/FACT_ADAPTERS.md",
+    "crates/wow-project/e2/INCREMENTAL_INVALIDATION.md",
+    "crates/wow-project/e2/ANALYZER_RECOGNIZER_GRAPH_PIPELINE.md",
+    "crates/wow-project/e2/PUBLICATION_BOUNDARY.md",
+    "crates/wow-project/e2/SECURITY_AND_BUDGETS.md",
+    "crates/wow-project/e2/ERROR_MODEL.md",
+    "crates/wow-project/e2/TEST_MATRIX.md",
+    "crates/wow-project/e2/IMPLEMENTATION_PLAN.md",
+    "crates/wow-project/e2/CONTRACT.json",
+    "crates/wow-project/e2/examples/README.md",
+    "crates/wow-project/e2/examples/source-snapshot.json",
+    "crates/wow-project/e2/examples/toc-cases.json",
+    "crates/wow-project/e2/examples/xml-cases.json",
+    "crates/wow-project/e2/examples/load-model.json",
+    "crates/wow-project/e2/examples/analyzer-recognizer-handoff.json",
+    "crates/wow-project/e2/examples/invalidation-cases.json",
+    "crates/wow-project/e2/examples/project-index-candidate.json",
+    "crates/wow-project/e2/examples/CHECKSUMS.json"
+  ],
+  "freeze_gate": {
+    "implementation_state": "not-started",
+    "required_before_first_rust_implementation": [
+      "wow-core wow-emmy wow-graph and wow-recognizers implementation commits and fixture digests",
+      "source snapshot root universe TOC XML load analyzer adapter recognizer graph invalidation capability budget and canonicalization profiles",
+      "synthetic fixture and one user-owned addon repository exact commit content and license evidence",
+      "all source package TOC XML load Lua analyzer fact recognizer proposal invalidation candidate vectors",
+      "all member and bundle SHA-256 values"
+    ]
+  }
+}
