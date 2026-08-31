@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-context-e3-input-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "input_set": {
+    "context_input_set_id": null,
+    "project_id": "fixture-project",
+    "project_generation_id": null,
+    "project_snapshot_id": null,
+    "graph_generation_id": null,
+    "graph_snapshot_id": null,
+    "analyzer_snapshot_id": null,
+    "profile_id": null,
+    "reference_generation_id": null,
+    "reference_graph_snapshot_id": null,
+    "blizzard_ui_graph_snapshot_id": null,
+    "project_view_contract_id": "wow-project/e2-c/toc-xml-load-incremental-index",
+    "graph_view_contract_id": "wow-graph/e2-a/typed-assertion-partition-query-core",
+    "source_reader": {
+      "snapshot_id": null,
+      "capabilities": [
+        "validate_source_handle",
+        "read_exact_span",
+        "map_virtual_to_physical_span",
+        "classify_redaction_ranges"
+      ],
+      "filesystem_or_url_input": false
+    },
+    "partition_manifest_ids": [],
+    "coverage_record_ids": [],
+    "conflict_ids": [],
+    "canonical_sha256": null
+  },
+  "coherence_cases": [
+    {
+      "case_id": "CTX-INPUT-001",
+      "mutation": "none",
+      "expected": "valid"
+    },
+    {
+      "case_id": "CTX-INPUT-002",
+      "mutation": "graph-project-generation-mismatch",
+      "expected_error": "context_input_generation_or_universe_mismatch"
+    },
+    {
+      "case_id": "CTX-INPUT-005",
+      "mutation": "same-display-name-in-project-reference-and-ui-universes",
+      "expected": "three-distinct-scoped-entity-keys"
+    },
+    {
+      "case_id": "CTX-INPUT-012",
+      "mutation": "candidate-universe-presented-as-project-truth",
+      "expected_error": "context_cross_universe_merge_forbidden"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "input_set.context_input_set_id",
+      "all exact project graph analyzer profile reference and source snapshot IDs",
+      "partition coverage conflict manifests",
+      "input_set.canonical_sha256"
+    ]
+  }
+}
