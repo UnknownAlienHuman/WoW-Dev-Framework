@@ -1,0 +1,374 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-annotations-e1-type-lowering-v1",
+  "state": "documentation-only-pending-reference-consumer-and-byte-freeze",
+  "profiles": {
+    "reference_view_id": null,
+    "profile_id": null,
+    "reference_generation_id": null,
+    "type_lowering_profile_id": null,
+    "emmylua_consumer_profile_id": null,
+    "luals_consumer_profile_id": null
+  },
+  "case_contract": {
+    "every_selected_input_has_result": true,
+    "any_requires_explicit_source_or_loss_rule": true,
+    "optionality_nilability_missing_default_are_distinct": true,
+    "consumer_specific_differences_are_profile_bound": true,
+    "runtime_secret_wrapper_claims_are_forbidden": true
+  },
+  "cases": [
+    {
+      "case_id": "TYPE-001",
+      "name": "primitive-types",
+      "inputs": [
+        "nil",
+        "boolean",
+        "integer",
+        "number",
+        "string"
+      ],
+      "expected_semantic_kinds": [
+        "nil",
+        "boolean",
+        "integer",
+        "number",
+        "string"
+      ],
+      "projection_status": "Exact",
+      "loss_category": null,
+      "expected_error": null
+    },
+    {
+      "case_id": "TYPE-002",
+      "name": "literal-types",
+      "inputs": [
+        true,
+        "fixture",
+        7,
+        3.5
+      ],
+      "expected_semantic_kind": "literal",
+      "consumer_policy": "exact-when-probed-otherwise-base-plus-explicit-loss",
+      "projection_status": "ExactWithSidecar",
+      "loss_category": "consumer_syntax_gap",
+      "expected_error": null
+    },
+    {
+      "case_id": "TYPE-003",
+      "name": "named-alias-recursive-types",
+      "input_shape": {
+        "named": "FixtureNode",
+        "alias": "FixtureNodeAlias",
+        "recursive_field": "next: FixtureNode|nil"
+      },
+      "expected_semantic_kinds": [
+        "named",
+        "named",
+        "union"
+      ],
+      "identity_rule": "exact-selected-generation-declaration-id",
+      "projection_status": "Exact",
+      "loss_category": null,
+      "expected_error": null
+    },
+    {
+      "case_id": "TYPE-004",
+      "name": "arrays-maps-collections",
+      "input_shapes": [
+        {
+          "array": "FixtureRecord"
+        },
+        {
+          "map": {
+            "key": "string",
+            "value": "FixtureRecord"
+          }
+        }
+      ],
+      "expected_semantic_kinds": [
+        "array",
+        "map"
+      ],
+      "projection_status": "Exact",
+      "loss_category": null,
+      "expected_error": null
+    },
+    {
+      "case_id": "TYPE-005",
+      "name": "tuple-versus-multiple-returns",
+      "input_shape": {
+        "multiple_returns": [
+          "string",
+          "integer"
+        ],
+        "single_tuple_value": [
+          "string",
+          "integer"
+        ]
+      },
+      "expected_distinction": "ordered-return-members-remain-distinct-from-one-tuple-value",
+      "projection_status": "ExactWithSidecar",
+      "loss_category": "consumer_syntax_gap",
+      "expected_error": null
+    },
+    {
+      "case_id": "TYPE-006",
+      "name": "unions-and-nil-variants",
+      "input_variants": [
+        "FixtureRecord",
+        "nil",
+        "FixtureRecord",
+        "string"
+      ],
+      "expected_variants": [
+        "FixtureRecord",
+        "nil",
+        "string"
+      ],
+      "duplicate_policy": "collapse-exact-duplicates-retain-all-reference-links",
+      "projection_status": "Exact",
+      "loss_category": null,
+      "expected_error": null
+    },
+    {
+      "case_id": "TYPE-007",
+      "name": "callbacks-receiver-variadic",
+      "input_shape": {
+        "receiver": "FixtureRecord",
+        "parameters": [
+          "string",
+          "...integer"
+        ],
+        "returns": [
+          "boolean",
+          "string|nil"
+        ]
+      },
+      "expected_semantic_kind": "function_or_callback",
+      "projection_status": "ExactWithSidecar",
+      "loss_category": "consumer_syntax_gap",
+      "expected_error": null
+    },
+    {
+      "case_id": "TYPE-008",
+      "name": "optional-nullable-missing-default",
+      "inputs": [
+        {
+          "optional": true,
+          "nilability": false,
+          "default": null
+        },
+        {
+          "optional": false,
+          "nilability": true,
+          "default": null
+        },
+        {
+          "optional": false,
+          "nilability": false,
+          "default": "fixture"
+        },
+        {
+          "missing_state": "unknown"
+        }
+      ],
+      "expected_distinct_states": 4,
+      "projection_status": "ExactWithSidecar",
+      "loss_category": "consumer_syntax_gap",
+      "expected_error": null
+    },
+    {
+      "case_id": "TYPE-009",
+      "name": "enum-strategies",
+      "input_shape": {
+        "enum": "FixtureMode",
+        "values": {
+          "One": 1,
+          "Two": 2
+        }
+      },
+      "allowed_strategies": [
+        "named-enum-plus-values",
+        "literal-union",
+        "base-type-with-sidecar-and-declared-loss"
+      ],
+      "projection_status": "ExactWithSidecar",
+      "loss_category": null,
+      "expected_error": null
+    },
+    {
+      "case_id": "TYPE-010",
+      "name": "unresolved-ambiguous-cross-profile-targets",
+      "mutations": [
+        "remove-named-target",
+        "add-second-equal-name-target",
+        "bind-target-from-another-profile"
+      ],
+      "projection_status": "Unsupported",
+      "loss_category": "source_conflict_or_partial",
+      "expected_errors": [
+        "annotation_named_type_unresolved",
+        "annotation_named_type_ambiguous",
+        "annotation_named_type_cross_profile_forbidden"
+      ]
+    },
+    {
+      "case_id": "TYPE-011",
+      "name": "explicit-source-any",
+      "input_shape": {
+        "source_type": "any",
+        "source_contract": "explicitly-unconstrained"
+      },
+      "expected_semantic_kind": "any_explicit",
+      "projection_status": "Exact",
+      "loss_category": null,
+      "expected_error": null
+    },
+    {
+      "case_id": "TYPE-012",
+      "name": "silent-any-unknown-omission-mutation",
+      "mutations": [
+        "unsupported-to-any-without-loss",
+        "unresolved-to-unknown-without-loss",
+        "drop-return-member"
+      ],
+      "projection_status": "Unsupported",
+      "loss_category": "unrepresentable_type",
+      "expected_errors": [
+        "annotation_silent_any_fallback_forbidden",
+        "annotation_silent_unknown_or_omission_forbidden"
+      ]
+    },
+    {
+      "case_id": "TYPE-013",
+      "name": "contextual-secret",
+      "input_shape": {
+        "ordinary_type": "string",
+        "restriction": "secret.conditional",
+        "predicate_id": null
+      },
+      "allowed_projection_forms": [
+        "union",
+        "sidecar_only",
+        "not_evaluated"
+      ],
+      "forbidden_projection_form": "ordinary-exact-safe-string",
+      "projection_status": "ExactWithSidecar",
+      "loss_category": "conditional_or_runtime_restriction_gap",
+      "expected_error": null
+    },
+    {
+      "case_id": "TYPE-014",
+      "name": "unknown-restriction-runtime-gap",
+      "input_shape": {
+        "ordinary_type": "number",
+        "restriction_state": "unknown-or-runtime-only"
+      },
+      "allowed_projection_statuses": [
+        "ExactWithSidecar",
+        "Unsupported",
+        "NotEvaluated"
+      ],
+      "forbidden_projection_status": "Exact-as-ordinary-safe-number",
+      "loss_category": "conditional_or_runtime_restriction_gap",
+      "expected_error": "annotation_secret_projection_invalid"
+    },
+    {
+      "case_id": "TYPE-015",
+      "name": "nominal-secret-runtime-method-declassification",
+      "mutation": "add-constructor-unwrap-arithmetic-or-safe-access-method",
+      "projection_status": "Unsupported",
+      "loss_category": null,
+      "expected_error": "annotation_runtime_secret_wrapper_or_declassification_claim_forbidden"
+    },
+    {
+      "case_id": "TYPE-016",
+      "name": "reserved-invalid-identifier-target",
+      "inputs": [
+        "end",
+        "bad-name",
+        "a/b",
+        "name with space"
+      ],
+      "allowed_outcomes": [
+        "consumer-supported-bracket-form",
+        "deterministic-generated-safe-name-with-bidirectional-map-and-loss",
+        "Unsupported"
+      ],
+      "projection_status": "LossyDeclared",
+      "loss_category": "invalid_identifier_rendering",
+      "expected_error": null
+    },
+    {
+      "case_id": "TYPE-017",
+      "name": "type-depth-union-alias-budget",
+      "mutation": "exceed-type-graph-or-union-budget",
+      "allowed_outcomes": [
+        "LossyDeclared",
+        "Unsupported",
+        "NotEvaluated"
+      ],
+      "loss_category": "budget_truncation",
+      "expected_error": "annotation_type_budget_exceeded"
+    },
+    {
+      "case_id": "TYPE-018",
+      "name": "consumer-interpretation-difference",
+      "input_shape": {
+        "semantic_type": "optional-callback-with-multiple-returns",
+        "consumers": [
+          "EmmyLua",
+          "LuaLS"
+        ]
+      },
+      "required_outcome": "consumer-specific-profile-or-shared-artifact-gate-failure",
+      "projection_status": "LossyDeclared",
+      "loss_category": "consumer_syntax_gap",
+      "expected_error": "annotation_consumer_disagreement"
+    },
+    {
+      "case_id": "TYPE-019",
+      "name": "documentation-prose-cannot-refine-type",
+      "input_shape": {
+        "structured_type": "string",
+        "documentation": "Actually an integer and optional"
+      },
+      "expected_semantic_kind": "string",
+      "documentation_effect": "none-on-type-identity",
+      "projection_status": "Exact",
+      "loss_category": null,
+      "expected_error": null
+    },
+    {
+      "case_id": "TYPE-020",
+      "name": "render-profile-syntax-only",
+      "input_shape": {
+        "semantic_type": "array-of-FixtureRecord",
+        "render_profiles": [
+          "ketho-compatible",
+          "consumer-native"
+        ]
+      },
+      "required_invariant": "same-structural-type-id-different-profile-bound-syntax-is-allowed",
+      "projection_status": "Exact",
+      "loss_category": null,
+      "expected_error": "annotation_type_lowering_nondeterministic"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "profiles.reference_view_id",
+      "profiles.profile_id",
+      "profiles.reference_generation_id",
+      "profiles.type_lowering_profile_id",
+      "profiles.emmylua_consumer_profile_id",
+      "profiles.luals_consumer_profile_id",
+      "cases[*].input_reference_type_or_fact_ids",
+      "cases[*].type_lowering_result_ids",
+      "cases[*].semantic_type_ids",
+      "cases[*].canonical_sha256"
+    ]
+  }
+}
