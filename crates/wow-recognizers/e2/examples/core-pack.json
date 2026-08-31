@@ -194,6 +194,7 @@
             "value": "hooksecurefunc"
           }
         ],
+        "confidence_policy": "Derived when target and callback resolve exactly; Possible otherwise",
         "outputs": [
           {
             "kind": "relation_assertion",
@@ -202,7 +203,7 @@
               "hook_kind": "secure_posthook",
               "safety_claim": null
             },
-            "confidence": "Derived-or-Possible-by-target-resolution"
+            "confidence": "Derived"
           }
         ]
       }
