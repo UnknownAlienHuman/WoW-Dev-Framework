@@ -1,0 +1,122 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-project-e3-b-license-redistribution-cases-v1",
+  "state": "documentation-only-pending-reviewed-decisions",
+  "default_policy": {
+    "raw_source_bytes": "LocalAnalysisOnly",
+    "source_excerpts": "Forbidden",
+    "normalized_facts": "LocalAnalysisOnly",
+    "source_maps": "LocalAnalysisOnly",
+    "graph_artifacts": "LocalAnalysisOnly",
+    "context_artifacts": "LocalAnalysisOnly",
+    "database_or_pack": "LocalAnalysisOnly",
+    "redistributable_release_eligible": false
+  },
+  "cases": [
+    {
+      "case_id": "UISRC-LIC-001",
+      "subject": "all-admitted-roots-and-files",
+      "license_records_complete": true,
+      "expected": "technical-license-closure-valid"
+    },
+    {
+      "case_id": "UISRC-LIC-002",
+      "subject": "one-admitted-file",
+      "license_state": "Unknown",
+      "expected": "no-redistribution-and-publication-policy-blocker-as-configured"
+    },
+    {
+      "case_id": "UISRC-LIC-003",
+      "mutation": "conflicting-license-or-copyright-records",
+      "expected_error": "ui_source_license_or_redistribution_conflict"
+    },
+    {
+      "case_id": "UISRC-LIC-004",
+      "mutation": "publicly-accessible-git-repository-treated-as-license-grant",
+      "expected": "mutation-detected"
+    },
+    {
+      "case_id": "UISRC-LIC-005",
+      "operation": "export-raw-source-tree",
+      "redistribution_decision": null,
+      "expected_error": "ui_source_raw_source_or_excerpt_redistribution_forbidden"
+    },
+    {
+      "case_id": "UISRC-LIC-006",
+      "operation": "render-source-excerpt-local-analysis",
+      "decision_state": "LocalAnalysisOnly",
+      "channel": "local",
+      "expected": "allowed-only-locally-with-provenance-and-redaction"
+    },
+    {
+      "case_id": "UISRC-LIC-007",
+      "operation": "render-source-excerpt-external",
+      "decision_state": "RedistributableWithNotice",
+      "required_notice_ids": [],
+      "expected": "allowed-only-after-notice-closure"
+    },
+    {
+      "case_id": "UISRC-LIC-008",
+      "mutation": "mark-all-normalized-facts-unrestricted-because-derived",
+      "expected_error": "ui_source_derived_artifact_redistribution_not_evaluated"
+    },
+    {
+      "case_id": "UISRC-LIC-009",
+      "subject": "graph-or-database-capable-of-source-reconstruction",
+      "expected": "separate-artifact-specific-review-required"
+    },
+    {
+      "case_id": "UISRC-LIC-010",
+      "operation": "build-redistributable-pack",
+      "mutation": "required-notice-missing-or-digest-wrong",
+      "expected_error": "ui_source_required_notice_or_attribution_missing"
+    },
+    {
+      "case_id": "UISRC-LIC-011",
+      "mutation": "reuse-redistribution-decision-from-different-source-revision-or-root-set",
+      "expected_error": "ui_source_redistribution_decision_missing_unknown_or_expired"
+    },
+    {
+      "case_id": "UISRC-LIC-012",
+      "change": "license-decision-only-source-bytes-unchanged",
+      "expected": "semantic-source-facts-may-reuse-under-proof-export-and-notice-artifacts-invalidated"
+    },
+    {
+      "case_id": "UISRC-LIC-013",
+      "subject": "repository-owned-synthetic-fixture",
+      "expected_decision": "RedistributableUnrestricted"
+    },
+    {
+      "case_id": "UISRC-LIC-014",
+      "mutation": "commit-entire-real-source-tree-as-test-fixture",
+      "expected_error": "ui_source_raw_source_or_excerpt_redistribution_forbidden"
+    },
+    {
+      "case_id": "UISRC-LIC-015",
+      "mutation": "local-projectstore-publication-labelled-release-eligible",
+      "expected_error": "ui_source_pack_or_database_release_ineligible"
+    },
+    {
+      "case_id": "UISRC-SEC-012",
+      "mutation": "provider-credential-private-host-path-or-token-in-manifest-error-or-artifact",
+      "expected_error": "ui_source_private_data_leak_forbidden"
+    }
+  ],
+  "real_source_decisions": {
+    "source_profile_id": null,
+    "source_revision_id": null,
+    "license_manifest_id": null,
+    "raw_source_decision_id": null,
+    "excerpt_decision_id": null,
+    "fact_decision_id": null,
+    "source_map_decision_id": null,
+    "graph_decision_id": null,
+    "context_decision_id": null,
+    "database_pack_decision_id": null,
+    "notice_bundle_id": null
+  },
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "redistributable_release_fields_must_be_non_null_before_release": true
+  }
+}
