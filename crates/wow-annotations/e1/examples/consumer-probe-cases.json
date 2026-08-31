@@ -1,0 +1,215 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-annotations-e1-consumer-probes-v1",
+  "state": "documentation-only-pending-consumer-pin-and-probe-freeze",
+  "profiles": {
+    "reference_view_id": null,
+    "profile_id": null,
+    "reference_generation_id": null,
+    "annotation_artifact_id": null,
+    "emmylua_consumer_profile_id": null,
+    "emmylua_revision": null,
+    "luals_consumer_profile_id": null,
+    "luals_revision": null,
+    "probe_adapter_profile_id": null
+  },
+  "isolated_workspace_contract": {
+    "contains_only": [
+      "annotation-artifact",
+      "small-positive-and-negative-lua-fixtures",
+      "explicit-generated-test-config",
+      "probe-manifest"
+    ],
+    "network": false,
+    "user_settings": false,
+    "workspace_settings_outside_probe": false,
+    "installed_extensions": false,
+    "installed_addon_libraries": false,
+    "artifact_writable_by_consumer": false
+  },
+  "cases": [
+    {
+      "case_id": "CONS-001",
+      "consumer": "EmmyLua",
+      "assertion": "positive-symbols-and-types",
+      "expected": "pass"
+    },
+    {
+      "case_id": "CONS-002",
+      "consumer": "LuaLS",
+      "assertion": "positive-symbols-and-types",
+      "expected": "pass"
+    },
+    {
+      "case_id": "CONS-003",
+      "consumer": "both",
+      "assertion": "unknown-api-global-negative",
+      "expected": "expected-diagnostic-remains"
+    },
+    {
+      "case_id": "CONS-004",
+      "consumer": "both",
+      "assertion": "wrong-parameter-member-type-negative",
+      "expected": "expected-diagnostic-remains"
+    },
+    {
+      "case_id": "CONS-005",
+      "consumer": "both",
+      "assertion": "optional-nil-multiple-return-union-callback",
+      "expected": "exact-profile-bound-assertions"
+    },
+    {
+      "case_id": "CONS-006",
+      "consumer": "both",
+      "assertion": "nominal-secret-analysis-type",
+      "expected": "recognized-without-runtime-methods-or-declassification"
+    },
+    {
+      "case_id": "CONS-007",
+      "consumer": "both",
+      "assertion": "generated-source-span",
+      "expected": "points-to-expected-fragment-and-source-map"
+    },
+    {
+      "case_id": "CONS-008",
+      "consumer": "both",
+      "assertion": "positive-only-probe-mutation",
+      "expected_error": "annotation_consumer_positive_only_probe_forbidden"
+    },
+    {
+      "case_id": "CONS-009",
+      "consumer": "both",
+      "assertion": "diagnostic-suppression-weak-union-global-auto-add",
+      "expected_error": "annotation_consumer_diagnostic_suppression_detected"
+    },
+    {
+      "case_id": "CONS-010",
+      "consumer": "both",
+      "assertion": "user-workspace-library-extension-config-mutation",
+      "expected_error": "annotation_consumer_config_mutation_detected"
+    },
+    {
+      "case_id": "CONS-011",
+      "consumer": "both",
+      "assertion": "artifact-rewrite",
+      "expected_error": "annotation_consumer_config_mutation_detected"
+    },
+    {
+      "case_id": "CONS-012",
+      "consumer": "both",
+      "assertion": "shared-artifact-consumer-disagreement",
+      "expected": "shared-release-gate-fails-or-consumer-specific-profile",
+      "expected_error": "annotation_consumer_disagreement"
+    },
+    {
+      "case_id": "CONS-013",
+      "consumer": "both",
+      "assertion": "consumer-version-update-regression",
+      "expected": "update-blocked-last-known-good-retained",
+      "expected_error": "annotation_consumer_update_incompatible"
+    },
+    {
+      "case_id": "CONS-014",
+      "consumer": "library",
+      "assertion": "process-or-tool-execution-inside-crate",
+      "expected_error": "annotation_consumer_process_in_library_forbidden"
+    },
+    {
+      "case_id": "CONS-015",
+      "consumer": "both",
+      "assertion": "timeout-memory-output-limit",
+      "expected_error": "annotation_consumer_probe_budget_exceeded"
+    },
+    {
+      "case_id": "CONS-016",
+      "consumer": "both",
+      "assertion": "malicious-diagnostic-log-path-payload",
+      "expected_error": "annotation_consumer_probe_untrusted_output"
+    },
+    {
+      "case_id": "CONS-017",
+      "consumer": "both",
+      "assertion": "probe-order-and-timing",
+      "expected": "semantic-assertion-and-result-ids-stable-timing-supplemental"
+    }
+  ],
+  "assertion_fixtures": {
+    "positive": [
+      "known-api-resolves",
+      "parameter-return-member-types-infer",
+      "named-structure-field-resolves",
+      "event-enum-cvar-widget-shapes",
+      "optional-nil-multiple-return-union-callback",
+      "nominal-secret-type-no-runtime-methods",
+      "source-span-resolves-through-map"
+    ],
+    "negative": [
+      "unknown-api-global",
+      "wrong-parameter-count-or-type",
+      "unknown-member",
+      "removed-or-unavailable-profile-symbol",
+      "unsupported-consumer-feature",
+      "nominal-secret-used-as-ordinary-runtime-object"
+    ]
+  },
+  "mutation_audit": {
+    "before_after_hashes_required": [
+      "explicit-probe-config",
+      "annotation-artifact-files",
+      "consumer-global-library-diagnostic-configuration",
+      "outside-root-files"
+    ],
+    "allowed_changes": [
+      "bounded-probe-output",
+      "bounded-probe-logs"
+    ],
+    "forbidden_changes": [
+      "user-settings",
+      "workspace-settings-outside-probe",
+      "globals-auto-add",
+      "libraries-auto-add",
+      "diagnostic-suppression",
+      "extension-install-or-update",
+      "artifact-rewrite",
+      "outside-root-file"
+    ]
+  },
+  "results": [
+    {
+      "consumer_probe_result_id": null,
+      "consumer_profile_id": null,
+      "artifact_id": null,
+      "parse_load_index_status": null,
+      "positive_assertion_record_ids": [],
+      "negative_assertion_record_ids": [],
+      "inferred_type_signature_span_record_ids": [],
+      "diagnostic_baseline_id": null,
+      "config_filesystem_mutation_report_id": null,
+      "performance_resource_report_id": null,
+      "error_ids": [],
+      "coverage_record_ids": [],
+      "raw_output_digest": null,
+      "canonical_sha256": null
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "profiles.*",
+      "cases[*].probe_request_id",
+      "cases[*].assertion_record_ids",
+      "cases[*].expected_diagnostic_or_inference_ids",
+      "cases[*].canonical_sha256",
+      "results[*].consumer_probe_result_id",
+      "results[*].consumer_profile_id",
+      "results[*].artifact_id",
+      "results[*].parse_load_index_status",
+      "results[*].positive_assertion_record_ids",
+      "results[*].negative_assertion_record_ids",
+      "results[*].diagnostic_baseline_id",
+      "results[*].config_filesystem_mutation_report_id",
+      "results[*].raw_output_digest",
+      "results[*].canonical_sha256"
+    ]
+  }
+}

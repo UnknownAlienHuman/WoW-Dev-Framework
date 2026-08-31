@@ -1,0 +1,210 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-annotations-e1-rendered-artifact-v1",
+  "state": "documentation-only-pending-layout-consumer-and-byte-freeze",
+  "profiles": {
+    "reference_view_id": null,
+    "profile_id": null,
+    "reference_generation_id": null,
+    "annotation_semantic_model_id": null,
+    "layout_rendering_profile_id": null,
+    "documentation_sanitization_profile_id": null,
+    "dialect_profile_id": null,
+    "consumer_profile_ids": []
+  },
+  "layout_contract": {
+    "encoding": "UTF-8",
+    "bom": false,
+    "line_endings": "LF",
+    "final_newline": true,
+    "trailing_whitespace": false,
+    "paths_are_artifact_relative": true,
+    "source_text_never_forms_paths": true,
+    "file_order": [
+      "Annotations/Core/WowDialect/Globals.lua",
+      "Annotations/Core/Type/FixtureTypes.lua",
+      "Annotations/Core/Blizzard_APIDocumentationGenerated/FixtureSystem.lua",
+      "Annotations/Core/Data/Event.lua"
+    ]
+  },
+  "files": [
+    {
+      "file_id": null,
+      "path": "Annotations/Core/WowDialect/Globals.lua",
+      "kind": "dialect",
+      "module_ids": [],
+      "expected_utf8_lf": "---@meta\n\n---@class WowSecretValue\n\n",
+      "byte_length": null,
+      "line_count": null,
+      "sha256": null,
+      "fragment_ids": [],
+      "projection_status": "ExactWithSidecar"
+    },
+    {
+      "file_id": null,
+      "path": "Annotations/Core/Type/FixtureTypes.lua",
+      "kind": "named-types",
+      "module_ids": [],
+      "expected_utf8_lf": "---@meta\n\n---@class FixtureRecord\n---@field id integer\n\n",
+      "byte_length": null,
+      "line_count": null,
+      "sha256": null,
+      "fragment_ids": [],
+      "projection_status": "Exact"
+    },
+    {
+      "file_id": null,
+      "path": "Annotations/Core/Blizzard_APIDocumentationGenerated/FixtureSystem.lua",
+      "kind": "api-system",
+      "module_ids": [],
+      "expected_utf8_lf": "---@meta\n\nC_FixtureSystem = {}\n\n---@param key string\n---@return WowSecretValue value\nfunction C_FixtureSystem.GetValue(key) end\n",
+      "byte_length": null,
+      "line_count": null,
+      "sha256": null,
+      "fragment_ids": [],
+      "projection_status": "ExactWithSidecar"
+    },
+    {
+      "file_id": null,
+      "path": "Annotations/Core/Data/Event.lua",
+      "kind": "events",
+      "module_ids": [],
+      "expected_utf8_lf": "---@meta\n\n---@alias FIXTURE_EVENT_Payload fun(value: string)\n\n",
+      "byte_length": null,
+      "line_count": null,
+      "sha256": null,
+      "fragment_ids": [],
+      "projection_status": "ExactWithSidecar"
+    }
+  ],
+  "fragments": [
+    {
+      "fragment_id": null,
+      "semantic_element_id": null,
+      "file_id": null,
+      "kind": "declaration",
+      "byte_span": null,
+      "line_span": null,
+      "renderer_rule_id": null,
+      "reference_projection_link_ids": [],
+      "sha256": null
+    }
+  ],
+  "manifests": {
+    "annotation_semantic_manifest_id": null,
+    "annotation_file_manifest_id": null,
+    "generated_source_map_id": null,
+    "projection_coverage_manifest_id": null,
+    "projection_loss_manifest_id": null,
+    "consumer_manifest_id": null,
+    "semantic_parity_report_id": null,
+    "annotation_artifact_id": null,
+    "annotation_artifact_manifest_id": null,
+    "annotation_build_report_id": null,
+    "artifact_eligibility": "fixture",
+    "canonical_sha256": null
+  },
+  "render_cases": [
+    {
+      "case_id": "RENDER-001",
+      "subject": "active-declaration-templates",
+      "expected": "valid-inert-syntax"
+    },
+    {
+      "case_id": "RENDER-002",
+      "subject": "ketho-compatible-layout-profile",
+      "expected": "exact-frozen-topology"
+    },
+    {
+      "case_id": "RENDER-003",
+      "subject": "missing-framexml-capability",
+      "expected": "no-placeholder-complete-framexml-output"
+    },
+    {
+      "case_id": "RENDER-004",
+      "subject": "unsafe-paths-and-case-collisions",
+      "expected_error": "annotation_artifact_path_invalid"
+    },
+    {
+      "case_id": "RENDER-005",
+      "subject": "semantic-name-file-or-symbol-collision",
+      "expected": "deterministic-safe-split-or-rejection-with-loss"
+    },
+    {
+      "case_id": "RENDER-006",
+      "subject": "keyword-invalid-arbitrary-name",
+      "expected": "safe-form-or-unsupported"
+    },
+    {
+      "case_id": "RENDER-007",
+      "subject": "literal-escaping",
+      "expected": "consumer-parse-round-trip"
+    },
+    {
+      "case_id": "RENDER-008",
+      "subject": "function-method-stubs",
+      "expected": "fixed-inert-no-source-body"
+    },
+    {
+      "case_id": "RENDER-009",
+      "subject": "class-alias-field-enum-event-cvar-widget",
+      "expected": "consumer-tested-profile-syntax"
+    },
+    {
+      "case_id": "RENDER-010",
+      "subject": "forward-recursive-type-order",
+      "expected": "deterministic-consumer-valid"
+    },
+    {
+      "case_id": "RENDER-011",
+      "subject": "size-based-file-split",
+      "expected": "semantic-boundary-and-id-derived-suffix"
+    },
+    {
+      "case_id": "RENDER-012",
+      "subject": "encoding-line-ending-whitespace",
+      "expected": "utf8-lf-final-newline-no-trailing-whitespace"
+    },
+    {
+      "case_id": "RENDER-013",
+      "subject": "volatile-or-private-metadata",
+      "expected": "absent-from-canonical-files"
+    },
+    {
+      "case_id": "RENDER-014",
+      "subject": "external-formatter-drift",
+      "expected_error": "annotation_rendering_nondeterministic"
+    },
+    {
+      "case_id": "RENDER-015",
+      "subject": "worker-and-input-order",
+      "expected": "byte-identical-files-and-manifests"
+    },
+    {
+      "case_id": "RENDER-016",
+      "subject": "full-source-or-addon-runtime-packaging",
+      "expected_error": "annotation_full_source_or_runtime_packaging_forbidden"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "profiles.*",
+      "files[*].file_id",
+      "files[*].module_ids",
+      "files[*].byte_length",
+      "files[*].line_count",
+      "files[*].sha256",
+      "files[*].fragment_ids",
+      "fragments[*].fragment_id",
+      "fragments[*].semantic_element_id",
+      "fragments[*].file_id",
+      "fragments[*].byte_span",
+      "fragments[*].line_span",
+      "fragments[*].renderer_rule_id",
+      "fragments[*].reference_projection_link_ids",
+      "fragments[*].sha256",
+      "manifests.*"
+    ]
+  }
+}

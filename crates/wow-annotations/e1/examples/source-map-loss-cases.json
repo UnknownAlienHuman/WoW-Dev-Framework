@@ -1,0 +1,317 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-annotations-e1-source-map-loss-v1",
+  "state": "documentation-only-pending-rendered-bytes-map-and-loss-freeze",
+  "profiles": {
+    "reference_view_id": null,
+    "profile_id": null,
+    "reference_generation_id": null,
+    "annotation_semantic_model_id": null,
+    "layout_rendering_profile_id": null,
+    "source_map_loss_profile_id": null,
+    "consumer_profile_ids": []
+  },
+  "generated_file_fixture": {
+    "file_id": null,
+    "path": "Annotations/Core/Blizzard_APIDocumentationGenerated/FixtureSystem.lua",
+    "sha256": null,
+    "byte_length": null,
+    "line_count": null
+  },
+  "source_map_entries": [
+    {
+      "entry_id": null,
+      "case_id": "MAP-001",
+      "material_kind": "function-declaration",
+      "generated_fragment_id": null,
+      "semantic_element_id": null,
+      "generated_byte_span": null,
+      "generated_line_span": null,
+      "reference_entity_ids": [],
+      "reference_fact_ids": [],
+      "raw_observation_ids": [],
+      "correction_application_ids": [],
+      "evidence_ids": [],
+      "source_handle_ids": [],
+      "projection_status_record_ids": [],
+      "projection_loss_record_ids": []
+    }
+  ],
+  "map_cases": [
+    {
+      "case_id": "MAP-001",
+      "subject": "all-material-fragment-kinds",
+      "expected": "exact-generated-and-reference-links"
+    },
+    {
+      "case_id": "MAP-002",
+      "subject": "utf8-byte-and-line-ranges",
+      "expected": "half-open-byte-ranges-validated-against-final-bytes"
+    },
+    {
+      "case_id": "MAP-003",
+      "subject": "file-bytes-change-after-map",
+      "expected_error": "annotation_generated_span_stale"
+    },
+    {
+      "case_id": "MAP-004",
+      "subject": "material-fragment-without-map-or-derivation",
+      "expected_error": "annotation_material_fragment_unmapped"
+    },
+    {
+      "case_id": "MAP-005",
+      "subject": "safe-generated-alias",
+      "expected": "bidirectional-exact-semantic-and-source-map"
+    },
+    {
+      "case_id": "MAP-006",
+      "subject": "cross-artifact-profile-generation-entry",
+      "expected_error": "annotation_source_map_invalid"
+    },
+    {
+      "case_id": "MAP-007",
+      "subject": "invalid-overlap-or-nesting",
+      "expected_error": "annotation_generated_span_invalid"
+    },
+    {
+      "case_id": "MAP-008",
+      "subject": "source-body-not-required",
+      "expected": "stable-source-handles-are-sufficient"
+    },
+    {
+      "case_id": "MAP-009",
+      "subject": "worker-and-input-order",
+      "expected": "same-entry-ids-spans-order-and-digest"
+    }
+  ],
+  "projection_cases": [
+    {
+      "case_id": "LOSS-001",
+      "subject": "exact-type-or-declaration",
+      "projection_status": "Exact",
+      "projection_coverage": "Complete",
+      "loss_category": null,
+      "loss_severity": null,
+      "eligibility_effect": "none"
+    },
+    {
+      "case_id": "LOSS-002",
+      "subject": "exact-with-restriction-or-provenance-sidecar",
+      "projection_status": "ExactWithSidecar",
+      "projection_coverage": "Complete",
+      "loss_category": null,
+      "loss_severity": null,
+      "eligibility_effect": "consumer-must-declare-sidecar-semantics-when-mandatory"
+    },
+    {
+      "case_id": "LOSS-003",
+      "subject": "consumer-representation-approximation",
+      "projection_status": "LossyDeclared",
+      "projection_coverage": "Partial",
+      "loss_category": "consumer_syntax_gap",
+      "loss_severity": "BlockingForConsumer",
+      "eligibility_effect": "consumer-specific-artifact-or-not-release-ready"
+    },
+    {
+      "case_id": "LOSS-004",
+      "subject": "no-acceptable-representation",
+      "projection_status": "Unsupported",
+      "projection_coverage": "Partial",
+      "loss_category": "unrepresentable_type",
+      "loss_severity": "BlockingForDeclaredCapability",
+      "eligibility_effect": "candidate-only"
+    },
+    {
+      "case_id": "LOSS-005",
+      "subject": "reference-capability-unavailable",
+      "projection_status": "NotEvaluated",
+      "projection_coverage": "NotEvaluated",
+      "loss_category": "source_conflict_or_partial",
+      "loss_severity": "BlockingForDeclaredCapability",
+      "eligibility_effect": "candidate-or-fixture-only"
+    },
+    {
+      "case_id": "LOSS-006",
+      "subject": "unknown-unsupported-conflict-input",
+      "projection_status": "Unsupported",
+      "projection_coverage": "Partial",
+      "loss_category": "unknown_reference_field",
+      "loss_severity": "Advisory",
+      "eligibility_effect": "visible-loss-required"
+    },
+    {
+      "case_id": "LOSS-007",
+      "subject": "documentation-sanitized-or-truncated",
+      "projection_status": "LossyDeclared",
+      "projection_coverage": "Partial",
+      "loss_category": "documentation_sanitized_or_truncated",
+      "loss_severity": "Advisory",
+      "eligibility_effect": "allowed-only-with-exact-map-and-loss"
+    },
+    {
+      "case_id": "LOSS-008",
+      "subject": "consumer-specific-limitation",
+      "projection_status": "LossyDeclared",
+      "projection_coverage": "Partial",
+      "loss_category": "consumer_syntax_gap",
+      "loss_severity": "BlockingForConsumer",
+      "eligibility_effect": "other-consumer-may-remain-candidate"
+    },
+    {
+      "case_id": "LOSS-009",
+      "subject": "reference-complete-projection-lossy",
+      "reference_coverage": "Complete",
+      "projection_coverage": "Partial",
+      "projection_status": "LossyDeclared",
+      "loss_category": "unrepresentable_type",
+      "eligibility_effect": "do-not-conflate-coverage-axes"
+    },
+    {
+      "case_id": "LOSS-010",
+      "subject": "projection-complete-reference-partial-or-conflicted",
+      "reference_coverage": "Partial",
+      "projection_coverage": "Complete",
+      "projection_status": "Exact",
+      "loss_category": "source_conflict_or_partial",
+      "eligibility_effect": "no-reference-authority-upgrade"
+    },
+    {
+      "case_id": "LOSS-011",
+      "subject": "mandatory-sidecar-ignored-by-consumer",
+      "projection_status": "ExactWithSidecar",
+      "projection_coverage": "Partial",
+      "loss_category": "consumer_syntax_gap",
+      "loss_severity": "BlockingForConsumer",
+      "eligibility_effect": "release-gate-fails",
+      "expected_error": "annotation_sidecar_semantics_silently_ignored"
+    },
+    {
+      "case_id": "LOSS-012",
+      "subject": "loss-report-truncates-blocker",
+      "projection_status": "LossyDeclared",
+      "projection_coverage": "Partial",
+      "loss_category": "budget_truncation",
+      "loss_severity": "BlockingForReleaseReadyArtifact",
+      "eligibility_effect": "not-release-ready",
+      "expected_error": "annotation_loss_report_truncated_as_complete_forbidden"
+    },
+    {
+      "case_id": "LOSS-013",
+      "subject": "budget-truncation",
+      "projection_status": "LossyDeclared",
+      "projection_coverage": "Partial",
+      "loss_category": "budget_truncation",
+      "loss_severity": "BlockingForDeclaredCapability",
+      "eligibility_effect": "explicit-counts-blockers-and-continuation-state"
+    },
+    {
+      "case_id": "LOSS-014",
+      "subject": "nonblocking-layout-difference",
+      "projection_status": "Exact",
+      "projection_coverage": "Complete",
+      "loss_category": "layout_partition_difference",
+      "loss_severity": "Informational",
+      "eligibility_effect": "semantic-gate-can-pass"
+    },
+    {
+      "case_id": "LOSS-015",
+      "subject": "worker-and-input-order",
+      "projection_status": "Exact",
+      "projection_coverage": "Complete",
+      "loss_category": null,
+      "loss_severity": null,
+      "eligibility_effect": "same-records-order-digests-and-decision"
+    }
+  ],
+  "example_loss_records": [
+    {
+      "loss_id": null,
+      "category": "consumer_syntax_gap",
+      "severity": "BlockingForConsumer",
+      "reference_subject_ids": [],
+      "semantic_subject_ids": [],
+      "generated_subject_ids": [],
+      "consumer_profile_ids": [],
+      "rule_ids": [],
+      "emitted_approximation_or_omission": null,
+      "affected_capability_ids": [],
+      "reference_coverage_ids": [],
+      "projection_status_record_ids": [],
+      "source_map_entry_ids": [],
+      "review_status": "pending",
+      "canonical_sha256": null
+    },
+    {
+      "loss_id": null,
+      "category": "documentation_sanitized_or_truncated",
+      "severity": "Advisory",
+      "reference_subject_ids": [],
+      "semantic_subject_ids": [],
+      "generated_subject_ids": [],
+      "consumer_profile_ids": [],
+      "rule_ids": [],
+      "emitted_approximation_or_omission": null,
+      "affected_capability_ids": [],
+      "reference_coverage_ids": [],
+      "projection_status_record_ids": [],
+      "source_map_entry_ids": [],
+      "review_status": "pending",
+      "canonical_sha256": null
+    }
+  ],
+  "eligibility_examples": [
+    {
+      "state": "fixture",
+      "allowed": true,
+      "requirements": [
+        "synthetic-or-partial-inputs-explicit"
+      ]
+    },
+    {
+      "state": "candidate",
+      "allowed": true,
+      "requirements": [
+        "all-losses-visible",
+        "no-fatal-security-or-map-failure"
+      ]
+    },
+    {
+      "state": "release-ready-annotation-artifact",
+      "allowed": false,
+      "blocked_until": [
+        "mandatory-reference-and-projection-capabilities-complete",
+        "no-unreviewed-blocking-loss",
+        "source-map-closure",
+        "consumer-probes-pass",
+        "parity-blockers-resolved",
+        "determinism-proven"
+      ]
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "profiles.*",
+      "generated_file_fixture.*",
+      "source_map_entries[*].entry_id",
+      "source_map_entries[*].generated_fragment_id",
+      "source_map_entries[*].semantic_element_id",
+      "source_map_entries[*].generated_byte_span",
+      "source_map_entries[*].generated_line_span",
+      "source_map_entries[*].reference_entity_ids",
+      "source_map_entries[*].reference_fact_ids",
+      "source_map_entries[*].evidence_ids",
+      "source_map_entries[*].source_handle_ids",
+      "example_loss_records[*].loss_id",
+      "example_loss_records[*].reference_subject_ids",
+      "example_loss_records[*].semantic_subject_ids",
+      "example_loss_records[*].affected_capability_ids",
+      "example_loss_records[*].canonical_sha256",
+      "source_map_manifest_id",
+      "projection_coverage_manifest_id",
+      "projection_loss_manifest_id",
+      "artifact_eligibility_decision_id",
+      "canonical_sha256"
+    ]
+  }
+}

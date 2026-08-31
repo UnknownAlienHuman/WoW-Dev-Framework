@@ -1,0 +1,301 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-annotations-e1-semantic-model-v1",
+  "state": "documentation-only-pending-reference-and-semantic-freeze",
+  "input": {
+    "reference_view_id": null,
+    "profile_id": null,
+    "reference_generation_id": null,
+    "reference_data_manifest_id": null,
+    "required_reference_capability_ids": [],
+    "semantic_profile_id": null,
+    "type_lowering_profile_id": null,
+    "dialect_profile_id": null,
+    "consumer_profile_ids": []
+  },
+  "semantic_model": {
+    "annotation_semantic_model_id": null,
+    "version": 1,
+    "module_ids": [],
+    "declaration_ids": [],
+    "member_ids": [],
+    "type_ids": [],
+    "documentation_ids": [],
+    "restriction_projection_ids": [],
+    "reference_projection_link_ids": [],
+    "projection_status_record_ids": [],
+    "projection_coverage_record_ids": [],
+    "projection_loss_record_ids": [],
+    "canonical_sha256": null,
+    "eligibility": "fixture"
+  },
+  "modules": [
+    {
+      "module_id": null,
+      "kind": "api-system",
+      "logical_scope": "FixtureSystem",
+      "declaration_ids": [],
+      "reference_entity_ids": [],
+      "projection_status": "Exact"
+    },
+    {
+      "module_id": null,
+      "kind": "named-types",
+      "logical_scope": "FixtureTypes",
+      "declaration_ids": [],
+      "reference_entity_ids": [],
+      "projection_status": "Exact"
+    },
+    {
+      "module_id": null,
+      "kind": "events",
+      "logical_scope": "FixtureEvents",
+      "declaration_ids": [],
+      "reference_entity_ids": [],
+      "projection_status": "ExactWithSidecar"
+    },
+    {
+      "module_id": null,
+      "kind": "restriction-analysis-types",
+      "logical_scope": "WowRestrictions",
+      "declaration_ids": [],
+      "reference_entity_ids": [],
+      "projection_status": "ExactWithSidecar"
+    }
+  ],
+  "declarations": [
+    {
+      "declaration_id": null,
+      "kind": "function",
+      "logical_name": "FixtureSystem.GetValue",
+      "module_id": null,
+      "owner_declaration_id": null,
+      "member_ids": [],
+      "type_id": null,
+      "documentation_id": null,
+      "restriction_projection_ids": [],
+      "reference_projection_link_ids": [],
+      "projection_status_record_id": null,
+      "semantic_order_key": null
+    },
+    {
+      "declaration_id": null,
+      "kind": "class",
+      "logical_name": "FixtureRecord",
+      "module_id": null,
+      "owner_declaration_id": null,
+      "member_ids": [],
+      "type_id": null,
+      "documentation_id": null,
+      "restriction_projection_ids": [],
+      "reference_projection_link_ids": [],
+      "projection_status_record_id": null,
+      "semantic_order_key": null
+    },
+    {
+      "declaration_id": null,
+      "kind": "event_payload_alias_or_callback",
+      "logical_name": "FIXTURE_EVENT_Payload",
+      "module_id": null,
+      "owner_declaration_id": null,
+      "member_ids": [],
+      "type_id": null,
+      "documentation_id": null,
+      "restriction_projection_ids": [],
+      "reference_projection_link_ids": [],
+      "projection_status_record_id": null,
+      "semantic_order_key": null
+    },
+    {
+      "declaration_id": null,
+      "kind": "nominal_secret_type",
+      "logical_name": "WowSecretValue",
+      "module_id": null,
+      "owner_declaration_id": null,
+      "member_ids": [],
+      "type_id": null,
+      "documentation_id": null,
+      "restriction_projection_ids": [],
+      "reference_projection_link_ids": [],
+      "projection_status_record_id": null,
+      "semantic_order_key": null
+    }
+  ],
+  "members": [
+    {
+      "member_id": null,
+      "owner_declaration_id": null,
+      "kind": "parameter",
+      "semantic_ordinal": 1,
+      "source_name": "key",
+      "type_id": null,
+      "optional": false,
+      "nilability": false,
+      "variadic": false,
+      "documentation_id": null,
+      "restriction_projection_ids": [],
+      "reference_projection_link_ids": [],
+      "projection_status_record_id": null
+    },
+    {
+      "member_id": null,
+      "owner_declaration_id": null,
+      "kind": "return",
+      "semantic_ordinal": 1,
+      "source_name": "value",
+      "type_id": null,
+      "optional": false,
+      "nilability": false,
+      "variadic": false,
+      "documentation_id": null,
+      "restriction_projection_ids": [],
+      "reference_projection_link_ids": [],
+      "projection_status_record_id": null
+    },
+    {
+      "member_id": null,
+      "owner_declaration_id": null,
+      "kind": "field",
+      "semantic_ordinal": 1,
+      "source_name": "id",
+      "type_id": null,
+      "optional": false,
+      "nilability": false,
+      "variadic": false,
+      "documentation_id": null,
+      "restriction_projection_ids": [],
+      "reference_projection_link_ids": [],
+      "projection_status_record_id": null
+    }
+  ],
+  "types": [
+    {
+      "type_id": null,
+      "kind": "string",
+      "child_type_ids": [],
+      "named_declaration_id": null,
+      "source_reference_type_ids": [],
+      "lowering_rule_id": null,
+      "projection_status": "Exact"
+    },
+    {
+      "type_id": null,
+      "kind": "integer",
+      "child_type_ids": [],
+      "named_declaration_id": null,
+      "source_reference_type_ids": [],
+      "lowering_rule_id": null,
+      "projection_status": "Exact"
+    },
+    {
+      "type_id": null,
+      "kind": "nominal_secret",
+      "child_type_ids": [],
+      "named_declaration_id": null,
+      "source_reference_type_ids": [],
+      "lowering_rule_id": null,
+      "projection_status": "ExactWithSidecar"
+    }
+  ],
+  "projection_status_cases": [
+    {
+      "case_id": "semantic.exact-callable",
+      "input_reference_fact_ids": [],
+      "output_semantic_element_ids": [],
+      "status": "Exact",
+      "loss_record_ids": []
+    },
+    {
+      "case_id": "semantic.exact-with-restriction-sidecar",
+      "input_reference_fact_ids": [],
+      "output_semantic_element_ids": [],
+      "status": "ExactWithSidecar",
+      "loss_record_ids": []
+    },
+    {
+      "case_id": "semantic.partial-member",
+      "input_reference_fact_ids": [],
+      "output_semantic_element_ids": [],
+      "status": "NotEvaluated",
+      "loss_record_ids": []
+    },
+    {
+      "case_id": "semantic.reference-conflict",
+      "input_reference_fact_ids": [],
+      "output_semantic_element_ids": [],
+      "status": "Unsupported",
+      "loss_record_ids": []
+    }
+  ],
+  "negative_cases": [
+    {
+      "case_id": "semantic.selected-input-without-status",
+      "mutation": "remove-projection-status-record",
+      "expected_error": "annotation_selected_input_without_projection_status"
+    },
+    {
+      "case_id": "semantic.output-without-reference-link",
+      "mutation": "remove-reference-projection-link",
+      "expected_error": "annotation_semantic_output_without_reference_or_derivation"
+    },
+    {
+      "case_id": "semantic.layout-affects-id",
+      "mutation": "change-file-path-or-line-and-observe-semantic-id-change",
+      "expected_error": "annotation_semantic_model_nondeterministic"
+    },
+    {
+      "case_id": "semantic.conflict-first-row",
+      "mutation": "choose-one-reference-conflict-input",
+      "expected_error": "annotation_reference_conflict_silently_resolved"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "input.reference_view_id",
+      "input.profile_id",
+      "input.reference_generation_id",
+      "input.reference_data_manifest_id",
+      "input.required_reference_capability_ids",
+      "input.semantic_profile_id",
+      "input.type_lowering_profile_id",
+      "input.dialect_profile_id",
+      "input.consumer_profile_ids",
+      "semantic_model.annotation_semantic_model_id",
+      "semantic_model.module_ids",
+      "semantic_model.declaration_ids",
+      "semantic_model.member_ids",
+      "semantic_model.type_ids",
+      "semantic_model.documentation_ids",
+      "semantic_model.restriction_projection_ids",
+      "semantic_model.reference_projection_link_ids",
+      "semantic_model.projection_status_record_ids",
+      "semantic_model.projection_coverage_record_ids",
+      "semantic_model.projection_loss_record_ids",
+      "semantic_model.canonical_sha256",
+      "modules[*].module_id",
+      "modules[*].declaration_ids",
+      "modules[*].reference_entity_ids",
+      "declarations[*].declaration_id",
+      "declarations[*].module_id",
+      "declarations[*].member_ids",
+      "declarations[*].type_id",
+      "declarations[*].documentation_id",
+      "declarations[*].reference_projection_link_ids",
+      "declarations[*].projection_status_record_id",
+      "declarations[*].semantic_order_key",
+      "members[*].member_id",
+      "members[*].owner_declaration_id",
+      "members[*].type_id",
+      "members[*].documentation_id",
+      "members[*].reference_projection_link_ids",
+      "members[*].projection_status_record_id",
+      "types[*].type_id",
+      "types[*].source_reference_type_ids",
+      "types[*].lowering_rule_id",
+      "projection_status_cases[*].input_reference_fact_ids",
+      "projection_status_cases[*].output_semantic_element_ids",
+      "projection_status_cases[*].loss_record_ids"
+    ]
+  }
+}
