@@ -1,0 +1,186 @@
+{
+  "schema_version": 1,
+  "contract_id": "wow-recognizers/e2-b/core-structural-rules",
+  "state": "implementation-ready-documentation-no-rust-code",
+  "work_package": "E2-B",
+  "crate": "wow-recognizers",
+  "direct_framework_dependencies": [
+    "wow-core",
+    "wow-emmy",
+    "wow-graph"
+  ],
+  "prerequisites": [
+    {
+      "contract_id": "wow-core/e0-a/1",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-emmy/e0-c/1",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-graph/e2-a/typed-assertion-partition-query-core",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-project/e2-toc-xml-fact-adapter",
+      "implementation_and_fixture_freeze_required": true,
+      "state": "future-prerequisite-for-real-project-integration"
+    }
+  ],
+  "active_scope": [
+    "bounded-canonical-json-core-pack-schema",
+    "typed-normalized-fact-bundle",
+    "deterministic-non-turing-complete-match-engine",
+    "typed-captures-explanations-and-ambiguity",
+    "toc-package-load-dependency-lod-savedvariables-rules",
+    "xml-template-object-parent-inherits-script-rules",
+    "createframe-createfrommixins-mixin-rules",
+    "native-frame-event-registration",
+    "eventregistry-native-frame-event-bridge",
+    "custom-event-producer-subscription-with-trigger-evidence",
+    "cvar-callback-registration",
+    "setscript-hookscript-hooksecurefunc-structure",
+    "libstub-require-new-embed-structure",
+    "savedvariables-root-and-literal-state-paths",
+    "proposed-graph-assertion-output-partitions",
+    "confidence-ambiguity-coverage-and-not-evaluated",
+    "versioned-producer-partition-replacement",
+    "mutation-corpus-and-precision-evaluation",
+    "budgets-cancellation-security-and-determinism"
+  ],
+  "deferred_scope": [
+    "source-lua-toc-xml-parsing",
+    "full-project-generation-and-invalidation-orchestration",
+    "graph-persistence-or-publication",
+    "named-framework-or-addon-calibration-packs",
+    "module-service-lifecycle-plugin-style-element-message-bus-heuristics",
+    "secret-guard-and-unsafe-sink-rules",
+    "diagnostics-severity-remediation-or-autofix",
+    "full-blizzard-ui-graph-and-source-skeletons",
+    "lineage-patch-impact-search-ranking-fts",
+    "semantic-or-codebase-memory-candidates",
+    "runtime-observations",
+    "external-user-pack-activation",
+    "ci"
+  ],
+  "operations": [
+    "parse_recognizer_pack",
+    "validate_recognizer_pack",
+    "compile_recognizer_pack",
+    "validate_recognizer_fact_bundle",
+    "match_recognizer_partition",
+    "explain_recognizer_match",
+    "build_recognizer_output_partition",
+    "build_recognizer_coverage_report",
+    "evaluate_recognizer_corpus",
+    "run_recognizer_mutation_suite",
+    "build_recognizer_precision_report"
+  ],
+  "output_confidence": [
+    "Derived",
+    "Possible"
+  ],
+  "rule_outcomes": [
+    "Matched",
+    "EvaluatedNoMatch",
+    "NotApplicable",
+    "NotEvaluated",
+    "Partial",
+    "Failed",
+    "Cancelled"
+  ],
+  "pack_trust_classes": [
+    "core",
+    "calibration",
+    "experimental"
+  ],
+  "e2_active_trust_classes": [
+    "core"
+  ],
+  "active_rule_ids": [
+    "core.toc.package@1",
+    "core.toc.file_order@1",
+    "core.toc.dependencies@1",
+    "core.toc.load_on_demand@1",
+    "core.toc.saved_variables@1",
+    "core.xml.template@1",
+    "core.xml.object@1",
+    "core.xml.inherits@1",
+    "core.xml.script@1",
+    "core.lua.create_frame@1",
+    "core.lua.create_from_mixins@1",
+    "core.lua.mixin_assignment@1",
+    "core.signal.native_frame_event@1",
+    "core.signal.native_event_registry_bridge@1",
+    "core.signal.custom_registry_producer@1",
+    "core.signal.custom_registry_subscription@1",
+    "core.signal.cvar_callback@1",
+    "core.hook.set_script@1",
+    "core.hook.hook_script@1",
+    "core.hook.secure_posthook@1",
+    "core.library.libstub_require@1",
+    "core.library.libstub_new@1",
+    "core.library.embed@1",
+    "core.state.saved_variable_root@1",
+    "core.state.literal_path_read@1",
+    "core.state.literal_path_write@1"
+  ],
+  "hard_rules": [
+    "normalized typed facts are the only correctness input",
+    "no second parser or raw source fallback",
+    "repository addon path and popularity are never semantic conditions",
+    "packs are declarative non executable bounded and versioned",
+    "recognizer outputs are Derived or Possible only",
+    "all competing matches remain visible",
+    "native frame events registry frame-event bridges custom callbacks and CVar callbacks remain distinct",
+    "custom EventRegistry callback requires exact TriggerEvent producer for confirmed custom relation",
+    "hook recognition never claims taint combat protected managed forbidden or runtime safety",
+    "SavedVariables roots require exact TOC declarations",
+    "negative clauses require complete closed-scope coverage",
+    "recognizers emit proposals and never publish graph state or final IDs",
+    "rule versions own atomically replaceable producer partitions",
+    "rule removal reduces coverage only",
+    "truncated partial failed or cancelled output is never complete",
+    "mutation evaluation must detect repository path and name overfitting",
+    "no filesystem network process editor database client or LLM correctness path"
+  ],
+  "normative_files": [
+    "crates/wow-recognizers/README.md",
+    "crates/wow-recognizers/e2/README.md",
+    "crates/wow-recognizers/e2/AGENTS.md",
+    "crates/wow-recognizers/e2/DECISIONS.md",
+    "crates/wow-recognizers/e2/DATA_MODEL.md",
+    "crates/wow-recognizers/e2/FACT_INPUT_MODEL.md",
+    "crates/wow-recognizers/e2/PACK_SCHEMA.md",
+    "crates/wow-recognizers/e2/MATCH_ENGINE.md",
+    "crates/wow-recognizers/e2/RULE_FAMILIES.md",
+    "crates/wow-recognizers/e2/OUTPUT_AND_GRAPH_HANDOFF.md",
+    "crates/wow-recognizers/e2/CONFIDENCE_AMBIGUITY_AND_COVERAGE.md",
+    "crates/wow-recognizers/e2/PARTITIONS_AND_VERSIONING.md",
+    "crates/wow-recognizers/e2/MUTATION_AND_EVALUATION.md",
+    "crates/wow-recognizers/e2/SECURITY_AND_BUDGETS.md",
+    "crates/wow-recognizers/e2/ERROR_MODEL.md",
+    "crates/wow-recognizers/e2/TEST_MATRIX.md",
+    "crates/wow-recognizers/e2/IMPLEMENTATION_PLAN.md",
+    "crates/wow-recognizers/e2/CONTRACT.json",
+    "crates/wow-recognizers/e2/examples/README.md",
+    "crates/wow-recognizers/e2/examples/core-pack.json",
+    "crates/wow-recognizers/e2/examples/fact-bundle.json",
+    "crates/wow-recognizers/e2/examples/match-cases.json",
+    "crates/wow-recognizers/e2/examples/ambiguity-cases.json",
+    "crates/wow-recognizers/e2/examples/mutation-cases.json",
+    "crates/wow-recognizers/e2/examples/graph-output.json",
+    "crates/wow-recognizers/e2/examples/CHECKSUMS.json"
+  ],
+  "freeze_gate": {
+    "implementation_state": "not-started",
+    "required_before_first_rust_implementation": [
+      "wow-core wow-emmy and wow-graph implementation commits and fixture digests",
+      "wow-project TOC XML fact adapter profile needed by real integration",
+      "core pack rule fact graph evaluation and budget profiles",
+      "all fact match ambiguity proposal partition replacement evaluation and mutation vectors",
+      "all member and bundle SHA-256 values"
+    ]
+  }
+}
