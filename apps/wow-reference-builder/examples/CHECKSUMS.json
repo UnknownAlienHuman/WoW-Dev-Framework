@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "manifest_id": "wow-reference-builder-e1-checksums-v1",
+  "algorithm": "sha256",
+  "state": "pending-byte-freeze-before-first-rust-implementation",
+  "implementation_state": "not-started",
+  "member_paths": [
+    "apps/wow-reference-builder/README.md",
+    "apps/wow-reference-builder/AGENTS.md",
+    "apps/wow-reference-builder/CONTRACT.json",
+    "apps/wow-reference-builder/examples/README.md",
+    "apps/wow-reference-builder/examples/cli-cases.json"
+  ],
+  "member_sha256": {},
+  "bundle_sha256": null,
+  "service_contract_id": "wow-service/e1-d-reference-pack-build-validation"
+}

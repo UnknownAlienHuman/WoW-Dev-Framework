@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e1-d-validation-cases-v1",
+  "state": "documentation-only-pending-candidate-and-byte-freeze",
+  "cases": [
+    {
+      "case_id": "PACK-VALIDATE-001",
+      "mutation": null,
+      "expected": "same-derived-eligibility"
+    },
+    {
+      "case_id": "PACK-VALIDATE-002",
+      "mutation": "validator-repairs-member-or-checksum",
+      "expected_error": "pack_validation_nonrepairing_contract_violated"
+    },
+    {
+      "case_id": "PACK-VALIDATE-003",
+      "mutation": "alter-member-bytes-size-or-digest",
+      "expected_error": "pack_member_checksum_mismatch"
+    },
+    {
+      "case_id": "PACK-VALIDATE-004",
+      "mutation": "mutable-corrupt-wrong-schema-store",
+      "expected_error": "pack_store_readonly_or_integrity_invalid"
+    },
+    {
+      "case_id": "PACK-VALIDATE-005",
+      "mutation": "change-reference-golden-result",
+      "expected_error": "pack_reference_golden_query_mismatch"
+    },
+    {
+      "case_id": "PACK-VALIDATE-006",
+      "mutation": "break-annotation-syntax-or-source-map-span",
+      "expected_error": "pack_generated_source_map_invalid"
+    },
+    {
+      "case_id": "PACK-VALIDATE-007",
+      "mutation": "omit-blocking-loss-or-truncate-as-complete",
+      "expected_error": "pack_projection_loss_or_coverage_invalid"
+    },
+    {
+      "case_id": "PACK-VALIDATE-008",
+      "mutation": "swap-oracle-or-consumer-pin",
+      "expected_error": "pack_oracle_or_consumer_result_invalid"
+    },
+    {
+      "case_id": "PACK-VALIDATE-009",
+      "mutation": "remove-mandatory-license",
+      "expected_error": "pack_license_or_provenance_incomplete"
+    },
+    {
+      "case_id": "PACK-VALIDATE-010",
+      "mutation": "mandatory-check-unavailable",
+      "expected_error": "pack_mandatory_check_not_evaluated"
+    },
+    {
+      "case_id": "PACK-VALIDATE-011",
+      "mutation": "manifest-claims-validated-with-failed-gate",
+      "expected_error": "pack_eligibility_claim_invalid"
+    }
+  ],
+  "report": {
+    "validation_report_id": null,
+    "pack_id": null,
+    "gate_record_ids": [],
+    "derived_eligibility": null,
+    "mutation_or_repair_count": 0,
+    "canonical_sha256": null
+  },
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "cases[*].candidate_member_or_report_ids",
+      "cases[*].validation_record_ids",
+      "cases[*].canonical_sha256",
+      "report.*"
+    ]
+  }
+}

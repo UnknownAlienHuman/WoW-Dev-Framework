@@ -1,0 +1,139 @@
+{
+  "schema_version": 1,
+  "contract_id": "wow-service/e1-d-reference-pack-build-validation",
+  "state": "implementation-ready-documentation-no-rust-code",
+  "work_package": "E1-D",
+  "crate": "wow-service",
+  "application": "wow-reference-builder",
+  "direct_framework_dependencies": [
+    "wow-core",
+    "wow-store",
+    "wow-reference",
+    "wow-annotations"
+  ],
+  "prerequisites": [
+    {
+      "contract_id": "wow-core/e0-a/1",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-store/e1-a/sqlite-persistence",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-reference/e1-persistent-schema-and-build-plan",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-annotations/e1-projection-and-parity",
+      "implementation_and_fixture_freeze_required": true
+    }
+  ],
+  "operations": [
+    "reference_pack_build",
+    "reference_pack_validate",
+    "reference_pack_rebuild_compare"
+  ],
+  "eligibility_states": [
+    "fixture",
+    "candidate",
+    "validated-local"
+  ],
+  "forbidden_states": [
+    "release-published"
+  ],
+  "active_scope": [
+    "exact-build-validation-rebuild-requests",
+    "component-contract-and-generation-coherence",
+    "reference-and-annotation-orchestration",
+    "pack-layout-member-checksum-license-provenance-assembly",
+    "typed-staging-materialization-plan",
+    "independent-readonly-nonrepairing-validation",
+    "logical-and-physical-determinism-classification",
+    "cancellation-recovery-quarantine-and-prior-output-preservation",
+    "thin-wow-reference-builder-cli-boundary"
+  ],
+  "deferred_scope": [
+    "source-acquisition-or-floating-update",
+    "complete-framexml-ui-graph-skeleton-lineage-search-members",
+    "runtime-client-probes",
+    "signing-attestation-upload-distribution-release-channel",
+    "lsp-mcp",
+    "ci"
+  ],
+  "hard_rules": [
+    "one exact source snapshot profile reference generation and component set per build",
+    "service orchestrates and never reimplements store reference or annotation algorithms",
+    "application materializes only a typed root-confined plan",
+    "validation is read-only and nonrepairing",
+    "pack manifest finalizes only after component and member closure",
+    "reference coverage store integrity annotation loss parity and consumer gates remain separate",
+    "no silent fallback profile generation component or last-known-good substitution",
+    "logical canonical annotation object sqlite and archive determinism classes remain separate",
+    "cancelled failed or partial output never becomes validated-local",
+    "prior destination remains unchanged until atomic validated finalization",
+    "no source/generated execution editor mutation network publication signing or CI"
+  ],
+  "domain_types": [
+    "ReferencePackBuildRequest",
+    "ReferencePackValidationRequest",
+    "ReferencePackRebuildComparisonRequest",
+    "ReferencePackComponentSet",
+    "ReferencePackBuildContext",
+    "ReferenceDataComponent",
+    "AnnotationComponent",
+    "ReferencePackLayoutProfile",
+    "PackStagingSession",
+    "PackMaterializationEntry",
+    "PackMaterializationPlan",
+    "ReferencePackMember",
+    "ReferencePackManifest",
+    "PackGateRecord",
+    "ReferencePackBuildOutcome",
+    "ReferencePackValidationReport",
+    "RebuildDifference",
+    "ReferencePackRebuildComparisonReport",
+    "ReferencePackRecoveryRecord",
+    "ReferencePackServiceError"
+  ],
+  "normative_files": [
+    "crates/wow-service/e1/README.md",
+    "crates/wow-service/e1/AGENTS.md",
+    "crates/wow-service/e1/DECISIONS.md",
+    "crates/wow-service/e1/DATA_MODEL.md",
+    "crates/wow-service/e1/BUILD_OPERATION.md",
+    "crates/wow-service/e1/VALIDATE_OPERATION.md",
+    "crates/wow-service/e1/ASSEMBLY_AND_LAYOUT.md",
+    "crates/wow-service/e1/DETERMINISM_AND_REBUILD.md",
+    "crates/wow-service/e1/APPLICATION_BOUNDARY.md",
+    "crates/wow-service/e1/ERROR_MODEL.md",
+    "crates/wow-service/e1/TEST_MATRIX.md",
+    "crates/wow-service/e1/IMPLEMENTATION_PLAN.md",
+    "crates/wow-service/e1/CONTRACT.json",
+    "crates/wow-service/e1/examples/README.md",
+    "crates/wow-service/e1/examples/build-request.json",
+    "crates/wow-service/e1/examples/build-result.json",
+    "crates/wow-service/e1/examples/validation-cases.json",
+    "crates/wow-service/e1/examples/rebuild-comparison.json",
+    "crates/wow-service/e1/examples/CHECKSUMS.json",
+    "apps/wow-reference-builder/README.md",
+    "apps/wow-reference-builder/AGENTS.md",
+    "apps/wow-reference-builder/CONTRACT.json",
+    "apps/wow-reference-builder/examples/README.md",
+    "apps/wow-reference-builder/examples/cli-cases.json",
+    "apps/wow-reference-builder/examples/CHECKSUMS.json"
+  ],
+  "freeze_gate": {
+    "implementation_state": "not-started",
+    "required_before_first_rust_implementation": [
+      "all prerequisite implementation commits and fixture bundle digests",
+      "exact source snapshot profile and component set",
+      "pack layout and materialization profiles",
+      "build validation and rebuild requests/results",
+      "member paths identities sizes and digests",
+      "pack manifest gate and checksum IDs",
+      "CLI requests stdout stderr and exit-code vectors",
+      "all member and bundle SHA-256 values"
+    ]
+  }
+}

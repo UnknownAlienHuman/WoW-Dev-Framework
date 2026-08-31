@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e1-d-build-request-v1",
+  "state": "documentation-only-pending-component-and-byte-freeze",
+  "request": {
+    "request_id": null,
+    "source_snapshot_manifest_id": null,
+    "source_root_handle_id": null,
+    "profile_identity_id": null,
+    "component_set_id": null,
+    "correction_set_id": null,
+    "reference_data_eligibility_target": "candidate",
+    "annotation_profiles": {
+      "semantic_profile_id": null,
+      "type_lowering_profile_id": null,
+      "layout_rendering_profile_id": null,
+      "dialect_profile_id": null,
+      "sanitization_profile_id": null,
+      "source_map_loss_profile_id": null,
+      "consumer_profile_ids": [],
+      "oracle_baseline_id": null
+    },
+    "pack_layout_profile_id": null,
+    "materialization_policy_id": null,
+    "pack_eligibility_target": "validated-local",
+    "deterministic_execution_profile_id": null,
+    "budget_policy_id": null,
+    "cancellation_policy_id": null
+  },
+  "negative_cases": [
+    {
+      "case_id": "PACK-CONFIG-002",
+      "mutation": "implicit-current-or-floating-component",
+      "expected_error": "pack_implicit_current_or_profile_forbidden"
+    },
+    {
+      "case_id": "PACK-CONFIG-003",
+      "mutation": "mix-profile-or-reference-generation",
+      "expected_error": "pack_profile_or_generation_mismatch"
+    },
+    {
+      "case_id": "PACK-CONFIG-004",
+      "mutation": "unfrozen-prerequisite",
+      "expected_error": "pack_component_contract_or_implementation_unfrozen"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "request.*",
+      "canonical_sha256"
+    ]
+  }
+}

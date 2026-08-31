@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e1-d-build-result-v1",
+  "state": "documentation-only-pending-component-and-byte-freeze",
+  "outcome": {
+    "build_outcome_id": null,
+    "request_id": null,
+    "status": "blocked",
+    "profile_identity_id": null,
+    "reference_generation_id": null,
+    "component_set_id": null,
+    "reference_data_component_id": null,
+    "annotation_component_id": null,
+    "staging_session_id": null,
+    "materialization_plan_id": null,
+    "materialization_report_id": null,
+    "pack_id": null,
+    "pack_manifest_id": null,
+    "checksum_manifest_id": null,
+    "license_provenance_manifest_id": null,
+    "build_report_id": null,
+    "validation_report_id": null,
+    "rebuild_comparison_report_id": null,
+    "eligibility": "candidate",
+    "gate_record_ids": [],
+    "blocking_gate_ids": [],
+    "cleanup_or_quarantine_instruction_id": null,
+    "prior_destination_unchanged": true,
+    "canonical_sha256": null
+  },
+  "member_families": [
+    "pack-manifest",
+    "pack-checksums",
+    "reference-store",
+    "reference-data-manifest",
+    "reference-build-report",
+    "annotation-file",
+    "annotation-semantic-manifest",
+    "annotation-file-manifest",
+    "annotation-source-map",
+    "annotation-projection-coverage",
+    "annotation-projection-loss",
+    "annotation-parity-report",
+    "annotation-consumer-manifest",
+    "annotation-consumer-probe-result",
+    "annotation-artifact-manifest",
+    "license-or-notice",
+    "provenance-manifest"
+  ],
+  "gate_examples": [
+    {
+      "gate_id": null,
+      "kind": "component-generation-closure",
+      "policy": "mandatory",
+      "status": "Passed",
+      "input_ids": [],
+      "blocker_ids": []
+    },
+    {
+      "gate_id": null,
+      "kind": "annotation-consumer-compatibility",
+      "policy": "mandatory",
+      "status": "NotEvaluated",
+      "input_ids": [],
+      "blocker_ids": []
+    },
+    {
+      "gate_id": null,
+      "kind": "license-redistribution",
+      "policy": "mandatory",
+      "status": "Passed",
+      "input_ids": [],
+      "blocker_ids": []
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "outcome.*",
+      "gate_examples[*].gate_id",
+      "gate_examples[*].input_ids",
+      "gate_examples[*].canonical_sha256"
+    ]
+  }
+}

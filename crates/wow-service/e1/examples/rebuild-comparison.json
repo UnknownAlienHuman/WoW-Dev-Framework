@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e1-d-rebuild-comparison-v1",
+  "state": "documentation-only-pending-build-and-byte-freeze",
+  "request": {
+    "rebuild_request_id": null,
+    "logical_build_request_id": null,
+    "execution_profile_ids": [],
+    "comparison_profile_id": null,
+    "budget_policy_id": null
+  },
+  "comparisons": [
+    {
+      "case_id": "PACK-DET-001",
+      "domain": "workers-1-2-N",
+      "required": "semantic-and-canonical-byte-equality"
+    },
+    {
+      "case_id": "PACK-DET-002",
+      "domain": "shuffled-input-row-member-order",
+      "required": "same-required-outputs"
+    },
+    {
+      "case_id": "PACK-DET-003",
+      "domain": "clock-temp-root-host",
+      "required": "excluded-from-canonical-identity"
+    },
+    {
+      "case_id": "PACK-DET-005",
+      "domain": "reference-data-logical",
+      "required": "equal"
+    },
+    {
+      "case_id": "PACK-DET-006",
+      "domain": "canonical-json-and-annotation-bytes",
+      "required": "byte-equal"
+    },
+    {
+      "case_id": "PACK-DET-007",
+      "domain": "content-addressed-object",
+      "required": "logical-and-encoded-equal-under-same-profile"
+    },
+    {
+      "case_id": "PACK-DET-008",
+      "domain": "sqlite",
+      "required": "logical-equal-physical-classified"
+    },
+    {
+      "case_id": "PACK-DET-010",
+      "domain": "archive",
+      "required": "not-evaluated-without-container-profile"
+    }
+  ],
+  "report": {
+    "rebuild_comparison_report_id": null,
+    "build_outcome_ids": [],
+    "difference_record_ids": [],
+    "gate_status": null,
+    "sqlite_physical_classification": null,
+    "archive_classification": null,
+    "canonical_sha256": null
+  },
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "request.*",
+      "comparisons[*].left_right_subject_ids",
+      "comparisons[*].comparison_record_id",
+      "comparisons[*].canonical_sha256",
+      "report.*"
+    ]
+  }
+}

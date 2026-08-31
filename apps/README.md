@@ -1,43 +1,57 @@
 # Applications
 
-Applications are thin transports over the shared `wow-service` use-case layer. They must not reimplement reference, analyzer, project, rule, graph, search, context, or profile logic.
+Applications are thin transports and host adapters over `wow-service`. They must not reimplement reference, annotation, storage, analyzer, project, rule, graph, search, context, or profile logic.
 
-## E0 active application
+## Contract routes
 
-- [`wow/`](wow/README.md) — minimal CLI projection for `status` and `check` only.
+- [`wow/`](wow/README.md) — E0 `status` and `check` CLI projection.
+- [`wow-reference-builder/`](wow-reference-builder/README.md) — E1-D local Reference Pack `build`, `validate`, and `rebuild-compare` frontend.
 
-The E0 CLI:
+## Dependency rule
+
+Each application depends on `wow-service` only among framework crates. Host libraries for arguments, JSON, filesystem, process isolation, or transport may be used only at the application boundary and must not absorb domain policy.
+
+## E0 `wow`
 
 ```text
-parses explicit typed arguments
+parses explicit typed status/check arguments
 constructs wow-service requests
-serializes exact service result types
-maps service state to frozen exit codes
+serializes exact service results
+maps semantic state to frozen exit codes
 ```
 
-Its only framework dependency is `wow-service`. See [`wow/AGENTS.md`](wow/AGENTS.md) and [`wow/CONTRACT.json`](wow/CONTRACT.json).
+No source scan, lower-crate orchestration, deferred-operation fake success, LSP/MCP, or editor mutation.
 
-## Planned applications
+## E1 `wow-reference-builder`
 
 ```text
-wow                 primary CLI router; E0 status/check only
-wow-emmy-check      possible compatibility/batch frontend, not active separately in E0
-wow-emmy-ls         Language Server Protocol frontend, deferred to E7
-wow-mcp             Model Context Protocol frontend, deferred to E7
-wow-reference-builder
-                    Reference Pack build/validation entry point, deferred to E1
+build
+    explicit request + materialized source root + output root
+
+validate
+    read-only nonrepairing candidate validation
+
+rebuild-compare
+    isolated repeated builds under frozen execution profiles
 ```
 
-Frontends translate transport requests into service use cases and serialize the same versioned result contracts. A transport-specific convenience is not a reason to add a domain operation or bypass `wow-service`.
+The application executes only typed staging/materialization/finalization and reviewed external probe adapter plans issued by `wow-service`. It does not download source, run repository scripts, execute Lua/generated files, mutate editors, sign, upload, publish, or activate a release.
 
-## E0 prohibitions
+## Later planned applications
 
-- no source filesystem scan or stdin source ingestion;
-- no direct dependencies on lower framework crates;
-- no analyzer/project/reference/rule orchestration;
-- no search, graph, LSP, MCP, daemon, runtime probe, edit/apply, release, or publishing command;
-- no empty/default success for deferred commands;
-- no semantic changes between JSON/text projections;
-- no CI or release automation.
+```text
+wow-emmy-check      optional batch compatibility frontend, not separately active
+wow-emmy-ls         LSP frontend, E7
+wow-mcp             MCP frontend, E7
+```
 
-The application directory does not activate every planned binary. Create only the executable required by the active milestone and its executable tests.
+A transport convenience is not a reason to add a domain operation or bypass `wow-service`.
+
+## General prohibitions
+
+- no direct lower framework crate dependencies;
+- no hidden current/latest profile or source;
+- no arbitrary shell/network/repository execution;
+- no source/editor/client mutation;
+- no semantic difference between JSON and text projections;
+- no final release/publishing/CI before the owning milestone contract.

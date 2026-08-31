@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "contract_id": "apps/wow-reference-builder/e1",
+  "state": "implementation-ready-documentation-no-rust-code",
+  "framework_dependencies": [
+    "wow-service"
+  ],
+  "commands": {
+    "build": {
+      "required_args": [
+        "request",
+        "source-root",
+        "output"
+      ],
+      "service_operation": "reference_pack_build"
+    },
+    "validate": {
+      "required_args": [
+        "pack"
+      ],
+      "optional_args": [
+        "expect"
+      ],
+      "service_operation": "reference_pack_validate"
+    },
+    "rebuild-compare": {
+      "required_args": [
+        "request",
+        "source-root",
+        "scratch-root"
+      ],
+      "service_operation": "reference_pack_rebuild_compare"
+    }
+  },
+  "exit_codes": {
+    "0": "gate-passed",
+    "2": "usage-or-request-invalid",
+    "3": "blocked-or-partial",
+    "4": "validation-failed",
+    "5": "build-or-component-failed",
+    "6": "cancelled",
+    "7": "security-path-integrity",
+    "8": "unavailable"
+  },
+  "forbidden": [
+    "direct-lower-crate-domain-dependency",
+    "implicit-current-or-default-source-output",
+    "shell-or-repository-script",
+    "network-download-upload",
+    "editor-mutation",
+    "source-or-generated-code-execution",
+    "in-place-destination-mutation",
+    "signing-release-publication-ci"
+  ],
+  "normative_files": [
+    "apps/wow-reference-builder/README.md",
+    "apps/wow-reference-builder/AGENTS.md",
+    "apps/wow-reference-builder/CONTRACT.json",
+    "apps/wow-reference-builder/examples/README.md",
+    "apps/wow-reference-builder/examples/cli-cases.json",
+    "apps/wow-reference-builder/examples/CHECKSUMS.json"
+  ]
+}
