@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-store-e2-read-lease-cases-v1",
+  "state": "documentation-only-pending-vector-freeze",
+  "cases": [
+    {
+      "case_id": "STORE-E2-LEASE-001",
+      "action": "acquire-open-release-current-N",
+      "expected": "exact-N"
+    },
+    {
+      "case_id": "STORE-E2-LEASE-002",
+      "action": "publish-N-plus-1-while-N-leased",
+      "expected": "N-reader-stable-N-plus-1-new-reader"
+    },
+    {
+      "case_id": "STORE-E2-LEASE-003",
+      "mutation": "read-handle-follows-head",
+      "expected_error": "project_store_read_handle_generation_mismatch"
+    },
+    {
+      "case_id": "STORE-E2-LEASE-004",
+      "mutation": "gc-targets-leased-N",
+      "expected_error": "project_store_gc_current_pinned_leased_or_evidence_root_forbidden"
+    },
+    {
+      "case_id": "STORE-E2-LEASE-006",
+      "action": "open-explicit-retained-historical-generation",
+      "expected": "exact-historical"
+    },
+    {
+      "case_id": "STORE-E2-LEASE-007",
+      "mutation": "exact-generation-missing",
+      "expected_error": "project_store_exact_read_not_found_without_fallback"
+    },
+    {
+      "case_id": "STORE-E2-LEASE-008",
+      "mutation": "abandoned-lease-ambiguous",
+      "expected": "retain-conservatively"
+    }
+  ],
+  "lease_profile_id": null,
+  "result_ids": {},
+  "canonical_sha256": null,
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "lease_profile_id",
+      "result_ids",
+      "canonical_sha256"
+    ]
+  }
+}
