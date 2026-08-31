@@ -1,0 +1,161 @@
+{
+  "schema_version": 1,
+  "contract_id": "wow-project/e3-a/blizzard-ui-source-universe-index",
+  "state": "implementation-ready-documentation-no-rust-code",
+  "work_package": "E3-A",
+  "crate": "wow-project",
+  "project_kind": "BlizzardUiPlatformSource",
+  "source_universe": "blizzard_ui_source",
+  "direct_framework_dependencies": [
+    "wow-core",
+    "wow-emmy",
+    "wow-graph",
+    "wow-recognizers",
+    "wow-store"
+  ],
+  "prerequisites": [
+    {
+      "contract_id": "wow-core/e0-a/1",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-emmy/e0-c/1",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-graph/e2-a/typed-assertion-partition-query-core",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-recognizers/e2-b/core-structural-rules",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-project/e2-c/toc-xml-load-incremental-index",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-store/e2-d/projectstore-coherent-publication",
+      "implementation_and_fixture_freeze_required": true
+    }
+  ],
+  "candidate_source_provider": {
+    "repository_full_name": "Gethe/wow-ui-source",
+    "role": "materialization-mirror-candidate-not-floating-authority",
+    "exact_revision_required_before_implementation": true
+  },
+  "active_scope": [
+    "exact-materialized-blizzard-ui-source-profile-and-snapshot",
+    "separate-blizzard-ui-source-project-universe-and-store",
+    "complete-configured-root-package-file-and-license-inventory",
+    "single-client-flavor-and-selected-toc-variant-per-package",
+    "e2-c-toc-xml-load-and-virtual-lua-pipeline-reuse",
+    "exact-wow-emmy-analyzer-plan-snapshot-and-fact-adapters",
+    "e2-b-core-recognizers-only",
+    "producer-owned-source-load-xml-analyzer-and-recognizer-graph-partitions",
+    "e2-a-graph-validation-and-e2-d-coherent-publication",
+    "source-authority-coverage-conflict-confidence-preservation",
+    "dependency-driven-incremental-update-reuse-nochange-and-removal-closure",
+    "exact-generation-structural-fingerprints-for-future-lineage-input-only",
+    "bounded-skeleton-input-view-for-wow-context",
+    "security-license-redistribution-budgets-cancellation-and-determinism"
+  ],
+  "deferred_scope": [
+    "project-map-l0-l1-and-context-pack-rendering",
+    "natural-language-or-model-context-selection",
+    "search-ranking-fts-and-fuzzy-resolution",
+    "cross-build-lineage-move-rename-replacement-and-patch-impact",
+    "named-addon-or-framework-calibration-packs",
+    "external-candidate-and-codebase-memory-integration",
+    "runtime-savedvariables-logs-event-payloads-taint-combat-or-object-instances",
+    "source-redistribution-or-release-bundling",
+    "ci"
+  ],
+  "operations": [
+    "validate_blizzard_ui_index_request",
+    "validate_blizzard_ui_source_profile",
+    "validate_blizzard_ui_source_snapshot",
+    "select_blizzard_ui_packages_and_toc_variants",
+    "build_blizzard_ui_load_model",
+    "build_blizzard_ui_analyzer_plan",
+    "validate_blizzard_ui_analyzer_snapshot",
+    "build_blizzard_ui_recognizer_fact_bundles",
+    "run_blizzard_ui_core_recognizers",
+    "validate_blizzard_ui_graph_proposals",
+    "assemble_blizzard_ui_index_candidate",
+    "validate_blizzard_ui_index_candidate",
+    "build_blizzard_ui_publication_bundle",
+    "publish_blizzard_ui_index",
+    "open_blizzard_ui_project_view",
+    "open_blizzard_ui_skeleton_input_view",
+    "plan_blizzard_ui_incremental_update"
+  ],
+  "producer_profiles": [
+    "platform_source_inventory",
+    "platform_toc_load",
+    "platform_xml_structure",
+    "platform_analyzer_structure",
+    "core_recognizer_rule_partition"
+  ],
+  "hard_rules": [
+    "one exact closed materialized source snapshot and compatibility profile",
+    "repository branch tag latest and provider names are provenance not floating authority",
+    "blizzard_ui_source never merges with user project reference runtime external or historical universes",
+    "E2-C is the only TOC XML project parser path and wow-emmy is the only Lua parser analyzer",
+    "one exact client flavor and TOC variant per package with no cross-variant fill",
+    "complete inventory and semantic coverage remain separate",
+    "source implementation evidence never becomes API Secret taint protected combat runtime or performance authority",
+    "core recognizers only and no source package path or popularity semantic conditions",
+    "graph proposals retain producer evidence coverage confidence ambiguity rejection and conflicts",
+    "platform source publishes in a separate E2-D ProjectStore with exact coherent identities",
+    "fingerprints are future comparison inputs and never lineage authority",
+    "skeleton input is bounded structured source evidence not Project Map L0 L1 prose or context ranking",
+    "removed inputs leave no target analyzer recognizer graph fingerprint source-handle or skeleton-input record",
+    "no source hook workflow generator Lua XML code filesystem escape network process editor client raw SQL or runtime data",
+    "license and redistribution state is explicit and local indexing does not imply source redistribution",
+    "all missing incompatible partial conflicted truncated failed or cancelled capabilities remain explicit",
+    "all logical outputs are deterministic under workers input order temp roots provider renames and physical store variation"
+  ],
+  "normative_files": [
+    "crates/wow-project/README.md",
+    "crates/wow-project/e3/README.md",
+    "crates/wow-project/e3/AGENTS.md",
+    "crates/wow-project/e3/DECISIONS.md",
+    "crates/wow-project/e3/DATA_MODEL.md",
+    "crates/wow-project/e3/SOURCE_ACQUISITION_AND_PINNING.md",
+    "crates/wow-project/e3/UNIVERSE_AND_PACKAGE_MODEL.md",
+    "crates/wow-project/e3/BLIZZARD_UI_LOAD_MODEL.md",
+    "crates/wow-project/e3/XML_TEMPLATE_AND_MIXIN_MODEL.md",
+    "crates/wow-project/e3/ANALYZER_AND_FACT_PROFILE.md",
+    "crates/wow-project/e3/GRAPH_PRODUCER_PROFILES.md",
+    "crates/wow-project/e3/COVERAGE_AND_AUTHORITY.md",
+    "crates/wow-project/e3/INCREMENTAL_UPDATE_AND_LINEAGE_INPUTS.md",
+    "crates/wow-project/e3/PUBLICATION_AND_CONTEXT_HANDOFF.md",
+    "crates/wow-project/e3/SKELETON_INPUT_VIEW.md",
+    "crates/wow-project/e3/SECURITY_LICENSE_AND_REDISTRIBUTION.md",
+    "crates/wow-project/e3/ERROR_MODEL.md",
+    "crates/wow-project/e3/TEST_MATRIX.md",
+    "crates/wow-project/e3/IMPLEMENTATION_PLAN.md",
+    "crates/wow-project/e3/CONTRACT.json",
+    "crates/wow-project/e3/examples/README.md",
+    "crates/wow-project/e3/examples/source-profile.json",
+    "crates/wow-project/e3/examples/source-snapshot.json",
+    "crates/wow-project/e3/examples/package-load-model.json",
+    "crates/wow-project/e3/examples/analyzer-graph-handoff.json",
+    "crates/wow-project/e3/examples/update-cases.json",
+    "crates/wow-project/e3/examples/publication-and-skeleton-input.json",
+    "crates/wow-project/e3/examples/CHECKSUMS.json"
+  ],
+  "freeze_gate": {
+    "implementation_state": "not-started",
+    "required_before_first_rust_implementation": [
+      "all E0 E1 E2 prerequisite implementation commits and fixture digests",
+      "exact source materializer implementation config security profile and platform adapter",
+      "exact Gethe wow-ui-source or alternate reviewed provider commit tree complete content manifest build mapping and license evidence",
+      "client flavor build Interface ReferenceProfile annotation analyzer parser recognizer graph and store profile IDs",
+      "all source package TOC XML load Lua analyzer fact recognizer graph candidate publication fingerprint and skeleton-input vectors",
+      "synthetic and real-source performance resource cancellation and rename-mutation reports",
+      "all member and bundle SHA-256 values"
+    ]
+  }
+}
