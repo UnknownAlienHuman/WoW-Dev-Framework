@@ -1,0 +1,197 @@
+{
+  "schema_version": 1,
+  "contract_id": "wow-project/e3-b/blizzard-ui-source-universe",
+  "state": "implementation-ready-documentation-no-rust-code",
+  "work_package": "E3-B",
+  "crate": "wow-project",
+  "direct_framework_dependencies": [
+    "wow-core",
+    "wow-emmy",
+    "wow-graph",
+    "wow-recognizers",
+    "wow-store"
+  ],
+  "prerequisites": [
+    {
+      "contract_id": "wow-core/e0-a/1",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-emmy/e0-c/1",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-graph/e2-a/typed-assertion-partition-query-core",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-recognizers/e2-b/core-structural-rules",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-project/e2-c/toc-xml-load-incremental-index",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-store/e2-d/projectstore-coherent-publication",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-context/e3-a/deterministic-skeleton-project-map",
+      "implementation_and_fixture_freeze_required": false,
+      "use": "source-graph and source-handle handoff shape; E3-B does not depend on wow-context"
+    }
+  ],
+  "universe_id_family": "blizzard_ui_source",
+  "active_scope": [
+    "exact-versioned-blizzard-ui-source-profile",
+    "externally-materialized-sealed-source-snapshot-validation",
+    "provider-revision-build-binding-root-file-content-license-and-coverage-manifests",
+    "declared-multi-root-package-and-global-unit-model",
+    "reuse-of-e2-c-toc-xml-load-and-wow-emmy-lua-pipeline",
+    "source-universe-fact-adapters-and-approved-universal-recognizers",
+    "direct-source-graph-proposal-partitions",
+    "exact-reference-source-bridge-proposal-partitions",
+    "source-reference-project-runtime-universe-and-authority-isolation",
+    "source-candidate-validation-invalidation-reuse-removal-and-nochange",
+    "dedicated-e2-d-source-store-graph-publication-and-current-selector",
+    "fresh-readback-source-graph-bridge-license-validation",
+    "build-binding-license-redistribution-coverage-conflict-and-publication-eligibility",
+    "source-handle-and-context-input-handoff",
+    "security-budgets-cancellation-determinism-and-fixture-freeze"
+  ],
+  "deferred_scope": [
+    "source-clone-download-update-or-provider-authentication",
+    "floating-repository-client-installation-or-host-filesystem-discovery",
+    "project-specific-ui-source-bridge-publication-without-exact-project-snapshot",
+    "runtime-source-bridges-savedvariables-logs-event-payloads-and-combat-observations",
+    "api-contract-restriction-secret-taint-protected-forbidden-or-runtime-authority-from-source",
+    "full-source-context-export",
+    "search-fuzzy-lineage-migration-impact-ranking",
+    "model-embedding-or-codebase-memory-candidates",
+    "diagnostics-remediation-autofix",
+    "redistributable-release-pack-signing-publication-and-ci"
+  ],
+  "operations": [
+    "validate_blizzard_ui_source_profile",
+    "validate_materialized_blizzard_ui_source_snapshot",
+    "classify_blizzard_ui_source_roots_and_packages",
+    "build_blizzard_ui_source_project_index",
+    "validate_blizzard_ui_source_analyzer_snapshot",
+    "build_blizzard_ui_source_fact_bundles",
+    "run_blizzard_ui_source_recognizers",
+    "build_blizzard_ui_source_graph_proposals",
+    "build_reference_ui_bridge_proposals",
+    "validate_blizzard_ui_source_graph_plan",
+    "plan_blizzard_ui_source_invalidation",
+    "assemble_blizzard_ui_source_candidate",
+    "validate_blizzard_ui_source_candidate",
+    "build_and_activate_blizzard_ui_source_publication",
+    "open_current_blizzard_ui_source_view",
+    "open_exact_blizzard_ui_source_view"
+  ],
+  "build_binding_states": [
+    "ExactBuildMatched",
+    "ProviderDeclared",
+    "ContentCorrelated",
+    "Unverified",
+    "Mismatch"
+  ],
+  "candidate_states": [
+    "CompleteCandidate",
+    "PartialCandidate",
+    "Failed",
+    "Cancelled",
+    "NoChange"
+  ],
+  "redistribution_states": [
+    "LocalAnalysisOnly",
+    "RedistributableWithNotice",
+    "RedistributableRestricted",
+    "RedistributableUnrestricted",
+    "Forbidden",
+    "Unknown",
+    "Conflict",
+    "ExpiredOrReviewRequired"
+  ],
+  "hard_rules": [
+    "implementation source is separate from API reference user project runtime and historical authority",
+    "one exact sealed externally materialized source snapshot is required",
+    "provider branch tag build label repository name and popularity are never authority or universal semantic conditions",
+    "build binding ingestion coverage license state and publication eligibility remain independent axes",
+    "source roots roles package boundaries and admitted files are explicit reviewed profile inputs",
+    "no source repository hook workflow build script generator Lua XML TOC or binary execution",
+    "wow-emmy remains the only Lua parser and analyzer",
+    "E2-C TOC XML load and fact contracts are reused rather than forked",
+    "all source entities belong to an exact blizzard_ui_source generation",
+    "source reference project dependency runtime external and historical entities never merge by name path signature or content",
+    "reference source bridges require exact compatible endpoints rules evidence and coverage",
+    "source calls do not declare public APIs and source absence does not establish API absence",
+    "static source never establishes runtime Secret taint combat protected forbidden managed payload readability performance or success",
+    "direct source recognizer and bridge assertions use separate producer partitions",
+    "wow-graph independently validates all source and bridge proposals",
+    "the source publication uses a dedicated ProjectStore Graph namespace and current selector",
+    "inactive source generations pass fresh source graph bridge license and store readback validation before CAS activation",
+    "a source publication never mutates a user project current record",
+    "last known good failed target inactive target and rollback candidate identities never relabel",
+    "raw source excerpts facts graphs databases and packaged artifacts each require an exact redistribution decision",
+    "unknown conflicting or missing license state never becomes redistributable",
+    "incremental reuse requires exact dependency proof and removed source has complete derived state closure",
+    "no network arbitrary filesystem process editor client raw SQL model or search capability exists in the library correctness path",
+    "missing real source build license probe benchmark or checksum evidence blocks production current and release claims"
+  ],
+  "normative_files": [
+    "crates/wow-project/e3/README.md",
+    "crates/wow-project/e3/AGENTS.md",
+    "crates/wow-project/e3/DECISIONS.md",
+    "crates/wow-project/e3/DATA_MODEL.md",
+    "crates/wow-project/e3/SOURCE_PROFILE_AND_MATERIALIZATION.md",
+    "crates/wow-project/e3/UNIVERSE_AND_IDENTITY.md",
+    "crates/wow-project/e3/INDEXING_PIPELINE.md",
+    "crates/wow-project/e3/REFERENCE_AND_PROJECT_BRIDGES.md",
+    "crates/wow-project/e3/GRAPH_PUBLICATION.md",
+    "crates/wow-project/e3/COVERAGE_CONFLICTS_AND_AUTHORITY.md",
+    "crates/wow-project/e3/LICENSE_SECURITY_AND_REDISTRIBUTION.md",
+    "crates/wow-project/e3/INVALIDATION_AND_VERSIONING.md",
+    "crates/wow-project/e3/ERROR_MODEL.md",
+    "crates/wow-project/e3/TEST_MATRIX.md",
+    "crates/wow-project/e3/IMPLEMENTATION_PLAN.md",
+    "crates/wow-project/e3/CONTRACT.json",
+    "crates/wow-project/e3/examples/README.md",
+    "crates/wow-project/e3/examples/source-profile.json",
+    "crates/wow-project/e3/examples/source-snapshot.json",
+    "crates/wow-project/e3/examples/source-index-candidate.json",
+    "crates/wow-project/e3/examples/universe-graph-proposals.json",
+    "crates/wow-project/e3/examples/bridge-cases.json",
+    "crates/wow-project/e3/examples/publication-cases.json",
+    "crates/wow-project/e3/examples/invalidation-cases.json",
+    "crates/wow-project/e3/examples/license-redistribution-cases.json",
+    "crates/wow-project/e3/examples/CHECKSUMS.json",
+    "crates/wow-reference/e3/BLIZZARD_UI_SOURCE_PROFILE.md",
+    "crates/wow-graph/e3/BLIZZARD_UI_SOURCE_GRAPH.md",
+    "crates/wow-context/e3/BLIZZARD_UI_INPUT_HANDOFF.md"
+  ],
+  "freeze_gate": {
+    "implementation_state": "not-started",
+    "required_before_first_rust_implementation": [
+      "all prerequisite implementation commits and fixture bundle digests",
+      "one synthetic and one exact reviewed sealed real Blizzard UI source snapshot content manifest",
+      "provider revision build binding root file source license redistribution and security manifests",
+      "TOC XML load analyzer adapter recognizer graph bridge store budget canonicalization and error profiles",
+      "all source package unit analyzer fact recognizer graph bridge candidate invalidation publication reader recovery and license vectors",
+      "all member and bundle SHA-256 values"
+    ],
+    "production_current_claim_additional_requirements": [
+      "policy eligible build binding state",
+      "complete mandatory source and graph capabilities",
+      "successful inactive readback validation",
+      "resolved exact license state for the intended local current channel"
+    ],
+    "redistributable_release_additional_requirements": [
+      "positive artifact-specific redistribution decisions",
+      "complete notice and attribution closure",
+      "reproducible permitted artifact bytes",
+      "E7 signing publication contract and explicit user authorization"
+    ]
+  }
+}
