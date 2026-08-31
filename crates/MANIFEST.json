@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "repository": "UnknownAlienHuman/WoW-Dev-Framework",
-  "documentation_frontier": "E2-C",
+  "documentation_frontier": "E2-D",
   "implementation_frontier": "not-started",
   "contract_state": "documentation-only-no-rust-code",
   "required_reading": [
@@ -20,8 +20,9 @@
     "Implement only the active work package and its executable fixtures.",
     "Do not create empty placeholder crates or fake successful operations.",
     "Required null fixture pins become invalid when implementation_state changes from not-started.",
-    "Cross-crate contract changes update this manifest, dependency graph or workstream routing as applicable.",
-    "The external WoW engineering KB remains the current patch-sensitive authority/router; live claims are linked, not duplicated."
+    "Cross-crate contract changes update routing and dependency documentation as applicable.",
+    "The external WoW engineering KB remains the current patch-sensitive authority/router; live claims are linked, not duplicated.",
+    "No CI or GitHub workflow is added without an explicit owner request."
   ],
   "contract_packages": [
     {
@@ -114,12 +115,26 @@
       "contract_id": "wow-project/e2-c/toc-xml-load-incremental-index",
       "manifest": "crates/wow-project/e2/CONTRACT.json",
       "state": "implementation-ready-documentation-no-rust-code"
+    },
+    {
+      "work_package": "E2-D",
+      "crate": "wow-store",
+      "contract_id": "wow-store/e2-d/project-store-generation-publication",
+      "manifest": "crates/wow-store/e2/CONTRACT.json",
+      "state": "implementation-ready-documentation-no-rust-code"
+    },
+    {
+      "work_package": "E2-D",
+      "crate": "wow-project",
+      "contract_id": "wow-project/e2-d/integrated-project-graph-publication",
+      "manifest": "crates/wow-project/e2d/CONTRACT.json",
+      "state": "implementation-ready-documentation-no-rust-code"
     }
   ],
   "crates": [
     {
       "name": "wow-core",
-      "status": "implementation-ready",
+      "status": "E0-A-implementation-ready",
       "first_milestone": "E0",
       "implementation_state": "not-started",
       "brief": "crates/wow-core/README.md",
@@ -136,20 +151,28 @@
     },
     {
       "name": "wow-store",
-      "status": "E1-A-implementation-ready-E2-D-projectstore-deferred",
+      "status": "E1-A-and-E2-D-implementation-ready",
       "first_milestone": "E1",
       "implementation_state": "not-started",
       "brief": "crates/wow-store/README.md",
+      "contract_manifests": [
+        "crates/wow-store/CONTRACT.json",
+        "crates/wow-store/e2/CONTRACT.json"
+      ],
       "allowed_dependencies": [
         "wow-core"
       ],
       "owns": [
         "sqlite-lifecycle",
         "schemas-and-migrations",
+        "registered-operations",
         "generation-transactions",
         "immutable-reference-store",
-        "future-project-store",
-        "content-addressed-objects"
+        "project-store-physical-profile",
+        "multi-domain-atomic-generation-publication",
+        "read-snapshots-and-leases",
+        "content-addressed-objects",
+        "integrity-recovery-retention-gc"
       ]
     },
     {
@@ -210,11 +233,15 @@
     },
     {
       "name": "wow-project",
-      "status": "E0-D-and-E2-C-implementation-ready-E2-D-publication-deferred",
+      "status": "E0-D-E2-C-E2-D-implementation-ready",
       "first_milestone": "E0",
       "implementation_state": "not-started",
       "brief": "crates/wow-project/README.md",
-      "contract_manifest": "crates/wow-project/e2/CONTRACT.json",
+      "contract_manifests": [
+        "crates/wow-project/CONTRACT.json",
+        "crates/wow-project/e2/CONTRACT.json",
+        "crates/wow-project/e2d/CONTRACT.json"
+      ],
       "allowed_dependencies": [
         "wow-core",
         "wow-store",
@@ -222,29 +249,16 @@
         "wow-graph",
         "wow-recognizers"
       ],
-      "active_e2_c_dependencies": [
-        "wow-core",
-        "wow-emmy",
-        "wow-graph",
-        "wow-recognizers"
-      ],
-      "inactive_until_e2_d": [
-        "wow-store"
-      ],
       "owns": [
-        "workspace-source-snapshot-roots-universes",
-        "project-generation-and-candidate",
-        "toc-variants-directives-files-dependencies-lod-bootstrap-savedvariables",
-        "xml-includes-templates-objects-inheritance-scripts-inline-lua",
-        "static-load-model-and-reachability",
-        "analyzer-workspace-and-snapshot-binding",
-        "recognizer-fact-adapters-and-execution-orchestration",
-        "graph-proposal-validation-orchestration",
-        "incremental-invalidation-reuse-and-removal-closure",
-        "project-index-candidate-view-and-e2-d-publication-bundle"
-      ],
-      "active_scope": "E2-C builds deterministic NotPublishedE2C project index candidates",
-      "next_contract": "E2-D ProjectStore plus atomic ProjectSnapshot and GraphSnapshot publication"
+        "workspace-and-file-model",
+        "project-generation",
+        "toc-xml-load-index",
+        "incremental-invalidation",
+        "recognizer-and-graph-orchestration",
+        "integrated-publication-bundle",
+        "coherent-publication-head",
+        "project-view"
+      ]
     },
     {
       "name": "wow-graph",
@@ -271,7 +285,6 @@
       "first_milestone": "E2",
       "implementation_state": "not-started",
       "brief": "crates/wow-recognizers/README.md",
-      "contract_manifest": "crates/wow-recognizers/e2/CONTRACT.json",
       "allowed_dependencies": [
         "wow-core",
         "wow-emmy",
@@ -285,9 +298,7 @@
         "confidence-ambiguity-coverage",
         "producer-partitions",
         "mutation-and-precision-evaluation"
-      ],
-      "active_scope": "TOC XML frame mixin signal hook library and SavedVariables structural rules only",
-      "deferred_scope": "named calibration packs and framework-specific lifecycle/plugin conventions"
+      ]
     },
     {
       "name": "wow-search",
