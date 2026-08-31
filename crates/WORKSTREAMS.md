@@ -162,16 +162,7 @@ frozen graph registry and fixtures
 
 Contract: [`wow-recognizers/e2/`](wow-recognizers/e2/README.md).
 
-Owns:
-
-- bounded canonical JSON core pack schema;
-- recognizer-owned typed fact input envelope;
-- deterministic non-Turing-complete matching;
-- TOC/XML/frame/mixin/event/callback/hook/library/SavedVariables rules;
-- proposed graph assertions only;
-- confidence/ambiguity/coverage/NotEvaluated;
-- producer partition/version/replacement contract;
-- mutation and precision evaluation.
+Owns bounded declarative core packs, typed normalized fact inputs, deterministic matching, universal graph proposals, evidence/confidence/ambiguity/coverage, producer partitions, and mutation/precision evaluation.
 
 Hard boundaries:
 
@@ -186,16 +177,6 @@ native frame events, EventRegistry frame bridges, custom callbacks and CVar call
 custom RegisterCallback requires exact TriggerEvent producer for confirmed custom relation
 hook recognition never means taint/combat/protected/managed/runtime safe
 SavedVariables roots require TOC declarations
-```
-
-Prerequisites before code:
-
-```text
-implemented/frozen wow-core
-implemented/frozen wow-emmy facts/pin/probe
-implemented/frozen wow-graph registry/proposal seam
-frozen project TOC/XML fact adapter profile for real integration
-frozen core pack/rules/evaluation/budget fixtures and checksums
 ```
 
 E2-B handoff gate:
@@ -215,26 +196,92 @@ rule update/disable removes only owned producer assertions
 1/2/N and shuffled inputs produce byte-identical outputs
 ```
 
-### E2-C — full `wow-project` TOC/XML/load/index contract
+### E2-C — full `wow-project` source/TOC/XML/load/incremental index
 
-Next documentation work package.
+Contract: [`wow-project/e2/`](wow-project/e2/README.md).
 
-Must define:
+Owns:
+
+- exact materialized project source snapshot, roots, universes, packages, and file manifest;
+- one selected TOC variant per package with no cross-variant merge;
+- bounded TOC directives/files/dependencies/LOD/bootstrap/SavedVariables parsing;
+- bounded streaming XML includes/templates/objects/inheritance/scripts;
+- source-mapped XML inline Lua virtual units;
+- static package/file/unit load model and reachability;
+- generation-bound `wow-emmy` physical/virtual Main and separate Library workspaces;
+- exact TOC/XML/project/analyzer adapters for E2-B;
+- recognizer execution and graph-proposal validation orchestration;
+- dependency-driven incremental invalidation, conservative widening, reuse proof, and stale-output removal;
+- immutable Complete/Partial `ProjectIndexCandidate` and E2-D publication bundle.
+
+Hard boundaries:
 
 ```text
-bounded TOC parser and flavor/variant selection
-streaming XML facts and embedded-script source ownership
-project fact adapter profiles consumed by recognizers
-load/dependency/optional/LOD/bootstrap model
-SavedVariables declarations and state-root seeds
-incremental invalidation across files/TOC/XML/analyzer/recognizer partitions
-coherent ProjectGeneration + GraphGeneration target publication
-no parser duplication inside recognizers or graph
+consume one closed materialized source snapshot; no floating repo or installed-addon scan
+no repository hook/build/test/generator/Lua/XML/TOC execution
+no second Lua parser
+no automatic dependency download
+unknown TOC/XML syntax preserved with narrow coverage effects
+LOD/Bootstrap/load order remain static metadata, not runtime success or frame readiness
+SavedVariables declarations only; never contents
+first-party/dependency/library/reference/external/runtime universes remain separate
+recognizers produce proposals and graph independently validates them
+rejected graph proposals remain visible
+unknown invalidation impact widens conservatively
+removed source removes all target facts/matches/proposals/handles
+wow-store remains inactive and candidate state is NotPublishedE2C
+no current pointer or final GraphGeneration
+```
+
+Prerequisites before E2-C code:
+
+```text
+implemented/frozen wow-core
+implemented/frozen wow-emmy pin/facts/virtual-source mapping
+implemented/frozen wow-graph E2-A registry/proposal seam
+implemented/frozen wow-recognizers E2-B core pack
+frozen materializer/TOC/XML/load/adapter/invalidation/candidate profiles
+frozen synthetic fixture and one pinned user-owned addon fixture
+all fixture/member/bundle checksums
+```
+
+E2-C handoff gate:
+
+```text
+one exact source snapshot validates without host-path leakage
+one exact TOC variant selected; alternate flavors never fill gaps
+TOC unknowns and XML unknowns survive with exact coverage
+XML DTD/entities/network/execution disabled
+physical and XML virtual Lua units bind exactly to wow-emmy
+static load model retains dependency/order/reachability reasons without runtime claims
+native/custom/CVar signal and hook proof limits survive adapters/recognizers
+all graph proposal rejections/conflicts remain visible
+Lua/TOC/XML/profile/rule/registry updates invalidate exact partitions or widen safely
+removed inputs have complete stale-output closure
+Complete/Partial candidates remain NotPublishedE2C
+one synthetic and one pinned user-owned addon fixture pass with repository/path rename mutations
+1/2/N and shuffled input/update sequences are byte-identical
 ```
 
 ### E2-D — ProjectStore and integrated publication
 
-After E2-A/B/C code seams exist, choose/freeze the measured ProjectStore physical model and atomic publication sequence. Readers never observe mixed project/analyzer/recognizer/graph generations.
+Next documentation package.
+
+Must choose/freeze the measured physical ProjectStore model and define:
+
+```text
+wow-store activation in wow-project
+one writer and stale-base rejection
+WAL/read-snapshot/runtime profile where selected
+registered project and graph logical write plans
+atomic ProjectStore + GraphSnapshot + ProjectSnapshot publication
+current/last-known-good/failed-target identities
+crash/cancel/recovery/reopen/query validation
+retention/leases/checkpoint/backup/rebuild/GC
+no mixed source/analyzer/recognizer/graph/store generations
+```
+
+No E2-D code before E2-A/B/C implementations and ProjectStore benchmarks/fixtures exist.
 
 ## E3–E7 routing
 

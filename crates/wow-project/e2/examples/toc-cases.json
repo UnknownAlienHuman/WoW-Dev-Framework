@@ -1,0 +1,142 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-project-e2-toc-cases-v1",
+  "state": "documentation-only-pending-parser-and-byte-freeze",
+  "profile": {
+    "toc_profile_id": null,
+    "selected_flavor": "retail",
+    "selected_interface": 120100,
+    "selected_variant_id": null
+  },
+  "selected_document": {
+    "file_id": "project-file:FixtureAddon_Mainline.toc",
+    "document_id": null,
+    "logical_lines": [
+      "## Interface: 120100",
+      "## Title: Fixture Addon",
+      "## Dependencies: FixtureDependency",
+      "## OptionalDeps: FixtureOptional",
+      "## LoadOnDemand: 1",
+      "## SavedVariables: FixtureDB",
+      "## SavedVariablesPerCharacter: FixtureCharDB",
+      "Bootstrap.lua [Bootstrap]",
+      "Main.xml",
+      "Core.lua"
+    ],
+    "normalized": {
+      "directive_record_ids": [],
+      "file_entry_ids": [],
+      "dependency_record_ids": [],
+      "saved_variable_record_ids": [],
+      "unknown_record_ids": [],
+      "coverage_record_ids": [],
+      "canonical_sha256": null
+    }
+  },
+  "expected_semantics": {
+    "interface": 120100,
+    "required_dependencies": [
+      "FixtureDependency"
+    ],
+    "optional_dependencies": [
+      "FixtureOptional"
+    ],
+    "load_on_demand": true,
+    "saved_variables": [
+      {
+        "name": "FixtureDB",
+        "scope": "account"
+      },
+      {
+        "name": "FixtureCharDB",
+        "scope": "character"
+      }
+    ],
+    "ordered_files": [
+      {
+        "path": "Bootstrap.lua",
+        "phase_role": "bootstrap",
+        "ordinal": 1
+      },
+      {
+        "path": "Main.xml",
+        "phase_role": "normal",
+        "ordinal": 2
+      },
+      {
+        "path": "Core.lua",
+        "phase_role": "normal",
+        "ordinal": 3
+      }
+    ]
+  },
+  "cases": [
+    {
+      "case_id": "PROJECT-E2-TOC-004",
+      "mutation": "add ## X-Fixture-Metadata: value",
+      "expected": "raw-unknown-preserved-with-no-unrelated-coverage-loss"
+    },
+    {
+      "case_id": "PROJECT-E2-TOC-006",
+      "mutation": "add second compatible selected variant",
+      "expected_error": "project_e2_toc_variant_selection_none_or_ambiguous"
+    },
+    {
+      "case_id": "PROJECT-E2-TOC-008",
+      "mutation": "merge Classic and Mainline file lists",
+      "expected_error": "project_e2_toc_cross_variant_merge_forbidden"
+    },
+    {
+      "case_id": "PROJECT-E2-TOC-011",
+      "mutation": "sort file entries alphabetically",
+      "expected": "different-load-order-and-mutation-failure"
+    },
+    {
+      "case_id": "PROJECT-E2-TOC-012",
+      "mutation": "remove Main.xml from source snapshot",
+      "expected_error": "project_e2_toc_file_missing_duplicate_or_path_invalid"
+    },
+    {
+      "case_id": "PROJECT-E2-TOC-016",
+      "mutation": "add unsupported file suffix token",
+      "expected": "raw-preserved-and-phase-capability-partial"
+    },
+    {
+      "case_id": "PROJECT-E2-TOC-018",
+      "mutation": "assert all frames exist after bootstrap or ADDON_LOADED",
+      "expected_error": "project_e2_toc_lod_or_bootstrap_runtime_claim_forbidden"
+    },
+    {
+      "case_id": "PROJECT-E2-TOC-020",
+      "mutation": "remove FixtureDependency declaration target",
+      "expected_error": "project_e2_required_dependency_unresolved"
+    },
+    {
+      "case_id": "PROJECT-E2-TOC-022",
+      "mutation": "download unresolved dependency",
+      "expected_error": "project_e2_dependency_download_or_network_forbidden"
+    },
+    {
+      "case_id": "PROJECT-E2-TOC-026",
+      "mutation": "remove FixtureDB TOC declaration but retain Lua global",
+      "expected": "no-active-state-root"
+    },
+    {
+      "case_id": "PROJECT-E2-TOC-027",
+      "mutation": "exceed line/list/record budget",
+      "expected": "Partial-never-complete"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "profile.toc_profile_id",
+      "profile.selected_variant_id",
+      "selected_document.document_id",
+      "selected_document.normalized.*record_ids",
+      "selected_document.normalized.canonical_sha256",
+      "cases[*].result-or-error-record-ids",
+      "fixture-canonical-sha256"
+    ]
+  }
+}

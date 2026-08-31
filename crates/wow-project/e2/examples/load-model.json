@@ -1,0 +1,156 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-project-e2-load-model-v1",
+  "state": "documentation-only-pending-load-profile-and-byte-freeze",
+  "profile": {
+    "load_profile_id": null,
+    "selected_package_id": "FixtureAddon",
+    "selected_toc_variant_id": null
+  },
+  "package_graph": {
+    "package_ids": [
+      "FixtureAddon",
+      "FixtureDependency",
+      "FixtureOptional"
+    ],
+    "required_edges": [
+      {
+        "source": "FixtureAddon",
+        "target": "FixtureDependency"
+      }
+    ],
+    "optional_edges": [
+      {
+        "source": "FixtureAddon",
+        "target": "FixtureOptional",
+        "resolution": "unresolved-optional"
+      }
+    ],
+    "conflict_ids": [],
+    "canonical_sha256": null
+  },
+  "load_units": [
+    {
+      "load_unit_id": null,
+      "source": "Bootstrap.lua",
+      "source_kind": "lua_file",
+      "phase": "bootstrap",
+      "semantic_order_path": [
+        1
+      ],
+      "reachability": "Reachable"
+    },
+    {
+      "load_unit_id": null,
+      "source": "Main.xml",
+      "source_kind": "xml_document",
+      "phase": "normal",
+      "semantic_order_path": [
+        2
+      ],
+      "reachability": "Reachable"
+    },
+    {
+      "load_unit_id": null,
+      "source": "Templates.xml",
+      "source_kind": "xml_document",
+      "phase": "normal",
+      "semantic_order_path": [
+        2,
+        1
+      ],
+      "reachability": "Reachable"
+    },
+    {
+      "load_unit_id": null,
+      "source": "UI.lua",
+      "source_kind": "lua_file",
+      "phase": "normal",
+      "semantic_order_path": [
+        2,
+        2
+      ],
+      "reachability": "Reachable"
+    },
+    {
+      "load_unit_id": null,
+      "source": "xml-inline:Main.xml:FixtureButton:OnLoad",
+      "source_kind": "xml_inline_lua",
+      "phase": "normal",
+      "semantic_order_path": [
+        2,
+        3
+      ],
+      "reachability": "Reachable"
+    },
+    {
+      "load_unit_id": null,
+      "source": "Core.lua",
+      "source_kind": "lua_file",
+      "phase": "normal",
+      "semantic_order_path": [
+        3
+      ],
+      "reachability": "Reachable"
+    },
+    {
+      "load_unit_id": null,
+      "source": "Unloaded.lua",
+      "source_kind": "lua_file",
+      "phase": "unreachable",
+      "semantic_order_path": [],
+      "reachability": "Unreachable"
+    }
+  ],
+  "direct_order_edge_ids": [],
+  "coverage_record_ids": [],
+  "canonical_sha256": null,
+  "assertions": [
+    {
+      "case_id": "PROJECT-E2-LOAD-011",
+      "assertion": "transitive order is returned as an explanation path and not persisted as every direct pair"
+    },
+    {
+      "case_id": "PROJECT-E2-LOAD-012",
+      "assertion": "bootstrap does not imply full UI state"
+    },
+    {
+      "case_id": "PROJECT-E2-LOAD-013",
+      "assertion": "ADDON_LOADED does not imply child frame readiness"
+    },
+    {
+      "case_id": "PROJECT-E2-LOAD-014",
+      "assertion": "static reachability is not runtime load success"
+    }
+  ],
+  "mutation_cases": [
+    {
+      "case_id": "PROJECT-E2-LOAD-004",
+      "mutation": "add FixtureDependency -> FixtureAddon required edge",
+      "expected": "cycle-conflict-no-arbitrary-break"
+    },
+    {
+      "case_id": "PROJECT-E2-LOAD-008",
+      "mutation": "query Unloaded.lua",
+      "expected": "Unreachable-not-analyzed-by-default"
+    },
+    {
+      "case_id": "PROJECT-E2-LOAD-016",
+      "mutation": "exceed unit edge or include-expansion budget",
+      "expected": "Partial-never-complete"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "profile.*",
+      "package_graph.conflict_ids",
+      "package_graph.canonical_sha256",
+      "load_units[*].load_unit_id",
+      "direct_order_edge_ids",
+      "coverage_record_ids",
+      "canonical_sha256",
+      "assertion-and-mutation-result-ids"
+    ]
+  }
+}

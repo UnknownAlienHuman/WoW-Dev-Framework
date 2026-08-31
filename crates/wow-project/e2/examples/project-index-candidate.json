@@ -1,0 +1,134 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-project-e2-index-candidate-v1",
+  "state": "documentation-only-pending-all-component-and-byte-freeze",
+  "candidate": {
+    "candidate_id": null,
+    "status": "CompleteCandidate",
+    "persistent_publication_state": "NotPublishedE2C",
+    "project_generation_id": null,
+    "profile_id": null,
+    "reference_generation_id": null,
+    "source_snapshot_id": null,
+    "root_universe_manifest_id": null,
+    "package_manifest_id": null,
+    "selected_toc_variant_manifest_id": null,
+    "toc_manifest_id": null,
+    "xml_manifest_id": null,
+    "load_model_id": null,
+    "lua_unit_manifest_id": null,
+    "analyzer_snapshot_id": null,
+    "analyzer_binding_manifest_id": null,
+    "fact_adapter_manifest_id": null,
+    "recognizer_result_manifest_id": null,
+    "graph_proposal_validation_id": null,
+    "invalidation_report_id": null,
+    "capability_coverage_manifest_id": null,
+    "conflict_manifest_id": null,
+    "deferred_capability_record_ids": [],
+    "canonical_sha256": null
+  },
+  "candidate_view": {
+    "view_id": null,
+    "candidate_id": null,
+    "read_operations": [
+      "source_and_package_manifests",
+      "selected_toc_and_xml_records",
+      "static_load_model_and_explanations",
+      "file_and_virtual_lua_units",
+      "analyzer_facts_and-generic-findings-by-capability",
+      "recognizer-outcomes-and-proposals",
+      "graph-proposal-validation-report",
+      "invalidation-coverage-conflict-and-deferred-records"
+    ],
+    "forbidden_operations": [
+      "set-current-pointer",
+      "open-or-write-projectstore",
+      "publish-graph-generation",
+      "mutate-candidate"
+    ],
+    "canonical_sha256": null
+  },
+  "e2_d_publication_bundle": {
+    "bundle_id": null,
+    "candidate_id": null,
+    "expected_base_project_generation_id": null,
+    "expected_base_graph_generation_id": null,
+    "expected_base_store_generation_id": null,
+    "target_project_generation_id": null,
+    "logical_project_partition_manifest_ids": [],
+    "validated_graph_proposal_partition_ids": [],
+    "expected_logical_count_digest_query_vectors": [],
+    "projectstore_schema_operation_validation_profile_id": null,
+    "publication_capability_policy_id": null,
+    "object_reference_manifest_id": null,
+    "canonical_sha256": null,
+    "raw_sql": null,
+    "sqlite_connection": null,
+    "final_graph_generation_id": null,
+    "current_pointer": null
+  },
+  "variants": [
+    {
+      "case_id": "PROJECT-E2-CAND-002",
+      "variant": "permitted-partial-xml-script-analyzer-partition",
+      "expected_status": "PartialCandidate",
+      "expected": "all-partial-and-NotEvaluated-records-visible"
+    },
+    {
+      "case_id": "PROJECT-E2-CAND-003",
+      "variant": "mandatory-selected-TOC-or-analyzer-generation-failure",
+      "expected_status": "Failed",
+      "expected": "no-valid-target-candidate"
+    },
+    {
+      "case_id": "PROJECT-E2-CAND-005",
+      "mutation": "alter one manifest after validation",
+      "expected_error": "project_e2_candidate_mutation_after_validation"
+    },
+    {
+      "case_id": "PROJECT-E2-CAND-006",
+      "mutation": "populate current pointer store generation or final graph generation inside E2-C candidate",
+      "expected_error": "project_e2_persistent_store_or_current_pointer_forbidden"
+    },
+    {
+      "case_id": "PROJECT-E2-CAND-008",
+      "mutation": "add SQL table PRAGMA connection or WAL instructions to publication bundle",
+      "expected_error": "project_e2_publication_bundle_invalid"
+    },
+    {
+      "case_id": "PROJECT-E2-CAND-009",
+      "mutation": "return base candidate under target generation after target failure",
+      "expected_error": "project_e2_old_generation_relabel_or_mix_forbidden"
+    },
+    {
+      "case_id": "PROJECT-E2-CAND-010",
+      "mutation": "change future ProjectStore physical model only",
+      "expected": "same-E2-C-candidate-semantic-digest"
+    },
+    {
+      "case_id": "PROJECT-E2-INV-019",
+      "variant": "NoChange",
+      "expected": "base-candidate-by-identity-no-new-generation"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "candidate.*except-fixed-status",
+      "candidate_view.view_id",
+      "candidate_view.candidate_id",
+      "candidate_view.canonical_sha256",
+      "e2_d_publication_bundle.*identity-and-manifest-fields",
+      "e2_d_publication_bundle.canonical_sha256",
+      "variants[*].result-or-error-record-ids",
+      "fixture-canonical-sha256"
+    ],
+    "must_remain_null_in_e2_c": [
+      "e2_d_publication_bundle.raw_sql",
+      "e2_d_publication_bundle.sqlite_connection",
+      "e2_d_publication_bundle.final_graph_generation_id",
+      "e2_d_publication_bundle.current_pointer"
+    ]
+  }
+}

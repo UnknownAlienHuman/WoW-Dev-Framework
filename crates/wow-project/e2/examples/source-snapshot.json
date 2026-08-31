@@ -1,0 +1,187 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-project-e2-source-snapshot-v1",
+  "state": "documentation-only-pending-source-profile-and-byte-freeze",
+  "request": {
+    "project_id": "fixture-project-e2-v1",
+    "project_kind": "fixture",
+    "profile_id": null,
+    "reference_generation_id": null,
+    "source_snapshot_id": null,
+    "materializer_profile_id": null,
+    "root_universe_profile_id": null,
+    "toc_profile_id": null,
+    "xml_profile_id": null,
+    "load_profile_id": null,
+    "analyzer_profile_id": null,
+    "recognizer_profile_id": null,
+    "graph_profile_id": null,
+    "invalidation_profile_id": null,
+    "capability_policy_id": null,
+    "budget_policy_id": null
+  },
+  "snapshot": {
+    "repository_provenance": {
+      "provider": "fixture",
+      "repository": "fixture/WoWProjectE2",
+      "revision": "fixture-e2-v1",
+      "content_manifest_sha256": null
+    },
+    "universes": [
+      {
+        "universe_id": "project:fixture-e2",
+        "role": "first_party_project",
+        "root_id": "root:first-party",
+        "logical_root": "FixtureAddon"
+      },
+      {
+        "universe_id": "dependency:FixtureDependency",
+        "role": "declared_dependency_metadata",
+        "root_id": null,
+        "logical_root": null
+      },
+      {
+        "universe_id": "library:annotations",
+        "role": "analyzer_library",
+        "root_id": null,
+        "logical_root": null
+      }
+    ],
+    "files": [
+      {
+        "file_id": "project-file:FixtureAddon_Mainline.toc",
+        "path": "FixtureAddon_Mainline.toc",
+        "kind": "toc",
+        "role": "first_party_project",
+        "content_sha256": null,
+        "byte_length": null
+      },
+      {
+        "file_id": "project-file:Bootstrap.lua",
+        "path": "Bootstrap.lua",
+        "kind": "lua",
+        "role": "first_party_project",
+        "content_sha256": null,
+        "byte_length": null
+      },
+      {
+        "file_id": "project-file:Main.xml",
+        "path": "Main.xml",
+        "kind": "xml",
+        "role": "first_party_project",
+        "content_sha256": null,
+        "byte_length": null
+      },
+      {
+        "file_id": "project-file:Templates.xml",
+        "path": "Templates.xml",
+        "kind": "xml",
+        "role": "first_party_project",
+        "content_sha256": null,
+        "byte_length": null
+      },
+      {
+        "file_id": "project-file:UI.lua",
+        "path": "UI.lua",
+        "kind": "lua",
+        "role": "first_party_project",
+        "content_sha256": null,
+        "byte_length": null
+      },
+      {
+        "file_id": "project-file:Core.lua",
+        "path": "Core.lua",
+        "kind": "lua",
+        "role": "first_party_project",
+        "content_sha256": null,
+        "byte_length": null
+      },
+      {
+        "file_id": "project-file:Unloaded.lua",
+        "path": "Unloaded.lua",
+        "kind": "lua",
+        "role": "first_party_project",
+        "content_sha256": null,
+        "byte_length": null
+      }
+    ],
+    "packages": [
+      {
+        "package_id": "FixtureAddon",
+        "candidate_toc_file_ids": [
+          "project-file:FixtureAddon_Mainline.toc"
+        ],
+        "selected_toc_variant_id": null
+      }
+    ],
+    "materialization_report_id": null,
+    "license_manifest_id": null,
+    "canonical_sha256": null
+  },
+  "real_addon_fixture": {
+    "repository_full_name": "UnknownAlienHuman/roth-ui",
+    "commit_sha": "1656d4b9d33be914be2058460520e7423668d95c",
+    "selected_package_id": "Roth_UI",
+    "license_evidence_id": "git-blob:7a12feda19dfade4fe3b3d617a223f56e2981240",
+    "content_manifest_sha256": null,
+    "fixture_scope_and_redaction_profile_id": "user-addon-readonly-project-structure-v1",
+    "selected_source_paths": [
+      "Roth_UI.toc",
+      "embeds/rLib/rLib.xml",
+      "Libs/LibSharedMedia-3.0/lib.xml",
+      "LICENSE.txt"
+    ],
+    "source_blob_ids": {
+      "Roth_UI.toc": "91e0cdec0715f101b85ae2e2750109277ffed0f3",
+      "embeds/rLib/rLib.xml": "230dd345a1f7fffc304a3a7330835903ba1053d4",
+      "Libs/LibSharedMedia-3.0/lib.xml": "7f2fd53481503ff9bbdea9aa52941320efed7742",
+      "LICENSE.txt": "7a12feda19dfade4fe3b3d617a223f56e2981240"
+    },
+    "expected_structural_scope": [
+      "selected-retail-toc-variant",
+      "required-and-optional-dependencies",
+      "account-and-character-savedvariables",
+      "long-toc-file-order",
+      "nested-xml-script-file-expansion",
+      "first-party-versus-embedded-library-role-separation"
+    ]
+  },
+  "negative_cases": [
+    {
+      "case_id": "PROJECT-E2-SOURCE-005",
+      "mutation": "add ../escape.lua absolute UNC device URI or tokenized path",
+      "expected_error": "project_e2_path_escape_absolute_device_uri_or_collision"
+    },
+    {
+      "case_id": "PROJECT-E2-SOURCE-007",
+      "mutation": "add symlink junction reparse or submodule entry",
+      "expected": "unsupported-skipped-with-coverage"
+    },
+    {
+      "case_id": "PROJECT-E2-SOURCE-009",
+      "mutation": "mark dependency source first_party_project",
+      "expected_error": "project_e2_first_party_dependency_library_universe_mix_forbidden"
+    },
+    {
+      "case_id": "PROJECT-E2-FIX-004",
+      "mutation": "rename repository package display paths and irrelevant local identifiers while preserving normalized structural facts",
+      "expected": "same-universal-facts-and-proposals-except-source-identities-and-new-project-generation"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "request.*profile-and-policy-ids",
+      "snapshot.repository_provenance.content_manifest_sha256",
+      "snapshot.files[*].content_sha256",
+      "snapshot.files[*].byte_length",
+      "snapshot.packages[*].selected_toc_variant_id",
+      "snapshot.materialization_report_id",
+      "snapshot.license_manifest_id",
+      "snapshot.canonical_sha256",
+      "real_addon_fixture.content_manifest_sha256",
+      "real-addon-generated-record-and-candidate-ids",
+      "fixture-canonical-sha256"
+    ]
+  }
+}

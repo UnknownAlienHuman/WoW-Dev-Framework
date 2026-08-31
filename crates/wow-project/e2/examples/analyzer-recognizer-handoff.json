@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-project-e2-analyzer-recognizer-handoff-v1",
+  "state": "documentation-only-pending-component-and-output-freeze",
+  "target_context": {
+    "project_generation_id": null,
+    "profile_id": null,
+    "reference_generation_id": null,
+    "analyzer_pin_id": null,
+    "analyzer_configuration_digest": null,
+    "analyzer_library_artifact_id": null,
+    "recognizer_pack_id": "wow-core-structural",
+    "recognizer_pack_version": "e2-1",
+    "fact_adapter_profile_id": null,
+    "graph_registry_bundle_id": null
+  },
+  "analyzer_plan": {
+    "plan_id": null,
+    "main_lua_unit_ids": [],
+    "library_file_ids": [],
+    "file_operation_ids": [],
+    "virtual_source_map_ids": [],
+    "canonical_sha256": null
+  },
+  "analyzer_binding": {
+    "analyzer_snapshot_id": null,
+    "main_manifest_id": null,
+    "library_manifest_id": null,
+    "fact_set_ids": [],
+    "generic_finding_ids": [],
+    "capability_coverage_ids": [],
+    "canonical_sha256": null
+  },
+  "recognizer_plan": {
+    "plan_id": null,
+    "fact_bundle_ids": [],
+    "expected_output_partition_keys": [],
+    "budget_profile_id": null,
+    "canonical_sha256": null
+  },
+  "recognizer_result": {
+    "result_id": null,
+    "output_partition_ids": [],
+    "rule_outcome_ids": [],
+    "match_ids": [],
+    "ambiguity_ids": [],
+    "proposal_ids": [],
+    "coverage_record_ids": [],
+    "canonical_sha256": null
+  },
+  "graph_validation": {
+    "validation_id": null,
+    "project_direct_proposal_partition_ids": [],
+    "recognizer_proposal_partition_ids": [],
+    "accepted_proposal_mappings": [],
+    "rejected_proposals": [],
+    "conflict_ids": [],
+    "coverage_impact_ids": [],
+    "final_graph_generation_id": null,
+    "canonical_sha256": null
+  },
+  "cases": [
+    {
+      "case_id": "PROJECT-E2-AN-008",
+      "mutation": "change XML inline source map while analyzer bytes remain",
+      "expected_error": "project_e2_analyzer_virtual_source_map_mismatch"
+    },
+    {
+      "case_id": "PROJECT-E2-ADAPT-003",
+      "mutation": "drop selected unknown or unsupported adapter input",
+      "expected_error": "project_e2_fact_adapter_loss_unreported"
+    },
+    {
+      "case_id": "PROJECT-E2-RECOG-002",
+      "assertion": "native frame event, native EventRegistry bridge, custom registry event, and CVar callback remain distinct"
+    },
+    {
+      "case_id": "PROJECT-E2-RECOG-003",
+      "mutation": "remove matching TriggerEvent producer",
+      "expected": "custom subscription becomes unresolved or Possible, never native"
+    },
+    {
+      "case_id": "PROJECT-E2-RECOG-004",
+      "mutation": "add taint-safe combat-safe or protected-safe to hook proposal",
+      "expected_error": "project_e2_hook_or_event_safety_claim_forbidden"
+    },
+    {
+      "case_id": "PROJECT-E2-GRAPH-003",
+      "mutation": "invalid relation endpoint or semantic key ingredient",
+      "expected": "proposal rejection retained"
+    },
+    {
+      "case_id": "PROJECT-E2-GRAPH-004",
+      "mutation": "omit rejected proposal from candidate report",
+      "expected_error": "project_e2_graph_rejection_or_conflict_hidden"
+    },
+    {
+      "case_id": "PROJECT-E2-GRAPH-008",
+      "mutation": "populate final_graph_generation_id",
+      "expected_error": "project_e2_graph_final_identity_or_publication_forbidden"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "target_context.*except-fixed-pack-fields",
+      "analyzer_plan.*",
+      "analyzer_binding.*",
+      "recognizer_plan.*",
+      "recognizer_result.*",
+      "graph_validation.validation_id",
+      "graph_validation.*proposal-partition-ids-and-mappings",
+      "graph_validation.conflict_ids",
+      "graph_validation.coverage_impact_ids",
+      "graph_validation.canonical_sha256",
+      "cases[*].result-or-error-record-ids",
+      "fixture-canonical-sha256"
+    ],
+    "must_remain_null_in_e2_c": [
+      "graph_validation.final_graph_generation_id"
+    ]
+  }
+}
