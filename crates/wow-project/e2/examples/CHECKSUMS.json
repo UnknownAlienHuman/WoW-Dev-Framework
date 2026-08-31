@@ -52,12 +52,18 @@
     "project_index_candidate_sha256": null
   },
   "real_addon_fixture_pins": {
-    "repository_full_name": null,
-    "commit_sha": null,
-    "selected_package_id": null,
-    "license_evidence_id": null,
+    "repository_full_name": "UnknownAlienHuman/roth-ui",
+    "commit_sha": "1656d4b9d33be914be2058460520e7423668d95c",
+    "selected_package_id": "Roth_UI",
+    "license_evidence_id": "git-blob:7a12feda19dfade4fe3b3d617a223f56e2981240",
+    "fixture_scope_profile_id": "user-addon-readonly-project-structure-v1",
+    "selected_source_blob_ids": {
+      "Roth_UI.toc": "91e0cdec0715f101b85ae2e2750109277ffed0f3",
+      "embeds/rLib/rLib.xml": "230dd345a1f7fffc304a3a7330835903ba1053d4",
+      "Libs/LibSharedMedia-3.0/lib.xml": "7f2fd53481503ff9bbdea9aa52941320efed7742",
+      "LICENSE.txt": "7a12feda19dfade4fe3b3d617a223f56e2981240"
+    },
     "source_content_manifest_sha256": null,
-    "fixture_scope_profile_id": null,
     "expected_project_index_candidate_id": null,
     "expected_candidate_sha256": null
   },
@@ -69,6 +75,7 @@
     "fact_adapter_recognizer_output_and_graph_proposal_mapping_ids": null,
     "invalidation_reuse_removal_and_nochange_ids": null,
     "candidate_partial_failure_publication_bundle_ids": null,
+    "real_addon_toc_xml_load_inventory_and_rename_mutation_ids": null,
     "security_budget_cancellation_and_worker_shuffle_outputs": null
   },
   "member_paths": [
@@ -77,6 +84,7 @@
     "crates/wow-project/e2/DECISIONS.md",
     "crates/wow-project/e2/DATA_MODEL.md",
     "crates/wow-project/e2/PROJECT_ROOTS_AND_UNIVERSES.md",
+    "crates/wow-project/e2/REAL_ADDON_FIXTURE.md",
     "crates/wow-project/e2/TOC_MODEL.md",
     "crates/wow-project/e2/XML_MODEL.md",
     "crates/wow-project/e2/LOAD_MODEL.md",
@@ -105,6 +113,7 @@
     "all prerequisite profile synthetic real-addon vector candidate and checksum values freeze before the first E2-C Rust commit",
     "tests verify committed fixtures and never rewrite them automatically",
     "real addon fixture stays read-only pinned licensed and never enters production semantic conditions",
+    "repository path and irrelevant identifier rename mutations must prove fixture independence",
     "E2-C final graph generation ProjectStore and current pointer fields remain absent or null"
   ]
 }
