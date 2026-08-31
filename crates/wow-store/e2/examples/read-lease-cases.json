@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-store-e2-read-leases-v1",
+  "state": "documentation-only-pending-executable-freeze",
+  "cases": [
+    {
+      "case_id": "PSTORE-READ-001",
+      "reader": "current-before-activation",
+      "expected": "coherent-old"
+    },
+    {
+      "case_id": "PSTORE-READ-002",
+      "reader": "held-across-activation",
+      "expected": "remains-old"
+    },
+    {
+      "case_id": "PSTORE-READ-003",
+      "reader": "opened-after-activation",
+      "expected": "coherent-new"
+    },
+    {
+      "case_id": "PSTORE-READ-004",
+      "reader": "exact-retained-generation",
+      "expected": "exact"
+    },
+    {
+      "case_id": "PSTORE-READ-009",
+      "reader": "active-lease-during-GC",
+      "expected": "generation-retained"
+    },
+    {
+      "case_id": "PSTORE-WAL-005",
+      "reader": "long-reader-during-checkpoint",
+      "expected": "busy-or-remaining-frames-no-state-change"
+    },
+    {
+      "case_id": "PSTORE-READ-011",
+      "reader": "external-process",
+      "expected_error": "project_store_external_reader_or_multiple_writer_unsupported"
+    }
+  ],
+  "result_ids": null,
+  "canonical_sha256": null,
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}

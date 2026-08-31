@@ -1,253 +1,62 @@
-# Mutable ProjectStore — deferred E2 contract
+# ProjectStore E2-D routing and selected physical model
 
-**Status:** normative future boundary; implementation is explicitly inactive in E1-A.
+**Status:** normative E2-D design selection; implementation has not started.
 
-This file prevents E1 storage work from making choices that would block the later mutable project-generation store. It is not permission to add WAL/project schemas now.
-
-## 1. Purpose
-
-ProjectStore will persist rebuildable project index/graph/generation data while source files and ProjectGeneration domain identity remain owned by `wow-project`.
-
-It differs from ReferenceStore:
+The pre-E2 document intentionally left the physical model open. E2-D now selects the smallest design that satisfies incremental publication, immutable historical readers, graph partition replacement, and bounded storage growth:
 
 ```text
-ReferenceStore
-    immutable, sealed, read-only, one published ReferenceGeneration
+profile ID: project-store-wal-manifested-partitions-v1
 
-ProjectStore
-    mutable owned store, one writer, WAL/read snapshots, atomic ProjectStoreGeneration publication
+one SQLite database per ProjectStore epoch
+journal mode: WAL after executable profile probe
+one writer owner
+immutable content-addressed partition versions
+complete generation membership maps
+two-stage inactive-build then validated activation
+snapshot-bound readers
+explicit checkpoint, backup, retention, and GC
 ```
 
-## 2. Activation gate
+Canonical details are under [`e2/`](e2/README.md). The earlier deferred boundary remains available in Git history at the commit immediately before E2-D.
 
-ProjectStore may activate only in E2 after:
+## Why this model
 
-- E1-A store foundation works;
-- `wow-project` E2 persistent logical schema/record/operation contract exists;
-- `wow-graph` typed storage contract exists where required;
-- migration/invalidation/publication fixtures are defined;
-- workload/latency/size benchmarks justify persistence layout;
-- `crates/MANIFEST.json` and dependency graph/workstream status updated.
+A database file per project generation makes frequent one-file updates copy or rebuild too much state. Full duplicated generation-keyed rows make storage proportional to all retained generations. Recursive base-plus-delta chains make read cost, corruption recovery, and retention reasoning depend on unbounded ancestry.
 
-E1-A code must return typed `operation_not_implemented_for_milestone` for ProjectStore open/write/checkpoint APIs.
+The selected model stores each logical partition version once and stores, for every generation, a complete ordered mapping from partition key to immutable partition-version ID. Unchanged partitions are reused without recursive lookup; changed partitions create new immutable versions.
 
-## 3. Ownership boundary
-
-`wow-project` owns:
+## Publication shape
 
 ```text
-ProjectGenerationId and source truth
-workspace/file/TOC/XML/analyzer fact semantics
-incremental invalidation plan
-which logical partitions belong to a generation
-published ProjectSnapshot/View semantics
+validated ProjectIndexCandidate
+-> wow-graph GraphPublicationPlan
+-> project/graph registered logical operation plans
+-> ProjectStore generation build transaction
+-> committed PublishedInactive generation
+-> exact read-back and golden validation
+-> current-generation compare-and-swap transaction
+-> coherent current ProjectSnapshot + GraphSnapshot + StoreGeneration
 ```
 
-`wow-graph` owns graph entity/relation semantics when activated.
+A reader observes the old publication set or the new publication set, never a mixture.
 
-`wow-store` owns:
+## Ownership
 
-```text
-SQLite connection/profile/WAL lifecycle
-schema/migration ledger
-one-writer transaction boundaries
-physical persistence and read snapshots
-atomic store-generation metadata publication
-checkpoint/backup/retention/integrity
-content objects
-```
+`wow-project` owns source/project generations, TOC/XML/load/analyzer/recognizer semantics, invalidation, ProjectSnapshot, and publication-bundle construction.
 
-Store does not decide invalidation or graph meaning.
+`wow-graph` owns graph registries, semantic keys/assertions, partition replacement, GraphGeneration, GraphSnapshot, conflicts, coverage, and graph validation.
 
-## 4. One writer
+`wow-store` owns SQLite/WAL/transactions, physical partition storage, generation membership, one-writer enforcement, read snapshots, current-record CAS, durability, checkpoint, backup, recovery, retention, and GC.
 
-One owner/actor serializes all writes for a ProjectStore.
+## Hard stops
 
-Rules:
-
-- no second independent writer connection;
-- write request references exact base published ProjectStoreGeneration and target ProjectGeneration;
-- stale-base write rejected;
-- no optimistic silent merge;
-- writer applies registered operation plan in one publication transaction/staged partition protocol;
-- cancellation/failure does not advance current store generation;
-- readers never observe partial target generation.
-
-## 5. WAL profile
-
-Future SQLite runtime profile must pin/probe:
-
-```text
-journal_mode=WAL
-synchronous policy
-busy timeout/locking
-wal_autocheckpoint or explicit checkpoint
-read snapshot behavior
-writer/read concurrency
-crash recovery
--WAL/-SHM lifecycle
-backup/copy semantics
-```
-
-WAL files are owned mutable runtime state, not release artifacts. No WAL setting leaks to ReferenceStore.
-
-## 6. Project store generation
-
-```text
-ProjectStoreGeneration
-    StoreId / StoreGenerationId
-    exact ProjectGenerationId
-    base store generation
-    schema registry/bundle versions
-    applied invalidation/write plan ID/digest
-    logical partition manifest/digests
-    object reference set
-    transaction/publication report
-    integrity/coverage state
-```
-
-Current pointer advances only after transaction/metadata/validation completes.
-
-## 7. Generation publication model
-
-Possible implementation models to evaluate before E2:
-
-### Versioned rows in one WAL database
-
-- rows keyed by generation/partition;
-- atomic current-generation metadata update in transaction;
-- readers select exact generation;
-- retention/GC deletes old generation rows later.
-
-### Database file per project-store generation
-
-- immutable snapshot-like publication;
-- higher write/copy cost;
-- simpler historical readers.
-
-### Hybrid base + generation delta
-
-- more complexity; must prove measured need.
-
-No model is accepted here. E2 benchmarks/contracts choose the smallest correct approach. Do not assume a file-per-generation or row-version model prematurely in E1-A code.
-
-## 8. Incremental writes
-
-`wow-project` supplies exact affected partitions and replacement semantics.
-
-Store validates:
-
-- plan/base/target identities;
-- every operation in registered catalog;
-- complete replacement/deletion/upsert set per partition;
-- reference/object accounting;
-- transaction budgets;
-- no cross-generation row leakage;
-- validation checks before current pointer advance.
-
-Store does not compute dependencies/affected partitions.
-
-## 9. Read snapshots
-
-A ProjectStore read view:
-
-- binds exact StoreGenerationId/ProjectGenerationId;
-- starts one consistent SQLite read transaction/snapshot;
-- does not switch when writer publishes newer generation;
-- respects retention/lease;
-- exposes registered prepared reads only;
-- carries exact schema/runtime profile/context;
-- no raw connection/application SQL.
-
-## 10. Last-known-good
-
-If target ProjectGeneration persistence fails:
-
-- previous published store generation remains current/last-known-good;
-- failed target retains target ProjectGeneration ID and failure record;
-- no relabel/substitution;
-- source/analyzer in-memory candidate and persisted current stay distinguishable;
-- higher service decides whether/how to expose old snapshot for explicit request.
-
-## 11. Checkpoints
-
-Checkpoint policy must be explicit and benchmarked:
-
-- automatic vs explicit;
-- mode and trigger thresholds;
-- cancellation/busy behavior;
-- size/durability implications;
-- reader lease interaction;
-- failure does not corrupt/advance generation;
-- no unbounded WAL growth.
-
-Checkpoint metrics/timing noncanonical; logical state/digests canonical.
-
-## 12. Backup/rebuild
-
-ProjectStore is rebuildable from source/project generation inputs.
-
-- backup is operational convenience, not platform/source authority;
-- corruption recovery may discard/rebuild owned derived store after preserving diagnostics/evidence;
-- no mutation of untrusted external DB into owned state;
-- backup/restore validates schema/generation/object manifests;
-- restore does not relabel generation.
-
-## 13. Retention and GC
-
-Retain:
-
-```text
-current published
-last-known-good as policy requires
-active reader leases
-generations requested for comparison/debugging
-generations referenced by service/task evidence as configured
-```
-
-Delete only after complete row/object/reference/lease accounting. No age-only deletion.
-
-## 14. Required future operations
-
-```text
-create_or_open_project_store
-validate_project_store_runtime_profile
-plan_project_store_update
-begin_project_store_write
-apply_partition_replacement_plan
-publish_project_store_generation
-acquire_project_store_read_snapshot
-checkpoint_project_store
-backup_or_rebuild_project_store
-retain_release_project_store_generation
-garbage_collect_project_store_generations
-```
-
-All return typed deferred state in E1-A.
-
-## 15. Required future tests
-
-- one writer/stale-base rejection;
-- read snapshot remains old while new generation publishes;
-- write failure/cancel no current advance;
-- cross-generation row leakage mutation;
-- incremental replacement deletes stale partition rows;
-- WAL crash/recovery/checkpoint/reader interactions;
-- last-known-good not relabeled;
-- exact generation open/retention;
-- schema migration with existing derived data;
-- corruption rebuild vs backup restore;
-- object reference/GC safety;
-- workload latency/DB/WAL size benchmark;
-- deterministic logical generation manifests.
-
-## 16. E1-A hard stops
-
-- no ProjectStore Cargo module/connection/WAL code;
-- no placeholder success/read empty database;
-- no assumed physical generation model;
-- no project/graph domain tables in standard metadata schema;
-- no ReferenceStore WAL policy reuse;
-- no filesystem watcher/source invalidation logic;
-- no multi-writer connection;
-- no old generation substitution/relabel.
+- no domain decisions in `wow-store`;
+- no raw SQL or connection handle outside `wow-store`;
+- no in-place mutation of a sealed partition version or published generation;
+- no recursive delta-chain read model;
+- no pointer activation before read-back validation;
+- no stale-base rebase or last-known-good relabel;
+- no external-process reader/writer support in v1 without a new lease/locking contract;
+- no schema/runtime-profile upgrade in place when it changes epoch compatibility;
+- no benchmark claim before executable implementation;
+- no Rust or Cargo activation during this documentation phase.

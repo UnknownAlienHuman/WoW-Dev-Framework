@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-store-e2-publication-plan-v1",
+  "state": "documentation-only-pending-prerequisite-and-byte-freeze",
+  "request": {
+    "store_id": null,
+    "epoch_id": null,
+    "runtime_profile_id": null,
+    "physical_profile_id": "project-store-wal-manifested-partitions-v1",
+    "schema_set_id": null,
+    "expected_base_current_record_id": null,
+    "project_index_candidate_id": null,
+    "project_generation_id": null,
+    "project_snapshot_id": null,
+    "analyzer_snapshot_id": null,
+    "graph_publication_plan_id": null,
+    "graph_generation_id": null,
+    "graph_snapshot_id": null,
+    "project_publication_set_id": null,
+    "budget_profile_id": null
+  },
+  "partition_plan": {
+    "new_partition_version_ids": [],
+    "reused_partition_version_ids": [],
+    "removed_partition_keys": [],
+    "complete_target_membership_id": null,
+    "object_reference_set_id": null
+  },
+  "phases": [
+    {
+      "phase": "preflight",
+      "expected": "base-and-profiles-valid"
+    },
+    {
+      "phase": "partition-materialization",
+      "expected": "new-sealed-reused-validated"
+    },
+    {
+      "phase": "inactive-generation-transaction",
+      "expected": "PublishedInactive"
+    },
+    {
+      "phase": "read-back-validation",
+      "expected": "ValidatedInactive"
+    },
+    {
+      "phase": "activation-cas",
+      "expected": "Active"
+    },
+    {
+      "phase": "post-open",
+      "expected": "exact-current-binding"
+    }
+  ],
+  "incremental_cases": [
+    {
+      "case_id": "PSTORE-BUILD-002",
+      "change": "one-lua-partition",
+      "expected": "changed-dependent-partitions-plus-full-membership"
+    },
+    {
+      "case_id": "PSTORE-ACT-003",
+      "change": "base-current-changed-before-cas",
+      "expected_error": "project_store_activation_cas_failed"
+    },
+    {
+      "case_id": "PSTORE-BUILD-005",
+      "change": "cancel-before-inactive-commit",
+      "expected": "old-current-and-no-background-work"
+    }
+  ],
+  "canonical_sha256": null,
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}

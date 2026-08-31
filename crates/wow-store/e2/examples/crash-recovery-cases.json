@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-store-e2-crash-recovery-v1",
+  "state": "documentation-only-pending-executable-freeze",
+  "cases": [
+    {
+      "case_id": "PSTORE-CRASH-001",
+      "point": "mid-partition-transaction",
+      "expected_current": "old",
+      "expected_target": "rolled-back-or-unreferenced-orphan"
+    },
+    {
+      "case_id": "PSTORE-CRASH-002",
+      "point": "mid-inactive-generation-transaction",
+      "expected_current": "old",
+      "expected_target": "absent"
+    },
+    {
+      "case_id": "PSTORE-CRASH-003",
+      "point": "after-inactive-commit-before-validation",
+      "expected_current": "old",
+      "expected_target": "recoverable-inactive"
+    },
+    {
+      "case_id": "PSTORE-CRASH-004",
+      "point": "after-validation-before-activation",
+      "expected_current": "old",
+      "expected_target": "validated-inactive"
+    },
+    {
+      "case_id": "PSTORE-CRASH-005",
+      "point": "during-activation-commit",
+      "expected_current": "old-or-new-atomically",
+      "expected_target": "consistent-with-current"
+    },
+    {
+      "case_id": "PSTORE-CRASH-006",
+      "point": "startup-current-integrity-failure",
+      "expected": "explicit-corrupt-no-auto-LKG"
+    },
+    {
+      "case_id": "PSTORE-CRASH-008",
+      "point": "inactive-recovery-after-base-changed",
+      "expected": "cannot-activate"
+    },
+    {
+      "case_id": "PSTORE-BACKUP-002",
+      "point": "copy-main-db-with-live-wal",
+      "expected_error": "project_store_main_db_copy_without_wal_forbidden"
+    }
+  ],
+  "expected_result_ids": null,
+  "canonical_sha256": null,
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}

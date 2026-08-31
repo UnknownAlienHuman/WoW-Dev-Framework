@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-store-e2-schema-set-v1",
+  "state": "documentation-only-pending-schema-catalog-freeze",
+  "schema_set": {
+    "schema_set_id": null,
+    "epoch_compatibility_id": null,
+    "bundles": [
+      {
+        "owner": "wow-store",
+        "bundle_id": null,
+        "role": "metadata-partition-generation-publication"
+      },
+      {
+        "owner": "wow-project",
+        "bundle_id": null,
+        "role": "project-index-project-snapshot"
+      },
+      {
+        "owner": "wow-graph",
+        "bundle_id": null,
+        "role": "graph-assertions-indexes-graph-snapshot"
+      }
+    ],
+    "operation_catalogs": [
+      {
+        "owner": "wow-store",
+        "catalog_id": null
+      },
+      {
+        "owner": "wow-project",
+        "catalog_id": null
+      },
+      {
+        "owner": "wow-graph",
+        "catalog_id": null
+      }
+    ],
+    "validation_catalogs": [
+      {
+        "owner": "wow-store",
+        "catalog_id": null
+      },
+      {
+        "owner": "wow-project",
+        "catalog_id": null
+      },
+      {
+        "owner": "wow-graph",
+        "catalog_id": null
+      }
+    ],
+    "required_sqlite_capability_profile_id": null,
+    "canonical_sha256": null
+  },
+  "negative_cases": [
+    {
+      "case_id": "PSTORE-SCHEMA-002",
+      "mutation": "remove graph validation catalog",
+      "expected_error": "project_store_validation_catalog_missing_or_mismatch"
+    },
+    {
+      "case_id": "PSTORE-SCHEMA-003",
+      "mutation": "supply SQL or table name in operation parameter",
+      "expected_error": "project_store_raw_sql_or_identifier_input_forbidden"
+    },
+    {
+      "case_id": "PSTORE-SCHEMA-005",
+      "mutation": "change breaking bundle while retaining epoch compatibility ID",
+      "expected_error": "project_store_epoch_incompatible"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}
