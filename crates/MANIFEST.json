@@ -34,7 +34,7 @@
     {
       "work_package": "E0-B",
       "crate": "wow-reference",
-      "contract_id": "wow-reference/e0-b/fixture-view",
+      "contract_id": "wow-reference/e0-b/1",
       "manifest": "crates/wow-reference/CONTRACT.json",
       "state": "implementation-ready-documentation-no-rust-code"
     },
@@ -48,28 +48,28 @@
     {
       "work_package": "E0-D",
       "crate": "wow-project",
-      "contract_id": "wow-project/e0-d/project-generation",
+      "contract_id": "wow-project/e0-d/1",
       "manifest": "crates/wow-project/CONTRACT.json",
       "state": "implementation-ready-documentation-no-rust-code"
     },
     {
       "work_package": "E0-E",
       "crate": "wow-rules",
-      "contract_id": "wow-rules/e0-e/vertical-rules",
+      "contract_id": "wow-rules/e0-e/1",
       "manifest": "crates/wow-rules/CONTRACT.json",
       "state": "implementation-ready-documentation-no-rust-code"
     },
     {
       "work_package": "E0-F",
       "crate": "wow-service",
-      "contract_id": "wow-service/e0-f/status-check",
+      "contract_id": "wow-service/e0-f/1",
       "manifest": "crates/wow-service/CONTRACT.json",
       "state": "implementation-ready-documentation-no-rust-code"
     },
     {
       "work_package": "E1-A",
       "crate": "wow-store",
-      "contract_id": "wow-store/e1-a/sqlite-persistence",
+      "contract_id": "wow-store/e1-a/1",
       "manifest": "crates/wow-store/CONTRACT.json",
       "state": "implementation-ready-documentation-no-rust-code"
     },
@@ -90,7 +90,7 @@
     {
       "work_package": "E1-D",
       "crate": "wow-service",
-      "contract_id": "wow-service/e1-d/reference-pack-build-validation",
+      "contract_id": "wow-service/e1-d-reference-pack-build-validation",
       "manifest": "crates/wow-service/e1/CONTRACT.json",
       "state": "implementation-ready-documentation-no-rust-code"
     },
