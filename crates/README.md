@@ -1,70 +1,46 @@
-# Crate implementation contracts
+# Crate contract map
 
-This directory contains implementation briefs for the production Rust libraries planned by WoW Dev Framework.
+**Status:** documentation frontier E3-B; Rust workspace not activated.
 
-**Current state:** contract scaffold only. No `Cargo.toml` or Rust source file should be created merely because a directory exists.
+Each directory below is an implementation contract, not yet a Rust crate. A future agent must satisfy its exact freeze gate before adding `Cargo.toml` or `.rs` files.
 
-A crate becomes active only when the current roadmap milestone needs its independently testable responsibility. Directory presence is not permission to implement a later milestone, invent a public API, or add infrastructure "for future use."
+| Crate | Responsibility | Documentation frontier |
+|---|---|---|
+| [`wow-core`](wow-core/README.md) | shared identities, generations, evidence, coverage, findings, canonical results | E0-A |
+| [`wow-store`](wow-store/README.md) | SQLite substrate, ReferenceStore, ProjectStore, publication/recovery/GC | E2-D |
+| [`wow-reference`](wow-reference/README.md) | exact Reference Profiles, API facts, corrections, coverage, ReferenceView | E1-B |
+| [`wow-annotations`](wow-annotations/README.md) | annotation semantic model, lowering, rendering, parity, source maps | E1-C |
+| [`wow-emmy`](wow-emmy/README.md) | pinned analyzer adapter, facts, diagnostics, coordinates | E0-C |
+| [`wow-project`](wow-project/README.md) | addon/source universes, TOC/XML/load, analyzer/recognizer orchestration, publication, Blizzard UI index | E3-A |
+| [`wow-graph`](wow-graph/README.md) | graph registries, assertions, producer partitions, snapshots, bounded queries | E2-A/E2-D seam |
+| [`wow-recognizers`](wow-recognizers/README.md) | declarative typed structural matching and graph proposals | E2-B |
+| [`wow-rules`](wow-rules/README.md) | diagnostic providers, findings, remediation tiers | E0-E |
+| [`wow-context`](wow-context/README.md) | Project Map, L0/L1, bounded evidence-preserving context packs | E3-B |
+| [`wow-search`](wow-search/README.md) | exact/migration/shape/FTS/graph retrieval and ranking | deferred E4 |
+| [`wow-cbm`](wow-cbm/README.md) | optional external Codebase Memory candidate bridge | deferred E6 |
+| [`wow-service`](wow-service/README.md) | coherent public use-case orchestration | E1-D; later operations deferred |
 
-## Required reading order
+## Required route for implementation agents
 
-Before implementing any crate:
+1. repository [`AGENTS.md`](../AGENTS.md);
+2. [`AGENTS.md`](AGENTS.md), [`DEPENDENCY_GRAPH.md`](DEPENDENCY_GRAPH.md), [`WORKSTREAMS.md`](WORKSTREAMS.md), and [`MANIFEST.json`](MANIFEST.json);
+3. target crate router and active work-package contract;
+4. current `wow-addon-engineering-kb` `AGENTS.md` and `INDEX_MINI.md` task route when WoW semantics are involved;
+5. exact prerequisite implementations, fixture manifests, and checksums;
+6. actual pinned addon/source repositories required by the work package.
 
-1. [`../AGENTS.md`](../AGENTS.md)
-2. [`AGENTS.md`](AGENTS.md)
-3. [`MANIFEST.json`](MANIFEST.json) — machine-readable routing and activation state
-4. [`DEPENDENCY_GRAPH.md`](DEPENDENCY_GRAPH.md)
-5. [`WORKSTREAMS.md`](WORKSTREAMS.md)
-6. the target crate's `README.md`
-7. the owning normative documents linked by that crate
-8. the current routes in the external [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb)
+## Global implementation rules
 
-For work involving a concrete addon, inspect that addon repository and its local instructions before using framework-wide assumptions.
+- no placeholder crates or fake successful operations;
+- allowed dependency edges are maxima, not defaults;
+- one agent owns one work package and primary crate;
+- every artifact and result binds exact profiles/generations;
+- partial/conflicted/truncated/failed/cancelled/Candidate/NotEvaluated state remains explicit;
+- no repository/addon/path/provider-name production special cases;
+- no source/repository script execution;
+- no patch-sensitive WoW facts copied into stable algorithms;
+- no CI unless the owner explicitly asks for it.
 
-## Production crate map
+## Current next decision
 
-| Crate | Owns | First implementation milestone | Brief |
-|---|---|---:|---|
-| `wow-core` | IDs, profile/generation identity, evidence, coverage, findings, stable handles | E0 | [`wow-core/README.md`](wow-core/README.md) |
-| `wow-store` | SQLite lifecycle, migrations, transactions, content-addressed objects | E1/E2 | [`wow-store/README.md`](wow-store/README.md) |
-| `wow-reference` | Reference Pack model, APIDocumentation ingestion, corrections, exact reference view | E0 fixture / E1 full | [`wow-reference/README.md`](wow-reference/README.md) |
-| `wow-annotations` | Ketho-compatible annotations and WoW dialect projections | E1 | [`wow-annotations/README.md`](wow-annotations/README.md) |
-| `wow-emmy` | Upstream Emmy adapter, analyzer actor, semantic facts, generic diagnostic normalization | E0 | [`wow-emmy/README.md`](wow-emmy/README.md) |
-| `wow-project` | Addon workspace, TOC/XML/load model, incremental project generations | E0 minimal / E2 full | [`wow-project/README.md`](wow-project/README.md) |
-| `wow-graph` | Typed entities/relations, lineage primitives, bounded graph queries | E2/E3 | [`wow-graph/README.md`](wow-graph/README.md) |
-| `wow-recognizers` | Declarative universal recognizers over normalized facts | E2 core / E5 packs | [`wow-recognizers/README.md`](wow-recognizers/README.md) |
-| `wow-search` | Exact, historical, shape, FTS, graph, and candidate ranking | E4 | [`wow-search/README.md`](wow-search/README.md) |
-| `wow-rules` | WoW diagnostic providers and rule-specific remediation contracts | E0 | [`wow-rules/README.md`](wow-rules/README.md) |
-| `wow-cbm` | Optional Codebase Memory MCP bridge and candidate normalization | E6 | [`wow-cbm/README.md`](wow-cbm/README.md) |
-| `wow-context` | L0/L1 skeletons, Project Map, context budgets, detail negotiation | E3 | [`wow-context/README.md`](wow-context/README.md) |
-| `wow-service` | Transport-independent use cases and cross-component orchestration | E0 | [`wow-service/README.md`](wow-service/README.md) |
-
-Development-only crates such as `wow-testkit` or `wow-eval` are deferred until repeated cross-crate test responsibilities justify them. E0 tests may live under `tests/` and crate-local test modules first.
-
-## Active E0 implementation set
-
-E0 activates only these slices:
-
-```text
-wow-core
-wow-reference      fixture-backed ReferenceView only
-wow-emmy           one pinned analyzer adapter path
-wow-project        minimal single-workspace generation only
-wow-rules          wow.api.exists + one direct Secret-local rule
-wow-service        status/check orchestration only
-apps/wow           minimal CLI transport
-cross-crate golden fixture
-```
-
-E0 does **not** activate `wow-store`, full Reference Pack building, annotation generation, graph persistence, recognizer packs, search, Codebase Memory, LSP, MCP, or release automation.
-
-## Contract status
-
-The operation inventories in crate briefs define required semantics and ownership. Concrete Rust names may be adjusted during implementation only when:
-
-- the owning semantics remain unchanged;
-- no dependency cycle or responsibility leak is introduced;
-- the brief and affected contract are updated in the same change;
-- the change is covered by an executable fixture or compatibility test.
-
-Do not create placeholder methods that return empty/default success. An unavailable capability must be absent, explicitly unsupported, or return `NotEvaluated`/a typed unavailable state according to the owning contract.
+After E3-B documentation, either define E3-C service/application context orchestration or proceed to E4 search/lineage contracts. Rust implementation still starts from E0-A and follows the dependency/freeze order; documentation order does not waive prerequisites.
