@@ -1,0 +1,135 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-project-e3-b-invalidation-cases-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "cases": [
+    {
+      "case_id": "UISRC-INV-001",
+      "change": "lua-file-content-digest",
+      "expected_invalidations": [
+        "source-file-and-handle-assertion",
+        "affected-load-and-workspace-partitions",
+        "analyzer-facts-findings-source-maps",
+        "dependent-adapter-and-recognizer-partitions",
+        "direct-source-graph-entities-relations",
+        "reference-source-bridges",
+        "candidate-and-publication-manifests"
+      ]
+    },
+    {
+      "case_id": "UISRC-INV-002",
+      "change": "xml-include-template-script-or-inline-lua",
+      "expected": "bounded-direct-dependency-closure-invalidated"
+    },
+    {
+      "case_id": "UISRC-INV-003",
+      "change": "toc-order-variant-dependency-lod-bootstrap-or-savedvariables",
+      "expected": "package-load-workspace-and-dependent-partitions-invalidated"
+    },
+    {
+      "case_id": "UISRC-INV-004",
+      "change": "source-root-role-boundary-or-path-normalization-profile",
+      "expected": "affected-root-or-source-collection-rekeyed-and-rebuilt"
+    },
+    {
+      "case_id": "UISRC-INV-005",
+      "change": "wow-emmy-implementation-config-annotation-or-fact-schema",
+      "expected_invalidations": [
+        "analyzer",
+        "adapters",
+        "recognizers",
+        "source-graph",
+        "bridges",
+        "candidate-and-publication"
+      ]
+    },
+    {
+      "case_id": "UISRC-INV-006",
+      "change": "recognizer-pack-rule-version-or-disable",
+      "expected": "only-owning-recognizer-output-and-dependent-graph-partitions-replaced"
+    },
+    {
+      "case_id": "UISRC-INV-007",
+      "change": "graph-registry-identity-relation-or-bridge-schema",
+      "expected": "affected-proposal-key-assertion-conflict-bridge-and-publication-rebuild"
+    },
+    {
+      "case_id": "UISRC-INV-008",
+      "change": "reference-profile-or-generation",
+      "expected": "reference-source-bridges-and-dependent-capabilities-rebuilt-source-internal-facts-reusable-with-proof"
+    },
+    {
+      "case_id": "UISRC-INV-009",
+      "change": "build-binding-evidence-or-state-only",
+      "expected": "new-profile-generation-or-publication-decision-without-relabel-current"
+    },
+    {
+      "case_id": "UISRC-INV-010",
+      "change": "license-or-redistribution-decision-only",
+      "expected": "notice-export-publication-eligibility-and-artifact-decisions-invalidated"
+    },
+    {
+      "case_id": "UISRC-INV-011",
+      "change": "unrelated-partition",
+      "reuse_proof": {
+        "source_profile_and_generation_match": true,
+        "dependency_ids_and_digests_match": true,
+        "source_handles_and_maps_match": true,
+        "coverage_conflict_build_license_state_compatible": true
+      },
+      "expected": "partition-reused"
+    },
+    {
+      "case_id": "UISRC-INV-012",
+      "change": "same-path-name-provider-revision-or-mtime-but-content-or-profile-dependency-differs",
+      "expected": "reuse-rejected"
+    },
+    {
+      "case_id": "UISRC-INV-013",
+      "change": "source-file-deleted",
+      "must_be_absent_in_target": [
+        "source-inventory-and-handle",
+        "toc-xml-load-records",
+        "physical-and-virtual-analyzer-units",
+        "analyzer-facts-findings-source-maps",
+        "adapter-facts",
+        "recognizer-matches-proposals-partitions",
+        "graph-entities-relations-assertions-indexes",
+        "reference-source-bridges-and-ambiguity-groups",
+        "candidate-publication-context-search-object-member-and-continuation-refs"
+      ]
+    },
+    {
+      "case_id": "UISRC-INV-014",
+      "change": "reference-alias-or-endpoint-deleted",
+      "expected": "stale-bridge-removed-and-coverage-updated"
+    },
+    {
+      "case_id": "UISRC-INV-015",
+      "change": "impact-unknown-or-dependency-manifest-incomplete",
+      "expected": "conservative-widening"
+    },
+    {
+      "case_id": "UISRC-INV-016",
+      "change": "different-update-orders-same-final-sealed-snapshot-and-profiles",
+      "expected": "identical-source-analyzer-graph-bridge-candidate-publication-outputs"
+    },
+    {
+      "case_id": "UISRC-INV-017",
+      "change": "all-final-logical-inputs-and-output-partition-digests-equivalent",
+      "expected": "NoChange-no-new-semantic-generation-or-current-record"
+    },
+    {
+      "case_id": "UISRC-INV-018",
+      "mutation": "infer-moved-to-or-same-lineage-as-across-builds-inside-e3b",
+      "expected_error": "ui_source_cross_build_lineage_inference_not_owned_e3b"
+    }
+  ],
+  "frozen_base_generation_id": null,
+  "frozen_target_generation_ids": {},
+  "frozen_invalidation_plan_ids": {},
+  "frozen_reuse_proof_ids": {},
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}
