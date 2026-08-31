@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-project-e3-a-package-load-model-v1",
+  "state": "documentation-only-pending-vector-freeze",
+  "project": {
+    "project_id": null,
+    "project_kind": "BlizzardUiPlatformSource",
+    "universe_id": null,
+    "source_snapshot_id": null,
+    "project_generation_id": null
+  },
+  "packages": [
+    {
+      "package_id": null,
+      "normalized_root": "Interface/AddOns/Blizzard_Fixture",
+      "available_toc_variant_ids": [],
+      "selected_toc_variant_id": null,
+      "selection_state": "PendingFreeze",
+      "required_dependencies": [],
+      "optional_dependencies": [],
+      "load_roles": [
+        "normal-package-load"
+      ],
+      "coverage_record_ids": []
+    }
+  ],
+  "units": [
+    {
+      "unit_id": null,
+      "kind": "toc_entry_lua",
+      "source_file_id": null,
+      "load_ordinal": 0,
+      "phase": "normal-package-load"
+    },
+    {
+      "unit_id": null,
+      "kind": "xml_document",
+      "source_file_id": null,
+      "load_ordinal": 1,
+      "phase": "normal-package-load"
+    },
+    {
+      "unit_id": null,
+      "kind": "xml_inline_virtual_lua",
+      "source_file_id": null,
+      "owner_xml_entity_id": null,
+      "load_ordinal": 2,
+      "phase": "normal-package-load",
+      "source_map_id": null
+    }
+  ],
+  "direct_edges": [
+    {
+      "edge_id": null,
+      "kind": "package_contains_entry",
+      "source_id": null,
+      "target_id": null,
+      "evidence_ids": []
+    },
+    {
+      "edge_id": null,
+      "kind": "entry_loads_after",
+      "source_id": null,
+      "target_id": null,
+      "evidence_ids": []
+    },
+    {
+      "edge_id": null,
+      "kind": "xml_contains_inline_script",
+      "source_id": null,
+      "target_id": null,
+      "evidence_ids": []
+    }
+  ],
+  "reachability": [
+    {
+      "unit_id": null,
+      "state": "Reachable",
+      "reason_path_edge_ids": []
+    }
+  ],
+  "conflict_ids": [],
+  "coverage_record_ids": [],
+  "canonical_sha256": null,
+  "mutations": [
+    {
+      "case_id": "BUI-PKG-009",
+      "mutation": "fill-missing-selected-variant-fact-from-other-flavor",
+      "expected_error": "blizzard_ui_cross_flavor_merge_forbidden"
+    },
+    {
+      "case_id": "BUI-PKG-013",
+      "mutation": "filesystem-order-differs-from-toc-order",
+      "expected": "toc-order-remains-semantic"
+    },
+    {
+      "case_id": "BUI-PKG-019",
+      "mutation": "persist-all-transitive-reachability-pairs",
+      "expected": "rejected-by-contract"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "project.*",
+      "packages[*].ids-selection-and-coverage",
+      "units[*].ids-source-and-source-map",
+      "direct_edges[*].ids-evidence",
+      "reachability[*].ids-and-reason-paths",
+      "canonical_sha256"
+    ]
+  }
+}
