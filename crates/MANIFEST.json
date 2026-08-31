@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "repository": "UnknownAlienHuman/WoW-Dev-Framework",
-  "documentation_frontier": "E2-B",
+  "documentation_frontier": "E2-C",
   "implementation_frontier": "not-started",
   "contract_state": "documentation-only-no-rust-code",
   "required_reading": [
@@ -107,6 +107,13 @@
       "contract_id": "wow-recognizers/e2-b/core-structural-rules",
       "manifest": "crates/wow-recognizers/e2/CONTRACT.json",
       "state": "implementation-ready-documentation-no-rust-code"
+    },
+    {
+      "work_package": "E2-C",
+      "crate": "wow-project",
+      "contract_id": "wow-project/e2-c/toc-xml-load-incremental-index",
+      "manifest": "crates/wow-project/e2/CONTRACT.json",
+      "state": "implementation-ready-documentation-no-rust-code"
     }
   ],
   "crates": [
@@ -129,7 +136,7 @@
     },
     {
       "name": "wow-store",
-      "status": "E1-A-implementation-ready",
+      "status": "E1-A-implementation-ready-E2-D-projectstore-deferred",
       "first_milestone": "E1",
       "implementation_state": "not-started",
       "brief": "crates/wow-store/README.md",
@@ -203,10 +210,11 @@
     },
     {
       "name": "wow-project",
-      "status": "E0-D-ready-E2-C-deferred",
+      "status": "E0-D-and-E2-C-implementation-ready-E2-D-publication-deferred",
       "first_milestone": "E0",
       "implementation_state": "not-started",
       "brief": "crates/wow-project/README.md",
+      "contract_manifest": "crates/wow-project/e2/CONTRACT.json",
       "allowed_dependencies": [
         "wow-core",
         "wow-store",
@@ -214,15 +222,29 @@
         "wow-graph",
         "wow-recognizers"
       ],
-      "owns": [
-        "workspace-and-file-model",
-        "project-generation-publication",
-        "toc-xml-load-model",
-        "incremental-invalidation",
-        "recognizer-and-graph-orchestration",
-        "project-view"
+      "active_e2_c_dependencies": [
+        "wow-core",
+        "wow-emmy",
+        "wow-graph",
+        "wow-recognizers"
       ],
-      "next_contract": "E2-C full TOC/XML/load/incremental project indexing"
+      "inactive_until_e2_d": [
+        "wow-store"
+      ],
+      "owns": [
+        "workspace-source-snapshot-roots-universes",
+        "project-generation-and-candidate",
+        "toc-variants-directives-files-dependencies-lod-bootstrap-savedvariables",
+        "xml-includes-templates-objects-inheritance-scripts-inline-lua",
+        "static-load-model-and-reachability",
+        "analyzer-workspace-and-snapshot-binding",
+        "recognizer-fact-adapters-and-execution-orchestration",
+        "graph-proposal-validation-orchestration",
+        "incremental-invalidation-reuse-and-removal-closure",
+        "project-index-candidate-view-and-e2-d-publication-bundle"
+      ],
+      "active_scope": "E2-C builds deterministic NotPublishedE2C project index candidates",
+      "next_contract": "E2-D ProjectStore plus atomic ProjectSnapshot and GraphSnapshot publication"
     },
     {
       "name": "wow-graph",
