@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-graph-e2-snapshot-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "snapshot": {
+    "graph_generation_id": null,
+    "graph_id": "fixture-graph-e2",
+    "registry_bundle_id": null,
+    "profile_id": null,
+    "reference_generation_id": null,
+    "project_generation_id": null,
+    "partition_manifest_ids": [],
+    "entity_assertion_count": 3,
+    "relation_assertion_count": 2,
+    "conflict_count": 0,
+    "coverage_manifest_id": null,
+    "logical_store_generation_id": null,
+    "publication_report_id": null,
+    "validation_report_id": null,
+    "canonical_sha256": null
+  },
+  "golden_checks": [
+    "entity-exact:file:main.lua",
+    "neighbors:function:OnLoad",
+    "axis:ownership:file:main.lua",
+    "explain-relation:uses_api"
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "snapshot.*",
+      "golden-check-result-ids",
+      "canonical_sha256"
+    ]
+  }
+}
