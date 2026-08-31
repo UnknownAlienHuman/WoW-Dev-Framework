@@ -1,0 +1,158 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-project-e2-invalidation-cases-v1",
+  "state": "documentation-only-pending-partition-and-byte-freeze",
+  "base_candidate_id": null,
+  "base_project_generation_id": null,
+  "dependency_graph_id": null,
+  "cases": [
+    {
+      "case_id": "PROJECT-E2-INV-001",
+      "change": "Core.lua content only",
+      "expected_direct_invalidation": [
+        "analyzer:Core.lua"
+      ],
+      "expected_transitive_kinds": [
+        "lua-adapter",
+        "recognizer-output-depending-on-Core.lua",
+        "graph-proposal-validation",
+        "candidate-manifests"
+      ],
+      "expected_reuse_kinds": [
+        "toc",
+        "xml-structure",
+        "load-model-if-path-and-references-unchanged"
+      ]
+    },
+    {
+      "case_id": "PROJECT-E2-INV-002",
+      "change": "swap Main.xml and Core.lua TOC order",
+      "expected_direct_invalidation": [
+        "toc:selected-variant",
+        "load:FixtureAddon"
+      ],
+      "expected_transitive_kinds": [
+        "lua-unit-order",
+        "analyzer-plan-when-output-affecting",
+        "load-recognizer-output",
+        "graph-proposals",
+        "candidate-manifests"
+      ]
+    },
+    {
+      "case_id": "PROJECT-E2-INV-003",
+      "change": "selected Mainline variant -> another exact variant",
+      "expected": "all-old-selected-variant-active-partitions-removed-and-target-rebuilt"
+    },
+    {
+      "case_id": "PROJECT-E2-INV-005",
+      "change": "remove FixtureDB SavedVariables declaration",
+      "expected_direct_invalidation": [
+        "toc:savedvariables",
+        "state-root:FixtureDB"
+      ],
+      "expected_transitive_kinds": [
+        "state-path-adapter",
+        "state-recognizer-output",
+        "graph-proposals"
+      ],
+      "expected_removals": [
+        "all-target-state-root-and-state-path-facts-for-FixtureDB"
+      ]
+    },
+    {
+      "case_id": "PROJECT-E2-INV-007",
+      "change": "inline OnLoad XML body bytes change",
+      "expected_direct_invalidation": [
+        "xml:Main.xml:scripts",
+        "lua-unit:xml-inline-OnLoad",
+        "analyzer:xml-inline-OnLoad"
+      ],
+      "expected_transitive_kinds": [
+        "lua-adapter",
+        "script-and-hook-recognizers",
+        "graph-proposals",
+        "candidate-manifests"
+      ]
+    },
+    {
+      "case_id": "PROJECT-E2-INV-008",
+      "change": "remove UI.lua",
+      "expected": "missing-script-load-closure-and-no-stale-analyzer-fact-match-proposal-handle"
+    },
+    {
+      "case_id": "PROJECT-E2-INV-010",
+      "change": "analyzer pin or configuration",
+      "expected": "all-Lua-dependent-analyzer-adapter-recognizer-proposal-partitions-invalidated"
+    },
+    {
+      "case_id": "PROJECT-E2-INV-011",
+      "change": "recognizer rule version only",
+      "expected": "affected-recognizer-output-and-proposal-partitions-rebuilt-with-parser-analyzer-reuse-if-exact"
+    },
+    {
+      "case_id": "PROJECT-E2-INV-012",
+      "change": "graph registry bundle only",
+      "expected": "all-affected-proposals-revalidated-source-parser-analyzer-recognizer-match-reuse-if-compatible"
+    },
+    {
+      "case_id": "PROJECT-E2-INV-013",
+      "change": "unknown XML include impact",
+      "mutation": "reuse-only-one-script-partition",
+      "expected_error": "project_e2_unknown_impact_not_widened"
+    },
+    {
+      "case_id": "PROJECT-E2-INV-014",
+      "change": "unknown XML include impact",
+      "expected": "containing-XML-package-closure-invalidated-conservatively"
+    },
+    {
+      "case_id": "PROJECT-E2-INV-015",
+      "change": "mtime changes or path same with content changed",
+      "expected_error": "project_e2_partition_reuse_unproven"
+    },
+    {
+      "case_id": "PROJECT-E2-INV-016",
+      "mutation": "reuse old records by changing generation field only",
+      "expected_error": "project_e2_old_generation_relabel_or_mix_forbidden"
+    },
+    {
+      "case_id": "PROJECT-E2-INV-017",
+      "mutation": "retain one removed source fact/match/proposal/source handle",
+      "expected_error": "project_e2_removed_input_output_closure_failed"
+    },
+    {
+      "case_id": "PROJECT-E2-INV-018",
+      "change_sequences": [
+        "independent-edits-A-then-B",
+        "independent-edits-B-then-A"
+      ],
+      "expected": "same-final-project-generation-invalidation-set-and-candidate-bytes"
+    },
+    {
+      "case_id": "PROJECT-E2-INV-019",
+      "change": "canonical target equals base",
+      "expected": "NoChange-no-expensive-work-no-new-generation"
+    },
+    {
+      "case_id": "PROJECT-E2-INV-020",
+      "change": "cancel target after analyzer or recognizer stage",
+      "expected": "no-complete-target-candidate-base-unchanged"
+    }
+  ],
+  "expected_invalidation_plan_ids": [],
+  "expected_target_candidate_ids": [],
+  "canonical_sha256": null,
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "base_candidate_id",
+      "base_project_generation_id",
+      "dependency_graph_id",
+      "cases[*].exact-input-output-partition-ids-and-digests",
+      "expected_invalidation_plan_ids",
+      "expected_target_candidate_ids",
+      "canonical_sha256"
+    ]
+  }
+}
