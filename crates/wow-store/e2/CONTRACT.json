@@ -106,7 +106,9 @@
   ],
   "normative_files": [
     "crates/wow-store/README.md",
+    "crates/wow-store/E1_A_OVERVIEW.md",
     "crates/wow-store/PROJECT_STORE.md",
+    "crates/wow-store/PROJECT_STORE_PRE_E2_BOUNDARY.md",
     "crates/wow-store/e2/README.md",
     "crates/wow-store/e2/AGENTS.md",
     "crates/wow-store/e2/DECISIONS.md",

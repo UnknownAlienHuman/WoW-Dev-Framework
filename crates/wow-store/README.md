@@ -8,7 +8,7 @@
 
 ### E1-A — storage foundation and immutable ReferenceStore
 
-Read the existing root package in this order:
+The complete pre-E2 E1-A overview is preserved byte-for-byte as [`E1_A_OVERVIEW.md`](E1_A_OVERVIEW.md). Read it before the detailed root package:
 
 1. [`AGENTS.md`](AGENTS.md)
 2. [`DECISIONS.md`](DECISIONS.md)

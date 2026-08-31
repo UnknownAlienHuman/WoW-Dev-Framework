@@ -17,7 +17,7 @@ snapshot-bound readers
 explicit checkpoint, backup, retention, and GC
 ```
 
-Canonical details are under [`e2/`](e2/README.md). The earlier deferred boundary remains available in Git history at the commit immediately before E2-D.
+Canonical details are under [`e2/`](e2/README.md). The exact pre-E2 deferred boundary is preserved byte-for-byte as [`PROJECT_STORE_PRE_E2_BOUNDARY.md`](PROJECT_STORE_PRE_E2_BOUNDARY.md).
 
 ## Why this model
 
