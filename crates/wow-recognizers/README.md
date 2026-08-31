@@ -1,165 +1,66 @@
-# `wow-recognizers` implementation contract
+# `wow-recognizers` contract router
 
-**Status:** core recognizers deferred to E2; calibration packs deferred to E5.
+**Status:** E2-B core structural recognizer contract is implementation-ready; Rust implementation has not started. Named calibration packs remain deferred to E5.
 
-## Mission
+`wow-recognizers` deterministically matches reviewed structural conventions over normalized fact bundles and emits proposed universal graph assertions. It never reparses source, branches on repository or addon identity, executes code, decides platform truth, runs diagnostics, or publishes graph generations.
 
-`wow-recognizers` deterministically matches structural conventions in normalized Lua/TOC/XML facts and emits universal graph roles and relations. It captures reusable architecture without hardcoding product behavior by addon or repository name.
+## Canonical E2-B route
 
-## Owned responsibilities
+Read in order:
 
-- recognizer definition/pack schema and versioning;
-- validation/compilation of declarative structural patterns;
-- matching over normalized `wow-emmy` syntax/semantic facts and provided TOC/XML facts;
-- universal role/entity/relation emission;
-- evidence, confidence, coverage, and ambiguity reporting;
-- core recognizers for factories, registrations, hooks, libraries, state roots, and lifecycle patterns;
-- named calibration packs as data;
-- recognizer mutation/precision evaluation;
-- pack enable/disable and producer-version identity;
-- bounded matching execution.
+1. [`e2/README.md`](e2/README.md)
+2. [`e2/AGENTS.md`](e2/AGENTS.md)
+3. [`e2/DECISIONS.md`](e2/DECISIONS.md)
+4. [`e2/DATA_MODEL.md`](e2/DATA_MODEL.md)
+5. [`e2/FACT_INPUT_MODEL.md`](e2/FACT_INPUT_MODEL.md)
+6. [`e2/PACK_SCHEMA.md`](e2/PACK_SCHEMA.md)
+7. [`e2/MATCH_ENGINE.md`](e2/MATCH_ENGINE.md)
+8. [`e2/RULE_FAMILIES.md`](e2/RULE_FAMILIES.md)
+9. [`e2/OUTPUT_AND_GRAPH_HANDOFF.md`](e2/OUTPUT_AND_GRAPH_HANDOFF.md)
+10. [`e2/CONFIDENCE_AMBIGUITY_AND_COVERAGE.md`](e2/CONFIDENCE_AMBIGUITY_AND_COVERAGE.md)
+11. [`e2/PARTITIONS_AND_VERSIONING.md`](e2/PARTITIONS_AND_VERSIONING.md)
+12. [`e2/MUTATION_AND_EVALUATION.md`](e2/MUTATION_AND_EVALUATION.md)
+13. [`e2/SECURITY_AND_BUDGETS.md`](e2/SECURITY_AND_BUDGETS.md)
+14. [`e2/ERROR_MODEL.md`](e2/ERROR_MODEL.md)
+15. [`e2/TEST_MATRIX.md`](e2/TEST_MATRIX.md)
+16. [`e2/IMPLEMENTATION_PLAN.md`](e2/IMPLEMENTATION_PLAN.md)
+17. [`e2/CONTRACT.json`](e2/CONTRACT.json) and [`e2/examples/`](e2/examples/README.md)
 
-## Explicit non-responsibilities
+Also read [`../AGENTS.md`](../AGENTS.md), [`../DEPENDENCY_GRAPH.md`](../DEPENDENCY_GRAPH.md), [`../WORKSTREAMS.md`](../WORKSTREAMS.md), the E2-A [`wow-graph` contract](../wow-graph/e2/README.md), the normalized [`wow-emmy` fact model](../wow-emmy/FACT_MODEL.md), and the current [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb) routes.
 
-`wow-recognizers` does not:
-
-- parse Lua with another parser;
-- inspect repository name to change semantics;
-- define Blizzard API truth;
-- run diagnostics or decide severity;
-- persist graph data directly;
-- execute addon code or configuration;
-- use an LLM in the correctness path;
-- treat an external implementation as platform authority;
-- infer dynamic facts as `Proven` when structure only supports `Possible`.
-
-## Input contract
-
-Recognizers consume normalized facts supplied by owning crates, for example:
+## Direct framework dependencies
 
 ```text
-call/receiver/member/literal arguments
-assignments/table fields/metatable/mixin shapes
-function/method/lifecycle declarations
-TOC package/load/dependency/SavedVariables facts
-XML template/frame/inheritance/script facts
-known API/event/registry symbols from the selected profile
-source handles and generation context
+wow-core
+wow-emmy
+wow-graph
 ```
 
-They never reopen source files to parse them independently.
+`wow-project` supplies TOC/XML/project fact bundles and invokes recognizers, but `wow-recognizers` does not depend on `wow-project`. The recognizer crate returns proposed graph assertion batches; publication remains owned by project/graph orchestration.
 
-## Output contract
-
-A match emits zero or more proposed facts:
+## E2-B active families
 
 ```text
-entity kind + stable key ingredients
-universal role attributes
-relation kind + endpoints
-source/evidence handles
-producer pack/rule/version
-confidence and derivation explanation
-coverage partition/status
-ambiguity/competing matches
+TOC package/load/dependency/LoadOnDemand/SavedVariables
+XML template/frame/parent/inherits/script ownership
+CreateFrame/CreateFromMixins/Mixin assignment
+native frame event registration
+native EventRegistry frame-event bridge
+custom registry callback only with an exact TriggerEvent producer
+CVar callback registration
+SetScript/HookScript/hooksecurefunc structural hooks
+LibStub/library requirement and embed structure
+SavedVariables roots and literal state paths
 ```
 
-`wow-project`/`wow-graph` validate and publish those facts. Recognizers do not mutate shared graph state directly.
+Framework-specific module/lifecycle factories, plugin/style/element ecosystems, message buses, Secret guard/sink recognizers, and named calibration packs remain deferred until their E5 corpus and mutation gates are defined.
 
-## Core recognizer families
+## Current state
 
 ```text
-TOC package/load/dependency/LOD/SavedVariables
-XML template/frame/parent/inherits/scripts
-CreateFrame factory/template/parent
-CreateFromMixins / Mixin assignment
-EventRegistry / CallbackRegistry / AceEvent registration
-SetScript / HookScript / hooksecurefunc
-LibStub and embedded-library use
-addon/module/service factories
-plugin/region/style/element registries
-literal state roots and paths
-slash commands and message buses
-flavor/edition partitions
-Secret guards and known unsafe sinks
-lifecycle initialize/enable/disable patterns
+documentation contract: complete
+closed fixture shapes: complete
+implementation-dependent pins and SHA-256 freeze: pending
+Cargo workspace activation: not started
+Rust source: absent
 ```
-
-Each family has a separate rule ID, required capability set, precision corpus, and negative fixtures.
-
-## Required operations
-
-| Operation | Required behavior |
-|---|---|
-| `parse_recognizer_pack` | Read a versioned data definition with no executable code. |
-| `validate_recognizer_pack` | Check schemas, captures, endpoint kinds, capability requirements, and boundedness. |
-| `compile_recognizer_pack` | Produce deterministic matcher state independent of repository identity. |
-| `match_partition` | Match one normalized fact partition under explicit budgets and generation. |
-| `emit_universal_facts` | Produce proposed entities/relations with derivation/evidence; no direct persistence. |
-| `classify_match_confidence` | Assign Derived/Possible according to deterministic structural rules; never name popularity. |
-| `report_coverage` | Report skipped unsupported facts/patterns and affected rule capability. |
-| `enable_pack` | Activate a pack by explicit configuration/profile compatibility. |
-| `disable_pack` | Remove only that producer's generation/coverage; core semantics remain unchanged. |
-| `explain_match` | Return captures, rule version, input handles, and derivation. |
-| `run_mutation_suite` | Rename repository/path/factory identifiers, add structural negatives, and measure hidden overfitting. |
-| `build_precision_report` | Produce per-role true/false/unknown counts against labeled fixtures. |
-
-## Declarative pack rules
-
-1. No arbitrary script, regex replacement code, shell command, or dynamic library.
-2. Patterns match normalized fact kinds/fields, not raw source text by default.
-3. Literal names are allowed only when they are part of a public structural convention and the rule explains why.
-4. Repository/addon name may appear in pack metadata/provenance, never in semantic branch conditions.
-5. A named pack removal may reduce coverage but cannot alter core fact meanings.
-6. Pattern evaluation is bounded by fact count, capture count, recursion/depth, and output count.
-7. Ambiguous matches remain competing `Possible` facts.
-8. A rule cannot emit a graph kind/relation not declared by `wow-graph`.
-9. Rule version changes replace prior producer partitions; stale duplicates are removed.
-10. Generated/user script payloads require explicit quarantine/budget policy.
-
-## E2 core scope
-
-Implement only recognizers needed to build basic project facts:
-
-- TOC/package/load/dependency;
-- XML template/frame/inheritance/script ownership;
-- CreateFrame/CreateFromMixins;
-- event/callback registration;
-- SetScript/HookScript/hooksecurefunc;
-- LibStub/library embeds;
-- SavedVariables roots/literal state paths.
-
-Do not add named framework packs until the core matcher and mutation suite prove repository independence.
-
-## E5 calibration packs
-
-Calibration may use Ace3, oUF, WeakAuras, BigWigs, Details, Plater, and other current selected repositories. Every observation must be pinned and treated as implementation evidence. A pack emits universal roles only.
-
-## Required tests
-
-- schema validation and executable-content rejection;
-- positive and structurally similar negative fixture per rule;
-- repository/path rename invariance;
-- pack removal changes coverage only;
-- same structural pattern in more than one repository where practical;
-- ambiguous/dynamic target remains `Possible`;
-- deterministic output under shuffled fact order;
-- capability gap reporting;
-- output budget/truncation;
-- producer-version partition replacement;
-- no second parser or raw-text fallback;
-- precision/recall report generation.
-
-## Documentation sources
-
-- [`../../docs/GRAPH_SEARCH_AND_PLANNING.md`](../../docs/GRAPH_SEARCH_AND_PLANNING.md)
-- [`../../docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md)
-- [`../../docs/DECISIONS.md`](../../docs/DECISIONS.md)
-- [`../../docs/TEST_STRATEGY.md`](../../docs/TEST_STRATEGY.md)
-- [Current external implementation map](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb/blob/main/KB/external/External_Repositories.md)
-- [Current WoW addon development workflow](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb/blob/main/KB/core/BlizzardUI_DevWorkflow.md)
-- [Current event/callback rules](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb/blob/main/KB/core/BlizzardUI_EventPatterns.md)
-
-## Definition of done
-
-Core recognizers are ready when they operate solely on normalized facts, emit explainable universal roles, survive repository/path/name mutations, retain ambiguity honestly, and can be removed or upgraded by producer partition without changing graph semantics.
