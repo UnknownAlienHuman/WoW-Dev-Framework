@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-store-e2-project-store-physical-profile-v1",
+  "state": "documentation-only-pending-runtime-and-filesystem-freeze",
+  "profile": {
+    "profile_id": null,
+    "kind": "immutable-file-per-generation-sqlite",
+    "sqlite_repository_and_commit": null,
+    "sqlite_version": null,
+    "rust_sqlite_binding_and_version": null,
+    "compile_options_manifest_id": null,
+    "runtime_capability_report_id": null,
+    "filesystem_capability_report_id": null,
+    "path_profile_id": null,
+    "journal_mode_staging": "WAL",
+    "published_writable_wal": false,
+    "synchronous_policy_id": null,
+    "checkpoint_policy_id": null,
+    "page_cache_mmap_busy_limits_id": null,
+    "atomic_materialization_profile_id": null,
+    "registry_profile_id": null,
+    "read_only_open_profile_id": null,
+    "one_writer": true,
+    "one_coherent_head": true,
+    "shared_content_addressed_objects": true,
+    "canonical_sha256": null
+  },
+  "rejected_alternatives": [
+    {
+      "kind": "row-versioned-single-mutable-database",
+      "state": "deferred-until-measured-equivalence"
+    },
+    {
+      "kind": "remote-or-multi-host-store",
+      "state": "out-of-scope"
+    },
+    {
+      "kind": "in-place-migration-repair-or-compaction",
+      "state": "forbidden"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "profile.*pins-and-policy-ids",
+      "profile.canonical_sha256"
+    ]
+  }
+}
