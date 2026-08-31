@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-store-e2-publication-cases-v1",
+  "state": "documentation-only-pending-vector-freeze",
+  "cases": [
+    {
+      "case_id": "STORE-E2-TXN-001",
+      "mutation": "none",
+      "expected": "one-committed-sealed-open-validated-inactive-generation"
+    },
+    {
+      "case_id": "STORE-E2-TXN-005",
+      "mutation": "graph-registered-operation-fails",
+      "expected": "all-domain-writes-rolled-back"
+    },
+    {
+      "case_id": "STORE-E2-TXN-009",
+      "mutation": "cancel-at-each-operation-phase",
+      "expected": "no-headed-target"
+    },
+    {
+      "case_id": "STORE-E2-TXN-011",
+      "mutation": "checkpoint-fails-after-commit",
+      "expected": "unsealed-recovery-state"
+    },
+    {
+      "case_id": "STORE-E2-SEAL-004",
+      "mutation": "sealed-member-checksum-mismatch",
+      "expected": "quarantine-no-head"
+    },
+    {
+      "case_id": "STORE-E2-OPEN-006",
+      "mutation": "golden-read-manifest-mismatch",
+      "expected": "inactive-invalid-no-head"
+    },
+    {
+      "case_id": "STORE-E2-HEAD-002",
+      "mutation": "valid-head-N-to-N-plus-1",
+      "expected": "cas-success"
+    },
+    {
+      "case_id": "STORE-E2-HEAD-003",
+      "mutation": "concurrent-head-wins-first",
+      "expected": "cas-conflict-and-inactive-target"
+    },
+    {
+      "case_id": "STORE-E2-HEAD-008",
+      "mutation": "crash-during-cas",
+      "expected": "registry-resolves-exact-old-or-new"
+    },
+    {
+      "case_id": "STORE-E2-DET-001",
+      "mutation": "workers-1-2-N-and-shuffled-plan-inputs",
+      "expected": "same-logical-generation-and-manifests"
+    }
+  ],
+  "result_ids": {},
+  "canonical_sha256": null,
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "result_ids",
+      "canonical_sha256"
+    ]
+  }
+}
