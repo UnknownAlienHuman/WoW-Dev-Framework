@@ -1,100 +1,73 @@
 # `wow-context` contract router
 
-**Status:** E3-A context projection contract is implementation-ready; Rust implementation has not started.
+**Status:** E3-B Project Map, L0/L1 skeleton, and context-pack contract is implementation-ready documentation; no Rust code exists.
 
-`wow-context` builds compact, deterministic, evidence-bearing Project Maps, L0/L1 skeletons, progressive context bundles, exact detail routes, faithful bounded source excerpts, coverage/loss records, and context metrics over one exact published project/graph/reference state.
+`wow-context` converts exact, already-published project, Blizzard UI source, graph, analyzer-derived, and reference views into deterministic bounded context artifacts. It does not parse source, own graph/search/storage, infer facts with a model, or mutate projects.
 
-It does not parse source, run analyzers or recognizers, perform search, infer diagnostics/fixes/runtime safety, publish generations, persist caches, or invoke models in the correctness path.
+## Contract routes
 
-## Canonical route
+The initial crate brief is preserved as [`PRE_E3_OVERVIEW.md`](PRE_E3_OVERVIEW.md).
 
-Read the E3-A package in this order:
+Read the current package in this order:
 
-1. [`e3/README.md`](e3/README.md)
-2. [`e3/AGENTS.md`](e3/AGENTS.md)
-3. [`e3/DECISIONS.md`](e3/DECISIONS.md)
-4. [`e3/INPUT_VIEWS_AND_SCOPES.md`](e3/INPUT_VIEWS_AND_SCOPES.md)
-5. [`e3/DATA_MODEL.md`](e3/DATA_MODEL.md)
-6. [`e3/OPERATIONS.md`](e3/OPERATIONS.md)
-7. [`e3/PROJECT_MAP.md`](e3/PROJECT_MAP.md)
-8. [`e3/SKELETONS.md`](e3/SKELETONS.md)
-9. [`e3/CONTROL_AND_EFFECT_MODEL.md`](e3/CONTROL_AND_EFFECT_MODEL.md)
-10. [`e3/DETAIL_AND_EXPANSION.md`](e3/DETAIL_AND_EXPANSION.md)
-11. [`e3/CONTINUATION_AND_STOPPING.md`](e3/CONTINUATION_AND_STOPPING.md)
-12. [`e3/EVIDENCE_COVERAGE_AND_LOSS.md`](e3/EVIDENCE_COVERAGE_AND_LOSS.md)
-13. [`e3/SOURCE_EXCERPTS_AND_SECURITY.md`](e3/SOURCE_EXCERPTS_AND_SECURITY.md)
-14. [`e3/BUDGETS_AND_TOKENIZATION.md`](e3/BUDGETS_AND_TOKENIZATION.md)
-15. [`e3/RENDERING_AND_CANONICALIZATION.md`](e3/RENDERING_AND_CANONICALIZATION.md)
-16. [`e3/METRICS_AND_EVALUATION.md`](e3/METRICS_AND_EVALUATION.md)
-17. [`e3/ERROR_MODEL.md`](e3/ERROR_MODEL.md)
-18. [`e3/TEST_MATRIX.md`](e3/TEST_MATRIX.md)
-19. [`e3/IMPLEMENTATION_PLAN.md`](e3/IMPLEMENTATION_PLAN.md)
-20. [`e3/CONTRACT.json`](e3/CONTRACT.json)
-21. [`e3/examples/`](e3/examples/README.md)
+1. [`e3/MILESTONE_RENUMBERING.md`](e3/MILESTONE_RENUMBERING.md)
+2. [`e3/README.md`](e3/README.md)
+3. the remaining route declared by the E3-B README and machine contract.
 
-The original pre-E3 scaffold is preserved as [`PRE_E3_OVERVIEW.md`](PRE_E3_OVERVIEW.md).
+The renumbering document is mandatory because the first context draft used the label `E3-A` before the Blizzard UI source-index package was assigned that milestone. The current authoritative assignment is:
 
-## Active E3-A direct dependencies
+```text
+E3-A = wow-project Blizzard UI source index and SkeletonInputView producer
+E3-B = wow-context Project Map, L0/L1, semantic context pack, and renderers
+```
+
+There is one context architecture, not two.
+
+## Direct dependencies
 
 ```text
 wow-core
-wow-reference
-wow-project
 wow-graph
+wow-project
+wow-reference
 ```
 
-The broader dependency table lists the maximum future edges. E3-A does **not** activate direct dependencies on `wow-store`, `wow-emmy`, or `wow-search`:
+`wow-context` has no direct dependency on `wow-store`, `wow-emmy`, `wow-recognizers`, `wow-rules`, `wow-search`, `wow-cbm`, `wow-service`, or applications. It receives relevant data only through exact public project, graph, and reference views.
 
-- store/read-transaction details remain behind coherent published project/graph views;
-- analyzer facts arrive through the published project view;
-- search/ranking supplies exact roots only in E4 or through a higher layer.
-
-## Exact input identity
-
-E3-A consumes one coherent snapshot containing:
+## E3-B output hierarchy
 
 ```text
-ProjectStoreEpochId
-ProjectStoreGenerationId
-ProjectPublicationSetId
-ProjectGenerationId / ProjectSnapshotId / ProjectViewId
-AnalyzerSnapshotId
-GraphGenerationId / GraphSnapshotId / GraphViewId
-optional exact ProfileId / ReferenceGenerationId / ReferenceViewId
-source-universe, query-catalog, capability, coverage, and conflict manifests
+ContextUniverseSet
+-> ProjectMap
+-> L0Skeleton(s)
+-> L1Skeleton(s)
+-> ContextSemanticPack
+-> RenderedContextArtifact(s)
 ```
 
-`StoreImageId` and whole-SQLite-generation assumptions are forbidden by the selected E2-D contract.
+Every layer is immutable, exact-generation-bound, evidence-preserving, budgeted, and independently identified. Rendering never becomes semantic truth.
 
-## E3-A output identity DAG
+## Hard boundaries
 
-```text
-input snapshot + profiles + normalized request
--> plan/frontier
--> Project Map, skeletons, control/effects, source, evidence, loss records
--> ContextBundleCore
--> renderer artifact
--> metrics
--> evaluation report
--> outer delivery envelope
-```
-
-No earlier artifact contains a later artifact ID. Renderer bytes, token counts, timings, and model-evaluation scores never determine semantic bundle identity.
-
-## E3-A / E3-B boundary
-
-E3-A can consume a pinned Blizzard UI source universe only after a separate E3-B producer has acquired, materialized, parsed, analyzed, graphed, licensed, covered, and published the exact source snapshot.
-
-E3-A itself never downloads, extracts, parses, indexes, or claims completeness for Blizzard UI source. API documentation/reference facts and platform UI source remain different evidence universes.
+- exact roots only; natural-language/fuzzy root resolution is not E3-B;
+- no second TOC/XML/Lua parser and no raw-source semantic inference;
+- no LLM/model inference, summarization, ranking, or tool calls in the canonical path;
+- no current-generation switching during a request;
+- no merged user-project, Blizzard UI source, reference, external, runtime, or historical identities;
+- no source text treated as framework or agent instructions;
+- no context claim without exact fact/assertion/evidence/coverage closure;
+- no hidden omission, silent truncation, or token-count claim without a pinned estimator/tokenizer profile;
+- no unbounded source/graph export;
+- no persistence or cache storage implementation in this crate;
+- no search, lineage, patch impact, diagnostics, remediation, or runtime truth;
+- no Cargo/Rust/CI activation during this documentation phase.
 
 ## Current implementation state
 
 ```text
-documentation frontier: E3-A
+documentation frontier: E3-B
 implementation frontier: not started
 Cargo.toml: absent
 Rust source: absent
 CI/workflows: absent
 ```
-
-Directory presence does not authorize implementation before E0-E2 prerequisites, exact read catalogs, profile registries, synthetic/real fixtures, evaluation gates, and all checksum pins are frozen.
