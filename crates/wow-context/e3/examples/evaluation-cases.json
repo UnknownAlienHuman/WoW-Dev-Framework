@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-context-e3-evaluation-v1",
+  "state": "documentation-only-pending-corpus-and-result-freeze",
+  "corpus": {
+    "context_evaluation_corpus_id": null,
+    "synthetic_exact_publication_fixture_id": null,
+    "pinned_real_project": {
+      "repository": "UnknownAlienHuman/roth-ui",
+      "commit": "1656d4b9d33be914be2058460520e7423668d95c",
+      "publication_fixture_id": null,
+      "purpose": "scale-navigation-compression-and-name-path-mutation-only"
+    },
+    "optional_pinned_platform_ui_source_fixture_id": null,
+    "mandatory_expected_record_manifest_id": null,
+    "forbidden_record_manifest_id": null,
+    "request_task_profile_ids": [],
+    "renderer_and_tokenizer_profile_ids": [],
+    "license_provenance_manifest_id": null,
+    "canonical_sha256": null
+  },
+  "hard_gates": {
+    "mandatory_structural_and_evidence_recall": "100-percent-unless-exact-input-partial-and-blocker-present",
+    "forbidden_invented_semantic_records": 0,
+    "cross_generation_universe_or_provenance_upgrades": 0,
+    "hidden_mandatory_conflicts_partial_or_truncation": 0,
+    "source_security_or_private_data_violations": 0,
+    "deterministic_semantic_output": "byte-identical",
+    "budget_reconciliation": "exact"
+  },
+  "cases": [
+    {
+      "case_id": "CTX-METRIC-001",
+      "condition": "closed-synthetic-mandatory-record-manifest",
+      "expected": "exact-expected-included-missing-extra-digests"
+    },
+    {
+      "case_id": "CTX-METRIC-002",
+      "condition": "every-material-field",
+      "expected": "exact-evidence-or-derivation-closure"
+    },
+    {
+      "case_id": "CTX-METRIC-003",
+      "mutation": "remove-mandatory-evidence-record-and-reduce-output-size",
+      "expected": "hard-fail-despite-better-compression"
+    },
+    {
+      "case_id": "CTX-METRIC-004",
+      "mutation": "deduplicate-competing-assertions-or-distinct-source-occurrences",
+      "expected_error": "context_false_deduplication_detected"
+    },
+    {
+      "case_id": "CTX-METRIC-005",
+      "mutation": "include-unrequested-high-centrality-node",
+      "expected": "out-of-scope-relevance-classification"
+    },
+    {
+      "case_id": "CTX-METRIC-006",
+      "mutation": "hide-partial-or-conflict-blocker",
+      "expected_error": "context_evaluation_hard_gate_failed"
+    },
+    {
+      "case_id": "CTX-METRIC-007",
+      "mutation": "consumer-harness-has-hidden-repository-access",
+      "expected_error": "context_consumer_utility_protocol_invalid"
+    },
+    {
+      "case_id": "CTX-METRIC-008",
+      "mutation": "external-model-score-overrides-deterministic-hard-gate",
+      "expected_error": "context_external_model_unpinned_or_authoritative_forbidden"
+    },
+    {
+      "case_id": "CTX-METRIC-009",
+      "mutation": "implementation-auto-rewrites-golden-corpus",
+      "expected_error": "context_evaluation_corpus_mutation_forbidden"
+    },
+    {
+      "case_id": "CTX-METRIC-011",
+      "mutation": "rename-repository-package-path-and-irrelevant-local-identifiers",
+      "expected": "same-universal-semantic-records-except-source-identities-and-new-generation"
+    },
+    {
+      "case_id": "CTX-METRIC-012",
+      "condition": "shuffle-input-query-worker-order",
+      "expected": "same-evaluation-record-order-and-digest"
+    }
+  ],
+  "consumer_tasks": [
+    "locate-project-bootstrap-and-direct-load-path",
+    "distinguish-native-custom-eventregistry-and-cvar-signals",
+    "trace-savedvariables-state-root-to-direct-readers-and-writers",
+    "locate-project-api-use-and-exact-reference-entity",
+    "choose-next-exact-evidence-or-source-detail-route",
+    "report-requested-capability-as-partial-or-conflicted"
+  ],
+  "evaluation_report_id": null,
+  "canonical_sha256": null,
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}

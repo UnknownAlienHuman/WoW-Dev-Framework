@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-context-e3-project-map-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "request": {
+    "context_input_snapshot_id": null,
+    "context_profile_id": null,
+    "project_map_profile_id": null,
+    "budget_profile_id": null,
+    "security_profile_id": null,
+    "renderer_profile_id": "human-markdown-project-map-approximately-2k-v1",
+    "root_entity_ids": []
+  },
+  "project_map": {
+    "project_map_id": null,
+    "sections": [
+      {
+        "kind": "project_identity",
+        "section_id": null,
+        "mandatory": true,
+        "item_ids": [],
+        "evidence_link_ids": [],
+        "coverage_record_ids": []
+      },
+      {
+        "kind": "packages_and_toc_variants",
+        "section_id": null,
+        "mandatory": true,
+        "item_ids": [],
+        "evidence_link_ids": [],
+        "coverage_record_ids": []
+      },
+      {
+        "kind": "load_units_and_entrypoints",
+        "section_id": null,
+        "mandatory": true,
+        "item_ids": [],
+        "detail_route_ids": []
+      },
+      {
+        "kind": "ownership_and_universal_roles",
+        "section_id": null,
+        "mandatory": false,
+        "item_ids": [],
+        "detail_route_ids": []
+      },
+      {
+        "kind": "signals_callbacks_and_hooks",
+        "section_id": null,
+        "mandatory": false,
+        "signal_systems_remain_distinct": true,
+        "item_ids": []
+      },
+      {
+        "kind": "state_roots_and_paths",
+        "section_id": null,
+        "savedvariables_contents_included": false,
+        "item_ids": []
+      },
+      {
+        "kind": "platform_api_usage",
+        "section_id": null,
+        "project_occurrence_and_reference_evidence_separate": true,
+        "item_ids": []
+      },
+      {
+        "kind": "capabilities_conflicts_and_gaps",
+        "section_id": null,
+        "mandatory": true,
+        "blocker_ids": [],
+        "loss_omission_stopping_ids": []
+      },
+      {
+        "kind": "next_detail_routes",
+        "section_id": null,
+        "mandatory": true,
+        "route_ids": []
+      }
+    ],
+    "canonical_semantic_sha256": null
+  },
+  "renderer_expectation": {
+    "target_utf8_bytes": 2048,
+    "target_is_not_authority": true,
+    "mandatory_blockers_may_force": [
+      "explicit_failure",
+      "blocker_only_artifact",
+      "truncation_with_continuation"
+    ],
+    "rendered_sha256": null
+  },
+  "mutation_cases": [
+    "CTX-MAP-005",
+    "CTX-MAP-006",
+    "CTX-MAP-007",
+    "CTX-MAP-008",
+    "CTX-MAP-011",
+    "CTX-MAP-013",
+    "CTX-MAP-017",
+    "CTX-MAP-018"
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}

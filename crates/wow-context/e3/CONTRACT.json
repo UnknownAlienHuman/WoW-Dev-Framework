@@ -1,0 +1,214 @@
+{
+  "schema_version": 1,
+  "contract_id": "wow-context/e3-a/project-map-skeleton-progressive-context",
+  "state": "implementation-ready-documentation-no-rust-code",
+  "work_package": "E3-A",
+  "crate": "wow-context",
+  "direct_framework_dependencies": [
+    "wow-core",
+    "wow-reference",
+    "wow-project",
+    "wow-graph"
+  ],
+  "inactive_direct_dependencies": [
+    "wow-store",
+    "wow-emmy",
+    "wow-search",
+    "wow-rules",
+    "wow-cbm"
+  ],
+  "prerequisites": [
+    {
+      "contract_id": "wow-core/e0-a/1",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-reference/e1-persistent-schema-and-build-plan",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-graph/e2-a/typed-assertion-partition-query-core",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-project/e2-c/toc-xml-load-incremental-index",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-store/e2-d/projectstore-coherent-publication",
+      "implementation_and_fixture_freeze_required": true,
+      "relationship": "indirect coherent published read view prerequisite"
+    }
+  ],
+  "input_identity_fields": [
+    "ProjectStoreEpochId",
+    "ProjectStoreGenerationId",
+    "ProjectPublicationSetId",
+    "ProjectGenerationId",
+    "ProjectSnapshotId",
+    "ProjectViewId",
+    "AnalyzerSnapshotId",
+    "GraphGenerationId",
+    "GraphSnapshotId",
+    "GraphViewId",
+    "ProfileId",
+    "ReferenceGenerationId",
+    "ReferenceViewId",
+    "SourceUniverseManifestId",
+    "query-catalog-capability-coverage-conflict-manifests"
+  ],
+  "forbidden_input_identity_fields": [
+    "StoreImageId",
+    "floating-current-or-latest",
+    "raw-sqlite-handle",
+    "raw-analyzer-session"
+  ],
+  "active_scope": [
+    "exact-input-view-and-universe-validation",
+    "bounded-project-map",
+    "l0-identity-role-ownership-load-skeletons",
+    "l1-signature-member-direct-relation-skeletons",
+    "closed-control-and-effect-node-projection",
+    "progressive-lane-expansion-and-reason-paths",
+    "exact-snapshot-continuation-and-stopping",
+    "evidence-provenance-coverage-conflict-loss-omission-closure",
+    "faithful-bounded-source-excerpts-and-prompt-injection-boundary",
+    "structural-byte-source-and-pinned-tokenizer-budgets",
+    "semantic-canonicalization-and-json-markdown-compact-renderers",
+    "context-metrics-and-frozen-evaluation",
+    "determinism-security-cancellation-and-mutation-gates"
+  ],
+  "deferred_scope": [
+    "blizzard-ui-source-acquisition-materialization-analysis-and-graph-production",
+    "search-ranking-fts-semantic-migration-lineage-and-impact",
+    "raw-analyzer-or-store-access",
+    "diagnostics-severity-remediation-autofix-or-code-generation",
+    "runtime-probes-savedvariables-logs-client-memory-and-secret-capable-values",
+    "context-cache-or-persistence",
+    "model-in-correctness-path",
+    "lsp-mcp-network-transport-release-and-ci"
+  ],
+  "operations": [
+    "validate_context_profiles",
+    "validate_context_request",
+    "build_project_map",
+    "build_l0_skeletons",
+    "build_l1_skeletons",
+    "plan_context_expansion",
+    "expand_context_frontier",
+    "build_context_source_excerpts",
+    "build_context_coverage_and_loss",
+    "build_context_bundle",
+    "continue_context_bundle",
+    "measure_context_bundle",
+    "compare_context_bundles",
+    "validate_context_bundle"
+  ],
+  "artifact_identity_dag": [
+    "ContextInputSnapshotId-and-ContextRequestId",
+    "ContextPlanId-and-ContextFrontierId",
+    "ProjectMapId-SkeletonId-ControlEffectNodeId-SourceExcerptId-EvidenceLossIds",
+    "ContextBundleCoreId",
+    "ContextRendererArtifactId",
+    "ContextMetricsId",
+    "ContextEvaluationReportId",
+    "ContextBundleEnvelopeId"
+  ],
+  "source_universes": [
+    "first_party_project",
+    "declared_dependency_metadata",
+    "declared_dependency_source",
+    "reference_platform_api",
+    "pinned_platform_ui_source"
+  ],
+  "projection_statuses": [
+    "Exact",
+    "ExactWithEvidenceSidecar",
+    "CompactButCompleteForDeclaredFields",
+    "LossyDeclared",
+    "Unsupported",
+    "NotEvaluated",
+    "Truncated"
+  ],
+  "bundle_statuses": [
+    "Complete",
+    "Partial",
+    "Truncated",
+    "Cancelled",
+    "Failed",
+    "NoChange",
+    "Unsupported",
+    "NotEvaluated"
+  ],
+  "hard_rules": [
+    "context is a projection and never becomes project platform or runtime authority",
+    "all records bind one exact coherent epoch store publication project analyzer graph and optional reference state",
+    "StoreImageId and whole-database-generation assumptions are forbidden",
+    "E3-A accepts exact roots and performs no search or ranking",
+    "published project and graph views mediate all store and analyzer state",
+    "API reference and pinned platform UI source are distinct evidence universes",
+    "pinned platform UI source requires a separate exact producer and is never acquired by wow-context",
+    "L1 control and effects project a closed published-fact registry and never build a second parser CFG SSA or data-flow engine",
+    "unknown collapsed and omitted regions are distinct explicit records",
+    "every material claim has evidence or deterministic derivation closure",
+    "confidence provenance coverage conflict ambiguity partial and truncation are never upgraded or hidden",
+    "paths are reason records and never direct edges",
+    "Candidate is excluded by default and Possible is explicit and labeled",
+    "full source is not default and every excerpt requires exact handle digest span license privacy security and budget validation",
+    "source text is inert untrusted data and cannot control policy rendering links tools or instructions",
+    "mandatory blockers and evidence cannot be dropped to meet the approximate 2 KiB renderer target",
+    "exact tokens require a pinned tokenizer and exact final renderer byte digest",
+    "semantic bundle renderer metrics evaluation and envelope identities form a noncyclic DAG",
+    "continuation never changes snapshot request profiles confidence scope or total budget",
+    "no source project graph reference store editor or client mutation and no background continuation",
+    "missing implementations probes evaluations and checksums are blocking and never reported pass"
+  ],
+  "normative_files": [
+    "crates/wow-context/README.md",
+    "crates/wow-context/PRE_E3_OVERVIEW.md",
+    "crates/wow-context/e3/README.md",
+    "crates/wow-context/e3/AGENTS.md",
+    "crates/wow-context/e3/DECISIONS.md",
+    "crates/wow-context/e3/INPUT_VIEWS_AND_SCOPES.md",
+    "crates/wow-context/e3/DATA_MODEL.md",
+    "crates/wow-context/e3/OPERATIONS.md",
+    "crates/wow-context/e3/PROJECT_MAP.md",
+    "crates/wow-context/e3/SKELETONS.md",
+    "crates/wow-context/e3/CONTROL_AND_EFFECT_MODEL.md",
+    "crates/wow-context/e3/DETAIL_AND_EXPANSION.md",
+    "crates/wow-context/e3/CONTINUATION_AND_STOPPING.md",
+    "crates/wow-context/e3/EVIDENCE_COVERAGE_AND_LOSS.md",
+    "crates/wow-context/e3/SOURCE_EXCERPTS_AND_SECURITY.md",
+    "crates/wow-context/e3/BUDGETS_AND_TOKENIZATION.md",
+    "crates/wow-context/e3/RENDERING_AND_CANONICALIZATION.md",
+    "crates/wow-context/e3/METRICS_AND_EVALUATION.md",
+    "crates/wow-context/e3/ERROR_MODEL.md",
+    "crates/wow-context/e3/TEST_MATRIX.md",
+    "crates/wow-context/e3/IDENTITY_DAG_TESTS.md",
+    "crates/wow-context/e3/IMPLEMENTATION_PLAN.md",
+    "crates/wow-context/e3/CONTRACT.json",
+    "crates/wow-context/e3/examples/README.md",
+    "crates/wow-context/e3/examples/input-snapshot.json",
+    "crates/wow-context/e3/examples/project-map.json",
+    "crates/wow-context/e3/examples/l0-skeleton.json",
+    "crates/wow-context/e3/examples/l1-skeleton.json",
+    "crates/wow-context/e3/examples/context-bundle.json",
+    "crates/wow-context/e3/examples/planning-continuation-cases.json",
+    "crates/wow-context/e3/examples/source-security-cases.json",
+    "crates/wow-context/e3/examples/budget-tokenizer-cases.json",
+    "crates/wow-context/e3/examples/evaluation-cases.json",
+    "crates/wow-context/e3/examples/CHECKSUMS.json"
+  ],
+  "freeze_gate": {
+    "implementation_state": "not-started",
+    "required_before_first_rust_implementation": [
+      "all prerequisite implementation commits and fixture bundle digests",
+      "exact coherent project graph reference read catalog and source-detail seam IDs",
+      "context project-map skeleton control-effect expansion source budget tokenizer security renderer canonicalization and evaluation profile IDs",
+      "synthetic exact corpus pinned roth-ui publication fixture and repository-path-name mutations",
+      "optional pinned platform UI source producer manifest or explicit E3-A NotEvaluated fixtures",
+      "all Project Map L0 L1 bundle continuation source tokenizer renderer metric evaluation and identity-DAG vectors",
+      "all member and bundle SHA-256 values"
+    ]
+  }
+}
