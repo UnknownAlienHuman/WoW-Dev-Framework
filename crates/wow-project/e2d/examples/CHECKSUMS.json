@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "manifest_id": "wow-project-e2-d-checksums-v1",
+  "algorithm": "sha256",
+  "state": "pending-byte-freeze-before-first-rust-implementation",
+  "implementation_state": "not-started",
+  "prerequisite_pins": {
+    "wow_core_implementation_commit": null,
+    "wow_store_e1_implementation_commit": null,
+    "wow_store_e2d_implementation_commit": null,
+    "wow_store_e2d_fixture_bundle_sha256": null,
+    "wow_emmy_implementation_commit": null,
+    "wow_graph_implementation_commit": null,
+    "wow_graph_fixture_bundle_sha256": null,
+    "wow_recognizers_implementation_commit": null,
+    "wow_recognizers_fixture_bundle_sha256": null,
+    "wow_project_e2c_implementation_commit": null,
+    "wow_project_e2c_fixture_bundle_sha256": null
+  },
+  "profile_pins": {
+    "publication_capability_policy_id": null,
+    "project_logical_schema_operation_bundle_id": null,
+    "graph_registry_schema_operation_bundle_id": null,
+    "project_store_physical_and_registered_bundle_ids": null,
+    "snapshot_identity_strategy_id": null,
+    "coherence_head_schema_id": null,
+    "post_open_validation_catalog_id": null,
+    "recovery_adoption_policy_id": null,
+    "canonicalization_and_error_schema_ids": null
+  },
+  "frozen_vectors": {
+    "request_candidate_base_coherence_ids": null,
+    "project_and_graph_plan_ids": null,
+    "publication_bundle_and_store_generation_ids": null,
+    "post_open_project_graph_validation_ids": null,
+    "coherence_project_snapshot_graph_snapshot_ids": null,
+    "head_cas_and_published_view_ids": null,
+    "failure_cancel_inactive_recovery_lkg_ids": null,
+    "fault_concurrency_old_reader_determinism_ids": null
+  },
+  "member_paths": [
+    "crates/wow-project/README.md",
+    "crates/wow-project/e2d/README.md",
+    "crates/wow-project/e2d/AGENTS.md",
+    "crates/wow-project/e2d/DECISIONS.md",
+    "crates/wow-project/e2d/DATA_MODEL.md",
+    "crates/wow-project/e2d/COHERENCE_AND_HEAD.md",
+    "crates/wow-project/e2d/PUBLICATION_PROTOCOL.md",
+    "crates/wow-project/e2d/FAILURE_AND_RECOVERY.md",
+    "crates/wow-project/e2d/SERVICE_AND_VIEW_HANDOFF.md",
+    "crates/wow-project/e2d/ERROR_MODEL.md",
+    "crates/wow-project/e2d/TEST_MATRIX.md",
+    "crates/wow-project/e2d/IMPLEMENTATION_PLAN.md",
+    "crates/wow-project/e2d/CONTRACT.json",
+    "crates/wow-project/e2d/examples/README.md",
+    "crates/wow-project/e2d/examples/publication-bundle.json",
+    "crates/wow-project/e2d/examples/publication-head.json",
+    "crates/wow-project/e2d/examples/end-to-end-cases.json"
+  ],
+  "member_sha256": {},
+  "bundle_sha256": null,
+  "freeze_rules": [
+    "null pins are allowed only while implementation_state is not-started",
+    "all prerequisite profile plan bundle store snapshot head view failure recovery vector and checksum values freeze before the first E2-D project Rust commit",
+    "tests verify committed fixtures and never rewrite them automatically",
+    "last-known-good and sealed inactive generations keep original identities"
+  ]
+}
