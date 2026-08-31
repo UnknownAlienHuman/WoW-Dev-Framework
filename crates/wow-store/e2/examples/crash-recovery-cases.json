@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
-  "fixture_id": "wow-store-e2-crash-recovery-v1",
+  "fixture_id": "wow-store-e2-crash-recovery-v2",
   "state": "documentation-only-pending-executable-freeze",
   "cases": [
     {
       "case_id": "PSTORE-CRASH-001",
       "point": "mid-partition-transaction",
       "expected_current": "old",
-      "expected_target": "rolled-back-or-unreferenced-orphan"
+      "expected_target": "rolled-back-or-unreferenced-recovery-subject"
     },
     {
       "case_id": "PSTORE-CRASH-002",
@@ -19,7 +19,7 @@
       "case_id": "PSTORE-CRASH-003",
       "point": "after-inactive-commit-before-validation",
       "expected_current": "old",
-      "expected_target": "recoverable-inactive"
+      "expected_target": "recoverable-published-inactive"
     },
     {
       "case_id": "PSTORE-CRASH-004",
@@ -34,21 +34,44 @@
       "expected_target": "consistent-with-current"
     },
     {
-      "case_id": "PSTORE-CRASH-006",
-      "point": "startup-current-integrity-failure",
-      "expected": "explicit-corrupt-no-auto-LKG"
+      "case_id": "PSTORE-IDEMP-006",
+      "point": "after-activation-commit-before-response",
+      "retry": "same-operation-id-and-digest",
+      "expected": "return-existing-activation-receipt-without-second-activation"
     },
     {
-      "case_id": "PSTORE-CRASH-008",
+      "case_id": "PSTORE-IDEMP-002",
+      "point": "same-operation-id-different-request-digest",
+      "expected_error": "project_store_idempotency_key_conflict"
+    },
+    {
+      "case_id": "PSTORE-RECOVER-006",
       "point": "inactive-recovery-after-base-changed",
-      "expected": "cannot-activate"
+      "expected": "stale-inactive-no-activation"
+    },
+    {
+      "case_id": "PSTORE-RECOVER-007",
+      "point": "wal-shm-present-with-unknown-operation-outcome",
+      "expected": "observe-and-classify-no-inference"
+    },
+    {
+      "case_id": "PSTORE-CRASH-006",
+      "point": "startup-current-integrity-failure",
+      "expected": "explicit-corrupt-no-auto-last-known-good"
     },
     {
       "case_id": "PSTORE-BACKUP-002",
       "point": "copy-main-db-with-live-wal",
       "expected_error": "project_store_main_db_copy_without_wal_forbidden"
+    },
+    {
+      "case_id": "PSTORE-RECOVER-008",
+      "point": "recovery-budget-exhausted",
+      "expected": "partial-not-evaluated-no-destructive-action"
     }
   ],
+  "operation_record_ids": null,
+  "activation_receipt_ids": null,
   "expected_result_ids": null,
   "canonical_sha256": null,
   "freeze_gate": {

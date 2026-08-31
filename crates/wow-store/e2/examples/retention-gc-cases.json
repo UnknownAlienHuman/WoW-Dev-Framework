@@ -1,14 +1,20 @@
 {
   "schema_version": 1,
-  "fixture_id": "wow-store-e2-retention-gc-v1",
+  "fixture_id": "wow-store-e2-retention-gc-v2",
   "state": "documentation-only-pending-executable-freeze",
   "pins": [
     "current",
     "last_known_good",
     "active_reader",
+    "validated_inactive_awaiting_activation",
+    "publication_or_idempotency_in_progress",
     "evidence",
     "debug",
+    "rollback",
+    "user",
     "recovery",
+    "quarantine",
+    "backup_or_export",
     "policy"
   ],
   "cases": [
@@ -34,20 +40,46 @@
     },
     {
       "case_id": "PSTORE-GC-006",
-      "state": "unknown-lease-or-reference",
+      "state": "unknown-lease-reference-or-operation",
       "expected": "no-delete"
+    },
+    {
+      "case_id": "PSTORE-RACE-002",
+      "state": "lease-acquired-after-dry-run-before-delete",
+      "expected_error": "project_store_gc_plan_stale"
+    },
+    {
+      "case_id": "PSTORE-RACE-003",
+      "state": "current-changed-after-dry-run",
+      "expected_error": "project_store_gc_plan_stale"
+    },
+    {
+      "case_id": "PSTORE-RACE-004",
+      "state": "operation-adopts-inactive-target-after-dry-run",
+      "expected": "retain-and-replan"
     },
     {
       "case_id": "PSTORE-GC-008",
       "state": "cancel-mid-gc",
-      "expected": "transaction-rollback-current-intact"
+      "expected": "exact-recoverable-state-current-intact"
     },
     {
       "case_id": "PSTORE-GC-010",
       "state": "old-epoch-reader-or-rollback-pin",
       "expected": "retain"
+    },
+    {
+      "case_id": "PSTORE-WIN-001",
+      "state": "old-epoch-delete-sharing-violation",
+      "expected_error": "project_store_windows_sharing_violation"
+    },
+    {
+      "case_id": "PSTORE-WIN-002",
+      "state": "object-delete-sharing-violation",
+      "expected": "finite-retry-after-root-recheck"
     }
   ],
+  "root_snapshot_digest": null,
   "plan_id": null,
   "report_id": null,
   "canonical_sha256": null,
