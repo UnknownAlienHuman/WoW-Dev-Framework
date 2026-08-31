@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-graph-e2-partition-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "partition_batch": {
+    "batch_id": null,
+    "partition_key": {
+      "producer_id": "fixture-project-facts",
+      "producer_version": "e2-1",
+      "universe_id": "project:fixture",
+      "partition_id": "project.file:main.lua"
+    },
+    "registry_bundle_id": null,
+    "profile_id": null,
+    "reference_generation_id": null,
+    "project_generation_id": null,
+    "entity_assertions": [
+      {
+        "assertion_id": null,
+        "entity_kind_id": "file",
+        "identity": {
+          "project_file_id": "file:main.lua"
+        },
+        "attributes": {
+          "normalized_path": "main.lua"
+        },
+        "confidence": "Proven",
+        "evidence_ids": [],
+        "coverage_record_ids": []
+      },
+      {
+        "assertion_id": null,
+        "entity_kind_id": "function",
+        "identity": {
+          "semantic_symbol_id": "function:OnLoad"
+        },
+        "attributes": {
+          "display_name": "OnLoad"
+        },
+        "confidence": "Proven",
+        "evidence_ids": [],
+        "coverage_record_ids": []
+      },
+      {
+        "assertion_id": null,
+        "entity_kind_id": "api_symbol",
+        "scope": "reference",
+        "identity": {
+          "reference_entity_key": "C_Fixture.KnownApi"
+        },
+        "confidence": "Proven",
+        "evidence_ids": [],
+        "coverage_record_ids": []
+      }
+    ],
+    "relation_assertions": [
+      {
+        "assertion_id": null,
+        "relation_kind_id": "contains",
+        "source_key": "file:main.lua",
+        "target_key": "function:OnLoad",
+        "confidence": "Derived",
+        "evidence_ids": [],
+        "coverage_record_ids": []
+      },
+      {
+        "assertion_id": null,
+        "relation_kind_id": "uses_api",
+        "source_key": "function:OnLoad",
+        "target_key": "C_Fixture.KnownApi",
+        "confidence": "Derived",
+        "evidence_ids": [],
+        "coverage_record_ids": []
+      }
+    ],
+    "coverage_record_ids": [],
+    "canonical_sha256": null
+  },
+  "replacement_variants": [
+    {
+      "case_id": "GRAPH-PART-002",
+      "remove_relation": "uses_api",
+      "expected": "stale-assertion-removed"
+    },
+    {
+      "case_id": "GRAPH-PART-008",
+      "replace_with_empty": true,
+      "expected": "producer-assertions-removed-and-coverage-downgraded"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "partition_batch.batch_id",
+      "partition_batch.registry_bundle_id",
+      "partition_batch.profile_id",
+      "partition_batch.reference_generation_id",
+      "partition_batch.project_generation_id",
+      "partition_batch.*assertion_ids-and-evidence",
+      "partition_batch.canonical_sha256"
+    ]
+  }
+}

@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-graph-e2-query-cases-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "cases": [
+    {
+      "case_id": "GRAPH-QUERY-001",
+      "operation": "entity_exact",
+      "root": "function:OnLoad",
+      "expected": "found"
+    },
+    {
+      "case_id": "GRAPH-QUERY-004",
+      "operation": "neighbors",
+      "root": "function:OnLoad",
+      "relations": [
+        "uses_api"
+      ],
+      "direction": "out",
+      "expected_count": 1
+    },
+    {
+      "case_id": "GRAPH-AXIS-001",
+      "operation": "traverse_axis",
+      "root": "file:main.lua",
+      "axis_id": "ownership",
+      "max_depth": 4,
+      "expected": "file-to-function"
+    },
+    {
+      "case_id": "GRAPH-QUERY-006",
+      "operation": "bounded_paths",
+      "root": "file:main.lua",
+      "target": "C_Fixture.KnownApi",
+      "relations": [
+        "contains",
+        "uses_api"
+      ],
+      "max_depth": 3,
+      "max_paths": 2,
+      "expected_paths": 1
+    },
+    {
+      "case_id": "GRAPH-QUERY-007",
+      "operation": "neighbors",
+      "confidence_policy": "exclude-candidate",
+      "expected": "no-candidate"
+    },
+    {
+      "case_id": "GRAPH-QUERY-010",
+      "operation": "project_subgraph",
+      "budgets": {
+        "max_nodes": 2,
+        "max_edges": 1,
+        "max_bytes": 1024
+      },
+      "expected": "truncated-explicitly"
+    },
+    {
+      "case_id": "GRAPH-QUERY-012",
+      "operation": "continue",
+      "cursor_id": null,
+      "expected": "same-snapshot-stable-continuation"
+    },
+    {
+      "case_id": "GRAPH-QUERY-013",
+      "operation": "continue",
+      "mutation": "another-snapshot-or-tampered",
+      "expected_error": "graph_query_cursor_invalid_or_stale"
+    },
+    {
+      "case_id": "GRAPH-QUERY-016",
+      "operation": "neighbors",
+      "root": "function:NoMore",
+      "expected": "no_new_evidence-not-authoritative-absence"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "graph-view-and-query-ids",
+      "cases[*].result-or-error-ids",
+      "cases[*].canonical_sha256"
+    ]
+  }
+}

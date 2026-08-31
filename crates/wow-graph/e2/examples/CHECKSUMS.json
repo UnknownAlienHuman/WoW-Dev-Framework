@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "manifest_id": "wow-graph-e2-a-checksums-v1",
+  "algorithm": "sha256",
+  "state": "pending-byte-freeze-before-first-rust-implementation",
+  "implementation_state": "not-started",
+  "prerequisite_pins": {
+    "wow_core_implementation_commit": null,
+    "wow_core_fixture_bundle_sha256": null,
+    "wow_store_implementation_commit": null,
+    "wow_store_fixture_bundle_sha256": null,
+    "project_store_profile_id": null
+  },
+  "profile_pins": {
+    "registry_bundle_id": null,
+    "graph_schema_operation_bundle_id": null,
+    "profile_id": null,
+    "reference_generation_id": null,
+    "project_generation_id": null,
+    "query_profile_id": null
+  },
+  "member_paths": [
+    "crates/wow-graph/README.md",
+    "crates/wow-graph/e2/README.md",
+    "crates/wow-graph/e2/AGENTS.md",
+    "crates/wow-graph/e2/DECISIONS.md",
+    "crates/wow-graph/e2/DATA_MODEL.md",
+    "crates/wow-graph/e2/KIND_AND_RELATION_REGISTRY.md",
+    "crates/wow-graph/e2/IDENTITY_AND_ASSERTIONS.md",
+    "crates/wow-graph/e2/PARTITIONS_AND_PUBLICATION.md",
+    "crates/wow-graph/e2/AXES_AND_VIEWS.md",
+    "crates/wow-graph/e2/QUERY_MODEL.md",
+    "crates/wow-graph/e2/PERSISTENCE_BOUNDARY.md",
+    "crates/wow-graph/e2/CONFLICT_COVERAGE_AND_PROVENANCE.md",
+    "crates/wow-graph/e2/SECURITY_AND_BUDGETS.md",
+    "crates/wow-graph/e2/ERROR_MODEL.md",
+    "crates/wow-graph/e2/TEST_MATRIX.md",
+    "crates/wow-graph/e2/IMPLEMENTATION_PLAN.md",
+    "crates/wow-graph/e2/CONTRACT.json",
+    "crates/wow-graph/e2/examples/README.md",
+    "crates/wow-graph/e2/examples/registry.json",
+    "crates/wow-graph/e2/examples/partition.json",
+    "crates/wow-graph/e2/examples/snapshot.json",
+    "crates/wow-graph/e2/examples/query-cases.json",
+    "crates/wow-graph/e2/examples/conflict-cases.json"
+  ],
+  "member_sha256": {},
+  "bundle_sha256": null,
+  "freeze_rules": [
+    "null values allowed only while implementation_state is not-started",
+    "all prerequisite registry partition snapshot query store and checksum values freeze before first Rust commit",
+    "tests verify committed bytes and never rewrite fixtures automatically"
+  ]
+}
