@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "manifest_id": "wow-store-e2-d-checksums-v1",
+  "manifest_id": "wow-store-e2-d-checksums-v2",
   "algorithm": "sha256",
   "state": "pending-byte-freeze-before-first-rust-implementation",
   "implementation_state": "not-started",
@@ -38,13 +38,17 @@
     "partition_identity_and_reuse": null,
     "complete_membership_and_store_generation": null,
     "inactive_build_and_validation": null,
+    "operation_idempotency_and_response_loss": null,
     "activation_cas": null,
     "old_new_exact_readers": null,
+    "semantic_continuation_and_gc_admission_races": null,
     "wal_checkpoint_crash_recovery": null,
     "backup_epoch_rebuild": null,
-    "retention_partition_object_epoch_gc": null,
+    "retention_partition_object_operation_and_epoch_gc": null,
+    "windows_sharing_and_retry_classification": null,
     "security_budget_cancellation": null,
     "logical_determinism": null,
+    "architecture_consolidation": null,
     "benchmark_baseline_report_id": null
   },
   "member_paths": [
@@ -60,13 +64,16 @@
     "crates/wow-store/e2/SCHEMA_COMPOSITION.md",
     "crates/wow-store/e2/PROJECT_GRAPH_BINDING.md",
     "crates/wow-store/e2/PUBLICATION_PROTOCOL.md",
+    "crates/wow-store/e2/IDEMPOTENCY_AND_RECOVERY.md",
     "crates/wow-store/e2/READ_SNAPSHOTS_AND_LEASES.md",
     "crates/wow-store/e2/WAL_CHECKPOINT_AND_CONCURRENCY.md",
     "crates/wow-store/e2/RECOVERY_BACKUP_RETENTION_GC.md",
     "crates/wow-store/e2/BENCHMARK_AND_PROFILE_FREEZE.md",
+    "crates/wow-store/e2/REJECTED_ALTERNATIVES.md",
     "crates/wow-store/e2/SECURITY_AND_BUDGETS.md",
     "crates/wow-store/e2/ERROR_MODEL.md",
     "crates/wow-store/e2/TEST_MATRIX.md",
+    "crates/wow-store/e2/IDEMPOTENCY_AND_CONSOLIDATION_TESTS.md",
     "crates/wow-store/e2/IMPLEMENTATION_PLAN.md",
     "crates/wow-store/e2/CONTRACT.json",
     "crates/wow-store/e2/examples/README.md",
@@ -85,6 +92,7 @@
     "nulls are allowed only while implementation_state is not-started",
     "all prerequisite runtime schema vector benchmark and checksum values freeze before the first E2-D Rust commit",
     "tests verify committed fixtures and never rewrite them automatically",
-    "physical SQLite or WAL bytes are not canonical unless the accepted reproducibility profile proves them"
+    "physical SQLite WAL checkpoint or backup bytes are not canonical unless the accepted reproducibility profile proves them",
+    "no superseded generation-image document or fixture may enter the current member set"
   ]
 }

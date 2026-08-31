@@ -6,6 +6,8 @@
 
 **Selected physical profile:** `project-store-wal-manifested-partitions-v1`
 
+**Contract revision:** E2-D v2 consolidates the selected WAL/partition-version model and supersedes the generation-image alternative merged in PR #13.
+
 ## Mission
 
 Persist one validated E2-C project index candidate and one E2-A graph publication plan as a coherent, queryable, crash-classified project publication without mixing project, analyzer, recognizer, graph, or store generations.
@@ -41,6 +43,8 @@ old read transactions remain stable
 partition/object reclamation only after retained-generation and lease closure
 ```
 
+Normal project generations do not create whole SQLite copies. The evaluated file-per-generation image design is explicitly rejected in [`REJECTED_ALTERNATIVES.md`](REJECTED_ALTERNATIVES.md); its useful crash, idempotency, reader, and retention guarantees are retained in the selected model.
+
 ## Why a store epoch exists
 
 `ProjectStoreEpochId` binds the physical model, SQLite runtime profile, schema bundle set, canonicalization contract, and security limits. Normal project updates stay within one epoch. An incompatible schema/runtime/physical-profile change builds a new epoch database and switches an outer registry record only after complete validation. It does not rewrite the active epoch in place.
@@ -63,6 +67,8 @@ wow-store E1-A schema/object/publication foundation
 
 ## E2-D package
 
+Read in this order:
+
 1. [`AGENTS.md`](AGENTS.md)
 2. [`DECISIONS.md`](DECISIONS.md)
 3. [`DATA_MODEL.md`](DATA_MODEL.md)
@@ -70,16 +76,19 @@ wow-store E1-A schema/object/publication foundation
 5. [`SCHEMA_COMPOSITION.md`](SCHEMA_COMPOSITION.md)
 6. [`PROJECT_GRAPH_BINDING.md`](PROJECT_GRAPH_BINDING.md)
 7. [`PUBLICATION_PROTOCOL.md`](PUBLICATION_PROTOCOL.md)
-8. [`READ_SNAPSHOTS_AND_LEASES.md`](READ_SNAPSHOTS_AND_LEASES.md)
-9. [`WAL_CHECKPOINT_AND_CONCURRENCY.md`](WAL_CHECKPOINT_AND_CONCURRENCY.md)
-10. [`RECOVERY_BACKUP_RETENTION_GC.md`](RECOVERY_BACKUP_RETENTION_GC.md)
-11. [`BENCHMARK_AND_PROFILE_FREEZE.md`](BENCHMARK_AND_PROFILE_FREEZE.md)
-12. [`SECURITY_AND_BUDGETS.md`](SECURITY_AND_BUDGETS.md)
-13. [`ERROR_MODEL.md`](ERROR_MODEL.md)
-14. [`TEST_MATRIX.md`](TEST_MATRIX.md)
-15. [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md)
-16. [`CONTRACT.json`](CONTRACT.json)
-17. [`examples/`](examples/README.md)
+8. [`IDEMPOTENCY_AND_RECOVERY.md`](IDEMPOTENCY_AND_RECOVERY.md)
+9. [`READ_SNAPSHOTS_AND_LEASES.md`](READ_SNAPSHOTS_AND_LEASES.md)
+10. [`WAL_CHECKPOINT_AND_CONCURRENCY.md`](WAL_CHECKPOINT_AND_CONCURRENCY.md)
+11. [`RECOVERY_BACKUP_RETENTION_GC.md`](RECOVERY_BACKUP_RETENTION_GC.md)
+12. [`BENCHMARK_AND_PROFILE_FREEZE.md`](BENCHMARK_AND_PROFILE_FREEZE.md)
+13. [`REJECTED_ALTERNATIVES.md`](REJECTED_ALTERNATIVES.md)
+14. [`SECURITY_AND_BUDGETS.md`](SECURITY_AND_BUDGETS.md)
+15. [`ERROR_MODEL.md`](ERROR_MODEL.md)
+16. [`TEST_MATRIX.md`](TEST_MATRIX.md)
+17. [`IDEMPOTENCY_AND_CONSOLIDATION_TESTS.md`](IDEMPOTENCY_AND_CONSOLIDATION_TESTS.md)
+18. [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md)
+19. [`CONTRACT.json`](CONTRACT.json)
+20. [`examples/`](examples/README.md)
 
 ## Public E2-D store operations
 
@@ -105,6 +114,21 @@ build_and_activate_project_store_epoch
 
 The project-facing orchestration operation remains owned by `wow-project`, not by `wow-store`.
 
+## Hard invariants
+
+- one semantic project/graph/analyzer publication set is selected by one current record;
+- semantic IDs are derived before and independently of SQLite physical identity;
+- each partition version is immutable after seal;
+- each generation has a complete membership map;
+- target generation is inactive until fresh read-back validation succeeds;
+- activation is a separate exact-base CAS;
+- response loss is reconciled from durable operation/current records;
+- a read binds one SQLite snapshot and one exact generation lease;
+- current, last-known-good, failed target, validated inactive, rollback target, and quarantine are never relabeled;
+- checkpoint, WAL, page layout, row IDs, clocks, paths, and worker order do not alter logical identities;
+- GC is proof-based and closes generations, memberships, partition versions, objects, leases, pins, and operation state;
+- store success never upgrades domain coverage or negative authority.
+
 ## Completion gate
 
-E2-D code is complete only when the selected profile passes executable SQLite/binding/platform probes and benchmark gates; one-file, TOC, XML, recognizer, and graph-registry updates publish exact coherent generations; inactive generation validation precedes activation; stale base and concurrent writer attempts fail deterministically; old readers retain the old snapshot; every crash/cancel point yields old-current, new-current, or recoverable inactive state; no cross-generation row/query leakage exists; checkpoints cannot invalidate readers; retention and GC preserve every leased/current/last-known-good/evidence-referenced generation and object; logical output is deterministic; and no raw SQL/domain semantics leak through the store seam.
+E2-D code is complete only when the selected profile passes executable SQLite/binding/platform probes and benchmark gates; one-file, TOC, XML, recognizer, and graph-registry updates publish exact coherent generations; inactive generation validation precedes activation; same-operation retries and response-loss recovery are idempotent; stale base and concurrent writer attempts fail deterministically; old readers retain the old snapshot; every crash/cancel point yields old-current, new-current, or recoverable/quarantined inactive state; no cross-generation row/query leakage exists; checkpoints cannot invalidate readers; retention and GC preserve every leased/current/last-known-good/evidence/recovery/operation-referenced generation, partition, and object; logical output is deterministic; the architecture-consolidation mutation suite passes; and no raw SQL/domain semantics leak through the store seam.
