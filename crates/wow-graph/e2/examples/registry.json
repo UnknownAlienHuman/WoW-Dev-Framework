@@ -1,0 +1,181 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-graph-e2-registry-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "registry_bundle_id": null,
+  "version": "e2-1",
+  "attribute_definitions": [
+    {
+      "attribute_id": "display_name",
+      "type": "string",
+      "identity": false,
+      "max_bytes": 512
+    },
+    {
+      "attribute_id": "normalized_path",
+      "type": "string",
+      "identity": true,
+      "max_bytes": 4096
+    },
+    {
+      "attribute_id": "role",
+      "type": "tagged_enum",
+      "identity": false,
+      "values": [
+        "module",
+        "service",
+        "library",
+        "state_root"
+      ]
+    }
+  ],
+  "entity_kinds": [
+    {
+      "kind_id": "file",
+      "allowed_universes": [
+        "project"
+      ],
+      "identity_fields": [
+        "project_file_id"
+      ]
+    },
+    {
+      "kind_id": "function",
+      "allowed_universes": [
+        "project"
+      ],
+      "identity_fields": [
+        "semantic_symbol_id"
+      ]
+    },
+    {
+      "kind_id": "module",
+      "allowed_universes": [
+        "project"
+      ],
+      "identity_fields": [
+        "universal_role_key"
+      ]
+    },
+    {
+      "kind_id": "api_symbol",
+      "allowed_universes": [
+        "reference"
+      ],
+      "identity_fields": [
+        "reference_entity_key"
+      ]
+    }
+  ],
+  "relation_kinds": [
+    {
+      "kind_id": "contains",
+      "source_kinds": [
+        "file",
+        "module"
+      ],
+      "target_kinds": [
+        "function",
+        "module"
+      ],
+      "axis_ids": [
+        "lexical",
+        "ownership"
+      ],
+      "transitivity": "query-derived-only"
+    },
+    {
+      "kind_id": "owns",
+      "source_kinds": [
+        "module"
+      ],
+      "target_kinds": [
+        "function"
+      ],
+      "axis_ids": [
+        "ownership"
+      ],
+      "transitivity": "none"
+    },
+    {
+      "kind_id": "uses_api",
+      "source_kinds": [
+        "function"
+      ],
+      "target_kinds": [
+        "api_symbol"
+      ],
+      "axis_ids": [],
+      "cross_universe_policy": "project-to-reference-explicit"
+    },
+    {
+      "kind_id": "calls",
+      "source_kinds": [
+        "function"
+      ],
+      "target_kinds": [
+        "function"
+      ],
+      "axis_ids": [
+        "call"
+      ],
+      "allowed_confidence": [
+        "Proven",
+        "Derived"
+      ]
+    },
+    {
+      "kind_id": "possible_calls",
+      "source_kinds": [
+        "function"
+      ],
+      "target_kinds": [
+        "function"
+      ],
+      "axis_ids": [
+        "call"
+      ],
+      "allowed_confidence": [
+        "Possible"
+      ]
+    }
+  ],
+  "axis_definitions": [
+    {
+      "axis_id": "ownership",
+      "members": [
+        {
+          "relation_kind_id": "owns",
+          "direction": "out"
+        },
+        {
+          "relation_kind_id": "contains",
+          "direction": "out"
+        }
+      ],
+      "hierarchy_model": "multi-parent-acyclic"
+    },
+    {
+      "axis_id": "call",
+      "members": [
+        {
+          "relation_kind_id": "calls",
+          "direction": "out"
+        },
+        {
+          "relation_kind_id": "possible_calls",
+          "direction": "out"
+        }
+      ],
+      "hierarchy_model": "general-directed"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "registry_bundle_id",
+      "definitions[*].ids-and-canonical-sha256",
+      "canonical_sha256"
+    ]
+  }
+}
