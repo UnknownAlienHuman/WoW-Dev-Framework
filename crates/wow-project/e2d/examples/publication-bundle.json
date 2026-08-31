@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-project-e2d-publication-bundle-v1",
+  "state": "documentation-only-pending-component-and-byte-freeze",
+  "request": {
+    "request_id": null,
+    "project_id": "fixture-project-e2-v1",
+    "project_index_candidate_id": null,
+    "project_index_candidate_sha256": null,
+    "expected_current_head_id": null,
+    "profile_id": null,
+    "reference_generation_id": null,
+    "graph_registry_bundle_id": null,
+    "expected_base_graph_generation_id": null,
+    "project_store_physical_profile_id": null,
+    "registered_bundle_set_id": null,
+    "publication_capability_policy_id": null
+  },
+  "project_plan": {
+    "project_logical_write_plan_id": null,
+    "project_generation_id": null,
+    "source_toc_xml_load_lua_manifest_ids": [],
+    "analyzer_snapshot_id": null,
+    "recognizer_result_manifest_ids": [],
+    "registered_invocation_ids": [],
+    "expected_manifest_id": null
+  },
+  "graph_plan": {
+    "graph_replacement_request_id": null,
+    "graph_replacement_plan_id": null,
+    "base_graph_generation_id": null,
+    "target_graph_generation_id": null,
+    "accepted_rejected_proposal_report_id": null,
+    "assertion_conflict_coverage_manifest_ids": [],
+    "registered_invocation_ids": [],
+    "golden_query_catalog_id": null
+  },
+  "store_plan": {
+    "target_project_store_generation_id": null,
+    "registered_operation_plan_id": null,
+    "object_plan_id": null,
+    "validation_catalog_id": null
+  },
+  "bundle": {
+    "project_publication_bundle_id": null,
+    "coherence_input_manifest_id": null,
+    "ordered_registered_invocation_ids": [],
+    "expected_logical_manifest_ids": [],
+    "canonical_sha256": null
+  },
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "request.*pins-and-ids",
+      "project_plan.*",
+      "graph_plan.*",
+      "store_plan.*",
+      "bundle.*"
+    ]
+  }
+}
