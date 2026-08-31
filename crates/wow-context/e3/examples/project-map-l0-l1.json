@@ -1,0 +1,192 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-context-e3-b-project-map-l0-l1-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "inputs": {
+    "context_universe_set_id": null,
+    "map_profile_id": null,
+    "l0_profile_id": null,
+    "l1_profile_id": null,
+    "primary_project_root_id": null,
+    "platform_project_root_id": null,
+    "l0_scope_id": null,
+    "l1_root_entity_id": null
+  },
+  "project_maps": [
+    {
+      "project_map_id": null,
+      "universe": "user_project",
+      "project_generation_id": null,
+      "graph_generation_id": null,
+      "nodes": [
+        {
+          "map_node_id": null,
+          "kind": "project",
+          "underlying_keys": [],
+          "origin_ids": [],
+          "coverage_record_ids": []
+        },
+        {
+          "map_node_id": null,
+          "kind": "package",
+          "underlying_keys": [],
+          "origin_ids": [],
+          "coverage_record_ids": []
+        },
+        {
+          "map_node_id": null,
+          "kind": "file",
+          "underlying_keys": [],
+          "origin_ids": [],
+          "coverage_record_ids": []
+        },
+        {
+          "map_node_id": null,
+          "kind": "service",
+          "underlying_keys": [],
+          "role_confidence": "Derived",
+          "origin_ids": [],
+          "coverage_record_ids": []
+        }
+      ],
+      "edges": [
+        {
+          "map_edge_id": null,
+          "relation_kind": "contains",
+          "source_map_node_id": null,
+          "target_map_node_id": null,
+          "relation_assertion_ids": [],
+          "confidence": "Derived"
+        },
+        {
+          "map_edge_id": null,
+          "relation_kind": "loads",
+          "source_map_node_id": null,
+          "target_map_node_id": null,
+          "relation_assertion_ids": [],
+          "confidence": "Derived"
+        }
+      ],
+      "groups": [],
+      "omission_ids": [],
+      "budget_report_id": null,
+      "canonical_sha256": null
+    },
+    {
+      "project_map_id": null,
+      "universe": "blizzard_ui_source",
+      "project_generation_id": null,
+      "graph_generation_id": null,
+      "nodes": [],
+      "edges": [],
+      "groups": [],
+      "omission_ids": [],
+      "budget_report_id": null,
+      "canonical_sha256": null
+    }
+  ],
+  "combined_view": {
+    "combined_map_reference_id": null,
+    "map_ids": [],
+    "cross_universe_relation_ids": [],
+    "identities_merged": false,
+    "generic_parent_created": false
+  },
+  "l0_skeleton": {
+    "l0_skeleton_id": null,
+    "scope_kind": "package",
+    "scope_id": null,
+    "sections": [
+      "Identity",
+      "LoadAndDependencies",
+      "FilesAndUnits",
+      "DeclaredStructure",
+      "SignalsAndCallbacks",
+      "HooksAndScripts",
+      "StateRoots",
+      "ApiUsage",
+      "ConflictsAndCoverage",
+      "ExpansionOptions"
+    ],
+    "declaration_summary_ids": [],
+    "source_handle_ids": [],
+    "evidence_ids": [],
+    "coverage_record_ids": [],
+    "conflict_ids": [],
+    "omission_ids": [],
+    "budget_report_id": null,
+    "contains_source_body": false,
+    "canonical_sha256": null
+  },
+  "l1_skeleton": {
+    "l1_skeleton_id": null,
+    "root_entity_ids": [],
+    "facets": [
+      "DeclarationAndType",
+      "OwnershipAndContainment",
+      "LoadAndLifecycle",
+      "CallersAndCallees",
+      "EventsAndCallbacks",
+      "HooksAndScripts",
+      "StateReadsAndWrites",
+      "ObjectParentAndInheritance",
+      "TemplatesAndMixins",
+      "FactoriesAndRegistries",
+      "ApiUsageAndReferenceFacts",
+      "ConflictsCoverageAndOmissions"
+    ],
+    "direct_relation_item_ids": [],
+    "reason_path_item_ids": [],
+    "possible_relation_item_ids": [],
+    "source_excerpt_candidate_ids": [],
+    "origin_ids": [],
+    "evidence_ids": [],
+    "coverage_record_ids": [],
+    "conflict_ids": [],
+    "omission_ids": [],
+    "budget_report_id": null,
+    "contains_unselected_source_body": false,
+    "canonical_sha256": null
+  },
+  "mutation_cases": [
+    {
+      "case_id": "CTX-MAP-004",
+      "mutation": "collapse-user-and-platform-same-name-node",
+      "expected_error": "context_cross_universe_identity_collapse_forbidden"
+    },
+    {
+      "case_id": "CTX-MAP-007",
+      "mutation": "emit-reason-path-as-direct-map-edge",
+      "expected_error": "context_project_map_direct_edge_not_asserted"
+    },
+    {
+      "case_id": "CTX-L0-003",
+      "mutation": "place-function-body-inside-l0",
+      "expected_error": "context_l0_body_content_forbidden"
+    },
+    {
+      "case_id": "CTX-L1-009",
+      "mutation": "event-like-string-becomes-native-event-without-owner-fact",
+      "expected_error": "context_skeleton_event_hook_state_class_collapse_forbidden"
+    },
+    {
+      "case_id": "CTX-L1-011",
+      "mutation": "hook-relation-rendered-as-taint-or-combat-safe",
+      "expected_error": "context_skeleton_runtime_or_safety_claim_forbidden"
+    },
+    {
+      "case_id": "CTX-L1-018",
+      "mutation": "blizzard-source-symbol-treated-as-public-api-contract",
+      "expected_error": "context_authority_or_confidence_upgrade_requested"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null": [
+      "all profile and input IDs",
+      "all map node, edge, group and origin records",
+      "all L0 and L1 expected semantic records",
+      "all budget, omission, coverage, conflict and canonical SHA-256 values"
+    ]
+  }
+}
