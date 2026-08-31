@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-store-e2-recovery-gc-cases-v1",
+  "state": "documentation-only-pending-vector-freeze",
+  "inventory_cases": [
+    {
+      "case_id": "STORE-E2-RECOVERY-001",
+      "entry": "abandoned-pretransaction-staging",
+      "expected_action": "discard_uncommitted_staging"
+    },
+    {
+      "case_id": "STORE-E2-RECOVERY-004",
+      "entry": "sealed-open-valid-inactive",
+      "expected_action": "revalidate_sealed_inactive"
+    },
+    {
+      "case_id": "STORE-E2-RECOVERY-005",
+      "entry": "sealed-inactive-exact-base-still-current",
+      "expected_action": "coordinator-adoption-candidate"
+    },
+    {
+      "case_id": "STORE-E2-RECOVERY-006",
+      "entry": "sealed-inactive-stale-base",
+      "expected_action": "retain-or-gc-not-adopt"
+    },
+    {
+      "case_id": "STORE-E2-RECOVERY-007",
+      "entry": "current-checksum-or-integrity-failure",
+      "expected_action": "critical-manual-recovery"
+    }
+  ],
+  "retention_cases": [
+    {
+      "case_id": "STORE-E2-GC-001",
+      "root": "current-head",
+      "expected": "retain"
+    },
+    {
+      "case_id": "STORE-E2-GC-002",
+      "root": "last-known-good",
+      "expected": "retain"
+    },
+    {
+      "case_id": "STORE-E2-GC-004",
+      "root": "active-lease",
+      "expected": "retain"
+    },
+    {
+      "case_id": "STORE-E2-GC-006",
+      "root": null,
+      "entry": "unreachable-old-generation",
+      "expected": "candidate"
+    },
+    {
+      "case_id": "STORE-E2-GC-007",
+      "entry": "object-referenced-by-retained-generation",
+      "expected": "retain"
+    },
+    {
+      "case_id": "STORE-E2-GC-009",
+      "mutation": "head-or-lease-changes-after-plan",
+      "expected_error": "project_store_gc_plan_invalid_or_stale"
+    },
+    {
+      "case_id": "STORE-E2-GC-010",
+      "mutation": "age-only-deletion",
+      "expected_error": "project_store_age_only_gc_forbidden"
+    }
+  ],
+  "inventory_id": null,
+  "root_set_id": null,
+  "gc_plan_id": null,
+  "result_ids": {},
+  "canonical_sha256": null,
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "inventory_id",
+      "root_set_id",
+      "gc_plan_id",
+      "result_ids",
+      "canonical_sha256"
+    ]
+  }
+}
