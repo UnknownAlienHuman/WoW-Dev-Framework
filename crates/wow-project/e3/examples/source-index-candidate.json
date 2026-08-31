@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-project-e3-b-source-index-candidate-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "candidate": {
+    "candidate_id": null,
+    "source_profile_id": null,
+    "materialized_snapshot_id": null,
+    "source_generation_id": null,
+    "build_binding": {
+      "binding_id": null,
+      "state": "Unverified",
+      "reference_profile_id": null,
+      "reference_generation_id": null
+    },
+    "root_manifest_ids": [],
+    "file_inventory_manifest_id": null,
+    "package_manifest_ids": [],
+    "global_unit_manifest_ids": [],
+    "toc_manifest_ids": [],
+    "xml_manifest_ids": [],
+    "load_model_id": null,
+    "lua_unit_manifest_id": null,
+    "analyzer_snapshot_id": null,
+    "analyzer_fact_finding_source_map_manifest_ids": [],
+    "fact_bundle_ids": [],
+    "recognizer_output_partition_ids": [],
+    "direct_source_graph_proposal_partition_ids": [],
+    "reference_source_bridge_proposal_partition_ids": [],
+    "graph_validation_report_id": null,
+    "rejected_proposal_manifest_id": null,
+    "source_graph_plan_id": null,
+    "license_redistribution_manifest_id": null,
+    "coverage_record_ids": [],
+    "conflict_ids": [],
+    "invalidation_manifest_id": null,
+    "publication_eligibility": {
+      "decision_id": null,
+      "local_analysis_eligible": null,
+      "production_current_eligible": null,
+      "redistributable_release_eligible": false,
+      "blocker_ids": []
+    },
+    "state": "CompleteCandidate",
+    "persistent_publication_state": "NotPublishedE3B",
+    "canonical_sha256": null
+  },
+  "partial_variants": [
+    {
+      "case_id": "UISRC-COV-003",
+      "mutation": "one-xml-parser-partition-partial",
+      "expected_candidate_state": "PartialCandidate",
+      "expected": "inventory-remains-complete-parser-and-dependent-capabilities-partial"
+    },
+    {
+      "case_id": "UISRC-COV-004",
+      "mutation": "recognizer-partition-failed",
+      "expected": "direct-source-facts-retained-recognizer-coverage-partial"
+    },
+    {
+      "case_id": "UISRC-LIC-002",
+      "mutation": "license-state-unknown",
+      "expected": "local-policy-dependent-and-not-redistributable"
+    },
+    {
+      "case_id": "UISRC-BIND-004",
+      "mutation": "source-build-unverified",
+      "expected": "candidate-may-be-local-only-not-production-current"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}
