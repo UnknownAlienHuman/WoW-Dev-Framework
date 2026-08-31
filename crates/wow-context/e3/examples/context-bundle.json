@@ -78,7 +78,7 @@
       "expected_error": "context_renderer_loss_or_sidecar_unreported"
     },
     {
-      "case_id": "CTX-CANON-006",
+      "case_id": "CTX-RENDER-006",
       "mutation": "add_wall_clock_or_row_id_to_bundle_identity",
       "expected_error": "context_volatile_field_in_canonical_identity"
     },
@@ -86,6 +86,16 @@
       "case_id": "CTX-DAG-001",
       "mutation": "bundle_core_references_metrics_or_evaluation",
       "expected_error": "context_artifact_identity_cycle_forbidden"
+    },
+    {
+      "case_id": "CTX-DAG-008",
+      "mutation": "evaluation_references_envelope_that_references_evaluation",
+      "expected_error": "context_artifact_identity_cycle_forbidden"
+    },
+    {
+      "case_id": "CTX-DAG-009",
+      "mutation": "valid_forward_only_artifact_reference_graph",
+      "expected": "pass"
     }
   ],
   "freeze_gate": {

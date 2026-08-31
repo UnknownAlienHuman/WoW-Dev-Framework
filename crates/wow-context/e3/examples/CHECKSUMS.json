@@ -66,6 +66,7 @@
     "source_faithfulness_license_privacy_prompt_and_container_security_vectors": null,
     "budget_fairness_renderer_bytes_tokenizer_exact_and_estimate_vectors": null,
     "canonicalization_renderer_semantic_equivalence_and_identity_dag_vectors": null,
+    "identity_dag_cycle_and_forward_reference_vectors": null,
     "metrics_evaluation_consumer_utility_and_repository_name_mutation_vectors": null,
     "one_two_n_worker_and_shuffled_input_outputs": null
   },
@@ -90,6 +91,7 @@
     "crates/wow-context/e3/METRICS_AND_EVALUATION.md",
     "crates/wow-context/e3/ERROR_MODEL.md",
     "crates/wow-context/e3/TEST_MATRIX.md",
+    "crates/wow-context/e3/IDENTITY_DAG_TESTS.md",
     "crates/wow-context/e3/IMPLEMENTATION_PLAN.md",
     "crates/wow-context/e3/CONTRACT.json",
     "crates/wow-context/e3/examples/README.md",

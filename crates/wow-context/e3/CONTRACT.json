@@ -184,6 +184,7 @@
     "crates/wow-context/e3/METRICS_AND_EVALUATION.md",
     "crates/wow-context/e3/ERROR_MODEL.md",
     "crates/wow-context/e3/TEST_MATRIX.md",
+    "crates/wow-context/e3/IDENTITY_DAG_TESTS.md",
     "crates/wow-context/e3/IMPLEMENTATION_PLAN.md",
     "crates/wow-context/e3/CONTRACT.json",
     "crates/wow-context/e3/examples/README.md",
@@ -206,7 +207,7 @@
       "context project-map skeleton control-effect expansion source budget tokenizer security renderer canonicalization and evaluation profile IDs",
       "synthetic exact corpus pinned roth-ui publication fixture and repository-path-name mutations",
       "optional pinned platform UI source producer manifest or explicit E3-A NotEvaluated fixtures",
-      "all Project Map L0 L1 bundle continuation source tokenizer renderer metric and evaluation vectors",
+      "all Project Map L0 L1 bundle continuation source tokenizer renderer metric evaluation and identity-DAG vectors",
       "all member and bundle SHA-256 values"
     ]
   }

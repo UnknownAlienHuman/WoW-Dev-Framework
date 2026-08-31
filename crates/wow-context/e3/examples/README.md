@@ -4,7 +4,7 @@
 - `project-map.json` — compact mandatory sections, blocker preservation, grouping, and exact detail routes.
 - `l0-skeleton.json` — exact identity/role/owner/load/direct-relation skeleton.
 - `l1-skeleton.json` — signatures, direct relations, control/effect nodes, unknown/collapsed/omitted regions.
-- `context-bundle.json` — noncyclic semantic bundle core, renderer, metrics, evaluation, and envelope identities.
+- `context-bundle.json` — noncyclic semantic bundle core, renderer, metrics, evaluation, and envelope identities. Its cycle mutations are declared in [`../IDENTITY_DAG_TESTS.md`](../IDENTITY_DAG_TESTS.md).
 - `planning-continuation-cases.json` — lanes, frontiers, stopping, total-budget inheritance, and generation-bound continuation.
 - `source-security-cases.json` — faithful excerpts, stale handles, license/privacy, prompt/container/terminal injection, and forbidden data.
 - `budget-tokenizer-cases.json` — multi-axis budgets, approximately 2 KiB renderer target, exact tokenizer pins, and estimate separation.
