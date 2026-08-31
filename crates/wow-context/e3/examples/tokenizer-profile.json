@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-context-e3-tokenizer-profile-v1",
+  "state": "documentation-only-tokenizer-not-selected",
+  "tokenizer_profile": {
+    "tokenizer_profile_id": null,
+    "implementation": null,
+    "implementation_version": null,
+    "dependency_lock_sha256": null,
+    "vocabulary_or_model_sha256": null,
+    "configuration_sha256": null,
+    "normalization_policy": null,
+    "invalid_utf8_policy": null,
+    "special_token_policy": null,
+    "message_or_document_framing_policy": null,
+    "fragment_separator_bytes_base64": null,
+    "probe_report_id": null,
+    "canonical_sha256": null
+  },
+  "probe_vectors": [
+    {
+      "probe_id": "ascii-plain",
+      "input_utf8": "function OnLoad() end",
+      "expected_token_ids": null,
+      "expected_token_count": null
+    },
+    {
+      "probe_id": "unicode-wow-labels",
+      "input_utf8": "API → event • возможное значение",
+      "expected_token_ids": null,
+      "expected_token_count": null
+    },
+    {
+      "probe_id": "fragment-boundary",
+      "fragments_utf8": [
+        "alpha",
+        "beta"
+      ],
+      "framed_input_utf8": null,
+      "expected_isolated_counts": null,
+      "expected_framed_token_ids": null,
+      "expected_framed_count": null
+    },
+    {
+      "probe_id": "combining-and-control",
+      "input_utf8": "é\n\t<source>",
+      "expected_token_ids": null,
+      "expected_token_count": null
+    },
+    {
+      "probe_id": "redaction-marker",
+      "input_utf8": "[REDACTED:credential_or_token]",
+      "expected_token_ids": null,
+      "expected_token_count": null
+    }
+  ],
+  "cases": [
+    {
+      "case_id": "CTX-TOKEN-002",
+      "condition": "tokenizer-profile-id-null",
+      "exact_token_operation": "unavailable"
+    },
+    {
+      "case_id": "CTX-TOKEN-003",
+      "mutation": "derive-exact-token-count-from-character-count",
+      "expected_error": "context_exact_token_budget_unavailable"
+    },
+    {
+      "case_id": "CTX-TOKEN-005",
+      "mutation": "vocabulary-or-config-substitution",
+      "expected_error": "context_tokenizer_probe_or_digest_mismatch"
+    },
+    {
+      "case_id": "CTX-TOKEN-006",
+      "mutation": "sum-isolated-fragments-without-framed-recount",
+      "expected": "mutation-detected"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation_when_exact_token_budgeting_is_implemented": true,
+    "required_non_null_values": [
+      "all tokenizer profile identity and digest fields",
+      "all probe expected token IDs and counts",
+      "tokenizer_profile.canonical_sha256"
+    ]
+  }
+}
