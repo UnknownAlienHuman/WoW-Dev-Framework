@@ -1,0 +1,160 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-project-e2-xml-cases-v1",
+  "state": "documentation-only-pending-parser-source-map-and-byte-freeze",
+  "profile": {
+    "xml_profile_id": null,
+    "embedded_lua_profile_id": null,
+    "source_coordinate_profile_id": null
+  },
+  "documents": [
+    {
+      "file_id": "project-file:Main.xml",
+      "xml_document_id": null,
+      "normalized_records": {
+        "include_record_ids": [],
+        "template_record_ids": [],
+        "object_record_ids": [],
+        "inheritance_record_ids": [],
+        "script_record_ids": [],
+        "embedded_lua_unit_ids": [],
+        "unknown_record_ids": [],
+        "coverage_record_ids": []
+      },
+      "expected_structure": {
+        "includes": [
+          "Templates.xml"
+        ],
+        "objects": [
+          {
+            "object_id": "FixtureButton",
+            "kind": "Button",
+            "parent": "UIParent",
+            "inherits": [
+              "FixtureButtonTemplate"
+            ]
+          }
+        ],
+        "scripts": [
+          {
+            "owner": "FixtureButton",
+            "script": "OnLoad",
+            "source_kind": "inline_body"
+          },
+          {
+            "owner": "FixtureButton",
+            "script": "external",
+            "source_kind": "external_file",
+            "path": "UI.lua"
+          }
+        ]
+      },
+      "canonical_sha256": null
+    },
+    {
+      "file_id": "project-file:Templates.xml",
+      "xml_document_id": null,
+      "normalized_records": {
+        "template_record_ids": [],
+        "object_record_ids": [],
+        "inheritance_record_ids": [],
+        "script_record_ids": [],
+        "coverage_record_ids": []
+      },
+      "expected_structure": {
+        "templates": [
+          {
+            "template_id": "FixtureButtonTemplate",
+            "kind": "Button",
+            "virtual": true
+          }
+        ]
+      },
+      "canonical_sha256": null
+    }
+  ],
+  "embedded_lua_units": [
+    {
+      "lua_unit_id": null,
+      "unit_kind": "xml_inline_script",
+      "owner_xml_document_id": null,
+      "owner_object_id": "FixtureButton",
+      "script_kind": "OnLoad",
+      "xml_source_span": null,
+      "logical_virtual_uri": null,
+      "content_sha256": null,
+      "byte_length": null,
+      "source_map_id": null,
+      "analyzer_file_id": null
+    }
+  ],
+  "cases": [
+    {
+      "case_id": "PROJECT-E2-XML-003",
+      "mutation": "add two compatible inheritance targets",
+      "expected": "ambiguous-Possible-no-first-target"
+    },
+    {
+      "case_id": "PROJECT-E2-XML-007",
+      "mutation": "validate analyzer span through inline source map",
+      "expected": "exact-XML-byte-span"
+    },
+    {
+      "case_id": "PROJECT-E2-XML-008",
+      "mutation": "wrap inline Lua with output-affecting synthetic code without loss profile",
+      "expected_error": "project_e2_xml_embedded_lua_extraction_or_source_map_invalid"
+    },
+    {
+      "case_id": "PROJECT-E2-XML-009",
+      "mutation": "add unknown element and attribute",
+      "expected": "raw-preserved-narrow-capability-gap"
+    },
+    {
+      "case_id": "PROJECT-E2-XML-012",
+      "mutation": "emit parent relation as inheritance",
+      "expected": "mutation-failure"
+    },
+    {
+      "case_id": "PROJECT-E2-XML-013",
+      "mutation": "remove Templates.xml or UI.lua target",
+      "expected_error": "project_e2_xml_include_invalid_missing_or_cycle"
+    },
+    {
+      "case_id": "PROJECT-E2-XML-014",
+      "mutation": "Templates.xml includes Main.xml",
+      "expected_error": "project_e2_xml_include_invalid_missing_or_cycle"
+    },
+    {
+      "case_id": "PROJECT-E2-XML-016",
+      "mutation": "add DTD external entity XInclude or remote namespace fetch",
+      "expected_error": "project_e2_xml_external_entity_dtd_xinclude_or_network_forbidden"
+    },
+    {
+      "case_id": "PROJECT-E2-XML-017",
+      "mutation": "entity expansion deep tree huge text or attributes",
+      "expected_error": "project_e2_xml_entity_depth_node_text_or_attribute_budget_exceeded"
+    },
+    {
+      "case_id": "PROJECT-E2-XML-019",
+      "mutation": "attempt to execute inline or external script",
+      "expected_error": "project_e2_xml_or_script_execution_forbidden"
+    },
+    {
+      "case_id": "PROJECT-E2-XML-022",
+      "mutation": "malform inline script while template remains valid",
+      "expected": "template-complete-script-analyzer-partial"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "profile.*",
+      "documents[*].xml_document_id",
+      "documents[*].normalized_records.*",
+      "documents[*].canonical_sha256",
+      "embedded_lua_units[*].*",
+      "cases[*].result-or-error-record-ids",
+      "fixture-canonical-sha256"
+    ]
+  }
+}
