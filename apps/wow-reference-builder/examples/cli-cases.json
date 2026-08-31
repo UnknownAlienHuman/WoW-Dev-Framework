@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-reference-builder-e1-cli-v1",
+  "state": "documentation-only-pending-service-and-byte-freeze",
+  "cases": [
+    {
+      "case_id": "PACK-APP-001",
+      "argv": [
+        "build",
+        "--request",
+        "request.json",
+        "--source-root",
+        "source",
+        "--output",
+        "pack"
+      ],
+      "expected_service_operation": "reference_pack_build",
+      "expected_exit_class": 0
+    },
+    {
+      "case_id": "PACK-APP-002",
+      "argv": [
+        "validate",
+        "--pack",
+        "pack"
+      ],
+      "expected_service_operation": "reference_pack_validate",
+      "expected_exit_class": 0
+    },
+    {
+      "case_id": "PACK-APP-003",
+      "argv": [
+        "rebuild-compare",
+        "--request",
+        "request.json",
+        "--source-root",
+        "source",
+        "--scratch-root",
+        "scratch"
+      ],
+      "expected_service_operation": "reference_pack_rebuild_compare",
+      "expected_exit_class": 0
+    },
+    {
+      "case_id": "PACK-APP-004",
+      "argv": [
+        "build"
+      ],
+      "expected_error": "usage-or-request-invalid",
+      "expected_exit_class": 2
+    },
+    {
+      "case_id": "PACK-APP-005",
+      "mutation": "compare-json-and-text-projection",
+      "expected": "same-semantic-result"
+    },
+    {
+      "case_id": "PACK-APP-006",
+      "mutation": "each-service-outcome",
+      "expected": "frozen-exit-code-mapping"
+    },
+    {
+      "case_id": "PACK-APP-007",
+      "mutation": "import-wow-reference-or-store-directly",
+      "expected": "architecture-test-fails"
+    },
+    {
+      "case_id": "PACK-APP-008",
+      "mutation": "generic-shell-network-repository-script",
+      "expected": "prohibited"
+    },
+    {
+      "case_id": "PACK-APP-009",
+      "mutation": "atomic-finalization-fails",
+      "expected": "prior-destination-unchanged"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "cases[*].request_or_result_ids",
+      "cases[*].stdout_sha256",
+      "cases[*].stderr_sha256",
+      "cases[*].canonical_sha256"
+    ]
+  }
+}
