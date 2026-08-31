@@ -1,0 +1,140 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-project-e3-b-source-snapshot-v1",
+  "state": "documentation-only-pending-content-freeze",
+  "snapshot": {
+    "materialized_snapshot_id": null,
+    "provider_id": null,
+    "revision_id": null,
+    "materializer_profile_id": null,
+    "build_binding_id": null,
+    "source_collection_id": "synthetic-blizzard-ui-source",
+    "sealed": true,
+    "immutable_to_indexer": true,
+    "roots": [
+      {
+        "root_id": "synthetic-shared-ui",
+        "normalized_root": "SharedUI",
+        "completeness": "Complete",
+        "files": [
+          {
+            "source_file_id": null,
+            "normalized_path": "SharedUI/Shared.lua",
+            "file_kind": "lua",
+            "logical_content_sha256": null,
+            "logical_length": null,
+            "encoding": "utf-8",
+            "newline_profile": "lf",
+            "source_handle_id": null,
+            "license_record_ids": []
+          },
+          {
+            "source_file_id": null,
+            "normalized_path": "SharedUI/Templates.xml",
+            "file_kind": "xml",
+            "logical_content_sha256": null,
+            "logical_length": null,
+            "encoding": "utf-8",
+            "newline_profile": "lf",
+            "source_handle_id": null,
+            "license_record_ids": []
+          }
+        ],
+        "omitted_entries": [],
+        "license_record_ids": [],
+        "canonical_sha256": null
+      },
+      {
+        "root_id": "synthetic-addon-packages",
+        "normalized_root": "AddOns",
+        "completeness": "Complete",
+        "files": [
+          {
+            "source_file_id": null,
+            "normalized_path": "AddOns/Blizzard_Fixture/Blizzard_Fixture.toc",
+            "file_kind": "toc",
+            "logical_content_sha256": null,
+            "logical_length": null,
+            "encoding": "utf-8",
+            "newline_profile": "lf",
+            "source_handle_id": null,
+            "license_record_ids": []
+          },
+          {
+            "source_file_id": null,
+            "normalized_path": "AddOns/Blizzard_Fixture/Core.lua",
+            "file_kind": "lua",
+            "logical_content_sha256": null,
+            "logical_length": null,
+            "encoding": "utf-8",
+            "newline_profile": "lf",
+            "source_handle_id": null,
+            "license_record_ids": []
+          },
+          {
+            "source_file_id": null,
+            "normalized_path": "AddOns/Blizzard_Fixture/Frames.xml",
+            "file_kind": "xml",
+            "logical_content_sha256": null,
+            "logical_length": null,
+            "encoding": "utf-8",
+            "newline_profile": "lf",
+            "source_handle_id": null,
+            "license_record_ids": []
+          }
+        ],
+        "omitted_entries": [],
+        "license_record_ids": [],
+        "canonical_sha256": null
+      }
+    ],
+    "materialization_report": {
+      "path_collisions": [],
+      "symlink_reparse_entries": [],
+      "submodules": [],
+      "lfs_pointers": [],
+      "archives": [],
+      "transformations": [],
+      "hooks_workflows_executed": false,
+      "partial": false,
+      "cancelled": false,
+      "security_report_id": null
+    },
+    "license_redistribution_manifest_id": null,
+    "coverage_record_ids": [],
+    "conflict_ids": [],
+    "source_content_manifest_sha256": null,
+    "canonical_sha256": null
+  },
+  "cases": [
+    {
+      "case_id": "UISRC-MAT-006",
+      "mutation": "absolute-or-parent-traversal-path",
+      "expected_error": "ui_source_root_or_path_escape_forbidden"
+    },
+    {
+      "case_id": "UISRC-MAT-007",
+      "mutation": "case-or-unicode-normalization-collision",
+      "expected_error": "ui_source_path_normalization_or_case_collision"
+    },
+    {
+      "case_id": "UISRC-MAT-011",
+      "mutation": "admitted-symlink-or-reparse-traversal",
+      "expected_error": "ui_source_symlink_reparse_submodule_lfs_or_archive_forbidden"
+    },
+    {
+      "case_id": "UISRC-MAT-018",
+      "mutation": "unreported-newline-or-byte-transformation",
+      "expected_error": "ui_source_file_manifest_or_content_digest_mismatch"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "snapshot.materialized_snapshot_id",
+      "all file IDs content digests lengths source handles and license records",
+      "all root and snapshot digests",
+      "security license coverage and conflict manifests"
+    ]
+  }
+}
