@@ -1,0 +1,118 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-project-e3-b-bridge-cases-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "source_generation_id": null,
+  "reference_generation_id": null,
+  "bridge_profile_id": null,
+  "cases": [
+    {
+      "case_id": "UISRC-BRIDGE-001",
+      "source_fact": "exact-analyzer-resolved-global-member-call",
+      "reference_lookup": "exact-compatible-canonical-api-entity",
+      "expected": {
+        "status": "ResolvedExact",
+        "relation_kind": "uses_api",
+        "confidence": "Derived"
+      }
+    },
+    {
+      "case_id": "UISRC-BRIDGE-002",
+      "mutation": "source-and-reference-profile-build-incompatible",
+      "expected": {
+        "status": "IncompatibleProfile",
+        "proposal": null
+      }
+    },
+    {
+      "case_id": "UISRC-BRIDGE-003",
+      "mutation": "same-symbol-string-but-analyzer-target-unresolved",
+      "expected": {
+        "status": "NotEvaluated",
+        "proposal": null
+      }
+    },
+    {
+      "case_id": "UISRC-BRIDGE-004",
+      "mutation": "case-insensitive-nearest-suffix-or-prefix-name-match",
+      "expected_error": "ui_source_bridge_string_or_nearest_name_resolution_forbidden"
+    },
+    {
+      "case_id": "UISRC-BRIDGE-005",
+      "source_fact": "exact-alias-use",
+      "reference_lookup": "exact-versioned-reference-alias-record",
+      "expected": "resolved-with-alias-evidence"
+    },
+    {
+      "case_id": "UISRC-BRIDGE-006",
+      "mutation": "multiple-compatible-reference-endpoints",
+      "expected": {
+        "status": "Ambiguous",
+        "ambiguity_group_id": null,
+        "selected_endpoint": null
+      }
+    },
+    {
+      "case_id": "UISRC-BRIDGE-007",
+      "mutation": "endpoint-absent-under-exact-complete-reference-negative-authority",
+      "expected": {
+        "status": "NotFoundWithAuthority",
+        "scope": "exact-reference-bridge-lookup-only"
+      }
+    },
+    {
+      "case_id": "UISRC-BRIDGE-008",
+      "mutation": "endpoint-not-found-under-partial-reference-coverage",
+      "expected": {
+        "status": "NotFoundWithoutAuthority",
+        "proposal": null
+      }
+    },
+    {
+      "case_id": "UISRC-BRIDGE-011",
+      "source_fact": "exact-native-frame-event-registration",
+      "reference_lookup": "exact-native-event-entity",
+      "expected": "native-event-bridge-distinct-from-custom-and-cvar"
+    },
+    {
+      "case_id": "UISRC-BRIDGE-012",
+      "mutation": "custom-eventregistry-string-resolved-as-native-frame-event",
+      "expected": "mutation-detected"
+    },
+    {
+      "case_id": "UISRC-BRIDGE-013",
+      "mutation": "cvar-callback-resolved-as-native-frame-event",
+      "expected": "mutation-detected"
+    },
+    {
+      "case_id": "UISRC-BRIDGE-015",
+      "mutation": "possible-or-ambiguous-input-promoted-to-derived",
+      "expected_error": "ui_source_bridge_confidence_or_authority_upgrade_forbidden"
+    },
+    {
+      "case_id": "UISRC-BRIDGE-018",
+      "request": "build-project-ui-hook-bridge",
+      "project_snapshot_id": null,
+      "expected_error": "ui_source_project_bridge_requires_exact_project_snapshot"
+    },
+    {
+      "case_id": "UISRC-BRIDGE-019",
+      "mutation": "same-project-and-ui-method-name-creates-hook",
+      "expected": "mutation-detected"
+    },
+    {
+      "case_id": "UISRC-BRIDGE-020",
+      "future_project_input": {
+        "project_snapshot_id": null,
+        "project_hook_fact_id": null,
+        "source_target_entity_key": null
+      },
+      "expected": "Derived-structural-hook-with-no-runtime-safety-claims"
+    }
+  ],
+  "frozen_expected_proposal_ids": {},
+  "frozen_expected_status_ids": {},
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}
