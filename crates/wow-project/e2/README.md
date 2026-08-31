@@ -99,8 +99,9 @@ Full dependency source indexing, installed runtime data, external implementation
 3. [`../../wow-emmy/FACT_MODEL.md`](../../wow-emmy/FACT_MODEL.md);
 4. [`../../wow-graph/e2/README.md`](../../wow-graph/e2/README.md);
 5. [`../../wow-recognizers/e2/README.md`](../../wow-recognizers/e2/README.md);
-6. all E2-C files in this package;
-7. current external KB `AGENTS.md`, `INDEX_MINI.md`, workflow, lifecycle/LOD, event, hook, security, and relevant subsystem routes.
+6. [`REAL_ADDON_FIXTURE.md`](REAL_ADDON_FIXTURE.md) for the pinned read-only user-addon fixture and its nonclaims;
+7. all other E2-C files in this package;
+8. current external KB `AGENTS.md`, `INDEX_MINI.md`, workflow, lifecycle/LOD, event, hook, security, and relevant subsystem routes.
 
 ## Public E2-C operations
 
@@ -127,4 +128,4 @@ No operation opens arbitrary host paths or returns a published persistent genera
 
 ## Completion gate
 
-E2-C code is complete only when one exact synthetic repository snapshot and one pinned real user-owned addon fixture can be indexed without source execution; TOC variants never mix; XML entities/includes/scripts remain bounded and source-mapped; Lua is parsed only by the accepted Emmy adapter; load, SavedVariables, native/custom signal, hook, and state proposals preserve their exact proof limits; file/TOC/XML updates invalidate exactly the required analyzer/recognizer/graph-input partitions or widen conservatively; removed facts/proposals disappear; all identities/generations remain coherent; partial/conflicted/truncated areas never become complete; and 1/2/N worker plus shuffled input/update sequences produce byte-identical canonical candidates.
+E2-C code is complete only when one exact synthetic repository snapshot and the pinned [`UnknownAlienHuman/roth-ui`](REAL_ADDON_FIXTURE.md) fixture can be indexed without source execution; TOC variants never mix; XML entities/includes/scripts remain bounded and source-mapped; Lua is parsed only by the accepted Emmy adapter; load, SavedVariables, native/custom signal, hook, and state proposals preserve their exact proof limits; file/TOC/XML updates invalidate exactly the required analyzer/recognizer/graph-input partitions or widen conservatively; removed facts/proposals disappear; all identities/generations remain coherent; partial/conflicted/truncated areas never become complete; repository/path/name mutations prove fixture independence; and 1/2/N worker plus shuffled input/update sequences produce byte-identical canonical candidates.
