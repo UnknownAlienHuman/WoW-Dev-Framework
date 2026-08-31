@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-graph-e2-conflicts-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "cases": [
+    {
+      "case_id": "GRAPH-ASSERT-002",
+      "kind": "exclusive-attribute-disagreement",
+      "assertion_ids": [],
+      "expected": "conflict"
+    },
+    {
+      "case_id": "GRAPH-ASSERT-003",
+      "kind": "relation-multiplicity-violation",
+      "assertion_ids": [],
+      "expected": "conflict-or-fail-by-schema"
+    },
+    {
+      "case_id": "GRAPH-AXIS-004",
+      "kind": "forbidden-load-cycle",
+      "assertion_ids": [],
+      "expected": "conflict"
+    },
+    {
+      "case_id": "GRAPH-ASSERT-006",
+      "kind": "missing-under-partial-coverage",
+      "coverage_record_ids": [],
+      "expected": "no-authoritative-absence"
+    },
+    {
+      "case_id": "GRAPH-ASSERT-008",
+      "kind": "producer-removal",
+      "producer_partition_id": null,
+      "expected": "only-producer-assertions-removed"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "cases[*].assertion-or-partition-ids",
+      "cases[*].conflict-or-coverage-result-ids",
+      "cases[*].canonical_sha256"
+    ]
+  }
+}
