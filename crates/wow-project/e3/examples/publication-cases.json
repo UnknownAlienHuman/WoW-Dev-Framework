@@ -1,0 +1,135 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-project-e3-b-publication-cases-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "publication_bundle": {
+    "publication_bundle_id": null,
+    "expected_base_current_record_id": null,
+    "source_candidate_id": null,
+    "source_profile_id": null,
+    "source_generation_id": null,
+    "source_snapshot_id": null,
+    "analyzer_snapshot_id": null,
+    "graph_generation_id": null,
+    "graph_snapshot_id": null,
+    "reference_profile_id": null,
+    "reference_generation_id": null,
+    "source_project_partition_manifest_ids": [],
+    "graph_partition_manifest_ids": [],
+    "bridge_partition_manifest_ids": [],
+    "schema_operation_validation_bundle_ids": [],
+    "license_redistribution_manifest_id": null,
+    "golden_read_ids": [],
+    "canonical_sha256": null
+  },
+  "target": {
+    "project_store_id": null,
+    "project_store_epoch_id": null,
+    "store_generation_id": null,
+    "source_publication_set_id": null,
+    "state_before_validation": "PublishedInactive",
+    "validation_report_id": null,
+    "current_record_id": null
+  },
+  "cases": [
+    {
+      "case_id": "UISRC-PUB-003",
+      "phase": "inactive-build-commit",
+      "expected": "target-published-inactive-current-unchanged"
+    },
+    {
+      "case_id": "UISRC-PUB-004",
+      "phase": "fresh-readback-validation",
+      "expected_checks": [
+        "source-profile-build-binding",
+        "root-file-content-source-map-closure",
+        "analyzer-fact-recognizer-closure",
+        "source-graph-and-bridge-endpoints",
+        "stale-removal-and-cross-universe-leakage",
+        "license-redistribution-notices",
+        "store-object-integrity-and-golden-queries"
+      ],
+      "expected_state": "ValidatedInactive"
+    },
+    {
+      "case_id": "UISRC-PUB-005",
+      "phase": "activation-cas",
+      "condition": "expected-base-current-record-matches",
+      "expected": "current-source-selector-advances-atomically"
+    },
+    {
+      "case_id": "UISRC-PUB-006",
+      "phase": "activation-cas",
+      "mutation": "current-record-changed-after-inactive-build",
+      "expected_error": "ui_source_current_activation_cas_failed"
+    },
+    {
+      "case_id": "UISRC-PUB-007",
+      "mutation": "advance-current-inside-inactive-build-transaction",
+      "expected_error": "ui_source_current_advanced_before_validation_forbidden"
+    },
+    {
+      "case_id": "UISRC-PUB-008",
+      "mutation": "sqlite-commit-succeeds-domain-readback-fails",
+      "expected": "target-quarantined-or-retained-inactive-current-unchanged"
+    },
+    {
+      "case_id": "UISRC-PUB-009",
+      "mutation": "write-user-project-current-record",
+      "expected_error": "ui_source_user_project_current_mutation_forbidden"
+    },
+    {
+      "case_id": "UISRC-PUB-010",
+      "reader": "opened-before-activation",
+      "expected": "continues-old-exact-source-store-graph-reference-set"
+    },
+    {
+      "case_id": "UISRC-PUB-011",
+      "reader": "opened-after-activation",
+      "expected": "opens-new-coherent-source-publication"
+    },
+    {
+      "case_id": "UISRC-PUB-012",
+      "mutation": "mix-source-store-graph-or-reference-generations",
+      "expected_error": "ui_source_store_source_graph_bridge_identity_mismatch"
+    },
+    {
+      "case_id": "UISRC-PUB-013",
+      "crash_point": "before-inactive-commit",
+      "expected": "current-intact-incomplete-target-cleaned-or-classified"
+    },
+    {
+      "case_id": "UISRC-PUB-014",
+      "crash_point": "after-inactive-commit-before-validation",
+      "expected": "recoverable-inactive-never-current"
+    },
+    {
+      "case_id": "UISRC-PUB-015",
+      "crash_point": "during-or-after-current-cas",
+      "expected": "atomic-old-or-new-current-record"
+    },
+    {
+      "case_id": "UISRC-PUB-016",
+      "mutation": "relabel-last-known-good-as-failed-target",
+      "expected_error": "ui_source_last_known_good_relabel_forbidden"
+    },
+    {
+      "case_id": "UISRC-PUB-017",
+      "operation": "explicit-rollback",
+      "expected": "retained-target-revalidated-and-activated-by-new-cas-record"
+    },
+    {
+      "case_id": "UISRC-PUB-019",
+      "mutation": "activation-for-build-b-overwrites-build-a-selector",
+      "expected": "mutation-detected"
+    },
+    {
+      "case_id": "UISRC-PUB-020",
+      "mutation": "local-partial-publication-labelled-production-exact",
+      "expected_error": "ui_source_publication_ineligible_for_selector"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}
