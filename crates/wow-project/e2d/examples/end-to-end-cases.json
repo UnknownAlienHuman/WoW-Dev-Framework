@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-project-e2d-end-to-end-cases-v1",
+  "state": "documentation-only-pending-vector-freeze",
+  "cases": [
+    {
+      "case_id": "PROJECT-E2D-HEAD-001",
+      "scenario": "first-complete-publication",
+      "expected": "one-coherent-headed-generation"
+    },
+    {
+      "case_id": "PROJECT-E2D-REQ-006",
+      "scenario": "policy-permitted-partial-candidate",
+      "expected": "partial-head-with-blockers-visible"
+    },
+    {
+      "case_id": "PROJECT-E2D-STORE-003",
+      "scenario": "project-operation-failure",
+      "expected": "rollback-no-target-head"
+    },
+    {
+      "case_id": "PROJECT-E2D-STORE-004",
+      "scenario": "graph-operation-failure",
+      "expected": "rollback-no-project-writes"
+    },
+    {
+      "case_id": "PROJECT-E2D-VALID-007",
+      "scenario": "sealed-store-graph-golden-query-mismatch",
+      "expected": "inactive-no-head"
+    },
+    {
+      "case_id": "PROJECT-E2D-HEAD-003",
+      "scenario": "concurrent-publisher-wins",
+      "expected": "cas-conflict-target-inactive"
+    },
+    {
+      "case_id": "PROJECT-E2D-VIEW-002",
+      "scenario": "old-reader-H1-new-publication-H2",
+      "expected": "old-reader-remains-coherent-H1"
+    },
+    {
+      "case_id": "PROJECT-E2D-RECOVERY-004",
+      "scenario": "valid-inactive-base-still-current",
+      "expected": "exact-revalidation-and-fresh-cas-adoption"
+    },
+    {
+      "case_id": "PROJECT-E2D-RECOVERY-005",
+      "scenario": "valid-inactive-base-stale",
+      "expected": "not-adoptable"
+    },
+    {
+      "case_id": "PROJECT-E2D-RECOVERY-010",
+      "scenario": "cancel-before-cas",
+      "expected": "old-head-and-classified-target"
+    },
+    {
+      "case_id": "PROJECT-E2D-RECOVERY-011",
+      "scenario": "cancel-after-cas-success",
+      "expected": "published"
+    },
+    {
+      "case_id": "PROJECT-E2D-LKG-003",
+      "scenario": "relabel-lkg-as-target",
+      "expected_error": "project_e2d_last_known_good_relabel_forbidden"
+    },
+    {
+      "case_id": "PROJECT-E2D-DET-001",
+      "scenario": "workers-1-2-N-shuffled-inputs",
+      "expected": "same-logical-bundle-snapshots-head"
+    }
+  ],
+  "result_ids": {},
+  "canonical_sha256": null,
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "result_ids",
+      "canonical_sha256"
+    ]
+  }
+}
