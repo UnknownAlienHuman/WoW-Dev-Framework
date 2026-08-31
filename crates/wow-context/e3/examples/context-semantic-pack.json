@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-context-e3-b-semantic-pack-v1",
+  "state": "documentation-only-pending-id-freeze",
+  "context_semantic_pack": {
+    "context_semantic_pack_id": null,
+    "universe_set_id": null,
+    "context_request_id": null,
+    "context_profile_set_id": null,
+    "expansion_plan_id": null,
+    "project_map_ids": [],
+    "l0_skeleton_ids": [],
+    "l1_skeleton_ids": [],
+    "ordered_context_item_ids": [],
+    "evidence_index_id": null,
+    "source_index_id": null,
+    "reference_index_id": null,
+    "selection_trace_id": null,
+    "omission_manifest_id": null,
+    "coverage_summary_id": null,
+    "conflict_summary_id": null,
+    "not_evaluated_summary_id": null,
+    "budget_report_id": null,
+    "boundary_notice_manifest_id": null,
+    "continuation_state_id": null,
+    "stop_state": "CompleteForRequest",
+    "canonical_sha256": null
+  },
+  "forbidden_identity_dependencies": [
+    "RenderedContextArtifactId",
+    "ContextMetricsId",
+    "ContextEvaluationReportId",
+    "ValidationReportId",
+    "cache_path",
+    "clock",
+    "host"
+  ],
+  "mutation_cases": [
+    {
+      "case_id": "CTX-PACK-006",
+      "mutation": "include_renderer_id_in_semantic_identity",
+      "expected_error": "context_metrics_or_evaluation_entered_semantic_identity"
+    },
+    {
+      "case_id": "CTX-PACK-003",
+      "mutation": "drop_required_omission_manifest",
+      "expected_error": "context_semantic_pack_dangling_reference"
+    },
+    {
+      "case_id": "CTX-REN-003",
+      "mutation": "add_independent_ContextBundleCore_object",
+      "expected_error": "context_legacy_and_current_type_both_activated"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}

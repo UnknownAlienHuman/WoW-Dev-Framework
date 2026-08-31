@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-context-e3-b-omission-coverage-cases-v1",
+  "state": "documentation-only-pending-id-freeze",
+  "cases": [
+    {
+      "case_id": "CTX-COV-001",
+      "input": "complete-required-scopes",
+      "expected": "CompleteForRequest"
+    },
+    {
+      "case_id": "CTX-COV-004",
+      "input": "optional-platform-universe-absent",
+      "expected": "explicit-omission-and-profile-scoped-partial-or-complete"
+    },
+    {
+      "case_id": "CTX-COV-009",
+      "input": "conflicting-exclusive-assertions",
+      "expected": "conflict-preserved-and-dependent-exact-claim-blocked"
+    },
+    {
+      "case_id": "CTX-COV-014",
+      "input": "empty-result-under-partial-coverage",
+      "expected": "not-found-partial-not-negative-authority"
+    },
+    {
+      "case_id": "CTX-COV-013",
+      "input": "candidate-budget-pruned",
+      "expected": "BudgetPruned-omission-with-completeness-impact"
+    },
+    {
+      "case_id": "CTX-SRC-010",
+      "input": "source-denied-by-consumer-trust",
+      "expected": "metadata-and-omission-no-source-bytes"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}

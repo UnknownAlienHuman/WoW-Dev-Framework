@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-context-e3-b-rendered-artifact-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "rendered_context_artifact": {
+    "rendered_artifact_id": null,
+    "context_semantic_pack_id": null,
+    "renderer_profile_id": null,
+    "media_type": "text/markdown",
+    "encoding": "utf-8",
+    "line_ending_profile": "lf-v1",
+    "source_boundary_profile_id": null,
+    "template_catalog_id": null,
+    "output_bytes_base64": null,
+    "output_sha256": null,
+    "output_byte_length": null,
+    "token_accounting": {
+      "class": "Unavailable",
+      "tokenizer_profile_id": null,
+      "value": null
+    },
+    "item_output_mapping_id": null,
+    "rendering_loss_manifest_id": null,
+    "boundary_validation_report_id": null,
+    "canonical_sha256": null
+  },
+  "mutation_cases": [
+    {
+      "case_id": "CTX-PACK-011",
+      "mutation": "renderer_adds_free_form_claim",
+      "expected_error": "context_renderer_created_or_changed_semantic_fact"
+    },
+    {
+      "case_id": "CTX-SRC-016",
+      "mutation": "source_line_closes_framework_boundary",
+      "expected_error": "context_source_boundary_escape_or_roundtrip_failed"
+    },
+    {
+      "case_id": "CTX-BUD-013",
+      "mutation": "claim_exact_tokens_without_exact_profile",
+      "expected_error": "context_exact_token_claim_without_exact_profile"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}

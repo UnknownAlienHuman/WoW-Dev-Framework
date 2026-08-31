@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-context-e3-b-cache-determinism-cases-v1",
+  "state": "documentation-only-pending-id-freeze",
+  "cases": [
+    {
+      "case_id": "CTX-CACHE-001",
+      "mutation": "exact-key-and-artifact",
+      "expected": "hit"
+    },
+    {
+      "case_id": "CTX-CACHE-004",
+      "mutation": "different-project-generation",
+      "expected_error": "context_cache_cross_generation_relabel_forbidden"
+    },
+    {
+      "case_id": "CTX-CACHE-006",
+      "mutation": "different-privacy-or-consumer-profile",
+      "expected_error": "context_cache_cross_privacy_or_consumer_reuse_forbidden"
+    },
+    {
+      "case_id": "CTX-CACHE-009",
+      "mutation": "corrupted-artifact-bytes",
+      "expected_error": "context_cache_artifact_schema_digest_or_profile_mismatch"
+    },
+    {
+      "case_id": "CTX-DET-001",
+      "mutation": "one-two-n-workers",
+      "expected": "identical-semantic-and-rendered-bytes"
+    },
+    {
+      "case_id": "CTX-DET-005",
+      "mutation": "cold-versus-warm-external-cache",
+      "expected": "identical-output"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}
