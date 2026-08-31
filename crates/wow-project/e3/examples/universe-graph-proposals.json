@@ -1,0 +1,129 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-project-e3-b-universe-graph-proposals-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "source_partition": {
+    "partition_id": null,
+    "producer_id": "synthetic-ui-source-direct",
+    "producer_version": "e3-b-1",
+    "universe": "blizzard_ui_source",
+    "source_generation_id": null,
+    "graph_registry_bundle_id": null,
+    "entities": [
+      {
+        "proposal_id": null,
+        "entity_kind": "file",
+        "semantic_identity": {
+          "source_generation_id": null,
+          "source_file_id": null
+        },
+        "source_handle_ids": [],
+        "evidence_ids": [],
+        "coverage_record_ids": [],
+        "confidence": "Proven"
+      },
+      {
+        "proposal_id": null,
+        "entity_kind": "function",
+        "semantic_identity": {
+          "source_generation_id": null,
+          "analyzer_semantic_symbol_id": "synthetic:UIFixture_OnLoad"
+        },
+        "attributes": {
+          "display_name": "UIFixture_OnLoad"
+        },
+        "source_handle_ids": [],
+        "evidence_ids": [],
+        "coverage_record_ids": [],
+        "confidence": "Proven"
+      },
+      {
+        "proposal_id": null,
+        "entity_kind": "xml_template",
+        "semantic_identity": {
+          "source_generation_id": null,
+          "xml_declaration_id": "synthetic:UIFixtureTemplate"
+        },
+        "attributes": {
+          "display_name": "UIFixtureTemplate"
+        },
+        "source_handle_ids": [],
+        "evidence_ids": [],
+        "coverage_record_ids": [],
+        "confidence": "Proven"
+      }
+    ],
+    "relations": [
+      {
+        "proposal_id": null,
+        "relation_kind": "defines",
+        "source_entity": "synthetic:file:Core.lua",
+        "target_entity": "synthetic:function:UIFixture_OnLoad",
+        "evidence_ids": [],
+        "coverage_record_ids": [],
+        "confidence": "Derived"
+      },
+      {
+        "proposal_id": null,
+        "relation_kind": "handles_event",
+        "source_entity": "synthetic:function:UIFixture_OnLoad",
+        "target_entity": "synthetic:source-event:PLAYER_LOGIN",
+        "evidence_ids": [],
+        "coverage_record_ids": [],
+        "confidence": "Derived"
+      }
+    ],
+    "canonical_sha256": null
+  },
+  "reference_bridge_partition": {
+    "partition_id": null,
+    "producer_id": "synthetic-ui-reference-bridge",
+    "source_generation_id": null,
+    "reference_generation_id": null,
+    "relations": [
+      {
+        "proposal_id": null,
+        "relation_kind": "uses_api",
+        "source_entity_key": "blizzard_ui_source:function:UIFixture_OnLoad",
+        "target_entity_key": "reference_api:api:C_Fixture.KnownApi",
+        "resolution_rule_id": null,
+        "source_assertion_ids": [],
+        "reference_assertion_ids": [],
+        "evidence_ids": [],
+        "coverage_record_ids": [],
+        "confidence": "Derived"
+      }
+    ],
+    "canonical_sha256": null
+  },
+  "anti_merge_cases": [
+    {
+      "case_id": "UISRC-GRAPH-003",
+      "mutation": "replace-source-function-key-with-reference-api-key-because-name-matches",
+      "expected_error": "ui_source_graph_cross_universe_merge_forbidden"
+    },
+    {
+      "case_id": "UISRC-GRAPH-004",
+      "mutation": "merge-source-entity-with-user-project-entity-by-path-or-signature",
+      "expected_error": "ui_source_graph_cross_universe_merge_forbidden"
+    },
+    {
+      "case_id": "UISRC-GRAPH-005",
+      "mutation": "include-provider-repository-or-checkout-path-in-semantic-key",
+      "expected": "mutation-detected"
+    },
+    {
+      "case_id": "UISRC-GRAPH-012",
+      "mutation": "persist-transitive-path-as-direct-relation",
+      "expected_error": "ui_source_graph_transitive_edge_materialization_forbidden"
+    },
+    {
+      "case_id": "UISRC-BRIDGE-014",
+      "mutation": "bridge-confidence-proven",
+      "expected_error": "ui_source_bridge_confidence_or_authority_upgrade_forbidden"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}
