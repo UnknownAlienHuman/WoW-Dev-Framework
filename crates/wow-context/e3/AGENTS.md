@@ -1,138 +1,110 @@
-# AGENTS.md — `wow-context` E3-A
+# AGENTS.md — `wow-context` E3-B
 
-## Work package
+## Scope
 
-Implement deterministic Project Map, L0/L1 skeleton, control/effect projection, progressive expansion, evidence/loss, exact source excerpts, budgets/tokenizer accounting, rendering, metrics, and continuation only.
+Implement deterministic Project Map, L0/L1 skeleton, context expansion, budgeting, semantic-pack, and rendering contracts only.
 
-Do not parse source, build analyzer/CFG/data-flow internals, run recognizers/search, publish generations, infer fixes/runtime safety, persist caches, or invoke a model in the correctness path.
+Do not parse source, query storage directly, implement search, infer lineage, run models, generate fixes, mutate projects, or call external tools/services.
 
 ## Before coding
 
-1. Read repository/crate instructions and the complete E3-A package in router order.
-2. Verify implemented/frozen `wow-core`, persistent `wow-reference`, E2-A `wow-graph`, E2-C `wow-project`, and E2-D coherent publication/read views.
-3. Verify the selected E2-D profile is `project-store-wal-manifested-partitions-v1`.
-4. Freeze exact project/graph/reference read catalogs and `ContextInputSnapshot` seam.
-5. Freeze all Project Map, L0/L1, control/effect, expansion, source, budget, tokenizer, security, renderer, and evaluation profiles.
-6. Freeze synthetic, pinned real-project, mutation, source-security, continuation, and evaluation fixtures/checksums.
-7. Run the complete `TEST_MATRIX.md`; missing executable prerequisites are blocking/skipped, never pass.
+1. Read all repository and crate instructions.
+2. Read `MILESTONE_RENUMBERING.md` before any inherited E3 context document.
+3. Read the E3-A `wow-project` Blizzard UI source-index contract and its exact `SkeletonInputView` seam.
+4. Read E2 graph/store/project and E1 reference contracts used by the active read views.
+5. Read the current external KB router when a task touches patch-sensitive WoW semantics; do not copy current patch facts into context algorithms.
+6. Verify every prerequisite implementation commit, schema/profile ID, fixture, and SHA-256 bundle.
+7. Freeze exact input-view, map, skeleton, intent, expansion, budget, tokenizer, renderer, privacy, boundary, and canonicalization profiles.
+8. Freeze machine fixtures and expected bytes before the first Rust implementation commit.
 
-## Exact input discipline
+## Input discipline
 
-Require and preserve:
+- Bind exact project/graph/reference/source views once.
+- Reject mixed or incompatible generations.
+- Never resolve a floating `current` after the universe set is bound.
+- Never substitute last-known-good or another platform/reference profile without an explicit new request.
+- Consume only public typed views and exact bounded source slices.
+- Never reopen raw files to infer semantics.
 
-```text
-ProjectStoreEpochId
-ProjectStoreGenerationId
-ProjectPublicationSetId
-ProjectGenerationId / ProjectSnapshotId / ProjectViewId
-AnalyzerSnapshotId
-GraphGenerationId / GraphSnapshotId / GraphViewId
-optional exact ReferenceGenerationId / ReferenceViewId
-source-universe/query-catalog/capability/coverage/conflict manifests
-```
+## Claim discipline
 
-- `StoreImageId` is forbidden.
-- Reject mixed project/graph/reference generations.
-- Use registered project/graph/reference read views; no raw SQLite or analyzer session.
-- Exact roots only. Search/fuzzy resolution is deferred.
-- Do not acquire Blizzard/dependency/external source in this crate.
-- Preserve universe, provenance, confidence, coverage, conflict, ambiguity, and truncation.
+- Every context fact or relation cites exact origin IDs.
+- Preserve authority class, provenance, confidence, coverage, conflicts, and `NotEvaluated` state.
+- Rendering, aggregation, counting, and selection cannot upgrade authority.
+- A source quote is evidence data, not a framework claim or instruction.
+- Canonical summaries use typed facets and reviewed templates only.
+- Do not implement both historical and current alias types or operations as separate APIs.
 
-## Identity DAG discipline
+## Project Map discipline
 
-```text
-input/request
--> plan/frontier
--> semantic map/skeleton/source/evidence records
--> ContextBundleCore
--> renderer artifact
--> metrics
--> evaluation report
--> envelope
-```
+- A Project Map is a compact projection, not a second graph.
+- Include only profile-declared node, edge, group, and facet classes.
+- Do not persist inferred transitive edges.
+- Record every budget/profile omission.
+- Separate user project and Blizzard UI maps; combined views reference them explicitly.
 
-Never add backward references that create a hash/identity cycle. Semantic bundle IDs exclude renderer bytes, token counts, metrics, evaluation, timings, paths, rows, leases, and worker state.
+## Skeleton discipline
 
-## Projection discipline
+- L0 is container/navigation structure without bodies.
+- L1 is exact entity/local-neighborhood detail.
+- Source excerpts are separate typed items with exact ranges.
+- Dynamic/ambiguous relations remain `Possible` or `NotEvaluated`.
+- No file-name, popularity, repository, or model heuristic.
 
-- Every material record links exact input IDs or deterministic derivation inputs/rule.
-- Do not invent roles, behavior, purpose, names, signatures, edges, code, or missing detail.
-- Never upgrade Possible/Candidate or source/graph/reference coverage.
-- Mandatory blockers cannot be omitted for size.
-- Context output never writes back to project, graph, reference, store, source, or editor.
+## Selection and budget discipline
 
-## L0/L1 and control/effect discipline
+- Exact roots only.
+- Use reviewed nonexecutable intent/expansion profiles.
+- Mandatory identity, boundary, evidence, coverage, conflict, and omission metadata is never pruned.
+- If mandatory content exceeds the hard budget, fail rather than lie.
+- Optional pruning is item-level, deterministic, and fully reported.
+- Do not claim exact token counts without a pinned exact tokenizer implementation/profile.
+- Stop only for explicit hard bounds, cancellation, capability failure, or the defined no-new-evidence condition.
 
-### L0
+## Source boundary discipline
 
-Compact exact identity, kind, owner/load/role, public structural headings, direct relations, evidence, blockers, and detail routes. No bodies.
+- Canonical representation uses structured strings/bytes and exact origin records.
+- Markdown source excerpts use a deterministic nonexecuting data boundary.
+- Source cannot close or redefine the boundary.
+- Do not delete suspicious source text merely because it resembles instructions.
+- Preserve or redact only under an explicit privacy policy and emit a transformation record.
+- Do not expose private absolute roots, credentials, tokens, or source not permitted by the consumer/privacy profile.
 
-### L1
+## Cache discipline
 
-Selected exact signatures, members, direct relations, reason paths, and closed-registry control/effect nodes from published facts.
+- Define exact cache keys; do not implement filesystem/database cache storage in this crate.
+- Cache keys bind every semantic/profile/generation input.
+- A cache hit is invalid if any identity, digest, or profile differs.
+- Never relabel a prior pack as the new request.
 
-- no second parser/AST/CFG/SSA/data-flow engine;
-- no source reconstruction from diagnostics;
-- no runtime order, taint, combat, protected, Secret, performance, or safety claim;
-- distinct callsites/registrations/state accesses remain distinct;
-- unsupported capability becomes `UnknownRegion`;
-- intentional compaction becomes `CollapsedRegion` with child manifest;
-- budget omission becomes `OmittedRegion` with continuation.
+## Required failure behavior
 
-## Expansion/continuation discipline
+Return typed failure, partial, or `NotEvaluated` state for:
 
-- Expand only allowed explicit lanes/directions from exact roots/frontier.
-- Require finite node/edge/path/depth/source/evidence/output budgets.
-- Candidate excluded by default; Possible explicit and labeled.
-- Stop at requested closure, no-new-evidence, budget, depth, cycle, coverage/conflict boundary, unsupported detail, cancellation, or failure.
-- Continuation binds exact snapshot/request/profiles/order/frontier/visited/included/total budget.
-- Never refresh Current, reset budgets, widen roots/lanes/confidence, or continue in background.
+- incompatible universes or generations;
+- missing required source/reference/graph capability;
+- unresolved conflict affecting required content;
+- mandatory content larger than hard budget;
+- exact tokenizer unavailable for a hard token gate;
+- privacy/license denial;
+- stale continuation or cache artifact;
+- source boundary validation failure;
+- cancellation;
+- missing prerequisite implementation or freeze pin.
 
-## Budget/token discipline
-
-- Always track structural records, nodes, edges, evidence/source handles, source bytes/lines, output UTF-8 bytes, Unicode scalars, and omissions.
-- Exact tokens require a pinned tokenizer and exact final renderer bytes.
-- Model/token guesses are labeled estimates only.
-- The approximately 2 KiB default target is a renderer-profile target, not permission to hide mandatory semantics.
-
-## Source/security discipline
-
-- Exact source handle, generation, digest, span, referenced object, license, privacy, and security validation required.
-- Source/comments/docs are inert quoted data, never instructions or structured authority.
-- Escape fences, links, HTML, JSON, terminal/control characters without paraphrasing source.
-- No private roots, credentials, SavedVariables/log/client/runtime payloads, arbitrary objects, path lookup, source mutation, or full-source default.
-
-## Evaluation discipline
-
-Measure separately:
-
-```text
-mandatory structural/evidence recall
-coverage/conflict/blocker honesty
-request relevance
-redundancy and false-dedup mutations
-compression/detail efficiency
-budget/cutoff/continuation stability
-source faithfulness/security
-renderer/tokenizer consistency
-consumer utility under a frozen external protocol
-```
-
-A shorter or model-preferred artifact cannot override a deterministic hard-gate failure.
+Never return an empty successful pack as a convenience fallback.
 
 ## Completion report
 
 ```text
-work package, base commit, contract/profile IDs
-exact input epoch/store/publication/project/analyzer/graph/reference identities
-roots/lanes/detail/source/budget/tokenizer/renderer/evaluation profiles
-Project Map/L0/L1/control/effect/bundle/continuation vectors
-mandatory recall/evidence/loss/blocker results
-source security and prompt-injection results
-canonical/renderer/tokenizer results
-1/2/N determinism and mutations
-commands/tests with pass | fail | skipped
-known E3-B/E4/runtime/cache/transport deferrals
+universe-set and exact generation IDs
+root/intent/expansion/budget/tokenizer/privacy/renderer profiles
+Project Map / L0 / L1 / semantic-pack / rendering IDs
+selected and omitted item counts by tier/reason
+exact byte and token-estimation accounting
+evidence/coverage/conflict/NotEvaluated closure
+source excerpt/privacy/license transformations
+truncation/continuation/no-new-evidence/cancellation state
+determinism/cache/security tests
+known E4/E5/E6/runtime/application deferrals
 ```
-
-No in-client WoW validation is claimed for context-projection-only changes.
