@@ -1,14 +1,26 @@
-# E3-A normative fixture shapes
+# E3-B normative and compatibility fixtures
 
-- `input-snapshot.json` — coherent E2-D epoch/store/publication/project/analyzer/graph/reference identities and source universes.
-- `project-map.json` — compact mandatory sections, blocker preservation, grouping, and exact detail routes.
-- `l0-skeleton.json` — exact identity/role/owner/load/direct-relation skeleton.
-- `l1-skeleton.json` — signatures, direct relations, control/effect nodes, unknown/collapsed/omitted regions.
-- `context-bundle.json` — noncyclic semantic bundle core, renderer, metrics, evaluation, and envelope identities. Its cycle mutations are declared in [`../IDENTITY_DAG_TESTS.md`](../IDENTITY_DAG_TESTS.md).
-- `planning-continuation-cases.json` — lanes, frontiers, stopping, total-budget inheritance, and generation-bound continuation.
-- `source-security-cases.json` — faithful excerpts, stale handles, license/privacy, prompt/container/terminal injection, and forbidden data.
-- `budget-tokenizer-cases.json` — multi-axis budgets, approximately 2 KiB renderer target, exact tokenizer pins, and estimate separation.
-- `evaluation-cases.json` — mandatory recall, evidence closure, honesty, relevance, false dedup, compression, and consumer utility hard gates.
-- `CHECKSUMS.json` — implementation/profile/corpus/vector/member freeze gate.
+**Status:** closed documentation shapes; implementation-dependent IDs and SHA-256 values remain null only while implementation state is `not-started`.
 
-All implementation-dependent IDs, expected canonical bytes, token vectors, evaluations, and SHA-256 values remain null only while `implementation_state` is `not-started`.
+## Current E3-B fixtures
+
+- `context-universe-set.json` — exact user-project, optional Blizzard UI source, and ReferenceView binding.
+- `context-request.json` — exact roots, intent, expansion, source, privacy, budget, tokenizer, and renderer profiles.
+- `project-map.json` — deterministic compact navigation projection.
+- `l0-skeleton.json` — bounded container-level structure.
+- `l1-skeleton.json` — bounded entity/local-neighborhood detail.
+- `context-semantic-pack.json` — canonical selected items, evidence, omissions, conflicts, and budgets.
+- `rendered-context-artifact.json` — separately identified JSON/Markdown projection.
+- `omission-coverage-cases.json` — honest partial, conflict, negative-authority, and pruning vectors.
+- `cache-determinism-cases.json` — exact cache identity, stale/corrupt/privacy mismatch, and rebuild vectors.
+
+## Inherited specialized fixtures
+
+The existing `input-snapshot.json`, `context-bundle.json`, planning/continuation, source-security, budget/tokenizer, and evaluation fixtures remain part of E3-B through `COMPATIBILITY_ALIASES.json`. They are not a second E3-A context implementation.
+
+## Freeze rules
+
+- Current machine identities use `ContextUniverseSet` and `ContextSemanticPack`.
+- Historical names are one-way documentation/migration aliases only.
+- All roots, profiles, catalogs, expected IDs, errors, bytes, token vectors, and checksums freeze before the first Rust commit.
+- Tests verify committed fixtures and never rewrite them automatically.
