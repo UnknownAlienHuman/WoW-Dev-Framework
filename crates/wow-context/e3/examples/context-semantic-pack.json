@@ -1,0 +1,200 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-context-e3-b-semantic-pack-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "identity_dag": [
+    "exact owner views and compatibility profiles -> ContextUniverseSetId",
+    "ContextUniverseSetId plus map profile -> ProjectMapId",
+    "ContextUniverseSetId plus exact scope/root and skeleton profile -> L0SkeletonId or L1SkeletonId",
+    "ContextUniverseSetId plus normalized request and semantic profiles -> ContextRequestId",
+    "ContextRequestId plus map/skeleton inputs -> ContextExpansionPlanId",
+    "selected semantic items, trust records, omissions and budget -> ContextSemanticPackId",
+    "ContextSemanticPackId plus renderer/boundary/encoding profile and exact bytes -> RenderedContextArtifactId"
+  ],
+  "context_semantic_pack": {
+    "context_semantic_pack_id": null,
+    "context_universe_set_id": null,
+    "context_request_id": null,
+    "context_profile_set_id": null,
+    "context_expansion_plan_id": null,
+    "project_map_ids": [],
+    "l0_skeleton_ids": [],
+    "l1_skeleton_ids": [],
+    "items": [
+      {
+        "context_item_id": null,
+        "kind": "Identity",
+        "typed_payload": {},
+        "origin_ids": [],
+        "evidence_ids": [],
+        "coverage_record_ids": [],
+        "conflict_ids": [],
+        "canonical_sha256": null
+      },
+      {
+        "context_item_id": null,
+        "kind": "Relation",
+        "typed_payload": {
+          "relation_kind": null,
+          "source_entity_id": null,
+          "target_entity_id": null,
+          "direct_relation_assertion_ids": []
+        },
+        "origin_ids": [],
+        "evidence_ids": [],
+        "coverage_record_ids": [],
+        "conflict_ids": [],
+        "confidence": null,
+        "canonical_sha256": null
+      },
+      {
+        "context_item_id": null,
+        "kind": "ReasonPath",
+        "typed_payload": {
+          "ordered_relation_assertion_ids": [],
+          "is_direct_relation": false
+        },
+        "origin_ids": [],
+        "evidence_ids": [],
+        "coverage_record_ids": [],
+        "conflict_ids": [],
+        "canonical_sha256": null
+      },
+      {
+        "context_item_id": null,
+        "kind": "ReferenceFact",
+        "typed_payload": {
+          "reference_entity_id": null,
+          "reference_fact_ids": []
+        },
+        "origin_ids": [],
+        "evidence_ids": [],
+        "coverage_record_ids": [],
+        "conflict_ids": [],
+        "canonical_sha256": null
+      },
+      {
+        "context_item_id": null,
+        "kind": "SourceExcerpt",
+        "typed_payload": {
+          "source_excerpt_item_id": null,
+          "untrusted_source_data": true
+        },
+        "origin_ids": [],
+        "evidence_ids": [],
+        "coverage_record_ids": [],
+        "conflict_ids": [],
+        "canonical_sha256": null
+      }
+    ],
+    "source_excerpt_items": [
+      {
+        "source_excerpt_item_id": null,
+        "source_handle_id": null,
+        "source_content_sha256": null,
+        "source_universe": null,
+        "source_generation_id": null,
+        "original_byte_range": null,
+        "returned_byte_range": null,
+        "encoding_profile_id": null,
+        "source_map_profile_id": null,
+        "privacy_consumer_profile_id": null,
+        "license_decision_id": null,
+        "boundary_profile_id": null,
+        "state": "ExactText",
+        "returned_text": null,
+        "transformation_record_ids": [],
+        "coverage_record_ids": [],
+        "canonical_sha256": null
+      }
+    ],
+    "selection_trace_id": null,
+    "omission_manifest_id": null,
+    "coverage_summary_id": null,
+    "conflict_summary_id": null,
+    "budget_report_id": null,
+    "continuation_cursor_id": null,
+    "stop_state": null,
+    "validation_report_id": null,
+    "canonical_sha256": null
+  },
+  "rendered_artifacts": [
+    {
+      "rendered_artifact_id": null,
+      "context_semantic_pack_id": null,
+      "renderer_profile_id": null,
+      "media_type": "application/json",
+      "encoding": "utf-8",
+      "exact_length": null,
+      "exact_sha256": null,
+      "token_accounting": {
+        "class": null,
+        "tokenizer_or_estimator_profile_id": null,
+        "value": null
+      },
+      "item_output_map_id": null,
+      "source_boundary_validation_report_id": null
+    },
+    {
+      "rendered_artifact_id": null,
+      "context_semantic_pack_id": null,
+      "renderer_profile_id": null,
+      "media_type": "text/markdown",
+      "encoding": "utf-8",
+      "line_endings": "lf",
+      "exact_length": null,
+      "exact_sha256": null,
+      "token_accounting": {
+        "class": null,
+        "tokenizer_or_estimator_profile_id": null,
+        "value": null
+      },
+      "item_output_map_id": null,
+      "source_boundary_validation_report_id": null
+    }
+  ],
+  "cache_key": {
+    "context_cache_key": null,
+    "semantic_or_render_target": null,
+    "exact_input_and_profile_digest": null,
+    "canonical_sha256": null
+  },
+  "mutation_cases": [
+    {
+      "case_id": "CTX-PACK-004",
+      "mutation": "claim-without-origin-or-evidence",
+      "expected_error": "context_item_origin_or_evidence_unresolved"
+    },
+    {
+      "case_id": "CTX-PACK-005",
+      "mutation": "possible-relation-rendered-as-proven",
+      "expected_error": "context_coverage_conflict_or_not_evaluated_lost"
+    },
+    {
+      "case_id": "CTX-PACK-009",
+      "mutation": "renderer-or-validation-id-enters-earlier-semantic-id",
+      "expected_error": "context_semantic_pack_identity_dag_invalid"
+    },
+    {
+      "case_id": "CTX-PACK-012",
+      "mutation": "renderer-adds-free-form-fact",
+      "expected_error": "context_renderer_created_new_fact"
+    },
+    {
+      "case_id": "CTX-CACHE-009",
+      "mutation": "prior-pack-relabeled-as-new-generation",
+      "expected_error": "context_cache_cross_generation_relabel_forbidden"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null": [
+      "all semantic pack identity and item records",
+      "all source privacy license transformation boundary and evidence records",
+      "selection, omission, coverage, conflict, budget, continuation and validation records",
+      "canonical JSON and deterministic Markdown exact bytes, lengths and SHA-256 values",
+      "tokenizer or estimator profile IDs and frozen expected values",
+      "cache key and artifact validation vectors"
+    ]
+  }
+}
