@@ -6,11 +6,12 @@
 ProjectStoreError
     code
     operation/stage
+    operation ID/request digest/attempt ID when applicable
     StoreId/EpochId/StoreGenerationId
     base/target CurrentPublicationRecord IDs
     ProjectGeneration/ProjectSnapshot IDs
     GraphGeneration/GraphSnapshot IDs
-    publication set/partition/object/schema/catalog IDs
+    publication set/partition/object/schema/catalog/query/cursor IDs
     budget/cancellation/durability state
     structured arguments
     recovery class
@@ -40,6 +41,16 @@ Public errors omit SQL text, private paths, tokens, raw source, object payloads,
 - `project_store_raw_sql_or_identifier_input_forbidden`
 - `project_store_schema_or_catalog_owner_violation`
 - `project_store_schema_integrity_failed`
+
+## Operation/idempotency
+
+- `project_store_operation_record_invalid`
+- `project_store_operation_state_invalid`
+- `project_store_idempotency_key_conflict`
+- `project_store_existing_operation_target_mismatch`
+- `project_store_response_loss_reconciliation_failed`
+- `project_store_retry_requires_exact_revalidation`
+- `project_store_quarantine_required`
 
 ## Writer/base/transaction
 
@@ -91,6 +102,9 @@ Public errors omit SQL text, private paths, tokens, raw source, object payloads,
 - `project_store_read_generation_not_retained`
 - `project_store_reader_switched_generation_forbidden`
 - `project_store_generation_lease_invalid`
+- `project_store_lease_admission_or_gc_race`
+- `project_store_query_catalog_or_ordering_mismatch`
+- `project_store_continuation_invalid_or_stale`
 - `project_store_raw_connection_or_cursor_leak_forbidden`
 - `project_store_registered_read_budget_exceeded`
 - `project_store_domain_negative_authority_forbidden`
@@ -104,6 +118,7 @@ Public errors omit SQL text, private paths, tokens, raw source, object payloads,
 - `project_store_checkpoint_changed_logical_state`
 - `project_store_busy_retry_unbounded_forbidden`
 - `project_store_durability_claim_unproven`
+- `project_store_windows_sharing_violation`
 
 ## Integrity/recovery/backup
 
@@ -111,6 +126,7 @@ Public errors omit SQL text, private paths, tokens, raw source, object payloads,
 - `project_store_foreign_key_or_reference_integrity_failed`
 - `project_store_object_reference_integrity_failed`
 - `project_store_recovery_state_ambiguous`
+- `project_store_recovery_budget_exceeded`
 - `project_store_current_corrupt`
 - `project_store_inactive_recovery_ineligible`
 - `project_store_automatic_repair_forbidden`
@@ -126,6 +142,7 @@ Public errors omit SQL text, private paths, tokens, raw source, object payloads,
 - `project_store_partition_still_reachable`
 - `project_store_object_still_referenced`
 - `project_store_gc_plan_invalid`
+- `project_store_gc_plan_stale`
 - `project_store_gc_partial_or_integrity_failed`
 - `project_store_age_only_gc_forbidden`
 - `project_store_epoch_gc_forbidden`
@@ -147,6 +164,7 @@ Public errors omit SQL text, private paths, tokens, raw source, object payloads,
 - `project_store_fixture_or_checksum_not_frozen`
 - `project_store_logical_determinism_failed`
 - `project_store_physical_determinism_overclaimed`
+- `project_store_superseded_physical_model_forbidden`
 
 ## Recovery classes
 
@@ -154,8 +172,9 @@ Public errors omit SQL text, private paths, tokens, raw source, object payloads,
 never
 after-request-or-profile-fix
 after-schema-or-catalog-fix
+retry-same-operation-after-durable-state-read
 retry-exact-base
-retry-after-reader-or-lock-release
+retry-after-reader-lock-or-sharing-release
 revalidate-existing-inactive-generation
 explicit-rollback-to-retained-validated-generation
 rebuild-new-generation

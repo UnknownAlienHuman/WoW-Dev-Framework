@@ -1,10 +1,19 @@
 {
   "schema_version": 1,
   "contract_id": "wow-store/e2-d/projectstore-coherent-publication",
+  "contract_revision": 2,
   "state": "implementation-ready-documentation-no-rust-code",
   "work_package": "E2-D",
   "crate": "wow-store",
   "selected_physical_profile_id": "project-store-wal-manifested-partitions-v1",
+  "supersedes": [
+    {
+      "design": "whole-sqlite-generation-image",
+      "historical_pull_request": 13,
+      "status": "rejected-for-current-implementation",
+      "rationale_path": "crates/wow-store/e2/REJECTED_ALTERNATIVES.md"
+    }
+  ],
   "direct_framework_dependencies": [
     "wow-core"
   ],
@@ -44,10 +53,11 @@
     "published-inactive-generation-build",
     "exact-read-back-store-project-graph-validation",
     "separate-current-record-compare-and-swap-activation",
-    "snapshot-bound-readers-and-process-local-generation-leases",
+    "durable-operation-idempotency-and-response-loss-reconciliation",
+    "snapshot-bound-readers-semantic-continuations-and-process-local-generation-leases",
     "wal-checkpoint-reader-pressure-and-durability-classification",
-    "startup-recovery-online-backup-restore-and-epoch-rebuild",
-    "reference-based-generation-partition-object-and-epoch-gc",
+    "startup-recovery-quarantine-online-backup-restore-and-epoch-rebuild",
+    "reference-based-generation-partition-object-operation-and-epoch-gc",
     "security-budgets-cancellation-determinism-and-benchmark-freeze"
   ],
   "deferred_scope": [
@@ -87,6 +97,21 @@
     "Quarantined",
     "GCEligible"
   ],
+  "operation_states": [
+    "Planned",
+    "MaterializingPartitions",
+    "BuildingInactiveGeneration",
+    "PublishedInactive",
+    "ValidatingInactive",
+    "ValidatedInactive",
+    "Activating",
+    "Activated",
+    "Failed",
+    "Cancelled",
+    "Quarantined",
+    "CleanupPending",
+    "RecoveryRequired"
+  ],
   "hard_rules": [
     "wow-store depends only on wow-core and never interprets domain semantics",
     "one exact SQLite WAL epoch and one writer owner in v1",
@@ -95,14 +120,16 @@
     "project graph analyzer and store identities form a noncyclic exact binding",
     "target commits inactive and passes fresh read-back validation before activation",
     "activation is a separate stale-base compare-and-swap transaction",
-    "readers bind one exact SQLite snapshot and never switch generations",
-    "current last-known-good failed-target and rollback identities never relabel",
-    "checkpoint WAL and physical bytes never alter logical identities",
+    "operation ID and canonical request digest govern idempotent retry and response-loss recovery",
+    "readers bind one exact SQLite snapshot generation lease and semantic continuation",
+    "current last-known-good failed-target validated-inactive rollback and quarantine identities never relabel",
+    "checkpoint WAL page row path clock and physical bytes never alter logical identities",
     "breaking schema runtime or physical profile changes build a new epoch",
-    "retention and GC require complete generation partition object and lease closure",
+    "retention and GC require complete generation partition object lease operation and evidence closure",
+    "the whole-sqlite-file-per-generation design is superseded and forbidden without a reviewed contract revision",
     "no raw SQL extension attach filesystem escape process network editor client or source execution",
     "row absence never becomes domain negative authority",
-    "missing probes benchmarks or checksums are blocking and never reported pass"
+    "missing probes benchmarks tests or checksums are blocking and never reported pass"
   ],
   "normative_files": [
     "crates/wow-store/README.md",
@@ -117,13 +144,16 @@
     "crates/wow-store/e2/SCHEMA_COMPOSITION.md",
     "crates/wow-store/e2/PROJECT_GRAPH_BINDING.md",
     "crates/wow-store/e2/PUBLICATION_PROTOCOL.md",
+    "crates/wow-store/e2/IDEMPOTENCY_AND_RECOVERY.md",
     "crates/wow-store/e2/READ_SNAPSHOTS_AND_LEASES.md",
     "crates/wow-store/e2/WAL_CHECKPOINT_AND_CONCURRENCY.md",
     "crates/wow-store/e2/RECOVERY_BACKUP_RETENTION_GC.md",
     "crates/wow-store/e2/BENCHMARK_AND_PROFILE_FREEZE.md",
+    "crates/wow-store/e2/REJECTED_ALTERNATIVES.md",
     "crates/wow-store/e2/SECURITY_AND_BUDGETS.md",
     "crates/wow-store/e2/ERROR_MODEL.md",
     "crates/wow-store/e2/TEST_MATRIX.md",
+    "crates/wow-store/e2/IDEMPOTENCY_AND_CONSOLIDATION_TESTS.md",
     "crates/wow-store/e2/IMPLEMENTATION_PLAN.md",
     "crates/wow-store/e2/CONTRACT.json",
     "crates/wow-store/e2/examples/README.md",
@@ -144,9 +174,9 @@
       "exact SQLite library Rust binding compile options and platform adapter",
       "effective WAL synchronous busy checkpoint limits and durability profile",
       "store project and graph schema operation validation bundle IDs and digests",
-      "physical profile partition identity membership publication and reader profiles",
+      "physical profile partition identity membership operation idempotency publication reader continuation recovery and GC profiles",
       "synthetic and pinned roth-ui benchmark corpus plus quantitative thresholds",
-      "all partition publication crash read lease recovery backup retention GC and benchmark vectors",
+      "all partition publication response-loss crash read lease cursor recovery backup retention GC and benchmark vectors",
       "all member and bundle SHA-256 values"
     ]
   }

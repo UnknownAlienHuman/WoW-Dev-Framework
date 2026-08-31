@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "fixture_id": "wow-store-e2-read-leases-v1",
+  "fixture_id": "wow-store-e2-read-leases-v2",
   "state": "documentation-only-pending-executable-freeze",
   "cases": [
     {
@@ -24,8 +24,28 @@
       "expected": "exact"
     },
     {
+      "case_id": "PSTORE-RACE-001",
+      "reader": "lease-acquisition-concurrent-with-gc-root-snapshot",
+      "expected": "shared-admission-guard-prevents-delete-race"
+    },
+    {
+      "case_id": "PSTORE-CURSOR-001",
+      "reader": "semantic-continuation-on-retained-generation",
+      "expected": "stable-continuation"
+    },
+    {
+      "case_id": "PSTORE-CURSOR-003",
+      "reader": "tampered-query-parameter-or-ordering-cursor",
+      "expected_error": "project_store_continuation_invalid_or_stale"
+    },
+    {
+      "case_id": "PSTORE-CURSOR-004",
+      "reader": "cursor-used-against-another-generation",
+      "expected_error": "project_store_continuation_invalid_or_stale"
+    },
+    {
       "case_id": "PSTORE-READ-009",
-      "reader": "active-lease-during-GC",
+      "reader": "active-lease-during-gc",
       "expected": "generation-retained"
     },
     {
@@ -39,6 +59,7 @@
       "expected_error": "project_store_external_reader_or_multiple_writer_unsupported"
     }
   ],
+  "cursor_ids": null,
   "result_ids": null,
   "canonical_sha256": null,
   "freeze_gate": {
