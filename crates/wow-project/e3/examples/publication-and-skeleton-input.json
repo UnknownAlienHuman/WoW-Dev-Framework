@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-project-e3-a-publication-skeleton-input-v1",
+  "state": "documentation-only-pending-vector-freeze",
+  "candidate": {
+    "blizzard_ui_index_candidate_id": null,
+    "project_generation_id": null,
+    "analyzer_snapshot_id": null,
+    "graph_publication_plan_id": null,
+    "fingerprint_manifest_id": null,
+    "skeleton_input_manifest_id": null,
+    "coverage_summary_id": null,
+    "canonical_sha256": null
+  },
+  "publication": {
+    "publication_bundle_id": null,
+    "project_snapshot_id": null,
+    "graph_generation_id": null,
+    "graph_snapshot_id": null,
+    "project_publication_set_id": null,
+    "project_store_generation_id": null,
+    "inactive_validation_report_id": null,
+    "current_publication_record_id": null,
+    "state_transition": [
+      "NotPublishedE3A",
+      "PublishedInactive",
+      "ValidatedInactive",
+      "Active"
+    ],
+    "canonical_sha256": null
+  },
+  "skeleton_input_cases": [
+    {
+      "case_id": "BUI-SKEL-001",
+      "operation": "open_blizzard_ui_skeleton_input_view",
+      "root_kind": "exact_entity",
+      "root_id": null,
+      "budgets": {
+        "max_entities": null,
+        "max_relations": null,
+        "max_source_spans": null,
+        "max_excerpt_bytes": null,
+        "max_output_bytes": null
+      },
+      "expected_page_id": null,
+      "expected_status": "CompleteOrExplicitPartial",
+      "canonical_sha256": null
+    },
+    {
+      "case_id": "BUI-SKEL-005",
+      "operation": "exact_source_slice",
+      "source_handle_id": null,
+      "content_sha256": null,
+      "byte_range": null,
+      "license_excerpt_policy_id": null,
+      "expected_result_id": null,
+      "canonical_sha256": null
+    },
+    {
+      "case_id": "BUI-SKEL-008",
+      "operation": "unbounded_all_source",
+      "expected_error": "blizzard_ui_unbounded_source_or_graph_export_forbidden"
+    },
+    {
+      "case_id": "BUI-SKEL-011",
+      "operation": "continue_with_other_snapshot_or_request",
+      "continuation_cursor_id": null,
+      "expected_error": "blizzard_ui_skeleton_input_cursor_invalid_or_stale"
+    },
+    {
+      "case_id": "BUI-SKEL-014",
+      "operation": "render-hostile-source-comment",
+      "expected": "quoted-source-data-not-framework-instruction"
+    }
+  ],
+  "publication_mutations": [
+    {
+      "case_id": "BUI-PUB-002",
+      "mutation": "use-user-project-store-identity-for-platform-source",
+      "expected_error": "blizzard_ui_store_graph_project_generation_mismatch"
+    },
+    {
+      "case_id": "BUI-PUB-006",
+      "mutation": "leave-removed-source-record-in-inactive-target",
+      "expected_error": "blizzard_ui_removed_input_stale_closure_failed"
+    },
+    {
+      "case_id": "BUI-PUB-008",
+      "mutation": "current-changes-before-cas",
+      "expected_error": "blizzard_ui_current_activation_stale_or_failed"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "candidate.*",
+      "publication.*",
+      "skeleton_input_cases[*].request-result-and-digest-fields",
+      "publication_mutations[*].exact-input-and-result-IDs"
+    ]
+  }
+}

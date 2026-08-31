@@ -1,0 +1,106 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-project-e3-a-analyzer-graph-handoff-v1",
+  "state": "documentation-only-pending-vector-freeze",
+  "analyzer_plan": {
+    "plan_id": null,
+    "project_generation_id": null,
+    "source_snapshot_id": null,
+    "analyzer_implementation_and_profile_id": null,
+    "annotation_artifact_id": null,
+    "main_unit_manifest_id": null,
+    "library_unit_manifest_id": null,
+    "source_coordinate_profile_id": null,
+    "canonical_sha256": null
+  },
+  "analyzer_snapshot": {
+    "analyzer_snapshot_id": null,
+    "fact_manifest_id": null,
+    "finding_manifest_id": null,
+    "coverage_record_ids": [],
+    "canonical_sha256": null
+  },
+  "fact_adapter": {
+    "adapter_profile_id": null,
+    "fact_bundle_ids": [],
+    "loss_record_ids": [],
+    "coverage_record_ids": [],
+    "canonical_sha256": null
+  },
+  "recognizers": {
+    "pack_id": "wow-core-structural",
+    "pack_version": "e2-1",
+    "result_partition_ids": [],
+    "match_ids": [],
+    "ambiguity_ids": [],
+    "coverage_record_ids": [],
+    "canonical_sha256": null
+  },
+  "graph_proposals": {
+    "graph_registry_profile_id": null,
+    "producer_partitions": [
+      {
+        "producer_id": "platform_source_inventory",
+        "partition_ids": []
+      },
+      {
+        "producer_id": "platform_toc_load",
+        "partition_ids": []
+      },
+      {
+        "producer_id": "platform_xml_structure",
+        "partition_ids": []
+      },
+      {
+        "producer_id": "platform_analyzer_structure",
+        "partition_ids": []
+      },
+      {
+        "producer_id": "core_recognizer_rule_partition",
+        "partition_ids": []
+      }
+    ],
+    "proposed_entity_assertion_ids": [],
+    "proposed_relation_assertion_ids": [],
+    "accepted_assertion_ids": [],
+    "rejected_proposal_ids": [],
+    "conflict_ids": [],
+    "coverage_record_ids": [],
+    "graph_publication_plan_id": null,
+    "graph_generation_id": null,
+    "graph_snapshot_id": null,
+    "canonical_sha256": null
+  },
+  "mutations": [
+    {
+      "case_id": "BUI-ANA-005",
+      "mutation": "project-reparses-lua-or-uses-raw-source-fallback",
+      "expected_error": "blizzard_ui_second_lua_parser_forbidden"
+    },
+    {
+      "case_id": "BUI-GRAPH-006",
+      "mutation": "enable-rule-on-provider-package-or-path-name",
+      "expected_error": "blizzard_ui_named_source_semantic_condition_forbidden"
+    },
+    {
+      "case_id": "BUI-GRAPH-015",
+      "mutation": "upgrade-source-shape-to-api-authority",
+      "expected_error": "blizzard_ui_confidence_or_authority_upgrade_forbidden"
+    },
+    {
+      "case_id": "BUI-GRAPH-013",
+      "mutation": "merge-same-name-user-project-and-platform-entity",
+      "expected_error": "blizzard_ui_cross_universe_identity_merge_forbidden"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "analyzer_plan.*",
+      "analyzer_snapshot.*",
+      "fact_adapter.*",
+      "recognizers.result-match-ambiguity-coverage-and-digests",
+      "graph_proposals.registry-partitions-proposals-results-generations-and-digest"
+    ]
+  }
+}

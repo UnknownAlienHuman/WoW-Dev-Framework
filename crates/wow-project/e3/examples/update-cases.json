@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-project-e3-a-update-cases-v1",
+  "state": "documentation-only-pending-vector-freeze",
+  "base": {
+    "source_snapshot_id": null,
+    "project_generation_id": null,
+    "analyzer_snapshot_id": null,
+    "graph_generation_id": null,
+    "project_store_generation_id": null
+  },
+  "cases": [
+    {
+      "case_id": "BUI-UPD-002",
+      "change": "one-lua-unit-content",
+      "expected_invalidated_partitions": [],
+      "expected_reused_partitions": [],
+      "expected_removed_records": [],
+      "expected_target_ids": {},
+      "canonical_sha256": null
+    },
+    {
+      "case_id": "BUI-UPD-003",
+      "change": "selected-toc-order-or-dependency",
+      "expected_invalidated_partitions": [],
+      "expected_reused_partitions": [],
+      "expected_target_ids": {},
+      "canonical_sha256": null
+    },
+    {
+      "case_id": "BUI-UPD-004",
+      "change": "xml-include-script-or-inline-lua",
+      "expected_invalidated_partitions": [],
+      "expected_reused_partitions": [],
+      "expected_removed_records": [],
+      "expected_target_ids": {},
+      "canonical_sha256": null
+    },
+    {
+      "case_id": "BUI-UPD-005",
+      "change": "analyzer-or-annotation-profile",
+      "expected_invalidated_partitions": [],
+      "expected_reused_partitions": [],
+      "expected_target_ids": {},
+      "canonical_sha256": null
+    },
+    {
+      "case_id": "BUI-UPD-006",
+      "change": "one-core-recognizer-rule-version-or-disable",
+      "expected_replaced_producer_partitions": [],
+      "expected_preserved_project_partitions": [],
+      "expected_coverage_change_ids": [],
+      "canonical_sha256": null
+    },
+    {
+      "case_id": "BUI-UPD-009",
+      "change": "remove-source-file",
+      "required_absence_sets": [
+        "source-package-toc-xml-load-records",
+        "analyzer-facts-findings",
+        "fact-adapter-records",
+        "recognizer-matches-proposals",
+        "graph-assertions-indexes-conflicts-source-handles",
+        "fingerprints-and-skeleton-inputs",
+        "target-generation-membership-and-object-references"
+      ],
+      "canonical_sha256": null
+    },
+    {
+      "case_id": "BUI-UPD-011",
+      "change": "different-update-sequences-same-final-state",
+      "expected": "same-target-candidate-publication-and-logical-query-results",
+      "canonical_sha256": null
+    },
+    {
+      "case_id": "BUI-UPD-012",
+      "change": "canonical-nochange",
+      "expected": "no-new-generation-and-no-expensive-work",
+      "canonical_sha256": null
+    },
+    {
+      "case_id": "BUI-FP-002",
+      "change": "same-fingerprint-in-another-generation",
+      "expected": "comparison-input-only-no-lineage-identity",
+      "canonical_sha256": null
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "base.*",
+      "cases[*].expected-partition-record-and-target-IDs",
+      "cases[*].canonical_sha256"
+    ]
+  }
+}
