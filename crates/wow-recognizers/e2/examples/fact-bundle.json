@@ -1,0 +1,249 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-recognizers-e2-fact-bundle-v1",
+  "state": "documentation-only-pending-prerequisite-and-byte-freeze",
+  "bundle": {
+    "bundle_id": null,
+    "fact_schema_profile_id": null,
+    "profile_id": null,
+    "reference_generation_id": null,
+    "project_generation_id": null,
+    "analyzer_snapshot_id": null,
+    "universe_id": "project:fixture-recognizers-e2",
+    "partition_manifest": [
+      "toc:FixtureAddon:Mainline",
+      "xml:FixtureFrames.xml",
+      "lua:Core.lua",
+      "lua:Events.lua",
+      "lua:State.lua"
+    ],
+    "capabilities": [
+      {
+        "capability_id": "emmy.fact.references",
+        "status": "Complete"
+      },
+      {
+        "capability_id": "emmy.fact.calls",
+        "status": "Complete"
+      },
+      {
+        "capability_id": "project.toc.package",
+        "status": "Complete"
+      },
+      {
+        "capability_id": "project.toc.dependencies",
+        "status": "Complete"
+      },
+      {
+        "capability_id": "project.toc.saved_variables",
+        "status": "Complete"
+      },
+      {
+        "capability_id": "project.xml.templates",
+        "status": "Complete"
+      },
+      {
+        "capability_id": "project.xml.objects",
+        "status": "Complete"
+      },
+      {
+        "capability_id": "project.xml.scripts",
+        "status": "Complete"
+      },
+      {
+        "capability_id": "project.signal.producer_scope",
+        "status": "Complete"
+      }
+    ],
+    "facts": [
+      {
+        "recognizer_fact_id": null,
+        "kind": "TocPackageFact",
+        "source_fact_id": null,
+        "package_id": "FixtureAddon",
+        "toc_variant_id": "FixtureAddon:Mainline",
+        "interface": 120100,
+        "source_handle_id": null,
+        "coverage_ids": []
+      },
+      {
+        "recognizer_fact_id": null,
+        "kind": "TocDependencyFact",
+        "source_fact_id": null,
+        "source_package_id": "FixtureAddon",
+        "target_package_name": "FixtureDependency",
+        "dependency_kind": "required",
+        "ordinal": 1,
+        "resolution_status": "resolved",
+        "source_handle_id": null,
+        "coverage_ids": []
+      },
+      {
+        "recognizer_fact_id": null,
+        "kind": "TocSavedVariableFact",
+        "source_fact_id": null,
+        "package_id": "FixtureAddon",
+        "toc_variant_id": "FixtureAddon:Mainline",
+        "variable_name": "FixtureDB",
+        "scope": "account",
+        "ordinal": 1,
+        "source_handle_id": null,
+        "coverage_ids": []
+      },
+      {
+        "recognizer_fact_id": null,
+        "kind": "XmlTemplateFact",
+        "source_fact_id": null,
+        "template_id": "FixtureButtonTemplate",
+        "object_kind": "Button",
+        "virtual": true,
+        "source_handle_id": null,
+        "coverage_ids": []
+      },
+      {
+        "recognizer_fact_id": null,
+        "kind": "XmlObjectFact",
+        "source_fact_id": null,
+        "object_id": "FixtureButton",
+        "object_kind": "Button",
+        "parent_object_id": "UIParent",
+        "template_ids": [
+          "FixtureButtonTemplate"
+        ],
+        "source_handle_id": null,
+        "coverage_ids": []
+      },
+      {
+        "recognizer_fact_id": null,
+        "kind": "LuaReferenceFact",
+        "source_fact_id": "ref:RegisterCallback",
+        "resolved_symbol_key": "EventRegistry:RegisterCallback",
+        "resolution_status": "resolved",
+        "file_id": "Events.lua",
+        "function_id": "RegisterFixtureCallbacks",
+        "source_handle_id": null,
+        "coverage_ids": []
+      },
+      {
+        "recognizer_fact_id": null,
+        "kind": "LuaCallFact",
+        "source_fact_id": "call:RegisterCallback",
+        "callee_reference_fact_id": "ref:RegisterCallback",
+        "argument_literals": [
+          "Fixture.Event"
+        ],
+        "argument_references": [
+          null,
+          "function:OnFixtureEvent",
+          "table:FixtureOwner"
+        ],
+        "file_id": "Events.lua",
+        "function_id": "RegisterFixtureCallbacks",
+        "source_handle_id": null,
+        "coverage_ids": []
+      },
+      {
+        "recognizer_fact_id": null,
+        "kind": "LuaReferenceFact",
+        "source_fact_id": "ref:TriggerEvent",
+        "resolved_symbol_key": "EventRegistry:TriggerEvent",
+        "resolution_status": "resolved",
+        "file_id": "Core.lua",
+        "function_id": "EmitFixtureEvent",
+        "source_handle_id": null,
+        "coverage_ids": []
+      },
+      {
+        "recognizer_fact_id": null,
+        "kind": "LuaCallFact",
+        "source_fact_id": "call:TriggerEvent",
+        "callee_reference_fact_id": "ref:TriggerEvent",
+        "argument_literals": [
+          "Fixture.Event"
+        ],
+        "file_id": "Core.lua",
+        "function_id": "EmitFixtureEvent",
+        "source_handle_id": null,
+        "coverage_ids": []
+      },
+      {
+        "recognizer_fact_id": null,
+        "kind": "LuaReferenceFact",
+        "source_fact_id": "ref:hooksecurefunc",
+        "resolved_symbol_key": "hooksecurefunc",
+        "resolution_status": "resolved",
+        "file_id": "Core.lua",
+        "function_id": "Attach",
+        "source_handle_id": null,
+        "coverage_ids": []
+      },
+      {
+        "recognizer_fact_id": null,
+        "kind": "LuaCallFact",
+        "source_fact_id": "call:hooksecurefunc",
+        "callee_reference_fact_id": "ref:hooksecurefunc",
+        "argument_literals": [
+          "FixtureTarget"
+        ],
+        "argument_references": [
+          null,
+          "function:AfterFixtureTarget"
+        ],
+        "file_id": "Core.lua",
+        "function_id": "Attach",
+        "source_handle_id": null,
+        "coverage_ids": []
+      },
+      {
+        "recognizer_fact_id": null,
+        "kind": "LuaAssignmentFact",
+        "source_fact_id": "state:read",
+        "assignment_kind": "field_read",
+        "root_reference": "FixtureDB",
+        "literal_path": [
+          "profile",
+          "enabled"
+        ],
+        "containing_function_id": "ReadState",
+        "source_handle_id": null,
+        "coverage_ids": []
+      }
+    ],
+    "canonical_sha256": null
+  },
+  "variants": [
+    {
+      "variant_id": "complete",
+      "changes": []
+    },
+    {
+      "variant_id": "partial-custom-event-producer-scope",
+      "capability_override": {
+        "project.signal.producer_scope": "Partial"
+      }
+    },
+    {
+      "variant_id": "dynamic-state-path",
+      "fact_mutation": "replace-literal-path-tail-with-dynamic-key"
+    },
+    {
+      "variant_id": "ambiguous-custom-event-producers",
+      "fact_mutation": "add-second-compatible-TriggerEvent-producer"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "bundle.bundle_id",
+      "bundle.fact_schema_profile_id",
+      "bundle.profile_id",
+      "bundle.reference_generation_id",
+      "bundle.project_generation_id",
+      "bundle.analyzer_snapshot_id",
+      "bundle.facts[*].recognizer_fact_id",
+      "bundle.facts[*].source_handle_id",
+      "bundle.facts[*].coverage_ids",
+      "bundle.canonical_sha256"
+    ]
+  }
+}
