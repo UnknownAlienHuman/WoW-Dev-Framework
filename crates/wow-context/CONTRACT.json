@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "crate": "wow-context",
+  "state": "implementation-ready-documentation-no-rust-code",
+  "documentation_frontier": "E3-A",
+  "implementation_frontier": "not-started",
+  "current_contract": {
+    "contract_id": "wow-context/e3-a/deterministic-skeleton-project-map",
+    "path": "crates/wow-context/e3/CONTRACT.json"
+  },
+  "direct_framework_dependencies": [
+    "wow-core",
+    "wow-project",
+    "wow-graph"
+  ],
+  "owned_capabilities": [
+    "L0 structural skeletons",
+    "L1 semantic skeletons",
+    "bounded Project Map",
+    "exact-root progressive context selection",
+    "context budgets and exact pinned-tokenizer accounting",
+    "snapshot-bound source excerpts and redaction",
+    "deterministic rendering and fragment explanation",
+    "context invalidation reuse diff and candidate validation"
+  ],
+  "explicit_non_owners": [
+    "source parsing and project indexing",
+    "graph assertion semantics and publication",
+    "SQLite ProjectStore and current activation",
+    "search fuzzy lineage migration and impact ranking",
+    "diagnostics remediation and autofix",
+    "model summaries embeddings and Codebase Memory",
+    "applications transports editor and WoW runtime"
+  ]
+}
