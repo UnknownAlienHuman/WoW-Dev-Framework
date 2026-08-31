@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-context-e3-invalidation-cases-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "cases": [
+    {
+      "case_id": "CTX-INV-001",
+      "change": "entity-typed-attribute-changed",
+      "expected_invalidations": [
+        "owning-l0",
+        "owning-l1",
+        "project-map-sections-that-render-the-field",
+        "dependent-bundles"
+      ]
+    },
+    {
+      "case_id": "CTX-INV-002",
+      "change": "direct-relation-added-or-removed",
+      "expected_invalidations": [
+        "source-and-target-direct-relation-sections",
+        "affected-axis-and-reason-paths",
+        "project-map-navigation",
+        "dependent-bundles"
+      ]
+    },
+    {
+      "case_id": "CTX-INV-003",
+      "change": "coverage-record-only",
+      "expected_invalidations": [
+        "every-citing-field-section-and-bundle"
+      ]
+    },
+    {
+      "case_id": "CTX-INV-005",
+      "change": "source-bytes-span-or-source-map-changed",
+      "expected_invalidations": [
+        "affected-source-excerpt",
+        "source-coordinate-fields-if-changed",
+        "dependent-rendered-members"
+      ]
+    },
+    {
+      "case_id": "CTX-INV-006",
+      "change": "unrelated-project-partition-with-exact-dependency-proof",
+      "expected_reuse": [
+        "unaffected-context-partitions"
+      ]
+    },
+    {
+      "case_id": "CTX-INV-007",
+      "change": "project-or-graph-generation-changed-without-impact-proof",
+      "expected": "conservative-widening"
+    },
+    {
+      "case_id": "CTX-INV-009",
+      "change": "rendering-profile-only",
+      "expected_reuse": [
+        "canonical-machine-skeletons",
+        "canonical-machine-project-map"
+      ],
+      "expected_invalidations": [
+        "rendered-members",
+        "rendered-bundles"
+      ]
+    },
+    {
+      "case_id": "CTX-INV-011",
+      "change": "tokenizer-profile-version-or-vocabulary",
+      "expected_invalidations": [
+        "token-dependent-selection-traces",
+        "token-counts",
+        "token-budgeted-bundles"
+      ]
+    },
+    {
+      "case_id": "CTX-INV-012",
+      "change": "entity-deleted",
+      "must_be_absent_in_target": [
+        "skeletons",
+        "project-map-members",
+        "navigation-index",
+        "relations-and-paths",
+        "source-presentations",
+        "selection-dependencies",
+        "rendered-fragments",
+        "continuation-targets"
+      ]
+    },
+    {
+      "case_id": "CTX-INV-014",
+      "change": "same-path-and-label-but-dependency-digest-changed",
+      "expected": "reuse-rejected"
+    },
+    {
+      "case_id": "CTX-INV-016",
+      "change": "equivalent-final-input-and-all-dependency-digests",
+      "expected": "canonical-nochange-no-new-semantic-artifact-set"
+    },
+    {
+      "case_id": "CTX-INV-017",
+      "change": "different-update-orders-same-final-state",
+      "expected": "identical-target-artifacts-and-diff"
+    },
+    {
+      "case_id": "CTX-INV-019",
+      "mutation": "wow-context-directly-updates-projectstore-current",
+      "expected_error": "context_artifact_publication_not_owned_e3a"
+    }
+  ],
+  "frozen_base_artifact_set_id": null,
+  "frozen_target_artifact_set_ids": {},
+  "frozen_invalidation_plan_ids": {},
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}
