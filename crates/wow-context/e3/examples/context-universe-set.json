@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-context-e3-b-context-universe-set-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "bind_request": {
+    "primary_project_publication_set_id": null,
+    "primary_project_generation_id": null,
+    "primary_project_snapshot_id": null,
+    "primary_project_view_id": null,
+    "primary_graph_generation_id": null,
+    "primary_graph_snapshot_id": null,
+    "primary_graph_view_id": null,
+    "primary_source_view_id": null,
+    "blizzard_ui_project_publication_set_id": null,
+    "blizzard_ui_project_generation_id": null,
+    "blizzard_ui_project_snapshot_id": null,
+    "blizzard_ui_project_view_id": null,
+    "blizzard_ui_graph_generation_id": null,
+    "blizzard_ui_graph_snapshot_id": null,
+    "blizzard_ui_graph_view_id": null,
+    "blizzard_ui_skeleton_input_view_id": null,
+    "reference_profile_id": null,
+    "reference_generation_id": null,
+    "reference_view_id": null,
+    "required_capabilities": [
+      "project.exact-entity-source-and-load-read",
+      "graph.exact-bounded-query",
+      "reference.exact-entity-read",
+      "project.exact-bounded-source-slice"
+    ],
+    "optional_platform_source_policy": "RequiredForPlatformFacets",
+    "budget_profile_id": null
+  },
+  "context_universe_set": {
+    "context_universe_set_id": null,
+    "primary_universe": {
+      "universe": "user_project",
+      "project_id": null,
+      "project_generation_id": null,
+      "project_snapshot_id": null,
+      "graph_generation_id": null,
+      "graph_snapshot_id": null,
+      "source_view_id": null
+    },
+    "platform_universe": {
+      "universe": "blizzard_ui_source",
+      "project_id": null,
+      "project_generation_id": null,
+      "project_snapshot_id": null,
+      "graph_generation_id": null,
+      "graph_snapshot_id": null,
+      "skeleton_input_view_id": null
+    },
+    "reference_universe": {
+      "universe": "reference_contract",
+      "profile_id": null,
+      "reference_generation_id": null,
+      "reference_view_id": null
+    },
+    "compatibility_report_id": null,
+    "capability_summary_ids": [],
+    "coverage_record_ids": [],
+    "conflict_ids": [],
+    "canonical_sha256": null
+  },
+  "compatibility_expectations": [
+    "primary project, graph, analyzer, source and publication identities close exactly",
+    "Blizzard UI source remains a separate universe and generation",
+    "ReferenceProfile product, flavor, build and Interface compatibility is explicit",
+    "source coordinates, graph registries and relation profiles are compatible",
+    "no symbolic current or latest value remains after binding"
+  ],
+  "negative_cases": [
+    {
+      "case_id": "CTX-BIND-003",
+      "mutation": "primary-project-and-graph-snapshot-mismatch",
+      "expected_error": "context_project_graph_source_binding_incoherent"
+    },
+    {
+      "case_id": "CTX-BIND-005",
+      "mutation": "reference-profile-flavor-or-build-mismatch",
+      "expected_error": "context_reference_profile_incompatible"
+    },
+    {
+      "case_id": "CTX-BIND-008",
+      "mutation": "merge-same-display-name-across-universes",
+      "expected_error": "context_cross_universe_identity_collapse_forbidden"
+    },
+    {
+      "case_id": "CTX-BIND-009",
+      "mutation": "symbolic-current-reaches-wow-context",
+      "expected_error": "context_floating_current_or_latest_forbidden"
+    },
+    {
+      "case_id": "CTX-BIND-011",
+      "mutation": "owner-view-returns-another-generation",
+      "expected_error": "context_owner_view_returned_unexpected_scope"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null": [
+      "all implementation and fixture prerequisite pins",
+      "all exact project, graph, source and reference identities",
+      "compatibility, capability, coverage and conflict expected records",
+      "context universe set ID and canonical SHA-256"
+    ]
+  }
+}
