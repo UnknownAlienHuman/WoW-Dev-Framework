@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-store-e2-generation-v1",
+  "state": "documentation-only-pending-generation-freeze",
+  "request": {
+    "request_id": null,
+    "store_id": "project-store:fixture-e2d",
+    "expected_head_id": null,
+    "target_project_publication_bundle_id": null,
+    "target_project_store_generation_id": null,
+    "physical_profile_id": null,
+    "registered_bundle_set_id": null,
+    "operation_plan_id": null,
+    "object_plan_id": null,
+    "validation_catalog_id": null
+  },
+  "staging": {
+    "staging_id": null,
+    "state": "Requested",
+    "transaction_report_id": null,
+    "checkpoint_close_report_id": null
+  },
+  "sealed": {
+    "project_store_generation_id": null,
+    "project_store_artifact_id": null,
+    "generation_manifest_id": null,
+    "logical_manifest_ids": [],
+    "object_reference_manifest_id": null,
+    "sealed_member_manifest_id": null,
+    "integrity_report_id": null,
+    "open_validation_report_id": null,
+    "publication_state": "InactiveValidated",
+    "canonical_sha256": null
+  },
+  "head": {
+    "head_key": "project:fixture-e2d",
+    "expected_previous_head_id": null,
+    "new_head_id": null,
+    "cas_result": null
+  },
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "request.*",
+      "staging.*report-ids",
+      "sealed.*",
+      "head.*result-and-ids"
+    ]
+  }
+}
