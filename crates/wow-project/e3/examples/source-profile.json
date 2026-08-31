@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-project-e3-a-source-profile-v1",
+  "state": "documentation-only-pending-profile-freeze",
+  "source_profile": {
+    "profile_id": null,
+    "source_class": "vendor_ui_source_mirror",
+    "provider": {
+      "repository_full_name": "Gethe/wow-ui-source",
+      "role": "materialization-mirror-candidate-not-authority",
+      "exact_commit_sha": null,
+      "exact_tree_sha": null,
+      "branch_or_tag_provenance": null
+    },
+    "client_target": {
+      "product": null,
+      "flavor": null,
+      "channel": null,
+      "build": null,
+      "interface": null,
+      "reference_profile_id": null,
+      "compatibility_assertion_id": null
+    },
+    "configured_roots": [],
+    "package_selection_profile_id": null,
+    "path_case_encoding_profile_id": null,
+    "ignored_excluded_generated_profile_id": null,
+    "materializer_profile_id": null,
+    "materializer_security_profile_id": null,
+    "license_redistribution_profile_id": null,
+    "toc_parser_profile_id": null,
+    "xml_parser_profile_id": null,
+    "load_profile_id": null,
+    "analyzer_profile_id": null,
+    "annotation_artifact_id": null,
+    "recognizer_pack_id": "wow-core-structural",
+    "recognizer_pack_version": "e2-1",
+    "graph_registry_profile_id": null,
+    "project_store_profile_id": "project-store-wal-manifested-partitions-v1",
+    "skeleton_input_profile_id": null,
+    "fingerprint_profile_id": null,
+    "budget_profile_id": null,
+    "canonicalization_profile_id": null,
+    "canonical_sha256": null
+  },
+  "hard_assertions": [
+    "one exact closed materialized snapshot",
+    "one exact client flavor and selected TOC variant per package",
+    "source universe is blizzard_ui_source",
+    "source is implementation evidence not API or runtime authority",
+    "no Git network client discovery or source execution in wow-project"
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "source_profile.profile_id",
+      "source_profile.provider.exact_commit_sha",
+      "source_profile.provider.exact_tree_sha",
+      "source_profile.client_target.*",
+      "source_profile.configured_roots",
+      "source_profile.*_profile_id",
+      "source_profile.annotation_artifact_id",
+      "source_profile.canonical_sha256"
+    ]
+  }
+}
