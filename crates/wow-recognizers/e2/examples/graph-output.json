@@ -1,0 +1,127 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-recognizers-e2-graph-output-v1",
+  "state": "documentation-only-pending-graph-and-byte-freeze",
+  "output_partition": {
+    "output_partition_id": null,
+    "pack_id": "wow-core-structural",
+    "pack_version": "e2-1",
+    "rule_id": "core.signal.custom_registry_subscription",
+    "rule_version": 1,
+    "fact_schema_profile_id": null,
+    "graph_registry_bundle_id": null,
+    "profile_id": null,
+    "reference_generation_id": null,
+    "project_generation_id": null,
+    "input_bundle_id": null,
+    "input_partition_id": "project.signal:Fixture.Event",
+    "status": "complete",
+    "rule_outcome_ids": [],
+    "match_ids": [],
+    "ambiguity_ids": [],
+    "coverage_record_ids": [],
+    "entity_proposals": [
+      {
+        "proposal_id": null,
+        "entity_kind_id": "event",
+        "semantic_key_ingredients": {
+          "universe_id": "project:fixture-recognizers-e2",
+          "event_key": "Fixture.Event",
+          "event_class": "custom-registry-event"
+        },
+        "attributes": {
+          "display_name": "Fixture.Event"
+        },
+        "confidence": "Derived",
+        "input_fact_ids": [
+          "call:TriggerEvent",
+          "call:RegisterCallback"
+        ],
+        "source_handle_ids": [],
+        "evidence_ids": [],
+        "coverage_record_ids": [],
+        "match_id": null,
+        "canonical_sha256": null
+      }
+    ],
+    "relation_proposals": [
+      {
+        "proposal_id": null,
+        "relation_kind_id": "subscribes_callback",
+        "direction": "callback-to-event",
+        "source_key_ingredients": {
+          "entity_kind_id": "callback",
+          "semantic_symbol_id": "function:OnFixtureEvent"
+        },
+        "target_key_ingredients": {
+          "entity_kind_id": "event",
+          "event_key": "Fixture.Event",
+          "event_class": "custom-registry-event"
+        },
+        "attributes": {
+          "registry_kind": "EventRegistry",
+          "owner_symbol_id": "table:FixtureOwner"
+        },
+        "confidence": "Derived",
+        "input_fact_ids": [
+          "call:TriggerEvent",
+          "call:RegisterCallback"
+        ],
+        "source_handle_ids": [],
+        "evidence_ids": [],
+        "coverage_record_ids": [],
+        "match_id": null,
+        "canonical_sha256": null
+      }
+    ],
+    "canonical_sha256": null
+  },
+  "graph_validation": {
+    "target_base_graph_generation_id": null,
+    "proposal_validation_report_id": null,
+    "accepted_proposal_mappings": [],
+    "rejected_proposals": [],
+    "conflict_ids": [],
+    "coverage_impacts": [],
+    "canonical_sha256": null
+  },
+  "replacement_cases": [
+    {
+      "case_id": "RECOG-PART-002",
+      "old_producer_partition_id": null,
+      "new_producer_partition_id": null,
+      "expected": "old-owned-assertions-removed-new-accepted-assertions-published"
+    },
+    {
+      "case_id": "RECOG-PART-003",
+      "foreign_producer_partition_ids": [],
+      "expected": "unchanged"
+    },
+    {
+      "case_id": "RECOG-PART-004",
+      "disabled_output_partition_id": null,
+      "expected": "empty-owned-replacement-with-coverage-loss"
+    },
+    {
+      "case_id": "RECOG-OUT-008",
+      "mutation": "mark-truncated-output-complete",
+      "expected_error": "recognizer_output_partition_partial_as_complete_forbidden"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "output_partition.output_partition_id",
+      "output_partition.*profile-and-generation-ids",
+      "output_partition.input_bundle_id",
+      "output_partition.rule_outcome_ids",
+      "output_partition.match_ids",
+      "output_partition.coverage_record_ids",
+      "output_partition.*proposal-ids-match-evidence-coverage-and-digests",
+      "output_partition.canonical_sha256",
+      "graph_validation.*",
+      "replacement_cases[*].partition-and-assertion-ids",
+      "fixture-canonical-sha256"
+    ]
+  }
+}

@@ -1,171 +1,211 @@
 {
   "schema_version": 1,
   "repository": "UnknownAlienHuman/WoW-Dev-Framework",
-  "current_milestone": "E0",
+  "documentation_frontier": "E2-B",
+  "implementation_frontier": "not-started",
   "contract_state": "documentation-only-no-rust-code",
   "required_reading": [
     "AGENTS.md",
     "crates/AGENTS.md",
+    "crates/README.md",
     "crates/DEPENDENCY_GRAPH.md",
     "crates/WORKSTREAMS.md",
-    "target crate brief",
-    "current wow-addon-engineering-kb routes"
+    "target crate router and contract manifest",
+    "current wow-addon-engineering-kb AGENTS.md and INDEX_MINI.md routes"
   ],
   "rules": [
     "Directory presence does not activate a crate.",
+    "Documentation-ready does not mean code prerequisites are implemented.",
     "Allowed dependencies are maximum permitted edges, not mandatory dependencies.",
-    "Implement only the active workstream and its executable fixtures.",
+    "Implement only the active work package and its executable fixtures.",
     "Do not create empty placeholder crates or fake successful operations.",
-    "Cross-crate contract changes must update this manifest and the dependency graph."
+    "Required null fixture pins become invalid when implementation_state changes from not-started.",
+    "Cross-crate contract changes update this manifest, dependency graph or workstream routing as applicable.",
+    "The external WoW engineering KB remains the current patch-sensitive authority/router; live claims are linked, not duplicated."
+  ],
+  "contract_packages": [
+    {
+      "work_package": "E0-A",
+      "crate": "wow-core",
+      "contract_id": "wow-core/e0-a/1",
+      "manifest": "crates/wow-core/CONTRACT.json",
+      "state": "implementation-ready-documentation-no-rust-code"
+    },
+    {
+      "work_package": "E0-B",
+      "crate": "wow-reference",
+      "contract_id": "wow-reference/e0-b/1",
+      "manifest": "crates/wow-reference/CONTRACT.json",
+      "state": "implementation-ready-documentation-no-rust-code"
+    },
+    {
+      "work_package": "E0-C",
+      "crate": "wow-emmy",
+      "contract_id": "wow-emmy/e0-c/1",
+      "manifest": "crates/wow-emmy/CONTRACT.json",
+      "state": "implementation-ready-documentation-no-rust-code"
+    },
+    {
+      "work_package": "E0-D",
+      "crate": "wow-project",
+      "contract_id": "wow-project/e0-d/1",
+      "manifest": "crates/wow-project/CONTRACT.json",
+      "state": "implementation-ready-documentation-no-rust-code"
+    },
+    {
+      "work_package": "E0-E",
+      "crate": "wow-rules",
+      "contract_id": "wow-rules/e0-e/1",
+      "manifest": "crates/wow-rules/CONTRACT.json",
+      "state": "implementation-ready-documentation-no-rust-code"
+    },
+    {
+      "work_package": "E0-F",
+      "crate": "wow-service",
+      "contract_id": "wow-service/e0-f/1",
+      "manifest": "crates/wow-service/CONTRACT.json",
+      "state": "implementation-ready-documentation-no-rust-code"
+    },
+    {
+      "work_package": "E1-A",
+      "crate": "wow-store",
+      "contract_id": "wow-store/e1-a/1",
+      "manifest": "crates/wow-store/CONTRACT.json",
+      "state": "implementation-ready-documentation-no-rust-code"
+    },
+    {
+      "work_package": "E1-B",
+      "crate": "wow-reference",
+      "contract_id": "wow-reference/e1-persistent-schema-and-build-plan",
+      "manifest": "crates/wow-reference/e1/CONTRACT.json",
+      "state": "implementation-ready-documentation-no-rust-code"
+    },
+    {
+      "work_package": "E1-C",
+      "crate": "wow-annotations",
+      "contract_id": "wow-annotations/e1-projection-and-parity",
+      "manifest": "crates/wow-annotations/e1/CONTRACT.json",
+      "state": "implementation-ready-documentation-no-rust-code"
+    },
+    {
+      "work_package": "E1-D",
+      "crate": "wow-service",
+      "contract_id": "wow-service/e1-d-reference-pack-build-validation",
+      "manifest": "crates/wow-service/e1/CONTRACT.json",
+      "state": "implementation-ready-documentation-no-rust-code"
+    },
+    {
+      "work_package": "E2-A",
+      "crate": "wow-graph",
+      "contract_id": "wow-graph/e2-a/typed-assertion-partition-query-core",
+      "manifest": "crates/wow-graph/e2/CONTRACT.json",
+      "state": "implementation-ready-documentation-no-rust-code"
+    },
+    {
+      "work_package": "E2-B",
+      "crate": "wow-recognizers",
+      "contract_id": "wow-recognizers/e2-b/core-structural-rules",
+      "manifest": "crates/wow-recognizers/e2/CONTRACT.json",
+      "state": "implementation-ready-documentation-no-rust-code"
+    }
   ],
   "crates": [
     {
       "name": "wow-core",
-      "status": "e0-active",
+      "status": "implementation-ready",
       "first_milestone": "E0",
+      "implementation_state": "not-started",
       "brief": "crates/wow-core/README.md",
       "allowed_dependencies": [],
       "owns": [
         "identity",
         "generation-context",
         "source-handles",
-        "evidence",
-        "conflicts",
-        "coverage-records",
-        "capability-summaries",
-        "not-evaluated",
-        "findings",
-        "warnings",
-        "budgets",
-        "canonicalization",
-        "result-envelopes"
-      ],
-      "active_scope": "identity, evidence/conflict, exact coverage plus summaries/evaluation, findings/warnings, budgets, canonicalization, deterministic result envelopes",
-      "work_package": "E0-A",
-      "contract_detail": "implementation-ready",
-      "implementation_state": "not-started",
-      "contract_manifest": "crates/wow-core/CONTRACT.json",
-      "contract_files": [
-        "crates/wow-core/AGENTS.md",
-        "crates/wow-core/DECISIONS.md",
-        "crates/wow-core/DATA_MODEL.md",
-        "crates/wow-core/OPERATIONS.md",
-        "crates/wow-core/CANONICALIZATION.md",
-        "crates/wow-core/ERROR_MODEL.md",
-        "crates/wow-core/TEST_MATRIX.md",
-        "crates/wow-core/IMPLEMENTATION_PLAN.md",
-        "crates/wow-core/CONSUMER_GUIDE.md"
-      ],
-      "canonicalization_version": "wow-core-json/e0-1",
-      "normative_examples": [
-        "crates/wow-core/examples/e0-clean-result.json",
-        "crates/wow-core/examples/e0-findings-result.json",
-        "crates/wow-core/examples/e0-not-evaluated-result.json",
-        "crates/wow-core/examples/e0-conflict-not-evaluated-result.json",
-        "crates/wow-core/examples/e0-generation-mismatch-error.json",
-        "crates/wow-core/examples/HASH_VECTORS.json"
+        "evidence-and-conflicts",
+        "coverage-and-not-evaluated",
+        "findings-warnings-budgets",
+        "canonical-result-envelopes"
       ]
     },
     {
       "name": "wow-store",
-      "status": "deferred",
+      "status": "E1-A-implementation-ready",
       "first_milestone": "E1",
+      "implementation_state": "not-started",
       "brief": "crates/wow-store/README.md",
       "allowed_dependencies": [
         "wow-core"
       ],
       "owns": [
         "sqlite-lifecycle",
-        "migrations",
+        "schemas-and-migrations",
         "generation-transactions",
+        "immutable-reference-store",
+        "future-project-store",
         "content-addressed-objects"
       ]
     },
     {
       "name": "wow-reference",
-      "status": "e0-fixture-slice",
+      "status": "E0-B-and-E1-B-implementation-ready",
       "first_milestone": "E0",
+      "implementation_state": "not-started",
       "brief": "crates/wow-reference/README.md",
       "allowed_dependencies": [
         "wow-core",
         "wow-store"
       ],
       "owns": [
-        "fixture-profile-validation",
-        "reference-input-inventory",
-        "restricted-declarative-evaluation",
-        "raw-canonical-value-preservation",
-        "unknown-field-preservation-and-impact",
-        "system-function-restriction-lowering",
-        "duplicate-and-conflict-classification",
-        "reference-side-source-and-evidence",
-        "per-partition-coverage",
-        "exact-reference-view",
-        "negative-authority-inputs",
-        "closed-fixture-validation",
-        "deterministic-reference-model"
-      ],
-      "active_scope": "one closed synthetic fixture profile, exact symbol/restriction lookups, complete/partial/conflict coverage, no full pack builder or storage",
-      "work_package": "E0-B",
-      "contract_detail": "implementation-ready",
-      "implementation_state": "not-started",
-      "contract_manifest": "crates/wow-reference/CONTRACT.json",
-      "contract_files": [
-        "crates/wow-reference/AGENTS.md",
-        "crates/wow-reference/DECISIONS.md",
-        "crates/wow-reference/DATA_MODEL.md",
-        "crates/wow-reference/OPERATIONS.md",
-        "crates/wow-reference/LOOKUP_AND_COVERAGE.md",
-        "crates/wow-reference/FIXTURE_PROFILE.md",
-        "crates/wow-reference/ERROR_MODEL.md",
-        "crates/wow-reference/TEST_MATRIX.md",
-        "crates/wow-reference/IMPLEMENTATION_PLAN.md"
-      ],
-      "fixture_profile_id": "fixture-retail-120100-e0-v1",
-      "normative_examples": [
-        "crates/wow-reference/examples/fixture-bundle.json",
-        "crates/wow-reference/examples/lookup-cases.json",
-        "crates/wow-reference/examples/CHECKSUMS.json"
-      ],
-      "byte_freeze_state": "required-before-first-rust-implementation"
+        "reference-profile-and-generation",
+        "restricted-apidoc-evaluation",
+        "raw-metadata-preservation",
+        "normalization-and-corrections",
+        "coverage-conflicts-negative-authority",
+        "persistent-reference-model",
+        "exact-reference-view"
+      ]
     },
     {
       "name": "wow-annotations",
-      "status": "deferred",
+      "status": "E1-C-implementation-ready",
       "first_milestone": "E1",
+      "implementation_state": "not-started",
       "brief": "crates/wow-annotations/README.md",
       "allowed_dependencies": [
         "wow-core",
         "wow-reference"
       ],
       "owns": [
-        "annotation-projection",
+        "annotation-semantic-model",
+        "type-lowering-and-rendering",
         "wow-dialect-projection",
-        "semantic-parity",
-        "projection-loss-report"
+        "source-maps-and-projection-loss",
+        "ketho-semantic-parity",
+        "emmylua-luals-consumer-probes"
       ]
     },
     {
       "name": "wow-emmy",
-      "status": "e0-active",
+      "status": "E0-C-implementation-ready",
       "first_milestone": "E0",
+      "implementation_state": "not-started",
       "brief": "crates/wow-emmy/README.md",
       "allowed_dependencies": [
         "wow-core"
       ],
       "owns": [
-        "upstream-adapter",
-        "analyzer-actor",
-        "syntax-semantic-facts",
+        "upstream-pin-and-adapter",
+        "analyzer-session-and-snapshots",
+        "normalized-lua-facts",
         "generic-diagnostic-normalization",
-        "compatibility-probe"
-      ],
-      "active_scope": "one pinned analyzer adapter, annotation fixture, generic diagnostic and required semantic facts"
+        "source-coordinate-contract"
+      ]
     },
     {
       "name": "wow-project",
-      "status": "e0-minimal-slice",
+      "status": "E0-D-ready-E2-C-deferred",
       "first_milestone": "E0",
+      "implementation_state": "not-started",
       "brief": "crates/wow-project/README.md",
       "allowed_dependencies": [
         "wow-core",
@@ -175,52 +215,63 @@
         "wow-recognizers"
       ],
       "owns": [
-        "workspace-model",
+        "workspace-and-file-model",
+        "project-generation-publication",
         "toc-xml-load-model",
-        "project-generation",
         "incremental-invalidation",
+        "recognizer-and-graph-orchestration",
         "project-view"
       ],
-      "active_scope": "single configured workspace and coherent project generation only"
+      "next_contract": "E2-C full TOC/XML/load/incremental project indexing"
     },
     {
       "name": "wow-graph",
-      "status": "deferred",
+      "status": "E2-A-implementation-ready",
       "first_milestone": "E2",
+      "implementation_state": "not-started",
       "brief": "crates/wow-graph/README.md",
       "allowed_dependencies": [
         "wow-core",
         "wow-store"
       ],
       "owns": [
-        "entity-relation-registry",
-        "typed-graph",
-        "parent-axes",
-        "lineage-primitives",
+        "versioned-graph-registries",
+        "semantic-keys-and-assertions",
+        "producer-partition-replacement",
+        "immutable-graph-snapshots",
+        "independent-axes",
         "bounded-queries"
       ]
     },
     {
       "name": "wow-recognizers",
-      "status": "deferred",
+      "status": "E2-B-implementation-ready",
       "first_milestone": "E2",
+      "implementation_state": "not-started",
       "brief": "crates/wow-recognizers/README.md",
+      "contract_manifest": "crates/wow-recognizers/e2/CONTRACT.json",
       "allowed_dependencies": [
         "wow-core",
         "wow-emmy",
         "wow-graph"
       ],
       "owns": [
-        "recognizer-schema",
-        "universal-role-matching",
-        "calibration-packs",
-        "mutation-evaluation"
-      ]
+        "declarative-core-pack-schema",
+        "typed-fact-input-envelope",
+        "bounded-structural-matching",
+        "universal-role-and-relation-proposals",
+        "confidence-ambiguity-coverage",
+        "producer-partitions",
+        "mutation-and-precision-evaluation"
+      ],
+      "active_scope": "TOC XML frame mixin signal hook library and SavedVariables structural rules only",
+      "deferred_scope": "named calibration packs and framework-specific lifecycle/plugin conventions"
     },
     {
       "name": "wow-search",
       "status": "deferred",
       "first_milestone": "E4",
+      "implementation_state": "not-started",
       "brief": "crates/wow-search/README.md",
       "allowed_dependencies": [
         "wow-core",
@@ -237,8 +288,9 @@
     },
     {
       "name": "wow-rules",
-      "status": "e0-active",
+      "status": "E0-E-implementation-ready-later-rules-deferred",
       "first_milestone": "E0",
+      "implementation_state": "not-started",
       "brief": "crates/wow-rules/README.md",
       "allowed_dependencies": [
         "wow-core",
@@ -253,13 +305,13 @@
         "rule-findings",
         "remediation-tiers",
         "rule-evaluation"
-      ],
-      "active_scope": "wow.api.exists and one direct wow.secret.local_operation rule only"
+      ]
     },
     {
       "name": "wow-cbm",
       "status": "deferred",
       "first_milestone": "E6",
+      "implementation_state": "not-started",
       "brief": "crates/wow-cbm/README.md",
       "allowed_dependencies": [
         "wow-core"
@@ -275,6 +327,7 @@
       "name": "wow-context",
       "status": "deferred",
       "first_milestone": "E3",
+      "implementation_state": "not-started",
       "brief": "crates/wow-context/README.md",
       "allowed_dependencies": [
         "wow-core",
@@ -294,8 +347,9 @@
     },
     {
       "name": "wow-service",
-      "status": "e0-active",
+      "status": "E0-F-and-E1-D-implementation-ready-later-use-cases-deferred",
       "first_milestone": "E0",
+      "implementation_state": "not-started",
       "brief": "crates/wow-service/README.md",
       "allowed_dependencies": [
         "wow-core",
@@ -314,11 +368,10 @@
       "owns": [
         "use-case-orchestration",
         "generation-coherence",
-        "status",
-        "check",
+        "status-and-check",
+        "reference-pack-build-validation",
         "public-operation-envelopes"
-      ],
-      "active_scope": "status and check orchestration only"
+      ]
     }
   ]
 }

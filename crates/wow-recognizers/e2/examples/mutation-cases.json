@@ -1,0 +1,149 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-recognizers-e2-mutation-cases-v1",
+  "state": "documentation-only-pending-evaluation-freeze",
+  "mutations": [
+    {
+      "case_id": "RECOG-MUT-001",
+      "mutation_id": "rename-repository-owner-addon-metadata",
+      "changes": [
+        "UnknownAlienHuman -> OtherOwner",
+        "FixtureAddon -> RenamedAddon"
+      ],
+      "preserve": [
+        "semantic fact IDs after normalized project remap",
+        "pack/rule profiles"
+      ],
+      "expected": "identical-semantic-matches-and-proposals"
+    },
+    {
+      "case_id": "RECOG-MUT-002",
+      "mutation_id": "move-and-rename-files",
+      "changes": [
+        "Core.lua -> Modules/CoreRuntime.lua",
+        "Events.lua -> Signals/Registry.lua"
+      ],
+      "expected": "identical-roles-except-exact-source-handles-and-new-generation-identity"
+    },
+    {
+      "case_id": "RECOG-MUT-003",
+      "mutation_id": "rename-local-identifiers",
+      "changes": [
+        "frame -> object",
+        "callback -> handler",
+        "db -> state"
+      ],
+      "expected": "identical-semantic-output"
+    },
+    {
+      "case_id": "RECOG-MUT-004",
+      "mutation_id": "change-decisive-convention-literal",
+      "changes": [
+        "EventRegistry:RegisterCallback -> OtherRegistry:RegisterCallback"
+      ],
+      "expected": "custom-registry-rule-no-longer-matches"
+    },
+    {
+      "case_id": "RECOG-MUT-005",
+      "mutation_id": "remove-custom-event-producer",
+      "changes": [
+        "delete TriggerEvent(Fixture.Event) fact"
+      ],
+      "expected": "confirmed-custom-subscription-becomes-unresolved-or-no-match"
+    },
+    {
+      "case_id": "RECOG-MUT-006",
+      "mutation_id": "exact-hook-target-to-dynamic",
+      "changes": [
+        "hooksecurefunc target resolution resolved -> dynamic"
+      ],
+      "expected": "Derived-to-Possible-with-no-safety-claim"
+    },
+    {
+      "case_id": "RECOG-MUT-007",
+      "mutation_id": "complete-to-partial-signal-producer-coverage",
+      "changes": [
+        "project.signal.producer_scope Complete -> Partial"
+      ],
+      "expected": "Partial-or-NotEvaluated-not-EvaluatedNoMatch"
+    },
+    {
+      "case_id": "RECOG-MUT-008",
+      "mutation_id": "duplicate-and-shuffle-facts",
+      "changes": [
+        "duplicate exact LuaCallFact and evidence",
+        "randomize all fact order"
+      ],
+      "expected": "same-match-and-proposal-identity-all-supporting-evidence-retained"
+    },
+    {
+      "case_id": "RECOG-MUT-010",
+      "mutation_id": "near-negative-libstub-path-only",
+      "changes": [
+        "add Libs/ directory metadata",
+        "remove exact LibStub call"
+      ],
+      "expected": "no-library-require-or-embed-match"
+    },
+    {
+      "case_id": "RECOG-MUT-011",
+      "mutation_id": "inject-repository-name-condition",
+      "changes": [
+        "add condition repository_name == WeakAuras"
+      ],
+      "expected_error": "recognizer_pack_repository_identity_condition_forbidden"
+    },
+    {
+      "case_id": "RECOG-PART-002",
+      "mutation_id": "rule-version-replacement",
+      "changes": [
+        "core.signal.custom_registry_subscription@1 -> @2",
+        "change output attribute schema under reviewed contract"
+      ],
+      "expected": "old-producer-partition-removed-new-partition-published-atomically"
+    },
+    {
+      "case_id": "RECOG-PART-004",
+      "mutation_id": "disable-rule",
+      "changes": [
+        "rollout default -> disabled"
+      ],
+      "expected": "empty-owned-replacement-and-explicit-coverage-loss"
+    },
+    {
+      "case_id": "RECOG-SEC-002",
+      "mutation_id": "cartesian-join-amplification",
+      "changes": [
+        "multiply producer and subscriber facts beyond max expansions"
+      ],
+      "expected": "deterministic-Partial-or-limit-error-no-complete-partition"
+    },
+    {
+      "case_id": "RECOG-DET-001",
+      "mutation_id": "worker-count",
+      "changes": [
+        "workers = 1",
+        "workers = 2",
+        "workers = N"
+      ],
+      "expected": "byte-identical-canonical-output"
+    }
+  ],
+  "evaluation_profile": {
+    "evaluation_profile_id": null,
+    "precision_thresholds": null,
+    "recall_thresholds": null,
+    "unknown_and_not_evaluated_policy": null,
+    "graph_validation_rejection_threshold": null,
+    "promotion_result_id": null
+  },
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "evaluation_profile.*",
+      "mutations[*].input-and-output-digests",
+      "mutations[*].evaluation-record-ids",
+      "fixture-canonical-sha256"
+    ]
+  }
+}

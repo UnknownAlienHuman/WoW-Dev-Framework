@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-recognizers-e2-ambiguity-cases-v1",
+  "state": "documentation-only-pending-output-freeze",
+  "cases": [
+    {
+      "case_id": "RECOG-EVENT-008",
+      "rule_id": "core.signal.custom_registry_subscription@1",
+      "reason": "multiple-custom-event-producers",
+      "input_variant": "ambiguous-custom-event-producers",
+      "expected_confidence": "Possible",
+      "expected_competing_match_ids": [],
+      "expected_ambiguity_id": null,
+      "forbidden_resolution": "first-or-nearest-producer"
+    },
+    {
+      "case_id": "RECOG-FRAME-003",
+      "rule_id": "core.lua.create_frame@1",
+      "reason": "unresolved-parent-or-template",
+      "input_variant": "dynamic-parent-and-two-template-candidates",
+      "expected_confidence": "Possible",
+      "expected_competing_match_ids": [],
+      "expected_ambiguity_id": null,
+      "forbidden_resolution": "variable-name-or-source-order"
+    },
+    {
+      "case_id": "RECOG-XML-005",
+      "rule_id": "core.xml.inherits@1",
+      "reason": "multiple-resolved-targets",
+      "input_variant": "two-compatible-template-targets",
+      "expected_confidence": "Possible",
+      "expected_competing_match_ids": [],
+      "expected_ambiguity_id": null,
+      "forbidden_resolution": "first-template"
+    },
+    {
+      "case_id": "RECOG-LIB-005",
+      "rule_id": "core.library.libstub_require@1",
+      "reason": "dynamic-library-key",
+      "input_variant": "library-key-from-runtime-expression",
+      "expected_confidence": "Possible",
+      "expected_competing_match_ids": [],
+      "expected_ambiguity_id": null,
+      "forbidden_resolution": "path-or-vendored-folder-name"
+    },
+    {
+      "case_id": "RECOG-STATE-004",
+      "rule_id": "core.state.literal_path_read@1",
+      "reason": "state-path-dynamic-segment",
+      "input_variant": "dynamic-state-path",
+      "expected_confidence": "Possible",
+      "expected_exact_prefix": [
+        "FixtureDB",
+        "profile"
+      ],
+      "expected_competing_match_ids": [],
+      "expected_ambiguity_id": null,
+      "forbidden_resolution": "runtime-example-or-source-text-key"
+    },
+    {
+      "case_id": "RECOG-COV-006",
+      "rule_id": "core.signal.custom_registry_subscription@1",
+      "reason": "cross-partition-coverage-gap",
+      "input_variant": "partial-custom-event-producer-scope",
+      "expected_outcome": "Partial",
+      "expected_confidence": "Possible",
+      "expected_competing_match_ids": [],
+      "expected_ambiguity_id": null,
+      "forbidden_resolution": "no-producer-therefore-native-or-absent"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "cases[*].expected_competing_match_ids",
+      "cases[*].expected_ambiguity_id",
+      "cases[*].canonical_sha256"
+    ]
+  }
+}

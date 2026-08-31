@@ -1,0 +1,223 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-recognizers-e2-core-pack-v1",
+  "state": "documentation-only-pending-profile-and-byte-freeze",
+  "pack": {
+    "pack_id": "wow-core-structural",
+    "version": "e2-1",
+    "trust_class": "core",
+    "fact_schema_profile_id": null,
+    "graph_registry_bundle_id": null,
+    "evaluation_profile_id": null,
+    "rollout": "shadow",
+    "budgets": {
+      "max_rules": 64,
+      "max_clauses_per_rule": 48,
+      "max_clause_depth": 8,
+      "max_join_expansions_per_rule": 100000,
+      "max_matches_per_rule_partition": 10000,
+      "max_proposals_per_rule_partition": 20000,
+      "max_explanation_bytes": 1048576
+    },
+    "active_rule_ids": [
+      "core.toc.package@1",
+      "core.toc.file_order@1",
+      "core.toc.dependencies@1",
+      "core.toc.load_on_demand@1",
+      "core.toc.saved_variables@1",
+      "core.xml.template@1",
+      "core.xml.object@1",
+      "core.xml.inherits@1",
+      "core.xml.script@1",
+      "core.lua.create_frame@1",
+      "core.lua.create_from_mixins@1",
+      "core.lua.mixin_assignment@1",
+      "core.signal.native_frame_event@1",
+      "core.signal.native_event_registry_bridge@1",
+      "core.signal.custom_registry_producer@1",
+      "core.signal.custom_registry_subscription@1",
+      "core.signal.cvar_callback@1",
+      "core.hook.set_script@1",
+      "core.hook.hook_script@1",
+      "core.hook.secure_posthook@1",
+      "core.library.libstub_require@1",
+      "core.library.libstub_new@1",
+      "core.library.embed@1",
+      "core.state.saved_variable_root@1",
+      "core.state.literal_path_read@1",
+      "core.state.literal_path_write@1"
+    ],
+    "representative_rules": [
+      {
+        "rule_id": "core.signal.custom_registry_subscription",
+        "version": 1,
+        "required_capabilities": [
+          "emmy.fact.references",
+          "emmy.fact.calls",
+          "project.signal.producer_scope"
+        ],
+        "scope": "declared-project-signal-partition",
+        "clauses": [
+          {
+            "op": "fact",
+            "as": "subscription_call",
+            "kind": "LuaCallFact"
+          },
+          {
+            "op": "fact",
+            "as": "subscription_callee",
+            "kind": "LuaReferenceFact"
+          },
+          {
+            "op": "join",
+            "left": "subscription_call.callee_reference_fact_id",
+            "right": "subscription_callee.source_fact_id"
+          },
+          {
+            "op": "field_eq",
+            "field": "subscription_callee.resolved_symbol_key",
+            "value": "EventRegistry:RegisterCallback"
+          },
+          {
+            "op": "fact",
+            "as": "producer_call",
+            "kind": "LuaCallFact"
+          },
+          {
+            "op": "fact",
+            "as": "producer_callee",
+            "kind": "LuaReferenceFact"
+          },
+          {
+            "op": "join",
+            "left": "producer_call.callee_reference_fact_id",
+            "right": "producer_callee.source_fact_id"
+          },
+          {
+            "op": "field_eq",
+            "field": "producer_callee.resolved_symbol_key",
+            "value": "EventRegistry:TriggerEvent"
+          },
+          {
+            "op": "join",
+            "left": "subscription_call.argument_literal_1",
+            "right": "producer_call.argument_literal_1"
+          }
+        ],
+        "captures": [
+          {
+            "name": "event_key",
+            "type": "bounded_string",
+            "source": "subscription_call.argument_literal_1",
+            "cardinality": "one"
+          },
+          {
+            "name": "callback",
+            "type": "semantic_reference",
+            "source": "subscription_call.argument_reference_2",
+            "cardinality": "one"
+          }
+        ],
+        "outputs": [
+          {
+            "kind": "relation_assertion",
+            "relation_kind_id": "subscribes_callback",
+            "source": "callback",
+            "target": "event_key",
+            "confidence": "Derived"
+          }
+        ],
+        "ambiguity_policy": "retain-all-competing-producers-as-Possible",
+        "negative_policy": "no-custom-confirmation-without-exact-producer"
+      },
+      {
+        "rule_id": "core.state.saved_variable_root",
+        "version": 1,
+        "required_capabilities": [
+          "project.toc.saved_variables"
+        ],
+        "scope": "toc-variant",
+        "clauses": [
+          {
+            "op": "fact",
+            "as": "saved_variable",
+            "kind": "TocSavedVariableFact"
+          }
+        ],
+        "captures": [
+          {
+            "name": "root_name",
+            "type": "identifier",
+            "source": "saved_variable.variable_name",
+            "cardinality": "one"
+          }
+        ],
+        "outputs": [
+          {
+            "kind": "entity_assertion",
+            "entity_kind_id": "state_root",
+            "semantic_key": {
+              "package_id": "saved_variable.package_id",
+              "root_name": "root_name"
+            },
+            "confidence": "Derived"
+          }
+        ]
+      },
+      {
+        "rule_id": "core.hook.secure_posthook",
+        "version": 1,
+        "required_capabilities": [
+          "emmy.fact.references",
+          "emmy.fact.calls"
+        ],
+        "scope": "file-or-function",
+        "clauses": [
+          {
+            "op": "fact",
+            "as": "call",
+            "kind": "LuaCallFact"
+          },
+          {
+            "op": "fact",
+            "as": "callee",
+            "kind": "LuaReferenceFact"
+          },
+          {
+            "op": "join",
+            "left": "call.callee_reference_fact_id",
+            "right": "callee.source_fact_id"
+          },
+          {
+            "op": "field_eq",
+            "field": "callee.resolved_symbol_key",
+            "value": "hooksecurefunc"
+          }
+        ],
+        "confidence_policy": "Derived when target and callback resolve exactly; Possible otherwise",
+        "outputs": [
+          {
+            "kind": "relation_assertion",
+            "relation_kind_id": "hooks",
+            "attributes": {
+              "hook_kind": "secure_posthook",
+              "safety_claim": null
+            },
+            "confidence": "Derived"
+          }
+        ]
+      }
+    ],
+    "canonical_sha256": null
+  },
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "pack.fact_schema_profile_id",
+      "pack.graph_registry_bundle_id",
+      "pack.evaluation_profile_id",
+      "all-rule-plan-ids-and-digests",
+      "pack.canonical_sha256"
+    ]
+  }
+}
