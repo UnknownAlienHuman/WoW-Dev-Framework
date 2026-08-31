@@ -1,0 +1,174 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-store-e2-d-recovery-cases-v1",
+  "state": "documentation-only-pending-crash-and-recovery-freeze",
+  "recovery_profile_id": null,
+  "cases": [
+    {
+      "case_id": "PSTORE-REC-001",
+      "crash_point": "after-idempotency-plan-record-before-staging",
+      "observed_state": "PlannedOnly",
+      "expected_action": "safe-cleanup-or-exact-retry",
+      "current_unchanged": true
+    },
+    {
+      "case_id": "PSTORE-REC-002",
+      "crash_point": "during-object-temp-write",
+      "observed_state": "StagingObjectsPartial",
+      "expected_action": "verify-complete-objects-clean-partials",
+      "object_authority": false
+    },
+    {
+      "case_id": "PSTORE-REC-003",
+      "crash_point": "during-generation-transaction-before-commit",
+      "observed_state": "StagingDatabasePartial",
+      "expected_action": "discard-or-quarantine",
+      "generation_authority": false
+    },
+    {
+      "case_id": "PSTORE-REC-004",
+      "crash_point": "after-generation-transaction-commit-before-checkpoint",
+      "observed_state": "TransactionCommittedInStaging",
+      "expected_action": "reopen-revalidate-complete-seal-or-quarantine",
+      "current_unchanged": true
+    },
+    {
+      "case_id": "PSTORE-REC-PRESEAL-CLOSE",
+      "crash_point": "during-checkpoint-close-sidecar-cleanup",
+      "observed_state": "TransactionCommittedInStaging",
+      "expected_action": "profile-specific-revalidation",
+      "writable_reopen_as_normal_generation": false
+    },
+    {
+      "case_id": "PSTORE-REC-MANIFEST",
+      "crash_point": "during-generation-manifest-or-checksum-write",
+      "observed_state": "UnknownInconsistentState",
+      "expected_action": "classify-members-and-quarantine-or-rebuild"
+    },
+    {
+      "case_id": "PSTORE-REC-005",
+      "crash_point": "after-generation-directory-rename-before-registry-record",
+      "observed_state": "GenerationDirectoryPublishedUnregistered",
+      "expected_action": "validate-and-register-SealedInactive-or-quarantine",
+      "automatic_activation": false
+    },
+    {
+      "case_id": "PSTORE-REC-006",
+      "mutation": "registry-says-sealed-but-generation-directory-missing",
+      "observed_state": "RegistryPointerGenerationMismatch",
+      "expected_action": "integrity-incident",
+      "expected_error": "project_store_registry_generation_inventory_mismatch"
+    },
+    {
+      "case_id": "PSTORE-REC-007",
+      "crash_point": "after-store-validation-before-domain-attestations",
+      "observed_state": "StoreValidatedAwaitingDomainAttestations",
+      "expected_action": "revalidate-exact-image-and-request-attestations",
+      "current_unchanged": true
+    },
+    {
+      "case_id": "PSTORE-REC-008",
+      "crash_point": "after-domain-attestations-before-activation",
+      "observed_state": "DomainValidatedAwaitingActivation",
+      "expected_action": "exact-activation-CAS-retry",
+      "expected_current_must_still_match": true
+    },
+    {
+      "case_id": "PSTORE-REC-ACT-BEFORE-COMMIT",
+      "crash_point": "during-registry-activation-before-commit",
+      "expected": "registry-old-or-new-atomic-state",
+      "classification_if_old": "ActivationTransactionNotCommitted"
+    },
+    {
+      "case_id": "PSTORE-REC-009",
+      "crash_point": "after-registry-activation-commit-before-response",
+      "observed_state": "ActivationCommittedReceiptAvailable",
+      "expected_action": "return-existing-receipt",
+      "rebuild": false,
+      "rollback": false
+    },
+    {
+      "case_id": "PSTORE-REC-RECEIPT-MISSING",
+      "crash_point": "activation-committed-receipt-response-uncertain",
+      "observed_state": "ActivationCommittedReceiptMissingOrResponseLost",
+      "expected_action": "reconstruct-validated-receipt-from-committed-state",
+      "current_target_remains_active": true
+    },
+    {
+      "case_id": "PSTORE-REC-010",
+      "mutation": "current-pointer-target-image-corrupt-or-missing",
+      "observed_state": "RegistryPointerGenerationMismatch",
+      "expected_action": "block-new-readers-create-recovery-record-explicit-rollback-only",
+      "automatic_pointer_repair": false
+    },
+    {
+      "case_id": "PSTORE-REC-011",
+      "mutation": "edit-sealed-project.sqlite-to-repair-manifest",
+      "expected_error": "project_store_sealed_generation_repair_forbidden"
+    },
+    {
+      "case_id": "PSTORE-REC-012",
+      "mutation": "copy-arbitrary-external-sqlite-into-generations",
+      "expected_error": "project_store_arbitrary_database_adoption_forbidden"
+    },
+    {
+      "case_id": "PSTORE-REC-013",
+      "mutation": "recovery-inventory-exceeds-budget",
+      "expected_error": "project_store_recovery_budget_exceeded_or_partial",
+      "destructive_action": false,
+      "activation": false
+    },
+    {
+      "case_id": "PSTORE-REC-014",
+      "cancel_point": "during-recovery-validation",
+      "expected_error": "project_store_recovery_cancelled",
+      "background_continuation": false
+    },
+    {
+      "case_id": "PSTORE-REC-015",
+      "mutation": "open-quarantine-as-normal-read-view",
+      "expected_error": "project_store_read_generation_quarantined_or_revoked"
+    },
+    {
+      "case_id": "PSTORE-REC-016",
+      "mutation": "infer-operation-success-from-directory-mtime",
+      "expected_error": "project_store_recovery_state_unclassified"
+    },
+    {
+      "case_id": "PSTORE-GC-013",
+      "crash_point": "after-gc-mark-during-generation-delete",
+      "observed_state": "GcInterrupted",
+      "expected_action": "reconcile-marks-files-roots-and-resume-or-hold"
+    },
+    {
+      "case_id": "PSTORE-GC-014",
+      "crash_point": "during-object-delete-or-gc-finalize",
+      "observed_state": "GcInterrupted",
+      "expected_action": "post-validate-reference-closure-and-finalize-or-recover"
+    },
+    {
+      "case_id": "PSTORE-REC-QUARANTINE",
+      "mutation": "image-checksum-logical-manifest-or-sqlite-integrity-failure",
+      "observed_state": "CorruptOrIdentityMismatchedGeneration",
+      "expected_action": "QuarantineAndRebuild",
+      "expected_recovery_record_id": null
+    }
+  ],
+  "crash_matrix_manifest": {
+    "crash_point_ids": [],
+    "expected_registry_state_ids": [],
+    "expected_inventory_state_ids": [],
+    "expected_recovery_record_ids": [],
+    "canonical_sha256": null
+  },
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "recovery_profile_id",
+      "cases[*].exact-operation-generation-image-publication-registry-ids",
+      "cases[*].expected-recovery-error-receipt-ids",
+      "cases[*].canonical_sha256",
+      "crash_matrix_manifest.*"
+    ]
+  }
+}
