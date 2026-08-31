@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-context-e3-source-excerpt-cases-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "cases": [
+    {
+      "case_id": "CTX-SOURCE-001",
+      "request": {
+        "source_snapshot_id": null,
+        "source_handle_id": null,
+        "requested_span": null,
+        "purpose": "exact-declaration-anchor",
+        "max_bytes": 1024
+      },
+      "expected": "exact-bounded-excerpt-with-source-and-evidence-refs"
+    },
+    {
+      "case_id": "CTX-SOURCE-002",
+      "mutation": "source-handle-from-another-generation",
+      "expected_error": "context_source_snapshot_or_digest_mismatch"
+    },
+    {
+      "case_id": "CTX-SOURCE-003",
+      "mutation": "host-path-glob-url-or-free-text-search",
+      "expected_error": "context_source_handle_or_span_invalid"
+    },
+    {
+      "case_id": "CTX-SOURCE-004",
+      "mutation": "valid-xml-inline-lua-virtual-to-physical-map",
+      "expected": "virtual-and-physical-source-refs-preserved"
+    },
+    {
+      "case_id": "CTX-SOURCE-005",
+      "mutation": "virtual-source-map-or-byte-digest-mismatch",
+      "expected_error": "context_virtual_source_mapping_mismatch"
+    },
+    {
+      "case_id": "CTX-SOURCE-010",
+      "mutation": "private-absolute-host-path-in-source-metadata",
+      "expected": "redacted-and-not-used-as-identity"
+    },
+    {
+      "case_id": "CTX-SOURCE-011",
+      "mutation": "credential-or-token-like-bytes",
+      "expected": "exact-redaction-or-handle-only"
+    },
+    {
+      "case_id": "CTX-SOURCE-014",
+      "mutation": "redistribution-policy-forbids-source-bytes",
+      "expected": "handle-only-with-redaction-license-record"
+    },
+    {
+      "case_id": "CTX-SOURCE-015",
+      "mutation": "comment-contains-ignore-instructions-and-tool-call",
+      "expected": "escaped-fenced-data-only"
+    },
+    {
+      "case_id": "CTX-SOURCE-016",
+      "mutation": "source-closes-markdown-fence-and-adds-heading",
+      "expected": "deterministic-escaping-or-length-framing"
+    },
+    {
+      "case_id": "CTX-SOURCE-018",
+      "mutation": "redaction-changes-rendered-byte-and-token-cost",
+      "expected": "final-budgets-recounted"
+    },
+    {
+      "case_id": "CTX-L1-021",
+      "mutation": "truncation-removes-decisive-evidence-site",
+      "expected_error": "context_source_excerpt_decisive_site_omitted"
+    }
+  ],
+  "frozen_expected_excerpt_ids": {},
+  "frozen_expected_rendered_sha256": {},
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}
