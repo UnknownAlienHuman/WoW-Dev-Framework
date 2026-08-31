@@ -1,145 +1,164 @@
-# E2-C candidate boundary and E2-D persistent publication handoff
+# E2-C candidate boundary and E2-D coherent publication handoff
 
-**Status:** normative separation of candidate construction from ProjectStore/GraphSnapshot publication.
+**Status:** normative cross-crate boundary, updated for the selected E2-D ProjectStore profile.
 
-## E2-C output
+## E2-C output remains unchanged
 
-E2-C produces a validated immutable `ProjectIndexCandidate` with:
+E2-C produces an immutable validated `ProjectIndexCandidate` with `persistent_publication_state = NotPublishedE2C`. Candidate construction remains independent of SQLite layout, WAL state, row IDs, current pointers, checkpoints, backups, retention, and garbage collection.
 
-- exact ProjectGeneration candidate identity;
-- source/root/universe/package/TOC/XML/load manifests;
-- physical/virtual Lua unit and analyzer snapshot binding;
-- project/TOC/XML/load facts;
-- recognizer input/output producer partitions;
-- graph proposal-validation mappings/rejections/conflicts;
-- invalidation/reuse/removal closure;
-- capability/coverage/truncation/deferred state;
-- canonical digest.
+A candidate contains exact source, root, universe, package, TOC, XML, load, Lua-unit, analyzer, recognizer, graph-proposal, invalidation, coverage, conflict, truncation, and canonical manifest identities. It is not a published project snapshot.
 
-It does not create a persistent store, current pointer, final GraphGeneration, or published E2 ProjectSnapshot.
+## Selected E2-D store contract
 
-## Why the boundary exists
-
-E2-D still must choose and prove the physical ProjectStore generation model, WAL/read snapshot behavior, one-writer transaction, multi-manifest atomicity, crash recovery, retention, and GC. Parser/recognizer code must not silently predetermine these choices.
-
-## Candidate immutability
-
-After validation:
-
-- candidate records/bytes are immutable;
-- no parser/analyzer/recognizer result can be appended in place;
-- correction requires a new target candidate/generation;
-- candidate is identified by canonical content, not memory pointer or sequence number;
-- candidate remains `NotPublishedE2C` even if complete.
-
-## Candidate read view
+The persistence side is defined by [`../../wow-store/e2/README.md`](../../wow-store/e2/README.md) and uses:
 
 ```text
-ProjectIndexCandidateView
-    exact candidate/generation/profile identities
-    source/package/TOC/XML/load manifests
-    file/Lua unit/source-handle queries
-    analyzer facts/findings by exact capability
-    recognizer outcomes/proposals
-    graph proposal-validation report
-    invalidation/coverage/conflict/deferred records
+one owned SQLite WAL database per ProjectStore epoch
+one writer owner
+immutable content-addressed partition versions
+complete generation membership maps
+PublishedInactive -> read-back validation -> CAS activation
+snapshot-bound readers and process-local generation leases
 ```
 
-The view is for tests, inspection, service/E2-D handoff. It cannot claim persistent/current status or open a database.
+The physical profile does not enter E2-C candidate identity.
 
-## E2-D handoff bundle
+## Project publication bundle
+
+`wow-project` assembles the domain-facing handoff:
 
 ```text
 ProjectPublicationBundle
     validated ProjectIndexCandidate ID/digest
-    exact base published Project/Graph/Store generation IDs: optional
-    target ProjectGenerationId
-    graph registry and validated proposal partitions
-    project logical partition manifests
-    required ProjectStore schema/operation/validation profile IDs
-    expected project/graph counts/digests/query vectors
-    object/reference manifests
+    exact expected current ProjectPublicationSet/StoreGeneration: optional
+    target ProjectGenerationId and ProjectSnapshot candidate
+    exact AnalyzerSnapshot and source/TOC/XML/load/recognizer manifests
+    project-owned logical partition replacement plan
+    exact GraphPublicationPlan from wow-graph
+    graph registry and validated producer proposal partitions
+    project/graph schema, operation, and validation bundle IDs
+    expected logical counts/digests and golden reads
+    object-reference manifest
     publication capability policy
     budgets/cancellation
 ```
 
-The bundle contains registered logical operations, not raw SQL.
+The bundle contains typed logical records and registered operation invocations only. It contains no raw SQL, SQLite table name, connection, transaction callback, PRAGMA, filesystem path, or row ID.
 
-## E2-D responsibilities
+## Ownership
 
-- select/freeze physical ProjectStore model after benchmarks/fixtures;
-- activate `wow-store` direct dependency in project implementation;
-- one writer and stale-base rejection;
-- WAL/runtime profile where selected;
-- atomic logical partition replacement and current generation publication;
-- construct final GraphGeneration/GraphSnapshot through `wow-graph`;
-- bind ProjectSnapshot to exact persisted ProjectStore/GraphSnapshot/analyzer/source identities;
-- reopen consistent read snapshots;
-- crash/cancel/failure isolation;
-- last-known-good/current/failed target reporting;
-- retention/lease/backup/rebuild/GC.
+`wow-project` owns:
 
-## Atomicity target
+- ProjectGeneration and ProjectSnapshot semantics;
+- source/project/analyzer/recognizer coherence;
+- invalidation and logical partition ownership;
+- construction and validation of the publication bundle;
+- interpretation of project-domain validation results.
 
-Readers must observe either:
+`wow-graph` owns:
+
+- GraphGeneration and GraphSnapshot semantics;
+- graph registry, assertions, conflicts, coverage, indexes, and graph validation;
+- construction of the exact graph publication plan.
+
+`wow-store` owns:
+
+- the ProjectStore epoch and selected physical profile;
+- SQLite/WAL/transaction/one-writer behavior;
+- partition-version materialization and generation membership;
+- inactive generation commit, exact read snapshots, CAS activation, durability, checkpoint, backup, recovery, retention, and GC.
+
+No crate silently implements another owner's semantics.
+
+## Noncyclic identity order
 
 ```text
-old published ProjectSnapshot + old GraphSnapshot + old ProjectStore generation
+E2-C candidate and project semantic manifest
++ wow-graph GraphGenerationId / GraphSnapshotId
+-> ProjectSnapshotId
+
+ProjectSnapshotId
++ GraphSnapshotId
++ AnalyzerSnapshotId
++ project/graph logical partition manifests
+-> ProjectPublicationSetId
+
+ProjectPublicationSetId
+-> ProjectStoreGenerationId
+-> inactive validation report
+-> CurrentPublicationRecord
+```
+
+`ProjectSnapshotId` is derived before `ProjectPublicationSetId`; the publication set then binds the already-stable project, graph, analyzer, and logical-partition identities. None of `ProjectGenerationId`, `GraphGenerationId`, `ProjectSnapshotId`, `GraphSnapshotId`, or `ProjectPublicationSetId` includes `ProjectStoreGenerationId`. The store generation binds the complete publication set afterward.
+
+## Two-stage publication
+
+### Stage 1 — build inactive
+
+The writer validates the exact base, materializes/reuses immutable partition versions, writes a complete target generation membership map and semantic manifests, runs in-transaction invariants, and commits the target as `PublishedInactive`.
+
+Current remains unchanged.
+
+### Stage 2 — validate and activate
+
+A fresh exact read snapshot opens the inactive target and runs project, graph, store, object, stale-removal, cross-generation-leakage, and golden-query validation. Only a successful report may enter a separate activation transaction that compare-and-swaps the single current publication record against the exact expected base.
+
+If current changed after the inactive build, activation fails as stale. There is no silent rebase or merge.
+
+## Atomic reader contract
+
+A current read resolves one `CurrentPublicationRecord` and acquires one exact SQLite read transaction plus a generation lease. Every project and graph read is scoped through that record and the target generation membership map.
+
+A reader observes either:
+
+```text
+old StoreGeneration + old ProjectSnapshot + old GraphSnapshot + old AnalyzerSnapshot
 ```
 
 or:
 
 ```text
-new coherent ProjectSnapshot + new GraphSnapshot + new ProjectStore generation
+new StoreGeneration + new ProjectSnapshot + new GraphSnapshot + new AnalyzerSnapshot
 ```
 
-Never mixed source/analyzer/recognizer/graph/store generations.
+Never a mixed set. Existing readers remain on the old SQLite snapshot after activation; new readers observe the new current record.
 
-## Failure before E2-D
+## Failure and last-known-good
 
-An E2-C candidate failure:
+- E2-C candidate failure produces no publication bundle.
+- Store build failure or cancellation leaves current unchanged.
+- A committed inactive generation is recoverable but not current.
+- Failed validation quarantines or retains the inactive target for inspection according to policy.
+- CAS failure leaves the validated target inactive and requires exact re-evaluation against current; no implicit activation.
+- Current, last-known-good, failed-target, validated-inactive, and rollback-candidate identities remain distinct.
+- No old generation is relabeled as the failed target or merged with target inputs.
 
-- produces no publication bundle;
-- leaves prior published state untouched;
-- can retain exact failure/candidate IDs for status/debugging;
-- does not alter current pointers.
+## E2-D output consumed by `wow-project`
 
-## Failure during E2-D
+```text
+PublishedProjectState
+    exact CurrentPublicationRecord
+    ProjectStoreReadSnapshot
+    ProjectSnapshot/View identity
+    GraphSnapshot/View identity
+    AnalyzerSnapshot identity
+    profile/reference generation
+    project/graph/store capability and validation records
+```
 
-The E2-C bundle remains immutable evidence. E2-D records exact store/graph/publication failure and does not mutate/relabel candidate. Prior published generation remains under its original identity.
+`wow-project` exposes domain views, not raw storage handles.
 
-## Last-known-good
+## Persistent determinism
 
-A previous published state or E2-C candidate can be referenced as last-known-good only with exact original IDs. It cannot satisfy a request for the failed target or merge old facts with new inputs.
+E2-C retains responsibility for logical candidate determinism. E2-D separately proves:
 
-## Persistent versus canonical determinism
+- logical partition/version and membership determinism;
+- ProjectPublicationSet and StoreGeneration determinism;
+- exact project/graph query equivalence;
+- physical SQLite/WAL/checkpoint/backup byte classification.
 
-E2-C freezes logical candidate determinism. E2-D separately classifies:
-
-- logical project/graph/store generation determinism;
-- SQLite physical byte reproducibility;
-- WAL/checkpoint/operational state;
-- backup/archive bytes.
-
-Physical nondeterminism cannot change logical IDs or query results.
-
-## E2-C tests
-
-- candidate complete/partial/fail/cancel/no-change;
-- candidate immutable after validation;
-- no current pointer/store/GraphGeneration fields;
-- publication bundle contains exact registered logical manifests only;
-- stale base not hidden;
-- prior state not relabeled/mixed;
-- candidate digest independent of future physical store model.
+Physical page or WAL differences cannot change semantic IDs or query results.
 
 ## E2-D entry gate
 
-Do not begin E2-D implementation until:
-
-- E2-A graph and E2-C candidate code/seams pass;
-- E2-B recognizer producer partitions pass replacement tests;
-- selected ProjectStore physical model is benchmarked/frozen;
-- store/project/graph schema-operation-validation bundles exist;
-- crash/WAL/read-snapshot/current-pointer fixtures exist;
-- full publication and rollback vectors/checksums freeze.
+No Rust implementation begins until E2-A, E2-B, E2-C, and E1-A implementations and fixtures exist; the exact SQLite binding/runtime/platform adapter is probed; the selected physical profile passes the frozen synthetic and pinned real-addon benchmark corpus; project/graph/store schema-operation-validation bundles exist; and all publication, crash, reader, retention, and checksum vectors are frozen.

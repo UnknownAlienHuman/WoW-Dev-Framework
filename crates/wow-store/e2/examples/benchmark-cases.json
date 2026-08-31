@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-store-e2-benchmark-v1",
+  "state": "documentation-only-pending-implementation-and-threshold-freeze",
+  "selected_model": "manifested-immutable-partition-versions-complete-membership",
+  "candidate_models": [
+    "whole-database-per-generation",
+    "duplicated-generation-keyed-rows",
+    "manifested-immutable-partition-versions-complete-membership",
+    "recursive-base-plus-delta"
+  ],
+  "corpora": [
+    {
+      "id": "synthetic-small",
+      "digest": null
+    },
+    {
+      "id": "synthetic-medium",
+      "digest": null
+    },
+    {
+      "id": "synthetic-high-fanout",
+      "digest": null
+    },
+    {
+      "id": "UnknownAlienHuman/roth-ui@1656d4b9d33be914be2058460520e7423668d95c",
+      "digest": null
+    }
+  ],
+  "workloads": [
+    "full-publish",
+    "warm-open",
+    "one-lua-file-update",
+    "toc-update",
+    "xml-update",
+    "recognizer-version-update",
+    "graph-registry-update",
+    "old-reader-during-activation",
+    "bounded-graph-query",
+    "checkpoint-under-readers",
+    "retention-gc",
+    "backup-restore",
+    "epoch-rebuild"
+  ],
+  "thresholds": {
+    "publish_latency_by_corpus": null,
+    "one_file_write_amplification": null,
+    "read_latency": null,
+    "db_and_wal_peak_bytes": null,
+    "checkpoint_busy_and_remaining_frames": null,
+    "recovery_backup_gc": null
+  },
+  "baseline_report_id": null,
+  "canonical_sha256": null,
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}

@@ -1,107 +1,122 @@
-# `wow-graph` / `wow-store` persistence boundary
+# `wow-graph` / `wow-store` E2 persistence boundary
 
-**Status:** normative logical schema and registered-operation contract; physical ProjectStore model remains owned by `wow-store`.
+**Status:** normative logical graph boundary, updated for the selected E2-D ProjectStore profile.
 
-## Ownership
+## Selected persistence profile
+
+The physical ProjectStore contract is [`../../wow-store/e2/README.md`](../../wow-store/e2/README.md):
+
+```text
+one SQLite WAL database per compatible ProjectStore epoch
+immutable content-addressed partition versions
+complete generation membership maps
+PublishedInactive -> exact read-back validation -> CAS activation
+```
+
+`wow-graph` remains independent of physical SQLite layout and depends on `wow-store` only through typed registered schema, operation, publication-plan, and snapshot-read seams.
+
+## Graph ownership
 
 `wow-graph` owns:
 
-- logical graph records and invariants;
-- required indexes/query access paths;
-- registered write/read/validation operation definitions;
-- partition replacement and snapshot semantics;
-- expected logical manifests/counts/digests.
+- versioned graph entity, relation, attribute, and axis registries;
+- semantic entity/relation keys;
+- immutable entity/relation assertions and producer partitions;
+- graph conflicts, coverage, derived views, and required query indexes;
+- `GraphGenerationId`, `GraphSnapshotManifest`, and graph capability semantics;
+- graph logical schema/operation/validation bundles;
+- graph publication planning and exact post-write golden validation.
+
+It does not own SQLite/WAL/transactions, physical row placement, current-pointer mechanics, checkpoints, backups, leases, retention, or GC.
+
+## Store ownership
 
 `wow-store` owns:
 
-- SQLite/runtime/WAL/connection/transaction lifecycle;
-- schema/migration execution;
-- one-writer enforcement;
-- read snapshots/leases;
-- durability/checkpoint/backup/recovery/GC;
-- physical row/object storage.
+- ProjectStore epoch/runtime/physical profile;
+- one-writer acquisition and finite busy policy;
+- schema composition and migration execution;
+- immutable partition-version materialization;
+- complete store-generation membership maps;
+- inactive generation transaction and state;
+- snapshot-bound reads and generation leases;
+- CAS activation of the coherent current publication record;
+- durability, WAL checkpoint, backup, recovery, retention, and GC.
 
-## Logical record families
+Store never interprets graph fields or turns database absence into graph authority.
 
-```text
-graph_registry_manifest
-graph_entity_assertion
-graph_relation_assertion
-graph_partition_manifest
-graph_conflict
-graph_coverage
-graph_snapshot_manifest
-graph_generation_current/history metadata
-```
-
-Derived/materialized entity/relation indexes may exist for performance only when deterministically rebuildable from assertions and validated against them.
-
-## Required index capabilities
-
-- entity key exact lookup;
-- relation source/kind/target and reverse traversal;
-- assertion by producer partition;
-- evidence/conflict/coverage refs;
-- scope/profile/generation filtering;
-- axis relation lookup;
-- deterministic ordered pagination;
-- stale partition deletion/replacement.
-
-Index choice is physical implementation detail; public semantics are not tied to SQL schema names.
-
-## Registered write operations
+## Graph publication plan
 
 ```text
-insert_registry_bundle
-replace_graph_partitions
-insert_entity_assertions
-insert_relation_assertions
-replace_conflicts_and_coverage
-publish_graph_snapshot_manifest
-retain_or_remove_graph_generation
+GraphPublicationPlan
+    exact graph registry bundle and contract versions
+    exact base GraphGeneration/producer partition manifests: optional
+    target ProjectGeneration/Profile/Reference context
+    ordered producer partition replacement batches
+    expected semantic keys/assertions/conflicts/coverage/views/index manifests
+    GraphGenerationId and GraphSnapshotManifest candidate
+    graph schema/operation/validation bundle IDs
+    expected exact/neighbor/axis/path query vectors
+    object-reference manifest
+    budgets/cancellation
 ```
 
-Actual plan is phase-ordered and atomic through store. No application-provided SQL.
+The plan contains registered logical operations and typed records only. No raw SQL or storage callback.
 
-## Registered reads
+## Graph partition versions
+
+The selected store profile may place graph assertion, conflict, coverage, and derived-index rows in immutable partition versions. Their logical keys and payload digests remain graph-owned. Their physical storage, membership, reuse, and reclamation remain store-owned.
+
+A rule/producer update replaces exactly the graph producer partition named by the graph plan. Assertions from other producer partitions remain in target membership. A partial, failed, truncated, or cancelled producer result cannot be materialized as a complete partition.
+
+## Graph identity and store identity
+
+`GraphGenerationId` is derived before store publication from graph semantics and exact producer partition manifests. It does not include `ProjectStoreGenerationId`.
+
+`ProjectStoreGenerationId` later binds the complete ProjectPublicationSet, including the exact GraphGeneration/GraphSnapshot, membership, schema, and objects. This direction prevents identity cycles.
+
+## Validation before activation
+
+A committed inactive target is not graph-current. Through a fresh exact store read snapshot, `wow-graph` validates:
+
+- registry and generation identity;
+- assertion, endpoint, evidence, coverage, conflict, and derivation closure;
+- no stale producer assertion after replacement;
+- reverse/axis/index closure;
+- no cross-generation or cross-universe leakage;
+- exact entity, neighbor, axis, bounded-path, and explanation golden vectors;
+- deterministic counts and logical digests;
+- honest partial/NotEvaluated/absence behavior.
+
+Failure blocks activation and remains explicit. Store or project cannot repair a graph failure by dropping assertions, weakening keys, or relabeling coverage.
+
+## Read boundary
+
+A graph view opens only from an exact coherent ProjectStore read snapshot/current publication set. All registered graph reads are scoped by the exact target generation membership map.
+
+Graph public APIs expose graph keys, assertions, evidence, conflicts, coverage, and bounded results. They never expose:
 
 ```text
-open_graph_snapshot
-entity_assertions_by_key
-relation_assertions_by_key
-neighbors_ordered
-axis_members_ordered
-partition_manifest
-conflicts_and_coverage
-snapshot_manifest
+SQLite connection/transaction/cursor
+SQL/table/index/PRAGMA names
+physical row ID/page/WAL position
+mutable partition or current record
+store root or private path
 ```
 
-Complex bounded paths may use graph-owned in-memory projection over registered reads. Only the requested neighborhood is loaded.
+## Retention and GC
 
-## ProjectStore activation
+`wow-graph` supplies logical reachability/reference validation for graph records and producer partitions. `wow-store` computes physical generation/partition/object reachability across current, last-known-good, leases, evidence/debug pins, and rollback/recovery policy.
 
-E2 chooses the smallest correct physical model after benchmark/fixture validation. This contract does not force row-versioned vs file-per-generation storage. Whatever model is selected must provide:
+A graph partition version is deleted only when no retained store generation references it and the graph-owned delete/validation catalog confirms closure. No age-only deletion.
 
-- exact snapshot binding;
-- atomic partition publication;
-- stale-base rejection;
-- no cross-generation leakage;
-- one writer;
-- reader stability;
-- deterministic logical manifest;
-- safe retention/GC.
+## Hard stops
 
-## Validation
-
-After store publication:
-
-- reopen exact snapshot;
-- compare partition/assertion/conflict/coverage manifests;
-- run golden exact/neighbor/axis/path queries;
-- validate no stale producer assertion;
-- validate reverse indexes and endpoint closure;
-- reject physical success if logical graph validation fails.
-
-## No raw interfaces
-
-No raw connection, SQL string, table name, PRAGMA, transaction callback, or SQLite row ID crosses the graph public API.
+- no graph publication outside the coherent ProjectPublicationSet;
+- no final GraphGeneration from E2-C candidate alone;
+- no raw SQL or store handle in graph APIs;
+- no direct current-pointer update by `wow-graph`;
+- no graph query spanning store generations implicitly;
+- no path result silently persisted as an edge;
+- no candidate/possible evidence upgraded by persistence;
+- no physical storage nondeterminism in semantic graph identity.

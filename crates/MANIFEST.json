@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "repository": "UnknownAlienHuman/WoW-Dev-Framework",
-  "documentation_frontier": "E2-C",
+  "documentation_frontier": "E2-D",
   "implementation_frontier": "not-started",
   "contract_state": "documentation-only-no-rust-code",
   "required_reading": [
@@ -114,12 +114,19 @@
       "contract_id": "wow-project/e2-c/toc-xml-load-incremental-index",
       "manifest": "crates/wow-project/e2/CONTRACT.json",
       "state": "implementation-ready-documentation-no-rust-code"
+    },
+    {
+      "work_package": "E2-D",
+      "crate": "wow-store",
+      "contract_id": "wow-store/e2-d/projectstore-coherent-publication",
+      "manifest": "crates/wow-store/e2/CONTRACT.json",
+      "state": "implementation-ready-documentation-no-rust-code"
     }
   ],
   "crates": [
     {
       "name": "wow-core",
-      "status": "implementation-ready",
+      "status": "E0-A-implementation-ready",
       "first_milestone": "E0",
       "implementation_state": "not-started",
       "brief": "crates/wow-core/README.md",
@@ -128,29 +135,35 @@
         "identity",
         "generation-context",
         "source-handles",
-        "evidence-and-conflicts",
-        "coverage-and-not-evaluated",
+        "evidence-conflicts-coverage",
         "findings-warnings-budgets",
         "canonical-result-envelopes"
       ]
     },
     {
       "name": "wow-store",
-      "status": "E1-A-implementation-ready-E2-D-projectstore-deferred",
+      "status": "E1-A-and-E2-D-implementation-ready",
       "first_milestone": "E1",
       "implementation_state": "not-started",
       "brief": "crates/wow-store/README.md",
+      "contract_manifests": [
+        "crates/wow-store/CONTRACT.json",
+        "crates/wow-store/e2/CONTRACT.json"
+      ],
       "allowed_dependencies": [
         "wow-core"
       ],
       "owns": [
-        "sqlite-lifecycle",
-        "schemas-and-migrations",
-        "generation-transactions",
+        "sqlite-runtime-schema-migrations",
         "immutable-reference-store",
-        "future-project-store",
-        "content-addressed-objects"
-      ]
+        "content-addressed-objects",
+        "project-store-epochs-and-wal",
+        "immutable-partition-versions",
+        "complete-generation-membership",
+        "inactive-build-readback-validation-current-cas",
+        "read-snapshots-checkpoint-recovery-backup-retention-gc"
+      ],
+      "selected_e2_d_profile": "project-store-wal-manifested-partitions-v1"
     },
     {
       "name": "wow-reference",
@@ -163,10 +176,9 @@
         "wow-store"
       ],
       "owns": [
-        "reference-profile-and-generation",
+        "reference-profile-generation",
         "restricted-apidoc-evaluation",
-        "raw-metadata-preservation",
-        "normalization-and-corrections",
+        "raw-metadata-normalization-corrections",
         "coverage-conflicts-negative-authority",
         "persistent-reference-model",
         "exact-reference-view"
@@ -184,11 +196,11 @@
       ],
       "owns": [
         "annotation-semantic-model",
-        "type-lowering-and-rendering",
-        "wow-dialect-projection",
-        "source-maps-and-projection-loss",
-        "ketho-semantic-parity",
-        "emmylua-luals-consumer-probes"
+        "type-lowering-rendering",
+        "wow-dialect",
+        "source-maps-projection-loss",
+        "ketho-parity",
+        "emmylua-luals-probes"
       ]
     },
     {
@@ -201,20 +213,23 @@
         "wow-core"
       ],
       "owns": [
-        "upstream-pin-and-adapter",
-        "analyzer-session-and-snapshots",
+        "upstream-pin-adapter",
+        "analyzer-session-snapshots",
         "normalized-lua-facts",
-        "generic-diagnostic-normalization",
-        "source-coordinate-contract"
+        "generic-diagnostics",
+        "source-coordinates"
       ]
     },
     {
       "name": "wow-project",
-      "status": "E0-D-and-E2-C-implementation-ready-E2-D-publication-deferred",
+      "status": "E0-D-E2-C-ready-E2-D-publication-seam-defined",
       "first_milestone": "E0",
       "implementation_state": "not-started",
       "brief": "crates/wow-project/README.md",
-      "contract_manifest": "crates/wow-project/e2/CONTRACT.json",
+      "contract_manifests": [
+        "crates/wow-project/CONTRACT.json",
+        "crates/wow-project/e2/CONTRACT.json"
+      ],
       "allowed_dependencies": [
         "wow-core",
         "wow-store",
@@ -222,33 +237,19 @@
         "wow-graph",
         "wow-recognizers"
       ],
-      "active_e2_c_dependencies": [
-        "wow-core",
-        "wow-emmy",
-        "wow-graph",
-        "wow-recognizers"
-      ],
-      "inactive_until_e2_d": [
-        "wow-store"
-      ],
       "owns": [
         "workspace-source-snapshot-roots-universes",
         "project-generation-and-candidate",
-        "toc-variants-directives-files-dependencies-lod-bootstrap-savedvariables",
-        "xml-includes-templates-objects-inheritance-scripts-inline-lua",
-        "static-load-model-and-reachability",
-        "analyzer-workspace-and-snapshot-binding",
-        "recognizer-fact-adapters-and-execution-orchestration",
-        "graph-proposal-validation-orchestration",
-        "incremental-invalidation-reuse-and-removal-closure",
-        "project-index-candidate-view-and-e2-d-publication-bundle"
+        "toc-xml-load-model",
+        "analyzer-and-recognizer-orchestration",
+        "incremental-invalidation",
+        "project-publication-set-and-published-project-view"
       ],
-      "active_scope": "E2-C builds deterministic NotPublishedE2C project index candidates",
-      "next_contract": "E2-D ProjectStore plus atomic ProjectSnapshot and GraphSnapshot publication"
+      "e2_d_store_contract": "crates/wow-store/e2/CONTRACT.json"
     },
     {
       "name": "wow-graph",
-      "status": "E2-A-implementation-ready",
+      "status": "E2-A-ready-E2-D-persistence-seam-defined",
       "first_milestone": "E2",
       "implementation_state": "not-started",
       "brief": "crates/wow-graph/README.md",
@@ -257,12 +258,12 @@
         "wow-store"
       ],
       "owns": [
-        "versioned-graph-registries",
-        "semantic-keys-and-assertions",
-        "producer-partition-replacement",
-        "immutable-graph-snapshots",
-        "independent-axes",
-        "bounded-queries"
+        "graph-registries",
+        "semantic-keys-assertions",
+        "producer-partitions",
+        "graph-generations-snapshots",
+        "axes-bounded-queries",
+        "graph-store-plan-and-validation"
       ]
     },
     {
@@ -271,23 +272,20 @@
       "first_milestone": "E2",
       "implementation_state": "not-started",
       "brief": "crates/wow-recognizers/README.md",
-      "contract_manifest": "crates/wow-recognizers/e2/CONTRACT.json",
       "allowed_dependencies": [
         "wow-core",
         "wow-emmy",
         "wow-graph"
       ],
       "owns": [
-        "declarative-core-pack-schema",
-        "typed-fact-input-envelope",
+        "declarative-core-packs",
+        "typed-fact-input",
         "bounded-structural-matching",
-        "universal-role-and-relation-proposals",
+        "universal-graph-proposals",
         "confidence-ambiguity-coverage",
         "producer-partitions",
-        "mutation-and-precision-evaluation"
-      ],
-      "active_scope": "TOC XML frame mixin signal hook library and SavedVariables structural rules only",
-      "deferred_scope": "named calibration packs and framework-specific lifecycle/plugin conventions"
+        "mutation-precision-evaluation"
+      ]
     },
     {
       "name": "wow-search",
@@ -310,7 +308,7 @@
     },
     {
       "name": "wow-rules",
-      "status": "E0-E-implementation-ready-later-rules-deferred",
+      "status": "E0-E-ready-later-rules-deferred",
       "first_milestone": "E0",
       "implementation_state": "not-started",
       "brief": "crates/wow-rules/README.md",
@@ -324,7 +322,7 @@
       "owns": [
         "diagnostic-providers",
         "capability-declarations",
-        "rule-findings",
+        "findings",
         "remediation-tiers",
         "rule-evaluation"
       ]
@@ -347,7 +345,7 @@
     },
     {
       "name": "wow-context",
-      "status": "deferred",
+      "status": "next-documentation-package-E3",
       "first_milestone": "E3",
       "implementation_state": "not-started",
       "brief": "crates/wow-context/README.md",
@@ -369,7 +367,7 @@
     },
     {
       "name": "wow-service",
-      "status": "E0-F-and-E1-D-implementation-ready-later-use-cases-deferred",
+      "status": "E0-F-and-E1-D-ready-later-use-cases-deferred",
       "first_milestone": "E0",
       "implementation_state": "not-started",
       "brief": "crates/wow-service/README.md",
@@ -390,7 +388,7 @@
       "owns": [
         "use-case-orchestration",
         "generation-coherence",
-        "status-and-check",
+        "status-check",
         "reference-pack-build-validation",
         "public-operation-envelopes"
       ]

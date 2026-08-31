@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-store-e2-generation-manifest-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "identity_dag": [
+    "ProjectIndexCandidateId",
+    "GraphPublicationPlanId -> GraphGenerationId -> GraphSnapshotId",
+    "ProjectIndexCandidateId + GraphSnapshotId + project semantic manifest -> ProjectSnapshotId",
+    "ProjectSnapshotId + GraphSnapshotId + AnalyzerSnapshotId + project/graph partition manifests -> ProjectPublicationSetId",
+    "ProjectPublicationSetId + complete membership + schema set + object refs -> ProjectStoreGenerationId",
+    "validation report -> CurrentPublicationRecord"
+  ],
+  "publication_set": {
+    "project_publication_set_id": null,
+    "project_generation_id": null,
+    "project_snapshot_id": null,
+    "analyzer_snapshot_id": null,
+    "graph_generation_id": null,
+    "graph_snapshot_id": null,
+    "candidate_and_plan_digests": [],
+    "canonical_sha256": null
+  },
+  "membership": {
+    "membership_id": null,
+    "entries": [],
+    "is_complete_not_delta": true,
+    "canonical_sha256": null
+  },
+  "store_generation": {
+    "store_generation_id": null,
+    "epoch_id": null,
+    "publication_set_id": null,
+    "membership_id": null,
+    "object_reference_set_id": null,
+    "state": "PublishedInactive",
+    "canonical_sha256": null
+  },
+  "validation": {
+    "report_id": null,
+    "status": null,
+    "canonical_sha256": null
+  },
+  "current_record": {
+    "current_record_id": null,
+    "store_generation_id": null,
+    "project_publication_set_id": null,
+    "project_generation_id": null,
+    "project_snapshot_id": null,
+    "graph_generation_id": null,
+    "graph_snapshot_id": null,
+    "analyzer_snapshot_id": null,
+    "base_record_digest": null,
+    "canonical_sha256": null
+  },
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}

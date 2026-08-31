@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-store-e2-runtime-profile-v1",
+  "state": "documentation-only-pending-probe-and-byte-freeze",
+  "physical_profile_id": "project-store-wal-manifested-partitions-v1",
+  "project_store_epoch_profile": {
+    "sqlite_library_version": null,
+    "rust_binding": {
+      "crate": null,
+      "version": null,
+      "features": [],
+      "commit_or_lock_digest": null
+    },
+    "compile_options_digest": null,
+    "platform_adapter_id": null,
+    "filesystem_class": null,
+    "database_open_flags": [],
+    "reader_open_flags": [],
+    "effective_pragmas": {
+      "journal_mode": "WAL",
+      "synchronous": null,
+      "foreign_keys": true,
+      "trusted_schema": false,
+      "busy_timeout_ms": null,
+      "wal_autocheckpoint_pages": null,
+      "cache_size": null,
+      "mmap_size": null,
+      "temp_store": null,
+      "page_size": null,
+      "auto_vacuum": null
+    },
+    "limits": {
+      "max_database_bytes": null,
+      "max_wal_bytes": null,
+      "max_readers": null,
+      "max_reader_lifetime_class": null,
+      "max_partitions_per_generation": null,
+      "max_rows_per_partition": null,
+      "max_result_bytes": null,
+      "max_retained_generations": null
+    },
+    "transaction_profile": {
+      "inactive_build_mode": "BEGIN IMMEDIATE expected",
+      "activation_mode": "BEGIN IMMEDIATE expected",
+      "finite_busy_policy": true,
+      "one_writer": true
+    },
+    "checkpoint_profile": {
+      "mode": "manual-thresholded",
+      "passive_after_activation": true,
+      "truncate_requires_no_incompatible_readers": true,
+      "warning_and_admission_thresholds": null
+    },
+    "durability_level": null,
+    "probe_report_id": null,
+    "canonical_sha256": null
+  },
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}

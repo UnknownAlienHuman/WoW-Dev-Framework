@@ -1,0 +1,153 @@
+{
+  "schema_version": 1,
+  "contract_id": "wow-store/e2-d/projectstore-coherent-publication",
+  "state": "implementation-ready-documentation-no-rust-code",
+  "work_package": "E2-D",
+  "crate": "wow-store",
+  "selected_physical_profile_id": "project-store-wal-manifested-partitions-v1",
+  "direct_framework_dependencies": [
+    "wow-core"
+  ],
+  "consumer_contracts": [
+    "wow-project/e2-c/toc-xml-load-incremental-index",
+    "wow-graph/e2-a/typed-assertion-partition-query-core"
+  ],
+  "prerequisites": [
+    {
+      "contract_id": "wow-core/e0-a/1",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-store/e1-a/1",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-graph/e2-a/typed-assertion-partition-query-core",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-recognizers/e2-b/core-structural-rules",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-project/e2-c/toc-xml-load-incremental-index",
+      "implementation_and_fixture_freeze_required": true
+    }
+  ],
+  "active_scope": [
+    "one-owned-sqlite-wal-database-per-project-store-epoch",
+    "one-writer-finite-busy-and-stale-base-rejection",
+    "immutable-content-addressed-project-and-graph-partition-versions",
+    "complete-generation-membership-map-with-no-recursive-delta-chain",
+    "owner-separated-store-project-and-graph-schema-operation-validation-bundles",
+    "project-publication-set-and-noncyclic-store-generation-identity",
+    "published-inactive-generation-build",
+    "exact-read-back-store-project-graph-validation",
+    "separate-current-record-compare-and-swap-activation",
+    "snapshot-bound-readers-and-process-local-generation-leases",
+    "wal-checkpoint-reader-pressure-and-durability-classification",
+    "startup-recovery-online-backup-restore-and-epoch-rebuild",
+    "reference-based-generation-partition-object-and-epoch-gc",
+    "security-budgets-cancellation-determinism-and-benchmark-freeze"
+  ],
+  "deferred_scope": [
+    "external-multiprocess-readers-or-writers",
+    "distributed-or-server-database",
+    "runtime-savedvariables-logs-event-payloads-or-secret-capable-data",
+    "project-source-analyzer-recognizer-or-graph-semantic-implementation",
+    "search-lineage-context-codebase-memory",
+    "release-signing-publication-or-ci"
+  ],
+  "operations": [
+    "validate_project_store_runtime_profile",
+    "validate_project_store_schema_set",
+    "create_project_store_epoch",
+    "open_project_store_epoch",
+    "acquire_project_store_writer",
+    "plan_partition_version_materialization",
+    "build_inactive_project_store_generation",
+    "open_project_store_generation_snapshot",
+    "validate_inactive_project_store_generation",
+    "activate_project_store_generation",
+    "open_current_project_store_snapshot",
+    "checkpoint_project_store",
+    "backup_project_store",
+    "recover_project_store",
+    "retain_project_store_generations",
+    "garbage_collect_project_store",
+    "build_and_activate_project_store_epoch"
+  ],
+  "generation_states": [
+    "Building",
+    "PublishedInactive",
+    "ValidatedInactive",
+    "Active",
+    "Superseded",
+    "Failed",
+    "Quarantined",
+    "GCEligible"
+  ],
+  "hard_rules": [
+    "wow-store depends only on wow-core and never interprets domain semantics",
+    "one exact SQLite WAL epoch and one writer owner in v1",
+    "partition versions and published generation manifests are immutable",
+    "every generation has a complete membership map and no recursive delta chain",
+    "project graph analyzer and store identities form a noncyclic exact binding",
+    "target commits inactive and passes fresh read-back validation before activation",
+    "activation is a separate stale-base compare-and-swap transaction",
+    "readers bind one exact SQLite snapshot and never switch generations",
+    "current last-known-good failed-target and rollback identities never relabel",
+    "checkpoint WAL and physical bytes never alter logical identities",
+    "breaking schema runtime or physical profile changes build a new epoch",
+    "retention and GC require complete generation partition object and lease closure",
+    "no raw SQL extension attach filesystem escape process network editor client or source execution",
+    "row absence never becomes domain negative authority",
+    "missing probes benchmarks or checksums are blocking and never reported pass"
+  ],
+  "normative_files": [
+    "crates/wow-store/README.md",
+    "crates/wow-store/E1_A_OVERVIEW.md",
+    "crates/wow-store/PROJECT_STORE.md",
+    "crates/wow-store/PROJECT_STORE_PRE_E2_BOUNDARY.md",
+    "crates/wow-store/e2/README.md",
+    "crates/wow-store/e2/AGENTS.md",
+    "crates/wow-store/e2/DECISIONS.md",
+    "crates/wow-store/e2/DATA_MODEL.md",
+    "crates/wow-store/e2/PHYSICAL_MODEL.md",
+    "crates/wow-store/e2/SCHEMA_COMPOSITION.md",
+    "crates/wow-store/e2/PROJECT_GRAPH_BINDING.md",
+    "crates/wow-store/e2/PUBLICATION_PROTOCOL.md",
+    "crates/wow-store/e2/READ_SNAPSHOTS_AND_LEASES.md",
+    "crates/wow-store/e2/WAL_CHECKPOINT_AND_CONCURRENCY.md",
+    "crates/wow-store/e2/RECOVERY_BACKUP_RETENTION_GC.md",
+    "crates/wow-store/e2/BENCHMARK_AND_PROFILE_FREEZE.md",
+    "crates/wow-store/e2/SECURITY_AND_BUDGETS.md",
+    "crates/wow-store/e2/ERROR_MODEL.md",
+    "crates/wow-store/e2/TEST_MATRIX.md",
+    "crates/wow-store/e2/IMPLEMENTATION_PLAN.md",
+    "crates/wow-store/e2/CONTRACT.json",
+    "crates/wow-store/e2/examples/README.md",
+    "crates/wow-store/e2/examples/runtime-profile.json",
+    "crates/wow-store/e2/examples/schema-set.json",
+    "crates/wow-store/e2/examples/publication-plan.json",
+    "crates/wow-store/e2/examples/generation-manifest.json",
+    "crates/wow-store/e2/examples/crash-recovery-cases.json",
+    "crates/wow-store/e2/examples/read-lease-cases.json",
+    "crates/wow-store/e2/examples/retention-gc-cases.json",
+    "crates/wow-store/e2/examples/benchmark-cases.json",
+    "crates/wow-store/e2/examples/CHECKSUMS.json"
+  ],
+  "freeze_gate": {
+    "implementation_state": "not-started",
+    "required_before_first_rust_implementation": [
+      "all prerequisite implementation commits and fixture bundle digests",
+      "exact SQLite library Rust binding compile options and platform adapter",
+      "effective WAL synchronous busy checkpoint limits and durability profile",
+      "store project and graph schema operation validation bundle IDs and digests",
+      "physical profile partition identity membership publication and reader profiles",
+      "synthetic and pinned roth-ui benchmark corpus plus quantitative thresholds",
+      "all partition publication crash read lease recovery backup retention GC and benchmark vectors",
+      "all member and bundle SHA-256 values"
+    ]
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-store-e2-retention-gc-v1",
+  "state": "documentation-only-pending-executable-freeze",
+  "pins": [
+    "current",
+    "last_known_good",
+    "active_reader",
+    "evidence",
+    "debug",
+    "recovery",
+    "policy"
+  ],
+  "cases": [
+    {
+      "case_id": "PSTORE-GC-001",
+      "state": "pinned-generation",
+      "expected": "retain"
+    },
+    {
+      "case_id": "PSTORE-GC-002",
+      "state": "unreferenced-old-generation",
+      "expected": "eligible"
+    },
+    {
+      "case_id": "PSTORE-GC-004",
+      "state": "partition-shared-by-retained-generation",
+      "expected": "retain"
+    },
+    {
+      "case_id": "PSTORE-GC-005",
+      "state": "object-still-referenced",
+      "expected": "retain"
+    },
+    {
+      "case_id": "PSTORE-GC-006",
+      "state": "unknown-lease-or-reference",
+      "expected": "no-delete"
+    },
+    {
+      "case_id": "PSTORE-GC-008",
+      "state": "cancel-mid-gc",
+      "expected": "transaction-rollback-current-intact"
+    },
+    {
+      "case_id": "PSTORE-GC-010",
+      "state": "old-epoch-reader-or-rollback-pin",
+      "expected": "retain"
+    }
+  ],
+  "plan_id": null,
+  "report_id": null,
+  "canonical_sha256": null,
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}

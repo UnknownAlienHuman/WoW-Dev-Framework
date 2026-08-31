@@ -1,0 +1,202 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-store-e2-d-retention-cases-v1",
+  "state": "documentation-only-pending-retention-root-and-gc-freeze",
+  "retention_profile_id": null,
+  "registry_epoch": null,
+  "publication_sets": [
+    {
+      "publication_set_id": null,
+      "state": "Current",
+      "store_generation_id": null,
+      "store_image_id": null,
+      "object_digests": []
+    },
+    {
+      "publication_set_id": null,
+      "state": "LastKnownGood",
+      "store_generation_id": null,
+      "store_image_id": null,
+      "object_digests": []
+    },
+    {
+      "publication_set_id": null,
+      "state": "Superseded",
+      "store_generation_id": null,
+      "store_image_id": null,
+      "object_digests": []
+    }
+  ],
+  "roots": [
+    {
+      "root_id": null,
+      "kind": "Current",
+      "subject_id": null
+    },
+    {
+      "root_id": null,
+      "kind": "LastKnownGood",
+      "subject_id": null
+    },
+    {
+      "root_id": null,
+      "kind": "ActiveReaderLease",
+      "subject_id": null
+    },
+    {
+      "root_id": null,
+      "kind": "EvidenceOrSourceHandle",
+      "subject_id": null
+    },
+    {
+      "root_id": null,
+      "kind": "DebugPin",
+      "subject_id": null
+    }
+  ],
+  "cases": [
+    {
+      "case_id": "PSTORE-GC-001",
+      "name": "current-closure-protected",
+      "expected_protected_ids": [],
+      "expected_candidate_ids": []
+    },
+    {
+      "case_id": "PSTORE-GC-002",
+      "name": "last-known-good-and-rollback-protected",
+      "expected_protected_ids": []
+    },
+    {
+      "case_id": "PSTORE-GC-003",
+      "name": "reader-lease-protects-superseded-generation",
+      "lease_id": null,
+      "expected_protected_generation_id": null
+    },
+    {
+      "case_id": "PSTORE-GC-004",
+      "name": "evidence-debug-user-pins",
+      "root_ids": [],
+      "expected_protected_ids": []
+    },
+    {
+      "case_id": "PSTORE-GC-005",
+      "name": "recovery-and-quarantine-hold",
+      "recovery_record_id": null,
+      "expected": "protected-until-explicit-clear"
+    },
+    {
+      "case_id": "PSTORE-GC-006",
+      "name": "superseded-unrooted-generation",
+      "expected_candidate_generation_id": null
+    },
+    {
+      "case_id": "PSTORE-GC-007",
+      "name": "shared-object-two-generations",
+      "shared_object_digest": null,
+      "first_generation_deleted": true,
+      "second_generation_retained": true,
+      "expected_object_deleted": false
+    },
+    {
+      "case_id": "PSTORE-GC-008",
+      "name": "pointer-changed-after-plan",
+      "plan_registry_epoch": null,
+      "observed_registry_epoch": null,
+      "expected_error": "project_store_gc_plan_invalid_or_stale_epoch"
+    },
+    {
+      "case_id": "PSTORE-GC-009",
+      "name": "lease-acquired-before-delete-mark",
+      "planned_candidate_generation_id": null,
+      "new_lease_id": null,
+      "expected": "predelete-recheck-protects-and-replans"
+    },
+    {
+      "case_id": "PSTORE-GC-010",
+      "name": "object-delete-before-generation-reference-removal",
+      "mutation": "delete-shared-object-first",
+      "expected_error": "project_store_gc_object_still_referenced"
+    },
+    {
+      "case_id": "PSTORE-GC-011",
+      "name": "age-only-deletion",
+      "mutation": "delete-because-older-than-threshold-without-root-closure",
+      "expected_error": "project_store_gc_age_only_decision_forbidden"
+    },
+    {
+      "case_id": "PSTORE-GC-012",
+      "name": "windows-sharing-violation",
+      "generation_id": null,
+      "expected_error": "project_store_gc_windows_sharing_violation",
+      "expected_state": "durable-retry-with-root-recheck"
+    },
+    {
+      "case_id": "PSTORE-GC-013",
+      "name": "crash-during-generation-delete",
+      "expected_state": "RecoveryRequired",
+      "expected_recovery_record_id": null
+    },
+    {
+      "case_id": "PSTORE-GC-014",
+      "name": "crash-during-object-delete-finalize",
+      "expected_state": "RecoveryRequired",
+      "expected_post_validation_id": null
+    },
+    {
+      "case_id": "PSTORE-GC-015",
+      "name": "registry-reference-to-missing-object",
+      "missing_object_digest": null,
+      "expected_error": "project_store_object_missing_or_corrupt",
+      "normal_gc_blocked": true
+    },
+    {
+      "case_id": "PSTORE-GC-016",
+      "name": "randomized-inventory-order",
+      "expected_same_gc_plan_id": null,
+      "expected_same_plan_sha256": null
+    },
+    {
+      "case_id": "PSTORE-RET-ORPHAN-VALID",
+      "name": "unregistered-valid-sealed-generation",
+      "expected": "recovery-subject-not-immediate-delete"
+    },
+    {
+      "case_id": "PSTORE-RET-ORPHAN-CORRUPT",
+      "name": "unregistered-corrupt-generation",
+      "expected": "quarantine-hold-before-explicit-deletion"
+    },
+    {
+      "case_id": "PSTORE-RET-LEASE-EXPIRED",
+      "name": "expired-lease-root-removal",
+      "expected": "new-gc-plan-and-all-root-recheck-required"
+    },
+    {
+      "case_id": "PSTORE-RET-POLICY-CHANGE",
+      "name": "retention-policy-version-change",
+      "expected": "new-plan-no-resurrection-or-retroactive-availability-claim"
+    }
+  ],
+  "gc_plan": {
+    "gc_plan_id": null,
+    "registry_epoch": null,
+    "root_set_digest": null,
+    "protected_subject_ids": [],
+    "candidate_generation_ids": [],
+    "candidate_object_digests": [],
+    "expected_freed_bytes": null,
+    "canonical_sha256": null
+  },
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "retention_profile_id",
+      "registry_epoch",
+      "publication_sets[*].*",
+      "roots[*].*",
+      "cases[*].exact-root-generation-object-lease-plan-ids",
+      "cases[*].expected-result-error-recovery-ids",
+      "cases[*].canonical_sha256",
+      "gc_plan.*"
+    ]
+  }
+}
