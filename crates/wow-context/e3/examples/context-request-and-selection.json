@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-context-e3-request-selection-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "request": {
+    "normalized_request_id": null,
+    "context_artifact_set_id": null,
+    "roots": [
+      {
+        "entity_key": "project:function:OnLoad"
+      }
+    ],
+    "requested_level": "L1",
+    "project_map_sections": [
+      "packages",
+      "load",
+      "signals-and-hooks",
+      "coverage-conflicts-unavailable"
+    ],
+    "graph_policy": {
+      "axes": [
+        "ownership",
+        "load",
+        "registration"
+      ],
+      "relation_kinds": [
+        "uses_api",
+        "registers_event",
+        "handles_event"
+      ],
+      "include_confidence": [
+        "Proven",
+        "Derived"
+      ],
+      "include_possible": false,
+      "include_candidate": false,
+      "max_depth": 2
+    },
+    "budgets": {
+      "max_fragments": 64,
+      "max_entities": 32,
+      "max_relations": 64,
+      "max_paths": 8,
+      "max_source_excerpt_bytes": 2048,
+      "max_machine_bytes": 32768,
+      "max_rendered_bytes": 32768,
+      "max_exact_tokens": null
+    },
+    "source_excerpts": "explicit-only",
+    "tokenizer_profile_id": null,
+    "continuation_cursor": null
+  },
+  "selection_trace": {
+    "selection_trace_id": null,
+    "priority_groups": [
+      {
+        "priority": "P0",
+        "purpose": "request-and-generation-identity",
+        "candidate_fragment_ids": []
+      },
+      {
+        "priority": "P1",
+        "purpose": "root-l0-and-uncertainty-closure",
+        "candidate_fragment_ids": []
+      },
+      {
+        "priority": "P2",
+        "purpose": "ownership-load-registration-reason-closure",
+        "candidate_fragment_ids": []
+      },
+      {
+        "priority": "P3",
+        "purpose": "requested-l1-fields-and-direct-relations",
+        "candidate_fragment_ids": []
+      },
+      {
+        "priority": "P5",
+        "purpose": "requested-project-map-sections",
+        "candidate_fragment_ids": []
+      }
+    ],
+    "included_fragment_ids": [],
+    "omissions": [],
+    "budget_report_id": null,
+    "no_new_evidence": false,
+    "truncated": false,
+    "continuation_cursor": null,
+    "canonical_sha256": null
+  },
+  "cases": [
+    {
+      "case_id": "CTX-SELECT-004",
+      "mutation": "optional-neighbor-prioritized-before-required-reason-path",
+      "expected": "mutation-detected"
+    },
+    {
+      "case_id": "CTX-SELECT-007",
+      "mutation": "explicitly-enable-possible",
+      "expected": "possible-fragments-labeled"
+    },
+    {
+      "case_id": "CTX-SELECT-013",
+      "mutation": "increase-budget",
+      "expected": "same-selected-prefix-plus-stable-extension"
+    },
+    {
+      "case_id": "CTX-SELECT-014",
+      "mutation": "tamper-cursor-or-change-snapshot",
+      "expected_error": "context_continuation_cursor_invalid_or_stale"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}
