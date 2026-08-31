@@ -1,0 +1,184 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-store-e2-d-publication-cases-v1",
+  "state": "documentation-only-pending-generation-image-and-receipt-freeze",
+  "cases": [
+    {
+      "case_id": "PSTORE-ACT-005",
+      "name": "initial-publication",
+      "expected_current": null,
+      "target_publication_set_id": null,
+      "expected_outcome": "Activated",
+      "expected_current_after": null,
+      "expected_receipt_id": null
+    },
+    {
+      "case_id": "PSTORE-ACT-007",
+      "name": "replacement-publication",
+      "expected_current": null,
+      "target_publication_set_id": null,
+      "expected_outcome": "Activated",
+      "expected_current_after": null,
+      "predecessor_retention_state": "SupersededRetained"
+    },
+    {
+      "case_id": "PSTORE-ACT-008",
+      "name": "stale-expected-current",
+      "expected_current": "stale-publication-set",
+      "observed_current": null,
+      "target_publication_set_id": null,
+      "expected_error": "project_store_activation_stale_current",
+      "target_generation_state": "SealedInactive",
+      "current_unchanged": true
+    },
+    {
+      "case_id": "PSTORE-ACT-006",
+      "name": "two-publishers-same-predecessor",
+      "publisher_target_ids": [
+        null,
+        null
+      ],
+      "expected": "exactly-one-activation-commits-other-stale",
+      "winner_receipt_id": null
+    },
+    {
+      "case_id": "PSTORE-ACT-009",
+      "name": "cancel-before-cas",
+      "target_publication_set_id": null,
+      "expected_error": "project_store_activation_cancelled_before_cas",
+      "current_unchanged": true,
+      "target_generation_state": "SealedInactive"
+    },
+    {
+      "case_id": "PSTORE-ACT-011",
+      "name": "activation-committed-response-lost",
+      "target_publication_set_id": null,
+      "activation_committed": true,
+      "first_response": "lost",
+      "retry_operation_id": "same",
+      "expected": "existing-exact-receipt",
+      "expected_receipt_id": null,
+      "no_rebuild": true
+    },
+    {
+      "case_id": "PSTORE-PLAN-005",
+      "name": "idempotency-key-reused-with-different-request",
+      "operation_id": "publication-op:fixture-e2-initial",
+      "original_request_sha256": null,
+      "mutated_request_sha256": null,
+      "expected_error": "project_store_idempotency_key_conflict"
+    },
+    {
+      "case_id": "PSTORE-PLAN-007",
+      "name": "same-logical-target-new-operation-id",
+      "current_publication_set_id": null,
+      "target_logical_manifest_id": null,
+      "expected_outcome": "NoChangeOrAlreadyActiveByFrozenPolicy",
+      "new_generation_created": false,
+      "pointer_updated": false
+    },
+    {
+      "case_id": "PSTORE-ACT-003",
+      "name": "mixed-domain-attestations",
+      "project_attestation_store_image_id": null,
+      "graph_attestation_store_image_id": "different-image",
+      "expected_error": "project_store_attestation_generation_or_image_mismatch"
+    },
+    {
+      "case_id": "PSTORE-ACT-002",
+      "name": "missing-graph-attestation",
+      "project_attestation_status": "Accepted",
+      "graph_attestation_status": "NotEvaluated",
+      "expected_error": "project_store_graph_attestation_invalid_or_rejected",
+      "current_unchanged": true
+    },
+    {
+      "case_id": "PSTORE-ACT-013",
+      "name": "failed-target-last-known-good-not-relabeled",
+      "failed_target_generation_id": null,
+      "last_known_good_publication_set_id": null,
+      "expected_error": "project_store_last_known_good_relabel_forbidden",
+      "last_known_good_identity_unchanged": true
+    },
+    {
+      "case_id": "PSTORE-ACT-014",
+      "name": "explicit-rollback",
+      "expected_current": null,
+      "rollback_target_publication_set_id": null,
+      "rollback_target_prevalidated": true,
+      "expected_outcome": "ActivatedExistingPublicationSet",
+      "rollback_target_identity_unchanged": true,
+      "new_activation_receipt_id": null
+    },
+    {
+      "case_id": "PSTORE-SEAL-006",
+      "name": "existing-exact-generation-image",
+      "store_generation_id": null,
+      "store_image_id": null,
+      "expected_outcome": "IdempotentExistingSealedGeneration"
+    },
+    {
+      "case_id": "PSTORE-SEAL-007",
+      "name": "existing-generation-incompatible-image",
+      "store_generation_id": null,
+      "existing_store_image_id": null,
+      "new_store_image_id": null,
+      "logical_equivalence_policy": "not-proven",
+      "expected_error": "project_store_generation_target_exists_incompatible"
+    },
+    {
+      "case_id": "PSTORE-BUILD-010",
+      "name": "project-write-success-graph-write-failure",
+      "failure_phase": "graph-registered-operation",
+      "expected": "whole-generation-transaction-rollback",
+      "current_unchanged": true,
+      "sealed_generation_created": false
+    },
+    {
+      "case_id": "PSTORE-BUILD-011",
+      "name": "partial-producer-partition-replacement",
+      "mutation": "omit-one-stale-assertion-delete-or-new-proposal",
+      "expected_error": "project_store_operation_count_or_digest_mismatch"
+    },
+    {
+      "case_id": "PSTORE-SEAL-008",
+      "name": "member-tampered-after-checksum",
+      "mutation": "change-final-project.sqlite-byte",
+      "expected_error": "project_store_image_checksum_or_manifest_invalid",
+      "expected_state": "Quarantined"
+    },
+    {
+      "case_id": "PSTORE-ACT-012",
+      "name": "separate-project-and-graph-pointers",
+      "mutation": "advance-only-project-pointer",
+      "expected_error": "project_store_project_graph_generation_mix_forbidden"
+    },
+    {
+      "case_id": "PSTORE-SEC-009",
+      "name": "disk-full-durable-stage-matrix",
+      "failure_stages": [
+        "object-temp-write",
+        "database-transaction",
+        "checkpoint",
+        "manifest-write",
+        "generation-rename",
+        "registry-activation"
+      ],
+      "expected": "classified-old-or-new-no-mixed-current"
+    },
+    {
+      "case_id": "PSTORE-SEC-012",
+      "name": "cancel-races-with-activation-commit",
+      "expected": "report-exact-registry-committed-state",
+      "background_retry": false
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "cases[*].exact-input-ids",
+      "cases[*].expected-output-error-receipt-ids",
+      "cases[*].canonical_sha256"
+    ]
+  }
+}
