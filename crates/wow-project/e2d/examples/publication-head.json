@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-project-e2d-publication-head-v1",
+  "state": "documentation-only-pending-snapshot-and-head-freeze",
+  "sealed_store": {
+    "project_store_generation_id": null,
+    "project_store_artifact_id": null,
+    "generation_manifest_id": null,
+    "open_validation_report_id": null
+  },
+  "coherence": {
+    "publication_coherence_manifest_id": null,
+    "project_publication_bundle_id": null,
+    "profile_id": null,
+    "reference_generation_id": null,
+    "project_generation_id": null,
+    "analyzer_snapshot_id": null,
+    "recognizer_result_manifest_ids": [],
+    "graph_generation_id": null,
+    "canonical_sha256": null
+  },
+  "project_snapshot": {
+    "project_snapshot_id": null,
+    "manifest_id": null,
+    "validation_report_id": null,
+    "canonical_sha256": null
+  },
+  "graph_snapshot": {
+    "graph_snapshot_id": null,
+    "graph_generation_id": null,
+    "manifest_id": null,
+    "validation_report_id": null,
+    "golden_query_result_manifest_id": null,
+    "canonical_sha256": null
+  },
+  "head": {
+    "head_key": "project:fixture-project-e2-v1",
+    "previous_head_id": null,
+    "project_publication_head_id": null,
+    "eligibility": "complete",
+    "publication_report_id": null,
+    "cas_result": null,
+    "canonical_sha256": null
+  },
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "sealed_store.*",
+      "coherence.*",
+      "project_snapshot.*",
+      "graph_snapshot.*",
+      "head.*"
+    ]
+  }
+}
