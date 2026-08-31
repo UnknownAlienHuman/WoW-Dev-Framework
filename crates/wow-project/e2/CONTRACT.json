@@ -109,6 +109,7 @@
     "removed inputs remove all target derived facts matches proposals and handles",
     "E2-C produces NotPublishedE2C candidates only and no ProjectStore or GraphGeneration publication",
     "first party dependency library reference external and runtime universes never collapse",
+    "the pinned real addon fixture is read only provenance and never a repository name condition",
     "no source repository hook build test Lua XML TOC or generated code execution",
     "no filesystem discovery network process editor client SQL or CI in the library contract"
   ],
@@ -118,6 +119,7 @@
     "crates/wow-project/e2/DECISIONS.md",
     "crates/wow-project/e2/DATA_MODEL.md",
     "crates/wow-project/e2/PROJECT_ROOTS_AND_UNIVERSES.md",
+    "crates/wow-project/e2/REAL_ADDON_FIXTURE.md",
     "crates/wow-project/e2/TOC_MODEL.md",
     "crates/wow-project/e2/XML_MODEL.md",
     "crates/wow-project/e2/LOAD_MODEL.md",
@@ -145,7 +147,7 @@
     "required_before_first_rust_implementation": [
       "wow-core wow-emmy wow-graph and wow-recognizers implementation commits and fixture digests",
       "source snapshot root universe TOC XML load analyzer adapter recognizer graph invalidation capability budget and canonicalization profiles",
-      "synthetic fixture and one user-owned addon repository exact commit content and license evidence",
+      "synthetic fixture and the pinned UnknownAlienHuman/roth-ui fixture exact commit content and license evidence",
       "all source package TOC XML load Lua analyzer fact recognizer proposal invalidation candidate vectors",
       "all member and bundle SHA-256 values"
     ]
