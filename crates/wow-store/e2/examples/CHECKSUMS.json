@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "manifest_id": "wow-store-e2-d-checksums-v1",
+  "algorithm": "sha256",
+  "state": "pending-byte-freeze-before-first-rust-implementation",
+  "implementation_state": "not-started",
+  "prerequisite_pins": {
+    "wow_core_implementation_commit": null,
+    "wow_core_fixture_bundle_sha256": null,
+    "wow_store_e1_implementation_commit": null,
+    "wow_store_e1_fixture_bundle_sha256": null,
+    "wow_graph_logical_bundle_id": null,
+    "wow_project_e2c_candidate_contract_id": "wow-project/e2-c/toc-xml-load-incremental-index"
+  },
+  "profile_pins": {
+    "project_store_physical_profile_id": null,
+    "sqlite_runtime_and_compile_options_manifest_id": null,
+    "filesystem_capability_report_id": null,
+    "durability_checkpoint_atomic_materialization_profile_id": null,
+    "registered_bundle_set_id": null,
+    "head_registry_profile_id": null,
+    "lease_profile_id": null,
+    "recovery_retention_gc_profile_id": null,
+    "canonicalization_and_error_schema_ids": null
+  },
+  "frozen_vectors": {
+    "staging_transaction_fault_cancel_vectors": null,
+    "object_write_reference_collision_vectors": null,
+    "seal_open_integrity_golden_read_vectors": null,
+    "head_cas_crash_concurrency_vectors": null,
+    "lease_reader_consistency_vectors": null,
+    "recovery_inactive_adoption_vectors": null,
+    "retention_root_generation_object_gc_vectors": null,
+    "logical_and_physical_determinism_vectors": null
+  },
+  "member_paths": [
+    "crates/wow-store/README.md",
+    "crates/wow-store/e2/README.md",
+    "crates/wow-store/e2/AGENTS.md",
+    "crates/wow-store/e2/DECISIONS.md",
+    "crates/wow-store/e2/DATA_MODEL.md",
+    "crates/wow-store/e2/PHYSICAL_MODEL.md",
+    "crates/wow-store/e2/LOGICAL_SCHEMA_AND_REGISTERED_OPERATIONS.md",
+    "crates/wow-store/e2/PUBLICATION_TRANSACTION.md",
+    "crates/wow-store/e2/READ_SNAPSHOTS_AND_LEASES.md",
+    "crates/wow-store/e2/RECOVERY_RETENTION_AND_GC.md",
+    "crates/wow-store/e2/INTEGRITY_VALIDATION_AND_SECURITY.md",
+    "crates/wow-store/e2/ERROR_MODEL.md",
+    "crates/wow-store/e2/TEST_MATRIX.md",
+    "crates/wow-store/e2/IMPLEMENTATION_PLAN.md",
+    "crates/wow-store/e2/CONTRACT.json",
+    "crates/wow-store/e2/examples/README.md",
+    "crates/wow-store/e2/examples/physical-profile.json",
+    "crates/wow-store/e2/examples/store-generation.json",
+    "crates/wow-store/e2/examples/publication-cases.json",
+    "crates/wow-store/e2/examples/read-lease-cases.json",
+    "crates/wow-store/e2/examples/recovery-gc-cases.json"
+  ],
+  "member_sha256": {},
+  "bundle_sha256": null,
+  "freeze_rules": [
+    "null pins are allowed only while implementation_state is not-started",
+    "all prerequisite profile vector generation artifact head lease recovery GC and checksum values freeze before the first E2-D store Rust commit",
+    "tests verify committed bytes and never rewrite fixtures automatically",
+    "published generation bytes are never rewritten to satisfy fixtures"
+  ]
+}
