@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-project-e3-b-source-profile-v1",
+  "state": "documentation-only-pending-real-profile-freeze",
+  "source_profile": {
+    "source_profile_id": null,
+    "provider": {
+      "provider_id": null,
+      "provider_class": null,
+      "provider_locator_provenance": null,
+      "revision_id": null,
+      "revision_verification_evidence_ids": [],
+      "materializer_profile_id": null,
+      "provider_claim_class": null
+    },
+    "build_binding": {
+      "binding_id": null,
+      "claimed_game_family": null,
+      "claimed_flavor": null,
+      "claimed_build": null,
+      "claimed_interface": null,
+      "reference_profile_id": null,
+      "reference_generation_id": null,
+      "evidence_ids": [],
+      "state": "Unverified",
+      "conflict_ids": [],
+      "decision_id": null
+    },
+    "root_definitions": [
+      {
+        "root_id": "synthetic-shared-ui",
+        "logical_role": "shared_ui",
+        "snapshot_relative_root": "SharedUI",
+        "package_policy": "explicit-global-units",
+        "allowed_file_kinds": [
+          "lua",
+          "xml",
+          "toc",
+          "manifest_or_metadata",
+          "text_documentation"
+        ],
+        "license_policy_id": null
+      },
+      {
+        "root_id": "synthetic-addon-packages",
+        "logical_role": "addon_packages",
+        "snapshot_relative_root": "AddOns",
+        "package_policy": "toc-manifest-packages",
+        "allowed_file_kinds": [
+          "lua",
+          "xml",
+          "toc",
+          "manifest_or_metadata",
+          "text_documentation"
+        ],
+        "license_policy_id": null
+      }
+    ],
+    "profiles": {
+      "source_collection_schema": null,
+      "canonicalization": null,
+      "toc": null,
+      "xml": null,
+      "load": null,
+      "analyzer": null,
+      "annotation_library": null,
+      "fact_adapter": null,
+      "recognizer_pack": "wow-core-structural@e2-1",
+      "recognizer_execution": null,
+      "graph_registry": null,
+      "bridge": null,
+      "project_store_physical": "project-store-wal-manifested-partitions-v1",
+      "store_schema_operation_validation": null,
+      "security": null,
+      "budgets": null,
+      "license": null,
+      "redistribution": null,
+      "publication_eligibility": null
+    },
+    "acquisition_in_library": false,
+    "current_or_latest_fallback": false,
+    "canonical_sha256": null
+  },
+  "cases": [
+    {
+      "case_id": "UISRC-PROFILE-002",
+      "mutation": "replace-revision-with-floating-main-or-latest",
+      "expected_error": "ui_source_floating_or_unqualified_source_forbidden"
+    },
+    {
+      "case_id": "UISRC-BIND-002",
+      "condition": "provider-claim-only",
+      "expected_state": "ProviderDeclared"
+    },
+    {
+      "case_id": "UISRC-BIND-005",
+      "mutation": "conflicting-provider-content-reference-build-evidence",
+      "expected_state": "Mismatch"
+    },
+    {
+      "case_id": "UISRC-ROOT-002",
+      "mutation": "remove-reviewed-root-role-and-infer-from-directory-name",
+      "expected": "mutation-detected"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "source_profile.source_profile_id",
+      "all provider revision materializer and build-binding fields",
+      "all root and profile IDs",
+      "source_profile.canonical_sha256"
+    ]
+  }
+}
