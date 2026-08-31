@@ -1,236 +1,277 @@
 # Agent workstreams and integration order
 
-**Status: operational**
+**Status: operational routing**
 
-This file prevents a swarm from implementing every planned component at once or inventing incompatible seams in parallel.
+This file prevents agents from implementing every planned component at once, coding against documentation-only prerequisites, or inventing incompatible seams in parallel.
 
 ## Ownership model
 
 - One agent owns one work package and one primary crate.
-- A work package may read all contracts but writes only its assigned crate plus explicitly listed fixtures.
+- A work package may read all contracts but writes only its assigned crate plus explicitly listed fixtures/routes.
 - Shared contract changes are proposed before dependent implementation begins.
 - A separate integration/review agent validates seams after each wave.
-- No agent may silently redesign another crate to make local code easier.
-- Documentation-ready does not mean implementation-ready when a prerequisite code boundary is still absent.
+- No agent silently redesigns another crate to make local work easier.
+- Documentation-ready is not implementation-ready when prerequisite code/pins/fixtures remain absent.
+- A completed documentation package keeps `implementation_state=not-started` until code and frozen checksums actually exist.
 
-## E0 work packages
-
-### E0-A — `wow-core` result primitives
-
-Owns:
-
-- profile and generation identity;
-- source handles;
-- provenance, confidence, evidence derivation, and explicit conflicts;
-- exact coverage records, derived capability summaries, and `NotEvaluated` blockers;
-- normalized findings, warnings, budgets, and deterministic result envelopes.
-
-Implementation starts from the detailed contract pack under [`wow-core/`](wow-core/):
+## Global implementation order
 
 ```text
-AGENTS.md
-DECISIONS.md
-DATA_MODEL.md
-OPERATIONS.md
-CANONICALIZATION.md
-ERROR_MODEL.md
-TEST_MATRIX.md
-CONSUMER_GUIDE.md
-IMPLEMENTATION_PLAN.md
-CONTRACT.json
-examples/*.json
+E0-A wow-core
+-> E0-B wow-reference fixture + E0-C wow-emmy
+-> E0-D wow-project fixture generation
+-> E0-E wow-rules
+-> E0-F wow-service + apps/wow
+
+-> E1-A wow-store
+-> E1-B persistent wow-reference
+-> E1-C wow-annotations
+-> E1-D Reference Pack build/validate app
+
+-> E2-A wow-graph
+-> E2-B wow-recognizers
+-> E2-C full wow-project TOC/XML/load/incremental indexing
+-> E2-D ProjectStore + graph/project publication integration
+
+-> E3 wow-context + Blizzard/project graph/skeletons/Project Map
+-> E4 wow-search + lineage/impact
+-> E5 calibration packs
+-> E6 Codebase Memory candidate bridge
+-> E7 LSP/MCP/release/publishing surfaces
 ```
 
-E0-A contract state is **implementation-ready / code not started**. Its committed examples and hash vectors are normative. A coding agent must not change their semantics merely to simplify serialization or APIs.
+Parallel documentation is allowed. Rust implementation still obeys prerequisite gates.
 
-Blocks all other E0 implementation packages. Merge implementation first.
+## E0 vertical slice
 
-E0-A handoff gate:
+### E0-A — `wow-core`
 
-```text
-all required wow-core operations implemented or contract-revised in the same change
-all applicable TEST_MATRIX case IDs executable
-all example envelopes, including conflict-blocked evaluation, and hash vectors pass byte-exactly
-all internal references resolve and evidence derivation remains acyclic
-coverage records reconcile exactly with capability summaries
-randomized order produces identical canonical bytes
-no IO/clock/random/async/domain workflow in wow-core
-public API inventory reviewed and frozen for E0 consumers
-```
+Contract: [`wow-core/`](wow-core/README.md).
 
-### E0-B — `wow-reference` fixture view
+Owns identity, generation, source handles, evidence/conflicts, coverage/NotEvaluated, findings/warnings/budgets, canonical result envelopes.
 
-Owns:
+Implementation blocks all dependent code. Before the first Rust commit, freeze all examples/hash vectors and public consumer seams.
 
-- one explicit fixture-only profile;
-- one closed project-owned APIDocumentation-shaped catalog;
-- restricted declarative evaluation without arbitrary Lua execution;
-- raw canonical records and unknown-field preservation;
-- exact system/function/restriction lowering;
-- duplicate and conflict classification;
-- exact per-partition coverage;
-- exact symbol and restriction-facet `ReferenceView` lookups;
-- authoritative and non-authoritative exact miss behavior;
-- no full builder, SQLite, corrections engine, annotations, lineage, or downloader.
+### E0-B — fixture `wow-reference`
 
-Implementation starts from the detailed contract pack under [`wow-reference/`](wow-reference/):
+Contract: [`wow-reference/`](wow-reference/README.md).
 
-```text
-AGENTS.md
-DECISIONS.md
-DATA_MODEL.md
-OPERATIONS.md
-LOOKUP_AND_COVERAGE.md
-FIXTURE_PROFILE.md
-ERROR_MODEL.md
-TEST_MATRIX.md
-IMPLEMENTATION_PLAN.md
-CONTRACT.json
-examples/*.json
-```
+Owns one synthetic profile/catalog, restricted evaluation, exact lookup, complete/partial/conflict coverage, Secret facet fixture, and no full store/builder.
 
-Fixture identity:
+May implement only after E0-A code is frozen.
+
+### E0-C — `wow-emmy`
+
+Contract: [`wow-emmy/`](wow-emmy/README.md).
+
+Owns exact upstream pin/probe, analyzer actor/snapshots, normalized Lua facts, generic diagnostics, source coordinates.
+
+May proceed in parallel with E0-B after E0-A implementation.
+
+### E0-D — minimal `wow-project`
+
+Contract: [`wow-project/`](wow-project/README.md).
+
+Owns one exact first-party workspace, project generation, source registry, analyzer snapshot binding, immutable project snapshot. No TOC/XML/graph yet.
+
+### E0-E — `wow-rules`
+
+Contract: [`wow-rules/`](wow-rules/README.md).
+
+Owns only `wow.api.exists` and one direct local `wow.secret.local_operation` rule in E0.
+
+### E0-F — `wow-service` + `apps/wow`
+
+Contract: [`wow-service/`](wow-service/README.md) and [`../apps/wow/`](../apps/wow/README.md).
+
+Owns `status`, `check`, coherent context, raw finding preservation, structured root-cause presentation, canonical envelopes, and thin CLI serialization.
+
+## E0 integration gate
 
 ```text
-fixture-retail-120100-e0-v1
-catalog: C_E0Fixture
-KnownApi: exact hit
-SecretText: synthetic secret.return producer
-RemovedApi: exact absent query key
-variants: complete | partial | conflict
-```
-
-E0-B contract state is **implementation-ready / code not started**.
-
-Important pre-implementation freeze:
-
-- `examples/CHECKSUMS.json` currently records the normative member list with null byte digests because no canonical Rust serializer exists yet;
-- before the first `wow-reference` Rust commit, canonical bytes and actual SHA-256 values must be frozen using the implemented E0-A canonicalization contract;
-- null digests are invalid after `implementation_state` changes from `not-started`.
-
-May be coded only after the E0-A implementation and consumer handoff are merged. Do not code against draft documentation names alone.
-
-E0-B handoff gate:
-
-```text
-fixture profile validates as fixture-only and cannot masquerade as release-grade
-input inventory and evaluator policy are deterministic and bounded
-arbitrary calls/IO/module loading never execute
-raw records and unknown fields round-trip
-KnownApi resolves exactly
-RemovedApi is authoritative absent only in complete coverage
-partial RemovedApi lookup is absent_without_authority with exact blockers
-SecretText returns first-class secret.return evidence
-complete source ingestion plus facet conflict remains conflict
-reference source handles never point to addon/project locations
-all non-deferred TEST_MATRIX IDs execute
-fixture member and bundle SHA-256 values are frozen and verified
-randomized order produces byte-identical canonical model/lookup output
-no E1 capability returns fake success
-```
-
-### E0-C — `wow-emmy` adapter
-
-Owns:
-
-- pinned upstream dependency;
-- analyzer session lifecycle;
-- annotation-library loading;
-- one generic diagnostic normalization path;
-- semantic/source span extraction required by the E0 rules.
-
-May proceed in parallel with E0-B implementation only after the implemented `wow-core` boundary is merged. Its documentation contract may be prepared earlier, but no Rust adapter code may bind to unimplemented/draft core names.
-
-### E0-D — `wow-project` minimal generation
-
-Owns:
-
-- one configured first-party workspace;
-- normalized file identity and digest;
-- coherent project generation publication;
-- no TOC/XML graph beyond what the E0 fixture explicitly needs.
-
-Begins after the analyzer session contract is available.
-
-### E0-E — `wow-rules` vertical rules
-
-Owns only:
-
-- `wow.api.exists` against the fixture reference view;
-- one direct local `wow.secret.local_operation` rule;
-- required capability declarations;
-- clean negative and partial/conflict coverage cases.
-
-Begins after E0-B, E0-C, and the minimal E0-D snapshot contract.
-
-### E0-F — `wow-service` + application integration
-
-Owns:
-
-- `status` and `check` use cases;
-- generation coherence checks;
-- provider execution and root-cause ordering;
-- deterministic serialization handoff;
-- minimal `apps/wow` CLI wiring;
-- cross-crate golden fixture.
-
-Begins after E0-A through E0-E. Merge last.
-
-## E0 integration gates
-
-Each package must pass its local tests before integration. The integration agent then verifies:
-
-```text
-one profile identity across all components
-one project generation across all findings
-valid fixture API resolves
-unknown fixture API produces the WoW finding only under authoritative complete absence
-generic analyzer finding is preserved
-one direct Secret-local misuse is detected
-missing or conflicted capability produces NotEvaluated
-a clean fixture stays clean
+one exact profile/reference generation
+one exact project/analyzer generation
+known fixture API resolves
+unknown fixture API produces WoW finding only under authoritative absence
+generic analyzer finding remains visible
+Secret-local unsafe and guarded cases classify correctly
+missing/conflicted capability produces NotEvaluated
 reference and project evidence remain separate
-repeated canonical output is byte-identical
-no editor configuration is mutated
+1/2/N canonical output byte-identical
+no editor/client/source mutation
 ```
 
-## Later workstream order
+## E1 Reference Pack
 
-### E1 — Reference Pack
+### E1-A — `wow-store`
 
-1. `wow-store` schema/migrations/object store
-2. full `wow-reference` ingestion/corrections/pack reader-writer
-3. `wow-annotations` projection/parity
-4. service/app pack build and validation
+Contract: [`wow-store/`](wow-store/README.md).
 
-### E2–E3 — Project and graph
+SQLite/runtime/schema/migrations, immutable ReferenceStore publication, objects, integrity, and future ProjectStore boundary. No domain authority or raw SQL public seam.
 
-1. `wow-graph` typed storage/query core
-2. `wow-recognizers` core structural rules
-3. full `wow-project` TOC/XML/incremental indexing
-4. `wow-context` skeletons and Project Map
-5. service integration and patch fixtures
+### E1-B — persistent `wow-reference`
 
-### E4–E6 — Discovery
+Contract: [`wow-reference/e1/`](wow-reference/e1/README.md).
 
-1. `wow-search` exact/migration/FTS/graph ranking
-2. recognizer calibration packs and external manifests
-3. `wow-cbm` optional candidate bridge
-4. service merge with strict evidence separation
+Pinned source snapshot, restricted APIDocumentation evaluator, raw metadata, normalized facts, digest-bound corrections, exact coverage/negative authority, ReferenceStore logical schema/build plan, ReferenceView.
+
+### E1-C — `wow-annotations`
+
+Contract: [`wow-annotations/e1/`](wow-annotations/e1/README.md).
+
+Consumer-neutral semantic model, explicit type lowering, deterministic inert rendering, source maps/loss, Ketho semantic parity, EmmyLua/LuaLS probes.
+
+### E1-D — pack build/validation
+
+Contract: [`wow-service/e1/`](wow-service/e1/README.md) and [`../apps/wow-reference-builder/`](../apps/wow-reference-builder/README.md).
+
+Cross-component build, independent nonrepairing validation, deterministic rebuild comparison, pack assembly, thin CLI. Signing/publication remains deferred.
+
+## E1 integration gate
+
+```text
+exact source/profile/component pins
+immutable ReferenceStore published/reopened/read-only
+raw unknown metadata retained
+corrections digest-bound and expiration tested
+ReferenceView negative authority honest
+annotation projection has no silent loss/injection/editor mutation
+Ketho/EmmyLua/LuaLS gates classified
+pack validator recomputes all member/checksum/coverage/license gates
+1/2/N rebuild comparison stable by declared determinism class
+no signing/upload/activation/CI
+```
+
+## E2 project and graph
+
+### E2-A — `wow-graph` typed assertion core
+
+Contract: [`wow-graph/e2/`](wow-graph/e2/README.md).
+
+Owns versioned registries, semantic entity/relation keys, producer assertions, conflicts/coverage, atomic producer-partition replacement, immutable graph snapshots, explicit axes, bounded exact queries, and logical store operations.
+
+Prerequisites before code:
+
+```text
+implemented/frozen wow-core
+implemented/frozen wow-store and selected ProjectStore profile
+frozen graph registry and fixtures
+```
+
+### E2-B — `wow-recognizers` core structural rules
+
+Contract: [`wow-recognizers/e2/`](wow-recognizers/e2/README.md).
+
+Owns:
+
+- bounded canonical JSON core pack schema;
+- recognizer-owned typed fact input envelope;
+- deterministic non-Turing-complete matching;
+- TOC/XML/frame/mixin/event/callback/hook/library/SavedVariables rules;
+- proposed graph assertions only;
+- confidence/ambiguity/coverage/NotEvaluated;
+- producer partition/version/replacement contract;
+- mutation and precision evaluation.
+
+Hard boundaries:
+
+```text
+no source parser or raw-text fallback
+no wow-project dependency
+no repository/addon/path semantic conditions
+no LLM correctness path
+no graph publication/final IDs
+no diagnostic severity/safety/autofix claims
+native frame events, EventRegistry frame bridges, custom callbacks and CVar callbacks remain distinct
+custom RegisterCallback requires exact TriggerEvent producer for confirmed custom relation
+hook recognition never means taint/combat/protected/managed/runtime safe
+SavedVariables roots require TOC declarations
+```
+
+Prerequisites before code:
+
+```text
+implemented/frozen wow-core
+implemented/frozen wow-emmy facts/pin/probe
+implemented/frozen wow-graph registry/proposal seam
+frozen project TOC/XML fact adapter profile for real integration
+frozen core pack/rules/evaluation/budget fixtures and checksums
+```
+
+E2-B handoff gate:
+
+```text
+all active rules use normalized facts only
+all proposals validate against exact graph registry
+all outputs Derived/Possible with complete evidence closure
+positive/near-negative/partial/dynamic cases for every rule
+repository/path/local-name mutations prove no overfitting
+decisive convention-literal mutations change only intended rules
+custom/native signal separation holds
+hook safety claims absent
+SavedVariables TOC authority holds
+partial/truncated/cancelled partitions never publish complete
+rule update/disable removes only owned producer assertions
+1/2/N and shuffled inputs produce byte-identical outputs
+```
+
+### E2-C — full `wow-project` TOC/XML/load/index contract
+
+Next documentation work package.
+
+Must define:
+
+```text
+bounded TOC parser and flavor/variant selection
+streaming XML facts and embedded-script source ownership
+project fact adapter profiles consumed by recognizers
+load/dependency/optional/LOD/bootstrap model
+SavedVariables declarations and state-root seeds
+incremental invalidation across files/TOC/XML/analyzer/recognizer partitions
+coherent ProjectGeneration + GraphGeneration target publication
+no parser duplication inside recognizers or graph
+```
+
+### E2-D — ProjectStore and integrated publication
+
+After E2-A/B/C code seams exist, choose/freeze the measured ProjectStore physical model and atomic publication sequence. Readers never observe mixed project/analyzer/recognizer/graph generations.
+
+## E3–E7 routing
+
+### E3
+
+Full project/Blizzard UI graph inputs, `wow-context` L0/L1 skeletons, Project Map, bounded context metrics.
+
+### E4
+
+`wow-search` exact/migration/shape/FTS/graph ranking, explicit lineage, patch-impact traversal. Similarity never authorizes replacement.
+
+### E5
+
+Named calibration packs from pinned audited repositories. They emit universal roles only and must survive repository/path/name mutations. Pack removal reduces coverage only.
+
+### E6
+
+Optional Codebase Memory MCP bridge. External semantic results remain Candidate and never bypass local evidence/graph/search authority.
+
+### E7
+
+LSP/MCP transports, release signing/publication/activation policy, final packaging and operational gates. No automation is introduced earlier by convention.
 
 ## Seam request format
 
 When an agent cannot continue without another crate change, report:
 
 ```text
-requesting crate
+requesting work package/crate
 owning crate
 required operation/data contract
 current workaround rejected
-why orchestration cannot solve it
-proposed minimal seam
-cycle/security impact
-fixture that will prove the seam
+why orchestration/read-view cannot solve it
+proposed smallest seam
+cycle/security/evidence impact
+fixture/mutation that proves the seam
+implementation/freeze prerequisite impact
 ```
 
-Do not implement the seam in the wrong crate while waiting.
+Do not implement a missing seam in the wrong crate while waiting.
