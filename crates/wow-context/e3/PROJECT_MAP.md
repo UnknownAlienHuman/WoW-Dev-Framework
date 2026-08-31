@@ -1,254 +1,206 @@
-# E3-A Project Map contract
+# E3-B deterministic Project Map
 
-**Status:** normative compact navigational projection over one exact published project/graph state.
+**Status:** normative compact navigation projection.
 
 ## Purpose
 
-The Project Map gives an agent or human a reliable first view of the project:
+A Project Map answers, within explicit bounds:
 
 ```text
-what project/profile/publication is this?
-which packages and selected TOC variants exist?
-what loads, in what direct order, and under which static phases?
-where are principal files/source units/entry points?
-which universal roles, signals, hooks, state roots, and platform APIs are structurally present?
-which capabilities are partial, conflicted, ambiguous, unsupported, or truncated?
-where should the next exact detail request go?
+what exact project/source universe is this?
+which packages, TOC variants, load units, files, and typed structural groups exist?
+how are they directly owned, contained, loaded, and related?
+where should an exact deeper L0/L1 request start?
+what is incomplete, conflicted, omitted, or outside the profile?
 ```
 
-It is a map, not a full source tree, full graph dump, architecture essay, or behavioral inference.
+It is not a full graph dump, prose architecture report, search index, runtime model, or replacement for graph queries.
 
-## Inputs
+## Map scope
+
+Build one `ProjectMap` for one exact project/graph universe. A semantic pack can reference:
+
+- one primary user-project map;
+- zero or one Blizzard UI platform-source map;
+- explicit cross-universe link records selected from exact graph/reference relations.
+
+Maps remain separately identified.
+
+## Node classes
+
+The profile can select bounded classes from:
 
 ```text
-exact ContextInputSnapshot
-ProjectMapProfile
-ContextProfile
-ContextBudgetProfile
-ContextSecurityProfile
-optional exact ReferenceView identity
+project
+package
+selected_toc_variant
+load_phase
+load_unit
+file
+xml_document
+template_or_object_group
+namespace
+module
+service
+library
+state_root
+signal_event_callback_group
+hook_group
+api_namespace_reference_group
+entity_group
+coverage_conflict_group
 ```
 
-The input graph/project views must support the exact registered queries named by the profile.
+A group is a deterministic projection with exact member IDs, counts, and selection rule. It is not a new semantic entity unless the graph already owns it.
 
-## Principal-root selection
+## Node facets
 
-Project Map roots derive only from exact records and frozen rules, for example:
+Allowed typed facets include:
+
+- exact identity and universe/generation;
+- source/package/file/load role;
+- selected TOC variant and direct dependency role;
+- exact recognizer-provided universal role with original confidence;
+- declaration/export/registration/state/API-use counts and member references;
+- direct source span/handle references;
+- input/graph/reference coverage and conflicts;
+- L0/L1 availability and deterministic cost class;
+- omission and continuation state.
+
+Forbidden facets:
+
+- model-generated responsibility descriptions;
+- guessed importance or popularity;
+- hidden product/framework labels;
+- runtime readiness, safety, or performance;
+- inferred cross-build history;
+- facts created solely from a display name or path.
+
+## Edge classes
+
+Map edges are selected exact graph relations or explicit path references, for example:
 
 ```text
-selected first-party packages and TOC variants
-bootstrap/normal load units and direct entry files
-project root/universe/package entities
-universal module/service/library/state roles accepted by graph
-registered lifecycle/signal/hook roots
-SavedVariables-backed state roots
-platform API-use roots under selected reference profile
-conflict/coverage blocker roots
+contains
+owns
+loads
+loads_before
+depends_on
+optional_depends_on
+includes
+references_template
+inherits
+mixes_in
+registers_event
+subscribes_callback
+reads_state
+writes_state
+uses_api
 ```
 
-Prohibited selection signals:
+The profile defines allowed classes and directions. Every edge links underlying relation/assertion IDs. A reason path remains a path record.
+
+## Build algorithm
 
 ```text
-repository popularity
-addon or owner name
-folder-name heuristics without source semantics
-LLM judgment
-message prose
-filesystem discovery order
-search ranking
+validate exact project/graph view
+-> enumerate exact configured roots under budget
+-> select profile-declared node classes
+-> create deterministic node projections
+-> load only direct profile-declared relations
+-> form deterministic groups from exact member sets
+-> attach source/evidence/coverage/conflict indexes
+-> apply mandatory and optional map tiers
+-> prune optional nodes/edges at item boundaries
+-> emit omission and budget records
+-> canonicalize and validate
 ```
 
-## Section model
+No whole graph is loaded to build a small map when bounded owner queries exist.
 
-### Project identity
+## Mandatory content
 
-- exact publication/store/project/graph/profile/reference IDs;
-- source snapshot/repository revision provenance;
-- project kind and selected flavor/Interface profile;
-- declared capabilities and global blocker summary;
-- artifact/detail profile IDs.
-
-### Packages and TOC variants
-
-- package IDs;
-- selected variant only;
-- required/optional dependency facts;
-- LoadOnDemand/bootstrap/directive summaries;
-- SavedVariables declarations by scope;
-- source handles and TOC coverage.
-
-Other unselected variants can be listed as explicit unselected metadata under budget, never merged into the active view.
-
-### Load units and entry points
-
-- direct load units and phases;
-- direct file/XML/include/script edges;
-- principal bootstrap/normal entry files;
-- conditionally reachable/unreachable/unknown classifications;
-- bounded reason paths, not materialized transitive edges.
-
-Static load classification is not runtime success/readiness.
-
-### Files and source units
-
-- exact first-party physical files;
-- XML external and inline virtual Lua units;
-- roles, owners, load-unit membership, digest/source handles;
-- analyzer/project coverage;
-- no full contents.
-
-### Ownership and universal roles
-
-- graph-confirmed/derived package/module/service/library/state ownership;
-- exact producer/confidence/evidence/ambiguity;
-- no framework-specific interpretation from names.
-
-### Lifecycle and registration
-
-- direct init/enable/disable/factory/registry structures when present;
-- graph lane and exact evidence;
-- `Possible` remains labeled;
-- no runtime ordering or success claim beyond static inputs.
-
-### Signals, callbacks, and hooks
-
-Keep separate:
-
-```text
-native frame events
-EventRegistry frame-event bridges
-custom EventRegistry producers/subscribers
-CVar callbacks
-SetScript/HookScript/hooksecurefunc structures
-```
-
-Hook presence never implies safety. Event names never prove producers outside exact evidence.
-
-### State roots and paths
-
-- TOC-declared SavedVariables roots and scopes;
-- exact literal state paths and readers/writers;
-- dynamic paths as exact prefixes/possible records;
-- no SavedVariables values.
-
-### Platform API usage
-
-- project functions/files that use exact selected reference API entities;
-- direct relation/evidence/source handles;
-- reference coverage/conflict state;
-- no API replacement or runtime-access conclusion.
-
-### Capabilities, conflicts, and gaps
-
-- source/project/analyzer/recognizer/graph/reference/context statuses separately;
-- unresolved producer/graph conflicts;
-- unsupported/deferred lanes;
-- budget/truncation omissions;
-- next revalidation/detail routes.
-
-### Next-detail routes
-
-For each principal item, possible exact next steps:
-
-```text
-open L0 skeleton
-expand ownership/load/registration/state/call/API-use lane
-open L1 signature/direct-neighbor skeleton
-inspect exact conflict/evidence/reason path
-request bounded source excerpt
-```
-
-Routes include estimated costs and required capabilities; estimates remain profile-labeled.
+- exact project/source/graph/reference binding;
+- root project node;
+- selected package and TOC/load identity needed to interpret included source;
+- every included node's exact underlying key;
+- every edge's underlying graph records;
+- coverage/conflict/partial/truncation state;
+- omitted-profile and budget summaries;
+- deterministic ordering/profile/schema IDs.
 
 ## Grouping
 
-Grouping is presentation over exact IDs, allowed when:
-
-- profile declares a stable group key;
-- every member ID remains recoverable;
-- evidence/confidence/coverage differences are not hidden;
-- conflicting items do not collapse into one resolved statement;
-- group counts and omitted member manifests are exact.
-
-Example valid groups:
+Profiles use closed typed rules such as:
 
 ```text
-files by selected load unit
-functions by exact universal module role
-signals by signal system and literal key
-state paths by exact TOC root
-API uses by exact ReferenceEntity
+same exact package
+same exact file
+same universal role key from accepted recognizer evidence
+same direct state root
+same exact native/custom signal class
+same exact API namespace
 ```
 
-## Prioritization
+Repository/addon/provider names, arbitrary path substrings, popularity, or learned clusters cannot form canonical groups.
 
-Frozen priority classes can include:
+Groups preserve member IDs and confidence. Mixed/conflicted role evidence remains conflicted.
+
+## Ordering
+
+A frozen order can use:
 
 ```text
-mandatory project identity/blockers
-selected package/load entry points
-explicit public/universal roles
-state/signal/lifecycle roots
-high direct fan-in/fan-out structural hubs under exact graph metrics
-request-selected lanes
-remaining bounded direct context
+project/universe order
+package selected-load order
+TOC/load ordinal
+source file canonical key
+node kind order
+canonical entity/group key
+relation kind/source/target/assertion ID
 ```
 
-Graph centrality may assist within a declared profile but does not create authority or behavioral importance by itself. No model preference or popularity.
+Never filesystem enumeration, SQL row ID, hash iteration, worker completion, or model rank.
 
-## Budgets
+## Size and continuation
 
-Project Map reserves mandatory budget first:
+Profiles set hard limits for nodes, edges, groups, members, evidence refs, bytes, and optional tokens. At a limit:
+
+- mandatory closure remains;
+- optional items are pruned deterministically;
+- counts state selected versus total-known under coverage;
+- omissions identify scopes/classes;
+- continuation binds exact snapshot/request/profile/ordering;
+- a truncated map cannot claim complete map projection coverage.
+
+## Combined map
+
+A combined map is an outer reference structure:
 
 ```text
-identity and generation header
-capability/conflict/blocker summary
-selected packages/variants/load roots
-at least one exact route for every truncated mandatory section
+CombinedProjectMap
+    primary user ProjectMapId
+    optional Blizzard UI ProjectMapId
+    exact cross-universe relation/path items
+    compatibility, coverage, conflict, omission, and budget records
 ```
 
-Optional sections then consume per-section/global budgets. Truncation records exact processed/omitted counts/partitions and continuation/detail routes.
+It does not copy both maps into one namespace or generic hierarchy.
 
-## Source/evidence policy
+## Map updates and cache
 
-Default map includes source/evidence handles and small exact labels/signatures, not source excerpts. Every section/item links exact project/graph/reference records and producer/coverage/conflict state.
+Map identity binds exact project, graph, reference, context profiles, and selected roots. Any relevant change creates a new ID.
 
-## Determinism
+Physical cache reuse is external. A prior map is never relabeled.
 
-Equivalent input/profile produces identical:
+## Validation
 
-```text
-principal roots
-section IDs/order/grouping
-item and relation IDs/order
-routes/cost classes
-coverage/loss/omission records
-metrics and canonical digest
-```
-
-Independent of database row order, graph query batch order, worker count, and rendering format.
-
-## Required tests
-
-- each section with positive, empty-authoritative, partial, conflict, unsupported, and truncated cases;
-- one selected TOC variant only;
-- static load nonclaim;
-- native/custom/CVar/hook separation;
-- SavedVariables root without contents;
-- `Possible`/Candidate policy;
-- grouped items retain all IDs/evidence/blockers;
-- mandatory sections survive tight budget;
-- exact routes and cost labels;
-- repository/path/name mutation invariance;
-- shuffled query/input/worker order determinism;
-- no full source/private path/prompt instruction leakage.
-
-## Hard stops
-
-- no complete graph/source dump;
-- no architecture purpose inferred from names/prose;
-- no merged variants/universes;
-- no runtime/security conclusion from static structure;
-- no blocker/conflict omission to look clean;
-- no route to fuzzy/search operation inside E3-A;
-- no map section without exact subject/evidence/derivation closure.
+- every node, edge, member, and facet origin resolves;
+- no cross-universe key collapse;
+- no unsupported class;
+- no direct edge backed only by a path;
+- group membership/counts close;
+- confidence/coverage/conflict preserved;
+- budget/omission totals reconcile;
+- deterministic bytes under randomized input order;
+- no free prose or source text in framework-control facets.
