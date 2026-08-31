@@ -1,90 +1,55 @@
 # `wow-project` contract router
 
-**Status:** E0-D minimal generation and E2-C full source/TOC/XML/load/incremental-index contracts are implementation-ready documentation; Rust implementation has not started.
+**Status:** E0-D, E2-C, and E3-A contracts are implementation-ready documentation; no Rust code exists.
 
-## Contract packages
+`wow-project` owns exact materialized source snapshots, project/source universes, TOC/XML/load structure, analyzer and recognizer orchestration, incremental invalidation, project-generation identity, and domain publication bundles. It never executes addon/source code and never implements storage, graph, analyzer, recognizer, rule, search, or context algorithms owned by other crates.
+
+## Contract routes
 
 ### E0-D — minimal project generation
 
-The original E0-D overview is preserved in [`E0_OVERVIEW.md`](E0_OVERVIEW.md). Its normative root-level companions remain:
+Read [`E0_OVERVIEW.md`](E0_OVERVIEW.md), then the root E0-D contract package:
+
+- [`AGENTS.md`](AGENTS.md)
+- [`DECISIONS.md`](DECISIONS.md)
+- [`DATA_MODEL.md`](DATA_MODEL.md)
+- [`SOURCE_REGISTRY.md`](SOURCE_REGISTRY.md)
+- [`UPDATE_MODEL.md`](UPDATE_MODEL.md)
+- [`GENERATION_AND_PUBLICATION.md`](GENERATION_AND_PUBLICATION.md)
+- [`ERROR_MODEL.md`](ERROR_MODEL.md)
+- [`TEST_MATRIX.md`](TEST_MATRIX.md)
+- [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md)
+- [`CONTRACT.json`](CONTRACT.json)
+- [`examples/`](examples/README.md)
+
+### E2-C — addon-project TOC/XML/load/incremental indexing
+
+Read [`e2/README.md`](e2/README.md). E2-C turns one exact addon source snapshot into a validated, deterministic, nonpersistent `ProjectIndexCandidate` and defines the handoff to E2-D coherent ProjectStore publication.
+
+### E3-A — Blizzard UI source universe and structural graph
+
+Read [`e3/README.md`](e3/README.md). E3-A activates an exact `blizzard_ui_source` project kind using the existing E2 parser/analyzer/recognizer pipeline plus E2-D publication. It produces a separate published platform-source ProjectSnapshot/GraphSnapshot and a bounded skeleton-input view for `wow-context`.
+
+E3-A does **not** generate Project Maps, L0/L1 skeletons, context packs, search rankings, migration lineage, patch impact, or runtime truth. Those remain downstream packages.
+
+## Direct dependencies by frontier
 
 ```text
-AGENTS.md
-DECISIONS.md
-DATA_MODEL.md
-GENERATION_AND_PUBLICATION.md
-UPDATE_MODEL.md
-SOURCE_REGISTRY.md
-ERROR_MODEL.md
-TEST_MATRIX.md
-IMPLEMENTATION_PLAN.md
-CONTRACT.json
-examples/
+E0-D: wow-core, wow-emmy
+E2-C: wow-core, wow-emmy, wow-graph, wow-recognizers
+E3-A publication: wow-core, wow-emmy, wow-graph, wow-recognizers, wow-store
 ```
 
-E0-D owns one exact closed Lua workspace, generation-bound analyzer update, first-party source registry, and immutable in-memory project snapshot. It does not parse TOC/XML or build graph facts.
+No direct dependency on `wow-context`, `wow-search`, `wow-rules`, `wow-service`, or applications.
 
-### E2-C — full project index candidate
-
-Read [`e2/README.md`](e2/README.md), [`e2/CONTRACT.json`](e2/CONTRACT.json), and the full [`e2/`](e2/) package.
-
-E2-C adds:
+## Current implementation state
 
 ```text
-closed materialized project source snapshot
-root/universe/package model
-one selected TOC variant per package
-bounded TOC directives/files/dependencies/LOD/bootstrap/SavedVariables parser
-bounded streaming XML includes/templates/objects/inheritance/scripts parser
-source-mapped XML inline Lua virtual units
-static load order and reachability model
-exact wow-emmy physical/virtual workspace binding
-E2-B recognizer fact bundles and output partitions
-E2-A graph proposal validation
-incremental invalidation/reuse/stale-removal
-immutable NotPublishedE2C ProjectIndexCandidate
+documentation frontier: E3-A
+implementation frontier: not started
+Cargo.toml: absent
+Rust source: absent
+CI/workflows: absent
 ```
 
-Persistent ProjectStore, WAL, current pointers, final GraphGeneration, and atomic ProjectSnapshot/GraphSnapshot publication remain E2-D.
-
-## Direct dependency activation
-
-Maximum graph:
-
-```text
-wow-core
-wow-store
-wow-emmy
-wow-graph
-wow-recognizers
-```
-
-Active in E0-D:
-
-```text
-wow-core
-wow-emmy
-```
-
-Active in E2-C:
-
-```text
-wow-core
-wow-emmy
-wow-graph
-wow-recognizers
-```
-
-`wow-store` remains inactive until E2-D.
-
-## Hard rules
-
-- `wow-emmy` is the only Lua parser/analyzer.
-- TOC variants never merge across flavor/profile boundaries.
-- XML DTD, external entities, network access, and source execution are forbidden.
-- LOD/bootstrap/static load order do not prove runtime readiness or success.
-- SavedVariables contents are never read; roots require TOC declarations.
-- First-party, dependency, analyzer-library, reference, external, and runtime universes remain separate.
-- Recognizers emit proposals; graph validates them; project does not rewrite either contract.
-- E2-C candidates are not persisted or current.
-- Live patch-sensitive WoW guidance comes from the current [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb), not duplicated static assumptions.
+Every exact source, tool, profile, graph, store, fixture, benchmark, and checksum pin remains blocking before the first implementation commit.

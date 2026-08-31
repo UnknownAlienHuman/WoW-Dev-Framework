@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-project-e3-a-source-snapshot-v1",
+  "state": "documentation-only-pending-source-freeze",
+  "snapshot": {
+    "source_snapshot_id": null,
+    "source_profile_id": null,
+    "provider_revision": {
+      "repository_full_name": "Gethe/wow-ui-source",
+      "commit_sha": null,
+      "tree_sha": null
+    },
+    "configured_roots": [],
+    "inventory": [
+      {
+        "file_id": null,
+        "normalized_relative_path": "Interface/AddOns/Blizzard_Fixture/Blizzard_Fixture.toc",
+        "entry_state": "IncludedKnown",
+        "file_kind": "toc",
+        "raw_content_sha256": null,
+        "logical_content_object_id": null,
+        "length": null,
+        "encoding_state": "PendingFreeze",
+        "license_record_id": null,
+        "source_handle_id": null
+      },
+      {
+        "file_id": null,
+        "normalized_relative_path": "Interface/AddOns/Blizzard_Fixture/Blizzard_Fixture.xml",
+        "entry_state": "IncludedKnown",
+        "file_kind": "xml",
+        "raw_content_sha256": null,
+        "logical_content_object_id": null,
+        "length": null,
+        "encoding_state": "PendingFreeze",
+        "license_record_id": null,
+        "source_handle_id": null
+      },
+      {
+        "file_id": null,
+        "normalized_relative_path": "Interface/AddOns/Blizzard_Fixture/Blizzard_Fixture.lua",
+        "entry_state": "IncludedKnown",
+        "file_kind": "lua",
+        "raw_content_sha256": null,
+        "logical_content_object_id": null,
+        "length": null,
+        "encoding_state": "PendingFreeze",
+        "license_record_id": null,
+        "source_handle_id": null
+      }
+    ],
+    "excluded_or_unsupported_records": [],
+    "external_reference_records": [],
+    "case_collision_records": [],
+    "license_provenance_manifest_id": null,
+    "materialization_report_id": null,
+    "security_report_id": null,
+    "inventory_coverage_record_ids": [],
+    "content_manifest_sha256": null,
+    "canonical_sha256": null
+  },
+  "mutations": [
+    {
+      "case_id": "BUI-SRC-004",
+      "mutation": "shuffle-inventory-order",
+      "expected": "same-source-snapshot-id"
+    },
+    {
+      "case_id": "BUI-SRC-006",
+      "mutation": "rename-provider-and-extraction-root-with-identical-bytes",
+      "expected": "same-universal-structural-outputs"
+    },
+    {
+      "case_id": "BUI-SRC-009",
+      "mutation": "symlink-or-junction-outside-root",
+      "expected_error": "blizzard_ui_source_root_or_path_escape"
+    },
+    {
+      "case_id": "BUI-SRC-012",
+      "mutation": "omit-one-configured-root-file-without-record",
+      "expected_error": "blizzard_ui_source_snapshot_invalid_or_incomplete"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "snapshot.source_snapshot_id",
+      "snapshot.source_profile_id",
+      "snapshot.provider_revision.*",
+      "snapshot.configured_roots",
+      "snapshot.inventory[*].*",
+      "snapshot.license_provenance_manifest_id",
+      "snapshot.materialization_report_id",
+      "snapshot.security_report_id",
+      "snapshot.inventory_coverage_record_ids",
+      "snapshot.content_manifest_sha256",
+      "snapshot.canonical_sha256"
+    ]
+  }
+}
