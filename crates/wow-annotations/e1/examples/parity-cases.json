@@ -1,0 +1,197 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-annotations-e1-parity-v1",
+  "state": "documentation-only-pending-oracle-source-and-byte-freeze",
+  "profiles": {
+    "reference_view_id": null,
+    "profile_id": null,
+    "reference_generation_id": null,
+    "annotation_artifact_id": null,
+    "comparison_profile_id": null,
+    "oracle_baseline_id": null,
+    "oracle_kind": "Ketho",
+    "oracle_repository": "Ketho/vscode-wow-api",
+    "oracle_revision": null,
+    "oracle_source_profile_id": null,
+    "oracle_config_id": null,
+    "oracle_extractor_profile_id": null
+  },
+  "classifications": [
+    "Equal",
+    "SemanticallyEquivalent",
+    "ExpectedProjectionDifference",
+    "OurDefect",
+    "OracleDefectOrStale",
+    "InputMismatch",
+    "ConsumerDisagreement",
+    "Unresolved"
+  ],
+  "cases": [
+    {
+      "case_id": "PARITY-001",
+      "name": "equal-semantics",
+      "classification": "Equal",
+      "blocking": false,
+      "required_evidence": [
+        "same-source-profile-config",
+        "field-level-semantic-equality"
+      ]
+    },
+    {
+      "case_id": "PARITY-002",
+      "name": "syntax-or-layout-diff-semantic-equality",
+      "classification": "SemanticallyEquivalent",
+      "blocking": false,
+      "required_evidence": [
+        "consumer-semantic-equivalence",
+        "separate-byte-layout-state"
+      ]
+    },
+    {
+      "case_id": "PARITY-003",
+      "name": "reviewed-profile-consumer-security-difference",
+      "classification": "ExpectedProjectionDifference",
+      "blocking": false,
+      "required_evidence": [
+        "accepted-profile-rule",
+        "source-and-consumer-evidence",
+        "loss-record"
+      ]
+    },
+    {
+      "case_id": "PARITY-004",
+      "name": "our-supported-output-wrong-or-missing",
+      "classification": "OurDefect",
+      "blocking": true,
+      "required_evidence": [
+        "reference-supports-exact",
+        "consumer-profile-supports-exact",
+        "field-diff"
+      ]
+    },
+    {
+      "case_id": "PARITY-005",
+      "name": "oracle-stale-or-wrong",
+      "classification": "OracleDefectOrStale",
+      "blocking": false,
+      "required_evidence": [
+        "exact-reference-source",
+        "oracle-source-or-extractor-mismatch"
+      ]
+    },
+    {
+      "case_id": "PARITY-006",
+      "name": "different-inputs",
+      "classification": "InputMismatch",
+      "blocking": true,
+      "required_evidence": [
+        "source-profile-correction-config-identity-difference"
+      ]
+    },
+    {
+      "case_id": "PARITY-007",
+      "name": "oracle-semantics-equal-consumers-differ",
+      "classification": "ConsumerDisagreement",
+      "blocking": true,
+      "required_evidence": [
+        "pinned-consumer-probe-results",
+        "exact-assertion-diff"
+      ]
+    },
+    {
+      "case_id": "PARITY-008",
+      "name": "insufficient-or-conflicting-evidence",
+      "classification": "Unresolved",
+      "blocking": true,
+      "required_evidence": [
+        "unresolved-evidence-or-coverage-record"
+      ]
+    },
+    {
+      "case_id": "PARITY-009",
+      "name": "byte-equal-semantic-or-reference-wrong",
+      "classification": "OurDefect",
+      "blocking": true,
+      "required_evidence": [
+        "semantic-or-reference-diff"
+      ],
+      "expected_error": "annotation_byte_parity_as_sole_correctness_forbidden"
+    },
+    {
+      "case_id": "PARITY-010",
+      "name": "byte-layout-diff-semantic-equal",
+      "classification": "SemanticallyEquivalent",
+      "blocking": false,
+      "byte_layout_state": "semantic_equal_layout_different"
+    },
+    {
+      "case_id": "PARITY-011",
+      "name": "oracle-overwrites-artifact",
+      "classification": "OurDefect",
+      "blocking": true,
+      "expected_error": "annotation_oracle_used_as_authority_forbidden"
+    },
+    {
+      "case_id": "PARITY-012",
+      "name": "floating-oracle-revision",
+      "classification": "InputMismatch",
+      "blocking": true,
+      "expected_error": "annotation_oracle_baseline_invalid"
+    },
+    {
+      "case_id": "PARITY-013",
+      "name": "malicious-or-oversized-oracle-output",
+      "classification": "Unresolved",
+      "blocking": true,
+      "expected_error": "annotation_malicious_oracle_or_consumer_output"
+    },
+    {
+      "case_id": "PARITY-014",
+      "name": "shuffled-difference-order",
+      "classification": "Equal",
+      "blocking": false,
+      "required_invariant": "same-parity-record-order-classifications-and-report-digest"
+    }
+  ],
+  "byte_layout_states": [
+    "byte_equal",
+    "layout_equal_semantic_bytes_differ",
+    "semantic_equal_layout_different",
+    "not_comparable"
+  ],
+  "report": {
+    "semantic_parity_report_id": null,
+    "classification_counts": {},
+    "record_ids": [],
+    "unresolved_blocker_ids": [],
+    "semantic_parity_capability_state": null,
+    "byte_layout_parity_state": null,
+    "canonical_sha256": null
+  },
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "profiles.reference_view_id",
+      "profiles.profile_id",
+      "profiles.reference_generation_id",
+      "profiles.annotation_artifact_id",
+      "profiles.comparison_profile_id",
+      "profiles.oracle_baseline_id",
+      "profiles.oracle_revision",
+      "profiles.oracle_source_profile_id",
+      "profiles.oracle_config_id",
+      "profiles.oracle_extractor_profile_id",
+      "cases[*].our_subject_ids",
+      "cases[*].oracle_subject_ids",
+      "cases[*].reference_evidence_ids",
+      "cases[*].parity_record_id",
+      "cases[*].canonical_sha256",
+      "report.semantic_parity_report_id",
+      "report.classification_counts",
+      "report.record_ids",
+      "report.semantic_parity_capability_state",
+      "report.byte_layout_parity_state",
+      "report.canonical_sha256"
+    ]
+  }
+}
