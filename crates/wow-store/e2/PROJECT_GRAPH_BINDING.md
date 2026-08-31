@@ -17,10 +17,15 @@ validated project/direct proposals
 -> GraphGenerationId / GraphSnapshotId
 
 ProjectIndexCandidateId
-+ GraphPublicationPlanId
++ GraphGenerationId / GraphSnapshotId
++ project semantic snapshot manifest
+-> ProjectSnapshotId
+
+ProjectSnapshotId
++ GraphSnapshotId
++ AnalyzerSnapshotId
 + project/graph logical partition manifests
 -> ProjectPublicationSetId
--> ProjectSnapshotId
 
 ProjectPublicationSetId
 + complete partition membership

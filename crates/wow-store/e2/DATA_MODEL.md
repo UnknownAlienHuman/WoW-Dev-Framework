@@ -146,7 +146,7 @@ ProjectPublicationSet
     canonical digest
 ```
 
-It excludes `ProjectStoreGenerationId` to avoid an identity cycle.
+`ProjectSnapshotId` and `GraphSnapshotId` are derived before this set. The set excludes `ProjectStoreGenerationId`; `ProjectStoreGenerationId` binds the complete publication set later. This ordering avoids identity cycles.
 
 ## Store generation
 

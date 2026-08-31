@@ -8,7 +8,7 @@
 
 ### E1-A — storage foundation and immutable ReferenceStore
 
-The complete pre-E2 E1-A overview is preserved byte-for-byte as [`E1_A_OVERVIEW.md`](E1_A_OVERVIEW.md). Read it before the detailed root package:
+The complete pre-E2 E1-A overview is preserved byte-for-byte as [`E1_A_OVERVIEW.md`](E1_A_OVERVIEW.md). Its historical `PROJECT_STORE.md` target is preserved separately as [`PROJECT_STORE_PRE_E2_BOUNDARY.md`](PROJECT_STORE_PRE_E2_BOUNDARY.md); use that file when reconstructing the exact E1-A-era boundary. Read the overview before the detailed root package:
 
 1. [`AGENTS.md`](AGENTS.md)
 2. [`DECISIONS.md`](DECISIONS.md)

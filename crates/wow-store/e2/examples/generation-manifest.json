@@ -5,8 +5,9 @@
   "identity_dag": [
     "ProjectIndexCandidateId",
     "GraphPublicationPlanId -> GraphGenerationId -> GraphSnapshotId",
-    "ProjectIndexCandidateId + GraphPublicationPlanId -> ProjectPublicationSetId -> ProjectSnapshotId",
-    "complete membership + schema set + object refs -> ProjectStoreGenerationId",
+    "ProjectIndexCandidateId + GraphSnapshotId + project semantic manifest -> ProjectSnapshotId",
+    "ProjectSnapshotId + GraphSnapshotId + AnalyzerSnapshotId + project/graph partition manifests -> ProjectPublicationSetId",
+    "ProjectPublicationSetId + complete membership + schema set + object refs -> ProjectStoreGenerationId",
     "validation report -> CurrentPublicationRecord"
   ],
   "publication_set": {

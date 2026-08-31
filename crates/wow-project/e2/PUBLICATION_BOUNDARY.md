@@ -73,15 +73,23 @@ No crate silently implements another owner's semantics.
 ## Noncyclic identity order
 
 ```text
-E2-C candidate and project semantic manifests
-+ wow-graph semantic publication plan/manifests
+E2-C candidate and project semantic manifest
++ wow-graph GraphGenerationId / GraphSnapshotId
+-> ProjectSnapshotId
+
+ProjectSnapshotId
++ GraphSnapshotId
++ AnalyzerSnapshotId
++ project/graph logical partition manifests
 -> ProjectPublicationSetId
+
+ProjectPublicationSetId
 -> ProjectStoreGenerationId
 -> inactive validation report
 -> CurrentPublicationRecord
 ```
 
-`ProjectPublicationSetId`, `ProjectGenerationId`, and `GraphGenerationId` do not include `ProjectStoreGenerationId`. The store generation binds them after their semantic identities are stable.
+`ProjectSnapshotId` is derived before `ProjectPublicationSetId`; the publication set then binds the already-stable project, graph, analyzer, and logical-partition identities. None of `ProjectGenerationId`, `GraphGenerationId`, `ProjectSnapshotId`, `GraphSnapshotId`, or `ProjectPublicationSetId` includes `ProjectStoreGenerationId`. The store generation binds the complete publication set afterward.
 
 ## Two-stage publication
 
