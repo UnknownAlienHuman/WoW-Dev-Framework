@@ -1,0 +1,199 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-recognizers-e2-match-cases-v1",
+  "state": "documentation-only-pending-output-freeze",
+  "cases": [
+    {
+      "case_id": "RECOG-TOC-003",
+      "rule_id": "core.toc.dependencies@1",
+      "input_variant": "complete",
+      "expected_outcome": "Matched",
+      "expected_relation_kind": "depends_on",
+      "expected_confidence": "Derived",
+      "expected_match_ids": [],
+      "expected_proposal_ids": []
+    },
+    {
+      "case_id": "RECOG-TOC-008",
+      "rule_id": "core.toc.saved_variables@1",
+      "input_variant": "complete",
+      "expected_outcome": "Matched",
+      "expected_entity_kind": "state_root",
+      "expected_confidence": "Derived",
+      "expected_match_ids": [],
+      "expected_proposal_ids": []
+    },
+    {
+      "case_id": "RECOG-XML-004",
+      "rule_id": "core.xml.inherits@1",
+      "input_variant": "complete",
+      "expected_outcome": "Matched",
+      "expected_relation_kinds": [
+        "inherits",
+        "references_template"
+      ],
+      "expected_match_ids": [],
+      "expected_proposal_ids": []
+    },
+    {
+      "case_id": "RECOG-FRAME-001",
+      "rule_id": "core.lua.create_frame@1",
+      "input_variant": "create-frame-exact",
+      "expected_outcome": "Matched",
+      "expected_confidence": "Derived",
+      "expected_match_ids": [],
+      "expected_proposal_ids": []
+    },
+    {
+      "case_id": "RECOG-EVENT-001",
+      "rule_id": "core.signal.native_frame_event@1",
+      "input_variant": "native-frame-event",
+      "expected_outcome": "Matched",
+      "expected_relation_kind": "registers_event",
+      "expected_signal_class": "native-frame-event",
+      "expected_match_ids": [],
+      "expected_proposal_ids": []
+    },
+    {
+      "case_id": "RECOG-EVENT-004",
+      "rule_id": "core.signal.native_event_registry_bridge@1",
+      "input_variant": "native-eventregistry-bridge",
+      "expected_outcome": "Matched",
+      "expected_signal_class": "native-frame-event-registry-bridge",
+      "expected_match_ids": [],
+      "expected_proposal_ids": []
+    },
+    {
+      "case_id": "RECOG-EVENT-005",
+      "rule_id": "core.signal.custom_registry_subscription@1",
+      "input_variant": "complete",
+      "expected_outcome": "Matched",
+      "expected_relation_kind": "subscribes_callback",
+      "expected_signal_class": "custom-registry-event",
+      "expected_confidence": "Derived",
+      "expected_match_ids": [],
+      "expected_proposal_ids": []
+    },
+    {
+      "case_id": "RECOG-EVENT-006",
+      "rule_id": "core.signal.custom_registry_subscription@1",
+      "input_variant": "subscription-without-producer-complete-local-scope",
+      "expected_outcome": "EvaluatedNoMatchOrUnresolvedStructuralRegistration",
+      "forbidden_claims": [
+        "custom-event-confirmed",
+        "native-event-confirmed"
+      ],
+      "expected_match_ids": [],
+      "expected_proposal_ids": []
+    },
+    {
+      "case_id": "RECOG-EVENT-007",
+      "rule_id": "core.signal.custom_registry_subscription@1",
+      "input_variant": "partial-custom-event-producer-scope",
+      "expected_outcome": "Partial",
+      "expected_confidence": "Possible",
+      "expected_blockers": [
+        "project.signal.producer_scope"
+      ],
+      "expected_match_ids": [],
+      "expected_proposal_ids": []
+    },
+    {
+      "case_id": "RECOG-EVENT-009",
+      "rule_id": "core.signal.custom_registry_subscription@1",
+      "input_variant": "plain-registercallback-player-login",
+      "expected_outcome": "EvaluatedNoMatchOrUnresolvedStructuralRegistration",
+      "forbidden_claims": [
+        "native-event-registration",
+        "custom-event-confirmed"
+      ],
+      "expected_match_ids": [],
+      "expected_proposal_ids": []
+    },
+    {
+      "case_id": "RECOG-HOOK-003",
+      "rule_id": "core.hook.secure_posthook@1",
+      "input_variant": "complete",
+      "expected_outcome": "Matched",
+      "expected_relation_kind": "hooks",
+      "expected_attributes": {
+        "hook_kind": "secure_posthook"
+      },
+      "forbidden_claims": [
+        "taint-safe",
+        "combat-safe",
+        "protected-safe",
+        "managed-object-safe",
+        "runtime-confirmed"
+      ],
+      "expected_match_ids": [],
+      "expected_proposal_ids": []
+    },
+    {
+      "case_id": "RECOG-LIB-004",
+      "rule_id": "core.library.libstub_require@1",
+      "input_variant": "libs-path-without-libstub-call",
+      "expected_outcome": "EvaluatedNoMatch",
+      "expected_match_ids": [],
+      "expected_proposal_ids": []
+    },
+    {
+      "case_id": "RECOG-STATE-002",
+      "rule_id": "core.state.literal_path_read@1",
+      "input_variant": "complete",
+      "expected_outcome": "Matched",
+      "expected_entity_kind": "state_path",
+      "expected_relation_kind": "reads_state",
+      "expected_path": [
+        "FixtureDB",
+        "profile",
+        "enabled"
+      ],
+      "expected_confidence": "Derived",
+      "expected_match_ids": [],
+      "expected_proposal_ids": []
+    },
+    {
+      "case_id": "RECOG-STATE-004",
+      "rule_id": "core.state.literal_path_read@1",
+      "input_variant": "dynamic-state-path",
+      "expected_outcome": "Matched",
+      "expected_confidence": "Possible",
+      "expected_exact_prefix": [
+        "FixtureDB",
+        "profile"
+      ],
+      "expected_match_ids": [],
+      "expected_proposal_ids": []
+    },
+    {
+      "case_id": "RECOG-COV-003",
+      "rule_id": "core.toc.dependencies@1",
+      "input_variant": "partial-dependency-capability-empty-facts",
+      "expected_outcome": "NotEvaluatedOrPartial",
+      "forbidden_outcomes": [
+        "EvaluatedNoMatch",
+        "complete"
+      ]
+    },
+    {
+      "case_id": "RECOG-MATCH-016",
+      "rule_id": "core.signal.custom_registry_subscription@1",
+      "input_variant": "join-amplification-over-budget",
+      "expected_outcome": "Partial",
+      "expected_truncation": true,
+      "forbidden_outcomes": [
+        "complete-output-partition"
+      ]
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "cases[*].expected_match_ids",
+      "cases[*].expected_proposal_ids",
+      "cases[*].expected-outcome-record-ids",
+      "cases[*].canonical_sha256"
+    ]
+  }
+}
