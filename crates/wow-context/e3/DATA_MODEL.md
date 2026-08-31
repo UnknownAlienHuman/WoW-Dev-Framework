@@ -1,50 +1,45 @@
-# E3-A context data model
+# E3-A context data model and identity DAG
 
-**Status:** normative semantic Project Map, skeleton, expansion, bundle, loss, metric, and continuation contract.
+**Status:** normative semantic Project Map, skeleton, expansion, source, bundle, renderer, metric, evaluation, and continuation contract.
 
-## 1. Object graph
+## Identity DAG
 
 ```text
-ContextRequest
-├── exact ContextInputSnapshot
-├── ContextProfile
-├── ProjectMapProfile
-├── SkeletonProfile
-├── DetailExpansionProfile
-├── SourceExcerptProfile
-├── ContextBudgetProfile
-├── TokenizerProfile: optional
-├── ContextSecurityProfile
-├── ContextEvaluationProfile
-└── cancellation
-
--> ContextPlan
--> ProjectMap and/or SkeletonRecord[]
--> ContextExpansionStep[]
--> SourceExcerptRecord[]
--> ContextCoverage/Loss/Omission records
--> ContextBundle
--> ContextMetrics
--> ContextContinuation
+exact domain input views + frozen profiles + normalized request
+-> ContextInputSnapshotId / ContextRequestId
+-> ContextPlanId / frontier
+-> ProjectMapId, SkeletonId, SourceExcerptId, expansion/loss/evidence records
+-> ContextBundleCoreId
+-> ContextRendererArtifactId
+-> ContextMetricsId
+-> ContextEvaluationReportId
+-> ContextBundleEnvelopeId
 ```
 
-## 2. Exact input snapshot
+No earlier artifact contains a later artifact ID. In particular, semantic bundle identity excludes renderer bytes, token counts, metrics, evaluation scores, timings, and envelope identity.
+
+## Context input snapshot
 
 ```text
 ContextInputSnapshot
-    PublicationSetId
-    StoreGenerationId / StoreImageId
+    snapshot ID
+    ProjectStoreEpochId
+    ProjectStoreGenerationId
+    ProjectPublicationSetId
     ProjectGenerationId / ProjectSnapshotId / ProjectViewId
+    AnalyzerSnapshotId
     GraphGenerationId / GraphSnapshotId / GraphViewId
-    ProfileId / ReferenceGenerationId / ReferenceViewId: optional exact set
-    project/graph/reference query bundle IDs
+    ProfileId
+    ReferenceGenerationId / ReferenceViewId: optional exact set
+    SourceUniverseManifestId[]
+    project/graph/reference query catalog IDs
     capability/coverage/conflict manifest IDs
     canonical digest
 ```
 
-All present identities must cohere. No floating current/latest token remains after acquisition.
+`StoreImageId` is forbidden. Operational read transaction/lease IDs are held by the caller/view owner and excluded from semantic identity.
 
-## 3. Context profiles
+## Profiles
 
 ### `ContextProfile`
 
@@ -55,177 +50,115 @@ input capability requirements
 relation lane registry
 confidence/provenance/coverage policies
 mandatory evidence/blocker fields
-ordering and canonicalization profile
-compatible renderer/evaluation profiles
+canonicalization and compatible profile matrix
 canonical digest
 ```
 
 ### `ProjectMapProfile`
 
 ```text
-included root/entity/load/role/capability classes
-principal-root selection rules
-entry-point and direct-neighborhood rules
-max summary cardinalities and deterministic grouping
+section registry/order
+principal-root and grouping rules
+entry-point/direct-neighborhood rules
+mandatory and optional fields
+strict default renderer target/cap
 next-detail route rules
-mandatory blocker/evidence display fields
 canonical digest
 ```
 
 ### `SkeletonProfile`
 
 ```text
-supported entity kinds and L0/L1 fields
-signature/member/relation/source-node projection rules
-role/heading vocabulary registry
-source-excerpt exclusion/default policy
-loss/unsupported policy
+supported subject kinds and L0/L1 fields
+signature/member/control-effect registries
+heading/role vocabulary
+projection/loss policy
 canonical digest
 ```
 
 ### `DetailExpansionProfile`
 
 ```text
-allowed lanes/directions
-per-lane confidence/coverage policy
-path/depth/frontier/cycle rules
-inclusion priority and stable ordering
-no-new-evidence and stopping rules
-continuation profile
+allowed lanes/directions/relation kinds
+confidence and coverage policy
+depth/path/cycle/frontier rules
+priority/fairness/stopping/continuation policy
 canonical digest
 ```
 
-### `SourceExcerptProfile`
+### Other profiles
 
 ```text
-allowed source origins/roles
-license/privacy/security requirements
-span expansion/context-line policy
-encoding/normalization/escaping policy
-per-excerpt/entity/bundle budgets
-prompt-injection labeling
-canonical digest
+SourceExcerptProfile
+ContextBudgetProfile
+TokenizerProfile: optional
+ContextSecurityProfile
+ContextRendererProfile
+ContextEvaluationProfile
 ```
 
-### `ContextBudgetProfile`
+Each is versioned, bounded, immutable for a request, and content-addressed.
 
-```text
-profile ID/version
-max roots/entities/skeletons/relations/paths/depth
-max evidence/source handles/conflicts/loss records
-max source excerpts/bytes/lines
-max structured nodes/fields
-max output UTF-8 bytes/Unicode scalars
-optional tokenizer budget policy
-per-lane/per-root reservations and global limits
-canonical digest
-```
-
-### `TokenizerProfile`
-
-```text
-tokenizer profile ID
-implementation/package/revision/version
-vocabulary/model file digest
-normalization/special-token/config policy
-input encoding and exact bytes policy
-counting API/probe identity
-canonical digest
-```
-
-### `ContextSecurityProfile`
-
-```text
-allowed origins/object roles
-private-path/payload/source rules
-source instruction labeling/escaping
-object/excerpt limits
-consumer output policy
-canonical digest
-```
-
-### `ContextEvaluationProfile`
-
-```text
-mandatory structural/evidence record corpus
-relevance task/request classes
-redundancy equivalence rules
-compression baseline
-consumer utility protocol
-optional external consumer/model pin
-acceptance thresholds and non-goal fields
-canonical digest
-```
-
-## 4. Context request
+## Context request
 
 ```text
 ContextRequest
     request ID
     exact ContextInputSnapshot
-    root EntityKey/IDs[]
-    artifact target: ProjectMap | L0 | L1 | ContextBundle
-    selected relation lanes/directions
-    selected detail/source/evidence policies
+    root EntityKey[]
+    artifact target = ProjectMap | L0 | L1 | Bundle
+    selected lanes/directions/detail/source/evidence policies
     confidence/coverage/conflict policy
-    context/project-map/skeleton/expansion/source/budget/security/evaluation profile IDs
-    tokenizer profile ID: optional
-    requested budget overrides within profile bounds
+    all profile IDs
+    optional tokenizer/renderer IDs
+    requested overrides within profile maxima
     continuation cursor: optional
-    output renderer profile: optional higher-layer field
     cancellation
     canonical digest
 ```
 
-Exact roots must resolve in the selected graph/project/reference universe. Root absence is classified with coverage, not guessed.
+Exact roots only. Search/ranking is not a request field in E3-A.
 
-## 5. Context plan
+## Context plan
 
 ```text
 ContextPlan
     plan ID
     normalized request ID/digest
-    exact input snapshot/profile IDs
-    resolved roots and root statuses
-    requested artifact stages
-    lane-specific query/expansion plans
+    input/profile IDs
+    resolved roots and statuses
+    requested stages and lane query plans
     mandatory inclusion set
-    budget reservations/priorities
+    budget reservations/priority rounds
     source/evidence query plan
     stopping/continuation policy
-    expected capability/coverage dependencies
+    expected capability dependencies
     canonical digest
 ```
 
-## 6. Project Map
+## Project Map
 
 ```text
 ProjectMap
-    project_map_id/version
-    exact input/context/project-map profile IDs
+    ProjectMapId
+    exact input/request/context/project-map profile IDs
     project/publication/profile header
-    package/load-unit/file/XML/Lua-unit summaries
-    principal entity/role/entry-point IDs
-    direct ownership/load/lifecycle/registration/state/API-use lane summaries
-    capability/coverage/conflict/truncation summary IDs
+    ordered ProjectMapSection IDs
+    evidence/coverage/conflict/loss/omission/stopping IDs
     next-detail route IDs
-    evidence/source handle refs
-    context projection coverage/loss/omission records
-    metrics
-    canonical digest
+    canonical semantic digest
 ```
 
-## 7. Project Map section
+It does not contain metrics or evaluation report IDs.
 
 ```text
 ProjectMapSection
     section ID/kind
-    exact subject entity/group IDs
-    heading/presentation role from frozen vocabulary
-    ordered item/edge/route IDs
-    input/evidence/coverage/conflict refs
-    projection status
-    omission/truncation refs
+    exact subject/group IDs
+    frozen heading/presentation role
+    ordered item/relation/route IDs
+    evidence/coverage/conflict refs
+    projection/loss/omission/truncation state
     canonical digest
 ```
 
@@ -245,141 +178,107 @@ capabilities_conflicts_and_gaps
 next_detail_routes
 ```
 
-## 8. Skeleton identity
-
-```text
-SkeletonId
-    domain-separated digest over:
-        exact ContextInputSnapshot semantic identities
-        subject EntityKey
-        detail level
-        skeleton/context profile IDs
-        canonical semantic content and required blocker/evidence refs
-```
-
-Renderer path/line/whitespace and output order do not determine identity.
-
-## 9. Skeleton record
+## Skeleton
 
 ```text
 SkeletonRecord
-    skeleton ID
-    detail level = L0 | L1
+    SkeletonId
+    level = L0 | L1
     exact subject EntityKey/kind/universe/generation
-    stable display/logical name fields
+    logical/display names from owning facts
     owner/package/file/load/role refs
-    signature/member/public-surface refs
-    direct relation summary/edge/path IDs
-    source-backed structural node IDs
-    evidence/source handle refs
-    confidence/provenance/coverage/conflict/ambiguity state
-    projection/loss/omission/truncation refs
+    signature/member IDs
+    direct relation/path IDs
+    control/effect node IDs
+    evidence/source/coverage/conflict/ambiguity refs
+    projection/loss/omission/stopping refs
     next-detail route IDs
-    canonical digest
+    canonical semantic digest
 ```
-
-## 10. Skeleton member
 
 ```text
 SkeletonMember
     member ID/kind/semantic ordinal
-    owner skeleton/entity
-    exact source/graph/project/reference subject refs
-    canonical name/type/signature/value metadata when proven
-    direct relation refs
-    evidence/source/coverage/conflict refs
+    exact owner/subject/source refs
+    proven name/type/signature/value metadata
+    direct relation/evidence/coverage/conflict refs
     projection status
     canonical digest
 ```
 
-No inferred member/type/body when the input contract lacks one.
-
-## 11. Source-backed structural node
-
 ```text
-SourceSkeletonNode
+ControlEffectNode
     node ID/kind
-    exact project file/source unit and source handle/span
-    containing semantic entity
-    structural role = declaration | signature | field | direct call | registration | guard | branch heading | state access | return heading | other reviewed
-    normalized proven attributes and related fact IDs
-    children/relations by exact IDs
-    faithful excerpt ref: optional
-    confidence/coverage/conflict state
+    subject/file/source-unit/source handle/span
+    semantic ordinal and parent/child IDs
+    exact input fact IDs and typed attributes
+    relation/evidence/coverage/conflict refs
+    projection and unknown/collapsed/omitted refs
     canonical digest
 ```
 
-This is structured analyzer/project evidence, not reconstructed source text.
-
-## 12. Detail route
+## Detail route
 
 ```text
 ContextDetailRoute
     route ID
-    source subject/artifact
+    source artifact/subject
     target entity/root IDs
     lane/direction/detail target
     reason/evidence/path IDs
     required capabilities
-    estimated structural/byte/token cost profile
-    priority class and stable ordering key
+    labeled estimated structural/byte/token cost profile
+    priority class/stable key
     canonical digest
 ```
 
-Cost estimates are labeled and profile-bound; they cannot silently change semantic priority.
+An estimate cannot create eligibility or authority.
 
-## 13. Expansion frontier
+## Frontier and expansion
 
 ```text
 ContextFrontier
     frontier ID
     exact input/request/profile IDs
-    pending root/entity/lane/path work items
-    visited semantic entity/relation/evidence sets
-    included artifact IDs
+    ordered pending work items
+    included/visited set digests
     used/reserved/remaining budgets
-    stopping/blocker/no-new-evidence records
+    stopping/blocker/no-new-evidence refs
     canonical digest
 ```
-
-## 14. Expansion step
 
 ```text
 ContextExpansionStep
     step ID/ordinal
-    input frontier ID
+    input/output frontier IDs
     exact query request/result IDs
-    lane/root/reason
-    newly included entity/relation/evidence/artifact IDs
-    duplicate/rejected/skipped IDs and reasons
+    root/lane/reason
+    new/duplicate/rejected/blocked record IDs
     budget delta
     coverage/conflict/truncation state
-    output frontier ID
     canonical digest
 ```
 
-## 15. Source excerpt
+## Source excerpt
 
 ```text
 ContextSourceExcerpt
     excerpt ID
     exact source handle/file/content digest/generation
-    exact requested and actual half-open byte span
-    line/column projection under explicit profile
-    faithful normalized bytes/text
+    requested and actual half-open byte spans
+    faithful source bytes/text under explicit profile
+    line/column projection
     prefix/suffix truncation markers
-    license/provenance/security refs
-    injection/untrusted-data label
+    license/provenance/security/injection-label refs
     excerpt digest
 ```
 
-Excerpt is not allowed without exact current source-handle validation.
+Source excerpt identity is independent of Markdown fencing/wrapping; renderer transformation is recorded later.
 
-## 16. Evidence link
+## Evidence and projection records
 
 ```text
 ContextEvidenceLink
-    link ID
     context artifact/record/field ID
     project/graph/reference/evidence/source IDs
     exact generations/universe
@@ -388,9 +287,47 @@ ContextEvidenceLink
     canonical digest
 ```
 
-Every material claim has at least one link or an explicit deterministic derivation chain.
+```text
+ContextCoverageRecord
+    artifact/request/profile and field/section/lane/detail partition
+    input coverage/conflict refs
+    exact considered/included/omitted/unsupported/truncated counts/digests
+    Complete | Partial | Unknown | Failed | NotApplicable | NotEvaluated
+    loss/omission/stopping refs
+    canonical digest
+```
 
-## 17. Projection status
+```text
+ContextLossRecord
+    subject/artifact/field
+    category/severity/reason
+    emitted compact/sidecar/omitted representation
+    exact lost semantics/detail
+    affected tasks/capabilities
+    evidence/coverage/conflict and route refs
+    canonical digest
+```
+
+```text
+ContextOmissionRecord
+    exact IDs or partition/count/digest
+    mandatory/optional and priority
+    reason/budget/blocker
+    continuation/detail route
+    canonical digest
+```
+
+```text
+ContextStoppingRecord
+    RequestedComplete | NoNewEvidence | BudgetExhausted | DepthLimit |
+    CycleClosed | CoverageBoundary | ConflictBoundary | UnsupportedDetail |
+    Cancelled | Failed
+    exact scope/frontier/query/budget/coverage refs
+    continuation availability
+    canonical digest
+```
+
+## Projection status
 
 ```text
 Exact
@@ -402,111 +339,117 @@ NotEvaluated
 Truncated
 ```
 
-Compact does not mean source/graph complete; it is scoped to declared fields/profile.
-
-## 18. Context loss/omission record
+## Context bundle core
 
 ```text
-ContextLossRecord
-    loss ID/category/severity
-    exact input/subject/artifact/field IDs
-    reason = budget | unsupported_detail | source_unavailable | conflict | partial_coverage | privacy_security | deduplication | renderer_limit | deferred_capability
-    emitted compact/sidecar/omitted representation
-    affected capabilities/tasks
-    evidence/coverage/conflict refs
-    continuation/detail route refs
-    canonical digest
-```
-
-```text
-ContextOmissionRecord
-    omitted exact entity/relation/evidence/source IDs or count/partition manifest
-    reason and priority class
-    whether recoverable by continuation
-    budget/blocker refs
-    canonical digest
-```
-
-## 19. Stopping record
-
-```text
-ContextStoppingRecord
-    stop ID
-    reason = RequestedComplete | NoNewEvidence | BudgetExhausted | DepthLimit | CycleClosed | CoverageBoundary | ConflictBoundary | UnsupportedDetail | Cancelled | Failed
-    exact frontier/root/lane
-    query/budget/coverage/conflict refs
-    continuation availability
-    canonical digest
-```
-
-`NoNewEvidence` is not authoritative absence.
-
-## 20. Context bundle
-
-```text
-ContextBundle
-    bundle ID/version
-    exact input snapshot/request/profile IDs
-    ProjectMap ID: optional
-    included L0/L1 skeleton/member/source-node IDs
-    included entity/relation/path/evidence/source-excerpt IDs
+ContextBundleCore
+    ContextBundleCoreId/version
+    exact input/request/profile IDs
+    optional ProjectMapId
+    ordered L0/L1 skeleton/member/control-effect IDs
+    relation/path/evidence/source-excerpt IDs
     coverage/loss/omission/stopping IDs
-    frontier/continuation ID: optional
-    metrics/evaluation refs
-    artifact eligibility/status
-    canonical ordering and digest
+    final frontier/continuation ID: optional
+    semantic status/eligibility
+    canonical semantic digest
 ```
 
-## 21. Continuation cursor
+No renderer, token, metric, evaluation, timing, or operational fields.
+
+## Continuation
 
 ```text
 ContextContinuation
-    continuation ID
-    exact input/request/profile/budget/tokenizer IDs
-    ordering/profile version
-    current frontier ID/digest
+    continuation ID/version
+    exact input/request/all relevant profile IDs
+    ordering/continuation version
+    frontier ID/digest
     included/visited set digests
-    used/reserved budget state
+    used/reserved/remaining total-request budget state
     last stable work-item key
+    creating stop records
     integrity digest
 ```
 
-## 22. Context metrics
+## Renderer artifact
+
+```text
+ContextRendererArtifact
+    RendererArtifactId
+    ContextBundleCoreId
+    renderer profile ID/version
+    output bytes digest/length/line/scalar counts
+    renderer coverage/loss/security refs
+    optional exact TokenizerResultId
+    canonical manifest digest
+```
+
+## Tokenizer result
+
+```text
+ExactTokenCount
+    tokenizer profile ID
+    exact RendererArtifactId/output bytes digest
+    special/template policy
+    count and optional token-ID digest
+    canonical digest
+```
+
+```text
+TokenEstimate
+    estimate profile
+    exact byte/scalar/word subject measures
+    estimate range/point and uncertainty
+    explicitly_exact = false
+```
+
+## Metrics
 
 ```text
 ContextMetrics
-    metric set ID
-    input source/project/graph size measures
-    output entities/relations/skeletons/evidence/source records
-    output UTF-8 bytes/Unicode scalars/lines/structured nodes
-    exact token count + tokenizer profile: optional
-    estimated token range/profile: optional separate field
-    redundancy/duplicate avoided counts
-    mandatory-record recall and evidence-closure counts
+    ContextMetricsId
+    ContextBundleCoreId and optional RendererArtifactId
+    input source/project/graph/reference measures
+    output record/evidence/source measures
+    bytes/scalars/lines/structured nodes
+    exact token result or separate estimate refs
+    duplicate avoided and mandatory recall counts
     omitted/truncated/partial/conflict counts
-    expansion steps/query costs
-    canonical digest for deterministic fields
+    expansion/query cost summaries
+    deterministic metric digest
+    supplemental scoped timing/memory outside canonical digest
 ```
 
-Timing/memory may be supplemental and hardware/profile scoped.
-
-## 23. Evaluation report
+## Evaluation report
 
 ```text
 ContextEvaluationReport
-    report ID
-    exact fixture/request/input/profile IDs
-    mandatory structural/evidence expected versus included
-    relevance labels/results
-    redundancy/compression/budget results
-    continuation stability/no-new-evidence results
+    EvaluationReportId
+    exact corpus/input/request/profile IDs
+    ContextBundleCoreId / renderer / metric refs
+    mandatory expected versus included records
+    relevance/redundancy/compression/budget/continuation/source results
     consumer task outcomes under pinned protocol
-    error/loss/blocker records
-    acceptance decision
+    hard-gate decision and loss/error refs
     canonical digest for deterministic judgments
 ```
 
-## 24. Artifact eligibility
+## Outer envelope
+
+```text
+ContextBundleEnvelope
+    EnvelopeId
+    ContextBundleCoreId
+    renderer artifact IDs
+    metric IDs
+    optional evaluation report IDs
+    transport-safe status/manifest
+    canonical envelope digest
+```
+
+The envelope is convenient delivery composition, not semantic bundle identity or authority.
+
+## Artifact eligibility
 
 ```text
 Fixture
@@ -514,21 +457,20 @@ Candidate
 ValidatedForDeclaredContextProfile
 ```
 
-Validated requires all mandatory structural/evidence/security/determinism/budget gates for the declared profile. It does not mean project/graph/source complete beyond input capabilities.
+Validation is scoped to the declared context profile and input capabilities; it never means complete source/project/platform truth.
 
-## 25. Canonical ordering
+## Canonical ordering
 
 ```text
-Project Map sections by profile section order/ID
+sections by profile order
 roots by universe/kind/semantic key/ID
-skeletons by detail/kind/owner/load/source/semantic key/ID
-members by semantic ordinal/kind/name/ID
-relations by lane/kind/source/target/qualifiers/ID
-reason paths by length then relation/entity stable tuple
-source nodes/excerpts by file/source-unit/span/ID
-evidence links by artifact/field/provenance/source/ID
-loss/omission/stopping by subject/category/reason/ID
-frontier items by priority class/lane/root/path/stable semantic key
+skeletons by level/kind/owner/load/source/key/ID
+members/control nodes by semantic/source ordinal
+relations by lane/kind/direction/source/target/qualifier/assertion
+paths by length then semantic tuple
+source excerpts by source unit/span/ID
+evidence/loss/omission/stopping by artifact field/scope/category/reason/ID
+frontier by priority/root/lane/path/detail/stable key
 ```
 
-No storage row, hash, filesystem, worker, query completion, or model-score ordering.
+No row, page, hash map, filesystem, worker, query completion, wall-clock, or model-score ordering.

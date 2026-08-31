@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-context-e3-bundle-dag-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "identity_dag": [
+    "ContextInputSnapshotId-and-ContextRequestId",
+    "ContextPlanId-and-ContextFrontierId",
+    "ProjectMapId-SkeletonId-ControlEffectNodeId-SourceExcerptId-EvidenceLossIds",
+    "ContextBundleCoreId",
+    "ContextRendererArtifactId",
+    "ContextMetricsId",
+    "ContextEvaluationReportId",
+    "ContextBundleEnvelopeId"
+  ],
+  "bundle_core": {
+    "context_bundle_core_id": null,
+    "context_input_snapshot_id": null,
+    "context_request_id": null,
+    "profile_ids": [],
+    "project_map_id": null,
+    "l0_skeleton_ids": [],
+    "l1_skeleton_ids": [],
+    "control_effect_node_ids": [],
+    "relation_and_reason_path_ids": [],
+    "evidence_link_ids": [],
+    "source_excerpt_ids": [],
+    "coverage_loss_omission_stopping_ids": [],
+    "continuation_id": null,
+    "status": "Truncated",
+    "canonical_semantic_sha256": null,
+    "forbidden_backreferences": [
+      "renderer_artifact_id",
+      "metrics_id",
+      "evaluation_report_id",
+      "envelope_id"
+    ]
+  },
+  "renderer_artifact": {
+    "renderer_artifact_id": null,
+    "context_bundle_core_id": null,
+    "renderer_profile_id": null,
+    "output_utf8_sha256": null,
+    "output_utf8_bytes": null,
+    "output_lines": null,
+    "output_unicode_scalars": null,
+    "renderer_loss_record_ids": [],
+    "tokenizer_result_id": null
+  },
+  "metrics": {
+    "context_metrics_id": null,
+    "context_bundle_core_id": null,
+    "renderer_artifact_id": null,
+    "mandatory_record_recall": null,
+    "evidence_closure": null,
+    "omitted_truncated_partial_conflict_counts": {},
+    "canonical_sha256": null
+  },
+  "evaluation": {
+    "context_evaluation_report_id": null,
+    "context_bundle_core_id": null,
+    "renderer_artifact_id": null,
+    "context_metrics_id": null,
+    "hard_gate_decision": null,
+    "canonical_sha256": null
+  },
+  "envelope": {
+    "context_bundle_envelope_id": null,
+    "context_bundle_core_id": null,
+    "renderer_artifact_ids": [],
+    "context_metrics_ids": [],
+    "context_evaluation_report_ids": [],
+    "canonical_sha256": null
+  },
+  "mutation_cases": [
+    {
+      "case_id": "CTX-RENDER-002",
+      "mutation": "renderer_hides_mandatory_blocker",
+      "expected_error": "context_renderer_loss_or_sidecar_unreported"
+    },
+    {
+      "case_id": "CTX-CANON-006",
+      "mutation": "add_wall_clock_or_row_id_to_bundle_identity",
+      "expected_error": "context_volatile_field_in_canonical_identity"
+    },
+    {
+      "case_id": "CTX-DAG-001",
+      "mutation": "bundle_core_references_metrics_or_evaluation",
+      "expected_error": "context_artifact_identity_cycle_forbidden"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}

@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-context-e3-l1-skeleton-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "skeleton": {
+    "skeleton_id": null,
+    "detail_level": "L1",
+    "context_input_snapshot_id": null,
+    "subject_entity_id": null,
+    "signature": {
+      "signature_fact_id": null,
+      "parameter_ids": [],
+      "return_ids": [],
+      "optionality_nilability_and_multiple_return_preserved": true,
+      "evidence_link_ids": []
+    },
+    "direct_relation_ids": [],
+    "reason_path_ids": [],
+    "control_effect_nodes": [
+      {
+        "node_id": null,
+        "kind": "Declaration",
+        "source_handle_id": null,
+        "half_open_byte_span": null,
+        "semantic_ordinal": 0,
+        "input_fact_ids": [],
+        "evidence_link_ids": []
+      },
+      {
+        "node_id": null,
+        "kind": "Guard",
+        "source_handle_id": null,
+        "half_open_byte_span": null,
+        "semantic_ordinal": 1,
+        "input_fact_ids": [],
+        "proof_ceiling": "structural-shape-only"
+      },
+      {
+        "node_id": null,
+        "kind": "DirectCall",
+        "source_handle_id": null,
+        "half_open_byte_span": null,
+        "semantic_ordinal": 2,
+        "target_entity_id": null,
+        "confidence": "Derived",
+        "evidence_link_ids": []
+      },
+      {
+        "node_id": null,
+        "kind": "PossibleCall",
+        "source_handle_id": null,
+        "half_open_byte_span": null,
+        "semantic_ordinal": 3,
+        "target_entity_ids": [],
+        "confidence": "Possible",
+        "evidence_link_ids": []
+      },
+      {
+        "node_id": null,
+        "kind": "UnknownRegion",
+        "source_handle_id": null,
+        "half_open_byte_span": null,
+        "missing_capability_ids": [],
+        "loss_record_ids": []
+      },
+      {
+        "node_id": null,
+        "kind": "CollapsedRegion",
+        "child_manifest_id": null,
+        "loss_record_ids": [],
+        "detail_route_ids": []
+      },
+      {
+        "node_id": null,
+        "kind": "OmittedRegion",
+        "omitted_manifest_digest": null,
+        "omitted_count": null,
+        "continuation_id": null
+      }
+    ],
+    "effect_summary": {
+      "member_node_ids": [],
+      "direct_call_count": 1,
+      "possible_call_count": 1,
+      "registration_counts_by_system": {},
+      "state_read_write_counts": {},
+      "api_use_counts": {},
+      "unknown_collapsed_omitted_counts": {
+        "unknown": 1,
+        "collapsed": 1,
+        "omitted": 1
+      }
+    },
+    "coverage_record_ids": [],
+    "conflict_ids": [],
+    "canonical_semantic_sha256": null
+  },
+  "hard_nonclaims": [
+    "no-second-parser-AST-CFG-SSA-or-dataflow",
+    "no-runtime-order",
+    "no-taint-combat-protected-secret-performance-or-safety-proof",
+    "no-source-reconstruction",
+    "no-callsite-deduplication-by-target",
+    "no-bare-ellipsis"
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}

@@ -1,9 +1,10 @@
 {
   "schema_version": 1,
   "repository": "UnknownAlienHuman/WoW-Dev-Framework",
-  "documentation_frontier": "E2-D",
+  "documentation_frontier": "E3-A",
   "implementation_frontier": "not-started",
   "contract_state": "documentation-only-no-rust-code",
+  "next_documentation_package": "E3-B-pinned-Blizzard-UI-source-producer",
   "required_reading": [
     "AGENTS.md",
     "crates/AGENTS.md",
@@ -17,11 +18,13 @@
     "Directory presence does not activate a crate.",
     "Documentation-ready does not mean code prerequisites are implemented.",
     "Allowed dependencies are maximum permitted edges, not mandatory dependencies.",
+    "Active work-package dependencies are narrower and authoritative for that package.",
     "Implement only the active work package and its executable fixtures.",
     "Do not create empty placeholder crates or fake successful operations.",
     "Required null fixture pins become invalid when implementation_state changes from not-started.",
-    "Cross-crate contract changes update this manifest, dependency graph or workstream routing as applicable.",
-    "The external WoW engineering KB remains the current patch-sensitive authority/router; live claims are linked, not duplicated."
+    "Cross-crate contract changes update this manifest, dependency graph, and workstream routing as applicable.",
+    "The external WoW engineering KB remains the current patch-sensitive authority/router; live claims are linked, not duplicated.",
+    "Missing implementation, probe, benchmark, tokenizer, evaluation, runtime, or source-producer evidence is skipped or NotEvaluated, never pass."
   ],
   "contract_packages": [
     {
@@ -121,6 +124,13 @@
       "contract_id": "wow-store/e2-d/projectstore-coherent-publication",
       "manifest": "crates/wow-store/e2/CONTRACT.json",
       "state": "implementation-ready-documentation-no-rust-code"
+    },
+    {
+      "work_package": "E3-A",
+      "crate": "wow-context",
+      "contract_id": "wow-context/e3-a/project-map-skeleton-progressive-context",
+      "manifest": "crates/wow-context/e3/CONTRACT.json",
+      "state": "implementation-ready-documentation-no-rust-code"
     }
   ],
   "crates": [
@@ -142,7 +152,7 @@
     },
     {
       "name": "wow-store",
-      "status": "E1-A-and-E2-D-implementation-ready",
+      "status": "E1-A-and-E2-D-v2-implementation-ready",
       "first_milestone": "E1",
       "implementation_state": "not-started",
       "brief": "crates/wow-store/README.md",
@@ -161,7 +171,9 @@
         "immutable-partition-versions",
         "complete-generation-membership",
         "inactive-build-readback-validation-current-cas",
-        "read-snapshots-checkpoint-recovery-backup-retention-gc"
+        "durable-operation-idempotency-response-loss-recovery",
+        "snapshot-readers-semantic-continuations-and-lease-gc-admission",
+        "checkpoint-recovery-backup-retention-gc"
       ],
       "selected_e2_d_profile": "project-store-wal-manifested-partitions-v1"
     },
@@ -345,10 +357,13 @@
     },
     {
       "name": "wow-context",
-      "status": "next-documentation-package-E3",
+      "status": "E3-A-implementation-ready",
       "first_milestone": "E3",
       "implementation_state": "not-started",
       "brief": "crates/wow-context/README.md",
+      "contract_manifests": [
+        "crates/wow-context/e3/CONTRACT.json"
+      ],
       "allowed_dependencies": [
         "wow-core",
         "wow-reference",
@@ -357,13 +372,32 @@
         "wow-graph",
         "wow-search"
       ],
+      "active_e3_a_direct_dependencies": [
+        "wow-core",
+        "wow-reference",
+        "wow-project",
+        "wow-graph"
+      ],
+      "inactive_e3_a_dependencies": [
+        "wow-store",
+        "wow-emmy",
+        "wow-search",
+        "wow-rules",
+        "wow-cbm"
+      ],
       "owns": [
-        "l0-l1-skeletons",
+        "exact-context-input-and-universe-validation",
         "project-map",
-        "context-budgets",
-        "detail-negotiation",
-        "context-metrics"
-      ]
+        "l0-l1-skeletons",
+        "closed-control-effect-projection",
+        "progressive-detail-frontiers-and-continuations",
+        "evidence-coverage-loss-omission-stopping",
+        "faithful-bounded-source-excerpts",
+        "context-budgets-and-tokenizer-accounting",
+        "semantic-canonicalization-and-renderers",
+        "context-metrics-and-evaluation"
+      ],
+      "e3_b_boundary": "pinned Blizzard UI source acquisition/index/graph producer is separate"
     },
     {
       "name": "wow-service",

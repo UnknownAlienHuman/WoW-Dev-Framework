@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-context-e3-l0-skeleton-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "skeleton": {
+    "skeleton_id": null,
+    "detail_level": "L0",
+    "context_input_snapshot_id": null,
+    "subject_entity_id": null,
+    "subject_kind": "function",
+    "universe": "first_party_project",
+    "owner_entity_ids": [],
+    "package_file_load_refs": [],
+    "universal_role_records": [
+      {
+        "role_id": null,
+        "producer_id": null,
+        "confidence": "Derived",
+        "evidence_link_ids": []
+      }
+    ],
+    "public_surface_heading_ids": [],
+    "direct_relation_records": [
+      {
+        "relation_id": null,
+        "lane": "registration",
+        "direct": true,
+        "confidence": "Derived",
+        "evidence_link_ids": []
+      }
+    ],
+    "coverage_record_ids": [],
+    "conflict_ids": [],
+    "loss_omission_stopping_ids": [],
+    "next_detail_route_ids": [],
+    "body_included": false,
+    "canonical_semantic_sha256": null
+  },
+  "negative_expectations": [
+    "no-purpose-from-name-or-comment",
+    "no-generic-related-or-parent",
+    "no-path-as-direct-edge",
+    "no-Possible-or-Candidate-upgrade",
+    "no-body-or-full-source",
+    "no-evidence-loss-during-dedup"
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}

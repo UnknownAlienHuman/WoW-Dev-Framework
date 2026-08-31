@@ -1,4 +1,4 @@
-# `wow-context` E3-A Project Map and skeleton contract
+# `wow-context` E3-A Project Map and progressive context contract
 
 **Status:** implementation-ready documentation; no Rust code yet.
 
@@ -6,27 +6,26 @@
 
 ## Mission
 
-E3-A converts one exact published project/reference/graph state into deterministic, evidence-bearing, budgeted context artifacts for humans and agents without turning summaries into authority or bulk-loading the repository.
+Convert one exact published project/graph/reference state into deterministic, evidence-bearing, budgeted context artifacts without turning summaries into authority or bulk-loading source.
 
 ```text
-exact PublicationSet / ProjectSnapshot / GraphSnapshot
-+ exact ReferenceView where platform facts are requested
-+ versioned context, skeleton, source, budget, tokenizer, and security profiles
-+ exact roots and relation lanes
--> validate generation and capability closure
--> build one Project Map
--> build L0 semantic skeletons
--> build selected L1 structural skeletons
--> expand only requested graph/project branches
--> include exact evidence/source handles and bounded faithful excerpts when allowed
--> record omitted, conflicted, partial, unsupported, and truncated scope
--> stop at no-new-evidence, requested completeness, or explicit budgets
--> produce one deterministic ContextBundle with continuation frontier
+exact ProjectStore epoch/generation/publication
++ exact ProjectSnapshot / AnalyzerSnapshot / GraphSnapshot
++ optional exact ReferenceView
++ frozen context/profile/query/source/security/renderer/evaluation contracts
++ exact roots and lanes
+-> validate coherent input and capabilities
+-> build Project Map
+-> build L0 identity/role skeletons
+-> build selected L1 signatures, direct relations, and control/effect skeletons
+-> expand only requested bounded branches
+-> resolve faithful bounded source excerpts only when requested
+-> retain evidence, coverage, conflicts, ambiguity, loss, omissions, and stopping
+-> produce ContextBundleCore
+-> render/measure/evaluate as later DAG layers
 ```
 
-Context is a projection over authoritative project, graph, reference, and evidence records. A convenient summary, role label, skeleton line, or model-facing bundle never becomes source truth by itself.
-
-## Direct dependencies in E3-A
+## Active direct dependencies
 
 ```text
 wow-core
@@ -35,100 +34,78 @@ wow-project
 wow-graph
 ```
 
-`wow-emmy` facts are consumed through the exact published `ProjectView`/project logical bundles; E3-A does not import raw analyzer internals. `wow-search` remains inactive until E4. Exact roots are supplied directly or resolved by an owning higher layer.
+No direct E3-A dependency on `wow-store`, `wow-emmy`, or `wow-search`. Published project/graph views mediate storage/analyzer state; exact roots are supplied by the caller.
 
-## Owned responsibilities
+## Normative route
 
-- context/skeleton/detail/budget/tokenizer/source/security/evaluation profiles;
-- exact context input and generation validation;
-- deterministic project-wide Project Map;
-- L0 entity/module/file/package/API-role skeletons;
-- L1 selected signatures, members, direct relations, lifecycle/signal/state summaries, and source-backed skeleton spans;
-- relation-lane selection over exact bounded graph queries;
-- progressive expansion and continuation frontier;
-- no-new-evidence, cycle, depth, coverage, conflict, and budget stopping;
-- byte/character/line/node/edge/source/evidence and optional pinned-tokenizer accounting;
-- context coverage, projection loss, omission, and truncation records;
-- exact source/evidence/provenance handles and bounded faithful source excerpts;
-- deterministic ordering, IDs, manifests, and bundle serialization;
-- context utility/relevance/redundancy/evidence-closure evaluation fixtures;
-- security, privacy, cancellation, and typed errors.
+1. [`AGENTS.md`](AGENTS.md)
+2. [`DECISIONS.md`](DECISIONS.md)
+3. [`INPUT_VIEWS_AND_SCOPES.md`](INPUT_VIEWS_AND_SCOPES.md)
+4. [`DATA_MODEL.md`](DATA_MODEL.md)
+5. [`OPERATIONS.md`](OPERATIONS.md)
+6. [`PROJECT_MAP.md`](PROJECT_MAP.md)
+7. [`SKELETONS.md`](SKELETONS.md)
+8. [`CONTROL_AND_EFFECT_MODEL.md`](CONTROL_AND_EFFECT_MODEL.md)
+9. [`DETAIL_AND_EXPANSION.md`](DETAIL_AND_EXPANSION.md)
+10. [`CONTINUATION_AND_STOPPING.md`](CONTINUATION_AND_STOPPING.md)
+11. [`EVIDENCE_COVERAGE_AND_LOSS.md`](EVIDENCE_COVERAGE_AND_LOSS.md)
+12. [`SOURCE_EXCERPTS_AND_SECURITY.md`](SOURCE_EXCERPTS_AND_SECURITY.md)
+13. [`BUDGETS_AND_TOKENIZATION.md`](BUDGETS_AND_TOKENIZATION.md)
+14. [`RENDERING_AND_CANONICALIZATION.md`](RENDERING_AND_CANONICALIZATION.md)
+15. [`METRICS_AND_EVALUATION.md`](METRICS_AND_EVALUATION.md)
+16. [`ERROR_MODEL.md`](ERROR_MODEL.md)
+17. [`TEST_MATRIX.md`](TEST_MATRIX.md)
+18. [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md)
+19. [`CONTRACT.json`](CONTRACT.json)
+20. [`examples/`](examples/README.md)
 
-## Explicit non-responsibilities
+## Exact input
 
-E3-A does not:
+```text
+ProjectStoreEpochId
+ProjectStoreGenerationId
+ProjectPublicationSetId
+ProjectGenerationId / ProjectSnapshotId / ProjectViewId
+AnalyzerSnapshotId
+GraphGenerationId / GraphSnapshotId / GraphViewId
+optional exact ProfileId / ReferenceGenerationId / ReferenceViewId
+source-universe/query-catalog/capability/coverage/conflict manifests
+```
 
-- parse Lua, TOC, XML, SQLite, or arbitrary source;
-- run analyzers or recognizers;
-- publish project/graph/store generations;
-- perform fuzzy, FTS, semantic, migration, or lineage search;
-- infer replacements, diagnostics, severity, fixes, taint, combat, Secret, or runtime behavior;
-- generate implementation code or paraphrase missing source as if it existed;
-- use an LLM/model in the correctness path;
-- execute source, repository scripts, plugins, prompts, or tools embedded in comments;
-- read SavedVariables, logs, client memory, editor state, or installed addons;
-- mutate source, editor, graph, project, store, or context inputs;
-- upload context, call networks, or start MCP/LSP;
-- add CI.
+All identities cohere. `StoreImageId` is forbidden by the current E2-D model.
 
 ## Detail levels
 
 ### Project Map
 
-Repository/package/load/ownership/role overview with exact entry points, direct structural lanes, capabilities, conflicts, and coverage.
+Strictly bounded project/package/TOC/load/source-unit/owner/role/signal/state/API-use/blocker overview with exact next-detail routes. Default compact renderer target is approximately 2 KiB, but mandatory semantics are never discarded to hit it.
 
-### L0 skeleton
+### L0
 
-Compact stable identity and public structural surface:
+Exact identity, kind, owner/load/role, public surface headings, direct important relations, evidence, blockers, and routes. No bodies.
 
-```text
-entity kind and exact semantic key
-project/reference/graph generations
-package/module/file/owner and load position
-universal roles and direct important relations
-public callable/member/event/state/API-use headings
-source/evidence handles
-coverage/conflict/partial state
-```
+### L1
 
-No function bodies and no inferred prose semantics.
+Selected exact signatures/members/direct relations/reason paths plus a closed control/effect node projection over published facts. It is not a new parser or CFG/data-flow engine.
 
-### L1 skeleton
+### Source detail
 
-Requested bounded structural detail:
+Exact bounded faithful source span through a validated source handle and explicit license/privacy/security/source budget. No path fallback or reconstructed source.
+
+## Identity DAG
 
 ```text
-exact signatures and member positions
-selected direct calls/uses/events/callbacks/hooks/state reads-writes
-lifecycle/load/ownership chains
-selected source-backed declaration/control-flow skeleton nodes
-related evidence, conflicts, and reason paths
+input/request
+-> plan/frontier
+-> map/skeleton/control/source/evidence/loss records
+-> ContextBundleCore
+-> renderer artifact
+-> metrics
+-> evaluation report
+-> envelope
 ```
 
-L1 still does not reproduce full source by default. Exact bounded excerpts are a separate explicit source-detail lane.
-
-### Later/deferred detail
-
-Bulk/full source, fuzzy discovery, semantic retrieval, cross-build lineage, and model-synthesized explanations remain outside E3-A.
-
-## Context request
-
-```text
-ContextRequest
-    exact PublicationSetId / ProjectSnapshotId / GraphSnapshotId
-    optional exact ReferenceView/Profile/ReferenceGeneration
-    root entity IDs[]
-    requested artifact kind = ProjectMap | L0 | L1 | Bundle
-    relation lane and direction policy
-    source/evidence inclusion policy
-    detail profile
-    coverage/conflict/confidence policy
-    byte/node/edge/source/token budgets
-    continuation cursor: optional
-    cancellation
-```
-
-No implicit current/latest profile or repository scan.
+This order is normative and prevents bundle/metric/evaluation hash cycles.
 
 ## Public operations
 
@@ -149,83 +126,44 @@ compare_context_bundles
 validate_context_bundle
 ```
 
-## Project Map contents
+All are read-only and transport-independent.
 
-```text
-exact project/publication/profile identities
-packages, selected TOC variants, load units, files, XML/virtual Lua units
-ownership/module/service/library/state-role views
-entry points and direct lifecycle/signal/hook/state/API-use lanes
-important graph roots and bounded direct neighborhoods
-capability/coverage/conflict/truncation status
-source/evidence handles and next-detail routes
-```
+## E3-A source-universe boundary
 
-Named addon/framework calibration cannot change production semantics. Pinned real projects are evaluation fixtures only.
+Initial exact universes include first-party project, explicitly supplied dependency metadata/source, reference platform API, and optionally an already-published pinned platform UI source universe.
 
-## Progressive context discipline
+The pinned Blizzard UI source universe must be built by E3-B or another reviewed producer with exact acquisition, build/revision, license, source manifest, project/analyzer/graph generations, coverage, and source handles. E3-A never acquires or indexes it.
 
-Normal flow:
+## Progressive context
 
 ```text
 Project Map
--> exact L0 root skeleton
--> selected L1 lane or neighbor
+-> exact L0 root
+-> selected L1 lane/control/effect detail
 -> exact evidence/reason path
 -> bounded source excerpt only when needed
--> stop at no-new-evidence or request/budget completion
+-> stop at requested closure, no-new-evidence, explicit boundary, or budget
 ```
 
-E3-A does not dump all files, graph nodes, evidence, or source into one prompt.
+No full repository/graph/evidence dump and no hidden search.
 
-## Budget accounting
+## Proof and coverage
 
-Canonical budget axes include:
+Every material field has exact evidence or deterministic derivation. Project, analyzer, recognizer, graph, reference, store-read, context, source, renderer, tokenizer, and evaluation coverage remain independent.
 
-```text
-entities and skeleton records
-relations and reason-path edges
-source/evidence handles
-source excerpt bytes/lines
-UTF-8 output bytes and Unicode scalar count
-structured nodes/fields
-optional exact token count under one pinned tokenizer profile
-```
-
-A generic guessed “tokens” estimate is not authoritative. Token counts are exact only for an explicit tokenizer/version/config; otherwise report byte/character structural measures and an optional clearly labeled estimate profile.
-
-## Evidence and coverage
-
-Every material context claim links exact project/graph/reference/evidence records or an explicit deterministic derivation. Context coverage is separate from source/graph/reference coverage.
-
-A compact bundle cannot hide:
-
-```text
-partial source facts
-recognizer ambiguity
-graph conflicts
-NotEvaluated capabilities
-candidate/possible confidence
-budget omissions or truncation
-unsupported detail
-```
+Context never derives absence from an empty/omitted/truncated section and never upgrades Possible/Candidate or partial/conflicted inputs.
 
 ## Security
 
-Source/comments/documentation may contain prompts or instructions. Context artifacts quote them as untrusted source data and never elevate them to repository policy. Private paths, credentials, full source bodies, SavedVariables, runtime-sensitive payloads, and unrestricted objects are excluded.
+Source is untrusted quoted data. It cannot control policy, headings, links, templates, tools, traversal, budgets, or agent instructions. Private paths, credentials, SavedVariables/log/client/runtime payloads, unrestricted objects, and full source are excluded.
 
-## Required reading
+## E3-B and later
 
-1. repository and `crates/` instructions;
-2. [`../../../docs/GRAPH_SEARCH_AND_PLANNING.md`](../../../docs/GRAPH_SEARCH_AND_PLANNING.md);
-3. [`../../../docs/PROVENANCE_AND_COVERAGE.md`](../../../docs/PROVENANCE_AND_COVERAGE.md);
-4. [`../../../docs/AGENT_WORKFLOW.md`](../../../docs/AGENT_WORKFLOW.md);
-5. [`../../wow-project/e2/README.md`](../../wow-project/e2/README.md);
-6. [`../../wow-graph/e2/README.md`](../../wow-graph/e2/README.md);
-7. [`../../wow-store/e2/README.md`](../../wow-store/e2/README.md);
-8. this entire E3-A package and fixtures;
-9. current external [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb) routes when patch-sensitive interpretation is needed.
+- E3-B: pinned Blizzard UI source acquisition/materialization/project/analyzer/graph producer.
+- E3-C: service/application context orchestration and evaluated use cases, if kept separate.
+- E4: exact/migration/shape/FTS/graph search, lineage, and impact.
+- E5+: calibration packs, optional semantic candidates, transports, release/publishing.
 
 ## Completion gate
 
-E3-A implementation is complete only when the same exact published state and profiles produce byte-identical Project Map, L0/L1 skeletons, context bundles, loss records, metrics, and continuation results under 1/2/N workers and shuffled input order; every material claim has evidence/derivation closure; source/graph/reference partial state remains visible; bounded expansion stops deterministically; old/new publication sets never mix; no source text becomes instructions; exact-token claims require a pinned tokenizer; pinned synthetic and real-project evaluation corpora show useful compression without missing mandatory structural/evidence records; and all applicable fixtures/checksums pass.
+E3-A is complete only when exact inputs produce byte-identical semantic maps/skeletons/bundles/continuations under shuffled input and 1/2/N workers; every material claim has evidence closure; unknown/collapsed/omitted detail is explicit; mandatory blockers survive tight budgets; source/security/tokenizer/renderer gates pass; continuations never switch generations or reset budgets; the identity DAG is cycle-free; synthetic and pinned real-project evaluation shows useful compression without missing mandatory records; and all frozen fixtures/checksums pass.
