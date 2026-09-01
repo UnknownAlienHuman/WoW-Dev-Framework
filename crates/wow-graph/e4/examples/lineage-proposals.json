@@ -1,0 +1,131 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-graph-e4-b-lineage-proposals-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "generation_pair_id": null,
+  "producer_partitions": [
+    {
+      "partition_key": "lineage.explicit-owner-transition:fixture:pair",
+      "producer_class": "ExplicitTransition",
+      "partition_id": null,
+      "coverage_record_ids": [],
+      "candidate_signal_ids": [],
+      "proposal_ids": [],
+      "canonical_sha256": null
+    },
+    {
+      "partition_key": "lineage.stable-owner-id:fixture:pair",
+      "producer_class": "StableOwnerIdentity",
+      "partition_id": null,
+      "coverage_record_ids": [],
+      "candidate_signal_ids": [],
+      "proposal_ids": [],
+      "canonical_sha256": null
+    },
+    {
+      "partition_key": "lineage.deterministic-structural:fixture:pair",
+      "producer_class": "StructuralFingerprint",
+      "partition_id": null,
+      "coverage_record_ids": [],
+      "candidate_signal_ids": [],
+      "proposal_ids": [],
+      "canonical_sha256": null
+    },
+    {
+      "partition_key": "lineage.search-candidate-import:fixture:pair",
+      "producer_class": "SearchCandidate",
+      "partition_id": null,
+      "search_universe_set_id": null,
+      "search_result_ids": [],
+      "coverage_record_ids": [],
+      "candidate_signal_ids": [],
+      "proposal_ids": [],
+      "maximum_proof_ceiling": "Candidate",
+      "canonical_sha256": null
+    }
+  ],
+  "proposal_shapes": [
+    {
+      "proposal_id": null,
+      "relation_kind": "same_stable_identity",
+      "from_endpoint_ids": [],
+      "to_endpoint_ids": [],
+      "supporting_signal_ids": [],
+      "opposing_signal_ids": [],
+      "proposed_proof_class": "Explicit",
+      "maximum_proof_ceiling": "Explicit",
+      "ambiguity_group_id": null,
+      "coverage_record_ids": [],
+      "conflict_ids": [],
+      "status": "ValidAtCeiling",
+      "canonical_sha256": null
+    },
+    {
+      "proposal_id": null,
+      "relation_kind": "replaced_by",
+      "from_endpoint_ids": [],
+      "to_endpoint_ids": [],
+      "capability_scope": null,
+      "supporting_signal_ids": [],
+      "opposing_signal_ids": [],
+      "proposed_proof_class": "Candidate",
+      "maximum_proof_ceiling": "Candidate",
+      "ambiguity_group_id": null,
+      "coverage_record_ids": [],
+      "conflict_ids": [],
+      "status": "ValidCandidateOnly",
+      "canonical_sha256": null
+    }
+  ],
+  "cases": [
+    {
+      "case_id": "LIN-IN-006",
+      "mutation": "use-an-exact-name-search-hit-as-lineage-proof",
+      "expected": "candidate-only"
+    },
+    {
+      "case_id": "LIN-IN-008",
+      "mutation": "copy-raw-search-score-into-proof-class",
+      "expected_error": "lineage_search_signal_authority_upgrade_forbidden"
+    },
+    {
+      "case_id": "LIN-REL-008",
+      "mutation": "derive-replaced-by-from-same-stable-identity",
+      "expected_error": "lineage_proposal_invalid"
+    },
+    {
+      "case_id": "LIN-REL-009",
+      "mutation": "derive-same-stable-identity-from-replaced-by",
+      "expected_error": "lineage_required_continuity_basis_missing"
+    },
+    {
+      "case_id": "LIN-REL-012",
+      "mutation": "remove-replacement-capability-scope",
+      "expected_error": "lineage_replacement_scope_or_evidence_missing"
+    },
+    {
+      "case_id": "LIN-REL-016",
+      "mutation": "repeat-candidate-signals-until-proof-becomes-derived",
+      "expected_error": "lineage_candidate_repetition_upgrade_forbidden"
+    },
+    {
+      "case_id": "LIN-REL-017",
+      "mutation": "review-raises-proof-without-qualifying-evidence",
+      "expected_error": "lineage_review_exceeds_proof_ceiling"
+    },
+    {
+      "case_id": "LIN-REL-019",
+      "mutation": "two-incompatible-explicit-transitions",
+      "expected": "conflict-retained"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "generation_pair_id",
+      "producer_partitions[*].partition-and-input-output-ids",
+      "proposal_shapes[*].all-identities-and-evidence",
+      "cases[*].canonical-request-and-result-sha256"
+    ]
+  }
+}
