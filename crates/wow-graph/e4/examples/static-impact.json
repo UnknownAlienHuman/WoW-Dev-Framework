@@ -1,0 +1,145 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-graph-e4-b-static-impact-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "generation_pair_id": null,
+  "lineage_snapshot_id": null,
+  "change_set_id": null,
+  "impact_profile_id": null,
+  "request": {
+    "request_id": null,
+    "changed_root_ids": [],
+    "target_view_ids": [],
+    "relation_lanes": [
+      "ApiUse",
+      "CallExposure",
+      "SignalRegistration",
+      "StateAccess",
+      "LoadDependency"
+    ],
+    "confidence_policy_id": null,
+    "coverage_policy_id": null,
+    "budgets": {
+      "max_roots": null,
+      "max_depth": null,
+      "max_fanout_per_kind": null,
+      "max_visited_nodes": null,
+      "max_visited_edges": null,
+      "max_paths": null,
+      "max_output_bytes": null
+    },
+    "canonical_sha256": null
+  },
+  "result": {
+    "result_id": null,
+    "paths": [
+      {
+        "impact_path_id": null,
+        "changed_root_id": null,
+        "affected_endpoint_id": null,
+        "path_class": "DirectUse",
+        "step_records": [],
+        "source_handle_ids": [],
+        "evidence_ids": [],
+        "coverage_record_ids": [],
+        "conflict_ids": [],
+        "canonical_sha256": null
+      },
+      {
+        "impact_path_id": null,
+        "changed_root_id": null,
+        "affected_endpoint_id": null,
+        "path_class": "DerivedReachability",
+        "step_records": [],
+        "source_handle_ids": [],
+        "evidence_ids": [],
+        "coverage_record_ids": [],
+        "conflict_ids": [],
+        "canonical_sha256": null
+      },
+      {
+        "impact_path_id": null,
+        "changed_root_id": null,
+        "affected_endpoint_id": null,
+        "path_class": "PossibleExposure",
+        "step_records": [],
+        "source_handle_ids": [],
+        "evidence_ids": [],
+        "coverage_record_ids": [],
+        "conflict_ids": [],
+        "canonical_sha256": null
+      }
+    ],
+    "unaffected_with_authority_records": [],
+    "coverage_record_ids": [],
+    "conflict_ids": [],
+    "omission_record_ids": [],
+    "budget_report_id": null,
+    "continuation": null,
+    "canonical_sha256": null
+  },
+  "cases": [
+    {
+      "case_id": "LIN-IMP-001",
+      "mutation": "none-direct-reference-api-use",
+      "expected": "DirectUse"
+    },
+    {
+      "case_id": "LIN-IMP-003",
+      "mutation": "use-multi-edge-owner-load-call-path",
+      "expected": "DerivedReachability-with-all-steps"
+    },
+    {
+      "case_id": "LIN-IMP-004",
+      "mutation": "replace-one-call-step-with-possible_calls",
+      "expected": "PossibleExposure"
+    },
+    {
+      "case_id": "LIN-IMP-005",
+      "mutation": "replace-accepted-lineage-root-with-search-candidate",
+      "expected": "candidate-limited-impact"
+    },
+    {
+      "case_id": "LIN-IMP-006",
+      "mutation": "collapse-a-multi-step-path-to-direct-edge",
+      "expected_error": "lineage_impact_path_collapsed_to_direct_edge_forbidden"
+    },
+    {
+      "case_id": "LIN-IMP-011",
+      "mutation": "state-that-static-exposure-causes-runtime-failure",
+      "expected_error": "lineage_impact_runtime_breakage_or_severity_claim_forbidden"
+    },
+    {
+      "case_id": "LIN-IMP-014",
+      "mutation": "drop-target-graph-coverage-and-emit-unaffected",
+      "expected_error": "lineage_impact_unaffected_claim_unauthorized"
+    },
+    {
+      "case_id": "LIN-IMP-015",
+      "mutation": "exceed-high-fanout-path-budget",
+      "expected": "deterministic-truncation-with-continuation"
+    },
+    {
+      "case_id": "LIN-IMP-020",
+      "mutation": "advance-current-target-graph-during-query",
+      "expected": "result-remains-bound-to-original-retained-view"
+    },
+    {
+      "case_id": "LIN-IMP-021",
+      "mutation": "continue-with-another-generation-pair",
+      "expected_error": "lineage_continuation_generation_or_profile_mismatch"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "generation_pair_id",
+      "lineage_snapshot_id",
+      "change_set_id",
+      "impact_profile_id",
+      "request.*",
+      "result.*",
+      "cases[*].canonical-request-and-result-sha256"
+    ]
+  }
+}
