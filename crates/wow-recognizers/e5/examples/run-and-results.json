@@ -1,0 +1,118 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-recognizers-e5-a-run-and-results-v1",
+  "state": "documentation-only-no-executable-run",
+  "run": {
+    "run_id": "run.fixture.module-factory@1",
+    "pack_id": "calibration.fixture.module-factory@1",
+    "corpus_id": "calibration-fixture.module-factory.synthetic@1",
+    "split_manifest_id": "split.fixture.module-factory@1",
+    "matcher_implementation_commit": null,
+    "fact_schema_profile_id": null,
+    "graph_registry_bundle_id": null,
+    "evaluation_profile_id": null,
+    "visible_splits": [
+      "Train",
+      "Dev",
+      "Test",
+      "Challenge"
+    ],
+    "sealed_holdout_accessed": false,
+    "worker_profile": null,
+    "case_results": [
+      {
+        "case_result_id": "case.fixture.positive-a",
+        "example_id": "fixture.module-factory.positive-a",
+        "expected_label_set_id": "labels.module-factory.positive-a@1",
+        "observed_state": "NotEvaluated",
+        "classification": "ExpectedNotEvaluated",
+        "graph_validation": "NotEvaluated",
+        "blockers": [
+          "E2-B matcher implementation/profile not frozen"
+        ],
+        "test_id": "CAL-RUN-003"
+      },
+      {
+        "case_result_id": "case.fixture.near-negative",
+        "example_id": "fixture.module-factory.near-negative",
+        "expected_label_set_id": "labels.module-factory.near-negative@1",
+        "observed_state": "NotEvaluated",
+        "classification": "ExpectedNotEvaluated",
+        "graph_validation": "NotApplicable",
+        "blockers": [
+          "E2-B matcher implementation/profile not frozen"
+        ],
+        "test_id": "CAL-RUN-006"
+      },
+      {
+        "case_result_id": "case.fixture.dynamic",
+        "example_id": "fixture.module-factory.dynamic",
+        "expected_label_set_id": "labels.module-factory.dynamic@1",
+        "observed_state": "NotEvaluated",
+        "classification": "ExpectedNotEvaluated",
+        "graph_validation": "NotEvaluated",
+        "blockers": [
+          "fact profile and matcher implementation not frozen"
+        ],
+        "test_id": "CAL-RUN-007"
+      },
+      {
+        "case_result_id": "case.fixture.partial",
+        "example_id": "fixture.module-factory.partial",
+        "expected_label_set_id": "labels.module-factory.partial@1",
+        "observed_state": "NotEvaluated",
+        "classification": "ExpectedNotEvaluated",
+        "graph_validation": "NotApplicable",
+        "blockers": [
+          "required fact capability intentionally Partial"
+        ],
+        "test_id": "CAL-RUN-008"
+      },
+      {
+        "case_result_id": "case.fixture.conflict",
+        "example_id": "fixture.module-factory.conflict",
+        "expected_label_set_id": "labels.module-factory.conflict@1",
+        "observed_state": "ConflictBlocked",
+        "classification": "ConflictBlocked",
+        "graph_validation": "NotEvaluated",
+        "blockers": [
+          "label conflict unresolved"
+        ],
+        "test_id": "CAL-LABEL-007"
+      }
+    ],
+    "metric_report": {
+      "metric_report_id": "metrics.fixture.module-factory@1",
+      "case_result_count": 5,
+      "tp": null,
+      "fp": null,
+      "fn": null,
+      "tn": null,
+      "unknown": 0,
+      "not_evaluated": 4,
+      "conflict_blocked": 1,
+      "denominator_profile_id": null,
+      "hard_gate_status": "NotEvaluated",
+      "quantitative_gate_status": "NotEvaluated"
+    },
+    "mutation_report_id": null,
+    "anti_overfitting_report_id": null,
+    "determinism_report_id": null,
+    "benchmark_report_id": null,
+    "status": "NotEvaluated",
+    "promotion_eligibility": "NotEvaluated",
+    "canonical_sha256": null
+  },
+  "nonclaims": [
+    "example counts are fixture shape data, not measured recognizer performance",
+    "no test or holdout result has been produced",
+    "no promotion or runtime claim is made"
+  ],
+  "test_ids": [
+    "CAL-RUN-001",
+    "CAL-RUN-008",
+    "CAL-METRIC-001",
+    "CAL-METRIC-018",
+    "CAL-FREEZE-006"
+  ]
+}

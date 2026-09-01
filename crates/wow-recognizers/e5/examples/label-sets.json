@@ -1,0 +1,217 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-recognizers-e5-a-label-sets-v1",
+  "state": "documentation-only-synthetic-review-records-no-e5-b-authorization",
+  "label_sets": [
+    {
+      "label_set_id": "labels.module-factory.positive-a@1",
+      "example_id": "fixture.module-factory.positive-a",
+      "labels": [
+        {
+          "label_id": "label.module-factory.positive-a.module",
+          "class": "Positive",
+          "expected_output": {
+            "kind": "entity_assertion",
+            "entity_kind_id": "module",
+            "semantic_key_ingredients": [
+              "factory_receiver_entity_id",
+              "module_name_literal"
+            ],
+            "maximum_confidence": "Derived"
+          },
+          "decisive_evidence_refs": [
+            "fact:factory_call",
+            "fact:factory_callee",
+            "fact:exact_module_name"
+          ],
+          "cardinality": {
+            "minimum": 1,
+            "maximum": 1
+          }
+        }
+      ],
+      "reviews": [
+        {
+          "review_id": "review.fixture.a1",
+          "reviewer_role": "synthetic-contract-reviewer-a",
+          "decision": "Accepted",
+          "candidate_output_hidden": true
+        },
+        {
+          "review_id": "review.fixture.a2",
+          "reviewer_role": "synthetic-contract-reviewer-b",
+          "decision": "Accepted",
+          "candidate_output_hidden": true
+        }
+      ],
+      "canonical_sha256": null
+    },
+    {
+      "label_set_id": "labels.module-factory.positive-b@1",
+      "example_id": "fixture.module-factory.positive-b",
+      "labels": [
+        {
+          "label_id": "label.module-factory.positive-b.module",
+          "class": "Positive",
+          "expected_output": {
+            "kind": "entity_assertion",
+            "entity_kind_id": "module",
+            "semantic_key_ingredients": [
+              "factory_receiver_entity_id",
+              "module_name_literal"
+            ],
+            "maximum_confidence": "Derived"
+          },
+          "decisive_evidence_refs": [
+            "fact:factory_call",
+            "fact:factory_callee",
+            "fact:return_binding",
+            "fact:exact_module_name"
+          ],
+          "cardinality": {
+            "minimum": 1,
+            "maximum": 1
+          }
+        }
+      ],
+      "reviews": [
+        {
+          "review_id": "review.fixture.b1",
+          "reviewer_role": "synthetic-contract-reviewer-a",
+          "decision": "Accepted",
+          "candidate_output_hidden": true
+        }
+      ],
+      "canonical_sha256": null
+    },
+    {
+      "label_set_id": "labels.module-factory.near-negative@1",
+      "example_id": "fixture.module-factory.near-negative",
+      "labels": [
+        {
+          "label_id": "label.module-factory.near-negative.no-module",
+          "class": "Negative",
+          "forbidden_output": {
+            "entity_kind_id": "module",
+            "scope": "exact fixture function partition"
+          },
+          "closed_scope_evidence_refs": [
+            "coverage:fixture-function-complete",
+            "fact:callee-is-not-module-factory"
+          ],
+          "cardinality": {
+            "minimum": 0,
+            "maximum": 0
+          }
+        }
+      ],
+      "reviews": [
+        {
+          "review_id": "review.fixture.n1",
+          "reviewer_role": "synthetic-contract-reviewer-a",
+          "decision": "Accepted",
+          "candidate_output_hidden": true
+        }
+      ],
+      "canonical_sha256": null
+    },
+    {
+      "label_set_id": "labels.module-factory.dynamic@1",
+      "example_id": "fixture.module-factory.dynamic",
+      "labels": [
+        {
+          "label_id": "label.module-factory.dynamic.possible",
+          "class": "Possible",
+          "expected_output": {
+            "entity_kind_id": "module",
+            "maximum_confidence": "Possible"
+          },
+          "decisive_evidence_refs": [
+            "fact:dynamic-callee",
+            "coverage:references-complete"
+          ]
+        }
+      ],
+      "reviews": [
+        {
+          "review_id": "review.fixture.d1",
+          "reviewer_role": "synthetic-contract-reviewer-a",
+          "decision": "Accepted",
+          "candidate_output_hidden": true
+        }
+      ],
+      "canonical_sha256": null
+    },
+    {
+      "label_set_id": "labels.module-factory.partial@1",
+      "example_id": "fixture.module-factory.partial",
+      "labels": [
+        {
+          "label_id": "label.module-factory.partial.not-evaluated",
+          "class": "NotEvaluated",
+          "missing_capabilities": [
+            "emmy.fact.references.complete"
+          ],
+          "forbidden_claims": [
+            "Positive",
+            "Negative",
+            "Derived"
+          ]
+        }
+      ],
+      "reviews": [
+        {
+          "review_id": "review.fixture.p1",
+          "reviewer_role": "synthetic-contract-reviewer-a",
+          "decision": "Accepted",
+          "candidate_output_hidden": true
+        }
+      ],
+      "canonical_sha256": null
+    },
+    {
+      "label_set_id": "labels.module-factory.conflict@1",
+      "example_id": "fixture.module-factory.conflict",
+      "labels": [
+        {
+          "label_id": "label.module-factory.conflict.unresolved",
+          "class": "Conflict",
+          "competing_review_ids": [
+            "review.fixture.c1",
+            "review.fixture.c2"
+          ],
+          "required_state": "QuarantineOrConflictBlocked"
+        }
+      ],
+      "reviews": [
+        {
+          "review_id": "review.fixture.c1",
+          "reviewer_role": "synthetic-contract-reviewer-a",
+          "decision": "Accepted",
+          "candidate_output_hidden": true
+        },
+        {
+          "review_id": "review.fixture.c2",
+          "reviewer_role": "synthetic-contract-reviewer-b",
+          "decision": "Rejected",
+          "candidate_output_hidden": true
+        }
+      ],
+      "canonical_sha256": null
+    }
+  ],
+  "hard_rules": [
+    "labels are independent from candidate output",
+    "Unknown Possible NotEvaluated and Conflict are not Negative",
+    "Negative requires complete closed-scope evidence",
+    "synthetic reviewer records do not establish E5-B promotion authorization"
+  ],
+  "test_ids": [
+    "CAL-LABEL-001",
+    "CAL-LABEL-002",
+    "CAL-LABEL-004",
+    "CAL-LABEL-005",
+    "CAL-LABEL-007",
+    "CAL-LABEL-020"
+  ]
+}

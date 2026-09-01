@@ -2,15 +2,17 @@
 
 **Rust-first, editor-independent code intelligence and agent tooling for World of Warcraft addon development.**
 
-> **Documentation frontier:** E4-C is complete: exact Reference Pack, analyzer/project/graph/persistence, separately published Blizzard UI source, deterministic Project Maps and L0/L1 context, immutable exact-generation search, explicit lineage/migration/static-impact contracts, and service/CLI orchestration.
+> **Documentation frontier:** E5-A is complete: exact Reference Pack, analyzer/project/graph/persistence, separately published Blizzard UI source, deterministic Project Maps and L0/L1 context, immutable exact-generation search, explicit lineage/migration/static-impact contracts, service/CLI orchestration, and audited calibration-corpus/named-shadow-pack contracts.
+>
+> **Next documentation package:** E5-B — retained calibration artifact acquisition, durable run orchestration, reviewer authorization, sealed-holdout access audit, promotion submissions, canonical service envelopes, and thin CLI transport.
 >
 > **Implementation frontier:** not started. The first executable work remains E0-A, not E4 or E5. No `Cargo.toml`, Rust source, or CI workflow exists.
 >
 > **Compatibility model:** every result binds one exact World of Warcraft profile and exact project/reference/source generations. Live patch guidance remains routed through the separate [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb).
 
-WoW Dev Framework is designed to give coding agents and addon developers a compact, exact, explainable technical surface over addon repositories, Blizzard API contracts, Blizzard UI implementation source, static structure, diagnostics, retrieval candidates, cross-generation evidence, migration artifacts, static impact, and bounded source context.
+WoW Dev Framework is designed to give coding agents and addon developers a compact, exact, explainable technical surface over addon repositories, Blizzard API contracts, Blizzard UI implementation source, static structure, diagnostics, retrieval candidates, cross-generation evidence, migration artifacts, static impact, bounded source context, and calibration evidence for universal structural recognizers.
 
-It is not a generic RAG product, editor-settings mutator, runtime injection platform, source-edit executor, replacement for Codebase Memory, or model-authority layer.
+It is not a generic RAG product, editor-settings mutator, runtime injection platform, source-edit executor, repository-specific heuristic engine, replacement for Codebase Memory, or model-authority layer.
 
 ## What the framework should answer
 
@@ -27,6 +29,9 @@ It is not a generic RAG product, editor-settings mutator, runtime injection plat
 - Which migration recipe is only advisory, which validates statically, and what validation still remains?
 - Which entities are statically affected through exact direct edges or reason paths, without claiming runtime breakage?
 - Which operation is statically permitted, and which still requires exact runtime evidence?
+- Which structural recognizer convention generalizes beyond a donor identity, and which evidence remains donor-local, correlated, conflicted, or not evaluated?
+- Did a candidate calibration pack pass repository/owner/addon/path/local-name invariance, decisive structural sensitivity, near-miss, leakage, graph-validation, security, and determinism gates?
+- Can a candidate pack be disabled without touching core or foreign producer partitions, and what exact coverage is lost?
 
 ## Contract stack
 
@@ -88,12 +93,23 @@ E4-C
     exact selected search root to context handoff
     thin service-only CLI
 
-E5-A next
-    audited calibration corpora and named calibration packs
-    universal outputs and anti-overfitting mutation gates
+E5-A
+    exact candidate-source and corpus admission contracts
+    conservative provenance/fork/copy/vendor/generated grouping
+    independent labels and atomic train/dev/test/holdout splits
+    E2-B-compatible named calibration shadow packs
+    anti-overfitting, near-miss, leakage, graph and resource gates
+    immutable per-case/metric/candidate/deactivation artifacts
 
-E5-B+
-    calibration review/promotion and immutable core-pack rollout
+E5-B next
+    retained calibration artifact acquisition
+    durable runs, idempotency and response-loss recovery
+    reviewer authorization and sealed-holdout access audit
+    promotion submission preparation
+    thin service-only CLI
+
+E5-C+
+    immutable core-pack publication, canary, rollout and rollback
     optional Codebase Memory candidates
     LSP/MCP and release operations
 ```
@@ -144,16 +160,25 @@ lineage/change layer
     immutable accepted/rejected/deferred/conflicted review state
     typed change, absence, replacement, migration and static-impact records
 
+calibration layer
+    exact candidate source/publication/fact identities
+    immutable provenance groups, labels, splits and mutations
+    E2-B declarative shadow matching
+    independent graph proposal validation
+    per-case-first metrics and hard gates
+    candidate-owned partitions and exact deactivation plans
+
 service/application layer
     exact/current publication selection
     retained view/lease lifecycle
     explicit search candidate selection
     review authorization adapter invocation
     context, migration and static-impact use-case sequencing
+    later calibration review/holdout/promotion-submission sequencing
     canonical envelopes and thin CLI transport
 
-later calibration/integration layer
-    audited named calibration corpora and universal recognizer packs
+later publication/integration layer
+    immutable core-pack publication/canary/rollback
     optional external semantic candidates
     LSP/MCP and release controls
 ```
@@ -162,19 +187,26 @@ later calibration/integration layer
 
 - One result uses one exact coherent generation/profile set; no mixed current/latest data.
 - `CurrentPublished` is resolved only at the service boundary and never refreshed mid-request.
-- Independent project, Blizzard UI, reference, search, and lineage stores are not falsely described as a distributed atomic snapshot.
-- User project, Blizzard UI implementation, Reference Pack, search candidate, external candidate, runtime, and historical universes remain distinct.
+- Independent project, Blizzard UI, reference, search, lineage, and calibration stores are not falsely described as one distributed atomic snapshot.
+- User project, Blizzard UI implementation, Reference Pack, search candidate, calibration corpus, external candidate, runtime, and historical universes remain distinct.
 - EmmyLua is the sole correctness-path Lua parser/analyzer and is pinned behind one adapter.
-- TOC/XML parsing is bounded and nonexecuting; source/repository scripts never run.
+- TOC/XML parsing and repository materialization are bounded and nonexecuting; source/repository scripts never run.
 - Graph assertions retain producer, evidence, provenance, confidence, coverage, conflicts, and generation identity.
 - Ownership, lexical, load, object, inheritance, registration, lifecycle, state, call, and lineage axes remain distinct.
 - A reason path never becomes a silent direct edge.
 - Named addon/framework packs can calibrate universal recognizers; production semantics never branch on repository/addon/owner/path/popularity names.
-- API/reference contract, implementation source, runtime observation, review authorization, and community evidence are different authority classes.
+- A repository commit pin is not an admitted calibration corpus member.
+- Raw source, normalized facts, labels, splits, mutations, pack bytes, run results, and candidate artifacts remain separate immutable identities.
+- Forks, copies, vendored code, generated templates, near-duplicates, and mutation families do not cross ordinary evaluation splits.
+- Expected labels, split assignments, reviewer notes, search/model output, and donor metadata never enter matcher semantics.
+- `Unknown`, `Possible`, `NotEvaluated`, conflict, partial, truncated, and cancelled are never coerced to Negative or pass.
+- E5-A calibration packs are `calibration` + `shadow_only`, emit universal registered graph proposals, and are limited to `Derived`/`Possible` confidence.
+- `ShadowValidated` and `PromotionEligibleByMetrics` are not reviewer authorization, publication, core activation, or runtime proof.
+- Disabling a candidate removes only its exact owned shadow partitions and downgrades only their coverage.
+- API/reference contract, implementation source, runtime observation, review authorization, calibration metrics, and community evidence are different authority classes.
 - Missing coverage never becomes a clean negative answer.
-- `Possible`, `Candidate`, conflict, partial, truncated, cancelled, and `NotEvaluated` are never upgraded or hidden.
 - Project Map and context are projections, not a second graph or new authority.
-- Source/query/review/migration text remains structurally isolated untrusted data and cannot control profiles, tools, ranking, proof ceilings, or agent instructions.
+- Source/query/review/migration/label text remains structurally isolated untrusted data and cannot control profiles, tools, ranking, proof ceilings, or agent instructions.
 - Exact token counts require a frozen exact tokenizer and framing profile over exact final bytes.
 - One SearchShard binds one exact owner generation; no mutable global/current corpus.
 - Exact identifiers are case-sensitive; a folded or fuzzy match remains approximate.
@@ -191,6 +223,33 @@ later calibration/integration layer
 - Static impact preserves exact reason paths and does not claim runtime breakage, severity, performance, taint, combat, Secret behavior, or fixability.
 - Applications depend on `wow-service` only and never reproduce domain algorithms.
 - No public success precedes mandatory resource closure.
+
+## E5-A current evidence state
+
+The contract records these exact user-repository revisions as candidate inputs:
+
+```text
+UnknownAlienHuman/roth-ui           1656d4b9d33be914be2058460520e7423668d95c
+UnknownAlienHuman/roth-chat         3c995183626002965043e38a837346fb290acd8a
+UnknownAlienHuman/roth-tooltip      28426fef16daadc5808fec6d38b445a97f42a71a
+UnknownAlienHuman/interrupt-glow    786ef9f11059b28541007af92963bc9e2234f154
+UnknownAlienHuman/old-runes         9938d95759970953a7ac178a95bb5ad7aa62cb81
+UnknownAlienHuman/trash-panda       f27ba9f09be0f716cb2c5f7605ed697d8aabb320
+UnknownAlienHuman/gcd-optimizer     00d8bd22f03b1136841f548c0a4a5a776c1a7c71
+UnknownAlienHuman/roth-blizz-plates 61de4d4d49ccf229ff3b7bff1ae1b5f97351b762
+```
+
+Current status:
+
+```text
+exact revisions pinned: 8
+real admitted corpus members: 0
+real measured calibration runs: 0
+sealed holdout generations: 0
+promotion submissions: 0
+```
+
+Admission remains blocked until exact tree/content inventories, source/project/analyzer/graph/fact publications, upstream/fork/copy/vendor/generated provenance groups, license/privacy/notice decisions, independent labels, and split eligibility are frozen. Closed synthetic fixtures validate artifact shapes only; they do not claim donor generalization or recognizer performance.
 
 ## Documented CLI surface
 
@@ -239,7 +298,7 @@ wow-reference-builder validate
 wow-reference-builder rebuild-compare
 ```
 
-There is no migration-apply command, automatic candidate selection, runtime-impact command, or tool-execution escape hatch.
+E5-B will define calibration commands only after the service orchestration, reviewer-authorization, sealed-holdout, retention, output, and exit contracts are frozen. There is no migration-apply command, automatic candidate selection, automatic pack promotion, runtime-impact command, or tool-execution escape hatch.
 
 ## First implementation target
 
@@ -278,6 +337,7 @@ Major domain contracts:
 - [`crates/wow-project/`](crates/wow-project/README.md)
 - [`crates/wow-graph/`](crates/wow-graph/README.md)
 - [`crates/wow-recognizers/`](crates/wow-recognizers/README.md)
+- [`crates/wow-recognizers/e5/`](crates/wow-recognizers/e5/README.md)
 - [`crates/wow-rules/`](crates/wow-rules/README.md)
 - [`crates/wow-context/`](crates/wow-context/README.md)
 - [`crates/wow-search/`](crates/wow-search/README.md)
@@ -310,7 +370,7 @@ This framework links the knowledge base. A conclusion is copied here only when i
 - English is the canonical architecture/contract language.
 - Addon localization content can remain in its target languages.
 - No CI/workflow is added without an explicit owner request.
-- Missing tools, probes, benchmarks, evaluation, client tests, authorization adapters, or implementation evidence are reported as skipped/blocked/NotEvaluated, never pass.
+- Missing tools, probes, benchmarks, evaluation, client tests, authorization adapters, holdout infrastructure, or implementation evidence are reported as skipped/blocked/NotEvaluated, never pass.
 
 ## License
 

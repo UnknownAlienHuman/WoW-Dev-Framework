@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-recognizers-e5-a-corpus-manifest-v1",
+  "state": "documentation-only-closed-synthetic-contract-fixture",
+  "corpus": {
+    "corpus_id": "calibration-fixture.module-factory.synthetic@1",
+    "corpus_class": "closed_synthetic_contract_fixture",
+    "purpose": "exercise E5-A artifact and gate semantics without claiming a real donor corpus is admitted",
+    "declared_generalization_scope": "DonorLocalInvestigation",
+    "real_candidate_source_manifest_id": "wow-recognizers-e5-a-candidate-sources-v1",
+    "real_candidate_sources_admitted": false,
+    "synthetic_source_snapshot_manifest_id": "source.fixture.module-factory@1",
+    "synthetic_fact_snapshot_manifest_id": "facts.fixture.module-factory@1",
+    "example_manifest_id": "examples.fixture.module-factory@1",
+    "label_manifest_id": "labels.fixture.module-factory@1",
+    "provenance_group_manifest_id": "provenance.fixture.module-factory@1",
+    "license_privacy_notice_manifest_id": "policy.fixture.synthetic-public@1",
+    "split_manifest_id": "split.fixture.module-factory@1",
+    "mutation_suite_id": "mutation.fixture.module-factory@1",
+    "evaluation_profile_id": null,
+    "examples": [
+      {
+        "example_id": "fixture.module-factory.positive-a",
+        "label_set_id": "labels.module-factory.positive-a@1",
+        "provenance_group_id": "synthetic-shape-a",
+        "structural_shape_group_ids": [
+          "receiver-method-literal-name"
+        ],
+        "fact_bundle_partition_id": "facts.fixture.module-factory.positive-a",
+        "coverage_status": "Complete",
+        "split_assignment": "Train"
+      },
+      {
+        "example_id": "fixture.module-factory.positive-b",
+        "label_set_id": "labels.module-factory.positive-b@1",
+        "provenance_group_id": "synthetic-shape-b",
+        "structural_shape_group_ids": [
+          "receiver-method-return-binding"
+        ],
+        "fact_bundle_partition_id": "facts.fixture.module-factory.positive-b",
+        "coverage_status": "Complete",
+        "split_assignment": "Dev"
+      },
+      {
+        "example_id": "fixture.module-factory.near-negative",
+        "label_set_id": "labels.module-factory.near-negative@1",
+        "provenance_group_id": "synthetic-near-negative",
+        "structural_shape_group_ids": [
+          "receiver-method-literal-name-near-miss"
+        ],
+        "fact_bundle_partition_id": "facts.fixture.module-factory.near-negative",
+        "coverage_status": "Complete",
+        "split_assignment": "Test"
+      },
+      {
+        "example_id": "fixture.module-factory.dynamic",
+        "label_set_id": "labels.module-factory.dynamic@1",
+        "provenance_group_id": "synthetic-dynamic",
+        "structural_shape_group_ids": [
+          "dynamic-callee"
+        ],
+        "fact_bundle_partition_id": "facts.fixture.module-factory.dynamic",
+        "coverage_status": "Complete",
+        "split_assignment": "Challenge"
+      },
+      {
+        "example_id": "fixture.module-factory.partial",
+        "label_set_id": "labels.module-factory.partial@1",
+        "provenance_group_id": "synthetic-partial",
+        "structural_shape_group_ids": [
+          "partial-reference-coverage"
+        ],
+        "fact_bundle_partition_id": "facts.fixture.module-factory.partial",
+        "coverage_status": "Partial",
+        "split_assignment": "Challenge"
+      },
+      {
+        "example_id": "fixture.module-factory.conflict",
+        "label_set_id": "labels.module-factory.conflict@1",
+        "provenance_group_id": "synthetic-conflict",
+        "structural_shape_group_ids": [
+          "conflicting-owner-evidence"
+        ],
+        "fact_bundle_partition_id": "facts.fixture.module-factory.conflict",
+        "coverage_status": "Complete",
+        "split_assignment": "Quarantine"
+      }
+    ],
+    "coverage": {
+      "source_materialization": "Complete",
+      "fact_schema": "documentation-fixture-pending-profile-freeze",
+      "label_review": "fixture-only-not-promotion-authority",
+      "real_donor_admission": "NotEvaluated"
+    },
+    "conflicts": [],
+    "omissions": [
+      "no real repository source bytes or facts are included",
+      "no sealed holdout is configured in the documentation fixture",
+      "no implementation, benchmark, quantitative threshold, or checksum is frozen"
+    ],
+    "canonical_sha256": null
+  },
+  "test_ids": [
+    "CAL-CORPUS-001",
+    "CAL-CORPUS-002",
+    "CAL-CORPUS-017",
+    "CAL-CONFIG-007"
+  ]
+}

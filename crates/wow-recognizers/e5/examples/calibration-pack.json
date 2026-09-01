@@ -1,0 +1,145 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-recognizers-e5-a-calibration-pack-v1",
+  "state": "documentation-only-synthetic-shadow-candidate-not-promotion-eligible",
+  "pack": {
+    "pack_id": "calibration.fixture.module-factory",
+    "version": "1",
+    "trust_class": "calibration",
+    "rollout_state": "shadow_only",
+    "generalization_scope": "DonorLocalInvestigation",
+    "fact_schema_profile_id": null,
+    "graph_registry_bundle_id": null,
+    "corpus_id": "calibration-fixture.module-factory.synthetic@1",
+    "split_manifest_id": "split.fixture.module-factory@1",
+    "mutation_suite_id": "mutation.fixture.module-factory@1",
+    "evaluation_profile_id": null,
+    "declared_universal_outputs": [
+      "entity_kind:module"
+    ],
+    "justified_convention_literals": [
+      {
+        "literal": "FixtureModuleFactory:NewModule",
+        "universal_contract": "synthetic exact module-factory convention used only to close documentation fixture shapes",
+        "sensitivity_mutation_id": "mutation.module-factory-literal"
+      }
+    ],
+    "budgets": {
+      "max_rules": 4,
+      "max_clauses_per_rule": 16,
+      "max_clause_depth": 4,
+      "max_join_expansions_per_rule": 1024,
+      "max_matches_per_rule_partition": 128,
+      "max_proposals_per_rule_partition": 128,
+      "max_explanation_bytes": 65536
+    },
+    "rules": [
+      {
+        "rule_id": "calibration.fixture.module_factory",
+        "version": 1,
+        "title": "Synthetic universal module-factory role fixture",
+        "required_capabilities": [
+          "emmy.fact.calls",
+          "emmy.fact.references",
+          "emmy.fact.literal_arguments"
+        ],
+        "scope": "exact-function-partition",
+        "clauses": [
+          {
+            "op": "fact",
+            "as": "factory_call",
+            "kind": "LuaCallFact"
+          },
+          {
+            "op": "fact",
+            "as": "factory_callee",
+            "kind": "LuaReferenceFact"
+          },
+          {
+            "op": "join",
+            "left": "factory_call.callee_reference_fact_id",
+            "right": "factory_callee.source_fact_id"
+          },
+          {
+            "op": "field_eq",
+            "field": "factory_callee.resolved_symbol_key",
+            "value": "FixtureModuleFactory:NewModule"
+          },
+          {
+            "op": "field_eq",
+            "field": "factory_call.argument_1_kind",
+            "value": "string_literal"
+          }
+        ],
+        "captures": [
+          {
+            "name": "factory_receiver_entity_id",
+            "type": "semantic_reference",
+            "source": "factory_call.receiver_reference_fact_id",
+            "cardinality": "one"
+          },
+          {
+            "name": "module_name_literal",
+            "type": "bounded_string",
+            "source": "factory_call.argument_literal_1",
+            "cardinality": "one"
+          }
+        ],
+        "outputs": [
+          {
+            "kind": "entity_assertion",
+            "entity_kind_id": "module",
+            "semantic_key": {
+              "owner_entity_id": "factory_receiver_entity_id",
+              "module_name": "module_name_literal"
+            },
+            "attributes": {
+              "role": "module"
+            },
+            "confidence": "Derived"
+          }
+        ],
+        "ambiguity_policy": "retain-competing-resolutions-as-Possible",
+        "coverage_policy": "NotEvaluated-when-required-reference-or-literal-capability-incomplete",
+        "rule_evidence_map": {
+          "motivating_train_examples": [
+            "fixture.module-factory.positive-a"
+          ],
+          "independent_dev_examples": [
+            "fixture.module-factory.positive-b"
+          ],
+          "test_examples": [
+            "fixture.module-factory.near-negative"
+          ],
+          "near_miss_examples": [
+            "fixture.module-factory.near-negative"
+          ],
+          "mutation_ids": [
+            "mutation.repository-rename",
+            "mutation.path-relocation",
+            "mutation.module-factory-literal",
+            "mutation.remove-callee-join",
+            "mutation.dynamic-callee",
+            "mutation.partial-coverage"
+          ]
+        }
+      }
+    ],
+    "named_metadata_semantic_flow_paths": [],
+    "promotion_eligibility": "NotEvaluated",
+    "canonical_sha256": null
+  },
+  "nonclaims": [
+    "the synthetic convention is not a real donor/framework contract",
+    "this fixture does not establish ecosystem generalization or promotion eligibility",
+    "no core/default graph publication occurs"
+  ],
+  "test_ids": [
+    "CAL-PACK-001",
+    "CAL-PACK-004",
+    "CAL-PACK-010",
+    "CAL-PACK-013",
+    "CAL-PACK-018",
+    "CAL-PACK-021"
+  ]
+}

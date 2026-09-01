@@ -1,10 +1,12 @@
 # `wow-recognizers` contract router
 
-**Status:** E2-B core structural recognizer contract is implementation-ready; Rust implementation has not started. Named calibration packs remain deferred to E5.
+**Status:** E2-B core structural recognizers and E5-A calibration-corpus/named-pack contracts are implementation-ready documentation. Rust implementation has not started.
 
-`wow-recognizers` deterministically matches reviewed structural conventions over normalized fact bundles and emits proposed universal graph assertions. It never reparses source, branches on repository or addon identity, executes code, decides platform truth, runs diagnostics, or publishes graph generations.
+`wow-recognizers` deterministically matches reviewed structural conventions over normalized facts and emits proposed universal graph assertions. It never reparses source, branches on repository/addon identity, executes code, decides platform truth, runs diagnostics, publishes graph generations, or authorizes pack promotion.
 
-## Canonical E2-B route
+## Canonical routes
+
+### E2-B — core structural recognizers
 
 Read in order:
 
@@ -26,7 +28,33 @@ Read in order:
 16. [`e2/IMPLEMENTATION_PLAN.md`](e2/IMPLEMENTATION_PLAN.md)
 17. [`e2/CONTRACT.json`](e2/CONTRACT.json) and [`e2/examples/`](e2/examples/README.md)
 
-Also read [`../AGENTS.md`](../AGENTS.md), [`../DEPENDENCY_GRAPH.md`](../DEPENDENCY_GRAPH.md), [`../WORKSTREAMS.md`](../WORKSTREAMS.md), the E2-A [`wow-graph` contract](../wow-graph/e2/README.md), the normalized [`wow-emmy` fact model](../wow-emmy/FACT_MODEL.md), and the current [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb) routes.
+E2-B owns the bounded declarative operator language, typed fact inputs, deterministic matcher, universal proposal output, producer partitions, and core-rule evaluation.
+
+### E5-A — calibration corpora and named packs
+
+Read in order:
+
+1. [`e5/README.md`](e5/README.md)
+2. [`e5/AGENTS.md`](e5/AGENTS.md)
+3. [`e5/DECISIONS.md`](e5/DECISIONS.md)
+4. [`e5/DATA_MODEL.md`](e5/DATA_MODEL.md)
+5. [`e5/CORPUS_ADMISSION_AND_PROVENANCE.md`](e5/CORPUS_ADMISSION_AND_PROVENANCE.md)
+6. [`e5/CORPUS_SPLITS_AND_LEAKAGE.md`](e5/CORPUS_SPLITS_AND_LEAKAGE.md)
+7. [`e5/LABELING_AND_REVIEW.md`](e5/LABELING_AND_REVIEW.md)
+8. [`e5/CALIBRATION_PACK_SCHEMA.md`](e5/CALIBRATION_PACK_SCHEMA.md)
+9. [`e5/OPERATIONS.md`](e5/OPERATIONS.md)
+10. [`e5/MUTATION_AND_ANTI_OVERFITTING.md`](e5/MUTATION_AND_ANTI_OVERFITTING.md)
+11. [`e5/EVALUATION_AND_GATES.md`](e5/EVALUATION_AND_GATES.md)
+12. [`e5/PARTITIONS_AND_DEACTIVATION.md`](e5/PARTITIONS_AND_DEACTIVATION.md)
+13. [`e5/SECURITY_AND_BUDGETS.md`](e5/SECURITY_AND_BUDGETS.md)
+14. [`e5/ERROR_MODEL.md`](e5/ERROR_MODEL.md)
+15. [`e5/TEST_MATRIX.md`](e5/TEST_MATRIX.md)
+16. [`e5/IMPLEMENTATION_PLAN.md`](e5/IMPLEMENTATION_PLAN.md)
+17. [`e5/CONTRACT.json`](e5/CONTRACT.json) and [`e5/examples/`](e5/examples/README.md)
+
+E5-A defines exact candidate-source admission, immutable corpora/labels/provenance/splits, leakage and sealed-holdout semantics, shadow-only calibration packs, independent graph validation, anti-overfitting mutations, per-case-first metrics, candidate artifacts, and partition-local deactivation.
+
+The eight pinned user repositories are candidate inputs only. A commit pin is not an admitted corpus member. Exact source/publication/fact/provenance/license/label/split gates remain blocking until implementation.
 
 ## Direct framework dependencies
 
@@ -36,31 +64,52 @@ wow-emmy
 wow-graph
 ```
 
-`wow-project` supplies TOC/XML/project fact bundles and invokes recognizers, but `wow-recognizers` does not depend on `wow-project`. The recognizer crate returns proposed graph assertion batches; publication remains owned by project/graph orchestration.
+`wow-project` supplies exact TOC/XML/project fact publications through orchestration, but `wow-recognizers` does not depend on `wow-project`. `wow-store`, `wow-service`, and applications own retention/orchestration/transport outside this crate.
 
-## E2-B active families
+## Active semantic boundary
 
 ```text
-TOC package/load/dependency/LoadOnDemand/SavedVariables
-XML template/frame/parent/inherits/script ownership
-CreateFrame/CreateFromMixins/Mixin assignment
-native frame event registration
-native EventRegistry frame-event bridge
-custom registry callback only with an exact TriggerEvent producer
-CVar callback registration
-SetScript/HookScript/hooksecurefunc structural hooks
-LibStub/library requirement and embed structure
-SavedVariables roots and literal state paths
+exact normalized fact partitions
++ bounded E2-B declarative pack
++ exact profiles and graph registry
+-> deterministic matches and ambiguity
+-> universal entity/relation proposals
+-> graph validation receipts
+-> exact producer-owned output partitions
 ```
 
-Framework-specific module/lifecycle factories, plugin/style/element ecosystems, message buses, Secret guard/sink recognizers, and named calibration packs remain deferred until their E5 corpus and mutation gates are defined.
+E5-A adds audit/evaluation artifacts around this path. Repository, owner, addon, path, popularity, split, expected label, reviewer, search, model, and prompt metadata cannot enter matcher clauses, captures, semantic keys, confidence, coverage, ordering, or budgets.
+
+## Confidence and rollout
+
+Recognizer proposal confidence is limited to:
+
+```text
+Derived
+Possible
+```
+
+E5-A packs use:
+
+```text
+trust_class = calibration
+rollout_state = shadow_only
+```
+
+`ShadowValidated` and `PromotionEligibleByMetrics` are evaluation states, not default activation. E5-B owns durable orchestration, reviewer authorization, holdout unsealing audit, and promotion submissions. E5-C owns immutable core-pack publication, canary, rollout, rollback, and last-known-good.
 
 ## Current state
 
 ```text
-documentation contract: complete
-closed fixture shapes: complete
-implementation-dependent pins and SHA-256 freeze: pending
-Cargo workspace activation: not started
+documentation frontier: E5-A
+implementation frontier: not-started
+E2-B implementation/checksum freeze: pending
+E5-A real corpus admission: pending
+sealed holdout/reviewer authorization: deferred to E5-B
+core-pack publication/rollback: deferred to E5-C
+Cargo.toml: absent
 Rust source: absent
+CI/workflows: absent
 ```
+
+Also read [`../AGENTS.md`](../AGENTS.md), [`../DEPENDENCY_GRAPH.md`](../DEPENDENCY_GRAPH.md), [`../WORKSTREAMS.md`](../WORKSTREAMS.md), the E2-A [`wow-graph` contract](../wow-graph/e2/README.md), the normalized [`wow-emmy` fact model](../wow-emmy/FACT_MODEL.md), and the current [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb) routes.

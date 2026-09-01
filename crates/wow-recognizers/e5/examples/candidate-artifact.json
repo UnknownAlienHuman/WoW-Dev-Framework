@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-recognizers-e5-a-candidate-artifact-v1",
+  "state": "documentation-only-blocked-not-promotion-submission",
+  "candidate_artifact": {
+    "candidate_artifact_id": "candidate.fixture.module-factory@1",
+    "pack_id": "calibration.fixture.module-factory@1",
+    "pack_sha256": null,
+    "corpus_id": "calibration-fixture.module-factory.synthetic@1",
+    "split_manifest_id": "split.fixture.module-factory@1",
+    "run_id": "run.fixture.module-factory@1",
+    "metric_report_id": "metrics.fixture.module-factory@1",
+    "mutation_report_id": null,
+    "anti_overfitting_report_id": null,
+    "graph_validation_report_id": null,
+    "license_provenance_notice_manifest_id": "policy.fixture.synthetic-public@1",
+    "promotion_eligibility": "NotEvaluated",
+    "blockers": [
+      "prerequisite implementations and exact profiles are not frozen",
+      "real donor sources are candidate pins only and not admitted",
+      "sealed holdout/reviewer authorization workflow is deferred to E5-B",
+      "quantitative thresholds, benchmarks, canonical bytes, and checksums are not frozen"
+    ],
+    "deactivation_plan": {
+      "deactivation_plan_id": "deactivation.fixture.module-factory@1",
+      "owned_active_shadow_partition_ids": [],
+      "stale_reference_ids": [],
+      "expected_coverage_downgrade": [],
+      "unaffected_core_partition_digests": null,
+      "validation_state": "NotEvaluated",
+      "canonical_sha256": null
+    },
+    "nonclaims": [
+      "not a promoted core pack",
+      "not default enabled",
+      "not graph publication",
+      "not runtime or WoW API authority"
+    ],
+    "canonical_sha256": null
+  },
+  "test_ids": [
+    "CAL-PART-006",
+    "CAL-PART-011",
+    "CAL-PART-012",
+    "CAL-PART-014"
+  ]
+}
