@@ -1,0 +1,152 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-graph-e4-b-migration-cases-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "replacement_assertion": {
+    "lineage_assertion_id": null,
+    "relation_kind": "replaced_by",
+    "source_generation_entity_ref": null,
+    "target_generation_entity_ref": null,
+    "accepted_proposal_ids": [],
+    "effective_confidence": "Proven",
+    "evidence_ids": [],
+    "review_decision_ids": [],
+    "coverage_record_ids": [],
+    "conflict_ids": [],
+    "canonical_sha256": null
+  },
+  "migration_candidate": {
+    "migration_candidate_id": null,
+    "source_generation_entity_ref": null,
+    "target_generation_entity_ref": null,
+    "lineage_replacement_search_reference_change_evidence_ids": [],
+    "applicability_candidate_profile_id": null,
+    "confidence": "Candidate",
+    "maximum_proof_ceiling": "Candidate",
+    "missing_precondition_ids": [],
+    "coverage_record_ids": [],
+    "conflict_ids": [],
+    "canonical_sha256": null
+  },
+  "migration_recipe": {
+    "migration_recipe_id": null,
+    "version": null,
+    "source_contract_scope_id": null,
+    "target_contract_scope_id": null,
+    "governing_assertion_ids": [],
+    "applicability_preconditions": [],
+    "transformation_steps": [],
+    "forbidden_or_unsupported_cases": [],
+    "semantic_constraints": [],
+    "expected_postconditions": [],
+    "required_validation_steps": [],
+    "rollback_or_manual_review_requirements": [],
+    "remediation_tier": "plan_only",
+    "evidence_ids": [],
+    "confidence": "Candidate",
+    "coverage_record_ids": [],
+    "conflict_ids": [],
+    "canonical_sha256": null
+  },
+  "cases": [
+    {
+      "case_id": "LIN-MIG-001",
+      "mutation": "explicit-reference-replacement",
+      "expected": "accepted-scoped-replaced-by"
+    },
+    {
+      "case_id": "LIN-MIG-002",
+      "mutation": "explicit-deprecation-without-target",
+      "expected": "deprecated-no-replacement"
+    },
+    {
+      "case_id": "LIN-MIG-003",
+      "mutation": "same-lineage-only",
+      "expected_error": "lineage_replacement_inferred_from_lineage_forbidden"
+    },
+    {
+      "case_id": "LIN-MIG-004",
+      "mutation": "similar-name-and-signature-only",
+      "expected": "migration-candidate-only"
+    },
+    {
+      "case_id": "LIN-MIG-005",
+      "mutation": "top-e4-a-candidate-only",
+      "expected_error": "lineage_replacement_inferred_from_similarity_forbidden"
+    },
+    {
+      "case_id": "LIN-MIG-008",
+      "mutation": "candidate-promoted-directly-to-recipe",
+      "expected_error": "lineage_migration_candidate_promoted_to_recipe_forbidden"
+    },
+    {
+      "case_id": "LIN-MIG-009",
+      "mutation": "valid-exact-recipe",
+      "expected": "structurally-valid-validated-recipe"
+    },
+    {
+      "case_id": "LIN-MIG-010",
+      "mutation": "missing-applicability-precondition",
+      "expected_error": "lineage_migration_precondition_incomplete"
+    },
+    {
+      "case_id": "LIN-MIG-012",
+      "mutation": "raw-code-shell-or-regex-transformation",
+      "expected_error": "lineage_migration_executable_payload_forbidden"
+    },
+    {
+      "case_id": "LIN-MIG-014",
+      "mutation": "default-optional-or-nil-semantics-lost",
+      "expected_error": "lineage_migration_transformation_step_invalid"
+    },
+    {
+      "case_id": "LIN-MIG-015",
+      "mutation": "exact-reference-secret-access-guard-step",
+      "expected": "allowed-advisory-step"
+    },
+    {
+      "case_id": "LIN-MIG-016",
+      "mutation": "pcall-conversion-copy-or-serialization-declassification",
+      "expected_error": "lineage_migration_transformation_step_invalid"
+    },
+    {
+      "case_id": "LIN-MIG-017",
+      "mutation": "native-custom-cvar-event-classes-collapsed",
+      "expected_error": "lineage_migration_transformation_step_invalid"
+    },
+    {
+      "case_id": "LIN-MIG-018",
+      "mutation": "hook-structure-claims-taint-or-combat-safety",
+      "expected_error": "lineage_migration_runtime_or_edit_success_claim_forbidden"
+    },
+    {
+      "case_id": "LIN-MIG-019",
+      "mutation": "required-client-or-runtime-validation-omitted",
+      "expected_error": "lineage_migration_postcondition_or_validation_incomplete"
+    },
+    {
+      "case_id": "LIN-MIG-020",
+      "mutation": "recipe-claims-edit-applied-and-successful",
+      "expected_error": "lineage_migration_runtime_or_edit_success_claim_forbidden"
+    },
+    {
+      "case_id": "LIN-MIG-022",
+      "mutation": "source-or-target-generation-advances",
+      "expected_error": "lineage_migration_source_or_target_scope_invalid"
+    },
+    {
+      "case_id": "LIN-MIG-023",
+      "mutation": "conflicted-replacement-target",
+      "expected_error": "lineage_migration_proof_ceiling_or_coverage_invalid"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "all source target lineage replacement deprecation search reference and change evidence IDs",
+      "all candidate applicability missing-precondition confidence coverage and conflict records",
+      "all recipe scope assertion precondition typed-step constraint postcondition validation rollback tier and evidence IDs",
+      "all expected bytes result IDs and SHA-256 values"
+    ]
+  }
+}
