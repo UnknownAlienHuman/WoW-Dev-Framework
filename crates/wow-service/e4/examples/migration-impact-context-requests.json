@@ -1,0 +1,126 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e4-c-migration-impact-context-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "cases": [
+    {
+      "case_id": "S4-MIG-001",
+      "operation": "migration_candidates",
+      "lineage_snapshot_id": null,
+      "source_entity_id": null,
+      "governing_relation": "replaced_by",
+      "expected_class": "ExplicitReplacementCandidate"
+    },
+    {
+      "case_id": "S4-MIG-002",
+      "operation": "migration_candidates",
+      "governing_relation": "lineage_successor_of",
+      "explicit_replacement_present": false,
+      "expected_class": "LineageOnlyNoReplacement"
+    },
+    {
+      "case_id": "S4-MIG-004",
+      "operation": "migration_candidates",
+      "mutation": "top-search-candidate-treated-as-replacement",
+      "expected_error": "e4_migration_replacement_inference_forbidden"
+    },
+    {
+      "case_id": "S4-MIG-005",
+      "operation": "migration_validate",
+      "recipe_id": null,
+      "governing_lineage_snapshot_id": null,
+      "expected_validation": "Valid",
+      "source_edit_applied": false,
+      "runtime_verified": false
+    },
+    {
+      "case_id": "S4-MIG-008",
+      "operation": "migration_validate",
+      "mutation": "recipe-validation-invokes-editor-or-source-write",
+      "expected_error": "e4_migration_application_or_source_edit_forbidden"
+    },
+    {
+      "case_id": "S4-IMP-001",
+      "operation": "impact_plan",
+      "lineage_snapshot_id": null,
+      "change_root_ids": [],
+      "target_graph_snapshot_ids": [],
+      "impact_profile_id": null,
+      "expected_plan_id": null
+    },
+    {
+      "case_id": "S4-IMP-003",
+      "operation": "impact_run",
+      "impact_plan_id": null,
+      "expected": "direct-and-bounded-transitive-reason-paths"
+    },
+    {
+      "case_id": "S4-IMP-005",
+      "operation": "impact_run",
+      "fixture": "high-fanout-cycle",
+      "budgets": {
+        "max_nodes": 128,
+        "max_edges": 256,
+        "max_paths": 32,
+        "max_depth": 6
+      },
+      "expected_status": "Truncated",
+      "continuation_id": null
+    },
+    {
+      "case_id": "S4-IMP-006",
+      "operation": "impact_run",
+      "mutation": "static-path-labeled-runtime-breakage-and-severity",
+      "expected_error": "e4_impact_runtime_or_severity_upgrade_forbidden"
+    },
+    {
+      "case_id": "S4-IMP-011",
+      "operation": "impact_continue",
+      "continuation_id": null,
+      "expected": "same-lineage-and-target-graph-snapshots-with-cumulative-budget"
+    },
+    {
+      "case_id": "S4-CTX-001",
+      "operation": "search_context",
+      "search_result_id": null,
+      "search_candidate_id": null,
+      "selection_receipt_id": null,
+      "expected_exact_context_root": null,
+      "context_operation": "context_inspect",
+      "context_profile_id": null,
+      "expected": "selection-receipt-plus-E3-C-context-result"
+    },
+    {
+      "case_id": "S4-CTX-002",
+      "operation": "search_context",
+      "mutation": "literal-query-text-used-as-context-root",
+      "expected_error": "e4_search_context_root_not_exact"
+    },
+    {
+      "case_id": "S4-CTX-003",
+      "operation": "search_context",
+      "mutation": "context-generation-differs-from-search-result-owner-generation",
+      "expected_error": "e4_search_context_owner_generation_mismatch"
+    },
+    {
+      "case_id": "S4-CTX-005",
+      "operation": "search_context",
+      "mutation": "search-score-injected-as-context-entity-confidence",
+      "expected_error": "e4_search_context_rank_to_authority_forbidden"
+    },
+    {
+      "case_id": "S4-CTX-008",
+      "operation": "search_context",
+      "mutation": "context-consumer-profile-broadens-private-search-source-policy",
+      "expected_error": "e4_search_context_profile_or_privacy_mismatch"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "lineage/change/replacement/migration recipe IDs and canonical bytes",
+      "impact plan/path/continuation/generation IDs and expected outputs",
+      "search result/candidate/selection/context root and E3-C result IDs"
+    ]
+  }
+}

@@ -1,19 +1,19 @@
 {
   "schema_version": 1,
   "repository": "UnknownAlienHuman/WoW-Dev-Framework",
-  "documentation_frontier": "E4-A",
+  "documentation_frontier": "E4-C",
   "implementation_frontier": "not-started",
   "contract_state": "documentation-only-no-rust-code",
   "next_documentation_work_package": {
-    "id": "E4-B",
-    "owner": "wow-graph",
+    "id": "E5-A",
+    "owner": "wow-recognizers",
     "collaborators": [
-      "wow-search",
       "wow-project",
-      "wow-reference",
+      "wow-graph",
+      "wow-search",
       "wow-service"
     ],
-    "scope": "explicit cross-generation lineage assertions and candidates, change classification, migration evidence and bounded static impact; retrieval similarity remains Candidate evidence only"
+    "scope": "audited calibration corpora and named calibration packs that emit universal structural roles only, with anti-overfitting, rename, path, owner and near-miss mutation gates"
   },
   "workspace_state": {
     "cargo_workspace_present": false,
@@ -35,12 +35,15 @@
     "No Cargo.toml or .rs placeholder is created before the implementation freeze gate is satisfied.",
     "Allowed dependencies are maximum boundaries, not dependencies that must be activated.",
     "Active work-package dependencies and public seams are narrower and authoritative.",
-    "All implementation begins from exact frozen contracts, profiles, fixtures, and SHA-256 manifests.",
-    "Partial conflicted truncated failed cancelled candidate possible and NotEvaluated states are never reported as complete or proven.",
+    "All implementation begins from exact frozen contracts, profiles, fixtures, corpora, evaluations and SHA-256 manifests.",
+    "Partial conflicted truncated failed cancelled Candidate Possible and NotEvaluated states are never reported as complete or proven.",
     "Patch-sensitive WoW facts remain routed through wow-addon-engineering-kb and exact pinned source/runtime evidence.",
-    "Repository addon owner path provider and popularity names never become hidden production semantics.",
-    "Search ranking and similarity produce candidates and never authorize lineage replacement migration impact safety runtime or platform truth.",
-    "Missing implementation probe benchmark tokenizer evaluation client or source evidence is blocking or NotEvaluated and never pass.",
+    "Repository addon owner path provider popularity and model outputs never become hidden production semantics.",
+    "Search ranking and similarity produce candidates and never authorize intended entity lineage replacement migration impact safety runtime or platform truth.",
+    "Review authorization and lineage proof are independent and neither can exceed the minimum proof ceiling.",
+    "Migration artifacts are advisory and static impact paths are not runtime breakage or severity claims.",
+    "Applications depend on wow-service only and never reproduce owner algorithms.",
+    "Missing implementation probe benchmark tokenizer evaluation reviewer authorization client or source evidence is blocking or NotEvaluated and never pass.",
     "No CI or workflow is added without an explicit owner request."
   ],
   "contract_packages": [
@@ -157,6 +160,25 @@
       "owner": "wow-search",
       "contract_id": "wow-search/e4-a/exact-generation-retrieval-core",
       "manifest": "crates/wow-search/e4/CONTRACT.json"
+    },
+    {
+      "work_package": "E4-B",
+      "owner": "wow-graph",
+      "producer_owners": [
+        "wow-project",
+        "wow-reference",
+        "wow-search"
+      ],
+      "contract_id": "wow-graph/e4-b/lineage-migration-static-impact",
+      "manifest": "crates/wow-graph/e4/CONTRACT.json"
+    },
+    {
+      "work_package": "E4-C",
+      "owner": "wow-service",
+      "application": "apps/wow",
+      "contract_id": "wow-service/e4-c/search-lineage-impact-use-cases",
+      "manifest": "crates/wow-service/e4/CONTRACT.json",
+      "application_manifest": "apps/wow/e4/CONTRACT.json"
     }
   ],
   "crates": [
@@ -189,7 +211,7 @@
     {
       "name": "wow-reference",
       "brief": "crates/wow-reference/README.md",
-      "documentation_frontier": "E1-B",
+      "documentation_frontier": "E4-B-producer-seam",
       "first_implementation_milestone": "E0-B",
       "implementation_state": "not-started",
       "allowed_dependencies": [
@@ -199,6 +221,9 @@
       "active_contracts": [
         "crates/wow-reference/CONTRACT.json",
         "crates/wow-reference/e1/CONTRACT.json"
+      ],
+      "supporting_contracts": [
+        "crates/wow-reference/E4_B_TRANSITION_EVIDENCE.md"
       ]
     },
     {
@@ -231,7 +256,7 @@
     {
       "name": "wow-project",
       "brief": "crates/wow-project/README.md",
-      "documentation_frontier": "E3-A",
+      "documentation_frontier": "E4-B-producer-seam",
       "first_implementation_milestone": "E0-D",
       "implementation_state": "not-started",
       "allowed_dependencies": [
@@ -245,12 +270,15 @@
         "crates/wow-project/CONTRACT.json",
         "crates/wow-project/e2/CONTRACT.json",
         "crates/wow-project/e3/CONTRACT.json"
+      ],
+      "supporting_contracts": [
+        "crates/wow-project/E4_B_LINEAGE_INPUTS.md"
       ]
     },
     {
       "name": "wow-graph",
       "brief": "crates/wow-graph/README.md",
-      "documentation_frontier": "E2-D-persistence-handoff",
+      "documentation_frontier": "E4-B",
       "first_implementation_milestone": "E2-A",
       "implementation_state": "not-started",
       "allowed_dependencies": [
@@ -258,13 +286,14 @@
         "wow-store"
       ],
       "active_contracts": [
-        "crates/wow-graph/e2/CONTRACT.json"
+        "crates/wow-graph/e2/CONTRACT.json",
+        "crates/wow-graph/e4/CONTRACT.json"
       ]
     },
     {
       "name": "wow-recognizers",
       "brief": "crates/wow-recognizers/README.md",
-      "documentation_frontier": "E2-B",
+      "documentation_frontier": "E2-B; E5-A-next",
       "first_implementation_milestone": "E2-B",
       "implementation_state": "not-started",
       "allowed_dependencies": [
@@ -296,7 +325,7 @@
     {
       "name": "wow-search",
       "brief": "crates/wow-search/README.md",
-      "documentation_frontier": "E4-A",
+      "documentation_frontier": "E4-B-producer-seam",
       "first_implementation_milestone": "E4-A",
       "implementation_state": "not-started",
       "allowed_dependencies": [
@@ -308,6 +337,9 @@
       ],
       "active_contracts": [
         "crates/wow-search/e4/CONTRACT.json"
+      ],
+      "supporting_contracts": [
+        "crates/wow-search/e4/LINEAGE_CANDIDATE_HANDOFF.md"
       ],
       "selected_search_shard_profile": "search-shard-immutable-sqlite-fts5-v1"
     },
@@ -343,7 +375,7 @@
     {
       "name": "wow-service",
       "brief": "crates/wow-service/README.md",
-      "documentation_frontier": "E3-C",
+      "documentation_frontier": "E4-C",
       "first_implementation_milestone": "E0-F",
       "implementation_state": "not-started",
       "allowed_dependencies": [
@@ -360,18 +392,20 @@
         "wow-cbm",
         "wow-context"
       ],
-      "active_e3_c_context_dependencies": [
+      "active_e4_c_dependencies": [
         "wow-core",
         "wow-store",
         "wow-reference",
         "wow-project",
         "wow-graph",
+        "wow-search",
         "wow-context"
       ],
       "active_contracts": [
         "crates/wow-service/CONTRACT.json",
         "crates/wow-service/e1/CONTRACT.json",
-        "crates/wow-service/e3/CONTRACT.json"
+        "crates/wow-service/e3/CONTRACT.json",
+        "crates/wow-service/e4/CONTRACT.json"
       ]
     }
   ],
@@ -379,18 +413,21 @@
     {
       "name": "wow",
       "path": "apps/wow",
+      "documentation_frontier": "E4-C",
       "implementation_state": "not-started",
       "framework_dependencies": [
         "wow-service"
       ],
       "active_contracts": [
         "apps/wow/CONTRACT.json",
-        "apps/wow/e3/CONTRACT.json"
+        "apps/wow/e3/CONTRACT.json",
+        "apps/wow/e4/CONTRACT.json"
       ]
     },
     {
       "name": "wow-reference-builder",
       "path": "apps/wow-reference-builder",
+      "documentation_frontier": "E1-D",
       "implementation_state": "not-started",
       "framework_dependencies": [
         "wow-service"
@@ -418,6 +455,8 @@
     "E3-A",
     "E3-B",
     "E3-C",
-    "E4-A"
+    "E4-A",
+    "E4-B",
+    "E4-C"
   ]
 }

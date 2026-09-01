@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e4-c-result-lifecycle-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "cases": [
+    {
+      "case_id": "S4-RES-001",
+      "operation": "fold_status",
+      "inputs": [
+        "Complete",
+        "CandidateOnly",
+        "Partial"
+      ],
+      "expected": "Partial"
+    },
+    {
+      "case_id": "S4-RES-002",
+      "operation": "lineage_validate",
+      "validation_state": "Invalid",
+      "execution_completed": true,
+      "expected_outer_status": "Complete",
+      "must_not_become": "Failed"
+    },
+    {
+      "case_id": "S4-RES-004",
+      "operation": "lineage_build",
+      "owner_status": "CandidateOnly",
+      "mutation": "service-labels-result-complete-proven",
+      "expected_error": "e4_lineage_proof_ceiling_escalation_forbidden"
+    },
+    {
+      "case_id": "S4-LIFE-002",
+      "operation": "search_query",
+      "owner_result": "Complete",
+      "resource_close": "Failed",
+      "expected_outer_status": "Failed",
+      "expected_error": "e4_resource_close_failed"
+    },
+    {
+      "case_id": "S4-LIFE-006",
+      "operation": "impact_run",
+      "owner_result": "TruncatedWithContinuation",
+      "retention_state": "NotAdmitted",
+      "expected_error": "e4_continuation_advertised_without_retention",
+      "continuation_advertised": false
+    },
+    {
+      "case_id": "S4-LIFE-009",
+      "operation": "search_query",
+      "retry": "same-exact-inputs-and-profiles",
+      "expected": "byte-identical-semantic-result"
+    },
+    {
+      "case_id": "S4-LIFE-011",
+      "operation": "lineage_build",
+      "operation_id": null,
+      "response_loss_phase": "Cataloged",
+      "retry_same_request_digest": true,
+      "expected": "recorded-exact-lineage-snapshot-receipt",
+      "duplicate_snapshot": false
+    },
+    {
+      "case_id": "S4-LIFE-012",
+      "operation": "search_index_build",
+      "operation_id": null,
+      "retry_same_operation_id_different_digest": true,
+      "expected_error": "e4_operation_id_request_digest_conflict"
+    },
+    {
+      "case_id": "S4-ACQ-002",
+      "operation": "search_query",
+      "selector_mode": "strict-current",
+      "first_collect": null,
+      "second_collect": null,
+      "mutation": "current-record-set-changed",
+      "expected": "close-and-retry-whole-acquisition"
+    },
+    {
+      "case_id": "S4-ACQ-003",
+      "operation": "search_query",
+      "selector_mode": "strict-current",
+      "mutation": "current-churn-exceeds-finite-attempt-limit",
+      "expected_error": "e4_acquisition_unstable_current"
+    },
+    {
+      "case_id": "S4-SEC-006",
+      "operation": "lineage_review_validate",
+      "mutation": "public-error-contains-raw-token-key-or-signature",
+      "expected_error": "e4_error_or_log_redaction_failed"
+    },
+    {
+      "case_id": "S4-SEC-011",
+      "operation": "lineage_review_apply",
+      "authorization_port_state": "Unavailable",
+      "expected_status": "NotEvaluated",
+      "snapshot_published": false
+    },
+    {
+      "case_id": "S4-DET-001",
+      "operation_family": "all-pure-reads-and-build-final-state",
+      "worker_modes": [
+        1,
+        2,
+        8
+      ],
+      "expected": "identical-canonical-semantic-results"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "canonical status/envelope/result bytes and digests",
+      "all current collect, close, retention, operation and response-loss receipts",
+      "deterministic worker/order/cache/storage expected vectors"
+    ]
+  }
+}

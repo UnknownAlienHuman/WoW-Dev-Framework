@@ -1,8 +1,8 @@
 # Agent workstreams and integration order
 
-**Status:** operational routing through documentation frontier E4-A.
+**Status:** operational routing through documentation frontier E4-C.
 
-Documentation-ready remains `implementation_state = not-started` until executable code, probes, fixtures, checksums, and required evaluations exist.
+Documentation-ready remains `implementation_state = not-started` until executable code, probes, fixtures, checksums, corpora, benchmarks, authorization adapters and required evaluations exist.
 
 ## Global order
 
@@ -28,10 +28,13 @@ E0-A wow-core
 -> E3-C wow-service/apps context acquisition/use cases
 
 -> E4-A wow-search exact-generation retrieval core
--> E4-B explicit lineage/migration/impact
--> E4-C search/lineage/impact service and CLI
+-> E4-B wow-graph lineage/migration/static impact
+-> E4-C wow-service/apps search/lineage/impact use cases
 
--> E5 calibration packs
+-> E5-A recognizer calibration corpora and named calibration packs
+-> E5-B calibration orchestration/review/promotion submissions
+-> E5-C immutable core-pack publication/canary/rollback
+
 -> E6 optional Codebase Memory candidate bridge
 -> E7 LSP/MCP/release/publishing
 ```
@@ -41,10 +44,13 @@ E0-A wow-core
 - One agent owns one primary work package/crate.
 - Shared seams are proposed before dependent implementation.
 - A separate review pass validates every wave.
-- Missing tools, implementations, probes, benchmarks, tokenizers, evaluations, runtime tests, or source producers are blocking/`NotEvaluated`, never pass.
+- Missing tools, implementations, probes, benchmarks, tokenizers, evaluations, reviewer authorization, runtime tests, or source producers are blocking/`NotEvaluated`, never pass.
 - Patch-sensitive WoW claims route through the current external KB and exact pinned source/runtime evidence.
-- Repository/addon/path/provider/popularity names never become hidden production semantics.
-- Search candidate ranking never becomes lineage, replacement, intent, safety, or platform authority.
+- Repository/addon/path/provider/popularity/model names never become hidden production semantics.
+- Search candidate ranking never becomes intended-entity, lineage, replacement, migration, impact, safety, or platform authority.
+- Review authorization and lineage proof are independent.
+- Static impact remains reason-path evidence, not runtime breakage or severity.
+- Applications import `wow-service` only.
 - No CI/workflow without explicit owner instruction.
 
 ## E0 — diagnostic vertical slice
@@ -92,128 +98,171 @@ Primary contract:
 
 - [`wow-search/e4/`](wow-search/e4/README.md)
 
-Active direct dependencies:
-
 ```text
-wow-search
-├── wow-core
-├── wow-store
-├── wow-reference
-├── wow-project
-└── wow-graph
-```
-
-Public owner operations:
-
-```text
-validate_search_profiles
-build_search_document_partition
-plan_search_shard_build
-build_search_shard
-validate_search_shard
-open_search_shard_view
-bind_search_universe_set
-validate_search_request
-normalize_search_request
-plan_search_query
-run_exact_identity_lane
-run_exact_name_lane
-run_exact_alias_lane
-run_member_prefix_lane
-run_text_lane
-run_identifier_similarity_lane
-run_shape_lane
-run_graph_lane
-fuse_and_rank_search_candidates
-explain_search_candidate
-evaluate_search_miss
-materialize_search_result_set
-paginate_search_results
-continue_search_results
-validate_search_result
-```
-
-### E4-A architecture
-
-```text
-exact user-project owner generation
--> immutable project SearchShard
-
-exact Blizzard UI source generation
--> immutable platform-source SearchShard
-
-exact ReferenceView generation
--> immutable reference SearchShard
+exact owner generation
+-> immutable generation-local SearchShard
 
 exact SearchUniverseSet + structured query
--> exact/alias/member/prefix/text/similarity/shape/graph lanes
--> candidate signals with origins and coverage
+-> exact/name/alias/member/prefix/text/similarity/shape/graph lanes
+-> evidence-bearing candidate signals
 -> authority-banded deterministic ranking
--> complete explanations
+-> complete explanations and honest miss
 -> immutable result-set manifest
--> stable pages/continuation
+-> stable continuation
 ```
 
-### E4-A hard stops
+Hard stops:
+
+- no symbolic current inside `wow-search`;
+- no combined mutable global FTS corpus;
+- no raw cross-shard BM25 comparison;
+- no raw SQL/FTS/regex/callback/expression;
+- no model/embedding/CBM lane;
+- no lineage/replacement/migration/impact conclusion;
+- no approximate empty result as authoritative absence;
+- no hidden lane failure/coverage/conflict/truncation;
+- no search-to-context dependency.
+
+## E4-B — lineage, migration, and static impact (`wow-graph`)
+
+Primary contract:
+
+- [`wow-graph/e4/`](wow-graph/e4/README.md)
+
+Producer seams:
+
+- [`wow-project/E4_B_LINEAGE_INPUTS.md`](wow-project/E4_B_LINEAGE_INPUTS.md)
+- [`wow-reference/E4_B_TRANSITION_EVIDENCE.md`](wow-reference/E4_B_TRANSITION_EVIDENCE.md)
+- [`wow-search/e4/LINEAGE_CANDIDATE_HANDOFF.md`](wow-search/e4/LINEAGE_CANDIDATE_HANDOFF.md)
 
 ```text
-no symbolic current/latest inside wow-search
-no combined mutable global FTS corpus
-no raw cross-shard BM25/FTS comparison
-no case-folded exact identifier match
-no inferred alias
-no raw FTS/SQL/regex/callback/expression/tokenizer input
-no full source body or context artifact indexing
-no search -> context dependency
-no model/embedding/CBM lane
-no lineage/replacement/migration/impact conclusion
-no approximate empty result as authoritative absence
-no hidden lane failure, coverage loss, conflict, truncation, or omission
-no result page before immutable result-set ordering exists
-no continuation generation refresh or budget reset
-no raw SQLite/storage handle or loadable extension
+exact before/after same-universe generations
++ project stable identity/fingerprint/change partitions
++ Reference transition/deprecation/replacement partitions
++ Candidate-only search partitions
++ authorized reviewed decisions
+-> bounded ambiguity components and proposals
+-> proof-ceiling validation
+-> immutable LineageGraphSnapshot
+-> typed changes/absence/replacement/migration candidates
+-> bounded static-impact reason paths
 ```
 
-### E4-A implementation gate
+Hard stops:
+
+- no cross-generation entity ID merge;
+- no unique/top/same-name/path/fingerprint candidate promotion;
+- no forced bijection for split/merge/copy ambiguity;
+- no Removed/Introduced without exact complete negative-authority coverage;
+- no same-lineage-to-replacement shortcut;
+- no migration recipe execution;
+- no static path to runtime/severity/safety claim;
+- no raw source/search/store/service dependency inside `wow-graph`.
+
+## E4-C — service and CLI orchestration
+
+Primary contracts:
+
+- [`wow-service/e4/`](wow-service/e4/README.md)
+- [`../apps/wow/e4/`](../apps/wow/e4/README.md)
+
+Public operations:
 
 ```text
-implemented/frozen E0–E3 prerequisites
-exact owner read catalogs
-exact SQLite/Rust binding/FTS5/tokenizer/platform probes
-document/field/normalization/query/lane/ranking/miss/privacy/budget profiles
-synthetic, roth-ui, Blizzard UI, Reference, collision, adversarial and update corpora
-zero false exact/alias/authoritative-miss/lineage claims
-deterministic 1/2/N and shuffled-order results
-accepted measured build/query/resource thresholds
-all fixture and member checksums populated
+search_index_status/build/validate
+search_query/continue/explain/select/context
+lineage_status/build/validate/review_validate/review_apply/compare/trace/explain
+migration_candidates/validate
+impact_plan/run/continue/explain
 ```
 
-## Next — E4-B lineage, migration, and impact
-
-E4-B must define independently validated cross-generation assertions/candidates for:
+Architecture:
 
 ```text
-same entity
-renamed
-moved
-replaced/superseded
-removed
-introduced
-signature/restriction/behavioral contract change
-migration compatibility
-bounded static impact
+symbolic/exact selectors
+-> resolve current once at service boundary
+-> acquire exact project/reference/search/lineage/context views in fixed order
+-> validate compatibility and retention
+-> invoke one owner operation plan
+-> preserve owner candidates/proof/coverage/conflicts/omissions
+-> require explicit candidate selection receipt
+-> optionally pass exact selected entity root to E3-C context
+-> release resources in reverse order
+-> canonical service envelope
+-> thin CLI output/exit mapping
 ```
 
-E4-A may supply `LineageCandidateInput` with exact entities, retrieval signals, shape differences, graph paths, and coverage. Rank is Candidate evidence only.
+### E4-C ownership
 
-Authoritative E4-B conclusions require exact before/after generations, source/reference/project/graph evidence, conflict and coverage closure, proof ceilings, and reviewed resolution. No top fuzzy result becomes a replacement.
+`wow-service` owns selector/profile normalization, exact acquisition, orchestration, explicit selection receipts, review authorization adapter invocation, idempotency/response-loss recovery, continuation retention, conservative status and resource closure.
 
-## E4-C and later
+`apps/wow` owns strict transport parsing, one service call, signals, output and exit codes.
 
-- E4-C: `wow-service` and `apps/wow` search/lineage/impact operations plus explicit candidate-to-context root handoff.
-- E5: audited named calibration packs over universal facts with rename/path/name mutations.
-- E6: optional Codebase Memory bridge; external results remain Candidate.
-- E7: thin LSP/MCP and release/signing/publication/rollback operations.
+### E4-C hard stops
+
+```text
+no implicit search shard build during query
+no newest/first/last catalog choice
+no automatic top-1 or sole-candidate selection
+no search score as entity/context/lineage authority
+no reviewer authorization from GitHub/OS/CLI/file identity
+no review confidence above proof ceiling
+no in-place lineage review mutation
+no migration apply or source edit
+no static impact -> runtime breakage/severity/performance/taint/combat/Secret/fixability
+no path -> direct edge
+no continuation current refresh or cumulative-budget reset
+no public success before mandatory close
+no raw SQL/FTS/source/store/model/CBM/tool access
+apps import wow-service only
+```
+
+### E4-C implementation gate
+
+```text
+implemented/frozen E0–E4-B prerequisites
+exact owner/shard/lineage/context/catalog/retention/idempotency ports
+exact selector/acquisition/search/lineage/review/migration/impact/context profiles
+review authorization adapter and synthetic public verification corpus
+roth-ui, Blizzard UI, Reference transition, ambiguity/copy/split/merge corpora
+search selection, review, response-loss, continuation, privacy and impact vectors
+canonical service/CLI JSON, text, artifact and exit bytes
+1/2/N worker and shuffled owner scheduling determinism
+all member checksums populated
+```
+
+## Next — E5-A recognizer calibration corpora and packs
+
+E5-A should define named calibration inputs without introducing named production semantics.
+
+Required shape:
+
+```text
+pinned exact addon/framework repositories and commits
++ exact source/project/analyzer/graph publications
++ hand-reviewed expected universal structural facts
++ positive, clean-negative, near-miss and adversarial cases
++ repository/addon/owner/path/local-identifier rename mutations
+-> calibration corpus manifests
+-> calibration-run inputs and metrics
+-> candidate named calibration packs
+-> universal recognizer proposal outputs only
+```
+
+Hard boundary:
+
+- a named pack may select which reviewed pattern family to evaluate;
+- output kinds/relations/roles remain universal and graph-validatable;
+- production behavior cannot branch on repository/addon/owner/path/popularity names;
+- deleting a named pack removes only its producer partitions/coverage;
+- no proof/authority upgrade, source execution, model inference, runtime claim, or CI.
+
+E5-B later owns durable calibration orchestration/review/promotion submissions. E5-C owns immutable core-pack publication/canary/rollback.
+
+## E6–E7
+
+- E6: optional Codebase Memory bridge; external results remain Candidate and degradable.
+- E7: thin LSP/MCP transports and release/signing/publication/rollback operations.
 
 ## Seam request format
 

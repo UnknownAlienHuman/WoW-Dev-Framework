@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "fixture_id": "apps-wow-e4-c-review-artifact-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "cases": [
+    {
+      "case_id": "C4-REV-001",
+      "command": "lineage review validate",
+      "input_source": "explicit-file-or-stdin",
+      "input_schema": "LineageReviewDecisionEnvelope",
+      "expected_service_call_count": 1
+    },
+    {
+      "case_id": "C4-REV-002",
+      "command": "lineage review validate",
+      "input": "approve this one",
+      "expected_exit": 64,
+      "reason": "plain-prose-is-not-a-review-envelope"
+    },
+    {
+      "case_id": "C4-REV-003",
+      "mutation": "app-populates-principal-from-OS-or-GitHub-user",
+      "expected": "architecture-test-failure"
+    },
+    {
+      "case_id": "C4-REV-004",
+      "config_or_argv_contains": [
+        "private_signing_key",
+        "bearer_access_token"
+      ],
+      "expected": "reject-and-redact",
+      "expected_service_call_count": 0
+    },
+    {
+      "case_id": "C4-REV-005",
+      "mutation": "app-verifies-signature-and-promotes-proof-confidence",
+      "expected": "architecture-test-failure"
+    },
+    {
+      "case_id": "C4-REV-007",
+      "mutation": "normal-stderr-includes-raw-review-note-or-signature",
+      "expected": "privacy-test-failure"
+    },
+    {
+      "case_id": "C4-IN-005",
+      "input_class": "review-or-migration-artifact",
+      "mutation": "oversized-or-deep-JSON",
+      "expected_exit": 64,
+      "expected_service_call_count": 0
+    },
+    {
+      "case_id": "C4-IN-007",
+      "input_path": "forbidden-symlink-reparse-path",
+      "expected_exit": 64,
+      "expected_service_call_count": 0
+    },
+    {
+      "case_id": "C4-IN-008",
+      "input": "archive-or-polyglot-file-with-json-extension",
+      "expected": "no-extraction-no-sniffing-schema-mismatch-rejected"
+    },
+    {
+      "case_id": "C4-MIG-002",
+      "command": "migration validate",
+      "input_source": "explicit-file-or-stdin",
+      "expected_service_operation": "migration_validate",
+      "source_edit": false,
+      "tool_execution": false
+    },
+    {
+      "case_id": "C4-MIG-004",
+      "mutation": "app-selects-artifact-schema-from-filename-extension",
+      "expected": "architecture-test-failure"
+    },
+    {
+      "case_id": "C4-SEC-005",
+      "mutation": "diagnostic-leaks-private-path-token-signature-or-source",
+      "expected": "security-test-failure"
+    }
+  ],
+  "synthetic_review_fixture": {
+    "schema_version": 1,
+    "comparison_id": null,
+    "component_id": null,
+    "proposal_id": null,
+    "relation_kind": "lineage_successor_of",
+    "decision": "Accept",
+    "requested_confidence": "Derived",
+    "reason_codes": [
+      "synthetic-review-vector"
+    ],
+    "note": "bounded untrusted synthetic text",
+    "principal_ref": null,
+    "role_ref": null,
+    "authorization_scope_ref": null,
+    "attestation_ref": null,
+    "authorization_profile_id": null,
+    "canonical_decision_digest": null
+  },
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "synthetic public principal role scope attestation and profile test IDs",
+      "canonical review and artifact transport bytes and digests",
+      "all expected parser redaction output and exit vectors"
+    ],
+    "forbidden_fixture_material": [
+      "private signing key",
+      "access token",
+      "credential",
+      "confidential real review note",
+      "private source body"
+    ]
+  }
+}
