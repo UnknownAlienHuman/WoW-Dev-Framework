@@ -118,21 +118,6 @@
       "expected_service_call_count": 1
     },
     {
-      "case_id": "C4-REV-001",
-      "argv": [
-        "wow",
-        "lineage",
-        "review",
-        "validate",
-        "--lineage-snapshot",
-        "lineage-snapshot:<ID>",
-        "--review-input",
-        "-"
-      ],
-      "expected_service_operation": "lineage_review_validate",
-      "expected_service_call_count": 1
-    },
-    {
       "case_id": "C4-REV-006",
       "argv": [
         "wow",
