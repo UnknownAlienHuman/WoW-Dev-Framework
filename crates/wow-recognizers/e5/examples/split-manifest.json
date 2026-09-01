@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-recognizers-e5-a-split-manifest-v1",
+  "state": "documentation-only-synthetic-split-no-sealed-holdout",
+  "split_manifest": {
+    "split_manifest_id": "split.fixture.module-factory@1",
+    "corpus_id": "calibration-fixture.module-factory.synthetic@1",
+    "group_key_profile_id": null,
+    "assignments": {
+      "Train": [
+        "synthetic-shape-a"
+      ],
+      "Dev": [
+        "synthetic-shape-b"
+      ],
+      "Test": [
+        "synthetic-near-negative"
+      ],
+      "SealedHoldout": [],
+      "Challenge": [
+        "synthetic-dynamic",
+        "synthetic-partial"
+      ],
+      "Quarantine": [
+        "synthetic-conflict"
+      ]
+    },
+    "connected_components": [
+      [
+        "synthetic-shape-a"
+      ],
+      [
+        "synthetic-shape-b"
+      ],
+      [
+        "synthetic-near-negative"
+      ],
+      [
+        "synthetic-dynamic"
+      ],
+      [
+        "synthetic-partial"
+      ],
+      [
+        "synthetic-conflict"
+      ]
+    ],
+    "mutation_parent_group_policy": "same-group-unless-explicit-challenge-profile",
+    "sealed_holdout": {
+      "member_manifest_sha256": null,
+      "label_manifest_sha256": null,
+      "visibility_state": "not-configured-documentation-fixture",
+      "unsealing_authorization_profile_id": null
+    },
+    "leakage_findings": [],
+    "unresolved_leakage_candidates": [],
+    "consumed_test_or_holdout_generations": [],
+    "independent_group_counts": {
+      "Train": 1,
+      "Dev": 1,
+      "Test": 1,
+      "SealedHoldout": 0
+    },
+    "canonical_sha256": null
+  },
+  "nonclaims": [
+    "synthetic split does not prove donor or ecosystem independence",
+    "sealed holdout semantics are specified but not implemented or exercised"
+  ],
+  "test_ids": [
+    "CAL-SPLIT-001",
+    "CAL-SPLIT-003",
+    "CAL-SPLIT-006",
+    "CAL-SPLIT-013",
+    "CAL-SPLIT-022"
+  ]
+}
