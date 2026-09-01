@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-graph-e4-b-generation-pair-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "profile_set_id": null,
+  "generation_pair": {
+    "generation_pair_id": null,
+    "mode": "SameProfileSuccessive",
+    "from": {
+      "endpoint_id": null,
+      "universe_kind": "ReferencePlatformContract",
+      "logical_owner_id": "fixture-reference-owner",
+      "store_generation_id": null,
+      "reference_profile_id": null,
+      "reference_generation_id": null,
+      "graph_generation_id": null,
+      "build_id": "fixture-build-a",
+      "client_flavor": "fixture-retail",
+      "owner_manifest_id": null,
+      "coverage_manifest_id": null,
+      "canonical_sha256": null
+    },
+    "to": {
+      "endpoint_id": null,
+      "universe_kind": "ReferencePlatformContract",
+      "logical_owner_id": "fixture-reference-owner",
+      "store_generation_id": null,
+      "reference_profile_id": null,
+      "reference_generation_id": null,
+      "graph_generation_id": null,
+      "build_id": "fixture-build-b",
+      "client_flavor": "fixture-retail",
+      "owner_manifest_id": null,
+      "coverage_manifest_id": null,
+      "canonical_sha256": null
+    },
+    "direction_evidence_ids": [],
+    "compatibility_report_id": null,
+    "canonical_sha256": null
+  },
+  "cases": [
+    {
+      "case_id": "LIN-PAIR-001",
+      "mutation": "none",
+      "expected": "valid-exact-same-profile-successive-pair"
+    },
+    {
+      "case_id": "LIN-PAIR-002",
+      "mutation": "reverse-from-and-to",
+      "expected": "distinct-pair-and-reversed-semantics"
+    },
+    {
+      "case_id": "LIN-PAIR-004",
+      "mutation": "remove-direction-evidence-and-use-filesystem-time",
+      "expected_error": "lineage_generation_direction_unproven_or_conflicted"
+    },
+    {
+      "case_id": "LIN-PAIR-005",
+      "mutation": "replace-exact-endpoint-with-current-selector",
+      "expected_error": "lineage_current_or_latest_selector_forbidden"
+    },
+    {
+      "case_id": "LIN-PAIR-008",
+      "mutation": "reuse-same-display-name-across-user-and-platform-universes",
+      "expected": "distinct-endpoints-no-identity-merge"
+    },
+    {
+      "case_id": "LIN-PAIR-009",
+      "mutation": "fill-missing-retail-facts-from-classic-endpoint",
+      "expected_error": "lineage_generation_pair_profile_or_owner_mismatch"
+    },
+    {
+      "case_id": "LIN-PAIR-012",
+      "mutation": "advance-owner-current-after-pair-binding",
+      "expected": "operation-retains-original-exact-endpoints"
+    },
+    {
+      "case_id": "LIN-PAIR-015",
+      "mutation": "make-logical-content-equal-but-keep-distinct-generation-ids",
+      "expected": "generation-identities-remain-distinct"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "profile_set_id",
+      "generation_pair.*",
+      "cases[*].canonical-request-and-result-sha256"
+    ]
+  }
+}
