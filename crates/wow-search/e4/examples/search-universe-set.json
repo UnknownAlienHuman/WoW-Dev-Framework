@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-search-e4-a-search-universe-set-v1",
+  "state": "documentation-only-pending-id-freeze",
+  "search_universe_set": {
+    "search_universe_set_id": null,
+    "primary_project_shard": {
+      "search_shard_id": null,
+      "universe_class": "PrimaryUserProject",
+      "project_store_generation_id": null,
+      "project_publication_set_id": null,
+      "project_generation_id": null,
+      "project_snapshot_id": null,
+      "graph_generation_id": null,
+      "graph_snapshot_id": null,
+      "search_profile_set_id": null
+    },
+    "blizzard_ui_shard": {
+      "availability": "BoundExact",
+      "search_shard_id": null,
+      "universe_class": "BlizzardUiSource",
+      "project_store_generation_id": null,
+      "project_publication_set_id": null,
+      "project_generation_id": null,
+      "project_snapshot_id": null,
+      "graph_generation_id": null,
+      "graph_snapshot_id": null,
+      "skeleton_input_view_id": null,
+      "search_profile_set_id": null
+    },
+    "reference_shard": {
+      "search_shard_id": null,
+      "universe_class": "ReferencePlatformContract",
+      "profile_id": null,
+      "reference_generation_id": null,
+      "reference_view_id": null,
+      "search_profile_set_id": null
+    },
+    "compatibility_report_id": null,
+    "capability_summary_id": null,
+    "coverage_summary_id": null,
+    "conflict_summary_id": null,
+    "canonical_sha256": null
+  },
+  "hard_rules": [
+    "shards remain separately identified",
+    "raw FTS rank is never compared across shards",
+    "same names never collapse identities",
+    "no current or latest selector is stored"
+  ],
+  "mutation_cases": [
+    {
+      "case_id": "SEARCH-UNIV-007",
+      "mutation": "collapse same-name project platform and reference entities",
+      "expected_error": "search_universe_same_name_identity_collapse_forbidden"
+    },
+    {
+      "case_id": "SEARCH-UNIV-010",
+      "mutation": "substitute older compatible-looking platform shard",
+      "expected_error": "search_universe_optional_shard_substituted"
+    },
+    {
+      "case_id": "SEARCH-UNIV-011",
+      "mutation": "replace exact shard with current selector",
+      "expected_error": "search_universe_current_or_latest_forbidden"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}
