@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "E4-A": "exact-generation search shards and retrieval core",
+  "E4-B": "lineage migration replacement and impact",
+  "E4-C": "service and application search operations"
+}
