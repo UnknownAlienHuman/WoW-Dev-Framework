@@ -1,41 +1,48 @@
 # `wow-search` contract router
 
-**Status:** E4-A exact-generation retrieval contract is implementation-ready documentation; Rust implementation has not started.
+**Status:** E4-A exact-generation retrieval core is implementation-ready documentation; Rust implementation has not started.
 
-`wow-search` owns immutable generation-bound search projections, safe structured query normalization, exact and approximate retrieval lanes, deterministic candidate fusion, complete ranking explanations, honest miss classification, and stable continuation. It does not own source parsing, reference/project/graph truth, lineage authority, context construction, diagnostics, remediation, service policy, or application transport.
+`wow-search` owns deterministic bounded retrieval over immutable exact-generation search shards. It does not own project/reference/graph truth, resolve current publications, infer lineage or replacements, generate context, call models, or mutate source.
+
+The original pre-E4 scaffold is preserved as [`INITIAL_OVERVIEW.md`](INITIAL_OVERVIEW.md). It is historical design input; the E4-A package controls implementation where the texts differ.
 
 ## Canonical route
 
-The original pre-E4 brief is preserved as [`INITIAL_OVERVIEW.md`](INITIAL_OVERVIEW.md).
+Read:
 
-Read E4-A in this order:
+1. repository [`AGENTS.md`](../../AGENTS.md);
+2. crate instructions and [`../MANIFEST.json`](../MANIFEST.json);
+3. [`../DEPENDENCY_GRAPH.md`](../DEPENDENCY_GRAPH.md);
+4. [`../WORKSTREAMS.md`](../WORKSTREAMS.md);
+5. [`e4/README.md`](e4/README.md) and the complete E4-A reading order;
+6. current [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb) routing when interpreting patch-sensitive WoW facts;
+7. exact pinned owner repositories/snapshots used by the assigned fixture.
 
-1. [`e4/README.md`](e4/README.md)
-2. [`e4/AGENTS.md`](e4/AGENTS.md)
-3. [`e4/DECISIONS.md`](e4/DECISIONS.md)
-4. [`e4/DATA_MODEL.md`](e4/DATA_MODEL.md)
-5. [`e4/SEARCH_UNIVERSE_AND_SHARDS.md`](e4/SEARCH_UNIVERSE_AND_SHARDS.md)
-6. [`e4/FIELD_AND_DOCUMENT_SCHEMA.md`](e4/FIELD_AND_DOCUMENT_SCHEMA.md)
-7. [`e4/INDEX_BUILD_AND_PUBLICATION.md`](e4/INDEX_BUILD_AND_PUBLICATION.md)
-8. [`e4/QUERY_MODEL_AND_NORMALIZATION.md`](e4/QUERY_MODEL_AND_NORMALIZATION.md)
-9. [`e4/EXACT_ALIAS_AND_PREFIX_LANES.md`](e4/EXACT_ALIAS_AND_PREFIX_LANES.md)
-10. [`e4/TEXT_FUZZY_AND_SHAPE_LANES.md`](e4/TEXT_FUZZY_AND_SHAPE_LANES.md)
-11. [`e4/GRAPH_ASSISTED_RETRIEVAL.md`](e4/GRAPH_ASSISTED_RETRIEVAL.md)
-12. [`e4/RANKING_FUSION_AND_EXPLANATIONS.md`](e4/RANKING_FUSION_AND_EXPLANATIONS.md)
-13. [`e4/MISS_PAGINATION_AND_CONTINUATION.md`](e4/MISS_PAGINATION_AND_CONTINUATION.md)
-14. [`e4/PERSISTENCE_AND_FTS5_PROFILE.md`](e4/PERSISTENCE_AND_FTS5_PROFILE.md)
-15. [`e4/COVERAGE_AUTHORITY_AND_LINEAGE_BOUNDARY.md`](e4/COVERAGE_AUTHORITY_AND_LINEAGE_BOUNDARY.md)
-16. [`e4/SECURITY_AND_BUDGETS.md`](e4/SECURITY_AND_BUDGETS.md)
-17. [`e4/EVALUATION_AND_CALIBRATION.md`](e4/EVALUATION_AND_CALIBRATION.md)
-18. [`e4/OPERATIONS.md`](e4/OPERATIONS.md)
-19. [`e4/ERROR_MODEL.md`](e4/ERROR_MODEL.md)
-20. [`e4/TEST_MATRIX.md`](e4/TEST_MATRIX.md)
-21. [`e4/IMPLEMENTATION_PLAN.md`](e4/IMPLEMENTATION_PLAN.md)
-22. [`e4/CONTRACT.json`](e4/CONTRACT.json) and [`e4/examples/`](e4/examples/README.md)
+## Active E4-A contract
 
-Also read [`../AGENTS.md`](../AGENTS.md), [`../DEPENDENCY_GRAPH.md`](../DEPENDENCY_GRAPH.md), [`../WORKSTREAMS.md`](../WORKSTREAMS.md), and the current [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb) routes before addon-facing work.
+```text
+contract: wow-search/e4-a/exact-generation-retrieval-core
+manifest: e4/CONTRACT.json
+state: implementation-ready-documentation-no-rust-code
+implementation: not-started
+```
+
+E4-A defines:
+
+- separate immutable user-project, Blizzard UI source, and ReferenceView search shards;
+- bounded typed search documents with exact origin/evidence/privacy/license closure;
+- exact identity, name, explicit alias, member, prefix, FTS, identifier-similarity, structured-shape, and seeded-graph lanes;
+- safe closed query normalization and FTS AST;
+- authority bands and canonical integer/ordinal fusion;
+- complete candidate explanations;
+- exact versus partial versus candidate-only miss semantics;
+- whole-candidate pagination and exact retained-shard continuation;
+- logical SearchStore and static FTS5 physical-profile boundary;
+- security, cancellation, determinism, evaluation, benchmark, and checksum gates.
 
 ## Direct dependencies
+
+Maximum active E4-A dependencies:
 
 ```text
 wow-core
@@ -45,29 +52,60 @@ wow-project
 wow-graph
 ```
 
-No direct dependency on `wow-context`, `wow-cbm`, `wow-service`, applications, analyzer actors, or recognizer engines is active in E4-A.
-
-## Output boundary
+No direct E4-A dependency on:
 
 ```text
-exact owner entities and fields
--> immutable SearchDocument partitions
--> one immutable SearchShard per exact owner generation
--> exact SearchUniverseSet
--> safe NormalizedSearchQuery
--> per-lane SearchCandidateSignal records
--> deterministic SearchCandidate ordering and explanations
--> SearchResult and exact continuation
+wow-context
+wow-service
+wow-cbm
+wow-emmy
+wow-recognizers
+wow-rules
+applications
 ```
 
-The output is a ranked set of exact entity candidates. It is not proof of user intent, lineage, replacement, migration, impact, safety, or runtime behavior.
+Owner facts produced through analyzer/recognizer/rules may appear only through exact project/graph/reference public records. Search does not invoke those producers.
 
-## Current implementation state
+## Authority boundary
 
 ```text
-documentation frontier: E4-A
-implementation frontier: not started
-Cargo.toml: absent
-Rust source: absent
-CI/workflows: absent
+owner fact
+    exact domain fact with its existing evidence/provenance/confidence/coverage
+
+search signal
+    query-relative reason an exact entity was retrieved
+
+ranked candidate
+    query-relative candidate assembled from signals
 ```
+
+Exact string equality proves only the declared string relation. Text, fuzzy, shape, and graph proximity remain candidate evidence. No E4-A operation can assert:
+
+```text
+user intended this entity
+same lineage
+moved or renamed
+replaced by
+migration path
+patch impact
+runtime behavior or safety
+platform/API authority beyond exact ReferenceView facts
+```
+
+## Deferred route
+
+The next documentation package after E4-A is E4-B: explicit cross-generation lineage, migration, and impact contracts. E4-C later exposes search and candidate-to-exact-context-root orchestration through `wow-service` and the thin CLI.
+
+E5 calibration, E6 external/Codebase Memory candidates, and E7 LSP/MCP/release remain later packages.
+
+## Implementation gate
+
+No `Cargo.toml` or `.rs` file may be added until:
+
+- E0–E3 prerequisite implementations and fixture bundles exist;
+- exact owner read/search projection ports are frozen;
+- exact SQLite/Rust binding/static FTS5/tokenizer profile is probed;
+- all E4-A machine fixtures and SHA-256 manifests are frozen;
+- recall, zero-false-authority, latency, memory, index-size, fanout, security, and determinism thresholds are accepted.
+
+Missing evidence is blocking/`NotEvaluated`, never pass.
