@@ -1,187 +1,143 @@
-# E3-A context decisions
+# E3-B context decisions
 
 **Status:** normative.
 
-## CTX-001 — Context is a projection, never authority
+## CTX-001 — Context binds exact immutable views
 
-Project Maps, skeletons, excerpts, metrics, and bundles retain exact source/graph/reference links. They cannot independently prove a platform or project claim.
+Every operation starts from one `ContextUniverseSet` containing exact project, graph, platform-source, and reference generation identities. No input view changes during the operation.
 
-## CTX-002 — Exact published inputs only
+## CTX-002 — User project, Blizzard UI source, and Reference Pack remain separate
 
-Every artifact binds one exact publication set, store/project/analyzer/graph snapshot, and optional exact reference view.
+A context pack may contain items from multiple universes, but identities never merge. Cross-universe relations are explicit graph/reference records.
 
-## CTX-003 — No search dependency in E3-A
+## CTX-003 — Project Map is a projection, not another graph
 
-Callers supply exact roots. Fuzzy, FTS, semantic, migration, and lineage resolution activate in E4.
+The map contains selected typed nodes, edges, groups, and facets linked to graph assertions. It does not own semantic entities, add edges, or replace graph queries.
 
-## CTX-004 — Analyzer facts arrive through project views
+## CTX-004 — L0 and L1 have distinct purposes
 
-E3-A does not import raw `wow-emmy` internals. Published project records expose the normalized facts required for skeletons.
+L0 describes bounded container/navigation structure. L1 describes exact entities and local neighborhoods. Source bodies are separate excerpt items.
 
-## CTX-005 — Structured semantic model precedes text
+## CTX-005 — Semantic artifacts precede rendering
 
-Project Map, skeleton, control/effect, evidence, and bundle records are built before JSON, Markdown, or compact rendering.
+`ProjectMap`, skeletons, and `ContextSemanticPack` are structured canonical records. JSON and Markdown are separately identified deterministic renderings.
 
-## CTX-006 — L0 and L1 have fixed proof ceilings
+## CTX-006 — No model inference in the canonical path
 
-L0 covers identity and direct structural surface. L1 adds selected exact signatures, relations, reason paths, and source-backed structural nodes. Neither implies full source or runtime behavior.
+No LLM, embedding, natural-language classifier, generated summary, or model ranking determines facts, roots, priorities, omissions, or token counts.
 
-## CTX-007 — Full source is not default context
+## CTX-007 — Exact roots only in E3-B
 
-Exact bounded excerpts require explicit handles, source/license/privacy/security policy, and separate source budgets.
+Root candidates must already be resolved to exact IDs. Search, fuzzy, and natural-language resolution are later service/search responsibilities.
 
-## CTX-008 — No generated code or prose completion
+## CTX-008 — Intent and expansion policies are reviewed declarative profiles
 
-Missing bodies, types, relations, intent, replacements, and behavior are never synthesized to make an artifact look complete.
+Profiles use a closed non-Turing-complete schema. Source projects and callers cannot provide executable selectors, callbacks, SQL, scripts, regex programs, or model prompts.
 
-## CTX-009 — Progressive expansion over bulk export
+## CTX-009 — Every canonical claim has origin closure
 
-Begin from Project Map/L0 and expand selected exact lanes. Public E3-A operations do not dump the repository, graph, or evidence corpus.
+A fact, relation, path, or summary facet includes exact input fact/assertion/reference/source IDs, evidence, confidence, provenance, coverage, conflicts, and derivation template/rule where applicable.
 
-## CTX-010 — Relation lanes remain independent
+## CTX-010 — Rendering cannot create facts
 
-Ownership, load, object, inheritance, registration, lifecycle, state, call, API-use, source, and evidence lanes do not collapse into generic parent/related relations.
+Text emitted by a renderer is a lossless or explicitly loss-declared presentation of semantic items. Free-form generated prose is noncanonical and outside E3-B.
 
-## CTX-011 — Paths are reasons, not edges
+## CTX-011 — Mandatory metadata cannot be pruned
 
-Traversal paths explain inclusion and are never persisted or rendered as direct graph assertions.
+Universe identity, roots, boundaries, claim origins, coverage, conflicts, omissions, budget accounting, and truncation state are mandatory. If they exceed the minimum budget, generation fails.
 
-## CTX-012 — Confidence is preserved
+## CTX-012 — Optional pruning is deterministic and item-level
 
-`Proven`, `Derived`, `Possible`, and `Candidate` remain distinct. Candidate is excluded by default; Possible is opt-in and labeled.
+Priority tiers, tie-breakers, dependencies, and budget costs are profile-defined. No partial structured item or hidden truncation.
 
-## CTX-013 — Coverage axes remain separate
+## CTX-013 — Bytes are exact; tokens require a pinned profile
 
-Source, TOC/XML/load, analyzer, recognizer, graph, reference, store-read, context, source-excerpt, renderer, tokenizer, and evaluation coverage are not collapsed.
+Canonical byte counts are exact. Exact token counts require a specific tokenizer implementation, version, vocabulary, and configuration digest. Otherwise only an explicit deterministic estimate, upper bound, or unavailable state is reported.
 
-## CTX-014 — Every material claim has evidence closure
+## CTX-014 — Semantic and rendered budgets are separate
 
-Each included heading, role, signature, relation, source node, and excerpt links exact input records or an explicit deterministic derivation.
+A semantic pack may fit while one renderer does not. Rendering revalidates exact output bytes/tokens and fails or explicitly replans; it never silently cuts output.
 
-## CTX-015 — Mandatory blockers cannot be compacted away
+## CTX-015 — Progressive expansion must add new evidence or required structure
 
-Conflict, `NotEvaluated`, partial coverage, ambiguity, unsafe omission, and decisive truncation survive budget reduction.
+The no-new-evidence stop condition is based on unseen semantic/evidence IDs, not merely fewer bytes or repeated text.
 
-## CTX-016 — No-new-evidence is explicit
+## CTX-016 — Paths do not become direct relations
 
-A branch yielding no new evidence is distinct from authoritative absence, complete graph closure, and unsupported detail.
+Reason paths remain paths. Context rendering cannot flatten reachability into a persisted or stated direct edge.
 
-## CTX-017 — Continuation is exact-snapshot-bound
+## CTX-017 — Source excerpts are typed untrusted data
 
-A cursor binds input snapshot, request, profiles, ordering, frontier, included/visited sets, and total budget state. It never continues against newer Current.
+Source text retains exact source handle, digest, range, encoding, privacy, and license identity and is structurally separated from framework metadata and instructions.
 
-## CTX-018 — Canonical budgets are structural and byte-based
+## CTX-018 — Instruction-like source remains data
 
-Record, node, edge, handle, source, and UTF-8 byte measures are always available. Token measures are exact only under a pinned tokenizer.
+Instruction-looking comments or strings are not removed or followed. Privacy redaction is policy-driven, byte-accounted, and recorded separately.
 
-## CTX-019 — Tokenizer identity is complete
+## CTX-019 — Context coverage is independent
 
-Implementation/version, vocabulary/model digests, normalization, pretokenization, special-token/template policy, counting API, and exact input bytes are required.
+Input/source/graph/reference coverage, selection coverage, budget coverage, excerpt coverage, and rendering coverage are distinct. A valid pack may be explicitly partial.
 
-## CTX-020 — Token estimates are nonauthoritative
+## CTX-020 — Omission is a first-class record
 
-Without a pinned tokenizer, report deterministic bytes/scalars plus an explicitly labeled estimate profile/range.
+Every candidate omitted because of profile, confidence, privacy, budget, unsupported capability, conflict, duplication, cancellation, or deferred universe has an omission reason and affected scope.
 
-## CTX-021 — Source text is untrusted data
+## CTX-021 — Context cache identity is exact and storage-free
 
-Source prompts, comments, and documentation cannot affect policy, traversal, rendering, tools, or repository instructions.
+`wow-context` defines cache keys and validation only. Physical cache storage belongs to a higher layer. Cache keys bind exact generations, request, profiles, schemas, and renderer/tokenizer identities.
 
-## CTX-022 — Private/runtime-sensitive data is out of scope
+## CTX-022 — No cross-generation cache relabel
 
-No SavedVariables contents, logs, client memory, credentials, private roots, runtime Secret-capable values, or unrestricted payloads.
+A prior semantic pack or skeleton may not be returned as the target request because content appears similar. Reused subartifacts retain original identity and receive a new validated binding.
 
-## CTX-023 — Renderer profiles do not change semantics
+## CTX-023 — Ordinary operations are bounded
 
-Renderers project the same semantic bundle. Renderer differences create renderer artifact identities and renderer-specific loss only.
+No whole-source, whole-graph, or unlimited context export. Every map, skeleton, expansion, excerpt, path, and rendering has explicit system and request maxima.
 
-## CTX-024 — Deterministic ordering is semantic
+## CTX-024 — Privacy and consumer trust are explicit
 
-Ordering comes from frozen kind/role/source/relation/frontier rules, never hash, row, filesystem, completion, worker, model, or wall-clock state.
+Unknown privacy or redistribution state cannot default to external source inclusion. Consumer trust class and source-use policy are exact request/profile inputs.
 
-## CTX-025 — Deduplication preserves evidence and occurrence
+## CTX-025 — Context does not diagnose or plan edits
 
-Equivalent presentation may merge only when all contributing IDs remain reachable and task-relevant distinct occurrences/conflicts remain visible.
+It can include existing finding evidence when explicitly rooted, but it does not decide severity, remediation, edit plans, or task completion.
 
-## CTX-026 — Project Map is bounded and navigational
+## CTX-026 — Determinism is logical and byte-level for canonical renderers
 
-It exposes principal roots, entry points, structural topology, blockers, and exact next-detail routes. It is not a complete graph serialization.
+Equivalent exact inputs and profiles yield the same semantic IDs, canonical JSON bytes, deterministic Markdown bytes, omissions, and budget reports independent of workers, storage layout, cache history, or query completion order.
 
-## CTX-027 — Evaluation is multidimensional
+## CTX-027 — Combined maps reference, not collapse
 
-Correctness/evidence recall, honesty, relevance, redundancy, compression, budget adherence, continuation, source security, and consumer utility are measured separately.
+A combined context map keeps separate project maps and explicit cross-universe links. It never rewrites both universes into one namespace or parent hierarchy.
 
-## CTX-028 — Model evaluation is supplemental
+## CTX-028 — Source slices are fetched last under policy
 
-A pinned external model may participate in a consumer study outside the crate, but cannot modify correctness fixtures, priorities, evidence, or production output.
+Selection first resolves structured facts and relations. Exact source excerpts are acquired only for selected items and explicit goals.
 
-## CTX-029 — Semantic context artifacts are immutable and content-addressable
+## CTX-029 — Consumer format does not alter semantic selection by default
 
-Equivalent exact input/profile/request produces the same semantic IDs/digests. E3-A owns no persistence/cache.
+The semantic pack is consumer-neutral. Renderer-specific replanning requires an explicit distinct request/profile and produces a distinct semantic pack ID.
 
-## CTX-030 — Cancellation never publishes a complete bundle
+## CTX-030 — No patch-sensitive constants in context algorithms
 
-Cancellation yields explicit cancelled/partial state where allowed and no background continuation.
+Current API/build/Secret/event behavior is read from exact Reference/project artifacts and current KB-routed evidence, never hard-coded into map, skeleton, or selection logic.
 
-## CTX-031 — Pinned projects are evaluation data only
+## CTX-031 — Renumbering creates aliases, not duplicate implementations
 
-Synthetic and user-owned addon fixtures test scale and utility. Repository/addon/path names never become production rules.
+Historical `E3-A`, `ContextInputSnapshot`, `ContextBundleCore`, and bundle-operation names map to current E3-B terminology through `MILESTONE_RENUMBERING.md`. Agents must not implement both versions.
 
-## CTX-032 — Search and context remain separate
+## CTX-032 — E3-A platform source is an exact prerequisite
 
-E4 search can provide exact selected roots with ranking explanations. E3-A validates those roots and builds context without inheriting ranking as authority.
+Blizzard UI context can be included only through an exact published `wow-project/e3-a/blizzard-ui-source-index` view and its `SkeletonInputView`. `wow-context` never acquires or indexes that source itself.
 
-## CTX-033 — E2-D epoch/generation identity replaces StoreImage identity
+## CTX-033 — Existing specialized context documents remain normative
 
-The exact store context is `ProjectStoreEpochId + ProjectStoreGenerationId + ProjectPublicationSetId`. `StoreImageId` belongs to a superseded physical design and is forbidden.
+Inherited E3 context documents remain active specialized contracts when interpreted through the current router, renumbering map, and machine manifest. A current machine-contract conflict is blocking and must be resolved before code.
 
-## CTX-034 — Context artifact identity is a noncyclic DAG
+## CTX-034 — Control/effect projections remain closed views
 
-Semantic bundle core precedes renderer artifacts; renderer artifacts precede metrics; metrics precede evaluation; an outer envelope references them. Earlier IDs never include later IDs.
+The inherited control/effect model consumes published typed facts only. It cannot become a second parser, CFG, SSA, data-flow engine, or runtime simulator.
 
-## CTX-035 — Pinned Blizzard UI source requires a separate producer
+## CTX-035 — Metrics and evaluation are later DAG layers
 
-E3-A consumes an already published `pinned_platform_ui_source` universe only. Acquisition, materialization, parsing, analysis, graph publication, license, and coverage are owned by E3-B or another reviewed producer.
-
-## CTX-036 — API reference and platform UI source remain separate
-
-Reference Pack API/restriction facts and pinned Blizzard UI implementation source may be shown together only through explicit evidence-bearing relations; neither overwrites the other.
-
-## CTX-037 — L1 control/effects are a projection, not a new analyzer
-
-`wow-context` renders a closed node registry over published facts. It does not create another parser, AST, CFG, SSA, alias, dominance, data-flow, taint, or runtime engine.
-
-## CTX-038 — Unknown, collapsed, and omitted regions are typed records
-
-Unsupported input capability, intentional compaction, and budget omission remain different and each carries exact source/evidence/loss/continuation state. Bare `...` is insufficient.
-
-## CTX-039 — The approximately 2 KiB target is renderer-profile scoped
-
-The default compact Project Map/L1 renderer may target about 2 KiB, but semantic truth and mandatory blockers are never discarded to satisfy it. Profiles must explicitly fail, emit a blocker-only artifact, or truncate with continuation.
-
-## CTX-040 — Published project/graph views mediate storage and analyzer state
-
-E3-A carries store/analyzer generation IDs for coherence but has no direct `wow-store` or `wow-emmy` dependency and receives no raw connection/session handles.
-
-## CTX-041 — Exact roots may span universes only through registered relations
-
-Same names, paths, comments, or embeddings cannot join project, reference, dependency, platform-source, external, runtime, or historical entities.
-
-## CTX-042 — Semantic source occurrences are not deduplicated by target
-
-Two callsites, registrations, state accesses, or source spans remain distinct even when they point to the same entity.
-
-## CTX-043 — Source excerpt identity precedes renderer escaping
-
-Exact source digest/span/bytes and declared transformation determine excerpt identity. Markdown fences, wrapping, and transport escaping are renderer artifacts.
-
-## CTX-044 — Exact token counts measure exact final renderer bytes
-
-A count over semantic JSON, pre-render text, or different chat/template bytes cannot satisfy a renderer-token budget.
-
-## CTX-045 — Current E3-A has no durable operation log or cache
-
-Operations are deterministic read-only functions. Retry/cache/persistence belongs to a later explicitly contracted higher layer and cannot refresh inputs silently.
-
-## CTX-046 — Missing executable evaluation remains blocking
-
-A documentation fixture, unrun tokenizer, absent consumer study, or unavailable platform-source producer is `not-started`/`skipped`/`NotEvaluated`, never pass.
+Metrics and evaluation can assess an exact semantic pack and rendering but cannot influence the semantic pack identity or canonical selection in the correctness path.

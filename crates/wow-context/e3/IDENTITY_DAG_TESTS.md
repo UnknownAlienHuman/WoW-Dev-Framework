@@ -1,48 +1,95 @@
-# E3-A artifact identity DAG mutation tests
+# E3-B identity-DAG tests
 
-**Status:** normative supplement to [`TEST_MATRIX.md`](TEST_MATRIX.md).
+**Status:** normative cycle and forward-reference mutation contract.
 
-The semantic context pipeline is a directed acyclic identity graph:
+## Canonical order
 
 ```text
-ContextInputSnapshotId / ContextRequestId
--> ContextPlanId / ContextFrontierId
--> ProjectMapId / SkeletonId / ControlEffectNodeId / SourceExcerptId / evidence-loss IDs
--> ContextBundleCoreId
--> ContextRendererArtifactId
--> ContextMetricsId
--> ContextEvaluationReportId
--> ContextBundleEnvelopeId
+owner project/graph/reference/source views
+-> ContextUniverseSetId
+
+ContextUniverseSet + reviewed profiles
+-> ContextProfileSetId
+
+ContextUniverseSet + exact roots/request fields
+-> ContextRequestId
+
+universe/profile/request + exact owner records
+-> ProjectMapId / L0SkeletonId / L1SkeletonId
+
+request/profiles/frontier rules
+-> ContextExpansionPlanId / ContextFrontierId
+
+selected semantic payloads and exact origins
+-> ContextItemId / SourceExcerptItemId
+
+candidate decisions and costs
+-> SelectionTraceId / OmissionManifestId / ContextBudgetReportId
+
+universe/request/profiles/maps/skeletons/items/trace/omissions/budget
+-> ContextSemanticPackId
+
+semantic pack + renderer/profile + exact rendered bytes
+-> RenderedContextArtifactId
+
+semantic/render artifacts
+-> metrics, comparison, evaluation, validation, cache-storage, and delivery records
 ```
 
-An earlier artifact may not include, hash, or require a later artifact ID. A later artifact may reference earlier immutable IDs.
+## Forbidden back-references
 
-| ID | Mutation or case | Expected |
+A semantic identity must not include:
+
+- its own ID/digest;
+- a validation report that validates it;
+- renderer artifact ID/bytes when computing semantic pack identity;
+- metrics/evaluation score;
+- cache location/hit state;
+- delivery envelope/request timestamp;
+- physical store row/page/WAL identity;
+- current pointer or later generation;
+- continuation page produced after the artifact;
+- consumer model response.
+
+## Required mutations
+
+| ID | Mutation | Expected |
 |---|---|---|
-| `CTX-DAG-001` | `ContextBundleCore` contains renderer, tokenizer, metrics, evaluation, or envelope IDs | reject `context_artifact_identity_cycle_forbidden` |
-| `CTX-DAG-002` | `ContextBundleCoreId` hashes final Markdown/JSON bytes or exact token count | reject; semantic core must remain renderer-independent |
-| `CTX-DAG-003` | `ContextRendererArtifactId` feeds back into source excerpt, skeleton, Project Map, plan, or input identity | reject |
-| `CTX-DAG-004` | Metrics or evaluation changes alter `ContextBundleCoreId` | reject |
-| `CTX-DAG-005` | Timing, memory, model score, worker count, path, row ID, or lease enters a semantic ID | reject `context_volatile_field_in_canonical_identity` |
-| `CTX-DAG-006` | Same semantic core rendered by JSON, Markdown, and compact-line profiles | same `ContextBundleCoreId`, distinct renderer IDs |
-| `CTX-DAG-007` | Same renderer bytes counted by two exact tokenizer profiles | same renderer ID, distinct tokenizer result IDs |
-| `CTX-DAG-008` | Evaluation report references the outer envelope that already references the report | reject cycle |
-| `CTX-DAG-009` | Outer envelope references core, renderer, metrics, and evaluation in canonical order | pass |
-| `CTX-DAG-010` | Bundle validation repairs a missing later artifact by mutating the semantic core | reject; validation is nonrepairing |
-| `CTX-DAG-011` | Renderer omits a mandatory core record and attempts to compensate in metrics/evaluation | reject renderer semantic mismatch/hard-gate failure |
-| `CTX-DAG-012` | Rebuild under shuffled input, query completion, and 1/2/N workers | identical semantic DAG IDs and canonical core bytes |
+| `CTX-DAG-001` | Semantic pack includes renderer artifact ID | reject |
+| `CTX-DAG-002` | Semantic pack includes metrics/evaluation report ID | reject |
+| `CTX-DAG-003` | Map ID includes pack ID | reject |
+| `CTX-DAG-004` | Request ID includes expansion result ID | reject |
+| `CTX-DAG-005` | Item includes selection trace that selected it | reject or split nonidentity reference |
+| `CTX-DAG-006` | Budget report includes rendered bytes before renderer identity | use predicted cost only; exact rendered report is later |
+| `CTX-DAG-007` | Cache key includes physical path/hit counter | reject |
+| `CTX-DAG-008` | Universe set includes mutable current pointer | reject |
+| `CTX-DAG-009` | Validation rewrites same artifact under unchanged ID | reject |
+| `CTX-DAG-010` | Continuation cursor changes request/profile/generation | reject |
+| `CTX-DAG-011` | Source excerpt ID includes Markdown output line range | reject; renderer mapping is later |
+| `CTX-DAG-012` | Renderer template reads evaluation score to omit items | reject |
 
-## Required graph validation
+## Graph validation
 
-The implementation test suite must construct the artifact-reference graph from frozen schemas and assert:
+Construct a directed dependency graph for every canonical type field. Fail if:
 
-- all reference directions match the declared layer order;
-- no self-edge or cycle exists;
-- every referenced earlier artifact exists and its digest validates;
-- later artifact absence can make an envelope/profile incomplete but cannot invalidate or rewrite an otherwise valid semantic core;
-- semantic-core equality is evaluated before renderer/tokenizer/metric/evaluation equality;
-- renderer/tokenizer/evaluation comparison never upgrades context or domain authority.
+- any strongly connected component has more than one node;
+- any node has a self-edge;
+- a field points to a later layer without being explicitly nonidentity metadata;
+- a supposedly noncanonical field changes the object's canonical digest;
+- a semantic object cannot be built without first rendering/validating/evaluating itself.
 
-## Freeze gate
+## Serialization mutations
 
-The closed `context-bundle.json` fixture must freeze valid and invalid DAG vectors, expected error codes, canonical bytes, and IDs before the first E3-A Rust commit.
+- reorder equivalent JSON object fields: semantic object normalizes identically;
+- reorder semantic arrays where order is schema-significant: ID changes or validation rejects, according to field definition;
+- inject later-layer IDs into unknown fields: unknown-field rejection;
+- use retired `ContextBundleCore` and current `ContextSemanticPack` as separate objects: reject;
+- include timestamp/host/process/cache state in canonical payload: reject.
+
+## Continuation chain
+
+Continuation page IDs form a forward chain over one exact request/universe/profile and prior page manifest. A prior semantic pack does not include future page IDs. Combined-page validation occurs in a later chain report and does not alter page IDs.
+
+## Acceptance
+
+The machine schema and Rust type graph must pass automated cycle/field-layer checks. Tests verify frozen fixture identities and never regenerate them in place.

@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-context-e3-b-map-l0-l1-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "universe_set_id": null,
+  "project_map": {
+    "project_map_id": null,
+    "project_map_profile_id": null,
+    "project_snapshot_id": null,
+    "graph_snapshot_id": null,
+    "nodes": [
+      {
+        "map_node_id": null,
+        "kind": "package",
+        "entity_key": null,
+        "source_handle_ids": [],
+        "origin_item_ids": [],
+        "confidence": "Proven",
+        "coverage_record_ids": [],
+        "conflict_ids": []
+      },
+      {
+        "map_node_id": null,
+        "kind": "file",
+        "entity_key": null,
+        "source_handle_ids": [],
+        "origin_item_ids": [],
+        "confidence": "Proven",
+        "coverage_record_ids": [],
+        "conflict_ids": []
+      }
+    ],
+    "edges": [
+      {
+        "map_edge_id": null,
+        "relation_kind": "loads",
+        "source_node_id": null,
+        "target_node_id": null,
+        "relation_assertion_ids": [],
+        "reason_path_id": null,
+        "confidence": "Derived"
+      }
+    ],
+    "omission_ids": [],
+    "budget_report_id": null,
+    "canonical_sha256": null
+  },
+  "l0_skeleton": {
+    "l0_skeleton_id": null,
+    "scope_kind": "file",
+    "scope_key": null,
+    "sections": [
+      "Identity",
+      "LoadAndDependencies",
+      "DeclaredStructure",
+      "SignalsAndCallbacks",
+      "StateRoots",
+      "ApiUsage",
+      "ConflictsAndCoverage",
+      "ExpansionOptions"
+    ],
+    "declaration_summary_ids": [],
+    "source_handle_ids": [],
+    "coverage_record_ids": [],
+    "conflict_ids": [],
+    "omission_ids": [],
+    "budget_report_id": null,
+    "canonical_sha256": null
+  },
+  "l1_skeleton": {
+    "l1_skeleton_id": null,
+    "root_entity_keys": [],
+    "signature_fact_ids": [],
+    "direct_relation_assertion_ids": [],
+    "reason_path_ids": [],
+    "reference_fact_ids": [],
+    "source_excerpt_candidate_ids": [],
+    "coverage_record_ids": [],
+    "conflict_ids": [],
+    "omission_ids": [],
+    "budget_report_id": null,
+    "canonical_sha256": null
+  },
+  "mutation_cases": [
+    {"case_id": "CTX-MAP-007", "mutation": "replace_reason_path_with_direct_edge", "expected_error": "context_project_map_path_materialized_as_direct_edge"},
+    {"case_id": "CTX-L0-003", "mutation": "infer_role_from_core_filename", "expected_error": "context_l0_role_or_importance_guess_forbidden"},
+    {"case_id": "CTX-L1-006", "mutation": "upgrade_possible_relation_to_proven", "expected_error": "context_l1_possible_or_ambiguous_relation_upgraded"}
+  ],
+  "freeze_gate": {"required_before_first_rust_implementation": true}
+}

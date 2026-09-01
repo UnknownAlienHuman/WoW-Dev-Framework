@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-context-e3-b-request-v1",
+  "state": "documentation-only-pending-id-freeze",
+  "request": {
+    "context_request_id": null,
+    "universe_set_id": null,
+    "root_selectors": [
+      {
+        "kind": "GraphEntityKey",
+        "id": null
+      }
+    ],
+    "intent_profile_id": null,
+    "requested_facets": [
+      "Identity",
+      "OwnershipAndContainment",
+      "ApiUsageAndReferenceFacts"
+    ],
+    "requested_axes": [
+      "ownership"
+    ],
+    "confidence_policy_id": null,
+    "coverage_policy_id": null,
+    "source_excerpt_profile_id": null,
+    "privacy_consumer_profile_id": null,
+    "budget_profile_id": null,
+    "tokenizer_profile_id": null,
+    "renderer_profile_ids": [],
+    "continuation_cursor_id": null,
+    "canonical_sha256": null
+  },
+  "forbidden_selectors": [
+    "fuzzy_name",
+    "natural_language_query",
+    "regex",
+    "sql",
+    "source_expression",
+    "filesystem_path",
+    "callback"
+  ],
+  "mutation_cases": [
+    {
+      "case_id": "CTX-REQ-003",
+      "mutation": "replace_exact_root_with_fuzzy_name",
+      "expected_error": "context_root_selector_unresolved_or_fuzzy"
+    },
+    {
+      "case_id": "CTX-REQ-005",
+      "mutation": "add_executable_selector",
+      "expected_error": "context_executable_selector_or_callback_forbidden"
+    },
+    {
+      "case_id": "CTX-EXP-021",
+      "mutation": "change_privacy_profile_on_continuation",
+      "expected_error": "context_continuation_changed_snapshot_request_or_profile"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}

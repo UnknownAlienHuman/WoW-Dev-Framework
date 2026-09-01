@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-context-e3-b-universe-set-v1",
+  "state": "documentation-only-pending-id-freeze",
+  "context_universe_set": {
+    "universe_set_id": null,
+    "primary_user_project": {
+      "project_id": null,
+      "project_generation_id": null,
+      "project_snapshot_id": null,
+      "project_view_id": null,
+      "graph_generation_id": null,
+      "graph_snapshot_id": null,
+      "graph_view_id": null,
+      "source_context_view_id": null
+    },
+    "blizzard_ui_source": {
+      "availability": "RequiredByProfile",
+      "project_id": null,
+      "project_generation_id": null,
+      "project_snapshot_id": null,
+      "project_view_id": null,
+      "graph_generation_id": null,
+      "graph_snapshot_id": null,
+      "graph_view_id": null,
+      "skeleton_input_view_id": null,
+      "producer_contract_id": "wow-project/e3-a/blizzard-ui-source-index"
+    },
+    "reference": {
+      "profile_id": null,
+      "reference_generation_id": null,
+      "reference_view_id": null
+    },
+    "compatibility_report_id": null,
+    "capability_summary_id": null,
+    "coverage_summary_id": null,
+    "conflict_summary_id": null,
+    "canonical_sha256": null
+  },
+  "forbidden_fields": [
+    "StoreImageId",
+    "floating_current",
+    "latest_profile",
+    "raw_sqlite_handle",
+    "raw_analyzer_session",
+    "natural_language_root"
+  ],
+  "mutation_cases": [
+    {
+      "case_id": "CTX-IN-002",
+      "mutation": "mix_project_and_graph_publications",
+      "expected_error": "context_project_graph_source_generation_mismatch"
+    },
+    {
+      "case_id": "CTX-IN-008",
+      "mutation": "merge_same_display_name_across_universes",
+      "expected_error": "context_cross_universe_identity_collapse_forbidden"
+    },
+    {
+      "case_id": "CTX-IN-012",
+      "mutation": "wrong_blizzard_skeleton_input_generation",
+      "expected_error": "context_platform_source_profile_incompatible"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}
