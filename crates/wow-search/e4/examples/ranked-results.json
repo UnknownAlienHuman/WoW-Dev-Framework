@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-search-e4-a-ranked-results-v1",
+  "state": "documentation-only-pending-id-and-score-freeze",
+  "search_result": {
+    "result_id": null,
+    "search_universe_set_id": null,
+    "request_id": null,
+    "normalized_search_query_id": null,
+    "ranking_profile_id": null,
+    "candidates": [
+      {
+        "candidate_id": null,
+        "universe_id": null,
+        "entity_id": null,
+        "document_ids": [],
+        "signal_ids": [],
+        "authority_band": "ExactCanonicalQualifiedName",
+        "integer_contributions": [
+          {
+            "feature": "exact_qualified_name",
+            "value": null,
+            "cap": null
+          },
+          {
+            "feature": "text_shard_local_reciprocal_rank",
+            "value": null,
+            "cap": null
+          }
+        ],
+        "integer_penalties": [],
+        "total": null,
+        "stable_tie_key": null,
+        "query_relative_match_status": "Candidate",
+        "entity_authority_unchanged": true,
+        "explanation_id": null,
+        "canonical_sha256": null
+      },
+      {
+        "candidate_id": null,
+        "universe_id": null,
+        "entity_id": null,
+        "document_ids": [],
+        "signal_ids": [],
+        "authority_band": "IdentifierSimilarityOrGraphExpansionCandidate",
+        "integer_contributions": [],
+        "integer_penalties": [],
+        "total": null,
+        "stable_tie_key": null,
+        "query_relative_match_status": "CandidateOnly",
+        "entity_authority_unchanged": true,
+        "explanation_id": null,
+        "canonical_sha256": null
+      }
+    ],
+    "lane_result_manifest_ids": [],
+    "ranking_explanation_manifest_id": null,
+    "miss_classification": "CandidateOnly",
+    "coverage_summary_id": null,
+    "conflict_summary_id": null,
+    "omission_manifest_id": null,
+    "budget_report_id": null,
+    "continuation_id": null,
+    "canonical_sha256": null
+  },
+  "candidate_explanation": {
+    "explanation_id": null,
+    "candidate_id": null,
+    "authority_band": "ExactCanonicalQualifiedName",
+    "ordered_contributions": [],
+    "ordered_penalties": [],
+    "caps_and_dedup_decisions": [],
+    "required_filter_outcomes": [],
+    "skipped_failed_partial_lane_records": [],
+    "matched_field_origin_ids": [],
+    "graph_path_ids": [],
+    "entity_evidence_ids": [],
+    "entity_coverage_and_conflict_ids": [],
+    "score_is_probability": false,
+    "score_is_entity_or_runtime_confidence": false,
+    "candidate_proves_intended_entity": false,
+    "candidate_proves_lineage_or_replacement": false,
+    "canonical_sha256": null
+  },
+  "mutation_cases": [
+    {
+      "case_id": "SEARCH-RANK-002",
+      "mutation": "allow repeated fuzzy/text signals to outrank exact canonical band",
+      "expected_error": "search_candidate_approximate_signals_upgraded_exactness"
+    },
+    {
+      "case_id": "SEARCH-RANK-007",
+      "mutation": "use floating aggregate in canonical fusion",
+      "expected_error": "search_ranking_raw_float_in_canonical_fusion"
+    },
+    {
+      "case_id": "SEARCH-RANK-014",
+      "mutation": "upgrade entity confidence because total score is high",
+      "expected_error": "search_candidate_entity_authority_upgraded_by_rank"
+    },
+    {
+      "case_id": "SEARCH-RANK-021",
+      "mutation": "emit replacement relation from top ranked similarity candidate",
+      "expected_error": "search_result_lineage_replacement_migration_or_impact_claim_forbidden"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}
