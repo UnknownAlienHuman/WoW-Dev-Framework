@@ -1,0 +1,122 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-search-e4-a-lane-results-v1",
+  "state": "documentation-only-pending-id-freeze",
+  "normalized_search_query_id": null,
+  "lane_results": [
+    {
+      "lane_id": "ExactCanonicalName",
+      "shard_id": null,
+      "state": "ExecutedComplete",
+      "signals": [
+        {
+          "signal_id": null,
+          "entity_id": null,
+          "document_id": null,
+          "signal_kind": "ExactCanonicalQualifiedName",
+          "matched_field_ids": [],
+          "field_origin_ids": [],
+          "authority_band": "ExactCanonicalQualifiedName",
+          "canonical_integer_features": {
+            "exact_qualified_name": 1
+          },
+          "canonical_sha256": null
+        }
+      ],
+      "coverage_record_ids": [],
+      "canonical_sha256": null
+    },
+    {
+      "lane_id": "GenerationLocalTextFts",
+      "shard_id": null,
+      "state": "ExecutedComplete",
+      "signals": [
+        {
+          "signal_id": null,
+          "entity_id": null,
+          "document_id": null,
+          "signal_kind": "TextMatch",
+          "matched_field_ids": [],
+          "field_origin_ids": [],
+          "shard_local_rank_ordinal": 0,
+          "raw_fts_rank": null,
+          "raw_fts_rank_is_noncanonical_and_never_federated": true,
+          "canonical_integer_features": {
+            "reciprocal_rank_contribution": null,
+            "matched_literal_terms": 2,
+            "matched_literal_phrases": 1
+          },
+          "canonical_sha256": null
+        }
+      ],
+      "coverage_record_ids": [],
+      "canonical_sha256": null
+    },
+    {
+      "lane_id": "IdentifierSimilarity",
+      "shard_id": null,
+      "state": "ExecutedComplete",
+      "signals": [
+        {
+          "signal_id": null,
+          "entity_id": null,
+          "document_id": null,
+          "signal_kind": "IdentifierSimilarityCandidate",
+          "canonical_integer_features": {
+            "trigram_basis_points": null,
+            "bounded_edit_distance": 1
+          },
+          "candidate_only": true,
+          "canonical_sha256": null
+        }
+      ],
+      "canonical_sha256": null
+    },
+    {
+      "lane_id": "SeededGraphExpansion",
+      "shard_id": null,
+      "state": "ExecutedPartial",
+      "signals": [
+        {
+          "signal_id": null,
+          "entity_id": null,
+          "document_id": null,
+          "signal_kind": "GraphReasonPathCandidate",
+          "seed_signal_ids": [],
+          "relation_assertion_ids": [],
+          "reason_path_id": null,
+          "direct_edge_created": false,
+          "candidate_only": true,
+          "canonical_sha256": null
+        }
+      ],
+      "partial_reason_ids": [],
+      "canonical_sha256": null
+    }
+  ],
+  "mutation_cases": [
+    {
+      "case_id": "SEARCH-TEXT-007",
+      "mutation": "compare raw BM25 value from project shard to raw value from reference shard",
+      "expected_error": "search_raw_fts_rank_compared_across_shards"
+    },
+    {
+      "case_id": "SEARCH-FUZZY-006",
+      "mutation": "turn identifier similarity signal into alias",
+      "expected_error": "search_fuzzy_match_upgraded_to_alias_lineage_or_replacement"
+    },
+    {
+      "case_id": "SEARCH-GRAPH-006",
+      "mutation": "persist reason path as direct relation",
+      "expected_error": "search_graph_path_materialized_as_direct_edge"
+    },
+    {
+      "case_id": "SEARCH-RANK-013",
+      "mutation": "treat partial graph lane as zero-score complete lane",
+      "expected_error": "search_lane_partial_failed_or_skipped_state_hidden"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}
