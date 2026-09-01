@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-search-e4-a-evaluation-v1",
+  "state": "documentation-only-pending-freeze",
+  "corpora": {
+    "synthetic_exact": null,
+    "synthetic_collision": null,
+    "synthetic_adversarial": null,
+    "pinned_roth_ui": null,
+    "pinned_blizzard_ui": null,
+    "pinned_reference_view": null,
+    "update_history": null,
+    "high_fanout_graph": null
+  },
+  "cases": [
+    {
+      "case_id": "SEARCH-EVAL-001",
+      "metric": "exact key and canonical-name recall",
+      "required": "100% on complete exact corpus"
+    },
+    {
+      "case_id": "SEARCH-EVAL-002",
+      "metric": "explicit alias recall",
+      "required": "100% on complete explicit-alias corpus"
+    },
+    {
+      "case_id": "SEARCH-EVAL-003",
+      "metric": "false exact or alias classification",
+      "required": 0
+    },
+    {
+      "case_id": "SEARCH-EVAL-004",
+      "metric": "false authoritative miss",
+      "required": 0
+    },
+    {
+      "case_id": "SEARCH-EVAL-005",
+      "metric": "false lineage replacement migration impact claim",
+      "required": 0
+    },
+    {
+      "case_id": "SEARCH-EVAL-007",
+      "metric": "same-name cross-universe collision",
+      "required": "no identity collapse"
+    },
+    {
+      "case_id": "SEARCH-EVAL-010",
+      "metric": "feature ablation",
+      "required": "reported"
+    },
+    {
+      "case_id": "SEARCH-EVAL-011",
+      "metric": "cold/warm cache canonical equality",
+      "required": "byte-identical"
+    },
+    {
+      "case_id": "SEARCH-EVAL-012",
+      "metric": "1/2/N worker canonical equality",
+      "required": "byte-identical"
+    },
+    {
+      "case_id": "SEARCH-EVAL-017",
+      "metric": "recall improvement with hard authority failure",
+      "required": "reject profile"
+    }
+  ],
+  "accepted_thresholds": null,
+  "evaluation_report_id": null,
+  "canonical_sha256": null
+}
