@@ -16,7 +16,7 @@
     "wow-search",
     "review-boundary"
   ],
-  "orchestration_owner": "wow-service/E4-C-deferred",
+  "orchestration_owner": "wow-service/e4-c/search-lineage-impact-use-cases",
   "prerequisites": [
     {
       "contract_id": "wow-core/e0-a/1",
@@ -192,8 +192,8 @@
     "security-privacy-license-budgets-cancellation-determinism-and-evaluation"
   ],
   "deferred_scope": [
-    "symbolic-current-resolution-and-cross-owner-acquisition",
-    "service-and-cli-lineage-search-impact-orchestration",
+    "symbolic-current-resolution-and-cross-owner-acquisition-owned-by-wow-service-e4-c",
+    "service-and-cli-lineage-search-impact-orchestration-owned-by-wow-service-e4-c",
     "automatic-source-edit-or-migration-application",
     "runtime-breakage-severity-taint-combat-secret-performance-or-release-proof",
     "models-embeddings-codebase-memory-or-external-authority",
