@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "manifest_id": "apps-wow-e4-c-checksums-v1",
+  "algorithm": "sha256",
+  "state": "pending-byte-freeze-before-first-rust-implementation",
+  "implementation_state": "not-started",
+  "prerequisite_pins": {
+    "wow_service_e4_c_implementation_commit": null,
+    "wow_service_e4_c_fixture_bundle_sha256": null,
+    "wow_app_e0_e3_regression_bundle_sha256": null
+  },
+  "profile_pins": {
+    "command_parser_profile_id": null,
+    "selector_and_exact_ID_token_profile_id": null,
+    "strict_config_profile_id": null,
+    "query_input_profile_id": null,
+    "review_envelope_transport_profile_id": null,
+    "artifact_and_continuation_input_profile_id": null,
+    "output_file_and_platform_adapter_profile_id": null,
+    "stdout_stderr_text_artifact_profile_id": null,
+    "exit_code_profile_id": null,
+    "signal_cancellation_and_broken_pipe_profile_id": null,
+    "privacy_redaction_and_error_profile_id": null
+  },
+  "vector_pins": {
+    "all_command_to_service_request_vectors": null,
+    "exact_and_current_selector_vectors": null,
+    "query_and_continuation_vectors": null,
+    "candidate_selection_and_context_vectors": null,
+    "lineage_and_review_transport_vectors": null,
+    "migration_and_impact_vectors": null,
+    "strict_config_file_stdin_path_vectors": null,
+    "canonical_envelope_stdout_bytes": null,
+    "faithful_text_output_bytes": null,
+    "exact_artifact_output_bytes": null,
+    "command_specific_exit_code_vectors": null,
+    "cancellation_broken_pipe_output_failure_vectors": null,
+    "security_privacy_dependency_determinism_vectors": null,
+    "application_benchmark_report_id": null
+  },
+  "member_paths": [
+    "apps/wow/README.md",
+    "apps/wow/e4/README.md",
+    "apps/wow/e4/AGENTS.md",
+    "apps/wow/e4/CLI_COMMANDS.md",
+    "apps/wow/e4/INPUT_SELECTORS_REVIEW_AND_ARTIFACTS.md",
+    "apps/wow/e4/OUTPUT_EXIT_AND_STREAMS.md",
+    "apps/wow/e4/SECURITY_AND_CONFIG.md",
+    "apps/wow/e4/TEST_MATRIX.md",
+    "apps/wow/e4/CONTRACT.json",
+    "apps/wow/e4/examples/README.md",
+    "apps/wow/e4/examples/cli-cases.json",
+    "apps/wow/e4/examples/stdout-exit-cases.json",
+    "apps/wow/e4/examples/review-artifact-cases.json"
+  ],
+  "member_sha256": {},
+  "bundle_sha256": null,
+  "freeze_rules": [
+    "null values are allowed only while implementation_state is not-started",
+    "no private review key credential access token or confidential source is committed",
+    "all service parser selector input output exit platform security regression benchmark and checksum values freeze before the first E4-C app Rust commit",
+    "tests verify committed fixtures and never rewrite them automatically",
+    "missing service implementation platform behavior output bytes or test evidence is blocking and never pass"
+  ]
+}
