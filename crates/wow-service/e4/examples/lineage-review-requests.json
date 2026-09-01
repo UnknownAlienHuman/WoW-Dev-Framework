@@ -1,0 +1,130 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e4-c-lineage-review-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "comparison": {
+    "comparison_class": "UserProject",
+    "before_selector": {
+      "kind": "ExactPublicationSet",
+      "id": null
+    },
+    "after_selector": {
+      "kind": "ExactPublicationSet",
+      "id": null
+    },
+    "lineage_profile_set_id": null,
+    "comparison_id": null
+  },
+  "cases": [
+    {
+      "case_id": "S4-LIN-001",
+      "operation": "lineage_build",
+      "operation_id": null,
+      "producer_profiles": {
+        "project_stable_identity": null,
+        "project_source_fingerprint": null,
+        "project_structural_change": null,
+        "search_lineage_candidate": null
+      },
+      "expected_snapshot_id": null
+    },
+    {
+      "case_id": "S4-LIN-003",
+      "operation": "lineage_build",
+      "input": "search-candidate-partition",
+      "expected_maximum_confidence": "Candidate"
+    },
+    {
+      "case_id": "S4-LIN-006",
+      "operation": "lineage_build",
+      "component_shape": "OneToMany",
+      "expected": "unresolved-ambiguity-retained"
+    },
+    {
+      "case_id": "S4-LIN-009",
+      "operation": "lineage_build",
+      "mutation": "before-only-entity-with-partial-after-coverage",
+      "must_not_emit": "removed_after",
+      "expected": "NotEvaluated"
+    },
+    {
+      "case_id": "S4-REV-001",
+      "operation": "lineage_review_validate",
+      "review_envelope": {
+        "schema_version": 1,
+        "comparison_id": null,
+        "component_id": null,
+        "proposal_id": null,
+        "relation_kind": "lineage_successor_of",
+        "decision": "Accept",
+        "requested_confidence": "Derived",
+        "reason_codes": [
+          "reviewed-exact-evidence-closure"
+        ],
+        "note": "synthetic bounded untrusted review note",
+        "principal_ref": null,
+        "role_ref": null,
+        "authorization_scope_ref": null,
+        "attestation_ref": null,
+        "authorization_profile_id": null,
+        "canonical_decision_digest": null
+      },
+      "expected_authorization": "Authorized",
+      "expected_semantic_validation": "Valid"
+    },
+    {
+      "case_id": "S4-REV-002",
+      "operation": "lineage_review_validate",
+      "mutation": "principal-authorized-from-github-or-os-username-only",
+      "expected_error": "e4_review_operator_identity_inference_forbidden"
+    },
+    {
+      "case_id": "S4-REV-005",
+      "operation": "lineage_review_validate",
+      "mutation": "expired-revoked-or-replayed-attestation",
+      "expected_error": "e4_review_expired_revoked_or_replayed"
+    },
+    {
+      "case_id": "S4-REV-008",
+      "operation": "lineage_review_validate",
+      "requested_confidence": "Proven",
+      "producer_ceiling": "Candidate",
+      "expected_error": "e4_review_requested_confidence_exceeds_ceiling"
+    },
+    {
+      "case_id": "S4-REV-010",
+      "operation": "lineage_review_apply",
+      "base_lineage_snapshot_id": null,
+      "validated_review_envelope_ids": [],
+      "operation_id": null,
+      "expected_new_lineage_snapshot_id": null,
+      "base_snapshot_modified": false
+    },
+    {
+      "case_id": "S4-REV-011",
+      "operation": "lineage_review_apply",
+      "mutation": "proposal-or-base-snapshot-changed-after-review-validation",
+      "expected_error": "e4_review_apply_stale_base"
+    },
+    {
+      "case_id": "S4-REV-014",
+      "operation": "lineage_review_apply",
+      "mutation": "response-lost-after-catalog",
+      "expected": "same-exact-recorded-snapshot-receipt-on-retry"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "comparison and before/after exact generation IDs",
+      "all producer partition/component/proposal/snapshot IDs",
+      "synthetic public review principal/role/attestation profile and expected verification vectors",
+      "all canonical review/build request and result digests"
+    ],
+    "forbidden_fixture_material": [
+      "private signing keys",
+      "real access tokens",
+      "real confidential review notes"
+    ]
+  }
+}
