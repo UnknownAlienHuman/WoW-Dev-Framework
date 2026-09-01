@@ -1,0 +1,135 @@
+{
+  "schema_version": 1,
+  "fixture_id": "apps-wow-e4-c-stdout-exit-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "cases": [
+    {
+      "case_id": "C4-OUT-001",
+      "output_mode": "envelope-json",
+      "service_bytes_sha256": null,
+      "expected_stdout_sha256": null,
+      "rule": "exact-service-bytes-plus-one-LF"
+    },
+    {
+      "case_id": "C4-OUT-002",
+      "output_mode": "text",
+      "service_status": "CandidateOnly",
+      "required_fields": [
+        "status",
+        "exact-result-and-generation-IDs",
+        "candidate-authority-band",
+        "coverage-conflicts-omissions",
+        "explicit-nonclaims"
+      ],
+      "must_not_render": [
+        "intended-entity",
+        "replacement",
+        "proven-lineage"
+      ]
+    },
+    {
+      "case_id": "C4-OUT-003",
+      "output_mode": "artifact",
+      "eligible_artifact_count": 1,
+      "service_artifact_sha256": null,
+      "expected_stdout_sha256": null,
+      "wrapper_bytes_added": 0
+    },
+    {
+      "case_id": "C4-OUT-004",
+      "output_mode": "artifact",
+      "eligible_artifact_count": 2,
+      "expected_exit": 4,
+      "stdout_bytes": 0
+    },
+    {
+      "case_id": "C4-OUT-006",
+      "output_mode": "envelope-json",
+      "mutation": "stdout-broken-pipe",
+      "expected_service_call_count": 1,
+      "expected_output_attempt_count": 1,
+      "automatic_retry": false
+    },
+    {
+      "case_id": "C4-OUT-008",
+      "output_path_state": "invalid-before-service",
+      "expected_exit": 64,
+      "expected_service_call_count": 0
+    },
+    {
+      "case_id": "C4-OUT-009",
+      "output_path_state": "write-fails-after-service-success",
+      "expected_exit": 4,
+      "expected_service_call_count": 1,
+      "second_service_call": false
+    },
+    {
+      "case_id": "C4-EXIT-001",
+      "service_statuses": [
+        "Complete",
+        "NoChange"
+      ],
+      "validation_state": "Valid",
+      "expected_exit": 0
+    },
+    {
+      "case_id": "C4-EXIT-002",
+      "service_status": "Complete",
+      "validation_state": "Invalid",
+      "expected_exit": 1
+    },
+    {
+      "case_id": "C4-EXIT-003",
+      "service_statuses": [
+        "Partial",
+        "CandidateOnly",
+        "ConflictBlocked",
+        "Truncated",
+        "NotEvaluated"
+      ],
+      "expected_exit": 2
+    },
+    {
+      "case_id": "C4-EXIT-004",
+      "error_class": "structured-domain-or-selector-failure",
+      "expected_exit": 3
+    },
+    {
+      "case_id": "C4-EXIT-005",
+      "error_class": "internal-owner-service-closure-serialization-or-output-failure",
+      "expected_exit": 4
+    },
+    {
+      "case_id": "C4-EXIT-006",
+      "error_class": "pre-service-cli-config-input-output-transport-failure",
+      "expected_exit": 64
+    },
+    {
+      "case_id": "C4-EXIT-007",
+      "service_status": "Cancelled",
+      "expected_exit": 130
+    },
+    {
+      "case_id": "C4-EXIT-008",
+      "service_status": "Complete",
+      "search_miss_class": "ExactNotFoundWithAuthority",
+      "expected_exit": 0
+    },
+    {
+      "case_id": "C4-CAN-003",
+      "phase": "output",
+      "signal": "cancel",
+      "expected_exit": 130,
+      "service_reinvoked": false,
+      "background_output": false
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "exact canonical envelope and artifact input/output byte digests",
+      "frozen text output required fields and bytes",
+      "all command-specific exit and broken-pipe vectors"
+    ]
+  }
+}
