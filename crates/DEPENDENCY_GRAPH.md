@@ -1,6 +1,6 @@
 # Crate dependency graph
 
-**Status: normative implementation boundary through documentation frontier E4-A**
+**Status: normative implementation boundary through documentation frontier E4-C**
 
 Dependencies point from orchestration/domain behavior toward narrower foundations. The graph must remain acyclic. Maximum permitted edges are not instructions to activate every dependency.
 
@@ -24,7 +24,53 @@ Dependencies point from orchestration/domain behavior toward narrower foundation
 
 Applications depend on `wow-service` only among framework crates.
 
-## Active E4-A search slice
+## Active E4-C operation slice
+
+```text
+apps/wow
+    -> wow-service
+        ├── wow-core
+        ├── wow-store
+        ├── wow-reference
+        ├── wow-project
+        ├── wow-graph
+        ├── wow-search
+        └── wow-context
+```
+
+This is the maximum active direct slice for E4-C operations. Each operation uses only the required subset.
+
+Examples:
+
+```text
+search_query
+    wow-core + wow-store + wow-reference + wow-project + wow-graph + wow-search
+
+lineage_build
+    wow-core + wow-store + wow-reference + wow-project + wow-graph
+    + optional exact wow-search Candidate producer
+
+search_context
+    search query/select slice + wow-context through the existing E3-C context composition
+```
+
+Inactive direct E4-C dependencies:
+
+```text
+wow-emmy
+wow-annotations
+wow-recognizers
+wow-rules
+wow-cbm
+```
+
+Their relevant immutable facts may arrive through exact owner publications. E4-C does not invoke them directly.
+
+## E4-A search boundary
+
+`wow-search` owns exact-generation shards, document projections, safe query AST, retrieval lanes, rank fusion, explanations, miss classification, pagination and continuation.
+
+It does not resolve current, call service/context/CBM, accept lineage proof or choose a candidate for the caller.
 
 ```text
 wow-search
@@ -35,79 +81,101 @@ wow-search
 └── wow-graph
 ```
 
-Inactive direct dependencies for E4-A:
+E4-A `wow-graph` access is bounded generation-local graph retrieval. E4-B lineage publication does not create a reverse dependency from graph to search.
+
+## E4-B lineage producer boundary
+
+`wow-graph` retains only:
 
 ```text
-wow-context
-wow-cbm
-wow-service
-wow-rules
-wow-emmy
-wow-recognizers
-wow-annotations
+wow-graph -> wow-core + wow-store
 ```
 
-Relevant analyzer/recognizer state reaches search only through exact published project/graph owner views. Search does not run those components.
-
-## SearchStore boundary
+Producer facts are supplied as typed artifacts by orchestration:
 
 ```text
-wow-search
-    owns logical documents, fields, indexes, query lanes,
-    ranking, explanations, misses and result manifests
-
-wow-store
-    owns SQLite/runtime/VFS/transactions, immutable file/object lifecycle,
-    read-only reopening, integrity plumbing, retention and GC
+wow-project -> project_stable_identity / source_fingerprint / structural_change partitions
+wow-reference -> explicit transition / deprecation / replacement partitions
+wow-search -> search_lineage_candidate partitions capped at Candidate
+review authorization boundary -> validated decision envelopes
 ```
 
-No raw SQL, table, rowid, PRAGMA, extension, connection, VFS, transaction callback, or path crosses the public seam.
+`wow-graph` validates and publishes lineage assertions/change/migration/static-impact state without importing those producer crates.
 
-## Search/context boundary
-
-`wow-context` remains exact-root-only and does not depend on `wow-search`.
+## E4-C search/context boundary
 
 ```text
-caller structured/text query
--> wow-service [E4-C]
--> wow-search returns ranked exact candidates with explanations/evidence
--> caller or explicit service policy selects exact candidate IDs
+caller query
+-> apps/wow
 -> wow-service
--> wow-context exact roots
+-> wow-search returns exact candidates and explanations
+-> explicit result/candidate selection receipt
+-> wow-service invokes wow-context with the selected exact entity root
 ```
 
-Search ranking never becomes context authority, and context never performs hidden search.
+`wow-search` never calls `wow-context`. `wow-context` never performs hidden search. Rank/similarity does not enter entity or context fact confidence.
 
-## Lineage boundary
-
-E4-A search can emit only Candidate evidence for a later lineage owner.
+## Review boundary
 
 ```text
-wow-search retrieval signals
--> E4-B lineage evaluation in owning project/reference/graph contracts
--> accepted/rejected explicit lineage assertions
+strict review envelope
+-> apps/wow transports data
+-> wow-service invokes ReviewAuthorizationPort
+-> wow-graph independently validates decision semantics/proof ceiling
+-> new immutable LineageGraphSnapshot
 ```
 
-No dependency shortcut permits search to write graph lineage or Reference replacement facts directly.
+Authorization does not create lineage proof. Graph validity does not bypass authorization. Neither owner imports the application.
 
 ## Current-resolution boundary
 
-Applications may accept a symbolic current selector, but only `wow-service` resolves it. `wow-search`, `wow-context`, owner views, and continuations use exact generations.
+```text
+apps/wow
+    parses symbolic current
+    -> wow-service
+       resolves once through owner ports
+       acquires exact retained owner/shard/lineage/context views
+```
+
+The app, `wow-search`, `wow-graph`, and `wow-context` never resolve current pointers. Independent stores are not represented as a distributed atomic snapshot.
+
+## Illustrative shape
+
+```text
+                         wow-core
+              _____________|_________________________
+             /       /      |        |               \
+       wow-store wow-emmy wow-cbm wow-reference      ...
+          |        |                    |
+       wow-graph   |              wow-annotations
+       /      \    |
+wow-recognizers \ |
+        \       wow-project
+         \       /     \
+          wow-rules   wow-search
+               \       /  \
+                \ wow-context
+                 \    /
+               wow-service
+                    |
+                  apps
+```
+
+The table and active work-package contracts are authoritative; this diagram is explanatory.
 
 ## Forbidden patterns
 
 - `wow-core` depending on any framework crate.
 - `wow-store` importing domain semantics.
-- `wow-reference` depending on `wow-annotations`.
+- `wow-reference` depending on `wow-annotations`, project, graph, search, service or apps.
 - `wow-emmy` depending on `wow-project` or `wow-rules`.
-- `wow-graph` parsing source or running recognizers/search.
+- `wow-graph` parsing source, running recognizers/search, resolving current, authorizing reviewers or calling service.
 - `wow-recognizers` depending on `wow-project`.
 - `wow-project` depending on search/context/service/apps.
-- `wow-search` depending on context/service/apps/CBM/analyzer/recognizer/rules or owning their algorithms.
-- `wow-search` writing owner graph/reference/project facts or resolving current.
+- `wow-search` depending on context/service/apps/CBM or implementing lineage authority.
 - `wow-context` depending on store/emmy/recognizers/rules/search/cbm/service/apps.
 - `wow-rules` performing persistence/network/process/source/editor/client mutation.
-- `wow-service` implementing owner algorithms or exposing raw owner handles.
+- `wow-service` implementing owner algorithms, changing proof ceilings, applying migration/source edits or exposing raw owner handles.
 - applications importing any framework crate except `wow-service`.
 - a production crate depending on an application.
 - test helpers becoming runtime dependencies.
@@ -116,11 +184,10 @@ Applications may accept a symbolic current selector, but only `wow-service` reso
 
 1. Stable universal identity/evidence/result primitive in `wow-core`.
 2. Narrow exact generation-bound read view from the owning crate.
-3. Typed operation request/result coordinated by `wow-service`.
-4. Immutable generated artifact with owner schema/identity.
-5. Independently replaceable producer partition with evidence/coverage.
-6. Rebuildable derived sidecar bound to exact owner generations.
-7. Thin application adapter over service only.
+3. Typed producer partition or immutable generated artifact.
+4. Typed operation request/result coordinated by `wow-service`.
+5. Independent authorization decision plus owner semantic validation.
+6. Thin application adapter over service only.
 
 ## Activation order
 
@@ -131,13 +198,19 @@ E0 diagnostic vertical slice
 -> E3-A Blizzard UI source universe
 -> E3-B Project Map/L0/L1/context packs
 -> E3-C service/application context operations
--> E4-A exact-generation search core
--> E4-B explicit lineage/migration/impact
--> E4-C search/lineage/impact service and CLI
--> E5 calibration packs
+-> E4-A exact-generation search
+-> E4-B explicit lineage/migration/static impact
+-> E4-C service/application search/lineage/impact operations
+-> E5 calibration corpora/packs and controlled promotion
 -> E6 optional Codebase Memory candidates
 -> E7 LSP/MCP/release/publishing
 ```
+
+## E5-A boundary
+
+Named calibration packs remain data/rule artifacts consumed by `wow-recognizers` under existing dependency limits. They cannot create a repository-specific dependency or make project/service code branch on addon/owner/path names.
+
+Calibration orchestration belongs above recognizers in later E5-B service tooling; immutable core-pack rollout belongs to E5-C.
 
 ## Changing the graph
 
