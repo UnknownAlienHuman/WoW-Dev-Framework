@@ -1,0 +1,154 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-graph-e4-b-impact-cases-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "request": {
+    "static_impact_request_id": null,
+    "lineage_graph_snapshot_id": null,
+    "change_set_id": null,
+    "target_graph_snapshot_id": null,
+    "change_root_ids": [],
+    "relation_axis_direction_profile_id": null,
+    "impact_category_profile_id": null,
+    "confidence_provenance_coverage_profile_id": null,
+    "budget_profile_id": null,
+    "continuation": null,
+    "canonical_sha256": null
+  },
+  "result": {
+    "static_impact_result_id": null,
+    "direct_affected_entity_ids": [],
+    "transitive_affected_entity_ids": [],
+    "impact_path_ids": [],
+    "possible_impact_path_ids": [],
+    "conflict_blocked_partition_ids": [],
+    "not_evaluated_partition_ids": [],
+    "coverage_manifest_id": null,
+    "omission_manifest_id": null,
+    "budget_report_id": null,
+    "continuation_id": null,
+    "validation_report_id": null,
+    "nonclaims": [
+      "static impact does not prove runtime breakage severity safety performance or fixability"
+    ],
+    "canonical_sha256": null
+  },
+  "path": {
+    "static_impact_path_id": null,
+    "root_change_or_assertion_id": null,
+    "target_generation_entity_ref": null,
+    "ordered_direct_relation_assertion_ids": [],
+    "impact_categories": [],
+    "effective_confidence": "Derived",
+    "decisive_proof_cap_record_id": null,
+    "evidence_ids": [],
+    "coverage_record_ids": [],
+    "conflict_ids": [],
+    "canonical_sha256": null
+  },
+  "cases": [
+    {
+      "case_id": "LIN-IMP-001",
+      "mutation": "changed-reference-api-to-direct-project-use",
+      "expected": "DirectReferenceImpact"
+    },
+    {
+      "case_id": "LIN-IMP-003",
+      "mutation": "two-edge-dependent-path",
+      "expected": "BoundedTransitiveImpact-with-path"
+    },
+    {
+      "case_id": "LIN-IMP-004",
+      "mutation": "path-flattened-to-direct-edge",
+      "expected_error": "lineage_impact_path_as_direct_edge_forbidden"
+    },
+    {
+      "case_id": "LIN-IMP-005",
+      "mutation": "possible-edge-in-path",
+      "expected": "PossibleImpact"
+    },
+    {
+      "case_id": "LIN-IMP-007",
+      "mutation": "conflicted-root-or-edge",
+      "expected_error": "lineage_impact_coverage_or_conflict_blocked"
+    },
+    {
+      "case_id": "LIN-IMP-008",
+      "mutation": "partial-relation-coverage",
+      "expected": "NotEvaluated-or-partial-impact"
+    },
+    {
+      "case_id": "LIN-IMP-009",
+      "mutation": "explicit-cross-universe-uses-api-bridge",
+      "expected": "allowed-separate-identities"
+    },
+    {
+      "case_id": "LIN-IMP-010",
+      "mutation": "same-name-implicit-cross-universe-bridge",
+      "expected_error": "lineage_impact_cross_universe_bridge_invalid"
+    },
+    {
+      "case_id": "LIN-IMP-011",
+      "mutation": "native-custom-cvar-signals-collapsed",
+      "expected_error": "lineage_impact_relation_axis_or_direction_forbidden"
+    },
+    {
+      "case_id": "LIN-IMP-012",
+      "mutation": "hook-path-claims-taint-combat-or-protected-safety",
+      "expected_error": "lineage_impact_runtime_breakage_severity_safety_claim_forbidden"
+    },
+    {
+      "case_id": "LIN-IMP-013",
+      "mutation": "load-path-claims-runtime-readiness",
+      "expected_error": "lineage_impact_runtime_breakage_severity_safety_claim_forbidden"
+    },
+    {
+      "case_id": "LIN-IMP-014",
+      "mutation": "structural-dependency-claims-runtime-breakage-or-severity",
+      "expected_error": "lineage_impact_runtime_breakage_severity_safety_claim_forbidden"
+    },
+    {
+      "case_id": "LIN-IMP-015",
+      "mutation": "high-fanout-target-graph",
+      "expected_error": "lineage_impact_truncated"
+    },
+    {
+      "case_id": "LIN-IMP-016",
+      "mutation": "cyclic-target-graph",
+      "expected": "cycle-safe-bounded-traversal"
+    },
+    {
+      "case_id": "LIN-IMP-017",
+      "mutation": "depth-node-edge-path-budget-reached",
+      "expected_error": "lineage_impact_budget_exceeded"
+    },
+    {
+      "case_id": "LIN-IMP-018",
+      "mutation": "no-new-evidence",
+      "expected": "not-global-no-impact-proof"
+    },
+    {
+      "case_id": "LIN-IMP-022",
+      "mutation": "target-graph-snapshot-switches-mid-query",
+      "expected_error": "lineage_impact_snapshot_or_generation_mismatch"
+    },
+    {
+      "case_id": "LIN-IMP-024",
+      "mutation": "one-two-n-traversal-workers",
+      "expected": "same-impact-result-bytes"
+    },
+    {
+      "case_id": "LIN-IMP-025",
+      "mutation": "cancel-during-traversal-or-serialization",
+      "expected_error": "lineage_operation_cancelled"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "all request lineage change target graph root relation impact confidence budget and continuation IDs",
+      "all target path relation assertion proof evidence coverage conflict omission and result IDs",
+      "all expected path/result/error bytes and SHA-256 values"
+    ]
+  }
+}
