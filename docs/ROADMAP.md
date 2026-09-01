@@ -3,8 +3,8 @@
 **Status:** operational documentation and implementation routing.
 
 ```text
-documentation frontier: E4-A complete
-next documentation package: E4-B explicit lineage/migration/impact
+documentation frontier: E4-C complete
+next documentation package: E5-A recognizer calibration corpora and named calibration packs
 implementation frontier: not started
 ```
 
@@ -21,9 +21,11 @@ No Rust workspace, `Cargo.toml`, `.rs` files, or CI workflows exist yet.
 | E3-B | Project Map, L0/L1, context packs and rendering | Complete | Not started |
 | E3-C | Service/application context acquisition and use cases | Complete | Not started |
 | E4-A | Exact-generation search shards, retrieval lanes, ranking and explanations | Complete | Not started |
-| E4-B | Explicit lineage, migration, replacement/removal/introduction and impact | Next | Not started |
-| E4-C | Search/lineage/impact service and CLI orchestration | Planned | Not started |
-| E5 | Named calibration packs with universal outputs | Planned | Not started |
+| E4-B | Explicit lineage, change, migration records and bounded static impact | Complete | Not started |
+| E4-C | Search/lineage/review/migration/impact service and CLI orchestration | Complete | Not started |
+| E5-A | Calibration corpora and named calibration packs with universal outputs | Next | Not started |
+| E5-B | Calibration runs, review and promotion submissions | Planned | Not started |
+| E5-C | Immutable core-pack publication, canary, rollout and rollback | Planned | Not started |
 | E6 | Optional Codebase Memory candidate bridge | Planned | Not started |
 | E7 | LSP/MCP, release, signing, publication and rollback | Planned | Not started |
 
@@ -95,33 +97,128 @@ exact SQLite/FTS/tokenizer/platform probes and measured thresholds
 all fixture/checksum pins frozen
 ```
 
-## E4-B — lineage, migration, and impact
+## E4-B — explicit lineage, migration records, and static impact
 
-Define explicit before/after generation models and independently validated assertions/candidates for:
+Documented contract:
+
+- [`../crates/wow-graph/e4/README.md`](../crates/wow-graph/e4/README.md)
+- [`../crates/wow-project/E4_B_LINEAGE_INPUTS.md`](../crates/wow-project/E4_B_LINEAGE_INPUTS.md)
+- [`../crates/wow-reference/E4_B_TRANSITION_EVIDENCE.md`](../crates/wow-reference/E4_B_TRANSITION_EVIDENCE.md)
+- [`../crates/wow-search/e4/LINEAGE_CANDIDATE_HANDOFF.md`](../crates/wow-search/e4/LINEAGE_CANDIDATE_HANDOFF.md)
+
+Build:
 
 ```text
-same entity
-renamed
-moved
-replaced or superseded
-removed
-introduced
-signature/type/restriction/contract change
-migration compatibility
-bounded static impact
+exact before/after same-universe generation bindings
+independent project stable-identity/fingerprint/change partitions
+exact Reference transition/deprecation/replacement partitions
+Candidate-only search proposal partitions
+bounded blocking and ambiguity components
+review decisions under explicit proof ceilings
+immutable LineageGraphSnapshot
+change/absence/replacement/migration candidate records
+bounded static-impact reason paths
 ```
 
-E4-A rank and similarity are Candidate evidence only. Authoritative conclusions require exact source/reference/project/graph evidence, generation/profile closure, conflict/coverage resolution, and explicit proof ceilings.
+Gate:
 
-## E4-C — service and CLI
+```text
+no cross-generation entity ID merge
+no same-name/path/signature/fingerprint/rank/uniqueness promotion
+no unrestricted all-pairs comparison
+no forced one-to-one mapping for copy/split/merge/ambiguity
+no search candidate above Candidate
+no accepted confidence above the minimum producer/relation/review/coverage ceiling
+no rejected/deferred/conflicted proposal deletion
+no Removed/Introduced without exact complete negative authority
+no same-lineage -> replacement shortcut
+no migration recipe execution
+no static path -> runtime breakage/severity/performance/taint/combat/Secret/fixability
+immutable publication and exact retained continuation
+all proposal/component/review/change/impact fixtures and checksums frozen
+```
 
-Expose search, candidate explanation, explicit candidate selection, lineage, migration, and impact through `wow-service` and `apps/wow`.
+## E4-C — service and CLI orchestration
 
-`wow-context` continues to accept exact selected roots only. Service does not hide ranking or auto-select a replacement without an explicit reviewed policy and visible evidence.
+Documented contracts:
 
-## E5–E7
+- [`../crates/wow-service/e4/README.md`](../crates/wow-service/e4/README.md)
+- [`../apps/wow/e4/README.md`](../apps/wow/e4/README.md)
 
-- E5: audited calibration packs over universal facts with repository/name/path mutation tests.
+Build:
+
+- explicit search index status/build/validation and query/explain/continuation orchestration;
+- exact current/owner/shard acquisition with finite stable-double-collect where requested;
+- explicit search result/candidate selection receipts;
+- exact selected entity to existing E3-C context handoff;
+- project/reference/search lineage producer orchestration;
+- review authorization adapter plus independent graph semantic validation;
+- immutable lineage build/review publication and query operations;
+- advisory migration candidate/recipe validation;
+- bounded static-impact plan/run/continue/explain operations;
+- idempotency, response-loss recovery, retention and closure-before-success;
+- thin `apps/wow` commands, strict inputs, canonical output and exit mapping.
+
+Gate:
+
+```text
+no hidden shard build or newest/first/last artifact choice
+no automatic top-1/sole/rank/name candidate selection
+no rank/query text as context or lineage authority
+no reviewer authorization from GitHub/OS/CLI/file identity
+review authorization and graph proof both pass independently
+review cannot exceed proof ceiling and publishes a new immutable snapshot
+no source edit or migration apply
+no static impact runtime/severity overclaim
+no path flattened to direct edge
+no continuation current refresh or cumulative-budget reset
+no public success before reverse resource closure
+no raw SQL/FTS/source/store/model/CBM/tool access
+apps depend on wow-service only and call it once
+deterministic service and CLI bytes/status/exit across workers/order/retry/cache
+all owner-port, authorization, response-loss, privacy, corpus and checksum gates frozen
+```
+
+## E5-A — calibration corpora and named packs
+
+Define exact audited corpora and candidate named calibration packs without introducing repository-specific production semantics.
+
+Required inputs:
+
+- pinned exact repositories/commits and license/provenance;
+- exact project/analyzer/graph publications;
+- hand-reviewed expected universal roles and relations;
+- positive, clean-negative, near-miss, adversarial, copied/vendor/generated and ambiguous cases;
+- repository/addon/owner/path/local-identifier rename and relocation mutations;
+- exact coverage/conflict/NotEvaluated labels;
+- deterministic metrics and failure ceilings.
+
+Required output boundary:
+
+```text
+named corpus/pack identity
+-> universal typed recognizer facts/proposals only
+-> graph-independent validation and owner evidence
+-> no named addon/framework role in final semantic output
+```
+
+Hard stops:
+
+- no production branch on repository/addon/owner/path/popularity;
+- no pattern copied only because one donor uses it;
+- no false positive hidden by corpus weighting;
+- no model/embedding source of truth;
+- no source execution or runtime claim;
+- disabling/deleting a named pack removes only its producer partitions and coverage;
+- no automatic core-pack promotion in E5-A.
+
+## E5-B and E5-C
+
+- **E5-B:** durable calibration runs, metric reports, reviewer authorization, candidate promotion submissions, regression and anti-overfitting gates.
+- **E5-C:** immutable core-pack publication, staged canary, rollout/rollback, last-known-good identity and removal of stale producer partitions.
+
+## E6–E7
+
 - E6: optional Codebase Memory bridge; candidates remain external and degradable.
 - E7: thin LSP/MCP and release/signing/publication/rollback operations.
 
@@ -130,5 +227,5 @@ Expose search, candidate explanation, explicit candidate selection, lineage, mig
 - Later documentation cannot bypass earlier implementation gates.
 - Architecture changes require an ADR and concrete failure of the accepted design.
 - Stable contracts link the current external WoW engineering KB rather than copying patch-sensitive claims.
-- Missing tools/probes/benchmarks/evaluations/client tests are skipped or NotEvaluated, never pass.
+- Missing tools/probes/benchmarks/evaluations/authorization/client tests are skipped, blocked or NotEvaluated, never pass.
 - Outcomes and proof gates matter; percentages and directory counts do not.
