@@ -1,0 +1,184 @@
+{
+  "schema_version": 1,
+  "fixture_id": "apps-wow-e3-c-cli-cases-v1",
+  "state": "documentation-only-pending-vector-freeze",
+  "root_token_profile": {
+    "grammar": "<RootKind>@<base64url-no-pad(canonical UTF-8 ID bytes)>",
+    "profile_id": null,
+    "valid_vectors": [],
+    "invalid_vectors": []
+  },
+  "cases": [
+    {
+      "case_id": "CLI3-STATUS-001",
+      "argv": [
+        "wow",
+        "context",
+        "status",
+        "--project-store",
+        "<ProjectStoreId>",
+        "--publication",
+        "current",
+        "--detail",
+        "capabilities",
+        "--output",
+        "envelope-json"
+      ],
+      "expected_service_operation": "context_status",
+      "expected_service_invocations": 1
+    },
+    {
+      "case_id": "CLI3-MAP-001",
+      "argv": [
+        "wow",
+        "context",
+        "map",
+        "--project-store",
+        "<ProjectStoreId>",
+        "--publication",
+        "store-generation:<ProjectStoreGenerationId>",
+        "--platform",
+        "omitted",
+        "--map-target",
+        "primary",
+        "--map-profile-id",
+        "<ProjectMapProfileId>"
+      ],
+      "expected_service_operation": "context_map",
+      "expected_service_invocations": 1
+    },
+    {
+      "case_id": "CLI3-INSP-001",
+      "argv": [
+        "wow",
+        "context",
+        "inspect",
+        "--project-store",
+        "<ProjectStoreId>",
+        "--publication",
+        "current",
+        "--root",
+        "graph-entity@<base64url-id>",
+        "--level",
+        "both",
+        "--l0-profile-id",
+        "<L0ProfileId>",
+        "--l1-profile-id",
+        "<L1ProfileId>"
+      ],
+      "expected_service_operation": "context_inspect",
+      "expected_service_invocations": 1
+    },
+    {
+      "case_id": "CLI3-BUILD-002",
+      "argv": [
+        "wow",
+        "context",
+        "build",
+        "--project-store",
+        "<ProjectStoreId>",
+        "--publication",
+        "publication-set:<ProjectPublicationSetId>",
+        "--root",
+        "graph-entity@<base64url-id>",
+        "--context-profile-id",
+        "<ContextProfileSetId>",
+        "--renderer-profile-id",
+        "<RendererProfileId>",
+        "--output",
+        "artifact"
+      ],
+      "expected_service_operation": "context_build",
+      "expected_service_invocations": 1,
+      "artifact_mode_requires_exactly_one_renderer": true
+    },
+    {
+      "case_id": "CLI3-CONT-001",
+      "argv": [
+        "wow",
+        "context",
+        "continue",
+        "--continuation",
+        "<base64url-continuation>",
+        "--output",
+        "envelope-json"
+      ],
+      "expected_service_operation": "context_continue",
+      "forbidden_options": [
+        "--publication",
+        "--root",
+        "--context-profile-id",
+        "--budget-profile-id"
+      ]
+    },
+    {
+      "case_id": "CLI3-VAL-001",
+      "argv": [
+        "wow",
+        "context",
+        "validate",
+        "--input",
+        "<explicit-artifact-path>",
+        "--artifact-kind",
+        "semantic-pack",
+        "--media-type",
+        "application/json",
+        "--validation-profile-id",
+        "<ValidationProfileId>",
+        "--origin-closure",
+        "structural"
+      ],
+      "expected_service_operation": "context_validate",
+      "host_path_in_service_request": false
+    },
+    {
+      "case_id": "CLI3-RENDER-002",
+      "argv": [
+        "wow",
+        "context",
+        "render",
+        "--input",
+        "-",
+        "--media-type",
+        "application/json",
+        "--renderer-profile-id",
+        "<RendererProfileId>",
+        "--origin-closure",
+        "structural",
+        "--output",
+        "artifact"
+      ],
+      "expected_service_operation": "context_render",
+      "input_marker_in_service_request": false
+    },
+    {
+      "case_id": "CLI3-CMD-008",
+      "mutation": "application_reads_current_record_before_service",
+      "expected": "architecture-test-failure"
+    },
+    {
+      "case_id": "CLI3-ROOT-007",
+      "mutation": "interpret_root_id_as_filesystem_path",
+      "expected": "architecture-test-failure"
+    },
+    {
+      "case_id": "CLI3-DEP-002",
+      "mutation": "add_direct_dependency_on_wow-context",
+      "expected": "architecture-test-failure"
+    },
+    {
+      "case_id": "CLI3-CONT-003",
+      "mutation": "add_new_publication_or_profile_to_continuation",
+      "expected_exit": 64,
+      "service_invocations": 0
+    },
+    {
+      "case_id": "CLI3-CFG-005",
+      "mutation": "auto_load_config_from_cwd_or_environment",
+      "expected": "architecture-test-failure"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}

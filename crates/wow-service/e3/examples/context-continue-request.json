@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e3-c-context-continue-request-v1",
+  "state": "documentation-only-pending-id-freeze",
+  "request": {
+    "request_id": null,
+    "operation": "context_continue",
+    "service_context_continuation_base64": null,
+    "expected_original_request_id": null,
+    "expected_original_semantic_pack_id": null,
+    "current_selectors": [],
+    "profile_overrides": [],
+    "budget_reset": null,
+    "canonical_sha256": null
+  },
+  "required_bound_fields": [
+    "exact original ContextUniverseSetId",
+    "exact project/store/graph/reference generations",
+    "exact original root and profile IDs",
+    "exact frontier and selected/omitted manifests",
+    "exact total budget state",
+    "valid owner retention receipt IDs"
+  ],
+  "mutation_cases": [
+    {
+      "case_id": "SVC3-CONT-002",
+      "mutation": "add_CurrentPublished_selector",
+      "expected_error": "service_context_continuation_current_resolution_forbidden"
+    },
+    {
+      "case_id": "SVC3-CONT-007",
+      "mutation": "reset_total_budget",
+      "expected_error": "service_context_continuation_total_budget_reset_forbidden"
+    },
+    {
+      "case_id": "SVC3-CONT-004",
+      "mutation": "remove_retained_generation",
+      "expected_error": "service_context_continuation_generation_unavailable"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}

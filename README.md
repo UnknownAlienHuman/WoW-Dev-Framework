@@ -2,158 +2,240 @@
 
 **Rust-first, editor-independent code intelligence and agent tooling for World of Warcraft addon development.**
 
-> **Status:** architecture and repository bootstrap. Implementation has not started.
+> **Documentation frontier:** E3-C is complete: exact Reference Pack contracts, analyzer/project/graph/persistence contracts, a separately published Blizzard UI source universe, deterministic Project Maps and L0/L1 context packs, plus service/CLI context orchestration.
 >
-> **Compatibility model:** every result is evaluated against one exact World of Warcraft reference profile. The repository does not embed a floating “latest” baseline; E0 must pin a concrete fixture profile, while live patch guidance remains in the separate [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb).
+> **Implementation frontier:** not started. The first executable work remains E0-A/E0, not E3 or E4. No `Cargo.toml`, Rust source, or CI workflow exists yet.
 >
-> **Immediate milestone:** build the E0 vertical slice. Do not replace it with another architecture rewrite.
+> **Compatibility model:** every result binds one exact World of Warcraft profile and exact project/reference/source generations. Live patch guidance is never copied as a floating baseline; it remains routed through the separate [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb).
 
-WoW Dev Framework is intended to give coding agents and addon developers a compact, exact, current, and explainable technical surface for Blizzard UI and addon repositories. It combines versioned API/reference data, EmmyLua analysis, a WoW-specific project graph, deterministic search, diagnostics, patch-impact analysis, and bounded agent context.
+WoW Dev Framework is designed to give coding agents and addon developers a compact, exact, explainable technical surface over addon repositories, Blizzard API contracts, Blizzard UI implementation source, static structure, diagnostics, search, migration evidence, and bounded source context.
 
-It is not a generic RAG product, not a replacement for Codebase Memory, not a VS Code configuration mutator, and not a runtime injection platform.
+It is not a generic RAG product, an editor-settings mutator, a runtime injection platform, a replacement for Codebase Memory, or a model-authority layer.
 
 ## What the framework should answer
 
-- Does this API, event, widget method, template, mixin, or package exist in the selected build?
-- What evidence shows that an API was removed, moved, deprecated, or replaced?
-- Which package, TOC, XML template, module, registry, or state root owns a symbol?
-- Can a file or symbol be reached through the actual TOC/XML load graph?
-- Which project surfaces are affected by an API, hook, state-path, package, or restriction change?
-- Is an operation involving a Secret Value, protected action, forbidden object, or Blizzard-managed surface statically safe?
-- What is the smallest sufficient source context an agent needs before editing code?
-- Which conclusion is proven, derived, possible, merely a candidate, or not evaluated because coverage is incomplete?
+- Does an API, event, method, template, mixin, package, or field exist in one exact profile?
+- What exact project/source/reference evidence supports the answer?
+- Which package, TOC, XML document, file, module, registry, state root, or lifecycle surface owns an entity?
+- How is it reached through the real TOC/XML/dependency/load graph?
+- Which relation is direct, derived, possible, conflicted, omitted, or not evaluated?
+- What is the smallest trustworthy Project Map, L0/L1 skeleton, reason path, or source excerpt needed for a task?
+- Which findings are generic Lua diagnostics versus WoW-specific diagnostics?
+- Which migration/lineage/impact conclusion is proven, and which is only a candidate?
+- Which operation is statically permitted, and which still requires exact runtime evidence?
 
-## Product model
+## Contract stack
 
 ```text
-Blizzard UI snapshot
-    ├── raw APIDocumentation catalog
-    ├── Ketho-compatible annotation pack
-    ├── FrameXML and package graph
-    ├── restriction and Secret facets
-    └── build lineage
+E0
+    wow-core identities/evidence/coverage/results
+    fixture ReferenceView
+    pinned EmmyLua adapter
+    minimal project generation
+    two bounded WoW rules
+    status/check service and CLI
 
-addon repository
-    ├── EmmyLua syntax and semantic facts
-    ├── TOC/XML/load facts
-    ├── universal framework conventions
-    ├── project graph
-    └── generated Project Map
+E1
+    SQLite/ReferenceStore foundation
+    persistent ReferenceView build
+    annotation generation and parity
+    Reference Pack build/validation
 
-optional Codebase Memory bridge
-    └── broad semantic source discovery and candidate traces
+E2
+    typed assertion graph
+    declarative structural recognizers
+    full TOC/XML/load/analyzer project candidate
+    WAL ProjectStore coherent publication
 
-all layers
-    → exact lookup and search
-    → ownership/load/call/state trees
-    → compact source skeletons
-    → diagnostics and planning
-    → patch-impact analysis
-    → agent verification
+E3-A
+    exact separately scoped Blizzard UI source universe
+    project/analyzer/graph publication
+    bounded SkeletonInputView
+
+E3-B
+    exact ContextUniverseSet
+    Project Map and L0/L1 skeletons
+    deterministic expansion, pruning, source boundaries and context packs
+
+E3-C
+    resolve current exactly once
+    acquire coherent retained views and leases
+    context status/map/inspect/build/continue/validate/render service operations
+    thin apps/wow CLI projection
+
+E4-A next
+    exact, alias, FTS, shape and graph-assisted retrieval
+    deterministic ranked candidates and explanations
+
+E4-B+
+    explicit lineage/migration/impact
+    calibration packs
+    optional Codebase Memory candidates
+    LSP/MCP and release operations
 ```
 
-The planned implementation is divided into four operational products:
+The machine-readable state and exact implementation order are in [`crates/MANIFEST.json`](crates/MANIFEST.json) and [`crates/WORKSTREAMS.md`](crates/WORKSTREAMS.md).
 
-1. **`wow-reference-builder`** — compiles immutable, versioned Blizzard Reference Packs and Ketho-compatible annotations.
-2. **`wow-emmy-ls`** — hosts upstream EmmyLua analysis and merges generic Lua diagnostics with WoW-specific diagnostics in one project generation.
-3. **`wow-index`** — owns the project/UI graph, exact and historical search, lineage, skeletons, planning, patch impact, and restriction facts.
-4. **`wow-cbm-bridge`** — optionally queries an installed Codebase Memory MCP server. It never writes directly to Codebase Memory storage.
+## Architecture
+
+```text
+exact Reference Pack
+    raw APIDocumentation and metadata
+    normalized API/type/event/restriction facts
+    corrections, conflicts and coverage
+    deterministic annotation artifacts
+
+exact user addon publication
+    source snapshot
+    selected TOC flavor
+    bounded XML and virtual Lua units
+    EmmyLua facts and diagnostics
+    recognizer producer partitions
+    ProjectSnapshot + GraphSnapshot
+
+exact Blizzard UI source publication
+    separate source universe and ProjectStore
+    package/load/XML/template/mixin/analyzer/graph records
+    implementation evidence, never automatic API/runtime authority
+
+context layer
+    separate exact universe binding
+    Project Maps
+    L0/L1 and closed control/effect projections
+    bounded source excerpts and evidence closure
+    semantic context packs and deterministic renderers
+
+service/application layer
+    exact current/exact publication selection
+    retained view/lease lifecycle
+    use-case sequencing and canonical envelopes
+    thin CLI transport and exit codes
+
+later retrieval/history layer
+    search candidates and explanations
+    explicit lineage/migration/impact assertions
+    optional external semantic candidates
+```
 
 ## Non-negotiable invariants
 
-- Blizzard UI content is the platform authority; a mirror is only an acquisition provider.
-- EmmyLua is pinned behind one adapter and is not forked by default.
-- Emmy syntax and semantic facts are the sole correctness-path Lua parser output.
-- Ketho and Numy are differential oracles, not hidden runtime dependencies.
-- Raw Blizzard metadata and generated annotations are separate projections.
-- One project generation uses one active reference profile; profiles are never mixed in diagnostics.
-- WoW ownership is multi-axis: lexical, package, load, object, inheritance, registration, lifecycle, state, and call relations remain distinct.
-- Named framework packs contain declarative universal recognizers; production logic never branches on an addon repository name.
-- Exact, migration, and lineage evidence rank before fuzzy or semantic similarity.
-- Unknown remains unknown. Missing coverage never becomes a clean negative answer.
-- SQLite, FTS5, adjacency tables, and bounded in-memory projections are the default storage stack.
-- Agents receive skeletons and source handles before full files.
+- One result uses one exact coherent generation/profile set; no mixed current/latest data.
+- `CurrentPublished` is resolved once at the service boundary and never refreshed mid-request.
+- Independent project, Blizzard UI, and reference stores are not falsely described as a distributed atomic snapshot.
+- User project, Blizzard UI implementation, Reference Pack, external candidate, runtime, and historical universes remain distinct.
+- EmmyLua is the sole correctness-path Lua parser/analyzer and is pinned behind one adapter.
+- TOC/XML parsing is bounded and nonexecuting; source/repository scripts never run.
+- Graph assertions retain producer, evidence, provenance, confidence, coverage, conflicts, and generation identity.
+- Ownership, lexical, load, object, inheritance, registration, lifecycle, state, call, and later lineage axes remain distinct.
+- A reason path never becomes a silent direct edge.
+- Named addon/framework packs can calibrate universal recognizers; production semantics never branch on repository/addon/path/popularity names.
+- API/reference contract, implementation source, runtime observation, and community evidence are different authority classes.
+- Missing coverage never becomes a clean negative answer.
+- `Possible`, `Candidate`, conflict, partial, truncated, cancelled, and `NotEvaluated` are never upgraded or hidden.
+- Project Map and context are projections, not a second graph or new authority.
+- Source text remains structurally isolated untrusted data and cannot control profiles, tools, headings, or agent instructions.
+- Exact token counts require a frozen exact tokenizer and framing profile over exact final bytes.
+- Applications depend on `wow-service` only and never reproduce domain algorithms.
+- No public success precedes mandatory resource closure.
+- Search produces candidates; `wow-service` passes explicit exact roots to `wow-context`. Context does not hide ranking.
 
-## Planned agent surface
+## Documented CLI surface
+
+The executable CLI does not exist yet. Current contracts define:
 
 ```text
-wow_status
-wow_lookup
-wow_search
-wow_tree
-wow_skeleton
-wow_plan
-wow_check
-wow_patch_impact
-wow_index_repo
-wow_runtime_review
+wow status
+wow check
+
+wow context status
+wow context map
+wow context inspect
+wow context build
+wow context continue
+wow context validate
+wow context render
+
+wow-reference-builder build
+wow-reference-builder validate
+wow-reference-builder rebuild-compare
 ```
 
-The public MCP/CLI/LSP surface should remain smaller than the internal service API. Related operations are routed internally instead of being exposed as dozens of narrowly scoped tools.
+Deferred E4/E7 commands are not available merely because their architecture is described.
 
-## Current vertical slice
+## First implementation target
+
+Rust implementation still begins with the E0 vertical slice:
 
 ```text
 pinned upstream EmmyLua analysis
-+ one generated WoW annotation fixture
-+ one APIDocumentation fixture
++ one frozen ReferenceView fixture
++ one generated annotation fixture
 + one generic Lua diagnostic
 + one WoW API diagnostic
-+ one Secret-local diagnostic
-→ one deterministic `wow check` result
++ one bounded Secret-local diagnostic
+-> one deterministic wow check result
 ```
 
-Acceptance requires merged diagnostics, exact profile identity, explicit evidence and coverage, no editor-setting mutation, and byte-identical sorted output across repeated runs.
+Agents must not start persistent stores, the full graph, Blizzard UI indexing, context, search, LSP, MCP, or release code before their prerequisite implementation and fixture/checksum gates pass.
 
-## Documentation
+## Documentation routes
 
-Start with the [documentation index](docs/README.md).
+Start with:
 
-- [Project vision and boundaries](docs/PROJECT_VISION.md)
-- [Normative architecture](docs/ARCHITECTURE.md)
-- [Provenance, confidence, and coverage](docs/PROVENANCE_AND_COVERAGE.md)
-- [Reference Pack contract](docs/REFERENCE_PACK.md)
-- [EmmyLua integration and diagnostics](docs/EMMYLUA_AND_DIAGNOSTICS.md)
-- [Graph, search, skeletons, and planning](docs/GRAPH_SEARCH_AND_PLANNING.md)
-- [Codebase Memory bridge](docs/CODEBASE_MEMORY_BRIDGE.md)
-- [Secret Values and restrictions](docs/SECRET_VALUES_AND_RESTRICTIONS.md)
-- [Agent workflow](docs/AGENT_WORKFLOW.md)
-- [Security model](docs/SECURITY_MODEL.md)
-- [Test strategy](docs/TEST_STRATEGY.md)
-- [Roadmap](docs/ROADMAP.md)
-- [Architecture decisions](docs/DECISIONS.md)
-- [Research baseline](docs/RESEARCH_BASELINE.md)
-- [Candidate ideas](docs/IDEAS.md)
-- [Glossary](docs/GLOSSARY.md)
+- [`AGENTS.md`](AGENTS.md)
+- [`docs/README.md`](docs/README.md)
+- [`crates/README.md`](crates/README.md)
+- [`crates/MANIFEST.json`](crates/MANIFEST.json)
+- [`crates/DEPENDENCY_GRAPH.md`](crates/DEPENDENCY_GRAPH.md)
+- [`crates/WORKSTREAMS.md`](crates/WORKSTREAMS.md)
+- [`docs/ROADMAP.md`](docs/ROADMAP.md)
+
+Major domain contracts:
+
+- [`crates/wow-core/`](crates/wow-core/README.md)
+- [`crates/wow-reference/`](crates/wow-reference/README.md)
+- [`crates/wow-emmy/`](crates/wow-emmy/README.md)
+- [`crates/wow-store/`](crates/wow-store/README.md)
+- [`crates/wow-project/`](crates/wow-project/README.md)
+- [`crates/wow-graph/`](crates/wow-graph/README.md)
+- [`crates/wow-recognizers/`](crates/wow-recognizers/README.md)
+- [`crates/wow-rules/`](crates/wow-rules/README.md)
+- [`crates/wow-context/`](crates/wow-context/README.md)
+- [`crates/wow-service/`](crates/wow-service/README.md)
+- [`apps/wow/`](apps/wow/README.md)
+- [`crates/wow-search/`](crates/wow-search/README.md)
 
 ## Repository layout
 
 ```text
-crates/      production Rust libraries, created only at proven boundaries
-apps/        CLI, MCP, LSP, and service binaries
+crates/      production library contracts and, later, Rust crates
+apps/        thin CLI/LSP/MCP/service adapters
 schemas/     versioned public data contracts
-tools/       builders, evaluators, corpus, migration, and release utilities
-tests/       fixtures, golden tests, evaluations, and compatibility probes
-docs/        normative contracts, operating guidance, research, and archive
+tools/       builders, evaluators, corpus, migration and release utilities
+tests/       fixtures, golden tests, evaluations and compatibility probes
+docs/        architecture, operating guidance, roadmap, research and archive
 ```
 
-Placeholder directory documents define intended boundaries. A crate is created only when it has an independently testable responsibility; line count is not a reason to split code.
+A directory is not an activated crate. Empty placeholder implementations and default-success stubs are forbidden.
 
 ## Related knowledge base
 
-Patch-sensitive WoW engineering research, field notes, regressions, and current platform guidance live separately:
+Patch-sensitive WoW engineering research, current API/security guidance, field reports, active upstream issues, and historical evidence live separately:
 
-- **[WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb)**
+**[WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb)**
 
-This repository references that knowledge base; it does not duplicate it. A research conclusion is promoted here only when it becomes an explicit contract, ADR, schema, fixture, test, or release input.
+This framework links that knowledge base. A conclusion is copied here only when it becomes a stable contract, ADR, schema, fixture, test, or exact release input.
 
-## Contributing
+## Repository policy
 
-Read [AGENTS.md](AGENTS.md) and [CONTRIBUTING.md](CONTRIBUTING.md) before changing contracts or adding implementation code. Architecture changes must identify the affected invariant, decision, acceptance gate, and migration impact.
+- English is the canonical architecture/contract language.
+- Addon localization content can remain in its target languages.
+- No CI/workflow is added without an explicit owner request.
+- Missing tools, probes, benchmarks, evaluation, client tests, or implementation evidence are reported as skipped/blocked/NotEvaluated, never pass.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT. See [`LICENSE`](LICENSE).
 
 ## Author
 

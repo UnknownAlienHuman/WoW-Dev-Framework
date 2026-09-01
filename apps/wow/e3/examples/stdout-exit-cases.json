@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "fixture_id": "apps-wow-e3-c-stdout-exit-cases-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "cases": [
+    {
+      "case_id": "CLI3-JSON-001",
+      "service_result": "complete-context-result",
+      "output_mode": "envelope-json",
+      "expected_stdout_sha256": null,
+      "expected_final_lf_count": 1,
+      "expected_stderr": "",
+      "expected_exit": 0
+    },
+    {
+      "case_id": "CLI3-JSON-002",
+      "service_result": "truncated-context-result",
+      "output_mode": "envelope-json",
+      "expected_stdout_sha256": null,
+      "expected_exit": 2
+    },
+    {
+      "case_id": "CLI3-OUTART-001",
+      "service_result": "one-eligible-rendered-artifact",
+      "output_mode": "artifact",
+      "expected_stdout_equals_artifact_bytes": true,
+      "append_final_lf": false,
+      "expected_stdout_sha256": null,
+      "expected_exit": 0
+    },
+    {
+      "case_id": "CLI3-OUTART-002",
+      "service_result": "one-eligible-artifact-with-truncated-status",
+      "output_mode": "artifact",
+      "expected_stdout_equals_artifact_bytes": true,
+      "expected_exit": 2
+    },
+    {
+      "case_id": "CLI3-VAL-002",
+      "service_result": "complete-validation-with-Invalid-payload",
+      "output_mode": "envelope-json",
+      "expected_stdout_sha256": null,
+      "expected_exit": 1
+    },
+    {
+      "case_id": "CLI3-EXIT-003",
+      "service_result": "structured-selector-or-generation-failure",
+      "expected_exit": 3
+    },
+    {
+      "case_id": "CLI3-EXIT-004",
+      "service_result": "internal-or-resource-close-failure",
+      "expected_exit": 4
+    },
+    {
+      "case_id": "CLI3-EXIT-005",
+      "parser_state": "invalid-root-or-artifact-transport-input",
+      "service_invocations": 0,
+      "expected_stdout": "",
+      "expected_stderr_sha256": null,
+      "expected_exit": 64
+    },
+    {
+      "case_id": "CLI3-EXIT-006",
+      "service_result": "cancelled",
+      "expected_exit": 130
+    },
+    {
+      "case_id": "CLI3-STREAM-004",
+      "condition": "broken_pipe_during_output",
+      "expected_service_invocations": 1,
+      "expected_second_output": false,
+      "expected_exit": 4
+    },
+    {
+      "case_id": "CLI3-JSON-008",
+      "mutation_dimensions": [
+        "terminal-width",
+        "color",
+        "locale",
+        "timezone",
+        "cwd",
+        "temp-root",
+        "clock"
+      ],
+      "expected_stdout_and_exit_unchanged": true
+    },
+    {
+      "case_id": "CLI3-TEXT-002",
+      "service_result": "partial-truncated-with-conflicts-omissions-continuation",
+      "required_text_fields": [
+        "operation",
+        "status",
+        "exact-resolved-generations",
+        "partial-or-truncated",
+        "conflict-count",
+        "omission-count",
+        "continuation-state"
+      ],
+      "forbidden_text_fields": [
+        "source-excerpt-body",
+        "safe",
+        "runtime-verified",
+        "tests-passed"
+      ],
+      "expected_exit": 2
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}

@@ -1,0 +1,200 @@
+{
+  "schema_version": 1,
+  "contract_id": "wow-service/e3-c/context-acquisition-and-use-cases",
+  "state": "implementation-ready-documentation-no-rust-code",
+  "work_package": "E3-C",
+  "crate": "wow-service",
+  "context_path_direct_dependencies": [
+    "wow-core",
+    "wow-store",
+    "wow-reference",
+    "wow-project",
+    "wow-graph",
+    "wow-context"
+  ],
+  "inactive_context_path_dependencies": [
+    "wow-annotations",
+    "wow-emmy",
+    "wow-recognizers",
+    "wow-rules",
+    "wow-search",
+    "wow-cbm"
+  ],
+  "prerequisites": [
+    {"contract_id":"wow-core/e0-a/1","implementation_and_fixture_freeze_required":true},
+    {"contract_id":"wow-store/e2-d/projectstore-coherent-publication","implementation_and_fixture_freeze_required":true},
+    {"contract_id":"wow-reference/e1-persistent-schema-and-build-plan","implementation_and_fixture_freeze_required":true},
+    {"contract_id":"wow-project/e2-c/toc-xml-load-incremental-index","implementation_and_fixture_freeze_required":true},
+    {"contract_id":"wow-graph/e2-a/typed-assertion-partition-query-core","implementation_and_fixture_freeze_required":true},
+    {"contract_id":"wow-project/e3-a/blizzard-ui-source-index","implementation_and_fixture_freeze_required":true,"relationship":"required for profiles binding Blizzard UI source"},
+    {"contract_id":"wow-context/e3-b/project-map-l0-l1-context-pack","implementation_and_fixture_freeze_required":true}
+  ],
+  "public_operations": [
+    "context_status",
+    "context_map",
+    "context_inspect",
+    "context_build",
+    "context_continue",
+    "context_validate",
+    "context_render"
+  ],
+  "publication_selectors": [
+    "ExactStoreGeneration",
+    "ExactPublicationSet",
+    "CurrentPublished"
+  ],
+  "platform_selector_states": [
+    "Omitted",
+    "ExactStoreGeneration",
+    "ExactPublicationSet",
+    "CurrentPublished"
+  ],
+  "status_precedence": [
+    "failed",
+    "cancelled",
+    "not_evaluated",
+    "truncated",
+    "partial",
+    "complete"
+  ],
+  "validation_states": [
+    "Valid",
+    "Invalid",
+    "NotEvaluated"
+  ],
+  "owner_ports": [
+    "ProjectPublicationAcquirePort",
+    "ReferenceAcquirePort",
+    "ContextEnginePort",
+    "ContinuationRetentionPort"
+  ],
+  "acquisition_order": [
+    "primary-project-publication",
+    "optional-platform-publication",
+    "exact-reference-view",
+    "context-invocation-resources"
+  ],
+  "release_order": [
+    "context-invocation-resources",
+    "exact-reference-view",
+    "optional-platform-publication",
+    "primary-project-publication"
+  ],
+  "domain_types": [
+    "ContextServiceConfiguration",
+    "ProjectPublicationSelector",
+    "OptionalPlatformSelector",
+    "ExpectedCurrentGuard",
+    "ReferenceSelectionGuard",
+    "ContextStatusRequest",
+    "ContextMapServiceRequest",
+    "ContextInspectServiceRequest",
+    "ContextBuildServiceRequest",
+    "ContextContinueServiceRequest",
+    "ContextValidateServiceRequest",
+    "ContextRenderServiceRequest",
+    "ResolvedPublicationSelection",
+    "ResolvedContextSelectionSet",
+    "ServiceContextLeaseSet",
+    "ContextServiceInvocationPlan",
+    "ContextOperationOutcome",
+    "ResourceClosureReport",
+    "ContextServiceStatus",
+    "ContextServiceResultEnvelope",
+    "ContextServiceFailureResult",
+    "ContextServiceCancelledResult",
+    "ServiceContextContinuation",
+    "ContextContinuationRetentionReceipt"
+  ],
+  "active_scope": [
+    "exact-service-configuration-and-profile-alias-resolution",
+    "one-time-current-and-exact-publication-selection",
+    "fixed-order-multi-owner-acquisition",
+    "exact-project-graph-reference-context-universe-compatibility",
+    "resource-lease-cancellation-close-and-continuation-retention-lifecycle",
+    "context-status-map-inspect-build-continue-validate-render-use-cases",
+    "exact-root-and-profile-policy",
+    "context-artifact-validation-and-render-delegation",
+    "conservative-operation-status-and-canonical-result-envelopes",
+    "thin-app-request-result-handoff",
+    "security-privacy-budgets-failure-isolation-and-determinism",
+    "E0-and-E1-service-regression-preservation"
+  ],
+  "deferred_scope": [
+    "search-fuzzy-natural-language-root-resolution",
+    "lineage-migration-patch-impact",
+    "rule-execution-or-new-findings-in-context-operations",
+    "model-embedding-reranking-codebase-memory",
+    "physical-context-cache",
+    "source-project-editing-tool-authorization-runtime-probes",
+    "lsp-mcp-http-daemon-and-distributed-session-transports",
+    "release-signing-publication-and-ci"
+  ],
+  "hard_rules": [
+    "service is the only multi-owner orchestration boundary and applications depend on service only",
+    "each symbolic current selector resolves exactly once and is never refreshed during the operation",
+    "independent current stores are not claimed as one distributed atomic snapshot",
+    "no hidden retry rebase last-known-good or generation fallback",
+    "ReferenceView selection is exact from selected publication bindings or an exact guard",
+    "exact roots only and no search or natural-language resolution in E3-C",
+    "owner ports are narrow typed and expose no raw storage analyzer parser or mutable handles",
+    "acquisition follows the frozen global order and release follows the reverse order",
+    "no public success envelope before mandatory resource closure completes",
+    "close failure cannot be hidden in complete partial or truncated success",
+    "continuation reopens exact retained generations and never resolves current",
+    "continuation is advertised only after required retention receipts are admitted",
+    "wow-context owns maps skeletons packs renderers continuations and validation; service never reconstructs them",
+    "invalid artifact is an operation-level Invalid payload when validation completed and not an internal service failure",
+    "service status preserves partial truncation NotEvaluated conflicts omissions and budgets",
+    "service cannot broaden source privacy license confidence or authority",
+    "no model search cbm source execution filesystem network process editor client SQL plugin or background work",
+    "CLI stream exit path and terminal state never enter service semantic identity",
+    "missing implementations probes fixtures evaluations and checksums are blocking and never pass",
+    "no Cargo Rust source or CI during this documentation phase"
+  ],
+  "normative_files": [
+    "crates/wow-service/README.md",
+    "crates/wow-service/AGENTS.md",
+    "crates/wow-service/E0_F_OVERVIEW.md",
+    "crates/wow-service/E0_F_AGENTS.md",
+    "crates/wow-service/e3/README.md",
+    "crates/wow-service/e3/AGENTS.md",
+    "crates/wow-service/e3/DECISIONS.md",
+    "crates/wow-service/e3/DATA_MODEL.md",
+    "crates/wow-service/e3/CURRENT_RESOLUTION_AND_ACQUISITION.md",
+    "crates/wow-service/e3/LEASES_CANCELLATION_AND_CLOSURE.md",
+    "crates/wow-service/e3/CONTEXT_OPERATIONS.md",
+    "crates/wow-service/e3/ROOT_PROFILE_AND_RENDER_POLICY.md",
+    "crates/wow-service/e3/RESULT_ENVELOPE_AND_STATUS.md",
+    "crates/wow-service/e3/APPLICATION_BOUNDARY.md",
+    "crates/wow-service/e3/SECURITY_AND_PRIVACY.md",
+    "crates/wow-service/e3/ERROR_MODEL.md",
+    "crates/wow-service/e3/TEST_MATRIX.md",
+    "crates/wow-service/e3/IMPLEMENTATION_PLAN.md",
+    "crates/wow-service/e3/CONTRACT.json",
+    "crates/wow-service/e3/examples/README.md",
+    "crates/wow-service/e3/examples/context-status-request.json",
+    "crates/wow-service/e3/examples/context-map-request.json",
+    "crates/wow-service/e3/examples/context-inspect-request.json",
+    "crates/wow-service/e3/examples/context-build-request.json",
+    "crates/wow-service/e3/examples/context-continue-request.json",
+    "crates/wow-service/e3/examples/context-artifact-requests.json",
+    "crates/wow-service/e3/examples/context-result-envelope.json",
+    "crates/wow-service/e3/examples/acquisition-cases.json",
+    "crates/wow-service/e3/examples/lifecycle-cases.json",
+    "crates/wow-service/e3/examples/CHECKSUMS.json",
+    "apps/wow/e3/CONTRACT.json"
+  ],
+  "freeze_gate": {
+    "implementation_state": "not-started",
+    "required_before_first_rust_implementation": [
+      "all prerequisite implementation commits and fixture bundle digests",
+      "exact store project graph reference and context owner-port catalog IDs",
+      "selector compatibility alias default operation status privacy continuation envelope application and error profile IDs",
+      "synthetic roth-ui Blizzard UI combined race failure artifact continuation privacy and CLI corpora",
+      "all canonical request result artifact stdout exit lifecycle and determinism vectors",
+      "all required E0/E1 regression reports",
+      "all member and bundle SHA-256 values"
+    ]
+  }
+}

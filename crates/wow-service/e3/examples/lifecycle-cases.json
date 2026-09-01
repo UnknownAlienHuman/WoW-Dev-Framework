@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e3-c-lifecycle-cases-v1",
+  "state": "documentation-only-pending-vector-freeze",
+  "cases": [
+    {
+      "case_id": "SVC3-LIFE-001",
+      "condition": "successful operation",
+      "expected_release_order": [
+        "context-invocation-resources",
+        "exact-reference-view",
+        "optional-platform-publication",
+        "primary-project-publication"
+      ]
+    },
+    {
+      "case_id": "SVC3-LIFE-004",
+      "condition": "context universe bind fails after all owner acquisitions",
+      "expected": "reverse-unwind-all-resources"
+    },
+    {
+      "case_id": "SVC3-LIFE-009",
+      "condition": "primary close fails",
+      "expected_error": "service_context_resource_close_failed"
+    },
+    {
+      "case_id": "SVC3-LIFE-013",
+      "condition": "cancellation during close",
+      "expected": "cleanup-continues-and-cancelled-during-close-recorded"
+    },
+    {
+      "case_id": "SVC3-LIFE-016",
+      "mutation": "finalize success before close",
+      "expected_error": "service_context_success_before_close_forbidden"
+    },
+    {
+      "case_id": "SVC3-CONT-009",
+      "condition": "continued result emits replacement continuation",
+      "expected": "new-retention-admitted-before-old-released-by-policy"
+    },
+    {
+      "case_id": "SVC3-CONT-010",
+      "condition": "continuation completes",
+      "expected": "retention-released-idempotently"
+    },
+    {
+      "case_id": "SVC3-LIFE-019",
+      "mutation": "broken output pipe reinvokes service",
+      "expected_error": "service_context_multiple_public_results_forbidden"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}

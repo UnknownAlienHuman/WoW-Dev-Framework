@@ -1,57 +1,51 @@
 # Applications
 
-Applications are thin transports and host adapters over `wow-service`. They must not reimplement reference, annotation, storage, analyzer, project, rule, graph, search, context, or profile logic.
+Applications are thin transports and host adapters over `wow-service`. They never reimplement reference, annotation, storage, analyzer, project, rule, graph, search, context, profile, or release semantics.
 
-## Contract routes
+## Active contract routes
 
-- [`wow/`](wow/README.md) — E0 `status` and `check` CLI projection.
-- [`wow-reference-builder/`](wow-reference-builder/README.md) — E1-D local Reference Pack `build`, `validate`, and `rebuild-compare` frontend.
+- [`wow/`](wow/README.md)
+  - E0-F: `status`, `check` diagnostic CLI.
+  - E3-C: `context status`, `map`, `inspect`, `build`, `continue`, `validate`, `render`.
+- [`wow-reference-builder/`](wow-reference-builder/README.md)
+  - E1-D: local Reference Pack `build`, `validate`, `rebuild-compare`.
 
 ## Dependency rule
 
-Each application depends on `wow-service` only among framework crates. Host libraries for arguments, JSON, filesystem, process isolation, or transport may be used only at the application boundary and must not absorb domain policy.
+Every application depends on `wow-service` only among framework crates. Host libraries may handle arguments, strict transport serialization, bounded explicit file/stdin I/O, signals, and output, but cannot absorb domain policy.
 
-## E0 `wow`
-
-```text
-parses explicit typed status/check arguments
-constructs wow-service requests
-serializes exact service results
-maps semantic state to frozen exit codes
-```
-
-No source scan, lower-crate orchestration, deferred-operation fake success, LSP/MCP, or editor mutation.
-
-## E1 `wow-reference-builder`
+## `apps/wow` E3-C boundary
 
 ```text
-build
-    explicit request + materialized source root + output root
-
-validate
-    read-only nonrepairing candidate validation
-
-rebuild-compare
-    isolated repeated builds under frozen execution profiles
+strict CLI/config/artifact input
+-> one typed wow-service request
+-> one service invocation
+-> canonical envelope JSON, faithful text, or exact returned artifact
+-> frozen exit code
 ```
 
-The application executes only typed staging/materialization/finalization and reviewed external probe adapter plans issued by `wow-service`. It does not download source, run repository scripts, execute Lua/generated files, mutate editors, sign, upload, publish, or activate a release.
+It does not resolve current, open stores/views, search roots, inspect project source, build maps/skeletons/packs, render context, retry on another generation, authorize tools/edits, or start background work.
 
-## Later planned applications
+## Reference builder boundary
+
+The builder executes typed staging/materialization/finalization and reviewed probe adapter plans issued by service. It does not download source, run repository scripts, execute Lua/generated files, mutate editors, sign, upload, publish, or activate a release.
+
+## Later applications
 
 ```text
-wow-emmy-check      optional batch compatibility frontend, not separately active
-wow-emmy-ls         LSP frontend, E7
-wow-mcp             MCP frontend, E7
+wow-emmy-ls   LSP frontend, E7
+wow-mcp       MCP frontend, E7
 ```
 
-A transport convenience is not a reason to add a domain operation or bypass `wow-service`.
+Search is expected to extend `apps/wow` through service in E4-A rather than create a domain-rich application.
 
 ## General prohibitions
 
-- no direct lower framework crate dependencies;
-- no hidden current/latest profile or source;
+- no direct lower framework dependency;
+- no hidden current/latest profile/source;
 - no arbitrary shell/network/repository execution;
-- no source/editor/client mutation;
-- no semantic difference between JSON and text projections;
-- no final release/publishing/CI before the owning milestone contract.
+- no implicit source/editor/client/config discovery;
+- no source/project mutation or tool authorization;
+- no semantic difference caused by terminal/environment;
+- no empty success for deferred operations;
+- no release/publishing/CI before its contract.

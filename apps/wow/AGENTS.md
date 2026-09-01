@@ -1,92 +1,66 @@
 # AGENTS.md — `apps/wow`
 
-These instructions apply to the E0 CLI application.
+These instructions route every `apps/wow` work package.
 
-## Read first
+## Required reading
 
 1. [`../../AGENTS.md`](../../AGENTS.md)
 2. [`../../crates/AGENTS.md`](../../crates/AGENTS.md)
 3. [`../../crates/wow-service/AGENTS.md`](../../crates/wow-service/AGENTS.md)
-4. [`../../crates/wow-service/CONTRACT.json`](../../crates/wow-service/CONTRACT.json)
-5. [`../../crates/wow-service/RESULT_ENVELOPE.md`](../../crates/wow-service/RESULT_ENVELOPE.md)
-6. [`README.md`](README.md)
-7. [`CONTRACT.json`](CONTRACT.json)
+4. [`README.md`](README.md)
+5. the selected work-package agent file and machine contract.
 
-## Scope
-
-Implement only `status` and `check` CLI projections. No daemon, LSP, MCP, search, graph, edit/apply, source-path scan, runtime probe, or release command.
-
-## Dependency rule
-
-The only framework dependency is `wow-service`.
-
-Do not import lower framework crates, upstream Emmy types, project/reference/rule internals, or source readers. If service does not expose needed semantic data, request a service contract seam instead of bypassing it.
-
-## Request construction
-
-- Parse explicit typed IDs/options.
-- `--generation current` becomes `CurrentPublished(ProjectId)`; CLI does not resolve current itself.
-- Exact generation remains exact.
-- `--file` accepts ProjectFileId, not host path/glob.
-- Reject unsupported flags/commands before service invocation or route a frozen typed deferred request according to the CLI contract.
-- No shell interpolation/plugin/config execution.
-
-## Result projection
-
-### JSON
-
-- Serialize the service result canonically and write exactly one final newline.
-- No banner/progress/log on stdout.
-- Do not add/remove/reorder semantic fields.
-- Structured service failure/cancellation results use stdout for valid service requests.
-
-### Text
-
-- Read only service records.
-- Show exact project/profile/generation and semantic/operation state.
-- Preserve visibility of raw finding count, display roots/children, NotEvaluated blockers, and deferred operations.
-- Do not infer pass/safe/runtime/working claims.
-
-## Exit codes
-
-Use the exact mapping in [`README.md`](README.md) and [`CONTRACT.json`](CONTRACT.json). Do not reinterpret advisory rollout as clean or add environment-dependent policy.
-
-## Stdout/stderr
-
-- Operation result -> stdout.
-- Parser/startup error -> stderr and exit 64.
-- No partial/double result on cancellation/broken pipe.
-- Never leak source, Secret-capable values, absolute paths, credentials, or private URLs.
-
-## Determinism
-
-Canonical JSON/exit code must not depend on:
+Routes:
 
 ```text
-terminal width/color
-current directory/temp root
-clock/timezone/locale
-worker scheduling
-stderr logging
-message wrapping
+E0-F -> E0_F_AGENTS.md + CONTRACT.json
+E3-C -> e3/AGENTS.md + e3/CONTRACT.json
 ```
 
-## Testing
+## Common dependency rule
 
-Run every CLI test referenced by service `TEST_MATRIX.md` and this contract, including dependency-graph/source-leak/JSON-byte/exit-code/cancellation/deferred-command mutations.
+The only framework dependency is `wow-service`. Never import lower crates, upstream analyzer types, context types directly, source readers, graph/store/reference/project handles, or application-internal copies of service records.
+
+Request a service seam when necessary; do not bypass it.
+
+## Common request rules
+
+- Parse explicit typed commands/options only.
+- Pass `current` as a symbolic service selector; never resolve it.
+- Preserve exact IDs/profiles/guards/continuations/artifact bytes.
+- Do not search or guess roots.
+- Do not read project source, repositories, directories, globs, editor state, WoW installation, SavedVariables, or logs.
+- Artifact input for context validate/render is explicit bounded transport data only.
+- No plugin/config/script/shell execution.
+
+## Common output rules
+
+- Invoke service once.
+- JSON output is exact canonical service JSON plus the defined final newline.
+- Direct artifact output is exact validated artifact bytes with no wrapper or newline change.
+- Text output derives only from service records and cannot hide partial/truncated/NotEvaluated/conflict/omission/continuation state.
+- Parser/startup/artifact transport errors use stderr only.
+- No banner/progress/log on canonical stdout.
+- No double output/reinvoke after cancellation or broken pipe.
+
+## Security
+
+Never leak source outside validated artifacts, Secret-capable values, private absolute paths, credentials, tokens, private URLs, raw continuation internals, lower handles, or config input paths into semantic output.
+
+## Documentation phase
+
+No Cargo/Rust/workflow/CI/placeholder implementation. Null app/service vectors remain blocking.
 
 ## Completion report
 
-Report:
-
 ```text
-commands/options/formats
-service dependency/public request/result types
-exit-code mapping
-stdout/stderr behavior
-canonical JSON digest vectors
-text projection coverage
-all tests/commands and results
-security/no-lower-bypass/no-source-mutation checks
-known unsupported commands
+work package and command surface
+only wow-service dependency
+request/selector/root/profile mapping
+output modes and exact byte behavior
+exit codes and service-state mapping
+artifact/config input limits
+cancellation/broken-pipe/single-invocation behavior
+security and dependency tests
+all executed and skipped gates
 ```

@@ -1,0 +1,150 @@
+{
+  "schema_version": 1,
+  "contract_id": "apps/wow/e3-c/context-cli",
+  "state": "implementation-ready-documentation-no-rust-code",
+  "work_package": "E3-C",
+  "application": "wow",
+  "framework_dependencies": [
+    "wow-service"
+  ],
+  "forbidden_framework_dependencies": [
+    "wow-core",
+    "wow-store",
+    "wow-reference",
+    "wow-annotations",
+    "wow-emmy",
+    "wow-project",
+    "wow-graph",
+    "wow-recognizers",
+    "wow-rules",
+    "wow-search",
+    "wow-context",
+    "wow-cbm"
+  ],
+  "prerequisite_contract": "wow-service/e3-c/context-acquisition-and-use-cases",
+  "active_commands": [
+    "context status",
+    "context map",
+    "context inspect",
+    "context build",
+    "context continue",
+    "context validate",
+    "context render"
+  ],
+  "publication_selector_tokens": [
+    "current",
+    "store-generation:<ProjectStoreGenerationId>",
+    "publication-set:<ProjectPublicationSetId>"
+  ],
+  "root_token_grammar": "<RootKind>@<base64url-no-pad(canonical UTF-8 ID bytes)>",
+  "output_modes": [
+    "envelope-json",
+    "text",
+    "artifact"
+  ],
+  "output_mode_restrictions": {
+    "context status": ["envelope-json", "text"],
+    "context map": ["envelope-json", "text"],
+    "context inspect": ["envelope-json", "text"],
+    "context build": ["envelope-json", "text", "artifact-if-exactly-one-eligible-rendered-artifact"],
+    "context continue": ["envelope-json", "text", "artifact-if-exactly-one-eligible-rendered-artifact"],
+    "context validate": ["envelope-json", "text"],
+    "context render": ["envelope-json", "text", "artifact-if-exactly-one-eligible-rendered-artifact"]
+  },
+  "context_exit_codes": {
+    "0": ["complete", "context validate Valid"],
+    "1": ["context validate Invalid"],
+    "2": ["partial", "truncated", "not_evaluated", "context validate partial or NotEvaluated"],
+    "3": ["structured request selector generation profile capability continuation retention or unavailable service failure"],
+    "4": ["internal owner context service closure serialization or output failure"],
+    "64": ["CLI explicit config artifact continuation or argument transport failure before service invocation"],
+    "130": ["cancelled"]
+  },
+  "config": {
+    "implicit_discovery": false,
+    "explicit_flag": "--config <PATH>",
+    "format": "strict-versioned-json",
+    "stdin_allowed": false,
+    "includes_scripts_plugins_environment_interpolation": false,
+    "precedence": ["explicit-cli", "explicit-config", "service-owned-default"]
+  },
+  "artifact_input": {
+    "commands": ["context validate", "context render"],
+    "flag": "--input <PATH|->",
+    "explicit_file_or_stdin_only": true,
+    "directory_glob_recursive_scan": false,
+    "execute_or_extract": false,
+    "host_path_in_semantic_request": false,
+    "media_auto_detection": false
+  },
+  "owned_responsibilities": [
+    "strict-command-and-option-parsing",
+    "explicit-bounded-config-and-artifact-transport-input",
+    "typed-wow-service-request-construction",
+    "single-service-invocation",
+    "signal-to-cancellation-projection",
+    "canonical-envelope-json-output",
+    "faithful-noncanonical-text-output",
+    "exact-validated-artifact-output",
+    "stdout-stderr-broken-pipe-policy",
+    "command-specific-exit-code-projection"
+  ],
+  "forbidden_responsibilities": [
+    "current-publication-resolution",
+    "lower-owner-view-or-store-acquisition",
+    "source-project-repository-editor-client-discovery",
+    "source-reading-except-explicit-context-artifact-transport",
+    "search-fuzzy-name-path-or-natural-language-root-resolution",
+    "context-map-skeleton-pack-renderer-or-evidence-algorithms",
+    "semantic-status-or-authority-reinterpretation",
+    "automatic-service-retry-or-generation-fallback",
+    "shell-process-network-plugin-model-or-tool-execution",
+    "source-project-mutation-or-tool-authorization",
+    "daemon-lsp-mcp-release-or-background-work",
+    "semantic-output-fields-derived-from-terminal-environment-or-host-path"
+  ],
+  "normative_files": [
+    "apps/wow/README.md",
+    "apps/wow/AGENTS.md",
+    "apps/wow/E0_F_CLI_OVERVIEW.md",
+    "apps/wow/E0_F_AGENTS.md",
+    "apps/wow/e3/README.md",
+    "apps/wow/e3/AGENTS.md",
+    "apps/wow/e3/CLI_COMMANDS.md",
+    "apps/wow/e3/OUTPUT_EXIT_AND_STREAMS.md",
+    "apps/wow/e3/SECURITY_AND_CONFIG.md",
+    "apps/wow/e3/TEST_MATRIX.md",
+    "apps/wow/e3/CONTRACT.json",
+    "apps/wow/e3/examples/README.md",
+    "apps/wow/e3/examples/cli-cases.json",
+    "apps/wow/e3/examples/stdout-exit-cases.json",
+    "apps/wow/e3/examples/CHECKSUMS.json"
+  ],
+  "hard_rules": [
+    "wow-service is the only framework dependency",
+    "current selectors are passed to service and never resolved by the app",
+    "root tokens are mechanical exact IDs and never searched or interpreted as paths",
+    "semantic profile aliases are resolved by service not app",
+    "exactly one service invocation occurs per valid command",
+    "envelope JSON equals canonical service JSON plus one final LF",
+    "artifact mode writes exact validated bytes with no wrapper or newline change",
+    "text mode derives only from public service fields and preserves incomplete/conflict/omission state",
+    "context validate Invalid maps to exit 1 without becoming internal failure",
+    "no implicit config source repository editor client environment or network discovery",
+    "explicit artifact input is bounded data and never source scanning or execution",
+    "broken pipe cancellation and output failure never trigger retry or double output",
+    "CLI path terminal locale clock and exit code never enter service semantic identity",
+    "missing service bytes profiles platform tests or checksums block implementation",
+    "no Cargo Rust source or CI during documentation phase"
+  ],
+  "freeze_gate": {
+    "implementation_state": "not-started",
+    "required_before_first_rust_implementation": [
+      "implemented and frozen wow-service E3-C request result and error contracts",
+      "frozen command selector root profile config artifact input output exit signal and platform adapter profiles",
+      "all canonical service JSON CLI stdout artifact text-required-field and exit-code vectors",
+      "all dependency security cancellation broken-pipe and E0 regression reports",
+      "all member and bundle SHA-256 values"
+    ]
+  }
+}

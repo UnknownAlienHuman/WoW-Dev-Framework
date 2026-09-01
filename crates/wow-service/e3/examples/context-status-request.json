@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e3-c-context-status-request-v1",
+  "state": "documentation-only-pending-id-freeze",
+  "request": {
+    "request_id": null,
+    "operation": "context_status",
+    "primary_selector": {
+      "kind": "CurrentPublished",
+      "project_store_id": null,
+      "expected_current_guard": null
+    },
+    "platform_selector": {
+      "kind": "Omitted"
+    },
+    "reference_guard": null,
+    "detail": "capabilities",
+    "operation_profile_id": null,
+    "budget_profile_id": null,
+    "canonical_sha256": null
+  },
+  "expected": {
+    "selector_resolved_once": true,
+    "context_artifacts_built": false,
+    "tests_or_context_generation_claimed_pass": false
+  },
+  "mutation_cases": [
+    {
+      "case_id": "SVC3-STATUS-004",
+      "mutation": "render_component_ready_as_context_tested",
+      "expected_error": "service_context_status_precedence_violation"
+    },
+    {
+      "case_id": "SVC3-STATUS-007",
+      "mutation": "invoke_project_map_during_status",
+      "expected_error": "service_context_operation_extra_lane_forbidden"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}

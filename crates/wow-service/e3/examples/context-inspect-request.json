@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e3-c-context-inspect-request-v1",
+  "state": "documentation-only-pending-id-freeze",
+  "request": {
+    "request_id": null,
+    "operation": "context_inspect",
+    "primary_selector": {
+      "kind": "CurrentPublished",
+      "project_store_id": null,
+      "expected_current_guard": {
+        "current_publication_record_id": null,
+        "record_digest": null
+      }
+    },
+    "platform_selector": {
+      "kind": "Omitted"
+    },
+    "reference_guard": null,
+    "root_selectors": [
+      {
+        "kind": "GraphEntityKey",
+        "id": null
+      }
+    ],
+    "level": "L0AndL1",
+    "l0_profile_id": null,
+    "l1_profile_id": null,
+    "intent_profile_id": null,
+    "expansion_profile_id": null,
+    "requested_facets": [
+      "Identity",
+      "OwnershipAndContainment",
+      "ApiUsageAndReferenceFacts"
+    ],
+    "budget_profile_id": null,
+    "canonical_sha256": null
+  },
+  "forbidden_roots": [
+    "fuzzy_name",
+    "filesystem_path",
+    "natural_language_query",
+    "regex",
+    "source_expression"
+  ],
+  "mutation_cases": [
+    {
+      "case_id": "SVC3-INSP-004",
+      "mutation": "replace_exact_root_with_source_path",
+      "expected_error": "service_context_root_unresolved_or_nonexact"
+    },
+    {
+      "case_id": "SVC3-INSP-007",
+      "mutation": "upgrade_possible_relation",
+      "expected_error": "service_context_authority_or_confidence_upgrade_forbidden"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}
