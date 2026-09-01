@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-search-e4-a-lane-results-v1",
+  "state": "documentation-only-pending-freeze",
+  "lane_results": [
+    {
+      "lane_id": "ExactCanonicalName",
+      "state": "Complete",
+      "signals": [
+        {
+          "signal_id": null,
+          "entity_key": "reference:C_Fixture.KnownApi",
+          "match_kind": "ExactCanonicalQualifiedName",
+          "matched_field": "canonical_qualified_name",
+          "field_origin_ids": [],
+          "authority_band": "ExactCanonicalQualifiedName",
+          "lane_rank": 1,
+          "raw_fts_score": null,
+          "canonical_feature_vector": null
+        }
+      ],
+      "coverage_record_ids": [],
+      "canonical_sha256": null
+    },
+    {
+      "lane_id": "GenerationLocalTextFts",
+      "state": "Complete",
+      "signals": [
+        {
+          "signal_id": null,
+          "entity_key": "reference:C_Fixture.KnownApi",
+          "match_kind": "TextFieldMatch",
+          "matched_field": "documentation",
+          "field_origin_ids": [],
+          "authority_band": "TextOrShapeCandidate",
+          "lane_rank": 1,
+          "raw_fts_score": {
+            "class": "noncanonical-shard-local-diagnostic",
+            "value": null
+          },
+          "canonical_feature_vector": null
+        }
+      ],
+      "coverage_record_ids": [],
+      "canonical_sha256": null
+    },
+    {
+      "lane_id": "IdentifierSimilarity",
+      "state": "Complete",
+      "signals": [
+        {
+          "signal_id": null,
+          "entity_key": "reference:C_Fixture.KnownApiAlternative",
+          "match_kind": "IdentifierSimilarity",
+          "authority_band": "FoldedPrefixOrIdentifierSimilarityCandidate",
+          "lane_rank": 1,
+          "edit_distance": 1,
+          "trigram_counts": null,
+          "canonical_feature_vector": null
+        }
+      ],
+      "coverage_record_ids": [],
+      "canonical_sha256": null
+    },
+    {
+      "lane_id": "SeededGraphExpansion",
+      "state": "Skipped",
+      "skip_reason": "no-permitted-exact-seed-required-by-profile",
+      "signals": [],
+      "coverage_record_ids": [],
+      "canonical_sha256": null
+    }
+  ],
+  "hard_rules": [
+    "raw FTS values are never compared across shards",
+    "signals retain their own match classes and origins",
+    "approximate signals cannot become aliases or lineage",
+    "skipped lanes remain visible"
+  ]
+}
