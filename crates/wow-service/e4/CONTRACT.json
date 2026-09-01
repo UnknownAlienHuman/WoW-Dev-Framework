@@ -1,0 +1,285 @@
+{
+  "schema_version": 1,
+  "contract_id": "wow-service/e4-c/search-lineage-impact-use-cases",
+  "state": "implementation-ready-documentation-no-rust-code",
+  "work_package": "E4-C",
+  "crate": "wow-service",
+  "documentation_frontier": "E4-C",
+  "implementation_state": "not-started",
+  "direct_framework_dependencies": [
+    "wow-core",
+    "wow-store",
+    "wow-reference",
+    "wow-project",
+    "wow-graph",
+    "wow-search",
+    "wow-context"
+  ],
+  "inactive_direct_dependencies": [
+    "wow-annotations",
+    "wow-emmy",
+    "wow-recognizers",
+    "wow-rules",
+    "wow-cbm"
+  ],
+  "application": "apps/wow",
+  "application_contract": "apps/wow/e4/CONTRACT.json",
+  "prerequisites": [
+    {
+      "contract_id": "wow-core/e0-a/1",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-store/e2-d/projectstore-coherent-publication",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-reference/e1-persistent-schema-and-build-plan",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-project/e2-c/toc-xml-load-incremental-index",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-project/e3-a/blizzard-ui-source-index",
+      "implementation_and_fixture_freeze_required": true,
+      "relationship": "required for Blizzard UI search and lineage operations"
+    },
+    {
+      "contract_id": "wow-graph/e2-a/typed-assertion-partition-query-core",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-context/e3-b/project-map-l0-l1-context-pack",
+      "implementation_and_fixture_freeze_required": true,
+      "relationship": "required only for search_context"
+    },
+    {
+      "contract_id": "wow-service/e3-c/context-acquisition-and-use-cases",
+      "implementation_and_fixture_freeze_required": true,
+      "relationship": "lifecycle and context composition base"
+    },
+    {
+      "contract_id": "wow-search/e4-a/exact-generation-retrieval-core",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-graph/e4-b/lineage-migration-static-impact",
+      "implementation_and_fixture_freeze_required": true
+    }
+  ],
+  "public_operations": [
+    "search_index_status",
+    "search_index_build",
+    "search_index_validate",
+    "search_query",
+    "search_continue",
+    "search_explain",
+    "search_select",
+    "search_context",
+    "lineage_status",
+    "lineage_build",
+    "lineage_validate",
+    "lineage_review_validate",
+    "lineage_review_apply",
+    "lineage_compare",
+    "lineage_trace",
+    "lineage_explain",
+    "migration_candidates",
+    "migration_validate",
+    "impact_plan",
+    "impact_run",
+    "impact_continue",
+    "impact_explain"
+  ],
+  "selectors": {
+    "project_publication": [
+      "ExactStoreGeneration",
+      "ExactPublicationSet",
+      "CurrentPublished"
+    ],
+    "reference": [
+      "ExactReferenceGenerationOrView",
+      "CurrentCompatible"
+    ],
+    "search_shard": [
+      "ExactSearchShard",
+      "ForExactOwnerGeneration"
+    ],
+    "lineage_snapshot": [
+      "ExactLineageGraphSnapshot",
+      "ForExactComparison"
+    ]
+  },
+  "catalog_lookup_states": [
+    "UniqueEligible",
+    "None",
+    "MultipleConflicting",
+    "NotEvaluated",
+    "Failed"
+  ],
+  "service_statuses": [
+    "Complete",
+    "NoChange",
+    "Partial",
+    "CandidateOnly",
+    "ConflictBlocked",
+    "Truncated",
+    "NotEvaluated",
+    "Cancelled",
+    "Failed"
+  ],
+  "validation_states": [
+    "Valid",
+    "Invalid",
+    "NotEvaluated"
+  ],
+  "owner_ports": [
+    "ProjectPublicationAcquirePort",
+    "ReferenceAcquirePort",
+    "SearchShardCatalogPort",
+    "SearchEnginePort",
+    "ProjectLineageInputProducerPort",
+    "ReferenceTransitionInputProducerPort",
+    "LineageGraphPort",
+    "ReviewAuthorizationPort",
+    "ContextEnginePort",
+    "ContinuationRetentionPort",
+    "IdempotencyOperationPort"
+  ],
+  "acquisition_order": [
+    "primary-project-before-or-current",
+    "primary-project-after-when-distinct",
+    "optional-platform-before",
+    "optional-platform-after-when-distinct",
+    "reference-before",
+    "reference-after-when-distinct",
+    "search-shards-by-universe-generation",
+    "lineage-graph-view",
+    "context-invocation-resources",
+    "retention-and-idempotency-resources"
+  ],
+  "domain_types": [
+    "E4ServiceConfiguration",
+    "SearchIndexBuildServiceRequest",
+    "SearchQueryServiceRequest",
+    "SearchSelectionRequest",
+    "SearchSelectionReceipt",
+    "LineageBuildServiceRequest",
+    "LineageReviewDecisionEnvelope",
+    "LineageCompareServiceRequest",
+    "LineageTraceServiceRequest",
+    "LineageExplainServiceRequest",
+    "MigrationCandidatesServiceRequest",
+    "MigrationValidateServiceRequest",
+    "ImpactServiceRequest",
+    "ResolvedSearchAcquisition",
+    "ResolvedLineageAcquisition",
+    "E4ServiceInvocationPlan",
+    "SearchServiceOutcome",
+    "LineageServiceOutcome",
+    "MigrationServiceOutcome",
+    "ImpactServiceOutcome",
+    "SearchContextOutcome",
+    "E4ResourceLeaseSet",
+    "E4RetentionReceiptSet",
+    "E4ResourceClosureReport",
+    "E4IdempotencyReceipt",
+    "E4ResponseLossRecoveryReceipt",
+    "E4ServiceContinuation",
+    "E4ServiceResultEnvelope"
+  ],
+  "active_scope": [
+    "exact-and-current-publication-selector-normalization",
+    "fixed-order-exact-owner-shard-lineage-context-acquisition",
+    "finite-stable-double-collect-for-strict-current",
+    "explicit-search-shard-build-validation-catalog-and-query-orchestration",
+    "search-result-continuation-explanation-and-honest-miss-preservation",
+    "explicit-search-candidate-selection-receipts",
+    "exact-selected-search-entity-to-E3-context-root-handoff",
+    "project-reference-search-lineage-input-producer-orchestration",
+    "review-authorization-and-independent-graph-semantic-validation",
+    "immutable-lineage-build-review-publication-and-query-orchestration",
+    "advisory-migration-candidate-and-recipe-validation",
+    "bounded-static-impact-plan-run-continue-and-explain",
+    "idempotency-response-loss-retention-cancellation-and-resource-closure",
+    "conservative-status-validation-and-canonical-result-envelopes",
+    "privacy-license-security-and-thin-application-boundary"
+  ],
+  "deferred_scope": [
+    "source-edit-or-migration-application",
+    "runtime-client-impact-validation",
+    "diagnostic-severity-or-remediation-recomputation",
+    "named-calibration-pack-policy",
+    "model-embedding-vector-or-codebase-memory-candidates",
+    "lsp-mcp-daemon-session-transport",
+    "release-signing-publication-rollback-and-ci"
+  ],
+  "hard_rules": [
+    "service is the only multi-owner orchestrator and apps depend on service only",
+    "symbolic current resolves only at the service boundary and exact requests never reread current",
+    "independent owners are not presented as one distributed atomic current snapshot",
+    "exact shard and lineage catalog lookup never selects newest first last or nearest",
+    "missing search shards never trigger implicit indexing",
+    "search lane ranking miss and explanation algorithms remain owned by wow-search",
+    "top one sole or highest-band candidate is never selected automatically",
+    "search selection requires exact result candidate and digest guards and produces a nonauthority receipt",
+    "search_context passes an exact entity root to the existing E3-C context path",
+    "project reference search and review lineage producer partitions remain separate",
+    "search-derived lineage evidence remains Candidate",
+    "review authorization and graph semantic validation are independent",
+    "GitHub OS CLI or file identity is not review authorization",
+    "review application publishes a new immutable lineage snapshot and never mutates the base",
+    "service never raises proof confidence or negative authority",
+    "same lineage never implies replacement or migration compatibility",
+    "migration artifacts are advisory and never applied",
+    "static impact paths never become runtime breakage severity performance taint combat Secret or fixability claims",
+    "reason paths never become direct edges",
+    "continuation reopens exact retained artifacts and uses cumulative budgets",
+    "build and review writes use exact operation ID plus request digest and response-loss recovery",
+    "no public success before mandatory resource closure",
+    "privacy license consumer and authorization restrictions can only narrow output",
+    "no raw SQL FTS storage source filesystem network process editor client model CBM or tool authorization",
+    "missing implementations probes corpora benchmarks reviews or checksums are blocking and never pass",
+    "no Cargo Rust source or CI during documentation phase"
+  ],
+  "normative_files": [
+    "crates/wow-service/README.md",
+    "crates/wow-service/e4/README.md",
+    "crates/wow-service/e4/AGENTS.md",
+    "crates/wow-service/e4/DECISIONS.md",
+    "crates/wow-service/e4/DATA_MODEL.md",
+    "crates/wow-service/e4/SELECTORS_AND_ACQUISITION.md",
+    "crates/wow-service/e4/SEARCH_OPERATIONS.md",
+    "crates/wow-service/e4/LINEAGE_REVIEW_AND_PUBLICATION.md",
+    "crates/wow-service/e4/MIGRATION_IMPACT_AND_CONTEXT_HANDOFF.md",
+    "crates/wow-service/e4/CONTINUATION_RETRY_AND_LIFECYCLE.md",
+    "crates/wow-service/e4/RESULT_ENVELOPE_AND_STATUS.md",
+    "crates/wow-service/e4/SECURITY_PRIVACY_AND_AUTHORIZATION.md",
+    "crates/wow-service/e4/ERROR_MODEL.md",
+    "crates/wow-service/e4/TEST_MATRIX.md",
+    "crates/wow-service/e4/IMPLEMENTATION_PLAN.md",
+    "crates/wow-service/e4/CONTRACT.json",
+    "crates/wow-service/e4/examples/README.md",
+    "crates/wow-service/e4/examples/search-requests.json",
+    "crates/wow-service/e4/examples/lineage-review-requests.json",
+    "crates/wow-service/e4/examples/migration-impact-context-requests.json",
+    "crates/wow-service/e4/examples/result-and-lifecycle-cases.json",
+    "crates/wow-service/e4/examples/CHECKSUMS.json",
+    "apps/wow/e4/CONTRACT.json"
+  ],
+  "freeze_gate": {
+    "implementation_state": "not-started",
+    "required_before_first_rust_implementation": [
+      "all E0 through E4-B prerequisite implementation commits and fixture bundle digests",
+      "exact store project reference graph search context lineage catalog retention and idempotency owner-port IDs",
+      "selector acquisition stability compatibility search lineage review migration impact context status envelope privacy security budget and error profile IDs",
+      "exact review authorization adapter implementation key format verification scope expiry revocation replay and test identities without committed private credentials",
+      "synthetic roth-ui Blizzard UI Reference transition ambiguity split merge copy review privacy high-fanout impact and response-loss corpora",
+      "all canonical requests results selection receipts review envelopes migration impact context handoff continuations CLI bytes exit codes and error vectors",
+      "accepted measured service latency memory owner-call output and continuation thresholds",
+      "all member and bundle SHA-256 values"
+    ]
+  }
+}
