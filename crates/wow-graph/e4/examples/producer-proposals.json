@@ -1,0 +1,144 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-graph-e4-b-producer-proposals-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "input_partitions": [
+    {
+      "producer_class": "project_stable_identity",
+      "partition_id": null,
+      "producer_id": null,
+      "producer_version": null,
+      "lineage_universe_set_id": null,
+      "records": [],
+      "coverage_manifest_id": null,
+      "conflict_manifest_id": null,
+      "canonical_sha256": null
+    },
+    {
+      "producer_class": "project_source_fingerprint",
+      "partition_id": null,
+      "producer_id": null,
+      "producer_version": null,
+      "lineage_universe_set_id": null,
+      "records": [],
+      "maximum_proof_ceiling": "Candidate",
+      "coverage_manifest_id": null,
+      "conflict_manifest_id": null,
+      "canonical_sha256": null
+    },
+    {
+      "producer_class": "reference_explicit_transition",
+      "partition_id": null,
+      "producer_id": null,
+      "producer_version": null,
+      "lineage_universe_set_id": null,
+      "records": [],
+      "coverage_manifest_id": null,
+      "conflict_manifest_id": null,
+      "canonical_sha256": null
+    },
+    {
+      "producer_class": "search_lineage_candidate",
+      "partition_id": null,
+      "producer_id": null,
+      "producer_version": null,
+      "lineage_universe_set_id": null,
+      "before_search_shard_id": null,
+      "after_search_shard_id": null,
+      "records": [],
+      "maximum_proof_ceiling": "Candidate",
+      "coverage_manifest_id": null,
+      "conflict_manifest_id": null,
+      "canonical_sha256": null
+    }
+  ],
+  "proposal": {
+    "proposal_id": null,
+    "relation_kind": "lineage_successor_of",
+    "source_generation_entity_ref": null,
+    "target_generation_entity_ref": null,
+    "producer_class": "project_stable_identity",
+    "producer_partition_id": null,
+    "proposed_confidence": "Proven",
+    "maximum_proof_ceiling": "Proven",
+    "feature_record_ids": [],
+    "evidence_ids": [],
+    "source_handle_ids": [],
+    "search_signal_ids": [],
+    "coverage_record_ids": [],
+    "conflict_ids": [],
+    "review_requirement": "NoneIfDeterministicRulePasses",
+    "canonical_sha256": null
+  },
+  "cases": [
+    {
+      "case_id": "LIN-PROD-001",
+      "mutation": "exact-project-stable-identity-complete",
+      "expected": "eligible-proven-ceiling"
+    },
+    {
+      "case_id": "LIN-PROD-002",
+      "mutation": "stable-identity-maps-to-two-after-entities",
+      "expected_error": "lineage_stable_identity_collision"
+    },
+    {
+      "case_id": "LIN-PROD-003",
+      "mutation": "stable-id-derived-only-from-path-or-name",
+      "expected_error": "lineage_input_producer_class_forbidden"
+    },
+    {
+      "case_id": "LIN-PROD-005",
+      "mutation": "identical-fingerprint-promoted-above-candidate",
+      "expected_error": "lineage_fingerprint_candidate_authority_upgrade_forbidden"
+    },
+    {
+      "case_id": "LIN-PROD-009",
+      "mutation": "exact-reference-transition",
+      "expected": "relation-specific-ceiling"
+    },
+    {
+      "case_id": "LIN-PROD-010",
+      "mutation": "conflicted-or-expired-reference-correction",
+      "expected_error": "lineage_reference_transition_conflicted_or_incomplete"
+    },
+    {
+      "case_id": "LIN-PROD-012",
+      "mutation": "e4-a-top-exact-name-result",
+      "expected": "candidate-lineage-ceiling"
+    },
+    {
+      "case_id": "LIN-PROD-013",
+      "mutation": "many-approximate-search-signals",
+      "expected": "candidate-lineage-ceiling"
+    },
+    {
+      "case_id": "LIN-PROD-014",
+      "mutation": "search-result-from-wrong-generation",
+      "expected_error": "lineage_search_candidate_generation_mismatch"
+    },
+    {
+      "case_id": "LIN-PROD-016",
+      "mutation": "disable-search-producer",
+      "expected": "owner-and-reference-proposals-preserved"
+    },
+    {
+      "case_id": "LIN-PROD-019",
+      "mutation": "relabel-source-provenance-as-reference-authority",
+      "expected_error": "lineage_input_proof_ceiling_exceeded"
+    },
+    {
+      "case_id": "LIN-PROD-020",
+      "mutation": "requested-proof-above-effective-minimum",
+      "expected_error": "lineage_input_proof_ceiling_exceeded"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "all producer implementation version partition universe generation and schema IDs",
+      "all owner reference search feature evidence coverage conflict and proposal IDs",
+      "all proof ceiling vectors and deterministic proposal bytes",
+      "all canonical SHA-256 values"
+    ]
+  }
+}
