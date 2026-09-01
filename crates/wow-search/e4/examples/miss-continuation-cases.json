@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-search-e4-a-miss-continuation-cases-v1",
+  "state": "documentation-only-pending-id-freeze",
+  "miss_cases": [
+    {
+      "case_id": "SEARCH-MISS-001",
+      "query_class": "ExactIdentity",
+      "coverage": "Complete",
+      "conflicts": [],
+      "truncated": false,
+      "expected": "ExactNotFoundWithAuthority"
+    },
+    {
+      "case_id": "SEARCH-MISS-003",
+      "query_class": "ExactCanonicalName",
+      "coverage": "Partial",
+      "expected": "ExactNotFoundPartial"
+    },
+    {
+      "case_id": "SEARCH-MISS-004",
+      "query_class": "ExactExplicitAlias",
+      "coverage": "Complete",
+      "expected": "no covered alias record; not entity absence"
+    },
+    {
+      "case_id": "SEARCH-MISS-005",
+      "query_class": "ApproximateLanes",
+      "executed_lanes": [
+        "GenerationLocalTextFts",
+        "IdentifierSimilarity",
+        "StructuredShape",
+        "SeededGraphExpansion"
+      ],
+      "expected": "NoCandidatesUnderExecutedLanes"
+    },
+    {
+      "case_id": "SEARCH-MISS-007",
+      "query_class": "ExactCanonicalName",
+      "privacy_omissions": [
+        "candidate metadata denied"
+      ],
+      "expected": "ExactNotFoundPartial"
+    }
+  ],
+  "result_set_manifest": {
+    "result_set_manifest_id": null,
+    "search_universe_set_id": null,
+    "request_id": null,
+    "normalized_search_query_id": null,
+    "ranking_profile_id": null,
+    "ordered_candidate_ids": [],
+    "ordered_ranking_keys": [],
+    "lane_result_manifest_ids": [],
+    "omission_manifest_id": null,
+    "coverage_summary_id": null,
+    "conflict_summary_id": null,
+    "truncation_state": null,
+    "canonical_sha256": null
+  },
+  "continuation": {
+    "continuation_id": null,
+    "exact_search_shard_ids": [],
+    "search_universe_set_id": null,
+    "request_id": null,
+    "normalized_search_query_id": null,
+    "ranking_miss_privacy_pagination_profile_ids": [],
+    "result_set_manifest_id": null,
+    "last_stable_ranking_key": null,
+    "last_candidate_id": null,
+    "lane_cursor_or_frontier_ids": [],
+    "selected_excluded_visited_manifest_ids": [],
+    "total_budget_state_id": null,
+    "prior_omission_and_truncation_ids": [],
+    "current_or_latest_selector": null,
+    "sqlite_rowid_or_internal_fts_cursor": null,
+    "integrity_digest": null,
+    "canonical_sha256": null
+  },
+  "continuation_cases": [
+    {
+      "case_id": "SEARCH-CONT-001",
+      "condition": "same exact retained shards request and profiles",
+      "expected": "stable next page"
+    },
+    {
+      "case_id": "SEARCH-CONT-002",
+      "mutation": "replace one shard with another generation",
+      "expected_error": "search_continuation_shard_request_or_profile_mismatch"
+    },
+    {
+      "case_id": "SEARCH-CONT-004",
+      "mutation": "use SQLite rowid or internal FTS cursor",
+      "expected_error": "search_continuation_internal_rowid_or_fts_cursor_forbidden"
+    },
+    {
+      "case_id": "SEARCH-CONT-005",
+      "mutation": "add current selector",
+      "expected_error": "search_continuation_current_or_latest_forbidden"
+    },
+    {
+      "case_id": "SEARCH-CONT-006",
+      "mutation": "reset cumulative query budget",
+      "expected_error": "search_continuation_total_budget_reset_forbidden"
+    },
+    {
+      "case_id": "SEARCH-CONT-008",
+      "condition": "referenced shard was not retained",
+      "expected_error": "search_continuation_retained_shard_unavailable"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}
