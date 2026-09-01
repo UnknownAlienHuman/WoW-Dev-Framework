@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-search-e4-a-shard-build-plan-v1",
+  "state": "documentation-only-pending-id-and-profile-freeze",
+  "build_request": {
+    "operation_id": null,
+    "request_digest": null,
+    "source_binding_id": null,
+    "search_profile_set_id": null,
+    "owner_read_catalog_ids": [],
+    "budget_profile_id": null,
+    "canonical_sha256": null
+  },
+  "document_partitions": [
+    {
+      "partition_key": "project-file:<ProjectFileId>",
+      "partition_version_id": null,
+      "owner_generation_ids": [],
+      "document_ids": [],
+      "field_origin_manifest_id": null,
+      "coverage_manifest_id": null,
+      "logical_sha256": null
+    },
+    {
+      "partition_key": "graph-producer:<ProducerPartitionId>",
+      "partition_version_id": null,
+      "owner_generation_ids": [],
+      "document_ids": [],
+      "field_origin_manifest_id": null,
+      "coverage_manifest_id": null,
+      "logical_sha256": null
+    }
+  ],
+  "complete_membership": {
+    "membership_id": null,
+    "partition_version_ids": [],
+    "is_complete_not_delta": true,
+    "canonical_sha256": null
+  },
+  "physical_profile": {
+    "profile_id": "search-shard-immutable-sqlite-fts5-v1",
+    "sqlite_runtime_profile_id": null,
+    "fts5_profile_id": null,
+    "generation_local_corpus": true,
+    "loadable_extensions": false,
+    "sealed_read_only": true
+  },
+  "stages": [
+    "validate-inputs-and-profiles",
+    "project-search-documents",
+    "validate-partitions-and-complete-membership",
+    "create-staging-search-store",
+    "populate-logical-indexes",
+    "build-generation-local-fts5",
+    "run-sqlite-and-fts-integrity",
+    "run-removal-and-cross-generation-closure",
+    "reopen-read-only-and-run-golden-queries",
+    "publish-and-seal"
+  ],
+  "validation": {
+    "report_id": null,
+    "golden_query_report_id": null,
+    "removal_closure_report_id": null,
+    "read_only_report_id": null,
+    "status": null
+  },
+  "target_shard": {
+    "search_shard_id": null,
+    "logical_manifest_id": null,
+    "physical_artifact_digest": null,
+    "physical_reproducibility_class": null,
+    "state": "PublishedInactive"
+  },
+  "mutation_cases": [
+    {
+      "case_id": "SEARCH-BUILD-008",
+      "mutation": "include retained prior-generation documents in target FTS corpus",
+      "expected_error": "search_shard_fts_corpus_generation_leak"
+    },
+    {
+      "case_id": "SEARCH-BUILD-013",
+      "mutation": "desynchronize FTS content and index",
+      "expected_error": "search_shard_fts_content_index_inconsistent"
+    },
+    {
+      "case_id": "SEARCH-BUILD-017",
+      "mutation": "update sealed shard in place",
+      "expected_error": "search_shard_in_place_mutation_forbidden"
+    },
+    {
+      "case_id": "SEARCH-BUILD-020",
+      "condition": "publication committed and response lost",
+      "expected": "retry returns existing exact shard receipt"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}
