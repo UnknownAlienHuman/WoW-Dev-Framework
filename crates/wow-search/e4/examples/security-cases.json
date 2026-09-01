@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-search-e4-a-security-v1",
+  "state": "documentation-only-pending-freeze",
+  "cases": [
+    {
+      "case_id": "SEARCH-SEC-001",
+      "input": "foo OR bar* column:secret",
+      "expected": "literal-safe-ast-or-reject"
+    },
+    {
+      "case_id": "SEARCH-SEC-002",
+      "input": "' UNION SELECT * FROM x --",
+      "expected": "literal-safe-ast-or-reject"
+    },
+    {
+      "case_id": "SEARCH-SEC-003",
+      "input": "/.*/ callback()",
+      "expected": "reject-executable-query-surface"
+    },
+    {
+      "case_id": "SEARCH-SEC-005",
+      "input": "*",
+      "expected": "reject-unbounded-prefix"
+    },
+    {
+      "case_id": "SEARCH-SEC-006",
+      "input": "repeated-term-budget-corpus",
+      "expected": "bounded"
+    },
+    {
+      "case_id": "SEARCH-SEC-008",
+      "input": "source-comment-instruction",
+      "expected": "data-only"
+    },
+    {
+      "case_id": "SEARCH-SEC-009",
+      "input": "private-path-token-field",
+      "expected": "excluded-or-redacted"
+    },
+    {
+      "case_id": "SEARCH-SEC-012",
+      "input": "tampered-shard-manifest",
+      "expected_error": "search_physical_artifact_integrity_failed"
+    },
+    {
+      "case_id": "SEARCH-SEC-013",
+      "input": "cross-generation-document-handle",
+      "expected_error": "search_document_cross_generation_or_universe_mismatch"
+    },
+    {
+      "case_id": "SEARCH-SEC-017",
+      "input": "cancel-every-expensive-stage",
+      "expected": "bounded-cancel-no-background-work"
+    }
+  ],
+  "hard_rules": [
+    "no raw FTS SQL regex callback expression tokenizer or extension",
+    "no source network process editor client or model execution",
+    "no private source or path leakage",
+    "no corrupt shard interpreted as empty search",
+    "no cancelled result reported complete"
+  ]
+}
