@@ -3,8 +3,8 @@
 **Status:** operational documentation and implementation routing.
 
 ```text
-documentation frontier: E3-C complete
-next documentation package: E4-A wow-search core retrieval
+documentation frontier: E4-A complete
+next documentation package: E4-B explicit lineage/migration/impact
 implementation frontier: not started
 ```
 
@@ -20,8 +20,9 @@ No Rust workspace, `Cargo.toml`, `.rs` files, or CI workflows exist yet.
 | E3-A | Exact Blizzard UI source universe and SkeletonInputView | Complete | Not started |
 | E3-B | Project Map, L0/L1, context packs and rendering | Complete | Not started |
 | E3-C | Service/application context acquisition and use cases | Complete | Not started |
-| E4-A | Exact/alias/FTS/shape/graph search and ranking explanations | Next | Not started |
-| E4-B | Explicit lineage, migration, replacement candidates and impact | Planned | Not started |
+| E4-A | Exact-generation search shards, retrieval lanes, ranking and explanations | Complete | Not started |
+| E4-B | Explicit lineage, migration, replacement/removal/introduction and impact | Next | Not started |
+| E4-C | Search/lineage/impact service and CLI orchestration | Planned | Not started |
 | E5 | Named calibration packs with universal outputs | Planned | Not started |
 | E6 | Optional Codebase Memory candidate bridge | Planned | Not started |
 | E7 | LSP/MCP, release, signing, publication and rollback | Planned | Not started |
@@ -44,59 +45,79 @@ Build graph assertions/partitions/queries, structural recognizers, full TOC/XML/
 
 Gate: producer-independent identity; atomic replacement; safe parsers; no second Lua parser; exact old/new readers; inactive read-back before current CAS; crash/response-loss/lease/GC/backup tests; logical determinism.
 
-## E3-A — Blizzard UI source universe
+## E3 — source and context
+
+### E3-A
 
 Build a separate exact platform-source project with pinned materialization, package/TOC/XML/Lua/analyzer/recognizer/graph publication, license/coverage, incremental replacement, fingerprints, and bounded `SkeletonInputView`.
 
-Gate: exact source/build/profile; no flavor merge or source execution; implementation source not promoted to API/runtime authority; separate store/snapshots; removal closure; bounded reads; redistribution explicit.
+### E3-B
 
-## E3-B — Project Map and context
+Build exact-universe binding, maps, L0/L1, expansion/selection/pruning, source boundaries, semantic packs, JSON/Markdown, cache identities, metrics, and evaluation.
 
-Build exact-universe binding, maps, L0/L1, closed control/effect projection, expansion/selection/pruning, source boundaries, semantic packs, JSON/Markdown, cache identities, metrics, and evaluation.
+### E3-C
 
-Gate: exact roots/views; separate universes; origin/evidence/coverage/conflict closure; mandatory records never pruned; omissions explicit; exact tokens only with frozen tokenizer; source remains untrusted data; byte-identical deterministic outputs.
+Build exact/current selector resolution, retained owner view acquisition, E3-B use-case orchestration, continuation retention, result envelopes, cancellation/closure, and thin context CLI commands.
 
-## E3-C — service and application context use cases
+## E4-A — exact-generation search core
 
-Build exact current/exact selector resolution, retained owner view acquisition, E3-B use-case orchestration, continuation retention, result envelopes, cancellation/closure, and thin context CLI commands.
+Documented contract:
+
+- [`../crates/wow-search/e4/README.md`](../crates/wow-search/e4/README.md)
+
+Build:
+
+- one immutable SearchShard per exact user-project, Blizzard UI, or Reference generation;
+- bounded typed SearchDocuments and exact field origins;
+- case-sensitive exact identity/name/alias/member/prefix lanes;
+- safe generation-local FTS5 text lane;
+- deterministic identifier similarity and structured shape;
+- seeded bounded graph reason paths;
+- authority bands and integer/ordinal fusion;
+- complete ranking explanations;
+- exact scoped miss gates;
+- immutable result-set manifests, whole-candidate pages, exact continuation;
+- SearchStore integrity/privacy/security/evaluation.
 
 Gate:
 
 ```text
-current resolved once by service only
-independent stores not misrepresented as globally atomic
-no hidden retry/fallback/LKG substitution
-exact ReferenceView and compatibility validation
-fixed acquire/reverse-release order
-no public success before close
-continuation reopens exact retained generations
-invalid artifact stays an Invalid validation payload, not internal failure
-service/app do not reimplement owner algorithms
-app imports service only
-canonical JSON/artifact bytes and exit codes frozen
-no implicit config/source/client discovery or background work
+no combined current/global FTS corpus
+no raw cross-shard FTS score comparison
+no inferred aliases
+no raw query syntax or executable extension
+no context dependency or hidden candidate selection
+no approximate result promoted to lineage/replacement/negative authority
+zero false exact/alias/authoritative-miss/lineage claims
+complete owner/document/index/lane coverage accounting
+deterministic ranking and pages across workers/order/cache/storage layout
+exact SQLite/FTS/tokenizer/platform probes and measured thresholds
+all fixture/checksum pins frozen
 ```
 
-## E4-A — search core
+## E4-B — lineage, migration, and impact
 
-Define and implement:
+Define explicit before/after generation models and independently validated assertions/candidates for:
 
-- exact ID/name/symbol lookup;
-- reviewed aliases/corrections;
-- FTS over bounded indexed text fields;
-- structural shape retrieval;
-- bounded graph neighborhood/path-assisted retrieval;
-- per-lane candidates, scores, evidence, coverage and conflicts;
-- deterministic fusion/ranking/tie-breaking;
-- explanations and explicit query normalization;
-- snapshot-bound pagination/continuation;
-- service operation and thin CLI projection.
+```text
+same entity
+renamed
+moved
+replaced or superseded
+removed
+introduced
+signature/type/restriction/contract change
+migration compatibility
+bounded static impact
+```
 
-`wow-search` does not call `wow-context`; service passes an explicitly selected exact result to context. Search result ranking never establishes lineage, replacement, safety, or platform truth.
+E4-A rank and similarity are Candidate evidence only. Authoritative conclusions require exact source/reference/project/graph evidence, generation/profile closure, conflict/coverage resolution, and explicit proof ceilings.
 
-## E4-B — lineage, migration and impact
+## E4-C — service and CLI
 
-Add explicit cross-generation assertions/candidates for same entity, moved/renamed/replaced/removed/introduced states, migration recipes, and bounded impact plans. Similarity is candidate evidence only. Every authoritative conclusion needs exact profile/generation/evidence/coverage/conflict closure.
+Expose search, candidate explanation, explicit candidate selection, lineage, migration, and impact through `wow-service` and `apps/wow`.
+
+`wow-context` continues to accept exact selected roots only. Service does not hide ranking or auto-select a replacement without an explicit reviewed policy and visible evidence.
 
 ## E5–E7
 
