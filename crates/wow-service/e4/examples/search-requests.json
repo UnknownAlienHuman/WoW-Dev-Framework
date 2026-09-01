@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e4-c-search-requests-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "cases": [
+    {
+      "case_id": "S4-SIDX-001",
+      "operation": "search_index_build",
+      "operation_id": null,
+      "owner_selector": {
+        "kind": "ExactPublicationSet",
+        "id": null
+      },
+      "search_profile_set_id": null,
+      "expected": "validated-and-cataloged-exact-shard"
+    },
+    {
+      "case_id": "S4-SIDX-003",
+      "operation": "search_query",
+      "owner_selector": {
+        "kind": "ExactPublicationSet",
+        "id": null
+      },
+      "search_shard_selector": {
+        "kind": "ForExactOwnerGeneration",
+        "search_profile_set_id": null
+      },
+      "mutation": "catalog-none",
+      "expected_error": "e4_search_shard_unavailable",
+      "must_not_invoke": [
+        "search_index_build"
+      ]
+    },
+    {
+      "case_id": "S4-SEARCH-001",
+      "operation": "search_query",
+      "selectors": {
+        "primary_project": null,
+        "optional_platform": null,
+        "reference": null
+      },
+      "request": {
+        "exact_search_request_id": null,
+        "literal_text": "RegisterEvent",
+        "required_lanes": [
+          "ExactCanonicalName",
+          "GenerationLocalTextFts"
+        ],
+        "budget_profile_id": null
+      },
+      "expected_result_id": null,
+      "expected_status": "Complete"
+    },
+    {
+      "case_id": "S4-SEARCH-003",
+      "operation": "search_query",
+      "mutation": "empty-approximate-lanes",
+      "expected_miss_class": "NoCandidatesUnderExecutedLanes",
+      "must_not_become": "ExactNotFoundWithAuthority"
+    },
+    {
+      "case_id": "S4-SEARCH-005",
+      "operation": "search_query",
+      "input": "approximate-candidates-only",
+      "expected_status": "CandidateOnly"
+    },
+    {
+      "case_id": "S4-SEARCH-009",
+      "operation": "search_explain",
+      "search_result_id": null,
+      "search_candidate_id": null,
+      "expected": "all-lane-signals-origin-arithmetic-coverage-and-nonclaims"
+    },
+    {
+      "case_id": "S4-SELECT-001",
+      "operation": "search_select",
+      "search_result_id": null,
+      "result_set_manifest_id": null,
+      "search_candidate_id": null,
+      "expected_entity_id": null,
+      "expected_result_digest": null,
+      "expected_candidate_digest": null,
+      "selection_origin": "ExplicitCallerSelection",
+      "expected_receipt_id": null
+    },
+    {
+      "case_id": "S4-SELECT-004",
+      "operation": "search_select",
+      "mutation": "candidate-omitted-and-service-picks-rank-1",
+      "expected_error": "e4_search_automatic_candidate_selection_forbidden"
+    },
+    {
+      "case_id": "S4-SELECT-006",
+      "operation": "search_select",
+      "mutation": "candidate-belongs-to-another-result",
+      "expected_error": "e4_search_candidate_result_guard_mismatch"
+    },
+    {
+      "case_id": "S4-IMP-011",
+      "operation": "search_continue",
+      "continuation_id": null,
+      "expected": "exact-retained-shards-result-manifest-and-cumulative-budget"
+    },
+    {
+      "case_id": "S4-LIFE-007",
+      "operation": "search_query",
+      "mutation": "retention-admission-fails-before-continuation-return",
+      "expected_error": "e4_retention_admission_failed",
+      "continuation_advertised": false
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "all exact owner/shard/profile/request/result/candidate/receipt IDs",
+      "all expected canonical request and result bytes/digests",
+      "all continuation and retention receipt IDs"
+    ]
+  }
+}
