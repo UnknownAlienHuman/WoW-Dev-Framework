@@ -161,6 +161,8 @@ Empty output is never implicitly complete or authoritative.
 
 Build/publication operations use exact operation ID plus canonical request digest. Same ID/same digest resumes/returns exact durable state; same ID/different digest is rejected. Read/query operations are pure for exact inputs.
 
-## Deferred orchestration
+## E4-C orchestration boundary
 
-E4-C `wow-service` later owns symbolic current resolution, acquisition/release of project/reference/search/lineage views, review authorization adapters, candidate selection and CLI envelopes. `wow-graph` does not implement those responsibilities.
+[`wow-service/e4`](../../wow-service/e4/README.md) owns symbolic current resolution, fixed-order acquisition/release of project/reference/search/lineage/context views, review-authorization adapter calls, idempotency/retention, explicit candidate selection, search-to-context handoff, and public service/CLI envelopes.
+
+`wow-graph` continues to accept only exact inputs and never imports or calls `wow-service`. The E4-C contract cannot change graph proof ceilings, choose a lineage candidate, repair a snapshot, apply a migration, or reinterpret static impact as runtime truth.
