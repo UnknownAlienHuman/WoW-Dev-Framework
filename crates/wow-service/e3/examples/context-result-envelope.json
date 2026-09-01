@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e3-c-context-result-envelope-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "envelope": {
+    "envelope_schema_version": "wow-service-context-result/e3-c/1",
+    "result_id": null,
+    "operation": "context_build",
+    "request_id": null,
+    "service_configuration_id": null,
+    "selector_metadata": {
+      "primary_kind": "CurrentPublished",
+      "platform_kind": "Omitted"
+    },
+    "resolved_context_selection_set_id": null,
+    "context_universe_set_id": null,
+    "status": "complete",
+    "root_ids": [],
+    "context_profile_set_id": null,
+    "context_operation_outcome_id": null,
+    "context_semantic_pack_id": null,
+    "rendered_context_artifact_ids": [],
+    "capability_summary_id": null,
+    "coverage_summary_id": null,
+    "conflict_summary_id": null,
+    "omission_manifest_id": null,
+    "loss_manifest_id": null,
+    "budget_usage_id": null,
+    "truncation_records": [],
+    "continuation_id": null,
+    "warning_ids": [],
+    "resource_closure_report_id": null,
+    "resource_closure_state": "Complete",
+    "producer_versions": [],
+    "canonical_sha256": null
+  },
+  "forbidden_identity_fields": [
+    "clock",
+    "duration",
+    "host",
+    "process_id",
+    "terminal",
+    "locale",
+    "cli_input_path",
+    "raw_lease_handle",
+    "raw_sqlite_handle",
+    "current_pointer_after_resolution",
+    "cache_hit"
+  ],
+  "mutation_cases": [
+    {
+      "case_id": "SVC3-ENV-014",
+      "mutation": "set_resource_closure_state_Failed_on_success",
+      "expected_error": "service_context_resource_closure_report_invalid"
+    },
+    {
+      "case_id": "SVC3-ENV-015",
+      "mutation": "include_cli_exit_code_in_result_identity",
+      "expected_error": "service_context_cli_or_transport_state_in_semantic_result"
+    },
+    {
+      "case_id": "SVC3-ENV-011",
+      "mutation": "drop_omission_or_conflict_summary",
+      "expected_error": "service_context_omission_conflict_or_coverage_hidden"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}

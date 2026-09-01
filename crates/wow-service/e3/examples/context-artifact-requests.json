@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e3-c-context-artifact-requests-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "validate_request": {
+    "request_id": null,
+    "operation": "context_validate",
+    "artifact_kind": "ContextSemanticPack",
+    "media_type": "application/json",
+    "artifact_bytes_base64": null,
+    "artifact_byte_length": null,
+    "validation_profile_id": null,
+    "origin_closure_level": "ExactOwnerClosure",
+    "exact_publication_guards": [],
+    "budget_profile_id": null,
+    "input_host_path": null,
+    "canonical_sha256": null
+  },
+  "render_request": {
+    "request_id": null,
+    "operation": "context_render",
+    "semantic_pack_bytes_base64": null,
+    "semantic_pack_byte_length": null,
+    "renderer_profile_id": null,
+    "tokenizer_profile_id": null,
+    "origin_closure_level": "StructuralOnly",
+    "budget_profile_id": null,
+    "input_host_path": null,
+    "canonical_sha256": null
+  },
+  "mutation_cases": [
+    {
+      "case_id": "SVC3-VAL-002",
+      "mutation": "invalid_semantic_pack",
+      "expected": "complete-service-operation-with-Invalid-validation-payload"
+    },
+    {
+      "case_id": "SVC3-VAL-007",
+      "mutation": "include_input_host_path_in_semantic_request",
+      "expected_error": "service_context_application_artifact_path_leak_forbidden"
+    },
+    {
+      "case_id": "SVC3-RENDER-004",
+      "mutation": "renderer_changes_semantic_pack",
+      "expected_error": "service_context_renderer_changed_semantic_pack"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}

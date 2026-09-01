@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e3-c-context-build-request-v1",
+  "state": "documentation-only-pending-id-freeze",
+  "request": {
+    "request_id": null,
+    "operation": "context_build",
+    "primary_selector": {
+      "kind": "ExactPublicationSet",
+      "project_store_id": null,
+      "project_publication_set_id": null
+    },
+    "platform_selector": {
+      "kind": "ExactPublicationSet",
+      "project_store_id": null,
+      "project_publication_set_id": null
+    },
+    "reference_guard": {
+      "profile_id": null,
+      "reference_generation_id": null,
+      "reference_view_id": null
+    },
+    "root_selectors": [
+      {
+        "kind": "GraphEntityKey",
+        "id": null
+      }
+    ],
+    "context_profile_set_id": null,
+    "intent_profile_id": null,
+    "expansion_profile_id": null,
+    "selection_profile_id": null,
+    "budget_profile_id": null,
+    "tokenizer_profile_id": null,
+    "source_excerpt_profile_id": null,
+    "privacy_consumer_profile_id": null,
+    "source_boundary_profile_id": null,
+    "renderer_profile_ids": [],
+    "continuation_retention_policy_id": null,
+    "canonical_sha256": null
+  },
+  "expected": {
+    "semantic_pack_validated_before_render": true,
+    "continuation_retained_before_advertisement": true,
+    "resources_closed_before_success": true
+  },
+  "mutation_cases": [
+    {
+      "case_id": "SVC3-BUILD-005",
+      "mutation": "renderer_changes_semantic_selection",
+      "expected_error": "service_context_renderer_changed_semantic_pack"
+    },
+    {
+      "case_id": "SVC3-BUILD-010",
+      "mutation": "advertise_continuation_without_retention",
+      "expected_error": "service_context_continuation_advertised_without_retention"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e3-c-acquisition-cases-v1",
+  "state": "documentation-only-pending-vector-freeze",
+  "cases": [
+    {
+      "case_id": "SVC3-SEL-005",
+      "condition": "primary CurrentPublished valid",
+      "expected": "one-current-read-exact-selection"
+    },
+    {
+      "case_id": "SVC3-SEL-006",
+      "condition": "current changes after exact view acquired",
+      "expected": "request-stays-on-acquired-generation"
+    },
+    {
+      "case_id": "SVC3-SEL-009",
+      "condition": "expected-current guard mismatch",
+      "expected_error": "service_context_expected_current_guard_mismatch"
+    },
+    {
+      "case_id": "SVC3-SEL-012",
+      "mutation": "substitute last-known-good",
+      "expected_error": "service_context_last_known_good_substitution_forbidden"
+    },
+    {
+      "case_id": "SVC3-SEL-018",
+      "mutation": "select floating current ReferenceView",
+      "expected_error": "service_context_reference_binding_mismatch"
+    },
+    {
+      "case_id": "SVC3-SEL-024",
+      "mutation": "claim globally atomic independent currents",
+      "expected_error": "service_context_distributed_atomicity_claim_forbidden"
+    },
+    {
+      "case_id": "SVC3-ACQ-001",
+      "condition": "primary platform reference available and compatible",
+      "expected": "fixed-order-acquisition-and-valid-universe-set"
+    },
+    {
+      "case_id": "SVC3-ACQ-011",
+      "condition": "platform and primary reference profiles incompatible",
+      "expected_error": "service_context_selection_incompatible"
+    },
+    {
+      "case_id": "SVC3-ACQ-012",
+      "condition": "wrong SkeletonInputView generation",
+      "expected_error": "service_context_skeleton_input_view_mismatch"
+    },
+    {
+      "case_id": "SVC3-ACQ-024",
+      "mutation": "flatten capabilities to ready boolean",
+      "expected_error": "service_context_result_payload_invalid"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}
