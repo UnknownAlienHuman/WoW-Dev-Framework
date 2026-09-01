@@ -1,19 +1,20 @@
 {
   "schema_version": 1,
   "repository": "UnknownAlienHuman/WoW-Dev-Framework",
-  "documentation_frontier": "E4-C",
+  "documentation_frontier": "E5-A",
   "implementation_frontier": "not-started",
   "contract_state": "documentation-only-no-rust-code",
   "next_documentation_work_package": {
-    "id": "E5-A",
-    "owner": "wow-recognizers",
+    "id": "E5-B",
+    "owner": "wow-service",
+    "application": "apps/wow",
     "collaborators": [
-      "wow-project",
+      "wow-recognizers",
+      "wow-store",
       "wow-graph",
-      "wow-search",
-      "wow-service"
+      "wow-project"
     ],
-    "scope": "audited calibration corpora and named calibration packs that emit universal structural roles only, with anti-overfitting, rename, path, owner and near-miss mutation gates"
+    "scope": "exact calibration artifact acquisition, durable run orchestration, reviewer authorization, sealed-holdout unsealing audit, promotion submissions, retention/idempotency/response-loss behavior, canonical service envelopes, and a thin CLI"
   },
   "workspace_state": {
     "cargo_workspace_present": false,
@@ -42,6 +43,9 @@
     "Search ranking and similarity produce candidates and never authorize intended entity lineage replacement migration impact safety runtime or platform truth.",
     "Review authorization and lineage proof are independent and neither can exceed the minimum proof ceiling.",
     "Migration artifacts are advisory and static impact paths are not runtime breakage or severity claims.",
+    "A repository commit pin is not an admitted calibration corpus member.",
+    "Calibration labels splits reviewer records and expected outputs never become matcher inputs.",
+    "E5-A calibration packs are shadow-only; E5-B owns durable review orchestration and E5-C owns publication rollout and rollback.",
     "Applications depend on wow-service only and never reproduce owner algorithms.",
     "Missing implementation probe benchmark tokenizer evaluation reviewer authorization client or source evidence is blocking or NotEvaluated and never pass.",
     "No CI or workflow is added without an explicit owner request."
@@ -179,6 +183,17 @@
       "contract_id": "wow-service/e4-c/search-lineage-impact-use-cases",
       "manifest": "crates/wow-service/e4/CONTRACT.json",
       "application_manifest": "apps/wow/e4/CONTRACT.json"
+    },
+    {
+      "work_package": "E5-A",
+      "owner": "wow-recognizers",
+      "input_owners": [
+        "wow-project",
+        "wow-store"
+      ],
+      "graph_validator": "wow-graph",
+      "contract_id": "wow-recognizers/e5-a/calibration-corpora-and-named-packs",
+      "manifest": "crates/wow-recognizers/e5/CONTRACT.json"
     }
   ],
   "crates": [
@@ -256,7 +271,7 @@
     {
       "name": "wow-project",
       "brief": "crates/wow-project/README.md",
-      "documentation_frontier": "E4-B-producer-seam",
+      "documentation_frontier": "E4-B-producer-seam; E5-A-input-seam",
       "first_implementation_milestone": "E0-D",
       "implementation_state": "not-started",
       "allowed_dependencies": [
@@ -278,7 +293,7 @@
     {
       "name": "wow-graph",
       "brief": "crates/wow-graph/README.md",
-      "documentation_frontier": "E4-B",
+      "documentation_frontier": "E4-B; E5-A-proposal-validation-seam",
       "first_implementation_milestone": "E2-A",
       "implementation_state": "not-started",
       "allowed_dependencies": [
@@ -293,7 +308,7 @@
     {
       "name": "wow-recognizers",
       "brief": "crates/wow-recognizers/README.md",
-      "documentation_frontier": "E2-B; E5-A-next",
+      "documentation_frontier": "E5-A",
       "first_implementation_milestone": "E2-B",
       "implementation_state": "not-started",
       "allowed_dependencies": [
@@ -302,7 +317,8 @@
         "wow-graph"
       ],
       "active_contracts": [
-        "crates/wow-recognizers/e2/CONTRACT.json"
+        "crates/wow-recognizers/e2/CONTRACT.json",
+        "crates/wow-recognizers/e5/CONTRACT.json"
       ]
     },
     {
@@ -375,7 +391,7 @@
     {
       "name": "wow-service",
       "brief": "crates/wow-service/README.md",
-      "documentation_frontier": "E4-C",
+      "documentation_frontier": "E4-C; E5-B-next",
       "first_implementation_milestone": "E0-F",
       "implementation_state": "not-started",
       "allowed_dependencies": [
@@ -413,7 +429,7 @@
     {
       "name": "wow",
       "path": "apps/wow",
-      "documentation_frontier": "E4-C",
+      "documentation_frontier": "E4-C; E5-B-next",
       "implementation_state": "not-started",
       "framework_dependencies": [
         "wow-service"
@@ -457,6 +473,7 @@
     "E3-C",
     "E4-A",
     "E4-B",
-    "E4-C"
+    "E4-C",
+    "E5-A"
   ]
 }
