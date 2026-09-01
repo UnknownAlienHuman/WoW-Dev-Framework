@@ -1,0 +1,126 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-graph-e4-b-ambiguity-review-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "component": {
+    "component_id": null,
+    "lineage_universe_set_id": null,
+    "component_shape": "OneToMany",
+    "blocking_key_records": [],
+    "before_entity_refs": [],
+    "after_entity_refs": [],
+    "proposal_ids": [],
+    "candidate_assignment_sets": [],
+    "ambiguity_state": "Unresolved",
+    "coverage_record_ids": [],
+    "conflict_ids": [],
+    "budget_and_truncation_report_id": null,
+    "canonical_sha256": null
+  },
+  "review_decision": {
+    "review_decision_id": null,
+    "target_component_or_proposal_id": null,
+    "reviewer_authority_class": null,
+    "attestation_id": null,
+    "decision": "Defer",
+    "requested_proof_ceiling": "Candidate",
+    "effective_proof_ceiling": "Candidate",
+    "structured_reason_code": null,
+    "bounded_untrusted_note": null,
+    "evidence_addition_ids": [],
+    "coverage_condition_ids": [],
+    "predecessor_or_superseded_decision_ids": [],
+    "canonical_sha256": null
+  },
+  "cases": [
+    {
+      "case_id": "LIN-AMB-001",
+      "mutation": "one-before-one-after-candidate",
+      "expected": "one-to-one-component-not-auto-proven"
+    },
+    {
+      "case_id": "LIN-AMB-002",
+      "mutation": "one-before-many-after",
+      "expected": "one-to-many-component"
+    },
+    {
+      "case_id": "LIN-AMB-003",
+      "mutation": "many-before-one-after",
+      "expected": "many-to-one-component"
+    },
+    {
+      "case_id": "LIN-AMB-007",
+      "mutation": "unique-high-rank-candidate-auto-promoted",
+      "expected_error": "lineage_unique_candidate_auto_promotion_forbidden"
+    },
+    {
+      "case_id": "LIN-AMB-008",
+      "mutation": "greedy-maximum-score-assignment-as-truth",
+      "expected_error": "lineage_greedy_or_score_only_assignment_forbidden"
+    },
+    {
+      "case_id": "LIN-AMB-010",
+      "mutation": "old-entity-remains-and-new-copy-appears",
+      "expected": "copy-or-extraction-ambiguity-not-move"
+    },
+    {
+      "case_id": "LIN-AMB-012",
+      "mutation": "one-to-many-similarity-without-split-evidence",
+      "expected_error": "lineage_split_merge_evidence_insufficient"
+    },
+    {
+      "case_id": "LIN-AMB-014",
+      "mutation": "many-to-one-similarity-without-merge-evidence",
+      "expected_error": "lineage_split_merge_evidence_insufficient"
+    },
+    {
+      "case_id": "LIN-AMB-017",
+      "mutation": "component-exceeds-node-or-edge-budget",
+      "expected_error": "lineage_candidate_component_budget_exceeded"
+    },
+    {
+      "case_id": "LIN-REV-004",
+      "mutation": "review-accepts-within-effective-ceiling",
+      "expected": "accepted-assertion"
+    },
+    {
+      "case_id": "LIN-REV-005",
+      "mutation": "review-requests-above-relation-ceiling",
+      "expected_error": "lineage_review_proof_ceiling_exceeded"
+    },
+    {
+      "case_id": "LIN-REV-006",
+      "mutation": "review-promotes-search-only-candidate-to-proven",
+      "expected_error": "lineage_review_candidate_only_promotion_forbidden"
+    },
+    {
+      "case_id": "LIN-REV-009",
+      "mutation": "conflicting-review-decisions",
+      "expected_error": "lineage_review_decision_conflict"
+    },
+    {
+      "case_id": "LIN-REV-011",
+      "mutation": "review-note-changes-proof-rule",
+      "expected_error": "lineage_review_note_or_payload_forbidden"
+    },
+    {
+      "case_id": "LIN-REV-015",
+      "mutation": "rejected-or-deferred-proposal-deleted",
+      "expected_error": "lineage_rejected_or_deferred_proposal_lost"
+    },
+    {
+      "case_id": "LIN-REV-019",
+      "mutation": "last-write-wins-conflict-resolution",
+      "expected_error": "lineage_last_write_majority_or_popularity_resolution_forbidden"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "all component blocking entity proposal assignment ambiguity coverage conflict and budget IDs",
+      "all review authority attestation target decision evidence and predecessor IDs",
+      "all accepted rejected deferred conflict and supersession expected bytes and IDs",
+      "all canonical SHA-256 values"
+    ]
+  }
+}
