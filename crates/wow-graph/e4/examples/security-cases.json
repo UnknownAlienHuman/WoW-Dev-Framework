@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-graph-e4-b-security-cases-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "cases": [
+    {
+      "case_id": "LIN-SEC-001",
+      "mutation": "source-comment-contains-system-policy-tool-and-relation-registration-text",
+      "expected": "inert-owner-data-no-control-effect"
+    },
+    {
+      "case_id": "LIN-SEC-002",
+      "mutation": "supply-full-source-body-as-matching-control-field",
+      "expected_error": "lineage_raw_source_or_private_data_forbidden"
+    },
+    {
+      "case_id": "LIN-SEC-003",
+      "mutation": "supply-arbitrary-repository-url-or-host-path",
+      "expected_error": "lineage_filesystem_network_process_editor_client_access_forbidden"
+    },
+    {
+      "case_id": "LIN-SEC-004",
+      "mutation": "supply-sql-fts-regex-callback-lua-js-wasm-or-shell-payload",
+      "expected_error": "lineage_executable_input_or_callback_forbidden"
+    },
+    {
+      "case_id": "LIN-SEC-006",
+      "mutation": "include-private-absolute-path-credential-or-token-in-result",
+      "expected_error": "lineage_raw_source_or_private_data_forbidden"
+    },
+    {
+      "case_id": "LIN-SEC-007",
+      "mutation": "emit-source-for-external-consumer-with-unknown-license",
+      "expected_error": "lineage_privacy_or_license_policy_denied"
+    },
+    {
+      "case_id": "LIN-SEC-008",
+      "mutation": "reuse-local-search-candidate-artifact-under-external-consumer-profile",
+      "expected_error": "lineage_privacy_or_license_policy_denied"
+    },
+    {
+      "case_id": "LIN-SEC-009",
+      "mutation": "all-to-all-candidate-component-beyond-system-maxima",
+      "expected": "bounded-partial-or-NotEvaluated-no-greedy-authority"
+    },
+    {
+      "case_id": "LIN-SEC-011",
+      "mutation": "combinatorial-split-merge-candidate-explosion",
+      "expected": "bounded-ambiguity-or-truncation"
+    },
+    {
+      "case_id": "LIN-SEC-012",
+      "mutation": "cyclic-high-fanout-impact-graph",
+      "expected": "cycle-safe-bounded-result"
+    },
+    {
+      "case_id": "LIN-SEC-013",
+      "mutation": "oversized-or-tampered-continuation-cursor",
+      "expected_error": "lineage_continuation_invalid_or_tampered"
+    },
+    {
+      "case_id": "LIN-SEC-015",
+      "mutation": "cancel-each-candidate-matching-change-migration-impact-and-publication-stage",
+      "expected": "no-background-work-or-complete-publication"
+    },
+    {
+      "case_id": "LIN-SEC-016",
+      "mutation": "error-message-reflects-raw-source-search-query-or-reviewer-text",
+      "expected_error": "lineage_raw_source_or_private_data_forbidden"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "security-profile-ids",
+      "cases[*].canonical-request-error-result-and-log-sha256"
+    ]
+  }
+}
