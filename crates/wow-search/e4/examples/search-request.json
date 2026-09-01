@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-search-e4-a-search-request-v1",
+  "state": "documentation-only-pending-id-freeze",
+  "request": {
+    "request_id": null,
+    "search_universe_set_id": null,
+    "intent": "CombinedRetrieval",
+    "exact_fields": {
+      "entity_id": null,
+      "canonical_name": "C_Fixture.KnownApi",
+      "alias": null,
+      "namespace": "C_Fixture",
+      "member": "KnownApi"
+    },
+    "literal_text": {
+      "terms": [
+        "known",
+        "api"
+      ],
+      "phrases": [
+        "known api"
+      ],
+      "prefix_terms": [
+        "know"
+      ]
+    },
+    "structured_shape": {
+      "entity_kinds": [
+        "function"
+      ],
+      "receiver": null,
+      "parameters": [],
+      "returns": [],
+      "restriction_facets": []
+    },
+    "exact_graph_seed_ids": [],
+    "enabled_lanes": [
+      "ExactCanonicalName",
+      "NamespaceMemberOrReceiverMethod",
+      "IdentifierPrefix",
+      "GenerationLocalTextFts",
+      "IdentifierSimilarity",
+      "StructuredShape",
+      "SeededGraphExpansion"
+    ],
+    "required_lanes": [
+      "ExactCanonicalName"
+    ],
+    "ranking_profile_id": null,
+    "graph_expansion_profile_id": null,
+    "miss_profile_id": null,
+    "pagination_profile_id": null,
+    "privacy_consumer_profile_id": null,
+    "budget_profile_id": null,
+    "canonical_sha256": null
+  },
+  "normalized_query": {
+    "normalized_search_query_id": null,
+    "safe_fts_ast": {
+      "node": "AllOf",
+      "children": [
+        {
+          "node": "AnyOf",
+          "children": [
+            {
+              "node": "LiteralTerm",
+              "value": "known"
+            },
+            {
+              "node": "LiteralTerm",
+              "value": "api"
+            }
+          ]
+        },
+        {
+          "node": "LiteralPhrase",
+          "terms": [
+            "known",
+            "api"
+          ]
+        },
+        {
+          "node": "LiteralPrefixTerm",
+          "value": "know"
+        }
+      ]
+    },
+    "raw_match_sql_or_fts_string": null,
+    "canonical_sha256": null
+  },
+  "mutation_cases": [
+    {
+      "case_id": "SEARCH-REQ-009",
+      "mutation": "replace safe AST with raw FTS MATCH query",
+      "expected_error": "search_request_raw_fts_sql_regex_or_expression_forbidden"
+    },
+    {
+      "case_id": "SEARCH-REQ-011",
+      "mutation": "insert FTS operators punctuation and column syntax into literal text",
+      "expected": "literal inert text or bounded rejection under normalization profile"
+    },
+    {
+      "case_id": "SEARCH-REQ-018",
+      "mutation": "request exact negative authority from approximate-only lanes",
+      "expected_error": "search_query_negative_authority_requested_from_approximate_lanes"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}
