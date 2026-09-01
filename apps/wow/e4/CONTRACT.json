@@ -1,0 +1,192 @@
+{
+  "schema_version": 1,
+  "contract_id": "apps/wow/e4-c/search-lineage-impact-cli",
+  "state": "implementation-ready-documentation-no-rust-code",
+  "work_package": "E4-C",
+  "application": "wow",
+  "documentation_frontier": "E4-C",
+  "implementation_state": "not-started",
+  "framework_dependencies": [
+    "wow-service"
+  ],
+  "forbidden_framework_dependencies": [
+    "wow-core",
+    "wow-store",
+    "wow-reference",
+    "wow-annotations",
+    "wow-emmy",
+    "wow-project",
+    "wow-graph",
+    "wow-recognizers",
+    "wow-rules",
+    "wow-search",
+    "wow-context",
+    "wow-cbm"
+  ],
+  "prerequisite_contract": "wow-service/e4-c/search-lineage-impact-use-cases",
+  "active_commands": [
+    "search index status",
+    "search index build",
+    "search index validate",
+    "search query",
+    "search continue",
+    "search explain",
+    "search select",
+    "search context",
+    "lineage status",
+    "lineage build",
+    "lineage validate",
+    "lineage review validate",
+    "lineage review apply",
+    "lineage compare",
+    "lineage trace",
+    "lineage explain",
+    "migration candidates",
+    "migration validate",
+    "impact plan",
+    "impact run",
+    "impact continue",
+    "impact explain"
+  ],
+  "publication_selector_tokens": [
+    "current",
+    "store-generation:<ProjectStoreGenerationId>",
+    "publication-set:<ProjectPublicationSetId>"
+  ],
+  "reference_selector_tokens": [
+    "current-compatible",
+    "reference-view:<ReferenceViewId>",
+    "reference-generation:<ReferenceGenerationId>"
+  ],
+  "search_shard_selector_tokens": [
+    "search-shard:<SearchShardId>",
+    "for-owner-generation:<SearchProfileSetId>"
+  ],
+  "lineage_snapshot_selector_tokens": [
+    "lineage-snapshot:<LineageGraphSnapshotId>",
+    "for-comparison:<LineageProfileSetId>"
+  ],
+  "exact_root_token_grammar": "<RootKind>@<base64url-no-pad(canonical UTF-8 ID bytes)>",
+  "output_modes": [
+    "envelope-json",
+    "text",
+    "artifact"
+  ],
+  "exit_codes": {
+    "0": [
+      "Complete",
+      "NoChange",
+      "validation Valid",
+      "complete exact search miss"
+    ],
+    "1": [
+      "completed validation Invalid",
+      "checked invalid or unauthorized review payload where command profile declares"
+    ],
+    "2": [
+      "Partial",
+      "CandidateOnly",
+      "ConflictBlocked",
+      "Truncated",
+      "NotEvaluated"
+    ],
+    "3": [
+      "structured selector generation shard snapshot candidate review continuation retention capability or domain failure"
+    ],
+    "4": [
+      "internal owner service closure canonicalization serialization or post-service output failure"
+    ],
+    "64": [
+      "CLI config argument explicit input or output transport failure before service invocation"
+    ],
+    "130": [
+      "Cancelled"
+    ]
+  },
+  "explicit_input_flags": [
+    "--config <PATH>",
+    "--query-json <PATH|->",
+    "--review-input <PATH|->",
+    "--context-request <PATH|->",
+    "--input <PATH|->",
+    "--continuation <PATH|->"
+  ],
+  "owned_responsibilities": [
+    "strict-command-option-and-config-parsing",
+    "explicit-bounded-file-or-stdin-transport-input",
+    "mechanical-exact-selector-and-ID-projection",
+    "typed-wow-service-request-construction",
+    "exactly-one-service-invocation",
+    "signal-to-cancellation-projection",
+    "canonical-envelope-json-output",
+    "faithful-noncanonical-text-output",
+    "single-exact-validated-artifact-output",
+    "stdout-stderr-broken-pipe-and-atomic-file-output",
+    "command-specific-exit-code-projection"
+  ],
+  "forbidden_responsibilities": [
+    "current-or-catalog-resolution",
+    "search-document-shard-query-ranking-explanation-or-miss-algorithms",
+    "automatic-top-one-sole-rank-or-name-candidate-selection",
+    "lineage-proposal-proof-component-review-change-migration-or-impact-algorithms",
+    "review-authorization-from-GitHub-OS-CLI-file-or-terminal-identity",
+    "direct-lower-owner-store-search-graph-context-or-source-access",
+    "source-project-repository-editor-client-or-environment-discovery",
+    "source-edit-migration-application-or-tool-authorization",
+    "raw-SQL-FTS-regex-shell-script-plugin-model-or-CBM-execution",
+    "implicit-network-fetch-archive-extraction-or-media-sniffing",
+    "automatic-retry-generation-fallback-or-current-refresh",
+    "daemon-LSP-MCP-release-CI-or-background-work"
+  ],
+  "hard_rules": [
+    "wow-service is the only framework dependency",
+    "current tokens are passed unchanged to service and never resolved by the app",
+    "exact IDs are parsed mechanically and never looked up by name or path",
+    "zero or multiple catalog results are never resolved by the app",
+    "exactly one service invocation occurs per valid command",
+    "search continuation accepts no selector query profile lane or fresh-budget override",
+    "candidate selection requires exact result result-set and candidate IDs and never accepts rank first top best name or sole-candidate shortcuts",
+    "search context requires an explicit candidate and strict context request",
+    "review input is one explicit strict JSON envelope and plain prose is not a decision",
+    "GitHub OS CLI terminal and file ownership never authorize review",
+    "no private key access token or credential is accepted in normal CLI/config fixtures",
+    "migration validation never applies edits and no migration-apply command exists",
+    "impact output preserves static-only path and nonclaim state",
+    "envelope JSON equals canonical service bytes plus one LF",
+    "artifact mode emits exactly one eligible validated artifact with no wrapper or newline change",
+    "text mode preserves Candidate Partial Conflict Truncated NotEvaluated proof and nonclaim state",
+    "stdout contains only requested output and stderr contains bounded diagnostics",
+    "broken pipe cancellation and output failure never trigger retry or double output",
+    "no implicit config cwd home environment editor Git repository WoW client or network discovery",
+    "explicit input is bounded data and never executed extracted or scanned recursively",
+    "terminal locale clock path and exit code never enter service semantic identity",
+    "missing service implementation fixtures platform tests or checksums block implementation",
+    "no Cargo Rust source or CI during documentation phase"
+  ],
+  "normative_files": [
+    "apps/wow/README.md",
+    "apps/wow/e4/README.md",
+    "apps/wow/e4/AGENTS.md",
+    "apps/wow/e4/CLI_COMMANDS.md",
+    "apps/wow/e4/INPUT_SELECTORS_REVIEW_AND_ARTIFACTS.md",
+    "apps/wow/e4/OUTPUT_EXIT_AND_STREAMS.md",
+    "apps/wow/e4/SECURITY_AND_CONFIG.md",
+    "apps/wow/e4/TEST_MATRIX.md",
+    "apps/wow/e4/CONTRACT.json",
+    "apps/wow/e4/examples/README.md",
+    "apps/wow/e4/examples/cli-cases.json",
+    "apps/wow/e4/examples/stdout-exit-cases.json",
+    "apps/wow/e4/examples/review-artifact-cases.json",
+    "apps/wow/e4/examples/CHECKSUMS.json"
+  ],
+  "freeze_gate": {
+    "implementation_state": "not-started",
+    "required_before_first_rust_implementation": [
+      "implemented and frozen wow-service E4-C request result error and canonical byte contracts",
+      "frozen command selector root config query review artifact continuation output exit signal cancellation broken-pipe and platform adapter profiles",
+      "all canonical request envelope stdout artifact text-required-field exit-code and error vectors",
+      "all dependency security privacy review cancellation path and E0-E3 regression reports",
+      "all member and bundle SHA-256 values"
+    ]
+  }
+}
