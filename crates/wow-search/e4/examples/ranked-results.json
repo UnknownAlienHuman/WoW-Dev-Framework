@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-search-e4-a-ranked-results-v1",
+  "state": "documentation-only-pending-freeze",
+  "result_set_manifest": {
+    "result_set_manifest_id": null,
+    "search_universe_set_id": null,
+    "normalized_query_id": null,
+    "ranking_profile_id": null,
+    "ordered_candidates": [
+      {
+        "candidate_id": null,
+        "entity_key": "reference:C_Fixture.KnownApi",
+        "authority_band": "ExactCanonicalQualifiedName",
+        "signal_ids": [],
+        "rank_tuple": null,
+        "stable_tie_key": null,
+        "explanation": {
+          "exact_constraints_matched": [
+            "canonical_qualified_name"
+          ],
+          "lane_contributions": [],
+          "caps_and_penalties": [],
+          "skipped_or_partial_lanes": [],
+          "coverage_record_ids": [],
+          "conflict_ids": [],
+          "nonclaims": [
+            "not proof of user intent",
+            "not a lineage or replacement conclusion",
+            "not runtime or safety authority"
+          ]
+        }
+      },
+      {
+        "candidate_id": null,
+        "entity_key": "reference:C_Fixture.KnownApiAlternative",
+        "authority_band": "FoldedPrefixOrIdentifierSimilarityCandidate",
+        "signal_ids": [],
+        "rank_tuple": null,
+        "stable_tie_key": null,
+        "explanation": {
+          "exact_constraints_matched": [],
+          "lane_contributions": [],
+          "caps_and_penalties": [
+            "approximate-identifier-band-cap"
+          ],
+          "skipped_or_partial_lanes": [],
+          "coverage_record_ids": [],
+          "conflict_ids": [],
+          "nonclaims": [
+            "not an alias",
+            "not a typo correction",
+            "not a replacement or lineage claim"
+          ]
+        }
+      }
+    ],
+    "candidate_enumeration_truncated": false,
+    "canonical_sha256": null
+  },
+  "hard_assertions": [
+    "the exact qualified-name candidate ranks above any number of approximate-only signals",
+    "all ranking arithmetic and tie keys are reconstructible",
+    "same-name cross-universe candidates remain distinct"
+  ]
+}
