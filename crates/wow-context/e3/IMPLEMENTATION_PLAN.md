@@ -1,141 +1,126 @@
 # E3-B implementation plan
 
-**Status:** normative order; implementation not started.
+**Status:** normative order; implementation has not started.
 
-## Phase 0 — reconcile and freeze the contract
+## Phase 0 — prerequisites and freeze
 
-- accept `MILESTONE_RENUMBERING.md`;
-- remove any duplicate E3-A/E3-B context type or operation from the implementation design;
-- implement and freeze all E0-E2 prerequisites;
-- implement and freeze E3-A `wow-project` Blizzard UI source index and `SkeletonInputView`;
-- freeze public project, graph, reference, and source-detail read catalogs;
-- freeze context schemas, profiles, examples, expected IDs, canonical bytes, and checksums;
-- update repository crate manifest and workstream activation before Rust code.
+Before any E3-B Rust file or `Cargo.toml`:
 
-No placeholder `Cargo.toml` or `.rs` file before this gate.
+- implement and freeze `wow-core`, persistent `wow-reference`, E2 graph/project/store publication, and E3-A Blizzard UI source-index contracts required by active profiles;
+- freeze exact project/graph/reference/source-slice/SkeletonInputView read catalogs;
+- freeze map, L0, L1, control/effect, intent, expansion, selection, continuation, budget, tokenizer/estimator, source, privacy/license, boundary, semantic-pack, renderer, cache-key, metrics, evaluation, error, and canonicalization profiles;
+- freeze synthetic, high-fanout/cyclic, pinned `roth-ui`, pinned Blizzard UI, combined-universe, and adversarial source corpora;
+- populate every fixture ID, expected byte/token vector, benchmark/evaluation threshold, and SHA-256 manifest;
+- verify no retired E3-A context type/operation is activated.
 
-## Phase 1 — value types, profiles, and canonicalization
+## Phase 1 — narrow input interfaces
 
-Implement:
-
-- `ContextUniverseSet`;
-- current terminology and historical aliases as one migration layer;
-- profile schemas and registries;
-- exact root selectors;
-- budget, token, source, privacy, boundary, and renderer profiles;
-- canonical IDs, ordering, and serialization;
-- typed errors and cancellation.
-
-Tests: milestone, schema, profile, request, canonicalization, and freeze groups.
-
-## Phase 2 — universe binding and owner view adapters
-
-Implement narrow adapters over exact public:
+Implement exact traits/adapters over public owner views only:
 
 ```text
-wow-project ProjectView and SkeletonInputView
-wow-graph GraphView
-wow-reference ReferenceView
+ProjectContextRead
+GraphContextRead
+ReferenceContextRead
+SourceSliceRead
 ```
 
-No storage, analyzer, parser, or search access.
+No raw store/analyzer/parser handles. Prove generation binding, cancellation, bounds, record validation, and no current refresh.
 
-Tests: generation compatibility, optional platform source, partial/conflict, wrong-universe records, stable old reader while current advances.
+## Phase 2 — profiles and universe binding
+
+Implement closed profile schemas, canonicalization, request/root validation, `ContextUniverseSet`, compatibility reports, and exact identity DAG foundations.
+
+Tests: universe/generation/profile/cross-universe/floating-current/unknown-field mutations.
 
 ## Phase 3 — Project Map
 
-Implement map nodes, edges, groups, facets, exact evidence/coverage, ordering, budget, omission, and continuation over synthetic fixtures.
+Implement map node/edge/group/facet projections, direct relation/path distinction, deterministic ordering, pagination, omissions, and validation.
 
-No source excerpts.
+Tests: grouping/role/name/path mutations, partial coverage, cycles, budget pages, 1/2/N order.
 
-Tests: map identity, grouping, path/direct distinction, multi-universe separation, fanout, determinism.
+## Phase 4 — L0 and L1
 
-## Phase 4 — L0 skeletons
+Implement container L0, entity/local-neighborhood L1, exact signatures/types/spans, signal/hook/state/API facets, and source excerpt candidates.
 
-Implement bounded container scopes, typed sections, declaration summaries, direct owner/load/dependency relations, role evidence, counts, member pages, and expansion routes.
+No bodies by default and no second parser/CFG/SSA/data-flow.
 
-Tests: body exclusion, name/path mutations, partial counts, mandatory closure, pagination.
+## Phase 5 — control/effect projection
 
-## Phase 5 — L1 and control/effect projections
+Implement only the closed published-fact registry, unknown/collapsed/omitted regions, reason paths, and exact origin closure.
 
-Implement exact entity records, signatures, types, spans, direct relations, reason paths, API/reference enrichment, event/hook/state distinctions, source-excerpt candidates, and the inherited closed control/effect projection over published facts.
+Tests include native/custom/CVar/hook distinctions and runtime/safety nonclaims.
 
-Tests: possible/dynamic relations, no second parser/CFG, no runtime-safety claims, direct/path distinction.
+## Phase 6 — expansion and selection
 
-## Phase 6 — expansion, selection, budgets, and continuation
+Implement deterministic stages, candidate dependency DAG, deduplication, mandatory closure, optional priority tiers, no-new-evidence stopping, cancellation, and continuation.
 
-Implement:
+No search/ranking/model inference.
 
-- deterministic stage planner and frontier;
-- candidate dependency graph;
-- mandatory closure;
-- optional tier/tie selection;
-- semantic byte costs;
-- exact/estimated token accounting interfaces;
-- no-new-evidence and all stop states;
-- exact continuation chain.
+## Phase 7 — source, privacy, and boundaries
 
-Tests: cycles, high fanout, tight budgets, mandatory overflow, continuation changes, cancellation, 1/2/N workers.
+Implement exact source slice requests, privacy/license/consumer decisions, deterministic transformations, JSON strings, Markdown `SRC` data boundaries, and boundary round-trip validation.
 
-## Phase 7 — source excerpts and trust boundaries
+## Phase 8 — budgets and tokenization
 
-Implement exact selected-source retrieval, source-map handling, privacy/license/consumer decisions, deterministic transformations, structural JSON/Markdown data boundaries, and excerpt budgets/continuation.
+Implement exact canonical/rendered byte accounting, deterministic predicted costs, optional pruning/rollback, exact tokenizer interface, deterministic estimate/upper-bound fallbacks, and overflow failures.
 
-Tests: hostile structured source strings, range/digest mismatch, private data, denied source, virtual units, boundary round trips.
+## Phase 9 — semantic pack and renderers
 
-## Phase 8 — semantic pack and renderers
+Assemble/validate `ContextSemanticPack`; implement lossless canonical JSON and deterministic Markdown with item/range trace. Rendering cannot change selection/facts.
 
-Implement `ContextSemanticPack`, nonrepairing validation, canonical JSON, deterministic Markdown, item/output mapping, rendering loss, exact byte measurement, and optional exact tokenizer integration.
+## Phase 10 — cache identity and comparison
 
-Tests: identity DAG, JSON round trip, semantic/render separation, token failure, renderer overflow, source boundaries.
+Implement cache keys/artifact validation only, plus semantic/renderer comparison. Physical cache storage remains outside the crate.
 
-## Phase 9 — cache keys, comparison, metrics, and evaluation
+## Phase 11 — metrics and evaluation
 
-Implement storage-independent cache keys and validation, exact pack comparison, deterministic metrics, and the frozen evaluation harness. Physical cache and orchestration remain external.
+Implement noncanonical operational metrics and frozen corpus/task evaluation reports. Missing external consumer/tokenizer/harness remains `NotEvaluated`.
 
-Tests: stale, corrupt, cross-privacy, and cross-generation cache entries; cold/warm equivalence; consumer evaluation hard gates.
-
-## Phase 10 — integration corpora
+## Phase 12 — integration and freeze verification
 
 Run:
 
-- tiny synthetic project;
-- complex synthetic TOC/XML/load/event/hook/state/cycle corpus;
-- pinned `roth-ui` published project fixture;
-- pinned E3-A Blizzard UI source publication fixture;
-- exact ReferenceView fixture;
-- repository/package/path/name mutation corpus;
-- privacy/license/source-boundary corpus;
-- 1/2/N workers and shuffled owner results;
-- tight, normal, and large context profiles;
-- canonical JSON and Markdown;
-- exact tokenizer and fallback estimator profiles where active.
+- all contract/unit/property/mutation/security/cancellation tests;
+- 1/2/N and shuffled owner-result rebuilds;
+- cold/warm external-cache validation;
+- old/new generation reader tests through owner views;
+- canonical JSON round trip and Markdown source-boundary parser;
+- synthetic/`roth-ui`/Blizzard UI/combined corpus evaluation;
+- exact checksum verification.
 
-## Phase 11 — freeze implementation outputs
+## Implementation slicing
 
-Populate every null prerequisite, profile, corpus, artifact, expected error/result, benchmark, and SHA-256 value. Tests verify committed bytes and never rewrite fixtures automatically.
+Prefer independently testable modules:
+
+```text
+profiles
+universe
+map
+l0
+l1
+control_effect
+expansion
+selection
+source_boundary
+budget
+semantic_pack
+render_json
+render_markdown
+cache_key
+metrics_eval
+validation
+```
+
+Do not create placeholder modules for deferred E4/E5/E6/E7 work.
 
 ## Deferred
 
-- fuzzy and natural-language search;
-- lineage, migration, patch impact, and candidate similarity;
+- natural-language/fuzzy root resolution and search;
+- lineage/migration/impact;
 - named calibration packs;
-- Codebase Memory;
-- runtime/client observations;
-- model-generated summaries;
-- diagnostics, fixes, edits, and planning;
-- physical cache storage;
-- service/application transport and CI.
-
-## Definition of Done
-
-- one context implementation and one terminology model;
-- exact universe/generation binding;
-- map, L0, L1, pack, and render operations implemented from public views only;
-- origin, evidence, coverage, conflict, and omission closure;
-- deterministic selection and bytes;
-- exact token claims only with a frozen tokenizer;
-- mandatory trust metadata never pruned;
-- source data structurally isolated;
-- no side effects or background work;
-- all nondeferred tests and frozen checksums pass.
+- Codebase Memory candidates;
+- runtime data/probes;
+- diagnostics/remediation/editing;
+- physical context cache/persistence;
+- service/application/transport/tool orchestration;
+- CI/release automation.
