@@ -1,6 +1,6 @@
 # `wow-project` contract router
 
-**Status:** E0-D, E2-C, E3-A and the E4-B lineage-input seam are implementation-ready documentation; Rust implementation has not started.
+**Status:** E0-D, E2-C, E3-A and the E4-B lineage-input seam are implementation-ready documentation; E4-C orchestration is defined in `wow-service`. Rust implementation has not started.
 
 `wow-project` owns exact materialized project/source universes, TOC/XML/load interpretation, analyzer/recognizer orchestration, incremental project generations, project publication semantics, Blizzard UI source indexing, and project-owned lineage input producers. It does not own graph acceptance, search ranking, lineage promotion, migration recipes, static-impact traversal, service orchestration, or storage internals.
 
@@ -28,7 +28,18 @@ project_source_fingerprint
 project_structural_change
 ```
 
-These are exact producer partitions submitted through future E4-C orchestration to independent `wow-graph` E4-B validation. Fingerprints and structural similarity remain Candidate evidence; project producers do not accept lineage, declare replacement, build migration recipes, or run static impact.
+These are exact producer partitions acquired and invoked through [`wow-service/e4`](../wow-service/e4/README.md), then submitted to independent `wow-graph` E4-B validation. Fingerprints and structural similarity remain Candidate evidence; project producers do not accept lineage, declare replacement, build migration recipes, authorize reviews, or run static impact.
+
+## E4-C handoff
+
+```text
+exact before/after ProjectPublication selectors
+-> wow-service resolves/acquires exact project views
+-> wow-project emits exact E4-B producer partitions
+-> wow-graph validates proposals/proof ceilings and publishes immutable lineage state
+```
+
+`wow-service` cannot alter project facts or proof ceilings. `wow-project` never resolves current, calls search/lineage/context, or observes review credentials.
 
 ## Direct dependency boundary
 
@@ -53,7 +64,7 @@ A repository, owner, package, path, name, signature, body digest, fingerprint or
 ## Current implementation state
 
 ```text
-documentation frontier: E4-B producer seam
+documentation frontier: E4-B producer seam; E4-C orchestration linked
 implementation frontier: not-started
 Cargo.toml: absent
 Rust source: absent
