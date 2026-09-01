@@ -1,6 +1,6 @@
 # Crate dependency graph
 
-**Status: normative implementation boundary through documentation frontier E4-C**
+**Status: normative implementation boundary through documentation frontier E5-A**
 
 Dependencies point from orchestration/domain behavior toward narrower foundations. The graph must remain acyclic. Maximum permitted edges are not instructions to activate every dependency.
 
@@ -23,6 +23,32 @@ Dependencies point from orchestration/domain behavior toward narrower foundation
 | `wow-service` | production crates through reviewed public contracts |
 
 Applications depend on `wow-service` only among framework crates.
+
+## Active E5-A operation slice
+
+```text
+exact source/project/fact publications supplied by owners
+    -> wow-recognizers
+        ├── wow-core
+        ├── wow-emmy
+        └── wow-graph
+```
+
+This is the complete direct framework slice for E5-A. `wow-project` and `wow-store` are prerequisite/input owners but are not direct dependencies of `wow-recognizers`. Repository materialization, retention, durable orchestration, reviewer authorization, holdout unsealing, and publication stay outside the crate.
+
+```text
+wow-project / wow-store
+    -> exact immutable fact/publication artifacts
+    -> caller/orchestrator
+    -> wow-recognizers E5-A validation and shadow execution
+
+wow-recognizers
+    -> universal graph proposals
+    -> wow-graph public proposal validation seam
+    -> validation receipts only
+```
+
+E5-A does not publish a project graph, activate a core pack, or expose a service/CLI.
 
 ## Active E4-C operation slice
 
@@ -127,6 +153,17 @@ strict review envelope
 
 Authorization does not create lineage proof. Graph validity does not bypass authorization. Neither owner imports the application.
 
+## Calibration review boundary
+
+```text
+E5-A candidate artifact
+-> future E5-B wow-service retained acquisition and reviewer authorization
+-> sealed-holdout unsealing audit and promotion submission
+-> future E5-C immutable core-pack publication/canary/rollback
+```
+
+Metric eligibility is not reviewer authorization. Reviewer authorization is not graph proof. Neither is publication. E5-A contains no durable effect or application boundary.
+
 ## Current-resolution boundary
 
 ```text
@@ -137,7 +174,7 @@ apps/wow
        acquires exact retained owner/shard/lineage/context views
 ```
 
-The app, `wow-search`, `wow-graph`, and `wow-context` never resolve current pointers. Independent stores are not represented as a distributed atomic snapshot.
+The app, `wow-search`, `wow-graph`, `wow-context`, and `wow-recognizers` never resolve current pointers. Independent stores are not represented as a distributed atomic snapshot.
 
 ## Illustrative shape
 
@@ -170,7 +207,7 @@ The table and active work-package contracts are authoritative; this diagram is e
 - `wow-reference` depending on `wow-annotations`, project, graph, search, service or apps.
 - `wow-emmy` depending on `wow-project` or `wow-rules`.
 - `wow-graph` parsing source, running recognizers/search, resolving current, authorizing reviewers or calling service.
-- `wow-recognizers` depending on `wow-project`.
+- `wow-recognizers` depending on `wow-project`/`wow-store`/service/apps, materializing repositories, publishing graph state, or authorizing promotion.
 - `wow-project` depending on search/context/service/apps.
 - `wow-search` depending on context/service/apps/CBM or implementing lineage authority.
 - `wow-context` depending on store/emmy/recognizers/rules/search/cbm/service/apps.
@@ -201,16 +238,28 @@ E0 diagnostic vertical slice
 -> E4-A exact-generation search
 -> E4-B explicit lineage/migration/static impact
 -> E4-C service/application search/lineage/impact operations
--> E5 calibration corpora/packs and controlled promotion
+-> E5-A calibration corpora, shadow packs, evaluation and candidate artifacts
+-> E5-B calibration orchestration/review/holdout/promotion submissions
+-> E5-C immutable core-pack publication/canary/rollback
 -> E6 optional Codebase Memory candidates
 -> E7 LSP/MCP/release/publishing
 ```
 
 ## E5-A boundary
 
-Named calibration packs remain data/rule artifacts consumed by `wow-recognizers` under existing dependency limits. They cannot create a repository-specific dependency or make project/service code branch on addon/owner/path names.
+Named calibration packs remain data/rule artifacts consumed by `wow-recognizers` under its existing dependency limits. They cannot create repository-specific dependencies or make project/service code branch on addon/owner/path names.
 
-Calibration orchestration belongs above recognizers in later E5-B service tooling; immutable core-pack rollout belongs to E5-C.
+```text
+exact candidate source + publication pins
++ admitted immutable corpus/labels/provenance/splits
++ E2-B declarative pack
++ anti-overfitting/security/determinism mutations
+-> shadow-only candidate-owned partitions
+-> independent graph validation
+-> immutable per-case/metric/candidate/deactivation artifacts
+```
+
+A repository commit pin alone is not admission. Unknown/Possible/NotEvaluated/Conflict/Partial/Truncated are not Negative or pass. Calibration orchestration belongs above recognizers in E5-B service tooling; immutable core-pack rollout belongs to E5-C.
 
 ## Changing the graph
 
