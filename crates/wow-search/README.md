@@ -1,174 +1,73 @@
-# `wow-search` implementation contract
+# `wow-search` contract router
 
-**Status:** deferred to E4; contract scaffold only.
+**Status:** E4-A exact-generation retrieval contract is implementation-ready documentation; Rust implementation has not started.
 
-## Mission
+`wow-search` owns immutable generation-bound search projections, safe structured query normalization, exact and approximate retrieval lanes, deterministic candidate fusion, complete ranking explanations, honest miss classification, and stable continuation. It does not own source parsing, reference/project/graph truth, lineage authority, context construction, diagnostics, remediation, service policy, or application transport.
 
-`wow-search` owns deterministic multi-lane lookup and ranking across exact reference facts, aliases/deprecations/replacements, historical lineage, structural shape, FTS text, and bounded graph neighborhoods. Optional semantic candidates are merged only as labeled candidate evidence by higher-layer orchestration.
+## Canonical route
 
-## Owned responsibilities
+The original pre-E4 brief is preserved as [`INITIAL_OVERVIEW.md`](INITIAL_OVERVIEW.md).
 
-- query intent/scope normalization;
-- exact canonical and alias lookup orchestration;
-- deprecation/replacement/lineage lanes;
-- namespace/member/prefix and structural-shape lanes;
-- FTS query construction and score normalization;
-- bounded graph-neighborhood expansion;
-- deterministic signal aggregation/reranking;
-- negative-authority handling;
-- search-hit explanations;
-- result budgets, pagination, cancellation, and truncation;
-- labeled search/evaluation corpus integration.
+Read E4-A in this order:
 
-## Explicit non-responsibilities
+1. [`e4/README.md`](e4/README.md)
+2. [`e4/AGENTS.md`](e4/AGENTS.md)
+3. [`e4/DECISIONS.md`](e4/DECISIONS.md)
+4. [`e4/DATA_MODEL.md`](e4/DATA_MODEL.md)
+5. [`e4/SEARCH_UNIVERSE_AND_SHARDS.md`](e4/SEARCH_UNIVERSE_AND_SHARDS.md)
+6. [`e4/FIELD_AND_DOCUMENT_SCHEMA.md`](e4/FIELD_AND_DOCUMENT_SCHEMA.md)
+7. [`e4/INDEX_BUILD_AND_PUBLICATION.md`](e4/INDEX_BUILD_AND_PUBLICATION.md)
+8. [`e4/QUERY_MODEL_AND_NORMALIZATION.md`](e4/QUERY_MODEL_AND_NORMALIZATION.md)
+9. [`e4/EXACT_ALIAS_AND_PREFIX_LANES.md`](e4/EXACT_ALIAS_AND_PREFIX_LANES.md)
+10. [`e4/TEXT_FUZZY_AND_SHAPE_LANES.md`](e4/TEXT_FUZZY_AND_SHAPE_LANES.md)
+11. [`e4/GRAPH_ASSISTED_RETRIEVAL.md`](e4/GRAPH_ASSISTED_RETRIEVAL.md)
+12. [`e4/RANKING_FUSION_AND_EXPLANATIONS.md`](e4/RANKING_FUSION_AND_EXPLANATIONS.md)
+13. [`e4/MISS_PAGINATION_AND_CONTINUATION.md`](e4/MISS_PAGINATION_AND_CONTINUATION.md)
+14. [`e4/PERSISTENCE_AND_FTS5_PROFILE.md`](e4/PERSISTENCE_AND_FTS5_PROFILE.md)
+15. [`e4/COVERAGE_AUTHORITY_AND_LINEAGE_BOUNDARY.md`](e4/COVERAGE_AUTHORITY_AND_LINEAGE_BOUNDARY.md)
+16. [`e4/SECURITY_AND_BUDGETS.md`](e4/SECURITY_AND_BUDGETS.md)
+17. [`e4/EVALUATION_AND_CALIBRATION.md`](e4/EVALUATION_AND_CALIBRATION.md)
+18. [`e4/OPERATIONS.md`](e4/OPERATIONS.md)
+19. [`e4/ERROR_MODEL.md`](e4/ERROR_MODEL.md)
+20. [`e4/TEST_MATRIX.md`](e4/TEST_MATRIX.md)
+21. [`e4/IMPLEMENTATION_PLAN.md`](e4/IMPLEMENTATION_PLAN.md)
+22. [`e4/CONTRACT.json`](e4/CONTRACT.json) and [`e4/examples/`](e4/examples/README.md)
 
-`wow-search` does not:
+Also read [`../AGENTS.md`](../AGENTS.md), [`../DEPENDENCY_GRAPH.md`](../DEPENDENCY_GRAPH.md), [`../WORKSTREAMS.md`](../WORKSTREAMS.md), and the current [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb) routes before addon-facing work.
 
-- ingest source or build reference/project indexes;
-- mutate graph/storage;
-- call Codebase Memory directly;
-- upgrade a semantic/fuzzy/name candidate to proven lineage;
-- generate automatic code edits;
-- decide diagnostic severity;
-- return an authoritative miss without complete relevant coverage;
-- use an LLM to rank correctness-path results;
-- read full source bodies by default.
-
-## Search stages
-
-The default stage order is normative:
-
-```text
-0. normalize intent, universe, profile/generation, entity kinds, budget
-1. exact active canonical name
-2. exact aliases, deprecations, replacements, and build lineage
-3. namespace/member/prefix
-4. receiver/signature/return/restriction shape
-5. bounded edit-distance/trigram candidates
-6. FTS5 over docs/comments/role labels/L0-L1 skeletons
-7. bounded graph-neighborhood expansion
-8. optional externally supplied semantic candidates
-9. deterministic reranking and explanation
-```
-
-A query may skip a lane only when its capability is unavailable or the intent excludes it. Skipped lanes appear in the result metadata.
-
-## Ranking authority
-
-Approximate authority order:
+## Direct dependencies
 
 ```text
-explicit replacement/deprecation relation
-exact canonical/alias match in active profile
-proven/derived lineage evidence
-entity kind and namespace
-receiver/signature/return/restriction shape
-package/load affinity
-graph-neighborhood overlap
-FTS documentation/skeleton score
-name edit distance/trigram
-external semantic score
+wow-core
+wow-store
+wow-reference
+wow-project
+wow-graph
 ```
 
-Signals do not change their evidence class merely because they rank highly.
+No direct dependency on `wow-context`, `wow-cbm`, `wow-service`, applications, analyzer actors, or recognizer engines is active in E4-A.
 
-## Required operations
-
-| Operation | Required behavior |
-|---|---|
-| `normalize_search_request` | Resolve explicit profile/universe/kind/scope/budget and reject floating or contradictory inputs. |
-| `classify_query_intent` | Identify exact symbol, migration, structural, natural-language, or mixed intent deterministically where possible. |
-| `run_exact_lane` | Query canonical names/aliases with complete evidence/coverage. |
-| `run_migration_lane` | Query deprecations/replacements/lineage while preserving edge confidence. |
-| `run_shape_lane` | Compare receiver/signature/return/restriction shape with explicit feature contributions. |
-| `run_text_lane` | Execute bounded FTS queries and normalize text-only scores as candidate signals. |
-| `run_graph_lane` | Expand only approved bounded relations from already selected seeds. |
-| `merge_external_candidates` | Accept normalized candidate records from service/CBM without upgrading confidence. |
-| `rerank_hits` | Apply deterministic documented signal weights/tie-breakers. |
-| `explain_hit` | Return lanes/signals/evidence/coverage and why a hit outranked another. |
-| `evaluate_search_miss` | Return authoritative miss, partial miss, profile unavailable, failed partition, conflict, or candidate-only. |
-| `paginate_search_results` | Provide stable cursors/order under one generation and query digest. |
-
-## Search hit contract
-
-A hit includes:
+## Output boundary
 
 ```text
-entity and canonical name/kind
-active profile/reference generation
-universe
-owner/load chains or handles
-source handle
-migration status
-provenance/confidence
-coverage summary
-lane/signal explanation
-stable detail handle
-generation-safe pagination identity
+exact owner entities and fields
+-> immutable SearchDocument partitions
+-> one immutable SearchShard per exact owner generation
+-> exact SearchUniverseSet
+-> safe NormalizedSearchQuery
+-> per-lane SearchCandidateSignal records
+-> deterministic SearchCandidate ordering and explanations
+-> SearchResult and exact continuation
 ```
 
-A hit does not include an entire file by default.
+The output is a ranked set of exact entity candidates. It is not proof of user intent, lineage, replacement, migration, impact, safety, or runtime behavior.
 
-## Removed/missing symbol behavior
+## Current implementation state
 
-When an exact active symbol is absent:
-
-1. verify profile and relevant complete coverage;
-2. inspect explicit deprecation/replacement records;
-3. inspect historical lineage;
-4. compare receiver/signature/return/restriction shape;
-5. inspect current source usage through handles when available;
-6. return a replacement only when evidence supports it;
-7. otherwise return labeled candidates plus the missing proof.
-
-Never transform the top fuzzy hit into a migration fact.
-
-## Determinism and calibration
-
-- weights and tie-breakers are versioned;
-- equal scores use stable entity/source keys;
-- lane order is fixed;
-- FTS tokenizer/configuration is part of search-version identity;
-- external scores are normalized separately and cannot dominate authoritative exact evidence;
-- calibration uses labeled normalized outcomes, not preferred prose answers;
-- a ranking change requires before/after task metrics and false-proven analysis.
-
-## E4 implementation sequence
-
-1. request/result contracts and exact lane;
-2. aliases/deprecations/replacements;
-3. lineage lane;
-4. shape lane;
-5. FTS lane;
-6. graph expansion;
-7. explanations and stable pagination;
-8. labeled task evaluation and weight calibration;
-9. external-candidate merge seam, without CBM client activation.
-
-## Required tests
-
-- exact canonical and alias hit;
-- explicit replacement outranks fuzzy candidate;
-- same-name different-kind/profile separation;
-- missing symbol under complete versus partial coverage;
-- changed restriction/signature shape;
-- lineage candidate versus proven relation;
-- deterministic ties and pagination;
-- FTS/name/semantic candidate cannot claim proven replacement;
-- graph budget/truncation;
-- stale external generation labeling;
-- query injection/oversized request rejection;
-- top-1/top-3 recall report and false-proven count;
-- transport-independent normalized output.
-
-## Documentation sources
-
-- [`../../docs/GRAPH_SEARCH_AND_PLANNING.md`](../../docs/GRAPH_SEARCH_AND_PLANNING.md)
-- [`../../docs/PROVENANCE_AND_COVERAGE.md`](../../docs/PROVENANCE_AND_COVERAGE.md)
-- [`../../docs/TEST_STRATEGY.md`](../../docs/TEST_STRATEGY.md)
-- [`../../docs/CODEBASE_MEMORY_BRIDGE.md`](../../docs/CODEBASE_MEMORY_BRIDGE.md)
-- [`../../docs/REFERENCE_PACK.md`](../../docs/REFERENCE_PACK.md)
-
-## Definition of done
-
-E4 search is complete when explicit current/historical evidence dominates similarity, every hit explains its lanes and evidence, incomplete profiles cannot produce authoritative misses, and the labeled WoW task corpus reaches the roadmap recall target without false proven replacements.
+```text
+documentation frontier: E4-A
+implementation frontier: not started
+Cargo.toml: absent
+Rust source: absent
+CI/workflows: absent
+```
