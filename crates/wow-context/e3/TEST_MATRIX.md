@@ -1,246 +1,337 @@
-# E3-A context acceptance and mutation matrix
+# E3-B test matrix
 
-**Status:** normative executable acceptance specification.
+**Status:** normative acceptance, property, mutation, security, and determinism matrix.
 
-## Profiles and input snapshot
+Every case must execute before implementation is called complete unless explicitly marked as a prerequisite/freeze gate. Case IDs are stable and unique.
 
-| ID | Case | Expected |
-|---|---|---|
-| `CTX-PROFILE-001` | Compatible frozen profile set | pass |
-| `CTX-PROFILE-002` | Missing/duplicate/breaking registry entry | reject |
-| `CTX-PROFILE-003` | Mandatory reserve can be disabled | mutation fails |
-| `CTX-PROFILE-004` | Unknown field without compatibility policy | reject |
-| `CTX-INPUT-001` | Exact coherent epoch/store/publication/project/graph/analyzer/reference | pass |
-| `CTX-INPUT-002` | Mixed project and graph publication | reject |
-| `CTX-INPUT-003` | Mixed reference profile/generation | reject |
-| `CTX-INPUT-004` | `Current` advances after acquisition | old exact view remains |
-| `CTX-INPUT-005` | Floating Current/latest after acquisition | reject |
-| `CTX-INPUT-006` | Legacy `StoreImageId` supplied | reject |
-| `CTX-INPUT-007` | Raw SQLite/analyzer handle requested | architecture failure |
-| `CTX-INPUT-008` | Missing required query catalog capability | scoped NotEvaluated |
-| `CTX-INPUT-009` | Retained old publication | exact pass |
-| `CTX-INPUT-010` | Collected/unavailable old publication | explicit stale/unavailable |
-
-## Universes and roots
+## Milestone, schema, and identity
 
 | ID | Case | Expected |
 |---|---|---|
-| `CTX-ROOT-001` | Exact project entity | resolved |
-| `CTX-ROOT-002` | Exact reference API entity | resolved with reference view |
-| `CTX-ROOT-003` | Absent root under complete domain coverage | authoritative absence preserved |
-| `CTX-ROOT-004` | Absent root under partial coverage | nonauthoritative/NotEvaluated |
-| `CTX-ROOT-005` | Same name in project/reference/platform source | distinct entities |
-| `CTX-ROOT-006` | Name/path-only cross-universe join | reject |
-| `CTX-ROOT-007` | Candidate/external merged into project truth | reject |
-| `CTX-ROOT-008` | Pinned platform UI graph with complete producer manifest | allowed |
-| `CTX-ROOT-009` | Platform UI source without build/revision/license/coverage | NotEvaluated/reject |
-| `CTX-ROOT-010` | Context attempts source acquisition/parsing | architecture failure |
+| `CTX-SCHEMA-001` | Current E3-B contract/profile schemas | pass |
+| `CTX-SCHEMA-002` | Unknown field or enum | reject |
+| `CTX-SCHEMA-003` | Breaking profile change without version | reject |
+| `CTX-SCHEMA-004` | Retired E3-A and current types both implemented | reject |
+| `CTX-SCHEMA-005` | Retired and current operations both implemented | reject |
+| `CTX-SCHEMA-006` | Contract says E3-B but router says E3-A | reject |
+| `CTX-DAG-001` | Semantic pack includes renderer artifact ID | reject |
+| `CTX-DAG-002` | Semantic pack includes metrics/evaluation ID | reject |
+| `CTX-DAG-003` | Map ID includes pack ID | reject |
+| `CTX-DAG-004` | Request ID includes expansion result | reject |
+| `CTX-DAG-005` | Selection trace creates item identity cycle | reject/split nonidentity ref |
+| `CTX-DAG-006` | Exact rendered bytes included before renderer layer | reject |
+| `CTX-DAG-007` | Cache key includes physical path/hit counter | reject |
+| `CTX-DAG-008` | Universe set includes mutable current pointer | reject |
+| `CTX-DAG-009` | Validator rewrites same ID | reject |
+| `CTX-DAG-010` | Continuation changes identity inputs | reject |
+| `CTX-DAG-011` | Source excerpt ID includes Markdown output range | reject |
+| `CTX-DAG-012` | Evaluation score controls semantic selection | reject |
+
+## Universe binding and immutable inputs
+
+| ID | Case | Expected |
+|---|---|---|
+| `CTX-IN-001` | Exact compatible user project/graph/reference views | bind |
+| `CTX-IN-002` | Mix project and graph publications | reject generation mismatch |
+| `CTX-IN-003` | ReferenceProfile incompatible with project | reject |
+| `CTX-IN-004` | Optional Blizzard UI absent and profile permits | explicit omission/partial policy |
+| `CTX-IN-005` | Blizzard UI required but absent | reject/NotEvaluated by operation contract |
+| `CTX-IN-006` | Current changes after bind | existing operation stays exact |
+| `CTX-IN-007` | Retry resolves newer current silently | reject/new request required |
+| `CTX-IN-008` | Merge same display name across universes | reject |
+| `CTX-IN-009` | Same path in two generations | distinct identities |
+| `CTX-IN-010` | Owner returns wrong universe record | reject |
+| `CTX-IN-011` | Source handle digest/coordinate mismatch | reject |
+| `CTX-IN-012` | Wrong Blizzard SkeletonInputView generation | reject |
+| `CTX-IN-013` | Raw SQLite/analyzer/parser handle supplied | reject |
+| `CTX-IN-014` | Legacy StoreImageId supplied | reject |
+| `CTX-IN-015` | Floating current/latest inside canonical request | reject |
+| `CTX-IN-016` | Exact read view becomes unavailable mid-request | typed failure/partial, no substitution |
+| `CTX-IN-017` | User-project-only profile receives platform rows | reject leakage |
+| `CTX-IN-018` | Combined view references separate maps and exact cross-links | pass |
+
+## Request, roots, and profiles
+
+| ID | Case | Expected |
+|---|---|---|
+| `CTX-REQ-001` | Exact graph/entity root allowed by intent | pass |
+| `CTX-REQ-002` | Root outside bound universe | reject |
+| `CTX-REQ-003` | Replace root with fuzzy name | reject |
+| `CTX-REQ-004` | Natural-language root in semantic selector | reject |
+| `CTX-REQ-005` | Executable selector/callback/script/SQL/regex | reject |
+| `CTX-REQ-006` | Unknown axis/relation/facet | reject |
+| `CTX-REQ-007` | Root kind incompatible with intent | reject |
+| `CTX-REQ-008` | Request asks to upgrade Possible to Proven | reject |
+| `CTX-REQ-009` | Zero/negative/unlimited/overflow budget | reject |
+| `CTX-REQ-010` | Unknown tokenizer/renderer/privacy profile | reject |
+| `CTX-REQ-011` | Equivalent reordered request fields | same normalized ID |
+| `CTX-REQ-012` | Source text supplied as profile/intent | reject/control data separation |
+| `CTX-REQ-013` | `PrepareChangeContext` requests edit generation | reject edit; context only |
+| `CTX-REQ-014` | Opaque audit text changes selection | mutation fails |
 
 ## Project Map
 
 | ID | Case | Expected |
 |---|---|---|
-| `CTX-MAP-001` | Complete synthetic project | all mandatory sections |
-| `CTX-MAP-002` | Strict default 2048-byte renderer profile | within cap or explicit blocker-only failure/truncation |
-| `CTX-MAP-003` | Mandatory identity/blocker exceeds cap | no silent drop |
-| `CTX-MAP-004` | One selected TOC variant | only selected semantics |
-| `CTX-MAP-005` | Unselected variant fills missing active fact | mutation fails |
-| `CTX-MAP-006` | Static load classified as runtime readiness | mutation fails |
-| `CTX-MAP-007` | Native/custom/EventRegistry/CVar signals | separate sections/types |
-| `CTX-MAP-008` | Hook represented as taint/combat safe | mutation fails |
-| `CTX-MAP-009` | SavedVariables root and scope | present without values |
-| `CTX-MAP-010` | Full source/file/graph dump | unavailable |
-| `CTX-MAP-011` | Repository/folder/popularity/model selection signal | mutation fails |
-| `CTX-MAP-012` | Grouping retains every ID/evidence/conflict | pass |
-| `CTX-MAP-013` | High-centrality optional node consumes blocker reserve | mutation fails |
-| `CTX-MAP-014` | Partial/conflict/unsupported sections | explicit |
-| `CTX-MAP-015` | Truncated section has exact totals/digest/route | pass |
-| `CTX-MAP-016` | Every principal item has exact detail route | pass |
-| `CTX-MAP-017` | Path shown as direct relation | mutation fails |
-| `CTX-MAP-018` | Rename repository/package/path/local identifiers | universal semantics invariant |
+| `CTX-MAP-001` | Small exact user project map | valid |
+| `CTX-MAP-002` | Separate Blizzard UI map | valid and distinct |
+| `CTX-MAP-003` | Combined map references both | no namespace collapse |
+| `CTX-MAP-004` | Every node resolves exact underlying key | pass |
+| `CTX-MAP-005` | Every edge resolves relation assertion/path | pass |
+| `CTX-MAP-006` | Group membership/counts exact | pass |
+| `CTX-MAP-007` | Replace reason path with direct edge | reject |
+| `CTX-MAP-008` | Generic parent relation synthesized | reject |
+| `CTX-MAP-009` | Group by repository/addon/path popularity | reject |
+| `CTX-MAP-010` | Mixed/conflicted role group | conflict retained |
+| `CTX-MAP-011` | Budgeted map page | deterministic omissions/cursor |
+| `CTX-MAP-012` | Total-known count under partial input | labeled partial |
+| `CTX-MAP-013` | DB/hash/worker order changes | same map bytes |
+| `CTX-MAP-014` | Full graph loaded for tiny map despite bounded reads | architecture test fails |
+| `CTX-MAP-015` | Model-generated responsibility facet | reject |
+| `CTX-MAP-016` | Static map asserts runtime readiness | reject authority upgrade |
 
-## L0 skeletons
+## L0 skeleton
 
 | ID | Case | Expected |
 |---|---|---|
-| `CTX-L0-001` | Package/TOC/load unit | exact identity/role/load |
-| `CTX-L0-002` | File/XML/virtual Lua unit | exact source ownership |
-| `CTX-L0-003` | Module/service/library/state role | producer/confidence retained |
-| `CTX-L0-004` | Function/method/callback/event/API symbol | exact public headings |
-| `CTX-L0-005` | XML template/frame/region/mixin/factory | exact structural roles |
-| `CTX-L0-006` | Unsupported kind | Unsupported + loss, no generic guess |
-| `CTX-L0-007` | Function body included | mutation fails |
-| `CTX-L0-008` | Purpose inferred from name/comment | mutation fails |
-| `CTX-L0-009` | Direct relation and reason path | distinct |
-| `CTX-L0-010` | Possible/Candidate default | Possible opt-in; Candidate excluded |
-| `CTX-L0-011` | Tight budget | blockers/evidence survive |
-| `CTX-L0-012` | Dedup evidence multiplicity | all refs retained |
-| `CTX-L0-013` | Shuffled inputs/workers | byte-identical semantic output |
+| `CTX-L0-001` | Project/package/file/module L0 | valid |
+| `CTX-L0-002` | Body included in default L0 | reject |
+| `CTX-L0-003` | Infer role from `Core`/`Manager` filename | reject |
+| `CTX-L0-004` | Exact recognizer role retained | original confidence/evidence |
+| `CTX-L0-005` | Large members | stable page/count/cursor |
+| `CTX-L0-006` | Partial member coverage | not rendered as all |
+| `CTX-L0-007` | Source documentation quote | labeled untrusted source data |
+| `CTX-L0-008` | Mandatory identity/evidence pruned | reject |
+| `CTX-L0-009` | Direct ownership/load facts | exact relation refs |
+| `CTX-L0-010` | Same names after rename mutation | universal facets unchanged |
+| `CTX-L0-011` | Unsupported scope | explicit Unsupported/NotEvaluated |
+| `CTX-L0-012` | L1 cost/route points to wrong generation | reject |
 
-## L1 signatures, members, control, and effects
-
-| ID | Case | Expected |
-|---|---|---|
-| `CTX-L1-001` | Exact callable signature | order/optionality/nil/multiple returns preserved |
-| `CTX-L1-002` | Unknown type widened to any or omitted | mutation fails |
-| `CTX-L1-003` | Source-ordered declaration/sequence | pass |
-| `CTX-L1-004` | Nested branch/arms/guard | exact published structure |
-| `CTX-L1-005` | Loop and early return | exact headings/spans |
-| `CTX-L1-006` | Direct resolved call | DirectCall |
-| `CTX-L1-007` | Dynamic/unresolved call | PossibleCall/Unknown, not direct |
-| `CTX-L1-008` | Same target at two callsites | two occurrence nodes |
-| `CTX-L1-009` | Event/callback/CVar/hook/XML registrations | systems distinct |
-| `CTX-L1-010` | Literal state read/write | exact root/path |
-| `CTX-L1-011` | Dynamic state path | exact prefix + Possible |
-| `CTX-L1-012` | Project API use and platform fact | separate evidence links |
-| `CTX-L1-013` | Guard shape claimed globally safe | mutation fails |
-| `CTX-L1-014` | Missing containment/CFG capability | UnknownRegion |
-| `CTX-L1-015` | Supported detail compacted | CollapsedRegion + child manifest |
-| `CTX-L1-016` | Budget omission | OmittedRegion + continuation |
-| `CTX-L1-017` | Bare `...` with no record | mutation fails |
-| `CTX-L1-018` | Source reconstructed from diagnostics | mutation fails |
-| `CTX-L1-019` | Second parser/CFG/SSA/data-flow engine | architecture failure |
-| `CTX-L1-020` | Overlap/missing source spans | explicit loss/stable order |
-| `CTX-L1-021` | Effect summary hides conflicts/member IDs | mutation fails |
-| `CTX-L1-022` | Runtime order/safety/taint/Secret claim | mutation fails |
-| `CTX-L1-023` | 1/2/N and shuffled fact order | identical IDs/tree/cross-refs |
-
-## Expansion and stopping
+## L1 and control/effect projection
 
 | ID | Case | Expected |
 |---|---|---|
-| `CTX-EXP-001` | Each declared lane one-hop | exact registered query |
-| `CTX-EXP-002` | Bounded reason path | explicit path, no persisted edge |
-| `CTX-EXP-003` | Root/lane/confidence/universe broadening | reject |
-| `CTX-EXP-004` | Call/state valid cycle | cycle-safe close |
-| `CTX-EXP-005` | Load/hierarchy conflict cycle | conflict boundary |
-| `CTX-EXP-006` | Duplicate presentation | evidence preserved |
-| `CTX-EXP-007` | High fanout | deterministic cutoff/frontier |
-| `CTX-EXP-008` | Independent lane after blocked lane | continues by profile |
-| `CTX-EXP-009` | Possible explicit inclusion | labeled/separate |
-| `CTX-EXP-010` | Candidate included by default | mutation fails |
-| `CTX-STOP-001` | RequestedComplete | all mandatory scope proven |
-| `CTX-STOP-002` | NoNewEvidence | not authoritative absence |
-| `CTX-STOP-003` | BudgetExhausted | exact budget/frontier/cursor |
-| `CTX-STOP-004` | DepthLimit | deeper scope unexamined |
-| `CTX-STOP-005` | CycleClosed | exact cycle/path retained |
-| `CTX-STOP-006` | CoverageBoundary | missing capability explicit |
-| `CTX-STOP-007` | ConflictBoundary | no silent winner |
-| `CTX-STOP-008` | UnsupportedDetail | loss/route, no guess |
-| `CTX-STOP-009` | Cancelled | no complete/background result |
-| `CTX-STOP-010` | Failed | no recovery cursor in E3-A |
+| `CTX-L1-001` | Exact entity/signature/type/span | valid |
+| `CTX-L1-002` | Same-name entity substitution | reject |
+| `CTX-L1-003` | Direct relation and path both present | remain distinct |
+| `CTX-L1-004` | Native/custom/CVar event systems | separate facets |
+| `CTX-L1-005` | SetScript/HookScript/hooksecurefunc | separate facts |
+| `CTX-L1-006` | Upgrade Possible relation to Proven | reject |
+| `CTX-L1-007` | Literal and dynamic state paths | exact versus Possible preserved |
+| `CTX-L1-008` | Same-name global treated as SavedVariables root | reject |
+| `CTX-L1-009` | Exact API relation enriched by ReferenceView | pass |
+| `CTX-L1-010` | Implementation source used as API contract | reject authority class |
+| `CTX-L1-011` | Hook relation used as taint/combat safety | reject |
+| `CTX-L1-012` | Full body included without explicit excerpt policy | reject |
+| `CTX-CE-001` | Published exact call relation | projected with origins |
+| `CTX-CE-002` | Published possible dynamic call | remains Possible |
+| `CTX-CE-003` | Unsupported control region | Unknown/NotEvaluated |
+| `CTX-CE-004` | Run second parser/CFG/SSA/data-flow | reject |
+| `CTX-CE-005` | Infer runtime order from static load | reject |
+| `CTX-CE-006` | Convert hook to safety claim | reject |
+| `CTX-CE-007` | Call/state cycle | bounded cycle-safe projection |
+| `CTX-CE-008` | Collapsed region lacks member manifest/route | reject |
+| `CTX-CE-009` | Omitted region lacks reason | reject |
+| `CTX-CE-010` | Unknown region rendered empty | reject |
 
-## Evidence, coverage, loss, and omissions
-
-| ID | Case | Expected |
-|---|---|---|
-| `CTX-EVID-001` | Every material field | exact evidence/derivation closure |
-| `CTX-EVID-002` | Context claim used as self-evidence | reject |
-| `CTX-EVID-003` | Project source relabeled platform source | reject |
-| `CTX-EVID-004` | Recognizer role relabeled explicit declaration | reject |
-| `CTX-EVID-005` | Possible/Candidate promoted | reject |
-| `CTX-EVID-006` | Coverage axes collapsed | reject |
-| `CTX-EVID-007` | Conflict competitors retained | pass |
-| `CTX-EVID-008` | Empty/omitted section treated as absence | reject |
-| `CTX-EVID-009` | Exact/sidecar/compact/lossy statuses | correct field scope |
-| `CTX-EVID-010` | Unsupported/NotEvaluated/Truncated | distinct |
-| `CTX-EVID-011` | Dedup deletes evidence/source occurrence | reject |
-| `CTX-EVID-012` | Huge omitted scope | exact count/digest/cursor |
-| `CTX-EVID-013` | Blocker report itself budget-limited | decisive blocker retained |
-| `CTX-EVID-014` | Complete eligibility with hidden loss | reject |
-
-## Source excerpts and security
+## Expansion, selection, stopping, and continuation
 
 | ID | Case | Expected |
 |---|---|---|
-| `CTX-SRC-001` | Exact physical source handle/span | faithful bytes |
-| `CTX-SRC-002` | XML virtual Lua source | exact virtual mapping |
-| `CTX-SRC-003` | Same path/new digest or generation | reject stale handle |
-| `CTX-SRC-004` | Path-only lookup | reject |
-| `CTX-SRC-005` | Deterministic surrounding context | exact span/markers |
-| `CTX-SRC-006` | Missing/forbidden source | structured skeleton retained + loss |
-| `CTX-SRC-007` | License forbids embedding | handle/digest only |
-| `CTX-SRC-008` | SavedVariables/log/client/credential/private path | reject/redact with loss |
-| `CTX-SRC-009` | Prompt/tool instruction in source | inert quoted data |
-| `CTX-SRC-010` | Markdown fence/HTML/JSON/terminal injection | contained/escaped |
-| `CTX-SRC-011` | Invalid UTF-8/control/NUL | explicit escape/reject policy |
-| `CTX-SRC-012` | Source paraphrased/reconstructed | reject |
-| `CTX-SRC-013` | Full file/repository by default | unavailable |
-| `CTX-SRC-014` | Object not referenced by publication | reject |
-| `CTX-SRC-015` | Filesystem/network/process/editor/client access | architecture failure |
-| `CTX-SRC-016` | Source mutation/execution | architecture failure |
+| `CTX-EXP-001` | Ordered stages with prerequisites | pass |
+| `CTX-EXP-002` | Stage executes before prerequisite | reject |
+| `CTX-EXP-003` | Candidate origin/dependency/cost closure | pass |
+| `CTX-EXP-004` | Candidate dependency cycle | reject |
+| `CTX-EXP-005` | Mandatory closure selected first | pass |
+| `CTX-EXP-006` | Mandatory candidate pruned | reject |
+| `CTX-EXP-007` | Optional tiers and stable ties | deterministic |
+| `CTX-EXP-008` | Same-tier DB/worker order change | same selection |
+| `CTX-EXP-009` | Dedup identical item | all reasons/evidence retained |
+| `CTX-EXP-010` | Dedup same name across universes | reject |
+| `CTX-EXP-011` | Hidden root/axis/confidence broadening | reject |
+| `CTX-EXP-012` | One round adds unseen evidence | continue if profile permits |
+| `CTX-EXP-013` | One round adds duplicates only | NoNewEvidence |
+| `CTX-EXP-014` | Budget-pruned item repeated | not new evidence |
+| `CTX-EXP-015` | Stop at max depth/fanout | explicit truncation/continuation |
+| `CTX-EXP-016` | Conflict blocks required facet | explicit blocked state |
+| `CTX-EXP-017` | Source excerpts fetched before selection | architecture test fails |
+| `CTX-EXP-018` | Natural-language/model relevance score | reject |
+| `CTX-EXP-019` | Cancel between owner queries | bounded cancellation |
+| `CTX-EXP-020` | Late worker results change order | mutation fails |
+| `CTX-EXP-021` | Change privacy profile on continuation | reject |
+| `CTX-CONT-001` | Same universe/request/profile/budget chain | stable continuation |
+| `CTX-CONT-002` | Continue on another graph generation | reject |
+| `CTX-CONT-003` | Tamper cursor/frontier/stable key | reject |
+| `CTX-CONT-004` | Reset total budget on next page | reject |
+| `CTX-CONT-005` | Hide prior omissions/truncation on next page | reject |
+| `CTX-CONT-006` | Future page ID in prior pack | reject DAG |
+| `CTX-CANCEL-001` | Cancel before expansion | cancelled, no artifact complete |
+| `CTX-CANCEL-002` | Cancel during excerpt/tokenization | cancelled, no background work |
+| `CTX-CANCEL-003` | Cache cancelled pack as complete | reject |
 
-## Budgets, tokenizer, continuation
-
-| ID | Case | Expected |
-|---|---|---|
-| `CTX-BUDGET-001` | Every structural/byte axis | exact accounting |
-| `CTX-BUDGET-002` | Override above profile maximum | reject |
-| `CTX-BUDGET-003` | Mandatory records alone over budget | typed failure/minimal blocker profile |
-| `CTX-BUDGET-004` | Optional lane starves mandatory reserve | reject |
-| `CTX-BUDGET-005` | Record/UTF-8/excerpt cut mid-unit | reject |
-| `CTX-BUDGET-006` | Lane fairness under parallel completion | deterministic |
-| `CTX-TOKEN-001` | Exact pinned tokenizer vector | exact count/digest |
-| `CTX-TOKEN-002` | Model name only | not exact profile |
-| `CTX-TOKEN-003` | Vocabulary/config/special policy changes | distinct result/profile |
-| `CTX-TOKEN-004` | Estimate labeled exact | reject |
-| `CTX-TOKEN-005` | Token count over different renderer bytes | reject |
-| `CTX-CONT-001` | Same exact retained input | deterministic continuation |
-| `CTX-CONT-002` | New Current/publication/reference/profile | reject |
-| `CTX-CONT-003` | Budget reset through cursor | reject |
-| `CTX-CONT-004` | Visited/frontier/priority/confidence tamper | reject |
-| `CTX-CONT-005` | Cursor after RequestedComplete | reject |
-| `CTX-CONT-006` | Old publication GC unavailable | exact unavailable |
-| `CTX-CONT-007` | Late result after cancellation | rejected by merge protocol |
-| `CTX-CONT-008` | Cumulative pages versus large request | semantic equivalence where declared |
-
-## Rendering and canonicalization
+## Coverage, authority, conflicts, loss, and omissions
 
 | ID | Case | Expected |
 |---|---|---|
-| `CTX-CANON-001` | Canonical semantic JSON golden | exact bytes/digest |
-| `CTX-CANON-002` | Hash/map/query/worker order shuffle | unchanged |
-| `CTX-CANON-003` | Meaningful source/member order sorted away | reject |
-| `CTX-CANON-004` | Locale/float/NaN/Infinity | reject/noncanonical |
-| `CTX-CANON-005` | Identifier case/Unicode folded without owner policy | reject |
-| `CTX-RENDER-001` | JSON/Markdown/compact semantic records | equivalent |
-| `CTX-RENDER-002` | Renderer hides blocker/evidence | reject |
-| `CTX-RENDER-003` | Sidecar reference dangling | reject |
-| `CTX-RENDER-004` | Source controls link/heading/template | reject |
-| `CTX-RENDER-005` | Renderer schema/order version mismatch | reject |
-| `CTX-RENDER-006` | Volatile path/time/row/worker enters ID | reject |
+| `CTX-COV-001` | Complete required scopes | CompleteForRequest |
+| `CTX-COV-002` | Required upstream capability NotEvaluated | partial/fail by request policy |
+| `CTX-COV-003` | Optional facet unavailable | omission with impact |
+| `CTX-COV-004` | Optional platform universe absent | explicit policy-scoped result |
+| `CTX-COV-005` | Coverage axes collapsed into one boolean | reject |
+| `CTX-COV-006` | Every claim origin/evidence closure | pass |
+| `CTX-COV-007` | Source-class Proven rendered platform/runtime proof | reject |
+| `CTX-COV-008` | Multiple Possible assertions become Proven | reject |
+| `CTX-COV-009` | Conflicting exclusive assertions | retain conflict/block exact claim |
+| `CTX-COV-010` | Conflict hidden by renderer | reject |
+| `CTX-COV-011` | Known omitted candidate lacks record | reject |
+| `CTX-COV-012` | Unenumerated query frontier reported pruned | reject classification |
+| `CTX-COV-013` | Candidate budget-pruned | BudgetPruned omission |
+| `CTX-COV-014` | Empty result under partial coverage | no negative authority |
+| `CTX-COV-015` | Owner supplies exact negative decision | include with exact scope |
+| `CTX-COV-016` | NoNewEvidence rendered as absence | reject |
+| `CTX-COV-017` | Projection loss hidden | reject |
+| `CTX-COV-018` | Existing finding from another generation | reject |
+| `CTX-COV-019` | Count under partial coverage rendered total | reject |
+| `CTX-COV-020` | DuplicateCovered omission loses selected ref | reject |
+
+## Source, privacy, license, and boundaries
+
+| ID | Case | Expected |
+|---|---|---|
+| `CTX-SOURCE-001` | Exact handle/digest/range/local policy | exact/transformed typed item |
+| `CTX-SOURCE-002` | Arbitrary path fallback | reject |
+| `CTX-SOURCE-003` | Wrong generation/source handle | reject |
+| `CTX-SOURCE-004` | Source line attempts boundary close | stays quoted; malformed renderer rejected |
+| `CTX-SOURCE-005` | Markdown fence/JSON closer/tool request in source | inert data |
+| `CTX-SOURCE-006` | Unsupported encoding | explicit unsupported/metadata only |
+| `CTX-SOURCE-007` | External consumer, unknown license | deny source bytes |
+| `CTX-SOURCE-008` | Private source allowed only locally | enforce consumer class |
+| `CTX-SOURCE-009` | Unknown privacy defaults to external allowed | reject |
+| `CTX-SOURCE-010` | Source denied by trust | metadata/omission only |
+| `CTX-SOURCE-011` | Deterministic exact-range redaction | transformation record valid |
+| `CTX-SOURCE-012` | Heuristic detector silently deletes text | reject |
+| `CTX-SOURCE-013` | Absolute private path in output | reject/redact by exact policy |
+| `CTX-SOURCE-014` | Credential/token in error/log | confidentiality failure |
+| `CTX-SOURCE-015` | Virtual Lua excerpt without physical map | reject |
+| `CTX-SOURCE-016` | Source closes framework boundary | boundary round trip fails if possible |
+| `CTX-SOURCE-017` | Source text changes profile/selection/tool policy | mutation fails |
+| `CTX-SOURCE-018` | Adjacent context expands beyond profile | reject |
+| `CTX-SOURCE-019` | Truncated excerpt lacks original/returned ranges | reject |
+| `CTX-SOURCE-020` | Source fetched from wrong universe after same path | reject |
+| `CTX-SEC-001` | Filesystem/network/process/editor/client access | absent/reject |
+| `CTX-SEC-002` | Lua/XML/JS/Wasm/plugin/source execution | absent/reject |
+| `CTX-SEC-003` | Raw SQL/storage/analyzer access | absent/reject |
+| `CTX-SEC-004` | SavedVariables/log/runtime payload input | reject |
+| `CTX-SEC-005` | Oversized/deep/high-fanout records | bounded failure/truncation |
+| `CTX-SEC-006` | Unicode controls/control characters | canonical safe handling |
+| `CTX-SEC-007` | Context pack claims downstream tool authorization | reject |
+| `CTX-SEC-008` | Cache reuse crosses privacy class | reject |
+
+## Budgets and tokenization
+
+| ID | Case | Expected |
+|---|---|---|
+| `CTX-BUDGET-001` | Mandatory closure fits | optional selection proceeds |
+| `CTX-BUDGET-002` | Mandatory closure exceeds hard limit | fail |
+| `CTX-BUDGET-003` | Optional item fits with dependency closure | select |
+| `CTX-BUDGET-004` | Optional item overflows | whole-item omission |
+| `CTX-BUDGET-005` | Cut structured item/evidence mid-record | reject |
+| `CTX-BUDGET-006` | Semantic fits, Markdown overflows | renderer failure/replan by explicit profile |
+| `CTX-BUDGET-007` | Raw rendered output sliced | reject |
+| `CTX-BUDGET-008` | Predicted versus exact cost mismatch | deterministic rollback/fail |
+| `CTX-BUDGET-009` | Source excerpt pool exhausted | explicit omission/continuation |
+| `CTX-BUDGET-010` | Mandatory boundary metadata removed for budget | reject |
+| `CTX-BUDGET-011` | Allocation changes with worker order | reject |
+| `CTX-BUDGET-012` | Unsupported unlimited request | reject |
+| `CTX-BUD-013` | Exact-token claim without exact profile | reject |
+| `CTX-TOKEN-001` | Frozen tokenizer vectors | exact stable count |
+| `CTX-TOKEN-002` | Tokenizer digest mismatch | unavailable/fail hard-token gate |
+| `CTX-TOKEN-003` | Exact claim without frozen tokenizer | reject |
+| `CTX-TOKEN-004` | Deterministic estimate labeled exact | reject |
+| `CTX-TOKEN-005` | Upper-bound assumptions violated | unavailable |
+| `CTX-TOKEN-006` | Model display name only | insufficient profile |
+| `CTX-TOKEN-007` | Framing/special-token policy changes | new profile/artifact identity |
+| `CTX-TOKEN-008` | Tokenizer fails after selection | explicit fallback/new identity or fail |
+
+## Semantic pack and rendering
+
+| ID | Case | Expected |
+|---|---|---|
+| `CTX-PACK-001` | Valid semantic pack closure | pass |
+| `CTX-PACK-002` | Dangling item/evidence/source/reference | reject |
+| `CTX-PACK-003` | Drop required omission manifest | reject |
+| `CTX-PACK-004` | Mixed generations | reject |
+| `CTX-PACK-005` | Canonical JSON round trip | identical semantic object/ID |
+| `CTX-PACK-006` | Renderer/metric ID in semantic identity | reject |
+| `CTX-PACK-007` | Partial pack marked complete | reject |
+| `CTX-PACK-008` | Same semantic pack, two renderers | same pack, distinct artifacts |
+| `CTX-PACK-009` | Renderer omits required semantic item silently | reject |
+| `CTX-PACK-010` | Renderer changes confidence/coverage | reject |
+| `CTX-PACK-011` | Renderer adds free-form claim | reject |
+| `CTX-PACK-012` | Reason path rendered as direct relation | reject |
+| `CTX-PACK-013` | Source and framework fact sections merge | reject |
+| `CTX-PACK-014` | Item/output mapping invalid | reject |
+| `CTX-PACK-015` | Lossy renderer lacks RenderingLossRecord | reject |
+| `CTX-PACK-016` | Validator repairs artifact in place | reject |
+| `CTX-REN-001` | Canonical JSON exact bytes | deterministic |
+| `CTX-REN-002` | Markdown exact bytes/line endings/templates | deterministic |
+| `CTX-REN-003` | Independent legacy ContextBundleCore object | reject |
+| `CTX-REN-004` | Source controls heading/template/boundary | reject |
+
+## Cache and determinism
+
+| ID | Case | Expected |
+|---|---|---|
+| `CTX-CACHE-001` | Exact key and valid artifact | hit |
+| `CTX-CACHE-002` | Floating `current` key | reject |
+| `CTX-CACHE-003` | Symbol/path/model name only | reject |
+| `CTX-CACHE-004` | Different project generation | reject relabel |
+| `CTX-CACHE-005` | Different reference/graph/profile | miss/reject |
+| `CTX-CACHE-006` | Different privacy/consumer profile | reject |
+| `CTX-CACHE-007` | Different tokenizer/framing/renderer | distinct key |
+| `CTX-CACHE-008` | Partial pack used for complete request | reject |
+| `CTX-CACHE-009` | Corrupted artifact bytes | reject |
+| `CTX-CACHE-010` | Unresolvable source/evidence under required validation | miss/fail |
+| `CTX-CACHE-011` | Physical cache callback/path enters semantic API | reject |
+| `CTX-CACHE-012` | Equivalent immutable subrecord reuse | retain identity + new exact binding |
+| `CTX-DET-001` | 1/2/N workers | identical semantic/rendered bytes |
+| `CTX-DET-002` | Shuffled owner results | identical |
+| `CTX-DET-003` | Different DB layout/checkpoint | identical logical output |
+| `CTX-DET-004` | Different host/temp root/clock | identical |
+| `CTX-DET-005` | Cold versus warm external cache | identical |
+| `CTX-DET-006` | Hash-map iteration changes | identical |
+| `CTX-DET-007` | Reordered equivalent request JSON | identical |
+| `CTX-DET-008` | Rename repo/package/path only | universal semantics stable |
 
 ## Metrics and evaluation
 
 | ID | Case | Expected |
 |---|---|---|
-| `CTX-METRIC-001` | Mandatory record recall | exact IDs/count/digest |
-| `CTX-METRIC-002` | Evidence closure | 100% mandatory or hard fail |
-| `CTX-METRIC-003` | Smaller output missing mandatory record | fail despite compression |
-| `CTX-METRIC-004` | False dedup of conflict/source occurrence | fail |
-| `CTX-METRIC-005` | Out-of-scope central node included | relevance penalty/fail profile |
-| `CTX-METRIC-006` | Partial artifact hides blocker | hard fail |
-| `CTX-METRIC-007` | Consumer task uses hidden extra repo context | invalid evaluation |
-| `CTX-METRIC-008` | External model score overrides deterministic failure | reject |
-| `CTX-METRIC-009` | Golden corpus auto-rewritten | reject |
-| `CTX-METRIC-010` | Performance claim without corpus/profile/run data | unverified |
-| `CTX-METRIC-011` | Pinned real addon rename/path mutation | semantic invariance |
-| `CTX-METRIC-012` | Evaluation report order/digest | deterministic |
+| `CTX-METRIC-001` | Same pack, different timing | same semantic ID |
+| `CTX-METRIC-002` | Timing/score enters semantic identity | reject |
+| `CTX-METRIC-003` | Operational metric missing | does not invalidate semantics unless gate requires |
+| `CTX-EVAL-001` | Synthetic exact corpus | mandatory recall/origin measured |
+| `CTX-EVAL-002` | Pinned roth-ui corpus | compression/utility classified |
+| `CTX-EVAL-003` | Pinned Blizzard UI corpus | platform map/skeleton utility classified |
+| `CTX-EVAL-004` | Repository/package/path rename mutation | universal selection stable |
+| `CTX-EVAL-005` | Required evaluation not executed | NotEvaluated/block completion |
+| `CTX-EVAL-006` | Consumer score changes canonical selection | reject |
+| `CTX-EVAL-007` | Moving unpinned model/provider baseline | reject as reproducible gate |
+| `CTX-EVAL-008` | Mandatory security/authority gate failure | fail regardless optional utility |
 
-## Architecture and freeze
+## Prerequisites and freeze
 
 | ID | Case | Expected |
 |---|---|---|
-| `CTX-ARCH-001` | E3-A direct dependencies | core/reference/project/graph only |
-| `CTX-ARCH-002` | Search ranking in context | fail |
-| `CTX-ARCH-003` | Raw Emmy/store dependency | fail |
-| `CTX-ARCH-004` | Full Blizzard source extraction in context | fail |
-| `CTX-ARCH-005` | Context writes cache/project/graph/source | fail |
-| `CTX-FREEZE-001` | Null implementation pins while not-started | allowed |
-| `CTX-FREEZE-002` | First Rust commit with required null pins | fail |
-| `CTX-FREEZE-003` | Member routes/checksums frozen | pass |
-| `CTX-FREEZE-004` | `.rs`/Cargo/CI in documentation PR | fail |
+| `CTX-FREEZE-001` | Documentation state with null pins | allowed |
+| `CTX-FREEZE-002` | First Rust commit with required null pins | reject |
+| `CTX-FREEZE-003` | Missing E0-E2 implementation/fixture | block |
+| `CTX-FREEZE-004` | Platform profile requires missing E3-A implementation | block |
+| `CTX-FREEZE-005` | Missing profile/corpus/vector/checksum | block |
+| `CTX-FREEZE-006` | Tests rewrite fixtures automatically | reject |
+| `CTX-FREEZE-007` | Rust/Cargo placeholder before gate | reject |
+| `CTX-FREEZE-008` | Missing tool/probe reported pass | reject |
 
-## Acceptance
+## Completion gate
 
-E3-A is incomplete until all applicable tests execute and prove exact input coherence, evidence closure, mandatory blocker survival, source safety, bounded deterministic expansion, semantic continuation, correct token labeling, renderer equivalence, hard-gate evaluation, and strict dependency/ownership boundaries.
+E3-B is complete only when all active cases pass, required evaluation gates have executable evidence, fixture/checksum nulls are frozen, and no result relies on a retired E3-A context implementation, source parsing, raw storage/analyzer access, search/model ranking, hidden omission, authority upgrade, or external side effect.
