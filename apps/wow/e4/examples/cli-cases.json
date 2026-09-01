@@ -1,0 +1,208 @@
+{
+  "schema_version": 1,
+  "fixture_id": "apps-wow-e4-c-cli-cases-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "cases": [
+    {
+      "case_id": "C4-CMD-001",
+      "argv": [
+        "wow",
+        "search",
+        "query",
+        "--query-json",
+        "-",
+        "--project",
+        "current",
+        "--reference",
+        "current-compatible",
+        "--output-mode",
+        "envelope-json"
+      ],
+      "expected_service_operation": "search_query",
+      "expected_service_call_count": 1
+    },
+    {
+      "case_id": "C4-SEL-002",
+      "argv": [
+        "wow",
+        "search",
+        "query",
+        "--project",
+        "current",
+        "--reference",
+        "current-compatible",
+        "--text",
+        "RegisterEvent"
+      ],
+      "expected": "symbolic-current-tokens-passed-unchanged-to-service"
+    },
+    {
+      "case_id": "C4-SEARCH-001",
+      "argv": [
+        "wow",
+        "search",
+        "query",
+        "--project",
+        "publication-set:<ID>",
+        "--reference",
+        "reference-view:<ID>",
+        "--text",
+        "RegisterEvent",
+        "--kind",
+        "function",
+        "--lane",
+        "ExactCanonicalName",
+        "--lane",
+        "GenerationLocalTextFts"
+      ],
+      "expected_service_operation": "search_query",
+      "expected_service_call_count": 1
+    },
+    {
+      "case_id": "C4-SEARCH-005",
+      "argv": [
+        "wow",
+        "search",
+        "continue",
+        "--continuation",
+        "-",
+        "--budget-profile",
+        "fresh-budget"
+      ],
+      "expected_exit": 64,
+      "expected_service_call_count": 0
+    },
+    {
+      "case_id": "C4-SEARCH-008",
+      "argv": [
+        "wow",
+        "search",
+        "select",
+        "--search-result",
+        "result-1",
+        "--candidate-rank",
+        "1"
+      ],
+      "expected_exit": 64,
+      "expected_service_call_count": 0,
+      "reason": "rank-only-selection-forbidden"
+    },
+    {
+      "case_id": "C4-SEARCH-009",
+      "argv": [
+        "wow",
+        "search",
+        "select",
+        "--search-result",
+        "result-with-one-candidate"
+      ],
+      "mutation": "application-auto-selects-sole-candidate",
+      "expected": "architecture-test-failure"
+    },
+    {
+      "case_id": "C4-LIN-001",
+      "argv": [
+        "wow",
+        "lineage",
+        "build",
+        "--before-project",
+        "publication-set:<BEFORE>",
+        "--after-project",
+        "publication-set:<AFTER>",
+        "--lineage-profile",
+        "profile-1",
+        "--operation-id",
+        "operation-1"
+      ],
+      "expected_service_operation": "lineage_build",
+      "expected_service_call_count": 1
+    },
+    {
+      "case_id": "C4-REV-001",
+      "argv": [
+        "wow",
+        "lineage",
+        "review",
+        "validate",
+        "--lineage-snapshot",
+        "lineage-snapshot:<ID>",
+        "--review-input",
+        "-"
+      ],
+      "expected_service_operation": "lineage_review_validate",
+      "expected_service_call_count": 1
+    },
+    {
+      "case_id": "C4-REV-006",
+      "argv": [
+        "wow",
+        "lineage",
+        "review",
+        "apply",
+        "--review-input",
+        "review.json"
+      ],
+      "expected_exit": 64,
+      "expected_service_call_count": 0,
+      "missing": [
+        "exact-base-lineage-snapshot",
+        "operation-id"
+      ]
+    },
+    {
+      "case_id": "C4-MIG-003",
+      "argv": [
+        "wow",
+        "migration",
+        "apply",
+        "--input",
+        "recipe.json"
+      ],
+      "expected_exit": 64,
+      "expected_service_call_count": 0,
+      "reason": "no-E4-C-migration-apply-command"
+    },
+    {
+      "case_id": "C4-IMP-003",
+      "argv": [
+        "wow",
+        "impact",
+        "continue",
+        "--continuation",
+        "continuation.json",
+        "--lineage-snapshot",
+        "lineage-snapshot:<NEW>"
+      ],
+      "expected_exit": 64,
+      "expected_service_call_count": 0,
+      "reason": "continuation-selector-override-forbidden"
+    },
+    {
+      "case_id": "C4-CMD-004",
+      "argv": [
+        "wow",
+        "search",
+        "context",
+        "--search-result",
+        "result-1",
+        "--result-set",
+        "set-1",
+        "--candidate",
+        "candidate-1",
+        "--context-request",
+        "context.json"
+      ],
+      "mutation": "app-calls-search-select-then-context-build-as-two-public-service-calls",
+      "expected": "architecture-test-failure",
+      "required_service_operation": "search_context"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "all canonical parsed command and service request IDs",
+      "all exact argv/config/input vectors",
+      "all expected parse/error/service-call results"
+    ]
+  }
+}
