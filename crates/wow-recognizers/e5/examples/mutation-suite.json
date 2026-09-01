@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-recognizers-e5-a-mutation-suite-v1",
+  "state": "documentation-only-pending-fact-bytes-and-executor",
+  "mutation_suite": {
+    "mutation_suite_id": "mutation.fixture.module-factory@1",
+    "source_corpus_id": "calibration-fixture.module-factory.synthetic@1",
+    "before_after_fact_manifest_ids": null,
+    "budget_profile_id": null,
+    "security_profile_id": null,
+    "cases": [
+      {
+        "case_id": "CAL-MUT-001",
+        "mutation_id": "mutation.repository-rename",
+        "source_example_id": "fixture.module-factory.positive-a",
+        "kind": "RepositoryIdentityRename",
+        "expected_semantic_delta": "none",
+        "expected_outcome": "pass-invariance"
+      },
+      {
+        "case_id": "CAL-MUT-002",
+        "mutation_id": "mutation.owner-transfer",
+        "source_example_id": "fixture.module-factory.positive-a",
+        "kind": "OwnerMetadataChange",
+        "expected_semantic_delta": "none",
+        "expected_outcome": "pass-invariance"
+      },
+      {
+        "case_id": "CAL-MUT-005",
+        "mutation_id": "mutation.path-relocation",
+        "source_example_id": "fixture.module-factory.positive-a",
+        "kind": "PathTopologyChange",
+        "expected_semantic_delta": "none",
+        "expected_outcome": "pass-invariance"
+      },
+      {
+        "case_id": "CAL-MUT-007",
+        "mutation_id": "mutation.local-identifier-rename",
+        "source_example_id": "fixture.module-factory.positive-a",
+        "kind": "IrrelevantLocalIdentifierRename",
+        "expected_semantic_delta": "none",
+        "expected_outcome": "pass-invariance"
+      },
+      {
+        "case_id": "CAL-MUT-011",
+        "mutation_id": "mutation.module-factory-literal",
+        "source_example_id": "fixture.module-factory.positive-a",
+        "kind": "ConventionLiteralChange",
+        "expected_semantic_delta": "module proposal removed",
+        "expected_outcome": "pass-sensitivity"
+      },
+      {
+        "case_id": "CAL-MUT-012",
+        "mutation_id": "mutation.remove-callee-join",
+        "source_example_id": "fixture.module-factory.positive-a",
+        "kind": "StructuralJoinRemoval",
+        "expected_semantic_delta": "module proposal removed or NotEvaluated according to capability state",
+        "expected_outcome": "pass-sensitivity"
+      },
+      {
+        "case_id": "CAL-MUT-014",
+        "mutation_id": "mutation.dynamic-callee",
+        "source_example_id": "fixture.module-factory.positive-a",
+        "kind": "ResolutionDowngrade",
+        "expected_semantic_delta": "Derived becomes Possible or NotEvaluated",
+        "expected_outcome": "pass-sensitivity"
+      },
+      {
+        "case_id": "CAL-MUT-015",
+        "mutation_id": "mutation.partial-coverage",
+        "source_example_id": "fixture.module-factory.near-negative",
+        "kind": "CoverageDowngrade",
+        "expected_semantic_delta": "TrueNegative/EvaluatedNoMatch becomes NotEvaluated or Partial",
+        "expected_outcome": "pass-sensitivity"
+      },
+      {
+        "case_id": "CAL-MUT-019",
+        "mutation_id": "mutation.swap-provenance-metadata",
+        "source_example_id": "fixture.module-factory.positive-b",
+        "kind": "MetadataCounterfactual",
+        "expected_semantic_delta": "none",
+        "expected_outcome": "pass-invariance"
+      },
+      {
+        "case_id": "CAL-MUT-023",
+        "mutation_id": "mutation.fanout-over-limit",
+        "source_example_id": "fixture.module-factory.positive-a",
+        "kind": "AdversarialFanout",
+        "expected_semantic_delta": "explicit Partial or resource failure; never complete sampling",
+        "expected_outcome": "pass-resource-boundary"
+      }
+    ],
+    "canonical_sha256": null
+  },
+  "hard_rules": [
+    "invariance and sensitivity expectations are explicit",
+    "mutations remain in the source provenance group unless assigned to an explicit challenge profile",
+    "a failed case is a hard gate and cannot be averaged away"
+  ]
+}
