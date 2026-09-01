@@ -3,8 +3,8 @@
 English documentation in this directory is the canonical navigation surface for WoW Dev Framework.
 
 ```text
-documentation frontier: E4-C complete
-next documentation package: E5-A recognizer calibration corpora and named calibration packs
+documentation frontier: E5-A complete
+next documentation package: E5-B calibration orchestration, review, holdout audit and promotion submissions
 implementation frontier: not started
 ```
 
@@ -37,6 +37,7 @@ implementation frontier: not started
 - [E4-B lineage, migration records, and static impact](../crates/wow-graph/e4/README.md) — exact before/after generations, producer partitions, proof ceilings, ambiguity, review, change classes, migration candidates, and bounded reason paths.
 - [E4-C search/lineage/impact service](../crates/wow-service/e4/README.md) — exact/current acquisition, shard and lineage orchestration, explicit candidate selection, review authorization, migration validation, static impact, and context handoff.
 - [E4-C CLI](../apps/wow/e4/README.md) — thin `wow-service`-only command, input, output, cancellation, and exit-code contracts.
+- [E5-A calibration corpora and named packs](../crates/wow-recognizers/e5/README.md) — exact candidate-source admission, provenance-aware splits, independent labels, shadow-only packs, anti-overfitting mutations, evaluation, candidate artifacts, and deactivation.
 - [Codebase Memory bridge](CODEBASE_MEMORY_BRIDGE.md) — optional broad-source candidate bridge.
 - [Secret Values and restrictions](SECRET_VALUES_AND_RESTRICTIONS.md) — open restriction facets and analysis levels.
 
@@ -59,6 +60,24 @@ E4-C wow-service + apps/wow
 
 Search does not prove lineage or intended entity. Review authorization does not create proof. Same lineage does not imply replacement. Migration validation does not edit source. Static impact does not establish runtime breakage or severity.
 
+## E5 calibration boundary
+
+```text
+E5-A wow-recognizers
+    validates exact immutable corpus/label/split/pack artifacts
+    executes E2-B packs in shadow-only candidate-owned partitions
+    produces per-case/mutation/metric/candidate/deactivation artifacts
+
+E5-B wow-service + apps/wow (next)
+    will acquire retained artifacts, authorize reviewers,
+    audit sealed-holdout access, and prepare promotion submissions
+
+E5-C publication owner (later)
+    will publish immutable core packs and own canary/rollout/rollback
+```
+
+A repository commit pin is not corpus admission. Repository/addon/owner/path/popularity/label/split/reviewer/model metadata cannot control matcher semantics. `ShadowValidated` or metric eligibility is not authorization or publication. Unknown/Possible/NotEvaluated/Conflict/Partial/Truncated are not Negative or pass.
+
 ## Operating documents
 
 - [Agent workflow](AGENT_WORKFLOW.md)
@@ -75,9 +94,9 @@ Search does not prove lineage or intended entity. Review authorization does not 
 
 ## Next documentation package
 
-E5-A is owned by `wow-recognizers`. It must define audited exact calibration corpora and named calibration packs that emit universal structural roles only. Repository/addon/owner/path/popularity names cannot become hidden production conditions. Positive, clean-negative, near-miss, ambiguous, adversarial, rename, relocation, and copied/vendor/generated mutations are mandatory.
+E5-B is owned by `wow-service`, with a thin `apps/wow` transport. It must define exact retained calibration artifact acquisition, durable operation identity and response-loss recovery, reviewer authorization independent from metrics/graph validity, sealed-holdout unsealing audit, promotion submission preparation, conservative result envelopes, cancellation/closure, and command-specific transport behavior.
 
-E5-A does not publish a core pack automatically; E5-B owns calibration review/promotion submissions and E5-C owns immutable rollout/canary/rollback.
+E5-B must invoke E5-A owner operations rather than reproduce corpus, split, matcher, mutation, metric, graph-validation, or deactivation algorithms. It does not publish a core pack; E5-C remains the publication/canary/rollback owner.
 
 ## Archive
 
