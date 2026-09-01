@@ -1,203 +1,152 @@
 # Roadmap
 
-**Status: operational**
-**Current milestone: E0**
+**Status:** operational documentation and implementation routing.
 
-The next milestone is an executable vertical slice, not another architecture rewrite.
+```text
+documentation frontier: E3-B complete
+next documentation package: E3-C service/application context orchestration
+implementation frontier: not started
+```
+
+Documentation-ready does not mean executable. No Rust workspace, `Cargo.toml`, `.rs` files, or CI workflows exist yet.
 
 ## Milestone summary
 
-| Milestone | Outcome | State |
-|---|---|---|
-| E0 | Merged generic + WoW diagnostics against one deterministic fixture profile | **Current** |
-| E1 | Full API reference, raw metadata, annotations, and profile packaging | Planned |
-| E2 | Addon project model, TOC/XML/load graph, Project Map | Planned |
-| E3 | Blizzard UI graph, package shards, and L0/L1 skeletons | Planned |
-| E4 | Exact/historical search, lineage, FTS, ranking explanations | Planned |
-| E5 | Universal framework recognizers and managed external corpus | Planned |
-| E6 | Optional Codebase Memory MCP bridge | Planned |
-| E7 | Production LSP/MCP, installers, packs, releases, and rollback | Planned |
+| Milestone | Documentation outcome | Documentation state | Implementation state |
+|---|---|---:|---:|
+| E0 | Deterministic diagnostic vertical-slice contracts | Complete | Not started |
+| E1 | ReferenceStore, full ReferenceView, annotations, pack build/validation | Complete | Not started |
+| E2 | Graph, recognizers, full project candidate, ProjectStore publication | Complete | Not started |
+| E3-A | Exact Blizzard UI source universe and SkeletonInputView producer | Complete | Not started |
+| E3-B | Project Map, L0/L1, context packs and deterministic rendering | Complete | Not started |
+| E3-C | Service/application context acquisition and use cases | Next | Not started |
+| E4 | Search, explicit lineage, migration and impact | Planned | Not started |
+| E5 | Named calibration packs with universal outputs | Planned | Not started |
+| E6 | Optional Codebase Memory candidate bridge | Planned | Not started |
+| E7 | LSP/MCP, release, signing, publication, rollback | Planned | Not started |
 
-## E0 — executable vertical slice
+## E0 — executable diagnostic slice
 
-### Build
+Build `wow-core`, fixture `wow-reference`, `wow-emmy`, minimal `wow-project`, two bounded `wow-rules`, `wow-service`, and thin `apps/wow` only after every E0 fixture/profile/checksum is frozen.
 
-- [ ] Create the minimal Rust workspace and transport-independent result types.
-- [ ] Pin the checked upstream EmmyLua analysis dependency behind one adapter.
-- [ ] Define profile, generation, source-handle, provenance, confidence, coverage, and finding primitives.
-- [ ] Add one minimal APIDocumentation fixture.
-- [ ] Add one generated Ketho-compatible annotation fixture.
-- [ ] Load the annotation fixture as an Emmy library without mutating editor configuration.
-- [ ] Normalize one built-in generic Emmy diagnostic.
-- [ ] Implement `wow.api.exists` for the fixture profile.
-- [ ] Implement one direct `wow.secret.local_operation` rule.
-- [ ] Expose a minimal `wow check` CLI path.
-- [ ] Add deterministic golden tests and clean negative fixtures.
-
-### Gate
+Gate:
 
 ```text
-same file receives merged generic + WoW findings
-known valid WoW API resolves through annotations/reference facts
-unknown current-profile API is detected without grep
-one direct Secret-local misuse is detected
-all output carries one profile/reference/project generation
-dependent rules return NotEvaluated when capabilities are absent
-no user editor configuration is mutated
-1/2/N repeated runs are byte-identical after canonical sorting
+one exact profile/reference/project/analyzer generation
+merged generic and WoW findings
+known API resolves; authoritative unknown API finding only under complete coverage
+bounded Secret-local unsafe and guarded cases
+NotEvaluated under missing/conflicted capability
+project and platform evidence stay separate
+1/2/N canonical output identical
+no source/editor/client mutation
 ```
 
-### Explicit non-goals
+## E1 — Reference Pack
 
-- full Blizzard UI ingestion;
-- complete Reference Pack schema;
-- LSP or MCP production frontend;
-- Codebase Memory integration;
-- framework recognizer packs;
-- broad interprocedural Secret flow;
-- release automation.
+Build generic store foundation, persistent reference ingestion/evaluation/corrections/coverage, deterministic annotations, and nonrepairing pack build/validation.
 
-## E1 — full API reference and annotations
-
-### Build
-
-- restricted APIDocumentation evaluator;
-- all generated API systems, tables, events, widgets, enums, and CVars;
-- raw unknown-field preservation;
-- restriction facets and predicates;
-- Ketho semantic parity and Spartan-style query parity;
-- configured historical/current profile packaging;
-- annotation and dialect compatibility probes.
-
-### Gate
+Gate:
 
 ```text
-all declared source files ingested or explicitly diagnosed
-negative authority only for complete partitions
-annotation pack accepted by the Emmy compatibility probe
-raw restriction metadata retained independently of annotations
-pack manifest/checksums deterministic and valid
-profiles remain isolated
+exact source/profile/component pins
+immutable validated ReferenceStore
+raw unknowns and expired/conflicting corrections retained
+negative authority honest
+annotation source-map/loss/injection/editor gates pass
+Ketho and consumer discrepancies classified
+pack checksums/licenses/coverage close
+logical rebuild determinism proven
 ```
 
-## E2 — project model
+## E2 — project graph and persistence
 
-### Build
+Build typed graph assertions/partitions/queries, structural recognizers, full TOC/XML/load/analyzer project indexing, incremental invalidation, and WAL manifested-partition ProjectStore publication.
 
-- TOC parser and flavor/load-on-demand variants;
-- structural XML parser;
-- load/dependency/reachability graph;
-- API use, event, hook, registration, and state facts;
-- direct Secret-local rules over real project files;
-- generated Project Map.
-
-### Gate
+Gate:
 
 ```text
-unreachable and use-before-load fixtures are caught
-incremental update changes only affected partitions
-Project Map remains within the context budget
-zero blocking false positives in the launch project corpus
+producer-independent semantic identity
+atomic partition replacement and coherent old/new readers
+one exact TOC flavor; bounded safe XML; no source execution
+no second Lua parser
+recognizer precision/ambiguity/coverage retained
+one-file update reuses unaffected partitions
+inactive read-back validation before current CAS
+crash/response-loss/recovery/lease/GC/backup gates pass
+logical output deterministic; physical bytes classified separately
 ```
 
-## E3 — Blizzard UI graph and skeletons
+## E3-A — Blizzard UI source universe
 
-### Build
+Build a separately identified exact platform-source project with pinned materialization, package/TOC/XML/Lua/analyzer/recognizer/graph publication, coverage/license records, incremental replacement, structural fingerprints, and bounded `SkeletonInputView`.
 
-- package-local shards and TOC variants;
-- functions, methods, templates, frames, regions, and mixins;
-- owner/load/object/call/event/state trees;
-- L0/L1 skeleton generation and source handles.
-
-### Gate
+Gate:
 
 ```text
-historical/current ActionButton lineage fixture resolves
-package query touches bounded data
-agent reaches a target with no more than three source reads
+exact source commit/tree/content/license/build profile
+no flavor/profile merge
+source implementation does not become API/runtime authority
+separate ProjectStore/ProjectSnapshot/GraphSnapshot
+removed source leaves no target records or object refs
+source redistribution remains explicitly classified
+bounded source and graph reads
 ```
 
-## E4 — search and lineage
+## E3-B — Project Map and context
 
-### Build
+Build exact-universe binding, Project Maps, L0/L1 skeletons, closed control/effect projection, deterministic expansion/selection/pruning, source boundaries, context semantic packs, canonical JSON/Markdown, cache identities, metrics, and evaluation.
 
-- aliases, deprecations, and replacement journal;
-- syntax/signature/neighborhood lineage;
-- FTS5 indexes;
-- deterministic ranker and explanation signals;
-- patch-impact plan generation.
-
-### Gate
+Gate:
 
 ```text
-explicit replacements outrank fuzzy hits
-unknown replacements remain candidates
-labeled search benchmark top-3 recall ≥ 0.9
-no partial profile produces an authoritative miss
+exact roots and immutable views
+no search/model/parser/store internals
+separate user/platform/reference identities
+all claims have origin/evidence/coverage/conflict closure
+mandatory records never pruned
+omissions and unenumerated regions explicit
+exact tokens only with frozen tokenizer/framing
+source remains quoted untrusted data
+no source-boundary/private-data violation
+1/2/N and shuffled results byte-identical
 ```
 
-## E5 — recognizers and external corpus
+## E3-C — service and application context use cases
 
-### Build
+Define and then implement exact current-resolution, retained view/lease acquisition, request normalization, context operation orchestration, renderer selection, canonical service envelopes, thin CLI commands, cancellation, status/exit codes, and resource closure.
 
-- declarative recognizer DSL over canonical facts;
-- core TOC/XML/factory/registry/state/hook recognizers;
-- Ace3/oUF/WeakAuras/BigWigs/Details/Plater calibration packs;
-- external repository manifests and official GitHub workflow.
-
-### Gate
+Hard boundaries:
 
 ```text
-pack removal changes coverage only
-no production code branches on repository name
-universal role precision measured per pack
-external source license/revision recorded
+service does not reimplement context/graph/store/parser/search/rule algorithms
+applications depend on service only
+symbolic current is resolved exactly once before canonical context request
+no fallback/last-known-good substitution without explicit operation policy
+no hidden natural-language search before E4
+no background work
 ```
+
+## E4 — search, lineage, migration, impact
+
+Build exact/alias/FTS/shape/graph lanes, explicit cross-build lineage assertions, deterministic ranking explanations, and bounded impact plans. Similarity produces candidates, never authoritative replacement.
+
+## E5 — calibration packs
+
+Add audited pinned framework/addon calibration packs over universal normalized facts. Rename/path/repository mutations must preserve universal outputs. Pack removal changes only pack-owned partitions and coverage.
 
 ## E6 — Codebase Memory bridge
 
-### Build
+Optional MCP client emitting generation-bound external candidates. Bridge absence cannot break exact local search/context; candidates never become proven by transport or model confidence.
 
-- standard MCP client/handoff;
-- stable source-handle joins;
-- merged local/external search with evidence separation;
-- coverage and generation reporting;
-- optional DerivedFacts interoperability proposal.
+## E7 — production transports and releases
 
-### Gate
-
-```text
-bridge absence does not break exact search
-semantic candidates are never presented as proven
-no direct Codebase Memory database access
-measured task benefit over CBM-off baseline
-```
-
-## E7 — production packaging
-
-### Build
-
-- thin LSP and MCP frontends;
-- installers and configuration bootstrap;
-- prebuilt Reference Packs;
-- release workflows;
-- cargo-deny/audit, SBOM, provenance, signatures where practical;
-- migration, rollback, and last-known-good activation.
-
-### Gate
-
-```text
-clean install and upgrade paths
-public contract compatibility report
-least-privilege release automation
-corrupt/incompatible pack rejection
-rollback tested
-security and license artifacts published
-```
+Thin LSP/MCP adapters, installers, release artifacts, signatures/provenance/SBOM where practical, least-privilege automation, compatibility/migration reports, last-known-good and rollback tests.
 
 ## Roadmap discipline
 
-- A later milestone may provide fixtures for an earlier one; it may not bypass its gate.
-- Architecture changes require an ADR and a concrete failure of the accepted design.
-- New components remain experimental until they satisfy the promotion rule in `TEST_STRATEGY.md`.
+- Later fixtures cannot bypass earlier implementation gates.
+- Architecture changes require an ADR and concrete failure of the accepted design.
+- Stable framework contracts link the current external WoW engineering KB rather than copying patch-sensitive facts.
+- Missing tools/probes/benchmarks/evaluations/client tests are skipped or NotEvaluated, never pass.
 - The roadmap tracks outcomes and gates, not arbitrary percentages or crate counts.
