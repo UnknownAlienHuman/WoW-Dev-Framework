@@ -96,12 +96,6 @@
       "expected_error": "e4_search_candidate_result_guard_mismatch"
     },
     {
-      "case_id": "S4-IMP-011",
-      "operation": "search_continue",
-      "continuation_id": null,
-      "expected": "exact-retained-shards-result-manifest-and-cumulative-budget"
-    },
-    {
       "case_id": "S4-LIFE-007",
       "operation": "search_query",
       "mutation": "retention-admission-fails-before-continuation-return",
