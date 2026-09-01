@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-context-e3-b-metrics-evaluation-v1",
+  "state": "documentation-only-pending-corpus-and-threshold-freeze",
+  "cases": [
+    {"case_id": "CTX-METRIC-001", "condition": "same_semantic_pack_different_execution_time", "expected": "same-semantic-id-metrics-noncanonical"},
+    {"case_id": "CTX-METRIC-002", "mutation": "put_timing_or_score_in_semantic_pack_identity", "expected_error": "context_metrics_or_evaluation_entered_semantic_identity"},
+    {"case_id": "CTX-EVAL-001", "corpus": "synthetic_exact", "expected": "mandatory-recall-and-origin-closure-measured"},
+    {"case_id": "CTX-EVAL-002", "corpus": "pinned_roth_ui", "expected": "compression-and-task-utility-classified"},
+    {"case_id": "CTX-EVAL-003", "corpus": "pinned_blizzard_ui", "expected": "platform-map-and-skeleton-utility-classified"},
+    {"case_id": "CTX-EVAL-004", "mutation": "change_repository_package_or_path_names_only", "expected": "universal-selection-unchanged-except-source-identities"},
+    {"case_id": "CTX-EVAL-005", "condition": "required_evaluation_not_executed", "expected_error": "context_required_evaluation_gate_not_executed"}
+  ],
+  "freeze_gate": {"required_before_first_rust_implementation": true}
+}

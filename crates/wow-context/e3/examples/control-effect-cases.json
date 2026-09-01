@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-context-e3-b-control-effect-v1",
+  "state": "documentation-only-pending-vector-freeze",
+  "cases": [
+    {"case_id": "CTX-CE-001", "input": "published_exact_call_relation", "expected": "control-effect-node-with-origin-closure"},
+    {"case_id": "CTX-CE-002", "input": "published_possible_dynamic_call", "expected": "Possible-not-upgraded"},
+    {"case_id": "CTX-CE-003", "input": "unsupported_control_flow_region", "expected": "typed-unknown-or-not-evaluated-region"},
+    {"case_id": "CTX-CE-004", "mutation": "run_second_parser_or_cfg_builder", "expected_error": "context_second_parser_cfg_ssa_or_dataflow_forbidden"},
+    {"case_id": "CTX-CE-005", "mutation": "infer_runtime_order_from_static_load_relation", "expected_error": "context_l1_control_effect_fact_unsupported"},
+    {"case_id": "CTX-CE-006", "mutation": "convert_hook_relation_to_taint_or_combat_safety", "expected_error": "context_authority_provenance_or_confidence_upgrade_forbidden"}
+  ],
+  "freeze_gate": {"required_before_first_rust_implementation": true}
+}

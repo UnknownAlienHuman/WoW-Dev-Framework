@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-context-e3-b-budget-source-continuation-v1",
+  "state": "documentation-only-pending-vector-freeze",
+  "cases": [
+    {"case_id": "CTX-BUDGET-001", "condition": "mandatory_closure_fits", "expected": "optional-selection-may-proceed"},
+    {"case_id": "CTX-BUDGET-002", "condition": "mandatory_closure_exceeds_hard_limit", "expected_error": "context_minimum_required_content_exceeds_budget"},
+    {"case_id": "CTX-BUDGET-005", "mutation": "cut_structured_item_or_evidence_mid-record", "expected_error": "context_partial_structured_item_pruning_forbidden"},
+    {"case_id": "CTX-TOKEN-003", "condition": "exact_token_claim_without_frozen_tokenizer", "expected_error": "context_exact_token_claim_without_exact_profile"},
+    {"case_id": "CTX-SOURCE-001", "condition": "exact_source_handle_digest_range_and_local_policy", "expected": "exact-or-explicitly-transformed-source-item"},
+    {"case_id": "CTX-SOURCE-004", "mutation": "source_line_attempts_to_close_markdown_boundary", "expected_error": "context_source_boundary_escape_or_roundtrip_failed"},
+    {"case_id": "CTX-SOURCE-007", "condition": "external_consumer_with_unknown_license", "expected_error": "context_source_license_or_redistribution_denied"},
+    {"case_id": "CTX-CONT-001", "condition": "same_universe_request_profiles_and_budget_chain", "expected": "stable-continuation"},
+    {"case_id": "CTX-CONT-002", "mutation": "continue_on_another_graph_generation", "expected_error": "context_continuation_changed_snapshot_request_or_profile"},
+    {"case_id": "CTX-CONT-004", "mutation": "reset_total_budget_on_next_page", "expected_error": "context_continuation_total_budget_reset_forbidden"},
+    {"case_id": "CTX-CANCEL-002", "condition": "cancel_during_excerpt_or_tokenization", "expected": "cancelled-no-background-work"}
+  ],
+  "freeze_gate": {"required_before_first_rust_implementation": true}
+}
