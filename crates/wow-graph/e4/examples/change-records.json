@@ -1,0 +1,169 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-graph-e4-b-change-records-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "change_set": {
+    "change_set_id": null,
+    "lineage_universe_set_id": null,
+    "lineage_graph_snapshot_id": null,
+    "accepted_lineage_assertion_manifest_id": null,
+    "change_record_ids": [],
+    "unmatched_before_manifest_id": null,
+    "unmatched_after_manifest_id": null,
+    "absence_decision_manifest_id": null,
+    "coverage_summary_id": null,
+    "conflict_summary_id": null,
+    "canonical_sha256": null
+  },
+  "change_record": {
+    "change_record_id": null,
+    "source_generation_entity_ref": null,
+    "target_generation_entity_ref": null,
+    "governing_lineage_assertion_ids": [],
+    "change_kind": "Renamed",
+    "typed_facets": [
+      {
+        "facet_id": null,
+        "field_or_relation_id": "canonical_name",
+        "before_state": "Known",
+        "before_value": null,
+        "before_origin_ids": [],
+        "after_state": "Known",
+        "after_value": null,
+        "after_origin_ids": [],
+        "comparison_result": "Changed",
+        "compatibility_class": null,
+        "coverage_record_ids": [],
+        "conflict_ids": [],
+        "canonical_sha256": null
+      }
+    ],
+    "evidence_ids": [],
+    "proof_ceiling": "Derived",
+    "coverage_record_ids": [],
+    "conflict_ids": [],
+    "canonical_sha256": null
+  },
+  "absence_decision": {
+    "absence_decision_id": null,
+    "subject_generation_entity_ref": null,
+    "kind": "UnmatchedOnly",
+    "closed_scope_id": null,
+    "before_owner_coverage_record_ids": [],
+    "after_owner_coverage_record_ids": [],
+    "lineage_candidate_coverage_record_ids": [],
+    "unresolved_component_or_conflict_ids": [],
+    "negative_authority_record_ids": [],
+    "canonical_sha256": null
+  },
+  "cases": [
+    {
+      "case_id": "LIN-CHG-002",
+      "mutation": "accepted-lineage-name-changed",
+      "expected": "Renamed"
+    },
+    {
+      "case_id": "LIN-CHG-003",
+      "mutation": "fuzzy-similar-name-without-accepted-lineage",
+      "expected_error": "lineage_change_pair_not_accepted"
+    },
+    {
+      "case_id": "LIN-CHG-004",
+      "mutation": "accepted-lineage-location-changed-with-move-evidence",
+      "expected": "Moved"
+    },
+    {
+      "case_id": "LIN-CHG-005",
+      "mutation": "old-and-new-copy-both-exist",
+      "expected_error": "lineage_copy_move_classification_conflict"
+    },
+    {
+      "case_id": "LIN-CHG-008",
+      "mutation": "structured-signature-changed",
+      "expected": "SignatureChanged"
+    },
+    {
+      "case_id": "LIN-CHG-009",
+      "mutation": "optionality-nilability-or-multiple-returns-collapsed",
+      "expected_error": "lineage_change_value_state_collapsed"
+    },
+    {
+      "case_id": "LIN-CHG-012",
+      "mutation": "exact-reference-restriction-changed",
+      "expected": "RestrictionChanged-with-Reference-authority"
+    },
+    {
+      "case_id": "LIN-CHG-013",
+      "mutation": "implementation-source-infers-reference-restriction",
+      "expected_error": "lineage_change_authority_class_collapsed"
+    },
+    {
+      "case_id": "LIN-CHG-017",
+      "mutation": "path-difference-rendered-as-direct-relation-change",
+      "expected_error": "lineage_change_relation_path_as_direct_edge_forbidden"
+    },
+    {
+      "case_id": "LIN-CHG-020",
+      "mutation": "missing-to-known-under-partial-before-coverage",
+      "expected_error": "lineage_change_coverage_incomplete"
+    },
+    {
+      "case_id": "LIN-CHG-022",
+      "mutation": "known-to-unknown-or-conflict",
+      "expected": "Unknown-or-Conflict-not-selected-value"
+    },
+    {
+      "case_id": "LIN-CHG-024",
+      "mutation": "rename-move-signature-compound-change",
+      "expected": "three-independent-typed-change-records"
+    },
+    {
+      "case_id": "LIN-ABS-001",
+      "mutation": "complete-closed-scope-old-unmatched",
+      "expected": "RemovedWithAuthority"
+    },
+    {
+      "case_id": "LIN-ABS-002",
+      "mutation": "partial-after-inventory",
+      "expected_error": "lineage_removal_authority_unavailable"
+    },
+    {
+      "case_id": "LIN-ABS-003",
+      "mutation": "candidate-generation-truncated",
+      "expected_error": "lineage_removal_authority_unavailable"
+    },
+    {
+      "case_id": "LIN-ABS-004",
+      "mutation": "unresolved-candidate-component",
+      "expected_error": "lineage_removal_authority_unavailable"
+    },
+    {
+      "case_id": "LIN-ABS-007",
+      "mutation": "empty-fts-result-only",
+      "expected_error": "lineage_empty_search_or_graph_as_absence_forbidden"
+    },
+    {
+      "case_id": "LIN-ABS-010",
+      "mutation": "complete-closed-scope-new-unmatched",
+      "expected": "IntroducedWithAuthority"
+    },
+    {
+      "case_id": "LIN-ABS-015",
+      "mutation": "review-asserts-absence-without-coverage",
+      "expected_error": "lineage_unmatched_promoted_to_absence_forbidden"
+    },
+    {
+      "case_id": "LIN-ABS-016",
+      "mutation": "accepted-counterpart-plus-removal-record",
+      "expected_error": "lineage_removal_or_introduction_conflict"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "all lineage assertion change facet before after origin compatibility coverage conflict and proof IDs",
+      "all unmatched scope coverage component negative-authority and absence decision IDs",
+      "all expected ChangeSet and absence bytes IDs and SHA-256 values"
+    ]
+  }
+}
