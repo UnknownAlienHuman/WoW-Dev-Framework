@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-graph-e4-b-ambiguity-cases-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "generation_pair_id": null,
+  "cases": [
+    {
+      "case_id": "LIN-MATCH-002",
+      "name": "swapped-names",
+      "from_endpoint_ids": [],
+      "to_endpoint_ids": [],
+      "candidate_proposal_ids": [],
+      "expected": "stable-owner-evidence-resolves-without-greedy-name-match",
+      "expected_solution_ids": [],
+      "canonical_sha256": null
+    },
+    {
+      "case_id": "LIN-MATCH-004",
+      "name": "equal-signatures-and-bodies-moved",
+      "from_endpoint_ids": [],
+      "to_endpoint_ids": [],
+      "candidate_proposal_ids": [],
+      "expected": "MultipleValidSolutions",
+      "ambiguity_group_id": null,
+      "canonical_sha256": null
+    },
+    {
+      "case_id": "LIN-MATCH-005",
+      "name": "search-top-hit-conflicts-with-stable-id",
+      "candidate_proposal_ids": [],
+      "expected": "stable-exact-evidence-wins-search-candidate-remains-auditable",
+      "canonical_sha256": null
+    },
+    {
+      "case_id": "LIN-MATCH-010",
+      "name": "global-solution-requires-non-top-local-edge",
+      "candidate_proposal_ids": [],
+      "expected": "globally-valid-unique-solution",
+      "canonical_sha256": null
+    },
+    {
+      "case_id": "LIN-REL-021",
+      "name": "one-to-many-split",
+      "from_endpoint_ids": [],
+      "to_endpoint_ids": [],
+      "group_proposal_id": null,
+      "expected_relation": "split_into",
+      "canonical_sha256": null
+    },
+    {
+      "case_id": "LIN-REL-022",
+      "name": "many-to-one-merge",
+      "from_endpoint_ids": [],
+      "to_endpoint_ids": [],
+      "group_proposal_id": null,
+      "expected_relation": "merged_into",
+      "canonical_sha256": null
+    },
+    {
+      "case_id": "LIN-MATCH-013",
+      "name": "component-over-budget",
+      "limits": {
+        "max_from_endpoints": null,
+        "max_to_endpoints": null,
+        "max_candidate_edges": null,
+        "max_group_candidates": null
+      },
+      "expected": "BudgetTruncated",
+      "expected_error": "lineage_candidate_component_budget_exceeded",
+      "canonical_sha256": null
+    },
+    {
+      "case_id": "LIN-MATCH-017",
+      "name": "unique-candidate-only-optimum",
+      "candidate_proposal_ids": [],
+      "expected": "unique-output-with-Candidate-proof-ceiling",
+      "canonical_sha256": null
+    },
+    {
+      "case_id": "LIN-MATCH-018",
+      "name": "review-with-new-exact-evidence",
+      "candidate_proposal_ids": [],
+      "review_decision_id": null,
+      "qualifying_evidence_ids": [],
+      "expected": "new-resolved-decision-and-assertion-within-ceiling",
+      "canonical_sha256": null
+    }
+  ],
+  "forbidden_solver_variants": [
+    "greedy-source-order",
+    "top-search-hit-per-source",
+    "aggregate-score-consume-endpoints",
+    "lexical-path-tie-as-truth",
+    "pairwise-split-or-merge-invention"
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "generation_pair_id",
+      "cases[*].endpoint-proposal-solution-and-ambiguity-ids",
+      "cases[*].limits",
+      "cases[*].canonical_sha256"
+    ]
+  }
+}
