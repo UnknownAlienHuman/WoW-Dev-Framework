@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-graph-e4-b-change-set-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "generation_pair_id": null,
+  "lineage_snapshot_id": null,
+  "change_profile_id": null,
+  "change_set": {
+    "change_set_id": null,
+    "entity_change_records": [
+      {
+        "change_record_id": null,
+        "from_endpoint_ids": [],
+        "to_endpoint_ids": [],
+        "lineage_assertion_ids": [],
+        "presence_class": "Retained",
+        "facets": [
+          {
+            "facet_id": null,
+            "kind": "CanonicalName",
+            "comparison_class": "ChangedCompatible",
+            "from_value_record_ids": [],
+            "to_value_record_ids": [],
+            "owner_evidence_ids": [],
+            "coverage_record_ids": [],
+            "conflict_ids": [],
+            "canonical_sha256": null
+          },
+          {
+            "facet_id": null,
+            "kind": "Signature",
+            "comparison_class": "ChangedPotentiallyBreaking",
+            "from_value_record_ids": [],
+            "to_value_record_ids": [],
+            "static_compatibility_profile_id": null,
+            "owner_evidence_ids": [],
+            "coverage_record_ids": [],
+            "conflict_ids": [],
+            "canonical_sha256": null
+          }
+        ],
+        "canonical_sha256": null
+      },
+      {
+        "change_record_id": null,
+        "from_endpoint_ids": [],
+        "to_endpoint_ids": [],
+        "presence_class": "RemovedWithAuthority",
+        "lineage_assertion_ids": [],
+        "negative_authority_record_ids": [],
+        "coverage_record_ids": [],
+        "canonical_sha256": null
+      },
+      {
+        "change_record_id": null,
+        "from_endpoint_ids": [],
+        "to_endpoint_ids": [],
+        "presence_class": "PresentOnlyFromPartialCoverage",
+        "lineage_assertion_ids": [],
+        "coverage_record_ids": [],
+        "canonical_sha256": null
+      }
+    ],
+    "relation_change_records": [],
+    "ambiguity_group_ids": [],
+    "conflict_ids": [],
+    "coverage_record_ids": [],
+    "omission_record_ids": [],
+    "aggregate_manifest_id": null,
+    "canonical_sha256": null
+  },
+  "cases": [
+    {
+      "case_id": "LIN-CHG-004",
+      "mutation": "add-required-parameter-under-compatible-static-profile",
+      "expected": "ChangedBreakingUnderStaticContract"
+    },
+    {
+      "case_id": "LIN-CHG-005",
+      "mutation": "change-optional-or-nilability",
+      "expected": "typed-signature-facet-change-without-collapse"
+    },
+    {
+      "case_id": "LIN-CHG-007",
+      "mutation": "old-type-unknown-new-type-known",
+      "expected": "UnknownFrom"
+    },
+    {
+      "case_id": "LIN-CHG-009",
+      "mutation": "emit-breaking-label-without-static-compatibility-profile",
+      "expected_error": "lineage_change_static_compatibility_profile_missing"
+    },
+    {
+      "case_id": "LIN-CHG-013",
+      "mutation": "render-a-reason-path-as-a-direct-relation-removal",
+      "expected_error": "lineage_change_relation_path_collapsed_forbidden"
+    },
+    {
+      "case_id": "LIN-CHG-017",
+      "mutation": "emit-no-change-while-requested-coverage-is-partial",
+      "expected_error": "lineage_no_change_claim_unauthorized"
+    },
+    {
+      "case_id": "LIN-ABS-002",
+      "mutation": "remove-target-inventory-partition",
+      "expected": "PresentOnlyFromPartialCoverage"
+    },
+    {
+      "case_id": "LIN-ABS-008",
+      "mutation": "treat-empty-store-query-as-removal-authority",
+      "expected_error": "lineage_removal_negative_authority_unavailable"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "generation_pair_id",
+      "lineage_snapshot_id",
+      "change_profile_id",
+      "change_set.*",
+      "cases[*].canonical-request-and-result-sha256"
+    ]
+  }
+}
