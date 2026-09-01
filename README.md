@@ -2,15 +2,15 @@
 
 **Rust-first, editor-independent code intelligence and agent tooling for World of Warcraft addon development.**
 
-> **Documentation frontier:** E4-A is complete: exact Reference Pack, analyzer/project/graph/persistence, separately published Blizzard UI source, deterministic Project Maps and L0/L1 context, service/CLI context orchestration, and immutable exact-generation search shards with explainable retrieval.
+> **Documentation frontier:** E4-C is complete: exact Reference Pack, analyzer/project/graph/persistence, separately published Blizzard UI source, deterministic Project Maps and L0/L1 context, immutable exact-generation search, explicit lineage/migration/static-impact contracts, and service/CLI orchestration.
 >
-> **Implementation frontier:** not started. The first executable work remains E0-A, not E4. No `Cargo.toml`, Rust source, or CI workflow exists.
+> **Implementation frontier:** not started. The first executable work remains E0-A, not E4 or E5. No `Cargo.toml`, Rust source, or CI workflow exists.
 >
 > **Compatibility model:** every result binds one exact World of Warcraft profile and exact project/reference/source generations. Live patch guidance remains routed through the separate [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb).
 
-WoW Dev Framework is designed to give coding agents and addon developers a compact, exact, explainable technical surface over addon repositories, Blizzard API contracts, Blizzard UI implementation source, static structure, diagnostics, search candidates, migration evidence, and bounded source context.
+WoW Dev Framework is designed to give coding agents and addon developers a compact, exact, explainable technical surface over addon repositories, Blizzard API contracts, Blizzard UI implementation source, static structure, diagnostics, retrieval candidates, cross-generation evidence, migration artifacts, static impact, and bounded source context.
 
-It is not a generic RAG product, an editor-settings mutator, a runtime injection platform, a replacement for Codebase Memory, or a model-authority layer.
+It is not a generic RAG product, editor-settings mutator, runtime injection platform, source-edit executor, replacement for Codebase Memory, or model-authority layer.
 
 ## What the framework should answer
 
@@ -22,7 +22,10 @@ It is not a generic RAG product, an editor-settings mutator, a runtime injection
 - What is the smallest trustworthy Project Map, L0/L1 skeleton, reason path, or source excerpt needed for a task?
 - Which exact and approximate search lanes found an entity, and why did it outrank another candidate?
 - Is a search miss authoritative, partial, candidate-only, truncated, or nonauthoritative?
-- Which migration/lineage/impact conclusion is proven, and which is only a candidate?
+- Which entities have accepted lineage across two exact generations, and which pairs remain candidates or conflicts?
+- Was an entity moved, renamed, split, merged, introduced, removed, deprecated, or replaced under the exact proof ceiling?
+- Which migration recipe is only advisory, which validates statically, and what validation still remains?
+- Which entities are statically affected through exact direct edges or reason paths, without claiming runtime breakage?
 - Which operation is statically permitted, and which still requires exact runtime evidence?
 
 ## Contract stack
@@ -70,13 +73,27 @@ E4-A
     authority-banded deterministic candidate ranking
     complete explanations, honest misses and stable continuation
 
-E4-B next
-    explicit cross-generation lineage, rename/move/replacement/removal/introduction
-    migration compatibility and bounded static impact
+E4-B
+    explicit cross-generation lineage overlay
+    independent project/reference/search/review producer partitions
+    proof ceilings, ambiguity components and immutable review promotion
+    typed change/absence/replacement/migration/static-impact records
 
-E4-C+
-    search/lineage/impact service and CLI
-    calibration packs
+E4-C
+    exact/current search and lineage acquisition
+    shard build/validation/query orchestration
+    explicit search candidate selection receipts
+    review authorization plus independent graph validation
+    migration validation and bounded static-impact use cases
+    exact selected search root to context handoff
+    thin service-only CLI
+
+E5-A next
+    audited calibration corpora and named calibration packs
+    universal outputs and anti-overfitting mutation gates
+
+E5-B+
+    calibration review/promotion and immutable core-pack rollout
     optional Codebase Memory candidates
     LSP/MCP and release operations
 ```
@@ -120,15 +137,23 @@ search layer
     deterministic rank tuples and explanations
     exact miss/partial/truncation/continuation state
 
+lineage/change layer
+    exact before/after generations in one universe
+    independent project/reference/search/review evidence partitions
+    bounded ambiguity components and explicit proof ceilings
+    immutable accepted/rejected/deferred/conflicted review state
+    typed change, absence, replacement, migration and static-impact records
+
 service/application layer
     exact/current publication selection
     retained view/lease lifecycle
-    explicit candidate selection and use-case sequencing
+    explicit search candidate selection
+    review authorization adapter invocation
+    context, migration and static-impact use-case sequencing
     canonical envelopes and thin CLI transport
 
-later history/integration layer
-    explicit lineage/migration/impact assertions
-    audited recognizer calibration
+later calibration/integration layer
+    audited named calibration corpora and universal recognizer packs
     optional external semantic candidates
     LSP/MCP and release controls
 ```
@@ -137,25 +162,33 @@ later history/integration layer
 
 - One result uses one exact coherent generation/profile set; no mixed current/latest data.
 - `CurrentPublished` is resolved only at the service boundary and never refreshed mid-request.
-- Independent project, Blizzard UI, reference, and search stores are not falsely described as a distributed atomic snapshot.
+- Independent project, Blizzard UI, reference, search, and lineage stores are not falsely described as a distributed atomic snapshot.
 - User project, Blizzard UI implementation, Reference Pack, search candidate, external candidate, runtime, and historical universes remain distinct.
 - EmmyLua is the sole correctness-path Lua parser/analyzer and is pinned behind one adapter.
 - TOC/XML parsing is bounded and nonexecuting; source/repository scripts never run.
 - Graph assertions retain producer, evidence, provenance, confidence, coverage, conflicts, and generation identity.
-- Ownership, lexical, load, object, inheritance, registration, lifecycle, state, call, and later lineage axes remain distinct.
+- Ownership, lexical, load, object, inheritance, registration, lifecycle, state, call, and lineage axes remain distinct.
 - A reason path never becomes a silent direct edge.
-- Named addon/framework packs can calibrate universal recognizers; production semantics never branch on repository/addon/path/popularity names.
-- API/reference contract, implementation source, runtime observation, and community evidence are different authority classes.
+- Named addon/framework packs can calibrate universal recognizers; production semantics never branch on repository/addon/owner/path/popularity names.
+- API/reference contract, implementation source, runtime observation, review authorization, and community evidence are different authority classes.
 - Missing coverage never becomes a clean negative answer.
 - `Possible`, `Candidate`, conflict, partial, truncated, cancelled, and `NotEvaluated` are never upgraded or hidden.
 - Project Map and context are projections, not a second graph or new authority.
-- Source text remains structurally isolated untrusted data and cannot control profiles, tools, headings, query syntax, ranking, or agent instructions.
+- Source/query/review/migration text remains structurally isolated untrusted data and cannot control profiles, tools, ranking, proof ceilings, or agent instructions.
 - Exact token counts require a frozen exact tokenizer and framing profile over exact final bytes.
 - One SearchShard binds one exact owner generation; no mutable global/current corpus.
 - Exact identifiers are case-sensitive; a folded or fuzzy match remains approximate.
 - Raw FTS/BM25 values are shard-local and never compared across corpora.
 - Search ranking retrieves candidates; it never proves user intent, alias, lineage, replacement, impact, safety, or runtime behavior.
-- Search and context remain separate: service passes explicitly selected exact roots.
+- Search selection is explicit; top-1, sole candidate, rank, display name, or query text cannot be silently selected.
+- Search and context remain separate: service passes an explicitly selected exact root.
+- Cross-generation entities remain distinct; lineage is an explicit overlay.
+- Same name, path, signature, fingerprint, graph neighborhood, uniqueness, or rank is Candidate evidence only.
+- One-to-many, many-to-one, split, merge, copy, and ambiguity are preserved rather than forced into a bijection.
+- Review authorization does not create proof, and review cannot exceed the minimum proof ceiling.
+- Same lineage does not imply deprecation, replacement, edit compatibility, or migration success.
+- Migration validation does not apply an edit or prove runtime correctness.
+- Static impact preserves exact reason paths and does not claim runtime breakage, severity, performance, taint, combat, Secret behavior, or fixability.
 - Applications depend on `wow-service` only and never reproduce domain algorithms.
 - No public success precedes mandatory resource closure.
 
@@ -175,12 +208,38 @@ wow context continue
 wow context validate
 wow context render
 
+wow search index status
+wow search index build
+wow search index validate
+wow search query
+wow search continue
+wow search explain
+wow search select
+wow search context
+
+wow lineage status
+wow lineage build
+wow lineage validate
+wow lineage review validate
+wow lineage review apply
+wow lineage compare
+wow lineage trace
+wow lineage explain
+
+wow migration candidates
+wow migration validate
+
+wow impact plan
+wow impact run
+wow impact continue
+wow impact explain
+
 wow-reference-builder build
 wow-reference-builder validate
 wow-reference-builder rebuild-compare
 ```
 
-Search CLI operations are deferred to E4-C. Documented search architecture does not make a command available.
+There is no migration-apply command, automatic candidate selection, runtime-impact command, or tool-execution escape hatch.
 
 ## First implementation target
 
@@ -196,7 +255,7 @@ pinned upstream EmmyLua analysis
 -> one deterministic wow check result
 ```
 
-Agents must not start persistent stores, the full graph, Blizzard UI indexing, context, search, LSP, MCP, or release code before prerequisite implementation and fixture/checksum gates pass.
+Agents must not start persistent stores, the full graph, Blizzard UI indexing, context, search, lineage, calibration, LSP, MCP, or release code before prerequisite implementation and fixture/checksum gates pass.
 
 ## Documentation routes
 
@@ -251,7 +310,7 @@ This framework links the knowledge base. A conclusion is copied here only when i
 - English is the canonical architecture/contract language.
 - Addon localization content can remain in its target languages.
 - No CI/workflow is added without an explicit owner request.
-- Missing tools, probes, benchmarks, evaluation, client tests, or implementation evidence are reported as skipped/blocked/NotEvaluated, never pass.
+- Missing tools, probes, benchmarks, evaluation, client tests, authorization adapters, or implementation evidence are reported as skipped/blocked/NotEvaluated, never pass.
 
 ## License
 
