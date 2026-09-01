@@ -1,0 +1,273 @@
+{
+  "schema_version": 1,
+  "contract_id": "wow-graph/e4-b/lineage-migration-static-impact",
+  "state": "implementation-ready-documentation-no-rust-code",
+  "work_package": "E4-B",
+  "crate": "wow-graph",
+  "documentation_frontier": "E4-B",
+  "implementation_state": "not-started",
+  "direct_framework_dependencies": [
+    "wow-core",
+    "wow-store"
+  ],
+  "producer_contract_owners": [
+    "wow-project",
+    "wow-reference",
+    "wow-search",
+    "review-boundary"
+  ],
+  "orchestration_owner": "wow-service/E4-C-deferred",
+  "prerequisites": [
+    {
+      "contract_id": "wow-core/e0-a/1",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-store/e2-d/projectstore-coherent-publication",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-graph/e2-a/typed-assertion-partition-query-core",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-project/e2-c/toc-xml-load-incremental-index",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-project/e3-a/blizzard-ui-source-index",
+      "implementation_and_fixture_freeze_required": true,
+      "relationship": "required for Blizzard UI source lineage comparisons"
+    },
+    {
+      "contract_id": "wow-reference/e1-persistent-schema-and-build-plan",
+      "implementation_and_fixture_freeze_required": true,
+      "relationship": "required for Reference lineage/transition comparisons"
+    },
+    {
+      "contract_id": "wow-search/e4-a/exact-generation-retrieval-core",
+      "implementation_and_fixture_freeze_required": true,
+      "relationship": "required only for search-derived Candidate proposal lanes"
+    }
+  ],
+  "lineage_universe_classes": [
+    "UserProject",
+    "BlizzardUiSource",
+    "ReferencePlatformContract"
+  ],
+  "relation_families": [
+    "lineage_successor_of",
+    "same_lineage_as",
+    "moved_from",
+    "renamed_from",
+    "split_from",
+    "merged_from",
+    "introduced_in",
+    "removed_after",
+    "signature_changed_from",
+    "type_changed_from",
+    "restriction_changed_from",
+    "ownership_changed_from",
+    "load_role_changed_from",
+    "relation_set_changed_from",
+    "deprecated_by",
+    "replaced_by",
+    "migration_candidate_to"
+  ],
+  "producer_classes": [
+    "project_stable_identity",
+    "project_source_fingerprint",
+    "project_structural_change",
+    "reference_explicit_transition",
+    "reference_deprecation_or_replacement",
+    "search_lineage_candidate",
+    "review_decision"
+  ],
+  "proof_classes": [
+    "Proven",
+    "Derived",
+    "Possible",
+    "Candidate"
+  ],
+  "component_shapes": [
+    "OneToOne",
+    "OneToMany",
+    "ManyToOne",
+    "ManyToMany",
+    "BeforeOnly",
+    "AfterOnly"
+  ],
+  "review_states": [
+    "Accept",
+    "Reject",
+    "Defer",
+    "Conflict",
+    "Supersede"
+  ],
+  "change_classes": [
+    "UnchangedIdentity",
+    "Moved",
+    "Renamed",
+    "Split",
+    "Merged",
+    "CopiedOrExtractedCandidate",
+    "SignatureChanged",
+    "TypeChanged",
+    "RestrictionChanged",
+    "OwnershipChanged",
+    "LoadRoleChanged",
+    "RelationSetChanged",
+    "Deprecated",
+    "Replaced",
+    "Removed",
+    "Introduced",
+    "UnmatchedBefore",
+    "UnmatchedAfter",
+    "Conflict",
+    "NotEvaluated"
+  ],
+  "migration_tiers": [
+    "plan_only",
+    "validated_recipe"
+  ],
+  "operations": [
+    "validate_lineage_profiles",
+    "bind_lineage_universe_set",
+    "validate_lineage_input_partitions",
+    "generate_lineage_candidate_components",
+    "validate_lineage_proposals",
+    "apply_lineage_review_decisions",
+    "plan_lineage_graph_publication",
+    "publish_lineage_graph_snapshot",
+    "open_lineage_graph_view",
+    "compare_entity_generations",
+    "classify_generation_changes",
+    "trace_lineage",
+    "explain_lineage_assertion",
+    "propose_migration_candidates",
+    "validate_migration_recipe",
+    "plan_static_impact",
+    "run_static_impact",
+    "explain_static_impact",
+    "validate_lineage_graph_snapshot"
+  ],
+  "domain_types": [
+    "LineageUniverseSet",
+    "GenerationBinding",
+    "GenerationComparisonSet",
+    "LineageProfileSet",
+    "GenerationEntityRef",
+    "LineageInputPartition",
+    "LineageProposal",
+    "LineageCandidateComponent",
+    "LineageReviewDecision",
+    "LineageAssertion",
+    "LineageConflictRecord",
+    "GenerationChangeSet",
+    "ChangeRecord",
+    "TypedChangeFacet",
+    "GenerationAbsenceDecision",
+    "MigrationCandidate",
+    "MigrationRecipe",
+    "StaticImpactRequest",
+    "StaticImpactPath",
+    "StaticImpactResult",
+    "LineageGraphSnapshot",
+    "LineageGraphView",
+    "LineageContinuation"
+  ],
+  "active_scope": [
+    "exact-same-universe-before-after-generation-binding",
+    "separate-generation-entity-identity-and-lineage-overlay",
+    "versioned-lineage-change-migration-impact-relation-registry",
+    "independent-project-reference-search-review-producer-partitions",
+    "explicit-proof-ceilings-and-candidate-only-search-fingerprint-evidence",
+    "bounded-blocking-pair-generation-and-bipartite-ambiguity-components",
+    "one-to-one-one-to-many-many-to-one-many-to-many-copy-split-merge-handling",
+    "deterministic-and-reviewed-promotion-with-retained-rejected-proposals",
+    "typed-field-relation-change-and-closed-removal-introduction-authority",
+    "separate-lineage-deprecation-replacement-migration-candidate-and-recipe-records",
+    "bounded-reason-path-static-impact-with-no-runtime-overclaim",
+    "immutable-lineage-store-publication-exact-queries-pagination-continuation-retention",
+    "security-privacy-license-budgets-cancellation-determinism-and-evaluation"
+  ],
+  "deferred_scope": [
+    "symbolic-current-resolution-and-cross-owner-acquisition",
+    "service-and-cli-lineage-search-impact-orchestration",
+    "automatic-source-edit-or-migration-application",
+    "runtime-breakage-severity-taint-combat-secret-performance-or-release-proof",
+    "models-embeddings-codebase-memory-or-external-authority",
+    "named-calibration-pack-promotion",
+    "lsp-mcp-release-signing-publication-and-ci"
+  ],
+  "hard_rules": [
+    "generation-local entities remain distinct and immutable and lineage is an explicit overlay relation",
+    "user project Blizzard UI source and Reference universes never form lineage with one another",
+    "same name path signature body fingerprint graph neighborhood or search rank is Candidate evidence only",
+    "a unique candidate is not automatically Proven or Derived",
+    "candidate generation is bounded by reviewed blocking and never unrestricted all-pairs",
+    "one-to-many many-to-one and ambiguity are preserved and never forced into a bijection",
+    "copy move split merge rename replacement deprecation removal introduction and migration remain distinct",
+    "search_lineage_candidate is capped at Candidate regardless of E4-A authority band",
+    "review cannot exceed the minimum relation input reviewer coverage and conflict proof ceiling",
+    "rejected deferred superseded and conflicting proposals remain auditable",
+    "Removed and Introduced require closed complete exact negative-authority coverage",
+    "replacement is not inferred from lineage similarity unmatched cardinality or source comments",
+    "migration recipes require exact scope preconditions typed steps constraints postconditions and validation and never execute edits",
+    "static impact preserves direct relations and reason paths and never claims runtime breakage severity safety performance or fixability",
+    "wow-graph retains direct dependencies only on wow-core and wow-store and never calls project reference search or service",
+    "lineage publication is immutable complete partitioned exact-generation and independently read-back validated",
+    "no raw SQL source execution filesystem network process editor client model embedding or unbounded graph/pair surface",
+    "missing implementation corpus benchmark runtime evidence or checksum is blocking or NotEvaluated and never pass",
+    "no Cargo Rust source or CI is added during the documentation phase"
+  ],
+  "normative_files": [
+    "crates/wow-graph/README.md",
+    "crates/wow-graph/e4/README.md",
+    "crates/wow-graph/e4/AGENTS.md",
+    "crates/wow-graph/e4/DECISIONS.md",
+    "crates/wow-graph/e4/DATA_MODEL.md",
+    "crates/wow-graph/e4/GENERATION_PAIR_AND_UNIVERSES.md",
+    "crates/wow-graph/e4/LINEAGE_RELATION_REGISTRY.md",
+    "crates/wow-graph/e4/INPUT_PRODUCERS_AND_PROOF_CEILINGS.md",
+    "crates/wow-graph/e4/CANDIDATE_GENERATION_AND_AMBIGUITY.md",
+    "crates/wow-graph/e4/REVIEW_PROMOTION_AND_CONFLICTS.md",
+    "crates/wow-graph/e4/CHANGE_CLASSIFICATION.md",
+    "crates/wow-graph/e4/MIGRATION_AND_REPLACEMENT.md",
+    "crates/wow-graph/e4/STATIC_IMPACT.md",
+    "crates/wow-graph/e4/PUBLICATION_AND_QUERIES.md",
+    "crates/wow-graph/e4/PERSISTENCE_BOUNDARY.md",
+    "crates/wow-graph/e4/COVERAGE_NEGATIVE_AUTHORITY.md",
+    "crates/wow-graph/e4/SECURITY_AND_BUDGETS.md",
+    "crates/wow-graph/e4/EVALUATION.md",
+    "crates/wow-graph/e4/OPERATIONS.md",
+    "crates/wow-graph/e4/ERROR_MODEL.md",
+    "crates/wow-graph/e4/TEST_MATRIX.md",
+    "crates/wow-graph/e4/IMPLEMENTATION_PLAN.md",
+    "crates/wow-graph/e4/CONTRACT.json",
+    "crates/wow-graph/e4/examples/README.md",
+    "crates/wow-graph/e4/examples/lineage-universe-set.json",
+    "crates/wow-graph/e4/examples/producer-proposals.json",
+    "crates/wow-graph/e4/examples/ambiguity-review-cases.json",
+    "crates/wow-graph/e4/examples/change-records.json",
+    "crates/wow-graph/e4/examples/migration-cases.json",
+    "crates/wow-graph/e4/examples/impact-cases.json",
+    "crates/wow-graph/e4/examples/CHECKSUMS.json",
+    "crates/wow-project/E4_B_LINEAGE_INPUTS.md",
+    "crates/wow-reference/E4_B_TRANSITION_EVIDENCE.md",
+    "crates/wow-search/e4/LINEAGE_CANDIDATE_HANDOFF.md"
+  ],
+  "freeze_gate": {
+    "implementation_state": "not-started",
+    "required_before_first_rust_implementation": [
+      "all prerequisite implementation commits and fixture bundle digests",
+      "exact project reference search review and graph producer read operation and validation port catalogs",
+      "exact lineage relation producer proof blocking component review change absence migration impact store privacy security error and canonicalization profile IDs",
+      "selected probed lineage-store SQLite Rust-binding runtime physical publication retention and recovery profile",
+      "synthetic and reviewed paired user-project Blizzard-UI Reference collision hard-negative update-history migration and impact corpora",
+      "candidate recall accepted-lineage precision zero-false-authority change migration impact latency memory pair component store and fanout thresholds",
+      "all proposal component review assertion conflict change absence migration impact publication query continuation security determinism vectors",
+      "all member and bundle SHA-256 values"
+    ]
+  }
+}

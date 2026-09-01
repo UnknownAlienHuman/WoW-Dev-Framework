@@ -1,49 +1,69 @@
 # `wow-graph` contract router
 
-**Status:** E2-A typed graph contract is implementation-ready; Rust implementation has not started.
+**Status:** E2-A typed graph and E4-B cross-generation lineage/migration/static-impact contracts are implementation-ready documentation; Rust implementation has not started.
 
-`wow-graph` owns the versioned WoW domain graph schema, semantic entity identity, evidence-bearing entity/relation assertions, atomic producer-partition replacement, immutable graph snapshots, independent graph axes, and deterministic bounded queries. It does not parse source, run recognizers, publish project generations, rank search results, or expose raw storage internals.
+`wow-graph` owns versioned graph schemas, semantic entity/relation assertions, producer partitions, immutable graph snapshots, bounded graph queries, and E4-B cross-generation lineage/change/impact overlays. It does not parse source, run recognizers/search, infer platform facts, rank candidates, resolve current publications, or expose raw storage internals.
 
-## Canonical route
+## E2-A — generation-local typed graph
 
-Read the E2-A package in this order:
+Read [`e2/README.md`](e2/README.md) and its complete route.
 
-1. [`e2/README.md`](e2/README.md)
-2. [`e2/AGENTS.md`](e2/AGENTS.md)
-3. [`e2/DECISIONS.md`](e2/DECISIONS.md)
-4. [`e2/DATA_MODEL.md`](e2/DATA_MODEL.md)
-5. [`e2/KIND_AND_RELATION_REGISTRY.md`](e2/KIND_AND_RELATION_REGISTRY.md)
-6. [`e2/IDENTITY_AND_ASSERTIONS.md`](e2/IDENTITY_AND_ASSERTIONS.md)
-7. [`e2/PARTITIONS_AND_PUBLICATION.md`](e2/PARTITIONS_AND_PUBLICATION.md)
-8. [`e2/AXES_AND_VIEWS.md`](e2/AXES_AND_VIEWS.md)
-9. [`e2/QUERY_MODEL.md`](e2/QUERY_MODEL.md)
-10. [`e2/PERSISTENCE_BOUNDARY.md`](e2/PERSISTENCE_BOUNDARY.md)
-11. [`e2/CONFLICT_COVERAGE_AND_PROVENANCE.md`](e2/CONFLICT_COVERAGE_AND_PROVENANCE.md)
-12. [`e2/SECURITY_AND_BUDGETS.md`](e2/SECURITY_AND_BUDGETS.md)
-13. [`e2/ERROR_MODEL.md`](e2/ERROR_MODEL.md)
-14. [`e2/TEST_MATRIX.md`](e2/TEST_MATRIX.md)
-15. [`e2/IMPLEMENTATION_PLAN.md`](e2/IMPLEMENTATION_PLAN.md)
-16. [`e2/CONTRACT.json`](e2/CONTRACT.json) and [`e2/examples/`](e2/examples/README.md)
+E2-A defines:
 
-Also read [`../AGENTS.md`](../AGENTS.md), [`../DEPENDENCY_GRAPH.md`](../DEPENDENCY_GRAPH.md), [`../WORKSTREAMS.md`](../WORKSTREAMS.md), and the current [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb) routes.
+- entity/relation/attribute/axis registries;
+- generation-scoped semantic keys and assertions;
+- producer partition replacement;
+- conflicts, coverage and provenance;
+- immutable graph publication;
+- bounded exact entity/neighbor/axis/path/subgraph/explanation queries;
+- logical `wow-store` persistence boundary.
 
-## Direct framework dependencies
+## E4-B — cross-generation lineage, migration and static impact
+
+Read [`e4/README.md`](e4/README.md) and its complete route.
+
+E4-B adds a separate immutable comparison overlay:
+
+```text
+exact before/after owner generations
++ explicit owner/reference transition evidence
++ bounded project fingerprints/change facts
++ Candidate-only search retrieval signals
+-> producer-separated lineage proposals
+-> proof-ceiling and ambiguity validation
+-> explicit review/promotion decisions where required
+-> immutable LineageGraphSnapshot
+-> change classification, migration candidates and bounded static impact paths
+```
+
+Generation-local E2 graph identity remains unchanged. Cross-generation relationships are explicit assertions in a separate `LineageGraph`; they never merge or rewrite source entity keys.
+
+## Direct dependency boundary
 
 ```text
 wow-core
 wow-store
 ```
 
-`wow-project` and `wow-recognizers` call the graph through public contracts; `wow-graph` does not depend on them. `wow-search`, `wow-context`, and `wow-service` remain higher-level consumers.
+`wow-project`, `wow-reference`, and `wow-search` produce typed E4-B inputs through their own public contracts. `wow-service` later coordinates them in E4-C. `wow-graph` never depends directly on those higher/domain producers.
 
-## Current implementation state
+## Authority boundary
+
+- Stable owner identity or explicit transition evidence can support a higher lineage proof ceiling under the exact E4-B profile.
+- Structural fingerprint, same name/path, text/fuzzy/shape/graph proximity, and E4-A rank remain Candidate evidence.
+- Replacement/migration is not the same relation as identity continuity.
+- Missing target entities are not `Removed` without complete relevant before/after coverage.
+- Impact is a bounded reason-path result, not proof of runtime breakage or severity.
+- One-to-many split and many-to-one merge remain explicit; no forced bijection or greedy first match.
+
+## Implementation state
 
 ```text
-documentation contract: complete
-closed fixture shapes: complete
-required prerequisite pins and SHA-256 freeze: pending implementations
-Cargo workspace activation: not started
+documentation frontier: E4-B
+implementation frontier: not-started
+Cargo.toml: absent
 Rust source: absent
+CI/workflows: absent
 ```
 
-Directory presence does not authorize later E3/E4 lineage, impact, search, source-skeleton, external-candidate, or runtime features.
+No E4-B Rust work starts before the E2 graph implementation, E4-A search implementation, exact comparison inputs, candidate/proof profiles, paired corpora, and all fixture/checksum gates are frozen.

@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-graph-e4-b-lineage-universe-set-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "profile_set_id": null,
+  "lineage_universe_set": {
+    "lineage_universe_set_id": null,
+    "universe_class": "UserProject",
+    "logical_universe_id": null,
+    "before": {
+      "owner_store_generation_id": null,
+      "owner_publication_set_id": null,
+      "owner_generation_id": null,
+      "owner_snapshot_id": null,
+      "owner_view_id": null,
+      "graph_generation_id": null,
+      "graph_snapshot_id": null,
+      "graph_view_id": null,
+      "source_or_reference_profile_id": null,
+      "search_shard_id": null,
+      "coverage_manifest_id": null,
+      "conflict_manifest_id": null
+    },
+    "after": {
+      "owner_store_generation_id": null,
+      "owner_publication_set_id": null,
+      "owner_generation_id": null,
+      "owner_snapshot_id": null,
+      "owner_view_id": null,
+      "graph_generation_id": null,
+      "graph_snapshot_id": null,
+      "graph_view_id": null,
+      "source_or_reference_profile_id": null,
+      "search_shard_id": null,
+      "coverage_manifest_id": null,
+      "conflict_manifest_id": null
+    },
+    "compatibility_report_id": null,
+    "capability_summary_id": null,
+    "coverage_summary_id": null,
+    "conflict_summary_id": null,
+    "retention_manifest_id": null,
+    "canonical_sha256": null
+  },
+  "cases": [
+    {
+      "case_id": "LIN-PROF-008",
+      "mutation": "valid-user-project-generation-pair",
+      "expected": "accepted"
+    },
+    {
+      "case_id": "LIN-PROF-009",
+      "mutation": "valid-blizzard-ui-generation-pair",
+      "expected": "accepted"
+    },
+    {
+      "case_id": "LIN-PROF-010",
+      "mutation": "valid-reference-generation-pair",
+      "expected": "accepted"
+    },
+    {
+      "case_id": "LIN-PROF-011",
+      "mutation": "infer-before-after-from-timestamp-or-branch",
+      "expected_error": "lineage_before_after_generation_invalid"
+    },
+    {
+      "case_id": "LIN-PROF-012",
+      "mutation": "symbolic-current-or-latest",
+      "expected_error": "lineage_current_or_latest_selector_forbidden"
+    },
+    {
+      "case_id": "LIN-PROF-013",
+      "mutation": "compare-user-project-to-reference-as-lineage",
+      "expected_error": "lineage_universe_class_mismatch"
+    },
+    {
+      "case_id": "LIN-PROF-016",
+      "mutation": "incompatible-build-flavor-or-profile",
+      "expected_error": "lineage_comparison_profile_incompatible"
+    },
+    {
+      "case_id": "LIN-PROF-018",
+      "mutation": "search-shard-binds-another-generation",
+      "expected_error": "lineage_search_candidate_generation_mismatch"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "profile_set_id",
+      "all before and after owner graph source reference search and retention identities",
+      "compatibility capability coverage and conflict records",
+      "lineage_universe_set.lineage_universe_set_id",
+      "lineage_universe_set.canonical_sha256",
+      "all case result error IDs and bytes"
+    ]
+  }
+}

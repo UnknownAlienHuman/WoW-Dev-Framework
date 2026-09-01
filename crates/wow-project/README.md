@@ -1,55 +1,63 @@
 # `wow-project` contract router
 
-**Status:** E0-D, E2-C, and E3-A contracts are implementation-ready documentation; no Rust code exists.
+**Status:** E0-D, E2-C, E3-A and the E4-B lineage-input seam are implementation-ready documentation; Rust implementation has not started.
 
-`wow-project` owns exact materialized source snapshots, project/source universes, TOC/XML/load structure, analyzer and recognizer orchestration, incremental invalidation, project-generation identity, and domain publication bundles. It never executes addon/source code and never implements storage, graph, analyzer, recognizer, rule, search, or context algorithms owned by other crates.
+`wow-project` owns exact materialized project/source universes, TOC/XML/load interpretation, analyzer/recognizer orchestration, incremental project generations, project publication semantics, Blizzard UI source indexing, and project-owned lineage input producers. It does not own graph acceptance, search ranking, lineage promotion, migration recipes, static-impact traversal, service orchestration, or storage internals.
 
-## Contract routes
+## Canonical routes
 
 ### E0-D — minimal project generation
 
-Read [`E0_OVERVIEW.md`](E0_OVERVIEW.md), then the root E0-D contract package:
+Read the root contract package beginning with [`E0_OVERVIEW.md`](E0_OVERVIEW.md), [`CONTRACT.json`](CONTRACT.json), and the root normative documents.
 
-- [`AGENTS.md`](AGENTS.md)
-- [`DECISIONS.md`](DECISIONS.md)
-- [`DATA_MODEL.md`](DATA_MODEL.md)
-- [`SOURCE_REGISTRY.md`](SOURCE_REGISTRY.md)
-- [`UPDATE_MODEL.md`](UPDATE_MODEL.md)
-- [`GENERATION_AND_PUBLICATION.md`](GENERATION_AND_PUBLICATION.md)
-- [`ERROR_MODEL.md`](ERROR_MODEL.md)
-- [`TEST_MATRIX.md`](TEST_MATRIX.md)
-- [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md)
-- [`CONTRACT.json`](CONTRACT.json)
-- [`examples/`](examples/README.md)
+### E2-C — full addon project indexing
 
-### E2-C — addon-project TOC/XML/load/incremental indexing
+Read [`e2/README.md`](e2/README.md). It defines exact source snapshots, TOC/XML/load, physical and virtual Lua units, analyzer/recognizer/graph proposal handoff, incremental invalidation, and immutable project candidates.
 
-Read [`e2/README.md`](e2/README.md). E2-C turns one exact addon source snapshot into a validated, deterministic, nonpersistent `ProjectIndexCandidate` and defines the handoff to E2-D coherent ProjectStore publication.
+### E3-A — Blizzard UI source universe
 
-### E3-A — Blizzard UI source universe and structural graph
+Read [`e3/README.md`](e3/README.md). It defines a separate exact `blizzard_ui_source` project/graph publication and bounded `SkeletonInputView` for context/search consumers.
 
-Read [`e3/README.md`](e3/README.md). E3-A activates an exact `blizzard_ui_source` project kind using the existing E2 parser/analyzer/recognizer pipeline plus E2-D publication. It produces a separate published platform-source ProjectSnapshot/GraphSnapshot and a bounded skeleton-input view for `wow-context`.
+### E4-B — lineage producer inputs
 
-E3-A does **not** generate Project Maps, L0/L1 skeletons, context packs, search rankings, migration lineage, patch impact, or runtime truth. Those remain downstream packages.
-
-## Direct dependencies by frontier
+Read [`E4_B_LINEAGE_INPUTS.md`](E4_B_LINEAGE_INPUTS.md). It defines:
 
 ```text
-E0-D: wow-core, wow-emmy
-E2-C: wow-core, wow-emmy, wow-graph, wow-recognizers
-E3-A publication: wow-core, wow-emmy, wow-graph, wow-recognizers, wow-store
+project_stable_identity
+project_source_fingerprint
+project_structural_change
 ```
 
-No direct dependency on `wow-context`, `wow-search`, `wow-rules`, `wow-service`, or applications.
+These are exact producer partitions submitted through future E4-C orchestration to independent `wow-graph` E4-B validation. Fingerprints and structural similarity remain Candidate evidence; project producers do not accept lineage, declare replacement, build migration recipes, or run static impact.
+
+## Direct dependency boundary
+
+Maximum permitted dependencies:
+
+```text
+wow-core
+wow-store
+wow-emmy
+wow-graph
+wow-recognizers
+```
+
+Active package slices remain narrower. `wow-project` never depends on `wow-search`, `wow-context`, `wow-service`, `wow-cbm`, `wow-rules`, or applications.
+
+## Cross-generation boundary
+
+Generation-local project entities, ProjectSnapshots and GraphSnapshots remain immutable. E4-B output references exact before/after project generations and does not rewrite their IDs.
+
+A repository, owner, package, path, name, signature, body digest, fingerprint or search rank cannot establish lineage by itself. `Removed`/`Introduced` requires exact closed before/after coverage evaluated by `wow-graph`.
 
 ## Current implementation state
 
 ```text
-documentation frontier: E3-A
-implementation frontier: not started
+documentation frontier: E4-B producer seam
+implementation frontier: not-started
 Cargo.toml: absent
 Rust source: absent
 CI/workflows: absent
 ```
 
-Every exact source, tool, profile, graph, store, fixture, benchmark, and checksum pin remains blocking before the first implementation commit.
+Implementation still begins from E0 dependency order; the E4-B seam cannot activate before E2/E3 project, E2 graph and E4-A search prerequisites are implemented and frozen.
