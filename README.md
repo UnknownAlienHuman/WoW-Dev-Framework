@@ -2,25 +2,26 @@
 
 **Rust-first, editor-independent code intelligence and agent tooling for World of Warcraft addon development.**
 
-> **Documentation frontier:** E3-C is complete: exact Reference Pack contracts, analyzer/project/graph/persistence contracts, a separately published Blizzard UI source universe, deterministic Project Maps and L0/L1 context packs, plus service/CLI context orchestration.
+> **Documentation frontier:** E4-A is complete: exact Reference Pack, analyzer/project/graph/persistence, separately published Blizzard UI source, deterministic Project Maps and L0/L1 context, service/CLI context orchestration, and immutable exact-generation search shards with explainable retrieval.
 >
-> **Implementation frontier:** not started. The first executable work remains E0-A/E0, not E3 or E4. No `Cargo.toml`, Rust source, or CI workflow exists yet.
+> **Implementation frontier:** not started. The first executable work remains E0-A, not E4. No `Cargo.toml`, Rust source, or CI workflow exists.
 >
-> **Compatibility model:** every result binds one exact World of Warcraft profile and exact project/reference/source generations. Live patch guidance is never copied as a floating baseline; it remains routed through the separate [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb).
+> **Compatibility model:** every result binds one exact World of Warcraft profile and exact project/reference/source generations. Live patch guidance remains routed through the separate [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb).
 
-WoW Dev Framework is designed to give coding agents and addon developers a compact, exact, explainable technical surface over addon repositories, Blizzard API contracts, Blizzard UI implementation source, static structure, diagnostics, search, migration evidence, and bounded source context.
+WoW Dev Framework is designed to give coding agents and addon developers a compact, exact, explainable technical surface over addon repositories, Blizzard API contracts, Blizzard UI implementation source, static structure, diagnostics, search candidates, migration evidence, and bounded source context.
 
 It is not a generic RAG product, an editor-settings mutator, a runtime injection platform, a replacement for Codebase Memory, or a model-authority layer.
 
 ## What the framework should answer
 
-- Does an API, event, method, template, mixin, package, or field exist in one exact profile?
+- Does an API, event, method, template, mixin, package, field, file, or project entity exist in one exact profile?
 - What exact project/source/reference evidence supports the answer?
 - Which package, TOC, XML document, file, module, registry, state root, or lifecycle surface owns an entity?
 - How is it reached through the real TOC/XML/dependency/load graph?
 - Which relation is direct, derived, possible, conflicted, omitted, or not evaluated?
 - What is the smallest trustworthy Project Map, L0/L1 skeleton, reason path, or source excerpt needed for a task?
-- Which findings are generic Lua diagnostics versus WoW-specific diagnostics?
+- Which exact and approximate search lanes found an entity, and why did it outrank another candidate?
+- Is a search miss authoritative, partial, candidate-only, truncated, or nonauthoritative?
 - Which migration/lineage/impact conclusion is proven, and which is only a candidate?
 - Which operation is statically permitted, and which still requires exact runtime evidence?
 
@@ -58,17 +59,23 @@ E3-B
     deterministic expansion, pruning, source boundaries and context packs
 
 E3-C
-    resolve current exactly once
-    acquire coherent retained views and leases
-    context status/map/inspect/build/continue/validate/render service operations
+    exact/current publication selection
+    coherent retained views and leases
+    context service operations
     thin apps/wow CLI projection
 
-E4-A next
-    exact, alias, FTS, shape and graph-assisted retrieval
-    deterministic ranked candidates and explanations
+E4-A
+    immutable SearchShard per exact owner generation
+    exact/alias/member/prefix/text/similarity/shape/graph retrieval
+    authority-banded deterministic candidate ranking
+    complete explanations, honest misses and stable continuation
 
-E4-B+
-    explicit lineage/migration/impact
+E4-B next
+    explicit cross-generation lineage, rename/move/replacement/removal/introduction
+    migration compatibility and bounded static impact
+
+E4-C+
+    search/lineage/impact service and CLI
     calibration packs
     optional Codebase Memory candidates
     LSP/MCP and release operations
@@ -101,28 +108,37 @@ exact Blizzard UI source publication
 context layer
     separate exact universe binding
     Project Maps
-    L0/L1 and closed control/effect projections
+    L0/L1 typed projections
     bounded source excerpts and evidence closure
     semantic context packs and deterministic renderers
 
-service/application layer
-    exact current/exact publication selection
-    retained view/lease lifecycle
-    use-case sequencing and canonical envelopes
-    thin CLI transport and exit codes
+search layer
+    separate immutable user/Blizzard/reference shards
+    typed bounded documents and exact field origins
+    safe structured query AST
+    exact and candidate retrieval lanes
+    deterministic rank tuples and explanations
+    exact miss/partial/truncation/continuation state
 
-later retrieval/history layer
-    search candidates and explanations
+service/application layer
+    exact/current publication selection
+    retained view/lease lifecycle
+    explicit candidate selection and use-case sequencing
+    canonical envelopes and thin CLI transport
+
+later history/integration layer
     explicit lineage/migration/impact assertions
+    audited recognizer calibration
     optional external semantic candidates
+    LSP/MCP and release controls
 ```
 
 ## Non-negotiable invariants
 
 - One result uses one exact coherent generation/profile set; no mixed current/latest data.
-- `CurrentPublished` is resolved once at the service boundary and never refreshed mid-request.
-- Independent project, Blizzard UI, and reference stores are not falsely described as a distributed atomic snapshot.
-- User project, Blizzard UI implementation, Reference Pack, external candidate, runtime, and historical universes remain distinct.
+- `CurrentPublished` is resolved only at the service boundary and never refreshed mid-request.
+- Independent project, Blizzard UI, reference, and search stores are not falsely described as a distributed atomic snapshot.
+- User project, Blizzard UI implementation, Reference Pack, search candidate, external candidate, runtime, and historical universes remain distinct.
 - EmmyLua is the sole correctness-path Lua parser/analyzer and is pinned behind one adapter.
 - TOC/XML parsing is bounded and nonexecuting; source/repository scripts never run.
 - Graph assertions retain producer, evidence, provenance, confidence, coverage, conflicts, and generation identity.
@@ -133,11 +149,15 @@ later retrieval/history layer
 - Missing coverage never becomes a clean negative answer.
 - `Possible`, `Candidate`, conflict, partial, truncated, cancelled, and `NotEvaluated` are never upgraded or hidden.
 - Project Map and context are projections, not a second graph or new authority.
-- Source text remains structurally isolated untrusted data and cannot control profiles, tools, headings, or agent instructions.
+- Source text remains structurally isolated untrusted data and cannot control profiles, tools, headings, query syntax, ranking, or agent instructions.
 - Exact token counts require a frozen exact tokenizer and framing profile over exact final bytes.
+- One SearchShard binds one exact owner generation; no mutable global/current corpus.
+- Exact identifiers are case-sensitive; a folded or fuzzy match remains approximate.
+- Raw FTS/BM25 values are shard-local and never compared across corpora.
+- Search ranking retrieves candidates; it never proves user intent, alias, lineage, replacement, impact, safety, or runtime behavior.
+- Search and context remain separate: service passes explicitly selected exact roots.
 - Applications depend on `wow-service` only and never reproduce domain algorithms.
 - No public success precedes mandatory resource closure.
-- Search produces candidates; `wow-service` passes explicit exact roots to `wow-context`. Context does not hide ranking.
 
 ## Documented CLI surface
 
@@ -160,7 +180,7 @@ wow-reference-builder validate
 wow-reference-builder rebuild-compare
 ```
 
-Deferred E4/E7 commands are not available merely because their architecture is described.
+Search CLI operations are deferred to E4-C. Documented search architecture does not make a command available.
 
 ## First implementation target
 
@@ -176,7 +196,7 @@ pinned upstream EmmyLua analysis
 -> one deterministic wow check result
 ```
 
-Agents must not start persistent stores, the full graph, Blizzard UI indexing, context, search, LSP, MCP, or release code before their prerequisite implementation and fixture/checksum gates pass.
+Agents must not start persistent stores, the full graph, Blizzard UI indexing, context, search, LSP, MCP, or release code before prerequisite implementation and fixture/checksum gates pass.
 
 ## Documentation routes
 
@@ -201,9 +221,9 @@ Major domain contracts:
 - [`crates/wow-recognizers/`](crates/wow-recognizers/README.md)
 - [`crates/wow-rules/`](crates/wow-rules/README.md)
 - [`crates/wow-context/`](crates/wow-context/README.md)
+- [`crates/wow-search/`](crates/wow-search/README.md)
 - [`crates/wow-service/`](crates/wow-service/README.md)
 - [`apps/wow/`](apps/wow/README.md)
-- [`crates/wow-search/`](crates/wow-search/README.md)
 
 ## Repository layout
 
@@ -224,7 +244,7 @@ Patch-sensitive WoW engineering research, current API/security guidance, field r
 
 **[WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb)**
 
-This framework links that knowledge base. A conclusion is copied here only when it becomes a stable contract, ADR, schema, fixture, test, or exact release input.
+This framework links the knowledge base. A conclusion is copied here only when it becomes a stable contract, ADR, schema, fixture, test, or exact release input.
 
 ## Repository policy
 

@@ -1,8 +1,8 @@
 # Crate implementation contracts
 
-**Documentation frontier:** E3-C complete. **Implementation frontier:** not started.
+**Documentation frontier:** E4-A complete. **Implementation frontier:** not started.
 
-This directory contains implementation contracts for the planned production Rust libraries. No `Cargo.toml` or `.rs` file is created merely because a directory exists.
+This directory contains implementation contracts for planned production Rust libraries. No `Cargo.toml` or `.rs` file is created merely because a directory exists.
 
 ## Required reading
 
@@ -28,7 +28,7 @@ This directory contains implementation contracts for the planned production Rust
 | `wow-graph` | registries, semantic keys/assertions, partitions, snapshots, axes/queries | E2-D seam |
 | `wow-recognizers` | declarative universal structural recognition | E2-B |
 | `wow-rules` | diagnostic providers, capability gates, findings/remediation tiers | E0-E |
-| `wow-search` | exact/alias/FTS/shape/graph retrieval and later lineage/impact | E4-A next |
+| `wow-search` | immutable exact-generation shards, exact/alias/text/similarity/shape/graph retrieval, ranking and explanations | E4-A |
 | `wow-context` | Project Map, L0/L1, context selection/budgets/source/rendering | E3-B |
 | `wow-cbm` | optional external Codebase Memory candidates | E6 |
 | `wow-service` | cross-owner orchestration and public use cases | E3-C |
@@ -42,9 +42,16 @@ E0-A through E0-F
 E1-A through E1-D
 E2-A through E2-D
 E3-A through E3-C
+E4-A
 ```
 
-Rust implementation still starts at E0-A and follows dependency/freeze order. Later contracts are not permission to start later crates first.
+Next documentation package:
+
+```text
+E4-B explicit cross-generation lineage, migration and bounded static impact
+```
+
+Rust implementation still starts at E0-A and follows dependency/freeze order. A later complete contract is not permission to implement later crates first.
 
 ## Active E0 implementation set when coding begins
 
@@ -59,7 +66,17 @@ apps/wow status/check
 cross-crate golden fixture
 ```
 
-E0 does not activate persistent store/graph/search/context/LSP/MCP/release code unless its reviewed vertical-slice contract is revised.
+E0 does not activate persistent store, graph, search, context, LSP, MCP, or release code unless its reviewed vertical-slice contract is revised.
+
+## Search/context boundary
+
+```text
+query -> wow-service -> wow-search ranked candidates
+-> explicit exact candidate selection
+-> wow-service -> wow-context exact roots
+```
+
+`wow-search` does not call `wow-context`. `wow-context` does not perform hidden retrieval. Candidate rank does not become authority.
 
 ## Contract discipline
 
@@ -67,5 +84,5 @@ E0 does not activate persistent store/graph/search/context/LSP/MCP/release code 
 - No empty/default success; unavailable work is typed unsupported/NotEvaluated/failure.
 - Allowed dependencies are maxima; active package slices are authoritative.
 - No owner algorithm in service/application convenience code.
-- Search remains separate from context: service exposes candidates, then passes explicit exact roots to context.
 - Missing evidence is never clean/pass.
+- Approximate search never establishes alias, lineage, replacement, impact, or negative authority.

@@ -25,6 +25,7 @@ English documentation in this directory is the canonical navigation surface for 
 - [Reference Pack](REFERENCE_PACK.md) — immutable Blizzard reference artifact and builder contract.
 - [EmmyLua and diagnostics](EMMYLUA_AND_DIAGNOSTICS.md) — upstream integration, project generations, and rule execution.
 - [Graph, search, and planning](GRAPH_SEARCH_AND_PLANNING.md) — typed graph, lineage, skeletons, search, and patch impact.
+- [E4-A exact-generation search contract](../crates/wow-search/e4/README.md) — immutable SearchShards, safe query lanes, deterministic ranking, explanations, misses, and continuation.
 - [Codebase Memory bridge](CODEBASE_MEMORY_BRIDGE.md) — optional broad-source candidate bridge.
 - [Secret Values and restrictions](SECRET_VALUES_AND_RESTRICTIONS.md) — open restriction facets and analysis levels.
 
@@ -33,6 +34,8 @@ English documentation in this directory is the canonical navigation surface for 
 - [Agent workflow](AGENT_WORKFLOW.md)
 - [Security model](SECURITY_MODEL.md)
 - [Test strategy](TEST_STRATEGY.md)
+- [Crate manifest](../crates/MANIFEST.json)
+- [Crate workstreams](../crates/WORKSTREAMS.md)
 - [Contributing](../CONTRIBUTING.md)
 - [Repository agent instructions](../AGENTS.md)
 
@@ -52,6 +55,6 @@ The original v8.0 source was retired from the working tree. Use Git history only
 
 - A changed public concept must update the glossary and its owning contract.
 - A changed architectural invariant must update `DECISIONS.md` through an ADR.
-- A changed milestone gate must update `ROADMAP.md` and its tests.
-- A new document must be added to this index and linked from the owning document.
+- A changed milestone gate must update `ROADMAP.md`, `crates/MANIFEST.json`, and `crates/WORKSTREAMS.md`.
+- A new document must be added to this index or its owning crate router.
 - Do not duplicate live WoW patch/security knowledge from the external knowledge base. Link to it and pin only the exact release input required here.

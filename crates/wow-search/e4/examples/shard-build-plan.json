@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-search-e4-a-shard-build-plan-v1",
+  "state": "documentation-only-pending-freeze",
+  "request": {
+    "source_binding_id": null,
+    "search_profile_set_id": null,
+    "owner_read_catalog_ids": [],
+    "base_search_shard_id": null,
+    "idempotency_key": null,
+    "budgets_profile_id": null
+  },
+  "document_partitions": [
+    {
+      "partition_key": "synthetic:reference:C_Fixture",
+      "partition_version_id": null,
+      "projection_producer": "reference-search-document-projection-v1",
+      "documents": [
+        {
+          "document_id": null,
+          "owner_entity_key": "reference:C_Fixture.KnownApi",
+          "document_kind": "ReferenceApiEntity",
+          "fields": {
+            "canonical_qualified_name": "C_Fixture.KnownApi",
+            "canonical_short_name": "KnownApi",
+            "entity_kind": "function",
+            "documentation": "Synthetic exact fixture API."
+          },
+          "field_origin_ids": [],
+          "coverage_record_ids": [],
+          "canonical_sha256": null
+        }
+      ],
+      "canonical_sha256": null
+    }
+  ],
+  "target_membership": {
+    "complete_not_delta": true,
+    "reused_partition_version_ids": [],
+    "new_partition_version_ids": [],
+    "removed_partition_keys": [],
+    "membership_id": null,
+    "canonical_sha256": null
+  },
+  "logical_indexes": {
+    "exact_keys_id": null,
+    "canonical_names_id": null,
+    "explicit_aliases_id": null,
+    "member_prefix_id": null,
+    "identifier_features_id": null,
+    "shape_features_id": null,
+    "fts_content_manifest_id": null
+  },
+  "expected_validation": {
+    "owner_binding": null,
+    "document_origin_closure": null,
+    "stale_removal": null,
+    "fts_mapping_integrity": null,
+    "golden_result_manifest_ids": [],
+    "read_only_reopen": null
+  },
+  "target_search_shard_id": null,
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "canonical_sha256": null
+  }
+}

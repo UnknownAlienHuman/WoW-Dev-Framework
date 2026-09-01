@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-search-e4-a-universe-set-v1",
+  "state": "documentation-only-pending-freeze",
+  "search_universe_set_id": null,
+  "compatibility_profile_id": null,
+  "shards": [
+    {
+      "universe_class": "PrimaryUserProject",
+      "required": true,
+      "search_shard_id": null,
+      "owner_binding": {
+        "project_store_generation_id": null,
+        "project_generation_id": null,
+        "project_snapshot_id": null,
+        "graph_generation_id": null,
+        "graph_snapshot_id": null,
+        "analyzer_snapshot_id": null
+      },
+      "coverage_manifest_id": null,
+      "privacy_license_profile_id": null
+    },
+    {
+      "universe_class": "BlizzardUiSource",
+      "required": false,
+      "search_shard_id": null,
+      "owner_binding": {
+        "project_store_generation_id": null,
+        "project_generation_id": null,
+        "project_snapshot_id": null,
+        "graph_generation_id": null,
+        "graph_snapshot_id": null,
+        "skeleton_input_view_id": null
+      },
+      "coverage_manifest_id": null,
+      "privacy_license_profile_id": null
+    },
+    {
+      "universe_class": "ReferencePlatformContract",
+      "required": true,
+      "search_shard_id": null,
+      "owner_binding": {
+        "profile_id": null,
+        "reference_generation_id": null,
+        "reference_view_id": null,
+        "reference_store_generation_id": null
+      },
+      "coverage_manifest_id": null,
+      "privacy_license_profile_id": null
+    }
+  ],
+  "hard_rules": [
+    "all shard IDs are exact and validated",
+    "same names across universes remain distinct",
+    "raw FTS statistics remain shard-local",
+    "no symbolic current or latest",
+    "missing optional universes are explicit omissions"
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "canonical_sha256": null
+  }
+}

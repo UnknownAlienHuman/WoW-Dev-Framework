@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-search-e4-a-miss-continuation-v1",
+  "state": "documentation-only-pending-freeze",
+  "cases": [
+    {
+      "case_id": "SEARCH-MISS-001",
+      "description": "exact complete key miss with owner negative authority",
+      "expected": "ExactNotFoundWithAuthority"
+    },
+    {
+      "case_id": "SEARCH-MISS-002",
+      "description": "exact miss with incomplete owner enumeration",
+      "expected": "ExactNotFoundPartial"
+    },
+    {
+      "case_id": "SEARCH-MISS-008",
+      "description": "text-only no hit",
+      "expected": "NoCandidatesUnderExecutedLanes"
+    },
+    {
+      "case_id": "SEARCH-MISS-009",
+      "description": "fuzzy shape and graph no hit",
+      "expected": "NoCandidatesUnderExecutedLanes"
+    },
+    {
+      "case_id": "SEARCH-MISS-010",
+      "description": "approximate candidates only",
+      "expected": "CandidateOnly"
+    },
+    {
+      "case_id": "SEARCH-PAGE-002",
+      "description": "candidate cap is distinct from page size",
+      "expected": "separate-state"
+    },
+    {
+      "case_id": "SEARCH-PAGE-005",
+      "description": "all pages contain no duplicate or gap",
+      "expected": "stable"
+    },
+    {
+      "case_id": "SEARCH-PAGE-008",
+      "description": "cursor used with another shard/request/profile",
+      "expected_error": "search_continuation_generation_or_profile_mismatch"
+    },
+    {
+      "case_id": "SEARCH-PAGE-009",
+      "description": "current advances after page one",
+      "expected": "continue-original-exact-result-set"
+    },
+    {
+      "case_id": "SEARCH-PAGE-012",
+      "description": "continuation attempts to reset total budget",
+      "expected_error": "search_continuation_budget_reset_forbidden"
+    }
+  ],
+  "result_set_and_cursor_pins": {
+    "search_result_set_manifest_id": null,
+    "search_continuation_id": null,
+    "retention_receipt_ids": [],
+    "canonical_sha256": null
+  }
+}

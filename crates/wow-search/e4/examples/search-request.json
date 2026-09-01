@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-search-e4-a-request-v1",
+  "state": "documentation-only-pending-freeze",
+  "request": {
+    "search_universe_set_id": null,
+    "query_class": "MixedStructured",
+    "literal_text": "known aura data",
+    "exact_fields": {
+      "canonical_qualified_name": "C_Fixture.KnownApi",
+      "namespace": "C_Fixture",
+      "member": "KnownApi"
+    },
+    "structured_shape": {
+      "entity_kinds": [
+        "function"
+      ],
+      "parameter_count": {
+        "min": 0,
+        "max": 4
+      },
+      "return_count": {
+        "min": 1,
+        "max": 2
+      },
+      "restriction_facets": []
+    },
+    "exact_graph_seed_entity_ids": [],
+    "enabled_lanes": [
+      "ExactCanonicalName",
+      "ExactExplicitAlias",
+      "NamespaceMemberOrReceiverMethod",
+      "IdentifierPrefix",
+      "GenerationLocalTextFts",
+      "IdentifierSimilarity",
+      "StructuredShape",
+      "SeededGraphExpansion"
+    ],
+    "required_lanes": [
+      "ExactCanonicalName"
+    ],
+    "ranking_profile_id": null,
+    "privacy_profile_id": null,
+    "budget_profile_id": null,
+    "continuation": null
+  },
+  "normalized_query": {
+    "normalized_query_id": null,
+    "exact_identifier_case_preserved": true,
+    "approximate_identifier_form": "c_fixture known api",
+    "text_terms": [
+      "known",
+      "aura",
+      "data"
+    ],
+    "fts_query_ast": {
+      "op": "AllTerms",
+      "children": [
+        {
+          "op": "LiteralTerm",
+          "value": "known"
+        },
+        {
+          "op": "LiteralTerm",
+          "value": "aura"
+        },
+        {
+          "op": "LiteralTerm",
+          "value": "data"
+        }
+      ]
+    },
+    "raw_match_sql_or_regex": null,
+    "canonical_sha256": null
+  },
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}
