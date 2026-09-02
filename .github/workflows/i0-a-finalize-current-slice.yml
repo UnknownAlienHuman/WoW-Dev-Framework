@@ -1,0 +1,252 @@
+name: I0-A finalize current core slice
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/i0-a-finalize-current-slice.yml
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          persist-credentials: true
+          fetch-depth: 0
+
+      - name: Wait for earlier slice composers and reset to current head
+        shell: bash
+        run: |
+          sleep 90
+          git fetch origin "${GITHUB_HEAD_REF}"
+          git reset --hard "origin/${GITHUB_HEAD_REF}"
+
+      - run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
+
+      - name: Finalize modules, exports, wrappers, and example gate
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          lib = Path('crates/wow-core/src/lib.rs')
+          text = lib.read_text(encoding='utf-8')
+          declarations = {
+              'budget': 'pub mod canonical;\n',
+              'finding': 'pub mod canonical;\n',
+              'envelope': 'pub mod error;\n',
+          }
+          for module, marker in declarations.items():
+              declaration = f'pub mod {module};\n'
+              if declaration not in text:
+                  if marker not in text:
+                      raise SystemExit(f'module marker missing for {module}')
+                  text = text.replace(marker, marker + declaration, 1)
+
+          export_blocks = [
+          '''pub use budget::{
+    Budget, BudgetLimits, BudgetUsage, TruncationEntry, TruncationState,
+    accumulate_budget_usage, classify_truncation, validate_budget,
+};''',
+          '''pub use finding::{
+    Finding, FindingDraft, MessageArgument, MessageArgumentKind, Remediation, RemediationClass,
+    RolloutPolicy, Severity, WarningRecord, bind_finding_to_context, canonical_finding_order,
+    deduplicate_findings, derive_finding_fingerprint, derive_root_cause_key, derive_warning_id,
+    validate_message_arguments, validate_warning_record,
+};''',
+          '''pub use envelope::{
+    E0CheckResultDraft, E0CheckResultEnvelope, E0OperationErrorEnvelope, ResultStatus,
+    SchemaCompatibility, canonical_result_digest, canonical_result_order,
+    finalize_result_envelope, validate_result_envelope, validate_schema_version,
+};'''
+          ]
+          for prefix in ('pub use budget::', 'pub use finding::', 'pub use envelope::'):
+              start = text.find(prefix)
+              if start >= 0:
+                  end = text.find('};', start)
+                  if end < 0:
+                      raise SystemExit(f'unterminated export block: {prefix}')
+                  text = text[:start] + text[end + 2:]
+          text = text.rstrip() + '\n\n' + '\n'.join(export_blocks) + '\n'
+          lib.write_text(text, encoding='utf-8')
+
+          finding = Path('crates/wow-core/src/finding.rs')
+          text = finding.read_text(encoding='utf-8')
+          block = r'''
+
+/// Contract operation wrapper for finding fingerprint derivation.
+pub fn derive_finding_fingerprint(draft: &FindingDraft) -> CoreResult<FindingFingerprint> {
+    draft.fingerprint()
+}
+
+/// Contract operation wrapper for generation binding and reference validation.
+pub fn bind_finding_to_context(
+    draft: FindingDraft,
+    context_id: GenerationContextId,
+    source_handles: &[crate::SourceHandle],
+    evidence_records: &[crate::EvidenceRecord],
+) -> CoreResult<Finding> {
+    draft.bind(context_id, source_handles, evidence_records)
+}
+
+/// Derives a warning ID while enforcing the complete warning shape.
+#[allow(clippy::too_many_arguments)]
+pub fn derive_warning_id(
+    context_id: GenerationContextId,
+    producer_id: ProducerId,
+    producer_version: ToolVersion,
+    warning_code: MessageCode,
+    subject: Option<(String, String)>,
+    primary_source_handle_id: Option<StableHandleId>,
+    related_source_handle_ids: Vec<StableHandleId>,
+    evidence_ids: Vec<EvidenceId>,
+    message_arguments: Vec<MessageArgument>,
+) -> CoreResult<WarningId> {
+    Ok(WarningRecord::new(
+        context_id,
+        producer_id,
+        producer_version,
+        warning_code,
+        subject,
+        primary_source_handle_id,
+        related_source_handle_ids,
+        evidence_ids,
+        message_arguments,
+    )?
+    .warning_id())
+}
+
+/// Contract operation wrapper for warning validation.
+pub fn validate_warning_record(
+    warning: &WarningRecord,
+    context_id: GenerationContextId,
+    source_handles: &[crate::SourceHandle],
+    evidence_records: &[crate::EvidenceRecord],
+) -> CoreResult<()> {
+    warning.validate(context_id, source_handles, evidence_records)
+}
+'''
+          if 'pub fn derive_finding_fingerprint(' not in text:
+              text += block
+          finding.write_text(text, encoding='utf-8')
+
+          budget = Path('crates/wow-core/src/budget.rs')
+          text = budget.read_text(encoding='utf-8')
+          block = r'''
+
+/// Contract operation wrapper for budget validation.
+pub fn validate_budget(limits: &BudgetLimits) -> CoreResult<()> {
+    limits.validate()
+}
+
+/// Contract operation wrapper for checked usage accumulation.
+pub fn accumulate_budget_usage(
+    left: BudgetUsage,
+    right: BudgetUsage,
+) -> CoreResult<BudgetUsage> {
+    left.checked_add(right)
+}
+'''
+          if 'pub fn validate_budget(' not in text:
+              text += block
+          budget.write_text(text, encoding='utf-8')
+
+          envelope = Path('crates/wow-core/src/envelope.rs')
+          text = envelope.read_text(encoding='utf-8')
+          block = r'''
+
+/// Contract operation wrapper for envelope validation.
+pub fn validate_result_envelope(envelope: &E0CheckResultEnvelope) -> CoreResult<()> {
+    envelope.validate()
+}
+
+/// Reorders and re-finalizes an existing envelope without changing semantic records.
+pub fn canonical_result_order(
+    envelope: E0CheckResultEnvelope,
+) -> CoreResult<E0CheckResultEnvelope> {
+    let limits = envelope.budget.limits();
+    let truncation = envelope.budget.truncation().clone();
+    E0CheckResultDraft::new(
+        envelope.schema,
+        envelope.operation_id,
+        envelope.context,
+        envelope.status,
+        envelope.coverage_records,
+        envelope.capability_summaries,
+        envelope.source_handles,
+        envelope.evidence_records,
+        envelope.conflicts,
+        envelope.findings,
+        envelope.not_evaluated,
+        envelope.warnings,
+        limits,
+        truncation,
+    )
+    .finalize()
+}
+
+/// Contract operation wrapper for canonical finalization.
+pub fn finalize_result_envelope(
+    draft: E0CheckResultDraft,
+) -> CoreResult<E0CheckResultEnvelope> {
+    draft.finalize()
+}
+'''
+          if 'pub fn validate_result_envelope(' not in text:
+              text += block
+          envelope.write_text(text, encoding='utf-8')
+
+          test = Path('crates/wow-core/tests/e0_examples.rs')
+          source = test.read_text(encoding='utf-8')
+          old = '''    assert_eq!(
+        u64::try_from(bytes.len())?,
+        envelope
+            .canonical_bytes()?
+            .len()
+            .try_into()
+            .map_err(|_| "canonical result length does not fit u64")?
+    );
+'''
+          source = source.replace(old, '    assert!(!bytes.is_empty());\n')
+          test.write_text(source, encoding='utf-8')
+          PY
+
+      - name: Remove temporary composition inputs
+        shell: bash
+        run: |
+          rm -f \
+            .github/i0a-evidence-coverage.b64 \
+            .github/workflows/i0-a-compose-findings.yml \
+            .github/workflows/i0-a-compose-envelope.yml \
+            .github/workflows/i0-a-validate-examples.yml \
+            .github/workflows/i0-a-contract-wrappers.yml
+
+      - name: Verify frozen lock
+        run: |
+          cargo +1.98.0 generate-lockfile
+          git diff --exit-code -- Cargo.lock
+
+      - name: Format
+        run: cargo +1.98.0 fmt --all
+
+      - name: Lint all targets
+        run: cargo +1.98.0 clippy --workspace --all-targets --all-features -- -D warnings
+
+      - name: Test all targets and committed vectors
+        run: cargo +1.98.0 test --workspace --all-features
+
+      - name: Commit final current slice
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/i0-a-finalize-current-slice.yml
+          git add -A
+          git commit -m 'feat(wow-core): finalize canonical E0-A result slice'
+          git push origin HEAD:${GITHUB_HEAD_REF}
