@@ -4,7 +4,9 @@
   "state": "documentation-only-pending-byte-freeze",
   "protocol_revision": "2025-11-25",
   "transport_profile": "mcp-2025-11-25-stdio-v1",
-  "capabilities": ["tools", "resources", "logging", "progress", "cancellation"],
+  "server_capabilities": ["tools", "resources", "logging"],
+  "utilities": ["progress", "cancellation"],
+  "tool_profile": "fixed-non-source-mutating-analysis",
   "tools": [
     {"name": "wow.status", "service_operation": "frontend_status", "effect_class": "pure-read"},
     {"name": "wow.check", "service_operation": "check", "effect_class": "analysis-read"},
@@ -32,7 +34,7 @@
   "cases": [
     {"case_id": "A7A-MCP-003", "expected": "fixed-implemented-nonmutating-tools-and-exact-resources"},
     {"case_id": "A7A-MCP-004", "mutation": "generic-wow-call", "expected": "reject"},
-    {"case_id": "A7A-MCP-006", "mutation": "effecting-default-tool", "expected": "reject"},
+    {"case_id": "A7A-MCP-006", "mutation": "user-source-provider-or-release-effect-in-default-tool", "expected": "reject"},
     {"case_id": "A7A-MCP-007", "expected_service_calls_per_tool": 1},
     {"case_id": "A7A-MCP-009", "expected": "structured-result-preserves-blockers-and-nonclaims"},
     {"case_id": "A7A-MCP-012", "mutation": "floating-current-resource", "expected": "reject"},

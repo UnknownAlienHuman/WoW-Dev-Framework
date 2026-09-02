@@ -7,13 +7,16 @@
     "transport_profile": "mcp-2025-11-25-stdio-v1",
     "session_id": null,
     "registry_id": null,
-    "capabilities": [
-      "tools-read-only",
-      "resources-exact",
-      "logging-redacted",
-      "progress-bounded",
+    "server_capabilities": [
+      "tools",
+      "resources",
+      "logging"
+    ],
+    "utilities": [
+      "progress",
       "cancellation"
     ],
+    "tool_profile": "fixed-non-source-mutating-analysis",
     "canonical_sha256": null
   },
   "cases": [
@@ -33,7 +36,7 @@
     },
     {
       "case_id": "S7A-MCP-007",
-      "mutation": "default-tool-list-includes-effecting-operation",
+      "mutation": "default-tool-list-includes-user-source-provider-or-release-effect",
       "expected_error": "e7a_mcp_effecting_tool_forbidden_by_profile"
     },
     {

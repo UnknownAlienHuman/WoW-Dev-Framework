@@ -88,13 +88,16 @@
     "mcp-2025-11-25-stdio-v1",
     "mcp-2025-11-25-streamable-http-local-v1"
   ],
-  "default_mcp_capabilities": [
-    "tools-read-only",
-    "resources-exact",
-    "logging-redacted",
-    "progress-bounded",
+  "default_mcp_server_capabilities": [
+    "tools",
+    "resources",
+    "logging"
+  ],
+  "default_mcp_utilities": [
+    "progress",
     "cancellation"
   ],
+  "default_mcp_tool_profile": "fixed-non-source-mutating-analysis",
   "unsupported_initial_mcp_capabilities": [
     "prompts",
     "sampling",
@@ -137,9 +140,10 @@
     "position encoding and document versions are exact and stale changes require resynchronization",
     "local daemon is current-user local IPC and no remote listener is enabled by default",
     "LSP methods project existing service results and do not create editor-specific semantics",
-    "MCP default tools are fixed read-only operations with exact structured output",
-    "MCP prompts sampling elicitation tasks arbitrary roots and effecting tools are absent initially",
+    "MCP default tools are fixed non-source-mutating analysis operations and every descriptor preserves its actual effect class and annotations",
+    "MCP prompts sampling elicitation tasks arbitrary roots and user-source provider calibration publication activation release or external effects are absent initially",
     "MCP local HTTP is loopback only Origin validated authenticated and disabled by default",
+    "tool annotations and model invocation are never authorization",
     "disconnect is not cancellation and progress is not completion",
     "OutcomeUnknown blocks blind retry and final responses are retrieved rather than recomputed",
     "backpressure is bounded and final results outrank progress and logs",

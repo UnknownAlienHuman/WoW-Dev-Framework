@@ -6,7 +6,7 @@
 
 ## Mission
 
-Expose existing `wow-service` capabilities through one exact session/operation registry that can be projected into the command line, a local daemon protocol, Language Server Protocol 3.18, and Model Context Protocol revision 2025-11-25 without moving domain logic into a transport.
+Expose existing `wow-service` capabilities through one exact session/operation registry projected into the command line, a local daemon protocol, Language Server Protocol 3.18, and Model Context Protocol revision 2025-11-25 without moving domain logic into a transport.
 
 ```text
 exact transport profile
@@ -72,9 +72,9 @@ frontend_operation_get
 frontend_operation_reconcile
 ```
 
-`frontend_workspace_folders_change` atomically validates an LSP folder-add/remove notification in one service operation. `frontend_workspace_files_changed` records bounded file-watch hints and delegates exact reacquisition to project owners; the notification itself never establishes bytes or a successful reindex.
+`frontend_workspace_folders_change` atomically validates an LSP folder-add/remove notification in one service operation. `frontend_workspace_files_changed` records bounded file-watch hints and delegates exact reacquisition to project owners; the notification itself never establishes bytes or successful reindexing.
 
-The registry may also expose an existing E0–E6 service operation directly when one transport request maps one-to-one to that exact operation and the transport profile authorizes it. It never creates a generic `call_service(name, json)` escape hatch.
+The registry may expose an existing E0–E6 service operation directly when one transport request maps one-to-one to that exact operation and the transport profile authorizes it. It never creates a generic `call_service(name, json)` escape hatch.
 
 ## Active dependency slice
 
@@ -93,7 +93,7 @@ wow-context
 wow-cbm
 ```
 
-E5 effecting operations remain available only through their own authorization profiles and are absent from default LSP/MCP profiles.
+E5 effecting operations remain under their own authorization profiles and are absent from default LSP/MCP profiles.
 
 ## Frontend modes
 
@@ -124,8 +124,8 @@ Transport lifecycle, progress, editor position conversion, MCP metadata and daem
 ## Default exposure
 
 - LSP advertises implemented read/analysis capabilities only.
-- MCP default profile exposes fixed read-only tools/resources only.
-- Effecting E5/E6 operations require separate explicit profiles and authorization and are absent from the default tool list.
+- MCP exposes a fixed non-source-mutating analysis tool set and exact resources. Every tool keeps its real `PureRead` or `DurableLocalEffect` class; no blanket read-only annotation is allowed.
+- Operations that mutate user source, provider state, calibration/publication state, activation, release state or external systems are absent from the default MCP profile.
 - MCP sampling, elicitation, prompts and task-augmented execution are unsupported initially.
 - Remote network listeners are disabled by default.
 

@@ -64,13 +64,16 @@
     "lsp": "3.18",
     "mcp": "2025-11-25"
   },
-  "initial_mcp_capabilities": [
-    "tools-read-only",
-    "resources-exact",
-    "logging-redacted",
-    "progress-bounded",
+  "initial_mcp_server_capabilities": [
+    "tools",
+    "resources",
+    "logging"
+  ],
+  "initial_mcp_utilities": [
+    "progress",
     "cancellation"
   ],
+  "initial_mcp_tool_profile": "fixed-non-source-mutating-analysis",
   "forbidden_mcp_capabilities": [
     "prompts",
     "sampling",
@@ -88,11 +91,13 @@
     "no generic service MCP RPC shell script plugin model provider or filesystem operation",
     "workspaces projects profiles and providers are never inferred from cwd Git editor or WoW installation",
     "LSP profile is 3.18 over stdio and advertises only implemented capability projections",
-    "MCP profile is revision 2025-11-25 with stdio default and fixed read-only tools/resources",
-    "MCP prompts sampling elicitation tasks arbitrary roots and effecting default tools are absent",
+    "MCP profile is revision 2025-11-25 with stdio default fixed non-source-mutating analysis tools and exact resources",
+    "every MCP tool preserves its actual effect class and correct annotations",
+    "MCP prompts sampling elicitation tasks arbitrary roots generic tools and user-source provider calibration publication activation release or external effects are absent",
     "local daemon uses current-user named pipes or Unix-domain sockets and runs foreground",
     "local MCP Streamable HTTP is loopback only Origin validated authenticated and disabled by default",
     "document versions and position encoding are exact and stale changes require resynchronization",
+    "tool annotations client identity and model invocation are never authorization",
     "disconnect is not cancellation and progress is not completion",
     "OutcomeUnknown is unsafe to retry and response replay never reexecutes service",
     "backpressure is bounded and final results outrank progress and logs",
