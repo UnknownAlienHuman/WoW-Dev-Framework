@@ -21,10 +21,33 @@ implementation frontier: not started
 
 ## Active routes
 
+- [E4-A exact-generation search](../crates/wow-search/e4/README.md)
+- [E4-B lineage/migration/static impact](../crates/wow-graph/e4/README.md)
+- [E4-C service/CLI](../crates/wow-service/e4/README.md)
 - [E5-A calibration owner](../crates/wow-recognizers/e5/README.md)
-- [E5-B review/holdout/submission](../crates/wow-service/e5/README.md)
+- [E5-B calibration orchestration/review/holdout/submission](../crates/wow-service/e5/README.md)
+- [E5-B CLI](../apps/wow/e5/README.md)
 - [E5-C core-pack publication lifecycle](../crates/wow-service/e5c/README.md)
+- [E5-C CLI](../apps/wow/e5c/README.md)
 - [E6-A external semantic-candidate bridge](../crates/wow-cbm/e6/README.md)
+
+## E5 lifecycle
+
+```text
+PromotionSubmission
+-> independent E5-C revalidation
+-> distinct immutable CorePackArtifact
+-> attestations + detached signatures
+-> PublishedInactive
+-> fresh read-back validation
+-> exact scoped canary
+-> finite rollout
+-> profile-specific guarded current activation
+-> explicit last-known-good
+-> exact rollback/revocation/deactivation/partition closure
+```
+
+None of submission, signature, inactive publication, canary pass, rollout stage, active pointer, or rollback proves global runtime correctness. E5-C internal catalog publication is not public distribution.
 
 ## E6-A authority boundary
 
@@ -44,4 +67,4 @@ E6-B must define configured provider/session/credential-port acquisition, durabl
 
 It must not widen E6-A Candidate authority, compare provider scores as confidence, choose top/sole candidates, treat mapping as provider truth, expose credentials/private endpoints/provider cursors, or make exact local workflows depend on external availability.
 
-Patch-sensitive WoW facts remain in the separate [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb).
+Patch-sensitive WoW facts remain in the separate [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb); stable contracts link rather than duplicate them.

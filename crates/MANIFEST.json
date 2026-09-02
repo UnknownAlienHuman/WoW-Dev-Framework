@@ -11,10 +11,19 @@
     "collaborators": ["wow-cbm", "wow-project", "wow-reference", "wow-context", "wow-store", "wow-core"],
     "scope": "configured provider/session/credential-port acquisition, durable external-candidate operations and catalogs, exact project/reference source-owner mapping, explicit candidate selection receipts, exact mapped-root context handoff, privacy/license/security, response-loss/retention/closure, conservative envelopes, and a thin service-only CLI"
   },
-  "workspace_state": {"cargo_workspace_present": false, "rust_source_present": false, "ci_workflows_present": false},
+  "workspace_state": {
+    "cargo_workspace_present": false,
+    "rust_source_present": false,
+    "ci_workflows_present": false
+  },
   "required_reading": [
-    "AGENTS.md", "crates/AGENTS.md", "crates/README.md", "crates/DEPENDENCY_GRAPH.md", "crates/WORKSTREAMS.md",
-    "target crate router and contract manifest", "current wow-addon-engineering-kb AGENTS.md and INDEX_MINI.md routes",
+    "AGENTS.md",
+    "crates/AGENTS.md",
+    "crates/README.md",
+    "crates/DEPENDENCY_GRAPH.md",
+    "crates/WORKSTREAMS.md",
+    "target crate router and contract manifest",
+    "current wow-addon-engineering-kb AGENTS.md and INDEX_MINI.md routes",
     "actual target addon repository and local instructions for addon-facing work"
   ],
   "global_rules": [
@@ -25,14 +34,25 @@
     "Partial conflict truncated failed cancelled OutcomeUnknown Candidate Possible and NotEvaluated states are never complete proven Negative or pass.",
     "Patch-sensitive WoW facts remain routed through wow-addon-engineering-kb and exact pinned source or runtime evidence.",
     "Repository addon owner path provider popularity split label reviewer holdout canary and model metadata never become hidden production semantics.",
-    "External provider results remain semantic_candidate plus Candidate with no negative authority.",
-    "Provider scores are local and provider locators remain unverified until exact E6-B owner mapping.",
-    "Zero external results never prove local or platform absence.",
-    "External provider failure is lane-local and never degrades exact local capabilities.",
     "Metrics graph validity review authorization holdout authorization submission signature publication canary activation rollout distribution and runtime proof remain independent.",
     "Response loss never proves no effect; exact reconciliation is required before redispatch.",
+    "A repository commit pin is not an admitted calibration corpus member.",
+    "Consumed or contamination-unknown holdout evidence is never represented as untouched.",
+    "Promotion submissions are not published or active core packs.",
+    "A valid signature does not create semantic or runtime proof.",
+    "Publication creates PublishedInactive and activation is a separate exact profile-specific CAS effect.",
+    "Canary evidence is exact and scoped and never ecosystem-wide runtime proof.",
+    "Last-known-good is explicitly designated and never inferred as previous or newest.",
+    "Rollback creates new immutable records and never rewrites history.",
+    "Historical project and graph generations remain immutable while target generations close stale producer partitions.",
+    "E5-C internal publication is not public distribution.",
+    "External provider results remain semantic_candidate plus Candidate with no negative authority.",
+    "Provider scores remain provider-local and provider locators remain unverified until exact E6-B owner mapping.",
+    "Zero external results never prove local or platform absence.",
+    "External provider failure is lane-local and never degrades exact local capabilities.",
+    "Provider process session credential index and database lifecycle remain outside E6-A.",
     "Applications depend on wow-service only and never reproduce owner algorithms.",
-    "Missing implementation probe benchmark evaluation authorization signing provider transport mapping client or source evidence is blocked or NotEvaluated never pass.",
+    "Missing implementation probe benchmark evaluation authorization signing observation provider transport mapping client or source evidence is blocked or NotEvaluated never pass.",
     "No CI or workflow is added without an explicit owner request."
   ],
   "contract_packages": [
@@ -58,23 +78,23 @@
     {"work_package":"E4-C","owner":"wow-service","application":"apps/wow","contract_id":"wow-service/e4-c/search-lineage-impact-use-cases","manifest":"crates/wow-service/e4/CONTRACT.json","application_manifest":"apps/wow/e4/CONTRACT.json"},
     {"work_package":"E5-A","owner":"wow-recognizers","contract_id":"wow-recognizers/e5-a/calibration-corpora-and-named-packs","manifest":"crates/wow-recognizers/e5/CONTRACT.json"},
     {"work_package":"E5-B","owner":"wow-service","application":"apps/wow","contract_id":"wow-service/e5-b/calibration-review-holdout-promotion-submission","manifest":"crates/wow-service/e5/CONTRACT.json","application_manifest":"apps/wow/e5/CONTRACT.json"},
-    {"work_package":"E5-C","owner":"wow-service","application":"apps/wow","contract_id":"wow-service/e5-c/core-pack-publication-rollout-lifecycle","manifest":"crates/wow-service/e5c/CONTRACT.json","application_manifest":"apps/wow/e5c/CONTRACT.json"},
-    {"work_package":"E6-A","owner":"wow-cbm","contract_id":"wow-cbm/e6-a/external-semantic-candidate-bridge","manifest":"crates/wow-cbm/e6/CONTRACT.json"}
+    {"work_package":"E5-C","owner":"wow-service","application":"apps/wow","collaborators":["wow-recognizers","wow-store","wow-graph","wow-project"],"contract_id":"wow-service/e5-c/core-pack-publication-rollout-lifecycle","manifest":"crates/wow-service/e5c/CONTRACT.json","application_manifest":"apps/wow/e5c/CONTRACT.json"},
+    {"work_package":"E6-A","owner":"wow-cbm","collaborators":["wow-core"],"contract_id":"wow-cbm/e6-a/external-semantic-candidate-bridge","manifest":"crates/wow-cbm/e6/CONTRACT.json"}
   ],
   "crates": [
     {"name":"wow-core","brief":"crates/wow-core/README.md","documentation_frontier":"E0-A","first_implementation_milestone":"E0-A","implementation_state":"not-started","allowed_dependencies":[],"active_contracts":["crates/wow-core/CONTRACT.json"]},
-    {"name":"wow-store","brief":"crates/wow-store/README.md","documentation_frontier":"E5-C seam; E6-B catalog/retention seam next","first_implementation_milestone":"E1-A","implementation_state":"not-started","allowed_dependencies":["wow-core"],"active_contracts":["crates/wow-store/CONTRACT.json","crates/wow-store/e2/CONTRACT.json"]},
-    {"name":"wow-reference","brief":"crates/wow-reference/README.md","documentation_frontier":"E4-B seam; E6-B mapping owner next","first_implementation_milestone":"E0-B","implementation_state":"not-started","allowed_dependencies":["wow-core","wow-store"],"active_contracts":["crates/wow-reference/CONTRACT.json","crates/wow-reference/e1/CONTRACT.json"]},
+    {"name":"wow-store","brief":"crates/wow-store/README.md","documentation_frontier":"E5-C store-publication seam; E6-B catalog-retention seam next","first_implementation_milestone":"E1-A","implementation_state":"not-started","allowed_dependencies":["wow-core"],"active_contracts":["crates/wow-store/CONTRACT.json","crates/wow-store/e2/CONTRACT.json"],"selected_project_store_profile":"project-store-wal-manifested-partitions-v1"},
+    {"name":"wow-reference","brief":"crates/wow-reference/README.md","documentation_frontier":"E4-B producer seam; E6-B mapping owner next","first_implementation_milestone":"E0-B","implementation_state":"not-started","allowed_dependencies":["wow-core","wow-store"],"active_contracts":["crates/wow-reference/CONTRACT.json","crates/wow-reference/e1/CONTRACT.json"]},
     {"name":"wow-annotations","brief":"crates/wow-annotations/README.md","documentation_frontier":"E1-C","first_implementation_milestone":"E1-C","implementation_state":"not-started","allowed_dependencies":["wow-core","wow-reference"],"active_contracts":["crates/wow-annotations/e1/CONTRACT.json"]},
     {"name":"wow-emmy","brief":"crates/wow-emmy/README.md","documentation_frontier":"E0-C","first_implementation_milestone":"E0-C","implementation_state":"not-started","allowed_dependencies":["wow-core"],"active_contracts":["crates/wow-emmy/CONTRACT.json"]},
-    {"name":"wow-project","brief":"crates/wow-project/README.md","documentation_frontier":"E5-C seam; E6-B mapping owner next","first_implementation_milestone":"E0-D","implementation_state":"not-started","allowed_dependencies":["wow-core","wow-store","wow-emmy","wow-graph","wow-recognizers"],"active_contracts":["crates/wow-project/CONTRACT.json","crates/wow-project/e2/CONTRACT.json","crates/wow-project/e3/CONTRACT.json"]},
-    {"name":"wow-graph","brief":"crates/wow-graph/README.md","documentation_frontier":"E5-C closure seam","first_implementation_milestone":"E2-A","implementation_state":"not-started","allowed_dependencies":["wow-core","wow-store"],"active_contracts":["crates/wow-graph/e2/CONTRACT.json","crates/wow-graph/e4/CONTRACT.json"]},
-    {"name":"wow-recognizers","brief":"crates/wow-recognizers/README.md","documentation_frontier":"E5-C core semantic seam","first_implementation_milestone":"E2-B","implementation_state":"not-started","allowed_dependencies":["wow-core","wow-emmy","wow-graph"],"active_contracts":["crates/wow-recognizers/e2/CONTRACT.json","crates/wow-recognizers/e5/CONTRACT.json"]},
+    {"name":"wow-project","brief":"crates/wow-project/README.md","documentation_frontier":"E5-C reindex seam; E6-B mapping owner next","first_implementation_milestone":"E0-D","implementation_state":"not-started","allowed_dependencies":["wow-core","wow-store","wow-emmy","wow-graph","wow-recognizers"],"active_contracts":["crates/wow-project/CONTRACT.json","crates/wow-project/e2/CONTRACT.json","crates/wow-project/e3/CONTRACT.json"]},
+    {"name":"wow-graph","brief":"crates/wow-graph/README.md","documentation_frontier":"E5-C producer-partition closure seam","first_implementation_milestone":"E2-A","implementation_state":"not-started","allowed_dependencies":["wow-core","wow-store"],"active_contracts":["crates/wow-graph/e2/CONTRACT.json","crates/wow-graph/e4/CONTRACT.json"]},
+    {"name":"wow-recognizers","brief":"crates/wow-recognizers/README.md","documentation_frontier":"E5-C core-pack semantic seam","first_implementation_milestone":"E2-B","implementation_state":"not-started","allowed_dependencies":["wow-core","wow-emmy","wow-graph"],"active_contracts":["crates/wow-recognizers/e2/CONTRACT.json","crates/wow-recognizers/e5/CONTRACT.json"]},
     {"name":"wow-rules","brief":"crates/wow-rules/README.md","documentation_frontier":"E0-E","first_implementation_milestone":"E0-E","implementation_state":"not-started","allowed_dependencies":["wow-core","wow-reference","wow-emmy","wow-project","wow-graph"],"active_contracts":["crates/wow-rules/CONTRACT.json"]},
-    {"name":"wow-search","brief":"crates/wow-search/README.md","documentation_frontier":"E4-A/B","first_implementation_milestone":"E4-A","implementation_state":"not-started","allowed_dependencies":["wow-core","wow-store","wow-reference","wow-project","wow-graph"],"active_contracts":["crates/wow-search/e4/CONTRACT.json"]},
+    {"name":"wow-search","brief":"crates/wow-search/README.md","documentation_frontier":"E4-B producer seam","first_implementation_milestone":"E4-A","implementation_state":"not-started","allowed_dependencies":["wow-core","wow-store","wow-reference","wow-project","wow-graph"],"active_contracts":["crates/wow-search/e4/CONTRACT.json"],"selected_search_shard_profile":"search-shard-immutable-sqlite-fts5-v1"},
     {"name":"wow-context","brief":"crates/wow-context/README.md","documentation_frontier":"E3-B; E6-B exact-root handoff next","first_implementation_milestone":"E3-B","implementation_state":"not-started","allowed_dependencies":["wow-core","wow-reference","wow-project","wow-graph"],"active_contracts":["crates/wow-context/e3/CONTRACT.json"]},
     {"name":"wow-cbm","brief":"crates/wow-cbm/README.md","documentation_frontier":"E6-A","first_implementation_milestone":"E6-A","implementation_state":"not-started","allowed_dependencies":["wow-core"],"active_contracts":["crates/wow-cbm/e6/CONTRACT.json"]},
-    {"name":"wow-service","brief":"crates/wow-service/README.md","documentation_frontier":"E5-C; E6-B next","first_implementation_milestone":"E0-F","implementation_state":"not-started","allowed_dependencies":["wow-core","wow-store","wow-reference","wow-annotations","wow-emmy","wow-project","wow-graph","wow-recognizers","wow-search","wow-rules","wow-cbm","wow-context"],"active_contracts":["crates/wow-service/CONTRACT.json","crates/wow-service/e1/CONTRACT.json","crates/wow-service/e3/CONTRACT.json","crates/wow-service/e4/CONTRACT.json","crates/wow-service/e5/CONTRACT.json","crates/wow-service/e5c/CONTRACT.json"]}
+    {"name":"wow-service","brief":"crates/wow-service/README.md","documentation_frontier":"E5-C; E6-B next","first_implementation_milestone":"E0-F","implementation_state":"not-started","allowed_dependencies":["wow-core","wow-store","wow-reference","wow-annotations","wow-emmy","wow-project","wow-graph","wow-recognizers","wow-search","wow-rules","wow-cbm","wow-context"],"active_e5c_dependencies":["wow-core","wow-store","wow-project","wow-graph","wow-recognizers"],"active_contracts":["crates/wow-service/CONTRACT.json","crates/wow-service/e1/CONTRACT.json","crates/wow-service/e3/CONTRACT.json","crates/wow-service/e4/CONTRACT.json","crates/wow-service/e5/CONTRACT.json","crates/wow-service/e5c/CONTRACT.json"]}
   ],
   "applications": [
     {"name":"wow","path":"apps/wow","documentation_frontier":"E5-C; E6-B next","implementation_state":"not-started","framework_dependencies":["wow-service"],"active_contracts":["apps/wow/CONTRACT.json","apps/wow/e3/CONTRACT.json","apps/wow/e4/CONTRACT.json","apps/wow/e5/CONTRACT.json","apps/wow/e5c/CONTRACT.json"]},

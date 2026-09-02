@@ -2,34 +2,111 @@
 
 **Status:** operational routing through documentation frontier E6-A.
 
-Documentation-ready remains `implementation_state = not-started` until executable code, exact fixtures/checksums, probes, adapters, benchmarks, authorization and runtime evidence exist.
+Documentation-ready remains `implementation_state = not-started` until executable code, exact fixtures/checksums, probes, benchmarks, authorization/signing/observation/provider adapters, runtime evidence, and evaluations exist.
 
 ## Global order
 
 ```text
-E0 diagnostic vertical slice
+E0-A wow-core
+-> E0-B wow-reference fixture + E0-C wow-emmy
+-> E0-D wow-project fixture
+-> E0-E wow-rules
+-> E0-F wow-service + apps/wow diagnostics
 -> E1 Reference Pack stack
 -> E2 graph/recognizers/project/ProjectStore
 -> E3 Blizzard UI source/context/service
 -> E4 search/lineage/migration/static-impact/service
 -> E5-A calibration owner
--> E5-B review/holdout/submission
--> E5-C core publication/signing/canary/rollout/rollback
--> E6-A external Candidate-only owner bridge
--> E6-B provider/session/mapping/context service and CLI
+-> E5-B durable calibration review/holdout/submission
+-> E5-C core-pack publication/signing/canary/rollout/rollback
+-> E6-A wow-cbm external semantic candidates
+-> E6-B service/CLI mapping/context orchestration
 -> E7 LSP/MCP/public release integration
 ```
 
 ## Global rules
 
 - One agent owns one primary package/crate.
-- Missing implementation/tool/probe/benchmark/authorization/credential adapter/runtime evidence is blocked or `NotEvaluated`, never pass.
+- Missing implementation/tool/probe/benchmark/authorization/signing/vault/observation/provider/runtime evidence is blocked or `NotEvaluated`, never pass.
 - Patch-sensitive WoW claims route through the current external KB and exact source/runtime evidence.
 - Repository/addon/owner/path/provider/popularity/model identity never becomes hidden semantics.
 - Applications import `wow-service` only.
 - No CI/workflow without explicit owner instruction.
 
-## E6-A owner work
+## E5-C publication lifecycle
+
+Primary contracts:
+
+- [`wow-service/e5c/`](wow-service/e5c/README.md)
+- [`../apps/wow/e5c/`](../apps/wow/e5c/README.md)
+
+```text
+exact E5-B PromotionSubmission
+-> independent E5-C revalidation
+-> distinct CorePackArtifact
+-> provenance/SBOM/license/notices
+-> detached signing + independent verification
+-> PublishedInactive
+-> fresh read-back validation
+-> exact canary cohort/assignment/observations/evaluation
+-> finite authorized rollout stages
+-> profile-specific current-record CAS
+-> explicit retained last-known-good
+-> exact rollback/revocation/deactivation
+-> new project/graph generations with stale partition closure
+```
+
+### Active owners
+
+```text
+wow-service: orchestration, authorization use, durable effects, envelopes
+wow-recognizers: core pack semantics and producer namespace
+wow-graph: graph output/partition/closure validation
+wow-project: exact reindex and new project generations
+wow-store: immutable objects/catalog/current/retention/GC
+apps/wow: transport only
+```
+
+### Hard stops
+
+```text
+no trust in submission label without exact revalidation
+no relabelled candidate as core artifact
+no signature as semantic/runtime proof
+no private key/KMS/HSM/vault/deployment credential in repository/CLI/results
+no publication side-effect activation
+no canary percentage without exact population/membership
+no untyped anecdote/issue/model signal
+no missing/partial/conflict/NotEvaluated required signal as pass
+no time-only or open-ended rollout
+no latest/best/previous/default activation or rollback target
+no stale current CAS rebase
+no inferred previous/newest last-known-good
+no rollback history rewrite
+no historical project/graph mutation
+no stale partition or hidden coverage change
+no blind effect retry after response loss
+no public distribution in E5-C
+```
+
+### Implementation gate
+
+Before E5-C Rust:
+
+```text
+implemented/frozen E0–E5-B prerequisites
+exact submission/artifact/recognizer/graph/project/store ports
+signing and authorization adapters/profiles without committed secrets
+provenance/SBOM/license/reproducibility profiles
+canary population/privacy/observation/signal profiles
+finite rollout/activation/LKG/rollback/revocation/closure profiles
+response-loss/retention/audit/recovery profiles
+canonical service/CLI/artifact/signature/state vectors
+synthetic and admitted real canary/rollout/rollback corpora
+measured thresholds and all SHA-256 manifests
+```
+
+## E6-A external Candidate-only bridge
 
 Primary contract: [`wow-cbm/e6/`](wow-cbm/e6/README.md)
 
@@ -92,7 +169,7 @@ all member/bundle SHA-256 values
 
 ## Next — E6-B
 
-Owners: `wow-service` and thin `apps/wow`; collaborators: `wow-cbm`, `wow-project`, `wow-reference`, `wow-context`, `wow-store`.
+Owners: `wow-service` and thin `apps/wow`; collaborators: `wow-cbm`, `wow-project`, `wow-reference`, `wow-context`, `wow-store`, and `wow-core`.
 
 Required flow:
 
@@ -113,10 +190,18 @@ Mapping states must preserve exact mapped, multiple, no-mapping-with-authority, 
 
 E6-B must keep provider credential/session/database/index lifecycle behind narrow ports, preserve `OutcomeUnknown`, never expose provider cursors/credentials/private endpoints, and never make local exact workflows depend on the provider.
 
-## E7
+## Seam request format
 
-After E6 implementation gates, define thin LSP/MCP transports and public release/distribution/update integrity. Do not expose arbitrary tool calls or bypass existing service/authority boundaries.
+```text
+requesting package/crate
+owning crate
+required operation/data
+rejected workaround
+why existing seam is insufficient
+smallest proposed seam
+cycle/identity/security/privacy/license/evidence impact
+fixture/mutation proving it
+freeze/migration impact
+```
 
-## Seam request
-
-State requesting/owning package, exact crossing operation/data, rejected workaround, insufficiency, smallest seam, cycle/identity/security/privacy/license/evidence impact, proving fixtures/mutations, and freeze/migration impact.
+Do not implement a missing seam in the wrong crate.
