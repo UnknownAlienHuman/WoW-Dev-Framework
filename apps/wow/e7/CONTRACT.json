@@ -1,0 +1,138 @@
+{
+  "schema_version": 1,
+  "contract_id": "apps/wow/e7-a/frontend-transports",
+  "state": "implementation-ready-documentation-no-rust-code",
+  "work_package": "E7-A",
+  "application": "wow",
+  "documentation_frontier": "E7-A",
+  "implementation_state": "not-started",
+  "framework_dependencies": [
+    "wow-service"
+  ],
+  "prerequisite_contract": "wow-service/e7-a/frontend-session-operation-registry",
+  "host_modes": [
+    "cli-one-shot",
+    "local-daemon-foreground",
+    "lsp-3.18-stdio",
+    "mcp-2025-11-25-stdio",
+    "mcp-2025-11-25-streamable-http-local-disabled-by-default"
+  ],
+  "host_commands": [
+    "transport capabilities",
+    "daemon run",
+    "daemon status",
+    "daemon shutdown",
+    "lsp",
+    "mcp"
+  ],
+  "service_operations": [
+    "frontend_status",
+    "frontend_capabilities",
+    "frontend_session_open",
+    "frontend_session_get",
+    "frontend_session_configuration_change",
+    "frontend_session_close",
+    "frontend_workspace_register",
+    "frontend_workspace_get",
+    "frontend_workspace_folders_change",
+    "frontend_workspace_files_changed",
+    "frontend_workspace_unregister",
+    "frontend_document_open",
+    "frontend_document_change",
+    "frontend_document_save",
+    "frontend_document_close",
+    "frontend_document_snapshot_get",
+    "frontend_document_diagnostics",
+    "frontend_workspace_diagnostics",
+    "frontend_hover",
+    "frontend_definition",
+    "frontend_references",
+    "frontend_document_symbols",
+    "frontend_workspace_symbols",
+    "frontend_completion",
+    "frontend_signature_help",
+    "frontend_code_actions",
+    "frontend_call_hierarchy_prepare",
+    "frontend_call_hierarchy_incoming",
+    "frontend_call_hierarchy_outgoing",
+    "frontend_operation_cancel",
+    "frontend_operation_get",
+    "frontend_operation_reconcile"
+  ],
+  "protocol_profiles": {
+    "local_daemon": "wow-local-jsonrpc/1",
+    "lsp": "3.18",
+    "mcp": "2025-11-25"
+  },
+  "initial_mcp_server_capabilities": [
+    "tools",
+    "resources",
+    "logging"
+  ],
+  "initial_mcp_utilities": [
+    "progress",
+    "cancellation"
+  ],
+  "initial_mcp_tool_profile": "fixed-non-source-mutating-analysis",
+  "forbidden_mcp_capabilities": [
+    "prompts",
+    "sampling",
+    "elicitation",
+    "tasks",
+    "server-requested-roots",
+    "generic-tool-proxy",
+    "effecting-default-tools"
+  ],
+  "hard_rules": [
+    "wow-service is the only framework dependency",
+    "one valid command method or tool call maps to exactly one service operation except protocol acknowledgements",
+    "workspace folder configuration and watched-file notifications each use one atomic service operation",
+    "all exposed operations come from the exact reviewed registry",
+    "no generic service MCP RPC shell script plugin model provider or filesystem operation",
+    "workspaces projects profiles and providers are never inferred from cwd Git editor or WoW installation",
+    "LSP profile is 3.18 over stdio and advertises only implemented capability projections",
+    "MCP profile is revision 2025-11-25 with stdio default fixed non-source-mutating analysis tools and exact resources",
+    "every MCP tool preserves its actual effect class and correct annotations",
+    "MCP prompts sampling elicitation tasks arbitrary roots generic tools and user-source provider calibration publication activation release or external effects are absent",
+    "local daemon uses current-user named pipes or Unix-domain sockets and runs foreground",
+    "local MCP Streamable HTTP is loopback only Origin validated authenticated and disabled by default",
+    "document versions and position encoding are exact and stale changes require resynchronization",
+    "tool annotations client identity and model invocation are never authorization",
+    "disconnect is not cancellation and progress is not completion",
+    "OutcomeUnknown is unsafe to retry and response replay never reexecutes service",
+    "backpressure is bounded and final results outrank progress and logs",
+    "multi-client source overlay authorization operation and result state is isolated",
+    "no automatic edit application editor setting mutation or source command execution",
+    "no sensitive material private source session secrets or raw handles in ordinary wire data logs or crash output",
+    "no public release packaging update or CI during E7-A documentation phase"
+  ],
+  "normative_files": [
+    "apps/wow/e7/README.md",
+    "apps/wow/e7/AGENTS.md",
+    "apps/wow/e7/MODES_AND_COMMANDS.md",
+    "apps/wow/e7/LSP_METHOD_MAPPING.md",
+    "apps/wow/e7/MCP_TOOL_RESOURCE_MAPPING.md",
+    "apps/wow/e7/OUTPUT_STREAMS_AND_EXIT.md",
+    "apps/wow/e7/SECURITY_AND_CONFIG.md",
+    "apps/wow/e7/TEST_MATRIX.md",
+    "apps/wow/e7/CONTRACT.json",
+    "apps/wow/e7/examples/README.md",
+    "apps/wow/e7/examples/mode-cases.json",
+    "apps/wow/e7/examples/lsp-method-map.json",
+    "apps/wow/e7/examples/mcp-tool-map.json",
+    "apps/wow/e7/examples/stdout-exit-cases.json",
+    "apps/wow/e7/examples/CHECKSUMS.json"
+  ],
+  "freeze_gate": {
+    "implementation_state": "not-started",
+    "required_before_first_rust_implementation": [
+      "implemented and frozen E7-A service operation registry session and overlay contracts",
+      "exact daemon LSP and MCP protocol adapter and library pins",
+      "all command method tool resource configuration endpoint output exit progress cancellation reconnect and isolation profiles",
+      "supported client and platform fixtures",
+      "canonical wire request response error and shutdown vectors",
+      "measured message document queue source result concurrency latency and memory limits",
+      "all member and bundle SHA-256 values"
+    ]
+  }
+}

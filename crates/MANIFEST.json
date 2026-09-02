@@ -1,29 +1,37 @@
 {
   "schema_version": 1,
   "repository": "UnknownAlienHuman/WoW-Dev-Framework",
-  "documentation_frontier": "E6-B",
+  "documentation_frontier": "E7-A",
   "implementation_frontier": "not-started",
   "contract_state": "documentation-only-no-rust-code",
   "launch_gate_document": "docs/LAUNCH_GATES.md",
   "next_documentation_work_package": {
-    "id": "E7-A",
-    "owner": "applications/transports",
-    "application": "apps/wow and future thin LSP/MCP hosts",
-    "collaborators": [
-      "wow-service",
-      "wow-core"
-    ],
-    "scope": "supported CLI-daemon LSP and MCP session/transport profiles, schema and capability negotiation, project/profile/session registration, bounded messages/streams/progress/backpressure, cancellation/disconnect/reconnect/response-loss/lease/close semantics, multi-client isolation, and a developer-preview packaging/compatibility boundary"
-  },
-  "subsequent_documentation_work_package": {
     "id": "E7-B",
-    "owner": "release/distribution",
-    "scope": "reproducible packaging, release artifacts, checksums/signatures/SBOM/provenance, installers/packages, update channels, rollback/retirement, compatibility/support policy, incident response, and public distribution"
+    "owner": "release-distribution",
+    "application": "tools/wow-release and release manifests",
+    "collaborators": [
+      "apps/wow",
+      "wow-service",
+      "wow-store",
+      "wow-reference",
+      "wow-recognizers"
+    ],
+    "scope": "pinned reproducible build profiles, supported platform/client/profile matrix, exact binary and data package layout, release manifests/checksums/signatures/SBOM/provenance, portable and installer packages, install/upgrade/update/rollback/retirement, compatibility/support/privacy/incident policy, release candidate evaluation, and public distribution gates"
+  },
+  "post_documentation_work_package": {
+    "id": "I0/E0-A",
+    "owner": "wow-core",
+    "scope": "begin executable implementation from the frozen E0-A identity evidence coverage result and canonicalization contract"
   },
   "workspace_state": {
     "cargo_workspace_present": false,
     "rust_source_present": false,
     "ci_workflows_present": false
+  },
+  "protocol_profiles": {
+    "local_daemon": "wow-local-jsonrpc/1",
+    "lsp": "3.18",
+    "mcp": "2025-11-25"
   },
   "required_reading": [
     "AGENTS.md",
@@ -31,32 +39,37 @@
     "crates/README.md",
     "crates/DEPENDENCY_GRAPH.md",
     "crates/WORKSTREAMS.md",
+    "docs/ROADMAP.md",
     "docs/LAUNCH_GATES.md",
-    "target crate router and contract manifest",
+    "target crate or application router and complete package",
     "current wow-addon-engineering-kb AGENTS.md and INDEX_MINI.md routes",
     "actual target addon repository and local instructions for addon-facing work"
   ],
   "global_rules": [
     "A documented directory is not an activated Rust crate.",
-    "No Cargo.toml or .rs placeholder is created before the implementation freeze gate is satisfied.",
+    "No Cargo.toml or .rs placeholder is created before the package implementation freeze gate is satisfied.",
     "Allowed dependencies are maximum boundaries; active work-package slices are narrower and authoritative.",
-    "All implementation begins from exact frozen contracts profiles fixtures corpora evaluations probes and SHA-256 manifests.",
-    "Partial conflict truncated failed cancelled OutcomeUnknown Candidate Possible and NotEvaluated states are never complete proven Negative or pass.",
+    "All implementation begins from exact frozen contracts profiles fixtures evaluations probes limits and SHA-256 manifests.",
+    "Partial conflict truncated failed cancelled OutcomeUnknown Candidate Possible ResynchronizationRequired and NotEvaluated never become complete proven Negative or pass.",
     "Patch-sensitive WoW facts remain routed through wow-addon-engineering-kb and exact pinned source or runtime evidence.",
-    "Repository addon owner path provider popularity split label reviewer holdout canary and model metadata never become hidden production semantics.",
-    "Metrics graph validity review authorization holdout authorization submission signature publication canary activation rollout distribution and runtime proof remain independent.",
+    "Repository addon owner path provider popularity split label reviewer holdout canary model client and transport identities never become hidden production semantics.",
+    "Metrics graph validity review authorization holdout authorization submission signature publication canary activation rollout provider mapping selection transport distribution and runtime proof remain independent.",
     "Response loss never proves no effect; exact reconciliation is required before redispatch.",
     "External provider results remain semantic_candidate plus Candidate with no negative authority.",
-    "Provider scores remain provider-local and provider locators remain unverified until exact project or reference owner mapping.",
-    "Exact mapping proves locator identity only and selection does not create verification acceptance edit authorization or promotion.",
+    "Exact provider locator mapping proves owner-record identity only and selection does not create verification acceptance edit authorization or promotion.",
     "Provider metadata remains a separate Candidate sidecar and never enters ContextSemanticPack truth.",
-    "Zero external results never prove local platform or source absence.",
     "External provider failure is lane-local and never degrades exact local capabilities.",
-    "Provider process session authorization and lifecycle remain behind narrow host adapters; public requests contain no sensitive material.",
-    "Applications and future transports depend on wow-service only and never reproduce owner algorithms.",
-    "The shortest runnable implementation path is E0-A through E0-F; E5 and optional E6 do not block the first executable bootstrap.",
-    "Missing implementation probe benchmark evaluation authorization signing observation provider transport mapping client or source evidence is blocked or NotEvaluated never pass.",
-    "No CI or workflow is added without an explicit owner request and a real frozen command."
+    "Applications and frontend transports depend on wow-service only and never reproduce owner algorithms.",
+    "Frontend operation exposure comes only from an exact immutable reviewed registry and unimplemented operations are not advertised.",
+    "Workspaces are explicit and unsaved documents are exact versioned project-owned overlays.",
+    "LSP 3.18 MCP 2025-11-25 and wow-local-jsonrpc/1 are pinned profiles and protocol upgrades create new profiles.",
+    "Default MCP tools are fixed and read-only; prompts sampling elicitation tasks generic tool proxies and effecting tools are absent.",
+    "Disconnect is not cancellation progress is not completion and response replay never reexecutes an operation.",
+    "Multi-client workspace overlay source authorization operation result and response-journal state is isolated.",
+    "No default remote listener shell generic RPC plugin model execution editor setting mutation or automatic source edit.",
+    "The shortest runnable implementation path is E0-A through E0-F; later governance and transports do not block the first executable bootstrap.",
+    "Missing implementation probe benchmark authorization provider protocol client platform runtime or source evidence is blocked or NotEvaluated never pass.",
+    "No CI or release workflow is added without an explicit owner real executable commands and a launch or release gate."
   ],
   "contract_packages": [
     {
@@ -240,6 +253,26 @@
       "contract_id": "wow-service/e6-b/external-candidate-orchestration-mapping-context",
       "manifest": "crates/wow-service/e6/CONTRACT.json",
       "application_manifest": "apps/wow/e6/CONTRACT.json"
+    },
+    {
+      "work_package": "E7-A",
+      "owner": "wow-service",
+      "application": "apps/wow",
+      "collaborators": [
+        "wow-project",
+        "wow-emmy",
+        "wow-rules",
+        "wow-store",
+        "wow-reference",
+        "wow-graph",
+        "wow-search",
+        "wow-context",
+        "wow-cbm",
+        "wow-core"
+      ],
+      "contract_id": "wow-service/e7-a/frontend-session-operation-registry",
+      "manifest": "crates/wow-service/e7/CONTRACT.json",
+      "application_manifest": "apps/wow/e7/CONTRACT.json"
     }
   ],
   "crates": [
@@ -257,7 +290,7 @@
     {
       "name": "wow-store",
       "brief": "crates/wow-store/README.md",
-      "documentation_frontier": "E6-B generic external-candidate object/catalog/effect/retention seam",
+      "documentation_frontier": "E7-A generic session lease response-journal and retention seam",
       "first_implementation_milestone": "E1-A",
       "implementation_state": "not-started",
       "allowed_dependencies": [
@@ -267,15 +300,18 @@
         "crates/wow-store/CONTRACT.json",
         "crates/wow-store/e2/CONTRACT.json"
       ],
-      "selected_project_store_profile": "project-store-wal-manifested-partitions-v1",
       "active_e6b_seams": [
         "crates/wow-store/E6_B_EXTERNAL_CANDIDATE_STORAGE.md"
-      ]
+      ],
+      "active_e7a_seams": [
+        "crates/wow-store/E7_A_SESSION_AND_RESPONSE_JOURNAL.md"
+      ],
+      "selected_project_store_profile": "project-store-wal-manifested-partitions-v1"
     },
     {
       "name": "wow-reference",
       "brief": "crates/wow-reference/README.md",
-      "documentation_frontier": "E6-B exact external-locator mapping owner seam",
+      "documentation_frontier": "E6-B exact locator mapping and E7-A frontend read seam",
       "first_implementation_milestone": "E0-B",
       "implementation_state": "not-started",
       "allowed_dependencies": [
@@ -310,7 +346,7 @@
     {
       "name": "wow-emmy",
       "brief": "crates/wow-emmy/README.md",
-      "documentation_frontier": "E0-C",
+      "documentation_frontier": "E7-A overlay-analysis seam",
       "first_implementation_milestone": "E0-C",
       "implementation_state": "not-started",
       "allowed_dependencies": [
@@ -318,12 +354,15 @@
       ],
       "active_contracts": [
         "crates/wow-emmy/CONTRACT.json"
+      ],
+      "active_e7a_seams": [
+        "crates/wow-emmy/E7_A_OVERLAY_ANALYSIS.md"
       ]
     },
     {
       "name": "wow-project",
       "brief": "crates/wow-project/README.md",
-      "documentation_frontier": "E6-B exact external-locator mapping owner seam",
+      "documentation_frontier": "E7-A workspace registration and immutable document overlay seam",
       "first_implementation_milestone": "E0-D",
       "implementation_state": "not-started",
       "allowed_dependencies": [
@@ -343,12 +382,15 @@
       ],
       "active_e6b_seams": [
         "crates/wow-project/E6_B_EXTERNAL_LOCATOR_MAPPING.md"
+      ],
+      "active_e7a_seams": [
+        "crates/wow-project/E7_A_DOCUMENT_OVERLAYS.md"
       ]
     },
     {
       "name": "wow-graph",
       "brief": "crates/wow-graph/README.md",
-      "documentation_frontier": "E5-C producer-partition closure seam; E6-B exact context-universe input seam",
+      "documentation_frontier": "E5-C closure seam and E7-A frontend query owner",
       "first_implementation_milestone": "E2-A",
       "implementation_state": "not-started",
       "allowed_dependencies": [
@@ -379,7 +421,7 @@
     {
       "name": "wow-rules",
       "brief": "crates/wow-rules/README.md",
-      "documentation_frontier": "E0-E",
+      "documentation_frontier": "E7-A overlay-aware live diagnostics seam",
       "first_implementation_milestone": "E0-E",
       "implementation_state": "not-started",
       "allowed_dependencies": [
@@ -391,12 +433,15 @@
       ],
       "active_contracts": [
         "crates/wow-rules/CONTRACT.json"
+      ],
+      "active_e7a_seams": [
+        "crates/wow-rules/E7_A_LIVE_DIAGNOSTICS.md"
       ]
     },
     {
       "name": "wow-search",
       "brief": "crates/wow-search/README.md",
-      "documentation_frontier": "E4-B producer seam",
+      "documentation_frontier": "E7-A frontend query owner over E4 contracts",
       "first_implementation_milestone": "E4-A",
       "implementation_state": "not-started",
       "allowed_dependencies": [
@@ -414,7 +459,7 @@
     {
       "name": "wow-context",
       "brief": "crates/wow-context/README.md",
-      "documentation_frontier": "E6-B exact mapped-root handoff seam",
+      "documentation_frontier": "E7-A frontend query owner over E3/E6 seams",
       "first_implementation_milestone": "E3-B",
       "implementation_state": "not-started",
       "allowed_dependencies": [
@@ -433,7 +478,7 @@
     {
       "name": "wow-cbm",
       "brief": "crates/wow-cbm/README.md",
-      "documentation_frontier": "E6-A owner contract; E6-B coordinating contract linked",
+      "documentation_frontier": "E6-A owner contract and E7-A read-only frontend exposure seam",
       "first_implementation_milestone": "E6-A",
       "implementation_state": "not-started",
       "allowed_dependencies": [
@@ -446,7 +491,7 @@
     {
       "name": "wow-service",
       "brief": "crates/wow-service/README.md",
-      "documentation_frontier": "E6-B",
+      "documentation_frontier": "E7-A",
       "first_implementation_milestone": "E0-F",
       "implementation_state": "not-started",
       "allowed_dependencies": [
@@ -463,12 +508,15 @@
         "wow-cbm",
         "wow-context"
       ],
-      "active_e6b_dependencies": [
+      "active_e7a_dependencies": [
         "wow-core",
         "wow-store",
-        "wow-project",
         "wow-reference",
+        "wow-emmy",
+        "wow-project",
         "wow-graph",
+        "wow-rules",
+        "wow-search",
         "wow-context",
         "wow-cbm"
       ],
@@ -479,7 +527,8 @@
         "crates/wow-service/e4/CONTRACT.json",
         "crates/wow-service/e5/CONTRACT.json",
         "crates/wow-service/e5c/CONTRACT.json",
-        "crates/wow-service/e6/CONTRACT.json"
+        "crates/wow-service/e6/CONTRACT.json",
+        "crates/wow-service/e7/CONTRACT.json"
       ]
     }
   ],
@@ -487,10 +536,17 @@
     {
       "name": "wow",
       "path": "apps/wow",
-      "documentation_frontier": "E6-B",
+      "documentation_frontier": "E7-A",
       "implementation_state": "not-started",
       "framework_dependencies": [
         "wow-service"
+      ],
+      "host_modes": [
+        "cli-one-shot",
+        "local-daemon-foreground",
+        "lsp-3.18-stdio",
+        "mcp-2025-11-25-stdio",
+        "mcp-2025-11-25-streamable-http-local-disabled-by-default"
       ],
       "active_contracts": [
         "apps/wow/CONTRACT.json",
@@ -498,7 +554,8 @@
         "apps/wow/e4/CONTRACT.json",
         "apps/wow/e5/CONTRACT.json",
         "apps/wow/e5c/CONTRACT.json",
-        "apps/wow/e6/CONTRACT.json"
+        "apps/wow/e6/CONTRACT.json",
+        "apps/wow/e7/CONTRACT.json"
       ]
     },
     {
@@ -540,7 +597,7 @@
       "E4-A",
       "E4-B",
       "E4-C",
-      "E7-A-minimal-frontend"
+      "E7-A-minimal-implemented-frontend"
     ],
     "governed_beta": [
       "E5-A",
@@ -549,10 +606,14 @@
       "E6-A-optional",
       "E6-B-optional"
     ],
-    "public_supported_v1": [
+    "release_candidate": [
       "selected-beta-scope",
       "E7-A",
-      "E7-B"
+      "E7-B-candidate-build"
+    ],
+    "public_supported_v1": [
+      "release-candidate-accepted",
+      "E7-B-public-release-update-support-gates"
     ]
   },
   "completed_documentation_work_packages": [
@@ -580,6 +641,7 @@
     "E5-B",
     "E5-C",
     "E6-A",
-    "E6-B"
+    "E6-B",
+    "E7-A"
   ]
 }

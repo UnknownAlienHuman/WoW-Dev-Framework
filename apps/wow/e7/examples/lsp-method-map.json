@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "fixture_id": "apps-wow-e7a-lsp-method-map-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "protocol": "3.18",
+  "transport_profile": "lsp-3.18-stdio-v1",
+  "mappings": [
+    {"method": "initialize", "service_operation": "frontend_session_open"},
+    {"method": "shutdown", "service_operation": "frontend_session_close"},
+    {"method": "workspace/didChangeConfiguration", "service_operation": "frontend_session_configuration_change"},
+    {"method": "workspace/didChangeWorkspaceFolders", "service_operation": "frontend_workspace_folders_change"},
+    {"method": "workspace/didChangeWatchedFiles", "service_operation": "frontend_workspace_files_changed"},
+    {"method": "textDocument/didOpen", "service_operation": "frontend_document_open"},
+    {"method": "textDocument/didChange", "service_operation": "frontend_document_change"},
+    {"method": "textDocument/didSave", "service_operation": "frontend_document_save"},
+    {"method": "textDocument/didClose", "service_operation": "frontend_document_close"},
+    {"method": "textDocument/diagnostic", "service_operation": "frontend_document_diagnostics"},
+    {"method": "workspace/diagnostic", "service_operation": "frontend_workspace_diagnostics"},
+    {"method": "textDocument/hover", "service_operation": "frontend_hover"},
+    {"method": "textDocument/definition", "service_operation": "frontend_definition"},
+    {"method": "textDocument/references", "service_operation": "frontend_references"},
+    {"method": "textDocument/documentSymbol", "service_operation": "frontend_document_symbols"},
+    {"method": "workspace/symbol", "service_operation": "frontend_workspace_symbols"},
+    {"method": "textDocument/completion", "service_operation": "frontend_completion"},
+    {"method": "textDocument/signatureHelp", "service_operation": "frontend_signature_help"},
+    {"method": "textDocument/codeAction", "service_operation": "frontend_code_actions"},
+    {"method": "textDocument/prepareCallHierarchy", "service_operation": "frontend_call_hierarchy_prepare"},
+    {"method": "callHierarchy/incomingCalls", "service_operation": "frontend_call_hierarchy_incoming"},
+    {"method": "callHierarchy/outgoingCalls", "service_operation": "frontend_call_hierarchy_outgoing"},
+    {"method": "$/cancelRequest", "service_operation": "frontend_operation_cancel"}
+  ],
+  "unadvertised": [
+    "textDocument/rename",
+    "textDocument/formatting",
+    "textDocument/rangeFormatting",
+    "textDocument/onTypeFormatting",
+    "textDocument/semanticTokens/full",
+    "textDocument/inlayHint",
+    "textDocument/codeLens",
+    "workspace/executeCommand"
+  ],
+  "cases": [
+    {"case_id": "A7A-LSP-001", "expected": "exact-negotiated-capability-set"},
+    {"case_id": "A7A-LSP-004", "method": "textDocument/didChange", "expected_service_calls": 1},
+    {"case_id": "A7A-LSP-008", "mutation": "push-diagnostic-starts-second-analysis", "expected": "fail"},
+    {"case_id": "A7A-LSP-010", "mutation": "external-top-result-auto-insert", "expected": "reject"},
+    {"case_id": "A7A-LSP-011", "mutation": "unguarded-workspace-edit", "expected": "reject-or-disabled"},
+    {"case_id": "A7A-LSP-013", "sequence": ["shutdown", "exit"], "expected_exit": 0}
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}

@@ -1,0 +1,145 @@
+# E7-A error model
+
+**Status:** normative.
+
+`FrontendServiceError` carries code, stage, protocol/session/workspace/document/overlay/operation IDs, owner/service error reference, transport/delivery/cancellation/reconciliation state, coverage/conflict/privacy/license/authorization/retention/close state, and bounded structured arguments.
+
+## Registry and negotiation
+
+```text
+e7a_protocol_profile_invalid_or_unsupported
+e7a_protocol_version_negotiation_failed
+e7a_operation_registry_invalid_or_digest_mismatch
+e7a_operation_not_registered_or_disabled
+e7a_operation_schema_incompatible
+e7a_capability_unavailable_or_not_evaluated
+e7a_runtime_discovery_or_registry_widening_forbidden
+e7a_generic_operation_or_tool_proxy_forbidden
+```
+
+## Session and workspace
+
+```text
+e7a_session_request_invalid
+e7a_session_unavailable_expired_or_closed
+e7a_session_client_consumer_or_profile_mismatch
+e7a_session_resume_unauthorized_or_stale
+e7a_workspace_registration_invalid
+e7a_workspace_root_outside_policy
+e7a_workspace_auto_discovery_forbidden
+e7a_workspace_project_or_profile_resolution_failed
+e7a_workspace_registration_conflict
+e7a_workspace_unregister_blocked_by_active_operation
+```
+
+## Document overlays
+
+```text
+e7a_document_request_invalid
+e7a_document_not_registered_or_wrong_workspace
+e7a_document_version_stale_repeated_or_out_of_order
+e7a_document_overlay_base_mismatch
+e7a_document_change_range_invalid
+e7a_position_encoding_unsupported_or_mismatched
+e7a_utf_position_or_boundary_invalid
+e7a_document_size_or_change_budget_exceeded
+e7a_document_resynchronization_required
+e7a_document_save_disk_conflict
+e7a_document_overlay_retention_or_privacy_failed
+```
+
+## LSP
+
+```text
+e7a_lsp_framing_or_jsonrpc_invalid
+e7a_lsp_initialize_order_or_capability_invalid
+e7a_lsp_method_not_supported_or_not_advertised
+e7a_lsp_document_version_or_result_id_mismatch
+e7a_lsp_diagnostic_projection_failed
+e7a_lsp_edit_guard_or_workspace_edit_invalid
+e7a_lsp_editor_command_or_setting_mutation_forbidden
+e7a_lsp_semantic_capability_placeholder_forbidden
+```
+
+## MCP
+
+```text
+e7a_mcp_framing_or_jsonrpc_invalid
+e7a_mcp_protocol_version_or_initialize_invalid
+e7a_mcp_capability_not_supported
+e7a_mcp_tool_not_registered_or_schema_invalid
+e7a_mcp_effecting_tool_forbidden_by_profile
+e7a_mcp_generic_tool_rpc_shell_or_model_proxy_forbidden
+e7a_mcp_resource_uri_invalid_or_floating
+e7a_mcp_resource_access_privacy_or_license_denied
+e7a_mcp_structured_output_projection_failed
+e7a_mcp_model_intent_as_user_authorization_forbidden
+e7a_mcp_http_non_loopback_or_origin_invalid
+e7a_mcp_http_session_or_replay_invalid
+```
+
+## Daemon and local IPC
+
+```text
+e7a_daemon_endpoint_invalid_or_insecure
+e7a_daemon_protocol_or_framing_invalid
+e7a_daemon_peer_authentication_failed
+e7a_daemon_cross_user_or_cross_session_access_forbidden
+e7a_daemon_remote_listener_forbidden
+e7a_daemon_operation_not_in_registry
+e7a_daemon_shutdown_unauthorized_or_incomplete
+```
+
+## Operation lifecycle
+
+```text
+e7a_transport_request_id_conflict
+e7a_durable_operation_id_request_digest_conflict
+e7a_operation_dispatch_failed
+e7a_operation_outcome_unknown
+e7a_operation_reconciliation_failed
+e7a_disconnect_treated_as_cancellation_forbidden
+e7a_cancellation_target_invalid
+e7a_cancellation_outcome_unknown
+e7a_progress_token_or_sequence_invalid
+e7a_progress_treated_as_completion_forbidden
+e7a_backpressure_limit_exceeded
+e7a_final_response_delivery_failed
+e7a_response_replay_unauthorized_or_expired
+e7a_public_success_before_close_forbidden
+e7a_background_work_forbidden
+```
+
+## Security and output
+
+```text
+e7a_raw_sql_mcp_rpc_tool_script_plugin_model_or_shell_forbidden
+e7a_filesystem_network_process_editor_client_access_forbidden
+e7a_credential_private_endpoint_or_handle_disclosure_forbidden
+e7a_cross_client_workspace_overlay_or_result_disclosure_forbidden
+e7a_source_prompt_or_control_injection_forbidden
+e7a_privacy_license_consumer_scope_mismatch
+e7a_unbounded_source_resource_or_output_forbidden
+e7a_output_serialization_or_projection_failed
+e7a_error_log_or_crash_redaction_failed
+e7a_frontend_bypassed_service_boundary
+```
+
+Recovery classes:
+
+```text
+never
+after-protocol-registry-or-schema-fix
+after-session-or-workspace-reregistration
+after-full-document-resynchronization
+after-owner-capability-or-project-generation-fix
+after-authorization-privacy-or-license-fix
+cancel-exact-operation
+reconcile-exact-durable-operation
+retrieve-retained-result
+open-new-session-and-replay-state
+safe-close-or-quarantine
+E7B-packaging-or-support-required
+```
+
+Default errors exclude source bodies, private paths, credentials, session secrets, provider cursor bytes, hidden holdout/cohort data, and raw owner/process handles.

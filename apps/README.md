@@ -1,65 +1,65 @@
-# Applications
+# Applications and frontend hosts
 
-Applications are thin transports and host adapters over `wow-service`. They never reimplement reference, annotation, storage, analyzer, project, rule, graph, search, lineage, context, profile, migration, impact, external-provider, mapping, selection, or release semantics.
+Applications are thin transports over `wow-service`. They never reimplement reference, analyzer, project, graph, recognizer, diagnostics, search, context, external-provider, calibration, publication, release or storage semantics.
 
-## Active contract routes
+## Active routes
 
 - [`wow/`](wow/README.md)
-  - E0-F: `status`, `check` diagnostic CLI.
-  - E3-C: context status/map/inspect/build/continue/validate/render.
-  - E4-C: search, lineage, migration validation, static impact, and search-to-context commands.
-  - E5-B: calibration run/review/holdout/submission commands.
-  - E5-C: core-pack artifact/signing/publication/canary/rollout/activation/LKG/rollback/revocation/closure commands.
-  - E6-B: external provider/query/result/mapping/selection/context commands.
+  - E0-F: `status`, `check` one-shot CLI.
+  - E3-C: context commands.
+  - E4-C: search, lineage, migration validation and static impact.
+  - E5-B/C: calibration and governed core-pack lifecycle commands.
+  - E6-B: external provider/result/mapping/selection/context commands.
+  - E7-A: one-shot CLI compatibility, foreground local daemon, LSP 3.18 stdio, MCP 2025-11-25 stdio and optional local-only MCP HTTP.
 - [`wow-reference-builder/`](wow-reference-builder/README.md)
-  - E1-D: local Reference Pack `build`, `validate`, `rebuild-compare`.
+  - E1-D: local Reference Pack build/validate/rebuild-compare.
 
 ## Dependency rule
 
-Every application depends on `wow-service` only among framework crates. Host libraries may handle arguments, strict transport serialization, bounded explicit file/stdin I/O, signals, and output, but cannot absorb domain policy.
+Every application/frontend depends on `wow-service` only among framework crates. Protocol/argument/file/signal/endpoint libraries may be host dependencies but cannot absorb domain policy.
 
-## `apps/wow` boundary
+## `apps/wow` E7-A boundary
 
 ```text
-strict command/config/request/selector input
+explicit mode and protocol profile
+-> exact immutable operation registry/session
+-> strict command/method/tool/resource input
 -> one typed wow-service request
 -> one service invocation
--> canonical envelope JSON, faithful text, or exact returned artifact
--> frozen exit code
+-> exact/lossless CLI, daemon, LSP or MCP result
+-> bounded progress/cancellation/backpressure
+-> explicit close/reconciliation
 ```
 
-The app does not resolve current/catalog/provider state, open owner stores/views, build indexes/graphs/context, rank or select candidates, authorize reviews/signing/provider use, map external locators, inspect source, access credentials/provider databases, retry unknown effects, apply migrations/edits, or publish releases.
+The app does not resolve current state, inspect owner stores, build analyzer/project/graph/context state, select external candidates, authorize effects, expose generic tools, infer workspaces, apply edits, change editor settings, read secrets/provider databases, retry unknown effects or publish/install releases.
 
-Exact caller-supplied selection is mandatory before search-to-context or external-candidate-to-context handoff. Review, signing, provider-use, mapping, selection, activation, and distribution authorization remain independent service/owner concerns.
-
-## Reference builder boundary
-
-The builder executes typed staging/materialization/finalization and reviewed probe adapter plans issued by service. It does not download source, run repository scripts, execute Lua/generated files, mutate editors, sign, upload, publish, or activate a release.
-
-## Next applications and transports
+## Initial host modes
 
 ```text
-E7-A
-    supported CLI-daemon/session host
-    thin LSP frontend
-    thin MCP frontend
-    one transport request -> one wow-service operation
-
-E7-B
-    public packaging/install/update/distribution frontends
+wow <one-shot command>
+wow transport capabilities
+wow daemon run|status|shutdown
+wow lsp --transport stdio
+wow mcp --transport stdio
+wow mcp --transport streamable-http-local
 ```
 
-Transport packages must not import lower framework crates, expose arbitrary shell/tool/RPC calls, or change evidence/authorization semantics.
+The local HTTP profile is explicit and disabled by default. No remote listener is supported in E7-A.
 
-## General prohibitions
+## Frontend invariants
 
-- no direct lower framework dependency;
-- no hidden current/latest/default profile/source/artifact/provider;
-- no arbitrary shell/network/repository/tool execution;
-- no implicit source/editor/client/config/provider discovery;
-- no source/project mutation, migration application, or tool authorization;
-- no automatic search/external/lineage candidate promotion or mapping selection;
-- no semantic difference caused by terminal/environment;
-- no empty success for deferred operations;
-- no retry after `OutcomeUnknown` without exact service reconciliation;
-- no release/publishing/CI before its contract and executable evidence.
+- exact registry, no reflection/generic operation proxy;
+- one semantic request to one service operation;
+- missing capabilities not advertised;
+- explicit workspace/project/profile registration;
+- exact versioned document overlays;
+- disconnect is not cancellation and progress is not completion;
+- response replay does not reexecute service;
+- bounded queues and multi-client isolation;
+- protocol stdout contains protocol frames/messages only;
+- no source/editor/project mutation without an existing exact owner contract and authorization;
+- no public package/update lifecycle before E7-B.
+
+## Next
+
+E7-B release tooling/packages consume built application artifacts only after implementation gates. Release tooling does not become a semantic application dependency and cannot package internal agent/architecture/TODO files by default.

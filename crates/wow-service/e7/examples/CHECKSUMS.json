@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "manifest_id": "wow-service-e7-a-checksums-v1",
+  "algorithm": "sha256",
+  "state": "pending-byte-freeze-before-first-rust-implementation",
+  "implementation_state": "not-started",
+  "prerequisite_pins": {
+    "e0_through_advertised_e6_implementation_commits": null,
+    "prerequisite_fixture_bundle_sha256": null
+  },
+  "protocol_adapter_pins": {
+    "local_daemon_jsonrpc": null,
+    "lsp_3_18": null,
+    "mcp_2025_11_25": null,
+    "mcp_streamable_http_local": null
+  },
+  "owner_port_pins": {
+    "operation_registry": null,
+    "session_registry": null,
+    "workspace_registration": null,
+    "document_overlay": null,
+    "diagnostic_search_context": null,
+    "response_journal": null,
+    "durable_operation_retention_audit": null
+  },
+  "profile_pins": {
+    "registry_and_capability": null,
+    "session_workspace_and_path": null,
+    "document_overlay_and_position_encoding": null,
+    "daemon_transport_and_peer": null,
+    "lsp_methods_and_projection": null,
+    "mcp_tools_resources_and_projection": null,
+    "mcp_http_origin_session_and_replay": null,
+    "progress_cancellation_reconnect_backpressure": null,
+    "privacy_license_isolation_and_redaction": null,
+    "canonicalization_and_output": null
+  },
+  "vector_pins": {
+    "operation_registry": null,
+    "lsp_session": null,
+    "mcp_session": null,
+    "reconnect_cancel": null,
+    "malformed_framing_and_security": null,
+    "client_platform_matrix": null,
+    "determinism_and_benchmarks": null
+  },
+  "member_paths": [
+    "crates/wow-service/e7/README.md",
+    "crates/wow-service/e7/AGENTS.md",
+    "crates/wow-service/e7/DECISIONS.md",
+    "crates/wow-service/e7/DATA_MODEL.md",
+    "crates/wow-service/e7/OPERATION_REGISTRY_AND_CAPABILITY_NEGOTIATION.md",
+    "crates/wow-service/e7/SESSION_WORKSPACE_AND_DOCUMENT_OVERLAYS.md",
+    "crates/wow-service/e7/LOCAL_DAEMON_TRANSPORT.md",
+    "crates/wow-service/e7/LSP_3_18_PROFILE.md",
+    "crates/wow-service/e7/MCP_2025_11_25_PROFILE.md",
+    "crates/wow-service/e7/PROGRESS_CANCELLATION_RECONNECT_AND_BACKPRESSURE.md",
+    "crates/wow-service/e7/SECURITY_PRIVACY_AND_MULTI_CLIENT_ISOLATION.md",
+    "crates/wow-service/e7/RESULT_ENVELOPE_AND_STATUS.md",
+    "crates/wow-service/e7/ERROR_MODEL.md",
+    "crates/wow-service/e7/TEST_MATRIX.md",
+    "crates/wow-service/e7/IMPLEMENTATION_PLAN.md",
+    "crates/wow-service/e7/CONTRACT.json",
+    "crates/wow-service/e7/examples/README.md",
+    "crates/wow-service/e7/examples/operation-registry.json",
+    "crates/wow-service/e7/examples/lsp-session.json",
+    "crates/wow-service/e7/examples/mcp-session.json",
+    "crates/wow-service/e7/examples/reconnect-cancel.json"
+  ],
+  "member_sha256": {},
+  "bundle_sha256": null,
+  "freeze_rules": [
+    "nulls are allowed only while implementation_state is not-started",
+    "all advertised service implementations protocol adapters clients platforms profiles vectors limits and checksums freeze before the first E7-A Rust commit",
+    "tests verify committed fixture bytes and never rewrite them automatically",
+    "private source credentials session secrets endpoints and raw owner handles are never committed"
+  ]
+}

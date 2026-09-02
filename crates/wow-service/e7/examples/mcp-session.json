@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e7a-mcp-session-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "session": {
+    "protocol_revision": "2025-11-25",
+    "transport_profile": "mcp-2025-11-25-stdio-v1",
+    "session_id": null,
+    "registry_id": null,
+    "server_capabilities": [
+      "tools",
+      "resources",
+      "logging"
+    ],
+    "utilities": [
+      "progress",
+      "cancellation"
+    ],
+    "tool_profile": "fixed-non-source-mutating-analysis",
+    "canonical_sha256": null
+  },
+  "cases": [
+    {
+      "case_id": "S7A-MCP-001",
+      "expected": "initialized-mcp-2025-11-25-session"
+    },
+    {
+      "case_id": "S7A-MCP-005",
+      "mutation": "advertise-prompts-sampling-elicitation-or-tasks",
+      "expected_error": "e7a_mcp_capability_not_supported"
+    },
+    {
+      "case_id": "S7A-MCP-006",
+      "mutation": "generic-wow-call-tool",
+      "expected_error": "e7a_mcp_generic_tool_rpc_shell_or_model_proxy_forbidden"
+    },
+    {
+      "case_id": "S7A-MCP-007",
+      "mutation": "default-tool-list-includes-user-source-provider-or-release-effect",
+      "expected_error": "e7a_mcp_effecting_tool_forbidden_by_profile"
+    },
+    {
+      "case_id": "S7A-MCP-009",
+      "mutation": "structured-output-omits-blocker",
+      "expected_error": "e7a_mcp_structured_output_projection_failed"
+    },
+    {
+      "case_id": "S7A-MCP-012",
+      "mutation": "resource-uri-uses-current-or-path-traversal",
+      "expected_error": "e7a_mcp_resource_uri_invalid_or_floating"
+    },
+    {
+      "case_id": "S7A-MCP-014",
+      "mutation": "model-invocation-treated-as-user-authorization",
+      "expected_error": "e7a_mcp_model_intent_as_user_authorization_forbidden"
+    },
+    {
+      "case_id": "S7A-HTTP-003",
+      "transport_profile": "mcp-2025-11-25-streamable-http-local-v1",
+      "mutation": "invalid-origin",
+      "expected_error": "e7a_mcp_http_non_loopback_or_origin_invalid"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}

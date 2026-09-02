@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e7a-operation-registry-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "registry": {
+    "registry_id": null,
+    "profile_ids": [
+      "cli-one-shot-v1",
+      "wow-local-jsonrpc-v1",
+      "lsp-3.18-stdio-v1",
+      "mcp-2025-11-25-stdio-v1"
+    ],
+    "entries": [],
+    "canonical_sha256": null
+  },
+  "cases": [
+    {
+      "case_id": "S7A-REG-001",
+      "expected": "exact-reviewed-registry-generation"
+    },
+    {
+      "case_id": "S7A-REG-003",
+      "mutation": "runtime-reflection-adds-operation",
+      "expected_error": "e7a_runtime_discovery_or_registry_widening_forbidden"
+    },
+    {
+      "case_id": "S7A-REG-004",
+      "mutation": "generic-call-service-tool-proxy",
+      "expected_error": "e7a_generic_operation_or_tool_proxy_forbidden"
+    },
+    {
+      "case_id": "S7A-REG-005",
+      "mutation": "request-result-error-schema-digest-mismatch",
+      "expected_error": "e7a_operation_schema_incompatible"
+    },
+    {
+      "case_id": "S7A-REG-006",
+      "mutation": "unimplemented-owner-capability-advertised",
+      "expected_error": "e7a_capability_unavailable_or_not_evaluated"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "registry.registry_id",
+      "registry.entries[*].descriptor-and-schema-digests",
+      "registry.canonical_sha256"
+    ]
+  }
+}

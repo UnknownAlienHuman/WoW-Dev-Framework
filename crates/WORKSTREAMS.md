@@ -1,8 +1,8 @@
 # Agent workstreams and integration order
 
-**Status:** operational routing through documentation frontier E6-B.
+**Status:** operational routing through documentation frontier E7-A.
 
-Documentation-ready remains `implementation_state = not-started` until executable code, exact fixtures/checksums, probes, benchmarks, authorization/signing/observation/provider adapters, runtime evidence, and evaluations exist.
+Documentation-ready remains `implementation_state = not-started` until executable code, exact fixtures/checksums, probes, benchmarks, authorization/signing/provider/protocol adapters, runtime/client evidence, and evaluations exist.
 
 ## Global order
 
@@ -21,253 +21,223 @@ E0-A wow-core
 -> E5-C core-pack publication/signing/canary/rollout/rollback
 -> E6-A wow-cbm external semantic candidates
 -> E6-B service/CLI mapping/context orchestration
--> E7-A supported LSP/MCP/CLI-daemon/session transport
--> E7-B public packaging/distribution/update/support lifecycle
+-> E7-A operation registry, sessions, overlays, daemon, LSP and MCP
+-> E7-B reproducible packaging/distribution/update/support lifecycle
+-> E0-A implementation begins after documentation freeze
 ```
 
 ## Global rules
 
 - One agent owns one primary package/crate or one explicitly named cross-crate seam.
-- Missing implementation/tool/probe/benchmark/authorization/signing/vault/observation/provider/runtime evidence is blocked or `NotEvaluated`, never pass.
+- Missing implementation/tool/probe/benchmark/authorization/signing/vault/provider/protocol/runtime/client evidence is blocked or `NotEvaluated`, never pass.
 - Patch-sensitive WoW claims route through the current external KB and exact source/runtime evidence.
-- Repository/addon/owner/path/provider/popularity/model identity never becomes hidden semantics.
-- Applications and future transports invoke `wow-service` only.
-- No CI/workflow without explicit owner instruction and a real frozen command.
+- Repository/addon/owner/path/provider/popularity/model/client identity never becomes hidden semantics.
+- Applications and frontend transports invoke `wow-service` only.
+- No CI/workflow without explicit owner instruction, real executable commands, and a launch/release gate.
 
-## E5-C publication lifecycle
+## First executable workstream — E0
 
-Primary contracts:
+Executable work begins here regardless of later documentation maturity:
 
+```text
+wow-core E0-A identities/evidence/results
+-> frozen ReferenceView fixture + pinned EmmyLua adapter
+-> minimal exact project generation
+-> bounded diagnostics
+-> wow-service status/check
+-> thin apps/wow CLI
+```
+
+Before each crate activation, populate the package's required implementation/profile/fixture/checksum values. Do not activate all documented crates at once. The R0 completion gate is defined in [`../docs/LAUNCH_GATES.md`](../docs/LAUNCH_GATES.md).
+
+## E5 governed recognizer lifecycle
+
+Primary routes:
+
+- [`wow-recognizers/e5/`](wow-recognizers/e5/README.md)
+- [`wow-service/e5/`](wow-service/e5/README.md)
 - [`wow-service/e5c/`](wow-service/e5c/README.md)
-- [`../apps/wow/e5c/`](../apps/wow/e5c/README.md)
 
 ```text
-exact E5-B PromotionSubmission
--> independent E5-C revalidation
--> distinct CorePackArtifact
--> provenance/SBOM/license/notices
--> detached signing + independent verification
--> PublishedInactive
--> fresh read-back validation
--> exact canary cohort/assignment/observations/evaluation
--> finite authorized rollout stages
--> profile-specific current-record CAS
--> explicit retained last-known-good
--> exact rollback/revocation/deactivation
--> new project/graph generations with stale partition closure
+E5-A
+    exact admitted corpus/provenance/labels/splits
+    shadow-only packs, mutations, metrics, graph receipts
+    candidate/deactivation artifacts
+
+E5-B
+    exact retained acquisition and durable runs
+    independent review authorization
+    sealed holdout access/audit/consumption
+    immutable PromotionSubmission
+
+E5-C
+    independent submission revalidation
+    distinct CorePackArtifact
+    provenance/SBOM/license/signing
+    PublishedInactive + fresh read-back
+    exact canary + finite rollout
+    profile-specific activation/LKG/rollback/revocation/closure
 ```
 
-### Active owners
+Hard stops remain: no commit-pin-only admission, donor-name semantics, label/split leakage, candidate relabeling, signature-as-proof, publication-side-effect activation, missing-signal pass, inferred LKG, rollback history rewrite, stale-partition retention, blind effect retry, or public distribution in E5.
 
-```text
-wow-service: orchestration, authorization use, durable effects, envelopes
-wow-recognizers: core pack semantics and producer namespace
-wow-graph: graph output/partition/closure validation
-wow-project: exact reindex and new project generations
-wow-store: immutable objects/catalog/current/retention/GC
-apps/wow: transport only
-```
+E5 implementation waits for all prerequisite owner implementations, real admitted corpora, independent reviews/holdout, signing/authorization/canary adapters, measured thresholds, response-loss tests, and checksum closure.
 
-### Hard stops
+## E6 optional external Candidate lane
 
-```text
-no trust in submission label without exact revalidation
-no relabelled candidate as core artifact
-no signature as semantic/runtime proof
-no private signing/deployment material in repository/CLI/results
-no publication side-effect activation
-no canary percentage without exact population/membership
-no untyped anecdote/issue/model signal
-no missing/partial/conflict/NotEvaluated required signal as pass
-no time-only or open-ended rollout
-no latest/best/previous/default activation or rollback target
-no stale current CAS rebase
-no inferred previous/newest last-known-good
-no rollback history rewrite
-no historical project/graph mutation
-no stale partition or hidden coverage change
-no blind effect retry after response loss
-no public distribution in E5-C
-```
+Primary routes:
 
-### Implementation gate
-
-Before E5-C Rust:
-
-```text
-implemented/frozen E0–E5-B prerequisites
-exact submission/artifact/recognizer/graph/project/store ports
-signing and authorization adapters/profiles without committed secrets
-provenance/SBOM/license/reproducibility profiles
-canary population/privacy/observation/signal profiles
-finite rollout/activation/LKG/rollback/revocation/closure profiles
-response-loss/retention/audit/recovery profiles
-canonical service/CLI/artifact/signature/state vectors
-synthetic and admitted real canary/rollout/rollback corpora
-measured thresholds and all SHA-256 manifests
-```
-
-## E6-A external Candidate-only bridge
-
-Primary contract: [`wow-cbm/e6/`](wow-cbm/e6/README.md)
-
-```text
-reviewed ProviderDescriptor
-+ negotiated capability intersection
-+ StableExternalGeneration | ObservedMutableGeneration | OpaqueExternalState
-+ closed bounded query
-+ already-acquired allow-listed transport
--> bounded raw response validation
--> loss/unknown/conflict preservation
--> semantic_candidate + Candidate normalization
--> provider-local score/rank metadata
--> UnverifiedProviderLocator
--> scoped zero/partial/truncated/failure state
--> exact continuation/cache validation
--> optional lane-local result
-```
-
-### Active dependency
-
-```text
-wow-cbm -> wow-core
-```
-
-No store/project/reference/graph/search/context/service/app/provider-SDK dependency is activated.
-
-### Hard stops
-
-```text
-no provider process/session/credential ownership
-no provider install/configure/index/import/delete or database access
-no generic arbitrary MCP/tool call
-no authority above semantic_candidate + Candidate
-no provider score fusion across providers
-no provider locator converted to owner source handle
-no path/URL/source follow
-no zero-result negative authority
-no opaque-state exact replay/freshness claim
-no hidden provider/stale-cache/model/web/local-search fallback
-no exact-local capability degradation from provider failure
-no background work, source execution, secret material, or unrestricted source retention
-```
-
-### Implementation gate
-
-Before E6-A Rust:
-
-```text
-implemented/frozen wow-core
-reviewed provider descriptor and adapter contract
-transport/capability probe reports
-external-state/query/normalization/score/loss/locator/zero/continuation/cache profiles
-privacy/license/security/cancellation profiles
-synthetic compatible/malformed/hostile/partial/opaque/mutable/stale fixtures
-measured resource limits
-canonical result/explanation/artifact/comparison/error vectors
-all member/bundle SHA-256 values
-```
-
-## E6-B external orchestration, mapping, selection, and context
-
-Primary contracts:
-
+- [`wow-cbm/e6/`](wow-cbm/e6/README.md)
 - [`wow-service/e6/`](wow-service/e6/README.md)
 - [`../apps/wow/e6/`](../apps/wow/e6/README.md)
-- [`wow-project/E6_B_EXTERNAL_LOCATOR_MAPPING.md`](wow-project/E6_B_EXTERNAL_LOCATOR_MAPPING.md)
-- [`wow-reference/E6_B_EXTERNAL_LOCATOR_MAPPING.md`](wow-reference/E6_B_EXTERNAL_LOCATOR_MAPPING.md)
-- [`wow-context/E6_B_EXTERNAL_CONTEXT_HANDOFF.md`](wow-context/E6_B_EXTERNAL_CONTEXT_HANDOFF.md)
-- [`wow-store/E6_B_EXTERNAL_CANDIDATE_STORAGE.md`](wow-store/E6_B_EXTERNAL_CANDIDATE_STORAGE.md)
 
 ```text
-exact provider configuration
--> credential-use authorization reference
--> narrow provider session and E6-A transport
--> durable OperationId + CanonicalRequestDigest
--> E6-A exact descriptor/state/query/result
--> immutable result/artifact catalog and read-back
--> exact project/reference owner mapping of UnverifiedProviderLocator
--> explicit candidate selection receipt
--> exact mapped root to existing context owner
--> separate external Candidate sidecar
--> retention/audit/reconciliation/reverse closure
--> one-call CLI
+reviewed provider descriptor/state/query
+-> E6-A loss-preserving semantic_candidate + Candidate
+-> UnverifiedProviderLocator
+-> E6-B exact provider/session/result catalog
+-> exact project/reference owner mapping
+-> explicit Selected | Rejected | Deferred receipt
+-> exact mapped root to normal context owner
+-> separate ExternalCandidateSidecar
+```
+
+### Active E6 owners
+
+```text
+wow-cbm: descriptor/state/query/normalization and Candidate ceiling
+wow-service: configuration/session orchestration and durable effects
+wow-project/wow-reference: exact locator mapping
+wow-context: exact-root context only
+wow-store: generic immutable objects/effects/retention
+apps/wow: transport only
+host adapters: secret-isolated provider session construction
+```
+
+Hard stops remain: no generic provider/MCP tool; no provider database/index lifecycle; no source/path opening by service; no cross-provider score fusion; no zero-result negative authority; no implicit mapping/selection; no provider metadata in exact context truth; no hidden fallback or local capability downgrade; no secret material in public seams.
+
+E6 is optional and may ship disabled. Enabling it requires a real reviewed adapter, exact stable/mutable/opaque fixtures, mapping/selection/context tests, response-loss and cancellation tests, measured benefit and limits, privacy/license closure, and checksums.
+
+## E7-A frontend sessions and transports
+
+Primary routes:
+
+- [`wow-service/e7/`](wow-service/e7/README.md)
+- [`../apps/wow/e7/`](../apps/wow/e7/README.md)
+- [`wow-project/E7_A_DOCUMENT_OVERLAYS.md`](wow-project/E7_A_DOCUMENT_OVERLAYS.md)
+- [`wow-emmy/E7_A_OVERLAY_ANALYSIS.md`](wow-emmy/E7_A_OVERLAY_ANALYSIS.md)
+- [`wow-rules/E7_A_LIVE_DIAGNOSTICS.md`](wow-rules/E7_A_LIVE_DIAGNOSTICS.md)
+- [`wow-store/E7_A_SESSION_AND_RESPONSE_JOURNAL.md`](wow-store/E7_A_SESSION_AND_RESPONSE_JOURNAL.md)
+
+### Contract flow
+
+```text
+implemented service capability
+-> immutable FrontendOperationRegistry
+-> exact protocol profile and client session
+-> explicit workspace/project/profile registration
+-> exact saved generation or versioned unsaved overlay
+-> one CLI/daemon/LSP/MCP semantic request
+-> one service operation
+-> bounded progress/cancellation/backpressure
+-> exact final result and delivery journal
+-> explicit close/reconciliation
+```
+
+### Protocol profiles
+
+```text
+CLI one-shot
+wow-local-jsonrpc/1 over current-user named pipe or Unix socket
+LSP 3.18 over stdio
+MCP 2025-11-25 over stdio
+MCP 2025-11-25 local Streamable HTTP, explicit and disabled by default
 ```
 
 ### Active owners
 
 ```text
-wow-service: configuration/session orchestration, durable effects, envelopes
-wow-cbm: provider descriptor/state/query/normalization and Candidate ceiling
-wow-project: exact project locator mapping
-wow-reference: exact reference locator mapping
-wow-graph: exact graph view for context universe
-wow-context: exact-root context artifacts
-wow-store: generic immutable object/catalog/effect/retention substrate
-apps/wow: transport only
-host adapters: credential authorization and provider session construction
+wow-service
+    operation registry, sessions, workspace/document orchestration,
+    transport-neutral feature requests, cancellation/reconciliation
+
+wow-project
+    explicit workspace validation and immutable document overlays
+
+wow-emmy
+    exact overlay analysis using the pinned analyzer
+
+wow-rules/search/context/reference/graph
+    existing exact owner results consumed through service
+
+wow-store
+    generic registry/session/lease/response-journal/retention substrate
+
+apps/wow
+    protocol framing, lifecycle, output and local endpoint host only
 ```
 
 ### Hard stops
 
 ```text
-no raw credential/private endpoint/process/database handle in public seams
-no provider install/start/configure/index/import/delete
-no generic MCP/tool/RPC/SQL/script/model/shell surface
-no service-side source/path/URL inspection
-no mapping by name/rank/score/proximity/order/popularity
-no clean no-mapping without owner negative authority
-no mapping treated as provider semantic proof
-no implicit top/sole/highest-score candidate selection
-no selection treated as verification/acceptance/edit authorization
-no provider metadata in ContextSemanticPack truth
-no recursive public service call for context
-no hidden fallback or local capability downgrade
-no blind repeat after OutcomeUnknown
+no transport importing lower framework crates
+no reflection or generic call-service/tool/RPC method
+no capability advertisement without implementation
+no implicit cwd/Git/editor/WoW workspace discovery
+no stale/out-of-order document change applied best-effort
+no LSP position conversion without exact overlay/encoding
+no editor-specific semantic fork or automatic edit application
+no default MCP effecting tools, prompts, sampling, elicitation or tasks
+no model invocation treated as user authorization
+no floating current/latest MCP resource URI
+no remote daemon/MCP listener by default
+no disconnect treated as cancellation
+no progress treated as completion
+no response replay that reexecutes service
+no unbounded queues, source/resource output or cross-client access
 no public success before retention/audit/reverse close
 ```
 
 ### Implementation gate
 
-Before E6-B Rust:
+Before E7-A Rust:
 
 ```text
-implemented/frozen E0–E6-A prerequisites
-exact provider configuration/authorization/session/transport/store ports
-exact project/reference mapping and graph/context acquisition ports
-credential/session/quota/cancellation/reconciliation profiles without committed secrets
-result/artifact/catalog/continuation/cache profiles
-mapping/negative-authority/selection/context/sidecar profiles
-privacy/license/security/retention/audit/recovery/close profiles
-synthetic and admitted real stable/mutable/opaque/zero/ambiguous/conflict fixtures
-response-loss and cancellation at every effect boundary
-measured resource/quota/owner/context limits
-canonical service/CLI vectors and all SHA-256 manifests
+implemented/frozen owner/service capabilities that will be advertised
+exact LSP 3.18, MCP 2025-11-25 and local daemon adapter/library pins
+complete immutable operation registry and schema digests
+workspace/path/overlay/position-encoding/session/isolation profiles
+canonical CLI/daemon/LSP/MCP request/result/progress/error/reconnect vectors
+Windows and claimed Unix endpoint/platform fixtures
+reference LSP and MCP host client fixtures
+cancellation/disconnect/response-loss/backpressure/crash/redaction tests
+measured frame/document/source/result/concurrency/latency/memory limits
+all member and bundle SHA-256 values
 ```
 
-## Next — E7-A
+The minimal developer preview may implement CLI plus one LSP or MCP profile first, but disabled transports must not be advertised. The complete E7-A package gates the public supported release.
 
-Owners: thin transport/application packages over `wow-service`; no transport may import lower framework crates.
+## Next — E7-B release lifecycle
 
-Required scope:
+E7-B owns documentation for:
 
 ```text
-explicit supported CLI-daemon/LSP/MCP transport profiles
-schema/capability/version negotiation
-project/profile/session registration
-one transport request -> one service operation
-bounded messages/streams/progress/backpressure
-cancellation/disconnect/reconnect/response-loss/lease/close behavior
-multi-client isolation and credential/configuration boundaries
-no arbitrary tool/shell/RPC escape hatch
-developer-preview packaging and compatibility manifest boundary
+pinned Rust toolchain and reproducible build profiles
+supported OS/architecture/client/profile compatibility matrix
+binary/data/config/cache/log layout
+portable archive and optional installer/package layout
+release manifests/checksums/signatures/SBOM/provenance attestations
+Reference Pack/core-pack/provider adapter compatibility manifests
+install/uninstall/upgrade/rollback/revocation/retirement
+stable/beta/nightly channel policy if enabled
+secure update verification and no-downgrade rules
+privacy/telemetry/crash/log/data-retention policy
+incident response and support lifecycle
+release candidate evaluation on real addon repositories
+public GitHub release and CI only after real commands exist
 ```
 
-E7-B later owns public release artifacts, checksums/signatures/SBOM/provenance, installers/packages, update channels, rollback/retirement, support and compatibility policy.
-
-## Launch routing
-
-See [`../docs/LAUNCH_GATES.md`](../docs/LAUNCH_GATES.md). The shortest executable path remains E0-A through E0-F; E6 and E5 governance do not block the first runnable bootstrap.
+After E7-B documentation is frozen, the next repository work package is E0-A implementation—not another architecture milestone.
 
 ## Seam request format
 

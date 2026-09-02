@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "fixture_id": "apps-wow-e7a-mode-cases-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "cases": [
+    {
+      "case_id": "A7A-MODE-002",
+      "argv": ["wow", "transport", "capabilities"],
+      "service_operation": "frontend_capabilities",
+      "expected_service_calls": 1
+    },
+    {
+      "case_id": "A7A-MODE-003",
+      "argv": ["wow", "daemon", "run", "--profile", "wow-local-jsonrpc-v1"],
+      "expected": "foreground-local-ipc-host"
+    },
+    {
+      "case_id": "A7A-MODE-004",
+      "argv": ["wow", "lsp", "--transport", "stdio", "--profile", "lsp-3.18-stdio-v1"],
+      "expected": "lsp-3.18-stdio"
+    },
+    {
+      "case_id": "A7A-MODE-005",
+      "argv": ["wow", "mcp", "--transport", "stdio", "--profile", "mcp-2025-11-25-stdio-v1"],
+      "expected": "mcp-2025-11-25-stdio"
+    },
+    {
+      "case_id": "A7A-MODE-006",
+      "argv": ["wow", "mcp", "--transport", "streamable-http-local"],
+      "profile_enabled": false,
+      "expected": "disabled-before-listener"
+    },
+    {
+      "case_id": "A7A-MODE-010",
+      "argv": ["wow", "daemon", "call-service", "arbitrary"],
+      "expected_error": "generic-operation-forbidden"
+    },
+    {
+      "case_id": "A7A-CFG-003",
+      "argv": ["wow", "lsp", "--auto-workspace", "--git-root"],
+      "expected_error": "implicit-discovery-forbidden"
+    },
+    {
+      "case_id": "A7A-CFG-004",
+      "argv": ["wow", "mcp", "--token", "secret"],
+      "expected_error": "sensitive-argv-forbidden"
+    },
+    {
+      "case_id": "A7A-PATH-003",
+      "argv": ["wow", "daemon", "run", "--listen", "0.0.0.0:7777"],
+      "expected_error": "remote-listener-forbidden"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}

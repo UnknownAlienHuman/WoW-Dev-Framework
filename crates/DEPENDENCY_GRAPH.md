@@ -1,6 +1,6 @@
 # Crate dependency graph
 
-**Status:** normative boundary through documentation frontier E6-B.
+**Status:** normative boundary through documentation frontier E7-A.
 
 Dependencies point toward narrower foundations. Maximum edges do not require activation.
 
@@ -21,7 +21,7 @@ Dependencies point toward narrower foundations. Maximum edges do not require act
 | `wow-service` | reviewed production crates through narrow public contracts |
 | applications/transports | `wow-service` only |
 
-## Active E5-C slice
+## E5 publication slice
 
 ```text
 apps/wow
@@ -33,73 +33,13 @@ apps/wow
         └── wow-recognizers
 ```
 
-## E5-C owner/effect flow
+E5-B submissions are independently revalidated, built into distinct core artifacts, attested/signed, published inactive, read back, canaried, rolled out, activated, designated LKG, rolled back/revoked/deactivated, and closed into new project/graph generations. Owner crates never import service/applications and historical generations remain immutable.
+
+## E6 external Candidate slice
 
 ```text
-E5-B PromotionSubmission catalog
--> wow-service independent revalidation
--> wow-recognizers core semantic/producer validation
--> wow-graph output and partition validation
--> wow-store immutable artifact/attestation/signature/catalog publication
--> signing authorization/signing/verification ports
--> canary authorization/assignment/observation ports
--> rollout/activation/rollback/revocation authorization ports
--> wow-project exact reindex
--> wow-graph new snapshot/partition closure
--> wow-store current/LKG/retention/audit
--> apps/wow transport
-```
+wow-cbm -> wow-core
 
-No owner imports service or applications. Service coordinates exact public receipts only.
-
-## E5-C distinct authorities
-
-```text
-E5-B review authorization
-E5-C artifact validation
-signing authorization
-signature verification
-publication authorization
-canary authorization and typed evidence
-rollout authorization
-activation/current CAS
-LKG designation
-rollback/revocation/deactivation authorization
-future E7 distribution authorization
-runtime correctness
-```
-
-No edge collapses these states. GitHub/OS/CLI/file/commit identity is not any authorization.
-
-## Historical immutability
-
-Activation or rollback creates new project/recognizer/graph generations. Historical generations retain original partitions. Stale partition closure applies only to new targets and preserves foreign/core-independent/calibration partitions.
-
-## Active E6-A slice
-
-```text
-wow-cbm
-└── wow-core
-```
-
-E6-A receives an already-acquired narrow transport through a host/service adapter contract but does not depend on provider SDK/MCP implementation, service, store, project, reference, graph, search, context, or applications.
-
-## E6-A external candidate boundary
-
-```text
-E6-B/session owner
-    -> reviewed ExternalCandidateTransportPort
-    -> wow-cbm E6-A
-        -> ExternalCandidateResultSet
-        -> ExternalCandidateArtifact
-        -> UnverifiedProviderLocator
-```
-
-`wow-cbm` never creates a reverse dependency into E6-B owners.
-
-## Active E6-B slice
-
-```text
 apps/wow
     -> wow-service
         ├── wow-core
@@ -110,78 +50,125 @@ apps/wow
         ├── wow-context
         └── wow-cbm
 
-host provider/credential adapters
-    -> narrow ports owned by wow-service/wow-cbm contracts
+host provider/session adapters
+    -> narrow E6 service/transport ports
 ```
 
-Host adapters are not framework semantic dependencies. They construct exact authorized sessions and expose only the reviewed E6-A transport.
+`wow-project` and `wow-reference` consume owner-neutral locator projections and do not depend on `wow-cbm`. `wow-context` receives only an exact mapped owner root and never provider metadata as semantic input. `wow-store` interprets no provider/mapping/selection semantics.
 
-## E6-B flow
+## E7-A frontend slice
 
 ```text
-exact provider configuration + authorization reference
--> host session factory
--> E6-A provider descriptor/state/query/result validation
--> wow-store immutable result/artifact catalog
--> wow-project OR wow-reference exact locator mapping
--> explicit selection receipt in wow-service
--> exact project/reference/graph views
--> wow-context exact mapped-root operation
--> separate Candidate sidecar + combined service envelope
--> apps/wow transport
+apps/wow
+    -> wow-service
+        ├── exact owner crates required by the registry entry
+        └── wow-store for generic durable/session/journal state
+
+LSP/MCP clients/editors/models
+    -> protocol messages only
+    -> apps/wow transport host
+    -> wow-service
 ```
 
-`wow-store` does not interpret provider/candidate/mapping/selection/context semantics. `wow-project` and `wow-reference` consume owner-neutral locator projections and do not depend on `wow-cbm` or service. `wow-context` receives only its existing exact universe/root contract and does not depend on `wow-cbm`.
+There is no `wow-lsp-core`, `wow-mcp-core`, or editor-specific semantic crate by default. Transport-neutral registry/session/request/result types live in `wow-service`; protocol framing and process/endpoint behavior live in `apps/wow`.
 
-## E6 authority boundaries
+### Owner-neutral overlay seams
 
 ```text
-external candidate result   = semantic_candidate + Candidate
-provider locator            = UnverifiedProviderLocator
-owner mapping receipt       = exact locator-to-owner-record identity only
-selection receipt           = explicit caller choice, not proof
-context artifact            = exact local owner evidence
-external sidecar            = provider Candidate evidence kept separate
+apps/wow protocol message
+-> wow-service session/workspace/document operation
+-> wow-project explicit workspace and immutable overlay owner
+-> wow-emmy overlay analyzer input/result
+-> wow-rules/search/context/reference/graph owner results
+-> wow-service transport projection
 ```
 
-No rank, score, label, stable generation, repeated result, zero result, mapping, selection, or context inclusion becomes provider semantic truth.
+Owner crates do not import LSP/MCP/daemon/application types. They use existing core/source/result types or owner-neutral E7 input records.
 
-## Provider failure
+### Store seam
 
-Unavailable provider disables only the optional external lane. It cannot lower exact ReferenceView/project/graph/search/context/rules capability. E6 performs no hidden fallback.
+`wow-store` may persist exact registry generations, bounded session metadata, operation tickets, response delivery journals, leases and retention edges. Unsaved overlay bodies remain memory-only by default. Store does not interpret protocol, workspace, diagnostic or editor semantics.
 
-## E5/E6 separation
-
-External provider candidates cannot enter E5 core-pack publication evidence or production matcher semantics without a future explicit reviewed calibration/admission path; E6 creates no such path.
-
-## Next E7-A boundary
+## Authority boundaries
 
 ```text
-LSP/MCP/CLI-daemon transport/application
-    -> wow-service only
+transport capability advertisement != owner implementation proof unless registry validated
+client/editor/model identity       != semantic or effect authorization
+wire request ID                    != durable OperationId
+workspace root                     != trusted project
+unsaved overlay                    != saved ProjectGeneration
+progress                           != completion
+response delivered                 != operation semantics
+MCP tool annotation                != authorization
+LSP WorkspaceEdit                  != permission to apply
 ```
 
-Transport packages own wire/session concerns only. They cannot import lower crates, discover arbitrary tools, execute shell/source, or bypass service authorization/evidence/retention boundaries.
+The exact service/owner result remains authoritative. Transport projections cannot raise confidence, create negative authority, hide blockers or change effect state.
+
+## Protocol boundaries
+
+```text
+LSP 3.18 stdio
+    -> standard lifecycle/document/language projections
+    -> one service operation per semantic request
+
+MCP 2025-11-25 stdio
+    -> fixed read-only tools and exact resources
+    -> one service operation per tools/call
+
+wow-local-jsonrpc/1
+    -> current-user local IPC
+    -> operation names validated against exact session registry
+
+local MCP Streamable HTTP
+    -> loopback only, explicit, authenticated, Origin-validated,
+       disabled by default
+```
+
+No remote/public service, generic tool/RPC forwarding, provider proxy, shell, script, model sampling, editor setting mutation or automatic source edit enters E7-A.
+
+## Distinct state/authority axes
+
+```text
+owner semantic result
+frontend capability availability
+session/workspace/document/overlay state
+durable effect state
+transport delivery state
+progress/cancellation state
+privacy/license/authorization
+release/support status
+runtime correctness
+```
+
+No edge collapses these states.
+
+## Response loss and isolation
+
+A disconnect does not cancel. `OutcomeUnknown` blocks blind retry. Durable results can be replayed by exact authorized lookup without reexecution. Session/workspace/overlay/source/authorization/operation/result/journal visibility is consumer-scoped.
+
+## Next E7-B boundary
+
+Release tooling may consume built `apps/wow` binaries and exact data packs after all implementation gates. It cannot import owner crates as a semantic runtime or bypass service contracts. Public packaging/signing/update artifacts are a separate release layer, not a new authority source.
 
 ## Forbidden patterns
 
-- `wow-core` depending on framework crates.
-- `wow-store` interpreting domain semantics.
-- `wow-graph` parsing source, running recognizers, authorizing, or calling service/apps.
-- `wow-recognizers` storing durable service/publication effects or activating packs.
-- `wow-project` or `wow-reference` depending on service/apps/wow-cbm for mapping.
-- `wow-context` depending on wow-cbm/service or accepting provider facts as semantic inputs.
-- `wow-service` reimplementing owner algorithms or exposing raw storage/signing/session/provider handles.
-- `wow-cbm` depending on service/apps/store/project/reference/graph/search/context.
-- `wow-cbm` owning process/session/credentials/provider index/database lifecycle.
-- Generic arbitrary MCP/tool/RPC/SQL/script/model/shell API.
-- Provider locator opened or mapped by service/app instead of owner.
-- Cross-provider score fusion or Candidate promotion.
-- Zero-result negative authority.
-- Implicit candidate/mapping/root selection.
-- Provider failure downgrading local exact capabilities.
-- Application/transport importing any framework crate except `wow-service`.
-- Sensitive adapter material, parser/session/process objects, filesystem roots, arbitrary callbacks, provider databases, or unrestricted source bodies crossing public seams.
-- Production crate depending on application/transport.
+- owner crate depending on service/application/protocol crates;
+- application/transport importing any framework crate except `wow-service`;
+- `wow-core` gaining transport/editor/provider semantics;
+- `wow-store` interpreting project/provider/protocol/diagnostic semantics;
+- editor-specific analyzer, graph, search or context forks;
+- runtime reflection or generic `call_service`/MCP/RPC/tool proxy;
+- capability advertisement without exact implementation/profile availability;
+- implicit cwd/Git/editor/WoW workspace discovery;
+- provider/source text becoming registry, command or authorization;
+- stale document changes applied best-effort;
+- raw filesystem/source/provider/session/process handles crossing service seams;
+- default remote listeners, arbitrary shell/process execution or editor-setting mutation;
+- effecting MCP tools in the default profile;
+- progress/delivery treated as semantic completion;
+- response replay causing a second effect;
+- cross-client overlays/source/results;
+- public release workflow before executable and E7-B gates.
 
-Changing an edge requires exact crossing data/operation, insufficiency of current seam, cycle/identity/security/privacy/license/evidence analysis, tests/mutations, migration notes, and manifest/workstream updates.
+Changing an edge requires exact crossing data/operation, insufficiency of current seam, cycle/identity/security/privacy/license/evidence analysis, tests/mutations, migration notes and manifest/workstream updates.

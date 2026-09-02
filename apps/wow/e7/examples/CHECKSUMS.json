@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "manifest_id": "apps-wow-e7-a-checksums-v1",
+  "algorithm": "sha256",
+  "state": "pending-byte-freeze-before-first-rust-implementation",
+  "implementation_state": "not-started",
+  "prerequisite_pins": {
+    "wow_service_e7a_implementation_commit": null,
+    "wow_service_e7a_fixture_bundle_sha256": null
+  },
+  "adapter_pins": {
+    "cli_parser": null,
+    "daemon_ipc_windows": null,
+    "daemon_ipc_unix": null,
+    "lsp_3_18": null,
+    "mcp_2025_11_25_stdio": null,
+    "mcp_streamable_http_local": null
+  },
+  "profile_pins": {
+    "mode_and_config": null,
+    "endpoint_and_path": null,
+    "lsp_method_mapping": null,
+    "mcp_tool_resource_mapping": null,
+    "output_exit_and_shutdown": null,
+    "progress_cancel_reconnect_backpressure": null,
+    "security_privacy_and_redaction": null
+  },
+  "vector_pins": {
+    "mode_cases": null,
+    "lsp_method_map": null,
+    "mcp_tool_map": null,
+    "stdout_exit_cases": null,
+    "malformed_framing_and_security": null,
+    "client_platform_matrix": null,
+    "determinism_and_benchmarks": null
+  },
+  "member_paths": [
+    "apps/wow/e7/README.md",
+    "apps/wow/e7/AGENTS.md",
+    "apps/wow/e7/MODES_AND_COMMANDS.md",
+    "apps/wow/e7/LSP_METHOD_MAPPING.md",
+    "apps/wow/e7/MCP_TOOL_RESOURCE_MAPPING.md",
+    "apps/wow/e7/OUTPUT_STREAMS_AND_EXIT.md",
+    "apps/wow/e7/SECURITY_AND_CONFIG.md",
+    "apps/wow/e7/TEST_MATRIX.md",
+    "apps/wow/e7/CONTRACT.json",
+    "apps/wow/e7/examples/README.md",
+    "apps/wow/e7/examples/mode-cases.json",
+    "apps/wow/e7/examples/lsp-method-map.json",
+    "apps/wow/e7/examples/mcp-tool-map.json",
+    "apps/wow/e7/examples/stdout-exit-cases.json"
+  ],
+  "member_sha256": {},
+  "bundle_sha256": null,
+  "freeze_rules": [
+    "nulls are allowed only while implementation_state is not-started",
+    "all service protocol adapters modes mappings client platform vectors limits and checksums freeze before the first E7-A application Rust commit",
+    "tests verify committed fixture bytes and never rewrite them automatically",
+    "private source credentials session secrets endpoints and raw handles are never committed"
+  ]
+}
