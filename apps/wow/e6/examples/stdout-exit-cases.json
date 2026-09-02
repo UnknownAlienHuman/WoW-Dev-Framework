@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "fixture_id": "apps-wow-e6b-stdout-exit-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "cases": [
+    {"case_id": "A6B-OUT-001", "service_status": "CandidateOnly", "output_mode": "envelope-json", "expected": "exact-service-bytes-plus-one-LF", "expected_exit": 0},
+    {"case_id": "A6B-RES-002", "service_status": "CandidateOnly", "provider_count": 0, "required_text": "no candidates returned for exact provider query", "forbidden_text": "source absent|does not exist", "expected_exit": 0},
+    {"case_id": "A6B-MAP-003", "service_status": "ExactMapped", "required_text": "locator identity mapped", "forbidden_text": "provider semantics verified", "expected_exit": 0},
+    {"case_id": "A6B-SEL-003", "service_status": "SelectionRecorded", "decision": "Deferred", "expected_exit": 0},
+    {"case_id": "A6B-CTX-003", "service_status": "ContextReady", "required_text": "external Candidate sidecar separate", "expected_exit": 0},
+    {"case_id": "A6B-LIFE-003", "service_status": "OutcomeUnknown", "required_text": "unsafe to retry", "expected_exit": 4},
+    {"case_id": "A6B-OUT-006", "service_status": "Truncated", "provider_count": 0, "expected_exit": 2}
+  ],
+  "freeze_gate": {"required_before_first_rust_implementation": true}
+}

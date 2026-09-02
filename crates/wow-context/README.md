@@ -1,8 +1,8 @@
 # `wow-context` contract router
 
-**Status:** E3-B Project Map, L0/L1 skeleton, and context-pack contract is implementation-ready documentation; no Rust code exists.
+**Status:** E3-B Project Map/L0/L1/context-pack contract and the E6-B exact mapped-root handoff seam are implementation-ready documentation; no Rust code exists.
 
-`wow-context` converts exact published project, Blizzard UI source, graph, analyzer-derived, and reference views into deterministic bounded context artifacts. It does not parse source, own graph/search/storage, infer facts with a model, or mutate projects.
+`wow-context` converts exact published project, Blizzard UI source, graph, analyzer-derived, and reference views into deterministic bounded context artifacts. It does not parse source, own graph/search/storage, infer facts with a model, consume external-provider semantics, or mutate projects.
 
 ## Contract history
 
@@ -11,44 +11,7 @@
 
 ## Active E3-B route
 
-1. [`e3/MILESTONE_RENUMBERING.md`](e3/MILESTONE_RENUMBERING.md)
-2. [`e3/README.md`](e3/README.md)
-3. [`e3/AGENTS.md`](e3/AGENTS.md)
-4. [`e3/DECISIONS.md`](e3/DECISIONS.md)
-5. [`e3/INPUT_UNIVERSE_AND_VIEWS.md`](e3/INPUT_UNIVERSE_AND_VIEWS.md)
-6. [`e3/DATA_MODEL.md`](e3/DATA_MODEL.md)
-7. [`e3/OPERATIONS.md`](e3/OPERATIONS.md)
-8. [`e3/CONTEXT_REQUEST_AND_PROFILES.md`](e3/CONTEXT_REQUEST_AND_PROFILES.md)
-9. [`e3/PROJECT_MAP.md`](e3/PROJECT_MAP.md)
-10. [`e3/L0_SKELETON.md`](e3/L0_SKELETON.md)
-11. [`e3/L1_SKELETON.md`](e3/L1_SKELETON.md)
-12. [`e3/CONTROL_AND_EFFECT_MODEL.md`](e3/CONTROL_AND_EFFECT_MODEL.md)
-13. [`e3/EXPANSION_SELECTION_AND_STOPPING.md`](e3/EXPANSION_SELECTION_AND_STOPPING.md)
-14. [`e3/COVERAGE_AUTHORITY_AND_OMISSIONS.md`](e3/COVERAGE_AUTHORITY_AND_OMISSIONS.md)
-15. [`e3/SOURCE_EXCERPTS_AND_PROMPT_BOUNDARIES.md`](e3/SOURCE_EXCERPTS_AND_PROMPT_BOUNDARIES.md)
-16. [`e3/BUDGETS_TOKENIZATION_AND_PRUNING.md`](e3/BUDGETS_TOKENIZATION_AND_PRUNING.md)
-17. [`e3/CONTEXT_PACK_AND_RENDERING.md`](e3/CONTEXT_PACK_AND_RENDERING.md)
-18. [`e3/CACHE_AND_DETERMINISM.md`](e3/CACHE_AND_DETERMINISM.md)
-19. [`e3/SECURITY_AND_PRIVACY.md`](e3/SECURITY_AND_PRIVACY.md)
-20. [`e3/METRICS_AND_EVALUATION.md`](e3/METRICS_AND_EVALUATION.md)
-21. [`e3/ERROR_MODEL.md`](e3/ERROR_MODEL.md)
-22. [`e3/TEST_MATRIX.md`](e3/TEST_MATRIX.md)
-23. [`e3/IDENTITY_DAG_TESTS.md`](e3/IDENTITY_DAG_TESTS.md)
-24. [`e3/IMPLEMENTATION_PLAN.md`](e3/IMPLEMENTATION_PLAN.md)
-25. [`e3/CONTRACT.json`](e3/CONTRACT.json) and [`e3/examples/`](e3/examples/README.md)
-
-## Direct dependencies
-
-```text
-wow-core
-wow-graph
-wow-project
-wow-reference
-```
-
-No direct dependency on `wow-store`, `wow-emmy`, `wow-recognizers`, `wow-rules`, `wow-search`, `wow-cbm`, `wow-service`, or applications. Relevant analyzer, recognizer, and persistence state arrives only through exact public project/graph/reference views.
-
-## Output hierarchy
+Read [`e3/README.md`](e3/README.md) and its complete normative package. It defines:
 
 ```text
 ContextUniverseSet
@@ -61,25 +24,44 @@ ContextUniverseSet
 
 Every layer is immutable, exact-generation-bound, evidence-preserving, budgeted, and independently identified. Rendering never becomes semantic truth.
 
+## E6-B exact mapped-root handoff
+
+Read [`E6_B_EXTERNAL_CONTEXT_HANDOFF.md`](E6_B_EXTERNAL_CONTEXT_HANDOFF.md).
+
+E6-B does not add an external-provider dependency or new semantic lane inside `wow-context`. After `wow-service` validates one `ExactMapped` owner record and one explicit `Selected` receipt, it supplies the normal exact E3 universe plus the exact mapped root. Existing E3 operations are reused.
+
+Provider labels, scores, snippets, summaries, traces, locators, mapping records, and selection receipts remain outside `ContextSemanticPack`. A separate external Candidate sidecar is composed by `wow-service`/the application, not by `wow-context`.
+
+## Direct dependencies
+
+```text
+wow-core
+wow-graph
+wow-project
+wow-reference
+```
+
+No direct dependency on `wow-store`, `wow-emmy`, `wow-recognizers`, `wow-rules`, `wow-search`, `wow-cbm`, `wow-service`, or applications. Relevant analyzer, recognizer, persistence, mapping, and selection state arrives only through exact public owner views/roots validated by service.
+
 ## Hard boundaries
 
-- exact roots only; search/fuzzy/natural-language resolution is outside E3-B;
+- exact roots only; search/fuzzy/natural-language/external resolution is outside the crate;
 - no second TOC/XML/Lua parser or raw-source semantic inference;
 - no model inference, summarization, ranking, embedding, or tool call in the canonical path;
 - no current-generation switch after binding;
 - no user-project, Blizzard UI, reference, external, runtime, or historical identity merge;
-- no source text interpreted as framework or agent instruction;
+- no provider/source text interpreted as framework or agent instruction;
 - no claim without exact origin/evidence/coverage closure;
 - no hidden omission, silent truncation, or exact-token claim without a frozen tokenizer;
 - no unbounded source/graph export;
 - no physical cache/persistence implementation;
-- no diagnostics, remediation, edits, lineage, impact, or runtime truth;
+- no diagnostics, remediation, edits, lineage, impact, external-candidate verification, or runtime truth;
 - no Cargo/Rust/CI activation during this documentation phase.
 
 ## Current implementation state
 
 ```text
-documentation frontier: E3-B
+documentation frontier: E6-B exact mapped-root handoff seam
 implementation frontier: not started
 Cargo.toml: absent
 Rust source: absent

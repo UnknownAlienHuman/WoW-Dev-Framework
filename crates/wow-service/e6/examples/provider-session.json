@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e6b-provider-session-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "configuration": {"configuration_id": null, "provider_descriptor_id": null, "adapter_contract_id": null, "authorization_reference_id": null, "canonical_sha256": null},
+  "authorization": {"authorization_receipt_id": null, "scope": null, "revocation_state": null, "canonical_sha256": null},
+  "session": {"session_binding_id": null, "transport_profile": null, "capability_set_id": null, "external_state_id": null, "close_state": null, "canonical_sha256": null},
+  "cases": [
+    {"case_id": "S6B-CFG-001", "expected": "exact-enabled-configuration"},
+    {"case_id": "S6B-CFG-002", "mutation": "floating-default-or-environment-discovery", "expected_error": "e6b_floating_default_environment_or_tool_discovery_forbidden"},
+    {"case_id": "S6B-AUTH-004", "mutation": "secret-material-in-public-request", "expected_error": "e6b_raw_credential_private_endpoint_or_command_forbidden"},
+    {"case_id": "S6B-SES-002", "mutation": "session-exposes-undeclared-operation", "expected_error": "e6b_provider_descriptor_or_profile_mismatch"},
+    {"case_id": "S6B-SES-006", "mutation": "mandatory-close-fails", "expected_error": "e6b_provider_session_close_failed"}
+  ],
+  "freeze_gate": {"required_before_first_rust_implementation": true}
+}

@@ -1,135 +1,150 @@
-# Codebase Memory bridge
+# External Codebase Memory bridge
 
-**Status: normative optional integration design**
+**Status:** normative integration overview subordinate to the E6-A and E6-B package contracts.
 
 ## 1. Purpose
 
-Codebase Memory is useful for broad repository indexing, BM25/semantic discovery, generic definitions/calls, architecture summaries, traces, and cross-repository candidates.
-
-WoW Dev Framework remains responsible for exact WoW contracts:
-
-- TOC/XML/load facts;
-- Blizzard API and UI ownership;
-- callbacks, events, hooks, and registries;
-- state paths;
-- restriction and Secret facets;
-- profile isolation;
-- historical lineage and patch impact.
-
-The bridge combines the two without pretending they are one evidence system.
-
-## 2. Hard boundaries
-
-Prohibited:
-
-- direct writes to Codebase Memory SQLite or other internal storage;
-- generated fake Lua files whose only purpose is to trick its parser;
-- patching a vendored Codebase Memory language specification during installation;
-- treating generic Lua `CALLS` edges as exact WoW call proof;
-- making exact search unavailable when Codebase Memory is absent;
-- upgrading semantic similarity to a proven API replacement.
-
-## 3. Join contract
+A Codebase Memory provider can contribute broad repository discovery, semantic candidates, generic definition/call candidates, architecture summaries, and trace candidates. WoW Dev Framework remains responsible for exact WoW and project authority:
 
 ```text
-Codebase Memory result
-    repository + revision + path + symbol/span
-→ StableSourceHandle
-→ resolve against project/external source registry
-→ attach exact WoW graph facts when available
-→ merged result with separate evidence classes
+TOC/XML/load facts
+Blizzard API and UI ownership
+callbacks/events/hooks/registries
+state and restriction facets
+profile/generation isolation
+lineage/migration/static impact
+exact project/reference source identity
+context and diagnostic evidence
 ```
 
-A candidate that cannot be resolved to a stable handle remains an external semantic candidate and cannot participate in exact impact or autofix logic.
+The systems remain separate evidence universes.
 
-## 4. Planned client boundary
+## 2. Normative routes
 
-```rust
-trait CbmBridge {
-    async fn ensure_index(
-        &self,
-        repo: &RepositoryIdentity,
-    ) -> Result<CbmGeneration>;
+- E6-A provider descriptor/state/query/normalization owner: [`../crates/wow-cbm/e6/README.md`](../crates/wow-cbm/e6/README.md)
+- E6-B session/result/mapping/selection/context orchestration: [`../crates/wow-service/e6/README.md`](../crates/wow-service/e6/README.md)
+- Project mapping owner: [`../crates/wow-project/E6_B_EXTERNAL_LOCATOR_MAPPING.md`](../crates/wow-project/E6_B_EXTERNAL_LOCATOR_MAPPING.md)
+- Reference mapping owner: [`../crates/wow-reference/E6_B_EXTERNAL_LOCATOR_MAPPING.md`](../crates/wow-reference/E6_B_EXTERNAL_LOCATOR_MAPPING.md)
+- Exact context handoff: [`../crates/wow-context/E6_B_EXTERNAL_CONTEXT_HANDOFF.md`](../crates/wow-context/E6_B_EXTERNAL_CONTEXT_HANDOFF.md)
 
-    async fn semantic_candidates(
-        &self,
-        query: &str,
-        scope: &RepoScope,
-    ) -> Result<Vec<CbmCandidate>>;
+This overview does not override those contracts.
 
-    async fn trace_candidates(
-        &self,
-        seed: &StableSourceHandle,
-    ) -> Result<Vec<CbmRelation>>;
+## 3. Authority ceiling
 
-    async fn coverage(
-        &self,
-        scope: &RepoScope,
-    ) -> Result<CbmCoverage>;
-}
-```
-
-The implementation communicates through standard MCP transport with a user-configured command. It does not install, own, or update the external server.
-
-## 5. Evidence separation
-
-Merged output labels:
-
-- exact local/reference facts as `Proven`, `Derived`, or `Possible` with their source provenance;
-- Codebase Memory results as `semantic_candidate + Candidate`;
-- generic Codebase Memory call/trace relations as candidate relations unless independently verified;
-- unavailable or partial Codebase Memory coverage separately from local coverage.
-
-A higher semantic score does not alter the evidence level.
-
-## 6. Failure behavior
-
-When the bridge is unconfigured, unavailable, stale, or times out:
-
-- exact reference/project lookup still works;
-- search reports that the semantic lane was not used;
-- no local capability is marked failed;
-- cached external candidates remain tied to their old external generation and are not presented as current;
-- the request may return a structured optional-integration warning, not a product error.
-
-## 7. External repository workflow
-
-External source is cloned/indexed on demand and recorded by manifest:
+Every accepted provider result remains:
 
 ```text
-repository URL
-commit SHA
-license/SPDX when detected
-retrieved_at
-external index generation
-source digest
-recognized universal roles
+provenance = semantic_candidate
+confidence = Candidate
+negative_authority = unavailable
 ```
 
-Source is not redistributed in release artifacts. License is recorded before copying any material into fixtures or implementation.
+Provider labels such as `exact`, `verified`, `authoritative`, `complete`, or `high confidence`; top rank; sole result; repeated result; stable external generation; and numeric score do not raise authority. Scores/ranks remain provider-local.
 
-## 8. Potential upstream interoperability
+A zero result means only that no accepted candidates were returned for one exact provider/state/query/profile/page under reported coverage. It is not proof that an API, symbol, source entity, implementation, relation, bug, or relevant context is absent.
 
-A future `DerivedFactsPack` proposal may define:
+## 4. Provider and transport boundary
+
+E6-A receives an already-acquired `ExternalCandidateTransportPort` exposing only reviewed typed operations:
 
 ```text
-provider and schema version
-repository/revision identity
-nodes with path/span/stable key
-edges with relation/confidence/evidence
-custom relation namespace
-replace-by-generation semantics
+provider_status
+provider_capabilities
+provider_generation
+candidate_query
+candidate_continue
+candidate_explain
 ```
 
-If Codebase Memory adopts a supported import ABI, the sidecar graph may optionally be projected into it. This repository's correctness and data ownership do not depend on that outcome.
+E6-B resolves one exact provider configuration, obtains a nonsecret credential-use authorization receipt, acquires a narrow session through a host adapter, registers durable operation identity, and invokes E6-A.
 
-## 9. Evaluation
+Forbidden throughout E6:
 
-The bridge is promoted only when an agent task evaluation demonstrates benefit over local exact/FTS/graph search. Measure:
+```text
+generic MCP/tool/RPC calls
+raw SQL or provider database access
+shell/script/plugin/model-prompt escape hatches
+provider install/start/configure/index/import/delete effects
+raw credentials/private endpoints/process handles
+path/URL following or provider-returned source execution
+hidden fallback to another provider/cache/model/web/local search
+```
 
-- additional top-3 recall;
-- accepted task outcomes;
-- extra source reads and bytes;
-- candidate verification cost;
-- false or stale candidate rate;
-- CBM-on versus CBM-off latency.
+Provider/index lifecycle may be defined later only through a separate explicit host/provider-owner contract. It is not an E6-A or E6-B semantic operation.
+
+## 5. External state
+
+Every query binds one explicit state class:
+
+```text
+StableExternalGeneration
+ObservedMutableGeneration
+OpaqueExternalState
+```
+
+Stable state requires a sufficient immutable provider generation/index/corpus receipt. Mutable state binds one observation/session episode. Opaque state is explicitly nonreproducible. Timestamp, uptime, repository name, same query, same top result, same count, or provider `current/latest` prose is not generation identity.
+
+Continuation and cache bind exact descriptor, capability, state, query, profiles, prior result, and cumulative budgets. Cache never converts stale to fresh, opaque to stable, partial to complete, or Candidate to verified.
+
+## 6. Locator and owner mapping
+
+Provider repository/revision/path/URI/symbol/span/digest fields become `UnverifiedProviderLocator`. E6-A does not open or resolve them.
+
+E6-B submits an owner-neutral bounded locator projection to one exact retained project or reference generation. Only the owning crate may return:
+
+```text
+ExactMapped
+MultipleMappings
+NoMappingWithOwnerAuthority
+NoMappingPartial
+Conflict
+NotEvaluated
+Failed
+```
+
+`ExactMapped` proves only locator-to-owner-record identity under the selected profile. It does not verify provider summaries, relations, traces, ranking, lineage, replacement, migration safety, impact, or runtime behavior.
+
+`NoMappingWithOwnerAuthority` requires complete relevant owner coverage. Service cannot manufacture it from provider zero results or failed matching.
+
+## 7. Explicit selection and context
+
+After mapping, the caller supplies an explicit `Selected`, `Rejected`, or `Deferred` decision for exact candidate/mapping IDs. Service never chooses top, sole, highest-score, nearest, same-name, newest, or first candidates.
+
+Context handoff requires retained `ExactMapped` plus `Selected`. Service reacquires exact project/reference/graph views and invokes one existing `wow-context` operation with the exact mapped root.
+
+Output composition remains separated:
+
+```text
+normal exact ContextSemanticPack / rendered artifact
++ separate ExternalCandidateSidecar
+```
+
+Provider snippets, summaries, labels, ranks, scores, generic traces, and unverified claims never become exact context or graph facts.
+
+## 8. Durable effects and failure behavior
+
+Provider dispatch, response receipt, result publication, mapping, selection, context publication, retention, and audit are separate effects. Each uses `OperationId + CanonicalRequestDigest` where effecting.
+
+A lost response after possible dispatch/publication becomes `OutcomeUnknown`. Blind retry is forbidden until the exact provider/store/owner effect is reconciled. Provider failure disables only the optional external lane and cannot lower exact local reference/project/graph/search/context/diagnostic capability.
+
+## 9. Storage and license
+
+`wow-store` persists generic immutable objects, catalogs, effect receipts, retention edges, and audit references. It does not interpret provider semantics, map locators, select candidates, or build context. Direct writes to provider storage remain forbidden.
+
+Ability to query, index, map, or inspect external source does not grant redistribution rights. Source/snippet retention requires exact provenance, license, notice, privacy, consumer, and redistribution decisions. Metadata-only output remains possible when source retention is denied.
+
+## 10. Evaluation and enablement
+
+The external lane may ship disabled. Before enabling a provider adapter, measure:
+
+```text
+additional top-3 candidate recall
+accepted developer-task outcomes
+verification cost and extra source reads
+false/stale/ambiguous candidate rate
+provider-on versus provider-off latency and resource use
+partial/zero/outage behavior
+credential/privacy/license exposure tests
+```
+
+A provider enters the default path only when a frozen evaluation shows unique task benefit. Its absence must never block the exact local product.

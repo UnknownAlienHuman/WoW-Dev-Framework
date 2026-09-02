@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e6b-query-result-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "query_operation": {"operation_id": null, "canonical_request_digest": null, "query_id": null, "dispatch_receipt_id": null, "state": "Registered"},
+  "result": {"result_record_id": null, "e6a_result_set_id": null, "authority": {"provenance": "semantic_candidate", "confidence": "Candidate", "negative_authority": "unavailable"}, "readback_validation": null, "canonical_sha256": null},
+  "cases": [
+    {"case_id": "S6B-QRY-002", "expected": "same-operation-same-result"},
+    {"case_id": "S6B-QRY-003", "mutation": "same-operation-different-digest", "expected_error": "e6b_operation_id_request_digest_conflict"},
+    {"case_id": "S6B-QRY-005", "mutation": "timeout-after-possible-dispatch", "expected_status": "OutcomeUnknown"},
+    {"case_id": "S6B-QRY-006", "mutation": "blind-redispatch", "expected_error": "e6b_blind_provider_redispatch_forbidden"},
+    {"case_id": "S6B-RES-006", "provider_count": 0, "expected": "scoped-zero-without-negative-authority"},
+    {"case_id": "S6B-CONT-002", "mutation": "switch-state-or-reset-budget", "expected_error": "e6b_continuation_invalid_stale_or_state_mismatched"}
+  ],
+  "freeze_gate": {"required_before_first_rust_implementation": true}
+}

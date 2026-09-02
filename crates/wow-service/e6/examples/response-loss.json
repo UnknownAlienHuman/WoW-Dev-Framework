@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e6b-response-loss-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "cases": [
+    {"case_id": "S6B-QRY-005", "boundary": "provider-dispatch", "expected_status": "OutcomeUnknown", "safe_to_retry": false},
+    {"case_id": "S6B-RES-002", "boundary": "result-publication", "expected": "reconcile-exact-store-effect"},
+    {"case_id": "S6B-MAP-014", "boundary": "mapping-publication", "expected": "reconcile-exact-owner-and-store-effect"},
+    {"case_id": "S6B-SEL-009", "boundary": "selection-publication", "expected": "reconcile-exact-selection-effect"},
+    {"case_id": "S6B-CTX-012", "boundary": "context-publication", "expected": "reconcile-exact-context-effect"},
+    {"case_id": "S6B-LIFE-003", "boundary": "mandatory-close", "expected": "no-public-success"},
+    {"case_id": "S6B-LIFE-006", "boundary": "cancellation", "expected": "exact-state-no-background-work"}
+  ],
+  "freeze_gate": {"required_before_first_rust_implementation": true}
+}

@@ -1,6 +1,6 @@
 # Agent workstreams and integration order
 
-**Status:** operational routing through documentation frontier E6-A.
+**Status:** operational routing through documentation frontier E6-B.
 
 Documentation-ready remains `implementation_state = not-started` until executable code, exact fixtures/checksums, probes, benchmarks, authorization/signing/observation/provider adapters, runtime evidence, and evaluations exist.
 
@@ -21,17 +21,18 @@ E0-A wow-core
 -> E5-C core-pack publication/signing/canary/rollout/rollback
 -> E6-A wow-cbm external semantic candidates
 -> E6-B service/CLI mapping/context orchestration
--> E7 LSP/MCP/public release integration
+-> E7-A supported LSP/MCP/CLI-daemon/session transport
+-> E7-B public packaging/distribution/update/support lifecycle
 ```
 
 ## Global rules
 
-- One agent owns one primary package/crate.
+- One agent owns one primary package/crate or one explicitly named cross-crate seam.
 - Missing implementation/tool/probe/benchmark/authorization/signing/vault/observation/provider/runtime evidence is blocked or `NotEvaluated`, never pass.
 - Patch-sensitive WoW claims route through the current external KB and exact source/runtime evidence.
 - Repository/addon/owner/path/provider/popularity/model identity never becomes hidden semantics.
-- Applications import `wow-service` only.
-- No CI/workflow without explicit owner instruction.
+- Applications and future transports invoke `wow-service` only.
+- No CI/workflow without explicit owner instruction and a real frozen command.
 
 ## E5-C publication lifecycle
 
@@ -73,7 +74,7 @@ apps/wow: transport only
 no trust in submission label without exact revalidation
 no relabelled candidate as core artifact
 no signature as semantic/runtime proof
-no private key/KMS/HSM/vault/deployment credential in repository/CLI/results
+no private signing/deployment material in repository/CLI/results
 no publication side-effect activation
 no canary percentage without exact population/membership
 no untyped anecdote/issue/model signal
@@ -132,7 +133,7 @@ reviewed ProviderDescriptor
 wow-cbm -> wow-core
 ```
 
-No store/project/reference/graph/search/context/service/app/MCP-provider SDK dependency is activated.
+No store/project/reference/graph/search/context/service/app/provider-SDK dependency is activated.
 
 ### Hard stops
 
@@ -148,7 +149,7 @@ no zero-result negative authority
 no opaque-state exact replay/freshness claim
 no hidden provider/stale-cache/model/web/local-search fallback
 no exact-local capability degradation from provider failure
-no background work, source execution, private credential, or unrestricted source retention
+no background work, source execution, secret material, or unrestricted source retention
 ```
 
 ### Implementation gate
@@ -167,28 +168,106 @@ canonical result/explanation/artifact/comparison/error vectors
 all member/bundle SHA-256 values
 ```
 
-## Next — E6-B
+## E6-B external orchestration, mapping, selection, and context
 
-Owners: `wow-service` and thin `apps/wow`; collaborators: `wow-cbm`, `wow-project`, `wow-reference`, `wow-context`, `wow-store`, and `wow-core`.
+Primary contracts:
 
-Required flow:
+- [`wow-service/e6/`](wow-service/e6/README.md)
+- [`../apps/wow/e6/`](../apps/wow/e6/README.md)
+- [`wow-project/E6_B_EXTERNAL_LOCATOR_MAPPING.md`](wow-project/E6_B_EXTERNAL_LOCATOR_MAPPING.md)
+- [`wow-reference/E6_B_EXTERNAL_LOCATOR_MAPPING.md`](wow-reference/E6_B_EXTERNAL_LOCATOR_MAPPING.md)
+- [`wow-context/E6_B_EXTERNAL_CONTEXT_HANDOFF.md`](wow-context/E6_B_EXTERNAL_CONTEXT_HANDOFF.md)
+- [`wow-store/E6_B_EXTERNAL_CANDIDATE_STORAGE.md`](wow-store/E6_B_EXTERNAL_CANDIDATE_STORAGE.md)
 
 ```text
-explicit provider configuration
--> credential/session authorization and narrow transport acquisition
+exact provider configuration
+-> credential-use authorization reference
+-> narrow provider session and E6-A transport
 -> durable OperationId + CanonicalRequestDigest
--> exact E6-A descriptor/state/query execution
--> immutable result/artifact catalogs and retention
+-> E6-A exact descriptor/state/query/result
+-> immutable result/artifact catalog and read-back
 -> exact project/reference owner mapping of UnverifiedProviderLocator
 -> explicit candidate selection receipt
--> exact mapped root to existing context service
--> reverse closure and conservative envelope
+-> exact mapped root to existing context owner
+-> separate external Candidate sidecar
+-> retention/audit/reconciliation/reverse closure
 -> one-call CLI
 ```
 
-Mapping states must preserve exact mapped, multiple, no-mapping-with-authority, partial, conflict, `NotEvaluated`, and failed. Mapping proves locator-to-owner-record identity only. Selection never occurs from top-1, sole result, score, name, path, snippet, or provider label.
+### Active owners
 
-E6-B must keep provider credential/session/database/index lifecycle behind narrow ports, preserve `OutcomeUnknown`, never expose provider cursors/credentials/private endpoints, and never make local exact workflows depend on the provider.
+```text
+wow-service: configuration/session orchestration, durable effects, envelopes
+wow-cbm: provider descriptor/state/query/normalization and Candidate ceiling
+wow-project: exact project locator mapping
+wow-reference: exact reference locator mapping
+wow-graph: exact graph view for context universe
+wow-context: exact-root context artifacts
+wow-store: generic immutable object/catalog/effect/retention substrate
+apps/wow: transport only
+host adapters: credential authorization and provider session construction
+```
+
+### Hard stops
+
+```text
+no raw credential/private endpoint/process/database handle in public seams
+no provider install/start/configure/index/import/delete
+no generic MCP/tool/RPC/SQL/script/model/shell surface
+no service-side source/path/URL inspection
+no mapping by name/rank/score/proximity/order/popularity
+no clean no-mapping without owner negative authority
+no mapping treated as provider semantic proof
+no implicit top/sole/highest-score candidate selection
+no selection treated as verification/acceptance/edit authorization
+no provider metadata in ContextSemanticPack truth
+no recursive public service call for context
+no hidden fallback or local capability downgrade
+no blind repeat after OutcomeUnknown
+no public success before retention/audit/reverse close
+```
+
+### Implementation gate
+
+Before E6-B Rust:
+
+```text
+implemented/frozen E0–E6-A prerequisites
+exact provider configuration/authorization/session/transport/store ports
+exact project/reference mapping and graph/context acquisition ports
+credential/session/quota/cancellation/reconciliation profiles without committed secrets
+result/artifact/catalog/continuation/cache profiles
+mapping/negative-authority/selection/context/sidecar profiles
+privacy/license/security/retention/audit/recovery/close profiles
+synthetic and admitted real stable/mutable/opaque/zero/ambiguous/conflict fixtures
+response-loss and cancellation at every effect boundary
+measured resource/quota/owner/context limits
+canonical service/CLI vectors and all SHA-256 manifests
+```
+
+## Next — E7-A
+
+Owners: thin transport/application packages over `wow-service`; no transport may import lower framework crates.
+
+Required scope:
+
+```text
+explicit supported CLI-daemon/LSP/MCP transport profiles
+schema/capability/version negotiation
+project/profile/session registration
+one transport request -> one service operation
+bounded messages/streams/progress/backpressure
+cancellation/disconnect/reconnect/response-loss/lease/close behavior
+multi-client isolation and credential/configuration boundaries
+no arbitrary tool/shell/RPC escape hatch
+developer-preview packaging and compatibility manifest boundary
+```
+
+E7-B later owns public release artifacts, checksums/signatures/SBOM/provenance, installers/packages, update channels, rollback/retirement, support and compatibility policy.
+
+## Launch routing
+
+See [`../docs/LAUNCH_GATES.md`](../docs/LAUNCH_GATES.md). The shortest executable path remains E0-A through E0-F; E6 and E5 governance do not block the first runnable bootstrap.
 
 ## Seam request format
 

@@ -1,20 +1,23 @@
 # `wow-cbm` contract router
 
-**Status:** E6-A external semantic-candidate bridge is implementation-ready documentation; no Rust code exists.
+**Status:** E6-A external semantic-candidate bridge is implementation-ready documentation; E6-B orchestration/owner mapping is defined in `wow-service`; no Rust code exists.
 
-`wow-cbm` is an optional, replaceable adapter over an already-acquired narrow external-candidate transport. It validates provider descriptors/external state, issues closed bounded candidate queries, normalizes untrusted results to `provenance=semantic_candidate` and `confidence=Candidate`, and never participates in exact local authority without independent owner mapping and verification.
+`wow-cbm` is an optional, replaceable adapter over an already-acquired narrow external-candidate transport. It validates provider descriptors and external state, issues closed bounded candidate queries, normalizes untrusted results to `provenance=semantic_candidate` and `confidence=Candidate`, and never participates in exact local authority without independent owner mapping.
 
-The original scaffold is preserved as [`INITIAL_OVERVIEW.md`](INITIAL_OVERVIEW.md). E6-A narrows it in three places:
+The original scaffold is preserved as [`INITIAL_OVERVIEW.md`](INITIAL_OVERVIEW.md). The active contracts narrow that scaffold as follows:
 
 ```text
-process/session/credential acquisition -> E6-B service/provider adapter
-provider index/build/update effects      -> E6-B or later provider-owner contract
-project/reference source-handle mapping  -> E6-B owner mapping ports
+provider descriptor/state/query/normalization -> wow-cbm E6-A
+provider configuration/session authorization -> wow-service E6-B + host adapters
+provider index/build/update lifecycle         -> later explicit host/provider-owner contract
+project/reference source-handle mapping       -> project/reference owner ports coordinated by E6-B
+explicit selection and context handoff        -> wow-service E6-B
+wire/session frontends                        -> E7-A
 ```
 
-`wow-cbm` does not spawn/configure/install providers, read/write provider databases, discover tools dynamically, follow paths/URLs, or create stable project/reference source handles.
+`wow-cbm` does not spawn/configure/install providers, read/write provider databases, discover tools dynamically, follow paths/URLs, create stable project/reference source handles, select candidates, build context, or depend on service/application crates.
 
-## Canonical route
+## Canonical E6-A route
 
 Read:
 
@@ -35,20 +38,24 @@ Read:
 15. [`e6/IMPLEMENTATION_PLAN.md`](e6/IMPLEMENTATION_PLAN.md)
 16. [`e6/CONTRACT.json`](e6/CONTRACT.json) and [`e6/examples/`](e6/examples/README.md)
 
+## E6-B handoff
+
+The coordinating contract is [`../wow-service/e6/README.md`](../wow-service/e6/README.md). It acquires one exact authorized provider session, publishes immutable E6-A results, invokes project/reference owner mapping, records an explicit caller selection, and passes one exact mapped owner root to normal context operations. Mapping and selection never raise external Candidate authority.
+
 ## Direct dependency
 
 ```text
 wow-core
 ```
 
-No direct dependency on store, project, reference, graph, search, context, service, apps, MCP implementation, or provider SDK.
+No direct dependency on store, project, reference, graph, search, context, service, applications, MCP implementation, or provider SDK.
 
 ## Current state
 
 ```text
-documentation frontier: E6-A
+documentation frontier: E6-A owner contract; E6-B coordinating contract linked
 implementation frontier: not-started
-next documentation package: E6-B service/CLI source-owner mapping and context handoff
+next documentation package: E7-A transport/session and developer-preview boundary
 Cargo.toml: absent
 Rust source: absent
 CI/workflows: absent

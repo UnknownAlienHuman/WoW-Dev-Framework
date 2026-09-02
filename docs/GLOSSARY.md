@@ -146,6 +146,34 @@
 
 **Optional degradation** — provider failure disables only the external lane while exact local/reference/project/search/context/diagnostic capabilities remain unaffected.
 
+## E6-B orchestration and mapping
+
+**ExternalProviderConfiguration** — exact reviewed service configuration binding one provider descriptor/adapter, allowed profiles/operations, nonsecret authorization-reference class, session policy, privacy/license policy, and hard limits.
+
+**ExternalProviderUseAuthorization** — nonsecret receipt authorizing use of one exact provider configuration and authorization reference for one operation/query purpose. It does not contain secret material and does not create semantic authority.
+
+**ExternalProviderSessionBinding** — exact session/transport/capability/external-state/reconciliation/cancellation/close receipt returned by a host adapter. It exposes no raw credential, command, process, endpoint, or database handle.
+
+**ExternalCandidateQueryOperation** — durable E6-B operation binding `OperationId + CanonicalRequestDigest`, configuration/session/state/query/profiles, dispatch/result/reconciliation state, and effect receipts.
+
+**ExternalCandidateResultCatalogRecord** — immutable service/store record binding one validated E6-A result set to exact provider/state/query/profile, Candidate authority, privacy/license, retention, and read-back validation.
+
+**ExternalLocatorMappingRecord** — immutable project/reference owner result for one exact locator and owner generation. Status is `ExactMapped`, `MultipleMappings`, `NoMappingWithOwnerAuthority`, `NoMappingPartial`, `Conflict`, `NotEvaluated`, or `Failed`.
+
+**ExactMapped** — one exact owner record matched every required locator identity field under the selected mapping profile. It proves locator identity only, not provider interpretation.
+
+**NoMappingWithOwnerAuthority** — the exact owner proved complete relevant coverage and no matching record. It does not prove the provider concept or broader source is absent.
+
+**ExternalCandidateSelectionReceipt** — immutable caller-supplied `Selected`, `Rejected`, or `Deferred` decision for one exact candidate and mapping. Selection is not verification, acceptance, edit authorization, or promotion.
+
+**Exact mapped root** — stable project/reference owner handle taken from an `ExactMapped` record and used as the unchanged root of an existing E3 context operation.
+
+**ExternalCandidateSidecar** — separate service/application artifact carrying permitted provider Candidate fields plus mapping/selection references. It is not part of `ContextSemanticPack` truth.
+
+**ExternalCandidateContextResult** — combined service record referencing normal exact context artifacts and a separate external Candidate sidecar, with independent lane/coverage/privacy/license/retention/closure state.
+
+**Provider operation reconciliation** — exact adapter/store/owner recovery of a possibly committed provider/query/result/mapping/selection/context effect. Unresolved state remains `OutcomeUnknown` and unsafe to retry.
+
 ## Restrictions
 
 **Restriction facet** — open versioned metadata describing Secret, protected, combat, hardware-event, forbidden-object, private-partition, or related constraints.
