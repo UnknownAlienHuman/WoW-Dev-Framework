@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "fixture_id": "apps-wow-lsp-e7a-method-cases-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "cases": [
+    {
+      "case_id": "L7A-INIT-001",
+      "method": "initialize",
+      "service_operation": "session_initialize",
+      "expected_service_calls": 1
+    },
+    {
+      "case_id": "L7A-DOC-001",
+      "method": "textDocument/didOpen",
+      "service_operation": "document_open",
+      "expected_service_calls": 1
+    },
+    {
+      "case_id": "L7A-DOC-002",
+      "method": "textDocument/didChange",
+      "service_operation": "document_change",
+      "expected_service_calls": 1
+    },
+    {
+      "case_id": "L7A-MAP-001",
+      "method": "textDocument/diagnostic",
+      "service_operation": "analysis_diagnostics",
+      "expected_service_calls": 1
+    },
+    {
+      "case_id": "L7A-MAP-004",
+      "method": "textDocument/definition",
+      "service_operation": "analysis_definition",
+      "expected_service_calls": 1
+    },
+    {
+      "case_id": "L7A-MAP-008",
+      "method": "textDocument/codeAction",
+      "service_operation": "analysis_code_actions",
+      "expected_service_calls": 1,
+      "forbidden_result_fields": [
+        "edit",
+        "command"
+      ]
+    },
+    {
+      "case_id": "L7A-CTRL-001",
+      "method": "$/cancelRequest",
+      "service_operation": "operation_cancel",
+      "expected_service_calls": 1
+    },
+    {
+      "case_id": "L7A-SEC-002",
+      "method": "workspace/executeCommand",
+      "expected_error": "e7a_lsp_workspace_edit_execute_command_or_settings_mutation_forbidden",
+      "expected_service_calls": 0
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}
