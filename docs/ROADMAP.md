@@ -3,8 +3,8 @@
 **Status:** operational documentation and implementation routing.
 
 ```text
-documentation frontier: E5-C complete
-next documentation package: E6-A optional external semantic-candidate bridge
+documentation frontier: E6-A complete
+next documentation package: E6-B external-candidate service/mapping/context/CLI
 implementation frontier: not started
 ```
 
@@ -22,8 +22,8 @@ No Rust workspace, `Cargo.toml`, `.rs` files, or CI workflows exist.
 | E5-A calibration owner | Complete | Not started |
 | E5-B durable review/holdout/submission | Complete | Not started |
 | E5-C core-pack publication lifecycle | Complete | Not started |
-| E6-A external candidate owner bridge | Next | Not started |
-| E6-B external candidate service/CLI | Planned | Not started |
+| E6-A external candidate owner bridge | Complete | Not started |
+| E6-B external candidate service/CLI | Next | Not started |
 | E7 LSP/MCP/public release integration | Planned | Not started |
 
 ## Implementation remains E0-first
@@ -112,20 +112,93 @@ synthetic and admitted real canary/rollout/rollback corpora
 measured thresholds and all SHA-256 manifests
 ```
 
-## Next — E6-A optional external candidate bridge
+## E6-A — optional external semantic-candidate bridge
 
-Owner: `wow-cbm`; direct dependency: `wow-core` only.
+Contract: [`../crates/wow-cbm/e6/README.md`](../crates/wow-cbm/e6/README.md)
 
-Define exact reviewed provider descriptors and external-state classes, closed bounded allow-listed candidate queries, deterministic loss-preserving normalization, hard `semantic_candidate + Candidate` authority ceiling, provider-local scores, unverified locators, zero-result negative-authority prohibition, continuation/cache, optional degradation, privacy/license/security, and an E6-B mapping/service handoff.
+### Provider and state model
 
-E6-A must not read/write provider databases, expose arbitrary MCP/tool calls, invoke models, map locators into project/reference truth, create graph/lineage/replacement proof, or make exact local workflows depend on provider availability.
+E6-A validates one exact reviewed provider descriptor and the intersection with one already-acquired transport/session capability observation. Runtime negotiation can narrow but cannot widen the reviewed descriptor.
 
-## E6-B and E7
+External state is explicit:
 
-E6-B later owns configured provider/session/credential acquisition, durable external-candidate orchestration, exact project/reference owner mapping, explicit selection receipts, exact-root context handoff, and thin CLI while preserving Candidate-only authority.
+```text
+StableExternalGeneration
+ObservedMutableGeneration
+OpaqueExternalState
+```
 
-E7 owns LSP/MCP transports and public release/distribution/signing/update integration after implementation gates.
+Stable state requires an immutable provider generation/index/corpus identity and sufficient exact receipt. Observed mutable state binds one session/observation episode. Opaque state is explicitly nonreproducible and receives restricted replay/cache/continuation claims. Timestamps, uptime, same query/top result/count, or provider `current/latest` labels are not generation identity.
+
+### Query and transport
+
+E6-A accepts only a closed bounded query and an already-acquired allow-listed `ExternalCandidateTransportPort`:
+
+```text
+provider_status
+provider_capabilities
+provider_generation
+candidate_query
+candidate_continue
+candidate_explain
+```
+
+There is no generic arbitrary MCP/tool call, provider process/session/credential ownership, install/configure/index/import/delete operation, provider database access, raw SQL, script, plugin, model prompt, path/URL follow, or source execution.
+
+### Candidate authority
+
+Every accepted provider result remains:
+
+```text
+provenance = semantic_candidate
+confidence = Candidate
+negative_authority = unavailable
+```
+
+Provider exact/verified/authoritative labels, top-1, sole result, high score, repeated result, stable generation, and zero result do not increase authority. Scores/ranks are provider-local and are never numerically fused across providers.
+
+### Source boundary
+
+Repository/path/URI/revision/symbol/span/digest fields become `UnverifiedProviderLocator`. E6-A does not open/follow/read/map them or create project/reference `StableSourceHandle` or entities. E6-B later invokes exact owner mapping ports.
+
+### Zero result and optional degradation
+
+Zero means only no accepted candidates for the exact provider/state/query/profile/page under reported coverage. Zero after all returned items fail validation is classified separately. Neither creates local negative authority.
+
+Provider unconfigured/unavailable/unsupported/opaque/stale/malformed/partial/truncated/cancelled/failure state disables only the optional lane. Exact ReferenceView/project/graph/search/context/diagnostic workflows remain available. There is no hidden fallback.
+
+### Continuation, cache, privacy, and security
+
+Continuation/cache bind exact descriptor/capability/state/query/profile and cumulative budgets. A cache hit cannot make stale fresh, opaque stable, partial complete, or Candidate verified.
+
+Provider snippets, summaries, labels, paths, cursor fields, and errors remain structurally isolated untrusted data. Credentials/private endpoints/provider database paths and unrestricted source are excluded. Source retention requires explicit provenance, license, notice, privacy, and redistribution decisions.
+
+### E6-A implementation gate
+
+Before Rust:
+
+```text
+implemented/frozen wow-core
+reviewed provider descriptor and adapter contract
+transport/capability probe reports
+external-state/query/normalization/score/loss/locator/zero/continuation/cache profiles
+privacy/license/security/cancellation profiles
+synthetic compatible/malformed/hostile/partial/opaque/mutable/stale fixtures
+measured resource limits
+canonical result/explanation/artifact/comparison/error vectors
+all member and bundle SHA-256 values
+```
+
+## Next — E6-B
+
+E6-B owns configured provider/session/credential acquisition, durable external-candidate operations and response-loss reconciliation, exact result/artifact catalogs and retention, project/reference owner mapping, explicit candidate selection receipts, exact mapped-root context handoff, conservative envelopes, cancellation/closure, privacy/license/security, and a thin service-only CLI.
+
+E6-B must not widen Candidate authority, compare provider scores as confidence, select top/sole candidates, treat mapping as provider truth, expose credentials/private endpoints/provider cursors, or make exact local workflows depend on provider availability.
+
+## E7
+
+E7 owns LSP/MCP transports and public release/distribution/signing/update integration after implementation gates. No generic tool escape hatch or bypass of service/authority boundaries is permitted.
 
 ## Discipline
 
-Stable contracts link the current external WoW engineering KB rather than copy patch-sensitive facts. Missing tools/probes/benchmarks/authorization/signing/vault/observations/runtime evidence are blocked or `NotEvaluated`, never passed. Architecture changes require an ADR and concrete failure of the accepted design. No CI/workflow without explicit owner instruction.
+Stable contracts link the current external WoW engineering KB rather than copy patch-sensitive facts. Missing tools/probes/benchmarks/authorization/signing/vault/provider adapters/observations/runtime evidence are blocked or `NotEvaluated`, never passed. Architecture changes require an ADR and concrete failure of the accepted design. No CI/workflow without explicit owner instruction.

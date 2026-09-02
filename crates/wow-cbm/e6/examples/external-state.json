@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-cbm-e6a-external-state-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "bindings": [
+    {"class": "StableExternalGeneration", "generation_id": null, "immutable_receipt_digest": null},
+    {"class": "ObservedMutableGeneration", "observation_session_receipt": null},
+    {"class": "OpaqueExternalState", "opaque_reason_profile": null}
+  ],
+  "cases": [
+    {"case_id": "CBM-STATE-001", "expected": "stable-generation-valid"},
+    {"case_id": "CBM-STATE-002", "mutation": "revision-only-mutable-index", "expected_error": "cbm_stable_generation_identity_insufficient"},
+    {"case_id": "CBM-STATE-007", "mutation": "timestamp-as-generation", "expected_error": "cbm_external_state_invalid"},
+    {"case_id": "CBM-STATE-008", "mutation": "conflicting-generation-digest", "expected_error": "cbm_external_state_conflict_or_stale"}
+  ],
+  "freeze_gate": {"required_before_first_rust_implementation": true}
+}

@@ -114,6 +114,38 @@
 
 **Partition closure report** — proof that new project/graph generations contain expected target pack partitions, omit stale pack partitions, preserve foreign/historical partitions, and expose coverage changes.
 
+## External semantic candidates
+
+**External candidate provider descriptor** — repository-owned immutable maximum contract for one provider adapter: allowed operations, schemas, state classes, score/locator semantics, privacy/license handling, and limits. Runtime negotiation cannot widen it.
+
+**Provider capability set** — exact intersection of a reviewed descriptor and one runtime transport/session observation.
+
+**StableExternalGeneration** — immutable provider generation/index/corpus identity with sufficient exact receipt for the declared replay/cache claims.
+
+**ObservedMutableGeneration** — one mutable provider-state episode bound to an exact session/observation receipt; later calls are not assumed identical.
+
+**OpaqueExternalState** — provider state without stable or observed identity; explicitly nonreproducible with restricted cache/continuation claims.
+
+**ExternalCandidateQuery** — closed bounded provider-scoped candidate request with no raw SQL, arbitrary MCP/tool call, executable, or model-prompt surface.
+
+**ExternalCandidateResultSet** — immutable provider/state/query-bound candidate set with zero/partial/truncation/failure, coverage/loss/conflict, continuation, and Candidate authority.
+
+**ExternalCandidate** — normalized provider result with `provenance=semantic_candidate`, `confidence=Candidate`, provider-local rank/score, untrusted fields, and no negative authority.
+
+**UnverifiedProviderLocator** — provider-supplied repository/path/URI/revision/symbol/span/digest data not yet mapped to a project/reference owner record.
+
+**External locator mapping request candidate** — E6-A handoff containing exact candidate/locator fields for later E6-B owner mapping; it is not a source handle.
+
+**ZeroCandidatesReported** — provider reported no candidates for one exact request/state under reported coverage; not global absence.
+
+**ZeroCandidatesAfterValidationLoss** — provider returned items but none survived bridge validation; distinct from provider-reported zero.
+
+**Provider-local score** — score/rank meaningful only under one exact provider/descriptor/profile; not framework confidence and not numerically comparable across providers by default.
+
+**External candidate cache entry** — exact descriptor/state/query/profile-bound cached result preserving original staleness, coverage, loss, and Candidate authority.
+
+**Optional degradation** — provider failure disables only the external lane while exact local/reference/project/search/context/diagnostic capabilities remain unaffected.
+
 ## Restrictions
 
 **Restriction facet** — open versioned metadata describing Secret, protected, combat, hardware-event, forbidden-object, private-partition, or related constraints.

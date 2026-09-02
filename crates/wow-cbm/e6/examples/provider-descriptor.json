@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-cbm-e6a-provider-descriptor-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "descriptor": {"descriptor_id": null, "adapter_contract_id": null, "allowlisted_operations": ["provider_status", "provider_capabilities", "provider_generation", "candidate_query", "candidate_continue", "candidate_explain"], "canonical_sha256": null},
+  "cases": [
+    {"case_id": "CBM-DESC-001", "expected": "valid-reviewed-descriptor"},
+    {"case_id": "CBM-DESC-003", "mutation": "credential-command-database-path", "expected_error": "cbm_provider_descriptor_invalid"},
+    {"case_id": "CBM-DESC-004", "mutation": "runtime-adds-arbitrary-operation", "expected_error": "cbm_provider_runtime_widened_descriptor_forbidden"},
+    {"case_id": "CBM-QRY-003", "mutation": "arbitrary-mcp-tool", "expected_error": "cbm_raw_sql_mcp_tool_script_or_expression_forbidden"}
+  ],
+  "freeze_gate": {"required_before_first_rust_implementation": true}
+}

@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-cbm-e6a-zero-continuation-cache-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "cases": [
+    {"case_id": "CBM-ZERO-001", "provider_count": 0, "expected": "scoped-zero-only"},
+    {"case_id": "CBM-ZERO-003", "mutation": "zero-as-global-absence", "expected_error": "cbm_zero_result_negative_authority_forbidden"},
+    {"case_id": "CBM-CONT-002", "mutation": "switch-state-or-reset-budget", "expected_error": "cbm_continuation_state_or_budget_reset_forbidden"},
+    {"case_id": "CBM-CACHE-002", "mutation": "cache-upgrades-stale-partial-or-opaque", "expected_error": "cbm_cache_authority_or_freshness_upgrade_forbidden"},
+    {"case_id": "CBM-DEG-002", "mutation": "hidden-provider-or-local-fallback", "expected_error": "cbm_provider_fallback_forbidden"}
+  ],
+  "freeze_gate": {"required_before_first_rust_implementation": true}
+}

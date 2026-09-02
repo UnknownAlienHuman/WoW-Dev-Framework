@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "manifest_id": "wow-cbm-e6-a-checksums-v1",
+  "algorithm": "sha256",
+  "state": "pending-byte-freeze-before-first-rust-implementation",
+  "implementation_state": "not-started",
+  "prerequisite_pins": {"wow_core_implementation_commit": null, "wow_core_fixture_bundle_sha256": null},
+  "adapter_and_profile_pins": {"provider_descriptor": null, "transport_adapter_contract": null, "capability_negotiation": null, "external_state": null, "query": null, "normalization_and_loss": null, "score_and_rank": null, "locator": null, "zero_coverage_degradation": null, "continuation_cache": null, "privacy_license_security": null, "canonicalization": null},
+  "vector_pins": {"provider_descriptor": null, "external_state": null, "candidate_result_set": null, "zero_continuation_cache": null, "malformed_hostile_cancellation": null, "determinism_and_benchmarks": null},
+  "member_paths": [
+    "crates/wow-cbm/README.md", "crates/wow-cbm/INITIAL_OVERVIEW.md", "crates/wow-cbm/e6/README.md", "crates/wow-cbm/e6/AGENTS.md", "crates/wow-cbm/e6/DECISIONS.md", "crates/wow-cbm/e6/DATA_MODEL.md",
+    "crates/wow-cbm/e6/PROVIDER_DESCRIPTOR_AND_CAPABILITIES.md", "crates/wow-cbm/e6/EXTERNAL_STATE_AND_GENERATIONS.md", "crates/wow-cbm/e6/QUERY_AND_TRANSPORT.md", "crates/wow-cbm/e6/NORMALIZATION_AND_AUTHORITY.md",
+    "crates/wow-cbm/e6/SOURCE_LOCATORS_AND_MAPPING_HANDOFF.md", "crates/wow-cbm/e6/ZERO_RESULT_COVERAGE_AND_DEGRADATION.md", "crates/wow-cbm/e6/CONTINUATION_CACHE_AND_DETERMINISM.md", "crates/wow-cbm/e6/SECURITY_PRIVACY_AND_LICENSE.md",
+    "crates/wow-cbm/e6/ERROR_MODEL.md", "crates/wow-cbm/e6/TEST_MATRIX.md", "crates/wow-cbm/e6/IMPLEMENTATION_PLAN.md", "crates/wow-cbm/e6/CONTRACT.json", "crates/wow-cbm/e6/examples/README.md",
+    "crates/wow-cbm/e6/examples/provider-descriptor.json", "crates/wow-cbm/e6/examples/external-state.json", "crates/wow-cbm/e6/examples/candidate-result-set.json", "crates/wow-cbm/e6/examples/zero-continuation-cache.json"
+  ],
+  "member_sha256": {},
+  "bundle_sha256": null,
+  "freeze_rules": ["nulls allowed only while implementation_state is not-started", "credentials private endpoints provider databases and private source are never committed", "tests verify committed bytes and never rewrite fixtures"]
+}
