@@ -1,25 +1,26 @@
 # `wow-cbm` contract router
 
-**Status:** E6-A external semantic-candidate bridge is implementation-ready documentation; E6-B orchestration/owner mapping is defined in `wow-service`; no Rust code exists.
+**Status:** E6-A external semantic-candidate owner documentation and its E6-B service handoff are complete; no Rust code exists.
 
-`wow-cbm` is an optional, replaceable adapter over an already-acquired narrow external-candidate transport. It validates provider descriptors and external state, issues closed bounded candidate queries, normalizes untrusted results to `provenance=semantic_candidate` and `confidence=Candidate`, and never participates in exact local authority without independent owner mapping.
+`wow-cbm` is an optional, replaceable pure bridge over an already-acquired narrow external-candidate transport. It validates reviewed provider descriptors, state, query, and response contracts, normalizes untrusted results to `provenance=semantic_candidate`, `confidence=Candidate`, and `negative_authority=unavailable`, and never creates exact local authority.
 
-The original scaffold is preserved as [`INITIAL_OVERVIEW.md`](INITIAL_OVERVIEW.md). The active contracts narrow that scaffold as follows:
+The original scaffold is preserved as [`INITIAL_OVERVIEW.md`](INITIAL_OVERVIEW.md). Active ownership is:
 
 ```text
-provider descriptor/state/query/normalization -> wow-cbm E6-A
-provider configuration/session authorization -> wow-service E6-B + host adapters
-provider index/build/update lifecycle         -> later explicit host/provider-owner contract
-project/reference source-handle mapping       -> project/reference owner ports coordinated by E6-B
-explicit selection and context handoff        -> wow-service E6-B
-wire/session frontends                        -> E7-A
+provider descriptor, state, query, and normalization -> wow-cbm E6-A
+provider configuration and session authorization     -> wow-service E6-B + host adapters
+provider index, build, and update lifecycle           -> separate provider-owner contract if ever needed
+project/reference locator mapping                     -> exact owners coordinated by wow-service E6-B
+caller selection and context handoff                  -> wow-service E6-B
+CLI, daemon, LSP, and MCP transport                    -> apps/wow E7-A
+artifact packaging, compatibility, and release        -> E7-B release lifecycle
 ```
 
-`wow-cbm` does not spawn/configure/install providers, read/write provider databases, discover tools dynamically, follow paths/URLs, create stable project/reference source handles, select candidates, build context, or depend on service/application crates.
+`wow-cbm` does not spawn, configure, install, or discover providers; read or write provider databases; follow paths or URLs; create project or reference handles; select candidates; build context; own service sessions or credentials; or depend on service and application crates.
 
 ## Canonical E6-A route
 
-Read:
+Read the complete package:
 
 1. [`e6/README.md`](e6/README.md)
 2. [`e6/AGENTS.md`](e6/AGENTS.md)
@@ -38,24 +39,58 @@ Read:
 15. [`e6/IMPLEMENTATION_PLAN.md`](e6/IMPLEMENTATION_PLAN.md)
 16. [`e6/CONTRACT.json`](e6/CONTRACT.json) and [`e6/examples/`](e6/examples/README.md)
 
+## Authority ceiling
+
+Every normalized provider item, result set, and artifact remains:
+
+```text
+provenance = semantic_candidate
+confidence = Candidate
+negative_authority = unavailable
+source_verification = unverified until exact owner mapping outside this crate
+```
+
+Provider labels, rank, score, top, sole, repetition, stable state, and zero results never raise authority. Scores remain provider-local and are not numerically fused across providers.
+
+External state is explicit:
+
+```text
+StableExternalGeneration
+ObservedMutableGeneration
+OpaqueExternalState
+```
+
+A timestamp, repository name, `current`, `latest`, same query, same result, same count, or cache hit does not create generation identity. Opaque state remains explicitly nonreproducible.
+
 ## E6-B handoff
 
-The coordinating contract is [`../wow-service/e6/README.md`](../wow-service/e6/README.md). It acquires one exact authorized provider session, publishes immutable E6-A results, invokes project/reference owner mapping, records an explicit caller selection, and passes one exact mapped owner root to normal context operations. Mapping and selection never raise external Candidate authority.
+The coordinating contract is [`../wow-service/e6/README.md`](../wow-service/e6/README.md). It resolves exact nonsecret provider configuration, acquires an authorized host session, invokes E6-A, publishes immutable results, asks `wow-project` or `wow-reference` to map a bounded locator against one exact retained owner generation, records explicit caller selection, and invokes normal context with one exact mapped root.
+
+`ExactMapped` proves locator-to-owner-record identity only. Selection is caller intent, not verification, edit authorization, lineage, replacement, impact, runtime proof, or core promotion. Provider metadata remains a separate Candidate sidecar.
 
 ## Direct dependency
 
 ```text
-wow-core
+wow-cbm -> wow-core
 ```
 
-No direct dependency on store, project, reference, graph, search, context, service, applications, MCP implementation, or provider SDK.
+No direct dependency on store, project, reference, graph, search, context, service, applications, MCP implementation, provider SDK, or release tooling.
+
+## E7 exposure and release
+
+The external lane can remain disabled in the product. An adapter enters an E7-A operation/exposure profile and an E7-B release only after exact implementation, capability, state, credential, privacy, license, outage, degradation, mapping, selection, and provider-on/off benefit evidence passes.
+
+Provider adapter configuration contains no credentials. Provider artifacts and compatibility have independent release and update identities; an executable update never silently activates a provider adapter or data set.
 
 ## Current state
 
 ```text
-documentation frontier: E6-A owner contract; E6-B coordinating contract linked
+planned owner documentation: E6-A complete
+E6-B service handoff: complete
+E7-A frontend and E7-B release routing: complete
 implementation frontier: not-started
-next documentation package: E7-A transport/session and developer-preview boundary
+first wow-cbm implementation: I6-A after exact local prerequisites
+repository next package: I0-A / wow-core E0-A
 Cargo.toml: absent
 Rust source: absent
 CI/workflows: absent
