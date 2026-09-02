@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "fixture_id": "apps-wow-e6b-cli-cases-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "cases": [
+    {
+      "case_id": "A6B-ROUTE-001",
+      "command_count": 18,
+      "service_operation_count": 18,
+      "expected": "one-to-one-bijection"
+    },
+    {
+      "case_id": "A6B-QUERY-001",
+      "command": "wow external query",
+      "service_operation": "external_candidate_query",
+      "expected_service_calls": 1
+    },
+    {
+      "case_id": "A6B-PROV-004",
+      "command": "wow external query --tool arbitrary --mcp-json request.json",
+      "expected_exit": 64
+    },
+    {
+      "case_id": "A6B-PROV-002",
+      "command": "wow external query --api-token secret",
+      "expected_exit": 64
+    },
+    {
+      "case_id": "A6B-MAP-003",
+      "command": "wow external map --provider-url file:///private/path",
+      "expected_exit": 64
+    },
+    {
+      "case_id": "A6B-SEL-002",
+      "command": "wow external select --top",
+      "expected_exit": 64
+    },
+    {
+      "case_id": "A6B-CTX-001",
+      "command": "wow external context --context-request request.json --operation-id op-1",
+      "service_operation": "external_candidate_context",
+      "expected_service_calls": 1
+    },
+    {
+      "case_id": "A6B-SEC-004",
+      "command": "wow external query",
+      "provider_failure": "Unavailable",
+      "hidden_fallback": "different-provider-or-local-search",
+      "expected": "no-hidden-fallback"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}
