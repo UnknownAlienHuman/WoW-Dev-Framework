@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e6b-mapping-selection-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "mapping": {"mapping_record_id": null, "result_id": null, "candidate_id": null, "locator_id": null, "owner_generation_id": null, "status": null, "mapped_handles": [], "canonical_sha256": null},
+  "selection": {"selection_receipt_id": null, "mapping_record_id": null, "decision": null, "authority_remains": "Candidate", "canonical_sha256": null},
+  "cases": [
+    {"case_id": "S6B-MAP-001", "expected_status": "ExactMapped"},
+    {"case_id": "S6B-MAP-003", "expected_status": "MultipleMappings"},
+    {"case_id": "S6B-MAP-007", "mutation": "clean-no-mapping-without-owner-authority", "expected_error": "e6b_no_mapping_without_owner_negative_authority"},
+    {"case_id": "S6B-MAP-013", "mutation": "mapping-as-provider-proof", "expected_error": "e6b_mapping_treated_as_provider_semantic_proof_forbidden"},
+    {"case_id": "S6B-SEL-001", "decision": "Selected", "expected_status": "SelectionRecorded"},
+    {"case_id": "S6B-SEL-004", "mutation": "service-selects-top-or-sole", "expected_error": "e6b_implicit_top_best_sole_first_or_highest_score_selection_forbidden"}
+  ],
+  "freeze_gate": {"required_before_first_rust_implementation": true}
+}

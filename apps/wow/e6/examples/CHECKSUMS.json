@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "manifest_id": "apps-wow-e6-b-checksums-v1",
+  "algorithm": "sha256",
+  "state": "pending-byte-freeze-before-first-rust-implementation",
+  "implementation_state": "not-started",
+  "prerequisite_pins": {"wow_service_e6b_implementation_commit": null, "wow_service_e6b_fixture_bundle_sha256": null},
+  "profile_pins": {"command_and_selector": null, "input_and_path": null, "provider_reference_transport": null, "query_result_and_continuation": null, "mapping_selection_context": null, "output_exit_signal_broken_pipe": null, "security_and_redaction": null},
+  "member_paths": [
+    "apps/wow/e6/README.md", "apps/wow/e6/AGENTS.md", "apps/wow/e6/CLI_COMMANDS.md", "apps/wow/e6/OUTPUT_EXIT_AND_SECURITY.md",
+    "apps/wow/e6/TEST_MATRIX.md", "apps/wow/e6/CONTRACT.json", "apps/wow/e6/examples/README.md", "apps/wow/e6/examples/cli-cases.json", "apps/wow/e6/examples/stdout-exit-cases.json"
+  ],
+  "member_sha256": {},
+  "bundle_sha256": null,
+  "freeze_rules": ["nulls allowed only while implementation_state is not-started", "sensitive provider and source data are never committed", "tests verify committed bytes and never rewrite fixtures"]
+}

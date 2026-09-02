@@ -3,8 +3,8 @@
 **Status:** operational documentation and implementation routing.
 
 ```text
-documentation frontier: E6-A complete
-next documentation package: E6-B external-candidate service/mapping/context/CLI
+documentation frontier: E6-B complete
+next documentation package: E7-A supported transport/session and developer-preview release boundary
 implementation frontier: not started
 ```
 
@@ -23,12 +23,15 @@ No Rust workspace, `Cargo.toml`, `.rs` files, or CI workflows exist.
 | E5-B durable review/holdout/submission | Complete | Not started |
 | E5-C core-pack publication lifecycle | Complete | Not started |
 | E6-A external candidate owner bridge | Complete | Not started |
-| E6-B external candidate service/CLI | Next | Not started |
-| E7 LSP/MCP/public release integration | Planned | Not started |
+| E6-B external orchestration/mapping/context/CLI | Complete | Not started |
+| E7-A LSP/MCP/CLI-daemon/session developer preview | Next | Not started |
+| E7-B public packaging/distribution/update/support | Planned | Not started |
 
 ## Implementation remains E0-first
 
 Documentation maturity never reorders implementation. Executable work begins with `wow-core` E0-A, then the frozen E0 reference/analyzer/project/rules/service/CLI slice. Every later package remains blocked until its prerequisite implementation commits, exact fixtures/profiles, probes, benchmarks, adapters, runtime evidence, and checksums exist.
+
+The shortest route to a runnable repository is defined in [`LAUNCH_GATES.md`](LAUNCH_GATES.md). E5 governance and the optional E6 provider lane are not prerequisites for the first E0 executable.
 
 ## E5-A — calibration evidence owner
 
@@ -53,8 +56,6 @@ Contracts:
 
 E5-C independently reacquires and revalidates one exact E5-B submission and all mandatory E5-A/B evidence. It creates a distinct immutable `CorePackArtifact` with `trust_class=core`; the calibration candidate is never relabeled.
 
-Publication sequence:
-
 ```text
 submission revalidation
 -> core artifact build/validation
@@ -67,50 +68,17 @@ submission revalidation
 
 Publication does not activate current/default. A valid signature proves bytes/key/profile binding only.
 
-### Canary
+### Canary, rollout, activation, and rollback
 
-Canary cohorts freeze exact population/membership or an authorized privacy-preserving commitment, profile, window, observation schemas, denominators, stop/pause/rollback criteria, privacy, and authorization.
+Canary freezes exact population/membership, profile, window, typed observation schemas, denominators, criteria, privacy, and authorization. Missing/partial/conflicted/`NotEvaluated` required signals never pass.
 
-Only typed registered observations are canonical. Missing/partial/conflicted/`NotEvaluated` required signals never pass. Canary success is limited to the exact publication/profile/cohort/window/capabilities and is not ecosystem-wide runtime proof.
+Rollout uses finite stages with exact prior state, required evidence, authorization, budgets, and stop/pause/rollback criteria. Activation is profile-specific and guarded by exact current-record CAS. Last-known-good is explicitly designated, never inferred as previous/newest.
 
-### Rollout and activation
-
-Rollout uses finite stages with exact prior state, cohort expansion, required evidence, authorization, budgets, and stop/pause/rollback criteria. It never advances because time elapsed or no complaint appeared.
-
-Activation is profile-specific and guarded by compare-and-swap against the exact expected current record. There is no latest/best/previous/default shortcut.
-
-### Last-known-good and rollback
-
-Last-known-good is explicitly designated with qualifying evidence, profile, authorization, retention, and expected prior designation. It is never inferred as previous/newest.
-
-Rollback selects one exact retained, signature-valid, nonrevoked, profile-compatible qualified target. It creates new activation/reindex/graph-closure/audit records and never rewrites history or relabels the failed target.
-
-### Partition closure
-
-New project/graph generations must prove target pack partitions present, stale/revoked/deactivated pack partitions absent, foreign/core-independent/calibration partitions preserved, coverage changes explicit, and no old/new generation mixing. Historical generations remain immutable.
+Rollback selects one exact retained, signature-valid, nonrevoked, compatible qualified target. It creates new activation/reindex/graph-closure/audit records and never rewrites history. New project/graph generations must prove stale target partitions absent, expected target partitions present, foreign partitions preserved, and coverage changes explicit.
 
 ### Durable effects and security
 
-All signing, publication, canary, observation, rollout, activation, LKG, rollback, revocation, deactivation, reindex, closure, retention, and audit effects use exact durable identities and response-loss reconciliation. `OutcomeUnknown` blocks blind repeat.
-
-Private keys, KMS/HSM/vault/deployment credentials, private cohort data, raw owner handles, arbitrary SQL/scripts/models/tools, and public distribution do not enter E5-C requests/fixtures/CLI/results.
-
-### E5-C implementation gate
-
-Before Rust:
-
-```text
-implemented/frozen E0–E5-B prerequisites
-exact submission/recognizer/graph/project/store owner ports
-signing and authorization adapters without committed secrets
-provenance/SBOM/license/reproducibility profiles
-canary population/privacy/observation/signal profiles
-finite rollout/activation/LKG/rollback/revocation/closure profiles
-response-loss/retention/audit/recovery profiles
-canonical service/CLI/artifact/signature/state/error vectors
-synthetic and admitted real canary/rollout/rollback corpora
-measured thresholds and all SHA-256 manifests
-```
+Signing, publication, canary, observation, rollout, activation, LKG, rollback, revocation, deactivation, reindex, closure, retention, and audit use exact durable identities and response-loss reconciliation. Private signing/deployment material, arbitrary SQL/scripts/models/tools, and public distribution do not enter E5-C requests/fixtures/CLI/results.
 
 ## E6-A — optional external semantic-candidate bridge
 
@@ -118,9 +86,7 @@ Contract: [`../crates/wow-cbm/e6/README.md`](../crates/wow-cbm/e6/README.md)
 
 ### Provider and state model
 
-E6-A validates one exact reviewed provider descriptor and the intersection with one already-acquired transport/session capability observation. Runtime negotiation can narrow but cannot widen the reviewed descriptor.
-
-External state is explicit:
+E6-A validates one exact reviewed provider descriptor and the intersection with one already-acquired transport/session capability observation. Runtime negotiation can narrow but cannot widen the descriptor.
 
 ```text
 StableExternalGeneration
@@ -128,11 +94,11 @@ ObservedMutableGeneration
 OpaqueExternalState
 ```
 
-Stable state requires an immutable provider generation/index/corpus identity and sufficient exact receipt. Observed mutable state binds one session/observation episode. Opaque state is explicitly nonreproducible and receives restricted replay/cache/continuation claims. Timestamps, uptime, same query/top result/count, or provider `current/latest` labels are not generation identity.
+Stable state requires an immutable provider generation/index/corpus identity and sufficient receipt. Observed mutable state binds one session/observation episode. Opaque state is explicitly nonreproducible. Timestamps, uptime, same query/top result/count, or provider `current/latest` labels are not generation identity.
 
-### Query and transport
+### Query, authority, and source boundary
 
-E6-A accepts only a closed bounded query and an already-acquired allow-listed `ExternalCandidateTransportPort`:
+E6-A accepts only closed bounded queries through an allow-listed `ExternalCandidateTransportPort`:
 
 ```text
 provider_status
@@ -143,11 +109,7 @@ candidate_continue
 candidate_explain
 ```
 
-There is no generic arbitrary MCP/tool call, provider process/session/credential ownership, install/configure/index/import/delete operation, provider database access, raw SQL, script, plugin, model prompt, path/URL follow, or source execution.
-
-### Candidate authority
-
-Every accepted provider result remains:
+Every accepted result remains:
 
 ```text
 provenance = semantic_candidate
@@ -155,50 +117,112 @@ confidence = Candidate
 negative_authority = unavailable
 ```
 
-Provider exact/verified/authoritative labels, top-1, sole result, high score, repeated result, stable generation, and zero result do not increase authority. Scores/ranks are provider-local and are never numerically fused across providers.
+Provider exact/verified/authoritative labels, top-1, sole result, high score, repetition, stable generation, and zero result do not increase authority. Scores are provider-local.
 
-### Source boundary
+Repository/path/URI/revision/symbol/span/digest fields become `UnverifiedProviderLocator`. E6-A does not open, follow, read, or map them into project/reference truth.
 
-Repository/path/URI/revision/symbol/span/digest fields become `UnverifiedProviderLocator`. E6-A does not open/follow/read/map them or create project/reference `StableSourceHandle` or entities. E6-B later invokes exact owner mapping ports.
+### Zero, cache, degradation, and security
 
-### Zero result and optional degradation
+Zero means only no accepted candidates for the exact provider/state/query/profile/page under reported coverage. Zero after validation loss is separate. Neither creates local negative authority.
 
-Zero means only no accepted candidates for the exact provider/state/query/profile/page under reported coverage. Zero after all returned items fail validation is classified separately. Neither creates local negative authority.
+Continuation/cache bind exact descriptor/capability/state/query/profile and cumulative budgets. Cache cannot make stale fresh, opaque stable, partial complete, or Candidate verified.
 
-Provider unconfigured/unavailable/unsupported/opaque/stale/malformed/partial/truncated/cancelled/failure state disables only the optional lane. Exact ReferenceView/project/graph/search/context/diagnostic workflows remain available. There is no hidden fallback.
+Provider failure disables only the optional lane. There is no generic tool call, provider lifecycle/database access, raw SQL, script, model prompt, path/URL follow, source execution, hidden fallback, or local capability downgrade.
 
-### Continuation, cache, privacy, and security
+## E6-B — external orchestration, exact mapping, selection, and context
 
-Continuation/cache bind exact descriptor/capability/state/query/profile and cumulative budgets. A cache hit cannot make stale fresh, opaque stable, partial complete, or Candidate verified.
+Contracts:
 
-Provider snippets, summaries, labels, paths, cursor fields, and errors remain structurally isolated untrusted data. Credentials/private endpoints/provider database paths and unrestricted source are excluded. Source retention requires explicit provenance, license, notice, privacy, and redistribution decisions.
+- [`../crates/wow-service/e6/README.md`](../crates/wow-service/e6/README.md)
+- [`../apps/wow/e6/README.md`](../apps/wow/e6/README.md)
+- [`../crates/wow-project/E6_B_EXTERNAL_LOCATOR_MAPPING.md`](../crates/wow-project/E6_B_EXTERNAL_LOCATOR_MAPPING.md)
+- [`../crates/wow-reference/E6_B_EXTERNAL_LOCATOR_MAPPING.md`](../crates/wow-reference/E6_B_EXTERNAL_LOCATOR_MAPPING.md)
+- [`../crates/wow-context/E6_B_EXTERNAL_CONTEXT_HANDOFF.md`](../crates/wow-context/E6_B_EXTERNAL_CONTEXT_HANDOFF.md)
+- [`../crates/wow-store/E6_B_EXTERNAL_CANDIDATE_STORAGE.md`](../crates/wow-store/E6_B_EXTERNAL_CANDIDATE_STORAGE.md)
 
-### E6-A implementation gate
+### Configuration and durable query
+
+E6-B resolves one exact provider configuration, obtains one nonsecret credential-use authorization receipt, acquires one narrow reviewed session, registers `OperationId + CanonicalRequestDigest`, invokes E6-A, and publishes an immutable result/artifact catalog with fresh read-back validation.
+
+No public request contains credential bytes, private endpoints, commands, process handles, provider database paths, or arbitrary MCP/RPC/tool input. Service never installs, starts, configures, indexes, imports, deletes, or mutates a provider.
+
+Provider dispatch, response receipt, result publication, mapping, selection, context publication, retention, and audit are separate effects. Any uncertain effect becomes `OutcomeUnknown`; blind repeat is forbidden.
+
+### Exact owner mapping
+
+`wow-project` and `wow-reference` alone map an owner-neutral bounded locator projection into one exact retained generation. Results remain:
+
+```text
+ExactMapped
+MultipleMappings
+NoMappingWithOwnerAuthority
+NoMappingPartial
+Conflict
+NotEvaluated
+Failed
+```
+
+Service never maps by same name, nearest path, rank, score, order, popularity, or floating current. Clean no-mapping requires owner negative authority. `ExactMapped` proves locator-to-owner-record identity only.
+
+### Explicit selection
+
+The caller supplies exact result, candidate, mapping, intended use, and `Selected | Rejected | Deferred`. Service records the decision and never chooses top/sole/highest-score candidates. Selection is not verification, acceptance, lineage, replacement, edit authorization, or core promotion.
+
+### Exact-root context handoff
+
+Context build requires retained `ExactMapped` plus `Selected`. Service reacquires exact project/reference/graph views and invokes one existing `wow-context` operation with the exact mapped root.
+
+Normal context artifacts contain only exact local owner evidence. Provider result fields remain in a separate `ExternalCandidateSidecar`; they never become `ContextSemanticPack` facts.
+
+### Optional degradation
+
+Provider/session/query failure remains lane-local. Exact local reference/project/graph/search/context/diagnostics/rules remain independently usable. No hidden fallback is permitted.
+
+### E6-B implementation gate
 
 Before Rust:
 
 ```text
-implemented/frozen wow-core
-reviewed provider descriptor and adapter contract
-transport/capability probe reports
-external-state/query/normalization/score/loss/locator/zero/continuation/cache profiles
-privacy/license/security/cancellation profiles
-synthetic compatible/malformed/hostile/partial/opaque/mutable/stale fixtures
-measured resource limits
-canonical result/explanation/artifact/comparison/error vectors
-all member and bundle SHA-256 values
+implemented/frozen E0–E6-A prerequisites
+exact provider configuration/authorization/session/transport/store ports
+exact project/reference mapping and graph/context acquisition ports
+credential/session/quota/cancellation/reconciliation profiles
+result/artifact/catalog/continuation/cache profiles
+mapping/negative-authority/selection/context/sidecar profiles
+privacy/license/security/retention/audit/recovery/close profiles
+synthetic and admitted real provider/mapping/context fixtures
+response-loss and cancellation at every effect boundary
+measured resource/quota/owner/context limits
+canonical service/CLI vectors and all SHA-256 manifests
 ```
 
-## Next — E6-B
+## Next — E7-A supported frontend/session transports
 
-E6-B owns configured provider/session/credential acquisition, durable external-candidate operations and response-loss reconciliation, exact result/artifact catalogs and retention, project/reference owner mapping, explicit candidate selection receipts, exact mapped-root context handoff, conservative envelopes, cancellation/closure, privacy/license/security, and a thin service-only CLI.
+E7-A must define concrete supported transport/application packages over `wow-service` only:
 
-E6-B must not widen Candidate authority, compare provider scores as confidence, select top/sole candidates, treat mapping as provider truth, expose credentials/private endpoints/provider cursors, or make exact local workflows depend on provider availability.
+```text
+CLI daemon and local session protocol
+LSP capability/session/request mapping
+MCP server/tool schemas and exact service mapping
+schema/version/capability negotiation
+project/profile/session registration
+bounded messages/streaming/progress/backpressure
+cancellation/disconnect/reconnect/response-loss/lease/close
+multi-client isolation, configuration and credential boundaries
+no arbitrary tool/shell/RPC escape hatch
+developer-preview packaging and compatibility manifest
+```
 
-## E7
+Transport success cannot upgrade service evidence. One transport request maps to one service operation unless an explicit higher-level workflow is itself a documented service operation.
 
-E7 owns LSP/MCP transports and public release/distribution/signing/update integration after implementation gates. No generic tool escape hatch or bypass of service/authority boundaries is permitted.
+## E7-B public release lifecycle
+
+E7-B later owns reproducible packaging, release artifacts, signatures/checksums/SBOM/provenance, installers/packages, update channels, compatibility/support policy, rollback/retirement, incident response, and public distribution. It cannot bypass E5 signing/publication distinctions or service authority boundaries.
+
+## Launch gates
+
+See [`LAUNCH_GATES.md`](LAUNCH_GATES.md) for the exact distinction between first runnable E0 bootstrap, useful internal alpha, developer preview, governed beta, and public supported v1.
 
 ## Discipline
 
-Stable contracts link the current external WoW engineering KB rather than copy patch-sensitive facts. Missing tools/probes/benchmarks/authorization/signing/vault/provider adapters/observations/runtime evidence are blocked or `NotEvaluated`, never passed. Architecture changes require an ADR and concrete failure of the accepted design. No CI/workflow without explicit owner instruction.
+Stable contracts link the current external WoW engineering KB rather than copy patch-sensitive facts. Missing tools/probes/benchmarks/authorization/signing/provider adapters/mapping/runtime/client evidence are blocked or `NotEvaluated`, never passed. Architecture changes require an ADR and concrete failure of the accepted design. No CI/workflow without explicit owner instruction.

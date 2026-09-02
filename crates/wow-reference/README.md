@@ -1,8 +1,8 @@
 # `wow-reference` contract router
 
-**Status:** E0-B fixture, E1-B persistent ReferenceView and the E4-B transition-evidence seam are implementation-ready documentation; Rust implementation has not started.
+**Status:** E0-B fixture, E1-B persistent ReferenceView, the E4-B transition-evidence seam, and the E6-B external-locator mapping seam are implementation-ready documentation; Rust implementation has not started.
 
-`wow-reference` owns exact ReferenceProfiles, source ingestion/evaluation, raw metadata, normalized API/type/event/restriction facts, corrections, coverage/negative authority, immutable ReferenceView records, and explicit cross-profile transition evidence. It does not own project-source continuity, search ranking, accepted lineage graph publication, migration application, runtime state, or service orchestration.
+`wow-reference` owns exact ReferenceProfiles, source ingestion/evaluation, raw metadata, normalized API/type/event/restriction facts, corrections, coverage/negative authority, immutable ReferenceView records, explicit cross-profile transition evidence, and exact mapping of bounded external locators into retained ReferenceViews. It does not own project-source continuity, external-provider semantics, candidate selection, search ranking, accepted lineage graph publication, migration application, runtime state, context orchestration, or service orchestration.
 
 ## Canonical routes
 
@@ -16,18 +16,17 @@ Read [`e1/README.md`](e1/README.md). It defines exact source snapshots, restrict
 
 ### E4-B — explicit transition producer
 
-Read [`E4_B_TRANSITION_EVIDENCE.md`](E4_B_TRANSITION_EVIDENCE.md). It defines exact before/after ReferenceView producer partitions for:
+Read [`E4_B_TRANSITION_EVIDENCE.md`](E4_B_TRANSITION_EVIDENCE.md). It defines exact before/after ReferenceView producer partitions for stable identity, explicit transition/rename/move keys, explicit deprecation/replacement, introduced/removed availability, signature/type/restriction changes, and reviewed correction transitions.
 
-```text
-stable reference identity
-explicit transition or rename/move key
-explicit deprecation/replacement
-introduced/removed availability
-signature/type/restriction changes
-reviewed correction transitions
-```
+Reference transition authority remains scoped to exact compared profiles. Search/source name similarity cannot manufacture aliases, replacements, removal, or platform facts.
 
-Reference transition authority remains scoped to exact compared profiles. Search/source name similarity cannot manufacture aliases, replacements, removal or platform facts.
+### E6-B — external locator mapping owner
+
+Read [`E6_B_EXTERNAL_LOCATOR_MAPPING.md`](E6_B_EXTERNAL_LOCATOR_MAPPING.md). It maps owner-neutral bounded provider locator fields into one exact retained ReferenceView.
+
+Supported identity classes can include API namespace/name, callable/event/CVar/type/enum/restriction stable keys, and exact pinned source artifact/path/span fields. Provider labels, scores, summaries, snippets, and inferred relations never create aliases, replacements, deprecations, or platform facts.
+
+Mapping preserves `ExactMapped`, `MultipleMappings`, `NoMappingWithOwnerAuthority`, `NoMappingPartial`, `Conflict`, `NotEvaluated`, and `Failed`. Clean no-mapping requires complete relevant reference coverage and negative authority.
 
 ## Direct dependency boundary
 
@@ -36,13 +35,15 @@ wow-core
 wow-store when persistent storage is active
 ```
 
-`wow-reference` never depends on `wow-annotations`, `wow-project`, `wow-graph`, `wow-search`, `wow-service`, `wow-context`, `wow-cbm`, or applications. E4-C orchestration submits typed transition records to `wow-graph` E4-B.
+`wow-reference` never depends on `wow-annotations`, `wow-project`, `wow-graph`, `wow-search`, `wow-service`, `wow-context`, `wow-cbm`, or applications. E4-C submits transition records to `wow-graph`; E6-B consumes owner-neutral mapping requests through a narrow port.
 
 ## Authority boundary
 
 - ReferenceView owns platform-contract facts under exact profiles.
 - Blizzard implementation source is a distinct authority class.
-- Project/source continuity is owned by `wow-project`.
+- Project/source continuity and project locator mapping are owned by `wow-project`.
+- External provider results remain `semantic_candidate + Candidate`.
+- Exact locator mapping proves only identity to one reference record.
 - Search signals remain Candidate lineage evidence.
 - Runtime spell secrecy, taint, combat or hotfix behavior requires exact runtime evidence.
 - Deprecated does not imply a replacement target.
@@ -51,11 +52,11 @@ wow-store when persistent storage is active
 ## Current implementation state
 
 ```text
-documentation frontier: E4-B transition seam
+documentation frontier: E6-B reference mapping seam
 implementation frontier: not-started
 Cargo.toml: absent
 Rust source: absent
 CI/workflows: absent
 ```
 
-The E4-B seam cannot activate before the E1-B Reference implementation, exact paired profiles, correction/coverage records, E2 graph and E4-B registry/fixture gates are implemented and frozen.
+The E6-B seam cannot activate before the E1-B Reference implementation, exact mapping profiles/fixtures, owner coverage/negative-authority records, E6-A, and E6-B service gates are implemented and frozen.

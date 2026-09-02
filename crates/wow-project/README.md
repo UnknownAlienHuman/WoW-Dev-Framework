@@ -1,8 +1,8 @@
 # `wow-project` contract router
 
-**Status:** E0-D, E2-C, E3-A and the E4-B lineage-input seam are implementation-ready documentation; E4-C orchestration is defined in `wow-service`. Rust implementation has not started.
+**Status:** E0-D, E2-C, E3-A, the E4-B lineage-input seam, and the E6-B external-locator mapping seam are implementation-ready documentation. Rust implementation has not started.
 
-`wow-project` owns exact materialized project/source universes, TOC/XML/load interpretation, analyzer/recognizer orchestration, incremental project generations, project publication semantics, Blizzard UI source indexing, and project-owned lineage input producers. It does not own graph acceptance, search ranking, lineage promotion, migration recipes, static-impact traversal, service orchestration, or storage internals.
+`wow-project` owns exact materialized project/source universes, TOC/XML/load interpretation, analyzer/recognizer orchestration, incremental project generations, project publication semantics, Blizzard UI source indexing, project-owned lineage inputs, and exact mapping of bounded external locators into retained project generations. It does not own graph acceptance, search ranking, external-provider semantics, candidate selection, context orchestration, migration application, static-impact traversal, service orchestration, or storage internals.
 
 ## Canonical routes
 
@@ -30,16 +30,28 @@ project_structural_change
 
 These are exact producer partitions acquired and invoked through [`wow-service/e4`](../wow-service/e4/README.md), then submitted to independent `wow-graph` E4-B validation. Fingerprints and structural similarity remain Candidate evidence; project producers do not accept lineage, declare replacement, build migration recipes, authorize reviews, or run static impact.
 
-## E4-C handoff
+### E6-B — external locator mapping owner
+
+Read [`E6_B_EXTERNAL_LOCATOR_MAPPING.md`](E6_B_EXTERNAL_LOCATOR_MAPPING.md). It defines exact mapping of an owner-neutral bounded `UnverifiedProviderLocator` projection into one retained project generation.
+
+Mapping returns `ExactMapped`, `MultipleMappings`, `NoMappingWithOwnerAuthority`, `NoMappingPartial`, `Conflict`, `NotEvaluated`, or `Failed`. It validates repository/revision/path/digest/span/symbol/entity fields only through project-owned records. It never follows provider paths, chooses by rank/name/proximity, verifies provider summaries, or depends on `wow-cbm`/`wow-service`.
+
+## E4/E6 service handoff
 
 ```text
-exact before/after ProjectPublication selectors
--> wow-service resolves/acquires exact project views
--> wow-project emits exact E4-B producer partitions
--> wow-graph validates proposals/proof ceilings and publishes immutable lineage state
+E4: exact before/after ProjectPublication selectors
+    -> wow-service acquisition
+    -> project lineage-input producer partitions
+    -> wow-graph validation
+
+E6: exact retained ProjectPublication/Generation
+    + bounded external locator projection
+    -> project-owned identity validation
+    -> zero/one/many exact owner handles + coverage/conflicts
+    -> wow-service mapping record, explicit selection, optional context
 ```
 
-`wow-service` cannot alter project facts or proof ceilings. `wow-project` never resolves current, calls search/lineage/context, or observes review credentials.
+`wow-service` cannot alter project facts, mapping results, proof ceilings, or negative authority. `wow-project` never resolves current, calls external providers/search/context/service, or observes credentials.
 
 ## Direct dependency boundary
 
@@ -57,18 +69,18 @@ Active package slices remain narrower. `wow-project` never depends on `wow-searc
 
 ## Cross-generation boundary
 
-Generation-local project entities, ProjectSnapshots and GraphSnapshots remain immutable. E4-B output references exact before/after project generations and does not rewrite their IDs.
+Generation-local project entities, ProjectSnapshots, GraphSnapshots, and mapping evidence remain exact-generation-bound. E4-B output references exact before/after generations; E6-B mapping references one exact generation. Neither rewrites IDs.
 
-A repository, owner, package, path, name, signature, body digest, fingerprint or search rank cannot establish lineage by itself. `Removed`/`Introduced` requires exact closed before/after coverage evaluated by `wow-graph`.
+A repository, owner, package, path, name, signature, body digest, fingerprint, provider label, or search rank cannot establish lineage or provider correctness by itself. `Removed`/`Introduced` and clean no-mapping require exact closed owner coverage.
 
 ## Current implementation state
 
 ```text
-documentation frontier: E4-B producer seam; E4-C orchestration linked
+documentation frontier: E6-B project mapping seam
 implementation frontier: not-started
 Cargo.toml: absent
 Rust source: absent
 CI/workflows: absent
 ```
 
-Implementation still begins from E0 dependency order; the E4-B seam cannot activate before E2/E3 project, E2 graph and E4-A search prerequisites are implemented and frozen.
+Implementation still begins from E0 dependency order; the E6-B seam cannot activate before E2/E3 project publication, exact mapping profiles/fixtures, E6-A, and E6-B service gates are implemented and frozen.

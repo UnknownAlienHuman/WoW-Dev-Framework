@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "fixture_id": "apps-wow-e6b-cli-cases-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "cases": [
+    {"case_id": "A6B-ROUTE-001", "command": "wow external-candidate query submit", "service_operation": "external_candidate_query_submit", "expected_service_calls": 1},
+    {"case_id": "A6B-IN-002", "command": "wow external-candidate mapping resolve --nearest", "expected_exit": 64},
+    {"case_id": "A6B-SEC-001", "command": "wow external-candidate query submit --credential secret", "expected_exit": 64},
+    {"case_id": "A6B-SEC-002", "command": "wow external-candidate query submit --tool arbitrary", "expected_exit": 64},
+    {"case_id": "A6B-QRY-002", "command": "wow external-candidate query submit --retry-unknown", "expected_exit": 64},
+    {"case_id": "A6B-SEL-002", "command": "wow external-candidate selection record --auto-select", "expected_exit": 64}
+  ],
+  "freeze_gate": {"required_before_first_rust_implementation": true}
+}

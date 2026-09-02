@@ -1,55 +1,32 @@
 # `wow-store` contract router
 
-**Status:** E1-A storage foundation and E2-D ProjectStore publication contracts are implementation-ready; no Rust code exists.
+**Status:** E1-A storage foundation, E2-D ProjectStore publication, and the E6-B external-candidate generic storage seam are implementation-ready; no Rust code exists.
 
-`wow-store` owns the persistence substrate only. It depends directly on `wow-core` and never imports WoW project, graph, reference, rule, search, or application semantics. Domain crates supply reviewed schema, prepared-operation, validation, and logical-manifest contracts.
+`wow-store` owns the persistence substrate only. It depends directly on `wow-core` and never imports WoW project, graph, reference, rule, search, external-provider, mapping, selection, context, or application semantics. Domain crates/service supply reviewed schema, prepared-operation, validation, and logical-manifest contracts.
 
 ## Contract routes
 
 ### E1-A — storage foundation and immutable ReferenceStore
 
-The complete pre-E2 E1-A overview is preserved byte-for-byte as [`E1_A_OVERVIEW.md`](E1_A_OVERVIEW.md). Its historical `PROJECT_STORE.md` target is preserved separately as [`PROJECT_STORE_PRE_E2_BOUNDARY.md`](PROJECT_STORE_PRE_E2_BOUNDARY.md); use that file when reconstructing the exact E1-A-era boundary. Read the overview before the detailed root package:
-
-1. [`AGENTS.md`](AGENTS.md)
-2. [`DECISIONS.md`](DECISIONS.md)
-3. [`DATA_MODEL.md`](DATA_MODEL.md)
-4. [`SCHEMA_AND_MIGRATIONS.md`](SCHEMA_AND_MIGRATIONS.md)
-5. [`SQLITE_PROFILE.md`](SQLITE_PROFILE.md)
-6. [`TRANSACTIONS_AND_PUBLICATION.md`](TRANSACTIONS_AND_PUBLICATION.md)
-7. [`OBJECT_STORE.md`](OBJECT_STORE.md)
-8. [`REFERENCE_STORE.md`](REFERENCE_STORE.md)
-9. [`INTEGRITY_AND_SECURITY.md`](INTEGRITY_AND_SECURITY.md)
-10. [`ERROR_MODEL.md`](ERROR_MODEL.md)
-11. [`TEST_MATRIX.md`](TEST_MATRIX.md)
-12. [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md)
-13. [`CONTRACT.json`](CONTRACT.json)
-14. [`examples/`](examples/README.md)
-
-E1-A proves schema/migration registration, immutable ReferenceStore build/seal/publication, content-addressed objects, validation, and generic store lifecycle. It does not activate a mutable project store.
+The complete pre-E2 E1-A overview is preserved byte-for-byte as [`E1_A_OVERVIEW.md`](E1_A_OVERVIEW.md). Its historical `PROJECT_STORE.md` target is preserved separately as [`PROJECT_STORE_PRE_E2_BOUNDARY.md`](PROJECT_STORE_PRE_E2_BOUNDARY.md). Read the root E1-A package for schema/migration registration, immutable ReferenceStore build/seal/publication, content-addressed objects, validation, and generic store lifecycle.
 
 ### E2-D — ProjectStore and coherent project/graph publication
 
-Read [`e2/README.md`](e2/README.md), then the complete E2-D package. The selected physical profile is:
+Read [`e2/README.md`](e2/README.md). The selected physical profile is:
 
 ```text
 project-store-wal-manifested-partitions-v1
 ```
 
-It uses:
+It uses one owned SQLite database per ProjectStore epoch, WAL with one writer, immutable content-addressed partition versions, complete generation membership maps, published-inactive build, read-back validation, separate CAS activation, snapshot-bound readers, and explicit retention/GC.
 
-```text
-one owned SQLite database per ProjectStore epoch
-WAL with one writer
-immutable content-addressed partition versions
-a complete generation-to-partition membership map
-no recursive delta chain
-published-inactive generation build
-read-back validation
-separate compare-and-swap current activation
-snapshot-bound readers and explicit retention/GC
-```
+### E6-B — external-candidate generic persistence
 
-The stable project source, analyzer, recognizer, and graph semantics remain owned by their domain crates. `wow-store` executes only registered storage operations and generic publication protocols.
+Read [`E6_B_EXTERNAL_CANDIDATE_STORAGE.md`](E6_B_EXTERNAL_CANDIDATE_STORAGE.md).
+
+The store may persist registered immutable objects and append-only records for provider/session references, query/dispatch receipts, bounded raw response objects, E6-A result sets/artifacts, mapping/selection/context manifests, reconciliation, retention, and audit.
+
+It does not call providers, own credentials/sessions, parse results, validate Candidate authority, map locators, choose candidates, build context, or interpret privacy/license semantics. There is no current/default external result pointer.
 
 ## Direct dependency
 
@@ -57,16 +34,16 @@ The stable project source, analyzer, recognizer, and graph semantics remain owne
 wow-core
 ```
 
-`wow-project` and `wow-graph` depend on `wow-store`; the reverse dependency is forbidden.
+Domain crates and service depend on `wow-store` through narrow contracts; the reverse dependency is forbidden.
 
 ## Current implementation state
 
 ```text
-documentation frontier: E2-D
+documentation frontier: E6-B generic storage seam
 implementation frontier: not started
 Cargo.toml: absent
 Rust source: absent
 CI/workflows: absent
 ```
 
-Directory presence and a selected physical profile do not bypass prerequisite implementation, probe, benchmark, fixture, or checksum gates.
+Directory presence and documented seams do not bypass prerequisite implementation, probe, benchmark, fixture, adapter, or checksum gates.

@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e6b-context-handoff-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "request": {"operation_id": null, "selection_receipt_id": null, "mapping_record_id": null, "mapped_root": null, "project_generation_id": null, "reference_generation_id": null, "graph_generation_id": null, "context_profile_id": null},
+  "result": {"combined_result_id": null, "context_artifact_id": null, "external_candidate_sidecar_id": null, "status": null, "canonical_sha256": null},
+  "cases": [
+    {"case_id": "S6B-CTX-001", "expected_status": "ContextReady"},
+    {"case_id": "S6B-CTX-002", "mutation": "missing-mapping-or-selection", "expected_error": "e6b_context_mapping_or_selection_unavailable"},
+    {"case_id": "S6B-CTX-004", "mutation": "nearest-parent-or-current-root-substitution", "expected_error": "e6b_context_exact_root_invalid_or_unsupported"},
+    {"case_id": "S6B-CTX-006", "mutation": "provider-summary-enters-context-semantic-pack", "expected_error": "e6b_context_provider_metadata_in_semantic_pack_forbidden"},
+    {"case_id": "S6B-CTX-009", "sidecar_policy": "redacted", "expected": "exact-context-plus-explicit-sidecar-omission"}
+  ],
+  "freeze_gate": {"required_before_first_rust_implementation": true}
+}

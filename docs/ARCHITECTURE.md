@@ -1,252 +1,406 @@
 # Architecture
 
-**Status: normative**
+**Status:** normative.
 
-**Source baseline:** architecture v8.0, reviewed 2026-08-15
+**Current contract baseline:** E0-A through E6-B, reviewed 2026-09-02.
+
+The detailed package contracts and [`../crates/MANIFEST.json`](../crates/MANIFEST.json) are authoritative for active operations, dependencies, states, and implementation gates. This document defines the system-wide shape and invariants.
 
 ## 1. System shape
 
-WoW Dev Framework consists of three tightly connected correctness domains and one optional discovery bridge:
+WoW Dev Framework has five separated responsibility layers:
 
 ```text
-Reference domain
-    wow-reference-builder
-    → immutable Reference Pack
+Foundations
+    wow-core
+    wow-store
 
-Project analysis domain
-    wow-emmy-core / wow-emmy-ls
-    → generic + WoW diagnostics for one project generation
+Exact local/reference intelligence
+    wow-reference
+    wow-annotations
+    wow-emmy
+    wow-project
+    wow-graph
+    wow-recognizers
+    wow-rules
+    wow-search
+    wow-context
 
-WoW intelligence domain
-    wow-index
-    → project/UI graph, exact search, lineage, skeletons, planning
+Governed recognizer evolution
+    wow-recognizers E5-A
+    wow-service E5-B/E5-C
 
-Optional discovery domain
-    wow-cbm-bridge
-    → broad semantic candidates from an installed Codebase Memory MCP server
+Optional external discovery
+    wow-cbm E6-A
+    wow-service E6-B owner mapping/selection/context orchestration
+
+Use cases and transports
+    wow-service
+    apps/wow and future E7 thin CLI-daemon/LSP/MCP hosts
 ```
 
-The public CLI, MCP, and LSP frontends route through one service/use-case layer. They are different transports over the same contracts, not separate implementations.
+Crate directories document future libraries; they are not active crates until their implementation freeze gates pass. The implementation frontier remains E0 even though documentation extends through E6-B.
 
-## 2. Truth stores and generations
+## 2. Evidence universes
 
-### Reference generation
-
-A Reference Pack is immutable and profile-specific. It contains platform facts produced from one pinned Blizzard UI snapshot, one builder version, one schema set, and one reviewed correction set.
-
-### Project generation
-
-One mutable project actor owns the active Emmy analysis and project index. File updates produce an immutable `ProjectGeneration` snapshot. Readers never combine facts from different project generations.
-
-### External candidate generation
-
-Codebase Memory and cloned external repositories have their own revision/generation identity. Their output is never silently merged into `Proven` platform or project facts.
-
-Every answer identifies the generations and profile used.
-
-## 3. Reference pipeline
+The following universes never merge implicitly:
 
 ```text
-pinned Blizzard UI snapshot
-    ├── Blizzard_APIDocumentation
-    ├── Blizzard_APIDocumentationGenerated in TOC order
-    ├── Blizzard_Deprecated and transition material
-    ├── Interface/AddOns TOC/XML/Lua packages
-    └── optional interface resources
-
-→ restricted declarative APIDocumentation evaluator
-→ schema-aware lowering with raw unknown-field preservation
-→ structural TOC/XML/Lua extraction
-→ reviewed digest-bound corrections
-→ Ketho and Numy differential reports
-→ immutable Reference Pack
+Reference Pack
+first-party addon project
+Blizzard UI source project
+calibration corpus and holdout
+core recognizer publication
+external semantic candidate provider
+runtime observation
+historical generation
 ```
 
-Arbitrary Lua is never executed. Unsupported constructs create ingestion diagnostics and reduce the affected partition's coverage. They do not disappear.
+A record may link exact identities across universes only through an owning contract. Linkage does not transfer authority.
 
-The Reference Pack contains both raw metadata and projections. Annotations are a consumer format, not the canonical store for fields such as Secret arguments/returns, predicates, unknown metadata, source spans, or correction provenance.
+Examples:
 
-See `REFERENCE_PACK.md`.
+- a community addon can demonstrate an implementation pattern but not define the Blizzard API contract;
+- a provider locator can map to a project source record but its summary/trace remains external Candidate evidence;
+- a static source fact does not prove runtime state;
+- a calibration metric or review does not activate a core pack;
+- a signature proves exact bytes/key/profile binding, not semantic or runtime correctness.
 
-## 4. Project analysis pipeline
+Every result carries exact profile/generation identities, provenance, confidence, coverage, conflicts, omissions, and relevant nonclaims.
+
+## 3. Dependency direction
+
+Dependencies point toward narrower foundations. Maximum permitted edges are defined in [`../crates/DEPENDENCY_GRAPH.md`](../crates/DEPENDENCY_GRAPH.md).
+
+Core rules:
 
 ```text
-workspace configuration
-+ selected Reference Pack
-+ first-party addon Lua/XML/TOC
-+ declared libraries
-
-→ update Emmy VFS and semantic index
-→ run built-in Emmy diagnostics
-→ extract canonical syntax/semantic facts
-→ update TOC/XML/load/project graph partitions
-→ run capability-declared WoW diagnostic providers
-→ fold downstream symptoms into root causes
-→ publish one normalized result for one ProjectGeneration
+wow-core depends on no framework crate
+wow-store depends only on wow-core
+owner crates never depend on wow-service or applications
+wow-cbm depends only on wow-core
+wow-context does not depend on wow-cbm
+applications/transports depend on wow-service only
 ```
 
-The full Blizzard UI implementation tree is not placed in the ordinary Emmy library workspace. Generated annotations, project-declared libraries, and narrow referenced stubs are used instead.
+`wow-service` coordinates narrow owner ports. It cannot reproduce parser, analyzer, project, graph, recognizer, search, context, storage, mapping, signing, or provider-normalization algorithms.
 
-No user or workspace editor configuration is overwritten. Generated configuration lives under `.wow/generated/<profile>/<generation>/`.
+An owner-neutral bounded projection may cross a seam when a direct dependency would violate ownership. E6-B locator mapping uses this pattern: project/reference owners consume typed locator fields without depending on `wow-cbm`.
 
-See `EMMYLUA_AND_DIAGNOSTICS.md`.
+## 4. Reference domain
 
-## 5. WoW graph
-
-A single generic `parent` relation is invalid for WoW. The graph preserves independent axes:
-
-- lexical containment;
-- package/module/namespace ownership;
-- TOC/load-unit ordering and dependency;
-- frame/XML object parentage;
-- inheritance and mixin composition;
-- event, callback, hook, style, element, and plugin registration;
-- lifecycle ownership;
-- state-root and state-path access;
-- proven or possible calls;
-- build lineage.
-
-Nodes and relation kinds use open string registries with versioned semantics. Every emitted edge includes source evidence, extractor or recognizer identity, generation, confidence, and coverage.
-
-The persistent graph uses SQLite adjacency tables. Only a bounded requested neighborhood is projected into memory.
-
-See `GRAPH_SEARCH_AND_PLANNING.md`.
-
-## 6. Recognizers
-
-Recognizers operate on normalized Emmy syntax/semantic facts plus TOC/XML facts. They emit universal roles.
+A Reference Pack is immutable and profile-specific. One build binds:
 
 ```text
-receiver.NewModule("Name")
-→ node role=module
-→ created_by factory
-→ owner/load evidence
+WoW flavor and Interface/build identity
+pinned Blizzard UI/source snapshot and digest
+APIDocumentation and generated implementation inputs
+builder/evaluator/schema versions
+reviewed correction set
+raw unknown-field preservation
+coverage and negative-authority partitions
+license/notice/provenance state
 ```
 
-A pack may be named after a calibration corpus such as Ace3 or oUF, but its contents are declarative structural patterns. Removing a pack may reduce coverage; it must not change core semantics. Production code never contains repository-name-specific branches.
-
-The correctness path uses one Lua parser: Emmy. Tree-sitter or ast-grep may exist in external discovery systems but cannot produce canonical WoW facts without verification.
-
-## 7. Search and lineage
-
-Search lanes run in authority order:
+Pipeline:
 
 ```text
-query classification
-→ exact active canonical name
-→ aliases, deprecations, replacements, and lineage
-→ namespace/member/prefix
-→ receiver, signature, return, and restriction shape
-→ bounded edit-distance/trigram candidates
-→ FTS5 over documentation and L0/L1 skeletons
-→ graph-neighborhood expansion
-→ optional Codebase Memory semantic candidates
-→ deterministic reranking with explanations
+pinned Blizzard source snapshot
+-> restricted declarative APIDocumentation evaluation
+-> raw metadata retention
+-> schema-aware normalization
+-> structural TOC/XML/Lua extraction through approved owners
+-> digest-bound reviewed corrections
+-> differential oracle reports
+-> immutable Reference Pack candidate
+-> publication and fresh read-back validation
+-> exact retained ReferenceView
 ```
 
-An explicit replacement edge outranks every fuzzy hit. Name similarity cannot establish lineage or authorize an autofix.
+Arbitrary Lua is never executed. Unsupported constructs and unknown fields reduce the affected capability/coverage and remain visible; they are not dropped or assumed safe.
 
-Historical lineage combines source-control move evidence, normalized syntax fingerprints, signature/receiver shape, ownership/load neighborhoods, call/API/event neighborhoods, and transition documentation. Path identity alone is insufficient because Blizzard package layouts move across builds.
+Annotations are consumer projections, not the canonical store for Secret/restriction metadata, raw unknown fields, source spans, correction provenance, or coverage.
 
-## 8. Skeletons and context
+## 5. Project domain
 
-The framework exposes three source detail levels:
-
-- **L0** — signature, owner/load chains, direct API/event/state roles, and neighborhood counts.
-- **L1** — signature, branch/loop/call structure, early returns, and state effects with bodies collapsed.
-- **L2** — exact source span/full source.
-
-Default agent context uses L0/L1. Full source requires an explicit source handle request.
-
-`.wow/ARCHITECTURE.generated.md` is a generated Project Map capped at approximately 2 KB. It records the active profile, load skeleton, module/service/state owners, registries, extension points, invariants, known dynamic gaps, and workaround debt.
-
-## 9. Secret and restriction model
-
-Restrictions use an open facet registry. Unknown facets are preserved raw and make dependent checks `NotEvaluated`.
-
-Static Secret analysis progresses by capability:
-
-1. API contract facets;
-2. direct local operations and guard dominance;
-3. bounded interprocedural summaries for stable direct calls;
-4. structured runtime evidence.
-
-Deep flow is not a prerequisite for the local MVP. Static analysis never hard-codes a permanent runtime spell whitelist.
-
-See `SECRET_VALUES_AND_RESTRICTIONS.md`.
-
-## 10. Storage
+One project generation binds exact source/configuration/profile inputs:
 
 ```text
-reference.sqlite
-    immutable, read-only, one profile
-
-project.sqlite
-    mutable WAL database, rebuildable per repository/generation
-
-external.sqlite
-    optional external manifest and source-handle metadata
-
-objects/
-    content-addressed compressed raw/skeleton artifacts
+configured project roots and source snapshot
+selected ReferenceView
+TOC variants and load order
+XML templates/mixins
+Lua physical and virtual units
+EmmyLua implementation/profile
+recognizer/rule/graph producer profiles
+publication and retention state
 ```
 
-SQLite provides exact indexes, FTS5, adjacency tables, transactions, portability, and inspectability. A graph server, vector database, and separate search daemon are excluded from v1 unless benchmarks prove a unique requirement.
-
-## 11. Process topology
-
-Normal interactive operation uses one `wow` process or daemon and, optionally, an already installed Codebase Memory process. Crates do not imply processes. Reference build CI may run differential oracle jobs separately.
-
-## 12. Planned Rust boundaries
+Pipeline:
 
 ```text
-wow-core          IDs, profiles, evidence, findings, stable handles
-wow-store         SQLite schemas, migrations, content-addressed objects
-wow-reference     APIDoc lowering and Reference Pack read/build
-wow-annotations   Ketho-compatible and dialect projections
-wow-emmy          upstream adapter, project actor, diagnostic registry
-wow-project       Lua/TOC/XML workspace and incremental generations
-wow-graph         universal nodes/relations, lineage, bounded queries
-wow-recognizers   declarative matcher and calibration packs
-wow-search        exact/migration/shape/FTS/graph ranking
-wow-rules         API/load/event/Secret/overlay/project diagnostics
-wow-cbm           optional MCP candidate bridge
-wow-context       skeletons, Project Map, context budgets
-wow-service       transport-independent use cases
-wow-app           CLI, MCP, and LSP binaries
+bounded nonexecuting source acquisition
+-> TOC/XML/load interpretation
+-> Emmy VFS and semantic analysis
+-> normalized syntax/semantic facts
+-> declarative recognizer proposals
+-> graph partition validation/publication
+-> capability-declared diagnostics
+-> immutable ProjectGeneration publication
 ```
 
-`wow-testkit` and `wow-eval` are development-only. The names describe planned responsibilities, not a mandate to create every crate before E0. Crates are introduced only when boundaries are proven by tests.
+Analyzed repositories are untrusted input. The framework does not execute hooks, installers, build scripts, repository tools, or Lua merely to index a project.
 
-## 13. Public result envelope
+Mutable working state stays inside its owner. Readers consume immutable generations and never mix `current` data resolved at different times. A symbolic current selector is resolved once by service, replaced with an exact identity, retained, and never refreshed inside the operation.
 
-Every query or diagnostic is normalized around:
+## 6. EmmyLua and diagnostics
+
+EmmyLua is the sole Lua parser/analyzer on the correctness path. It is pinned behind one adapter and compatibility-probed before activation.
+
+Diagnostics combine:
 
 ```text
-profile and reference generation
-project/external generation where applicable
-entity or finding identity
-source handles and evidence provenance
-confidence
-coverage status and missing capabilities
-explanation/ranking signals
-stable detail handles
+upstream generic Emmy findings
+framework WoW diagnostic providers
+exact ReferenceView facts
+exact project/load/graph facts
+restriction capability state
 ```
 
-The precise contract is defined in `PROVENANCE_AND_COVERAGE.md` and will become a versioned public schema before external release.
+A rule declares its required capabilities. Missing capability yields `NotEvaluated` or typed unavailability, never clean success. Root causes and downstream symptoms remain distinct. Autofixes require exact mechanically checkable preconditions; otherwise output is a plan or Candidate.
 
-## 14. Failure behavior
+No user/editor configuration is silently overwritten. Generated configuration/artifacts use explicitly owned project paths and profiles.
 
-- Stale or missing profile: reject or return explicit unavailable status.
-- Failed source partition: keep unaffected partitions usable; mark dependent capabilities incomplete.
-- Unknown upstream field: preserve and quarantine; do not drop.
-- Emmy update loses a mandatory capability: block activation and retain last-known-good.
-- Codebase Memory unavailable: exact local/reference workflow remains functional.
-- Conflicting oracles: retain both evidence records and open a triage gap.
-- Dynamic runtime behavior not statically provable: return `NotEvaluated` or `Possible`, plus the required runtime scenario.
+## 7. Graph and recognizers
 
-## 15. Deployment and release model
+The graph preserves independent relation axes:
 
-Normal users consume prebuilt, checksum-verified Reference Packs. They do not need Ketho, Numy, PHP, LuaRocks, VS Code, or the full Blizzard source tree.
+```text
+lexical containment
+package/module/namespace ownership
+TOC/load dependency and order
+XML/frame object parentage
+inheritance/mixin composition
+event/callback/hook/style/element/plugin registration
+lifecycle ownership
+state-root/state-path access
+call evidence
+cross-generation lineage/change
+```
 
-Production release work belongs to E7 and includes prebuilt binaries, pack publication, SBOM, dependency policy, compatibility reports, rollback, and last-known-good activation. No release workflow is added before executable validation exists.
+There is no universal `parent` relation. Every assertion binds producer, evidence, confidence, profile/generation, coverage, conflicts, and partition ownership.
+
+Recognizers operate only on normalized owner facts. Production rules are universal structural patterns and cannot branch on repository, addon, owner, path, popularity, labels, split membership, reviewer, holdout, canary, or model identity.
+
+Producer partitions are immutable per generation. Activating, rolling back, revoking, or replacing a recognizer pack creates new project/graph generations; historical generations are never rewritten.
+
+## 8. Search, lineage, and context
+
+Search authority order is explicit:
+
+```text
+exact canonical identity
+explicit aliases/deprecations/replacements/transitions
+namespace/member/prefix
+receiver/signature/type/restriction shape
+bounded fuzzy/text lanes
+FTS5 over exact-generation documents and skeletons
+graph-neighborhood candidates
+optional external semantic candidates
+```
+
+Similarity retrieves Candidates; it cannot establish lineage, replacement, negative authority, migration safety, impact, or edit authorization. Ranking explanations expose lanes, exact inputs, scores, coverage, and proof ceilings.
+
+Lineage and static impact operate over exact before/after generations and typed evidence. Path/name/fingerprint/search rank alone is insufficient.
+
+Context uses exact roots and exact retained project/reference/graph views:
+
+```text
+ContextUniverseSet
+-> ProjectMap
+-> L0 skeleton
+-> L1 skeleton
+-> ContextSemanticPack
+-> rendered artifacts
+```
+
+L2/full source is requested explicitly under privacy/license/budget policy. Context rendering is not semantic truth. Source/provider text is data, never framework or agent instruction.
+
+## 9. Restriction and runtime model
+
+Restriction facets are open and versioned. Unknown facets remain raw and make dependent checks `NotEvaluated`.
+
+Static Secret/restriction analysis progresses by demonstrated capability:
+
+```text
+API contract facets
+direct local operations and guard dominance
+bounded interprocedural summaries for stable direct calls
+structured runtime evidence
+```
+
+Static analysis never freezes a permanent runtime spell/client-state whitelist. State-, hotfix-, data-, combat-, taint-, or restriction-dependent behavior requires an exact client-build scenario and runtime evidence when the task needs runtime proof.
+
+Patch-sensitive guidance is routed through the current external [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb), then confirmed against pinned Blizzard source and required runtime probes. The KB is linked, not copied into stable contracts.
+
+## 10. Governed recognizer lifecycle (E5)
+
+E5 separates authority gates:
+
+```text
+E5-A admitted calibration corpus, shadow pack, mutations, metrics, candidate
+E5-B durable runs, independent authorization/review, sealed holdout, PromotionSubmission
+E5-C independent revalidation, distinct CorePackArtifact, attestations/signing,
+     PublishedInactive, read-back, canary, finite rollout, activation, LKG,
+     rollback/revocation/deactivation and stale-partition closure
+```
+
+No metric, graph validation, review, holdout result, submission, signature, inactive publication, canary, rollout stage, or repository identity automatically authorizes the next gate.
+
+Activation is execution-profile-specific and guarded by exact expected-current compare-and-swap. Last-known-good is explicitly designated, not inferred as previous/newest. Rollback creates new immutable effect/reindex/closure records and never rewrites history.
+
+Public package distribution remains E7-B; E5-C internal publication is not a downloadable release.
+
+## 11. Optional external discovery (E6)
+
+### E6-A owner boundary
+
+`wow-cbm` consumes:
+
+```text
+reviewed provider descriptor
+negotiated capability intersection
+StableExternalGeneration | ObservedMutableGeneration | OpaqueExternalState
+closed bounded query
+already-acquired allow-listed transport
+```
+
+It returns immutable loss-preserving external candidate records. Every result is:
+
+```text
+provenance = semantic_candidate
+confidence = Candidate
+negative_authority = unavailable
+```
+
+Provider labels, top/sole/repeated results, stable state, and high scores cannot raise authority. Scores/ranks remain provider-local. Zero results do not prove absence.
+
+Provider path/URI/revision/symbol/span/digest fields remain `UnverifiedProviderLocator`. E6-A never opens or maps them.
+
+### E6-B orchestration boundary
+
+`wow-service` may:
+
+```text
+resolve one exact provider configuration
+obtain nonsecret credential-use authorization
+acquire one narrow host-owned session
+register durable operation identity
+invoke E6-A
+publish/read back immutable result artifacts
+ask project/reference owners to map one exact locator
+record caller-supplied Selected | Rejected | Deferred
+invoke normal context with one exact mapped root
+compose a separate ExternalCandidateSidecar
+```
+
+Only project/reference owners map locators. Mapping statuses preserve exact mapped, multiple, authoritative no-mapping, partial no-mapping, conflict, `NotEvaluated`, and failure. `ExactMapped` proves locator-to-owner-record identity only.
+
+Selection is explicit and is not verification, semantic acceptance, lineage, replacement, impact, edit authorization, or core-pack admission. Provider metadata never enters `ContextSemanticPack` truth.
+
+Provider failure is lane-local. There is no hidden fallback to another provider, stale cache, model, web, local search, or broader query.
+
+Provider installation, startup, configuration mutation, index/import/delete lifecycle, database access, arbitrary MCP/tools, and secret material are outside E6 semantic operations.
+
+## 12. Storage
+
+`wow-store` owns generic physical persistence only:
+
+```text
+explicit schemas and migrations
+SQLite profiles and WAL ownership
+immutable content-addressed objects
+append-only catalog/effect/audit records
+published-inactive then fresh read-back validation protocols
+exact snapshot/lease/retention/GC
+backup/restore and corruption handling
+```
+
+Domain owners supply logical schema, canonical bytes, prepared operations, validation rules, and retention edges. Store never interprets project, graph, recognizer, provider, mapping, selection, or context semantics.
+
+Raw SQL, database connections, row IDs, physical object keys, transaction callbacks, and filesystem roots never cross public service/application seams.
+
+No graph server, vector database, or separate search daemon is introduced without measured unique necessity.
+
+## 13. Service and applications
+
+`wow-service` is the only production coordination layer. It owns:
+
+```text
+strict request validation
+one-time symbolic selector resolution
+exact retained owner acquisition
+cross-owner compatibility validation
+narrow port sequencing
+durable effect/idempotency/reconciliation state
+conservative result envelopes
+retention/audit and reverse-order close-before-success
+```
+
+Applications and E7 transports depend on `wow-service` only. One valid command/tool/request maps to one service operation unless a higher-level workflow is itself a documented service operation.
+
+CLI/LSP/MCP/daemon layers cannot resolve authority, inspect lower stores, execute source, expose generic tool/shell/RPC escape hatches, or change semantic output.
+
+## 14. Durable effects and failure behavior
+
+Effecting operations register `OperationId + CanonicalRequestDigest` before dispatch. Same ID/same digest returns or reconciles the same effect; same ID/different digest fails.
+
+A timeout, cancellation, disconnect, serialization failure, or process loss after dispatch can yield `OutcomeUnknown`. Response loss does not prove effect absence. Blind redispatch is forbidden until exact owner reconciliation.
+
+Public success is not finalized before mandatory retention, audit, and reverse resource closure. Cancellation stops new work but does not erase durable evidence or spawn unowned background cleanup.
+
+Other failure rules:
+
+- stale/missing profile: reject or explicit unavailable state;
+- failed partition: unaffected partitions remain usable and dependent capabilities become incomplete;
+- conflicting evidence: retain conflict, never choose newest/majority by default;
+- unknown upstream field: preserve and narrow capability;
+- malformed/untrusted input: bounded typed failure;
+- provider unavailable: external lane unavailable, exact local lane unchanged;
+- runtime behavior not proved: `NotEvaluated`/`Possible` plus required scenario.
+
+## 15. Security and privacy
+
+Public seams reject or structurally isolate:
+
+```text
+arbitrary Lua/source execution
+repository hooks/installers/build scripts
+raw SQL and database handles
+generic MCP/tool/RPC calls
+shell/script/plugin/model-prompt escape hatches
+private signing/provider/deployment material
+private endpoints/process/client handles
+unbounded source, graph, response, or continuation data
+source/provider text as control instructions
+```
+
+Output is the intersection of source, provider, consumer, privacy, license, notice, and redistribution policies. Unknown state denies or narrows; higher layers cannot widen lower restrictions.
+
+Logs/errors default to stable IDs, counts, stages, statuses, and reason codes rather than source, secrets, private paths, private cohort/provider data, or raw owner handles.
+
+## 16. Launch and release layering
+
+Launch states are defined in [`LAUNCH_GATES.md`](LAUNCH_GATES.md):
+
+```text
+first runnable bootstrap: E0-A through E0-F
+useful internal alpha: E1 through E3
+external developer preview: E4 plus minimal E7-A frontend
+governed beta: E5; E6 optional when enabled
+public supported v1: selected beta scope plus E7-A/E7-B gates
+```
+
+E7-A owns supported CLI-daemon/LSP/MCP session and transport contracts. E7-B owns reproducible packaging, checksums/signatures/SBOM/provenance, installer/update channels, compatibility/support policy, rollback/retirement, incident response, and public distribution.
+
+No CI or release workflow is added before it executes real frozen commands with an explicit owner and corresponding launch gate.
