@@ -23,12 +23,10 @@ impl NormalizedSourcePath {
     pub fn parse(candidate: &str) -> CoreResult<Parsed<Self>> {
         const OPERATION: &str = "normalize_source_path";
         if candidate.is_empty() || candidate.len() > MAX_PATH_BYTES {
-            return Err(validation_error(
-                OPERATION,
-                CoreErrorCode::InvalidSourcePath,
-                "candidate",
-            )
-            .with_argument("length", candidate.len().to_string()));
+            return Err(
+                validation_error(OPERATION, CoreErrorCode::InvalidSourcePath, "candidate")
+                    .with_argument("length", candidate.len().to_string()),
+            );
         }
         if candidate.chars().any(char::is_control) {
             return Err(validation_error(

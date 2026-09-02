@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 
-use crate::digest::{ExternalGenerationId, GenerationContextId, ProjectGenerationId, ReferenceGenerationId};
+use crate::digest::{
+    ExternalGenerationId, GenerationContextId, ProjectGenerationId, ReferenceGenerationId,
+};
 use crate::error::{CoreErrorCode, CoreResult, mismatch_error, validation_error};
 use crate::ids::{ProducerId, ToolVersion, validate_lower_segment};
 use crate::profile::{ProfileIdentity, SchemaVersionEntry};
@@ -229,11 +231,8 @@ impl GenerationContext {
                 "reference_generation",
             ));
         }
-        let project_generation = merge_project_generation(
-            self.project_generation,
-            other.project_generation,
-            mode,
-        )?;
+        let project_generation =
+            merge_project_generation(self.project_generation, other.project_generation, mode)?;
         let schema_versions = merge_identical_entries(
             &self.schema_versions,
             &other.schema_versions,
@@ -454,17 +453,18 @@ fn merge_external_generations(
     combined.sort();
     let mut result: Vec<ExternalGeneration> = Vec::new();
     for entry in combined {
-        if let Some(previous) = result.last() {
-            if previous.provider_id == entry.provider_id && previous.scope_id == entry.scope_id {
-                if previous == &entry {
-                    continue;
-                }
-                return Err(validation_error(
-                    "merge_generation_context",
-                    CoreErrorCode::DuplicateExternalGenerationScope,
-                    "external_generations",
-                ));
+        if let Some(previous) = result.last()
+            && previous.provider_id == entry.provider_id
+            && previous.scope_id == entry.scope_id
+        {
+            if previous == &entry {
+                continue;
             }
+            return Err(validation_error(
+                "merge_generation_context",
+                CoreErrorCode::DuplicateExternalGenerationScope,
+                "external_generations",
+            ));
         }
         result.push(entry);
     }

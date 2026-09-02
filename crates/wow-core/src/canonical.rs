@@ -125,25 +125,21 @@ mod tests {
             alpha: "a",
         };
         let actual = canonical_json_string(&value);
-        assert_eq!(
-            actual.as_deref(),
-            Ok(r#"{"alpha":"a","zebra":"z"}"#)
-        );
+        assert_eq!(actual.as_deref(), Ok(r#"{"alpha":"a","zebra":"z"}"#));
     }
 
     #[test]
     fn empty_object_domain_vector_matches() {
         let value = serde_json::json!({});
         let digest = domain_separated_digest("wow-core/test/e0-1", &value);
-        let expected = hex_to_array(
-            "a5b546c8b8a738bf5d7483dd556c3018f02a8fad5b1569836e054eb0273730e2",
-        );
+        let expected =
+            hex_to_array("a5b546c8b8a738bf5d7483dd556c3018f02a8fad5b1569836e054eb0273730e2");
         assert_eq!(digest, Ok(expected));
     }
 
     fn hex_to_array(input: &str) -> [u8; 32] {
         let mut output = [0_u8; 32];
-        for (index, chunk) in input.as_bytes().chunks_exact(2).enumerate() {
+        for (index, chunk) in input.as_bytes().as_chunks::<2>().0.iter().enumerate() {
             let high = hex_nibble(chunk[0]);
             let low = hex_nibble(chunk[1]);
             output[index] = (high << 4) | low;

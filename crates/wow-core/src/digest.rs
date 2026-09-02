@@ -76,21 +76,15 @@ impl<P: DigestPurpose> ContentDigest<P> {
         }
 
         if payload.len() != 64 || !payload.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-            return Err(validation_error(
-                OPERATION,
-                CoreErrorCode::InvalidDigest,
-                "candidate.hex",
-            )
-            .with_argument("length", payload.len().to_string()));
+            return Err(
+                validation_error(OPERATION, CoreErrorCode::InvalidDigest, "candidate.hex")
+                    .with_argument("length", payload.len().to_string()),
+            );
         }
 
         let was_canonical = payload.bytes().all(|byte| !byte.is_ascii_uppercase());
         let bytes = decode_hex_32(payload).ok_or_else(|| {
-            validation_error(
-                OPERATION,
-                CoreErrorCode::InvalidDigest,
-                "candidate.hex",
-            )
+            validation_error(OPERATION, CoreErrorCode::InvalidDigest, "candidate.hex")
         })?;
 
         Ok(Parsed::new(Self::from_bytes(bytes), was_canonical))
@@ -215,7 +209,10 @@ macro_rules! fixed_digest_id {
 
         impl fmt::Debug for $name {
             fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-                formatter.debug_tuple(stringify!($name)).field(&self.canonical()).finish()
+                formatter
+                    .debug_tuple(stringify!($name))
+                    .field(&self.canonical())
+                    .finish()
             }
         }
 
@@ -278,7 +275,11 @@ fixed_digest_id!(
     "generation:project:sha256:",
     "wow-core/project-generation/e0-1"
 );
-fixed_digest_id!(StableHandleId, "handle:sha256:", "wow-core/source-handle/e0-1");
+fixed_digest_id!(
+    StableHandleId,
+    "handle:sha256:",
+    "wow-core/source-handle/e0-1"
+);
 fixed_digest_id!(EvidenceId, "evidence:sha256:", "wow-core/evidence/e0-1");
 fixed_digest_id!(ConflictId, "conflict:sha256:", "wow-core/conflict/e0-1");
 fixed_digest_id!(CoverageId, "coverage:sha256:", "wow-core/coverage/e0-1");
@@ -293,7 +294,11 @@ fixed_digest_id!(
     "context:sha256:",
     "wow-core/generation-context/e0-1"
 );
-fixed_digest_id!(RootCauseKey, "root-cause:sha256:", "wow-core/root-cause/e0-1");
+fixed_digest_id!(
+    RootCauseKey,
+    "root-cause:sha256:",
+    "wow-core/root-cause/e0-1"
+);
 fixed_digest_id!(
     NotEvaluatedId,
     "not-evaluated:sha256:",
@@ -473,7 +478,10 @@ mod tests {
         let parsed = ContentDigest::<SourceContent>::parse(&input);
         assert!(parsed.is_ok());
         let parsed = parsed.ok();
-        assert_eq!(parsed.as_ref().map(|value| value.was_canonical()), Some(false));
+        assert_eq!(
+            parsed.as_ref().map(|value| value.was_canonical()),
+            Some(false)
+        );
     }
 
     #[test]

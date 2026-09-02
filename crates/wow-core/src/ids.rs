@@ -68,7 +68,10 @@ macro_rules! dotted_id {
 
         impl fmt::Debug for $name {
             fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-                formatter.debug_tuple(stringify!($name)).field(&self.0).finish()
+                formatter
+                    .debug_tuple(stringify!($name))
+                    .field(&self.0)
+                    .finish()
             }
         }
 
@@ -211,7 +214,10 @@ impl ProfileId {
 
 impl fmt::Debug for ProfileId {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.debug_tuple("ProfileId").field(&self.canonical).finish()
+        formatter
+            .debug_tuple("ProfileId")
+            .field(&self.canonical)
+            .finish()
     }
 }
 
@@ -333,7 +339,10 @@ impl SchemaId {
 
 impl fmt::Debug for SchemaId {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.debug_tuple("SchemaId").field(&self.canonical).finish()
+        formatter
+            .debug_tuple("SchemaId")
+            .field(&self.canonical)
+            .finish()
     }
 }
 
@@ -471,7 +480,10 @@ impl EntityKey {
 
 impl fmt::Debug for EntityKey {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.debug_tuple("EntityKey").field(&self.canonical()).finish()
+        formatter
+            .debug_tuple("EntityKey")
+            .field(&self.canonical())
+            .finish()
     }
 }
 
@@ -541,12 +553,7 @@ pub struct CoveragePartitionId {
 impl CoveragePartitionId {
     /// Builds a coverage partition ID from unencoded components.
     pub fn new(scope: &str, key: Option<&str>) -> CoreResult<Self> {
-        validate_qualified_id(
-            scope,
-            false,
-            "parse_coverage_partition_id",
-            "scope",
-        )?;
+        validate_qualified_id(scope, false, "parse_coverage_partition_id", "scope")?;
         if let Some(value) = key {
             validate_exact_payload(value, "parse_coverage_partition_id", "key")?;
         }
@@ -671,12 +678,10 @@ fn require_canonical<T>(parsed: Parsed<T>, operation: &'static str) -> CoreResul
     if parsed.was_canonical {
         Ok(parsed.value)
     } else {
-        Err(validation_error(
-            operation,
-            CoreErrorCode::InvalidIdentifier,
-            "candidate",
+        Err(
+            validation_error(operation, CoreErrorCode::InvalidIdentifier, "candidate")
+                .with_argument("reason", "noncanonical"),
         )
-        .with_argument("reason", "noncanonical"))
     }
 }
 
@@ -690,9 +695,9 @@ pub(crate) fn validate_lower_segment(
         .as_bytes()
         .first()
         .is_some_and(u8::is_ascii_lowercase);
-    let valid_rest = candidate
-        .bytes()
-        .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'_' | b'-'));
+    let valid_rest = candidate.bytes().all(|byte| {
+        byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'_' | b'-')
+    });
 
     if !valid_length {
         return Err(validation_error(
@@ -765,7 +770,7 @@ fn validate_dotted_segment(
     if !bytes[0].is_ascii_lowercase()
         || !bytes
             .iter()
-            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || **byte == b'_')
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || *byte == b'_')
     {
         return Err(validation_error(
             operation,
@@ -783,11 +788,7 @@ fn validate_dotted_segment(
     Ok(())
 }
 
-fn validate_slug(
-    candidate: &str,
-    operation: &'static str,
-    field: &'static str,
-) -> CoreResult<()> {
+fn validate_slug(candidate: &str, operation: &'static str, field: &'static str) -> CoreResult<()> {
     if candidate.is_empty() || candidate.len() > 96 {
         return Err(validation_error(
             operation,
@@ -925,18 +926,10 @@ fn percent_decode_canonical(
             ));
         }
         let high = decode_upper_hex(bytes[index + 1]).ok_or_else(|| {
-            validation_error(
-                operation,
-                CoreErrorCode::NoncanonicalPercentEncoding,
-                field,
-            )
+            validation_error(operation, CoreErrorCode::NoncanonicalPercentEncoding, field)
         })?;
         let low = decode_upper_hex(bytes[index + 2]).ok_or_else(|| {
-            validation_error(
-                operation,
-                CoreErrorCode::NoncanonicalPercentEncoding,
-                field,
-            )
+            validation_error(operation, CoreErrorCode::NoncanonicalPercentEncoding, field)
         })?;
         let decoded = (high << 4) | low;
         if decoded.is_ascii_alphanumeric() || matches!(decoded, b'-' | b'.' | b'_' | b'~') {
@@ -949,13 +942,8 @@ fn percent_decode_canonical(
         output.push(decoded);
         index += 3;
     }
-    String::from_utf8(output).map_err(|_| {
-        validation_error(
-            operation,
-            CoreErrorCode::InvalidEntityKey,
-            field,
-        )
-    })
+    String::from_utf8(output)
+        .map_err(|_| validation_error(operation, CoreErrorCode::InvalidEntityKey, field))
 }
 
 const fn decode_upper_hex(byte: u8) -> Option<u8> {
@@ -977,7 +965,10 @@ mod tests {
         let parsed = ProfileId::parse("PROFILE:FIXTURE:E0-RETAIL-120100");
         assert!(parsed.is_ok());
         let parsed = parsed.ok();
-        assert_eq!(parsed.as_ref().map(|value| value.was_canonical()), Some(false));
+        assert_eq!(
+            parsed.as_ref().map(|value| value.was_canonical()),
+            Some(false)
+        );
         assert_eq!(
             parsed.as_ref().map(|value| value.value().as_str()),
             Some("profile:fixture:e0-retail-120100")
