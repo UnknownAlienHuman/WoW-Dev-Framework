@@ -31,7 +31,7 @@ jobs:
       - name: Install frozen Rust toolchain
         run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
 
-      - name: Apply the exact compiler correction discovered by run 2
+      - name: Apply the exact compiler correction discovered by runs 2 and 3
         shell: bash
         run: |
           python3 - <<'PY'
@@ -41,7 +41,7 @@ jobs:
           needle = "**byte == b'_'"
           if text.count(needle) != 1:
               raise SystemExit('expected exactly one compiler-correction site')
-          path.write_text(text.replace(needle, "byte == b'_'"), encoding='utf-8')
+          path.write_text(text.replace(needle, "*byte == b'_'"), encoding='utf-8')
           PY
 
       - name: Generate exact dependency lock
