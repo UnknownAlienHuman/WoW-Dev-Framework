@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e7b-channel-manifest-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "candidate": {
+    "release_candidate_id": null,
+    "bundle_id": null,
+    "support_matrix_id": null,
+    "state": "ReadyForChannel",
+    "canonical_sha256": null
+  },
+  "channel": {
+    "channel_id": "developer-preview",
+    "expected_prior_record_id": null,
+    "expected_prior_digest": null,
+    "publication_plan_id": null,
+    "published_record_id": null,
+    "canonical_sha256": null
+  },
+  "update_manifest": {
+    "update_manifest_id": null,
+    "release_candidate_id": null,
+    "bundle_id": null,
+    "target_triple": "x86_64-pc-windows-msvc",
+    "signature_id": null,
+    "canonical_sha256": null
+  },
+  "cases": [
+    {
+      "case_id": "S7B-CH-002",
+      "expected_status": "Published"
+    },
+    {
+      "case_id": "S7B-CH-004",
+      "mutation": "stale-channel-CAS",
+      "expected_error": "e7b_channel_expected_current_cas_failed"
+    },
+    {
+      "case_id": "S7B-CH-005",
+      "mutation": "select-newest-or-tag",
+      "expected_error": "e7b_channel_latest_newest_or_tag_selection_forbidden"
+    },
+    {
+      "case_id": "S7B-CH-006",
+      "mutation": "replace-asset-under-same-release-name",
+      "expected_error": "e7b_distribution_asset_mutation_or_substitution_detected"
+    },
+    {
+      "case_id": "S7B-CH-007",
+      "mutation": "upload-response-lost",
+      "expected_status": "OutcomeUnknown"
+    },
+    {
+      "case_id": "S7B-UPM-002",
+      "mutation": "cross-target-or-bundle-manifest",
+      "expected_error": "e7b_update_manifest_cross_target_channel_product_or_bundle_mismatch"
+    },
+    {
+      "case_id": "S7B-UPM-005",
+      "mutation": "hidden-startup-update-check",
+      "expected_error": "e7b_hidden_network_update_check_download_or_telemetry_forbidden"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}

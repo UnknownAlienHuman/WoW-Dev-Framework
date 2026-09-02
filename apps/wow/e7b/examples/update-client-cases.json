@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "fixture_id": "apps-wow-e7b-update-client-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "cases": [
+    {
+      "case_id": "A7B-VER-001",
+      "command": "wow version",
+      "service_operation": "release_status",
+      "expected_service_calls": 1,
+      "network": false
+    },
+    {
+      "case_id": "A7B-VER-004",
+      "command": "wow release verify bundle --input fixture.zip",
+      "service_operation": "release_bundle_validate",
+      "expected_service_calls": 1,
+      "network": false
+    },
+    {
+      "case_id": "A7B-CHK-001",
+      "command": "wow update check --channel developer-preview --operation-id fixture-op",
+      "service_operation": "release_update_check",
+      "expected_service_calls": 1,
+      "network": "explicit-service-policy-only"
+    },
+    {
+      "case_id": "A7B-CHK-003",
+      "mutation": "check-downloads-or-installs",
+      "expected": "forbidden"
+    },
+    {
+      "case_id": "A7B-PLAN-003",
+      "command": "wow update plan --latest",
+      "expected": "pre-service-reject"
+    },
+    {
+      "case_id": "A7B-APPLY-003",
+      "mutation": "app-overwrites-running-executable",
+      "expected": "architecture-failure"
+    },
+    {
+      "case_id": "A7B-APPLY-004",
+      "command": "wow update apply --command arbitrary",
+      "expected": "pre-service-reject"
+    },
+    {
+      "case_id": "A7B-RB-002",
+      "command": "wow update rollback --previous",
+      "expected": "pre-service-reject"
+    },
+    {
+      "case_id": "A7B-REC-001",
+      "command": "wow update reconcile --operation-id fixture-op --request-digest fixture-digest",
+      "service_operation": "release_operation_reconcile",
+      "expected_service_calls": 1
+    },
+    {
+      "case_id": "A7B-REC-003",
+      "command": "wow update reconcile --retry-unknown",
+      "expected": "pre-service-reject"
+    },
+    {
+      "case_id": "A7B-SEC-005",
+      "mutation": "startup-telemetry-update-or-remote-config",
+      "expected": "absent"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "contract_id": "tools/wow-release/e7-b/release-publisher-client",
+  "state": "implementation-ready-documentation-no-rust-code",
+  "work_package": "E7-B",
+  "tool": "wow-release",
+  "documentation_frontier": "E7-B",
+  "implementation_state": "not-started",
+  "public_bundle_default": false,
+  "framework_dependencies": [
+    "wow-service"
+  ],
+  "prerequisite_contract": "wow-service/e7-b/release-distribution-update-support-lifecycle",
+  "commands": [
+    {"command":"status","service_operation":"release_status"},
+    {"command":"source validate","service_operation":"release_source_validate"},
+    {"command":"plan validate","service_operation":"release_plan_validate"},
+    {"command":"build submit","service_operation":"release_build_submit"},
+    {"command":"build get","service_operation":"release_build_get"},
+    {"command":"rebuild compare","service_operation":"release_rebuild_compare"},
+    {"command":"artifact validate","service_operation":"release_artifact_validate"},
+    {"command":"sbom build","service_operation":"release_sbom_build"},
+    {"command":"provenance build","service_operation":"release_provenance_build"},
+    {"command":"sign request","service_operation":"release_sign_request"},
+    {"command":"sign validate","service_operation":"release_signature_validate"},
+    {"command":"bundle build","service_operation":"release_bundle_build"},
+    {"command":"bundle validate","service_operation":"release_bundle_validate"},
+    {"command":"support validate","service_operation":"release_support_matrix_validate"},
+    {"command":"candidate validate","service_operation":"release_candidate_validate"},
+    {"command":"channel prepare","service_operation":"release_channel_prepare"},
+    {"command":"channel publish","service_operation":"release_channel_publish"},
+    {"command":"channel get","service_operation":"release_channel_get"},
+    {"command":"update-manifest build","service_operation":"release_update_manifest_build"},
+    {"command":"update-manifest validate","service_operation":"release_update_manifest_validate"},
+    {"command":"revoke","service_operation":"release_revoke"},
+    {"command":"retire","service_operation":"release_retire"},
+    {"command":"reconcile","service_operation":"release_operation_reconcile"}
+  ],
+  "output_modes": [
+    "envelope-json",
+    "text",
+    "artifact"
+  ],
+  "hard_rules": [
+    "wow-service is the only framework dependency",
+    "each valid command invokes exactly one service operation",
+    "the tool does not implement or directly call source traversal Cargo rustc process sandbox signing provider archive installer store or credential APIs",
+    "the tool accepts no arbitrary command shell script environment callback URL header provider API GitHub API upload callback or installer command",
+    "private keys tokens passwords cookies endpoints signing sockets KMS HSM vault and CI credentials never enter normal arguments config fixtures logs or results",
+    "source branch tag cwd filename latest newest previous first sole and highest version never replace exact identities",
+    "build evidence sign bundle candidate publish update manifest revoke retire and reconcile are distinct commands and effects",
+    "the tool never selects or mutates a release candidate bundle channel target or provider plan",
+    "reconcile never redispatches an unknown effect",
+    "JSON output is exact service bytes plus one LF and output failure never repeats service",
+    "the tool performs no telemetry update check background polling build signing upload or cleanup",
+    "CI may invoke the tool only after real commands and freeze evidence exist and publication remains separately authorized",
+    "the tool is excluded from the default public bundle"
+  ],
+  "normative_files": [
+    "tools/wow-release/README.md",
+    "tools/wow-release/AGENTS.md",
+    "tools/wow-release/COMMANDS.md",
+    "tools/wow-release/SECURITY_AND_EXECUTION.md",
+    "tools/wow-release/TEST_MATRIX.md",
+    "tools/wow-release/CONTRACT.json",
+    "tools/wow-release/examples/README.md",
+    "tools/wow-release/examples/release-tool-cases.json",
+    "tools/wow-release/examples/CHECKSUMS.json"
+  ],
+  "freeze_gate": {
+    "implementation_state": "not-started",
+    "required_before_first_rust_implementation": [
+      "implemented and frozen E7-B service operation schemas and bytes",
+      "exact command option selector input output exit cancellation progress direct and daemon transport profiles",
+      "canonical command request result text artifact error and reconciliation vectors",
+      "credential absence path security output failure CI and one-call conformance reports",
+      "all member and bundle SHA-256 values"
+    ]
+  }
+}

@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e7b-source-build-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "source": {
+    "repository": "UnknownAlienHuman/WoW-Dev-Framework",
+    "commit_id": null,
+    "tree_id": null,
+    "tree_manifest_sha256": null,
+    "cargo_lock_sha256": null,
+    "workspace_manifest_sha256": null,
+    "canonical_sha256": null
+  },
+  "plan": {
+    "release_plan_id": null,
+    "target_triple": "x86_64-pc-windows-msvc",
+    "rust_toolchain_profile": null,
+    "feature_profile": null,
+    "dependency_materialization_id": null,
+    "environment_allowlist_profile": null,
+    "deterministic_build_profile": null,
+    "canonical_sha256": null
+  },
+  "builds": [
+    {
+      "build_id": null,
+      "builder_independence_profile": null,
+      "unsigned_artifact_set_id": null,
+      "canonical_sha256": null
+    },
+    {
+      "build_id": null,
+      "builder_independence_profile": null,
+      "unsigned_artifact_set_id": null,
+      "canonical_sha256": null
+    }
+  ],
+  "cases": [
+    {
+      "case_id": "S7B-SRC-001",
+      "expected": "SourceValidated"
+    },
+    {
+      "case_id": "S7B-SRC-002",
+      "mutation": "tag-or-working-tree-as-source-identity",
+      "expected_error": "e7b_floating_latest_tag_branch_dependency_or_toolchain_forbidden"
+    },
+    {
+      "case_id": "S7B-DEP-002",
+      "mutation": "lockfile-update-or-floating-dependency",
+      "expected_error": "e7b_dependency_materialization_missing_or_invalid"
+    },
+    {
+      "case_id": "S7B-BLD-003",
+      "mutation": "network-access-during-offline-build",
+      "expected_error": "e7b_build_network_or_sandbox_policy_violation"
+    },
+    {
+      "case_id": "S7B-BLD-007",
+      "mutation": "response-lost-after-build-dispatch",
+      "expected_status": "OutcomeUnknown"
+    },
+    {
+      "case_id": "S7B-REP-001",
+      "expected": "Reproducible"
+    },
+    {
+      "case_id": "S7B-REP-003",
+      "mutation": "independent-artifact-byte-mismatch",
+      "expected_error": "e7b_reproducibility_mismatch"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}

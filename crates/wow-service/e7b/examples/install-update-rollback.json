@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e7b-install-update-rollback-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "current_installation": {
+    "installation_id": null,
+    "release_id": null,
+    "bundle_id": null,
+    "current_record_digest": null,
+    "store_schema_id": null,
+    "config_schema_id": null,
+    "last_known_runnable_id": null
+  },
+  "target": {
+    "release_id": null,
+    "bundle_id": null,
+    "update_manifest_id": null,
+    "support_matrix_id": null
+  },
+  "plan": {
+    "update_plan_id": null,
+    "staging_plan_id": null,
+    "backup_plan_id": null,
+    "migration_plan_id": null,
+    "replacement_helper_id": null,
+    "rollback_target_id": null,
+    "canonical_sha256": null
+  },
+  "cases": [
+    {
+      "case_id": "S7B-UPD-002",
+      "mutation": "partial-or-wrong-digest-download",
+      "expected_error": "e7b_update_download_failed_partial_or_digest_mismatched"
+    },
+    {
+      "case_id": "S7B-UPD-003",
+      "mutation": "running-process-overwrites-own-executable",
+      "expected_error": "e7b_running_executable_self_overwrite_forbidden"
+    },
+    {
+      "case_id": "S7B-UPD-005",
+      "mutation": "helper-accepts-arbitrary-command-or-url",
+      "expected_error": "e7b_replacement_helper_invalid_spoofed_or_unauthorized"
+    },
+    {
+      "case_id": "S7B-MIG-002",
+      "mutation": "raw-SQL-or-script-migration",
+      "expected_error": "e7b_store_or_config_migration_plan_invalid"
+    },
+    {
+      "case_id": "S7B-ACT-002",
+      "mutation": "stale-installation-current-CAS",
+      "expected_error": "e7b_install_current_cas_stale"
+    },
+    {
+      "case_id": "S7B-LKR-002",
+      "mutation": "previous-directory-inferred-LKR",
+      "expected_error": "e7b_previous_newest_or_directory_as_LKR_forbidden"
+    },
+    {
+      "case_id": "S7B-RB-002",
+      "mutation": "old-binary-with-incompatible-migrated-data",
+      "expected_error": "e7b_rollback_data_migration_or_restore_invalid"
+    },
+    {
+      "case_id": "S7B-RB-004",
+      "mutation": "rollback-response-lost-after-CAS",
+      "expected_status": "OutcomeUnknown"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}

@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "contract_id": "apps/wow/e7-b/release-update-client",
+  "state": "implementation-ready-documentation-no-rust-code",
+  "work_package": "E7-B",
+  "application": "wow",
+  "documentation_frontier": "E7-B",
+  "implementation_state": "not-started",
+  "framework_dependencies": [
+    "wow-service"
+  ],
+  "prerequisite_contract": "wow-service/e7-b/release-distribution-update-support-lifecycle",
+  "commands": [
+    {
+      "command": "version",
+      "service_operation": "release_status",
+      "network": false
+    },
+    {
+      "command": "release status",
+      "service_operation": "release_status",
+      "network": false
+    },
+    {
+      "command": "release verify bundle",
+      "service_operation": "release_bundle_validate",
+      "network": false
+    },
+    {
+      "command": "installation validate",
+      "service_operation": "release_installation_validate",
+      "network": false
+    },
+    {
+      "command": "update check",
+      "service_operation": "release_update_check",
+      "network": "explicit-service-policy-only"
+    },
+    {
+      "command": "update plan",
+      "service_operation": "release_update_plan",
+      "network": "only-if-exact-plan-materialization-policy-requires"
+    },
+    {
+      "command": "update apply",
+      "service_operation": "release_update_apply",
+      "network": "only-through-frozen-service-plan"
+    },
+    {
+      "command": "update rollback",
+      "service_operation": "release_update_rollback",
+      "network": false
+    },
+    {
+      "command": "update reconcile",
+      "service_operation": "release_operation_reconcile",
+      "network": false
+    }
+  ],
+  "output_modes": [
+    "envelope-json",
+    "text",
+    "artifact"
+  ],
+  "hard_rules": [
+    "wow-service is the only framework dependency",
+    "each valid command invokes exactly one service operation",
+    "the app contains no build signing distribution download verification installer migration helper or rollback semantics",
+    "local identity verification and installation validation commands perform no network access",
+    "update check is explicit and never downloads or installs",
+    "update plan apply rollback and reconcile remain separate commands and effects",
+    "the app never selects latest newest previous highest version tag filename directory or same name targets",
+    "the app never overwrites its running executable executes bundle scripts runs shell commands edits store or configuration or chooses a helper",
+    "the Windows replacement helper is selected launched and validated only by the installation owner under the exact plan",
+    "public inputs contain no signing distribution provider or helper credentials private endpoints arbitrary URLs headers commands or environment blocks",
+    "OutcomeUnknown is unsafe to retry and update reconcile never redispatches",
+    "JSON output is exact service bytes plus one LF and broken pipe never repeats service",
+    "baseline performs no startup background update check download install telemetry crash upload or remote configuration",
+    "missing service installer helper platform or checksum evidence remains unimplemented and unadvertised"
+  ],
+  "normative_files": [
+    "apps/wow/e7b/README.md",
+    "apps/wow/e7b/AGENTS.md",
+    "apps/wow/e7b/CLI_COMMANDS.md",
+    "apps/wow/e7b/UPDATE_SECURITY_AND_RECOVERY.md",
+    "apps/wow/e7b/TEST_MATRIX.md",
+    "apps/wow/e7b/CONTRACT.json",
+    "apps/wow/e7b/examples/README.md",
+    "apps/wow/e7b/examples/update-client-cases.json",
+    "apps/wow/e7b/examples/CHECKSUMS.json"
+  ],
+  "freeze_gate": {
+    "implementation_state": "not-started",
+    "required_before_first_rust_implementation": [
+      "implemented and frozen E7-B service update installation rollback and reconciliation contracts",
+      "exact Windows helper handoff input output exit path and process lifecycle profiles",
+      "canonical command request result text artifact and error vectors",
+      "network absence and explicit update-policy tests",
+      "Windows console PowerShell cmd path lock antivirus daemon LSP MCP drain and crash recovery reports",
+      "all member and bundle SHA-256 values"
+    ]
+  }
+}
