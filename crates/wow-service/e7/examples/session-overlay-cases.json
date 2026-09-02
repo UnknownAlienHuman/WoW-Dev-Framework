@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e7a-session-overlay-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "session_binding": {
+    "session_id": null,
+    "workspace_binding_id": null,
+    "session_view_set_id": null,
+    "project_store_generation_id": null,
+    "project_generation_id": null,
+    "project_snapshot_id": null,
+    "graph_generation_id": null,
+    "graph_snapshot_id": null,
+    "analyzer_snapshot_id": null,
+    "reference_profile_id": null,
+    "reference_generation_id": null,
+    "canonical_sha256": null
+  },
+  "cases": [
+    {
+      "case_id": "S7A-SESSION-001",
+      "operation": "workspace_bind",
+      "expected": "active-exact-session-view"
+    },
+    {
+      "case_id": "S7A-SESSION-003",
+      "mutation": "refresh-current-during-request",
+      "expected_error": "e7a_current_refresh_mid_request_forbidden"
+    },
+    {
+      "case_id": "S7A-SESSION-008",
+      "operation": "session_rebind_exact",
+      "expected": "new-session-view-set"
+    },
+    {
+      "case_id": "S7A-DOC-001",
+      "operation": "document_open",
+      "document_version": 1,
+      "full_content_digest": null,
+      "expected": "first-overlay-generation"
+    },
+    {
+      "case_id": "S7A-DOC-002",
+      "operation": "document_change",
+      "prior_version": 1,
+      "new_version": 2,
+      "change_kind": "incremental",
+      "expected": "new-full-content-digest"
+    },
+    {
+      "case_id": "S7A-DOC-005",
+      "mutation": "same-version-different-content",
+      "expected_error": "e7a_document_version_stale_duplicate_or_conflicting"
+    },
+    {
+      "case_id": "S7A-DOC-015",
+      "operation": "document_save",
+      "expected": "observation-only"
+    },
+    {
+      "case_id": "S7A-DOC-016",
+      "mutation": "save-treated-as-disk-or-publication-proof",
+      "expected_error": "e7a_document_save_as_disk_or_publication_proof_forbidden"
+    },
+    {
+      "case_id": "S7A-DOC-021",
+      "mutation": "overlay-writes-source-file",
+      "expected_error": "e7a_document_overlay_write_to_source_forbidden"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}
