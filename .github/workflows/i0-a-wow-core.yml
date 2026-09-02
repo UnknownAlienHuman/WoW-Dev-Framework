@@ -31,17 +31,59 @@ jobs:
       - name: Install frozen Rust toolchain
         run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
 
-      - name: Apply the exact compiler correction discovered by runs 2 and 3
+      - name: Apply exact compiler and lint corrections discovered by bootstrap runs
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          path = Path('crates/wow-core/src/ids.rs')
-          text = path.read_text(encoding='utf-8')
+
+          ids = Path('crates/wow-core/src/ids.rs')
+          text = ids.read_text(encoding='utf-8')
           needle = "**byte == b'_'"
           if text.count(needle) != 1:
-              raise SystemExit('expected exactly one compiler-correction site')
-          path.write_text(text.replace(needle, "*byte == b'_'"), encoding='utf-8')
+              raise SystemExit('expected exactly one byte-iterator correction site')
+          ids.write_text(text.replace(needle, "*byte == b'_'"), encoding='utf-8')
+
+          canonical = Path('crates/wow-core/src/canonical.rs')
+          text = canonical.read_text(encoding='utf-8')
+          needle = "input.as_bytes().chunks_exact(2).enumerate()"
+          replacement = "input.as_bytes().as_chunks::<2>().0.iter().enumerate()"
+          if text.count(needle) != 1:
+              raise SystemExit('expected exactly one hash-test chunk site')
+          canonical.write_text(text.replace(needle, replacement), encoding='utf-8')
+
+          generation = Path('crates/wow-core/src/generation.rs')
+          text = generation.read_text(encoding='utf-8')
+          needle = '''        if let Some(previous) = result.last() {
+            if previous.provider_id == entry.provider_id && previous.scope_id == entry.scope_id {
+                if previous == &entry {
+                    continue;
+                }
+                return Err(validation_error(
+                    "merge_generation_context",
+                    CoreErrorCode::DuplicateExternalGenerationScope,
+                    "external_generations",
+                ));
+            }
+        }
+'''
+          replacement = '''        if let Some(previous) = result.last()
+            && previous.provider_id == entry.provider_id
+            && previous.scope_id == entry.scope_id
+        {
+            if previous == &entry {
+                continue;
+            }
+            return Err(validation_error(
+                "merge_generation_context",
+                CoreErrorCode::DuplicateExternalGenerationScope,
+                "external_generations",
+            ));
+        }
+'''
+          if text.count(needle) != 1:
+              raise SystemExit('expected exactly one external-generation merge site')
+          generation.write_text(text.replace(needle, replacement), encoding='utf-8')
           PY
 
       - name: Generate exact dependency lock
