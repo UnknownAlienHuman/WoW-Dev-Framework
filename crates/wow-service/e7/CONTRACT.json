@@ -1,0 +1,196 @@
+{
+  "schema_version": 1,
+  "contract_id": "wow-service/e7-a/lsp-mcp-session-and-transport-foundation",
+  "state": "implementation-ready-documentation-no-rust-code",
+  "work_package": "E7-A",
+  "crate": "wow-service",
+  "documentation_frontier": "E7-A",
+  "implementation_state": "not-started",
+  "applications": [
+    "apps/wow-lsp",
+    "apps/wow-mcp"
+  ],
+  "application_contracts": [
+    "apps/wow-lsp/e7/CONTRACT.json",
+    "apps/wow-mcp/e7/CONTRACT.json"
+  ],
+  "direct_framework_dependencies": [
+    "wow-core",
+    "wow-store",
+    "wow-reference",
+    "wow-project",
+    "wow-graph",
+    "wow-search",
+    "wow-context",
+    "wow-rules",
+    "wow-cbm"
+  ],
+  "inactive_direct_dependencies": [
+    "wow-annotations",
+    "wow-emmy",
+    "wow-recognizers"
+  ],
+  "prerequisites": [
+    {
+      "contract_id": "wow-service/e3-c/context-acquisition-and-use-cases",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-service/e4-c/search-lineage-impact-use-cases",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-service/e6-b/external-candidate-mapping-context-orchestration",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-project/e2-c/toc-xml-load-incremental-index",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-store/e2-d/projectstore-coherent-publication",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-context/e3-b/project-map-l0-l1-context-pack",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-search/e4-a/exact-generation-retrieval-core",
+      "implementation_and_fixture_freeze_required": true
+    }
+  ],
+  "public_operations": [
+    "protocol_status",
+    "protocol_profile_validate",
+    "session_initialize",
+    "session_capabilities",
+    "session_rebind_exact",
+    "session_shutdown",
+    "workspace_bind",
+    "workspace_status",
+    "document_open",
+    "document_change",
+    "document_save",
+    "document_close",
+    "document_snapshot_validate",
+    "analysis_diagnostics",
+    "analysis_hover",
+    "analysis_definition",
+    "analysis_references",
+    "analysis_symbols",
+    "analysis_code_actions",
+    "analysis_resolve_action",
+    "context_request",
+    "search_request",
+    "operation_cancel",
+    "operation_status"
+  ],
+  "session_states": [
+    "Created",
+    "Initializing",
+    "Active",
+    "Rebinding",
+    "ShuttingDown",
+    "Closed",
+    "Failed",
+    "Quarantined"
+  ],
+  "service_statuses": [
+    "Complete",
+    "NoChange",
+    "Partial",
+    "CandidateOnly",
+    "Blocked",
+    "ConflictBlocked",
+    "Truncated",
+    "Busy",
+    "OutcomeUnknown",
+    "NotEvaluated",
+    "Cancelled",
+    "Failed"
+  ],
+  "initial_protocol_profile_candidates": [
+    "lsp-stdio-single-client-read-analysis-v1",
+    "mcp-stdio-single-client-fixed-tools-resources-v1"
+  ],
+  "active_scope": [
+    "exact-external-protocol-specification-and-profile-freeze",
+    "transport-independent-session-workspace-generation-binding-and-rebind",
+    "session-local-immutable-document-overlay-generations",
+    "diagnostics-hover-definition-references-symbols-and-advisory-actions",
+    "existing-exact-context-and-search-service-operation-projection",
+    "exact-cancellation-progress-partial-result-backpressure-and-shutdown",
+    "independent-authentication-authorization-privacy-license-and-source-boundaries",
+    "fixed-allow-listed-LSP-and-MCP-capability-descriptors",
+    "canonical-service-results-and-protocol-projection-loss-records",
+    "thin-service-only-LSP-and-MCP-stdio-applications"
+  ],
+  "deferred_scope": [
+    "remote-network-daemon-http-tls-multi-tenant-session-transport",
+    "completion-signature-help-rename-formatting-semantic-tokens-inlay-hints-file-operations",
+    "workspace-edit-or-execute-command-application",
+    "MCP-sampling-elicitation-prompts-dynamic-tools-or-arbitrary-roots",
+    "source-editing-or-runtime-WoW-client-control",
+    "model-embedding-reranker-or-generic-tool-orchestration",
+    "reproducible-build-release-signing-distribution-update-and-CI"
+  ],
+  "hard_rules": [
+    "protocol specification versions transports framing and compatibility are exact frozen profiles and never floating latest",
+    "LSP and MCP applications depend on wow-service only and map one request to one service operation",
+    "normal operations use one exact immutable SessionViewSet and never refresh current",
+    "explicit rebind creates a new SessionViewSet and never silently migrates overlays continuations or results",
+    "unsaved documents are session-local immutable overlay generations and never source writes or project publications",
+    "document changes require monotonic versions validated ranges and canonical full-content digests",
+    "save notifications are observations and never disk publication or runtime proof",
+    "client capabilities authentication editor trust MCP approval GitHub OS CLI process or file identity never create operation authorization or semantic authority",
+    "MCP exposes fixed allow-listed tools and resources with no generic tool or owner passthrough",
+    "LSP code actions are advisory and contain no executable command or applied workspace edit in E7-A",
+    "source query provider review and prompt text remain structurally isolated untrusted data",
+    "cancellation progress partial results continuation and queues are exact bounded and no detached work survives terminal state",
+    "response loss never proves no effect and OutcomeUnknown blocks blind repetition",
+    "protocol projection preserves evidence confidence coverage conflicts blockers partial truncation and NotEvaluated",
+    "no raw SQL storage owner source filesystem URL network process editor client model credential or private key surface",
+    "no Cargo Rust source release workflow or CI during the documentation phase"
+  ],
+  "normative_files": [
+    "crates/wow-service/README.md",
+    "crates/wow-service/e7/README.md",
+    "crates/wow-service/e7/AGENTS.md",
+    "crates/wow-service/e7/DECISIONS.md",
+    "crates/wow-service/e7/DATA_MODEL.md",
+    "crates/wow-service/e7/PROTOCOL_PROFILES_AND_HANDSHAKE.md",
+    "crates/wow-service/e7/SESSION_WORKSPACE_AND_GENERATIONS.md",
+    "crates/wow-service/e7/DOCUMENT_OVERLAYS.md",
+    "crates/wow-service/e7/SERVICE_OPERATIONS.md",
+    "crates/wow-service/e7/CANCELLATION_PROGRESS_AND_BACKPRESSURE.md",
+    "crates/wow-service/e7/AUTHORIZATION_PRIVACY_AND_TRUST.md",
+    "crates/wow-service/e7/RESULTS_ERRORS_AND_TELEMETRY.md",
+    "crates/wow-service/e7/SECURITY_AND_BUDGETS.md",
+    "crates/wow-service/e7/ERROR_MODEL.md",
+    "crates/wow-service/e7/TEST_MATRIX.md",
+    "crates/wow-service/e7/IMPLEMENTATION_PLAN.md",
+    "crates/wow-service/e7/CONTRACT.json",
+    "crates/wow-service/e7/examples/README.md",
+    "crates/wow-service/e7/examples/protocol-profiles.json",
+    "crates/wow-service/e7/examples/session-overlay-cases.json",
+    "crates/wow-service/e7/examples/operation-cases.json",
+    "crates/wow-service/e7/examples/CHECKSUMS.json",
+    "apps/wow-lsp/e7/CONTRACT.json",
+    "apps/wow-mcp/e7/CONTRACT.json"
+  ],
+  "freeze_gate": {
+    "implementation_state": "not-started",
+    "required_before_first_rust_implementation": [
+      "all active E0 through E6 owner and service implementation commits and fixture bundle digests",
+      "exact official LSP and MCP specification revisions conformance vectors and compatibility decisions",
+      "frozen stdio framing JSON-RPC position encoding initialization capability error progress cancellation and shutdown profiles",
+      "implemented session workspace generation document-overlay diagnostics navigation action context search authorization retention and closure owner ports",
+      "frozen LSP and MCP method tool resource descriptor schemas and one-to-one service mappings",
+      "synthetic pinned-addon Blizzard-UI-source external-candidate Unicode edit queue disconnect authorization privacy and adversarial fixtures",
+      "measured message document queue concurrency latency memory shutdown and output thresholds on every supported target",
+      "all canonical service LSP MCP request result error framing and projection bytes",
+      "all member and bundle SHA-256 values"
+    ]
+  }
+}
