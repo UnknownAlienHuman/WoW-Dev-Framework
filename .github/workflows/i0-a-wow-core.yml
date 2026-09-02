@@ -67,6 +67,9 @@ jobs:
             -C "$HOME/.cargo" \
             -cf cargo-registry.tar.xz \
             registry
+          tar -cf i0-a-rust-offline-kit.tar \
+            rust-1.98.0-toolchain.tar.xz \
+            cargo-registry.tar.xz
 
       - name: Upload exact reviewed input tree
         uses: actions/upload-artifact@v7.0.1
@@ -81,9 +84,7 @@ jobs:
         uses: actions/upload-artifact@v7.0.1
         with:
           name: i0-a-rust-offline-kit
-          path: |
-            rust-1.98.0-toolchain.tar.xz
-            cargo-registry.tar.xz
+          path: i0-a-rust-offline-kit.tar
           archive: false
           if-no-files-found: error
           retention-days: 1
