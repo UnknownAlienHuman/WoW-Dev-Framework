@@ -15,8 +15,8 @@
   "prerequisites": [
     "wow-core/e0-a/1",
     "wow-store/e2-d/projectstore-coherent-publication",
-    "wow-service/e7-a/transport-session-editor-use-cases",
-    "apps/wow/e7-a/transport-host"
+    "wow-service/e7-a/frontend-session-operation-registry",
+    "apps/wow/e7-a/frontend-host"
   ],
   "first_supported_target_intent": {
     "target_triple": "x86_64-pc-windows-msvc",
