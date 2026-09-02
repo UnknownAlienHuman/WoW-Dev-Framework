@@ -3,221 +3,188 @@
 **Status:** operational documentation and implementation routing.
 
 ```text
-documentation frontier: E5-A complete
-next documentation package: E5-B calibration orchestration, review, holdout audit and promotion submissions
+documentation frontier: E5-B complete
+next documentation package: E5-C immutable core-pack publication/signing/canary/rollout/rollback
 implementation frontier: not started
 ```
 
-No Rust workspace, `Cargo.toml`, `.rs` files, or CI workflows exist yet.
+No Rust workspace, `Cargo.toml`, `.rs` files, or CI workflows exist.
 
 ## Milestone summary
 
 | Milestone | Documentation outcome | Documentation | Implementation |
 |---|---|---:|---:|
-| E0 | Deterministic diagnostic vertical slice | Complete | Not started |
-| E1 | ReferenceStore, ReferenceView, annotations, pack build/validation | Complete | Not started |
-| E2 | Graph, core recognizers, full project candidate, ProjectStore publication | Complete | Not started |
-| E3-A | Exact Blizzard UI source universe and SkeletonInputView | Complete | Not started |
-| E3-B | Project Map, L0/L1, context packs and rendering | Complete | Not started |
-| E3-C | Service/application context acquisition and use cases | Complete | Not started |
-| E4-A | Exact-generation search shards, retrieval lanes, ranking and explanations | Complete | Not started |
-| E4-B | Explicit lineage, change, migration records and bounded static impact | Complete | Not started |
-| E4-C | Search/lineage/review/migration/impact service and CLI orchestration | Complete | Not started |
-| E5-A | Calibration corpora, named shadow packs, anti-overfitting evaluation, candidate/deactivation artifacts | Complete | Not started |
-| E5-B | Durable calibration runs, reviewer authorization, sealed-holdout audit, promotion submissions | Next | Not started |
-| E5-C | Immutable core-pack publication, canary, rollout and rollback | Planned | Not started |
-| E6 | Optional Codebase Memory candidate bridge | Planned | Not started |
-| E7 | LSP/MCP, release, signing, publication and rollback | Planned | Not started |
+| E0 | deterministic diagnostic vertical slice | Complete | Not started |
+| E1 | ReferenceStore/View, annotations, pack build/validation | Complete | Not started |
+| E2 | graph, recognizers, project indexing and ProjectStore | Complete | Not started |
+| E3-A | exact Blizzard UI source universe | Complete | Not started |
+| E3-B | Project Map, L0/L1 and context packs | Complete | Not started |
+| E3-C | context service and CLI | Complete | Not started |
+| E4-A | exact-generation search | Complete | Not started |
+| E4-B | lineage, migration records and static impact | Complete | Not started |
+| E4-C | search/lineage/impact service and CLI | Complete | Not started |
+| E5-A | calibration corpora, shadow packs, evaluation and candidate artifacts | Complete | Not started |
+| E5-B | durable runs, review authorization, sealed holdout, promotion submissions | Complete | Not started |
+| E5-C | immutable core-pack publication, signing, canary, rollout and rollback | Next | Not started |
+| E6 | optional Codebase Memory candidate bridge | Planned | Not started |
+| E7 | LSP/MCP and release integration | Planned | Not started |
 
-## E0–E2 implementation foundation
+## Implementation remains E0-first
 
-### E0 — executable diagnostic slice
-
-Build `wow-core`, fixture `wow-reference`, `wow-emmy`, minimal `wow-project`, two bounded rules, service, and thin diagnostic CLI only after all E0 fixtures/profiles/checksums freeze.
-
-Gate: one exact profile/project/reference/analyzer context; generic + WoW findings; honest negative authority and NotEvaluated; no source/editor/client mutation; byte-identical output.
-
-### E1 — Reference Pack
-
-Build generic storage, persistent reference ingestion/corrections/coverage, deterministic annotations, and nonrepairing pack build/validation.
-
-Gate: exact pins; immutable validated ReferenceStore; raw unknown/correction conflicts retained; annotation loss/injection/editor gates; pack checksum/license/coverage closure; deterministic rebuild classification.
-
-### E2 — graph, project and persistence
-
-Build graph assertions/partitions/queries, E2-B structural recognizers, full TOC/XML/load/analyzer indexing, invalidation, and WAL manifested-partition ProjectStore publication.
-
-Gate: producer-independent identity; atomic replacement; safe parsers; no second Lua parser; exact old/new readers; inactive read-back before current CAS; crash/response-loss/lease/GC/backup tests; logical determinism.
-
-## E3 — source and context
-
-- **E3-A:** separate exact Blizzard UI source project with pinned materialization, package/TOC/XML/Lua/analyzer/recognizer/graph publication, license/coverage, fingerprints and bounded `SkeletonInputView`.
-- **E3-B:** exact-universe binding, Project Map/L0/L1, deterministic expansion/selection/pruning, source/privacy/license boundaries, semantic packs, rendering, continuation/cache identities and metrics.
-- **E3-C:** exact/current selector resolution, retained owner acquisition, context orchestration, continuation retention, result envelopes, cancellation/closure and thin context CLI.
-
-## E4 — search, lineage and impact
-
-### E4-A — exact-generation search core
-
-Contract: [`../crates/wow-search/e4/README.md`](../crates/wow-search/e4/README.md)
-
-Build immutable SearchShards per exact owner generation, bounded typed documents, exact/alias/member/prefix/text/similarity/shape/graph lanes, authority bands, deterministic integer/ordinal fusion, complete explanations, honest miss, immutable result sets, continuation, integrity/privacy/security/evaluation.
-
-Gate:
+Documentation maturity does not reorder implementation. Executable work begins with:
 
 ```text
-no combined current/global FTS corpus
-no raw cross-shard FTS score comparison
-no inferred aliases or hidden candidate selection
-no raw query syntax/executable extension/model/CBM lane
-no approximate result promoted to lineage/replacement/negative authority
-complete owner/document/index/lane coverage accounting
-deterministic ranking/pages across workers/order/cache/storage layout
-exact SQLite/FTS/tokenizer/platform probes and measured thresholds
-all fixture/checksum pins frozen
+wow-core E0-A
+-> fixture wow-reference + pinned wow-emmy
+-> minimal wow-project
+-> two bounded wow-rules
+-> wow-service status/check
+-> thin apps/wow
 ```
 
-### E4-B — lineage, migration records and static impact
+Later packages remain blocked until prerequisite implementation commits, profiles, fixtures, probes, benchmarks, authorization adapters, runtime evidence, and SHA-256 manifests exist.
 
-Contract: [`../crates/wow-graph/e4/README.md`](../crates/wow-graph/e4/README.md)
+## E0–E4 documented foundation
 
-Build exact before/after same-universe bindings, independent project/reference/search/review producer partitions, bounded ambiguity components, proof-ceiling validation, immutable lineage snapshot, typed changes/absence/replacement/migration records and bounded static-impact reason paths.
+- **E0:** exact identity/evidence/coverage/result primitives and one deterministic diagnostic slice.
+- **E1:** generic store, persistent ReferenceView, annotations, and nonrepairing Reference Pack assembly.
+- **E2:** assertion graph, declarative recognizers, bounded TOC/XML/load indexing, incremental invalidation, coherent ProjectStore publication.
+- **E3:** separate Blizzard UI source universe, Project Map/L0/L1/context engine, and exact service/CLI acquisition.
+- **E4:** exact-generation search, explicit lineage/change/migration/static impact, and service/CLI orchestration.
 
-Gate:
+All keep candidate, partial, conflict, truncation, `NotEvaluated`, source implementation, platform contract, and runtime evidence distinct.
 
-```text
-no cross-generation entity merge
-no name/path/signature/fingerprint/rank/uniqueness promotion
-no unrestricted all-pairs or forced split/merge bijection
-no search candidate above Candidate
-no review confidence above minimum proof ceiling
-no Removed/Introduced without complete exact negative authority
-no same-lineage -> replacement shortcut
-no migration execution
-no static path -> runtime/severity/performance/taint/combat/Secret/fixability
-immutable publication and exact retained continuation
-```
-
-### E4-C — service and CLI orchestration
-
-Contracts:
-
-- [`../crates/wow-service/e4/README.md`](../crates/wow-service/e4/README.md)
-- [`../apps/wow/e4/README.md`](../apps/wow/e4/README.md)
-
-Build explicit shard/lineage status/build/validation, search/query/explain/continuation, exact current acquisition, explicit candidate selection, search-to-context handoff, review authorization plus independent graph validation, immutable lineage publication/query, advisory migration validation, bounded impact operations, idempotency/response-loss/retention/closure, and thin CLI transport.
-
-Gate:
-
-```text
-no implicit shard build or newest/first/last selection
-no top-1/sole/rank/name candidate selection
-no rank/query text as context or lineage authority
-no reviewer authorization from GitHub/OS/CLI/file identity
-no in-place review mutation or migration apply
-no static impact overclaim or path flattening
-no current refresh/budget reset on continuation
-no public success before reverse resource closure
-apps depend on wow-service only
-```
-
-## E5-A — calibration corpora and named packs
+## E5-A — calibration owner
 
 Contract: [`../crates/wow-recognizers/e5/README.md`](../crates/wow-recognizers/e5/README.md)
 
-Documentation now defines:
-
-- exact candidate-source revision, tree/inventory/publication/fact closure;
-- conservative upstream/fork/copy/vendor/generated/near-duplicate provenance groups;
-- license/privacy/notice decisions per artifact class;
-- immutable independent label and reviewer-evidence records;
-- atomic Train/Dev/Test/SealedHoldout/Challenge/Quarantine splits;
-- leakage detection, consumed-generation history, and holdout visibility rules;
-- E2-B-compatible `calibration` + `shadow_only` pack schema;
-- universal registered graph outputs at `Derived`/`Possible` only;
-- repository/owner/addon/path/local-name/prose invariance;
-- decisive literal/structure/resolution/coverage sensitivity and near-miss tests;
-- independent graph validation and immutable per-case-first metrics;
-- candidate artifact, supersession and partition-local deactivation;
-- typed errors, security/resource ceilings, determinism, implementation plan, fixtures and pending checksum gate.
-
-Current real-source state:
-
-```text
-8 exact user-repository commits pinned as candidate inputs
-0 real sources admitted
-0 real measured calibration runs
-0 sealed holdout generations
-0 promotion submissions
-```
-
-The eight pins cannot advance until exact tree/source inventories, project/analyzer/graph/fact publications, provenance grouping, license/privacy decisions, independent labels and split eligibility close.
-
-E5-A gate before Rust:
-
-```text
-implemented/frozen E0/E2 prerequisite crates and owner seams
-exact candidate source and publication identities
-provenance/license/privacy/label/split/holdout profiles
-pack/rule/literal/mutation/evaluation/graph-validation profiles
-per-case expected outcomes and hard failure gates
-ordinary/adversarial benchmarks and quantitative thresholds
-1/2/N worker and shuffled-order determinism
-candidate/deactivation canonical bytes
-all member and bundle SHA-256 values
-```
+E5-A owns exact candidate-source/corpus/provenance/label/split/pack validation, shadow matching, anti-overfitting mutations, graph proposal validation receipts, per-case-first metrics, candidate artifacts, and deactivation plans.
 
 Hard stops:
 
 ```text
-no commit-pin-only corpus admission
-no repository source execution or raw-source matcher fallback
-no repository/addon/owner/path/popularity/label/split/reviewer/model condition
+no commit-pin-only admission
+no repository/addon/owner/path/popularity semantics
+no labels/splits/reviewer/expected outputs as matcher input
 no copied/forked/vendor/generated leakage across ordinary splits
-no holdout access before exact candidate/run freeze
 no Unknown/Possible/NotEvaluated/Conflict/Partial/Truncated -> Negative/pass
-no donor-specific graph kind or new E5 operator language
 no confidence above Derived/Possible
 no default/core rollout or graph publication
-no hard failure hidden by aggregate weighting
-no generalization claim beyond admitted independent provenance groups
-no core/foreign partition deletion during deactivation
+no hard failure hidden by aggregates
+no deactivation of core/foreign partitions
 ```
 
-## Next — E5-B calibration orchestration, review and promotion submissions
-
-Owner: `wow-service`; thin application: `apps/wow`.
-
-Define:
+Current real evidence remains:
 
 ```text
-exact corpus/pack/run/candidate selectors
-retained artifact catalogs and fixed-order acquisition
-owner compatibility validation and reverse-order closure
-durable operation ID + canonical request digest
-idempotency and response-loss recovery
-reviewer authorization independent from metrics and graph validity
-sealed-holdout unsealing authorization and access audit
-promotion submission preparation without core publication
-conservative status/result envelopes
-strict CLI inputs, output modes, cancellation and exit codes
+exact user-repository revisions pinned: 8
+real admitted corpus members: 0
+real measured calibration runs: 0
+sealed holdout generations executed: 0
+implemented promotion submissions: 0
 ```
 
-E5-B must invoke `wow-recognizers` E5-A operations rather than reimplement corpus admission, provenance grouping, split/leakage, labeling, matcher, mutation, metrics, graph validation, or deactivation. Missing reviewer authorization or holdout infrastructure remains blocked/NotEvaluated. E5-C remains the sole publication/canary/rollback owner.
+## E5-B — durable orchestration, review, holdout, and submission
 
-## E5-C
+Contracts:
 
-Implement immutable core-pack publication, signatures when a signing profile exists, staged canary, rollout, exact last-known-good, rollback, stale partition closure and publication/read-back validation.
+- [`../crates/wow-service/e5/README.md`](../crates/wow-service/e5/README.md)
+- [`../apps/wow/e5/README.md`](../apps/wow/e5/README.md)
 
-## E6–E7
+E5-B defines 22 service operations and matching thin CLI commands for exact source/corpus/split validation/admission, durable run lifecycle, case explanation, candidate validation, reviewer authorization, holdout request/execution/audit, immutable promotion submissions, and deactivation-plan validation.
 
-- E6: optional Codebase Memory bridge; candidates remain external and degradable.
-- E7: thin LSP/MCP and release/signing/publication operations.
+### Required state separation
+
+```text
+metric eligibility != graph validity
+graph validity != reviewer authorization
+reviewer authorization != holdout authorization
+holdout authorization != disclosure
+disclosure != promotion approval
+promotion submission != publication
+publication != activation
+activation != runtime correctness
+```
+
+### Durable operation gate
+
+Every effecting operation registers:
+
+```text
+OperationId + CanonicalRequestDigest
+```
+
+before dispatch. Same ID/different digest is rejected. Response loss yields `OutcomeUnknown` until exact owner/store/vault reconciliation. No blind repeat, no hidden rerun, and no public success before retention and reverse-order closure.
+
+### Review gate
+
+Review uses a narrow authorization port and immutable exact-candidate decision envelopes. GitHub login/repository ownership, OS user, CLI operator, file owner, commit author, metric result, or successful graph validation is not authorization.
+
+Authorization cannot alter candidate bytes, labels, metrics, graph proof, confidence, coverage, or proof ceilings.
+
+### Sealed-holdout gate
+
+Before access, freeze exact holdout generation, candidate pack, candidate artifact, implementation/evaluator, run request, profiles, budgets, disclosure, retention, and contamination policy.
+
+Every request, grant, denial, open, execution, disclosure, failure, cancellation, revocation, replay, and consumption event is auditable. A consumed or contamination-unknown generation is never called untouched. Review authorization is not holdout authorization.
+
+### Promotion-submission gate
+
+A `PromotionSubmission` binds exact candidate, corpus, split, run, graph, mutation, metric, review, holdout, license/privacy, deactivation, blocker, and nonclaim evidence.
+
+Submission states such as `Prepared`, `Validated`, or `ReadyForE5CReview` do not mean published, active, default, or runtime-verified. E5-B cannot publish or activate.
+
+### E5-B implementation gate
+
+Before Rust:
+
+```text
+all E0–E5-A implementations and fixture bundles
+exact owner catalog/read/effect/reconciliation ports
+review and holdout authorization adapters/profiles
+holdout vault/evaluator/disclosure/audit/consumption profiles
+durable operation/idempotency/retention/recovery profiles
+canonical service and CLI request/result/error/output vectors
+synthetic and admitted real authorization/holdout/response-loss corpora
+measured resource thresholds
+all member/bundle SHA-256 values
+```
+
+Missing evidence is blocked/`NotEvaluated`, never pass.
+
+## Next — E5-C core-pack publication lifecycle
+
+Owner: `wow-service`; thin application: `apps/wow`; collaborators: `wow-recognizers`, `wow-store`, `wow-graph`, `wow-project`.
+
+E5-C must define:
+
+```text
+exact PromotionSubmission selector and independent revalidation
+distinct immutable CorePackArtifact
+publication catalog and PublishedInactive state
+detached signatures, provenance/SBOM/license/notices without committed private keys
+fresh read-back validation
+exact canary cohorts and typed observation profiles
+guarded current/default activation
+finite staged rollout and pause
+explicit retained last-known-good
+rollback, deactivation, revocation and stale producer-partition closure
+project/graph reindex handoff
+OperationId/request-digest idempotency and response-loss recovery
+retention, audit, recovery and thin service-only CLI
+```
+
+E5-C cannot rewrite E5-A/B evidence, treat a signature as semantic/runtime proof, infer last-known-good as previous/newest, claim ecosystem-wide runtime correctness from a canary, or expose public distribution before E7.
+
+## E6–E7 planned boundary
+
+- **E6:** optional external Codebase Memory/semantic candidates; Candidate-only, degradable, no provider database writes.
+- **E7:** thin LSP/MCP and release/signing/distribution integration after implementation gates.
 
 ## Roadmap discipline
 
-- Later documentation cannot bypass earlier implementation gates.
-- Architecture changes require an ADR and concrete failure of the accepted design.
-- Stable contracts link the current external WoW engineering KB rather than copying patch-sensitive claims.
-- Missing tools/probes/benchmarks/evaluations/authorization/client tests are skipped, blocked or NotEvaluated, never pass.
 - Outcomes and proof gates matter; percentages and directory counts do not.
+- Stable contracts link the current external WoW KB instead of copying patch-sensitive facts.
+- Missing tools, probes, benchmarks, authorizations, vaults, evaluations, or client evidence are skipped, blocked, or `NotEvaluated`, never pass.
+- Architecture changes require an ADR and concrete failure of the accepted design.
+- No CI/workflow without explicit owner instruction.

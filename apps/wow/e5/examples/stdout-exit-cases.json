@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "fixture_id": "apps-wow-e5b-stdout-exit-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "cases": [
+    {"case_id": "A5B-OUT-001", "service_status": "Complete", "output_mode": "envelope-json", "expected": "exact-service-bytes-plus-one-LF", "expected_exit": 0},
+    {"case_id": "A5B-OUT-006", "validation_state": "Invalid", "expected_exit": 1},
+    {"case_id": "A5B-OUT-007", "service_status": "Blocked", "expected_exit": 2},
+    {"case_id": "A5B-OUT-009", "service_status": "OutcomeUnknown", "expected_exit": 4},
+    {"case_id": "A5B-HOLD-008", "holdout_consumption": "DisclosedAndConsumed", "required_text": "consumed", "forbidden_text": "untouched"},
+    {"case_id": "A5B-PROM-003", "submission_state": "Prepared", "required_text": "submission prepared", "forbidden_text": "published|promoted|active"}
+  ],
+  "freeze_gate": {"required_before_first_rust_implementation": true}
+}

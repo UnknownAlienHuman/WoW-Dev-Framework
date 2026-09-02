@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "fixture_id": "apps-wow-e5b-cli-cases-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "cases": [
+    {"case_id": "A5B-ROUTE-001", "command": "wow calibration run submit", "service_operation": "calibration_run_submit", "expected_service_calls": 1},
+    {"case_id": "A5B-IN-002", "command": "wow calibration candidate validate --best", "expected_exit": 64},
+    {"case_id": "A5B-REV-002", "command": "wow calibration review record --approve", "expected_exit": 64},
+    {"case_id": "A5B-HOLD-002", "command": "wow calibration holdout execute --vault-token secret", "expected_exit": 64},
+    {"case_id": "A5B-PROM-002", "command": "wow calibration promotion activate", "expected_exit": 64}
+  ],
+  "freeze_gate": {"required_before_first_rust_implementation": true}
+}

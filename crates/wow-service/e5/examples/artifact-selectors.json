@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e5b-artifact-selectors-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "cases": [
+    {"case_id": "S5B-SEL-001", "selector": "ExactArtifact", "expected": "UniqueEligible"},
+    {"case_id": "S5B-SEL-003", "selector": "ForExactBinding", "expected": "None"},
+    {"case_id": "S5B-SEL-004", "selector": "ForExactBinding", "expected": "MultipleConflicting"},
+    {"case_id": "S5B-SEL-005", "selector": "LatestOrBest", "expected_error": "e5b_latest_best_default_selector_forbidden"}
+  ],
+  "freeze_gate": {"required_before_first_rust_implementation": true, "canonical_sha256": null}
+}

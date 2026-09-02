@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "contract_id": "apps/wow/e5-b/calibration-review-holdout-promotion-cli",
+  "state": "implementation-ready-documentation-no-rust-code",
+  "work_package": "E5-B",
+  "application": "wow",
+  "documentation_frontier": "E5-B",
+  "implementation_state": "not-started",
+  "framework_dependencies": ["wow-service"],
+  "prerequisite_contract": "wow-service/e5-b/calibration-review-holdout-promotion-submission",
+  "active_commands": [
+    "calibration status", "calibration source validate", "calibration corpus validate", "calibration corpus admit", "calibration split validate",
+    "calibration run submit", "calibration run get", "calibration run list", "calibration run cancel", "calibration run retry",
+    "calibration case explain", "calibration candidate build", "calibration candidate validate", "calibration review validate", "calibration review record",
+    "calibration holdout request", "calibration holdout execute", "calibration holdout audit",
+    "calibration promotion prepare", "calibration promotion validate", "calibration promotion get", "calibration deactivation validate"
+  ],
+  "service_operations": [
+    "calibration_status", "calibration_source_validate", "calibration_corpus_validate", "calibration_corpus_admit", "calibration_split_validate",
+    "calibration_run_submit", "calibration_run_get", "calibration_run_list", "calibration_run_cancel", "calibration_run_retry",
+    "calibration_case_explain", "calibration_candidate_build", "calibration_candidate_validate", "calibration_review_validate", "calibration_review_record",
+    "calibration_holdout_request", "calibration_holdout_execute", "calibration_holdout_audit",
+    "calibration_promotion_prepare", "calibration_promotion_validate", "calibration_promotion_get", "calibration_deactivation_validate"
+  ],
+  "output_modes": ["envelope-json", "text", "artifact"],
+  "exit_codes": {"0": "success-or-valid", "1": "completed-invalid-or-denied", "2": "partial-blocked-not-evaluated", "3": "structured-domain-failure", "4": "outcome-unknown-or-internal-output-failure", "64": "pre-service-transport-failure", "130": "cancelled"},
+  "hard_rules": [
+    "wow-service is the only framework dependency",
+    "exactly one service operation per valid command",
+    "catalog and current selectors are never resolved by the app",
+    "plain approval and local or GitHub identity never authorize review",
+    "vault credentials and hidden holdout data are not CLI inputs",
+    "promotion commands never publish or activate",
+    "machine output preserves blockers authorization consumption OutcomeUnknown and nonclaims",
+    "broken pipe or output failure never repeats service"
+  ],
+  "normative_files": [
+    "apps/wow/e5/README.md", "apps/wow/e5/AGENTS.md", "apps/wow/e5/CLI_COMMANDS.md", "apps/wow/e5/OUTPUT_EXIT_AND_STREAMS.md",
+    "apps/wow/e5/SECURITY_AND_INPUTS.md", "apps/wow/e5/TEST_MATRIX.md", "apps/wow/e5/CONTRACT.json",
+    "apps/wow/e5/examples/README.md", "apps/wow/e5/examples/cli-cases.json", "apps/wow/e5/examples/stdout-exit-cases.json", "apps/wow/e5/examples/CHECKSUMS.json"
+  ],
+  "freeze_gate": {"implementation_state": "not-started", "required_before_first_rust_implementation": ["implemented and frozen wow-service E5-B contract", "all command/profile/output/exit/security vectors", "all member and bundle SHA-256 values"]}
+}

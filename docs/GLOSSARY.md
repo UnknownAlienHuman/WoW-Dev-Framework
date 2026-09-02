@@ -1,175 +1,121 @@
 # Glossary
 
-**Status: normative terminology**
+**Status:** normative terminology.
 
-## Reference Pack
+## Identity, evidence, and state
 
-An immutable, profile-specific artifact containing normalized Blizzard API/UI facts, raw metadata, annotations, source maps, skeletons, checksums, licenses, and capability/coverage state.
+**Profile** — exact WoW target identified by flavor, Interface, build, source revision/digest, schema/tool versions, and correction set. `Current` is not a durable profile ID.
 
-## Profile
+**Reference generation** — immutable identity of one built Reference Pack.
 
-An exact World of Warcraft target identified by flavor/edition, Interface, client build, source revision/digest, schema versions, builder version, and correction set. “Current” is not a durable profile ID.
+**Project generation** — immutable project snapshot published from coherent source/configuration inputs against one profile.
 
-## Reference generation
+**External generation** — exact revision/index identity of an external source or candidate system.
 
-The immutable identity of a built Reference Pack.
+**Capability** — named operation whose availability depends on explicit inputs and coverage.
 
-## Project generation
+**Coverage partition** — smallest source/analysis area whose completeness is reported independently.
 
-An immutable snapshot published by the project actor after applying a coherent set of file/configuration updates against one Reference Pack profile.
+**Negative authority** — permission to state absence. Requires exact scope/profile/generation, complete relevant coverage, and no unresolved conflict/truncation.
 
-## External generation
+**Provenance** — origin class of evidence: platform source, project source, runtime probe, correction, oracle, external implementation, semantic candidate, or historical record.
 
-The revision/index identity of an external repository or Codebase Memory result set.
+**Confidence** — `Proven`, `Derived`, `Possible`, or `Candidate`.
 
-## Capability
+**Stable source handle** — compact exact source identity including owner/revision/profile/path/span/digest and optional symbol/entity key.
 
-A named analysis/query function whose availability depends on specific source partitions and tool behavior, such as `apidoc.signature.complete` or `project.toc.complete`.
+**OutcomeUnknown** — durable state where an effect may have committed but its receipt cannot yet be reconciled. It blocks blind retry and is not failure, cancellation, no-change, or success.
 
-## Coverage partition
+**Idempotency key** — exact `OperationId + CanonicalRequestDigest` binding used to reconcile/resume effects without duplication.
 
-The smallest named source/analysis area for which completeness can be reported independently.
+**Retention receipt** — owner proof that an exact artifact/generation remains available for a result, continuation, review, audit, or submission.
 
-## Negative authority
+## Graph, search, and context
 
-Permission to state that an entity/fact is absent. It requires complete relevant coverage, a known profile/generation, and no unresolved conflict.
+**Entity** — typed graph node such as API symbol, function, package, frame, template, module, registry, state path, restriction facet, or source span.
 
-## Provenance
+**Relation** — typed directed edge with producer, evidence, confidence, generation, coverage, and conflicts.
 
-The class and exact origin of evidence, such as platform source, project source, runtime probe, curated correction, differential oracle, external implementation, semantic candidate, or historical record.
+**Parent axis** — one explicit hierarchy/view such as lexical, ownership, load, object, inheritance, registration, lifecycle, state, call, or lineage. There is no universal parent.
 
-## Confidence
+**Candidate** — item selected for investigation by exact-relative, fuzzy, text, shape, semantic, external, or search similarity. It is not a proven relation or replacement.
 
-The relation between evidence and conclusion: `Proven`, `Derived`, `Possible`, or `Candidate`.
+**Project Map** — deterministic compact typed projection of one exact project/graph generation.
 
-## Stable source handle
+**L0 skeleton** — bounded container/navigation structure without full implementation bodies.
 
-A compact identity for source detail containing repository/pack identity, revision/profile, path, span, digest, and optional symbol/entity key.
+**L1 skeleton** — bounded exact entity and local-neighborhood structure.
 
-## Entity
+**L2 source** — exact source span/full source under an explicit privacy/license policy.
 
-A typed graph node such as API symbol, function, package, frame, template, module, registry, state path, restriction facet, or source span.
+## Recognizers and calibration
 
-## Relation
+**Recognizer** — deterministic declarative pattern over normalized Lua/TOC/XML facts that emits universal roles/relations.
 
-A typed directed edge between entities, with evidence, confidence, generation, and coverage.
+**Core recognizer pack** — immutable reviewed universal pack eligible for an explicitly activated core execution profile.
 
-## Parent axis
+**Calibration pack** — named declarative pack derived from corpus conventions. Its name is audit metadata; rules cannot branch on repository/addon/owner/path/popularity/split/label/reviewer/model identity.
 
-One independent hierarchy such as lexical, owner, load, object, inheritance, registration, lifecycle, state, or call. WoW does not have one universal parent relation.
+**Calibration candidate source** — exact repository revision proposed for a corpus. A commit pin alone is not admission.
 
-## Recognizer
+**Admitted calibration corpus** — immutable manifest whose members passed exact materialization/publication/fact, provenance, license/privacy, label, coverage, and split gates.
 
-A deterministic declarative pattern over normalized Lua/TOC/XML facts that emits universal roles and relations.
+**Calibration expected label set** — immutable independent expected outputs/uncertainty/cardinality statement, never copied from candidate output.
 
-## Core recognizer pack
+**Calibration provenance group** — conservative connected group of forks, copies, vendored/generated code, near-duplicates, mutations, or shared authoring lineage; atomic unit for split independence.
 
-A repository-owned immutable pack of universal E2-B recognizer rules eligible for the reviewed core execution profile. Its activation, versions, fixtures, and producer partitions are exact and independently validated.
+**Calibration split manifest** — immutable whole-provenance-group assignment to `Train`, `Dev`, `Test`, `SealedHoldout`, `Challenge`, or `Quarantine`, with visibility/leakage history.
 
-## Calibration pack
+**Calibration pack candidate** — exact `trust_class=calibration`, `rollout_state=shadow_only` pack limited to universal `Derived`/`Possible` proposals.
 
-A named set of declarative recognizers and fixtures derived from structural conventions observed in a corpus. The name is audit metadata; the rules emit universal roles and relations and cannot branch on repository, addon, owner, path, popularity, split, label, reviewer, search, or model identity.
+**Calibration candidate artifact** — immutable E5-A evidence bundle containing exact inputs, run/case/mutation/metric/graph/security/deactivation results, blockers, and nonclaims.
 
-## Calibration candidate source
+**Calibration deactivation plan** — proof that disabling a candidate removes only its owned shadow partitions and reports exact coverage loss.
 
-An exact repository revision plus audit metadata proposed for a calibration corpus. A commit pin alone is not admission: exact tree/source inventory, owner publications/facts, provenance grouping, license/privacy decisions, independent labels, and split eligibility remain separate gates.
+**PromotionEligibleByMetrics** — E5-A metric state only. It is not review authorization, submission, publication, activation, or runtime proof.
 
-## Admitted calibration corpus
+## Review and holdout
 
-An immutable manifest of candidate sources/examples that passed the claimed materialization, fact-publication, provenance, license/privacy, label, coverage, and split gates. Quarantined or partially pinned sources are not admitted members.
+**Calibration review decision envelope** — strict exact-candidate decision input with structured decision, principal/role/scope references, authorization evidence, expiry/revocation/replay state, and digest.
 
-## Calibration corpus example
+**Review authorization** — independent security decision that a principal may submit a defined review decision within exact scope. It does not create semantic or graph proof.
 
-One exact bounded fact/source-evidence unit in an admitted corpus, linked to an independent expected label set, provenance group, structural-shape groups, capability/coverage state, mutation family, and split assignment.
+**Calibration review record** — immutable E5-B record binding candidate, envelope, use-time authorization, independent candidate validation, decision, audit, and supersession links.
 
-## Calibration expected label set
+**Sealed holdout** — evaluation generation whose membership/labels remain inaccessible to candidate authors until exact candidate/run/evaluator/profile identities freeze and separate access is authorized.
 
-An immutable independent statement of expected universal entity/relation outputs, confidence ceiling, ambiguity/cardinality, decisive evidence, and label class: `Positive`, `Negative`, `Possible`, `NotEvaluated`, `Unknown`, or `Conflict`. It is not copied from candidate-pack output.
+**Holdout authorization** — independent permission to access one exact sealed generation for one frozen candidate/run/disclosure purpose. Reviewer authorization does not imply it.
 
-## Calibration provenance group
+**Holdout access grant** — immutable exact authorization record plus nonsecret vault-scope handle, use/expiry/revocation/replay policy, and permitted visibility.
 
-A conservative connected group of examples related by upstream/fork history, copied or vendored code, generated templates, near-duplicate structure, shared authoring lineage, mutation ancestry, or another reviewed dependence. The strongest applicable closure is the atomic unit for split independence.
+**Holdout access audit** — append-only hash-linked record of requests, grants/denials, open, evaluation, disclosure, failure, cancellation, revocation, replay, and consumption.
 
-## Calibration split manifest
+**Holdout disclosure class** — `AggregateGateOnly`, `PerCaseClassificationWithoutHiddenInputs`, `BoundedReviewedEvidence`, or `FullReviewedDisclosure`.
 
-An immutable assignment of whole provenance groups to `Train`, `Dev`, `Test`, `SealedHoldout`, `Challenge`, or `Quarantine`, together with visibility rules, leakage analysis, consumed-generation history, and canonical identity.
+**Holdout consumption record** — exact determination of whether disclosed/evaluated holdout evidence can influence a candidate lineage.
 
-## Sealed holdout
+**ContaminationUnknown** — state where nonaccess/noninfluence cannot be proved. It cannot be represented as untouched.
 
-An evaluation split whose exact membership digest is frozen while labels/results remain inaccessible to pack authors until the candidate pack bytes, implementation/profile identities, and run request are frozen. Once results influence a change, that holdout generation is consumed and no longer untouched evidence for the changed candidate.
+## Promotion and publication
 
-## Calibration pack candidate
+**Promotion submission** — immutable E5-B artifact binding exact candidate evidence, authorized reviews, holdout audit/consumption, blockers, license/privacy, deactivation, target profile, and nonclaims. It requests E5-C consideration but is not publication.
 
-An exact `trust_class = calibration`, `rollout_state = shadow_only` E5-A pack bound to frozen corpus/split/mutation/evaluation profiles. It uses the E2-B operator language and produces only registered universal graph proposals at `Derived` or `Possible` confidence.
+**CorePackArtifact** — future E5-C distinct immutable reviewed core-pack artifact created only after independent submission/candidate/pack revalidation.
 
-## Calibration shadow output partition
+**Core-pack publication** — future E5-C immutable catalog effect placing a validated core pack in `PublishedInactive` or another explicit publication state. It is distinct from activation.
 
-An exact pack/rule/version/input/profile-owned evaluation partition containing matches, proposals, evidence, coverage, conflicts, graph-validation receipts, and resource state. It is not a production GraphSnapshot and cannot satisfy default core coverage.
+**Activation** — future guarded selection of an exact published pack for a defined execution profile/current record.
 
-## ShadowValidated
+**Canary** — future bounded exact activation cohort/profile used to gather explicit rollout evidence; it is not global runtime proof.
 
-An E5-A evaluation state indicating that the frozen candidate completed the applicable shadow hard gates and reports. It is not reviewer authorization, a promotion submission, core activation, publication, or runtime proof.
+**Last-known-good** — exact retained previously validated publication explicitly designated under a policy. It is never inferred as previous/newest or relabeled as a failed target.
 
-## PromotionEligibleByMetrics
+## Restrictions
 
-An E5-A state indicating that frozen metric and hard-gate criteria passed for the exact candidate generation. It does not authorize promotion; E5-B review/authorization and E5-C immutable publication remain required.
+**Restriction facet** — open versioned metadata describing Secret, protected, combat, hardware-event, forbidden-object, private-partition, or related constraints.
 
-## Calibration candidate artifact
+**Secret Value** — WoW runtime value with restricted accessibility/operations. Static nominal types are analysis projections, not runtime wrappers.
 
-An immutable E5-A bundle containing exact pack/corpus/split/run identities, per-case and metric reports, mutation/anti-overfitting and graph-validation evidence, license/provenance records, blockers/nonclaims, and a deactivation plan. It is input to future E5-B review, not a promoted core pack.
+**Root-cause folding** — deterministic grouping of downstream diagnostics under a causal failure while preserving raw findings.
 
-## Calibration deactivation plan
-
-An exact plan proving that disabling, rejecting, quarantining, or superseding a candidate removes only its owned shadow partitions and stale references, preserves core/foreign partitions and historical evidence, and reports the precise coverage downgrade.
-
-## Promotion submission
-
-A future E5-B immutable review artifact that binds an exact E5-A candidate artifact, reviewer authorization, sealed-holdout access audit, retained evidence, and decision state. It requests consideration for publication but is not itself a published core pack.
-
-## Holdout access audit
-
-A future E5-B record of who or what was authorized to unseal exact holdout material, under which scope, candidate/run identity, time/revocation/replay constraints, and result-retention policy. Authorization does not alter labels, metrics, or graph proof.
-
-## Lineage
-
-An evidence-backed explicit relationship between entities from exact different generations. Generation-local identities remain distinct; lineage does not by itself imply deprecation, replacement, edit compatibility, migration success, or runtime behavior.
-
-## Skeleton L0
-
-Signature, role, chains, direct effects, and neighborhood counts.
-
-## Skeleton L1
-
-Collapsed control-flow and effect structure: branches, loops, calls, guards, returns, and state effects.
-
-## Skeleton L2
-
-Exact source span or full source.
-
-## Project Map
-
-A generated compact architecture summary for one project generation, intended to fit in routine agent context.
-
-## Restriction facet
-
-A versioned metadata unit describing Secret, protected, combat, hardware-event, forbidden-object, private-partition, or related runtime constraints.
-
-## Secret Value
-
-A World of Warcraft runtime value whose accessibility or permitted operations are restricted by the game. Static nominal Secret types are analysis projections, not runtime wrapper claims.
-
-## Differential oracle
-
-An external implementation used to compare expected output or behavior. It can reveal disagreement but does not automatically override canonical source.
-
-## Candidate
-
-An item selected for investigation by fuzzy, text, semantic, or external implementation similarity. It is not a proven relation or replacement.
-
-## Root-cause folding
-
-Deterministic grouping of downstream diagnostics under a known causal failure while preserving raw findings for inspection.
-
-## Universe
-
-A separated source domain: reference, first-party workspace, declared dependency, external example, or installed runtime data.
+**Universe** — separated source domain such as Reference Pack, first-party project, dependency, Blizzard UI source, calibration corpus, external candidate, runtime, or history.
