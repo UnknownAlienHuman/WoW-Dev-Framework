@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e7a-operation-cases-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "cases": [
+    {
+      "case_id": "S7A-AN-001",
+      "operation": "analysis_diagnostics",
+      "session_view_set_id": null,
+      "overlay_generation_id": null,
+      "expected": "immutable-diagnostic-result"
+    },
+    {
+      "case_id": "S7A-AN-008",
+      "operation": "analysis_definition",
+      "result_cardinality": 2,
+      "expected": "two-exact-targets-no-auto-selection"
+    },
+    {
+      "case_id": "S7A-AN-015",
+      "operation": "analysis_code_actions",
+      "expected": "advisory-action-without-edit-or-command"
+    },
+    {
+      "case_id": "S7A-AN-017",
+      "mutation": "action-applies-workspace-edit",
+      "expected_error": "e7a_code_action_edit_or_command_forbidden"
+    },
+    {
+      "case_id": "S7A-CTRL-004",
+      "failure_point": "effect-committed-response-lost-then-cancel",
+      "expected_status": "OutcomeUnknown",
+      "expected_error": "e7a_effect_outcome_unknown"
+    },
+    {
+      "case_id": "S7A-CTRL-011",
+      "operation": "analysis_references",
+      "mutation": "queue-saturated",
+      "expected_status": "Busy",
+      "expected_error": "e7a_queue_busy_or_backpressure_limit_exceeded"
+    },
+    {
+      "case_id": "S7A-SEC-002",
+      "authorization_source": "client-editor-github-or-os-identity",
+      "expected_error": "e7a_client_identity_authorization_inference_forbidden"
+    },
+    {
+      "case_id": "S7A-SEC-012",
+      "dynamic_descriptor_source": "document-or-provider-data",
+      "expected_error": "e7a_dynamic_method_tool_or_resource_registration_forbidden"
+    },
+    {
+      "case_id": "S7A-SEC-014",
+      "operation": "lsp-execute-command-or-workspace-edit",
+      "expected_error": "e7a_lsp_workspace_edit_execute_command_or_settings_mutation_forbidden"
+    },
+    {
+      "case_id": "S7A-DET-003",
+      "mutation": "client-name-request-id-progress-cadence",
+      "expected": "same-semantic-service-result"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}
