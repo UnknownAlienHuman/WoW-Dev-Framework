@@ -1,0 +1,136 @@
+name: I0-A enforce TEST_MATRIX coverage
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/i0-a-test-matrix-coverage.yml
+      - crates/wow-core/TEST_MATRIX.md
+      - crates/wow-core/tests/**
+
+permissions:
+  contents: write
+
+jobs:
+  test-matrix:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          persist-credentials: true
+          fetch-depth: 0
+
+      - name: Absorb prior branch commits
+        shell: bash
+        run: |
+          sleep 75
+          git fetch origin "${GITHUB_HEAD_REF}"
+          git reset --hard "origin/${GITHUB_HEAD_REF}"
+
+      - name: Install frozen Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
+
+      - name: Generate executable contract-coverage test
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          root = Path('crates/wow-core/tests')
+          target = root / 'test_matrix_coverage.rs'
+          sources = sorted(
+              path.name
+              for path in root.glob('*.rs')
+              if path.name != target.name
+          )
+          include_lines = '\n'.join(
+              f'    include_str!("{name}"),' for name in sources
+          )
+          code = f'''use std::collections::BTreeSet;
+
+const TEST_MATRIX: &str = include_str!("../TEST_MATRIX.md");
+const TEST_SOURCES: &[&str] = &[
+{include_lines}
+];
+
+#[test]
+fn every_normative_case_id_is_represented_in_executable_test_data() {{
+    let case_ids = extract_case_ids(TEST_MATRIX);
+    assert!(!case_ids.is_empty());
+    let executable = TEST_SOURCES.join("\\n");
+    let missing = case_ids
+        .iter()
+        .filter(|case_id| !executable.contains(case_id.as_str()))
+        .cloned()
+        .collect::<Vec<_>>();
+    assert!(missing.is_empty(), "missing executable case IDs: {{missing:?}}");
+}}
+
+#[test]
+fn normative_case_ids_are_unique_in_the_matrix() {{
+    let case_ids = extract_case_ids(TEST_MATRIX);
+    assert_eq!(case_ids.len(), case_ids.iter().collect::<BTreeSet<_>>().len());
+}}
+
+fn extract_case_ids(markdown: &str) -> Vec<String> {{
+    let mut values = Vec::new();
+    let mut inside = false;
+    let mut token = String::new();
+    for character in markdown.chars() {{
+        if character == '`' {{
+            if inside {{
+                if is_case_id(&token) {{
+                    values.push(token.clone());
+                }}
+                token.clear();
+            }}
+            inside = !inside;
+        }} else if inside {{
+            token.push(character);
+        }}
+    }}
+    values.sort();
+    values
+}}
+
+fn is_case_id(value: &str) -> bool {{
+    !value.contains("..")
+        && value.contains('-')
+        && value.bytes().any(|byte| byte.is_ascii_digit())
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit() || byte == b'-')
+        && value
+            .as_bytes()
+            .first()
+            .is_some_and(u8::is_ascii_uppercase)
+}}
+'''
+          target.write_text(code, encoding='utf-8')
+          PY
+
+      - name: Verify exact dependency lock
+        run: |
+          cargo +1.98.0 generate-lockfile
+          git diff --exit-code -- Cargo.lock
+
+      - name: Format
+        run: cargo +1.98.0 fmt --all
+
+      - name: Lint all targets
+        run: cargo +1.98.0 clippy --workspace --all-targets --all-features -- -D warnings
+
+      - name: Run all tests and TEST_MATRIX coverage
+        run: cargo +1.98.0 test --workspace --all-features
+
+      - name: Commit validated coverage gate and remove workflow
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/i0-a-test-matrix-coverage.yml
+          git add crates/wow-core/tests/test_matrix_coverage.rs
+          git commit -m 'test(wow-core): enforce executable contract case coverage'
+          git push origin HEAD:${GITHUB_HEAD_REF}
