@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e7a-editor-requests-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "request_binding": {
+    "operation_id": null,
+    "session_snapshot_id": null,
+    "document_uri": "file:///fixture/AddOn/Main.lua",
+    "document_version": 7,
+    "position_profile": "lsp-utf16",
+    "canonical_request_digest": null
+  },
+  "cases": [
+    {
+      "case_id": "S7A-DIAG-001",
+      "operation": "editor_diagnostics",
+      "expected": "exact-overlay-bound-findings"
+    },
+    {
+      "case_id": "S7A-DIAG-002",
+      "operation": "editor_diagnostics",
+      "mutation": "zero-findings-with-partial-capability",
+      "expected_status": "Partial"
+    },
+    {
+      "case_id": "S7A-DEF-002",
+      "operation": "editor_definition",
+      "mutation": "candidate-encoded-as-exact-location",
+      "expected_error": "e7a_editor_definition_or_reference_candidate_as_exact_forbidden"
+    },
+    {
+      "case_id": "S7A-DEF-003",
+      "operation": "editor_definition",
+      "mutation": "clean-zero-without-owner-negative-authority",
+      "expected_error": "e7a_editor_clean_zero_without_negative_authority"
+    },
+    {
+      "case_id": "S7A-SYM-002",
+      "operation": "editor_document_symbols",
+      "mutation": "unsupported-axis-replaced-by-lexical",
+      "expected_error": "e7a_editor_symbol_parent_axis_missing_or_unsupported"
+    },
+    {
+      "case_id": "S7A-CALL-002",
+      "operation": "editor_outgoing_calls",
+      "mutation": "event-or-hook-conflated-with-call",
+      "expected_error": "e7a_editor_call_axis_conflation_forbidden"
+    },
+    {
+      "case_id": "S7A-ACT-001",
+      "operation": "editor_code_actions",
+      "expected": "mechanically-safe-edit-candidate-with-version-and-digest-guards"
+    },
+    {
+      "case_id": "S7A-ACT-004",
+      "operation": "editor_code_actions",
+      "mutation": "service-applies-edit",
+      "expected_error": "e7a_editor_code_action_automatic_apply_forbidden"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}
