@@ -10,7 +10,7 @@ on:
       - .github/workflows/i0-a-wow-core.yml
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: i0-a-wow-core-${{ github.ref }}
@@ -18,40 +18,21 @@ concurrency:
 
 jobs:
   validate:
-    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - name: Check out exact implementation branch
+      - name: Check out exact revision
         uses: actions/checkout@v6.0.2
         with:
-          ref: ${{ github.event.pull_request.head.ref }}
-          persist-credentials: true
+          persist-credentials: false
 
       - name: Install frozen Rust toolchain
         run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
 
-      - name: Apply exact byte-iterator compiler correction
-        shell: bash
+      - name: Verify exact dependency lock
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path('crates/wow-core/src/ids.rs')
-          text = path.read_text(encoding='utf-8')
-          needle = "**byte == b'_'"
-          if text.count(needle) != 1:
-              raise SystemExit('expected exactly one byte-iterator correction site')
-          path.write_text(text.replace(needle, "*byte == b'_'"), encoding='utf-8')
-          PY
-
-      - name: Generate exact dependency lock
-        run: cargo +1.98.0 generate-lockfile
-
-      - name: Apply compiler-guided lint fixes
-        run: cargo +1.98.0 clippy --fix --workspace --all-targets --all-features --allow-dirty --allow-staged
-
-      - name: Format working tree
-        run: cargo +1.98.0 fmt --all
+          cargo +1.98.0 generate-lockfile
+          git diff --exit-code -- Cargo.lock
 
       - name: Check formatting
         run: cargo +1.98.0 fmt --all -- --check
@@ -62,34 +43,21 @@ jobs:
       - name: Run tests
         run: cargo +1.98.0 test --workspace --all-features
 
-      - name: Commit exact lock and compiler output
-        shell: bash
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add Cargo.lock crates/wow-core/src crates/wow-core/tests
-          if ! git diff --cached --quiet; then
-            git commit -m 'style(wow-core): apply compiler fixes and lock dependencies'
-            git push origin HEAD:${GITHUB_HEAD_REF}
-          fi
-
-      - name: Package exact validated tree
+      - name: Package exact reviewed input tree
         if: always()
         shell: bash
         run: |
-          tar -czf i0-a-working-tree.tar.gz \
+          tar -czf i0-a-reviewed-tree.tar.gz \
             Cargo.toml \
             Cargo.lock \
             rust-toolchain.toml \
-            crates/wow-core/Cargo.toml \
-            crates/wow-core/src \
-            crates/wow-core/tests
+            crates/wow-core
 
-      - name: Upload exact validated tree
+      - name: Upload exact reviewed input tree
         if: always()
         uses: actions/upload-artifact@v7.0.1
         with:
-          path: i0-a-working-tree.tar.gz
+          path: i0-a-reviewed-tree.tar.gz
           archive: false
           if-no-files-found: error
           retention-days: 1
