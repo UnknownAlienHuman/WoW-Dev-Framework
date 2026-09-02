@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e5b-review-holdout-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "review_cases": [
+    {"case_id": "S5B-REV-001", "authorization": "Authorized", "candidate_validation": "Valid", "expected": "immutable-review-record"},
+    {"case_id": "S5B-REV-002", "authorization_input": "GitHubLoginOrRepositoryOwner", "expected_error": "e5b_review_operator_identity_inference_forbidden"},
+    {"case_id": "S5B-REV-007", "authorization": "Authorized", "candidate_validation": "Invalid", "expected_error": "e5b_review_semantic_validation_failed"}
+  ],
+  "holdout_cases": [
+    {"case_id": "S5B-HOLD-004", "candidate_and_run_frozen": true, "authorization": "Authorized", "expected": "exact-access-grant"},
+    {"case_id": "S5B-HEX-002", "disclosure_class": "AggregateGateOnly", "expected": "hidden-inputs-not-returned"},
+    {"case_id": "S5B-HEX-006", "actual": "DisclosedAndConsumed", "reported": "UntouchedForCandidateLineage", "expected_error": "e5b_holdout_consumed_presented_as_untouched"},
+    {"case_id": "S5B-HEX-007", "failure_point": "vault-effect-response-lost", "expected_status": "OutcomeUnknown", "minimum_consumption_state": "ContaminationUnknown"}
+  ],
+  "freeze_gate": {"required_before_first_rust_implementation": true}
+}

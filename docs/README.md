@@ -1,113 +1,47 @@
 # Documentation index
 
-English documentation in this directory is the canonical navigation surface for WoW Dev Framework.
+English documentation is the canonical navigation surface.
 
 ```text
-documentation frontier: E5-A complete
-next documentation package: E5-B calibration orchestration, review, holdout audit and promotion submissions
+documentation frontier: E5-B complete
+next documentation package: E5-C core-pack publication/signing/canary/rollout/rollback
 implementation frontier: not started
 ```
 
-## Document classes
-
-| Class | Meaning |
-|---|---|
-| **Normative** | Defines behavior, public contracts, invariants, or accepted decisions. Implementation must conform. |
-| **Operational** | Defines how contributors, agents, tests, and releases apply the normative contracts. |
-| **Research** | Pins external inputs and records verified observations. It is not automatically a product contract. |
-| **Candidate** | Contains ideas that require an experiment or ADR before implementation. |
-| **Archive** | Retired routing tombstones. Superseded source content is available only through Git history and does not control current routing. |
-
 ## Read first
 
-1. [Project vision and boundaries](PROJECT_VISION.md) — normative scope and non-goals.
-2. [Architecture](ARCHITECTURE.md) — normative system design.
-3. [Provenance, confidence, and coverage](PROVENANCE_AND_COVERAGE.md) — normative truth and negative-answer contract.
-4. [Architecture decisions](DECISIONS.md) — accepted constraints.
-5. [Roadmap](ROADMAP.md) — active documentation and implementation gate.
-6. [Crate manifest](../crates/MANIFEST.json) — machine-readable frontier and active contract routes.
-7. [Crate workstreams](../crates/WORKSTREAMS.md) — exact dependency/order and next package.
+1. [Project vision](PROJECT_VISION.md)
+2. [Architecture](ARCHITECTURE.md)
+3. [Provenance, confidence, and coverage](PROVENANCE_AND_COVERAGE.md)
+4. [Architecture decisions](DECISIONS.md)
+5. [Roadmap](ROADMAP.md)
+6. [Machine manifest](../crates/MANIFEST.json)
+7. [Dependency graph](../crates/DEPENDENCY_GRAPH.md)
+8. [Workstreams](../crates/WORKSTREAMS.md)
 
-## Component contracts
+## Active routes
 
-- [Reference Pack](REFERENCE_PACK.md) — immutable Blizzard reference artifact and builder contract.
-- [EmmyLua and diagnostics](EMMYLUA_AND_DIAGNOSTICS.md) — upstream integration, project generations, and rule execution.
-- [Graph, search, and planning](GRAPH_SEARCH_AND_PLANNING.md) — typed graph, lineage, skeletons, search, and patch impact.
-- [E4-A exact-generation search](../crates/wow-search/e4/README.md) — immutable SearchShards, safe query lanes, deterministic ranking, explanations, misses, and continuation.
-- [E4-B lineage, migration records, and static impact](../crates/wow-graph/e4/README.md) — exact before/after generations, producer partitions, proof ceilings, ambiguity, review, change classes, migration candidates, and bounded reason paths.
-- [E4-C search/lineage/impact service](../crates/wow-service/e4/README.md) — exact/current acquisition, shard and lineage orchestration, explicit candidate selection, review authorization, migration validation, static impact, and context handoff.
-- [E4-C CLI](../apps/wow/e4/README.md) — thin `wow-service`-only command, input, output, cancellation, and exit-code contracts.
-- [E5-A calibration corpora and named packs](../crates/wow-recognizers/e5/README.md) — exact candidate-source admission, provenance-aware splits, independent labels, shadow-only packs, anti-overfitting mutations, evaluation, candidate artifacts, and deactivation.
-- [Codebase Memory bridge](CODEBASE_MEMORY_BRIDGE.md) — optional broad-source candidate bridge.
-- [Secret Values and restrictions](SECRET_VALUES_AND_RESTRICTIONS.md) — open restriction facets and analysis levels.
+- [E3-B context engine](../crates/wow-context/e3/README.md)
+- [E3-C context service](../crates/wow-service/e3/README.md)
+- [E4-A exact-generation search](../crates/wow-search/e4/README.md)
+- [E4-B lineage/migration/static impact](../crates/wow-graph/e4/README.md)
+- [E4-C search/lineage/impact service](../crates/wow-service/e4/README.md)
+- [E5-A calibration owner](../crates/wow-recognizers/e5/README.md)
+- [E5-B durable calibration orchestration](../crates/wow-service/e5/README.md)
+- [E5-B CLI](../apps/wow/e5/README.md)
 
-## E4 authority boundary
-
-```text
-E4-A wow-search
-    retrieves and ranks exact entities relative to a query
-    approximate signals remain candidate evidence
-
-E4-B wow-graph
-    validates exact cross-generation proposals under proof ceilings
-    publishes immutable lineage/change/migration/static-impact records
-
-E4-C wow-service + apps/wow
-    resolves outer selectors, acquires exact artifacts, invokes owners,
-    requires explicit candidate selection, validates review authorization,
-    preserves status/coverage/conflicts and exposes thin transport operations
-```
-
-Search does not prove lineage or intended entity. Review authorization does not create proof. Same lineage does not imply replacement. Migration validation does not edit source. Static impact does not establish runtime breakage or severity.
-
-## E5 calibration boundary
+## E5 authority boundary
 
 ```text
-E5-A wow-recognizers
-    validates exact immutable corpus/label/split/pack artifacts
-    executes E2-B packs in shadow-only candidate-owned partitions
-    produces per-case/mutation/metric/candidate/deactivation artifacts
-
-E5-B wow-service + apps/wow (next)
-    will acquire retained artifacts, authorize reviewers,
-    audit sealed-holdout access, and prepare promotion submissions
-
-E5-C publication owner (later)
-    will publish immutable core packs and own canary/rollout/rollback
+E5-A: exact calibration artifacts and shadow evaluation
+E5-B: durable orchestration, independent review, sealed holdout, submission
+E5-C: independent publication/signing/canary/activation/rollout/rollback
 ```
 
-A repository commit pin is not corpus admission. Repository/addon/owner/path/popularity/label/split/reviewer/model metadata cannot control matcher semantics. `ShadowValidated` or metric eligibility is not authorization or publication. Unknown/Possible/NotEvaluated/Conflict/Partial/Truncated are not Negative or pass.
+Metrics, graph validity, review authorization, holdout authorization, disclosure, submission, publication, activation, and runtime correctness never imply each other. Response loss is not proof of no effect. A consumed or contamination-unknown holdout is never called untouched.
 
-## Operating documents
+## Next package
 
-- [Agent workflow](AGENT_WORKFLOW.md)
-- [Security model](SECURITY_MODEL.md)
-- [Test strategy](TEST_STRATEGY.md)
-- [Contributing](../CONTRIBUTING.md)
-- [Repository agent instructions](../AGENTS.md)
+E5-C must independently revalidate one exact E5-B `PromotionSubmission`, create a distinct immutable core-pack artifact/catalog entry, define detached signing/provenance/SBOM/license attestations without committed private keys, publish inactive and read back, define exact canary cohorts and observations, use guarded current/default activation, stage rollout, retain explicit last-known-good, and perform exact rollback/revocation/stale-partition closure. It cannot rewrite E5-A/B evidence or infer global runtime correctness.
 
-## Research and planning
-
-- [Research baseline](RESEARCH_BASELINE.md)
-- [Candidate ideas](IDEAS.md)
-- [Glossary](GLOSSARY.md)
-
-## Next documentation package
-
-E5-B is owned by `wow-service`, with a thin `apps/wow` transport. It must define exact retained calibration artifact acquisition, durable operation identity and response-loss recovery, reviewer authorization independent from metrics/graph validity, sealed-holdout unsealing audit, promotion submission preparation, conservative result envelopes, cancellation/closure, and command-specific transport behavior.
-
-E5-B must invoke E5-A owner operations rather than reproduce corpus, split, matcher, mutation, metric, graph-validation, or deactivation algorithms. It does not publish a core pack; E5-C remains the publication/canary/rollback owner.
-
-## Archive
-
-- [Retired v8.0 architecture source tombstone](archive/WOW_EMMY_COGNITIVE_PLATFORM_ARCHITECTURE_V8_0_RU.md)
-
-The original v8.0 source was retired from the working tree. Use Git history only for architecture archaeology; the English contracts in this directory are the maintained repository surface.
-
-## Update rules
-
-- A changed public concept must update the glossary and its owning contract.
-- A changed architectural invariant must update `DECISIONS.md` through an ADR.
-- A changed milestone gate must update `ROADMAP.md`, `crates/MANIFEST.json`, and `crates/WORKSTREAMS.md`.
-- A new document must be added to this index or its owning crate router.
-- Do not duplicate live WoW patch/security knowledge from the external knowledge base. Link to it and pin only the exact release input required here.
+Patch-sensitive WoW facts remain in the separate [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb); stable framework docs link rather than duplicate them.

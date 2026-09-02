@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "manifest_id": "wow-service-e5-b-checksums-v1",
+  "algorithm": "sha256",
+  "state": "pending-byte-freeze-before-first-rust-implementation",
+  "implementation_state": "not-started",
+  "prerequisite_pins": {
+    "wow_core": null,
+    "wow_store_e2d": null,
+    "wow_project": null,
+    "wow_graph": null,
+    "wow_recognizers_e2b": null,
+    "wow_service_e4c": null,
+    "wow_recognizers_e5a": null
+  },
+  "adapter_and_profile_pins": {
+    "artifact_catalog": null,
+    "durable_operation": null,
+    "retention_and_audit": null,
+    "review_authorization": null,
+    "holdout_authorization_and_vault": null,
+    "promotion_submission": null,
+    "privacy_license_security": null,
+    "status_error_canonicalization": null,
+    "cli_exit_codes": null
+  },
+  "member_paths": [
+    "crates/wow-service/e5/README.md",
+    "crates/wow-service/e5/AGENTS.md",
+    "crates/wow-service/e5/DECISIONS.md",
+    "crates/wow-service/e5/DATA_MODEL.md",
+    "crates/wow-service/e5/ARTIFACT_CATALOGS_AND_SELECTORS.md",
+    "crates/wow-service/e5/DURABLE_RUN_ORCHESTRATION.md",
+    "crates/wow-service/e5/REVIEW_AUTHORIZATION.md",
+    "crates/wow-service/e5/SEALED_HOLDOUT_ACCESS.md",
+    "crates/wow-service/e5/PROMOTION_SUBMISSIONS.md",
+    "crates/wow-service/e5/RETENTION_IDEMPOTENCY_AND_RECOVERY.md",
+    "crates/wow-service/e5/RESULT_ENVELOPE_AND_STATUS.md",
+    "crates/wow-service/e5/SECURITY_PRIVACY_AND_AUDIT.md",
+    "crates/wow-service/e5/ERROR_MODEL.md",
+    "crates/wow-service/e5/TEST_MATRIX.md",
+    "crates/wow-service/e5/IMPLEMENTATION_PLAN.md",
+    "crates/wow-service/e5/CONTRACT.json",
+    "crates/wow-service/e5/examples/README.md",
+    "crates/wow-service/e5/examples/artifact-selectors.json",
+    "crates/wow-service/e5/examples/run-lifecycle-cases.json",
+    "crates/wow-service/e5/examples/review-holdout-cases.json",
+    "crates/wow-service/e5/examples/promotion-submission.json"
+  ],
+  "member_sha256": {},
+  "bundle_sha256": null,
+  "freeze_rules": ["nulls allowed only while implementation_state is not-started", "private credentials and raw holdout material are never committed"]
+}

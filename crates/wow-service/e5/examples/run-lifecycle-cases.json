@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e5b-run-lifecycle-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "cases": [
+    {"case_id": "S5B-RUN-001", "operation": "calibration_run_submit", "expected": "durable-run-receipt"},
+    {"case_id": "S5B-RUN-002", "mutation": "same-operation-id-same-digest", "expected": "same-effect-and-result"},
+    {"case_id": "S5B-RUN-003", "mutation": "same-operation-id-different-digest", "expected_error": "e5b_operation_id_request_digest_conflict"},
+    {"case_id": "S5B-IDEM-002", "failure_point": "after-dispatch-before-response", "expected_status": "OutcomeUnknown"},
+    {"case_id": "S5B-LIFE-002", "failure_point": "cancel-during-owner-run", "expected_status": "Cancelled"},
+    {"case_id": "S5B-LIFE-006", "mutation": "success-before-close", "expected_error": "e5b_public_success_before_close_forbidden"}
+  ],
+  "freeze_gate": {"required_before_first_rust_implementation": true}
+}

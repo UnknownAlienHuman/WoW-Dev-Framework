@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e5b-promotion-submission-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "submission": {
+    "submission_id": null,
+    "candidate_artifact_id": null,
+    "pack_digest": null,
+    "evidence_refs": [],
+    "review_record_ids": [],
+    "holdout_audit_consumption_refs": [],
+    "blockers": [],
+    "state": "Prepared",
+    "nonclaims": ["not-published", "not-activated", "not-default", "not-runtime-verified", "generalization-limited-to-stated-evidence", "E5-C-independent-validation-required"],
+    "canonical_sha256": null
+  },
+  "cases": [
+    {"case_id": "S5B-PROM-001", "expected": "PreparedOrValidated"},
+    {"case_id": "S5B-PROM-009", "mutation": "render-prepared-as-published", "expected_error": "e5b_core_publication_or_activation_forbidden"},
+    {"case_id": "S5B-PROM-014", "mutation": "remove-required-nonclaims", "expected": "invalid-submission"}
+  ],
+  "freeze_gate": {"required_before_first_rust_implementation": true}
+}

@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "manifest_id": "apps-wow-e5-b-checksums-v1",
+  "algorithm": "sha256",
+  "state": "pending-byte-freeze-before-first-rust-implementation",
+  "implementation_state": "not-started",
+  "prerequisite_pins": {"wow_service_e5b_implementation_commit": null, "wow_service_e5b_fixture_bundle_sha256": null},
+  "profile_pins": {"command_and_selector": null, "config_and_input": null, "review_and_holdout_transport": null, "output_and_exit": null, "signal_cancellation_broken_pipe": null, "security_and_redaction": null},
+  "member_paths": [
+    "apps/wow/e5/README.md", "apps/wow/e5/AGENTS.md", "apps/wow/e5/CLI_COMMANDS.md", "apps/wow/e5/OUTPUT_EXIT_AND_STREAMS.md",
+    "apps/wow/e5/SECURITY_AND_INPUTS.md", "apps/wow/e5/TEST_MATRIX.md", "apps/wow/e5/CONTRACT.json",
+    "apps/wow/e5/examples/README.md", "apps/wow/e5/examples/cli-cases.json", "apps/wow/e5/examples/stdout-exit-cases.json"
+  ],
+  "member_sha256": {},
+  "bundle_sha256": null,
+  "freeze_rules": ["nulls allowed only while implementation_state is not-started", "private credentials and raw holdout material are never committed"]
+}
