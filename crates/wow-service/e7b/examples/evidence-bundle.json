@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e7b-evidence-bundle-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "artifact_set": {
+    "unsigned_artifact_set_id": null,
+    "wow_executable_sha256": null,
+    "compatibility_manifest_sha256": null,
+    "operation_registry_sha256": null,
+    "schema_set_sha256": null,
+    "canonical_sha256": null
+  },
+  "evidence": {
+    "evidence_set_id": null,
+    "sbom_sha256": null,
+    "provenance_sha256": null,
+    "license_notice_sha256": null,
+    "test_report_manifest_sha256": null,
+    "reproducibility_report_sha256": null,
+    "canonical_sha256": null
+  },
+  "signatures": {
+    "signature_set_id": null,
+    "portable_signature_ids": [],
+    "platform_signature_id": null,
+    "canonical_sha256": null
+  },
+  "bundle": {
+    "bundle_id": null,
+    "target_triple": "x86_64-pc-windows-msvc",
+    "member_manifest_sha256": null,
+    "archive_sha256": null,
+    "canonical_sha256": null
+  },
+  "cases": [
+    {
+      "case_id": "S7B-ART-004",
+      "mutation": "embedded-registry-or-source-id-mismatch",
+      "expected_error": "e7b_executable_self_description_or_target_mismatch"
+    },
+    {
+      "case_id": "S7B-SBOM-002",
+      "mutation": "missing-build-or-native-dependency",
+      "expected_error": "e7b_sbom_dependency_or_relationship_incomplete"
+    },
+    {
+      "case_id": "S7B-PROV-002",
+      "mutation": "provenance-claims-unobserved-test",
+      "expected_error": "e7b_provenance_claim_without_observed_evidence"
+    },
+    {
+      "case_id": "S7B-SIGN-002",
+      "mutation": "wrong-signing-domain-or-target",
+      "expected_error": "e7b_signing_scope_target_domain_or_profile_mismatch"
+    },
+    {
+      "case_id": "S7B-SIGN-004",
+      "mutation": "private-signing-material-in-request",
+      "expected_error": "e7b_private_signing_or_trust_material_disclosure_forbidden"
+    },
+    {
+      "case_id": "S7B-BND-002",
+      "mutation": "archive-path-or-name-collision",
+      "expected_error": "e7b_archive_layout_path_link_device_or_collision_invalid"
+    },
+    {
+      "case_id": "S7B-BND-004",
+      "mutation": "bundle-member-missing-or-digest-mismatch",
+      "expected_error": "e7b_bundle_member_missing_unexpected_or_incompatible"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}
