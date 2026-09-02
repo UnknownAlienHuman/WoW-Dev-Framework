@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e6b-context-degradation-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "cases": [
+    {
+      "case_id": "S6B-CTX-001",
+      "mapped_owner": "Project",
+      "selection_status": "Selected",
+      "expected": "exact-root-context-with-separate-external-attachment"
+    },
+    {
+      "case_id": "S6B-CTX-002",
+      "mapped_owner": "Reference",
+      "selection_status": "Selected",
+      "expected": "exact-root-reference-context-with-separate-external-attachment"
+    },
+    {
+      "case_id": "S6B-CTX-003",
+      "mutation": "provider-summary-inserted-as-framework-fact",
+      "expected_error": "e6b_context_provider_metadata_injected_as_framework_fact"
+    },
+    {
+      "case_id": "S6B-CTX-005",
+      "mutation": "mapping-generation-does-not-match-context-generation",
+      "expected_error": "e6b_context_generation_or_root_mismatch"
+    },
+    {
+      "case_id": "S6B-CTX-007",
+      "context_owner": "Unavailable",
+      "fallback": "provider-snippet",
+      "expected_error": "e6b_context_provider_summary_fallback_forbidden"
+    },
+    {
+      "case_id": "S6B-CTX-008",
+      "provider_snippet_disclosure": "Denied",
+      "mapped_local_context": "Available",
+      "expected": "context-success-with-explicit-external-omission"
+    },
+    {
+      "case_id": "S6B-RET-008",
+      "provider": "Unavailable",
+      "fallback": "different-provider-or-stale-cache",
+      "expected_error": "e6b_hidden_provider_or_cache_fallback_forbidden"
+    },
+    {
+      "case_id": "S6B-SEC-008",
+      "mutation": "external-attachment-uses-broader-consumer-profile",
+      "expected_error": "e6b_privacy_license_consumer_scope_mismatch"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}
