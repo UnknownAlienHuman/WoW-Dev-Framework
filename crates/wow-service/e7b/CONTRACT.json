@@ -16,7 +16,7 @@
     "wow-core/e0-a/1",
     "wow-store/e2-d/projectstore-coherent-publication",
     "wow-service/e7-a/frontend-session-operation-registry",
-    "apps/wow/e7-a/frontend-host"
+    "apps/wow/e7-a/frontend-transports"
   ],
   "first_supported_target_intent": {
     "target_triple": "x86_64-pc-windows-msvc",
