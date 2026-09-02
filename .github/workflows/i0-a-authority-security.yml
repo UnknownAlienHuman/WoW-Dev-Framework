@@ -1,0 +1,270 @@
+name: I0-A close evidence authority and safe errors
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/i0-a-authority-security.yml
+      - crates/wow-core/tests/e0_authority_security.rs
+
+permissions:
+  contents: write
+
+jobs:
+  close-authority:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          persist-credentials: true
+          fetch-depth: 0
+
+      - name: Absorb prior branch commits
+        shell: bash
+        run: |
+          sleep 30
+          git fetch origin "${GITHUB_HEAD_REF}"
+          git reset --hard "origin/${GITHUB_HEAD_REF}"
+
+      - name: Install frozen Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
+
+      - name: Enforce evidence ceilings and credential-safe errors
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path('crates/wow-core/src/integrity.rs')
+          s = p.read_text(encoding='utf-8')
+          if not s.startswith('use std::collections::BTreeMap;'):
+              s = 'use std::collections::BTreeMap;\n\n' + s
+
+          marker = 'pub(crate) fn validate_conflict(record: &crate::ConflictRecord) -> CoreResult<()> {'
+          if 'pub(crate) fn validate_evidence_authority_graph(' not in s:
+              block = '''pub(crate) fn validate_evidence_authority_graph(
+              records: &[crate::EvidenceRecord],
+          ) -> CoreResult<()> {
+              #[derive(Clone)]
+              struct EvidenceNode {
+                  provenance: String,
+                  confidence: String,
+                  claim_scope: String,
+                  inputs: Vec<String>,
+              }
+
+              let mut nodes = BTreeMap::<String, EvidenceNode>::new();
+              for record in records {
+                  let value = object_value(record, "validate_evidence_record")?;
+                  let id = required_string(&value, "evidence_id", "validate_evidence_record")?
+                      .to_owned();
+                  let node = EvidenceNode {
+                      provenance: required_string(
+                          &value,
+                          "provenance",
+                          "validate_evidence_record",
+                      )?
+                      .to_owned(),
+                      confidence: required_string(
+                          &value,
+                          "confidence",
+                          "validate_evidence_record",
+                      )?
+                      .to_owned(),
+                      claim_scope: required_string(
+                          &value,
+                          "claim_scope",
+                          "validate_evidence_record",
+                      )?
+                      .to_owned(),
+                      inputs: string_array(
+                          &value,
+                          "derivation_input_ids",
+                          "validate_evidence_record",
+                      )?,
+                  };
+                  if nodes.insert(id, node).is_some() {
+                      return Err(validation_error(
+                          "validate_evidence_record",
+                          CoreErrorCode::ResultDuplicateId,
+                          "evidence_records",
+                      ));
+                  }
+              }
+
+              for node in nodes.values() {
+                  if node.provenance == "runtime_probe"
+                      && node.confidence == "proven"
+                      && node.claim_scope != "runtime_scenario"
+                  {
+                      return Err(validation_error(
+                          "validate_evidence_record",
+                          CoreErrorCode::EvidenceAuthorityViolation,
+                          "claim_scope",
+                      ));
+                  }
+
+                  match node.confidence.as_str() {
+                      "proven" if !node.inputs.is_empty() => {
+                          return Err(validation_error(
+                              "validate_evidence_record",
+                              CoreErrorCode::EvidenceAuthorityViolation,
+                              "derivation_input_ids",
+                          ));
+                      }
+                      "derived" => {
+                          if node.inputs.is_empty() {
+                              return Err(validation_error(
+                                  "validate_evidence_record",
+                                  CoreErrorCode::DerivedEvidenceMissingInputs,
+                                  "derivation_input_ids",
+                              ));
+                          }
+                          for input_id in &node.inputs {
+                              let input = nodes.get(input_id).ok_or_else(|| {
+                                  validation_error(
+                                      "validate_evidence_record",
+                                      CoreErrorCode::MissingEvidenceReference,
+                                      "derivation_input_ids",
+                                  )
+                              })?;
+                              if !matches!(input.confidence.as_str(), "proven" | "derived") {
+                                  return Err(validation_error(
+                                      "validate_evidence_record",
+                                      CoreErrorCode::EvidenceAuthorityViolation,
+                                      "derivation_input_ids",
+                                  ));
+                              }
+                          }
+                      }
+                      _ => {}
+                  }
+              }
+              Ok(())
+          }
+
+          '''
+              if marker not in s:
+                  raise SystemExit('conflict validation marker missing')
+              s = s.replace(marker, block + marker, 1)
+
+          object_loop = '''                Value::Object(object) => {
+                      if object.len() > 64 {
+                          return Err(validation_error(
+                              "validate_result_envelope",
+                              CoreErrorCode::BudgetExceeded,
+                              field,
+                          ));
+                      }
+                      for item in object.values() {
+                          validate_safe_error_value(item, field)?;
+                      }
+                  }
+          '''
+          if object_loop in s:
+              replacement = '''                Value::Object(object) => {
+                      if object.len() > 64 {
+                          return Err(validation_error(
+                              "validate_result_envelope",
+                              CoreErrorCode::BudgetExceeded,
+                              field,
+                          ));
+                      }
+                      for key in object.keys() {
+                          if is_sensitive_error_key(key) {
+                              return Err(validation_error(
+                                  "validate_result_envelope",
+                                  CoreErrorCode::ContractViolation,
+                                  field,
+                              ));
+                          }
+                      }
+                      if object
+                          .get("name")
+                          .and_then(Value::as_str)
+                          .is_some_and(is_sensitive_error_key)
+                      {
+                          return Err(validation_error(
+                              "validate_result_envelope",
+                              CoreErrorCode::ContractViolation,
+                              field,
+                          ));
+                      }
+                      for item in object.values() {
+                          validate_safe_error_value(item, field)?;
+                      }
+                  }
+          '''
+              s = s.replace(object_loop, replacement, 1)
+          sensitive_marker = 'fn validate_safe_error_value(value: &Value, field: &\'static str) -> CoreResult<()> {'
+          if 'fn is_sensitive_error_key(' not in s:
+              helper = '''fn is_sensitive_error_key(key: &str) -> bool {
+              let normalized = key.to_ascii_lowercase();
+              [
+                  "password",
+                  "passwd",
+                  "credential",
+                  "authorization",
+                  "access_token",
+                  "refresh_token",
+                  "session_token",
+                  "api_key",
+                  "private_key",
+                  "client_secret",
+                  "signing_key",
+                  "cookie",
+                  "bearer",
+              ]
+              .iter()
+              .any(|sensitive| normalized == *sensitive || normalized.ends_with(&format!("_{sensitive}")))
+          }
+
+          '''
+              if sensitive_marker not in s:
+                  raise SystemExit('safe error validator marker missing')
+              s = s.replace(sensitive_marker, helper + sensitive_marker, 1)
+          p.write_text(s, encoding='utf-8')
+
+          p = Path('crates/wow-core/src/envelope.rs')
+          s = p.read_text(encoding='utf-8')
+          marker = '    validate_evidence_acyclic(&envelope.evidence_records)?;\n'
+          addition = marker + '    crate::integrity::validate_evidence_authority_graph(&envelope.evidence_records)?;\n'
+          if 'validate_evidence_authority_graph' not in s:
+              if marker not in s:
+                  raise SystemExit('evidence acyclic marker missing')
+              s = s.replace(marker, addition, 1)
+          p.write_text(s, encoding='utf-8')
+          PY
+
+      - name: Remove superseded temporary workflows
+        shell: bash
+        run: |
+          rm -f \
+            .github/workflows/i0-a-close-integrity.yml \
+            .github/workflows/i0-a-integrity-finalizer.yml
+
+      - name: Verify exact dependency lock
+        run: |
+          cargo +1.98.0 generate-lockfile
+          git diff --exit-code -- Cargo.lock
+
+      - name: Format
+        run: cargo +1.98.0 fmt --all
+
+      - name: Lint all targets
+        run: cargo +1.98.0 clippy --workspace --all-targets --all-features -- -D warnings
+
+      - name: Test all targets and vectors
+        run: cargo +1.98.0 test --workspace --all-features
+
+      - name: Commit validated authority closure and remove workflow
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/i0-a-authority-security.yml
+          git add crates/wow-core/src/integrity.rs crates/wow-core/src/envelope.rs crates/wow-core/tests/e0_authority_security.rs
+          git commit -m 'feat(wow-core): enforce evidence authority ceilings'
+          git push origin HEAD:${GITHUB_HEAD_REF}
