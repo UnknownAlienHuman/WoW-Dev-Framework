@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "fixture_id": "tools-wow-release-e7b-cases-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "cases": [
+    {
+      "case_id": "R7B-SRC-001",
+      "command": "wow-release source validate --source-request source.json",
+      "service_operation": "release_source_validate",
+      "expected_service_calls": 1
+    },
+    {
+      "case_id": "R7B-BLD-001",
+      "command": "wow-release build submit --release-plan plan-id --operation-id op-id",
+      "service_operation": "release_build_submit",
+      "expected_service_calls": 1
+    },
+    {
+      "case_id": "R7B-BLD-002",
+      "command": "wow-release build submit --cargo-args arbitrary",
+      "expected": "pre-service-reject"
+    },
+    {
+      "case_id": "R7B-SIGN-001",
+      "command": "wow-release sign request --target bundle:fixture --expect-digest fixture --signing-profile fixture --authorization-reference fixture --operation-id fixture",
+      "service_operation": "release_sign_request",
+      "expected_service_calls": 1
+    },
+    {
+      "case_id": "R7B-SIGN-002",
+      "command": "wow-release sign request --private-key key.pem",
+      "expected": "pre-service-reject"
+    },
+    {
+      "case_id": "R7B-CH-002",
+      "command": "wow-release channel publish --publication-plan plan-id --operation-id op-id --expect-current-digest digest --authorization-reference auth-id",
+      "service_operation": "release_channel_publish",
+      "expected_service_calls": 1
+    },
+    {
+      "case_id": "R7B-CH-003",
+      "command": "wow-release channel publish --github-api arbitrary",
+      "expected": "pre-service-reject"
+    },
+    {
+      "case_id": "R7B-REC-001",
+      "command": "wow-release reconcile --operation-id op-id --request-digest digest",
+      "service_operation": "release_operation_reconcile",
+      "expected_service_calls": 1
+    },
+    {
+      "case_id": "R7B-REC-002",
+      "command": "wow-release reconcile --retry-unknown",
+      "expected": "pre-service-reject"
+    },
+    {
+      "case_id": "R7B-CI-002",
+      "mutation": "workflow-reimplements-release-in-shell-and-auto-publishes",
+      "expected": "forbidden"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}
