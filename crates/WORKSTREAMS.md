@@ -1,8 +1,8 @@
 # Agent workstreams and integration order
 
-**Status:** operational routing through documentation frontier E5-B.
+**Status:** operational routing through documentation frontier E5-C.
 
-Documentation-ready remains `implementation_state = not-started` until executable code, probes, fixtures, checksums, benchmarks, authorization adapters, vault/reconciliation infrastructure, and evaluations exist.
+Documentation-ready remains `implementation_state = not-started` until executable code, exact fixtures/checksums, probes, benchmarks, authorization/signing/observation adapters, runtime evidence, and evaluations exist.
 
 ## Global order
 
@@ -12,144 +12,107 @@ E0-A wow-core
 -> E0-D wow-project fixture
 -> E0-E wow-rules
 -> E0-F wow-service + apps/wow diagnostics
-
--> E1-A wow-store foundation
--> E1-B persistent wow-reference
--> E1-C wow-annotations
--> E1-D Reference Pack build/validate
-
--> E2-A wow-graph
--> E2-B wow-recognizers core matcher
--> E2-C full wow-project candidate
--> E2-D ProjectStore coherent publication
-
--> E3-A Blizzard UI source universe
--> E3-B Project Map/L0/L1/context
--> E3-C context service/CLI
-
--> E4-A exact-generation search
--> E4-B lineage/migration/static impact
--> E4-C search/lineage/impact service/CLI
-
--> E5-A calibration corpora, shadow packs, evaluation and candidates
--> E5-B durable calibration orchestration, review, holdout audit and submissions
--> E5-C immutable core-pack publication/signing/canary/rollout/rollback
-
--> E6 optional Codebase Memory candidate bridge
--> E7 LSP/MCP/release integration
+-> E1 Reference Pack stack
+-> E2 graph/recognizers/project/ProjectStore
+-> E3 Blizzard UI source/context/service
+-> E4 search/lineage/migration/static-impact/service
+-> E5-A calibration owner
+-> E5-B durable calibration review/holdout/submission
+-> E5-C core-pack publication/signing/canary/rollout/rollback
+-> E6-A wow-cbm external semantic candidates
+-> E6-B service/CLI mapping/context orchestration
+-> E7 LSP/MCP/public release integration
 ```
 
 ## Global rules
 
 - One agent owns one primary package/crate.
-- Shared seams are proposed before dependent implementation.
-- Missing implementation, tool, probe, benchmark, authorization, vault, runtime test, or source evidence is blocked/`NotEvaluated`, never pass.
-- Patch-sensitive WoW claims route through the current external KB and exact pinned source/runtime evidence.
-- Repository/addon/path/provider/popularity/model names never become hidden production semantics.
-- Search rank and calibration metrics never become intent, lineage, review, publication, activation, safety, or runtime authority.
+- Missing implementation/tool/probe/benchmark/authorization/signing/vault/observation/runtime evidence is blocked or `NotEvaluated`, never pass.
+- Patch-sensitive WoW claims route through the current external KB and exact source/runtime evidence.
+- Repository/addon/owner/path/provider/popularity/model identity never becomes hidden semantics.
 - Applications import `wow-service` only.
 - No CI/workflow without explicit owner instruction.
 
-## E5-A owner work
-
-Primary contract: [`wow-recognizers/e5/`](wow-recognizers/e5/README.md)
-
-```text
-exact candidate sources/publications
-+ provenance/license/privacy/labels/splits
-+ E2-B declarative calibration pack
-+ mutation/evaluation profiles
--> candidate-owned shadow partitions
--> independent graph validation
--> per-case/mutation/metric reports
--> candidate and deactivation artifacts
-```
-
-Hard stops: no commit-pin-only admission, donor-name semantics, split leakage, hidden Negative coercion, confidence above `Derived`/`Possible`, default graph publication, core activation, or deletion of foreign/core partitions.
-
-## E5-B service/application work
+## E5-C publication lifecycle
 
 Primary contracts:
 
-- [`wow-service/e5/`](wow-service/e5/README.md)
-- [`../apps/wow/e5/`](../apps/wow/e5/README.md)
-
-### Ownership
-
-`wow-service` coordinates exact retained E5-A artifacts, project/fact publications, graph validation, durable operation/storage/retention/audit ports, review authorization, and holdout authorization/vault ports. `apps/wow` is transport-only.
-
-### Required order
+- [`wow-service/e5c/`](wow-service/e5c/README.md)
+- [`../apps/wow/e5c/`](../apps/wow/e5c/README.md)
 
 ```text
-register durable OperationId + CanonicalRequestDigest
--> acquire exact retained artifacts in fixed order
--> validate compatibility/visibility/privacy/license
--> invoke E5-A owner operations
--> persist exact effect receipts
--> independently validate graph state
--> independently authorize review when requested
--> independently authorize and audit holdout access when requested
--> classify disclosure and candidate-lineage consumption
--> build/validate immutable PromotionSubmission when requested
--> admit retention/audit records
--> close resources in reverse order
--> return canonical envelope
+exact E5-B PromotionSubmission
+-> independent E5-C revalidation
+-> distinct CorePackArtifact
+-> provenance/SBOM/license/notices
+-> detached signing + independent verification
+-> PublishedInactive
+-> fresh read-back validation
+-> exact canary cohort/assignment/observations/evaluation
+-> finite authorized rollout stages
+-> profile-specific current-record CAS
+-> explicit retained last-known-good
+-> exact rollback/revocation/deactivation
+-> new project/graph generations with stale partition closure
+```
+
+### Active owners
+
+```text
+wow-service: orchestration, authorization use, durable effects, envelopes
+wow-recognizers: core pack semantics and producer namespace
+wow-graph: graph output/partition/closure validation
+wow-project: exact reindex and new project generations
+wow-store: immutable objects/catalog/current/retention/GC
+apps/wow: transport only
 ```
 
 ### Hard stops
 
 ```text
-no latest/best/highest-metric/first/last/sole selection
-no E5-A algorithm reimplementation
-no blind retry after uncertain effect
-no GitHub/OS/CLI/file/commit identity as authorization
-no review permission reused as holdout permission
-no holdout access before candidate/run/evaluator/profile freeze
-no hidden or unaudited holdout disclosure
-no consumed/unknown holdout called untouched
-no blocker hidden by aggregate metrics or review
-no source/label/split/candidate mutation
-no core publication/activation/canary/rollout/rollback
-no public success before retention/closure
-no credentials or hidden labels/source in normal output
+no trust in submission label without exact revalidation
+no relabelled candidate as core artifact
+no signature as semantic/runtime proof
+no private key/KMS/HSM/vault/deployment credential in repository/CLI/results
+no publication side-effect activation
+no canary percentage without exact population/membership
+no untyped anecdote/issue/model signal
+no missing/partial/conflict/NotEvaluated required signal as pass
+no time-only or open-ended rollout
+no latest/best/previous/default activation or rollback target
+no stale current CAS rebase
+no inferred previous/newest last-known-good
+no rollback history rewrite
+no historical project/graph mutation
+no stale partition or hidden coverage change
+no blind effect retry after response loss
+no public distribution in E5-C
 ```
 
 ### Implementation gate
 
-Before E5-B Rust:
+Before E5-C Rust:
 
 ```text
-implemented/frozen E0-E5-A prerequisites
-exact owner catalog/read/effect/reconciliation ports
-review and holdout authorization adapters/profiles
-holdout vault/evaluator/disclosure/audit/consumption profiles
-durable operation/idempotency/retention/recovery profiles
-canonical service and CLI request/result/error/output vectors
-synthetic and admitted real authorization/holdout/response-loss corpora
-measured resource thresholds
-all member/bundle SHA-256 values
+implemented/frozen E0–E5-B prerequisites
+exact submission/artifact/recognizer/graph/project/store ports
+signing and authorization adapters/profiles without committed secrets
+provenance/SBOM/license/reproducibility profiles
+canary population/privacy/observation/signal profiles
+finite rollout/activation/LKG/rollback/revocation/closure profiles
+response-loss/retention/audit/recovery profiles
+canonical service/CLI/artifact/signature/state vectors
+synthetic and admitted real canary/rollout/rollback corpora
+measured thresholds and all SHA-256 manifests
 ```
 
-## Next — E5-C
+## Next — E6-A
 
-E5-C owns one exact `PromotionSubmission` handoff and must independently revalidate it before creating a separate immutable `CorePackArtifact`.
+Owner: `wow-cbm`; direct dependency remains `wow-core` only.
 
-Required scope:
+E6-A must define exact reviewed provider descriptors, external-state classes, bounded allow-listed query transport, Candidate-only normalization, provider-local scoring, unverified source locators, zero-result negative-authority prohibition, continuation/cache, optional degradation, privacy/license/security, and a later E6-B mapping/service handoff.
 
-```text
-immutable publication candidate and catalog
-independent submission/candidate/pack revalidation
-signing/provenance/SBOM/license/notice attestations
-PublishedInactive + fresh read-back validation
-exact canary cohorts and observation profiles
-guarded current/default activation and finite rollout stages
-explicit last-known-good
-rollback/revocation/deactivation/stale producer-partition closure
-idempotency/response-loss/retention/audit/recovery
-thin service-only CLI
-```
-
-E5-C cannot rewrite E5-A/B evidence, treat signatures as semantic proof, claim global runtime correctness from canary success, infer last-known-good as previous/newest, or expose public distribution before E7.
+It must not read/write provider databases, expose arbitrary MCP/tool calls, invoke models, map locators into project truth, create graph/lineage/replacement proof, or make exact local workflows depend on provider availability.
 
 ## Seam request format
 

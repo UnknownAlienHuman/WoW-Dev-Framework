@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "contract_id": "apps/wow/e5-c/core-pack-publication-cli",
+  "state": "implementation-ready-documentation-no-rust-code",
+  "work_package": "E5-C",
+  "application": "wow",
+  "documentation_frontier": "E5-C",
+  "implementation_state": "not-started",
+  "framework_dependencies": ["wow-service"],
+  "prerequisite_contract": "wow-service/e5-c/core-pack-publication-rollout-lifecycle",
+  "active_commands": [
+    "core-pack status", "core-pack submission validate", "core-pack artifact build", "core-pack artifact validate",
+    "core-pack sign request", "core-pack sign validate", "core-pack publication publish", "core-pack publication get", "core-pack publication list", "core-pack publication validate",
+    "core-pack canary plan", "core-pack canary start", "core-pack canary status", "core-pack canary observe", "core-pack canary evaluate",
+    "core-pack rollout plan", "core-pack rollout advance", "core-pack rollout pause", "core-pack activation get", "core-pack activate",
+    "core-pack lkg get", "core-pack lkg designate", "core-pack rollback", "core-pack revoke", "core-pack deactivate", "core-pack partition-closure validate"
+  ],
+  "service_operations": [
+    "core_pack_status", "core_pack_submission_validate", "core_pack_artifact_build", "core_pack_artifact_validate",
+    "core_pack_sign_request", "core_pack_signature_validate", "core_pack_publish", "core_pack_publication_get", "core_pack_publication_list", "core_pack_publication_validate",
+    "core_pack_canary_plan", "core_pack_canary_start", "core_pack_canary_status", "core_pack_canary_observation_record", "core_pack_canary_evaluate",
+    "core_pack_rollout_plan", "core_pack_rollout_advance", "core_pack_rollout_pause", "core_pack_activation_get", "core_pack_activate",
+    "core_pack_last_known_good_get", "core_pack_last_known_good_designate", "core_pack_rollback", "core_pack_revoke", "core_pack_deactivate", "core_pack_partition_closure_validate"
+  ],
+  "output_modes": ["envelope-json", "text", "artifact"],
+  "exit_codes": {"0": "complete-or-exact-effect", "1": "completed-invalid-or-denied", "2": "partial-inactive-canary-paused-blocked-not-evaluated", "3": "structured-domain-failure", "4": "outcome-unknown-or-internal-output-failure", "64": "pre-service-transport-failure", "130": "cancelled"},
+  "hard_rules": [
+    "wow-service is the only framework dependency",
+    "exactly one service operation per valid command",
+    "no latest best previous default or automatic target selection",
+    "private signing authorization deployment credentials and cohort secrets are not CLI input",
+    "application never signs publishes assigns cohorts activates rolls out rolls back reindexes or edits partitions locally",
+    "machine output preserves exact scoped states blockers OutcomeUnknown and nonclaims",
+    "E5-C exposes no public distribution command",
+    "broken pipe or output failure never repeats service"
+  ],
+  "normative_files": [
+    "apps/wow/e5c/README.md", "apps/wow/e5c/AGENTS.md", "apps/wow/e5c/CLI_COMMANDS.md", "apps/wow/e5c/OUTPUT_EXIT_AND_SECURITY.md",
+    "apps/wow/e5c/TEST_MATRIX.md", "apps/wow/e5c/CONTRACT.json", "apps/wow/e5c/examples/README.md", "apps/wow/e5c/examples/cli-cases.json",
+    "apps/wow/e5c/examples/stdout-exit-cases.json", "apps/wow/e5c/examples/CHECKSUMS.json"
+  ],
+  "freeze_gate": {"implementation_state": "not-started", "required_before_first_rust_implementation": ["implemented and frozen E5-C service contract", "all command/profile/output/exit/security/platform vectors", "all member and bundle SHA-256 values"]}
+}

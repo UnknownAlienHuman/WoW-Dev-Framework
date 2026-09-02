@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "fixture_id": "apps-wow-e5c-stdout-exit-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "cases": [
+    {"case_id": "A5C-OUT-001", "service_status": "Complete", "output_mode": "envelope-json", "expected": "exact-service-bytes-plus-one-LF", "expected_exit": 0},
+    {"case_id": "A5C-PUB-002", "service_status": "PublishedInactive", "required_text": "published inactive", "forbidden_text": "active|default", "expected_exit": 2},
+    {"case_id": "A5C-CAN-004", "service_status": "CanaryOnly", "required_text": "scoped canary", "forbidden_text": "globally safe", "expected_exit": 2},
+    {"case_id": "A5C-OUT-004", "service_status": "OutcomeUnknown", "required_text": "reconciliation required", "expected_exit": 4},
+    {"case_id": "A5C-RB-001", "service_status": "RolledBack", "closure": "Complete", "expected_exit": 0},
+    {"case_id": "A5C-REV-001", "service_status": "Revoked", "required_text": "exact scope", "expected_exit": 0}
+  ],
+  "freeze_gate": {"required_before_first_rust_implementation": true}
+}
