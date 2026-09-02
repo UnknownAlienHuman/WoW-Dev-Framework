@@ -1,0 +1,123 @@
+name: I0-A fix panic-free result tests
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/i0-a-fix-result-tests.yml
+      - crates/wow-core/tests/e0_result_semantics.rs
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          persist-credentials: true
+
+      - run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
+
+      - name: Remove panic-style assertions
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('crates/wow-core/tests/e0_result_semantics.rs')
+          text = path.read_text(encoding='utf-8')
+          replacements = {
+          '''    let error = validate_message_arguments(&[zeta, alpha]).expect_err("order must be rejected");''':
+          '''    let error = expect_core_error(
+        validate_message_arguments(&[zeta, alpha]),
+        "order must be rejected",
+    )?;''',
+          '''    let float = MessageArgument::new("count", MessageArgumentKind::Integer, "1.5", true)
+        .expect_err("floating-point message argument must be rejected");''':
+          '''    let float = expect_core_error(
+        MessageArgument::new("count", MessageArgumentKind::Integer, "1.5", true),
+        "floating-point message argument must be rejected",
+    )?;''',
+          '''    let error = validate_budget(&invalid).expect_err("zero limit must be rejected");''':
+          '''    let error = expect_core_error(validate_budget(&invalid), "zero limit must be rejected")?;''',
+          '''    let error = accumulate_budget_usage(left, right).expect_err("usage overflow must fail");''':
+          '''    let error = expect_core_error(
+        accumulate_budget_usage(left, right),
+        "usage overflow must fail",
+    )?;''',
+          '''    let invalid = TruncationEntry::new(
+        "findings",
+        Vec::new(),
+        Some(0),
+        true,
+        "wow.core.output_limited".parse()?,
+    )
+    .expect_err("known and unknown omission counts are mutually exclusive");''':
+          '''    let invalid = expect_core_error(
+        TruncationEntry::new(
+            "findings",
+            Vec::new(),
+            Some(0),
+            true,
+            "wow.core.output_limited".parse()?,
+        ),
+        "known and unknown omission counts are mutually exclusive",
+    )?;''',
+          '''    let future = validate_schema_version(&schema, &"0.3.0".parse()?, &schema, &supported)
+        .expect_err("future minor version must be rejected");''':
+          '''    let future = expect_core_error(
+        validate_schema_version(&schema, &"0.3.0".parse()?, &schema, &supported),
+        "future minor version must be rejected",
+    )?;''',
+          '''    let error = envelope
+        .validate()
+        .expect_err("tampered canonical digest must fail");''':
+          '''    let error = expect_core_error(
+        envelope.validate(),
+        "tampered canonical digest must fail",
+    )?;''',
+          '''    let error = envelope
+        .validate()
+        .expect_err("complete must not hide NotEvaluated");''':
+          '''    let error = expect_core_error(
+        envelope.validate(),
+        "complete must not hide NotEvaluated",
+    )?;''',
+          }
+          for old, new in replacements.items():
+              if old not in text:
+                  raise SystemExit(f'expected test fragment not found: {old[:60]}')
+              text = text.replace(old, new)
+          helper = '''
+
+fn expect_core_error<T>(
+    result: Result<T, wow_core::CoreError>,
+    message: &'static str,
+) -> Result<wow_core::CoreError, Box<dyn Error>> {
+    match result {
+        Ok(_) => Err(std::io::Error::other(message).into()),
+        Err(error) => Ok(error),
+    }
+}
+'''
+          if 'fn expect_core_error<T>(' not in text:
+              text += helper
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - run: cargo +1.98.0 fmt --all
+      - run: cargo +1.98.0 clippy --workspace --all-targets --all-features -- -D warnings
+      - run: cargo +1.98.0 test --workspace --all-features
+
+      - name: Commit panic-free tests
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/i0-a-fix-result-tests.yml
+          git add crates/wow-core/tests/e0_result_semantics.rs
+          git commit -m 'test(wow-core): enforce panic-free result invariant tests'
+          git push origin HEAD:${GITHUB_HEAD_REF}
