@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "manifest_id": "wow-service-e7-b-checksums-v1",
+  "algorithm": "sha256",
+  "state": "pending-byte-freeze-before-first-rust-implementation",
+  "implementation_state": "not-started",
+  "prerequisite_pins": {
+    "selected_e0_e7a_implementation_commits": null,
+    "product_fixture_bundle_sha256": null
+  },
+  "source_dependency_toolchain_pins": {
+    "release_source_profile": null,
+    "cargo_workspace_and_lockfile": null,
+    "rust_toolchain_and_target": null,
+    "dependency_vendor_materialization": null,
+    "build_script_proc_macro_native_input_policy": null
+  },
+  "executor_and_build_pins": {
+    "build_authorization_adapter": null,
+    "build_executor": null,
+    "windows_x64_build_profile": null,
+    "sandbox_and_environment_allowlist": null,
+    "deterministic_time_path_archive_profile": null,
+    "independent_builder_profile": null,
+    "reproducibility_comparison_profile": null
+  },
+  "evidence_signing_distribution_pins": {
+    "artifact_self_description": null,
+    "SBOM": null,
+    "provenance": null,
+    "license_and_notices": null,
+    "test_security_and_benchmark_report_profile": null,
+    "portable_signing_authorization_and_adapter": null,
+    "platform_signing_adapter": null,
+    "trust_root_rotation_and_revocation": null,
+    "bundle_layout_and_validation": null,
+    "support_matrix_and_release_candidate": null,
+    "distribution_publisher_and_reader": null,
+    "channel_and_update_manifest": null
+  },
+  "installation_support_pins": {
+    "windows_installation_owner": null,
+    "windows_replacement_helper": null,
+    "store_and_config_migration": null,
+    "backup_restore_LKR_and_rollback": null,
+    "uninstall_and_cleanup": null,
+    "revocation_retirement_and_incident": null,
+    "retention_audit_recovery_and_close": null
+  },
+  "vector_pins": {
+    "source_build": null,
+    "evidence_bundle": null,
+    "channel_manifest": null,
+    "install_update_rollback": null,
+    "malicious_source_dependency_archive_manifest_and_helper": null,
+    "response_loss_at_every_external_effect": null,
+    "Windows_x64_platform_and_client": null,
+    "real_addon_and_resource_benchmarks": null,
+    "complete_release_rehearsal": null
+  },
+  "member_paths": [
+    "crates/wow-service/e7b/README.md",
+    "crates/wow-service/e7b/AGENTS.md",
+    "crates/wow-service/e7b/DECISIONS.md",
+    "crates/wow-service/e7b/DATA_MODEL.md",
+    "crates/wow-service/e7b/SOURCE_BUILD_AND_REPRODUCIBILITY.md",
+    "crates/wow-service/e7b/ARTIFACT_BUNDLE_SBOM_PROVENANCE.md",
+    "crates/wow-service/e7b/SIGNING_AND_TRUST.md",
+    "crates/wow-service/e7b/SUPPORT_MATRIX_AND_RELEASE_CANDIDATE.md",
+    "crates/wow-service/e7b/CHANNELS_AND_DISTRIBUTION.md",
+    "crates/wow-service/e7b/INSTALL_UPDATE_AND_ROLLBACK.md",
+    "crates/wow-service/e7b/COMPATIBILITY_SUPPORT_RETIREMENT_AND_INCIDENTS.md",
+    "crates/wow-service/e7b/DURABLE_RELEASE_EFFECTS_AND_RECOVERY.md",
+    "crates/wow-service/e7b/SECURITY_AND_SUPPLY_CHAIN.md",
+    "crates/wow-service/e7b/RESULT_ENVELOPE_AND_STATUS.md",
+    "crates/wow-service/e7b/ERROR_MODEL.md",
+    "crates/wow-service/e7b/TEST_MATRIX.md",
+    "crates/wow-service/e7b/IMPLEMENTATION_PLAN.md",
+    "crates/wow-service/e7b/CONTRACT.json",
+    "crates/wow-service/e7b/examples/README.md",
+    "crates/wow-service/e7b/examples/source-build.json",
+    "crates/wow-service/e7b/examples/evidence-bundle.json",
+    "crates/wow-service/e7b/examples/channel-manifest.json",
+    "crates/wow-service/e7b/examples/install-update-rollback.json"
+  ],
+  "member_sha256": {},
+  "bundle_sha256": null,
+  "freeze_rules": [
+    "nulls are allowed only while implementation_state is not-started",
+    "all source dependency toolchain executor build evidence signing trust distribution installer platform support benchmark vector and checksum values freeze before the first E7-B Rust commit",
+    "tests verify committed bytes and never rewrite fixtures",
+    "private signing distribution build CI provider and user data are never committed"
+  ]
+}
