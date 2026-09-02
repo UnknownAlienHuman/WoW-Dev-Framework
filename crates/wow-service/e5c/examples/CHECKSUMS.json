@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "manifest_id": "wow-service-e5-c-checksums-v1",
+  "algorithm": "sha256",
+  "state": "pending-byte-freeze-before-first-rust-implementation",
+  "implementation_state": "not-started",
+  "prerequisite_pins": {"e0_e5b_implementation_commits": null, "prerequisite_fixture_bundle_sha256": null},
+  "port_and_adapter_pins": {"submission_catalog": null, "recognizer": null, "graph_validation": null, "project_reindex": null, "store": null, "signing_authorization": null, "signing_and_verification": null, "canary_assignment_and_observation": null, "rollout_activation_rollback_authorization": null, "retention_and_audit": null},
+  "profile_pins": {"submission_revalidation": null, "artifact_and_producer_namespace": null, "provenance_sbom_license": null, "signing_and_key_lifecycle": null, "publication_and_readback": null, "canary_population_privacy_and_signals": null, "rollout_and_activation": null, "last_known_good_and_rollback": null, "revocation_and_partition_closure": null, "security_result_cli_and_canonicalization": null},
+  "vector_pins": {"submission_artifact": null, "publication_signature": null, "canary_rollout": null, "rollback_revocation": null, "response_loss_and_recovery": null, "determinism_and_benchmarks": null},
+  "member_paths": [
+    "crates/wow-service/e5c/README.md", "crates/wow-service/e5c/AGENTS.md", "crates/wow-service/e5c/DECISIONS.md", "crates/wow-service/e5c/DATA_MODEL.md",
+    "crates/wow-service/e5c/SUBMISSION_REVALIDATION_AND_ARTIFACT_BUILD.md", "crates/wow-service/e5c/SIGNING_PROVENANCE_SBOM_AND_LICENSE.md",
+    "crates/wow-service/e5c/PUBLICATION_CATALOG_AND_READBACK.md", "crates/wow-service/e5c/CANARY_COHORTS_AND_OBSERVATIONS.md",
+    "crates/wow-service/e5c/ACTIVATION_ROLLOUT_AND_LAST_KNOWN_GOOD.md", "crates/wow-service/e5c/ROLLBACK_REVOCATION_AND_PARTITION_CLOSURE.md",
+    "crates/wow-service/e5c/DURABLE_EFFECTS_RETENTION_AND_RECOVERY.md", "crates/wow-service/e5c/RESULT_ENVELOPE_AND_STATUS.md",
+    "crates/wow-service/e5c/SECURITY_PRIVACY_AND_DISTRIBUTION.md", "crates/wow-service/e5c/ERROR_MODEL.md", "crates/wow-service/e5c/TEST_MATRIX.md",
+    "crates/wow-service/e5c/IMPLEMENTATION_PLAN.md", "crates/wow-service/e5c/CONTRACT.json", "crates/wow-service/e5c/examples/README.md",
+    "crates/wow-service/e5c/examples/submission-artifact.json", "crates/wow-service/e5c/examples/publication-signature.json",
+    "crates/wow-service/e5c/examples/canary-rollout.json", "crates/wow-service/e5c/examples/rollback-revocation.json"
+  ],
+  "member_sha256": {},
+  "bundle_sha256": null,
+  "freeze_rules": ["nulls allowed only while implementation_state is not-started", "private signing or deployment credentials are never committed", "tests verify committed bytes and never rewrite fixtures"]
+}

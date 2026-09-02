@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e5c-rollback-revocation-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "rollback": {"operation_id": null, "failed_publication_id": null, "rollback_target_id": null, "expected_current_digest": null, "receipt_id": null},
+  "revocation": {"revocation_id": null, "scope": null, "reason_codes": [], "canonical_sha256": null},
+  "partition_closure": {"report_id": null, "target_project_generation_ids": [], "stale_partition_ids": [], "foreign_partition_unchanged": true, "canonical_sha256": null},
+  "cases": [
+    {"case_id": "S5C-RB-002", "mutation": "previous-or-newest-target", "expected_error": "e5c_latest_best_previous_default_selector_forbidden"},
+    {"case_id": "S5C-RB-004", "mutation": "rewrite-history", "expected_error": "e5c_rollback_history_rewrite_or_relabel_forbidden"},
+    {"case_id": "S5C-CLOSE-002", "mutation": "stale-partition-remains", "expected_error": "e5c_stale_pack_partition_retained"},
+    {"case_id": "S5C-CLOSE-003", "mutation": "foreign-partition-changed", "expected_error": "e5c_foreign_or_historical_partition_modified"}
+  ],
+  "freeze_gate": {"required_before_first_rust_implementation": true}
+}

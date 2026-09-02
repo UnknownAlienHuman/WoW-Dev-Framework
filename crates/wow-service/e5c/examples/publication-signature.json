@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e5c-publication-signature-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "attestation_set": {"attestation_set_id": null, "artifact_id": null, "sbom_digest": null, "license_notice_digest": null, "canonical_sha256": null},
+  "signature": {"signature_id": null, "signed_digest": null, "key_id": null, "algorithm_profile": null, "verification": null, "canonical_sha256": null},
+  "publication": {"publication_id": null, "state": "PublishedInactive", "readback_report_id": null, "canonical_sha256": null},
+  "cases": [
+    {"case_id": "S5C-SIGN-003", "expected": "detached-signature-verifies"},
+    {"case_id": "S5C-SIGN-007", "mutation": "private-key-in-request", "expected_error": "e5c_private_signing_material_disclosure_forbidden"},
+    {"case_id": "S5C-PUB-001", "expected_status": "PublishedInactive"},
+    {"case_id": "S5C-PUB-009", "mutation": "validated-without-readback", "expected_error": "e5c_publication_marked_valid_without_readback"}
+  ],
+  "freeze_gate": {"required_before_first_rust_implementation": true}
+}

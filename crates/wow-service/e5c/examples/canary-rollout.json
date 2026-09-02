@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e5c-canary-rollout-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "canary_plan": {"plan_id": null, "publication_id": null, "population_digest": null, "membership_commitment": null, "required_signals": [], "canonical_sha256": null},
+  "canary_evaluation": {"evaluation_id": null, "conclusion": null, "signal_results": [], "canonical_sha256": null},
+  "rollout_plan": {"rollout_plan_id": null, "finite_stages": [], "canonical_sha256": null},
+  "activation": {"current_record_id": null, "expected_prior_digest": null, "publication_id": null, "canonical_sha256": null},
+  "last_known_good": {"designation_id": null, "publication_id": null, "canonical_sha256": null},
+  "cases": [
+    {"case_id": "S5C-CAN-002", "mutation": "percentage-without-population", "expected_error": "e5c_canary_population_or_membership_unfrozen"},
+    {"case_id": "S5C-CAN-009", "mutation": "required-signal-missing", "expected_error": "e5c_canary_required_signal_missing_or_partial"},
+    {"case_id": "S5C-ROLL-004", "mutation": "advance-because-time-elapsed", "expected_error": "e5c_rollout_time_only_advance_forbidden"},
+    {"case_id": "S5C-ACT-002", "mutation": "stale-current-cas", "expected_error": "e5c_activation_stale_current_cas"},
+    {"case_id": "S5C-LKG-002", "mutation": "previous-is-lkg", "expected_error": "e5c_last_known_good_previous_or_newest_inference_forbidden"}
+  ],
+  "freeze_gate": {"required_before_first_rust_implementation": true}
+}

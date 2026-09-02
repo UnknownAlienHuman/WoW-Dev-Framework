@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "manifest_id": "apps-wow-e5-c-checksums-v1",
+  "algorithm": "sha256",
+  "state": "pending-byte-freeze-before-first-rust-implementation",
+  "implementation_state": "not-started",
+  "prerequisite_pins": {"wow_service_e5c_implementation_commit": null, "wow_service_e5c_fixture_bundle_sha256": null},
+  "profile_pins": {"command_and_selector": null, "input_and_path": null, "signing_transport": null, "canary_and_rollout_transport": null, "activation_lkg_rollback_transport": null, "output_exit_signal_broken_pipe": null, "security_and_redaction": null},
+  "member_paths": [
+    "apps/wow/e5c/README.md", "apps/wow/e5c/AGENTS.md", "apps/wow/e5c/CLI_COMMANDS.md", "apps/wow/e5c/OUTPUT_EXIT_AND_SECURITY.md",
+    "apps/wow/e5c/TEST_MATRIX.md", "apps/wow/e5c/CONTRACT.json", "apps/wow/e5c/examples/README.md", "apps/wow/e5c/examples/cli-cases.json", "apps/wow/e5c/examples/stdout-exit-cases.json"
+  ],
+  "member_sha256": {},
+  "bundle_sha256": null,
+  "freeze_rules": ["nulls allowed only while implementation_state is not-started", "private credentials and private cohort data are never committed", "tests verify committed bytes and never rewrite fixtures"]
+}

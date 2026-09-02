@@ -1,12 +1,10 @@
 # Crate dependency graph
 
-**Status:** normative implementation boundary through documentation frontier E5-B.
+**Status:** normative boundary through documentation frontier E5-C.
 
-Dependencies point toward narrower foundations. Maximum permitted dependencies do not require activation.
+Dependencies point toward narrower foundations. Maximum edges do not require activation.
 
-## Maximum permitted direct framework dependencies
-
-| Crate | Maximum direct dependencies |
+| Crate | Maximum permitted direct dependencies |
 |---|---|
 | `wow-core` | none |
 | `wow-store` | `wow-core` |
@@ -23,7 +21,7 @@ Dependencies point toward narrower foundations. Maximum permitted dependencies d
 | `wow-service` | reviewed production crates through narrow public contracts |
 | applications | `wow-service` only |
 
-## Active E5-B operation slice
+## Active E5-C slice
 
 ```text
 apps/wow
@@ -35,103 +33,68 @@ apps/wow
         └── wow-recognizers
 ```
 
-`wow-reference`, `wow-annotations`, `wow-emmy`, `wow-rules`, `wow-search`, `wow-context`, and `wow-cbm` are inactive direct dependencies for E5-B. Their relevant immutable facts may already be referenced by exact project/E5-A artifacts, but E5-B does not invoke those crates directly.
+Other crates are inactive direct dependencies in E5-C. Their relevant evidence may be transitively referenced by exact E5-A/B artifacts but E5-C does not invoke them.
 
-## E5-A owner seam
-
-```text
-exact source/project/analyzer/graph/fact publications
-    -> caller/orchestrator
-    -> wow-recognizers E5-A
-        -> candidate-owned shadow partitions
-        -> independent wow-graph proposal validation
-        -> immutable case/mutation/metric/candidate/deactivation artifacts
-```
-
-`wow-recognizers` does not import `wow-project`, `wow-store`, service, or applications. It owns E5-A validation/evaluation algorithms and emits exact immutable artifacts.
-
-## E5-B orchestration seam
+## Owner/effect flow
 
 ```text
-exact retained E5-A artifacts
-+ exact project/fact publication views
-+ graph validation port
-+ durable operation/store/retention/audit ports
-+ review authorization port
-+ holdout authorization and vault ports
-    -> wow-service E5-B
-    -> immutable run/review/holdout/audit/promotion-submission records
-    -> apps/wow transport
+E5-B PromotionSubmission catalog
+-> wow-service independent revalidation
+-> wow-recognizers core semantic/producer validation
+-> wow-graph output and partition validation
+-> wow-store immutable artifact/attestation/signature/catalog publication
+-> signing authorization/signing/verification ports
+-> canary authorization/assignment/observation ports
+-> rollout/activation/rollback/revocation authorization ports
+-> wow-project exact reindex
+-> wow-graph new snapshot/partition closure
+-> wow-store current/LKG/retention/audit
+-> apps/wow transport
 ```
 
-`wow-service` does not inspect raw database tables, source bodies, analyzer sessions, matcher internals, hidden holdout membership, private credentials, or vault storage.
+No owner imports service or applications. `wow-store` does not interpret recognizer/project/graph semantics. `wow-recognizers` does not publish catalogs/current pointers or authorize rollout. `wow-graph` does not run recognizers or resolve current. `wow-project` does not select packs. Service coordinates exact public receipts only.
 
-## Authorization boundaries
+## Distinct authorities
 
 ```text
-strict review envelope
-    -> ReviewAuthorizationPort
-    -> independent candidate/graph semantic validation
-    -> immutable review record
-
-strict frozen holdout request
-    -> HoldoutAuthorizationPort
-    -> exact HoldoutVaultPort execution
-    -> audit/disclosure/consumption records
+E5-B review authorization
+E5-C artifact validation
+signing authorization
+signature verification
+publication authorization
+canary authorization and typed evidence
+rollout authorization
+activation/current CAS
+LKG designation
+rollback/revocation/deactivation authorization
+future E7 distribution authorization
+runtime correctness
 ```
 
-Review authorization does not grant holdout access. Either authorization does not create semantic proof, alter metrics, raise confidence, or authorize E5-C publication.
+No edge collapses these states. GitHub/OS/CLI/file/commit identity is not any authorization.
 
-GitHub account/repository role, OS user, terminal/CLI operator, file owner, commit author, and plain prose are not authorization.
+## Historical immutability
 
-## Durable effect boundary
+Activation or rollback creates new project/recognizer/graph generations. Historical generations retain original partitions. Stale partition closure applies only to new targets and preserves foreign/core-independent/calibration partitions.
+
+## Next E6-A boundary
 
 ```text
-OperationId + CanonicalRequestDigest
-    -> durable registration
-    -> exact owner effect
-    -> exact receipt/reconciliation
-    -> retention
-    -> reverse resource closure
-    -> public result
+wow-cbm -> wow-core
 ```
 
-Response loss never proves absence of an effect. `OutcomeUnknown` blocks blind redispatch. No public success precedes mandatory retention and closure.
-
-## E5-C handoff
-
-```text
-exact validated PromotionSubmission
-    -> future E5-C independent revalidation
-    -> distinct immutable CorePackArtifact
-    -> publication/signing/catalog
-    -> canary/activation/rollout/rollback/last-known-good
-```
-
-E5-B has no publication, current/default mutation, canary, rollout, rollback, signing, or distribution operation.
-
-## Existing E4 boundaries remain active
-
-- `wow-search` returns candidates and explanations; it does not prove intent or lineage.
-- `wow-graph` validates lineage/static-impact under proof ceilings; it does not call search/service.
-- `wow-context` consumes explicit exact roots; search does not call context.
-- `wow-service` coordinates only through narrow owner contracts.
-- Applications import `wow-service` only.
+E6-A external provider candidates remain optional `Candidate` evidence. `wow-cbm` cannot depend on search/context/service/apps or create reverse graph/project dependencies. E6-B later maps unverified locators through owner ports at service level.
 
 ## Forbidden patterns
 
-- `wow-core` depending on another framework crate.
-- `wow-store` interpreting project, graph, search, context, calibration, or authorization semantics.
-- `wow-graph` parsing source, running recognizers/search, authorizing reviewers, or calling service/apps.
-- `wow-recognizers` materializing repositories, storing durable service effects, authorizing review/holdout, or publishing core packs.
+- `wow-core` depending on framework crates.
+- `wow-store` interpreting domain semantics.
+- `wow-graph` parsing source, running recognizers, authorizing, or calling service/apps.
+- `wow-recognizers` storing durable service/publication effects or activating packs.
 - `wow-project` depending on service/apps.
-- `wow-context` depending on store/emmy/recognizers/rules/search/cbm/service/apps.
-- `wow-service` reproducing corpus/split/matcher/mutation/metric/graph/deactivation algorithms.
-- An app importing any framework crate except `wow-service`.
-- Raw SQL, connection, parser, source scanner, filesystem root, private credential, vault token, or executable callback crossing a public seam.
-- A production crate depending on an application.
-- Test helpers becoming runtime dependencies.
+- `wow-service` reimplementing owner algorithms or exposing raw storage/signing/vault/observation handles.
+- Application importing any framework crate except `wow-service`.
+- Private credentials, raw SQL, parser/session objects, filesystem roots, arbitrary executable callbacks, or provider databases crossing public seams.
+- Production crate depending on application.
 
-## Changing the graph
-
-A dependency change requires the exact crossing operation/data, why current seams are insufficient, cycle and identity-DAG analysis, security/privacy/license/evidence impact, tests on both sides, a mutation rejecting the shortcut, migration notes, and manifest/workstream updates.
+Changing an edge requires exact crossing data/operation, insufficiency of current seam, cycle/identity/security/privacy/license/evidence analysis, tests/mutations, migration notes, and manifest/workstream updates.

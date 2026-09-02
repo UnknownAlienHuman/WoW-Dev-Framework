@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "fixture_id": "apps-wow-e5c-cli-cases-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "cases": [
+    {"case_id": "A5C-ROUTE-001", "command": "wow core-pack publication publish", "service_operation": "core_pack_publish", "expected_service_calls": 1},
+    {"case_id": "A5C-IN-002", "command": "wow core-pack rollback --previous", "expected_exit": 64},
+    {"case_id": "A5C-SIGN-002", "command": "wow core-pack sign request --private-key key.pem", "expected_exit": 64},
+    {"case_id": "A5C-ACT-002", "command": "wow core-pack activate --force-without-cas", "expected_exit": 64},
+    {"case_id": "A5C-PUB-003", "command": "wow core-pack release publish", "expected_exit": 64}
+  ],
+  "freeze_gate": {"required_before_first_rust_implementation": true}
+}

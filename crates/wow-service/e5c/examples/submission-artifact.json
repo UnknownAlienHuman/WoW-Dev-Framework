@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e5c-submission-artifact-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "submission": {"submission_id": null, "digest": null, "state": "ReadyForE5CReview"},
+  "revalidation": {"report_id": null, "status": null, "blockers": [], "canonical_sha256": null},
+  "core_artifact": {"artifact_id": null, "trust_class": "core", "origin_candidate_id": null, "origin_submission_id": null, "producer_namespace": null, "canonical_sha256": null},
+  "cases": [
+    {"case_id": "S5C-SUB-001", "expected": "revalidation-pass"},
+    {"case_id": "S5C-SUB-002", "mutation": "latest-or-best-selector", "expected_error": "e5c_latest_best_previous_default_selector_forbidden"},
+    {"case_id": "S5C-ART-002", "mutation": "relabel-candidate-as-core", "expected_error": "e5c_core_artifact_relabelled_candidate_forbidden"},
+    {"case_id": "S5C-ART-003", "mutation": "repository-name-production-condition", "expected_error": "e5c_production_rule_named_condition_forbidden"}
+  ],
+  "freeze_gate": {"required_before_first_rust_implementation": true}
+}
