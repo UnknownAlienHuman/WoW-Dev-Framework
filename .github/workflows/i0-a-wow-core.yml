@@ -31,63 +31,24 @@ jobs:
       - name: Install frozen Rust toolchain
         run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
 
-      - name: Apply exact compiler and lint corrections discovered by bootstrap runs
+      - name: Apply exact byte-iterator compiler correction
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
-
-          ids = Path('crates/wow-core/src/ids.rs')
-          text = ids.read_text(encoding='utf-8')
+          path = Path('crates/wow-core/src/ids.rs')
+          text = path.read_text(encoding='utf-8')
           needle = "**byte == b'_'"
           if text.count(needle) != 1:
               raise SystemExit('expected exactly one byte-iterator correction site')
-          ids.write_text(text.replace(needle, "*byte == b'_'"), encoding='utf-8')
-
-          canonical = Path('crates/wow-core/src/canonical.rs')
-          text = canonical.read_text(encoding='utf-8')
-          needle = "input.as_bytes().chunks_exact(2).enumerate()"
-          replacement = "input.as_bytes().as_chunks::<2>().0.iter().enumerate()"
-          if text.count(needle) != 1:
-              raise SystemExit('expected exactly one hash-test chunk site')
-          canonical.write_text(text.replace(needle, replacement), encoding='utf-8')
-
-          generation = Path('crates/wow-core/src/generation.rs')
-          text = generation.read_text(encoding='utf-8')
-          needle = '''        if let Some(previous) = result.last() {
-            if previous.provider_id == entry.provider_id && previous.scope_id == entry.scope_id {
-                if previous == &entry {
-                    continue;
-                }
-                return Err(validation_error(
-                    "merge_generation_context",
-                    CoreErrorCode::DuplicateExternalGenerationScope,
-                    "external_generations",
-                ));
-            }
-        }
-'''
-          replacement = '''        if let Some(previous) = result.last()
-            && previous.provider_id == entry.provider_id
-            && previous.scope_id == entry.scope_id
-        {
-            if previous == &entry {
-                continue;
-            }
-            return Err(validation_error(
-                "merge_generation_context",
-                CoreErrorCode::DuplicateExternalGenerationScope,
-                "external_generations",
-            ));
-        }
-'''
-          if text.count(needle) != 1:
-              raise SystemExit('expected exactly one external-generation merge site')
-          generation.write_text(text.replace(needle, replacement), encoding='utf-8')
+          path.write_text(text.replace(needle, "*byte == b'_'"), encoding='utf-8')
           PY
 
       - name: Generate exact dependency lock
         run: cargo +1.98.0 generate-lockfile
+
+      - name: Apply compiler-guided lint fixes
+        run: cargo +1.98.0 clippy --fix --workspace --all-targets --all-features --allow-dirty --allow-staged
 
       - name: Format working tree
         run: cargo +1.98.0 fmt --all
@@ -101,14 +62,14 @@ jobs:
       - name: Run tests
         run: cargo +1.98.0 test --workspace --all-features
 
-      - name: Commit exact lock and formatter output
+      - name: Commit exact lock and compiler output
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add Cargo.lock crates/wow-core/src crates/wow-core/tests
           if ! git diff --cached --quiet; then
-            git commit -m 'style(wow-core): apply rustfmt and lock dependencies'
+            git commit -m 'style(wow-core): apply compiler fixes and lock dependencies'
             git push origin HEAD:${GITHUB_HEAD_REF}
           fi
 
