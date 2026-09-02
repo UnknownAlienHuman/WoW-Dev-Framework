@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e6b-query-lifecycle-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "cases": [
+    {
+      "case_id": "S6B-IDEM-001",
+      "operation_id": null,
+      "request_digest": null,
+      "registration_before_dispatch": true,
+      "expected": "registered"
+    },
+    {
+      "case_id": "S6B-IDEM-003",
+      "mutation": "same-operation-id-same-digest",
+      "expected": "same-exact-result-no-repeat"
+    },
+    {
+      "case_id": "S6B-IDEM-004",
+      "mutation": "same-operation-id-different-digest",
+      "expected_error": "e6b_operation_id_request_digest_conflict"
+    },
+    {
+      "case_id": "S6B-IDEM-007",
+      "failure_point": "after-provider-dispatch-before-response",
+      "expected_status": "OutcomeUnknown",
+      "expected_error": "e6b_provider_effect_outcome_unknown"
+    },
+    {
+      "case_id": "S6B-IDEM-010",
+      "reconciliation": "EffectCommitted",
+      "expected": "recover-exact-result"
+    },
+    {
+      "case_id": "S6B-QUERY-001",
+      "operation": "external_candidate_query",
+      "expected_status": "CandidateOnly",
+      "authority": {
+        "provenance": "semantic_candidate",
+        "confidence": "Candidate",
+        "negative_authority": "unavailable"
+      }
+    },
+    {
+      "case_id": "S6B-QUERY-007",
+      "provider_result_count": 0,
+      "expected": "request-and-state-scoped-zero-result"
+    },
+    {
+      "case_id": "S6B-CONT-003",
+      "operation": "external_candidate_continue",
+      "mutation": "external-state-replaced",
+      "expected_error": "e6b_continuation_invalid_or_stale"
+    },
+    {
+      "case_id": "S6B-CONT-005",
+      "mutation": "reset-cumulative-budget",
+      "expected_error": "e6b_continuation_provider_state_or_budget_reset_forbidden"
+    },
+    {
+      "case_id": "S6B-RET-003",
+      "operation": "external_candidate_cache_validate",
+      "state_profile_match": true,
+      "privacy_profile_match": true,
+      "expected": "ValidExactHit"
+    },
+    {
+      "case_id": "S6B-RET-004",
+      "mutation": "cache-from-another-mutable-observation",
+      "expected_error": "e6b_cache_entry_invalid_or_mismatch"
+    },
+    {
+      "case_id": "S6B-RET-007",
+      "provider_state": "Unavailable",
+      "expected": "scoped-optional-degradation",
+      "local_workflows_available": true
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}
