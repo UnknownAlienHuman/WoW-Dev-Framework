@@ -24,12 +24,17 @@ jobs:
     steps:
       - name: Check out exact revision
         uses: actions/checkout@v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Install frozen Rust toolchain
         run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
 
       - name: Generate exact dependency lock
         run: cargo +1.98.0 generate-lockfile
+
+      - name: Format working tree
+        run: cargo +1.98.0 fmt --all
 
       - name: Check formatting
         run: cargo +1.98.0 fmt --all -- --check
@@ -40,13 +45,23 @@ jobs:
       - name: Run tests
         run: cargo +1.98.0 test --workspace --all-features
 
-      - name: Emit generated Cargo.lock
+      - name: Package exact generated validation tree
         if: always()
         shell: bash
         run: |
-          if [[ -f Cargo.lock ]]; then
-            echo '---CARGO_LOCK_BASE64---'
-            base64 -w0 Cargo.lock
-            echo
-            echo '---END_CARGO_LOCK_BASE64---'
-          fi
+          tar -czf i0-a-working-tree.tar.gz \
+            Cargo.toml \
+            Cargo.lock \
+            rust-toolchain.toml \
+            crates/wow-core/Cargo.toml \
+            crates/wow-core/src \
+            crates/wow-core/tests
+
+      - name: Upload exact generated validation tree
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          path: i0-a-working-tree.tar.gz
+          archive: false
+          if-no-files-found: error
+          retention-days: 1
