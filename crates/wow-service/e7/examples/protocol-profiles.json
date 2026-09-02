@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e7a-protocol-profiles-v1",
+  "state": "documentation-only-pending-spec-and-byte-freeze",
+  "profiles": [
+    {
+      "profile_id": "lsp-stdio-single-client-read-analysis-v1",
+      "protocol_family": "LSP",
+      "official_specification_revision": null,
+      "official_specification_digest": null,
+      "transport": "stdio",
+      "capabilities": [
+        "initialize",
+        "shutdown",
+        "text-document-sync",
+        "diagnostics",
+        "hover",
+        "definition",
+        "references",
+        "symbols",
+        "advisory-code-actions",
+        "cancellation",
+        "progress"
+      ],
+      "forbidden_capabilities": [
+        "execute-command",
+        "apply-workspace-edit",
+        "formatting",
+        "rename"
+      ],
+      "canonical_sha256": null
+    },
+    {
+      "profile_id": "mcp-stdio-single-client-fixed-tools-resources-v1",
+      "protocol_family": "MCP",
+      "official_specification_revision": null,
+      "official_specification_digest": null,
+      "transport": "stdio",
+      "capabilities": [
+        "initialize",
+        "fixed-tools",
+        "exact-resources",
+        "cancellation",
+        "progress"
+      ],
+      "forbidden_capabilities": [
+        "sampling",
+        "elicitation",
+        "dynamic-tools",
+        "arbitrary-file-or-url-resources"
+      ],
+      "canonical_sha256": null
+    }
+  ],
+  "cases": [
+    {
+      "case_id": "S7A-PROTO-001",
+      "profile_id": "lsp-stdio-single-client-read-analysis-v1",
+      "expected": "Valid"
+    },
+    {
+      "case_id": "S7A-PROTO-002",
+      "profile_id": "mcp-stdio-single-client-fixed-tools-resources-v1",
+      "expected": "Valid"
+    },
+    {
+      "case_id": "S7A-PROTO-003",
+      "profile_selector": "latest",
+      "expected_error": "e7a_protocol_profile_invalid_or_unfrozen"
+    },
+    {
+      "case_id": "S7A-PROTO-004",
+      "protocol_revision": "unsupported",
+      "expected_error": "e7a_protocol_revision_or_transport_unsupported"
+    },
+    {
+      "case_id": "S7A-PROTO-007",
+      "dynamic_descriptor_source": "project-source",
+      "expected_error": "e7a_dynamic_method_tool_or_resource_registration_forbidden"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "profiles[*].official_specification_revision",
+      "profiles[*].official_specification_digest",
+      "profiles[*].canonical_sha256",
+      "initialization-and-capability-golden-bytes",
+      "canonical_sha256"
+    ]
+  }
+}
