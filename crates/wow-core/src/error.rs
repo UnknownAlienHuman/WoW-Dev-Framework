@@ -94,16 +94,16 @@ pub enum RetryClass {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ErrorArgument {
-    name: String,
-    value: String,
+    name: Box<str>,
+    value: Box<str>,
 }
 
 impl ErrorArgument {
     /// Creates a bounded structured argument.
     pub fn new(name: impl Into<String>, value: impl Into<String>) -> Self {
         Self {
-            name: name.into(),
-            value: value.into(),
+            name: name.into().into_boxed_str(),
+            value: value.into().into_boxed_str(),
         }
     }
 
@@ -126,16 +126,16 @@ impl ErrorArgument {
 pub struct CoreError {
     code: CoreErrorCode,
     category: ErrorCategory,
-    operation_id: String,
+    operation_id: Box<str>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    field_path: Option<String>,
+    field_path: Option<Box<str>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    subject_kind: Option<String>,
+    subject_kind: Option<Box<str>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    subject_id: Option<String>,
-    reason_arguments: Vec<ErrorArgument>,
+    subject_id: Option<Box<str>>,
+    reason_arguments: Box<[ErrorArgument]>,
     retry_class: RetryClass,
-    cause_codes: Vec<CoreErrorCode>,
+    cause_codes: Box<[CoreErrorCode]>,
 }
 
 impl CoreError {
@@ -150,20 +150,20 @@ impl CoreError {
         Self {
             code,
             category,
-            operation_id: operation_id.into(),
+            operation_id: operation_id.into().into_boxed_str(),
             field_path: None,
             subject_kind: None,
             subject_id: None,
-            reason_arguments: Vec::new(),
+            reason_arguments: Box::new([]),
             retry_class,
-            cause_codes: Vec::new(),
+            cause_codes: Box::new([]),
         }
     }
 
     /// Adds a safe schema field path.
     #[must_use]
     pub fn at_field(mut self, field_path: impl Into<String>) -> Self {
-        self.field_path = Some(field_path.into());
+        self.field_path = Some(field_path.into().into_boxed_str());
         self
     }
 
@@ -174,30 +174,30 @@ impl CoreError {
         subject_kind: impl Into<String>,
         subject_id: impl Into<String>,
     ) -> Self {
-        self.subject_kind = Some(subject_kind.into());
-        self.subject_id = Some(subject_id.into());
+        self.subject_kind = Some(subject_kind.into().into_boxed_str());
+        self.subject_id = Some(subject_id.into().into_boxed_str());
         self
     }
 
     /// Adds a bounded structured reason argument.
     #[must_use]
-    pub fn with_argument(
-        mut self,
-        name: impl Into<String>,
-        value: impl Into<String>,
-    ) -> Self {
-        self.reason_arguments.push(ErrorArgument::new(name, value));
-        self.reason_arguments.sort();
-        self.reason_arguments.dedup();
+    pub fn with_argument(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
+        let mut arguments = self.reason_arguments.into_vec();
+        arguments.push(ErrorArgument::new(name, value));
+        arguments.sort();
+        arguments.dedup();
+        self.reason_arguments = arguments.into_boxed_slice();
         self
     }
 
     /// Adds a nested stable cause code.
     #[must_use]
     pub fn with_cause(mut self, code: CoreErrorCode) -> Self {
-        self.cause_codes.push(code);
-        self.cause_codes.sort_unstable();
-        self.cause_codes.dedup();
+        let mut causes = self.cause_codes.into_vec();
+        causes.push(code);
+        causes.sort_unstable();
+        causes.dedup();
+        self.cause_codes = causes.into_boxed_slice();
         self
     }
 
