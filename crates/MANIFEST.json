@@ -265,10 +265,12 @@
       ],
       "active_contracts": [
         "crates/wow-store/CONTRACT.json",
-        "crates/wow-store/e2/CONTRACT.json",
-        "crates/wow-store/E6_B_EXTERNAL_CANDIDATE_STORAGE.md"
+        "crates/wow-store/e2/CONTRACT.json"
       ],
-      "selected_project_store_profile": "project-store-wal-manifested-partitions-v1"
+      "selected_project_store_profile": "project-store-wal-manifested-partitions-v1",
+      "active_e6b_seams": [
+        "crates/wow-store/E6_B_EXTERNAL_CANDIDATE_STORAGE.md"
+      ]
     },
     {
       "name": "wow-reference",
@@ -282,8 +284,12 @@
       ],
       "active_contracts": [
         "crates/wow-reference/CONTRACT.json",
-        "crates/wow-reference/e1/CONTRACT.json",
-        "crates/wow-reference/E4_B_TRANSITION_EVIDENCE.md",
+        "crates/wow-reference/e1/CONTRACT.json"
+      ],
+      "active_e4b_seams": [
+        "crates/wow-reference/E4_B_TRANSITION_EVIDENCE.md"
+      ],
+      "active_e6b_seams": [
         "crates/wow-reference/E6_B_EXTERNAL_LOCATOR_MAPPING.md"
       ]
     },
@@ -330,8 +336,12 @@
       "active_contracts": [
         "crates/wow-project/CONTRACT.json",
         "crates/wow-project/e2/CONTRACT.json",
-        "crates/wow-project/e3/CONTRACT.json",
-        "crates/wow-project/E4_B_LINEAGE_INPUTS.md",
+        "crates/wow-project/e3/CONTRACT.json"
+      ],
+      "active_e4b_seams": [
+        "crates/wow-project/E4_B_LINEAGE_INPUTS.md"
+      ],
+      "active_e6b_seams": [
         "crates/wow-project/E6_B_EXTERNAL_LOCATOR_MAPPING.md"
       ]
     },
@@ -414,7 +424,9 @@
         "wow-graph"
       ],
       "active_contracts": [
-        "crates/wow-context/e3/CONTRACT.json",
+        "crates/wow-context/e3/CONTRACT.json"
+      ],
+      "active_e6b_seams": [
         "crates/wow-context/E6_B_EXTERNAL_CONTEXT_HANDOFF.md"
       ]
     },
