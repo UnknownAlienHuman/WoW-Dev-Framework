@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "manifest_id": "apps-wow-e7-b-checksums-v1",
+  "algorithm": "sha256",
+  "state": "pending-byte-freeze-before-first-rust-implementation",
+  "implementation_state": "not-started",
+  "prerequisite_pins": {
+    "wow_service_e7b_implementation_commit": null,
+    "wow_service_e7b_fixture_bundle_sha256": null
+  },
+  "profile_pins": {
+    "command_and_selector": null,
+    "local_identity_and_bundle_verification": null,
+    "explicit_update_check_and_network_policy": null,
+    "update_plan_apply_and_rollback": null,
+    "operation_reconciliation": null,
+    "Windows_replacement_helper_handoff": null,
+    "config_input_path_output_and_exit": null,
+    "security_redaction_and_no_hidden_network": null
+  },
+  "vector_pins": {
+    "update_client_cases": null,
+    "command_service_bijection": null,
+    "canonical_JSON_text_and_artifact_output": null,
+    "forbidden_selectors_flags_commands_and_secrets": null,
+    "broken_pipe_cancellation_handoff_and_response_loss": null,
+    "Windows_console_path_lock_and_host_drain": null
+  },
+  "member_paths": [
+    "apps/wow/e7b/README.md",
+    "apps/wow/e7b/AGENTS.md",
+    "apps/wow/e7b/CLI_COMMANDS.md",
+    "apps/wow/e7b/UPDATE_SECURITY_AND_RECOVERY.md",
+    "apps/wow/e7b/TEST_MATRIX.md",
+    "apps/wow/e7b/CONTRACT.json",
+    "apps/wow/e7b/examples/README.md",
+    "apps/wow/e7b/examples/update-client-cases.json"
+  ],
+  "member_sha256": {},
+  "bundle_sha256": null,
+  "freeze_rules": [
+    "nulls are allowed only while implementation_state is not-started",
+    "all service CLI helper platform network path security output vector and checksum values freeze before the first E7-B update-client Rust commit",
+    "tests verify committed fixtures and never rewrite them",
+    "sensitive signing distribution installer provider and user data are never committed"
+  ]
+}
