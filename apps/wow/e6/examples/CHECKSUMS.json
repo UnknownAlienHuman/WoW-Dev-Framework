@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "manifest_id": "apps-wow-e6-b-checksums-v1",
+  "algorithm": "sha256",
+  "state": "pending-byte-freeze-before-first-rust-implementation",
+  "implementation_state": "not-started",
+  "prerequisite_pins": {
+    "wow_service_e6b_implementation_commit": null,
+    "wow_service_e6b_fixture_bundle_sha256": null
+  },
+  "profile_pins": {
+    "command_and_selector": null,
+    "config_and_explicit_input": null,
+    "provider_and_external_state_transport": null,
+    "mapping_and_selection_transport": null,
+    "context_and_external_attachment_transport": null,
+    "output_and_exit": null,
+    "signal_cancellation_broken_pipe": null,
+    "file_platform_adapter": null,
+    "security_privacy_and_redaction": null
+  },
+  "vector_pins": {
+    "command_service_bijection": null,
+    "invalid_provider_and_credential_inputs": null,
+    "mapping_and_selection_shortcuts": null,
+    "canonical_envelope_stdout": null,
+    "artifact_and_text_output": null,
+    "candidate_mapping_selection_context_required_fields": null,
+    "exit_codes": null,
+    "cancellation_response_loss_and_output_failure": null,
+    "credential_session_cursor_path_and_snippet_nonleakage": null
+  },
+  "member_paths": [
+    "apps/wow/e6/README.md",
+    "apps/wow/e6/AGENTS.md",
+    "apps/wow/e6/CLI_COMMANDS.md",
+    "apps/wow/e6/OUTPUT_EXIT_AND_STREAMS.md",
+    "apps/wow/e6/SECURITY_AND_INPUTS.md",
+    "apps/wow/e6/TEST_MATRIX.md",
+    "apps/wow/e6/CONTRACT.json",
+    "apps/wow/e6/examples/README.md",
+    "apps/wow/e6/examples/cli-cases.json",
+    "apps/wow/e6/examples/stdout-exit-cases.json"
+  ],
+  "member_sha256": {},
+  "bundle_sha256": null,
+  "freeze_rules": [
+    "nulls are allowed only while implementation_state is not-started",
+    "all service command platform output exit credential privacy cancellation and checksum values freeze before the first E6-B app Rust commit",
+    "tests verify committed bytes and never rewrite fixtures automatically",
+    "credentials private endpoints session handles provider cursors and private source are never committed"
+  ]
+}
