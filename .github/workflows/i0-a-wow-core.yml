@@ -19,7 +19,7 @@ concurrency:
 jobs:
   validate:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - name: Check out exact revision
         uses: actions/checkout@v6.0.2
@@ -43,8 +43,10 @@ jobs:
       - name: Run tests
         run: cargo +1.98.0 test --workspace --all-features
 
+      - name: Fetch locked registry for offline reproduction
+        run: cargo +1.98.0 fetch --locked
+
       - name: Package exact reviewed input tree
-        if: always()
         shell: bash
         run: |
           tar -czf i0-a-reviewed-tree.tar.gz \
@@ -53,11 +55,35 @@ jobs:
             rust-toolchain.toml \
             crates/wow-core
 
+      - name: Package frozen Rust toolchain and locked registry
+        shell: bash
+        run: |
+          sysroot="$(rustc +1.98.0 --print sysroot)"
+          tar --use-compress-program='xz -1 -T0' \
+            -C "$(dirname "$sysroot")" \
+            -cf rust-1.98.0-toolchain.tar.xz \
+            "$(basename "$sysroot")"
+          tar --use-compress-program='xz -1 -T0' \
+            -C "$HOME/.cargo" \
+            -cf cargo-registry.tar.xz \
+            registry
+
       - name: Upload exact reviewed input tree
-        if: always()
         uses: actions/upload-artifact@v7.0.1
         with:
+          name: i0-a-reviewed-tree
           path: i0-a-reviewed-tree.tar.gz
+          archive: false
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upload frozen offline validation kit
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: i0-a-rust-offline-kit
+          path: |
+            rust-1.98.0-toolchain.tar.xz
+            cargo-registry.tar.xz
           archive: false
           if-no-files-found: error
           retention-days: 1
