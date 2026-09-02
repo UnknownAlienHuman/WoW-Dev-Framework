@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e6b-mapping-selection-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "mapping_cases": [
+    {
+      "case_id": "S6B-MAP-001",
+      "target_owner": "Project",
+      "mapping_status": "ExactMapped",
+      "mapped_root_id": null,
+      "expected": "exact-owner-receipt"
+    },
+    {
+      "case_id": "S6B-MAP-002",
+      "target_owner": "Reference",
+      "mapping_status": "ExactMapped",
+      "mapped_root_id": null,
+      "expected": "exact-owner-receipt"
+    },
+    {
+      "case_id": "S6B-MAP-004",
+      "matching_owner_records": 2,
+      "expected_status": "MultipleMappings"
+    },
+    {
+      "case_id": "S6B-MAP-005",
+      "matching_owner_records": 0,
+      "owner_coverage": "Partial",
+      "expected_status": "NoMappingPartial"
+    },
+    {
+      "case_id": "S6B-MAP-006",
+      "matching_owner_records": 0,
+      "owner_negative_authority": "ExactScopedAvailable",
+      "expected_status": "NoMappingWithOwnerAuthority"
+    },
+    {
+      "case_id": "S6B-MAP-013",
+      "mapping_method": "same-name-or-path-suffix",
+      "expected_error": "e6b_mapping_name_path_snippet_heuristic_forbidden"
+    },
+    {
+      "case_id": "S6B-MAP-018",
+      "mapping_status": "ExactMapped",
+      "provider_summary_validated": true,
+      "expected_error": "e6b_mapping_provider_claim_upgrade_forbidden"
+    }
+  ],
+  "selection_cases": [
+    {
+      "case_id": "S6B-SEL-001",
+      "result_id": null,
+      "candidate_id": null,
+      "mapping_receipt_id": null,
+      "mapped_root_id": null,
+      "origin": "UserExplicit",
+      "expected": "Selected"
+    },
+    {
+      "case_id": "S6B-SEL-002",
+      "selector": "top-1",
+      "expected_error": "e6b_top_first_best_highest_score_or_sole_selection_forbidden"
+    },
+    {
+      "case_id": "S6B-SEL-005",
+      "selector": "sole-candidate",
+      "expected_error": "e6b_top_first_best_highest_score_or_sole_selection_forbidden"
+    },
+    {
+      "case_id": "S6B-SEL-009",
+      "mapping_status": "MultipleMappings",
+      "decision": "Selected",
+      "expected_error": "e6b_selection_requires_exact_mapping"
+    },
+    {
+      "case_id": "S6B-SEL-012",
+      "selection_permissions": [
+        "edit-source",
+        "execute-tool"
+      ],
+      "expected_error": "e6b_selection_authority_or_permission_upgrade_forbidden"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}
