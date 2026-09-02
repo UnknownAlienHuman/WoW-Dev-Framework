@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "manifest_id": "apps-wow-mcp-e7-a-checksums-v1",
+  "algorithm": "sha256",
+  "state": "pending-byte-freeze-before-first-rust-implementation",
+  "implementation_state": "not-started",
+  "prerequisite_pins": {
+    "wow_service_e7a_implementation_commit": null,
+    "wow_service_e7a_fixture_bundle_sha256": null,
+    "wow_service_e6b_implementation_commit": null,
+    "wow_service_e6b_fixture_bundle_sha256": null
+  },
+  "official_protocol_pins": {
+    "mcp_specification_revision": null,
+    "mcp_specification_digest": null,
+    "mcp_conformance_vector_digest": null
+  },
+  "profile_pins": {
+    "stdio_framing_and_json_rpc": null,
+    "initialization_and_capabilities": null,
+    "static_tools_and_closed_schemas": null,
+    "opaque_resources_and_exact_reads": null,
+    "external_candidate_mapping_selection_and_context": null,
+    "cancellation_progress_and_continuation": null,
+    "authorization_privacy_license_and_source_boundary": null,
+    "backpressure_shutdown_broken_pipe_and_platform": null,
+    "error_projection_and_canonicalization": null
+  },
+  "vector_pins": {
+    "tool_service_bijection": null,
+    "resource_class_and_uri_validation": null,
+    "initialization_and_capabilities": null,
+    "framing_and_json_errors": null,
+    "candidate_authority_mapping_selection_and_context": null,
+    "source_boundary_and_privacy": null,
+    "cancellation_progress_continuation_and_response_loss": null,
+    "slow_peer_broken_pipe_shutdown": null,
+    "dynamic_generic_tool_and_sampling_rejection": null,
+    "one_two_n_worker_and_output_determinism": null,
+    "supported_platform_reports": null
+  },
+  "member_paths": [
+    "apps/wow-mcp/README.md",
+    "apps/wow-mcp/AGENTS.md",
+    "apps/wow-mcp/e7/README.md",
+    "apps/wow-mcp/e7/TOOLS_AND_RESOURCES.md",
+    "apps/wow-mcp/e7/FRAMING_LIFECYCLE_AND_RESULTS.md",
+    "apps/wow-mcp/e7/AUTHORIZATION_AND_SOURCE_BOUNDARIES.md",
+    "apps/wow-mcp/e7/SECURITY_AND_INPUTS.md",
+    "apps/wow-mcp/e7/TEST_MATRIX.md",
+    "apps/wow-mcp/e7/CONTRACT.json",
+    "apps/wow-mcp/e7/examples/README.md",
+    "apps/wow-mcp/e7/examples/mcp-tool-resource-cases.json",
+    "apps/wow-mcp/e7/examples/mcp-framing-lifecycle-cases.json"
+  ],
+  "member_sha256": {},
+  "bundle_sha256": null,
+  "freeze_rules": [
+    "nulls are allowed only while implementation_state is not-started",
+    "all service spec profile platform vector canonical byte and checksum values freeze before the first wow-mcp Rust commit",
+    "tests verify committed fixtures and never rewrite them automatically",
+    "credentials private endpoints source bodies provider databases hidden review or holdout data are never committed"
+  ]
+}
