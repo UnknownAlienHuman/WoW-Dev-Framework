@@ -1,0 +1,178 @@
+{
+  "schema_version": 1,
+  "contract_id": "apps/wow/e6-b/external-candidate-cli",
+  "state": "implementation-ready-documentation-no-rust-code",
+  "work_package": "E6-B",
+  "application": "wow",
+  "documentation_frontier": "E6-B",
+  "implementation_state": "not-started",
+  "framework_dependencies": [
+    "wow-service"
+  ],
+  "forbidden_framework_dependencies": [
+    "wow-core",
+    "wow-store",
+    "wow-reference",
+    "wow-annotations",
+    "wow-emmy",
+    "wow-project",
+    "wow-graph",
+    "wow-recognizers",
+    "wow-rules",
+    "wow-search",
+    "wow-context",
+    "wow-cbm"
+  ],
+  "prerequisite_contract": "wow-service/e6-b/external-candidate-mapping-context-orchestration",
+  "active_commands": [
+    "external status",
+    "external provider validate",
+    "external generation validate",
+    "external query",
+    "external continue",
+    "external result get",
+    "external result list",
+    "external result validate",
+    "external explain",
+    "external artifact build",
+    "external mapping validate",
+    "external map",
+    "external selection validate",
+    "external select",
+    "external context",
+    "external operation get",
+    "external operation reconcile",
+    "external cache validate"
+  ],
+  "service_operations": [
+    "external_candidate_status",
+    "external_provider_validate",
+    "external_generation_validate",
+    "external_candidate_query",
+    "external_candidate_continue",
+    "external_candidate_result_get",
+    "external_candidate_result_list",
+    "external_candidate_result_validate",
+    "external_candidate_explain",
+    "external_candidate_artifact_build",
+    "external_candidate_mapping_validate",
+    "external_candidate_map",
+    "external_candidate_selection_validate",
+    "external_candidate_select",
+    "external_candidate_context",
+    "external_candidate_operation_get",
+    "external_candidate_operation_reconcile",
+    "external_candidate_cache_validate"
+  ],
+  "output_modes": [
+    "envelope-json",
+    "text",
+    "artifact"
+  ],
+  "exit_codes": {
+    "0": [
+      "Complete",
+      "NoChange",
+      "validation Valid",
+      "mapping ExactMapped",
+      "explicit selection Selected",
+      "context Complete"
+    ],
+    "1": [
+      "completed validation Invalid",
+      "checked selection Rejected or Invalid where command profile declares"
+    ],
+    "2": [
+      "CandidateOnly",
+      "Partial",
+      "Blocked",
+      "ConflictBlocked",
+      "Truncated",
+      "NotEvaluated",
+      "MultipleMappings",
+      "NoMappingPartial",
+      "Deferred"
+    ],
+    "3": [
+      "structured request provider session external-state result mapping selection context cache retention privacy license or domain failure"
+    ],
+    "4": [
+      "OutcomeUnknown or internal owner service closure canonicalization serialization or post-service output failure"
+    ],
+    "64": [
+      "CLI config input or output-path failure before service invocation"
+    ],
+    "130": [
+      "Cancelled"
+    ]
+  },
+  "owned_responsibilities": [
+    "strict-command-option-and-config-parsing",
+    "explicit-bounded-file-or-stdin-input",
+    "mechanical-exact-ID-digest-profile-selector-and-operation-transport",
+    "one-typed-wow-service-request",
+    "exactly-one-service-invocation",
+    "signal-to-cancellation-projection",
+    "canonical-envelope-json-output",
+    "faithful-Candidate-mapping-selection-context-text-output",
+    "single-exact-eligible-artifact-output",
+    "stdout-stderr-broken-pipe-and-atomic-file-output",
+    "command-specific-exit-code-projection"
+  ],
+  "forbidden_responsibilities": [
+    "provider-catalog-current-or-external-state-resolution",
+    "provider-credential-session-endpoint-cursor-or-database-access",
+    "generic-MCP-tool-method-or-provider-management",
+    "direct-wow-cbm-project-reference-context-store-or-other-owner-access",
+    "provider-path-URL-source-or-snippet-following",
+    "name-path-snippet-fuzzy-search-or-score-based-mapping",
+    "top-first-last-best-highest-score-sole-or-provider-label-selection",
+    "external-Candidate-authority-confidence-or-permission-upgrade",
+    "provider-prose-rank-score-as-context-framework-facts",
+    "source-edit-tool-execution-runtime-or-platform-validation",
+    "hidden-provider-model-cache-search-or-snippet-fallback",
+    "implicit-cwd-home-environment-Git-editor-WoW-repository-or-network-discovery",
+    "automatic-retry-with-new-identities-or-background-work"
+  ],
+  "hard_rules": [
+    "wow-service is the only framework dependency",
+    "exactly one service operation is invoked per valid command",
+    "provider catalog credentials sessions external state and current selectors are never resolved by the application",
+    "raw credentials endpoints session handles provider cursors and database paths are not CLI inputs or outputs",
+    "no arbitrary MCP tool endpoint method script SQL model or provider-management command exists",
+    "mapping accepts exact artifact IDs and is never performed by path name snippet fuzzy search or local source access",
+    "selection requires exact mapping receipt and explicit origin and has no top first best highest score or sole shortcut",
+    "context is one service call and provider prose rank score remain separate Candidate evidence",
+    "envelope JSON equals canonical service bytes plus one LF",
+    "artifact output is exact eligible bytes without wrapper or newline change",
+    "text preserves Candidate authority external-state mapping selection OutcomeUnknown privacy and mandatory nonclaims",
+    "stdout contains requested output only and broken pipe output failure or cancellation never repeats service",
+    "no implicit config discovery executable input hidden fallback or background work",
+    "missing service implementation adapters fixtures platform tests provider integration or checksums block implementation",
+    "no Cargo Rust source or CI during documentation phase"
+  ],
+  "normative_files": [
+    "apps/wow/README.md",
+    "apps/wow/e6/README.md",
+    "apps/wow/e6/AGENTS.md",
+    "apps/wow/e6/CLI_COMMANDS.md",
+    "apps/wow/e6/OUTPUT_EXIT_AND_STREAMS.md",
+    "apps/wow/e6/SECURITY_AND_INPUTS.md",
+    "apps/wow/e6/TEST_MATRIX.md",
+    "apps/wow/e6/CONTRACT.json",
+    "apps/wow/e6/examples/README.md",
+    "apps/wow/e6/examples/cli-cases.json",
+    "apps/wow/e6/examples/stdout-exit-cases.json",
+    "apps/wow/e6/examples/CHECKSUMS.json"
+  ],
+  "freeze_gate": {
+    "implementation_state": "not-started",
+    "required_before_first_rust_implementation": [
+      "implemented and frozen wow-service E6-B request result error provider mapping selection context retention audit and canonical byte contracts",
+      "frozen command selector config provider result mapping selection context cache output exit signal cancellation broken-pipe and platform adapter profiles",
+      "all canonical request envelope stdout artifact text-required-field exit-code and error vectors",
+      "all dependency credential session state privacy mapping selection context fallback cancellation response-loss and prior-regression reports",
+      "all member and bundle SHA-256 values"
+    ]
+  }
+}
