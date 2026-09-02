@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "fixture_id": "apps-wow-mcp-e7a-tool-resource-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "cases": [
+    {
+      "case_id": "M7A-TOOL-004",
+      "tool": "wow.protocol.status",
+      "service_operation": "protocol_status",
+      "expected_service_calls": 1
+    },
+    {
+      "case_id": "M7A-TOOL-006",
+      "tool": "wow.analysis.definition",
+      "service_operation": "analysis_definition",
+      "expected_service_calls": 1
+    },
+    {
+      "case_id": "M7A-TOOL-008",
+      "tool": "wow.external.query",
+      "service_operation": "external_candidate_query",
+      "expected_service_calls": 1,
+      "result_confidence": "Candidate"
+    },
+    {
+      "case_id": "M7A-TOOL-010",
+      "tool": "wow.external.select",
+      "service_operation": "external_candidate_select",
+      "required_inputs": [
+        "exact-result-id",
+        "exact-candidate-id",
+        "exact-mapping-receipt-id"
+      ]
+    },
+    {
+      "case_id": "M7A-TOOL-012",
+      "tool": "wow.external.auto_context_top1",
+      "expected": "unknown-tool",
+      "expected_service_calls": 0
+    },
+    {
+      "case_id": "M7A-TOOL-003",
+      "tool": "call_tool",
+      "expected_error": "e7a_dynamic_method_tool_or_resource_registration_forbidden",
+      "expected_service_calls": 0
+    },
+    {
+      "case_id": "M7A-RES-002",
+      "resource_uri": "wowdev://context/<opaque-exact-id>",
+      "expected": "exact-authorized-retained-read"
+    },
+    {
+      "case_id": "M7A-RES-003",
+      "resource_uri": "file:///private/path",
+      "expected_error": "e7a_mcp_arbitrary_file_url_or_provider_locator_forbidden"
+    },
+    {
+      "case_id": "M7A-OUT-003",
+      "provider_result_count": 0,
+      "forbidden_claim": "entity-does-not-exist",
+      "expected_error": "e7a_negative_authority_unavailable"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}
