@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "fixture_id": "apps-wow-lsp-e7a-framing-position-v1",
+  "state": "documentation-only-pending-spec-and-byte-freeze",
+  "cases": [
+    {
+      "case_id": "L7A-FRAME-001",
+      "input_bytes_sha256": null,
+      "expected_message_sha256": null
+    },
+    {
+      "case_id": "L7A-FRAME-002",
+      "mutation": "duplicate-or-conflicting-content-length",
+      "expected_error": "e7a_protocol_framing_or_json_invalid"
+    },
+    {
+      "case_id": "L7A-FRAME-003",
+      "mutation": "oversized-body",
+      "expected_error": "e7a_protocol_message_or_structure_limit_exceeded"
+    },
+    {
+      "case_id": "L7A-DOC-006",
+      "position_encoding": "utf-16",
+      "text": "A😀B",
+      "position_vectors": [],
+      "expected": "exact-astral-code-point-conversion"
+    },
+    {
+      "case_id": "L7A-DOC-009",
+      "method": "textDocument/didSave",
+      "expected": "observation-only"
+    },
+    {
+      "case_id": "L7A-CTRL-009",
+      "failure_point": "broken-pipe-or-eof",
+      "expected": "cancel-reconcile-close-without-rerun-or-save"
+    },
+    {
+      "case_id": "L7A-SEC-005",
+      "mutation": "private-source-path-or-credential-in-error",
+      "expected_error": "e7a_error_log_or_telemetry_redaction_failed"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "official-spec-and-profile-ids",
+      "cases[*].input-and-output-bytes",
+      "unicode-position-vectors",
+      "canonical_sha256"
+    ]
+  }
+}
