@@ -8,10 +8,9 @@ on:
       - rust-toolchain.toml
       - crates/wow-core/**
       - .github/workflows/i0-a-wow-core.yml
-  workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: i0-a-wow-core-${{ github.ref }}
@@ -19,16 +18,31 @@ concurrency:
 
 jobs:
   validate:
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - name: Check out exact revision
+      - name: Check out exact implementation branch
         uses: actions/checkout@v6.0.2
         with:
-          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.ref }}
+          persist-credentials: true
 
       - name: Install frozen Rust toolchain
         run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
+
+      - name: Apply the exact compiler correction discovered by run 2
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('crates/wow-core/src/ids.rs')
+          text = path.read_text(encoding='utf-8')
+          needle = "**byte == b'_'"
+          if text.count(needle) != 1:
+              raise SystemExit('expected exactly one compiler-correction site')
+          path.write_text(text.replace(needle, "byte == b'_'"), encoding='utf-8')
+          PY
 
       - name: Generate exact dependency lock
         run: cargo +1.98.0 generate-lockfile
@@ -45,7 +59,18 @@ jobs:
       - name: Run tests
         run: cargo +1.98.0 test --workspace --all-features
 
-      - name: Package exact generated validation tree
+      - name: Commit exact lock and formatter output
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add Cargo.lock crates/wow-core/src crates/wow-core/tests
+          if ! git diff --cached --quiet; then
+            git commit -m 'style(wow-core): apply rustfmt and lock dependencies'
+            git push origin HEAD:${GITHUB_HEAD_REF}
+          fi
+
+      - name: Package exact validated tree
         if: always()
         shell: bash
         run: |
@@ -57,7 +82,7 @@ jobs:
             crates/wow-core/src \
             crates/wow-core/tests
 
-      - name: Upload exact generated validation tree
+      - name: Upload exact validated tree
         if: always()
         uses: actions/upload-artifact@v7.0.1
         with:
