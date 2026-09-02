@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e6b-provider-session-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "cases": [
+    {
+      "case_id": "S6B-PROV-001",
+      "provider_descriptor_id": null,
+      "adapter_profile_id": null,
+      "authorization": "Authorized",
+      "expected": "validated-session-receipt"
+    },
+    {
+      "case_id": "S6B-PROV-005",
+      "mutation": "required-capability-missing",
+      "expected_status": "NotEvaluated"
+    },
+    {
+      "case_id": "S6B-PROV-007",
+      "request": {
+        "kind": "GenericMcpCall",
+        "tool_name": "arbitrary"
+      },
+      "expected_error": "e6b_arbitrary_provider_tool_or_mcp_call_forbidden"
+    },
+    {
+      "case_id": "S6B-PROV-013",
+      "authorization_source": "GitHubRepositoryOwner",
+      "expected_error": "e6b_provider_unauthorized"
+    },
+    {
+      "case_id": "S6B-PROV-014",
+      "mutation": "raw-token-in-public-request",
+      "expected_error": "e6b_raw_credential_or_session_handle_forbidden"
+    },
+    {
+      "case_id": "S6B-STATE-003",
+      "external_state_class": "ObservedMutableGeneration",
+      "observation_receipt_id": null,
+      "expected": "exact-observation-binding"
+    },
+    {
+      "case_id": "S6B-STATE-006",
+      "external_state_class": "OpaqueExternalState",
+      "claimed_reproducible": true,
+      "expected_error": "e6b_opaque_state_reproducibility_claim_forbidden"
+    },
+    {
+      "case_id": "S6B-PROV-018",
+      "failure_point": "session-close-after-result",
+      "expected_error": "e6b_provider_session_close_failed",
+      "public_success": false
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true,
+    "required_non_null_values": [
+      "provider-descriptor-adapter-authorization-session-state-profile-IDs",
+      "cases[*].request-result-or-error-digests",
+      "canonical_sha256"
+    ]
+  }
+}
