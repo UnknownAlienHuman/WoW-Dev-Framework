@@ -1,0 +1,216 @@
+{
+  "schema_version": 1,
+  "contract_id": "wow-service/e6-b/external-candidate-mapping-context-orchestration",
+  "state": "implementation-ready-documentation-no-rust-code",
+  "work_package": "E6-B",
+  "crate": "wow-service",
+  "documentation_frontier": "E6-B",
+  "implementation_state": "not-started",
+  "application": "apps/wow",
+  "application_contract": "apps/wow/e6/CONTRACT.json",
+  "direct_framework_dependencies": [
+    "wow-core",
+    "wow-store",
+    "wow-reference",
+    "wow-project",
+    "wow-cbm",
+    "wow-context"
+  ],
+  "inactive_direct_dependencies": [
+    "wow-annotations",
+    "wow-emmy",
+    "wow-graph",
+    "wow-recognizers",
+    "wow-rules",
+    "wow-search"
+  ],
+  "prerequisites": [
+    {
+      "contract_id": "wow-core/e0-a/1",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-store/e2-d/projectstore-coherent-publication",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-reference/e1-persistent-schema-and-build-plan",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-project/e3-a/blizzard-ui-source-index",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-context/e3-b/project-map-l0-l1-context-pack",
+      "implementation_and_fixture_freeze_required": true
+    },
+    {
+      "contract_id": "wow-service/e3-c/context-acquisition-and-use-cases",
+      "implementation_and_fixture_freeze_required": true,
+      "relationship": "exact context use-case composition"
+    },
+    {
+      "contract_id": "wow-cbm/e6-a/external-semantic-candidate-bridge",
+      "implementation_and_fixture_freeze_required": true
+    }
+  ],
+  "public_operations": [
+    "external_candidate_status",
+    "external_provider_validate",
+    "external_generation_validate",
+    "external_candidate_query",
+    "external_candidate_continue",
+    "external_candidate_result_get",
+    "external_candidate_result_list",
+    "external_candidate_result_validate",
+    "external_candidate_explain",
+    "external_candidate_artifact_build",
+    "external_candidate_mapping_validate",
+    "external_candidate_map",
+    "external_candidate_selection_validate",
+    "external_candidate_select",
+    "external_candidate_context",
+    "external_candidate_operation_get",
+    "external_candidate_operation_reconcile",
+    "external_candidate_cache_validate"
+  ],
+  "owner_ports": [
+    "ExternalCandidateProviderCatalogPort",
+    "ProviderCredentialAuthorizationPort",
+    "ProviderSessionAcquirePort",
+    "ExternalCandidateBridgePort",
+    "ExternalCandidateArtifactStorePort",
+    "DurableExternalOperationPort",
+    "ProjectExternalLocatorMappingPort",
+    "ReferenceExternalLocatorMappingPort",
+    "ExternalCandidateRetentionPort",
+    "ExternalCandidateAuditPort",
+    "ContextUseCasePort"
+  ],
+  "external_state_classes": [
+    "StableExternalGeneration",
+    "ObservedMutableGeneration",
+    "OpaqueExternalState"
+  ],
+  "mapping_statuses": [
+    "ExactMapped",
+    "MultipleMappings",
+    "NoMappingWithOwnerAuthority",
+    "NoMappingPartial",
+    "Conflict",
+    "NotEvaluated",
+    "Failed"
+  ],
+  "selection_decisions": [
+    "Selected",
+    "Rejected",
+    "Deferred"
+  ],
+  "service_statuses": [
+    "Complete",
+    "NoChange",
+    "CandidateOnly",
+    "Partial",
+    "Blocked",
+    "ConflictBlocked",
+    "Truncated",
+    "OutcomeUnknown",
+    "NotEvaluated",
+    "Cancelled",
+    "Failed"
+  ],
+  "authority_ceiling": {
+    "provenance": "semantic_candidate",
+    "confidence": "Candidate",
+    "negative_authority": "unavailable"
+  },
+  "active_scope": [
+    "configured-provider-descriptor-capability-credential-authorization-and-opaque-session-acquisition",
+    "explicit-stable-observed-mutable-or-opaque-external-state-binding",
+    "durable-operation-id-request-digest-idempotency-response-loss-and-reconciliation",
+    "E6-A-status-provider-generation-query-continuation-result-explain-artifact-and-cache-orchestration",
+    "immutable-external-result-artifact-catalog-persistence-retention-and-audit",
+    "exact-project-or-reference-owner-locator-mapping-without-service-heuristics",
+    "explicit-candidate-selection-receipts-without-authority-or-permission-upgrade",
+    "exact-mapped-root-context-handoff-through-existing-E3-C-use-case",
+    "external-Candidate-evidence-kept-separate-from-context-framework-facts",
+    "conservative-status-coverage-conflict-privacy-license-credential-and-nonclaim-envelopes",
+    "optional-provider-degradation-without-hidden-fallback",
+    "thin-service-only-CLI-contract"
+  ],
+  "deferred_scope": [
+    "generic-MCP-LSP-daemon-session-or-arbitrary-tool-transport",
+    "provider-install-start-stop-update-configure-index-import-delete-or-database-access",
+    "provider-privacy-deletion-and-anti-resurrection",
+    "external-candidate-fusion-with-E4-search-or-graph-publication",
+    "external-candidate-lineage-replacement-migration-impact-or-negative-authority",
+    "source-edit-tool-execution-runtime-client-validation",
+    "release-public-distribution-and-CI"
+  ],
+  "hard_rules": [
+    "wow-service invokes wow-cbm E6-A and never reimplements provider query normalization candidate explanation comparison or cache algorithms",
+    "raw credentials endpoints session handles provider cursors database paths and arbitrary tool names never cross public service or CLI surfaces",
+    "StableExternalGeneration ObservedMutableGeneration and OpaqueExternalState are never silently upgraded or refreshed mid-operation",
+    "every provider store selection or context effect registers OperationId plus CanonicalRequestDigest before dispatch",
+    "response loss never proves no effect and OutcomeUnknown blocks blind repeat until exact reconciliation",
+    "provider output always remains semantic_candidate Candidate with negative_authority unavailable",
+    "provider locators remain unverified until one exact project or reference owner mapping receipt",
+    "ExactMapped proves locator correspondence only and never validates provider prose relation rank score recommendation or absence",
+    "service never maps by name path snippet fuzzy rank provider exact label or hidden E4 search",
+    "selection is explicit and never top first last best highest score sole same name same path or same snippet",
+    "selection does not upgrade confidence or grant edit tool publication runtime platform or negative authority",
+    "context receives only exact mapped owner roots and provider prose rank score remain outside framework facts",
+    "provider failure is scoped optional degradation and never triggers hidden provider model cache search or snippet fallback",
+    "continuation and retry bind exact original provider external state query profiles identities and cumulative budgets",
+    "cache and retention never upgrade freshness authority or reproducibility",
+    "no public success before retention audit and mandatory reverse resource closure",
+    "applications depend on wow-service only and invoke one service operation per command",
+    "missing implementation adapter authorization reconciliation owner mapping provider benchmark fixture or checksum evidence is blocked or NotEvaluated never pass",
+    "no Cargo Rust source or CI during documentation phase"
+  ],
+  "normative_files": [
+    "crates/wow-service/README.md",
+    "crates/wow-service/e6/README.md",
+    "crates/wow-service/e6/AGENTS.md",
+    "crates/wow-service/e6/DECISIONS.md",
+    "crates/wow-service/e6/DATA_MODEL.md",
+    "crates/wow-service/e6/PROVIDER_SESSION_AND_CREDENTIALS.md",
+    "crates/wow-service/e6/DURABLE_EXTERNAL_OPERATIONS.md",
+    "crates/wow-service/e6/CANDIDATE_MAPPING.md",
+    "crates/wow-service/e6/EXPLICIT_SELECTION.md",
+    "crates/wow-service/e6/CONTEXT_HANDOFF.md",
+    "crates/wow-service/e6/RETENTION_CACHE_AND_DEGRADATION.md",
+    "crates/wow-service/e6/RESULT_ENVELOPE_AND_STATUS.md",
+    "crates/wow-service/e6/SECURITY_PRIVACY_AND_AUDIT.md",
+    "crates/wow-service/e6/ERROR_MODEL.md",
+    "crates/wow-service/e6/TEST_MATRIX.md",
+    "crates/wow-service/e6/IMPLEMENTATION_PLAN.md",
+    "crates/wow-service/e6/CONTRACT.json",
+    "crates/wow-service/e6/examples/README.md",
+    "crates/wow-service/e6/examples/provider-session-cases.json",
+    "crates/wow-service/e6/examples/query-lifecycle-cases.json",
+    "crates/wow-service/e6/examples/mapping-selection-cases.json",
+    "crates/wow-service/e6/examples/context-degradation-cases.json",
+    "crates/wow-service/e6/examples/CHECKSUMS.json",
+    "crates/wow-project/e6/EXTERNAL_CANDIDATE_MAPPING_HANDOFF.md",
+    "crates/wow-reference/e6/EXTERNAL_CANDIDATE_MAPPING_HANDOFF.md",
+    "crates/wow-store/e6/EXTERNAL_CANDIDATE_STORE_HANDOFF.md",
+    "crates/wow-context/e6/EXTERNAL_CANDIDATE_CONTEXT_HANDOFF.md",
+    "apps/wow/e6/CONTRACT.json"
+  ],
+  "freeze_gate": {
+    "implementation_state": "not-started",
+    "required_before_first_rust_implementation": [
+      "all E0 through E6-A prerequisite implementation commits and fixture bundle digests",
+      "exact provider descriptor capability adapter credential authorization session external-state and reconciliation implementation profiles without committed secrets",
+      "exact E6-A bridge artifact catalog store durable operation retention audit project mapping reference mapping and context-use-case port IDs",
+      "query continuation result artifact mapping selection context cache privacy license security status error and canonicalization profiles",
+      "stable mutable opaque synthetic providers and one configured real-provider integration corpus",
+      "all response-loss cancellation substitution privacy credential mapping selection context and degradation vectors",
+      "all canonical requests receipts results mappings selections context handoffs envelopes CLI bytes exit-code and error vectors",
+      "accepted measured resource latency memory provider-call owner-call and output thresholds",
+      "all member and bundle SHA-256 values"
+    ]
+  }
+}
