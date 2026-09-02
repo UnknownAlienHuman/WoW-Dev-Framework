@@ -2,17 +2,17 @@
 
 **Rust-first, editor-independent code intelligence and agent tooling for World of Warcraft addon development.**
 
-> **Documentation frontier:** E6-B complete — exact provider configuration/session orchestration, durable external Candidate results, project/reference owner mapping, explicit selection, exact-root context handoff, and thin CLI contracts.
+> **Documentation frontier:** E7-A complete — closed service operation registry, explicit frontend sessions/workspaces, project-owned unsaved overlays, local daemon, LSP 3.18, MCP 2025-11-25, exact cancellation/reconnect/backpressure, and multi-client isolation.
 >
-> **Next documentation package:** E7-A — LSP/MCP/CLI-daemon session surfaces and developer-preview release boundary.
+> **Next documentation package:** E7-B — reproducible builds, artifacts, packaging, signing/attestations, installation, updates, rollback, retirement, compatibility, support and public release.
 >
 > **Implementation frontier:** not started. Executable work still begins with E0-A. No `Cargo.toml`, Rust source, or CI workflow exists.
 >
 > Patch-sensitive WoW guidance remains in the separate [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb).
 
-WoW Dev Framework provides exact, generation-bound, evidence-preserving technical context over addon repositories, Blizzard API contracts and UI source, diagnostics, typed graphs, search, lineage, migration evidence, static impact, Project Maps, L0/L1 skeletons, universal structural-recognizer calibration/publication, and optional external semantic candidates.
+WoW Dev Framework provides exact, generation-bound, evidence-preserving technical context over addon repositories, Blizzard API contracts and UI source, diagnostics, typed graphs, search, lineage, migration evidence, static impact, Project Maps, L0/L1 skeletons, structural-recognizer calibration/publication, optional external semantic candidates, and thin service-only developer frontends.
 
-It is not a generic RAG product, editor-settings mutator, runtime injection platform, source-edit executor, repository-specific heuristic engine, model-authority layer, provider database owner, or automatic unreviewed promotion system.
+It is not a generic RAG product, editor-settings mutator, runtime injection platform, source-edit executor, repository-specific heuristic engine, model-authority layer, provider database owner, generic MCP tool proxy, or automatic unreviewed promotion system.
 
 ## Contract stack
 
@@ -28,8 +28,8 @@ E5-C immutable core artifact, signing, publication, canary, rollout,
      activation, LKG, rollback, revocation and partition closure
 E6-A optional external semantic-candidate owner bridge
 E6-B provider/session/result/mapping/selection/context service and CLI
-E7-A next: LSP/MCP/CLI-daemon/session transport and developer preview
-E7-B later: packaging, public distribution, updates and support lifecycle
+E7-A closed frontend registry, sessions, daemon, LSP and MCP
+E7-B next: reproducible packaging, distribution, updates and support lifecycle
 ```
 
 Machine state and implementation order are in [`crates/MANIFEST.json`](crates/MANIFEST.json), [`crates/WORKSTREAMS.md`](crates/WORKSTREAMS.md), and [`docs/LAUNCH_GATES.md`](docs/LAUNCH_GATES.md).
@@ -37,137 +37,114 @@ Machine state and implementation order are in [`crates/MANIFEST.json`](crates/MA
 ## Core invariants
 
 - One result/effect binds one exact coherent profile/generation set.
-- User project, Blizzard UI source, Reference Pack, search candidate, calibration corpus, external candidate, runtime, and history remain separate universes.
+- User project, Blizzard UI source, Reference Pack, search candidate, calibration corpus, external candidate, runtime and history remain separate universes.
 - EmmyLua is the sole correctness-path Lua parser/analyzer.
 - TOC/XML/reference/repository ingestion is bounded and nonexecuting.
-- Graph assertions retain producer, evidence, confidence, coverage, conflicts, and generation.
+- Graph assertions retain producer, evidence, confidence, coverage, conflicts and generation.
 - Production recognizers never branch on repository/addon/owner/path/popularity identity.
 - A commit pin is not corpus admission.
-- Labels, splits, expected outputs, reviewer notes, holdout data, model/search output, canary cohort identity, and rollout state never become matcher semantics.
-- `Unknown`, `Possible`, `Candidate`, `Partial`, `Conflict`, `Truncated`, `OutcomeUnknown`, cancelled, and `NotEvaluated` never become proof, Negative, or pass.
-- Metrics, graph validity, review authorization, holdout authorization, submission, signature, publication, canary, activation, rollout, distribution, and runtime correctness are independent gates.
+- Labels, splits, expected outputs, reviewer notes, holdout data, model/search output, canary cohort identity and rollout state never become matcher semantics.
+- `Unknown`, `Possible`, `Candidate`, `Partial`, `Conflict`, `Truncated`, `OutcomeUnknown`, cancelled and `NotEvaluated` never become proof, clean Negative or pass.
+- Metrics, graph validity, review authorization, holdout authorization, submission, signature, publication, canary, activation, rollout, distribution and runtime correctness are independent gates.
 - Response loss never proves no effect; exact reconciliation precedes retry.
-- Consumed or contamination-unknown holdout evidence is never called untouched.
-- A `PromotionSubmission` is not a published pack.
 - A signature proves exact bytes/key/profile binding, not semantic or runtime correctness.
-- Publication creates `PublishedInactive`; activation is a separate authorized profile-specific CAS.
-- Canary evidence is exact and scoped; it is not ecosystem-wide runtime proof.
+- Publication creates `PublishedInactive`; activation is a separate exact-profile CAS.
 - Last-known-good is explicitly designated, not inferred as previous/newest.
 - Rollback creates new immutable effect/activation/closure records and never rewrites history.
-- Stale producer partitions disappear only in new project/graph generations; historical generations remain immutable.
-- E5-C internal catalog publication is not public distribution.
-- Applications depend on `wow-service` only.
-- No public success precedes retention and resource closure.
+- Applications/transports depend on `wow-service` only.
+- No public success precedes mandatory retention, audit and resource closure.
 
 ## External candidate invariants
 
 - `wow-cbm` depends directly only on `wow-core`.
-- Provider descriptors are reviewed immutable contracts; runtime negotiation cannot widen them.
-- Provider process/session/credential and index lifecycle remain outside E6-A owner semantics.
-- E6-B acquires sessions only through exact nonsecret configuration/authorization references and a narrow allow-listed transport.
-- There is no generic arbitrary MCP/tool-call surface.
-- Every normalized external result is `provenance=semantic_candidate`, `confidence=Candidate`, and `negative_authority=unavailable`.
-- Provider `exact`, `verified`, `authoritative`, top-1, sole-result, repeated-result, and high-score labels never upgrade authority.
-- Scores/ranks remain provider-local and are never numerically fused across providers.
-- Provider paths/URIs/revisions/symbols/spans remain `UnverifiedProviderLocator` until a project/reference owner maps them under one exact retained generation.
-- Exact mapping validates locator-to-owner-record identity only; it does not verify provider summaries, traces, relationships, replacements, impact, or runtime behavior.
-- Candidate selection is explicit and auditable; it is not verification, acceptance, edit authorization, or core-pack admission.
-- Provider metadata remains a separate Candidate sidecar and never enters `ContextSemanticPack` as exact truth.
-- A zero result proves only that no accepted candidates were returned for the exact query/state under reported coverage; it is never global absence.
-- Continuation/cache bind exact provider descriptor/capability/state/query/profile and cumulative budgets.
-- Opaque provider state is explicitly nonreproducible.
-- Provider failure is lane-local and cannot degrade exact ReferenceView/project/graph/search/context/diagnostic capabilities.
-- No hidden fallback to another provider, stale cache, model, web, local search, or broader query.
-- Source snippets/summaries/labels/paths/errors remain untrusted data.
+- Every external result is `provenance=semantic_candidate`, `confidence=Candidate`, `negative_authority=unavailable`.
+- Provider labels, rank, score, repetition, stable state and zero results never upgrade authority.
+- Provider paths/URIs/revisions/symbols/spans remain `UnverifiedProviderLocator` until an exact project/reference owner maps them.
+- Mapping proves locator-to-owner-record identity only; selection is explicit caller intent, not verification or edit authorization.
+- Provider metadata remains a separate Candidate sidecar and never enters `ContextSemanticPack` truth.
+- Provider failure is lane-local and never degrades exact local capabilities.
+- No hidden fallback to another provider, stale cache, model, web, local search or broader query.
 
-## Documented E5-C CLI
-
-The executable CLI does not exist yet. Contracts define:
+## E7-A frontend invariants
 
 ```text
-wow core-pack status
-wow core-pack submission validate
-wow core-pack artifact build|validate
-wow core-pack sign request|validate
-wow core-pack publication publish|get|list|validate
-wow core-pack canary plan|start|status|observe|evaluate
-wow core-pack rollout plan|advance|pause
-wow core-pack activation get|activate
-wow core-pack lkg get|designate
-wow core-pack rollback
-wow core-pack revoke
-wow core-pack deactivate
-wow core-pack partition-closure validate
+one immutable FrontendOperationRegistry
+one transport request -> one service operation
+explicit session/workspace/project/profile registration
+exact versioned unsaved document overlays
+LSP 3.18 over stdio
+MCP 2025-11-25 over stdio by default
+current-user local daemon IPC
+optional loopback-only MCP Streamable HTTP, disabled by default
 ```
 
-There is no public release/download/updater command in E5-C.
+- Registry negotiation can narrow but never add an operation or widen authorization/privacy.
+- Missing owner implementations are not advertised.
+- Workspaces are never inferred from cwd, Git, editor state, addon folders or WoW installation.
+- LSP positions bind the exact overlay and negotiated UTF-16/UTF-8 encoding; stale versions require full resynchronization.
+- Default MCP tools/resources are fixed and read-only. There is no generic `wow.call`, arbitrary tool/RPC/shell, prompt, sampling, elicitation, task execution or model-controlled authorization.
+- MCP resources use exact `wow://` IDs, not floating current/latest or raw filesystem paths.
+- Local daemon uses a current-user named pipe or Unix-domain socket; no TCP/remote listener exists by default.
+- Disconnect is not cancellation. Progress is not completion. Response replay returns retained bytes and never reexecutes service.
+- Final results, errors and state changes outrank progress/logs under bounded backpressure.
+- Sessions isolate workspaces, overlays, authorization, private source, operations, provider access, results and response journals.
+- Unsaved source is private and memory-only by default.
+- E7-A working transports are not a public release; packaging/update/support remain E7-B.
 
-## E6 contracts
+## Documented host modes
 
-E6-A owns pure external provider candidate semantics:
+The executable does not exist yet. Contracts define one `wow` binary with:
 
 ```text
-validate_provider_descriptor
-negotiate_provider_capabilities
-validate_external_generation
-normalize_external_candidate_query
-query_external_candidates
-continue_external_candidate_query
-validate_external_candidate_result_set
-explain_external_candidate
-build_external_candidate_artifact
-compare_external_candidate_results
-validate_external_candidate_cache_entry
+wow <existing one-shot command>
+wow transport capabilities
+wow daemon run|status|shutdown
+wow lsp --transport stdio
+wow mcp --transport stdio
+wow mcp --transport streamable-http-local   # explicit local-only profile
 ```
 
-E6-B documents the service/CLI path:
+The initial LSP profile covers lifecycle, explicit workspace folders, incremental text synchronization, pull diagnostics, negotiated push compatibility, hover, definition, references, document/workspace symbols, completion, signature help, guarded code actions and call hierarchy.
 
-```text
-wow external-candidate status
-wow external-candidate provider validate
-wow external-candidate query submit|get|list|cancel|continue
-wow external-candidate operation reconcile
-wow external-candidate result validate|explain|compare
-wow external-candidate artifact build|get
-wow external-candidate mapping resolve|get
-wow external-candidate selection record|get
-wow external-candidate context build|continue
-wow external-candidate cache validate
-```
+The initial MCP profile exposes only implemented read-only service operations as fixed tools/resources. Effecting provider, calibration, publication, activation, rollback, edit and release operations are absent.
 
 ## Current evidence state
 
-Documentation defines artifact shapes and gates only. Current real implementation evidence remains:
+Documentation defines contracts, fixtures and freeze gates only:
 
 ```text
 Cargo workspace and Rust source: 0
-implemented E0-E6 operations: 0
+implemented E0-E7 operations: 0
 real Reference Packs/project generations: 0
-real admitted calibration corpus members: 0
-real measured calibration runs: 0
-implemented PromotionSubmissions: 0
-published core packs/canary observations/active profiles: 0
-live external provider adapters/probes: 0
-exact external owner mappings/context handoffs: 0
-LSP/MCP/daemon transports: 0
+real analyzer/diagnostic/search/context execution: 0
+real calibration/core-pack lifecycle execution: 0
+live external provider adapters/mappings: 0
+live daemon/LSP/MCP client tests: 0
 public release artifacts: 0
 ```
 
-Missing implementations, adapters, credentials infrastructure, exact corpora, provider probes, benchmarks, runtime observations, platform tests, and checksums remain blocked or `NotEvaluated`, never passed.
+Missing implementations, adapter/library pins, exact fixtures/checksums, provider/client/platform probes, benchmarks, runtime observations and release evidence remain blocked or `NotEvaluated`, never passed.
 
 ## Launch path
 
-The shortest valid path to a runnable project is still:
-
 ```text
-E0-A wow-core
--> E0-B ReferenceView fixture + E0-C EmmyLua adapter
--> E0-D project fixture
--> E0-E diagnostics
--> E0-F wow-service + apps/wow
+first runnable:
+    E0-A -> E0-F
+
+useful internal alpha:
+    first runnable + E1 + E2 + E3
+
+developer preview:
+    internal alpha + E4 + minimal implemented E7-A frontend
+
+governed beta:
+    developer preview + E5; E6 optional when enabled
+
+public supported v1:
+    selected beta scope + implemented E7-A + complete E7-B gates
 ```
 
-E1–E4 create a useful internal/developer alpha. E5 enables governed recognizer promotion. E6 is optional and may remain disabled. E7-A supplies supported frontend/session transports; E7-B supplies public packaging, signing, updates, rollback, and support lifecycle. See [`docs/LAUNCH_GATES.md`](docs/LAUNCH_GATES.md).
+E5 governance and optional E6 do not block the first E0 executable. See [`docs/LAUNCH_GATES.md`](docs/LAUNCH_GATES.md).
 
 ## Routes
 
@@ -175,17 +152,16 @@ E1–E4 create a useful internal/developer alpha. E5 enables governed recognizer
 - [`docs/README.md`](docs/README.md)
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 - [`docs/PROVENANCE_AND_COVERAGE.md`](docs/PROVENANCE_AND_COVERAGE.md)
+- [`docs/DECISIONS.md`](docs/DECISIONS.md)
 - [`docs/ROADMAP.md`](docs/ROADMAP.md)
 - [`docs/LAUNCH_GATES.md`](docs/LAUNCH_GATES.md)
 - [`crates/README.md`](crates/README.md)
 - [`crates/MANIFEST.json`](crates/MANIFEST.json)
 - [`crates/DEPENDENCY_GRAPH.md`](crates/DEPENDENCY_GRAPH.md)
 - [`crates/WORKSTREAMS.md`](crates/WORKSTREAMS.md)
-- [`crates/wow-service/e5c/`](crates/wow-service/e5c/README.md)
-- [`crates/wow-cbm/e6/`](crates/wow-cbm/e6/README.md)
-- [`crates/wow-service/e6/`](crates/wow-service/e6/README.md)
-- [`apps/wow/e6/`](apps/wow/e6/README.md)
+- [`crates/wow-service/e7/`](crates/wow-service/e7/README.md)
+- [`apps/wow/e7/`](apps/wow/e7/README.md)
 
 ## License
 
-MIT. Third-party, provider-returned, addon, and Blizzard-source artifacts retain separate provenance, license, notice, privacy, and redistribution decisions.
+MIT. Third-party, provider-returned, addon and Blizzard-source artifacts retain separate provenance, license, notice, privacy and redistribution decisions.

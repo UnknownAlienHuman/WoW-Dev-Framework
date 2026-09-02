@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "fixture_id": "apps-wow-e7a-mcp-tool-map-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "protocol_revision": "2025-11-25",
+  "transport_profile": "mcp-2025-11-25-stdio-v1",
+  "capabilities": ["tools", "resources", "logging", "progress", "cancellation"],
+  "tools": [
+    {"name": "wow.status", "service_operation": "frontend_status", "effect_class": "pure-read"},
+    {"name": "wow.check", "service_operation": "check", "effect_class": "analysis-read"},
+    {"name": "wow.search", "service_operation": "search_query", "effect_class": "analysis-read"},
+    {"name": "wow.search_explain", "service_operation": "search_explain", "effect_class": "pure-read"},
+    {"name": "wow.context_build", "service_operation": "context_build", "effect_class": "durable-analysis-artifact"},
+    {"name": "wow.context_continue", "service_operation": "context_continue", "effect_class": "durable-analysis-artifact"},
+    {"name": "wow.context_inspect", "service_operation": "context_inspect", "effect_class": "pure-read"},
+    {"name": "wow.lineage_explain", "service_operation": "lineage_explain", "effect_class": "pure-read"},
+    {"name": "wow.migration_validate", "service_operation": "migration_validate", "effect_class": "nonapplying-validation"},
+    {"name": "wow.static_impact", "service_operation": "impact_run", "effect_class": "analysis-read"},
+    {"name": "wow.external_candidate_result_get", "service_operation": "external_candidate_query_get", "effect_class": "pure-read"},
+    {"name": "wow.external_candidate_mapping_get", "service_operation": "external_candidate_mapping_get", "effect_class": "pure-read"},
+    {"name": "wow.external_candidate_selection_get", "service_operation": "external_candidate_selection_get", "effect_class": "pure-read"}
+  ],
+  "resources": [
+    "wow://profiles/<profile-id>",
+    "wow://projects/<project-generation-id>/map",
+    "wow://results/<result-id>",
+    "wow://diagnostics/<result-id>",
+    "wow://context/<context-artifact-id>",
+    "wow://publications/<publication-id>"
+  ],
+  "forbidden_capabilities": ["prompts", "sampling", "elicitation", "tasks", "server-requested-roots"],
+  "cases": [
+    {"case_id": "A7A-MCP-003", "expected": "fixed-implemented-nonmutating-tools-and-exact-resources"},
+    {"case_id": "A7A-MCP-004", "mutation": "generic-wow-call", "expected": "reject"},
+    {"case_id": "A7A-MCP-006", "mutation": "effecting-default-tool", "expected": "reject"},
+    {"case_id": "A7A-MCP-007", "expected_service_calls_per_tool": 1},
+    {"case_id": "A7A-MCP-009", "expected": "structured-result-preserves-blockers-and-nonclaims"},
+    {"case_id": "A7A-MCP-012", "mutation": "floating-current-resource", "expected": "reject"},
+    {"case_id": "A7A-MCP-014", "mutation": "model-call-as-authorization", "expected": "reject"}
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}

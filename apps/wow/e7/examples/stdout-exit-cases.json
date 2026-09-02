@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "fixture_id": "apps-wow-e7a-stdout-exit-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "cases": [
+    {
+      "case_id": "A7A-OUT-001",
+      "mode": "one-shot-cli",
+      "output": "exact-service-envelope-plus-one-LF",
+      "expected_exit": 0
+    },
+    {
+      "case_id": "A7A-OUT-002",
+      "mode": "lsp-stdio",
+      "stdout": "lsp-frames-only",
+      "stderr": "bounded-redacted-logs"
+    },
+    {
+      "case_id": "A7A-MCP-002",
+      "mode": "mcp-stdio",
+      "mutation": "banner-on-stdout",
+      "expected": "fail"
+    },
+    {
+      "case_id": "A7A-LSP-013",
+      "mode": "lsp-stdio",
+      "sequence": ["shutdown", "exit"],
+      "expected_exit": 0
+    },
+    {
+      "case_id": "A7A-LSP-014",
+      "mode": "lsp-stdio",
+      "sequence": ["exit-without-shutdown"],
+      "expected": "nonzero-abnormal-cleanup"
+    },
+    {
+      "case_id": "A7A-LIFE-004",
+      "mutation": "outcome-unknown-without-recovery-ids",
+      "expected": "fail"
+    },
+    {
+      "case_id": "A7A-LIFE-005",
+      "delivery": "lost-after-retained-result",
+      "expected": "retrieve-exact-result-without-reexecution"
+    },
+    {
+      "case_id": "A7A-LIFE-007",
+      "mutation": "broken-pipe-repeats-service-operation",
+      "expected_exit": 4
+    },
+    {
+      "case_id": "A7A-DMN-005",
+      "mode": "daemon",
+      "expected": "drain-reconcile-close-exit-zero"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}

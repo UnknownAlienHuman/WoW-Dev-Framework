@@ -1,6 +1,6 @@
 # Crate implementation contracts
 
-**Documentation frontier:** E6-B complete. **Implementation frontier:** not started.
+**Documentation frontier:** E7-A complete. **Implementation frontier:** not started.
 
 Directories contain contracts for future Rust libraries. A directory is not an activated crate; no `Cargo.toml` or `.rs` placeholder is created before its freeze gate.
 
@@ -21,24 +21,24 @@ Directories contain contracts for future Rust libraries. A directory is not an a
 | Crate | Primary ownership | Frontier |
 |---|---|---:|
 | `wow-core` | identities/evidence/coverage/results | E0-A |
-| `wow-store` | SQLite/objects/publication/recovery/GC | E6-B generic external-result seam |
+| `wow-store` | immutable storage/effects/retention/recovery | E7-A session/journal seam |
 | `wow-reference` | exact ReferenceProfile/View/transitions/mapping | E6-B mapping seam |
 | `wow-annotations` | annotation projection/maps/loss/parity | E1-C |
-| `wow-emmy` | pinned analyzer adapter/facts/diagnostics | E0-C |
-| `wow-project` | source/TOC/XML/load/publication/reindex/mapping | E6-B mapping seam |
-| `wow-graph` | typed graph/lineage/impact/partition validation | E5-C closure seam; E6-B exact context input |
-| `wow-recognizers` | structural rules/calibration/core pack semantics | E5-C owner seam |
-| `wow-rules` | diagnostic providers/capability gates | E0-E |
-| `wow-search` | exact-generation retrieval/candidates | E4-B seam |
-| `wow-context` | Project Map/L0/L1/context packs | E6-B exact mapped-root handoff |
+| `wow-emmy` | pinned analyzer adapter/facts/overlay analysis | E7-A overlay seam |
+| `wow-project` | source/index/publication/reindex/mapping/overlays | E7-A workspace/overlay seam |
+| `wow-graph` | typed graph/lineage/impact/partition validation | E5-C/E6-B seams |
+| `wow-recognizers` | structural rules/calibration/core semantics | E5-C |
+| `wow-rules` | diagnostics/capability gates/live diagnostic results | E7-A live seam |
+| `wow-search` | exact-generation retrieval/candidates | E4 |
+| `wow-context` | Project Map/L0/L1/context packs | E6-B handoff |
 | `wow-cbm` | optional external Candidate-only bridge | E6-A |
-| `wow-service` | orchestration/durable effects/authorization/mapping/context envelopes | E6-B |
+| `wow-service` | orchestration/durable effects/frontend registry/sessions | E7-A |
 
-Completed documentation: E0-A–E6-B. Next: **E7-A** supported transport/session and developer-preview release boundary.
+Completed documentation: E0-A–E7-A. Next: **E7-B** public release and support lifecycle.
 
 Executable implementation still starts at E0-A. Later documentation never bypasses earlier implementation/freeze gates.
 
-## E5 gate separation
+## E5 separation
 
 ```text
 E5-A calibration evidence and shadow candidates
@@ -47,37 +47,47 @@ E5-C immutable core artifact, signing, inactive publication, canary,
      guarded activation, finite rollout, LKG, rollback/revocation/closure
 ```
 
-Submission, signature, publication, canary, activation, rollout, rollback, distribution and runtime correctness are separate. Public distribution remains E7-B.
-
-## E6 gate separation
+## E6 separation
 
 ```text
-E6-A wow-cbm
-    reviewed provider descriptors and exact external-state classes
-    bounded allow-listed candidate queries
-    Candidate-only normalization and provider-local scoring
-    unverified locators, zero-result honesty, continuation/cache
-    optional degradation and no provider/database/session ownership
-
-E6-B wow-service + apps/wow + owner seams
-    exact provider configuration/session authorization references
-    durable external query/result/artifact operations and retention
-    exact project/reference locator mapping
-    explicit candidate selection receipt
-    exact mapped-root context handoff with separate Candidate sidecar
-    canonical envelopes and thin CLI
+E6-A wow-cbm owns pure external Candidate normalization
+E6-B wow-service coordinates session/result/mapping/selection/context
 ```
 
-E6-A cannot create exact local authority. E6-B mapping proves only locator-to-owner-record identity; selection and context do not verify provider summaries/relations. E6 remains optional and may ship disabled.
+E6 remains optional and may ship disabled. Mapping and selection never verify provider interpretation.
+
+## E7-A separation
+
+```text
+owner crates
+    project workspace/overlay identity
+    Emmy overlay analysis
+    diagnostics/search/context results
+    generic store/journal/retention
+
+wow-service
+    immutable operation registry
+    session/workspace/document orchestration
+    exact request/result/delivery state
+
+apps/wow
+    one-shot CLI
+    foreground local daemon
+    LSP 3.18 stdio
+    MCP 2025-11-25 stdio
+    optional local-only MCP HTTP
+```
+
+Transports do not own semantic algorithms, advertise missing capabilities, infer workspaces, expose generic tools, treat disconnect as cancellation, or mutate source automatically.
 
 ## Launch order
 
 ```text
 first runnable: E0-A -> E0-F
 useful internal alpha: E1 + E2 + E3
-external developer preview: E4 + minimal E7-A frontend
+developer preview: E4 + implemented minimal E7-A frontend
 governed beta: E5; optionally E6
-public supported v1: selected beta scope + E7-A/E7-B release gates
+public supported v1: selected beta scope + implemented E7-A + E7-B release gates
 ```
 
 See [`../docs/LAUNCH_GATES.md`](../docs/LAUNCH_GATES.md).

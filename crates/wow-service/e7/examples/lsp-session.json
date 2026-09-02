@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e7a-lsp-session-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "session": {
+    "protocol": "3.18",
+    "transport_profile": "lsp-3.18-stdio-v1",
+    "session_id": null,
+    "registry_id": null,
+    "position_encoding": "utf-16",
+    "capability_set_id": null,
+    "canonical_sha256": null
+  },
+  "workspace": {
+    "registration_id": null,
+    "explicit_root": null,
+    "project_generation_id": null
+  },
+  "document": {
+    "uri": null,
+    "version": 1,
+    "overlay_snapshot_id": null,
+    "content_sha256": null
+  },
+  "cases": [
+    {
+      "case_id": "S7A-LSP-001",
+      "expected": "initialized-lsp-3.18-session"
+    },
+    {
+      "case_id": "S7A-WS-002",
+      "mutation": "infer-workspace-from-cwd-git-parent-or-wow-installation",
+      "expected_error": "e7a_workspace_auto_discovery_forbidden"
+    },
+    {
+      "case_id": "S7A-DOC-005",
+      "mutation": "out-of-order-document-version",
+      "expected_status": "ResynchronizationRequired"
+    },
+    {
+      "case_id": "S7A-DOC-008",
+      "mutation": "utf16-position-splits-surrogate-pair",
+      "expected_error": "e7a_utf_position_or_boundary_invalid"
+    },
+    {
+      "case_id": "S7A-LSP-DIAG-001",
+      "expected": "versioned-pull-diagnostic-result"
+    },
+    {
+      "case_id": "S7A-LSP-FEAT-004",
+      "mutation": "completion-auto-inserts-external-top-result",
+      "expected_error": "e7a_lsp_semantic_capability_placeholder_forbidden"
+    },
+    {
+      "case_id": "S7A-LSP-FEAT-007",
+      "mutation": "code-action-without-document-version-content-guards",
+      "expected_error": "e7a_lsp_edit_guard_or_workspace_edit_invalid"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}

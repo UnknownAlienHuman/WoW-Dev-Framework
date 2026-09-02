@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-service-e7a-reconnect-cancel-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "operation": {
+    "transport_request_id": null,
+    "service_request_id": null,
+    "durable_operation_id": null,
+    "canonical_request_digest": null,
+    "session_id": null,
+    "delivery_state": null
+  },
+  "cases": [
+    {
+      "case_id": "S7A-LIFE-002",
+      "mutation": "progress-treated-as-completion",
+      "expected_error": "e7a_progress_treated_as_completion_forbidden"
+    },
+    {
+      "case_id": "S7A-LIFE-006",
+      "boundary": "cancellation-after-possible-effect",
+      "expected": "exact-owner-state-and-reconciliation"
+    },
+    {
+      "case_id": "S7A-LIFE-007",
+      "mutation": "disconnect-causes-blind-retry",
+      "expected_error": "e7a_disconnect_treated_as_cancellation_forbidden"
+    },
+    {
+      "case_id": "S7A-LIFE-008",
+      "expected": "reconnect-retrieves-retained-exact-result"
+    },
+    {
+      "case_id": "S7A-LIFE-010",
+      "boundary": "timeout-after-possible-effect",
+      "expected_status": "OutcomeUnknown"
+    },
+    {
+      "case_id": "S7A-LIFE-012",
+      "mutation": "public-success-before-retention-and-close",
+      "expected_error": "e7a_public_success_before_close_forbidden"
+    },
+    {
+      "case_id": "S7A-SEC-001",
+      "mutation": "cross-client-overlay-or-result-read",
+      "expected_error": "e7a_cross_client_workspace_overlay_or_result_disclosure_forbidden"
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}
