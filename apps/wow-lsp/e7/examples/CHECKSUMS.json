@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "manifest_id": "apps-wow-lsp-e7-a-checksums-v1",
+  "algorithm": "sha256",
+  "state": "pending-byte-freeze-before-first-rust-implementation",
+  "implementation_state": "not-started",
+  "prerequisite_pins": {
+    "wow_service_e7a_implementation_commit": null,
+    "wow_service_e7a_fixture_bundle_sha256": null
+  },
+  "official_protocol_pins": {
+    "lsp_specification_revision": null,
+    "lsp_specification_digest": null,
+    "lsp_conformance_vector_digest": null
+  },
+  "profile_pins": {
+    "stdio_framing_and_json_rpc": null,
+    "initialization_and_capabilities": null,
+    "text_document_sync": null,
+    "position_encoding_and_source_mapping": null,
+    "diagnostics_navigation_and_actions": null,
+    "cancellation_progress_and_partial_results": null,
+    "authorization_privacy_and_source_boundary": null,
+    "backpressure_shutdown_broken_pipe_and_platform": null,
+    "error_projection_and_canonicalization": null
+  },
+  "vector_pins": {
+    "method_service_bijection": null,
+    "initialization_and_capabilities": null,
+    "framing_and_json_errors": null,
+    "unicode_positions_and_document_versions": null,
+    "diagnostics_hover_definition_references_symbols_actions": null,
+    "cancellation_progress_partial_results": null,
+    "authorization_privacy_and_source_injection": null,
+    "slow_peer_broken_pipe_shutdown": null,
+    "one_two_n_worker_and_output_determinism": null,
+    "supported_platform_reports": null
+  },
+  "member_paths": [
+    "apps/wow-lsp/README.md",
+    "apps/wow-lsp/AGENTS.md",
+    "apps/wow-lsp/e7/README.md",
+    "apps/wow-lsp/e7/METHODS_AND_CAPABILITIES.md",
+    "apps/wow-lsp/e7/FRAMING_SYNC_AND_POSITIONS.md",
+    "apps/wow-lsp/e7/OUTPUT_ERRORS_AND_LIFECYCLE.md",
+    "apps/wow-lsp/e7/SECURITY_AND_INPUTS.md",
+    "apps/wow-lsp/e7/TEST_MATRIX.md",
+    "apps/wow-lsp/e7/CONTRACT.json",
+    "apps/wow-lsp/e7/examples/README.md",
+    "apps/wow-lsp/e7/examples/lsp-method-cases.json",
+    "apps/wow-lsp/e7/examples/lsp-framing-position-cases.json"
+  ],
+  "member_sha256": {},
+  "bundle_sha256": null,
+  "freeze_rules": [
+    "nulls are allowed only while implementation_state is not-started",
+    "all service spec profile platform vector canonical byte and checksum values freeze before the first wow-lsp Rust commit",
+    "tests verify committed fixtures and never rewrite them automatically",
+    "credentials private paths source bodies hidden review or holdout data are never committed"
+  ]
+}
