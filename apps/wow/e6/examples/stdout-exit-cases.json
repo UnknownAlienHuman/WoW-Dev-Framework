@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "fixture_id": "apps-wow-e6b-stdout-exit-v1",
+  "state": "documentation-only-pending-id-and-byte-freeze",
+  "cases": [
+    {
+      "case_id": "A6B-OUT-001",
+      "service_status": "Complete",
+      "output_mode": "envelope-json",
+      "expected": "exact-service-bytes-plus-one-LF",
+      "expected_exit": 0
+    },
+    {
+      "case_id": "A6B-QUERY-008",
+      "service_status": "CandidateOnly",
+      "required_text": [
+        "Candidate",
+        "negative authority unavailable"
+      ],
+      "forbidden_text": [
+        "proven",
+        "verified source"
+      ],
+      "expected_exit": 2
+    },
+    {
+      "case_id": "A6B-MAP-005",
+      "mapping_status": "MultipleMappings",
+      "required_text": "multiple mappings; explicit resolution required",
+      "expected_exit": 2
+    },
+    {
+      "case_id": "A6B-SEL-001",
+      "selection_status": "Selected",
+      "required_text": [
+        "explicit selection",
+        "does not upgrade authority"
+      ],
+      "expected_exit": 0
+    },
+    {
+      "case_id": "A6B-CTX-004",
+      "context_status": "Complete",
+      "required_text": "external Candidate evidence is separate from framework context facts",
+      "expected_exit": 0
+    },
+    {
+      "case_id": "A6B-OUT-009",
+      "service_status": "OutcomeUnknown",
+      "required_text": "do not repeat; reconcile exact operation",
+      "expected_exit": 4
+    },
+    {
+      "case_id": "A6B-OUT-010",
+      "failure_stage": "pre-service-input",
+      "expected_service_calls": 0,
+      "expected_exit": 64
+    },
+    {
+      "case_id": "A6B-OUT-011",
+      "service_status": "Cancelled",
+      "expected_exit": 130
+    }
+  ],
+  "freeze_gate": {
+    "required_before_first_rust_implementation": true
+  }
+}
