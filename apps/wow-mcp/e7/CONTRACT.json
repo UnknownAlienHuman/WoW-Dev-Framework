@@ -1,0 +1,214 @@
+{
+  "schema_version": 1,
+  "contract_id": "apps/wow-mcp/e7-a/fixed-tool-resource-adapter",
+  "state": "implementation-ready-documentation-no-rust-code",
+  "work_package": "E7-A",
+  "application": "wow-mcp",
+  "documentation_frontier": "E7-A",
+  "implementation_state": "not-started",
+  "framework_dependencies": [
+    "wow-service"
+  ],
+  "forbidden_framework_dependencies": [
+    "wow-core",
+    "wow-store",
+    "wow-reference",
+    "wow-annotations",
+    "wow-emmy",
+    "wow-project",
+    "wow-graph",
+    "wow-recognizers",
+    "wow-rules",
+    "wow-search",
+    "wow-context",
+    "wow-cbm"
+  ],
+  "prerequisite_contract": "wow-service/e7-a/lsp-mcp-session-and-transport-foundation",
+  "protocol_family": "MCP",
+  "initial_profile_candidate": "mcp-stdio-single-client-fixed-tools-resources-v1",
+  "supported_protocol_capabilities": [
+    "initialize",
+    "fixed-tools-list-and-call",
+    "exact-resources-list-and-read",
+    "cancellation",
+    "progress"
+  ],
+  "tools": [
+    {
+      "name": "wow.protocol.status",
+      "service_operation": "protocol_status"
+    },
+    {
+      "name": "wow.protocol.profile_validate",
+      "service_operation": "protocol_profile_validate"
+    },
+    {
+      "name": "wow.session.initialize",
+      "service_operation": "session_initialize"
+    },
+    {
+      "name": "wow.session.capabilities",
+      "service_operation": "session_capabilities"
+    },
+    {
+      "name": "wow.session.rebind_exact",
+      "service_operation": "session_rebind_exact"
+    },
+    {
+      "name": "wow.session.shutdown",
+      "service_operation": "session_shutdown"
+    },
+    {
+      "name": "wow.workspace.bind",
+      "service_operation": "workspace_bind"
+    },
+    {
+      "name": "wow.workspace.status",
+      "service_operation": "workspace_status"
+    },
+    {
+      "name": "wow.analysis.diagnostics",
+      "service_operation": "analysis_diagnostics"
+    },
+    {
+      "name": "wow.analysis.hover",
+      "service_operation": "analysis_hover"
+    },
+    {
+      "name": "wow.analysis.definition",
+      "service_operation": "analysis_definition"
+    },
+    {
+      "name": "wow.analysis.references",
+      "service_operation": "analysis_references"
+    },
+    {
+      "name": "wow.analysis.symbols",
+      "service_operation": "analysis_symbols"
+    },
+    {
+      "name": "wow.analysis.code_actions",
+      "service_operation": "analysis_code_actions"
+    },
+    {
+      "name": "wow.analysis.resolve_action",
+      "service_operation": "analysis_resolve_action"
+    },
+    {
+      "name": "wow.context.request",
+      "service_operation": "context_request"
+    },
+    {
+      "name": "wow.search.request",
+      "service_operation": "search_request"
+    },
+    {
+      "name": "wow.external.query",
+      "service_operation": "external_candidate_query"
+    },
+    {
+      "name": "wow.external.continue",
+      "service_operation": "external_candidate_continue"
+    },
+    {
+      "name": "wow.external.result_validate",
+      "service_operation": "external_candidate_result_validate"
+    },
+    {
+      "name": "wow.external.explain",
+      "service_operation": "external_candidate_explain"
+    },
+    {
+      "name": "wow.external.map",
+      "service_operation": "external_candidate_map"
+    },
+    {
+      "name": "wow.external.select",
+      "service_operation": "external_candidate_select"
+    },
+    {
+      "name": "wow.external.context",
+      "service_operation": "external_candidate_context"
+    },
+    {
+      "name": "wow.operation.status",
+      "service_operation": "operation_status"
+    },
+    {
+      "name": "wow.operation.cancel",
+      "service_operation": "operation_cancel"
+    }
+  ],
+  "resource_classes": [
+    "ProtocolStatusResource",
+    "SessionStatusResource",
+    "WorkspaceStatusResource",
+    "DiagnosticResultResource",
+    "NavigationResultResource",
+    "SearchResultResource",
+    "ContextSemanticPackResource",
+    "RenderedContextArtifactResource",
+    "ExternalCandidateResultResource",
+    "ExternalCandidateArtifactResource",
+    "OperationStatusResource",
+    "EvidenceCoverageConflictResource"
+  ],
+  "deliberately_unsupported": [
+    "sampling",
+    "elicitation",
+    "prompts",
+    "dynamic-tools",
+    "source-or-provider-defined-tools",
+    "generic-call-tool-or-service-dispatch",
+    "arbitrary-file-url-repository-provider-or-database-resources",
+    "source-editing-workspace-edit-shell-network-process-editor-or-client-control",
+    "core-pack-or-release-publication-and-activation",
+    "remote-network-multi-tenant-transport"
+  ],
+  "hard_rules": [
+    "wow-service is the only framework dependency",
+    "each fixed tool maps to exactly one service operation",
+    "tools and resources are repository-owned static versioned descriptors",
+    "no generic tool service or JSON-RPC owner pass-through",
+    "MCP specification transport framing capability and error behavior are exact frozen profiles",
+    "provider results remain semantic_candidate and Candidate with no negative authority",
+    "external locator mapping and explicit selection are separate required receipts before context",
+    "top first best highest-score sole name path snippet or provider labels never select or prove",
+    "opaque exact-generation resource URIs are never arbitrary paths URLs repositories or provider locators",
+    "sampling elicitation prompts dynamic tools and automatic follow-up tool calls are absent",
+    "client host model OS GitHub process file or repository identity never authorizes operations or raises authority",
+    "source provider query review and prompt text remain structurally isolated untrusted data",
+    "partial candidate conflict truncated OutcomeUnknown and NotEvaluated state is preserved",
+    "stdout contains protocol only and broken output never repeats service",
+    "no credentials private keys hidden review holdout data raw stores databases owner handles or private paths",
+    "no background work after response cancellation shutdown or transport loss",
+    "no Cargo Rust source or CI during documentation phase"
+  ],
+  "normative_files": [
+    "apps/wow-mcp/README.md",
+    "apps/wow-mcp/AGENTS.md",
+    "apps/wow-mcp/e7/README.md",
+    "apps/wow-mcp/e7/TOOLS_AND_RESOURCES.md",
+    "apps/wow-mcp/e7/FRAMING_LIFECYCLE_AND_RESULTS.md",
+    "apps/wow-mcp/e7/AUTHORIZATION_AND_SOURCE_BOUNDARIES.md",
+    "apps/wow-mcp/e7/SECURITY_AND_INPUTS.md",
+    "apps/wow-mcp/e7/TEST_MATRIX.md",
+    "apps/wow-mcp/e7/CONTRACT.json",
+    "apps/wow-mcp/e7/examples/README.md",
+    "apps/wow-mcp/e7/examples/mcp-tool-resource-cases.json",
+    "apps/wow-mcp/e7/examples/mcp-framing-lifecycle-cases.json",
+    "apps/wow-mcp/e7/examples/CHECKSUMS.json"
+  ],
+  "freeze_gate": {
+    "implementation_state": "not-started",
+    "required_before_first_rust_implementation": [
+      "implemented and frozen wow-service E7-A plus E6-B external candidate request result error authorization and canonical byte contracts",
+      "exact official MCP specification revision and conformance vectors",
+      "frozen stdio framing JSON-RPC initialization capabilities static tool resource cancellation progress error shutdown and platform profiles",
+      "all tool-to-service and resource-to-artifact mappings with closed schemas and side-effect classifications",
+      "all candidate mapping selection context authority privacy source-boundary slow-peer and adversarial vectors",
+      "all canonical MCP request response notification error tool resource and framing bytes",
+      "all member and bundle SHA-256 values"
+    ]
+  }
+}
