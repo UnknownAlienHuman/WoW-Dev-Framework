@@ -3,129 +3,101 @@
 **Status:** operational documentation and implementation routing.
 
 ```text
-documentation frontier: E5-C complete
-next documentation package: E6-A optional external semantic-candidate bridge
+documentation frontier: E6-A complete
+next documentation package: E6-B external-candidate service/mapping/context/CLI
 implementation frontier: not started
 ```
 
 No Rust workspace, `Cargo.toml`, `.rs` files, or CI workflows exist.
 
-## Milestones
+## Summary
 
 | Milestone | Documentation | Implementation |
 |---|---:|---:|
-| E0 diagnostic vertical slice | Complete | Not started |
-| E1 Reference Pack stack | Complete | Not started |
-| E2 graph/recognizers/project/ProjectStore | Complete | Not started |
-| E3 Blizzard UI source/context/service | Complete | Not started |
-| E4 search/lineage/migration/impact/service | Complete | Not started |
+| E0–E4 foundation/search/lineage/context | Complete | Not started |
 | E5-A calibration owner | Complete | Not started |
-| E5-B durable review/holdout/submission | Complete | Not started |
-| E5-C core-pack publication lifecycle | Complete | Not started |
-| E6-A external candidate owner bridge | Next | Not started |
-| E6-B external candidate service/CLI | Planned | Not started |
-| E7 LSP/MCP/public release integration | Planned | Not started |
+| E5-B review/holdout/submission | Complete | Not started |
+| E5-C core publication lifecycle | Complete | Not started |
+| E6-A external Candidate-only bridge | Complete | Not started |
+| E6-B external service/mapping/context/CLI | Next | Not started |
+| E7 LSP/MCP/public distribution | Planned | Not started |
 
-## Implementation remains E0-first
+Documentation maturity never reorders implementation; executable work begins with E0-A.
 
-Documentation maturity never reorders implementation. Executable work begins with `wow-core` E0-A, then the frozen E0 reference/analyzer/project/rules/service/CLI slice. Every later package remains blocked until its prerequisite implementation commits, exact fixtures/profiles, probes, benchmarks, adapters, runtime evidence, and checksums exist.
+## E5-C recap
 
-## E5-A — calibration evidence owner
+E5-C independently revalidates one exact PromotionSubmission, builds a distinct immutable CorePackArtifact, produces attestations and detached signatures, publishes inactive and reads back, gathers exact scoped canary evidence, advances finite rollout stages, activates by profile-specific CAS, explicitly designates LKG, and performs immutable rollback/revocation/deactivation plus project/graph stale partition closure. Internal publication is not public distribution.
 
-`wow-recognizers` owns exact candidate-source/corpus/provenance/label/split/pack validation, shadow matching, anti-overfitting mutations, graph receipts, per-case-first metrics, candidate artifacts, and deactivation plans.
+## E6-A — optional external semantic candidates
 
-No commit-pin-only admission, donor-name semantics, split leakage, hidden Negative coercion, confidence above `Derived`/`Possible`, default graph publication, or core activation.
+Contract: [`../crates/wow-cbm/e6/README.md`](../crates/wow-cbm/e6/README.md)
 
-## E5-B — durable review, holdout, and submission
-
-`wow-service` and `apps/wow` own exact retained acquisition, durable `OperationId + CanonicalRequestDigest`, response-loss reconciliation, reviewer authorization, sealed-holdout access/audit/consumption, immutable `PromotionSubmission`, conservative envelopes, and thin transport.
-
-Review authorization, graph validity, holdout authorization, disclosure, submission, publication, activation, and runtime correctness remain separate.
-
-## E5-C — immutable core-pack publication lifecycle
-
-Contracts:
-
-- [`../crates/wow-service/e5c/README.md`](../crates/wow-service/e5c/README.md)
-- [`../apps/wow/e5c/README.md`](../apps/wow/e5c/README.md)
-
-### Artifact and publication
-
-E5-C independently reacquires and revalidates one exact E5-B submission and all mandatory E5-A/B evidence. It creates a distinct immutable `CorePackArtifact` with `trust_class=core`; the calibration candidate is never relabeled.
-
-Publication sequence:
+### State model
 
 ```text
-submission revalidation
--> core artifact build/validation
--> provenance/SBOM/license/notices
--> detached signing + verification
--> PublishedInactive catalog record
--> fresh exact read-back validation
--> ValidatedInactive
+StableExternalGeneration
+ObservedMutableGeneration
+OpaqueExternalState
 ```
 
-Publication does not activate current/default. A valid signature proves bytes/key/profile binding only.
+Stable requires an immutable provider generation/index/corpus identity and receipt. Observed mutable binds one session/observation episode. Opaque state is explicitly nonreproducible and receives restricted cache/continuation claims. Timestamps, uptime, same query/top result/count, or provider `current/latest` labels are not generation identity.
 
-### Canary
+### Query and authority
 
-Canary cohorts freeze exact population/membership or an authorized privacy-preserving commitment, profile, window, observation schemas, denominators, stop/pause/rollback criteria, privacy, and authorization.
+E6-A validates reviewed provider descriptors/capability intersections, invokes one allow-listed narrow transport operation, bounds and validates the response, records unknown/loss/conflict/coverage, and normalizes candidates.
 
-Only typed registered observations are canonical. Missing/partial/conflicted/`NotEvaluated` required signals never pass. Canary success is limited to the exact publication/profile/cohort/window/capabilities and is not ecosystem-wide runtime proof.
+Every result remains:
 
-### Rollout and activation
+```text
+provenance = semantic_candidate
+confidence = Candidate
+negative_authority = unavailable
+```
 
-Rollout uses finite stages with exact prior state, cohort expansion, required evidence, authorization, budgets, and stop/pause/rollback criteria. It never advances because time elapsed or no complaint appeared.
+Provider exact/verified/authoritative labels, top-1, sole result, high score, repeated result, stable generation, and zero result do not increase authority. Scores are provider-local and never numerically fused across providers.
 
-Activation is profile-specific and guarded by compare-and-swap against the exact expected current record. There is no latest/best/previous/default shortcut.
+### Source boundary
 
-### Last-known-good and rollback
+Repository/path/URI/revision/symbol/span/digest fields are `UnverifiedProviderLocator`. E6-A does not open/follow/read/map them or create project/reference `StableSourceHandle`/entities. E6-B later invokes exact owner mapping ports.
 
-Last-known-good is explicitly designated with qualifying evidence, profile, authorization, retention, and expected prior designation. It is never inferred as previous/newest.
+### Zero and degradation
 
-Rollback selects one exact retained, signature-valid, nonrevoked, profile-compatible qualified target. It creates new activation/reindex/graph-closure/audit records and never rewrites history or relabels the failed target.
+Zero means only no accepted candidates for the exact provider/state/query/profile/page under reported coverage. Zero after all items fail validation is classified separately. Neither creates local negative authority.
 
-### Partition closure
+Provider unconfigured/unavailable/unsupported/opaque/stale/malformed/partial/truncated/cancelled/failure state disables only the optional lane. There is no hidden fallback or local capability downgrade.
 
-New project/graph generations must prove target pack partitions present, stale/revoked/deactivated pack partitions absent, foreign/core-independent/calibration partitions preserved, coverage changes explicit, and no old/new generation mixing. Historical generations remain immutable.
+### Security
 
-### Durable effects and security
+No provider install/start/configure/index/import/delete, provider database, raw MCP/tool call, SQL/script/model prompt, path/URL follow, source execution, credential/session acquisition, private endpoint, unrestricted source retention, or background task exists in E6-A.
 
-All signing, publication, canary, observation, rollout, activation, LKG, rollback, revocation, deactivation, reindex, closure, retention, and audit effects use exact durable identities and response-loss reconciliation. `OutcomeUnknown` blocks blind repeat.
-
-Private keys, KMS/HSM/vault/deployment credentials, private cohort data, raw owner handles, arbitrary SQL/scripts/models/tools, and public distribution do not enter E5-C requests/fixtures/CLI/results.
-
-### E5-C implementation gate
+### E6-A implementation gate
 
 Before Rust:
 
 ```text
-implemented/frozen E0–E5-B prerequisites
-exact submission/recognizer/graph/project/store owner ports
-signing and authorization adapters without committed secrets
-provenance/SBOM/license/reproducibility profiles
-canary population/privacy/observation/signal profiles
-finite rollout/activation/LKG/rollback/revocation/closure profiles
-response-loss/retention/audit/recovery profiles
-canonical service/CLI/artifact/signature/state/error vectors
-synthetic and admitted real canary/rollout/rollback corpora
-measured thresholds and all SHA-256 manifests
+implemented/frozen wow-core
+reviewed provider descriptor and adapter contract
+transport/capability probes
+external-state/query/normalization/score/loss/locator/zero/continuation/cache profiles
+privacy/license/security/cancellation profiles
+synthetic compatible/malformed/hostile/partial/opaque/mutable/stale fixtures
+measured limits
+canonical result/explanation/artifact/comparison/error vectors
+all SHA-256 manifests
 ```
 
-## Next — E6-A optional external candidate bridge
+## Next — E6-B
 
-Owner: `wow-cbm`; direct dependency: `wow-core` only.
+Owners: `wow-service` + `apps/wow`; collaborators: `wow-cbm`, `wow-project`, `wow-reference`, `wow-context`, `wow-store`.
 
-Define exact reviewed provider descriptors and external-state classes, closed bounded allow-listed candidate queries, deterministic loss-preserving normalization, hard `semantic_candidate + Candidate` authority ceiling, provider-local scores, unverified locators, zero-result negative-authority prohibition, continuation/cache, optional degradation, privacy/license/security, and an E6-B mapping/service handoff.
+Define provider/session/credential-port acquisition, durable operation and response-loss state, exact result/artifact catalogs and retention, project/reference owner mapping, explicit selection receipts, exact mapped-root context handoff, conservative envelopes, privacy/license/security, cancellation/closure, and thin CLI.
 
-E6-A must not read/write provider databases, expose arbitrary MCP/tool calls, invoke models, map locators into project/reference truth, create graph/lineage/replacement proof, or make exact local workflows depend on provider availability.
+E6-B must not widen Candidate authority, compare provider scores as confidence, choose top/sole candidates, treat mapping as provider truth, expose credentials/private endpoints/provider cursor bytes, or make exact local workflows depend on provider availability.
 
-## E6-B and E7
+## E7
 
-E6-B later owns configured provider/session/credential acquisition, durable external-candidate orchestration, exact project/reference owner mapping, explicit selection receipts, exact-root context handoff, and thin CLI while preserving Candidate-only authority.
-
-E7 owns LSP/MCP transports and public release/distribution/signing/update integration after implementation gates.
+Define thin LSP/MCP and public release/distribution/update integration only after implementation gates. No generic tool escape hatch or bypass of service/authority boundaries.
 
 ## Discipline
 
-Stable contracts link the current external WoW engineering KB rather than copy patch-sensitive facts. Missing tools/probes/benchmarks/authorization/signing/vault/observations/runtime evidence are blocked or `NotEvaluated`, never passed. Architecture changes require an ADR and concrete failure of the accepted design. No CI/workflow without explicit owner instruction.
+Patch-sensitive facts remain in the external WoW engineering KB. Missing tools, probes, adapters, benchmarks, authorization, runtime evidence, or client validation are blocked/`NotEvaluated`, never pass. No CI/workflow without explicit owner instruction.

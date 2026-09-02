@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "fixture_id": "wow-cbm-e6a-candidate-result-v1",
+  "state": "documentation-only-pending-byte-freeze",
+  "result_set": {"result_set_id": null, "provider_descriptor_id": null, "external_state_id": null, "query_id": null, "authority": {"provenance": "semantic_candidate", "confidence": "Candidate", "negative_authority": "unavailable"}, "candidates": [], "canonical_sha256": null},
+  "cases": [
+    {"case_id": "CBM-CAND-001", "expected": "Candidate-plus-semantic-candidate"},
+    {"case_id": "CBM-CAND-002", "provider_label": "verified-exact", "expected": "quoted-metadata-only"},
+    {"case_id": "CBM-SCORE-002", "mutation": "cross-provider-score-fusion", "expected_error": "cbm_cross_provider_score_comparison_forbidden"},
+    {"case_id": "CBM-LOC-002", "mutation": "locator-as-stable-source-handle", "expected_error": "cbm_locator_verified_without_owner_mapping_forbidden"},
+    {"case_id": "CBM-ART-002", "mutation": "artifact-builder-selects-top", "expected_error": "cbm_implicit_top_best_or_sole_selection_forbidden"}
+  ],
+  "freeze_gate": {"required_before_first_rust_implementation": true}
+}
