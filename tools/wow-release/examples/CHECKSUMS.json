@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "manifest_id": "tools-wow-release-e7-b-checksums-v1",
+  "algorithm": "sha256",
+  "state": "pending-byte-freeze-before-first-rust-implementation",
+  "implementation_state": "not-started",
+  "prerequisite_pins": {
+    "wow_service_e7b_implementation_commit": null,
+    "wow_service_e7b_fixture_bundle_sha256": null
+  },
+  "profile_pins": {
+    "command_and_selector": null,
+    "strict_input_path_and_config": null,
+    "direct_service_transport": null,
+    "optional_local_daemon_transport": null,
+    "output_exit_progress_cancellation_and_reconciliation": null,
+    "credential_execution_provider_and_CI_security": null
+  },
+  "vector_pins": {
+    "release_tool_cases": null,
+    "command_service_bijection": null,
+    "forbidden_commands_secrets_provider_API_and_selectors": null,
+    "canonical_JSON_text_and_artifact_output": null,
+    "broken_pipe_disconnect_cancellation_and_OutcomeUnknown": null,
+    "CI_exact_command_and_no_auto_publish": null
+  },
+  "member_paths": [
+    "tools/wow-release/README.md",
+    "tools/wow-release/AGENTS.md",
+    "tools/wow-release/COMMANDS.md",
+    "tools/wow-release/SECURITY_AND_EXECUTION.md",
+    "tools/wow-release/TEST_MATRIX.md",
+    "tools/wow-release/CONTRACT.json",
+    "tools/wow-release/examples/README.md",
+    "tools/wow-release/examples/release-tool-cases.json"
+  ],
+  "member_sha256": {},
+  "bundle_sha256": null,
+  "freeze_rules": [
+    "nulls are allowed only while implementation_state is not-started",
+    "all service command transport output CI security vector and checksum values freeze before the first wow-release Rust commit",
+    "tests verify committed fixtures and never rewrite them",
+    "private build signing distribution provider CI and user data are never committed"
+  ]
+}
