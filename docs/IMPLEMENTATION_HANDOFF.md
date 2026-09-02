@@ -228,7 +228,7 @@ Implement static operation registry/compatibility manifest, immutable sessions, 
 
 Implement one binary with direct CLI, local named-pipe daemon, standalone LSP stdio and standalone MCP stdio.
 
-Start with full-document sync and read-only developer exposure. Incremental UTF-16 sync and additional capabilities remain disabled until their exact suites pass.
+Implement the exact E7-A LSP 3.18 synchronization contract: incremental `textDocument/didChange`, with a full-document change accepted as an exact replacement. Advertise it only after the overlay, position-encoding, version, resynchronization, and client conformance suites pass. Keep the developer exposure read-only by default.
 
 A1 is complete when an admitted editor/MCP client can use diagnostics, hover, navigation, symbols, search/context and guarded code actions on real addons with exact version/session behavior and measured latency/resources.
 
