@@ -1,0 +1,52 @@
+name: I0-A wow-core
+
+on:
+  pull_request:
+    paths:
+      - Cargo.toml
+      - Cargo.lock
+      - rust-toolchain.toml
+      - crates/wow-core/**
+      - .github/workflows/i0-a-wow-core.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: i0-a-wow-core-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out exact revision
+        uses: actions/checkout@v6.0.2
+
+      - name: Install frozen Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
+
+      - name: Generate exact dependency lock
+        run: cargo +1.98.0 generate-lockfile
+
+      - name: Check formatting
+        run: cargo +1.98.0 fmt --all -- --check
+
+      - name: Check lints
+        run: cargo +1.98.0 clippy --workspace --all-targets --all-features -- -D warnings
+
+      - name: Run tests
+        run: cargo +1.98.0 test --workspace --all-features
+
+      - name: Emit generated Cargo.lock
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f Cargo.lock ]]; then
+            echo '---CARGO_LOCK_BASE64---'
+            base64 -w0 Cargo.lock
+            echo
+            echo '---END_CARGO_LOCK_BASE64---'
+          fi
