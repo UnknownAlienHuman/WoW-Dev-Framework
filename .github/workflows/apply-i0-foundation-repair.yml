@@ -1,0 +1,74 @@
+name: Apply I0 foundation repair
+
+on:
+  push:
+    branches:
+      - repair/i0-foundation-integrity
+    paths:
+      - .github/repair-payload/**
+      - .github/workflows/apply-i0-foundation-repair.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-i0-foundation-repair
+  cancel-in-progress: true
+
+jobs:
+  apply-and-validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out repair branch
+        uses: actions/checkout@v6.0.2
+        with:
+          ref: repair/i0-foundation-integrity
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Reconstruct verified repair tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .github/repair-payload/part-*.b64 | base64 --decode > /tmp/i0-foundation-repair.tar.zst
+          echo "70b97ea22f138f629464c46855687bb0f1187546c1c19d1057cf2a038e1961b8  /tmp/i0-foundation-repair.tar.zst" | sha256sum --check --strict
+          zstd --decompress --stdout /tmp/i0-foundation-repair.tar.zst | tar --extract --file=- --directory="$GITHUB_WORKSPACE"
+
+      - name: Install frozen Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
+
+      - name: Format repaired tree
+        run: cargo +1.98.0 fmt --all
+
+      - name: Verify dependency lock
+        run: |
+          cargo +1.98.0 generate-lockfile
+          git diff --exit-code -- Cargo.lock
+
+      - name: Check lints
+        run: cargo +1.98.0 clippy --locked --workspace --all-targets --all-features -- -D warnings
+
+      - name: Run debug tests
+        run: cargo +1.98.0 test --locked --workspace --all-features
+
+      - name: Run release tests
+        run: cargo +1.98.0 test --locked --workspace --all-features --release
+
+      - name: Build documentation
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo +1.98.0 doc --locked --workspace --all-features --no-deps
+
+      - name: Commit only validated repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .github/repair-payload
+          rm -f .github/workflows/apply-i0-foundation-repair.yml
+          git add -A
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "fix(wow-core): restore executable E0 foundation"
+          git push origin HEAD:repair/i0-foundation-integrity
