@@ -1,0 +1,28 @@
+name: Temporary E0-A recovered tree export
+
+on:
+  push:
+    branches:
+      - e0-a-core-implementation-working-final
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          persist-credentials: false
+      - name: Package exact tracked tree
+        shell: bash
+        run: git ls-files -z | tar --null -T - -czf e0-a-recovered-tree.tar.gz
+      - uses: actions/upload-artifact@v7.0.1
+        with:
+          name: e0-a-recovered-tree
+          path: e0-a-recovered-tree.tar.gz
+          retention-days: 1
+          if-no-files-found: error
