@@ -1,0 +1,103 @@
+name: Finalize current-source skill
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/finalize-current-source-skill.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: finalize-current-source-skill
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    if: ${{ !startsWith(github.event.head_commit.message, 'chore(agent): finalize current-source workflow') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+      - name: Synchronize canonical skill and remove transient exports
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          skill = '''---
+          name: wow-dev
+          description: Current-source workflow for World of Warcraft addon research, implementation, review, migration, and debugging.
+          ---
+
+          # WoW development skill
+
+          Use this skill for every WoW addon or framework task.
+
+          1. Read the actual target repository, local instructions, TOCs, load order, flavor/selector, subsystem, and risk areas first.
+          2. Prefer the configured local Blizzard UI checkout. Use GitHub only when suitable local source is unavailable.
+          3. Resolve the moving selector once at operation start. Record exact Git object ID and `version.txt`; read generated docs, Lua, XML, TOC, XSD, and implementation from that revision only. Re-resolve next operation.
+          4. Create and verify a source manifest. For generated API work run:
+
+          ```bash
+          python scripts/build-blizzard-api-reference.py \\
+            --source "$WOW_UI_SOURCE_DIR" \\
+            --manifest .wow-dev/source-manifest.json \\
+            --output .wow-dev/api-reference.json
+          python scripts/verify-blizzard-api-reference.py \\
+            .wow-dev/api-reference.json \\
+            --source "$WOW_UI_SOURCE_DIR" \\
+            --manifest .wow-dev/source-manifest.json \\
+            --require-complete
+          ```
+
+          5. Check optional context only through the generic interface. If disabled, unavailable, unconfigured, or unauthorized, continue silently. When enabled, request one sanitized route, never expose provider identity or provenance, classify it `advisory`, and revalidate every patch-sensitive claim.
+          6. Use generated docs for signatures/events/enums/predicates/restrictions, then inspect implementation/XML/TOC for lifecycle. An empty search is ambiguous, not proof of absence.
+          7. Classify claims as `current-source-confirmed`, `project-confirmed`, `runtime-confirmed`, `implementation-derived`, `advisory`, `historical`, or `unverified`.
+          8. Keep version/flavor behavior behind narrow adapters. Do not execute repository code while indexing, mutate protected state in combat, or assume conversion/copying/serialization/`pcall` removes Secret Value restrictions.
+          9. Run every available deterministic check. Missing tools or client access are skipped/NotEvaluated. Runtime claims require exact build, Interface, addon ref, scenario, restriction state, steps, and observations.
+          10. Report target ref/flavor, exact Blizzard revision/version, source pointers, classifications, files changed, checks, remaining client work, and the next exact blocker. Never include optional provider identity or private provenance.
+          '''
+          skill = "\n".join(line[10:] if line.startswith("          ") else line for line in skill.splitlines()) + "\n"
+          destinations = [
+              Path(".agents/skills/wow-dev/SKILL.md"),
+              Path(".claude/skills/wow-dev/SKILL.md"),
+              Path(".opencode/skills/wow-dev/SKILL.md"),
+              Path(".agent/skills/wow-dev/SKILL.md"),
+          ]
+          for destination in destinations:
+              destination.parent.mkdir(parents=True, exist_ok=True)
+              destination.write_text(skill, encoding="utf-8")
+          for obsolete in (
+              ".github/workflows/export-current-main.yml",
+              ".github/workflows/i0-a-export-current-tree.yml",
+              ".github/workflows/finalize-current-source-skill.yml",
+          ):
+              Path(obsolete).unlink(missing_ok=True)
+          PY
+          python scripts/sync-wow-dev-skill.py --check
+          python -m unittest -v tests/test_blizzard_api_reference.py
+          if grep -RIlE 'wow-addon-engineering-kb|UnknownAlienHuman/wow-addon-engineering-kb|WoW Addon Engineering KB' --exclude-dir=.git --exclude-dir=target .; then
+            echo 'operator-only provider identity leaked into public tree' >&2
+            exit 1
+          fi
+      - name: Commit finalized tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "chore(agent): finalize current-source workflow"
+          git push origin HEAD:main
