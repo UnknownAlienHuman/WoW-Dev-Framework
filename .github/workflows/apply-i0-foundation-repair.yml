@@ -46,38 +46,70 @@ jobs:
           coverage = Path("crates/wow-core/src/coverage.rs")
           source = coverage.read_text(encoding="utf-8")
 
-          old_import = "use crate::evidence::{ConflictAffectedRef, ConflictRecord};"
-          new_import = "use crate::evidence::ConflictRecord;"
-          if old_import not in source:
-              raise SystemExit("expected coverage import was not found")
-          source = source.replace(old_import, new_import, 1)
-
-          old_binding = "let mut applicable_status = None;"
-          new_binding = "let mut applicable_status: Option<CoverageStatus> = None;"
-          if old_binding not in source:
-              raise SystemExit("expected applicable_status binding was not found")
-          source = source.replace(old_binding, new_binding, 1)
-
-          enum_marker = "pub enum CapabilityAvailability {"
-          enum_replacement = "#[allow(clippy::large_enum_variant)]\n" + enum_marker
-          if enum_marker not in source:
-              raise SystemExit("CapabilityAvailability enum was not found")
-          source = source.replace(enum_marker, enum_replacement, 1)
+          replacements = (
+              (
+                  "use crate::evidence::{ConflictAffectedRef, ConflictRecord};",
+                  "use crate::evidence::ConflictRecord;",
+              ),
+              (
+                  "let mut applicable_status = None;",
+                  "let mut applicable_status: Option<CoverageStatus> = None;",
+              ),
+              (
+                  "NotEvaluated(NotEvaluatedRecord),",
+                  "NotEvaluated(Box<NotEvaluatedRecord>),",
+              ),
+              (
+                  "Ok(CapabilityAvailability::NotEvaluated(\n        NotEvaluatedRecord::new(",
+                  "Ok(CapabilityAvailability::NotEvaluated(Box::new(\n        NotEvaluatedRecord::new(",
+              ),
+              (
+                  "        )?,\n    ))\n}\n\n/// Outcome of a conservative negative-authority evaluation.",
+                  "        )?,\n    )))\n}\n\n/// Outcome of a conservative negative-authority evaluation.",
+              ),
+          )
+          for old, new in replacements:
+              if old not in source:
+                  raise SystemExit(f"expected coverage fragment was not found: {old!r}")
+              source = source.replace(old, new, 1)
           coverage.write_text(source, encoding="utf-8")
 
-          for relative in (
-              "crates/wow-core/src/digest.rs",
-              "crates/wow-core/src/generation.rs",
-              "crates/wow-core/src/ids.rs",
-              "crates/wow-core/src/profile.rs",
-              "crates/wow-core/src/source.rs",
-          ):
+          def move_trailing_items_before_tests(relative: str, suffix_marker: str) -> None:
               path = Path(relative)
               source = path.read_text(encoding="utf-8")
-              lint_allow = "#![allow(clippy::items_after_test_module)]\n"
-              if not source.startswith(lint_allow):
-                  source = lint_allow + source
-              path.write_text(source, encoding="utf-8")
+              test_marker = "#[cfg(test)]\nmod tests {"
+              test_start = source.find(test_marker)
+              if test_start < 0:
+                  raise SystemExit(f"test module marker not found in {relative}")
+              suffix_start = source.find(suffix_marker, test_start)
+              if suffix_start < 0:
+                  raise SystemExit(f"compatibility suffix marker not found in {relative}")
+
+              prefix = source[:test_start].rstrip()
+              tests = source[test_start:suffix_start].rstrip()
+              suffix = source[suffix_start:].rstrip()
+              path.write_text(f"{prefix}\n\n{suffix}\n\n{tests}\n", encoding="utf-8")
+
+          move_trailing_items_before_tests(
+              "crates/wow-core/src/digest.rs",
+              "/// Parses one field-purpose-specific SHA-256 digest.",
+          )
+          move_trailing_items_before_tests(
+              "crates/wow-core/src/generation.rs",
+              "/// Returns the validated identity of one complete generation context.",
+          )
+          move_trailing_items_before_tests(
+              "crates/wow-core/src/ids.rs",
+              "/// Parses a profile identifier while preserving canonicalization information.",
+          )
+          move_trailing_items_before_tests(
+              "crates/wow-core/src/profile.rs",
+              "/// Operation wrapper for validating a structured profile identity.",
+          )
+          move_trailing_items_before_tests(
+              "crates/wow-core/src/source.rs",
+              "/// Normalizes one source path while retaining canonicalization information.",
+          )
           PY
 
       - name: Install frozen Rust toolchain
