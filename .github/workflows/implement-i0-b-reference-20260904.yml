@@ -1,0 +1,1741 @@
+name: Implement I0-B deterministic reference view
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/implement-i0-b-reference-20260904.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: implement-i0-b-reference
+  cancel-in-progress: false
+
+jobs:
+  implement-validate-publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v6.0.2
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Materialize deterministic reference implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import re
+          from pathlib import Path
+
+          ROOT = Path.cwd()
+
+          def write(path: str, content: str) -> None:
+              target = ROOT / path
+              target.parent.mkdir(parents=True, exist_ok=True)
+              target.write_text(content.rstrip() + "\n", encoding="utf-8")
+
+          def ensure_workspace_member() -> None:
+              path = ROOT / "Cargo.toml"
+              source = path.read_text(encoding="utf-8")
+              if '"crates/wow-reference"' in source or '"crates/*"' in source:
+                  return
+              match = re.search(r"(?ms)^members\s*=\s*\[(.*?)\]", source)
+              if match is None:
+                  raise SystemExit("workspace members array was not found")
+              body = match.group(1)
+              stripped = body.rstrip()
+              separator = "" if not stripped or stripped.endswith(",") else ","
+              replacement = f"members = [{stripped}{separator}\n    \"crates/wow-reference\",\n]"
+              source = source[: match.start()] + replacement + source[match.end() :]
+              path.write_text(source, encoding="utf-8")
+
+          def ensure_toml_entry(path: Path, section: str, key: str, value: str) -> None:
+              source = path.read_text(encoding="utf-8") if path.exists() else ""
+              if re.search(rf"(?m)^\s*{re.escape(key)}\s*=", source):
+                  return
+              section_match = re.search(rf"(?m)^\[{re.escape(section)}\]\s*$", source)
+              line = f"{key} = {value}\n"
+              if section_match is None:
+                  source = source.rstrip() + f"\n\n[{section}]\n" + line
+              else:
+                  insert = section_match.end()
+                  source = source[:insert] + "\n" + line + source[insert:].lstrip("\n")
+              path.parent.mkdir(parents=True, exist_ok=True)
+              path.write_text(source.rstrip() + "\n", encoding="utf-8")
+
+          def replace_workspace_policy_test() -> None:
+              path = ROOT / "crates/wow-core/tests/repository_policy.rs"
+              if not path.exists():
+                  return
+              source = path.read_text(encoding="utf-8")
+              name = "fn workspace_activates_only_wow_core"
+              fn_start = source.find(name)
+              if fn_start < 0:
+                  return
+              annotation_start = source.rfind("#[test]", 0, fn_start)
+              open_brace = source.find("{", fn_start)
+              if annotation_start < 0 or open_brace < 0:
+                  raise SystemExit("workspace policy test could not be located")
+              depth = 0
+              close_brace = -1
+              for index in range(open_brace, len(source)):
+                  if source[index] == "{":
+                      depth += 1
+                  elif source[index] == "}":
+                      depth -= 1
+                      if depth == 0:
+                          close_brace = index + 1
+                          break
+              if close_brace < 0:
+                  raise SystemExit("workspace policy test closing brace was not found")
+              replacement = '''#[test]
+          fn workspace_activates_implemented_i0_crates() {
+              assert!(ROOT_MANIFEST.contains("\\\"crates/wow-core\\\""));
+              assert!(ROOT_MANIFEST.contains("\\\"crates/wow-reference\\\""));
+          }'''
+              source = source[:annotation_start] + replacement + source[close_brace:]
+              path.write_text(source, encoding="utf-8")
+
+          ensure_workspace_member()
+          root_manifest = ROOT / "Cargo.toml"
+          ensure_toml_entry(root_manifest, "workspace.dependencies", "serde", '{ version = "=1.0.228", features = ["derive"] }')
+          ensure_toml_entry(root_manifest, "workspace.dependencies", "serde_json", '{ version = "=1.0.150" }')
+          ensure_toml_entry(root_manifest, "workspace.dependencies", "sha2", '{ version = "=0.11.0" }')
+
+          crate_manifest = ROOT / "crates/wow-reference/Cargo.toml"
+          if not crate_manifest.exists():
+              write(
+                  "crates/wow-reference/Cargo.toml",
+                  '''[package]
+          name = "wow-reference"
+          version.workspace = true
+          edition.workspace = true
+          rust-version.workspace = true
+          license.workspace = true
+          description = "Deterministic reference views and negative-authority semantics for WoW addon tooling."
+          publish = false
+
+          [dependencies]
+          serde.workspace = true
+          serde_json.workspace = true
+          sha2.workspace = true
+
+          [lints]
+          workspace = true''',
+              )
+          else:
+              ensure_toml_entry(crate_manifest, "dependencies", "serde", "{ workspace = true }")
+              ensure_toml_entry(crate_manifest, "dependencies", "serde_json", "{ workspace = true }")
+              ensure_toml_entry(crate_manifest, "dependencies", "sha2", "{ workspace = true }")
+
+          lib_path = ROOT / "crates/wow-reference/src/lib.rs"
+          if lib_path.exists():
+              lib_source = lib_path.read_text(encoding="utf-8")
+              if "pub mod deterministic;" not in lib_source:
+                  lib_source = lib_source.rstrip() + "\n\n/// Deterministic, content-addressed I0-B reference views.\npub mod deterministic;\n"
+                  lib_path.write_text(lib_source, encoding="utf-8")
+          else:
+              write(
+                  "crates/wow-reference/src/lib.rs",
+                  '''//! Deterministic reference intelligence for World of Warcraft addon tooling.
+          //!
+          //! The crate exposes a content-addressed reference view whose negative answers are
+          //! authoritative only when the relevant coverage scope is complete and unconflicted.
+
+          #![forbid(unsafe_code)]
+
+          /// Deterministic, content-addressed I0-B reference views.
+          pub mod deterministic;''',
+              )
+
+          write(
+              "crates/wow-reference/src/deterministic.rs",
+              r'''//! Deterministic reference-view construction, validation, and exact lookup.
+
+          use std::collections::BTreeSet;
+          use std::error::Error;
+          use std::fmt;
+
+          use serde::{Deserialize, Serialize};
+          use sha2::{Digest, Sha256};
+
+          /// Stable schema identifier for serialized reference views.
+          pub const REFERENCE_VIEW_SCHEMA: &str = "wow-reference/reference-view/v1";
+          /// Stable canonicalization identifier for serialized reference views.
+          pub const REFERENCE_CANONICALIZATION: &str = "wow-reference-json/v1";
+
+          const PAYLOAD_DOMAIN: &[u8] = b"wow-reference/payload/v1\0";
+          const VIEW_DOMAIN: &[u8] = b"wow-reference/view/v1\0";
+
+          /// Result type used by deterministic reference operations.
+          pub type ReferenceResult<T> = Result<T, ReferenceError>;
+
+          /// Stable reason code for a rejected reference operation.
+          #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+          #[serde(rename_all = "snake_case")]
+          pub enum ReferenceErrorCode {
+              /// A required identifier or text field is invalid.
+              InvalidField,
+              /// A digest is not canonical lowercase SHA-256.
+              InvalidDigest,
+              /// Two records claim the same canonical identity.
+              DuplicateRecord,
+              /// A record points at an unknown source.
+              MissingSource,
+              /// Records are not in their required canonical order.
+              NoncanonicalOrder,
+              /// A stored payload, generation, or view digest does not match.
+              DigestMismatch,
+              /// JSON serialization or deserialization failed.
+              Serialization,
+              /// A conflict record is structurally incomplete.
+              InvalidConflict,
+          }
+
+          /// Stable non-secret error returned by the reference boundary.
+          #[derive(Debug, Clone, PartialEq, Eq)]
+          pub struct ReferenceError {
+              code: ReferenceErrorCode,
+              field: &'static str,
+          }
+
+          impl ReferenceError {
+              fn new(code: ReferenceErrorCode, field: &'static str) -> Self {
+                  Self { code, field }
+              }
+
+              /// Machine-readable reason code.
+              #[must_use]
+              pub const fn code(&self) -> ReferenceErrorCode {
+                  self.code
+              }
+
+              /// Stable field path associated with the rejection.
+              #[must_use]
+              pub const fn field(&self) -> &'static str {
+                  self.field
+              }
+          }
+
+          impl fmt::Display for ReferenceError {
+              fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+                  write!(formatter, "{:?} at {}", self.code, self.field)
+              }
+          }
+
+          impl Error for ReferenceError {}
+
+          /// Supported World of Warcraft client family.
+          #[derive(
+              Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize,
+          )]
+          #[serde(rename_all = "snake_case")]
+          pub enum ClientFlavor {
+              /// Current retail client.
+              Retail,
+              /// Classic Era client.
+              ClassicEra,
+              /// Progression Classic client.
+              ClassicProgression,
+              /// Public test realm.
+              Ptr,
+              /// Beta client.
+              Beta,
+          }
+
+          /// Exact client identity to which a reference view applies.
+          #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+          #[serde(deny_unknown_fields)]
+          pub struct ClientBuild {
+              /// Client family.
+              pub flavor: ClientFlavor,
+              /// Human-readable client version.
+              pub version: String,
+              /// Numeric Blizzard build.
+              pub build: u32,
+              /// Numeric addon interface version.
+              pub interface: u32,
+          }
+
+          /// Authority class of one reference source.
+          #[derive(
+              Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize,
+          )]
+          #[serde(rename_all = "snake_case")]
+          pub enum SourceAuthority {
+              /// Blizzard-generated API documentation.
+              BlizzardApiDocumentation,
+              /// Blizzard user-interface source code.
+              BlizzardUiSource,
+              /// A runtime probe captured for an exact client build.
+              RuntimeProbe,
+              /// A reviewed curated correction.
+              CuratedOverride,
+              /// A deterministic synthetic fixture.
+              SyntheticFixture,
+          }
+
+          /// One immutable input contributing facts to a reference generation.
+          #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+          #[serde(deny_unknown_fields)]
+          pub struct ReferenceSource {
+              /// Stable source identifier.
+              pub source_id: String,
+              /// Authority class.
+              pub authority: SourceAuthority,
+              /// Immutable source revision.
+              pub revision: String,
+              /// SHA-256 digest of normalized source content.
+              pub logical_digest: String,
+          }
+
+          /// Kind of reference symbol.
+          #[derive(
+              Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize,
+          )]
+          #[serde(rename_all = "snake_case")]
+          pub enum SymbolKind {
+              /// Lua function or callable API.
+              Function,
+              /// Game event.
+              Event,
+              /// Console variable.
+              CVar,
+              /// Global value.
+              Global,
+              /// Enumeration.
+              Enum,
+              /// Structured type.
+              Type,
+              /// Type field.
+              Field,
+              /// Type method.
+              Method,
+          }
+
+          impl SymbolKind {
+              fn token(self) -> &'static str {
+                  match self {
+                      Self::Function => "function",
+                      Self::Event => "event",
+                      Self::CVar => "cvar",
+                      Self::Global => "global",
+                      Self::Enum => "enum",
+                      Self::Type => "type",
+                      Self::Field => "field",
+                      Self::Method => "method",
+                  }
+              }
+          }
+
+          /// Exact lookup key for a reference symbol.
+          #[derive(
+              Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize,
+          )]
+          #[serde(deny_unknown_fields)]
+          pub struct ReferenceKey {
+              /// Symbol kind.
+              pub kind: SymbolKind,
+              /// Optional namespace, such as `C_ChatInfo`.
+              #[serde(skip_serializing_if = "Option::is_none")]
+              pub namespace: Option<String>,
+              /// Exact case-sensitive symbol name inside the namespace.
+              pub name: String,
+          }
+
+          impl ReferenceKey {
+              /// Creates and validates one exact reference key.
+              pub fn new(
+                  kind: SymbolKind,
+                  namespace: Option<impl Into<String>>,
+                  name: impl Into<String>,
+              ) -> ReferenceResult<Self> {
+                  let key = Self {
+                      kind,
+                      namespace: namespace.map(Into::into),
+                      name: name.into(),
+                  };
+                  key.validate()?;
+                  Ok(key)
+              }
+
+              fn validate(&self) -> ReferenceResult<()> {
+                  if let Some(namespace) = &self.namespace {
+                      validate_symbol_token(namespace, "key.namespace")?;
+                  }
+                  validate_symbol_token(&self.name, "key.name")
+              }
+
+              fn identity(&self) -> String {
+                  match &self.namespace {
+                      Some(namespace) => {
+                          format!("{}:{namespace}.{}", self.kind.token(), self.name)
+                      }
+                      None => format!("{}:{}", self.kind.token(), self.name),
+                  }
+              }
+          }
+
+          /// Runtime/security property attached to a reference symbol.
+          #[derive(
+              Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize,
+          )]
+          #[serde(rename_all = "snake_case")]
+          pub enum RestrictionFacet {
+              /// The operation is restricted while combat lockdown is active.
+              CombatLockdown,
+              /// The operation is protected by Blizzard secure-execution rules.
+              ProtectedAction,
+              /// The operation must execute through a secure path.
+              SecureExecution,
+              /// A hardware event is required.
+              HardwareEventRequired,
+              /// The operation is sensitive to taint propagation.
+              TaintSensitive,
+              /// The operation is unavailable in restricted environments.
+              RestrictedEnvironment,
+          }
+
+          /// One canonical symbol fact.
+          #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+          #[serde(deny_unknown_fields)]
+          pub struct ReferenceSymbol {
+              /// Exact symbol key.
+              pub key: ReferenceKey,
+              /// Optional canonical signature.
+              #[serde(skip_serializing_if = "Option::is_none")]
+              pub signature: Option<String>,
+              /// Optional concise source documentation.
+              #[serde(skip_serializing_if = "Option::is_none")]
+              pub documentation: Option<String>,
+              /// Sorted unique runtime/security facets.
+              pub restrictions: Vec<RestrictionFacet>,
+              /// Sorted unique source identifiers proving this record.
+              pub source_ids: Vec<String>,
+          }
+
+          /// Coverage state of a reference scope.
+          #[derive(
+              Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize,
+          )]
+          #[serde(rename_all = "snake_case")]
+          pub enum CoverageState {
+              /// Every symbol in the declared scope has been enumerated.
+              Complete,
+              /// Some symbols are present, but absence is not authoritative.
+              Partial,
+              /// The scope was not evaluated.
+              NotEvaluated,
+          }
+
+          /// Scope to which one coverage assertion applies.
+          #[derive(
+              Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize,
+          )]
+          #[serde(deny_unknown_fields)]
+          pub struct CoverageScope {
+              /// Covered symbol kind.
+              pub kind: SymbolKind,
+              /// Optional exact namespace. `None` describes the global namespace.
+              #[serde(skip_serializing_if = "Option::is_none")]
+              pub namespace: Option<String>,
+          }
+
+          impl CoverageScope {
+              /// Creates a validated coverage scope.
+              pub fn new(
+                  kind: SymbolKind,
+                  namespace: Option<impl Into<String>>,
+              ) -> ReferenceResult<Self> {
+                  let scope = Self {
+                      kind,
+                      namespace: namespace.map(Into::into),
+                  };
+                  if let Some(namespace) = &scope.namespace {
+                      validate_symbol_token(namespace, "coverage.scope.namespace")?;
+                  }
+                  Ok(scope)
+              }
+
+              fn matches(&self, key: &ReferenceKey) -> bool {
+                  self.kind == key.kind && self.namespace == key.namespace
+              }
+          }
+
+          /// Evidence supporting positive and negative authority for one scope.
+          #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+          #[serde(deny_unknown_fields)]
+          pub struct CoverageRecord {
+              /// Stable coverage identifier.
+              pub coverage_id: String,
+              /// Covered scope.
+              pub scope: CoverageScope,
+              /// Coverage state.
+              pub state: CoverageState,
+              /// Sorted unique source identifiers proving this assertion.
+              pub source_ids: Vec<String>,
+              /// Stable reason code for partial or unevaluated coverage.
+              #[serde(skip_serializing_if = "Option::is_none")]
+              pub reason_code: Option<String>,
+          }
+
+          /// One competing value in a reference conflict.
+          #[derive(
+              Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize,
+          )]
+          #[serde(deny_unknown_fields)]
+          pub struct ConflictValue {
+              /// Source making the claim.
+              pub source_id: String,
+              /// Canonical scalar representation of the claimed value.
+              pub value: String,
+          }
+
+          /// An unresolved or historical disagreement about one symbol field.
+          #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+          #[serde(deny_unknown_fields)]
+          pub struct ReferenceConflict {
+              /// Stable conflict identifier.
+              pub conflict_id: String,
+              /// Affected exact symbol key.
+              pub key: ReferenceKey,
+              /// Affected field path.
+              pub field_path: String,
+              /// Sorted unique competing values.
+              pub values: Vec<ConflictValue>,
+              /// Whether the conflict currently blocks negative authority.
+              pub active: bool,
+          }
+
+          /// Mutable input accepted by [`ReferenceView::build`].
+          #[derive(Debug, Clone, PartialEq, Eq)]
+          pub struct ReferenceDraft {
+              /// Exact client identity.
+              pub profile: ClientBuild,
+              /// Immutable source manifests.
+              pub sources: Vec<ReferenceSource>,
+              /// Symbol records.
+              pub symbols: Vec<ReferenceSymbol>,
+              /// Coverage assertions.
+              pub coverage: Vec<CoverageRecord>,
+              /// Conflict records.
+              pub conflicts: Vec<ReferenceConflict>,
+          }
+
+          /// Immutable content-addressed reference generation.
+          #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+          #[serde(deny_unknown_fields)]
+          pub struct ReferenceView {
+              schema_version: String,
+              canonicalization_version: String,
+              profile: ClientBuild,
+              sources: Vec<ReferenceSource>,
+              symbols: Vec<ReferenceSymbol>,
+              coverage: Vec<CoverageRecord>,
+              conflicts: Vec<ReferenceConflict>,
+              payload_digest: String,
+              generation_id: String,
+              canonical_digest: String,
+          }
+
+          /// Reason that an exact negative answer is not authoritative.
+          #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+          pub enum NegativeAuthorityReason {
+              /// No coverage assertion exists for the exact scope.
+              NoCoverage,
+              /// The exact scope is only partially covered.
+              PartialCoverage,
+              /// The exact scope was not evaluated.
+              NotEvaluated,
+              /// An active conflict affects the requested key.
+              ActiveConflict,
+          }
+
+          /// Exact reference lookup outcome.
+          #[derive(Debug, PartialEq, Eq)]
+          pub enum ExactLookup<'a> {
+              /// A symbol is present. Active conflicts are surfaced alongside it.
+              Present {
+                  /// Canonical symbol record.
+                  symbol: &'a ReferenceSymbol,
+                  /// Active conflict identifiers affecting the symbol.
+                  conflict_ids: Vec<&'a str>,
+              },
+              /// The symbol is authoritatively absent from a complete, unconflicted scope.
+              Absent {
+                  /// Coverage assertion proving enumeration completeness.
+                  coverage_id: &'a str,
+                  /// Immutable reference generation answering the query.
+                  generation_id: &'a str,
+              },
+              /// The view cannot make an authoritative negative assertion.
+              NotAuthoritative {
+                  /// Stable reason.
+                  reason: NegativeAuthorityReason,
+                  /// Relevant coverage assertion, when one exists.
+                  coverage_id: Option<&'a str>,
+                  /// Active conflicts blocking the answer.
+                  conflict_ids: Vec<&'a str>,
+              },
+          }
+
+          #[derive(Serialize)]
+          struct ReferencePayload<'a> {
+              schema_version: &'a str,
+              canonicalization_version: &'a str,
+              profile: &'a ClientBuild,
+              sources: &'a [ReferenceSource],
+              symbols: &'a [ReferenceSymbol],
+              coverage: &'a [CoverageRecord],
+              conflicts: &'a [ReferenceConflict],
+          }
+
+          #[derive(Serialize)]
+          struct UnsignedReferenceView<'a> {
+              schema_version: &'a str,
+              canonicalization_version: &'a str,
+              profile: &'a ClientBuild,
+              sources: &'a [ReferenceSource],
+              symbols: &'a [ReferenceSymbol],
+              coverage: &'a [CoverageRecord],
+              conflicts: &'a [ReferenceConflict],
+              payload_digest: &'a str,
+              generation_id: &'a str,
+          }
+
+          impl ReferenceView {
+              /// Builds a canonical immutable view from unordered input records.
+              pub fn build(mut draft: ReferenceDraft) -> ReferenceResult<Self> {
+                  normalize_draft(&mut draft);
+                  validate_draft(&draft)?;
+
+                  let payload_digest = payload_digest(&draft)?;
+                  let generation_id = format!("generation:reference:{payload_digest}");
+                  let canonical_digest = unsigned_view_digest(
+                      &draft,
+                      &payload_digest,
+                      &generation_id,
+                  )?;
+
+                  let view = Self {
+                      schema_version: REFERENCE_VIEW_SCHEMA.to_owned(),
+                      canonicalization_version: REFERENCE_CANONICALIZATION.to_owned(),
+                      profile: draft.profile,
+                      sources: draft.sources,
+                      symbols: draft.symbols,
+                      coverage: draft.coverage,
+                      conflicts: draft.conflicts,
+                      payload_digest,
+                      generation_id,
+                      canonical_digest,
+                  };
+                  view.verify()?;
+                  Ok(view)
+              }
+
+              /// Parses strict JSON and verifies all stored identities.
+              pub fn from_json(bytes: &[u8]) -> ReferenceResult<Self> {
+                  let view: Self = serde_json::from_slice(bytes).map_err(|_| {
+                      ReferenceError::new(
+                          ReferenceErrorCode::Serialization,
+                          "reference_view",
+                      )
+                  })?;
+                  view.verify()?;
+                  Ok(view)
+              }
+
+              /// Verifies canonical ordering, invariants, and all content identities.
+              pub fn verify(&self) -> ReferenceResult<()> {
+                  if self.schema_version != REFERENCE_VIEW_SCHEMA {
+                      return Err(ReferenceError::new(
+                          ReferenceErrorCode::InvalidField,
+                          "schema_version",
+                      ));
+                  }
+                  if self.canonicalization_version != REFERENCE_CANONICALIZATION {
+                      return Err(ReferenceError::new(
+                          ReferenceErrorCode::InvalidField,
+                          "canonicalization_version",
+                      ));
+                  }
+                  let draft = self.to_draft();
+                  validate_draft(&draft)?;
+                  validate_canonical_order(&draft)?;
+
+                  let expected_payload = payload_digest(&draft)?;
+                  if self.payload_digest != expected_payload {
+                      return Err(ReferenceError::new(
+                          ReferenceErrorCode::DigestMismatch,
+                          "payload_digest",
+                      ));
+                  }
+                  let expected_generation = format!("generation:reference:{expected_payload}");
+                  if self.generation_id != expected_generation {
+                      return Err(ReferenceError::new(
+                          ReferenceErrorCode::DigestMismatch,
+                          "generation_id",
+                      ));
+                  }
+                  let expected_view = unsigned_view_digest(
+                      &draft,
+                      &self.payload_digest,
+                      &self.generation_id,
+                  )?;
+                  if self.canonical_digest != expected_view {
+                      return Err(ReferenceError::new(
+                          ReferenceErrorCode::DigestMismatch,
+                          "canonical_digest",
+                      ));
+                  }
+                  Ok(())
+              }
+
+              /// Performs a case-sensitive lookup with explicit negative-authority semantics.
+              #[must_use]
+              pub fn exact_lookup(&self, key: &ReferenceKey) -> ExactLookup<'_> {
+                  let conflict_ids: Vec<&str> = self
+                      .conflicts
+                      .iter()
+                      .filter(|conflict| conflict.active && conflict.key == *key)
+                      .map(|conflict| conflict.conflict_id.as_str())
+                      .collect();
+
+                  if let Ok(index) = self
+                      .symbols
+                      .binary_search_by(|symbol| symbol.key.cmp(key))
+                  {
+                      return ExactLookup::Present {
+                          symbol: &self.symbols[index],
+                          conflict_ids,
+                      };
+                  }
+
+                  if !conflict_ids.is_empty() {
+                      return ExactLookup::NotAuthoritative {
+                          reason: NegativeAuthorityReason::ActiveConflict,
+                          coverage_id: self.coverage_for(key).map(|record| {
+                              record.coverage_id.as_str()
+                          }),
+                          conflict_ids,
+                      };
+                  }
+
+                  match self.coverage_for(key) {
+                      Some(record) if record.state == CoverageState::Complete => {
+                          ExactLookup::Absent {
+                              coverage_id: &record.coverage_id,
+                              generation_id: &self.generation_id,
+                          }
+                      }
+                      Some(record) if record.state == CoverageState::Partial => {
+                          ExactLookup::NotAuthoritative {
+                              reason: NegativeAuthorityReason::PartialCoverage,
+                              coverage_id: Some(&record.coverage_id),
+                              conflict_ids,
+                          }
+                      }
+                      Some(record) => ExactLookup::NotAuthoritative {
+                          reason: NegativeAuthorityReason::NotEvaluated,
+                          coverage_id: Some(&record.coverage_id),
+                          conflict_ids,
+                      },
+                      None => ExactLookup::NotAuthoritative {
+                          reason: NegativeAuthorityReason::NoCoverage,
+                          coverage_id: None,
+                          conflict_ids,
+                      },
+                  }
+              }
+
+              /// Serializes the verified view to compact deterministic JSON bytes.
+              pub fn canonical_json(&self) -> ReferenceResult<Vec<u8>> {
+                  self.verify()?;
+                  serde_json::to_vec(self).map_err(|_| {
+                      ReferenceError::new(
+                          ReferenceErrorCode::Serialization,
+                          "reference_view",
+                      )
+                  })
+              }
+
+              /// Serializes the verified view to stable human-readable JSON.
+              pub fn pretty_json(&self) -> ReferenceResult<String> {
+                  self.verify()?;
+                  serde_json::to_string_pretty(self).map_err(|_| {
+                      ReferenceError::new(
+                          ReferenceErrorCode::Serialization,
+                          "reference_view",
+                      )
+                  })
+              }
+
+              /// Clones the payload into mutable build input.
+              #[must_use]
+              pub fn to_draft(&self) -> ReferenceDraft {
+                  ReferenceDraft {
+                      profile: self.profile.clone(),
+                      sources: self.sources.clone(),
+                      symbols: self.symbols.clone(),
+                      coverage: self.coverage.clone(),
+                      conflicts: self.conflicts.clone(),
+                  }
+              }
+
+              /// Exact client identity.
+              #[must_use]
+              pub const fn profile(&self) -> &ClientBuild {
+                  &self.profile
+              }
+
+              /// Canonically sorted sources.
+              #[must_use]
+              pub fn sources(&self) -> &[ReferenceSource] {
+                  &self.sources
+              }
+
+              /// Canonically sorted symbols.
+              #[must_use]
+              pub fn symbols(&self) -> &[ReferenceSymbol] {
+                  &self.symbols
+              }
+
+              /// Canonically sorted coverage assertions.
+              #[must_use]
+              pub fn coverage(&self) -> &[CoverageRecord] {
+                  &self.coverage
+              }
+
+              /// Canonically sorted conflicts.
+              #[must_use]
+              pub fn conflicts(&self) -> &[ReferenceConflict] {
+                  &self.conflicts
+              }
+
+              /// Digest of the normalized reference payload.
+              #[must_use]
+              pub fn payload_digest(&self) -> &str {
+                  &self.payload_digest
+              }
+
+              /// Immutable generation identity derived from the payload digest.
+              #[must_use]
+              pub fn generation_id(&self) -> &str {
+                  &self.generation_id
+              }
+
+              /// Self-digest of the complete unsigned view envelope.
+              #[must_use]
+              pub fn canonical_digest(&self) -> &str {
+                  &self.canonical_digest
+              }
+
+              fn coverage_for(&self, key: &ReferenceKey) -> Option<&CoverageRecord> {
+                  self.coverage.iter().find(|record| record.scope.matches(key))
+              }
+          }
+
+          /// Computes a canonical lowercase SHA-256 digest for raw bytes.
+          #[must_use]
+          pub fn sha256_digest(bytes: &[u8]) -> String {
+              let digest = Sha256::digest(bytes);
+              format!("sha256:{}", lowercase_hex(&digest))
+          }
+
+          fn normalize_draft(draft: &mut ReferenceDraft) {
+              for symbol in &mut draft.symbols {
+                  symbol.restrictions.sort_unstable();
+                  symbol.restrictions.dedup();
+                  symbol.source_ids.sort();
+                  symbol.source_ids.dedup();
+              }
+              for record in &mut draft.coverage {
+                  record.source_ids.sort();
+                  record.source_ids.dedup();
+              }
+              for conflict in &mut draft.conflicts {
+                  conflict.values.sort();
+                  conflict.values.dedup();
+              }
+              draft.sources.sort_by(|left, right| {
+                  left.source_id.cmp(&right.source_id)
+              });
+              draft.symbols.sort_by(|left, right| left.key.cmp(&right.key));
+              draft.coverage.sort_by(|left, right| {
+                  left.scope
+                      .cmp(&right.scope)
+                      .then_with(|| left.coverage_id.cmp(&right.coverage_id))
+              });
+              draft.conflicts.sort_by(|left, right| {
+                  left.key
+                      .cmp(&right.key)
+                      .then_with(|| left.field_path.cmp(&right.field_path))
+                      .then_with(|| left.conflict_id.cmp(&right.conflict_id))
+              });
+          }
+
+          fn validate_draft(draft: &ReferenceDraft) -> ReferenceResult<()> {
+              validate_client(&draft.profile)?;
+              validate_sources(&draft.sources)?;
+              let source_ids: BTreeSet<&str> = draft
+                  .sources
+                  .iter()
+                  .map(|source| source.source_id.as_str())
+                  .collect();
+              validate_symbols(&draft.symbols, &source_ids)?;
+              validate_coverage(&draft.coverage, &source_ids)?;
+              validate_conflicts(&draft.conflicts, &source_ids)
+          }
+
+          fn validate_client(profile: &ClientBuild) -> ReferenceResult<()> {
+              validate_text(&profile.version, "profile.version", 64)?;
+              if profile.build == 0 {
+                  return Err(ReferenceError::new(
+                      ReferenceErrorCode::InvalidField,
+                      "profile.build",
+                  ));
+              }
+              if profile.interface == 0 {
+                  return Err(ReferenceError::new(
+                      ReferenceErrorCode::InvalidField,
+                      "profile.interface",
+                  ));
+              }
+              Ok(())
+          }
+
+          fn validate_sources(sources: &[ReferenceSource]) -> ReferenceResult<()> {
+              let mut previous: Option<&str> = None;
+              for source in sources {
+                  validate_machine_id(&source.source_id, "sources.source_id")?;
+                  validate_text(&source.revision, "sources.revision", 256)?;
+                  validate_digest(&source.logical_digest, "sources.logical_digest")?;
+                  if previous == Some(source.source_id.as_str()) {
+                      return Err(ReferenceError::new(
+                          ReferenceErrorCode::DuplicateRecord,
+                          "sources.source_id",
+                      ));
+                  }
+                  previous = Some(&source.source_id);
+              }
+              Ok(())
+          }
+
+          fn validate_symbols(
+              symbols: &[ReferenceSymbol],
+              source_ids: &BTreeSet<&str>,
+          ) -> ReferenceResult<()> {
+              let mut previous: Option<&ReferenceKey> = None;
+              for symbol in symbols {
+                  symbol.key.validate()?;
+                  if let Some(signature) = &symbol.signature {
+                      validate_text(signature, "symbols.signature", 4_096)?;
+                  }
+                  if let Some(documentation) = &symbol.documentation {
+                      validate_text(documentation, "symbols.documentation", 16_384)?;
+                  }
+                  validate_strict_order(&symbol.restrictions, "symbols.restrictions")?;
+                  validate_source_refs(
+                      &symbol.source_ids,
+                      source_ids,
+                      "symbols.source_ids",
+                  )?;
+                  if previous == Some(&symbol.key) {
+                      return Err(ReferenceError::new(
+                          ReferenceErrorCode::DuplicateRecord,
+                          "symbols.key",
+                      ));
+                  }
+                  previous = Some(&symbol.key);
+              }
+              Ok(())
+          }
+
+          fn validate_coverage(
+              coverage: &[CoverageRecord],
+              source_ids: &BTreeSet<&str>,
+          ) -> ReferenceResult<()> {
+              let mut identifiers = BTreeSet::new();
+              let mut scopes = BTreeSet::new();
+              for record in coverage {
+                  validate_machine_id(&record.coverage_id, "coverage.coverage_id")?;
+                  if let Some(namespace) = &record.scope.namespace {
+                      validate_symbol_token(namespace, "coverage.scope.namespace")?;
+                  }
+                  validate_source_refs(
+                      &record.source_ids,
+                      source_ids,
+                      "coverage.source_ids",
+                  )?;
+                  match record.state {
+                      CoverageState::Complete if record.reason_code.is_some() => {
+                          return Err(ReferenceError::new(
+                              ReferenceErrorCode::InvalidField,
+                              "coverage.reason_code",
+                          ));
+                      }
+                      CoverageState::Partial | CoverageState::NotEvaluated => {
+                          let Some(reason) = &record.reason_code else {
+                              return Err(ReferenceError::new(
+                                  ReferenceErrorCode::InvalidField,
+                                  "coverage.reason_code",
+                              ));
+                          };
+                          validate_machine_id(reason, "coverage.reason_code")?;
+                      }
+                      CoverageState::Complete => {}
+                  }
+                  if !identifiers.insert(record.coverage_id.as_str()) {
+                      return Err(ReferenceError::new(
+                          ReferenceErrorCode::DuplicateRecord,
+                          "coverage.coverage_id",
+                      ));
+                  }
+                  if !scopes.insert(&record.scope) {
+                      return Err(ReferenceError::new(
+                          ReferenceErrorCode::DuplicateRecord,
+                          "coverage.scope",
+                      ));
+                  }
+              }
+              Ok(())
+          }
+
+          fn validate_conflicts(
+              conflicts: &[ReferenceConflict],
+              source_ids: &BTreeSet<&str>,
+          ) -> ReferenceResult<()> {
+              let mut identifiers = BTreeSet::new();
+              for conflict in conflicts {
+                  validate_machine_id(&conflict.conflict_id, "conflicts.conflict_id")?;
+                  conflict.key.validate()?;
+                  validate_text(&conflict.field_path, "conflicts.field_path", 512)?;
+                  validate_strict_order(&conflict.values, "conflicts.values")?;
+                  if conflict.active && conflict.values.len() < 2 {
+                      return Err(ReferenceError::new(
+                          ReferenceErrorCode::InvalidConflict,
+                          "conflicts.values",
+                      ));
+                  }
+                  for value in &conflict.values {
+                      validate_text(&value.value, "conflicts.values.value", 4_096)?;
+                      if !source_ids.contains(value.source_id.as_str()) {
+                          return Err(ReferenceError::new(
+                              ReferenceErrorCode::MissingSource,
+                              "conflicts.values.source_id",
+                          ));
+                      }
+                  }
+                  if !identifiers.insert(conflict.conflict_id.as_str()) {
+                      return Err(ReferenceError::new(
+                          ReferenceErrorCode::DuplicateRecord,
+                          "conflicts.conflict_id",
+                      ));
+                  }
+              }
+              Ok(())
+          }
+
+          fn validate_canonical_order(draft: &ReferenceDraft) -> ReferenceResult<()> {
+              if !draft
+                  .sources
+                  .windows(2)
+                  .all(|pair| pair[0].source_id < pair[1].source_id)
+              {
+                  return Err(ReferenceError::new(
+                      ReferenceErrorCode::NoncanonicalOrder,
+                      "sources",
+                  ));
+              }
+              if !draft
+                  .symbols
+                  .windows(2)
+                  .all(|pair| pair[0].key < pair[1].key)
+              {
+                  return Err(ReferenceError::new(
+                      ReferenceErrorCode::NoncanonicalOrder,
+                      "symbols",
+                  ));
+              }
+              if !draft.coverage.windows(2).all(|pair| {
+                  (&pair[0].scope, &pair[0].coverage_id)
+                      < (&pair[1].scope, &pair[1].coverage_id)
+              }) {
+                  return Err(ReferenceError::new(
+                      ReferenceErrorCode::NoncanonicalOrder,
+                      "coverage",
+                  ));
+              }
+              if !draft.conflicts.windows(2).all(|pair| {
+                  (&pair[0].key, &pair[0].field_path, &pair[0].conflict_id)
+                      < (&pair[1].key, &pair[1].field_path, &pair[1].conflict_id)
+              }) {
+                  return Err(ReferenceError::new(
+                      ReferenceErrorCode::NoncanonicalOrder,
+                      "conflicts",
+                  ));
+              }
+              Ok(())
+          }
+
+          fn validate_source_refs(
+              references: &[String],
+              source_ids: &BTreeSet<&str>,
+              field: &'static str,
+          ) -> ReferenceResult<()> {
+              if references.is_empty() {
+                  return Err(ReferenceError::new(
+                      ReferenceErrorCode::InvalidField,
+                      field,
+                  ));
+              }
+              validate_strict_order(references, field)?;
+              for source_id in references {
+                  if !source_ids.contains(source_id.as_str()) {
+                      return Err(ReferenceError::new(
+                          ReferenceErrorCode::MissingSource,
+                          field,
+                      ));
+                  }
+              }
+              Ok(())
+          }
+
+          fn validate_strict_order<T: Ord>(
+              values: &[T],
+              field: &'static str,
+          ) -> ReferenceResult<()> {
+              if values.windows(2).any(|pair| pair[0] >= pair[1]) {
+                  return Err(ReferenceError::new(
+                      ReferenceErrorCode::NoncanonicalOrder,
+                      field,
+                  ));
+              }
+              Ok(())
+          }
+
+          fn validate_machine_id(value: &str, field: &'static str) -> ReferenceResult<()> {
+              let valid = (1..=512).contains(&value.len())
+                  && value.bytes().all(|byte| {
+                      byte.is_ascii_alphanumeric()
+                          || matches!(byte, b'.' | b'_' | b'-' | b':' | b'/' | b'@' | b'+')
+                  });
+              if !valid {
+                  return Err(ReferenceError::new(
+                      ReferenceErrorCode::InvalidField,
+                      field,
+                  ));
+              }
+              Ok(())
+          }
+
+          fn validate_symbol_token(value: &str, field: &'static str) -> ReferenceResult<()> {
+              let valid = (1..=256).contains(&value.len())
+                  && value.bytes().all(|byte| {
+                      byte.is_ascii_alphanumeric()
+                          || matches!(byte, b'_' | b'.' | b':' | b'-')
+                  });
+              if !valid {
+                  return Err(ReferenceError::new(
+                      ReferenceErrorCode::InvalidField,
+                      field,
+                  ));
+              }
+              Ok(())
+          }
+
+          fn validate_text(value: &str, field: &'static str, max: usize) -> ReferenceResult<()> {
+              if value.is_empty()
+                  || value.len() > max
+                  || value.chars().any(char::is_control)
+              {
+                  return Err(ReferenceError::new(
+                      ReferenceErrorCode::InvalidField,
+                      field,
+                  ));
+              }
+              Ok(())
+          }
+
+          fn validate_digest(value: &str, field: &'static str) -> ReferenceResult<()> {
+              let Some(hex) = value.strip_prefix("sha256:") else {
+                  return Err(ReferenceError::new(
+                      ReferenceErrorCode::InvalidDigest,
+                      field,
+                  ));
+              };
+              if hex.len() != 64
+                  || !hex
+                      .bytes()
+                      .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
+              {
+                  return Err(ReferenceError::new(
+                      ReferenceErrorCode::InvalidDigest,
+                      field,
+                  ));
+              }
+              Ok(())
+          }
+
+          fn payload_digest(draft: &ReferenceDraft) -> ReferenceResult<String> {
+              let payload = ReferencePayload {
+                  schema_version: REFERENCE_VIEW_SCHEMA,
+                  canonicalization_version: REFERENCE_CANONICALIZATION,
+                  profile: &draft.profile,
+                  sources: &draft.sources,
+                  symbols: &draft.symbols,
+                  coverage: &draft.coverage,
+                  conflicts: &draft.conflicts,
+              };
+              let bytes = serde_json::to_vec(&payload).map_err(|_| {
+                  ReferenceError::new(
+                      ReferenceErrorCode::Serialization,
+                      "reference_payload",
+                  )
+              })?;
+              Ok(domain_digest(PAYLOAD_DOMAIN, &bytes))
+          }
+
+          fn unsigned_view_digest(
+              draft: &ReferenceDraft,
+              payload_digest: &str,
+              generation_id: &str,
+          ) -> ReferenceResult<String> {
+              let view = UnsignedReferenceView {
+                  schema_version: REFERENCE_VIEW_SCHEMA,
+                  canonicalization_version: REFERENCE_CANONICALIZATION,
+                  profile: &draft.profile,
+                  sources: &draft.sources,
+                  symbols: &draft.symbols,
+                  coverage: &draft.coverage,
+                  conflicts: &draft.conflicts,
+                  payload_digest,
+                  generation_id,
+              };
+              let bytes = serde_json::to_vec(&view).map_err(|_| {
+                  ReferenceError::new(
+                      ReferenceErrorCode::Serialization,
+                      "reference_view",
+                  )
+              })?;
+              Ok(domain_digest(VIEW_DOMAIN, &bytes))
+          }
+
+          fn domain_digest(domain: &[u8], bytes: &[u8]) -> String {
+              let mut hasher = Sha256::new();
+              hasher.update(domain);
+              hasher.update(bytes);
+              let digest = hasher.finalize();
+              format!("sha256:{}", lowercase_hex(&digest))
+          }
+
+          fn lowercase_hex(bytes: &[u8]) -> String {
+              const HEX: &[u8; 16] = b"0123456789abcdef";
+              let mut output = String::with_capacity(bytes.len() * 2);
+              for byte in bytes {
+                  output.push(char::from(HEX[usize::from(byte >> 4)]));
+                  output.push(char::from(HEX[usize::from(byte & 0x0f)]));
+              }
+              output
+          }
+
+          impl ReferenceSymbol {
+              /// Stable textual identity used by diagnostics and indexes.
+              #[must_use]
+              pub fn identity(&self) -> String {
+                  self.key.identity()
+              }
+          }
+          ''',
+          )
+
+          write(
+              "crates/wow-reference/examples/generate_fixture.rs",
+              r'''use std::error::Error;
+          use std::fs;
+          use std::path::PathBuf;
+
+          use wow_reference::deterministic::{
+              sha256_digest, ClientBuild, ClientFlavor, ConflictValue, CoverageRecord,
+              CoverageScope, CoverageState, ReferenceConflict, ReferenceDraft, ReferenceKey,
+              ReferenceSource, ReferenceSymbol, ReferenceView, RestrictionFacet, SourceAuthority,
+              SymbolKind,
+          };
+
+          fn main() -> Result<(), Box<dyn Error>> {
+              let view = fixture_view()?;
+              let mut json = view.pretty_json()?;
+              json.push('\n');
+              let digest = format!("{}\n", view.canonical_digest());
+
+              let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+              let fixture_dir = root.join("tests/fixtures");
+              let json_path = fixture_dir.join("reference-view.json");
+              let digest_path = fixture_dir.join("reference-view.sha256");
+              let check = std::env::args().any(|argument| argument == "--check");
+
+              if check {
+                  let committed_json = fs::read_to_string(&json_path)?;
+                  let committed_digest = fs::read_to_string(&digest_path)?;
+                  if committed_json != json || committed_digest != digest {
+                      return Err(std::io::Error::other(
+                          "committed I0-B fixture vectors are stale",
+                      )
+                      .into());
+                  }
+              } else {
+                  fs::create_dir_all(&fixture_dir)?;
+                  fs::write(json_path, json)?;
+                  fs::write(digest_path, digest)?;
+              }
+              Ok(())
+          }
+
+          fn fixture_view() -> Result<ReferenceView, Box<dyn Error>> {
+              let api_source = "source:blizzard-api-docs:fixture".to_owned();
+              let ui_source = "source:blizzard-ui:fixture".to_owned();
+
+              let sources = vec![
+                  ReferenceSource {
+                      source_id: ui_source.clone(),
+                      authority: SourceAuthority::BlizzardUiSource,
+                      revision: "fixture:ui:12.1.0.69497".to_owned(),
+                      logical_digest: sha256_digest(b"fixture Blizzard UI source"),
+                  },
+                  ReferenceSource {
+                      source_id: api_source.clone(),
+                      authority: SourceAuthority::BlizzardApiDocumentation,
+                      revision: "fixture:apidoc:12.1.0.69497".to_owned(),
+                      logical_digest: sha256_digest(b"fixture Blizzard API documentation"),
+                  },
+              ];
+
+              let symbols = vec![
+                  ReferenceSymbol {
+                      key: ReferenceKey::new(
+                          SymbolKind::Event,
+                          Option::<String>::None,
+                          "PLAYER_LOGIN",
+                      )?,
+                      signature: None,
+                      documentation: Some(
+                          "Fires after the player and initial saved variables are available."
+                              .to_owned(),
+                      ),
+                      restrictions: Vec::new(),
+                      source_ids: vec![api_source.clone()],
+                  },
+                  ReferenceSymbol {
+                      key: ReferenceKey::new(
+                          SymbolKind::Function,
+                          Some("C_ChatInfo"),
+                          "SendAddonMessage",
+                      )?,
+                      signature: Some(
+                          "C_ChatInfo.SendAddonMessage(prefix, text, channel, target?)"
+                              .to_owned(),
+                      ),
+                      documentation: Some(
+                          "Sends an addon communication payload on the selected channel."
+                              .to_owned(),
+                      ),
+                      restrictions: Vec::new(),
+                      source_ids: vec![api_source.clone(), ui_source.clone()],
+                  },
+                  ReferenceSymbol {
+                      key: ReferenceKey::new(
+                          SymbolKind::Function,
+                          Some("C_ChatInfo"),
+                          "RegisterAddonMessagePrefix",
+                      )?,
+                      signature: Some(
+                          "C_ChatInfo.RegisterAddonMessagePrefix(prefix) -> successful"
+                              .to_owned(),
+                      ),
+                      documentation: Some(
+                          "Registers an addon message prefix before communication."
+                              .to_owned(),
+                      ),
+                      restrictions: Vec::new(),
+                      source_ids: vec![api_source.clone()],
+                  },
+                  ReferenceSymbol {
+                      key: ReferenceKey::new(
+                          SymbolKind::Function,
+                          Option::<String>::None,
+                          "CastSpellByName",
+                      )?,
+                      signature: Some("CastSpellByName(spellName, onSelf?)".to_owned()),
+                      documentation: Some(
+                          "Legacy protected spell-casting entry point.".to_owned(),
+                      ),
+                      restrictions: vec![
+                          RestrictionFacet::TaintSensitive,
+                          RestrictionFacet::ProtectedAction,
+                          RestrictionFacet::CombatLockdown,
+                      ],
+                      source_ids: vec![ui_source.clone()],
+                  },
+                  ReferenceSymbol {
+                      key: ReferenceKey::new(
+                          SymbolKind::Function,
+                          Option::<String>::None,
+                          "InCombatLockdown",
+                      )?,
+                      signature: Some("InCombatLockdown() -> inLockdown".to_owned()),
+                      documentation: Some(
+                          "Returns whether protected UI operations are currently locked."
+                              .to_owned(),
+                      ),
+                      restrictions: Vec::new(),
+                      source_ids: vec![api_source.clone(), ui_source.clone()],
+                  },
+              ];
+
+              let coverage = vec![
+                  CoverageRecord {
+                      coverage_id: "coverage:function:C_Timer".to_owned(),
+                      scope: CoverageScope::new(SymbolKind::Function, Some("C_Timer"))?,
+                      state: CoverageState::Partial,
+                      source_ids: vec![api_source.clone()],
+                      reason_code: Some("fixture_partial_namespace".to_owned()),
+                  },
+                  CoverageRecord {
+                      coverage_id: "coverage:event:global".to_owned(),
+                      scope: CoverageScope::new(
+                          SymbolKind::Event,
+                          Option::<String>::None,
+                      )?,
+                      state: CoverageState::Complete,
+                      source_ids: vec![api_source.clone()],
+                      reason_code: None,
+                  },
+                  CoverageRecord {
+                      coverage_id: "coverage:function:C_ChatInfo".to_owned(),
+                      scope: CoverageScope::new(
+                          SymbolKind::Function,
+                          Some("C_ChatInfo"),
+                      )?,
+                      state: CoverageState::Complete,
+                      source_ids: vec![api_source.clone(), ui_source.clone()],
+                      reason_code: None,
+                  },
+                  CoverageRecord {
+                      coverage_id: "coverage:function:global".to_owned(),
+                      scope: CoverageScope::new(
+                          SymbolKind::Function,
+                          Option::<String>::None,
+                      )?,
+                      state: CoverageState::Partial,
+                      source_ids: vec![api_source.clone(), ui_source.clone()],
+                      reason_code: Some("fixture_selected_globals".to_owned()),
+                  },
+              ];
+
+              let conflicts = vec![ReferenceConflict {
+                  conflict_id: "conflict:C_ChatInfo.RegisterAddonMessagePrefix2:signature"
+                      .to_owned(),
+                  key: ReferenceKey::new(
+                      SymbolKind::Function,
+                      Some("C_ChatInfo"),
+                      "RegisterAddonMessagePrefix2",
+                  )?,
+                  field_path: "signature".to_owned(),
+                  values: vec![
+                      ConflictValue {
+                          source_id: api_source.clone(),
+                          value: "(prefix) -> successful".to_owned(),
+                      },
+                      ConflictValue {
+                          source_id: ui_source.clone(),
+                          value: "not_observed".to_owned(),
+                      },
+                  ],
+                  active: true,
+              }];
+
+              Ok(ReferenceView::build(ReferenceDraft {
+                  profile: ClientBuild {
+                      flavor: ClientFlavor::Retail,
+                      version: "12.1.0".to_owned(),
+                      build: 69_497,
+                      interface: 120_100,
+                  },
+                  sources,
+                  symbols,
+                  coverage,
+                  conflicts,
+              })?)
+          }
+          ''',
+          )
+
+          write(
+              "crates/wow-reference/tests/deterministic_reference_view.rs",
+              r'''use std::error::Error;
+
+          use serde_json::Value;
+          use wow_reference::deterministic::{
+              ExactLookup, NegativeAuthorityReason, ReferenceKey, ReferenceView,
+              RestrictionFacet, SymbolKind,
+          };
+
+          fn fixture() -> Result<ReferenceView, Box<dyn Error>> {
+              Ok(ReferenceView::from_json(include_bytes!(
+                  "fixtures/reference-view.json"
+              ))?)
+          }
+
+          #[test]
+          fn committed_fixture_is_self_verifying_and_byte_stable() -> Result<(), Box<dyn Error>> {
+              let view = fixture()?;
+              view.verify()?;
+              assert_eq!(
+                  format!("{}\n", view.canonical_digest()),
+                  include_str!("fixtures/reference-view.sha256")
+              );
+              Ok(())
+          }
+
+          #[test]
+          fn unordered_draft_rebuilds_the_same_generation() -> Result<(), Box<dyn Error>> {
+              let view = fixture()?;
+              let mut draft = view.to_draft();
+              draft.sources.reverse();
+              draft.symbols.reverse();
+              draft.coverage.reverse();
+              draft.conflicts.reverse();
+              for symbol in &mut draft.symbols {
+                  symbol.source_ids.reverse();
+                  symbol.restrictions.reverse();
+              }
+              let rebuilt = ReferenceView::build(draft)?;
+              assert_eq!(view, rebuilt);
+              Ok(())
+          }
+
+          #[test]
+          fn exact_lookup_distinguishes_presence_absence_and_unknown() -> Result<(), Box<dyn Error>> {
+              let view = fixture()?;
+              let present = ReferenceKey::new(
+                  SymbolKind::Function,
+                  Some("C_ChatInfo"),
+                  "SendAddonMessage",
+              )?;
+              let absent = ReferenceKey::new(
+                  SymbolKind::Function,
+                  Some("C_ChatInfo"),
+                  "SendAddonMessageLogged",
+              )?;
+              let unknown = ReferenceKey::new(
+                  SymbolKind::Function,
+                  Some("C_Timer"),
+                  "NonexistentFixtureFunction",
+              )?;
+
+              assert!(matches!(
+                  view.exact_lookup(&present),
+                  ExactLookup::Present { .. }
+              ));
+              assert!(matches!(
+                  view.exact_lookup(&absent),
+                  ExactLookup::Absent { .. }
+              ));
+              assert!(matches!(
+                  view.exact_lookup(&unknown),
+                  ExactLookup::NotAuthoritative {
+                      reason: NegativeAuthorityReason::PartialCoverage,
+                      ..
+                  }
+              ));
+              Ok(())
+          }
+
+          #[test]
+          fn active_conflict_blocks_otherwise_complete_negative_authority() -> Result<(), Box<dyn Error>> {
+              let view = fixture()?;
+              let conflicted = ReferenceKey::new(
+                  SymbolKind::Function,
+                  Some("C_ChatInfo"),
+                  "RegisterAddonMessagePrefix2",
+              )?;
+              assert!(matches!(
+                  view.exact_lookup(&conflicted),
+                  ExactLookup::NotAuthoritative {
+                      reason: NegativeAuthorityReason::ActiveConflict,
+                      ..
+                  }
+              ));
+              Ok(())
+          }
+
+          #[test]
+          fn restriction_facets_and_digest_tampering_are_enforced() -> Result<(), Box<dyn Error>> {
+              let view = fixture()?;
+              let cast = ReferenceKey::new(
+                  SymbolKind::Function,
+                  Option::<String>::None,
+                  "CastSpellByName",
+              )?;
+              let ExactLookup::Present { symbol, .. } = view.exact_lookup(&cast) else {
+                  return Err(std::io::Error::other("fixture symbol was not found").into());
+              };
+              assert!(symbol.restrictions.contains(&RestrictionFacet::CombatLockdown));
+              assert!(symbol.restrictions.contains(&RestrictionFacet::ProtectedAction));
+              assert!(symbol.restrictions.contains(&RestrictionFacet::TaintSensitive));
+
+              let mut value: Value = serde_json::from_slice(&view.canonical_json()?)?;
+              value["canonical_digest"] = Value::String(
+                  "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+                      .to_owned(),
+              );
+              let tampered = serde_json::to_vec(&value)?;
+              assert!(ReferenceView::from_json(&tampered).is_err());
+              Ok(())
+          }
+          ''',
+          )
+
+          write(
+              ".github/workflows/i0-reference.yml",
+              '''name: I0-B reference gate
+
+          on:
+            push:
+              branches:
+                - main
+              paths:
+                - Cargo.toml
+                - Cargo.lock
+                - rust-toolchain.toml
+                - crates/wow-reference/**
+                - .github/workflows/i0-reference.yml
+            pull_request:
+              paths:
+                - Cargo.toml
+                - Cargo.lock
+                - rust-toolchain.toml
+                - crates/wow-reference/**
+                - .github/workflows/i0-reference.yml
+            workflow_dispatch:
+
+          permissions:
+            contents: read
+
+          concurrency:
+            group: i0-reference-${{ github.ref }}
+            cancel-in-progress: true
+
+          jobs:
+            validate:
+              runs-on: ubuntu-24.04
+              timeout-minutes: 30
+              steps:
+                - name: Check out repository
+                  uses: actions/checkout@v6.0.2
+
+                - name: Install frozen Rust toolchain
+                  run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
+
+                - name: Verify formatting
+                  run: cargo +1.98.0 fmt --all -- --check
+
+                - name: Verify frozen fixture vectors
+                  run: cargo +1.98.0 run --locked -p wow-reference --example generate_fixture -- --check
+
+                - name: Check strict lints
+                  run: cargo +1.98.0 clippy --locked -p wow-reference --all-targets --all-features -- -D warnings
+
+                - name: Run debug tests
+                  run: cargo +1.98.0 test --locked -p wow-reference --all-features
+
+                - name: Run release tests
+                  run: cargo +1.98.0 test --locked -p wow-reference --all-features --release
+
+                - name: Build documentation
+                  env:
+                    RUSTDOCFLAGS: -D warnings
+                  run: cargo +1.98.0 doc --locked -p wow-reference --all-features --no-deps
+          ''',
+          )
+
+          readme_path = ROOT / "crates/wow-reference/README.md"
+          readme = readme_path.read_text(encoding="utf-8") if readme_path.exists() else "# wow-reference\n"
+          start = "<!-- i0b-deterministic-view:start -->"
+          end = "<!-- i0b-deterministic-view:end -->"
+          section = '''<!-- i0b-deterministic-view:start -->
+          ## Executable deterministic view
+
+          `deterministic` provides the first executable I0-B boundary:
+
+          - immutable client-scoped `ReferenceView` generations;
+          - payload and envelope SHA-256 identities;
+          - exact case-sensitive lookup;
+          - authoritative absence only for complete, unconflicted coverage scopes;
+          - explicit partial/not-evaluated/conflict outcomes;
+          - normalized restriction facets and committed fixture hash vectors.
+
+          Source ingestion, persistent pack publication, and upstream-specific producers remain separate later slices.
+          <!-- i0b-deterministic-view:end -->'''
+          if start in readme and end in readme:
+              prefix = readme.split(start, 1)[0].rstrip()
+              suffix = readme.split(end, 1)[1].lstrip()
+              readme = prefix + "\n\n" + section + ("\n\n" + suffix if suffix else "")
+          else:
+              readme = readme.rstrip() + "\n\n" + section + "\n"
+          readme_path.parent.mkdir(parents=True, exist_ok=True)
+          readme_path.write_text(readme, encoding="utf-8")
+
+          replace_workspace_policy_test()
+          PY
+
+      - name: Install frozen Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
+
+      - name: Format source tree
+        run: cargo +1.98.0 fmt --all
+
+      - name: Refresh dependency lock
+        run: cargo +1.98.0 generate-lockfile
+
+      - name: Generate frozen I0-B fixture vectors
+        run: cargo +1.98.0 run --locked -p wow-reference --example generate_fixture
+
+      - name: Verify frozen I0-B fixture vectors
+        run: cargo +1.98.0 run --locked -p wow-reference --example generate_fixture -- --check
+
+      - name: Check strict workspace lints
+        run: cargo +1.98.0 clippy --locked --workspace --all-targets --all-features -- -D warnings
+
+      - name: Run workspace debug tests
+        run: cargo +1.98.0 test --locked --workspace --all-features
+
+      - name: Run workspace release tests
+        run: cargo +1.98.0 test --locked --workspace --all-features --release
+
+      - name: Build workspace documentation
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo +1.98.0 doc --locked --workspace --all-features --no-deps
+
+      - name: Publish validated implementation directly to main
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/implement-i0-b-reference-20260904.yml
+          git add -A
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "feat(wow-reference): add deterministic reference views"
+          git pull --rebase origin main
+          git push origin HEAD:main
