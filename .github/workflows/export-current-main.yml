@@ -1,47 +1,19 @@
 name: Export current main snapshot
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - .github/workflows/export-current-main.yml
   workflow_dispatch:
 
 permissions:
   contents: read
 
-concurrency:
-  group: export-current-main
-  cancel-in-progress: true
-
 jobs:
   export:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
     steps:
-      - name: Check out current main
-        uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+      - run: git archive --format=tar.gz --output=/tmp/main.tar.gz HEAD
+      - uses: actions/upload-artifact@v7
         with:
-          ref: main
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Package current tracked tree
-        shell: bash
-        run: |
-          set -euo pipefail
-          git archive --format=tar.gz --output=/tmp/wow-dev-framework-main.tar.gz HEAD
-          git rev-parse HEAD > /tmp/COMMIT_SHA
-          sha256sum /tmp/wow-dev-framework-main.tar.gz > /tmp/SHA256SUMS
-
-      - name: Upload current tree
-        uses: actions/upload-artifact@v7
-        with:
-          name: wow-dev-framework-current-main
-          path: |
-            /tmp/wow-dev-framework-main.tar.gz
-            /tmp/COMMIT_SHA
-            /tmp/SHA256SUMS
+          name: current-main
+          path: /tmp/main.tar.gz
           retention-days: 1
-          if-no-files-found: error
