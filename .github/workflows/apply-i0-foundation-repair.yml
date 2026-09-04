@@ -111,6 +111,7 @@ jobs:
           rm -f .github/workflows/apply-i0-foundation-repair.yml
           rm -f .github/workflows/export-i0-c-dev-inputs.yml
           rm -f .github/workflows/i0-b-export.yml
+          rm -f .github/workflows/i0-foundation.yml
           git add -A
           git commit -m "fix(wow-core): restore executable E0 foundation"
           git push origin HEAD:main
