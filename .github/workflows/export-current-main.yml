@@ -27,13 +27,18 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Package tracked repository
+      - name: Package tracked repository and current dependency cache
         shell: bash
         run: |
           set -euo pipefail
           git archive --format=tar.gz --output=/tmp/wow-dev-framework-main.tar.gz HEAD
           sha256sum /tmp/wow-dev-framework-main.tar.gz > /tmp/SHA256SUMS
           git rev-parse HEAD > /tmp/COMMIT_SHA
+          cargo fetch --locked
+          cache_dir="$(find "$HOME/.cargo/registry/cache" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+          test -n "$cache_dir"
+          cp "$cache_dir/libc-0.2.189.crate" /tmp/libc-0.2.189.crate
+          printf '%s  %s\n' '3eaf3ede3fee6db1a4c2ee091bf8a8b4dccdc6d17f656fb07896ee72867612f2' '/tmp/libc-0.2.189.crate' | sha256sum --check
 
       - name: Upload current snapshot
         uses: actions/upload-artifact@v7
@@ -43,5 +48,6 @@ jobs:
             /tmp/wow-dev-framework-main.tar.gz
             /tmp/SHA256SUMS
             /tmp/COMMIT_SHA
+            /tmp/libc-0.2.189.crate
           retention-days: 1
           if-no-files-found: error
