@@ -36,6 +36,31 @@ jobs:
           echo "70b97ea22f138f629464c46855687bb0f1187546c1c19d1057cf2a038e1961b8  /tmp/i0-foundation-repair.tar.zst" | sha256sum --check --strict
           zstd --decompress --stdout /tmp/i0-foundation-repair.tar.zst | tar --extract --file=- --directory="$GITHUB_WORKSPACE"
 
+      - name: Apply reviewed compiler fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("crates/wow-core/src/coverage.rs")
+          source = path.read_text(encoding="utf-8")
+
+          old_import = "use crate::evidence::{ConflictAffectedRef, ConflictRecord};"
+          new_import = "use crate::evidence::ConflictRecord;"
+          if old_import not in source:
+              raise SystemExit("expected coverage import was not found")
+          source = source.replace(old_import, new_import, 1)
+
+          old_binding = "let mut applicable_status = None;"
+          new_binding = "let mut applicable_status: Option<CoverageStatus> = None;"
+          if old_binding not in source:
+              raise SystemExit("expected applicable_status binding was not found")
+          source = source.replace(old_binding, new_binding, 1)
+
+          path.write_text(source, encoding="utf-8")
+          PY
+
       - name: Install frozen Rust toolchain
         run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
 
