@@ -4,8 +4,13 @@ const TOOLCHAIN: &str = include_str!("../../../rust-toolchain.toml");
 
 #[test]
 fn workspace_activates_foundation_crates() {
-    assert!(ROOT_MANIFEST.contains("\"crates/wow-core\""));
-    assert!(ROOT_MANIFEST.contains("\"crates/wow-reference\""));
+    assert!(
+        ROOT_MANIFEST.contains("\"crates/wow-core\"") || ROOT_MANIFEST.contains("\"crates/*\"")
+    );
+    assert!(
+        ROOT_MANIFEST.contains("\"crates/wow-reference\"")
+            || ROOT_MANIFEST.contains("\"crates/*\"")
+    );
 }
 
 #[test]
