@@ -9,6 +9,7 @@ on:
       - .github/repair-i0.py
       - .github/fix-generated-backslash.py
       - .github/fix-message-fingerprint.py
+      - .github/fix-canonical-order.py
       - .github/workflows/apply-i0-foundation-repair.yml
   workflow_dispatch:
 
@@ -44,6 +45,7 @@ jobs:
           python3 .github/repair-i0.py
           python3 .github/fix-generated-backslash.py
           python3 .github/fix-message-fingerprint.py
+          python3 .github/fix-canonical-order.py
 
       - name: Install frozen Rust toolchain
         run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
@@ -93,6 +95,7 @@ jobs:
           rm -f .github/repair-i0.py
           rm -f .github/fix-generated-backslash.py
           rm -f .github/fix-message-fingerprint.py
+          rm -f .github/fix-canonical-order.py
           rm -f .github/workflows/apply-i0-foundation-repair.yml
           git add -A
           git config user.name "github-actions[bot]"
