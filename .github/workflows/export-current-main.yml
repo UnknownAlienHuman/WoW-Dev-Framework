@@ -20,26 +20,28 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Download unattached verified delivery payload
+      - name: Check out current main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Package current tracked tree
         shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error --location \
-            --header "Authorization: Bearer ${GH_TOKEN}" \
-            --header "Accept: application/vnd.github.raw+json" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/git/blobs/9e0d9654c44531665651db653cd5b85fdf8ed4b1" \
-            --output /tmp/prepared-payload.bin
-          test "$(wc -c < /tmp/prepared-payload.bin)" -eq 30018
-          printf '%s  %s\n' '9e0d9654c44531665651db653cd5b85fdf8ed4b1' 'Git-blob-object-id-only' > /tmp/README.txt
+          git archive --format=tar.gz --output=/tmp/wow-dev-framework-main.tar.gz HEAD
+          git rev-parse HEAD > /tmp/COMMIT_SHA
+          sha256sum /tmp/wow-dev-framework-main.tar.gz > /tmp/SHA256SUMS
 
-      - name: Upload delivery payload
+      - name: Upload current tree
         uses: actions/upload-artifact@v7
         with:
-          name: wow-dev-framework-prepared-payload
+          name: wow-dev-framework-current-main
           path: |
-            /tmp/prepared-payload.bin
-            /tmp/README.txt
+            /tmp/wow-dev-framework-main.tar.gz
+            /tmp/COMMIT_SHA
+            /tmp/SHA256SUMS
           retention-days: 1
           if-no-files-found: error
