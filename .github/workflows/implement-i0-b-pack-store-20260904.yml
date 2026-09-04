@@ -1,0 +1,832 @@
+name: Implement I0-B immutable reference pack store
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/implement-i0-b-pack-store-20260904.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: implement-i0-b-pack-store
+  cancel-in-progress: false
+
+jobs:
+  implement-validate-publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v6.0.2
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Materialize immutable pack store
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f crates/wow-reference/src/deterministic.rs
+          python3 - <<'PY'
+          from pathlib import Path
+
+          root = Path.cwd()
+
+          def write(path: str, content: str) -> None:
+              target = root / path
+              target.parent.mkdir(parents=True, exist_ok=True)
+              target.write_text(content.rstrip() + "\n", encoding="utf-8")
+
+          lib_path = root / "crates/wow-reference/src/lib.rs"
+          lib_source = lib_path.read_text(encoding="utf-8")
+          if "pub mod store;" not in lib_source:
+              lib_source = lib_source.rstrip() + "\n\n/// Immutable content-addressed reference-pack storage.\npub mod store;\n"
+              lib_path.write_text(lib_source, encoding="utf-8")
+
+          deterministic = root / "crates/wow-reference/src/deterministic.rs"
+          source = deterministic.read_text(encoding="utf-8")
+          old = "#[derive(Debug, Clone, PartialEq, Eq)]\n          pub struct ReferenceDraft {"
+          new = "#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]\n          #[serde(deny_unknown_fields)]\n          pub struct ReferenceDraft {"
+          if old in source:
+              source = source.replace(old, new, 1)
+          elif "pub struct ReferenceDraft" in source and "#[serde(deny_unknown_fields)]\n          pub struct ReferenceDraft" not in source:
+              raise SystemExit("ReferenceDraft derive layout changed unexpectedly")
+          deterministic.write_text(source, encoding="utf-8")
+
+          write(
+              "crates/wow-reference/src/store.rs",
+              r'''//! Immutable content-addressed storage for verified reference generations.
+
+          use std::error::Error;
+          use std::fmt;
+          use std::fs::{self, File, OpenOptions};
+          use std::io::Write;
+          use std::path::{Path, PathBuf};
+
+          use serde::{Deserialize, Serialize};
+
+          use crate::deterministic::{ReferenceView, REFERENCE_VIEW_SCHEMA};
+
+          /// Maximum accepted serialized reference pack size.
+          pub const MAX_REFERENCE_PACK_BYTES: u64 = 64 * 1024 * 1024;
+          /// File containing the canonical serialized reference view.
+          pub const REFERENCE_VIEW_FILE: &str = "reference-view.json";
+          /// File containing immutable generation metadata.
+          pub const REFERENCE_MANIFEST_FILE: &str = "manifest.json";
+
+          /// Result type used by immutable pack-store operations.
+          pub type StoreResult<T> = Result<T, StoreError>;
+
+          /// Stable reason code for a failed pack-store operation.
+          #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+          pub enum StoreErrorCode {
+              /// A generation identifier or store path is invalid.
+              InvalidInput,
+              /// A filesystem operation failed.
+              Io,
+              /// A serialized reference view is invalid.
+              InvalidView,
+              /// Existing immutable bytes disagree with the requested generation.
+              GenerationCollision,
+              /// A serialized pack exceeds the configured hard limit.
+              PackTooLarge,
+              /// A store directory contains an unexpected entry.
+              UnexpectedEntry,
+          }
+
+          /// Stable non-secret pack-store error.
+          #[derive(Debug, Clone, PartialEq, Eq)]
+          pub struct StoreError {
+              code: StoreErrorCode,
+              operation: &'static str,
+          }
+
+          impl StoreError {
+              fn new(code: StoreErrorCode, operation: &'static str) -> Self {
+                  Self { code, operation }
+              }
+
+              /// Machine-readable reason code.
+              #[must_use]
+              pub const fn code(&self) -> StoreErrorCode {
+                  self.code
+              }
+
+              /// Stable operation that failed.
+              #[must_use]
+              pub const fn operation(&self) -> &'static str {
+                  self.operation
+              }
+          }
+
+          impl fmt::Display for StoreError {
+              fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+                  write!(formatter, "{:?} in {}", self.code, self.operation)
+              }
+          }
+
+          impl Error for StoreError {}
+
+          /// Result of publishing one immutable generation.
+          #[derive(Debug, Clone, PartialEq, Eq)]
+          pub struct PublishOutcome {
+              generation_id: String,
+              generation_path: PathBuf,
+              newly_published: bool,
+          }
+
+          impl PublishOutcome {
+              /// Published immutable generation identity.
+              #[must_use]
+              pub fn generation_id(&self) -> &str {
+                  &self.generation_id
+              }
+
+              /// Directory containing the immutable pack.
+              #[must_use]
+              pub fn generation_path(&self) -> &Path {
+                  &self.generation_path
+              }
+
+              /// Whether this call created the generation rather than verifying an existing copy.
+              #[must_use]
+              pub const fn newly_published(&self) -> bool {
+                  self.newly_published
+              }
+          }
+
+          /// Filesystem-backed immutable reference generation store.
+          #[derive(Debug, Clone, PartialEq, Eq)]
+          pub struct ReferencePackStore {
+              root: PathBuf,
+          }
+
+          #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+          #[serde(deny_unknown_fields)]
+          struct PackManifest {
+              schema_version: String,
+              generation_id: String,
+              payload_digest: String,
+              canonical_digest: String,
+              view_file: String,
+          }
+
+          impl ReferencePackStore {
+              /// Creates a store handle without touching the filesystem.
+              pub fn new(root: impl Into<PathBuf>) -> StoreResult<Self> {
+                  let root = root.into();
+                  if root.as_os_str().is_empty() {
+                      return Err(StoreError::new(
+                          StoreErrorCode::InvalidInput,
+                          "open_store",
+                      ));
+                  }
+                  Ok(Self { root })
+              }
+
+              /// Root directory supplied by the caller.
+              #[must_use]
+              pub fn root(&self) -> &Path {
+                  &self.root
+              }
+
+              /// Publishes a verified generation exactly once.
+              ///
+              /// Re-publishing identical bytes is idempotent. Any disagreement at an existing
+              /// content-addressed path is reported as a generation collision.
+              pub fn publish(&self, view: &ReferenceView) -> StoreResult<PublishOutcome> {
+                  view.verify().map_err(|_| {
+                      StoreError::new(StoreErrorCode::InvalidView, "publish_generation")
+                  })?;
+                  let component = generation_component(view.generation_id())?;
+                  let generations = self.root.join("generations");
+                  fs::create_dir_all(&generations).map_err(|_| {
+                      StoreError::new(StoreErrorCode::Io, "create_generations_directory")
+                  })?;
+                  let final_path = generations.join(&component);
+                  if final_path.exists() {
+                      self.verify_existing(&final_path, view)?;
+                      return Ok(PublishOutcome {
+                          generation_id: view.generation_id().to_owned(),
+                          generation_path: final_path,
+                          newly_published: false,
+                      });
+                  }
+
+                  let staging = create_staging_directory(&generations, &component)?;
+                  let result = self.write_staging(&staging, view);
+                  if let Err(error) = result {
+                      remove_directory_if_present(&staging);
+                      return Err(error);
+                  }
+
+                  match fs::rename(&staging, &final_path) {
+                      Ok(()) => {
+                          sync_directory(&generations)?;
+                          Ok(PublishOutcome {
+                              generation_id: view.generation_id().to_owned(),
+                              generation_path: final_path,
+                              newly_published: true,
+                          })
+                      }
+                      Err(_) if final_path.exists() => {
+                          remove_directory_if_present(&staging);
+                          self.verify_existing(&final_path, view)?;
+                          Ok(PublishOutcome {
+                              generation_id: view.generation_id().to_owned(),
+                              generation_path: final_path,
+                              newly_published: false,
+                          })
+                      }
+                      Err(_) => {
+                          remove_directory_if_present(&staging);
+                          Err(StoreError::new(
+                              StoreErrorCode::Io,
+                              "publish_generation",
+                          ))
+                      }
+                  }
+              }
+
+              /// Loads and verifies one exact generation.
+              pub fn load(&self, generation_id: &str) -> StoreResult<ReferenceView> {
+                  let path = self.generation_path(generation_id)?;
+                  let bytes = read_bounded(&path.join(REFERENCE_VIEW_FILE))?;
+                  let view = ReferenceView::from_json(&bytes).map_err(|_| {
+                      StoreError::new(StoreErrorCode::InvalidView, "load_generation")
+                  })?;
+                  if view.generation_id() != generation_id {
+                      return Err(StoreError::new(
+                          StoreErrorCode::GenerationCollision,
+                          "load_generation",
+                      ));
+                  }
+                  verify_manifest(&path, &view)?;
+                  Ok(view)
+              }
+
+              /// Returns whether the exact content-addressed generation directory exists.
+              pub fn contains(&self, generation_id: &str) -> StoreResult<bool> {
+                  Ok(self.generation_path(generation_id)?.is_dir())
+              }
+
+              /// Returns all immutable generation identities in lexical order.
+              pub fn list_generations(&self) -> StoreResult<Vec<String>> {
+                  let generations = self.root.join("generations");
+                  if !generations.exists() {
+                      return Ok(Vec::new());
+                  }
+                  let entries = fs::read_dir(generations).map_err(|_| {
+                      StoreError::new(StoreErrorCode::Io, "list_generations")
+                  })?;
+                  let mut result = Vec::new();
+                  for entry in entries {
+                      let entry = entry.map_err(|_| {
+                          StoreError::new(StoreErrorCode::Io, "list_generations")
+                      })?;
+                      let file_type = entry.file_type().map_err(|_| {
+                          StoreError::new(StoreErrorCode::Io, "list_generations")
+                      })?;
+                      let name = entry.file_name();
+                      let Some(name) = name.to_str() else {
+                          return Err(StoreError::new(
+                              StoreErrorCode::UnexpectedEntry,
+                              "list_generations",
+                          ));
+                      };
+                      if name.starts_with(".stage-") {
+                          continue;
+                      }
+                      if !file_type.is_dir() {
+                          return Err(StoreError::new(
+                              StoreErrorCode::UnexpectedEntry,
+                              "list_generations",
+                          ));
+                      }
+                      let Some(hex) = name.strip_prefix("sha256-") else {
+                          return Err(StoreError::new(
+                              StoreErrorCode::UnexpectedEntry,
+                              "list_generations",
+                          ));
+                      };
+                      validate_hex_digest(hex, "list_generations")?;
+                      result.push(format!("generation:reference:sha256:{hex}"));
+                  }
+                  result.sort();
+                  Ok(result)
+              }
+
+              /// Resolves a validated generation identity to its immutable directory.
+              pub fn generation_path(&self, generation_id: &str) -> StoreResult<PathBuf> {
+                  let component = generation_component(generation_id)?;
+                  Ok(self.root.join("generations").join(component))
+              }
+
+              fn write_staging(
+                  &self,
+                  staging: &Path,
+                  view: &ReferenceView,
+              ) -> StoreResult<()> {
+                  let mut view_bytes = view.canonical_json().map_err(|_| {
+                      StoreError::new(StoreErrorCode::InvalidView, "serialize_generation")
+                  })?;
+                  view_bytes.push(b'\n');
+                  write_new_file(&staging.join(REFERENCE_VIEW_FILE), &view_bytes)?;
+
+                  let manifest = PackManifest {
+                      schema_version: REFERENCE_VIEW_SCHEMA.to_owned(),
+                      generation_id: view.generation_id().to_owned(),
+                      payload_digest: view.payload_digest().to_owned(),
+                      canonical_digest: view.canonical_digest().to_owned(),
+                      view_file: REFERENCE_VIEW_FILE.to_owned(),
+                  };
+                  let mut manifest_bytes = serde_json::to_vec(&manifest).map_err(|_| {
+                      StoreError::new(StoreErrorCode::InvalidView, "serialize_manifest")
+                  })?;
+                  manifest_bytes.push(b'\n');
+                  write_new_file(
+                      &staging.join(REFERENCE_MANIFEST_FILE),
+                      &manifest_bytes,
+                  )?;
+                  sync_directory(staging)
+              }
+
+              fn verify_existing(
+                  &self,
+                  generation_path: &Path,
+                  expected: &ReferenceView,
+              ) -> StoreResult<()> {
+                  let actual = self.load(expected.generation_id())?;
+                  if &actual != expected {
+                      return Err(StoreError::new(
+                          StoreErrorCode::GenerationCollision,
+                          "publish_generation",
+                      ));
+                  }
+                  let mut expected_bytes = expected.canonical_json().map_err(|_| {
+                      StoreError::new(StoreErrorCode::InvalidView, "serialize_generation")
+                  })?;
+                  expected_bytes.push(b'\n');
+                  let actual_bytes = read_bounded(
+                      &generation_path.join(REFERENCE_VIEW_FILE),
+                  )?;
+                  if actual_bytes != expected_bytes {
+                      return Err(StoreError::new(
+                          StoreErrorCode::GenerationCollision,
+                          "publish_generation",
+                      ));
+                  }
+                  Ok(())
+              }
+          }
+
+          /// Reads and verifies a standalone serialized reference view.
+          pub fn load_view_file(path: &Path) -> StoreResult<ReferenceView> {
+              let bytes = read_bounded(path)?;
+              ReferenceView::from_json(&bytes).map_err(|_| {
+                  StoreError::new(StoreErrorCode::InvalidView, "load_view_file")
+              })
+          }
+
+          /// Writes one standalone verified view without replacing an existing file.
+          pub fn write_new_view_file(path: &Path, view: &ReferenceView) -> StoreResult<()> {
+              view.verify().map_err(|_| {
+                  StoreError::new(StoreErrorCode::InvalidView, "write_view_file")
+              })?;
+              let mut bytes = view.canonical_json().map_err(|_| {
+                  StoreError::new(StoreErrorCode::InvalidView, "write_view_file")
+              })?;
+              bytes.push(b'\n');
+              write_new_file(path, &bytes)
+          }
+
+          fn generation_component(generation_id: &str) -> StoreResult<String> {
+              let Some(hex) = generation_id.strip_prefix("generation:reference:sha256:") else {
+                  return Err(StoreError::new(
+                      StoreErrorCode::InvalidInput,
+                      "parse_generation_id",
+                  ));
+              };
+              validate_hex_digest(hex, "parse_generation_id")?;
+              Ok(format!("sha256-{hex}"))
+          }
+
+          fn validate_hex_digest(hex: &str, operation: &'static str) -> StoreResult<()> {
+              if hex.len() != 64
+                  || !hex
+                      .bytes()
+                      .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
+              {
+                  return Err(StoreError::new(StoreErrorCode::InvalidInput, operation));
+              }
+              Ok(())
+          }
+
+          fn create_staging_directory(
+              generations: &Path,
+              component: &str,
+          ) -> StoreResult<PathBuf> {
+              let process = std::process::id();
+              for attempt in 0_u16..128 {
+                  let candidate = generations.join(format!(
+                      ".stage-{component}-{process}-{attempt}"
+                  ));
+                  match fs::create_dir(&candidate) {
+                      Ok(()) => return Ok(candidate),
+                      Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+                      Err(_) => {
+                          return Err(StoreError::new(
+                              StoreErrorCode::Io,
+                              "create_staging_directory",
+                          ));
+                      }
+                  }
+              }
+              Err(StoreError::new(
+                  StoreErrorCode::Io,
+                  "create_staging_directory",
+              ))
+          }
+
+          fn write_new_file(path: &Path, bytes: &[u8]) -> StoreResult<()> {
+              if u64::try_from(bytes.len()).map_or(true, |length| {
+                  length > MAX_REFERENCE_PACK_BYTES
+              }) {
+                  return Err(StoreError::new(
+                      StoreErrorCode::PackTooLarge,
+                      "write_pack_file",
+                  ));
+              }
+              let mut file = OpenOptions::new()
+                  .write(true)
+                  .create_new(true)
+                  .open(path)
+                  .map_err(|_| StoreError::new(StoreErrorCode::Io, "write_pack_file"))?;
+              file.write_all(bytes)
+                  .map_err(|_| StoreError::new(StoreErrorCode::Io, "write_pack_file"))?;
+              file.sync_all()
+                  .map_err(|_| StoreError::new(StoreErrorCode::Io, "sync_pack_file"))
+          }
+
+          fn read_bounded(path: &Path) -> StoreResult<Vec<u8>> {
+              let metadata = fs::metadata(path)
+                  .map_err(|_| StoreError::new(StoreErrorCode::Io, "read_pack_file"))?;
+              if metadata.len() > MAX_REFERENCE_PACK_BYTES {
+                  return Err(StoreError::new(
+                      StoreErrorCode::PackTooLarge,
+                      "read_pack_file",
+                  ));
+              }
+              let bytes = fs::read(path)
+                  .map_err(|_| StoreError::new(StoreErrorCode::Io, "read_pack_file"))?;
+              if u64::try_from(bytes.len()).map_or(true, |length| {
+                  length > MAX_REFERENCE_PACK_BYTES
+              }) {
+                  return Err(StoreError::new(
+                      StoreErrorCode::PackTooLarge,
+                      "read_pack_file",
+                  ));
+              }
+              Ok(bytes)
+          }
+
+          fn verify_manifest(path: &Path, view: &ReferenceView) -> StoreResult<()> {
+              let bytes = read_bounded(&path.join(REFERENCE_MANIFEST_FILE))?;
+              let manifest: PackManifest = serde_json::from_slice(&bytes).map_err(|_| {
+                  StoreError::new(StoreErrorCode::InvalidView, "load_manifest")
+              })?;
+              let expected = PackManifest {
+                  schema_version: REFERENCE_VIEW_SCHEMA.to_owned(),
+                  generation_id: view.generation_id().to_owned(),
+                  payload_digest: view.payload_digest().to_owned(),
+                  canonical_digest: view.canonical_digest().to_owned(),
+                  view_file: REFERENCE_VIEW_FILE.to_owned(),
+              };
+              if manifest != expected {
+                  return Err(StoreError::new(
+                      StoreErrorCode::GenerationCollision,
+                      "load_manifest",
+                  ));
+              }
+              Ok(())
+          }
+
+          fn remove_directory_if_present(path: &Path) {
+              if fs::remove_dir_all(path).is_err() {}
+          }
+
+          #[cfg(unix)]
+          fn sync_directory(path: &Path) -> StoreResult<()> {
+              File::open(path)
+                  .and_then(|directory| directory.sync_all())
+                  .map_err(|_| StoreError::new(StoreErrorCode::Io, "sync_directory"))
+          }
+
+          #[cfg(not(unix))]
+          fn sync_directory(_path: &Path) -> StoreResult<()> {
+              Ok(())
+          }
+          ''',
+          )
+
+          write(
+              "crates/wow-reference/src/bin/wow-reference-pack.rs",
+              r'''use std::error::Error;
+          use std::ffi::OsString;
+          use std::fs;
+          use std::path::Path;
+
+          use wow_reference::deterministic::{ReferenceDraft, ReferenceView};
+          use wow_reference::store::{
+              load_view_file, write_new_view_file, ReferencePackStore,
+          };
+
+          fn main() {
+              if let Err(error) = run() {
+                  eprintln!("wow-reference-pack: {error}");
+                  std::process::exit(2);
+              }
+          }
+
+          fn run() -> Result<(), Box<dyn Error>> {
+              let mut arguments = std::env::args_os();
+              let program = arguments
+                  .next()
+                  .unwrap_or_else(|| OsString::from("wow-reference-pack"));
+              let Some(command) = arguments.next() else {
+                  return Err(usage(&program).into());
+              };
+              match command.to_str() {
+                  Some("build") => {
+                      let input = required_path(&mut arguments, &program)?;
+                      let output = required_path(&mut arguments, &program)?;
+                      reject_extra(arguments, &program)?;
+                      let bytes = fs::read(input)?;
+                      let draft: ReferenceDraft = serde_json::from_slice(&bytes)?;
+                      let view = ReferenceView::build(draft)?;
+                      write_new_view_file(&output, &view)?;
+                      println!("{}", view.generation_id());
+                  }
+                  Some("verify") => {
+                      let input = required_path(&mut arguments, &program)?;
+                      reject_extra(arguments, &program)?;
+                      let view = load_view_file(&input)?;
+                      println!("{}", view.generation_id());
+                  }
+                  Some("publish") => {
+                      let input = required_path(&mut arguments, &program)?;
+                      let root = required_path(&mut arguments, &program)?;
+                      reject_extra(arguments, &program)?;
+                      let view = load_view_file(&input)?;
+                      let store = ReferencePackStore::new(root)?;
+                      let outcome = store.publish(&view)?;
+                      println!("{}", outcome.generation_id());
+                  }
+                  Some("list") => {
+                      let root = required_path(&mut arguments, &program)?;
+                      reject_extra(arguments, &program)?;
+                      let store = ReferencePackStore::new(root)?;
+                      for generation in store.list_generations()? {
+                          println!("{generation}");
+                      }
+                  }
+                  _ => return Err(usage(&program).into()),
+              }
+              Ok(())
+          }
+
+          fn required_path(
+              arguments: &mut impl Iterator<Item = OsString>,
+              program: &OsString,
+          ) -> Result<std::path::PathBuf, Box<dyn Error>> {
+              arguments
+                  .next()
+                  .map(std::path::PathBuf::from)
+                  .ok_or_else(|| usage(program).into())
+          }
+
+          fn reject_extra(
+              mut arguments: impl Iterator<Item = OsString>,
+              program: &OsString,
+          ) -> Result<(), Box<dyn Error>> {
+              if arguments.next().is_some() {
+                  return Err(usage(program).into());
+              }
+              Ok(())
+          }
+
+          fn usage(program: &OsString) -> std::io::Error {
+              let display = Path::new(program).display();
+              std::io::Error::new(
+                  std::io::ErrorKind::InvalidInput,
+                  format!(
+                      "usage: {display} build <draft.json> <view.json> | verify <view.json> | publish <view.json> <store> | list <store>"
+                  ),
+              )
+          }
+          ''',
+          )
+
+          write(
+              "crates/wow-reference/tests/immutable_pack_store.rs",
+              r'''use std::error::Error;
+          use std::fs;
+          use std::path::{Path, PathBuf};
+
+          use wow_reference::deterministic::ReferenceView;
+          use wow_reference::store::{
+              ReferencePackStore, StoreErrorCode, REFERENCE_VIEW_FILE,
+          };
+
+          struct TestDirectory {
+              path: PathBuf,
+          }
+
+          impl TestDirectory {
+              fn new(label: &str) -> Result<Self, Box<dyn Error>> {
+                  let base = std::env::temp_dir().join(format!(
+                      "wow-reference-{label}-{}",
+                      std::process::id()
+                  ));
+                  if base.exists() {
+                      fs::remove_dir_all(&base)?;
+                  }
+                  fs::create_dir(&base)?;
+                  Ok(Self { path: base })
+              }
+
+              fn path(&self) -> &Path {
+                  &self.path
+              }
+          }
+
+          impl Drop for TestDirectory {
+              fn drop(&mut self) {
+                  if fs::remove_dir_all(&self.path).is_err() {}
+              }
+          }
+
+          fn fixture() -> Result<ReferenceView, Box<dyn Error>> {
+              Ok(ReferenceView::from_json(include_bytes!(
+                  "fixtures/reference-view.json"
+              ))?)
+          }
+
+          #[test]
+          fn publication_is_content_addressed_idempotent_and_loadable() -> Result<(), Box<dyn Error>> {
+              let directory = TestDirectory::new("roundtrip")?;
+              let store = ReferencePackStore::new(directory.path())?;
+              let view = fixture()?;
+
+              let first = store.publish(&view)?;
+              assert!(first.newly_published());
+              assert!(first.generation_path().is_dir());
+              assert!(store.contains(view.generation_id())?);
+
+              let second = store.publish(&view)?;
+              assert!(!second.newly_published());
+              assert_eq!(first.generation_path(), second.generation_path());
+              assert_eq!(store.load(view.generation_id())?, view);
+              assert_eq!(
+                  store.list_generations()?,
+                  vec![view.generation_id().to_owned()]
+              );
+              Ok(())
+          }
+
+          #[test]
+          fn invalid_generation_identity_never_becomes_a_path() -> Result<(), Box<dyn Error>> {
+              let directory = TestDirectory::new("path-guard")?;
+              let store = ReferencePackStore::new(directory.path())?;
+              assert!(store.generation_path("../../escape").is_err());
+              assert!(store.generation_path("generation:reference:sha256:ABC").is_err());
+              Ok(())
+          }
+
+          #[test]
+          fn immutable_collision_is_rejected_instead_of_overwritten() -> Result<(), Box<dyn Error>> {
+              let directory = TestDirectory::new("collision")?;
+              let store = ReferencePackStore::new(directory.path())?;
+              let view = fixture()?;
+              let published = store.publish(&view)?;
+              fs::write(published.generation_path().join(REFERENCE_VIEW_FILE), b"{}\n")?;
+
+              let error = match store.publish(&view) {
+                  Ok(_) => {
+                      return Err(std::io::Error::other(
+                          "tampered immutable generation was accepted",
+                      )
+                      .into());
+                  }
+                  Err(error) => error,
+              };
+              assert!(matches!(
+                  error.code(),
+                  StoreErrorCode::InvalidView | StoreErrorCode::GenerationCollision
+              ));
+              Ok(())
+          }
+
+          #[test]
+          fn unexpected_store_entries_are_not_silently_ignored() -> Result<(), Box<dyn Error>> {
+              let directory = TestDirectory::new("unexpected-entry")?;
+              let store = ReferencePackStore::new(directory.path())?;
+              fs::create_dir_all(directory.path().join("generations"))?;
+              fs::write(directory.path().join("generations/random-file"), b"x")?;
+              let error = match store.list_generations() {
+                  Ok(_) => {
+                      return Err(std::io::Error::other(
+                          "unexpected store entry was ignored",
+                      )
+                      .into());
+                  }
+                  Err(error) => error,
+              };
+              assert_eq!(error.code(), StoreErrorCode::UnexpectedEntry);
+              Ok(())
+          }
+          ''',
+          )
+
+          readme = root / "crates/wow-reference/README.md"
+          source = readme.read_text(encoding="utf-8")
+          marker = "<!-- i0b-pack-store:start -->"
+          section = '''<!-- i0b-pack-store:start -->
+          ## Immutable pack store and CLI
+
+          `ReferencePackStore` publishes each verified generation under a path derived solely from
+          `generation:reference:sha256:<digest>`. Existing generations are byte-verified and never
+          overwritten. The `wow-reference-pack` binary supports `build`, `verify`, `publish`, and
+          `list` operations.
+
+          No mutable `CURRENT` pointer is written in this slice; atomic current-generation
+          publication belongs to the later project-store publication boundary.
+          <!-- i0b-pack-store:end -->'''
+          end = "<!-- i0b-pack-store:end -->"
+          if marker in source and end in source:
+              prefix = source.split(marker, 1)[0].rstrip()
+              suffix = source.split(end, 1)[1].lstrip()
+              source = prefix + "\n\n" + section + ("\n\n" + suffix if suffix else "")
+          else:
+              source = source.rstrip() + "\n\n" + section + "\n"
+          readme.write_text(source, encoding="utf-8")
+          PY
+
+      - name: Install frozen Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
+
+      - name: Format source tree
+        run: cargo +1.98.0 fmt --all
+
+      - name: Verify dependency lock
+        run: |
+          cargo +1.98.0 generate-lockfile
+          git diff --exit-code -- Cargo.lock
+
+      - name: Verify frozen reference vectors
+        run: cargo +1.98.0 run --locked -p wow-reference --example generate_fixture -- --check
+
+      - name: Check strict workspace lints
+        run: cargo +1.98.0 clippy --locked --workspace --all-targets --all-features -- -D warnings
+
+      - name: Run workspace debug tests
+        run: cargo +1.98.0 test --locked --workspace --all-features
+
+      - name: Run workspace release tests
+        run: cargo +1.98.0 test --locked --workspace --all-features --release
+
+      - name: Build workspace documentation
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo +1.98.0 doc --locked --workspace --all-features --no-deps
+
+      - name: Publish validated pack store directly to main
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/implement-i0-b-pack-store-20260904.yml
+          git add -A
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "feat(wow-reference): add immutable pack store and CLI"
+          git pull --rebase origin main
+          git push origin HEAD:main
+
+      - name: Package failed candidate
+        if: failure()
+        shell: bash
+        run: tar --exclude=.git --exclude=target -czf /tmp/i0-b-pack-store-failed.tar.gz .
+
+      - name: Upload failed candidate
+        if: failure()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: i0-b-pack-store-failed
+          path: /tmp/i0-b-pack-store-failed.tar.gz
+          retention-days: 1
+          if-no-files-found: error
