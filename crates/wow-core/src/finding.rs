@@ -8,9 +8,7 @@ use crate::digest::{
     WarningId,
 };
 use crate::error::{CoreErrorCode, CoreResult, validation_error};
-use crate::ids::{
-    EntityKey, MessageCode, ProducerId, RuleId, ToolVersion, validate_lower_segment,
-};
+use crate::ids::{EntityKey, MessageCode, ProducerId, RuleId, ToolVersion, validate_lower_segment};
 
 const MAX_MESSAGE_ARGUMENTS: usize = 128;
 const MAX_ARGUMENT_VALUE_BYTES: usize = 4096;
@@ -161,9 +159,7 @@ impl Remediation {
         plan_handle_id: Option<StableHandleId>,
     ) -> CoreResult<Self> {
         let valid = match class {
-            RemediationClass::ExactEdit | RemediationClass::ValidatedRecipe => {
-                recipe_id.is_some()
-            }
+            RemediationClass::ExactEdit | RemediationClass::ValidatedRecipe => recipe_id.is_some(),
             RemediationClass::PlanOnly | RemediationClass::CandidateOnly => true,
         };
         if !valid {
@@ -308,7 +304,7 @@ impl FindingDraft {
         #[derive(Serialize)]
         struct FingerprintProjection<'a> {
             finding_code: &'a MessageCode,
-            identity_relevant_message_arguments: Vec<&'a MessageArgument>,
+            identity_message_arguments: Vec<&'a MessageArgument>,
             primary_source_handle_id: StableHandleId,
             #[serde(skip_serializing_if = "Option::is_none")]
             root_cause_key: Option<RootCauseKey>,
@@ -318,14 +314,14 @@ impl FindingDraft {
             subject_entity_key: Option<&'a EntityKey>,
         }
 
-        let identity_relevant_message_arguments = self
+        let identity_message_arguments = self
             .message_arguments
             .iter()
             .filter(|argument| argument.identity_relevant())
             .collect();
         FindingFingerprint::derive(&FingerprintProjection {
             finding_code: &self.finding_code,
-            identity_relevant_message_arguments,
+            identity_message_arguments,
             primary_source_handle_id: self.primary_source_handle_id,
             root_cause_key: self.root_cause_key,
             rule_id: &self.rule_id,
@@ -367,7 +363,11 @@ impl FindingDraft {
         }
 
         let evidence = evidence_index(evidence_records)?;
-        if self.evidence_ids.iter().any(|id| !evidence.contains_key(id)) {
+        if self
+            .evidence_ids
+            .iter()
+            .any(|id| !evidence.contains_key(id))
+        {
             return Err(validation_error(
                 "bind_finding_to_context",
                 CoreErrorCode::MissingEvidenceReference,
@@ -395,11 +395,11 @@ impl FindingDraft {
         #[derive(Serialize)]
         struct FindingIdentity {
             context_id: GenerationContextId,
-            fingerprint: FindingFingerprint,
+            finding_fingerprint: FindingFingerprint,
         }
         let finding_id = FindingId::derive(&FindingIdentity {
             context_id,
-            fingerprint,
+            finding_fingerprint: fingerprint,
         })?;
         Ok(Finding {
             finding_id,
@@ -670,14 +670,18 @@ impl WarningRecord {
             ));
         }
         let evidence = evidence_index(evidence_records)?;
-        if self.evidence_ids.iter().any(|id| !evidence.contains_key(id)) {
+        if self
+            .evidence_ids
+            .iter()
+            .any(|id| !evidence.contains_key(id))
+        {
             return Err(validation_error(
                 "validate_warning_record",
                 CoreErrorCode::MissingEvidenceReference,
                 "evidence_ids",
             ));
         }
-        Ok(())
+        crate::integrity::validate_warning(self)
     }
 
     /// Stable warning ID.
@@ -693,9 +697,7 @@ impl WarningRecord {
     }
 }
 
-fn evidence_index(
-    records: &[crate::EvidenceRecord],
-) -> CoreResult<BTreeMap<EvidenceId, String>> {
+fn evidence_index(records: &[crate::EvidenceRecord]) -> CoreResult<BTreeMap<EvidenceId, String>> {
     let mut index = BTreeMap::new();
     for record in records {
         let value = serde_json::to_value(record).map_err(|error| {
@@ -815,4 +817,125 @@ fn validate_bounded_text(
     } else {
         Ok(())
     }
+}
+
+impl Finding {
+    /// Revalidates a deserialized finding against its exact registries.
+    pub fn validate(
+        &self,
+        context_id: GenerationContextId,
+        source_handles: &[crate::SourceHandle],
+        evidence_records: &[crate::EvidenceRecord],
+    ) -> CoreResult<()> {
+        if self.context_id != context_id {
+            return Err(validation_error(
+                "bind_finding_to_context",
+                CoreErrorCode::FindingContextMismatch,
+                "context_id",
+            ));
+        }
+        validate_message_arguments(&self.message_arguments)?;
+        let source_ids = source_handles
+            .iter()
+            .map(crate::SourceHandle::handle_id)
+            .collect::<BTreeSet<_>>();
+        if !source_ids.contains(&self.primary_source_handle_id)
+            || self
+                .related_source_handle_ids
+                .iter()
+                .any(|id| !source_ids.contains(id))
+        {
+            return Err(validation_error(
+                "bind_finding_to_context",
+                CoreErrorCode::MissingSourceHandle,
+                "source_handle_ids",
+            ));
+        }
+        let evidence = evidence_index(evidence_records)?;
+        if self
+            .evidence_ids
+            .iter()
+            .any(|id| !evidence.contains_key(id))
+        {
+            return Err(validation_error(
+                "bind_finding_to_context",
+                CoreErrorCode::MissingEvidenceReference,
+                "evidence_ids",
+            ));
+        }
+        if self
+            .remediation
+            .as_ref()
+            .is_some_and(|remediation| remediation.class() == RemediationClass::ExactEdit)
+            && self.evidence_ids.iter().any(|id| {
+                evidence
+                    .get(id)
+                    .is_some_and(|confidence| confidence == "candidate")
+            })
+        {
+            return Err(validation_error(
+                "bind_finding_to_context",
+                CoreErrorCode::RemediationAuthorityViolation,
+                "remediation.class",
+            ));
+        }
+        crate::integrity::validate_finding(self)
+    }
+}
+
+/// Recomputes a finding fingerprint before context binding.
+pub fn derive_finding_fingerprint(draft: &FindingDraft) -> CoreResult<FindingFingerprint> {
+    draft.fingerprint()
+}
+
+/// Binds a validated finding draft to one exact context and registries.
+pub fn bind_finding_to_context(
+    draft: FindingDraft,
+    context_id: GenerationContextId,
+    source_handles: &[crate::SourceHandle],
+    evidence_records: &[crate::EvidenceRecord],
+) -> CoreResult<Finding> {
+    draft.bind(context_id, source_handles, evidence_records)
+}
+
+/// Recomputes the identity of one warning record.
+pub fn derive_warning_id(record: &WarningRecord) -> CoreResult<WarningId> {
+    #[derive(Serialize)]
+    struct Projection<'a> {
+        context_id: GenerationContextId,
+        evidence_ids: &'a [EvidenceId],
+        message_arguments: &'a [MessageArgument],
+        #[serde(skip_serializing_if = "Option::is_none")]
+        primary_source_handle_id: Option<StableHandleId>,
+        producer_id: &'a ProducerId,
+        producer_version: &'a ToolVersion,
+        related_source_handle_ids: &'a [StableHandleId],
+        #[serde(skip_serializing_if = "Option::is_none")]
+        subject_id: Option<&'a str>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        subject_kind: Option<&'a str>,
+        warning_code: &'a MessageCode,
+    }
+    WarningId::derive(&Projection {
+        context_id: record.context_id,
+        evidence_ids: &record.evidence_ids,
+        message_arguments: &record.message_arguments,
+        primary_source_handle_id: record.primary_source_handle_id,
+        producer_id: &record.producer_id,
+        producer_version: &record.producer_version,
+        related_source_handle_ids: &record.related_source_handle_ids,
+        subject_id: record.subject_id.as_deref(),
+        subject_kind: record.subject_kind.as_deref(),
+        warning_code: &record.warning_code,
+    })
+}
+
+/// Operation wrapper for warning validation.
+pub fn validate_warning_record(
+    record: &WarningRecord,
+    context_id: GenerationContextId,
+    source_handles: &[crate::SourceHandle],
+    evidence_records: &[crate::EvidenceRecord],
+) -> CoreResult<()> {
+    record.validate(context_id, source_handles, evidence_records)
 }

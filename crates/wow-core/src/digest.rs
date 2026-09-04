@@ -466,6 +466,42 @@ const fn decode_nibble(byte: u8) -> Option<u8> {
     }
 }
 
+/// Parses one field-purpose-specific SHA-256 digest.
+pub fn parse_content_digest<P: DigestPurpose>(
+    candidate: &str,
+) -> CoreResult<Parsed<ContentDigest<P>>> {
+    ContentDigest::<P>::parse(candidate)
+}
+
+/// Hashes exact canonical material bytes and prepends a supported typed-ID family tag.
+pub fn derive_typed_digest_id(family_tag: &str, canonical_material: &[u8]) -> CoreResult<String> {
+    use sha2::{Digest as _, Sha256};
+
+    let prefix = match family_tag {
+        "reference_generation" => "generation:reference:sha256:",
+        "project_generation" => "generation:project:sha256:",
+        "source_handle" => "handle:sha256:",
+        "evidence" => "evidence:sha256:",
+        "conflict" => "conflict:sha256:",
+        "coverage" => "coverage:sha256:",
+        "finding_fingerprint" => "finding-fingerprint:sha256:",
+        "finding" => "finding:sha256:",
+        "generation_context" => "context:sha256:",
+        "root_cause" => "root-cause:sha256:",
+        "not_evaluated" => "not-evaluated:sha256:",
+        "warning" => "warning:sha256:",
+        _ => {
+            return Err(unsupported_error(
+                "derive_typed_digest_id",
+                CoreErrorCode::UnsupportedIdentifierFamily,
+                "family_tag",
+            ));
+        }
+    };
+    let hash = Sha256::digest(canonical_material);
+    Ok(format!("{prefix}{}", encode_hex(&hash)))
+}
+
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;

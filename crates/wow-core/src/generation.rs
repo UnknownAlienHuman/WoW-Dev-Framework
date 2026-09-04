@@ -554,6 +554,36 @@ fn validate_bounded_text(
     }
 }
 
+/// Returns the validated identity of one complete generation context.
+pub fn derive_generation_context_id(
+    context: &GenerationContext,
+) -> CoreResult<GenerationContextId> {
+    context.validate()?;
+    Ok(context.context_id())
+}
+
+/// Operation wrapper for generation-context validation.
+pub fn validate_generation_context(context: &GenerationContext) -> CoreResult<()> {
+    context.validate()
+}
+
+/// Operation wrapper for explicit generation-context merges.
+pub fn merge_generation_context(
+    left: &GenerationContext,
+    right: &GenerationContext,
+    mode: MergeMode,
+) -> CoreResult<GenerationContext> {
+    left.merge(right, mode)
+}
+
+/// Operation wrapper for the strict same-generation guard.
+pub fn require_same_generation(
+    left: &GenerationContext,
+    right: &GenerationContext,
+) -> CoreResult<()> {
+    left.require_same_generation(right)
+}
+
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;

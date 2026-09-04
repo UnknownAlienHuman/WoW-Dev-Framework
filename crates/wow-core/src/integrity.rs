@@ -27,9 +27,7 @@ pub(crate) fn validate_evidence(record: &crate::EvidenceRecord) -> CoreResult<()
     let value = object_value(record, "validate_evidence_record")?;
     let provenance = required_string(&value, "provenance", "validate_evidence_record")?;
     let confidence = required_string(&value, "confidence", "validate_evidence_record")?;
-    if matches!(provenance, "semantic_candidate" | "model_inference")
-        && confidence != "candidate"
-    {
+    if matches!(provenance, "semantic_candidate" | "model_inference") && confidence != "candidate" {
         return Err(validation_error(
             "validate_evidence_record",
             CoreErrorCode::EvidenceAuthorityViolation,
@@ -103,7 +101,7 @@ pub(crate) fn validate_coverage(record: &crate::CoverageRecord) -> CoreResult<()
     ensure_sorted_unique(&conflicts, "validate_coverage_record", "conflict_ids")?;
 
     let valid = match status {
-        "complete" => missing.is_empty() && conflicts.is_empty() && truncation.is_empty() && failure.is_none(),
+        "complete" => missing.is_empty() && truncation.is_empty() && failure.is_none(),
         "partial" => !missing.is_empty() || !truncation.is_empty() || !conflicts.is_empty(),
         "unknown" => !missing.is_empty() && failure.is_none(),
         "failed" => failure.and_then(Value::as_str).is_some(),
@@ -164,11 +162,8 @@ pub(crate) fn validate_warning(record: &crate::WarningRecord) -> CoreResult<()> 
 
 pub(crate) fn validate_finding(record: &crate::Finding) -> CoreResult<()> {
     let value = object_value(record, "bind_finding_to_context")?;
-    let supplied_fingerprint = required_string(
-        &value,
-        "fingerprint",
-        "derive_finding_fingerprint",
-    )?;
+    let supplied_fingerprint =
+        required_string(&value, "fingerprint", "derive_finding_fingerprint")?;
     let supplied_finding_id = required_string(&value, "finding_id", "bind_finding_to_context")?;
 
     let arguments = value
@@ -187,9 +182,14 @@ pub(crate) fn validate_finding(record: &crate::Finding) -> CoreResult<()> {
         .collect::<Vec<_>>();
 
     let mut projection = Map::new();
-    copy_required(&value, &mut projection, "finding_code", "derive_finding_fingerprint")?;
+    copy_required(
+        &value,
+        &mut projection,
+        "finding_code",
+        "derive_finding_fingerprint",
+    )?;
     projection.insert(
-        "identity_relevant_message_arguments".to_owned(),
+        "identity_message_arguments".to_owned(),
         Value::Array(identity_arguments),
     );
     copy_required(
@@ -199,7 +199,12 @@ pub(crate) fn validate_finding(record: &crate::Finding) -> CoreResult<()> {
         "derive_finding_fingerprint",
     )?;
     copy_optional(&value, &mut projection, "root_cause_key");
-    copy_required(&value, &mut projection, "rule_id", "derive_finding_fingerprint")?;
+    copy_required(
+        &value,
+        &mut projection,
+        "rule_id",
+        "derive_finding_fingerprint",
+    )?;
     copy_required(
         &value,
         &mut projection,
@@ -222,9 +227,14 @@ pub(crate) fn validate_finding(record: &crate::Finding) -> CoreResult<()> {
     }
 
     let mut binding = Map::new();
-    copy_required(&value, &mut binding, "context_id", "bind_finding_to_context")?;
+    copy_required(
+        &value,
+        &mut binding,
+        "context_id",
+        "bind_finding_to_context",
+    )?;
     binding.insert(
-        "fingerprint".to_owned(),
+        "finding_fingerprint".to_owned(),
         Value::String(supplied_fingerprint.to_owned()),
     );
     let expected_finding_id = typed_domain_id(
@@ -273,9 +283,8 @@ fn typed_domain_id(domain: &str, value: &Value, prefix: &str) -> CoreResult<Stri
     output.push_str(prefix);
     for byte in digest {
         use std::fmt::Write as _;
-        write!(&mut output, "{byte:02x}").map_err(|_| {
-            contract_error("derive_typed_digest_id", "digest")
-        })?;
+        write!(&mut output, "{byte:02x}")
+            .map_err(|_| contract_error("derive_typed_digest_id", "digest"))?;
     }
     Ok(output)
 }

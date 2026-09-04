@@ -547,6 +547,75 @@ fn is_floating_revision(revision: &str) -> bool {
     )
 }
 
+/// Normalizes one source path while retaining canonicalization information.
+pub fn normalize_source_path(candidate: &str) -> CoreResult<Parsed<NormalizedSourcePath>> {
+    NormalizedSourcePath::parse(candidate)
+}
+
+/// Validates one canonical source span.
+pub fn validate_source_span(span: &SourceSpan) -> CoreResult<()> {
+    span.validate()
+}
+
+/// Finishes one source-handle builder.
+pub fn build_source_handle(builder: SourceHandleBuilder) -> CoreResult<SourceHandle> {
+    builder.build()
+}
+
+/// Verifies that supplied content has the digest bound into a source handle.
+pub fn verify_source_handle_content(
+    handle: &SourceHandle,
+    supplied: &ContentDigest<SourceContent>,
+) -> CoreResult<()> {
+    handle.content_digest.verify(supplied)
+}
+
+/// Compares two immutable source handles without inferring lineage.
+#[must_use]
+pub fn compare_source_handles(left: &SourceHandle, right: &SourceHandle) -> SourceHandleComparison {
+    left.compare(right)
+}
+
+impl SourceHandle {
+    /// Revalidates every field and the content-derived handle identifier.
+    pub fn validate(&self) -> CoreResult<()> {
+        validate_origin_text(&self.origin_id, "origin_id")?;
+        validate_origin_text(&self.revision, "revision")?;
+        if is_floating_revision(&self.revision) {
+            return Err(validation_error(
+                "validate_source_handle",
+                CoreErrorCode::InvalidSourceHandle,
+                "revision",
+            ));
+        }
+        self.span.validate()?;
+        validate_origin_generation_matrix(
+            self.origin_kind,
+            self.reference_generation,
+            self.project_generation,
+        )?;
+        crate::integrity::validate_source_handle(self)
+    }
+
+    /// Optional reference-generation binding.
+    #[must_use]
+    pub const fn reference_generation(&self) -> Option<ReferenceGenerationId> {
+        self.reference_generation
+    }
+
+    /// Optional project-generation binding.
+    #[must_use]
+    pub const fn project_generation(&self) -> Option<ProjectGenerationId> {
+        self.project_generation
+    }
+
+    /// Optional exact associated entity.
+    #[must_use]
+    pub const fn entity_key(&self) -> Option<&EntityKey> {
+        self.entity_key.as_ref()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;

@@ -475,6 +475,39 @@ fn is_floating_revision(revision: &str) -> bool {
     )
 }
 
+/// Operation wrapper for validating a structured profile identity.
+pub fn validate_profile_identity(profile: &ProfileIdentity) -> CoreResult<()> {
+    profile.validate()
+}
+
+/// Operation wrapper for comparing two structured profile identities.
+pub fn compare_profile_identity(
+    left: &ProfileIdentity,
+    right: &ProfileIdentity,
+) -> CoreResult<ProfileComparison> {
+    left.validate()?;
+    right.validate()?;
+    Ok(left.compare(right))
+}
+
+/// Requires two validated profile identities to be exactly identical.
+pub fn require_profile_identity_match(
+    left: &ProfileIdentity,
+    right: &ProfileIdentity,
+) -> CoreResult<()> {
+    left.validate()?;
+    right.validate()?;
+    if left == right {
+        Ok(())
+    } else {
+        Err(crate::error::mismatch_error(
+            "require_profile_identity_match",
+            CoreErrorCode::ProfileMismatch,
+            "profile",
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;

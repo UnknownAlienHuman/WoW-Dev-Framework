@@ -247,7 +247,10 @@ impl Budget {
     pub fn validate_limits(&self) -> CoreResult<()> {
         self.limits.validate()?;
         let pairs = [
-            (self.usage.coverage_records, self.limits.max_coverage_records),
+            (
+                self.usage.coverage_records,
+                self.limits.max_coverage_records,
+            ),
             (
                 self.usage.capability_summaries,
                 self.limits.max_capability_summaries,
@@ -259,10 +262,7 @@ impl Budget {
             ),
             (self.usage.conflicts, self.limits.max_conflicts),
             (self.usage.findings, self.limits.max_findings),
-            (
-                self.usage.not_evaluated,
-                self.limits.max_not_evaluated,
-            ),
+            (self.usage.not_evaluated, self.limits.max_not_evaluated),
             (self.usage.warnings, self.limits.max_warnings),
             (self.usage.output_bytes, self.limits.max_output_bytes),
         ];
@@ -294,4 +294,14 @@ pub fn classify_truncation(mut entries: Vec<TruncationEntry>) -> CoreResult<Trun
         }
     }
     Ok(TruncationState::Truncated { entries })
+}
+
+/// Operation wrapper for validating one budget limit set.
+pub fn validate_budget(limits: &BudgetLimits) -> CoreResult<()> {
+    limits.validate()
+}
+
+/// Operation wrapper for checked usage accumulation.
+pub fn accumulate_budget_usage(left: BudgetUsage, right: BudgetUsage) -> CoreResult<BudgetUsage> {
+    left.checked_add(right)
 }

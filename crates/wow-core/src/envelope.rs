@@ -77,45 +77,26 @@ impl E0CheckResultEnvelope {
         }
         self.context.validate()?;
         let context_id = self.context.context_id();
-        validate_context_bound_collection(
-            &self.coverage_records,
-            "coverage_records",
-            context_id,
-        )?;
+        validate_context_bound_collection(&self.coverage_records, "coverage_records", context_id)?;
         validate_context_bound_collection(
             &self.capability_summaries,
             "capability_summaries",
             context_id,
         )?;
         validate_source_handle_contexts(&self.source_handles, &self.context)?;
-        validate_context_bound_collection(
-            &self.evidence_records,
-            "evidence_records",
-            context_id,
-        )?;
+        validate_records(self)?;
+        validate_context_bound_collection(&self.evidence_records, "evidence_records", context_id)?;
         validate_context_bound_collection(&self.conflicts, "conflicts", context_id)?;
         validate_context_bound_collection(&self.findings, "findings", context_id)?;
-        validate_context_bound_collection(
-            &self.not_evaluated,
-            "not_evaluated",
-            context_id,
-        )?;
+        validate_context_bound_collection(&self.not_evaluated, "not_evaluated", context_id)?;
         validate_context_bound_collection(&self.warnings, "warnings", context_id)?;
 
         validate_unique_ids(&self.coverage_records, "coverage_id", "coverage_records")?;
         validate_unique_ids(&self.source_handles, "handle_id", "source_handles")?;
-        validate_unique_ids(
-            &self.evidence_records,
-            "evidence_id",
-            "evidence_records",
-        )?;
+        validate_unique_ids(&self.evidence_records, "evidence_id", "evidence_records")?;
         validate_unique_ids(&self.conflicts, "conflict_id", "conflicts")?;
         validate_unique_ids(&self.findings, "finding_id", "findings")?;
-        validate_unique_ids(
-            &self.not_evaluated,
-            "not_evaluated_id",
-            "not_evaluated",
-        )?;
+        validate_unique_ids(&self.not_evaluated, "not_evaluated_id", "not_evaluated")?;
         validate_unique_ids(&self.warnings, "warning_id", "warnings")?;
         validate_unique_summary_keys(&self.capability_summaries)?;
         validate_reference_closure(self)?;
@@ -229,7 +210,7 @@ impl E0CheckResultDraft {
     pub fn finalize(mut self) -> CoreResult<E0CheckResultEnvelope> {
         self.context.validate()?;
         self.coverage_records
-            .sort_by_cached_key(|record| record_id(record, "coverage_id").unwrap_or_default());
+            .sort_by_cached_key(coverage_sort_key_lossless);
         self.capability_summaries
             .sort_by_cached_key(summary_sort_key_lossless);
         self.source_handles
@@ -240,9 +221,8 @@ impl E0CheckResultDraft {
             .sort_by_cached_key(|record| record_id(record, "conflict_id").unwrap_or_default());
         canonical_finding_order(&mut self.findings, &self.source_handles)?;
         self.findings = deduplicate_findings(self.findings)?;
-        self.not_evaluated.sort_by_cached_key(|record| {
-            record_id(record, "not_evaluated_id").unwrap_or_default()
-        });
+        self.not_evaluated
+            .sort_by_cached_key(|record| record_id(record, "not_evaluated_id").unwrap_or_default());
         self.warnings
             .sort_by_cached_key(|record| record_id(record, "warning_id").unwrap_or_default());
 
@@ -317,6 +297,7 @@ impl E0OperationErrorEnvelope {
         operation_id: OperationId,
         error: CoreError,
     ) -> CoreResult<Self> {
+        error.validate()?;
         let zero = ContentDigest::<CanonicalResult>::from_bytes([0; 32]);
         let mut envelope = Self {
             schema,
@@ -338,6 +319,7 @@ impl E0OperationErrorEnvelope {
                 "canonicalization_version",
             ));
         }
+        self.error.validate()?;
         if error_envelope_digest(self)? != self.canonical_digest {
             return Err(validation_error(
                 "validate_result_envelope",
@@ -555,12 +537,7 @@ fn validate_reference_closure(envelope: &E0CheckResultEnvelope) -> CoreResult<()
     )?;
 
     for record in &envelope.evidence_records {
-        validate_string_array_refs(
-            record,
-            "source_handle_ids",
-            &handles,
-            "evidence_records",
-        )?;
+        validate_string_array_refs(record, "source_handle_ids", &handles, "evidence_records")?;
         validate_string_array_refs(
             record,
             "derivation_input_ids",
@@ -575,12 +552,7 @@ fn validate_reference_closure(envelope: &E0CheckResultEnvelope) -> CoreResult<()
         validate_string_array_refs(record, "conflict_ids", &conflicts, "coverage_records")?;
     }
     for record in &envelope.capability_summaries {
-        validate_string_array_refs(
-            record,
-            "conflict_ids",
-            &conflicts,
-            "capability_summaries",
-        )?;
+        validate_string_array_refs(record, "conflict_ids", &conflicts, "capability_summaries")?;
         let value = record_value(record, "capability_summaries")?;
         if let Some(Value::Array(partitions)) = value.get("partition_refs") {
             for partition in partitions {
@@ -610,33 +582,13 @@ fn validate_reference_closure(envelope: &E0CheckResultEnvelope) -> CoreResult<()
         }
     }
     for record in &envelope.findings {
-        validate_scalar_ref(
-            record,
-            "primary_source_handle_id",
-            &handles,
-            "findings",
-        )?;
-        validate_string_array_refs(
-            record,
-            "related_source_handle_ids",
-            &handles,
-            "findings",
-        )?;
+        validate_scalar_ref(record, "primary_source_handle_id", &handles, "findings")?;
+        validate_string_array_refs(record, "related_source_handle_ids", &handles, "findings")?;
         validate_string_array_refs(record, "evidence_ids", &evidence, "findings")?;
     }
     for record in &envelope.warnings {
-        validate_optional_scalar_ref(
-            record,
-            "primary_source_handle_id",
-            &handles,
-            "warnings",
-        )?;
-        validate_string_array_refs(
-            record,
-            "related_source_handle_ids",
-            &handles,
-            "warnings",
-        )?;
+        validate_optional_scalar_ref(record, "primary_source_handle_id", &handles, "warnings")?;
+        validate_string_array_refs(record, "related_source_handle_ids", &handles, "warnings")?;
         validate_string_array_refs(record, "evidence_ids", &evidence, "warnings")?;
     }
     validate_evidence_acyclic(&envelope.evidence_records)?;
@@ -821,6 +773,18 @@ fn required_string(
         })
 }
 
+fn coverage_sort_key_lossless(
+    record: &crate::CoverageRecord,
+) -> (String, String, String, String, String) {
+    (
+        record.capability_id().as_str().to_owned(),
+        record.partition_id().canonical(),
+        record.producer_id().as_str().to_owned(),
+        record.producer_version().to_string(),
+        record.coverage_id().canonical(),
+    )
+}
+
 fn summary_sort_key_lossless(record: &crate::CapabilitySummary) -> Vec<u8> {
     canonical_json_bytes(record).unwrap_or_default()
 }
@@ -904,4 +868,154 @@ fn record_status<T: Serialize>(record: &T) -> Option<String> {
             .and_then(Value::as_str)
             .map(str::to_owned)
     })
+}
+
+fn validate_records(envelope: &E0CheckResultEnvelope) -> CoreResult<()> {
+    for handle in &envelope.source_handles {
+        handle.validate()?;
+    }
+    crate::validate_evidence_derivation_graph(&envelope.evidence_records)?;
+    for conflict in &envelope.conflicts {
+        conflict.validate()?;
+    }
+    for coverage in &envelope.coverage_records {
+        coverage.validate()?;
+        for conflict_id in coverage.conflict_ids() {
+            let conflict = envelope
+                .conflicts
+                .iter()
+                .find(|conflict| conflict.conflict_id() == *conflict_id)
+                .ok_or_else(|| reference_error("coverage_records.conflict_ids"))?;
+            if !crate::coverage::conflict_affects_coverage(conflict, coverage) {
+                return Err(validation_error(
+                    "validate_coverage_record",
+                    CoreErrorCode::CoverageConflict,
+                    "coverage_records.conflict_ids",
+                ));
+            }
+        }
+    }
+    for evidence in &envelope.evidence_records {
+        for reference in evidence.coverage_refs() {
+            let matches = envelope
+                .coverage_records
+                .iter()
+                .filter(|coverage| {
+                    coverage.capability_id() == reference.capability_id()
+                        && coverage.partition_id() == reference.partition_id()
+                        && coverage.producer_id() == reference.producer_id()
+                })
+                .count();
+            if matches != 1 {
+                return Err(reference_error("evidence_records.coverage_refs"));
+            }
+        }
+    }
+    for summary in &envelope.capability_summaries {
+        let selected = summary
+            .partition_refs()
+            .iter()
+            .map(|partition| {
+                envelope
+                    .coverage_records
+                    .iter()
+                    .find(|coverage| coverage.coverage_id() == partition.coverage_id())
+                    .cloned()
+                    .ok_or_else(|| reference_error("capability_summaries.partition_refs"))
+            })
+            .collect::<CoreResult<Vec<_>>>()?;
+        summary.validate(&selected)?;
+    }
+    for record in &envelope.not_evaluated {
+        record.validate()?;
+        for blocker in record.blocking_partitions() {
+            let coverage = envelope
+                .coverage_records
+                .iter()
+                .find(|coverage| coverage.coverage_id() == blocker.coverage_id())
+                .ok_or_else(|| reference_error("not_evaluated.blocking_partitions"))?;
+            if coverage.capability_id() != blocker.capability_id()
+                || coverage.partition_id() != blocker.partition_id()
+                || coverage.status() != blocker.status()
+            {
+                return Err(reference_error("not_evaluated.blocking_partitions"));
+            }
+        }
+    }
+    let context_id = envelope.context.context_id();
+    for finding in &envelope.findings {
+        finding.validate(
+            context_id,
+            &envelope.source_handles,
+            &envelope.evidence_records,
+        )?;
+    }
+    for warning in &envelope.warnings {
+        warning.validate(
+            context_id,
+            &envelope.source_handles,
+            &envelope.evidence_records,
+        )?;
+    }
+    Ok(())
+}
+
+/// Operation wrapper for strict result-envelope validation.
+pub fn validate_result_envelope(envelope: &E0CheckResultEnvelope) -> CoreResult<()> {
+    envelope.validate()
+}
+
+/// Returns a canonically ordered, rehashed equivalent result envelope.
+pub fn canonical_result_order(
+    mut envelope: E0CheckResultEnvelope,
+) -> CoreResult<E0CheckResultEnvelope> {
+    envelope.validate()?;
+    envelope
+        .coverage_records
+        .sort_by_cached_key(coverage_sort_key_lossless);
+    envelope
+        .capability_summaries
+        .sort_by_cached_key(summary_sort_key_lossless);
+    envelope
+        .source_handles
+        .sort_by_key(crate::SourceHandle::handle_id);
+    envelope
+        .evidence_records
+        .sort_by_key(crate::EvidenceRecord::evidence_id);
+    envelope
+        .conflicts
+        .sort_by_key(crate::ConflictRecord::conflict_id);
+    canonical_finding_order(&mut envelope.findings, &envelope.source_handles)?;
+    envelope
+        .not_evaluated
+        .sort_by_key(crate::NotEvaluatedRecord::not_evaluated_id);
+    envelope
+        .warnings
+        .sort_by_key(crate::WarningRecord::warning_id);
+
+    let mut budget = envelope.budget.clone();
+    for _ in 0..FINALIZATION_PASSES {
+        envelope.budget = budget.clone();
+        envelope.canonical_digest = canonical_result_digest(&envelope)?;
+        let bytes = canonical_json_bytes(&envelope)?;
+        let output_bytes =
+            u64::try_from(bytes.len()).map_err(|_| usage_overflow("output_bytes"))?;
+        if budget.usage().output_bytes == output_bytes {
+            envelope.validate()?;
+            return Ok(envelope);
+        }
+        budget = budget.with_output_bytes(output_bytes)?;
+    }
+    Err(CoreError::new(
+        CoreErrorCode::CanonicalizationFailure,
+        ErrorCategory::Invariant,
+        "canonical_result_order",
+        RetryClass::AfterInputChange,
+    )
+    .with_argument("reason", "output_bytes_fixed_point_did_not_converge"))
+}
+
+/// Operation wrapper for the result finalization pipeline.
+pub fn finalize_result_envelope(draft: E0CheckResultDraft) -> CoreResult<E0CheckResultEnvelope> {
+    draft.finalize()
 }

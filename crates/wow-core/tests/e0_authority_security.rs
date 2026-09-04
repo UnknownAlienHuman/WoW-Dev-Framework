@@ -54,10 +54,7 @@ fn proven_evidence_cannot_hide_derivation_inputs() -> Result<(), Box<dyn Error>>
     {
         let records = evidence_records_mut(&mut value)?;
         let derived = record_object_mut(records, derived_index)?;
-        derived.insert(
-            "confidence".to_owned(),
-            Value::String("proven".to_owned()),
-        );
+        derived.insert("confidence".to_owned(), Value::String("proven".to_owned()));
     }
     normalize_evidence_ids(&mut value)?;
 
@@ -87,10 +84,7 @@ fn proven_runtime_probe_is_scenario_scoped() -> Result<(), Box<dyn Error>> {
             "provenance".to_owned(),
             Value::String("runtime_probe".to_owned()),
         );
-        record.insert(
-            "confidence".to_owned(),
-            Value::String("proven".to_owned()),
-        );
+        record.insert("confidence".to_owned(), Value::String("proven".to_owned()));
         record.insert(
             "claim_scope".to_owned(),
             Value::String("platform_contract".to_owned()),
@@ -105,8 +99,8 @@ fn proven_runtime_probe_is_scenario_scoped() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn source_handle_floating_revision_is_rejected_after_id_rederivation(
-) -> Result<(), Box<dyn Error>> {
+fn source_handle_floating_revision_is_rejected_after_id_rederivation() -> Result<(), Box<dyn Error>>
+{
     let mut value: Value =
         serde_json::from_str(include_str!("../examples/e0-findings-result.json"))?;
     mutate_first_source_handle(&mut value, |record| {
@@ -120,8 +114,7 @@ fn source_handle_floating_revision_is_rejected_after_id_rederivation(
 }
 
 #[test]
-fn source_handle_path_escape_is_rejected_after_id_rederivation(
-) -> Result<(), Box<dyn Error>> {
+fn source_handle_path_escape_is_rejected_after_id_rederivation() -> Result<(), Box<dyn Error>> {
     let mut value: Value =
         serde_json::from_str(include_str!("../examples/e0-findings-result.json"))?;
     mutate_first_source_handle(&mut value, |record| {
@@ -131,9 +124,16 @@ fn source_handle_path_escape_is_rejected_after_id_rederivation(
         );
     })?;
 
-    let envelope: E0CheckResultEnvelope = serde_json::from_value(value)?;
-    let error = require_error(envelope.validate())?;
-    assert_eq!(error.code(), CoreErrorCode::PathEscape);
+    let error = match serde_json::from_value::<E0CheckResultEnvelope>(value) {
+        Ok(_) => {
+            return Err(std::io::Error::other(
+                "path escape unexpectedly deserialized into a typed envelope",
+            )
+            .into());
+        }
+        Err(error) => error,
+    };
+    assert!(error.to_string().contains("PathEscape"));
     Ok(())
 }
 
@@ -155,10 +155,7 @@ fn error_reason_argument_cannot_be_a_credential_payload() -> Result<(), Box<dyn 
     let object = sensitive
         .as_object_mut()
         .ok_or_else(|| std::io::Error::other("reason argument is not an object"))?;
-    object.insert(
-        "name".to_owned(),
-        Value::String("access_token".to_owned()),
-    );
+    object.insert("name".to_owned(), Value::String("access_token".to_owned()));
     object.insert("value".to_owned(), Value::String("synthetic".to_owned()));
     arguments.push(sensitive);
     arguments.sort_by(|left, right| {
@@ -210,10 +207,7 @@ fn evidence_records_mut(value: &mut Value) -> Result<&mut Vec<Value>, Box<dyn Er
         .ok_or_else(|| std::io::Error::other("evidence records are missing").into())
 }
 
-fn record_object(
-    records: &[Value],
-    index: usize,
-) -> Result<&Map<String, Value>, Box<dyn Error>> {
+fn record_object(records: &[Value], index: usize) -> Result<&Map<String, Value>, Box<dyn Error>> {
     records
         .get(index)
         .and_then(Value::as_object)

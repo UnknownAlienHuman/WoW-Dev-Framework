@@ -14,11 +14,16 @@ fn message_arguments_require_unique_canonical_order() -> Result<(), Box<dyn Erro
     let zeta = MessageArgument::new("zeta", MessageArgumentKind::Boolean, "true", false)?;
 
     validate_message_arguments(&[alpha.clone(), zeta.clone()])?;
-    let error = validate_message_arguments(&[zeta, alpha]).expect_err("order must be rejected");
+    let error = require_error(
+        validate_message_arguments(&[zeta, alpha]),
+        "order must be rejected",
+    )?;
     assert_eq!(error.code(), CoreErrorCode::InvalidMessageArgument);
 
-    let float = MessageArgument::new("count", MessageArgumentKind::Integer, "1.5", true)
-        .expect_err("floating-point message argument must be rejected");
+    let float = require_error(
+        MessageArgument::new("count", MessageArgumentKind::Integer, "1.5", true),
+        "floating-point message argument must be rejected",
+    )?;
     assert_eq!(float.code(), CoreErrorCode::InvalidMessageArgument);
     Ok(())
 }
@@ -32,7 +37,7 @@ fn budget_validation_and_usage_are_checked() -> Result<(), Box<dyn Error>> {
         max_findings: 0,
         ..limits
     };
-    let error = validate_budget(&invalid).expect_err("zero limit must be rejected");
+    let error = require_error(validate_budget(&invalid), "zero limit must be rejected")?;
     assert_eq!(error.code(), CoreErrorCode::BudgetInvalid);
 
     let left = BudgetUsage {
@@ -43,7 +48,10 @@ fn budget_validation_and_usage_are_checked() -> Result<(), Box<dyn Error>> {
         findings: 1,
         ..BudgetUsage::default()
     };
-    let error = accumulate_budget_usage(left, right).expect_err("usage overflow must fail");
+    let error = require_error(
+        accumulate_budget_usage(left, right),
+        "usage overflow must fail",
+    )?;
     assert_eq!(error.code(), CoreErrorCode::UsageOverflow);
     Ok(())
 }
@@ -55,14 +63,16 @@ fn truncation_never_uses_zero_as_unknown() -> Result<(), Box<dyn Error>> {
     let state = classify_truncation(vec![unknown])?;
     assert!(state.is_truncated());
 
-    let invalid = TruncationEntry::new(
-        "findings",
-        Vec::new(),
-        Some(0),
-        true,
-        "wow.core.output_limited".parse()?,
-    )
-    .expect_err("known and unknown omission counts are mutually exclusive");
+    let invalid = require_error(
+        TruncationEntry::new(
+            "findings",
+            Vec::new(),
+            Some(0),
+            true,
+            "wow.core.output_limited".parse()?,
+        ),
+        "known and unknown omission counts are mutually exclusive",
+    )?;
     assert_eq!(invalid.code(), CoreErrorCode::ContractViolation);
     Ok(())
 }
@@ -79,8 +89,10 @@ fn schema_compatibility_is_exact_major_and_not_future_minor() -> Result<(), Box<
         validate_schema_version(&schema, &"0.1.0".parse()?, &schema, &supported)?,
         SchemaCompatibility::CompatibleSupported
     );
-    let future = validate_schema_version(&schema, &"0.3.0".parse()?, &schema, &supported)
-        .expect_err("future minor version must be rejected");
+    let future = require_error(
+        validate_schema_version(&schema, &"0.3.0".parse()?, &schema, &supported),
+        "future minor version must be rejected",
+    )?;
     assert_eq!(future.code(), CoreErrorCode::SchemaVersionUnsupported);
     Ok(())
 }
@@ -97,39 +109,32 @@ fn canonical_reordering_preserves_exact_clean_result() -> Result<(), Box<dyn Err
 
 #[test]
 fn canonical_digest_tampering_is_rejected() -> Result<(), Box<dyn Error>> {
-    let mut value: Value =
-        serde_json::from_str(include_str!("../examples/e0-clean-result.json"))?;
+    let mut value: Value = serde_json::from_str(include_str!("../examples/e0-clean-result.json"))?;
     set_string_field(
         &mut value,
         "canonical_digest",
         format!("sha256:{}", "0".repeat(64)),
     )?;
     let envelope: E0CheckResultEnvelope = serde_json::from_value(value)?;
-    let error = envelope
-        .validate()
-        .expect_err("tampered canonical digest must fail");
+    let error = require_error(envelope.validate(), "tampered canonical digest must fail")?;
     assert_eq!(error.code(), CoreErrorCode::CanonicalDigestMismatch);
     Ok(())
 }
 
 #[test]
 fn complete_status_cannot_hide_not_evaluated() -> Result<(), Box<dyn Error>> {
-    let mut value: Value = serde_json::from_str(include_str!(
-        "../examples/e0-not-evaluated-result.json"
-    ))?;
+    let mut value: Value =
+        serde_json::from_str(include_str!("../examples/e0-not-evaluated-result.json"))?;
     set_string_field(&mut value, "status", "complete".to_owned())?;
     let envelope: E0CheckResultEnvelope = serde_json::from_value(value)?;
-    let error = envelope
-        .validate()
-        .expect_err("complete must not hide NotEvaluated");
+    let error = require_error(envelope.validate(), "complete must not hide NotEvaluated")?;
     assert_eq!(error.code(), CoreErrorCode::ResultStatusViolation);
     Ok(())
 }
 
 #[test]
 fn strict_envelope_rejects_unknown_and_duplicate_fields() -> Result<(), Box<dyn Error>> {
-    let mut value: Value =
-        serde_json::from_str(include_str!("../examples/e0-clean-result.json"))?;
+    let mut value: Value = serde_json::from_str(include_str!("../examples/e0-clean-result.json"))?;
     let object = value
         .as_object_mut()
         .ok_or_else(|| std::io::Error::other("fixture is not an object"))?;
@@ -162,12 +167,26 @@ fn presentation_field_inside_finding_is_rejected() -> Result<(), Box<dyn Error>>
     Ok(())
 }
 
-fn set_string_field(value: &mut Value, field: &str, replacement: String) -> Result<(), Box<dyn Error>> {
+fn set_string_field(
+    value: &mut Value,
+    field: &str,
+    replacement: String,
+) -> Result<(), Box<dyn Error>> {
     let object = value
         .as_object_mut()
         .ok_or_else(|| std::io::Error::other("fixture is not an object"))?;
     object.insert(field.to_owned(), Value::String(replacement));
     Ok(())
+}
+
+fn require_error<T>(
+    result: Result<T, wow_core::CoreError>,
+    message: &'static str,
+) -> Result<wow_core::CoreError, Box<dyn Error>> {
+    match result {
+        Ok(_) => Err(std::io::Error::other(message).into()),
+        Err(error) => Ok(error),
+    }
 }
 
 const fn valid_limits() -> BudgetLimits {

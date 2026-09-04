@@ -125,7 +125,77 @@ dotted_id!(RuleId, "parse_rule_id");
 dotted_id!(ProducerId, "parse_producer_id");
 dotted_id!(CapabilityId, "parse_capability_id");
 dotted_id!(OperationId, "parse_operation_id");
-dotted_id!(MessageCode, "parse_message_code");
+/// Validated diagnostic, warning, or reason code.
+///
+/// Public finding and warning codes may be dotted, while bounded reason codes
+/// may be one canonical `snake_case` segment.
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct MessageCode(String);
+
+impl MessageCode {
+    /// Parses one canonical message code without requiring a dot.
+    pub fn parse(candidate: &str) -> CoreResult<Parsed<Self>> {
+        const OPERATION: &str = "parse_message_code";
+        reject_hidden_text(candidate, OPERATION)?;
+        if !candidate.is_ascii() {
+            return Err(validation_error(
+                OPERATION,
+                CoreErrorCode::InvalidIdentifier,
+                "candidate",
+            ));
+        }
+        let canonical = candidate.to_ascii_lowercase();
+        validate_qualified_id(&canonical, false, OPERATION, "candidate")?;
+        let was_canonical = canonical == candidate;
+        Ok(Parsed::new(Self(canonical), was_canonical))
+    }
+
+    /// Canonical text.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Debug for MessageCode {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.debug_tuple("MessageCode").field(&self.0).finish()
+    }
+}
+
+impl fmt::Display for MessageCode {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+impl FromStr for MessageCode {
+    type Err = CoreError;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        let parsed = Self::parse(input)?;
+        require_canonical(parsed, "parse_message_code")
+    }
+}
+
+impl Serialize for MessageCode {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.0)
+    }
+}
+
+impl<'de> Deserialize<'de> for MessageCode {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        value.parse().map_err(D::Error::custom)
+    }
+}
 
 /// Stable profile label. Structured profile fields remain authoritative.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -952,6 +1022,44 @@ const fn decode_upper_hex(byte: u8) -> Option<u8> {
         b'A'..=b'F' => Some(byte - b'A' + 10),
         _ => None,
     }
+}
+
+/// Parses a profile identifier while preserving canonicalization information.
+pub fn parse_profile_id(candidate: &str) -> CoreResult<Parsed<ProfileId>> {
+    ProfileId::parse(candidate)
+}
+
+/// Parses a rule identifier while preserving canonicalization information.
+pub fn parse_rule_id(candidate: &str) -> CoreResult<Parsed<RuleId>> {
+    RuleId::parse(candidate)
+}
+
+/// Parses a producer identifier while preserving canonicalization information.
+pub fn parse_producer_id(candidate: &str) -> CoreResult<Parsed<ProducerId>> {
+    ProducerId::parse(candidate)
+}
+
+/// Parses a capability identifier while preserving canonicalization information.
+pub fn parse_capability_id(candidate: &str) -> CoreResult<Parsed<CapabilityId>> {
+    CapabilityId::parse(candidate)
+}
+
+/// Parses an operation identifier while preserving canonicalization information.
+pub fn parse_operation_id(candidate: &str) -> CoreResult<Parsed<OperationId>> {
+    OperationId::parse(candidate)
+}
+
+/// Constructs an exact entity key from its kind and payload.
+pub fn parse_entity_key(kind: &str, key: &str) -> CoreResult<EntityKey> {
+    EntityKey::new(kind, key)
+}
+
+/// Constructs an exact coverage partition from its scope and optional payload.
+pub fn parse_coverage_partition_id(
+    scope: &str,
+    key: Option<&str>,
+) -> CoreResult<CoveragePartitionId> {
+    CoveragePartitionId::new(scope, key)
 }
 
 #[cfg(test)]
