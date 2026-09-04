@@ -1,0 +1,175 @@
+name: Finalize rolling source manifest producer
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/finalize-source-manifest-20260904.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: finalize-source-manifest-20260904
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Repair test import and install durable source gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          test_path = Path('tests/test_build_blizzard_source_manifest.py')
+          text = test_path.read_text(encoding='utf-8')
+          old = 'import os\nimport subprocess\nimport tempfile'
+          new = 'import os\nimport subprocess\nimport sys\nimport tempfile'
+          if old in text:
+              text = text.replace(old, new, 1)
+          elif 'import sys\n' not in text:
+              raise SystemExit('cannot add sys import deterministically')
+
+          old = 'MODULE = importlib.util.module_from_spec(SPEC)\nSPEC.loader.exec_module(MODULE)'
+          new = (
+              'MODULE = importlib.util.module_from_spec(SPEC)\n'
+              'sys.modules[SPEC.name] = MODULE\n'
+              'SPEC.loader.exec_module(MODULE)'
+          )
+          if old in text:
+              text = text.replace(old, new, 1)
+          elif 'sys.modules[SPEC.name] = MODULE' not in text:
+              raise SystemExit('cannot register dynamic module deterministically')
+          test_path.write_text(text, encoding='utf-8', newline='\n')
+
+          workflow = '''name: Blizzard source manifest
+
+          on:
+            push:
+              branches: [main]
+              paths:
+                - scripts/build-blizzard-source-manifest.py
+                - tests/test_build_blizzard_source_manifest.py
+                - .github/workflows/source-manifest.yml
+            pull_request:
+              paths:
+                - scripts/build-blizzard-source-manifest.py
+                - tests/test_build_blizzard_source_manifest.py
+                - .github/workflows/source-manifest.yml
+            schedule:
+              - cron: '41 9 * * *'
+            workflow_dispatch:
+
+          permissions:
+            contents: read
+
+          concurrency:
+            group: source-manifest-${{ github.ref }}
+            cancel-in-progress: true
+
+          jobs:
+            unit:
+              strategy:
+                fail-fast: false
+                matrix:
+                  os: [ubuntu-latest, windows-latest, macos-latest]
+              runs-on: ${{ matrix.os }}
+              timeout-minutes: 15
+              steps:
+                - uses: actions/checkout@v7
+                - uses: actions/setup-python@v7
+                  with:
+                    python-version: '3.x'
+                - name: Run source manifest tests
+                  run: python -m unittest tests.test_build_blizzard_source_manifest
+
+            current-source-smoke:
+              runs-on: ubuntu-latest
+              timeout-minutes: 20
+              steps:
+                - uses: actions/checkout@v7
+                - uses: actions/setup-python@v7
+                  with:
+                    python-version: '3.x'
+                - name: Resolve current source and build exact manifest
+                  shell: bash
+                  run: |
+                    set -euo pipefail
+                    git -c core.hooksPath=/dev/null \\
+                      -c filter.lfs.smudge= -c filter.lfs.required=false \\
+                      clone --filter=blob:none --no-checkout --single-branch \\
+                      --branch live https://github.com/Gethe/wow-ui-source.git /tmp/wow-ui-source
+                    git -C /tmp/wow-ui-source fetch --quiet origin live
+                    revision="$(git -C /tmp/wow-ui-source rev-parse origin/live^{commit})"
+                    python scripts/build-blizzard-source-manifest.py \\
+                      --source /tmp/wow-ui-source \\
+                      --revision "$revision" \\
+                      --selector live \\
+                      --output /tmp/blizzard-source-manifest.json
+                    python - <<'PYVERIFY'
+                    import json
+                    from pathlib import Path
+                    value = json.loads(Path('/tmp/blizzard-source-manifest.json').read_text())
+                    assert len(value['source']['revision']) == 40
+                    assert value['source']['version']
+                    assert value['coverage']['included_files'] > 0
+                    assert value['coverage'].get('kind_generated_api', 0) > 0
+                    assert len(value['manifest_sha256']) == 64
+                    PYVERIFY
+          '''
+          workflow = '\n'.join(
+              line[10:] if line.startswith('          ') else line
+              for line in workflow.splitlines()
+          ).lstrip()
+          Path('.github/workflows/source-manifest.yml').write_text(
+              workflow, encoding='utf-8', newline='\n'
+          )
+
+          marker = '## Exact source manifest producer'
+          docs_path = Path('docs/SOURCE_ACQUISITION.md')
+          docs = docs_path.read_text(encoding='utf-8')
+          if marker not in docs:
+              docs += f'''\n\n{marker}\n\nAfter resolving a moving selector once, build a deterministic inventory from the exact commit:\n\n```bash\npython scripts/build-blizzard-source-manifest.py \\\n  --source "$WOW_UI_SOURCE_DIR" \\\n  --revision <resolved-40-character-commit> \\\n  --selector live \\\n  --output .wow-dev/source-manifest.json\n```\n\nThe producer reads Git objects through `git archive`; uncommitted working-tree files cannot enter the result. It includes Lua, XML, TOC, generated API documents, and schemas by default. Every included file carries its Git blob identity, SHA-256 content digest, byte count, and semantic class. The manifest has its own digest and no clock, local path, remote URL, credential, or moving selector participates in that digest.\n\nA selector such as `live`, `ptr`, or `beta` is routing metadata only. Resolve it again for the next operation; retain the exact resolved commit in the produced generation's provenance.\n'''
+              docs_path.write_text(docs, encoding='utf-8', newline='\n')
+
+          skill_path = Path('.agents/skills/wow-dev/SKILL.md')
+          skill = skill_path.read_text(encoding='utf-8')
+          skill_marker = '### Produce an exact source manifest'
+          if skill_marker not in skill:
+              skill += f'''\n\n{skill_marker}\n\nAfter the source selector has been resolved, run `scripts/build-blizzard-source-manifest.py` against that exact commit before broad source analysis or reference generation. Re-resolve moving selectors only at the start of a new operation. Never substitute the checkout working tree for the resolved commit, and never treat a manifest from an older commit as current merely because its local directory still exists.\n'''
+              skill_path.write_text(skill, encoding='utf-8', newline='\n')
+
+          Path('.github/workflows/finalize-source-manifest-20260904.yml').unlink()
+          PY
+
+      - name: Validate producer and repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          python3 -m unittest tests.test_build_blizzard_source_manifest
+          cargo fmt --all --check
+          cargo check --locked --workspace --all-targets --all-features
+          cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+          cargo test --locked --workspace --all-targets --all-features
+
+      - name: Commit directly to main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'feat(source): produce exact manifests from current Blizzard snapshots'
+          git push origin HEAD:main
