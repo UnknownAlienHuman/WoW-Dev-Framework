@@ -28,13 +28,18 @@ fn production_dependencies_are_exactly_pinned() {
         let declaration = CRATE_MANIFEST
             .lines()
             .map(str::trim)
-            .find(|line| line.starts_with(&assignment))
-            .unwrap_or_else(|| panic!("missing production dependency {name}"));
+            .find(|line| line.starts_with(&assignment));
 
         assert!(
-            declaration == exact_plain || declaration.contains(&exact_inline),
-            "production dependency {name} is not pinned exactly to {version}: {declaration}"
+            declaration.is_some(),
+            "missing production dependency {name}"
         );
+        if let Some(declaration) = declaration {
+            assert!(
+                declaration == exact_plain || declaration.contains(&exact_inline),
+                "production dependency {name} is not pinned exactly to {version}: {declaration}"
+            );
+        }
     }
 }
 '''
