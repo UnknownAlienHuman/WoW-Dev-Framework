@@ -1,0 +1,101 @@
+name: Integrate Blizzard API draft reader
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/integrate-blizzard-api-draft.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: direct-main-integration
+  cancel-in-progress: false
+
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Wire the verified reader into wow-reference
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          lib = Path('crates/wow-reference/src/lib.rs')
+          text = lib.read_text(encoding='utf-8')
+          if 'pub mod blizzard_api;' not in text:
+              text = text.rstrip() + '\n\npub mod blizzard_api;\n'
+          export_marker = 'pub use blizzard_api::'
+          if export_marker not in text:
+              text += '''\npub use blizzard_api::{
+              BLIZZARD_API_DRAFT_SCHEMA, BlizzardApiCallable, BlizzardApiCoverage,
+              BlizzardApiCoverageStatus, BlizzardApiDraftError, BlizzardApiFileCoverage,
+              BlizzardApiFileFailure, BlizzardApiFileStatus, BlizzardApiIndex, BlizzardApiLookup,
+              BlizzardApiParameter, BlizzardApiProducer, BlizzardApiRecordCounts,
+              BlizzardApiReferenceDraft, BlizzardApiSourceIdentity, BlizzardApiSourcePointer,
+              BlizzardApiSystem, BlizzardApiTable,
+          };\n'''
+          lib.write_text(text, encoding='utf-8', newline='\n')
+
+          manifest = Path('crates/wow-reference/Cargo.toml')
+          cargo = manifest.read_text(encoding='utf-8')
+          additions = []
+          if re.search(r'^sha2\s*=', cargo, flags=re.MULTILINE) is None:
+              additions.append('sha2 = "0.11"')
+          if re.search(r'^serde\s*=', cargo, flags=re.MULTILINE) is None:
+              additions.append('serde = { version = "1", features = ["derive"] }')
+          if re.search(r'^serde_json\s*=', cargo, flags=re.MULTILINE) is None:
+              additions.append('serde_json = "1"')
+          if re.search(r'^wow-core\s*=', cargo, flags=re.MULTILINE) is None:
+              additions.append('wow-core = { path = "../wow-core" }')
+          if additions:
+              match = re.search(r'^\[dependencies\]\s*$', cargo, flags=re.MULTILINE)
+              if match is None:
+                  cargo = cargo.rstrip() + '\n\n[dependencies]\n' + '\n'.join(additions) + '\n'
+              else:
+                  insertion = match.end()
+                  cargo = cargo[:insertion] + '\n' + '\n'.join(additions) + cargo[insertion:]
+          cargo = re.sub(r'^\s*rust-version\s*=.*\n', '', cargo, flags=re.MULTILINE)
+          manifest.write_text(cargo, encoding='utf-8', newline='\n')
+
+          readme = Path('crates/wow-reference/README.md')
+          if readme.exists():
+              body = readme.read_text(encoding='utf-8')
+              heading = '## Rolling Blizzard generated API ingestion'
+              if heading not in body:
+                  body = body.rstrip() + f'''\n\n{heading}\n\n`blizzard_api` verifies normalized generated-documentation drafts, builds exact function/event/table indexes, and permits authoritative absence only when every candidate generated document was parsed. Source revisions identify completed evidence; moving selectors are resolved again for later operations. See [`../../docs/BLIZZARD_API_REFERENCE_DRAFT.md`](../../docs/BLIZZARD_API_REFERENCE_DRAFT.md).\n'''
+                  readme.write_text(body, encoding='utf-8', newline='\n')
+          PY
+          git rm --ignore-unmatch .github/workflows/integrate-blizzard-api-draft.yml
+      - name: Validate Python producer and Rust ingestion
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile \
+            scripts/build-blizzard-api-reference.py \
+            scripts/verify-blizzard-api-reference.py \
+            tests/test_blizzard_api_reference.py
+          python -m unittest tests.test_blizzard_api_reference
+          cargo fmt --all --check
+          cargo check --workspace --all-targets --all-features
+          cargo clippy --workspace --all-targets --all-features -- -D warnings
+          cargo test --workspace --all-targets --all-features
+          RUSTDOCFLAGS='-D warnings' cargo doc --workspace --all-features --no-deps
+          test ! -e .github/workflows/integrate-blizzard-api-draft.yml
+      - name: Publish directly to main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat(reference): ingest verified rolling Blizzard API drafts"
+          git push origin HEAD:main
