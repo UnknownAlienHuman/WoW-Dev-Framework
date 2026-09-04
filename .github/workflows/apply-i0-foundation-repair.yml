@@ -175,18 +175,20 @@ jobs:
 
           examples = Path("crates/wow-core/tests/e0_examples.rs")
           source = examples.read_text(encoding="utf-8")
-          old = '''    assert_eq!(
-              u64::try_from(bytes.len())?,
-              envelope
-                  .canonical_bytes()?
-                  .len()
-                  .try_into()
-                  .map_err(|_| "canonical result length does not fit u64")?
-          );'''
-          new = "    assert_eq!(bytes, envelope.canonical_bytes()?);"
-          if old not in source:
-              raise SystemExit("canonical result length assertion was not found")
-          source = source.replace(old, new, 1)
+          start_marker = "    let bytes = envelope.canonical_bytes()?;\n"
+          end_marker = "    let reparsed: E0CheckResultEnvelope"
+          start = source.find(start_marker)
+          if start < 0:
+              raise SystemExit("canonical bytes marker was not found")
+          start += len(start_marker)
+          end = source.find(end_marker, start)
+          if end < 0:
+              raise SystemExit("canonical reparsing marker was not found")
+          source = (
+              source[:start]
+              + "    assert_eq!(bytes, envelope.canonical_bytes()?);\n"
+              + source[end:]
+          )
           examples.write_text(source, encoding="utf-8")
           PY
 
