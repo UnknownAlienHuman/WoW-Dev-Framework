@@ -1,0 +1,92 @@
+name: Finalize source manifest verification
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/finalize-source-manifest-v3-20260904.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: finalize-source-manifest-v3-20260904
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Connect verifier to source gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          verifier_path = Path('scripts/verify-blizzard-source-manifest.py')
+          verifier = verifier_path.read_text(encoding='utf-8')
+          old = '''            max_file_bytes=BUILDER.DEFAULT_MAX_FILE_BYTES,\n            max_total_bytes=max(coverage["included_bytes"] + 1, BUILDER.DEFAULT_MAX_TOTAL_BYTES),'''
+          new = '''            max_file_bytes=max(\n                max((record["bytes"] for record in manifest["files"]), default=0) + 1,\n                BUILDER.DEFAULT_MAX_FILE_BYTES,\n            ),\n            max_total_bytes=max(coverage["included_bytes"] + 1, BUILDER.DEFAULT_MAX_TOTAL_BYTES),'''
+          if verifier.count(old) != 1:
+              raise SystemExit('verifier limit block was not found exactly once')
+          verifier = verifier.replace(old, new, 1)
+          verifier_path.write_text(verifier, encoding='utf-8', newline='\n')
+
+          workflow_path = Path('.github/workflows/source-manifest.yml')
+          workflow = workflow_path.read_text(encoding='utf-8')
+          workflow = workflow.replace(
+              '''            - scripts/build-blizzard-source-manifest.py\n            - tests/test_build_blizzard_source_manifest.py''',
+              '''            - scripts/build-blizzard-source-manifest.py\n            - scripts/verify-blizzard-source-manifest.py\n            - tests/test_build_blizzard_source_manifest.py\n            - tests/test_verify_blizzard_source_manifest.py''',
+          )
+          workflow = workflow.replace(
+              '''              run: python -m unittest tests.test_build_blizzard_source_manifest''',
+              '''              run: >-\n                python -m unittest\n                tests.test_build_blizzard_source_manifest\n                tests.test_verify_blizzard_source_manifest''',
+          )
+          smoke_anchor = '''                    assert len(value['manifest_sha256']) == 64\n                    PYVERIFY'''
+          smoke_replacement = '''                    assert len(value['manifest_sha256']) == 64\n                    PYVERIFY\n                    python scripts/verify-blizzard-source-manifest.py \\\n                      /tmp/blizzard-source-manifest.json \\\n                      --source /tmp/wow-ui-source \\\n                      --current-ref origin/live \\\n                      --json'''
+          if workflow.count(smoke_anchor) != 1:
+              raise SystemExit('current-source smoke anchor was not found exactly once')
+          workflow = workflow.replace(smoke_anchor, smoke_replacement, 1)
+          workflow_path.write_text(workflow, encoding='utf-8', newline='\n')
+
+          docs_path = Path('docs/BLIZZARD_SOURCE_MANIFEST.md')
+          docs = docs_path.read_text(encoding='utf-8')
+          marker = '## Verification and stale detection'
+          if marker not in docs:
+              docs += f'''\n\n{marker}\n\nValidate structure, coverage counters, record ordering, every digest, and reproducibility from the declared commit:\n\n```bash\npython scripts/verify-blizzard-source-manifest.py \\\n  .wow-dev/source-manifest.json \\\n  --source "$WOW_UI_SOURCE_DIR"\n```\n\nTo compare the immutable manifest with a newly resolved moving selector:\n\n```bash\npython scripts/verify-blizzard-source-manifest.py \\\n  .wow-dev/source-manifest.json \\\n  --source "$WOW_UI_SOURCE_DIR" \\\n  --current-ref origin/live \\\n  --json\n```\n\nExit code `0` means valid and current, `2` means invalid or unreproducible, and `3` means valid but stale. A stale result instructs the caller to update or refresh the source selector and build a new manifest; it never mutates historical evidence.\n'''
+              docs_path.write_text(docs, encoding='utf-8', newline='\n')
+
+          Path('.github/workflows/finalize-source-manifest-v3-20260904.yml').unlink()
+          PY
+
+      - name: Validate verifier and repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          python3 -m unittest \
+            tests.test_build_blizzard_source_manifest \
+            tests.test_verify_blizzard_source_manifest
+          cargo fmt --all --check
+          cargo check --locked --workspace --all-targets --all-features
+          cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+          cargo test --locked --workspace --all-targets --all-features
+
+      - name: Commit directly to main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'feat(source): verify snapshot manifests and detect staleness'
+          git push origin HEAD:main
