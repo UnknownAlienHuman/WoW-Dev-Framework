@@ -1,6 +1,9 @@
 [workspace]
 resolver = "3"
-members = ["crates/wow-core"]
+members = [
+    "crates/wow-core",
+    "crates/wow-reference",
+]
 
 [workspace.package]
 edition = "2024"

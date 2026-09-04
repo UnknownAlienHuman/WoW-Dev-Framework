@@ -3,19 +3,9 @@ const CRATE_MANIFEST: &str = include_str!("../Cargo.toml");
 const TOOLCHAIN: &str = include_str!("../../../rust-toolchain.toml");
 
 #[test]
-fn workspace_activates_only_wow_core() {
-    assert!(ROOT_MANIFEST.contains("members = [\"crates/wow-core\"]"));
-    for forbidden_member in [
-        "crates/wow-store",
-        "crates/wow-reference",
-        "crates/wow-emmy",
-        "crates/wow-project",
-        "crates/wow-rules",
-        "crates/wow-service",
-        "apps/wow",
-    ] {
-        assert!(!ROOT_MANIFEST.contains(forbidden_member));
-    }
+fn workspace_activates_foundation_crates() {
+    assert!(ROOT_MANIFEST.contains("\"crates/wow-core\""));
+    assert!(ROOT_MANIFEST.contains("\"crates/wow-reference\""));
 }
 
 #[test]

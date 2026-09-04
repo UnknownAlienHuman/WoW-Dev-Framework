@@ -168,7 +168,10 @@ impl fmt::Display for ReferenceViewError {
                 write!(formatter, "invalid digest at {field}: {value}")
             }
             Self::DigestMismatch { stored, computed } => {
-                write!(formatter, "reference-view digest mismatch: {stored} != {computed}")
+                write!(
+                    formatter,
+                    "reference-view digest mismatch: {stored} != {computed}"
+                )
             }
             Self::Serialization { detail } => {
                 write!(formatter, "reference-view serialization failed: {detail}")
@@ -594,15 +597,17 @@ impl ReferenceView {
             return LookupResult::Unknown(LookupUnknownReason::PartitionMissing);
         };
 
-        if let Some(record) = partition.records().iter().find(|record| record.key() == key) {
+        if let Some(record) = partition
+            .records()
+            .iter()
+            .find(|record| record.key() == key)
+        {
             return LookupResult::Found(record);
         }
 
         match partition.coverage() {
             CoverageStatus::Complete => LookupResult::AuthoritativeAbsence,
-            CoverageStatus::Partial => {
-                LookupResult::Unknown(LookupUnknownReason::PartialCoverage)
-            }
+            CoverageStatus::Partial => LookupResult::Unknown(LookupUnknownReason::PartialCoverage),
             CoverageStatus::NotEvaluated => {
                 LookupResult::Unknown(LookupUnknownReason::NotEvaluated)
             }
@@ -647,10 +652,15 @@ struct UnsignedReferenceView<'a> {
 
 fn validate_identifier(field: &'static str, value: &str) -> ReferenceViewResult<()> {
     let mut bytes = value.bytes();
-    let first_valid = bytes.next().is_some_and(|byte| byte.is_ascii_alphanumeric());
+    let first_valid = bytes
+        .next()
+        .is_some_and(|byte| byte.is_ascii_alphanumeric());
     let rest_valid = bytes.all(|byte| {
         byte.is_ascii_alphanumeric()
-            || matches!(byte, b'_' | b'-' | b'.' | b':' | b'/' | b'%' | b'+' | b'@' | b'#')
+            || matches!(
+                byte,
+                b'_' | b'-' | b'.' | b':' | b'/' | b'%' | b'+' | b'@' | b'#'
+            )
     });
     if value.len() > 512 || !first_valid || !rest_valid {
         return Err(ReferenceViewError::InvalidIdentifier {
@@ -812,8 +822,7 @@ fn validate_conflict_slice(values: &[ReferenceConflict]) -> ReferenceViewResult<
             let error = if left == right {
                 ReferenceViewError::DuplicateKey {
                     field: "view.conflicts",
-                    value: format!("{}:{}", pair[0].partition_id(), pair[0].key())
-                        .into_boxed_str(),
+                    value: format!("{}:{}", pair[0].partition_id(), pair[0].key()).into_boxed_str(),
                 }
             } else {
                 ReferenceViewError::NonCanonicalOrder {

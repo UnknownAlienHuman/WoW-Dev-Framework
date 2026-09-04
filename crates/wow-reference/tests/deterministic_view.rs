@@ -11,7 +11,10 @@ fn api_record(key: &str, payload: &str) -> Result<ReferenceRecord, Box<dyn Error
         key,
         ReferenceRecordKind::Api,
         payload,
-        vec!["source:warcraft-wiki".to_owned(), "source:blizzard-ui".to_owned()],
+        vec![
+            "source:warcraft-wiki".to_owned(),
+            "source:blizzard-ui".to_owned(),
+        ],
         vec![RestrictionFacet::new(
             "combat-lockdown",
             RestrictionState::Restricted,
@@ -35,9 +38,16 @@ fn exact_lookup_and_complete_negative_authority_are_distinct() -> Result<(), Box
     let partition = ReferencePartition::new(
         "api:retail",
         CoverageStatus::Complete,
-        vec![api_record("C_Spell.GetSpellInfo", "(spell_id)->spell_info")?],
+        vec![api_record(
+            "C_Spell.GetSpellInfo",
+            "(spell_id)->spell_info",
+        )?],
     )?;
-    let view = ReferenceView::new("generation:reference:retail-120100", vec![partition], vec![])?;
+    let view = ReferenceView::new(
+        "generation:reference:retail-120100",
+        vec![partition],
+        vec![],
+    )?;
 
     let found = require_found(
         view.lookup("api:retail", "C_Spell.GetSpellInfo"),
@@ -81,13 +91,15 @@ fn conflicts_take_precedence_over_records_and_negative_authority() -> Result<(),
     let second = api_record("C_Map.GetMapInfo", "(map_id)->map_info_or_nil")?;
     let first_digest = first.digest()?;
     let second_digest = second.digest()?;
-    let partition =
-        ReferencePartition::new("api:retail", CoverageStatus::Complete, vec![first])?;
+    let partition = ReferencePartition::new("api:retail", CoverageStatus::Complete, vec![first])?;
     let conflict = ReferenceConflict::new(
         "api:retail",
         "C_Map.GetMapInfo",
         vec![second_digest, first_digest],
-        vec!["source:blizzard-ui".to_owned(), "source:warcraft-wiki".to_owned()],
+        vec![
+            "source:blizzard-ui".to_owned(),
+            "source:warcraft-wiki".to_owned(),
+        ],
     )?;
     let view = ReferenceView::new(
         "generation:reference:conflict",
@@ -147,7 +159,10 @@ fn serialized_view_round_trips_and_rejects_digest_tampering() -> Result<(), Box<
     let partition = ReferencePartition::new(
         "api:retail",
         CoverageStatus::Complete,
-        vec![api_record("C_Spell.GetSpellInfo", "(spell_id)->spell_info")?],
+        vec![api_record(
+            "C_Spell.GetSpellInfo",
+            "(spell_id)->spell_info",
+        )?],
     )?;
     let view = ReferenceView::new("generation:reference:round-trip", vec![partition], vec![])?;
     let bytes = view.canonical_bytes()?;
@@ -166,11 +181,8 @@ fn serialized_view_round_trips_and_rejects_digest_tampering() -> Result<(), Box<
 fn duplicate_records_are_rejected_before_publication() -> Result<(), Box<dyn Error>> {
     let first = api_record("C_Spell.GetSpellInfo", "(spell_id)->spell_info")?;
     let second = api_record("C_Spell.GetSpellInfo", "(spell_id)->spell_info")?;
-    let result = ReferencePartition::new(
-        "api:retail",
-        CoverageStatus::Complete,
-        vec![first, second],
-    );
+    let result =
+        ReferencePartition::new("api:retail", CoverageStatus::Complete, vec![first, second]);
     assert!(result.is_err());
     Ok(())
 }
