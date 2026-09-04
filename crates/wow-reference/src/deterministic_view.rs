@@ -580,7 +580,7 @@ impl ReferenceView {
 
     /// Performs an exact lookup under conservative negative-authority rules.
     #[must_use]
-    pub fn lookup<'a>(&'a self, partition_id: &str, key: &str) -> LookupResult<'a> {
+    pub fn lookup(&self, partition_id: &str, key: &str) -> LookupResult<'_> {
         if let Some(conflict) = self
             .conflicts
             .iter()
