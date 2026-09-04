@@ -1,0 +1,121 @@
+name: Stabilize I0-B deterministic reference view
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/stabilize-i0-b-reference-20260904.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: stabilize-i0-b-reference
+  cancel-in-progress: false
+
+jobs:
+  stabilize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v6.0.2
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Reapply materialization when the first gate did not publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! -f crates/wow-reference/src/deterministic.rs ]]; then
+            python3 - <<'PY'
+          from pathlib import Path
+          import textwrap
+
+          workflow = Path('.github/workflows/implement-i0-b-reference-20260904.yml')
+          if not workflow.exists():
+              raise SystemExit('I0-B implementation source workflow is unavailable')
+          source = workflow.read_text(encoding='utf-8')
+          marker = "python3 - <<'PY'\n"
+          start = source.find(marker)
+          if start < 0:
+              raise SystemExit('materialization script start marker was not found')
+          start += len(marker)
+          end = source.find('\n          PY', start)
+          if end < 0:
+              raise SystemExit('materialization script end marker was not found')
+          script = textwrap.dedent(source[start:end])
+          namespace = {'__name__': '__main__'}
+          exec(compile(script, str(workflow), 'exec'), namespace)
+          PY
+          fi
+
+      - name: Install frozen Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
+
+      - name: Generate lock and fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo +1.98.0 generate-lockfile
+          cargo +1.98.0 run --locked -p wow-reference --example generate_fixture
+          cargo +1.98.0 fmt --all
+
+      - name: Apply machine-safe Clippy suggestions
+        run: cargo +1.98.0 clippy --fix --locked --workspace --all-targets --all-features --allow-dirty --allow-staged -- -D warnings
+
+      - name: Reformat and refresh fixture after lint fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo +1.98.0 fmt --all
+          cargo +1.98.0 run --locked -p wow-reference --example generate_fixture
+          cargo +1.98.0 run --locked -p wow-reference --example generate_fixture -- --check
+
+      - name: Check strict workspace lints
+        run: cargo +1.98.0 clippy --locked --workspace --all-targets --all-features -- -D warnings
+
+      - name: Run workspace debug tests
+        run: cargo +1.98.0 test --locked --workspace --all-features
+
+      - name: Run workspace release tests
+        run: cargo +1.98.0 test --locked --workspace --all-features --release
+
+      - name: Build workspace documentation
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo +1.98.0 doc --locked --workspace --all-features --no-deps
+
+      - name: Publish validated implementation directly to main
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/implement-i0-b-reference-20260904.yml
+          rm -f .github/workflows/stabilize-i0-b-reference-20260904.yml
+          git add -A
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "feat(wow-reference): add deterministic reference views"
+          git pull --rebase origin main
+          git push origin HEAD:main
+
+      - name: Package failed candidate
+        if: failure()
+        shell: bash
+        run: tar --exclude=.git --exclude=target -czf /tmp/i0-b-failed-tree.tar.gz .
+
+      - name: Upload failed candidate
+        if: failure()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: i0-b-failed-tree
+          path: /tmp/i0-b-failed-tree.tar.gz
+          retention-days: 1
+          if-no-files-found: error
