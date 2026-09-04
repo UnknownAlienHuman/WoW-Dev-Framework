@@ -17,11 +17,11 @@ concurrency:
 
 jobs:
   export:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Check out exact main commit
-        uses: actions/checkout@v6.0.2
+      - name: Check out current main
+        uses: actions/checkout@v7
         with:
           ref: main
           fetch-depth: 0
@@ -31,12 +31,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git ls-files -z | tar --null -T - -czf /tmp/wow-dev-framework-main.tar.gz
+          git archive --format=tar.gz --output=/tmp/wow-dev-framework-main.tar.gz HEAD
           sha256sum /tmp/wow-dev-framework-main.tar.gz > /tmp/SHA256SUMS
           git rev-parse HEAD > /tmp/COMMIT_SHA
 
-      - name: Upload exact snapshot
-        uses: actions/upload-artifact@v7.0.1
+      - name: Upload current snapshot
+        uses: actions/upload-artifact@v7
         with:
           name: wow-dev-framework-current-main
           path: |
