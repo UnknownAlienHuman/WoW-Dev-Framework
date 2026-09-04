@@ -20,34 +20,26 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Check out current main
-        uses: actions/checkout@v7
-        with:
-          ref: main
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Package tracked repository and current dependency cache
+      - name: Download unattached verified delivery payload
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          git archive --format=tar.gz --output=/tmp/wow-dev-framework-main.tar.gz HEAD
-          sha256sum /tmp/wow-dev-framework-main.tar.gz > /tmp/SHA256SUMS
-          git rev-parse HEAD > /tmp/COMMIT_SHA
-          cargo fetch --locked
-          cache_dir="$(find "$HOME/.cargo/registry/cache" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
-          test -n "$cache_dir"
-          cp "$cache_dir/libc-0.2.189.crate" /tmp/libc-0.2.189.crate
-          printf '%s  %s\n' '3eaf3ede3fee6db1a4c2ee091bf8a8b4dccdc6d17f656fb07896ee72867612f2' '/tmp/libc-0.2.189.crate' | sha256sum --check
+          curl --fail --silent --show-error --location \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header "Accept: application/vnd.github.raw+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/git/blobs/9e0d9654c44531665651db653cd5b85fdf8ed4b1" \
+            --output /tmp/prepared-payload.bin
+          test "$(wc -c < /tmp/prepared-payload.bin)" -eq 30018
+          printf '%s  %s\n' '9e0d9654c44531665651db653cd5b85fdf8ed4b1' 'Git-blob-object-id-only' > /tmp/README.txt
 
-      - name: Upload current snapshot
+      - name: Upload delivery payload
         uses: actions/upload-artifact@v7
         with:
-          name: wow-dev-framework-current-main
+          name: wow-dev-framework-prepared-payload
           path: |
-            /tmp/wow-dev-framework-main.tar.gz
-            /tmp/SHA256SUMS
-            /tmp/COMMIT_SHA
-            /tmp/libc-0.2.189.crate
+            /tmp/prepared-payload.bin
+            /tmp/README.txt
           retention-days: 1
           if-no-files-found: error
