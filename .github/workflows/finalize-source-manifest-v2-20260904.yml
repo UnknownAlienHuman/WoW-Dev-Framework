@@ -1,0 +1,151 @@
+name: Generalize source manifest object identity
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/finalize-source-manifest-v2-20260904.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: finalize-source-manifest-v2-20260904
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Remove SHA-1 assumptions and bind selection policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('scripts/build-blizzard-source-manifest.py')
+          text = path.read_text(encoding='utf-8')
+
+          replacements = [
+              (
+                  '''    git_blob_sha1: str\n    content_sha256: str''',
+                  '''    git_blob_algorithm: str\n    git_blob_id: str\n    content_sha256: str''',
+                  'file record fields',
+              ),
+              (
+                  '''            "git_blob_sha1": self.git_blob_sha1,\n            "content_sha256": self.content_sha256,''',
+                  '''            "git_blob_algorithm": self.git_blob_algorithm,\n            "git_blob_id": self.git_blob_id,\n            "content_sha256": self.content_sha256,''',
+                  'file record JSON',
+              ),
+              (
+                  '''def resolve_commit(source: Path, revision: str) -> str:\n    if not source.is_dir():''',
+                  '''def git_object_format(source: Path) -> str:\n    value = str(run_git(source, ["rev-parse", "--show-object-format"])).strip()\n    if value not in {"sha1", "sha256"}:\n        fail(f"Unsupported Git object format: {value!r}")\n    return value\n\n\ndef resolve_commit(source: Path, revision: str, object_format: str) -> str:\n    if not source.is_dir():''',
+                  'object format resolver',
+              ),
+              (
+                  '''    if len(resolved) != 40 or any(character not in "0123456789abcdef" for character in resolved):\n        fail(f"Git returned a non-canonical commit identifier: {resolved!r}")''',
+                  '''    expected_length = 40 if object_format == "sha1" else 64\n    if len(resolved) != expected_length or any(\n        character not in "0123456789abcdef" for character in resolved\n    ):\n        fail(f"Git returned a non-canonical {object_format} commit identifier: {resolved!r}")''',
+                  'commit length validation',
+              ),
+              (
+                  '''def git_blob_sha1(content: bytes) -> str:\n    header = f"blob {len(content)}\\0".encode("ascii")\n    return hashlib.sha1(header + content, usedforsecurity=False).hexdigest()''',
+                  '''def git_blob_id(content: bytes, object_format: str) -> str:\n    header = f"blob {len(content)}\\0".encode("ascii")\n    try:\n        digest = hashlib.new(object_format, usedforsecurity=False)\n    except (TypeError, ValueError) as error:\n        fail(f"Cannot construct the Git {object_format} digest: {error}")\n    digest.update(header)\n    digest.update(content)\n    return digest.hexdigest()''',
+                  'generic blob identity',
+              ),
+              (
+                  '''    limits: Limits,\n) -> tuple[list[FileRecord], str, dict[str, int]]:''',
+                  '''    limits: Limits,\n    object_format: str,\n) -> tuple[list[FileRecord], str, dict[str, int]]:''',
+                  'archive object format parameter',
+              ),
+              (
+                  '''                        git_blob_sha1=git_blob_sha1(content),\n                        content_sha256=hashlib.sha256(content).hexdigest(),''',
+                  '''                        git_blob_algorithm=object_format,\n                        git_blob_id=git_blob_id(content, object_format),\n                        content_sha256=hashlib.sha256(content).hexdigest(),''',
+                  'generic blob record',
+              ),
+              (
+                  '''    commit = resolve_commit(source, revision)\n    records, version, coverage = records_from_git_archive(''',
+                  '''    object_format = git_object_format(source)\n    commit = resolve_commit(source, revision, object_format)\n    records, version, coverage = records_from_git_archive(''',
+                  'build object format',
+              ),
+              (
+                  '''        version_path=version_path,\n        limits=limits,\n    )''',
+                  '''        version_path=version_path,\n        limits=limits,\n        object_format=object_format,\n    )''',
+                  'archive call object format',
+              ),
+              (
+                  '''            "revision": commit,\n            "version": version,''',
+                  '''            "revision": commit,\n            "git_object_format": object_format,\n            "version": version,''',
+                  'source object format field',
+              ),
+              (
+                  '''        "coverage": coverage,\n        "files": [record.as_json() for record in records],''',
+                  '''        "selection": {\n            "extensions": sorted(extensions),\n            "version_path": version_path,\n            "non_regular_entries": "reject",\n            "working_tree": "ignored",\n        },\n        "coverage": coverage,\n        "files": [record.as_json() for record in records],''',
+                  'selection identity',
+              ),
+          ]
+
+          for old, new, label in replacements:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected one match, found {count}')
+              text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8', newline='\n')
+
+          test_path = Path('tests/test_build_blizzard_source_manifest.py')
+          test = test_path.read_text(encoding='utf-8')
+          old = '''        self.assertEqual(by_path[path]["git_blob_sha1"], expected)'''
+          new = '''        self.assertEqual(by_path[path]["git_blob_algorithm"], "sha1")\n        self.assertEqual(by_path[path]["git_blob_id"], expected)'''
+          if test.count(old) != 1:
+              raise SystemExit('blob test assertion was not found exactly once')
+          test = test.replace(old, new, 1)
+          test_path.write_text(test, encoding='utf-8', newline='\n')
+
+          workflow_path = Path('.github/workflows/source-manifest.yml')
+          workflow = workflow_path.read_text(encoding='utf-8')
+          old = '''                    assert len(value['source']['revision']) == 40\n                    assert value['source']['version']'''
+          new = '''                    algorithm = value['source']['git_object_format']\n                    assert algorithm in {'sha1', 'sha256'}\n                    assert len(value['source']['revision']) == (40 if algorithm == 'sha1' else 64)\n                    assert value['source']['version']'''
+          if workflow.count(old) != 1:
+              raise SystemExit('workflow revision assertion was not found exactly once')
+          workflow = workflow.replace(old, new, 1)
+          workflow_path.write_text(workflow, encoding='utf-8', newline='\n')
+
+          docs_path = Path('docs/BLIZZARD_SOURCE_MANIFEST.md')
+          docs = docs_path.read_text(encoding='utf-8')
+          docs = docs.replace(
+              'Git blob identity, and SHA-256 content digest.',
+              'Git object-format name and blob identity, and SHA-256 content digest.',
+          )
+          if 'SHA-1 is not assumed' not in docs:
+              docs += '''\n\n## Git object format\n\nSHA-1 is not assumed. The producer asks the selected repository for its object format and records `sha1` or `sha256` alongside every Git object identifier. SHA-256 content digests remain independent integrity fields.\n'''
+          docs_path.write_text(docs, encoding='utf-8', newline='\n')
+
+          Path('.github/workflows/finalize-source-manifest-v2-20260904.yml').unlink()
+          PY
+
+      - name: Validate generalized producer
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          python3 -m unittest tests.test_build_blizzard_source_manifest
+          cargo fmt --all --check
+          cargo test --locked --workspace --all-targets --all-features
+
+      - name: Commit directly to main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix(source): support evolving Git object formats'
+          git push origin HEAD:main
