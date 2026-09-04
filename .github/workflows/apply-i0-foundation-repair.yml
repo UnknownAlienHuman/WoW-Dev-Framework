@@ -105,7 +105,22 @@ jobs:
           RUSTDOCFLAGS: -D warnings
         run: cargo +1.98.0 doc --locked --workspace --all-features --no-deps
 
-      - name: Commit only validated repair
+      - name: Package failed candidate for exact audit
+        if: failure()
+        shell: bash
+        run: tar --exclude=.git -czf /tmp/i0-foundation-failed-tree.tar.gz .
+
+      - name: Upload failed candidate for exact audit
+        if: failure()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: i0-foundation-failed-tree
+          path: /tmp/i0-foundation-failed-tree.tar.gz
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Commit validated repair and remove stale branches
+        if: success()
         shell: bash
         run: |
           set -euo pipefail
@@ -116,3 +131,11 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "fix(wow-core): restore executable E0 foundation"
           git push origin HEAD:repair/i0-foundation-integrity
+
+          git fetch origin --prune
+          while IFS= read -r branch; do
+            case "$branch" in
+              main|repair/i0-foundation-integrity|HEAD) continue ;;
+            esac
+            git push origin --delete "$branch"
+          done < <(git for-each-ref --format='%(refname:strip=3)' refs/remotes/origin | sort -u)
