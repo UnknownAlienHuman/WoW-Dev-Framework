@@ -6,6 +6,7 @@ on:
       - repair/i0-foundation-integrity
     paths:
       - .github/repair-payload/**
+      - .github/repair-i0.py
       - .github/workflows/apply-i0-foundation-repair.yml
   workflow_dispatch:
 
@@ -36,165 +37,8 @@ jobs:
           echo "70b97ea22f138f629464c46855687bb0f1187546c1c19d1057cf2a038e1961b8  /tmp/i0-foundation-repair.tar.zst" | sha256sum --check --strict
           zstd --decompress --stdout /tmp/i0-foundation-repair.tar.zst | tar --extract --file=- --directory="$GITHUB_WORKSPACE"
 
-      - name: Apply reviewed compiler and lint fixes
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-
-          coverage = Path("crates/wow-core/src/coverage.rs")
-          source = coverage.read_text(encoding="utf-8")
-
-          replacements = (
-              (
-                  "use crate::evidence::{ConflictAffectedRef, ConflictRecord};",
-                  "use crate::evidence::ConflictRecord;",
-              ),
-              (
-                  "let mut applicable_status = None;",
-                  "let mut applicable_status: Option<CoverageStatus> = None;",
-              ),
-              (
-                  "NotEvaluated(NotEvaluatedRecord),",
-                  "NotEvaluated(Box<NotEvaluatedRecord>),",
-              ),
-              (
-                  "Ok(CapabilityAvailability::NotEvaluated(\n        NotEvaluatedRecord::new(",
-                  "Ok(CapabilityAvailability::NotEvaluated(Box::new(\n        NotEvaluatedRecord::new(",
-              ),
-              (
-                  "        )?,\n    ))\n}\n\n/// Outcome of a conservative negative-authority evaluation.",
-                  "        )?,\n    )))\n}\n\n/// Outcome of a conservative negative-authority evaluation.",
-              ),
-          )
-          for old, new in replacements:
-              if old not in source:
-                  raise SystemExit(f"expected coverage fragment was not found: {old!r}")
-              source = source.replace(old, new, 1)
-          coverage.write_text(source, encoding="utf-8")
-
-          def move_trailing_items_before_tests(relative: str, suffix_marker: str) -> None:
-              path = Path(relative)
-              source = path.read_text(encoding="utf-8")
-              test_marker = "#[cfg(test)]\nmod tests {"
-              test_start = source.find(test_marker)
-              if test_start < 0:
-                  raise SystemExit(f"test module marker not found in {relative}")
-              suffix_start = source.find(suffix_marker, test_start)
-              if suffix_start < 0:
-                  raise SystemExit(f"compatibility suffix marker not found in {relative}")
-
-              prefix = source[:test_start].rstrip()
-              tests = source[test_start:suffix_start].rstrip()
-              suffix = source[suffix_start:].rstrip()
-              path.write_text(f"{prefix}\n\n{suffix}\n\n{tests}\n", encoding="utf-8")
-
-          move_trailing_items_before_tests(
-              "crates/wow-core/src/digest.rs",
-              "/// Parses one field-purpose-specific SHA-256 digest.",
-          )
-          move_trailing_items_before_tests(
-              "crates/wow-core/src/generation.rs",
-              "/// Returns the validated identity of one complete generation context.",
-          )
-          move_trailing_items_before_tests(
-              "crates/wow-core/src/ids.rs",
-              "/// Parses a profile identifier while preserving canonicalization information.",
-          )
-          move_trailing_items_before_tests(
-              "crates/wow-core/src/profile.rs",
-              "/// Operation wrapper for validating a structured profile identity.",
-          )
-          move_trailing_items_before_tests(
-              "crates/wow-core/src/source.rs",
-              "/// Normalizes one source path while retaining canonicalization information.",
-          )
-
-          semantics = Path("crates/wow-core/tests/e0_result_semantics.rs")
-          source = semantics.read_text(encoding="utf-8")
-          test_replacements = (
-              (
-                  'let error = validate_message_arguments(&[zeta, alpha]).expect_err("order must be rejected");',
-                  'let error = require_error(\n        validate_message_arguments(&[zeta, alpha]),\n        "order must be rejected",\n    )?;',
-              ),
-              (
-                  'let float = MessageArgument::new("count", MessageArgumentKind::Integer, "1.5", true)\n        .expect_err("floating-point message argument must be rejected");',
-                  'let float = require_error(\n        MessageArgument::new("count", MessageArgumentKind::Integer, "1.5", true),\n        "floating-point message argument must be rejected",\n    )?;',
-              ),
-              (
-                  'let error = validate_budget(&invalid).expect_err("zero limit must be rejected");',
-                  'let error = require_error(validate_budget(&invalid), "zero limit must be rejected")?;',
-              ),
-              (
-                  'let error = accumulate_budget_usage(left, right).expect_err("usage overflow must fail");',
-                  'let error = require_error(\n        accumulate_budget_usage(left, right),\n        "usage overflow must fail",\n    )?;',
-              ),
-              (
-                  '    )\n    .expect_err("known and unknown omission counts are mutually exclusive");',
-                  '    ),\n        "known and unknown omission counts are mutually exclusive",\n    )?;',
-              ),
-              (
-                  'let invalid = TruncationEntry::new(\n',
-                  'let invalid = require_error(\n        TruncationEntry::new(\n',
-              ),
-              (
-                  'let future = validate_schema_version(&schema, &"0.3.0".parse()?, &schema, &supported)\n        .expect_err("future minor version must be rejected");',
-                  'let future = require_error(\n        validate_schema_version(&schema, &"0.3.0".parse()?, &schema, &supported),\n        "future minor version must be rejected",\n    )?;',
-              ),
-              (
-                  'let error = envelope\n        .validate()\n        .expect_err("tampered canonical digest must fail");',
-                  'let error = require_error(\n        envelope.validate(),\n        "tampered canonical digest must fail",\n    )?;',
-              ),
-              (
-                  'let error = envelope\n        .validate()\n        .expect_err("complete must not hide NotEvaluated");',
-                  'let error = require_error(\n        envelope.validate(),\n        "complete must not hide NotEvaluated",\n    )?;',
-              ),
-          )
-          for old, new in test_replacements:
-              if old not in source:
-                  raise SystemExit(f"expected test fragment was not found: {old!r}")
-              source = source.replace(old, new, 1)
-
-          helper_marker = "const fn valid_limits() -> BudgetLimits {"
-          helper = '''fn require_error<T>(
-              result: Result<T, wow_core::CoreError>,
-              message: &'static str,
-          ) -> Result<wow_core::CoreError, Box<dyn Error>> {
-              match result {
-                  Ok(_) => Err(std::io::Error::other(message).into()),
-                  Err(error) => Ok(error),
-              }
-          }
-
-          '''
-          if helper_marker not in source:
-              raise SystemExit("valid_limits marker was not found")
-          source = source.replace(helper_marker, helper + helper_marker, 1)
-          semantics.write_text(source, encoding="utf-8")
-
-          examples = Path("crates/wow-core/tests/e0_examples.rs")
-          source = examples.read_text(encoding="utf-8")
-          function_marker = "fn validate_result(source: &str)"
-          function_start = source.find(function_marker)
-          if function_start < 0:
-              raise SystemExit("validate_result function was not found")
-          start_marker = "    let bytes = envelope.canonical_bytes()?;\n"
-          end_marker = "    let reparsed: E0CheckResultEnvelope"
-          start = source.find(start_marker, function_start)
-          if start < 0:
-              raise SystemExit("validate_result canonical bytes marker was not found")
-          start += len(start_marker)
-          end = source.find(end_marker, start)
-          if end < 0:
-              raise SystemExit("validate_result reparsing marker was not found")
-          source = (
-              source[:start]
-              + "    assert_eq!(bytes, envelope.canonical_bytes()?);\n"
-              + source[end:]
-          )
-          examples.write_text(source, encoding="utf-8")
-          PY
+      - name: Apply deterministic source repair
+        run: python3 .github/repair-i0.py
 
       - name: Install frozen Rust toolchain
         run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
@@ -224,7 +68,7 @@ jobs:
       - name: Package failed candidate for exact audit
         if: failure()
         shell: bash
-        run: tar --exclude=.git -czf /tmp/i0-foundation-failed-tree.tar.gz .
+        run: tar --exclude=.git --exclude=target -czf /tmp/i0-foundation-failed-tree.tar.gz .
 
       - name: Upload failed candidate for exact audit
         if: failure()
@@ -241,6 +85,7 @@ jobs:
         run: |
           set -euo pipefail
           rm -rf .github/repair-payload
+          rm -f .github/repair-i0.py
           rm -f .github/workflows/apply-i0-foundation-repair.yml
           git add -A
           git config user.name "github-actions[bot]"
