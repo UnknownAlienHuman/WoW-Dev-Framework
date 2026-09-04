@@ -110,6 +110,84 @@ jobs:
               "crates/wow-core/src/source.rs",
               "/// Normalizes one source path while retaining canonicalization information.",
           )
+
+          semantics = Path("crates/wow-core/tests/e0_result_semantics.rs")
+          source = semantics.read_text(encoding="utf-8")
+          test_replacements = (
+              (
+                  'let error = validate_message_arguments(&[zeta, alpha]).expect_err("order must be rejected");',
+                  'let error = require_error(\n        validate_message_arguments(&[zeta, alpha]),\n        "order must be rejected",\n    )?;',
+              ),
+              (
+                  'let float = MessageArgument::new("count", MessageArgumentKind::Integer, "1.5", true)\n        .expect_err("floating-point message argument must be rejected");',
+                  'let float = require_error(\n        MessageArgument::new("count", MessageArgumentKind::Integer, "1.5", true),\n        "floating-point message argument must be rejected",\n    )?;',
+              ),
+              (
+                  'let error = validate_budget(&invalid).expect_err("zero limit must be rejected");',
+                  'let error = require_error(validate_budget(&invalid), "zero limit must be rejected")?;',
+              ),
+              (
+                  'let error = accumulate_budget_usage(left, right).expect_err("usage overflow must fail");',
+                  'let error = require_error(\n        accumulate_budget_usage(left, right),\n        "usage overflow must fail",\n    )?;',
+              ),
+              (
+                  '    )\n    .expect_err("known and unknown omission counts are mutually exclusive");',
+                  '    ),\n        "known and unknown omission counts are mutually exclusive",\n    )?;',
+              ),
+              (
+                  'let invalid = TruncationEntry::new(\n',
+                  'let invalid = require_error(\n        TruncationEntry::new(\n',
+              ),
+              (
+                  'let future = validate_schema_version(&schema, &"0.3.0".parse()?, &schema, &supported)\n        .expect_err("future minor version must be rejected");',
+                  'let future = require_error(\n        validate_schema_version(&schema, &"0.3.0".parse()?, &schema, &supported),\n        "future minor version must be rejected",\n    )?;',
+              ),
+              (
+                  'let error = envelope\n        .validate()\n        .expect_err("tampered canonical digest must fail");',
+                  'let error = require_error(\n        envelope.validate(),\n        "tampered canonical digest must fail",\n    )?;',
+              ),
+              (
+                  'let error = envelope\n        .validate()\n        .expect_err("complete must not hide NotEvaluated");',
+                  'let error = require_error(\n        envelope.validate(),\n        "complete must not hide NotEvaluated",\n    )?;',
+              ),
+          )
+          for old, new in test_replacements:
+              if old not in source:
+                  raise SystemExit(f"expected test fragment was not found: {old!r}")
+              source = source.replace(old, new, 1)
+
+          helper_marker = "const fn valid_limits() -> BudgetLimits {"
+          helper = '''fn require_error<T>(
+              result: Result<T, wow_core::CoreError>,
+              message: &'static str,
+          ) -> Result<wow_core::CoreError, Box<dyn Error>> {
+              match result {
+                  Ok(_) => Err(std::io::Error::other(message).into()),
+                  Err(error) => Ok(error),
+              }
+          }
+
+          '''
+          if helper_marker not in source:
+              raise SystemExit("valid_limits marker was not found")
+          source = source.replace(helper_marker, helper + helper_marker, 1)
+          semantics.write_text(source, encoding="utf-8")
+
+          examples = Path("crates/wow-core/tests/e0_examples.rs")
+          source = examples.read_text(encoding="utf-8")
+          old = '''    assert_eq!(
+              u64::try_from(bytes.len())?,
+              envelope
+                  .canonical_bytes()?
+                  .len()
+                  .try_into()
+                  .map_err(|_| "canonical result length does not fit u64")?
+          );'''
+          new = "    assert_eq!(bytes, envelope.canonical_bytes()?);"
+          if old not in source:
+              raise SystemExit("canonical result length assertion was not found")
+          source = source.replace(old, new, 1)
+          examples.write_text(source, encoding="utf-8")
           PY
 
       - name: Install frozen Rust toolchain
