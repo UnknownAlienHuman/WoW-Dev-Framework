@@ -1,0 +1,66 @@
+name: Branch hygiene
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+  schedule:
+    - cron: "17 8 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: branch-hygiene
+  cancel-in-progress: true
+
+jobs:
+  prune:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out full repository
+        uses: actions/checkout@v6.0.2
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Delete only branches already represented by main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin --prune '+refs/heads/*:refs/remotes/origin/*'
+
+          main_tree="$(git rev-parse 'origin/main^{tree}')"
+          deleted=0
+          retained=0
+
+          while IFS= read -r branch; do
+            case "$branch" in
+              main|HEAD) continue ;;
+            esac
+
+            branch_ref="origin/$branch"
+            branch_tree="$(git rev-parse "$branch_ref^{tree}")"
+
+            if [[ "$branch_tree" == "$main_tree" ]] || git merge-base --is-ancestor "$branch_ref" origin/main; then
+              git push origin --delete "$branch"
+              printf 'deleted: %s\n' "$branch" >> "$GITHUB_STEP_SUMMARY"
+              deleted=$((deleted + 1))
+            else
+              printf 'retained (unmerged): %s\n' "$branch" >> "$GITHUB_STEP_SUMMARY"
+              retained=$((retained + 1))
+            fi
+          done < <(
+            git for-each-ref \
+              --format='%(refname:strip=3)' \
+              refs/remotes/origin \
+              | sort -u
+          )
+
+          {
+            printf '\nDeleted merged/no-op branches: %d\n' "$deleted"
+            printf 'Retained genuinely divergent branches: %d\n' "$retained"
+          } >> "$GITHUB_STEP_SUMMARY"
