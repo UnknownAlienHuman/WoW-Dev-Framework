@@ -58,3 +58,26 @@ jobs:
         env:
           RUSTDOCFLAGS: -D warnings
         run: cargo +1.98.0 doc --locked --workspace --all-features --no-deps
+
+      - name: Export exact compiler and resolved registry
+        shell: bash
+        run: |
+          set -euo pipefail
+          sysroot="$(rustc +1.98.0 --print sysroot)"
+          mkdir -p /tmp/rust-dev/toolchain /tmp/rust-dev/cargo-home
+          cp -a "$sysroot/." /tmp/rust-dev/toolchain/
+          cp -a "$HOME/.cargo/registry" /tmp/rust-dev/cargo-home/
+          printf '%s\n' "$sysroot" > /tmp/rust-dev/RUNNER_SYSROOT
+          tar --directory=/tmp/rust-dev --use-compress-program='zstd -10 -T0' --create --file=/tmp/rust-1.98.0-dev.tar.zst .
+          sha256sum /tmp/rust-1.98.0-dev.tar.zst > /tmp/rust-1.98.0-dev.tar.zst.sha256
+
+      - name: Upload one-day development toolchain
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: rust-1.98.0-dev
+          path: |
+            /tmp/rust-1.98.0-dev.tar.zst
+            /tmp/rust-1.98.0-dev.tar.zst.sha256
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
