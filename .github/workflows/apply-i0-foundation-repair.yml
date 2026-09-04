@@ -10,6 +10,7 @@ on:
       - .github/fix-generated-backslash.py
       - .github/fix-message-fingerprint.py
       - .github/fix-canonical-order.py
+      - .github/fix-repository-policy.py
       - .github/workflows/apply-i0-foundation-repair.yml
   workflow_dispatch:
 
@@ -32,6 +33,15 @@ jobs:
           fetch-depth: 0
           persist-credentials: true
 
+      - name: Integrate current main tip
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git merge --no-ff --no-edit origin/main
+
       - name: Reconstruct verified repair tree
         shell: bash
         run: |
@@ -46,6 +56,7 @@ jobs:
           python3 .github/fix-generated-backslash.py
           python3 .github/fix-message-fingerprint.py
           python3 .github/fix-canonical-order.py
+          python3 .github/fix-repository-policy.py
 
       - name: Install frozen Rust toolchain
         run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
@@ -86,7 +97,7 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
-      - name: Commit validated repair and remove stale branches
+      - name: Commit validated repair to main and remove repair branches
         if: success()
         shell: bash
         run: |
@@ -96,17 +107,12 @@ jobs:
           rm -f .github/fix-generated-backslash.py
           rm -f .github/fix-message-fingerprint.py
           rm -f .github/fix-canonical-order.py
+          rm -f .github/fix-repository-policy.py
           rm -f .github/workflows/apply-i0-foundation-repair.yml
+          rm -f .github/workflows/export-i0-c-dev-inputs.yml
+          rm -f .github/workflows/i0-b-export.yml
           git add -A
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "fix(wow-core): restore executable E0 foundation"
-          git push origin HEAD:repair/i0-foundation-integrity
-
-          git fetch origin --prune
-          while IFS= read -r branch; do
-            case "$branch" in
-              main|repair/i0-foundation-integrity|HEAD) continue ;;
-            esac
-            git push origin --delete "$branch"
-          done < <(git for-each-ref --format='%(refname:strip=3)' refs/remotes/origin | sort -u)
+          git push origin HEAD:main
+          git push origin --delete repair/i0-foundation-integrity
+          git push origin --delete impl/i0-c-wow-emmy-adapter || true
