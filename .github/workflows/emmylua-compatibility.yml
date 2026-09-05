@@ -1,0 +1,106 @@
+name: EmmyLua compatibility
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/wow_emmy_source.py"
+      - "scripts/check-emmylua-version.py"
+      - "tests/test_wow_emmy_source.py"
+      - "docs/EMMYLUA_UPSTREAM.md"
+      - "crates/wow-emmy/**"
+      - ".github/workflows/emmylua-compatibility.yml"
+  pull_request:
+    paths:
+      - "scripts/wow_emmy_source.py"
+      - "scripts/check-emmylua-version.py"
+      - "tests/test_wow_emmy_source.py"
+      - "crates/wow-emmy/**"
+      - ".github/workflows/emmylua-compatibility.yml"
+  schedule:
+    - cron: "17 10 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: emmylua-compatibility-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  manager:
+    name: manager (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+      - name: Compile manager and tests
+        run: >-
+          python -m py_compile
+          scripts/wow_emmy_source.py
+          scripts/check-emmylua-version.py
+          tests/test_wow_emmy_source.py
+      - name: Run manager regression suite
+        run: python -m unittest -v tests/test_wow_emmy_source.py
+
+  current-upstream:
+    name: current upstream probe
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+      - name: Resolve current upstream into a local checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/check-emmylua-version.py probe \
+            --source "$RUNNER_TEMP/emmylua-analyzer" \
+            --update auto \
+            --output "$RUNNER_TEMP/emmylua-compatibility.json" \
+            --json
+          python scripts/check-emmylua-version.py verify \
+            --report "$RUNNER_TEMP/emmylua-compatibility.json" \
+            --json
+      - name: Inspect exact report identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - "$RUNNER_TEMP/emmylua-compatibility.json" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          report = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          assert report["compatibility"]["status"] == "compatible"
+          assert report["source"]["revision"] == report["source"]["remote_head"]
+          assert report["analysis_crate"]["name"] == "emmylua_code_analysis"
+          print(json.dumps({
+              "revision": report["source"]["revision"],
+              "tree": report["source"]["tree"],
+              "crate_version": report["analysis_crate"]["version"],
+              "rust_version": report["analysis_crate"]["rust_version"],
+              "surface_sha256": report["surface"]["surface_sha256"],
+              "report_sha256": report["report_sha256"],
+          }, sort_keys=True))
+          PY
+      - name: Compile the current analyzer package in the compatibility sandbox
+        shell: bash
+        working-directory: ${{ runner.temp }}/emmylua-analyzer
+        run: |
+          set -euo pipefail
+          cargo check --locked -p emmylua_code_analysis --all-targets
