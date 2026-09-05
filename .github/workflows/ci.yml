@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.x'
+      - name: Install current stable Rust
+        shell: bash
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+      - name: Check formatting
+        run: cargo +stable fmt --all --check
+      - name: Check workspace
+        run: cargo +stable check --locked --workspace --all-targets --all-features
+      - name: Lint workspace
+        run: cargo +stable clippy --locked --workspace --all-targets --all-features -- -D warnings
+      - name: Test workspace
+        run: cargo +stable test --locked --workspace --all-targets --all-features
+      - name: Test source tools
+        run: python -m unittest discover -s tests -v
+      - name: Check documentation
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo +stable doc --locked --workspace --all-features --no-deps
+      - name: Preserve exact source on failure
+        if: failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git bundle create "$RUNNER_TEMP/source.bundle" --all
+          git rev-parse HEAD > "$RUNNER_TEMP/COMMIT_SHA"
+          git status --porcelain > "$RUNNER_TEMP/worktree-status.txt"
+          rustc +stable -Vv > "$RUNNER_TEMP/rust-version.txt"
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-failure-source
+          path: |
+            ${{ runner.temp }}/source.bundle
+            ${{ runner.temp }}/COMMIT_SHA
+            ${{ runner.temp }}/worktree-status.txt
+            ${{ runner.temp }}/rust-version.txt
+          retention-days: 2
+          if-no-files-found: error
