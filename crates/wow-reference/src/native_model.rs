@@ -76,6 +76,7 @@ pub struct EventFact<'a> {
 #[derive(Clone, Debug)]
 pub struct ValueFact<'a> {
     pub name: &'a str,
+    pub type_name: Option<&'a str>,
     pub value: &'a RawValue,
     pub raw: &'a RawValue,
 }
@@ -260,13 +261,18 @@ fn event(value: &RawValue) -> Result<EventFact<'_>> {
         raw: value,
     })
 }
-fn values<'a>(map: &BTreeMap<&str, &'a RawValue>, key: &str) -> Result<Vec<ValueFact<'a>>> {
-    collection(map, "Fields")?
+fn values<'a>(
+    map: &BTreeMap<&str, &'a RawValue>,
+    collection_key: &str,
+    key: &str,
+) -> Result<Vec<ValueFact<'a>>> {
+    collection(map, collection_key)?
         .into_iter()
         .map(|v| {
             let fields = object(v)?;
             Ok(ValueFact {
                 name: required_text(&fields, "Name", v)?,
+                type_name: optional_text(&fields, "Type")?,
                 value: required(&fields, key, v)?,
                 raw: v,
             })
@@ -291,14 +297,21 @@ fn table(value: &RawValue) -> Result<TableFact<'_>> {
         },
         "Enumeration" => TableFact::Enumeration {
             name,
-            values: values(&map, "EnumValue")?,
+            values: values(&map, "Fields", "EnumValue")?,
             raw: value,
         },
-        "Constants" => TableFact::Constants {
-            name,
-            values: values(&map, "Value")?,
-            raw: value,
-        },
+        "Constants" => {
+            // Blizzard uses Values, not the Enumeration/Structure Fields lane.
+            // Reject the old mistaken shape rather than silently emitting {}.
+            if map.contains_key("Fields") || !map.contains_key("Values") {
+                return Err(error(ModelErrorCode::WrongType, value));
+            }
+            TableFact::Constants {
+                name,
+                values: values(&map, "Values", "Value")?,
+                raw: value,
+            }
+        }
         _ => TableFact::Unsupported {
             name,
             type_name,

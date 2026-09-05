@@ -29,6 +29,15 @@ correction/type closure or consumer certification. Declaration maps are present;
 literal maps are whole-file. Full fine-grained E1 maps and actual EmmyLua/LuaLS
 semantic consumer probes remain incomplete. Existing donor goldens still pass.
 
+The native scalar lane reads Constants `Values`, retains descriptor types and
+resolves source-local enum labels, transitive references and exact integer `+`/`-`
+expressions. It records per-value outcomes and transitive source spans/hashes in
+native library report v2. Unknown global names remain unresolved data rather than
+rejecting a whole documentation file. Invalid individual callable/structure
+projections are excluded with their own issue and leave valid neighboring
+annotations/source maps intact. This does not implement runtime-global discovery,
+correction packs, widget alias mappings or general Lua evaluation.
+
 Legacy Python source tools still provide local Git snapshot inventory,
 declarative API and XML/TOC producers/verifiers. They are migration debt, not the
 product architecture to extend. The Rust port must replace these paths and their

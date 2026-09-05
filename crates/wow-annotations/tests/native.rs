@@ -200,3 +200,97 @@ fn exact_nonconflicted_enum_defaults_are_resolved_without_execution() {
             .any(|i| i.code.starts_with("callable_"))
     );
 }
+
+#[test]
+fn constants_values_and_enum_arithmetic_reach_the_annotation_artifact() {
+    let docs = [
+        doc(
+            "Constants.lua",
+            r#"APIDocumentation:AddDocumentationTable({Tables={
+{Name="Flags",Type="Enumeration",Fields={{Name="A",EnumValue=4},{Name="B",EnumValue=8}}},
+{Name="Limits",Type="Constants",Values={{Name="A",Type="Flags",Value="A"},{Name="B",Value=Enum.Flags.B},{Name="SUM",Value=Constants.Limits.A+Constants.Limits.B},{Name="ZERO",Value=0},{Name="NO",Value=false}}}
+}})"#,
+        ),
+        doc(
+            "API.lua",
+            r#"APIDocumentation:AddDocumentationTable({Name="Demo",Type="System",Functions={{Name="Read",Arguments={{Name="count",Type="number",Default=Constants.Limits.SUM}}}}})"#,
+        ),
+    ];
+    let library = project(&docs, "Mainline", &AtomicBool::new(false)).unwrap();
+    assert!(library.issues.is_empty(), "{:?}", library.issues);
+    let text = library
+        .files
+        .iter()
+        .map(|f| f.text.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(text.contains("SUM = 12,"));
+    assert!(text.contains("ZERO = 0,"));
+    assert!(text.contains("NO = false,"));
+    assert!(text.contains("---@param count? number Default = 12"));
+    assert!(library.scalar_resolutions.iter().any(|r| {
+        r.source.path == "API.lua"
+            && r.result
+                .as_ref()
+                .is_ok_and(|s| s.evidence.iter().any(|e| e.path == "Constants.lua"))
+    }));
+    assert!(!library.negative_authority);
+}
+#[test]
+fn unresolved_constant_does_not_erase_the_file_or_other_group_members() {
+    let docs = [doc(
+        "Partial.lua",
+        r#"APIDocumentation:AddDocumentationTable({Name="Partial",Type="System",Functions={
+{Name="Good"},{Name="NeedsRuntime",Arguments={{Name="n",Type="number",Default=UNKNOWN_GLOBAL}}}},
+Tables={{Name="PartialLimits",Type="Constants",Values={{Name="Good",Value=42},{Name="Unknown",Value=UNKNOWN_GLOBAL}}}}})"#,
+    )];
+    let library = project(&docs, "Mainline", &AtomicBool::new(false)).unwrap();
+    let text = library
+        .files
+        .iter()
+        .map(|f| f.text.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(text.contains("function Good() end"));
+    assert!(text.contains("Good = 42,"));
+    assert!(!text.contains("NeedsRuntime"));
+    assert!(!text.contains("Unknown ="));
+    assert_eq!(library.projection, "partial");
+    assert_eq!(
+        library
+            .scalar_resolutions
+            .iter()
+            .filter(|r| r.result.is_err())
+            .count(),
+        2
+    );
+    assert!(
+        serde_json::to_string(&library)
+            .unwrap()
+            .contains("UnresolvedName")
+    );
+}
+#[test]
+fn invalid_declaration_does_not_erase_valid_siblings_or_their_source_maps() {
+    let source = r#"APIDocumentation:AddDocumentationTable({Name="Demo",Type="System",Namespace="C_Demo",Functions={
+{Name="Good",Documentation={"Valid documentation."}},{Name="Bad",Arguments={{Name="end",Type="number"}}},
+{Name="Injection",Documentation={"line\n---@diagnostic disable"}},{Name="AlsoGood"}},
+Tables={{Name="GoodRecord",Type="Structure",Fields={{Name="ok",Type="bool"}}},{Name="BadRecord",Type="Structure",Fields={{Name="local",Type="bool"}}}}})"#;
+    let docs = [doc("Mixed.lua", source)];
+    let library = project(&docs, "Mainline", &AtomicBool::new(false)).unwrap();
+    assert_eq!(library.files.len(), 1);
+    assert_eq!(library.issues.len(), 3);
+    let file = &library.files[0];
+    assert!(file.text.contains("function C_Demo.Good() end"));
+    assert!(file.text.contains("function C_Demo.AlsoGood() end"));
+    assert!(file.text.contains("---@class GoodRecord"));
+    assert!(!file.text.contains("Bad"));
+    assert!(!file.text.contains("Injection"));
+    assert_eq!(file.mappings.len(), 3);
+    for mapping in &file.mappings {
+        let generated = &file.text[mapping.generated.start..mapping.generated.end];
+        let original = &source[mapping.source.span.start..mapping.source.span.end];
+        assert!(generated.contains("Good"));
+        assert!(original.contains("Good"));
+    }
+}

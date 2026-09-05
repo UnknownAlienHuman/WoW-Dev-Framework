@@ -53,7 +53,23 @@ pub enum RawKind {
     Number(String),
     String(String),
     Reference(Vec<String>),
+    /// An unevaluated bare global name observed in a data value. It is never
+    /// looked up in a host/Lua environment or treated as nil/a known constant.
+    UnresolvedName(String),
+    /// Only the corpus-required additive forms are admitted; the original
+    /// operands and spans remain raw. The reference resolver owns evaluation.
+    BinaryExpression {
+        op: AdditiveOp,
+        left: Box<RawValue>,
+        right: Box<RawValue>,
+    },
     Table(Vec<RawField>),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub enum AdditiveOp {
+    Add,
+    Subtract,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -80,8 +96,13 @@ impl RawValue {
                 };
                 (n + cn + 1, b + cb + key_bytes)
             }),
-            RawKind::String(s) | RawKind::Number(s) => (1, s.len()),
+            RawKind::String(s) | RawKind::Number(s) | RawKind::UnresolvedName(s) => (1, s.len()),
             RawKind::Reference(parts) => (1, parts.iter().map(String::len).sum()),
+            RawKind::BinaryExpression { left, right, .. } => {
+                let (ln, lb) = left.weight();
+                let (rn, rb) = right.weight();
+                (1 + ln + rn, lb + rb)
+            }
             _ => (1, 0),
         }
     }
@@ -314,7 +335,7 @@ pub fn ingest_document(
     Ok(DocumentationDocument {
         revision: revision.to_owned(),
         source_bytes: text.len(),
-        evaluator: "ketho-apidoc-declarative/1",
+        evaluator: "ketho-apidoc-declarative/2",
         path: path.to_owned(),
         sha256: digest,
         registrations,
@@ -358,7 +379,7 @@ fn preflight(text: &str) -> Result<()> {
             }
             TkAssign | TkComma | TkSemicolon => chain = 0,
             TkLocal | TkName | TkString | TkLongString | TkInt | TkFloat | TkNil | TkTrue
-            | TkFalse | TkDot | TkColon | TkMinus => chain += 1,
+            | TkFalse | TkDot | TkColon | TkMinus | TkPlus => chain += 1,
             _ => return Err(fail(NativeErrorCode::UnsupportedExpression)),
         }
         if depth > MAX_DEPTH || chain > MAX_DEPTH {
@@ -457,11 +478,19 @@ impl Evaluator<'_> {
                 let name = name
                     .get_name_text()
                     .ok_or_else(|| fail(NativeErrorCode::Syntax))?;
-                let weight = self
-                    .bindings
-                    .get(&name)
-                    .ok_or_else(|| at(NativeErrorCode::UnknownBinding, location))?
-                    .weight();
+                let Some(bound) = self.bindings.get(&name) else {
+                    // A raw unresolved leaf does not authorize a value, a host
+                    // lookup or registration. General calls/indexing still fail.
+                    if depth == 0 {
+                        return Err(at(NativeErrorCode::UnknownBinding, location));
+                    }
+                    self.tick(0, name.len())?;
+                    return Ok(RawValue {
+                        kind: RawKind::UnresolvedName(name),
+                        span: location,
+                    });
+                };
+                let weight = bound.weight();
                 self.tick(weight.0, weight.1)?;
                 return self
                     .bindings
@@ -476,6 +505,27 @@ impl Evaluator<'_> {
                         .ok_or_else(|| fail(NativeErrorCode::Syntax))?,
                     depth + 1,
                 );
+            }
+            LuaExpr::BinaryExpr(binary) => {
+                let op = match binary
+                    .get_op_token()
+                    .map(|t| t.syntax().text().to_owned())
+                    .as_deref()
+                {
+                    Some("+") => AdditiveOp::Add,
+                    Some("-") => AdditiveOp::Subtract,
+                    _ => return Err(at(NativeErrorCode::UnsupportedExpression, location)),
+                };
+                let (left, right) = binary
+                    .get_exprs()
+                    .ok_or_else(|| fail(NativeErrorCode::Syntax))?;
+                let left = self.value(left, depth + 1)?;
+                let right = self.value(right, depth + 1)?;
+                RawKind::BinaryExpression {
+                    op,
+                    left: Box::new(left),
+                    right: Box::new(right),
+                }
             }
             LuaExpr::UnaryExpr(unary) => {
                 let op = unary

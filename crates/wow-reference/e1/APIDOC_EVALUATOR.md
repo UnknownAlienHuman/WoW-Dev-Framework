@@ -414,3 +414,35 @@ canonicalize_evaluation_output
 - no cross-file environment leakage without exact bundle;
 - no source side effect;
 - no parser/evaluator version drift outside generation identity.
+
+
+## Implemented native subset: declarative profile v2
+
+`../src/native.rs` uses EmmyLua's lexer/AST and captures immutable literal tables,
+local bindings, exact registration calls, Enum/Constants paths and binary `+`/`-`.
+It does not execute Lua. Bare unknown names inside data become `UnresolvedName`;
+unknown registration roots, calls, mutation, helper execution and other binary
+operators remain rejected. Original expression nodes and UTF-8 spans are retained.
+
+`../src/native_constants.rs` resolves only the caller-selected normalized corpus.
+Enumeration members use `Fields/EnumValue`; constant members use `Values/Value`
+and retain their descriptor `Type`. A string naming a present enum member resolves
+through that enum; a string with an unknown named descriptor type stays unresolved,
+not an invented runtime string. Function defaults are already Lua values and do
+not inherit descriptor-string interpretation. No global-name allowlist is added.
+
+Scalar results include the source hashes/spans of every participating value.
+Duplicate group/member definitions, including equal duplicates, block resolution.
+Cycles, unresolved names/paths, mixed revisions, unsupported values, budget
+exhaustion and cancellation remain distinct errors. Arithmetic is deliberately
+integer-only within ±(2^53−1), including intermediates; no floating-point rounding,
+string coercion or signed-zero normalization. Direct numeric lexemes stay raw.
+Each resolution has a 48-depth/4096-step budget; the catalog admits at most 65536
+value definitions. The annotation consumer also bounds accumulated evidence bytes.
+
+The consumer reports a failed resolution against that value/declaration and keeps
+unrelated supported declarations. This slice does not implement the full E1
+persistent ReferenceView/correction contract, host runtime values, or a complete
+Lua constant evaluator. Successful scalar resolution cannot upgrade coverage or
+runtime safety authority. Profile versions identify behavior; they do not pin a
+WoW build or permanently bind a source/dependency revision.

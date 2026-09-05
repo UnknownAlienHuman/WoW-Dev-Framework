@@ -9,6 +9,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::Serialize;
 use wow_reference::native::{DocumentationDocument, RawKind, RawValue, Span, source_digest};
+use wow_reference::native_constants::{ResolvedScalar, ScalarCatalog, ScalarError, ScalarValue};
 use wow_reference::native_model::{
     CallableFact, FieldFact, SystemFacts, SystemOwner, TableFact, ValueFact, normalize_document,
 };
@@ -62,6 +63,12 @@ pub struct MetadataSidecar {
     pub source: SourceLink,
 }
 
+#[derive(Clone, Debug, Serialize)]
+pub struct ScalarResolutionRecord {
+    pub source: SourceLink,
+    pub result: Result<ResolvedScalar, ScalarError>,
+}
+
 #[derive(Debug, Serialize)]
 pub struct NativeLibrary<'a> {
     pub schema: &'static str,
@@ -73,6 +80,7 @@ pub struct NativeLibrary<'a> {
     pub files: Vec<AnnotationFile>,
     pub issues: Vec<ProjectionIssue>,
     pub metadata_sidecars: Vec<MetadataSidecar>,
+    pub scalar_resolutions: Vec<ScalarResolutionRecord>,
     pub limitations: Vec<&'static str>,
 }
 
@@ -132,6 +140,8 @@ pub fn project<'a>(
         .collect::<Vec<_>>();
     let mut issues = Vec::new();
     let mut metadata_sidecars = Vec::new();
+    let mut scalar_resolutions = Vec::new();
+    let mut resolution_budget = MAX_LIBRARY_BYTES;
     let mut systems = Vec::new();
     for document in &normalized {
         for system in &document.systems {
@@ -185,36 +195,10 @@ pub fn project<'a>(
             return Err(RenderError::InputLimit);
         }
     }
-    let mut defaults = BTreeMap::<Vec<String>, &RawValue>::new();
-    for (_, system) in &systems {
-        for table in &system.tables {
-            if identities[&table_key(table)] != 1 {
-                continue;
-            }
-            let (root, name, values) = match table {
-                TableFact::Enumeration { name, values, .. } => ("Enum", *name, values),
-                TableFact::Constants { name, values, .. } => ("Constants", *name, values),
-                _ => continue,
-            };
-            let mut names = BTreeMap::<&str, usize>::new();
-            for value in values {
-                *names.entry(value.name).or_default() += 1;
-            }
-            for value in values {
-                if names[value.name] == 1
-                    && matches!(
-                        value.value.kind,
-                        RawKind::String(_) | RawKind::Number(_) | RawKind::Boolean(_)
-                    )
-                {
-                    defaults.insert(
-                        vec![root.into(), name.into(), value.name.into()],
-                        value.value,
-                    );
-                }
-            }
-        }
-    }
+    let catalog = ScalarCatalog::new(revision, &systems).map_err(|error| match error {
+        ScalarError::InvalidSource => RenderError::InvalidSource,
+        _ => RenderError::InputLimit,
+    })?;
     let renderer = Renderer::new(enum_names, MAX_FILE_BYTES)?;
     let literals = LiteralRenderer::new(MAX_FILE_BYTES)?;
     let mut files = Vec::new();
@@ -228,6 +212,13 @@ pub fn project<'a>(
         if cancelled.load(Ordering::Relaxed) {
             return Err(RenderError::Cancelled);
         }
+        let mut scalars = ScalarProjection {
+            catalog: &catalog,
+            document,
+            cancelled,
+            records: &mut scalar_resolutions,
+            budget: &mut resolution_budget,
+        };
         metadata(
             document,
             system.raw,
@@ -257,7 +248,7 @@ pub fn project<'a>(
             metadata(
                 document,
                 table_raw(table),
-                &["Name", "Type", "Fields", "Arguments", "Returns"],
+                &["Name", "Type", "Fields", "Values", "Arguments", "Returns"],
                 &mut metadata_sidecars,
             );
             match table {
@@ -322,10 +313,24 @@ pub fn project<'a>(
                 issues.push(issue(document, function.raw, "duplicate_callable"));
                 continue;
             }
-            match callable(function, &defaults) {
+            match callable(function, &mut scalars) {
                 Ok(f) => {
-                    input.functions.push(f);
-                    function_sources.push(link(document, function.raw));
+                    let candidate = System {
+                        owner: input.owner.clone(),
+                        functions: vec![f],
+                        tables: Vec::new(),
+                    };
+                    match renderer.render(&candidate) {
+                        Ok(_) => {
+                            input.functions.extend(candidate.functions);
+                            function_sources.push(link(document, function.raw));
+                        }
+                        Err(error) => issues.push(issue(
+                            document,
+                            function.raw,
+                            format!("renderer_{error:?}"),
+                        )),
+                    }
                 }
                 Err(error) => {
                     issues.push(issue(document, function.raw, format!("callable_{error:?}")))
@@ -339,51 +344,68 @@ pub fn project<'a>(
                 continue;
             }
             let converted = match table {
-                TableFact::Structure { name, fields, .. } => {
-                    convert_fields(fields, &defaults).map(|fields| {
+                TableFact::Structure { name, fields, .. } => convert_fields(fields, &mut scalars)
+                    .map(|fields| {
                         Some(Table::Structure {
                             name: (*name).into(),
                             fields,
                         })
-                    })
-                }
+                    }),
                 TableFact::Callback {
                     name,
                     arguments,
                     returns,
                     ..
-                } if returns.is_empty() => convert_fields(arguments, &defaults).map(|arguments| {
-                    Some(Table::Callback {
-                        name: (*name).into(),
-                        arguments,
+                } if returns.is_empty() => {
+                    convert_fields(arguments, &mut scalars).map(|arguments| {
+                        Some(Table::Callback {
+                            name: (*name).into(),
+                            arguments,
+                        })
                     })
-                }),
+                }
                 TableFact::Enumeration { name, values, .. } => {
-                    convert_values(values).map(|values| {
+                    let converted = convert_values(values, false, &mut scalars, &mut issues);
+                    if values.is_empty() || !converted.is_empty() {
                         enums.push(EnumDeclaration {
                             name: (*name).into(),
-                            values,
+                            values: converted,
                             integer_format: IntegerFormat::Decimal,
                         });
                         literal_sources.push(link(document, raw));
-                        None
-                    })
+                    }
+                    Ok(None)
                 }
-                TableFact::Constants { name, values, .. } => convert_values(values).map(|values| {
-                    constants.push(ConstantGroup {
-                        name: (*name).into(),
-                        values,
-                        order: MemberOrder::Name,
-                    });
-                    literal_sources.push(link(document, raw));
-                    None
-                }),
+                TableFact::Constants { name, values, .. } => {
+                    let converted = convert_values(values, true, &mut scalars, &mut issues);
+                    if values.is_empty() || !converted.is_empty() {
+                        constants.push(ConstantGroup {
+                            name: (*name).into(),
+                            values: converted,
+                            order: MemberOrder::Name,
+                        });
+                        literal_sources.push(link(document, raw));
+                    }
+                    Ok(None)
+                }
                 _ => Err(RenderError::UnsupportedType),
             };
             match converted {
                 Ok(Some(table)) => {
-                    input.tables.push(table);
-                    table_sources.push(link(document, raw));
+                    let candidate = System {
+                        owner: input.owner.clone(),
+                        functions: Vec::new(),
+                        tables: vec![table],
+                    };
+                    match renderer.render(&candidate) {
+                        Ok(_) => {
+                            input.tables.extend(candidate.tables);
+                            table_sources.push(link(document, raw));
+                        }
+                        Err(error) => {
+                            issues.push(issue(document, raw, format!("renderer_{error:?}")))
+                        }
+                    }
                 }
                 Ok(None) => {}
                 Err(error) => issues.push(issue(document, raw, format!("table_{error:?}"))),
@@ -455,6 +477,9 @@ pub fn project<'a>(
             }
         }
     }
+    if resolution_budget == 0 {
+        return Err(RenderError::OutputLimit);
+    }
     if !all_enums.is_empty() || !all_constants.is_empty() {
         let text = literals.render_enums(&all_enums, &all_constants)?;
         let maps = whole_file_maps(&text, all_literal_sources);
@@ -469,7 +494,7 @@ pub fn project<'a>(
         return Err(RenderError::Cancelled);
     }
     Ok(NativeLibrary {
-        schema: "wow-native-annotation-library/1",
+        schema: "wow-native-annotation-library/2",
         revision,
         projection: if issues.is_empty() {
             "projected_with_sidecars"
@@ -481,6 +506,7 @@ pub fn project<'a>(
         files,
         issues,
         metadata_sidecars,
+        scalar_resolutions,
         limitations: vec![
             "raw restriction and unknown metadata are retained, not interpreted as runtime safety",
             "named type closure and source-owned widget aliases require the correction/type mapping lane",
@@ -551,9 +577,62 @@ fn table_raw<'a>(table: &TableFact<'a>) -> &'a RawValue {
         | TableFact::Unsupported { raw, .. } => raw,
     }
 }
+struct ScalarProjection<'a, 'c> {
+    catalog: &'c ScalarCatalog<'a>,
+    document: &'a DocumentationDocument,
+    cancelled: &'c AtomicBool,
+    records: &'c mut Vec<ScalarResolutionRecord>,
+    budget: &'c mut usize,
+}
+impl ScalarProjection<'_, '_> {
+    fn resolve(
+        &mut self,
+        raw: &RawValue,
+        declared_type: Option<&str>,
+    ) -> Result<ScalarValue, RenderError> {
+        if *self.budget == 0 {
+            return Err(RenderError::OutputLimit);
+        }
+        let result = self
+            .catalog
+            .resolve(self.document, raw, declared_type, self.cancelled);
+        let value =
+            result
+                .as_ref()
+                .map(|result| result.value.clone())
+                .map_err(|error| match error {
+                    ScalarError::Cancelled => RenderError::Cancelled,
+                    _ => RenderError::UnsupportedType,
+                });
+        let cost = 512
+            + self.document.path().len()
+            + result.as_ref().map_or(0, |resolved| {
+                let value_bytes = match &resolved.value {
+                    ScalarValue::Number(s) | ScalarValue::String(s) => s.len(),
+                    ScalarValue::Boolean(_) => 8,
+                };
+                value_bytes
+                    + resolved
+                        .evidence
+                        .iter()
+                        .map(|e| 256 + e.path.len() + e.sha256.len())
+                        .sum::<usize>()
+            });
+        let Some(remaining) = self.budget.checked_sub(cost) else {
+            *self.budget = 0;
+            return Err(RenderError::OutputLimit);
+        };
+        *self.budget = remaining;
+        self.records.push(ScalarResolutionRecord {
+            source: link(self.document, raw),
+            result,
+        });
+        value
+    }
+}
 fn callable(
     value: &CallableFact<'_>,
-    defaults: &BTreeMap<Vec<String>, &RawValue>,
+    scalars: &mut ScalarProjection<'_, '_>,
 ) -> Result<Function, RenderError> {
     Ok(Function {
         name: value.name.into(),
@@ -561,34 +640,27 @@ fn callable(
             .documentation
             .as_ref()
             .map(|d| d.iter().map(|s| (*s).into()).collect()),
-        arguments: convert_fields(&value.arguments, defaults)?,
-        returns: convert_fields(&value.returns, defaults)?,
+        arguments: convert_fields(&value.arguments, scalars)?,
+        returns: convert_fields(&value.returns, scalars)?,
     })
 }
 fn convert_fields(
     fields: &[FieldFact<'_>],
-    defaults: &BTreeMap<Vec<String>, &RawValue>,
+    scalars: &mut ScalarProjection<'_, '_>,
 ) -> Result<Vec<Field>, RenderError> {
     fields
         .iter()
         .map(|f| {
-            let resolved_default = match f.default {
-                Some(RawValue {
-                    kind: RawKind::Reference(parts),
-                    ..
-                }) => Some(*defaults.get(parts).ok_or(RenderError::UnsupportedType)?),
-                value => value,
+            let default_text = match f.default {
+                None
+                | Some(RawValue {
+                    kind: RawKind::Nil, ..
+                }) => None,
+                Some(raw) => Some(match scalars.resolve(raw, None)? {
+                    ScalarValue::Boolean(value) => value.to_string(),
+                    ScalarValue::Number(value) | ScalarValue::String(value) => value,
+                }),
             };
-            let default_text = resolved_default
-                .map(|d| match &d.kind {
-                    RawKind::Nil => Ok(None),
-                    RawKind::Boolean(b) => Ok(Some(b.to_string())),
-                    RawKind::Number(n) | RawKind::String(n) => Ok(Some(n.clone())),
-                    // An unresolved enum expression is not its runtime default value.
-                    _ => Err(RenderError::UnsupportedType),
-                })
-                .transpose()?
-                .flatten();
             let variadic = match f.stride_index.map(|v| &v.kind) {
                 None | Some(RawKind::Nil | RawKind::Boolean(false)) => false,
                 Some(RawKind::Number(n)) if n.parse::<u64>().is_ok_and(|v| v > 0) => true,
@@ -605,22 +677,41 @@ fn convert_fields(
         })
         .collect()
 }
-fn convert_values(values: &[ValueFact<'_>]) -> Result<Vec<LiteralMember>, RenderError> {
-    values
-        .iter()
-        .map(|v| {
-            Ok(LiteralMember {
-                name: v.name.into(),
-                value: scalar(v.value)?,
-            })
-        })
-        .collect()
+fn convert_values(
+    values: &[ValueFact<'_>],
+    typed_constants: bool,
+    scalars: &mut ScalarProjection<'_, '_>,
+    issues: &mut Vec<ProjectionIssue>,
+) -> Vec<LiteralMember> {
+    let mut result = Vec::new();
+    for value in values {
+        let resolved = scalars.resolve(
+            value.value,
+            if typed_constants {
+                value.type_name
+            } else {
+                None
+            },
+        );
+        match resolved.and_then(scalar) {
+            Ok(literal) => result.push(LiteralMember {
+                name: value.name.into(),
+                value: literal,
+            }),
+            Err(error) => issues.push(issue(
+                scalars.document,
+                value.raw,
+                format!("value_{error:?}"),
+            )),
+        }
+    }
+    result
 }
-fn scalar(raw: &RawValue) -> Result<LiteralValue, RenderError> {
-    match &raw.kind {
-        RawKind::Boolean(b) => Ok(LiteralValue::Boolean(*b)),
-        RawKind::String(s) => Ok(LiteralValue::String(s.clone())),
-        RawKind::Number(s) => {
+fn scalar(value: ScalarValue) -> Result<LiteralValue, RenderError> {
+    match value {
+        ScalarValue::Boolean(b) => Ok(LiteralValue::Boolean(b)),
+        ScalarValue::String(s) => Ok(LiteralValue::String(s)),
+        ScalarValue::Number(s) => {
             let (negative, magnitude) = s
                 .strip_prefix('-')
                 .map_or((false, s.as_str()), |v| (true, v));
@@ -634,11 +725,9 @@ fn scalar(raw: &RawValue) -> Result<LiteralValue, RenderError> {
             };
             match integer.and_then(|v| if negative { v.checked_neg() } else { Some(v) }) {
                 Some(value) => Ok(LiteralValue::Integer(value)),
-                // Keep unsupported numeric lexemes in raw data; never round them.
                 None => Err(RenderError::UnsupportedType),
             }
         }
-        _ => Err(RenderError::UnsupportedType),
     }
 }
 
