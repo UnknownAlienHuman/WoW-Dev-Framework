@@ -1,0 +1,5 @@
+---@meta _
+---@alias FrameEvent string
+---|"A_TEST"
+---|"B_TEST" # `id: number, value: boolean`
+---|"Z_TEST" # `unitTarget: string`

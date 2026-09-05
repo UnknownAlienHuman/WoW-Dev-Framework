@@ -7,3 +7,5 @@
 //! coverage, acquire source, execute Lua, or configure a language server.
 
 pub mod ketho;
+
+pub mod literals;

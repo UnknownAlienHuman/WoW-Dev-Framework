@@ -14,7 +14,7 @@ annotation libraries; the framework's semantic analyzer remains behind wow-emmy.
 | `wowdoc/init.lua`: GetBaseName/GetArguments/GetFullName | `wow-annotations`: globals, namespaces, ScriptObject receivers and varargs | Implemented with explicitly supplied widget alias |
 | `wowdoc/loader/init.lua` | `wow-reference`: selected TOC corpus, documentation systems, separate ScriptObject output, correction dispatch | Native source-to-renderer integration pending |
 | `wowdoc/loader/doc_widgets.lua`, `patches.lua`, `TypeDocumentation.lua`, `luasrc/custom_doc` | reference-owned type/widget mapping and reviewed corrections | Port required; no permanent build assumptions |
-| `luasrc/annotate/literals.lua` and the enum/event/CVar paths invoked by `luasrc/init.lua` | typed enum/event/CVar data and annotation projection | Port required |
+| `luasrc/annotate/literals.lua` and the enum/event/CVar paths invoked by `luasrc/init.lua` | typed enum/event/CVar data and annotation projection | Pure literal renderer implemented; acquisition/reference integration pending |
 | `luasrc/WikiParser`, `wowdoc` resource acquisition, TypeScript resource export | explicit enrichment and equivalent native query data where required | Port/select by feature parity, not a mandatory extra runtime |
 | VS Code activation and LuaLS configuration | thin host adapter over an editor-independent Rust service | Port behavior, not an extension/Node dependency |
 
@@ -72,3 +72,46 @@ upstream Rust Lua frontend behind its owner adapter. Loading arbitrary source vi
 Lua `loadfile` is not carried over from the donor. The end-user product must not
 require Python, Node, a VS Code installation, or a Lua runtime to generate its
 annotations. No full service, complete E1-C, or public release is claimed yet.
+
+## Literal-generator port
+
+`wow-annotations::literals` ports Ketho's `GetEventLiterals`, `GetCVarLiterals`
+and `GetEnumTable` output from caller-supplied typed data. Event payload display
+text is supplied by the reference owner; this emitter does not infer payload
+signatures. The donor's open `FrameEvent string` and `CVar string` aliases are
+preserved, not turned into exhaustive runtime whitelists. Enums and Constants
+stay separate and fields preserve boolean, integer, finite-number or string
+identity. Wide numeric-looking enum strings are not parsed or reformatted.
+
+`IntegerFormat` and `MemberOrder` make presentation choices explicit. The Rust
+renderer contains no special case for any Blizzard enum/constant name, no static
+inventory, source repository, flavor, build or Interface value. Data acquisition
+(including donor resource sources beyond Gethe) remains outside this library and
+is not silently enabled by porting the renderer.
+
+Three additional golden files were produced by the exact reviewed donor literal
+module, blob `1c79f0e9c92a9836218938a34244540db2a999e6`, with isolated synthetic
+inputs corresponding to `tests/literals.rs`. Network/resource loading was
+replaced by an in-memory test harness; only reviewed pure rendering ran. Rust
+tests now compare those committed event, CVar and enum/constant bytes offline.
+These are scoped donor-output probes, not live-source or language-server probes.
+See `crates/wow-annotations/tests/golden/README.md` for identities and differences.
+
+Explicit differences from donor rendering:
+
+- equal boolean values use a stable member-name tie-breaker;
+- every string literal is escaped; non-ASCII/control UTF-8 bytes use Lua 5.1
+  decimal escapes, preventing strings from creating physical annotation lines;
+- unsafe event payload comments and duplicate names reject the whole result;
+- decimal/hex and constant-group ordering are caller policies, not known-name
+  heuristics; a negative or boolean member never changes later numeric formatting;
+- integral scalar inputs outside the conservative Lua 5.1 exact-integer interval
+  reject instead of rounding or being silently converted to string;
+- finite fractional constants are supported; nonfinite values and unprobed
+  fractional enum declarations reject explicitly;
+- input and output size bounds apply before successful artifact return.
+
+The pure emitter slice does not yet provide E1 source maps, projection-loss
+sidecars, source-bound artifact identities, or full consumer compatibility.
+Unsupported input fails with no output; the future reference adapter must turn
+that failure into its explicit projection status, not drop a field or use `any`.

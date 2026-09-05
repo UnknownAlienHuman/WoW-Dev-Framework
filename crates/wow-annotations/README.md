@@ -3,7 +3,8 @@
 **Status:** the Rust Ketho emitter slice is implemented and active in Cargo.
 The full E1-C ReferenceView-to-artifact service is not complete.
 
-See [`src/ketho.rs`](src/ketho.rs), [`tests/ketho.rs`](tests/ketho.rs),
+See [`src/ketho.rs`](src/ketho.rs), [`src/literals.rs`](src/literals.rs),
+[`tests/ketho.rs`](tests/ketho.rs), [`tests/literals.rs`](tests/literals.rs),
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and the
 [Rust port map](../../docs/KETHO_RUST_PORT.md).
 
@@ -12,6 +13,8 @@ GetSystem behavior and explicit function/method naming. It has no dependencies,
 source ingestion, IO, Python/Lua runtime, editor mutation, or reference-authority
 claims. Callers provide ordered declaration data, enum membership and resolved
 widget aliases. Unsafe/unrepresentable input is rejected, not widened or dropped.
+The literal lane also ports event/CVar aliases and enum/constant files from
+typed input, including scalar-preserving values and explicit order/format policy.
 The complete service still needs the source-bound ReferenceView adapter, loss
 sidecars, source maps, artifact publication and real language-server probes.
 

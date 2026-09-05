@@ -2,6 +2,8 @@
 
 `src/ketho.rs` ports the annotation behavior of Ketho/vscode-wow-api:
 `luasrc/annotate/init.lua` and the naming helpers in `wowdoc/init.lua`.
+`src/literals.rs` ports `luasrc/annotate/literals.lua` rendering, with
+explicit formatting policies, deterministic ties and escaped string values.
 The committed synthetic golden outputs are derived from that renderer.
 Reviewed revision: d0b5b51fac4c52c493371b9b18e66ce604ea4326.
 Source: https://github.com/Ketho/vscode-wow-api

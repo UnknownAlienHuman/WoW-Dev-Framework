@@ -11,9 +11,9 @@ use std::collections::BTreeSet;
 use std::fmt;
 
 const MAX_NAME_BYTES: usize = 1024;
-const MAX_TEXT_BYTES: usize = 64 * 1024;
-const MAX_ITEMS: usize = 4096;
-const MAX_OUTPUT_BYTES: usize = 8 * 1024 * 1024;
+pub(crate) const MAX_TEXT_BYTES: usize = 64 * 1024;
+pub(crate) const MAX_ITEMS: usize = 4096;
+pub(crate) const MAX_OUTPUT_BYTES: usize = 8 * 1024 * 1024;
 
 /// Explicit namespace/receiver ownership, rather than a guessed dotted name.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -82,6 +82,7 @@ pub enum RenderError {
     DuplicateName,
     InputLimit,
     OutputLimit,
+    UnsupportedLiteral,
 }
 
 impl fmt::Display for RenderError {
@@ -94,6 +95,7 @@ impl fmt::Display for RenderError {
             Self::DuplicateName => "duplicate declaration or argument name",
             Self::InputLimit => "annotation input exceeds the renderer limit",
             Self::OutputLimit => "annotation output exceeds the renderer limit",
+            Self::UnsupportedLiteral => "literal is not representable in this annotation profile",
         })
     }
 }
@@ -342,13 +344,13 @@ enum Position {
     Return,
 }
 
-struct Output {
-    bytes: String,
-    limit: usize,
+pub(crate) struct Output {
+    pub(crate) bytes: String,
+    pub(crate) limit: usize,
 }
 
 impl Output {
-    fn push(&mut self, value: &str) -> Result<(), RenderError> {
+    pub(crate) fn push(&mut self, value: &str) -> Result<(), RenderError> {
         if self.bytes.len().saturating_add(value.len()) > self.limit {
             return Err(RenderError::OutputLimit);
         }
@@ -425,7 +427,7 @@ fn qualified_identifier(value: &str) -> Result<(), RenderError> {
     Ok(())
 }
 
-fn identifier(value: &str) -> Result<(), RenderError> {
+pub(crate) fn identifier(value: &str) -> Result<(), RenderError> {
     if value.is_empty() || value.len() > MAX_NAME_BYTES {
         return Err(RenderError::InvalidIdentifier);
     }
@@ -465,7 +467,7 @@ fn identifier(value: &str) -> Result<(), RenderError> {
     Ok(())
 }
 
-fn safe_text(value: &str) -> Result<(), RenderError> {
+pub(crate) fn safe_text(value: &str) -> Result<(), RenderError> {
     if value.len() > MAX_TEXT_BYTES {
         return Err(RenderError::InputLimit);
     }

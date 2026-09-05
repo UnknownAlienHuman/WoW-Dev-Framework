@@ -1,0 +1,5 @@
+---@meta _
+---@alias CVar string
+---|"Test_Name"
+---|"alpha"
+---|"zeta"

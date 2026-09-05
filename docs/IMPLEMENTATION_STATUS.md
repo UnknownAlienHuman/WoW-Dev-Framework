@@ -14,11 +14,13 @@ Active Cargo workspace members:
 - `wow-annotations`: pure Rust port of Ketho's annotation emitter and naming
   helpers. Ordered callables, fields, arrays, explicit enum types, structures,
   argument-only callbacks, varargs, defaults and ScriptObject receivers are
-  implemented. The crate has no runtime dependencies or source/IO execution.
+  implemented. Native event/CVar literal unions and typed enum/constant output
+  are also implemented, with explicit ordering/formatting, escaped strings and
+  bounded output. The crate has no runtime dependencies or source/IO execution.
 
 The emitter is a partial annotation-service implementation, not full E1-C. It
 is not connected to the ReferenceView-to-artifact path yet. Source maps, loss
-sidecars, remaining donor generators and real EmmyLua/LuaLS consumer probes are
+sidecars, source loading/corrections and real EmmyLua/LuaLS consumer probes are
 pending. Scoped golden parity does not certify a complete annotation library.
 
 Legacy Python source tools still provide local Git snapshot inventory,
