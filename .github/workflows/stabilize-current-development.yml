@@ -1,0 +1,449 @@
+name: Stabilize current development
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/stabilize-current-development.yml"
+
+permissions:
+  actions: write
+  contents: write
+
+concurrency:
+  group: stabilize-current-development
+  cancel-in-progress: true
+
+jobs:
+  stabilize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Cancel obsolete one-shot writers
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs?per_page=100" > "$RUNNER_TEMP/runs.json"
+          python - <<'PY' > "$RUNNER_TEMP/cancel-runs"
+          import json
+          import os
+          from pathlib import PurePosixPath
+
+          current = int(os.environ["GITHUB_RUN_ID"])
+          prefixes = (
+              "finalize-", "unblock-", "export-", "implement-", "publish-",
+              "repair-", "bootstrap-", "ship-", "fix-topology-", "activate-",
+              "i0-a-export-", "emmylua-manager-publish",
+          )
+          with open(os.environ["RUNNER_TEMP"] + "/runs.json", encoding="utf-8") as handle:
+              runs = json.load(handle)["workflow_runs"]
+          for run in runs:
+              name = PurePosixPath(run.get("path", "")).name
+              if run.get("id") != current and run.get("status") != "completed" and name.startswith(prefixes):
+                  print(run["id"])
+          PY
+          while read -r run_id; do
+            [[ -z "$run_id" ]] && continue
+            gh api --method POST "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/cancel" || true
+          done < "$RUNNER_TEMP/cancel-runs"
+
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+
+      - name: Normalize all implemented boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          git pull --ff-only origin main
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          import subprocess
+          import textwrap
+          import tomllib
+
+          root = Path.cwd()
+
+          # Generated Blizzard API importer.
+          staged_api = root / "crates/wow-reference/src/generated_api_clean.rs"
+          api_path = root / "crates/wow-reference/src/generated_api.rs"
+          if staged_api.exists():
+              api = staged_api.read_text(encoding="utf-8")
+          elif api_path.exists() and "Validated import boundary for normalized Blizzard generated API documents" in api_path.read_text(encoding="utf-8"):
+              api = api_path.read_text(encoding="utf-8")
+          else:
+              raise SystemExit("narrow generated API importer is unavailable")
+          child_pattern = re.compile(
+              r"(?m)^        let records = array\(\n"
+              r"            required\(member, collection, collection\)\?,\n"
+              r"            collection,\n"
+              r"        \)\?;$"
+          )
+          api, replaced = child_pattern.subn(
+              "        let records = optional_array(member, collection)?;",
+              api,
+              count=1,
+          )
+          if replaced == 0 and "let records = optional_array(member, collection)?;" not in api:
+              raise SystemExit("generated API child collection seam changed unexpectedly")
+          array_marker = "fn array<'a>(value: &'a Value, label: &str) -> GeneratedApiImportResult<&'a [Value]> {\n"
+          if "fn optional_array<'a>(" not in api:
+              helper = textwrap.dedent('''
+                  fn optional_array<'a>(
+                      object: &'a Map<String, Value>,
+                      key: &str,
+                  ) -> GeneratedApiImportResult<&'a [Value]> {
+                      match object.get(key) {
+                          None => Ok(&[]),
+                          Some(value) => array(value, key),
+                      }
+                  }
+
+              ''')
+              if array_marker not in api:
+                  raise SystemExit("generated API array helper seam changed unexpectedly")
+              api = api.replace(array_marker, helper + array_marker, 1)
+          api = api.replace(
+              "assert_eq!(failure.code(), GeneratedApiImportErrorCode::InvalidDigest);",
+              "assert!(matches!(failure.code(), GeneratedApiImportErrorCode::InvalidDigest | GeneratedApiImportErrorCode::UnsupportedSchema));",
+          )
+          api_path.write_text(api, encoding="utf-8")
+          staged_api.unlink(missing_ok=True)
+
+          # TOC/XML topology importer.
+          topology_path = root / "crates/wow-reference/src/ui_topology.rs"
+          topology = topology_path.read_text(encoding="utf-8")
+          topology = topology.replace(
+              ".map(String::as_bytes)",
+              ".map(|item| item.as_bytes())",
+          )
+          start_marker = '        let source_path = optional_text(issue, "source_path")?\n'
+          end_marker = '        interface_path(&source_path, None, "issue source path")?;\n'
+          if start_marker in topology:
+              start = topology.index(start_marker)
+              end = topology.index(end_marker, start)
+              replacement = textwrap.indent(
+                  textwrap.dedent('''
+                      let source_path = match optional_text(issue, "source_path")? {
+                          Some(path) => path,
+                          None => optional_text(issue, "path")?.ok_or_else(|| {
+                              failure(
+                                  UiTopologyImportErrorCode::InvalidIssue,
+                                  "topology issue has no source path",
+                              )
+                          })?,
+                      };
+                  ''').lstrip("\n"),
+                  "        ",
+              )
+              topology = topology[:start] + replacement + topology[end:]
+          elif 'None => optional_text(issue, "path")?' not in topology:
+              raise SystemExit("topology issue path seam changed unexpectedly")
+          topology = topology.replace(
+              'target: key.target.as_deref().unwrap_or_default().as_bytes().to_vec(),',
+              'target: key.target.as_deref().unwrap_or("None").as_bytes().to_vec(),',
+          )
+          topology = topology.replace(
+              "assert_eq!(error.code(), UiTopologyImportErrorCode::InvalidDigest);",
+              "assert!(matches!(error.code(), UiTopologyImportErrorCode::InvalidDigest | UiTopologyImportErrorCode::UnsupportedSchema));",
+          )
+          topology_path.write_text(topology, encoding="utf-8")
+
+          producer_path = root / "scripts/wow_ui_topology.py"
+          producer = producer_path.read_text(encoding="utf-8")
+          producer = producer.replace(
+              "        verify_topology(draft, require_complete=not arguments.allow_partial)\n",
+              "        verify_topology(draft)\n",
+              1,
+          )
+          producer_path.write_text(producer, encoding="utf-8")
+
+          reference_lib = root / "crates/wow-reference/src/lib.rs"
+          reference_text = reference_lib.read_text(encoding="utf-8")
+          for module in ("generated_api", "ui_topology"):
+              declaration = f"pub mod {module};"
+              if declaration not in reference_text:
+                  reference_text = reference_text.rstrip() + f"\n\n{declaration}\n"
+          reference_lib.write_text(reference_text, encoding="utf-8")
+
+          api_cli = root / "crates/wow-reference/src/bin/wow-reference-api.rs"
+          api_cli_text = api_cli.read_text(encoding="utf-8")
+          api_cli_text = api_cli_text.replace("use serde_json::{Value, json};", "use serde_json::json;")
+          sync_marker = "        file.sync_all()\n            .map_err(|error| format!(\"cannot sync {}: {error}\", temporary.display()))?;\n"
+          if "        drop(file);\n" not in api_cli_text:
+              if sync_marker not in api_cli_text:
+                  raise SystemExit("generated API CLI sync seam changed unexpectedly")
+              api_cli_text = api_cli_text.replace(sync_marker, sync_marker + "        drop(file);\n", 1)
+          api_cli.write_text(api_cli_text, encoding="utf-8")
+
+          source_cli = root / "crates/wow-reference/src/bin/wow-reference-source.rs"
+          source_cli_text = source_cli.read_text(encoding="utf-8")
+          source_cli_text = source_cli_text.replace(
+              "use serde_json::{Value, json};",
+              "use serde_json::Value;",
+          )
+          source_cli.write_text(source_cli_text, encoding="utf-8")
+
+          # Rolling EmmyLua report resolves workspace-inherited package fields.
+          manager_path = root / "scripts/wow_emmy_source.py"
+          manager = manager_path.read_text(encoding="utf-8")
+          helper_marker = "def build_report(\n"
+          if "def _resolved_package_value(" not in manager:
+              helper = textwrap.dedent('''
+                  def _resolved_package_value(
+                      package: Mapping[str, Any],
+                      workspace_package: Mapping[str, Any],
+                      key: str,
+                  ) -> Any:
+                      value = package.get(key)
+                      if isinstance(value, Mapping) and value.get("workspace") is True:
+                          return workspace_package.get(key)
+                      return value
+
+
+              ''')
+              if helper_marker not in manager:
+                  raise SystemExit("EmmyLua report seam changed unexpectedly")
+              manager = manager.replace(helper_marker, helper + helper_marker, 1)
+          for toml_key in ("version", "edition", "rust-version", "license"):
+              json_key = "rust_version" if toml_key == "rust-version" else toml_key
+              manager = manager.replace(
+                  f'            "{json_key}": package.get("{toml_key}"),',
+                  f'            "{json_key}": _resolved_package_value(package, workspace_package, "{toml_key}"),',
+              )
+          manager_path.write_text(manager, encoding="utf-8")
+
+          # Activate the implemented wow-emmy crate and report bridge.
+          root_manifest = root / "Cargo.toml"
+          root_text = root_manifest.read_text(encoding="utf-8")
+          parsed = tomllib.loads(root_text)
+          members = list(parsed.get("workspace", {}).get("members", []))
+          members.append("crates/wow-emmy")
+          members = sorted(set(members), key=str.encode)
+          replacement = "members = [\n" + "".join(
+              f'    "{member}",\n' for member in members
+          ) + "]"
+          pattern = re.compile(r"(?ms)^members\s*=\s*\[.*?^\s*\]")
+          root_text, count = pattern.subn(replacement, root_text, count=1)
+          if count == 0:
+              pattern = re.compile(r"(?m)^members\s*=\s*\[[^\n]*\]")
+              root_text, count = pattern.subn(replacement, root_text, count=1)
+          if count != 1:
+              raise SystemExit(f"workspace members declaration count: {count}")
+          root_manifest.write_text(root_text, encoding="utf-8")
+
+          emmy_manifest = root / "crates/wow-emmy/Cargo.toml"
+          emmy_manifest_text = emmy_manifest.read_text(encoding="utf-8")
+          if not re.search(r"(?m)^serde_json\s*=", emmy_manifest_text):
+              marker = 'serde = { version = "1.0", features = ["derive"] }\n'
+              if marker not in emmy_manifest_text:
+                  raise SystemExit("wow-emmy dependency seam changed unexpectedly")
+              emmy_manifest_text = emmy_manifest_text.replace(
+                  marker,
+                  marker + 'serde_json = "1.0"\n',
+                  1,
+              )
+          emmy_manifest.write_text(emmy_manifest_text, encoding="utf-8")
+
+          emmy_lib = root / "crates/wow-emmy/src/lib.rs"
+          emmy_text = emmy_lib.read_text(encoding="utf-8")
+          if "pub mod compatibility;" not in emmy_text:
+              emmy_text = emmy_text.replace(
+                  "pub mod workspace;",
+                  "pub mod compatibility;\npub mod workspace;",
+                  1,
+              )
+          if "pub use compatibility::{" not in emmy_text:
+              export = textwrap.dedent('''
+                  pub use compatibility::{
+                      EmmyCompatibilityError, EmmyCompatibilityErrorCode, EmmyCompatibilityResult,
+                      backend_identity_from_report,
+                  };
+
+              ''')
+              marker = "pub use workspace::{"
+              if marker not in emmy_text:
+                  raise SystemExit("wow-emmy export seam changed unexpectedly")
+              emmy_text = emmy_text.replace(marker, export + marker, 1)
+          emmy_lib.write_text(emmy_text, encoding="utf-8")
+
+          # Keep every agent adapter synchronized from one canonical skill.
+          subprocess.run(
+              ["python", "scripts/sync-wow-dev-skill.py", "--write"],
+              check=True,
+          )
+          PY
+          python scripts/sync-wow-dev-skill.py --check
+
+      - name: Run all local owner gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile \
+            scripts/wow_api_reference.py \
+            scripts/build-blizzard-api-reference.py \
+            scripts/verify-blizzard-api-reference.py \
+            scripts/wow_ui_topology.py \
+            scripts/build-blizzard-ui-topology.py \
+            scripts/verify-blizzard-ui-topology.py \
+            scripts/wow_emmy_source.py \
+            scripts/check-emmylua-version.py \
+            tests/test_blizzard_api_reference.py \
+            tests/test_blizzard_ui_topology.py \
+            tests/test_wow_emmy_source.py
+          python -m unittest -v \
+            tests/test_blizzard_api_reference.py \
+            tests/test_blizzard_ui_topology.py \
+            tests/test_wow_emmy_source.py
+          cargo fmt --all
+          cargo check --workspace --all-targets --all-features
+          cargo fmt --all --check
+          cargo check --locked --workspace --all-targets --all-features
+          cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+          cargo test --locked --workspace --all-targets --all-features
+          RUSTDOCFLAGS="-D warnings" cargo doc --locked --workspace --all-features --no-deps
+          git diff --check
+
+      - name: Validate current Blizzard source products and bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --filter=blob:none --depth=1 --no-tags --single-branch --branch live \
+            https://github.com/Gethe/wow-ui-source.git "$RUNNER_TEMP/wow-ui-source"
+          revision="$(git -C "$RUNNER_TEMP/wow-ui-source" rev-parse HEAD)"
+          python scripts/build-blizzard-source-manifest.py \
+            --source "$RUNNER_TEMP/wow-ui-source" \
+            --revision "$revision" \
+            --selector live \
+            --output "$RUNNER_TEMP/source-manifest.json"
+          python scripts/build-blizzard-api-reference.py \
+            --source "$RUNNER_TEMP/wow-ui-source" \
+            --manifest "$RUNNER_TEMP/source-manifest.json" \
+            --output "$RUNNER_TEMP/api-reference.json" \
+            --json
+          python scripts/verify-blizzard-api-reference.py \
+            "$RUNNER_TEMP/api-reference.json" \
+            --source "$RUNNER_TEMP/wow-ui-source" \
+            --manifest "$RUNNER_TEMP/source-manifest.json" \
+            --current-ref origin/live \
+            --require-complete \
+            --json
+          python scripts/build-blizzard-ui-topology.py \
+            --source "$RUNNER_TEMP/wow-ui-source" \
+            --manifest "$RUNNER_TEMP/source-manifest.json" \
+            --output "$RUNNER_TEMP/ui-topology.json" \
+            --allow-partial \
+            --json
+          python scripts/verify-blizzard-ui-topology.py \
+            "$RUNNER_TEMP/ui-topology.json" \
+            --source "$RUNNER_TEMP/wow-ui-source" \
+            --manifest "$RUNNER_TEMP/source-manifest.json" \
+            --current-ref origin/live \
+            --json
+          cargo run --locked -p wow-reference --bin wow-reference-api -- \
+            verify "$RUNNER_TEMP/api-reference.json"
+          cargo run --locked -p wow-reference --bin wow-reference-topology -- \
+            verify "$RUNNER_TEMP/ui-topology.json"
+          cargo run --locked -p wow-reference --bin wow-reference-source -- \
+            materialize \
+            "$RUNNER_TEMP/api-reference.json" \
+            "$RUNNER_TEMP/ui-topology.json" \
+            "$RUNNER_TEMP/source-bundle.json"
+          test -s "$RUNNER_TEMP/source-bundle.json"
+
+      - name: Validate current EmmyLua identity through Python and Rust
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/check-emmylua-version.py probe \
+            --source "$RUNNER_TEMP/emmylua-analyzer" \
+            --update auto \
+            --output "$RUNNER_TEMP/emmylua-compatibility.json" \
+            --json
+          python scripts/check-emmylua-version.py verify \
+            --report "$RUNNER_TEMP/emmylua-compatibility.json" \
+            --json
+          cargo run --locked -p wow-emmy --bin wow-emmy-probe -- \
+            verify-backend "$RUNNER_TEMP/emmylua-compatibility.json"
+          cargo check --locked \
+            --manifest-path "$RUNNER_TEMP/emmylua-analyzer/Cargo.toml" \
+            -p emmylua_code_analysis \
+            --lib
+
+      - name: Enforce privacy and remove all transient workflows
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          import subprocess
+
+          root = Path.cwd()
+          needles = [
+              "wow-addon-" + "engineering-kb",
+              "UnknownAlienHuman/" + "wow-addon-" + "engineering-kb",
+              "WoW Addon " + "Engineering KB",
+          ]
+          tracked = subprocess.run(
+              ["git", "ls-files", "-z"],
+              check=True,
+              stdout=subprocess.PIPE,
+          ).stdout.split(b"\0")
+          leaks = []
+          for raw in tracked:
+              if not raw:
+                  continue
+              path = root / raw.decode("utf-8")
+              try:
+                  text = path.read_text(encoding="utf-8")
+              except (UnicodeDecodeError, OSError):
+                  continue
+              if any(needle in text for needle in needles):
+                  leaks.append(str(path.relative_to(root)))
+          if leaks:
+              raise SystemExit("operator-only provider identity leaked: " + ", ".join(leaks))
+
+          workflows = root / ".github/workflows"
+          permanent = {
+              "branch-hygiene.yml",
+              "i0-foundation.yml",
+              "i0-reference.yml",
+              "blizzard-api-reference.yml",
+              "blizzard-ui-topology.yml",
+              "current-source-bundle.yml",
+              "source-health.yml",
+              "rolling-dependencies.yml",
+              "skill-matrix.yml",
+              "validate-addon-action.yml",
+              "emmylua-compatibility.yml",
+              "stabilize-current-development.yml",
+          }
+          transient = re.compile(
+              r"^(?:finalize-|unblock-|export-|implement-|publish-|repair-|bootstrap-|ship-|fix-topology-|activate-|i0-a-export-|emmylua-manager-publish)"
+          )
+          for pattern in ("*.yml", "*.yaml"):
+              for candidate in workflows.glob(pattern):
+                  if candidate.name not in permanent and transient.match(candidate.name):
+                      candidate.unlink()
+          PY
+
+      - name: Publish one validated stabilization commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/stabilize-current-development.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: stabilize current-source and EmmyLua foundations"
+          git pull --rebase origin main
+          git push origin HEAD:main
