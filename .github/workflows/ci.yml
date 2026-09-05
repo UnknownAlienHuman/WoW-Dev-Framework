@@ -47,6 +47,23 @@ jobs:
         run: cargo +stable doc --locked --workspace --all-features --no-deps
       - name: Verify tests did not rewrite tracked files
         run: git diff --exit-code
+      - name: Archive exact tested source
+        if: runner.os == 'Linux'
+        run: |
+          git archive --format=tar --output="$RUNNER_TEMP/tested-source.tar" HEAD
+          git rev-parse HEAD > "$RUNNER_TEMP/COMMIT_SHA"
+          sha256sum "$RUNNER_TEMP/tested-source.tar" > "$RUNNER_TEMP/SHA256SUMS"
+      - name: Retain tested source
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v7
+        with:
+          name: tested-source-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/tested-source.tar
+            ${{ runner.temp }}/COMMIT_SHA
+            ${{ runner.temp }}/SHA256SUMS
+          retention-days: 3
+          if-no-files-found: error
   updated-dependencies:
     runs-on: ubuntu-latest
     timeout-minutes: 20
