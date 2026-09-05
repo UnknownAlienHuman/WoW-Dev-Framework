@@ -88,7 +88,9 @@ jobs:
           persist-credentials: false
       - run: rustup toolchain install stable --profile minimal
       - name: Resolve current parser in isolated CI checkout
-        run: cargo +stable add --package wow-reference --git https://github.com/EmmyLuaLs/emmylua-analyzer-rust --branch main emmylua_parser
+        run: |
+          rm Cargo.lock
+          cargo +stable add --package wow-reference --git https://github.com/EmmyLuaLs/emmylua-analyzer-rust --branch main emmylua_parser
       - name: Test reference consumer against current parser
         run: cargo +stable test --package wow-reference --all-targets --all-features
       - name: Retain exact offline dependency inputs
