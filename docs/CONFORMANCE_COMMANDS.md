@@ -1,6 +1,12 @@
 # Conformance command contract
 
-**Status:** normative command surface to implement and freeze. No command below is currently available because the Rust workspace does not exist.
+**Status:** the full release conformance surface below remains planned.
+The active workspace and native maintenance commands are real; see
+[tools/xtask](../tools/xtask/README.md) and the [implementation ledger](IMPLEMENTATION_STATUS.md).
+
+Implemented development checks: `cargo xtask check`, `cargo xtask sync-skill --check`,
+`cargo xtask manifest` and `cargo xtask verify-manifest`.
+These do not claim to implement every release gate below.
 
 ## Principles
 
@@ -13,7 +19,7 @@
 
 ## Toolchain bootstrap
 
-Freeze exact versions before use:
+Record the exact versions used by a test run; do not permanently freeze the toolchain:
 
 ```text
 rustc --version --verbose
@@ -337,8 +343,9 @@ The workflow calls these commands; no release logic, generic shell upload or unc
 ## Current command status
 
 ```text
-all commands in this document: specified, not implemented
-all executable test/build/release evidence: NotEvaluated
+native maintenance commands listed at the top: implemented, scoped development checks
+active workspace fmt/check/clippy/test/rustdoc: executable
+planned service/release commands and full package acceptance: not complete
 ```
 
-The first command to make real is the E0-A package test/contract validator, followed by the R0 `wow status` and `wow check` path.
+The R0 `wow status` and `wow check` path still requires the remaining owner implementations. Native development checks do not certify the planned release conformance surface.

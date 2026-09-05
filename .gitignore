@@ -44,7 +44,6 @@ Desktop.ini
 
 # Cargo.lock is intentionally not ignored: this repository will ship applications.
 
-# Local source products and Python bytecode
+# Local source products
 /.wow-dev/
-__pycache__/
-*.py[cod]
+/.wow-dev-skill.lock

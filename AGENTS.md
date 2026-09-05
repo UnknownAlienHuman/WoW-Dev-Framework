@@ -6,10 +6,10 @@ These rules apply to every human or automated contributor.
 
 - `wow-core`: executable deterministic boundary primitives.
 - `wow-reference`: deterministic reference view plus generated API and UI topology imports; full owner acceptance and persistent channel publication remain incomplete.
-- Source producers consume an explicit local Git checkout. GitHub-only input materialization and managed source auto-update are not implemented in these commands.
+- Native source production consumes an explicit local Git checkout. GitHub-only input materialization and managed source auto-update are not implemented in these commands.
 - Blizzard source manifest: exact per-operation source inventory with file hashes and Git object identity.
-- Generated API producer: safe declarative-Lua parser and normalized reference draft.
-- Normalized facts are connected to Rust; next implement a real `wow-emmy` analyzer seam.
+- Generated API input: reference-owned EmmyLua AST evaluation and typed native model.
+- Legacy JSON importers remain compatibility readers, not the current source-production path.
 - `wow-annotations`: active Rust Ketho emitters plus native source-to-library
   projection; corrections, full ReferenceView publication and semantic consumer
   probes remain incomplete. `examples/native_library.rs` is the native driver.
@@ -24,8 +24,8 @@ service, not merely a comparison oracle. Read the actual donor modules and
 `docs/KETHO_RUST_PORT.md` before changing source loading, normalization, type
 lowering, annotation output, or consumer integration. Port their behavior into
 Rust within the existing owner crates. Do not invent an unrelated extractor or
-add/expand Python product components. Existing Python source tools are migration
-debt, not the architecture to extend. Ketho output is also the parity baseline;
+add Python code, embedded interpreters, wrappers or interpreter-based tests.
+The repository and CI are Rust-native; `cargo xtask check` enforces this policy. Ketho output is also the parity baseline;
 current Gethe source remains the authority for current Blizzard facts.
 
 ## Mandatory route
@@ -66,7 +66,7 @@ Implement the smallest coherent owner responsibility in dependency order. No pla
 Run applicable checks and report pass/fail/skipped/NotEvaluated:
 
 ```text
-python -m unittest
+cargo xtask check
 cargo fmt --all --check
 cargo check --workspace --all-targets --all-features
 cargo clippy --workspace --all-targets --all-features -- -D warnings
@@ -74,4 +74,4 @@ cargo test --workspace --all-targets --all-features
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --all-features --no-deps
 ```
 
-For source work, also build and verify a source manifest and generated API draft against a current local checkout. Missing tooling, credentials, network, or WoW runtime is a skip, never a pass.
+For source work, build and verify a source manifest with `cargo xtask`, then run the native Ketho annotation driver against the same current local revision. Missing tooling, credentials, network, or WoW runtime is a skip, never a pass.

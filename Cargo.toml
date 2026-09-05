@@ -4,6 +4,7 @@ members = [
     "crates/wow-core",
     "crates/wow-reference",
     "crates/wow-annotations",
+    "tools/xtask",
 ]
 
 [workspace.package]

@@ -22,7 +22,10 @@
     "rust_toolchain_present": false,
     "rust_source_present": true,
     "ci_workflows_present": true,
-    "supported_release_present": false
+    "supported_release_present": false,
+    "maintenance_packages": [
+      "tools/xtask"
+    ]
   },
   "protocol_profiles": {
     "local_daemon": "wow-local-jsonrpc/1",
@@ -72,7 +75,7 @@
     "Only exact source owners map external locators and ExactMapped proves locator identity only.",
     "External candidate selection is explicit caller intent and is not verification acceptance edit authorization lineage replacement impact or promotion.",
     "Provider metadata remains a separate Candidate sidecar and never enters ContextSemanticPack truth.",
-    "Provider failure is lane-local and never degrades exact local capabilities.",
+    "Provider failure is lane-local and never degrades exact local workflows.",
     "Service operation registries protocol profiles and schemas are closed versioned content-addressed and may only be narrowed at runtime.",
     "Applications transports and internal tools depend on wow-service only among framework crates and invoke one service operation per semantic request.",
     "Every externally observable or durable effect registers OperationId plus CanonicalRequestDigest before dispatch.",
@@ -88,7 +91,7 @@
     "Baseline performs no hidden current discovery network update check download install telemetry crash upload or remote configuration.",
     "Missing implementation adapter probe benchmark platform client runtime signing provider installation or checksum evidence is blocked or NotEvaluated never pass.",
     "No CI or release workflow is added until real frozen commands exist and an explicit owner and launch gate require it.",
-    "After E7-B the default next work is I0-A wow-core implementation; new architecture requires a concrete implementation-discovered contract failure and the smallest tested seam or ADR change."
+    "Follow docs/IMPLEMENTATION_STATUS.md for current implementation scope and the Ketho Rust port route; new architecture requires a concrete implementation-discovered contract failure and the smallest tested seam or ADR change."
   ],
   "contract_packages": [
     {
@@ -382,7 +385,7 @@
       "name": "wow-annotations",
       "brief": "crates/wow-annotations/README.md",
       "first_implementation_package": "I1-C",
-      "implementation_state": "not-started",
+      "implementation_state": "partial-executable",
       "allowed_dependencies": [
         "wow-core",
         "wow-reference"
@@ -601,6 +604,14 @@
   ],
   "tools": [
     {
+      "name": "xtask",
+      "path": "tools/xtask",
+      "implementation_state": "implemented-scoped-maintenance",
+      "framework_dependencies": [],
+      "public_bundle_default": false,
+      "brief": "tools/xtask/README.md"
+    },
+    {
       "name": "wow-release",
       "path": "tools/wow-release",
       "first_implementation_package": "I7-B",
@@ -690,7 +701,7 @@
   ],
   "implementation_evidence_state": {
     "implemented_work_packages": 0,
-    "active_cargo_workspace_members": 2,
+    "active_cargo_workspace_members": 4,
     "real_reference_packs": 0,
     "real_project_generations": 0,
     "real_analyzer_diagnostic_search_context_runs": 0,

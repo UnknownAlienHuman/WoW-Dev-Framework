@@ -347,3 +347,10 @@ accepted ADR when architecture changes
 ```
 
 Implementation convenience alone is not sufficient.
+
+## Native repository maintenance
+
+`tools/xtask` is an active internal maintenance package with no framework crate
+dependencies. It reuses the existing serde_json/sha2 dependency closure for
+repository, source inventory and artifact checks; it is not a semantic service
+or public release client. See [its scope](../tools/xtask/README.md).

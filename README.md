@@ -149,10 +149,13 @@ Updates are explicit by default. Check, download, verify, stage, backup, migrate
 
 ## Current executable state
 
-The active workspace has `wow-core` and `wow-reference`. Source manifests,
-generated API drafts and XML/TOC topology are produced without executing source
-Lua and imported through the Rust reference boundary. Python and Rust are tested
-end to end against synthetic Git SHA-1 and SHA-256 repositories.
+The active workspace contains `wow-core`, `wow-reference`, `wow-annotations`
+and the internal `xtask` maintenance tool. The Rust Ketho path loads current
+Blizzard documentation and generates annotation libraries without an external
+interpreter. `cargo xtask check` validates repository policy and synchronized
+skills; `manifest`/`verify-manifest` inventory exact local Git snapshots.
+Existing API/topology JSON importers remain native compatibility readers. The
+retired legacy topology producer has not yet been replaced by a full native one.
 
 See [the implementation ledger](docs/IMPLEMENTATION_STATUS.md) for implemented
 commands, update policy and explicit nonclaims. The planned public `wow` binary,
@@ -171,7 +174,7 @@ V1  selected scope plus complete E7-A/E7-B Windows release evidence
 ## Next implementation step
 
 Implement I0-C behind the `wow-emmy` adapter, without a permanent upstream
-revision or client-build dependency. Preserve current source-bridge tests. Do
+revision or client-build dependency. Preserve native source and wire-compatibility tests. Do
 not activate placeholder crates or treat a compiled upstream as our adapter.
 
 ## Routes

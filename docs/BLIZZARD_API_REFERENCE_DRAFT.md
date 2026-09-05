@@ -1,16 +1,13 @@
-# Generated API reference draft
+# Generated API reference draft compatibility
 
-The executable producer and wire schema are owned by
-[Blizzard API reference](BLIZZARD_API_REFERENCE.md),
-`scripts/wow_api_reference.py` and `wow-reference::generated_api`.
+`wow-reference::generated_api` retains the v1 wire importer for existing artifacts.
+The old producer/verification entrypoints are retired. Current native generation
+uses the source model and Ketho renderer described in
+[Blizzard API input](BLIZZARD_API_REFERENCE.md); it emits a different native report
+and is not a renamed implementation of the v1 JSON producer.
 
-The build and verify entrypoints delegate to that single module. They consume
-an explicit local Git repository and verified source manifest. Historical
-GitHub-only CLI flags and the older `draft_digest` shape are not supported.
-Use each entrypoint's `--help` for its actual command surface.
-
-Source JSON permits null, signed and decimal values. Rust uses the dedicated
-`wow-reference::wire_json` profile to preserve Python-produced number lexemes;
-this does not relax the stricter `wow-core` identity canonicalization contract.
-Full implementation scope and remaining work are in
-[the status ledger](IMPLEMENTATION_STATUS.md).
+Source wire JSON permits null, signed and decimal values. The dedicated
+`wow-reference::wire_json` profile retains numeric lexemes during digest checks;
+it does not relax the stricter core-ID canonicalization contract. Rust unit and
+CLI fixtures exercise this compatibility boundary with no external interpreter.
+See [implementation status](IMPLEMENTATION_STATUS.md) for the remaining scope.

@@ -10,7 +10,7 @@ See [`src/ketho.rs`](src/ketho.rs), [`src/literals.rs`](src/literals.rs),
 
 The pure emitter slice ports Ketho's GetType/GetField/GetFunction/GetTable/GetCallbackType/
 GetSystem behavior and explicit function/method naming. It has no dependencies,
-source ingestion, IO, Python/Lua runtime, editor mutation, or reference-authority
+source ingestion, IO, external interpreter runtime, editor mutation, or reference-authority
 claims. Callers provide ordered declaration data, enum membership and resolved
 widget aliases. Unsafe/unrepresentable input is rejected, not widened or dropped.
 The literal lane also ports event/CVar aliases and enum/constant files from

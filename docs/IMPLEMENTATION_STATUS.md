@@ -1,107 +1,96 @@
 # Implementation status and update policy
 
-This is the executable implementation ledger, not the planned E0-E7 completion
-matrix. Ketho/vscode-wow-api is the primary annotation-service implementation
-donor; [KETHO_RUST_PORT.md](KETHO_RUST_PORT.md) specifies the Rust migration route.
+This ledger describes executable scope, not completion of the planned E0-E7
+architecture. Ketho is the annotation-service donor; the
+[port map](KETHO_RUST_PORT.md) defines the native migration route.
 
-## Implemented executable scope
-
-Active Cargo workspace members:
+## Active workspace
 
 - `wow-core`: deterministic identity, evidence, coverage and result primitives.
-- `wow-reference`: deterministic reference view; generated API and UI topology
-  JSON validation/import; source-bound API/topology bundle and development CLIs.
-- `wow-annotations`: pure Rust port of Ketho's annotation emitter and naming
-  helpers. Ordered callables, fields, arrays, explicit enum types, structures,
-  argument-only callbacks, varargs, defaults and ScriptObject receivers are
-  implemented. Native event/CVar literal unions and typed enum/constant output
-  are also implemented, with explicit ordering/formatting, escaped strings and
-  bounded output. A native reference-to-renderer connection now accepts exact
-  source documents through the EmmyLua parser and emits annotations plus raw
-  metadata, explicit loss/error records and declaration source mappings.
-  Its library remains nonexecuting and free of IO; a Rust development driver
-  performs local Git/TOC reads and writes a new output directory.
+- `wow-reference`: deterministic fixture reference view; native EmmyLua-AST
+  documentation loading/normalization and exact scalar resolution; retained
+  v1 API/topology wire importers and development CLIs.
+- `wow-annotations`: Rust Ketho callable, structure, callback and literal
+  emitters connected to native source documents. The Git/TOC development driver
+  creates a new library with raw metadata, errors and declaration source maps.
+- `tools/xtask`: internal repository/source maintenance with no framework crate
+  dependencies. Policy/JSON/skill checks, explicit skill synchronization, public
+  HTTPS remote-head comparison, exact Git manifest build/verify and native
+  artifact consistency verification. Not the public product/service CLI.
 
-The native source-to-library path is runnable without Python or a Lua runtime;
-see [the exact command and limits](KETHO_RUST_PORT.md#native-source-to-library-path).
-It is still a bounded in-memory E1-B/E1-C slice, not full ReferenceView persistence,
-correction/type closure or consumer certification. Declaration maps are present;
-literal maps are whole-file. Full fine-grained E1 maps and actual EmmyLua/LuaLS
-semantic consumer probes remain incomplete. Existing donor goldens still pass.
+There are no interpreter source files or interpreter invocations in the build,
+tests or CI. `cargo xtask check` enforces the native-only repository policy and
+skill consistency. See [xtask commands and limits](../tools/xtask/README.md).
+No replacement script is hidden in Rust, CI heredocs or generated payloads.
 
-The native scalar lane reads Constants `Values`, retains descriptor types and
-resolves source-local enum labels, transitive references and exact integer `+`/`-`
-expressions. It records per-value outcomes and transitive source spans/hashes in
-native library report v2. Unknown global names remain unresolved data rather than
-rejecting a whole documentation file. Invalid individual callable/structure
-projections are excluded with their own issue and leave valid neighboring
-annotations/source maps intact. This does not implement runtime-global discovery,
-correction packs, widget alias mappings or general Lua evaluation.
+## Native source and annotations
 
-Legacy Python source tools still provide local Git snapshot inventory,
-declarative API and XML/TOC producers/verifiers. They are migration debt, not the
-product architecture to extend. The Rust port must replace these paths and their
-CI invocations before the product is described as Python-free. No new Python
-product components are accepted.
+The [native command](KETHO_RUST_PORT.md#native-source-to-library-path) reads one
+materialized local Git revision and selected documentation TOC. Source worktree
+changes are ignored; source Lua and generated stubs are never executed.
+Report `wow-native-annotation-library/3` retains raw metadata, scalar-resolution
+outcomes/evidence, explicit return-name transformations and escaped prose links.
+Constants use `Values`; enums use `Fields`. Exact integer additive expressions,
+enum labels and transitive same-corpus references resolve without runtime globals.
+Invalid declarations/groups do not erase valid siblings; conflicts remain errors.
 
-The canonical WoW development skill and byte-identical host copies are present.
-CI checks current stable Rust, locked and updated dependency resolution, Rust
-and legacy Python tests, and the existing Python-to-Rust source-bridge regression.
-The new emitter's unit/golden tests are entirely Rust and offline.
+Declaration maps are source-bound; literal maps are whole-file. Named type/widget
+closure, corrections, fine-grained maps, persistent ReferenceView integration and
+real EmmyLua/LuaLS semantic consumer probes remain incomplete. Native projection
+is partial when data is omitted or unsupported; it never issues negative authority.
 
-The existing source-bridge integration test uses synthetic Git SHA-1 and SHA-256
-repositories, including null/negative/exponent values, optional child collections,
-export attributes, dirty worktrees, stale selection and digest tampering. These
-fixtures are not evidence of an installed WoW client or a language-server probe.
+## Retired source path and compatibility boundary
 
-`wow-reference-source materialize` is no-clobber and idempotent for identical
-bytes. It publishes a staged file by an atomic hard link; unsupported filesystems
-return an error. Directory crash durability is not claimed.
+The former interpreter-based source producers, their tests and setup/workflow
+calls are removed, not retained as migration fallback. Native Ketho generation
+replaces the annotation input/output path, not every old wire command.
 
-## Update policy
+- Source manifests now build/verify through native `cargo xtask` commands.
+- Skill maintenance now uses native `cargo xtask sync-skill`.
+- v1 API/topology JSON readers remain for existing artifacts. Native Rust CLI
+  fixtures cover lookup, digest tampering, source mismatch, partial authority and
+  idempotent/no-clobber bundle publication. These fixtures do not regenerate
+  current Gethe topology or prove a real source inventory.
+- A full native XML/TOC topology producer and v1 API wire producer are not
+  implemented. The annotation TOC reader is not a full topology replacement.
+- The old upstream source-manager/public-symbol-report command family is retired.
+  `check-source` is a read-only replacement for remote-head comparison only, not
+  managed cloning, auto-update or analyzer semantic compatibility.
 
-No repository toolchain override exists. CI installs current stable Rust.
-Compatible dependency requirements permit updates; Cargo.lock records one build,
-not a permanent version. Moving Blizzard selectors are resolved per operation.
-Exact revision/version/hashes describe the inspected input only. The scheduled
-source-bundle job clones current Gethe/live and does not imply support for every
-other flavor. Raw source-wire numeric lexemes remain distinct from core identity
-JSON; no universal numeric normalization is claimed.
+Rust manifest regressions use synthetic SHA-1/SHA-256 Git repositories and cover
+raw blobs, export attributes, dirty worktrees, digest tampering, source movement,
+path rejection and new-only output. Native Ketho source/model/renderer tests
+remain active. No language-server, installation or client result is fabricated.
 
-## Optional context and remaining product work
+## CI and update policy
 
-No private knowledge provider is a build or runtime dependency. No provider
-endpoint, token or corpus belongs in public code. Operator-only retrieval,
-managed Blizzard checkout updates and GitHub-only manifest acquisition remain
-unimplemented. The current skill describes manual research rather than fictitious
-commands. Removing current identifiers does not erase Git history or old copies;
-link sanitization alone does not make confidential prose safe to publish.
+CI checks Linux/Windows, current stable Rust, fmt/check/strict Clippy, debug/release
+workspace tests, rustdoc, repository policy and exact skill copies. Separate
+updated-dependency and rolling-parser lanes exercise the reference/annotation
+consumers. No permanent toolchain override exists; compatible requirements and
+Cargo.lock describe a reproducible build without forbidding updates.
+
+The current-source workflow resolves the selected Gethe branch, builds/rebuilds
+its Git manifest and generates annotations through Rust only. Final output bytes,
+hashes, source counts and mapping ranges are checked. Source admission failures
+fail the job; explicit projection omissions remain partial, not a semantic pass.
+The default branch/environment can be changed for an explicit dispatched run;
+this does not certify every flavor. The source check and generator share one
+resolved revision, never a permanently embedded client build.
+
+## Remaining product scope
+
+Managed Blizzard checkout updates, GitHub-only acquisition and operator-only
+knowledge retrieval remain unimplemented. No private provider, endpoint, token
+or corpus is a public build/runtime dependency. Source-head checks use only an
+explicit public HTTPS origin; offline freshness is unverified.
 
 Full I0-A/I0-B acceptance and persistent channel publication remain incomplete.
-The real EmmyLua semantic adapter is not an active workspace member. The public
-wow binary, service composition, project model, diagnostics, persistence, graph,
-search, provider transport and release lifecycle remain subsequent work. R0,
-platform/install/signing and WoW runtime gates are not complete.
+The real semantic `wow-emmy` adapter and public `wow` binary are not active.
+Service composition, project model, diagnostics, persistence, graph, search,
+transport, installation and release gates remain subsequent work.
 
-## Next implementation
-
-Port Ketho correction/type/widget mappings, complete the selected projection
-capabilities, and verify resulting libraries in both annotation consumers.
-Keep the separate real wow-emmy analyzer adapter on the R0 path. Do not postpone
-annotation parity behind unrelated graph/governance work or extend the legacy
-Python pipeline. Activate only implemented owner slices and report exact scope.
-
-## Native declaration recovery
-
-The native Ketho source-to-library adapter now retains valid siblings when a
-literal group is malformed, reports duplicate literal members individually, and
-rejects enum `Values`/mixed collection shapes. Reserved return labels have explicit
-collision-checked `name_projections`; prose controls are escaped with source-linked
-metadata while source annotation directives remain rejected. Library report v3
-preserves v2 scalar-resolution evidence. Tests cover source links, output bounds,
-name conflicts and rejection without spurious projection records.
-
-The concurrent `native_constants` resolver remains the only scalar-resolution
-implementation; no parallel resolver or Python product path was introduced.
-Full corrections/widget/type closure and dual-consumer semantic certification
-remain incomplete. Local or CI success is not a full product-release claim.
+Next annotation work: reviewed Ketho correction/type/widget mappings and actual
+dual-consumer probes. Keep the analyzer adapter on the R0 path, without delaying
+annotation parity behind unrelated future subsystems or restoring a parallel
+interpreter implementation.

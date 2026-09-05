@@ -28,7 +28,7 @@ The managed source auto-updater is not yet implemented; do not invent its CLI.
 ## Native annotation path
 
 For annotation work read `docs/KETHO_RUST_PORT.md` and use the Ketho Rust port,
-not a new Python extractor. The native driver consumes a materialized local
+not a parallel extractor. The native driver consumes a materialized local
 checkout, one resolved ref, the selected generated-API TOC, an explicit source
 environment and a new output directory:
 
@@ -40,22 +40,24 @@ Inspect `source-report.json`: exit 3 means partial, not success without omission
 Raw metadata and declaration source maps are retained. No reference completeness,
 run-time safety, or EmmyLua/LuaLS semantic compatibility follows from rendering.
 
-## Legacy reference pipeline (migration debt)
-
-Use each command's `--help`. Build and verify a source manifest, then API and
-UI-topology drafts from that manifest. Import both using the Rust reference
-commands. The pipeline never executes source Lua, XML scripts or repository
-hooks. A manifest proves its selected source inventory, not all runtime APIs.
+## Repository and source checks
 
 ```text
-python scripts/build-blizzard-source-manifest.py --help
-python scripts/verify-blizzard-source-manifest.py --help
-python scripts/build-blizzard-api-reference.py --help
-python scripts/verify-blizzard-api-reference.py --help
-python scripts/build-blizzard-ui-topology.py --help
-python scripts/verify-blizzard-ui-topology.py --help
-cargo run -p wow-reference --bin wow-reference-source -- help
+cargo xtask check
+cargo xtask sync-skill --check
+cargo xtask check-source <checkout> <branch>
+cargo xtask manifest <checkout> <resolved-ref> <selector> <new-manifest.json>
+cargo xtask verify-manifest <manifest.json> <checkout> <current-local-ref>
 ```
+
+`check-source` is read-only and uses an explicitly configured public HTTPS origin.
+Exit 3 reports a differing remote head; 4 means network freshness is unverified.
+It offers review/update rather than overwriting dirty or divergent checkouts.
+Use `sync-skill --write` explicitly to synchronize discovery copies.
+The old JSON producer commands have been retired. Retained API/topology importers
+validate existing v1 artifacts only; a native XML/TOC topology producer is still
+incomplete. Do not invent a replacement command or route native annotations
+through a legacy wire artifact.
 
 Missing, partial, conflicted, failed or unsupported input never proves absence.
 Exact source signatures do not prove in-client behavior. For protected state,

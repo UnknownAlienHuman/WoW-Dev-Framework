@@ -24,18 +24,14 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.x'
       - name: Install current stable Rust
         run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
       - name: Record tested inputs
         run: |
           git rev-parse HEAD
           rustc +stable -Vv
-          python --version
-      - run: python scripts/sync-wow-dev-skill.py --check
-      - run: python -m unittest discover -s tests -v
+      - name: Native repository policy and skill checks
+        run: cargo +stable xtask check
       - run: cargo +stable fmt --all --check
       - run: cargo +stable check --locked --workspace --all-targets --all-features
       - run: cargo +stable clippy --locked --workspace --all-targets --all-features -- -D warnings
@@ -71,9 +67,6 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.x'
       - run: rustup toolchain install stable --profile minimal --component clippy
       - run: cargo +stable update
       - run: cargo +stable test --workspace --all-targets --all-features
@@ -89,10 +82,10 @@ jobs:
       - run: rustup toolchain install stable --profile minimal
       - name: Resolve current parser in isolated CI checkout
         run: |
-          rm Cargo.lock
-          cargo +stable add --package wow-reference --git https://github.com/EmmyLuaLs/emmylua-analyzer-rust --branch main emmylua_parser
+          cargo +stable update
+          cargo +stable metadata --format-version 1 > "$RUNNER_TEMP/rolling-dependencies.json"
       - name: Test reference consumer against current parser
-        run: cargo +stable test --package wow-reference --all-targets --all-features
+        run: cargo +stable test --package wow-reference --package wow-annotations --all-targets --all-features
       - name: Retain exact offline dependency inputs
         shell: bash
         run: |

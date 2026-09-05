@@ -9,7 +9,7 @@ These instructions apply to every crate directory and cross-crate owner seam.
 ```text
 documentation frontier: E7-B / planned architecture
 implementation: partial executable foundation and source bridge
-active workspace: wow-core, wow-reference, wow-annotations
+active workspace: wow-core, wow-reference, wow-annotations; tools/xtask (maintenance)
 current port: Ketho native source-to-annotations in wow-reference / wow-annotations
 next port: reviewed correction/type/widget mappings and consumer probes
 separate R0 owner: I0-C / real wow-emmy semantic analyzer adapter
@@ -192,7 +192,7 @@ remaining exact blockers
 
 ```text
 Ketho native source-to-library port: docs/KETHO_RUST_PORT.md
-current workspace: wow-core, wow-reference, wow-annotations
+current workspace: wow-core, wow-reference, wow-annotations; tools/xtask (maintenance)
 full wow-emmy semantic integration and product gates remain incomplete
 ```
 

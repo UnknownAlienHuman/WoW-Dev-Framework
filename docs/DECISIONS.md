@@ -32,8 +32,11 @@ source-loading, normalization/correction, type-lowering, annotation-emission and
 editor-independent consumer behavior into Rust. Ketho is an implementation
 baseline as well as the semantic/output parity baseline, not only an oracle.
 The module map and migration order are in [KETHO_RUST_PORT.md](KETHO_RUST_PORT.md).
-No new or expanded Python product pipeline is accepted. Existing Python tools
-remain migration debt until their Rust replacements pass the relevant tests.
+Owner direction requires zero Python code or interpreter invocation in the
+repository. The old source producers and interpreter-driven tests are retired,
+not kept as a fallback. Native source generation and Rust-only CI are mandatory.
+Existing wire importers remain compatibility readers; retired functionality is
+explicitly listed in the implementation ledger rather than described as ported.
 Current Gethe data, not a historical Ketho snapshot, defines current Blizzard
 facts. Preserve required third-party notices; do not copy source execution or
 editor-setting/diagnostic-suppression policies as hidden product behavior.

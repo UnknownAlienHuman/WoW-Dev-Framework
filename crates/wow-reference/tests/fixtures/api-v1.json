@@ -1,0 +1,118 @@
+{
+  "conflicts": [],
+  "coverage": {
+    "candidate_files": 1,
+    "entity_counts": {
+      "constants": 0,
+      "enumerations": 0,
+      "events": 0,
+      "functions": 1,
+      "predicates": 0,
+      "tables": 0
+    },
+    "failed_files": 0,
+    "failures": [],
+    "limitations": [
+      "Synthetic wire-compatibility fixture; not runtime evidence."
+    ],
+    "negative_authority": true,
+    "parsed_files": 1,
+    "parsed_paths": [
+      "Interface/AddOns/Blizzard_APIDocumentationGenerated/FixtureDocumentation.lua"
+    ],
+    "scope": "Interface/AddOns/Blizzard_APIDocumentationGenerated/*Documentation.lua",
+    "status": "complete"
+  },
+  "draft_sha256": "sha256:29201912d796b5481465f07e735152caa6ea1ccd7c741932598c664b8de45003",
+  "producer": {
+    "configuration": {
+      "generated_root": "Interface/AddOns/Blizzard_APIDocumentationGenerated/"
+    },
+    "id": "blizzard-generated-api-reference",
+    "parser": "declarative-lua-table-v1",
+    "version": 1
+  },
+  "schema": "wow-dev-framework/blizzard-api-reference-draft",
+  "schema_version": 1,
+  "source": {
+    "manifest_declared_digest": null,
+    "manifest_sha256": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+    "revision": "4444444444444444444444444444444444444444",
+    "selector": "fixture",
+    "source_id": "synthetic-native-test",
+    "version": "99.1.2.34567"
+  },
+  "systems": [
+    {
+      "attributes": {},
+      "constants": [],
+      "documentation": [],
+      "enumerations": [],
+      "environment": "All",
+      "events": [],
+      "functions": [
+        {
+          "arguments": [
+            {
+              "name": "id",
+              "source": {
+                "git_object": "1111111111111111111111111111111111111111",
+                "line_end": 4,
+                "line_start": 3,
+                "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/FixtureDocumentation.lua",
+                "sha256": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+              },
+              "type": "number"
+            }
+          ],
+          "attributes": {
+            "Future": null,
+            "Minimum": -1
+          },
+          "documentation": [],
+          "fields": [],
+          "name": "Lookup",
+          "payload": [],
+          "qualified_name": "C_Fixture.Lookup",
+          "restrictions": {
+            "has_restrictions": true
+          },
+          "returns": [
+            {
+              "name": "value",
+              "source": {
+                "git_object": "1111111111111111111111111111111111111111",
+                "line_end": 5,
+                "line_start": 4,
+                "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/FixtureDocumentation.lua",
+                "sha256": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+              },
+              "type": "number"
+            }
+          ],
+          "source": {
+            "git_object": "1111111111111111111111111111111111111111",
+            "line_end": 3,
+            "line_start": 2,
+            "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/FixtureDocumentation.lua",
+            "sha256": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+          },
+          "type": "Function",
+          "values": []
+        }
+      ],
+      "name": "Fixture",
+      "namespace": "C_Fixture",
+      "predicates": [],
+      "source": {
+        "git_object": "1111111111111111111111111111111111111111",
+        "line_end": 2,
+        "line_start": 1,
+        "path": "Interface/AddOns/Blizzard_APIDocumentationGenerated/FixtureDocumentation.lua",
+        "sha256": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+      },
+      "tables": [],
+      "type": "System"
+    }
+  ]
+}

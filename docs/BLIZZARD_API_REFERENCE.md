@@ -1,57 +1,35 @@
-# Generated Blizzard API reference producer
+# Native Blizzard API input and retained wire import
 
-The generated API producer converts Blizzard's declarative API documentation into a deterministic, normalized reference draft. It is update-oriented: no client build, Interface value, source commit, or moving branch head is compiled into the tool.
+The current source path is the Rust Ketho loader and projection documented in
+[KETHO_RUST_PORT.md](KETHO_RUST_PORT.md#native-source-to-library-path).
+It consumes one selected local Git revision and generated-API TOC, evaluates a
+bounded declarative subset through the existing EmmyLua AST without executing
+Lua, and retains raw values, metadata, owners, source spans and projection issues.
 
-## Inputs
-
-The producer requires a local Git checkout, a verified source manifest created for one exact revision, and the generated documentation records listed by that manifest. Local source is preferred. A moving selector is resolved before manifest creation; its exact revision is retained as evidence for that operation only. A later update creates another manifest and another draft.
-
-## Non-executing parser
-
-`scripts/wow_api_reference.py` implements a bounded parser for the declarative Lua-table subset used by `Blizzard_APIDocumentationGenerated`. It supports keyed and array tables, quoted and long-bracket strings, numbers, booleans, `nil`, symbol references, opaque expression preservation, comments, escapes, and source spans.
-
-It rejects trailing statements, mismatched documentation-table registration, malformed or unbounded input, unsafe paths, oversized files, digest mismatch, and Git-object mismatch. It never starts Lua or executes repository hooks, scripts, submodules, package managers, or generated code.
-
-## Coverage and authority
-
-The coverage scope is:
-
-```text
-Interface/AddOns/Blizzard_APIDocumentationGenerated/*Documentation.lua
+```sh
+cargo run -p wow-annotations --example native_library -- \
+  /path/to/wow-ui-source HEAD \
+  Interface/AddOns/Blizzard_APIDocumentationGenerated/Blizzard_APIDocumentationGenerated.toc \
+  Mainline /path/to/new-output
+cargo xtask verify-library /path/to/new-output --require-input-complete
 ```
 
-Candidate, parsed, and failed files are explicit. Negative authority is enabled only when every candidate file matched the source manifest and parsed successfully.
+The legacy v1 JSON producer and its standalone build/verify commands are retired.
+There is no interpreter fallback. The following Rust commands still validate
+**existing v1 wire artifacts**, not newly generated native-library reports:
 
-`--allow-partial` is investigative. A partial draft always has `negative_authority = false`. Generated docs do not prove runtime behavior; implementation, XML, TOC, data/hotfix state, and exact client probes remain separate evidence lanes.
-
-## Build and verify
-
-```bash
-python scripts/build-blizzard-api-reference.py \
-  --source "$WOW_UI_SOURCE_DIR" \
-  --manifest .wow-dev/source-manifest.json \
-  --output .wow-dev/api-reference.json \
-  --json
-
-python scripts/verify-blizzard-api-reference.py \
-  .wow-dev/api-reference.json \
-  --source "$WOW_UI_SOURCE_DIR" \
-  --manifest .wow-dev/source-manifest.json \
-  --current-ref origin/live \
-  --require-complete \
-  --json
+```sh
+cargo run -p wow-reference --bin wow-reference-api -- verify /path/to/api-reference.json
+cargo run -p wow-reference --bin wow-reference-source -- verify /path/to/api-reference.json /path/to/ui-topology.json
 ```
 
-Exit codes:
+These are distinct schemas. Native report v3 cannot be passed to the v1 importer.
+Current native generation does not assert negative authority; partial, unsupported,
+conflicted or excluded data remains explicit. Retained v1 import acceptance is
+wire-contract compatibility, not proof of current source freshness, semantic
+classification of every legacy producer record or runtime availability.
 
-- `0`: valid and, when requested, current;
-- `2`: invalid, inconsistent, unreproducible, or incomplete when completeness is required;
-- `3`: internally valid but the checked moving ref advanced.
-
-Staleness preserves historical evidence and signals creation of a new generation. It does not permit mixing files from the old and new revisions.
-
-The output retains producer/parser versions, source-manifest digest, selector, reported version, exact revision, per-file Git object and SHA-256, source line spans, normalized systems and members, declared restrictions, coverage, conflicts, limitations, and a canonical self-digest.
-
-The executable `wow-reference::generated_api` import validates this producer-owned draft and exposes source-bound facts, coverage and conflicts. `wow-reference-source` binds API and topology products from the same source. Further typed owner integration and the actual EmmyLua analyzer adapter remain subsequent work; see [implementation status](IMPLEMENTATION_STATUS.md).
-
-The producer accepts named systems and the unnamed table-only groups handled by Blizzard `APIDocumentationMixin:AddDocumentationTable`. For an unnamed group, `name` is only the registered local declaration binding: `attributes.name_origin = "declaration_binding"`. It is not a runtime system or namespace. Individual member names and source spans remain unchanged.
+Native source/model/constant/projection regressions test the current pipeline.
+Rust CLI fixtures separately test retained importers, tamper rejection, exact
+source binding and no-clobber publication. Full persistent ReferenceView, corrected
+widget/type closure and real EmmyLua/LuaLS semantic probes remain incomplete.

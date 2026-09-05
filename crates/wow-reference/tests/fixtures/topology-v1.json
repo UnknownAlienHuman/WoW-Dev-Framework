@@ -1,0 +1,94 @@
+{
+  "coverage": {
+    "candidate_toc_files": 1,
+    "candidate_xml_files": 1,
+    "failed_files": 0,
+    "failures": [],
+    "limitations": [
+      "Synthetic wire-compatibility fixture; not runtime evidence."
+    ],
+    "negative_authority": true,
+    "parsed_toc_files": 1,
+    "parsed_xml_files": 1,
+    "status": "complete",
+    "unresolved_references": 0
+  },
+  "descriptors": [
+    {
+      "addon_directory": "Fixture",
+      "descriptor_name": "Fixture",
+      "entries": [
+        {
+          "declared": "Logic.lua",
+          "kind": "lua",
+          "line": 2,
+          "resolution": "exact",
+          "target": "Interface/AddOns/Fixture/Logic.lua"
+        }
+      ],
+      "metadata": {
+        "Interface": [
+          {
+            "line": 1,
+            "value": "99999"
+          }
+        ]
+      },
+      "path": "Interface/AddOns/Fixture/Fixture.toc",
+      "source": {
+        "git_object": "1111111111111111111111111111111111111111",
+        "line_end": 2,
+        "line_start": 1,
+        "path": "Interface/AddOns/Fixture/Fixture.toc",
+        "sha256": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "declared": "Logic.lua",
+      "kind": "toc_load",
+      "line": 2,
+      "resolution": "exact",
+      "source": "Interface/AddOns/Fixture/Fixture.toc",
+      "target": "Interface/AddOns/Fixture/Logic.lua"
+    }
+  ],
+  "include_cycles": [],
+  "issues": [],
+  "producer": {
+    "configuration": {
+      "scope": "Interface/**/*.toc+xml"
+    },
+    "id": "blizzard-ui-topology",
+    "version": 1
+  },
+  "schema": "wow-dev-framework/blizzard-ui-topology-draft",
+  "schema_version": 1,
+  "source": {
+    "manifest_declared_digest": null,
+    "manifest_sha256": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+    "revision": "4444444444444444444444444444444444444444",
+    "selector": "fixture",
+    "source_id": "synthetic-native-test",
+    "version": "99.1.2.34567"
+  },
+  "topology_sha256": "sha256:dfc38e05cb6a7cbfc57869111c8e06b4036f7dec2909bdadea5143aec8fafed7",
+  "xml_documents": [
+    {
+      "element_count": 1,
+      "inline_scripts": 0,
+      "path": "Interface/AddOns/Fixture/Main.xml",
+      "references": [],
+      "root": "Ui",
+      "source": {
+        "git_object": "1111111111111111111111111111111111111111",
+        "line_end": 2,
+        "line_start": 1,
+        "path": "Interface/AddOns/Fixture/Main.xml",
+        "sha256": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+      },
+      "templates": []
+    }
+  ]
+}

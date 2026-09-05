@@ -1,61 +1,36 @@
 # Blizzard source manifest
 
-The source manifest is the deterministic handoff between rolling source acquisition and reference producers.
+A moving selector is resolved once per operation. Its exact SHA identifies only
+the bytes inspected in that operation, not a permanent client dependency.
+The native maintenance inventory reads a materialized local Git checkout:
 
-## Boundary
-
-A moving selector such as `live`, `ptr`, `beta`, or a Classic branch is resolved at the beginning of an operation. The resulting full commit identifier is then used for every file read in that operation. The selector may move later; the completed result continues to identify the bytes it actually consumed.
-
-The manifest producer reads the selected commit through the local Git object database. It does not read uncommitted working-tree files, execute repository code, inspect a WoW installation, infer a current branch, or refresh the selector midway through the operation.
-
-```bash
-python scripts/build-blizzard-source-manifest.py \
-  --source "$WOW_UI_SOURCE_DIR" \
-  --revision <resolved-commit> \
-  --selector live \
-  --output .wow-dev/source-manifest.json
+```sh
+cargo xtask manifest "$WOW_UI_SOURCE_DIR" HEAD live .wow-dev/source-manifest.json
+cargo xtask verify-manifest .wow-dev/source-manifest.json "$WOW_UI_SOURCE_DIR" origin/live
 ```
 
-Use the source acquisition and version-check commands before this step. A local clone is preferred. Network fallback, update policy, and stale-checkout handling belong to the source acquisition layer, not to the deterministic producer.
+Create the destination parent first; the output file must not exist. The producer
+includes Lua, generated API docs, XML, TOC, XSD and `version.txt`, in bytewise path
+order. Each record retains canonical path, semantic class, length, Git object
+algorithm/ID and independent SHA-256. Git object hashing supports both SHA-1 and
+SHA-256 without a compiled client version. No worktree bytes, export substitutions,
+source execution, local paths, credentials or wall-clock time enter the manifest.
 
-## Included data
+The v1 fixed default selection is retained. Optional legacy extension/limit flags
+are not aliases for the new positional command. Bounds are documented in
+[xtask](../tools/xtask/README.md). Nonregular or unsafe source paths are rejected.
+Verification rebuilds from the exact revision and compares all fields and digest;
+when a selected current local ref differs, it returns 3 instead of rewriting
+historical evidence. A local ref check does not establish network freshness.
 
-The default manifest includes:
+Use `cargo xtask check-source <checkout> <branch>` to compare an explicit public
+HTTPS origin. It is read-only and reports unverified freshness on network failure.
+Managed cloning/automatic updating and GitHub-only acquisition are not implemented
+by these commands. A local clone is preferred; resolve a new revision for a new
+operation, never mix files from different source revisions.
 
-- Lua implementation files;
-- generated API documentation Lua files;
-- XML layouts and templates;
-- TOC load-order files;
-- XSD schemas;
-- `version.txt`.
-
-Each file record contains its canonical repository-relative path, semantic class, byte count, Git blob identity, and SHA-256 content digest. Records are bytewise path-sorted. Asset files and unrelated text are excluded unless their extension is explicitly requested.
-
-The manifest also records:
-
-- an opaque source identifier;
-- the optional moving selector used to locate the source;
-- the exact resolved commit;
-- the version reported by that exact commit;
-- inclusion and exclusion counts;
-- a digest over every other manifest field.
-
-Local paths, remote URLs, credentials, wall-clock time, and working-tree state are absent from manifest identity.
-
-## Update behavior
-
-A manifest is immutable evidence for one source snapshot. It is never edited in place to pretend that it represents a newer client.
-
-For the next operation:
-
-1. check the configured source selector;
-2. safely update or refresh the local object database according to policy;
-3. resolve the selector once;
-4. build a new manifest;
-5. create a new reference generation when bytes, producer version, or configuration changed.
-
-A source update does not silently invalidate historical results. It makes them non-current for operations that explicitly require the latest selected channel.
-
-## Authority
-
-The manifest proves source byte identity and acquisition coverage. It does not by itself prove runtime behavior, hotfix state, combat restrictions, user data, or that every possible source file was semantically interpreted. Reference producers must preserve unsupported, conflicted, partial, and not-evaluated coverage instead of manufacturing clean negative claims.
+An inventory proves selected byte identity, not semantic completeness or runtime
+behavior. The native Ketho generator consumes an exact TOC/revision independently
+and retains source hashes in its report. The source workflow supplies the same
+resolved revision to both operations and does not claim full ReferenceView
+persistence or native XML/TOC topology generation.

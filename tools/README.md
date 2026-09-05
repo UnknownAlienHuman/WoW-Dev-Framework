@@ -2,6 +2,13 @@
 
 Internal tools are thin clients or deterministic validators around owned framework and service contracts. They are not alternate implementations of product semantics.
 
+## `xtask`
+
+Implemented native repository maintenance: [commands, scope and limits](xtask/README.md).
+It has no framework crate dependencies and is not a product/service or release
+implementation. It owns the single current policy/skill/source-inventory check
+implementation. Development snapshot IO is explicit, not a hidden analysis port.
+
 ## `wow-release`
 
 Read [`wow-release/README.md`](wow-release/README.md).
@@ -57,7 +64,7 @@ Utilities may be introduced only when an implementation package owns them and th
 
 ```text
 planned documentation: complete through E7-B
-implementation frontier: not-started
-Cargo packages and Rust source: absent
-next repository package: I0-A / wow-core E0-A
+implemented internal maintenance package: tools/xtask
+product/release clients: not implemented
+active owner crates and next work: docs/IMPLEMENTATION_STATUS.md
 ```

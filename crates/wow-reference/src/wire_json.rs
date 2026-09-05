@@ -2,7 +2,7 @@
 //!
 //! Source documents contain null, signed values, and decimal literals. Keep
 //! those values here rather than relaxing `wow-core`'s stricter ID contract.
-//! `serde_json/arbitrary_precision` retains number lexemes produced by Python;
+//! `serde_json/arbitrary_precision` retains number lexemes supplied by source producers;
 //! this avoids silently changing decimal/exponent spelling during digest checks.
 
 use serde::Serialize;
@@ -35,7 +35,7 @@ mod tests {
     use serde_json::Value;
 
     #[test]
-    fn preserves_python_number_lexemes_and_source_nulls() -> serde_json::Result<()> {
+    fn preserves_wire_number_lexemes_and_source_nulls() -> serde_json::Result<()> {
         let value: Value = serde_json::from_str(
             r#"{"z":null,"a":[-2,1e-07,1.0,123456789012345678901234567890]}"#,
         )?;

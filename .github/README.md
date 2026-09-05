@@ -1,20 +1,21 @@
-# Repository automation policy
+# Repository automation
 
-The repository has three maintained workflows:
+Three maintained workflows run actual native commands:
 
-- `ci.yml`: current stable Rust on Linux and Windows, Python/source-bridge tests,
-  strict Clippy and rustdoc, plus a compatible dependency-update lane.
-- `current-source-bundle.yml`: a current Gethe/live checkout, coherent source
-  manifest, generated API/topology producers and Rust validation.
-- `branch-hygiene.yml`: remove only branches already contained in main or with
-  an identical tree; do not discard unique divergent work.
+- `ci.yml`: Rust on Linux/Windows; `cargo xtask check`, fmt, check, strict Clippy,
+  debug/release tests and rustdoc. Updated dependency and rolling Emmy parser
+  lanes exercise both the reference and annotation consumers.
+- `current-source-bundle.yml`: current Gethe checkout, Rust source manifest build
+  and verification, native Ketho generation, final artifact/hash/map validation.
+  Source admission must be complete; projection omissions remain explicit partial
+  reports. This is not a language-server semantic compatibility certificate.
+- `branch-hygiene.yml`: remove only branches already represented by main.
 
-Build and source CI are read-only and never modify source or publish commits.
-The branch-hygiene job alone has the write permission needed for its stated role.
-No self-mutating finalizer, recovery payload or embedded implementation workflow
-is part of the supported development path. Publish reviewed changes separately,
-using a non-forced update of the expected branch, and verify the resulting commit.
+Build/source jobs are read-only. Only the branch-hygiene job has write permission.
+No interpreter setup, embedded interpreter script, self-modifying source payload,
+finalizer or hidden publication step is permitted. `cargo xtask check` rejects
+interpreter assets and ordinary reintroduction through scripts or CI.
 
-A new workflow requires real executable commands, an explicit owner and gate,
-bounded inputs, minimal permissions and a documented failure path. A successful
-source/build job is not a supported release, in-client test or installer proof.
+The old v1 API/topology producer workflow has been retired. Native importers
+remain compatibility readers tested with synthetic JSON fixtures; they are not
+claimed to regenerate full UI topology from current source.

@@ -2,7 +2,7 @@
 
 Ketho/vscode-wow-api is the primary implementation donor, not just an oracle.
 The task is to port its useful WoW annotation-service behavior into the existing
-Rust owners, not to invent a separate Python extractor or rewrite a language
+Rust owners, not to invent a parallel extractor or rewrite a language
 server. Gethe remains the current Blizzard data source. EmmyLua/LuaLS consume
 annotation libraries; the framework's semantic analyzer remains behind wow-emmy.
 
@@ -43,7 +43,7 @@ Two committed output vectors were compared with the actual reviewed Ketho emitte
 (blob `1f0b902a809472c30b28a0e220b70235b29235b8`) in an isolated local Lua probe:
 a namespace system and a widget system. Only the reviewed emitter and a donor-derived pure helper harness
 ran, with synthetic inputs; the network loader and generated stubs were not run.
-Rust tests compare these bytes without requiring a Lua interpreter or Python.
+Rust tests compare these bytes without requiring an external interpreter.
 This is scoped donor parity, not full Ketho parity or an EmmyLua/LuaLS load test.
 
 The renderer deliberately rejects duplicate names, nonterminal varargs, unsafe
@@ -62,15 +62,16 @@ artifact. Widget/enum inventories are caller-supplied, never global static truth
 2. Connect that typed reference input to the Rust emitter with source maps and
    explicit projection loss. Port literals and the remaining useful Ketho output.
 3. Validate the resulting libraries in both current compatible EmmyLua and LuaLS.
-4. Replace the corresponding legacy Python producers, consumers and CI invocations
-   with native Rust tests/commands, then remove those legacy files. Do not extend
-   the Python pipeline or route the native renderer through it as the product.
+4. The interpreter-based source producers and tests have been removed by owner
+   direction. Maintain the native Ketho path and Rust-only maintenance/CI. Legacy
+   v1 wire readers remain for existing artifacts; full native XML/TOC production
+   remains a documented gap, not a hidden fallback.
 5. Expose the native service through the planned CLI and agent/editor adapters.
 
 Do not replace the pipeline with another custom Lua parser. Use the selected
 upstream Rust Lua frontend behind its owner adapter. Loading arbitrary source via
 Lua `loadfile` is not carried over from the donor. The end-user product must not
-require Python, Node, a VS Code installation, or a Lua runtime to generate its
+require an external interpreter, Node, a VS Code installation, or a Lua runtime to generate its
 annotations. No full service, complete E1-C, or public release is claimed yet.
 
 ## Literal-generator port
@@ -236,5 +237,7 @@ Constants still require the existing `Values` shape. These are regressions in
 Next: port reviewed correction/type/widget mappings and remaining consumer-specific
 type losses, then run real dual-consumer probes. Runtime-only global defaults and
 unsupported numeric/type expressions remain explicit unresolved cases.
-Retire legacy Python paths only after their native replacements cover the same
-verified use cases; never extend that legacy product pipeline.
+The old source producer scripts are retired. Native source/manifest and skill
+checks are used in CI. Retained v1 JSON compatibility is covered by Rust CLI
+fixtures, not a subprocess bridge to an interpreter. See the implementation
+ledger for capabilities still awaiting native replacement.

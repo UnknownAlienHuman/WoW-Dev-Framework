@@ -1,6 +1,6 @@
 //! Development driver for the documented native Ketho source-to-annotations lane.
 //! Reads an exact local Git revision and its selected APIDocumentation TOC; never
-//! executes source Lua or Python. This is not the public service-owned `wow` CLI.
+//! executes source Lua or an external interpreter. This is not the public service-owned `wow` CLI.
 use std::env;
 use std::ffi::OsString;
 use std::fs;
