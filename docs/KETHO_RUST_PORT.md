@@ -12,8 +12,8 @@ annotation libraries; the framework's semantic analyzer remains behind wow-emmy.
 |---|---|---|
 | `luasrc/annotate/init.lua` | `wow-annotations`: GetType, GetField, GetFunction, GetTable, GetCallbackType, GetSystem | Pure emitter implemented |
 | `wowdoc/init.lua`: GetBaseName/GetArguments/GetFullName | `wow-annotations`: globals, namespaces, ScriptObject receivers and varargs | Implemented with explicitly supplied widget alias |
-| `wowdoc/loader/init.lua` | `wow-reference`: selected TOC corpus, documentation systems, separate ScriptObject output, correction dispatch | Native declarative input, typed normalization and emitter integration implemented; correction dispatch pending |
-| `wowdoc/loader/doc_widgets.lua`, `patches.lua`, `TypeDocumentation.lua`, `luasrc/custom_doc` | reference-owned type/widget mapping and reviewed corrections | Port required; no permanent build assumptions |
+| `wowdoc/loader/init.lua` | `wow-reference`: selected TOC corpus, documentation systems, separate ScriptObject output, correction dispatch | Native declarative input, typed normalization and emitter integration implemented; source-guarded Type/Nilable and widget receiver corrections connected |
+| `wowdoc/loader/doc_widgets.lua`, `patches.lua`, `TypeDocumentation.lua`, `luasrc/custom_doc` | reference-owned type/widget mapping and reviewed corrections | Reviewed Type/Nilable/receiver pack application implemented; full type/widget inventory and inheritance remain pending |
 | `luasrc/annotate/literals.lua` and the enum/event/CVar paths invoked by `luasrc/init.lua` | typed enum/event/CVar data and annotation projection | Native event/enum/constant projection connected; external CVar/resource acquisition pending |
 | `luasrc/WikiParser`, `wowdoc` resource acquisition, TypeScript resource export | explicit enrichment and equivalent native query data where required | Port/select by feature parity, not a mandatory extra runtime |
 | VS Code activation and LuaLS configuration | thin host adapter over an editor-independent Rust service | Port behavior, not an extension/Node dependency |
@@ -206,8 +206,8 @@ mutation/control flow/helper execution, computed keys, numeric/hex/Unicode strin
 escapes requiring byte-string semantics, CR-bearing long-string normalization,
 callback returns/arrays not supported by the current emitter, and unrepresentable
 numbers/types. Restriction metadata remains advisory sidecar data, not invented
-runtime wrapper types. Corrected widget aliases and named-type closure still need
-the Ketho correction/type-resource port. No generated body is executable addon logic.
+runtime wrapper types. Reviewed widget receiver aliases can be supplied through the correction pack. Named-type closure and widget inheritance still need
+the Ketho type-resource port. No generated body is executable addon logic.
 
 Rust tests exercise the actual source-to-renderer connection, source identity,
 raw metadata, enum ownership, duplicate conflicts, UTF-8 ranges, bounded input,
@@ -234,10 +234,20 @@ mixed `Fields`/`Values` forms fail normalization rather than producing empty enu
 Constants still require the existing `Values` shape. These are regressions in
 `wow-annotations/tests/native.rs` and `wow-reference/tests/native.rs`.
 
-Next: port reviewed correction/type/widget mappings and remaining consumer-specific
+Next: port the remaining type resources, widget inheritance and consumer-specific
 type losses, then run real dual-consumer probes. Runtime-only global defaults and
 unsupported numeric/type expressions remain explicit unresolved cases.
 The old source producer scripts are retired. Native source/manifest and skill
 checks are used in CI. Retained v1 JSON compatibility is covered by Rust CLI
 fixtures, not a subprocess bridge to an interpreter. See the implementation
 ledger for capabilities still awaiting native replacement.
+
+## Reviewed correction connection
+
+The native driver accepts an explicit `--corrections` data pack. The reference
+owner ports Ketho's name-addressed Type/Nilable patching and widget receiver
+mapping with exact source/value guards, review evidence and collision detection.
+No automatic source-digest refresh or compiled widget inventory is introduced.
+The optional v4 report retains the full canonical set and all applied/expired/
+rejected/conflict/not-applicable outcomes; unconfigured generation stays v3.
+See [native correction usage and limits](KETHO_NATIVE_CORRECTIONS.md).

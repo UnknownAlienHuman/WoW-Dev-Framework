@@ -147,6 +147,22 @@ impl Renderer {
     /// Ketho `GetType`: bool/cstring/luaIndex aliases and explicit Enum membership.
     /// Unknown valid named types stay named; they are never replaced by `any`.
     pub fn lower_type(&self, name: &str) -> Result<String, RenderError> {
+        if name.len() > MAX_NAME_BYTES || name.split('|').count() > 16 {
+            return Err(RenderError::InputLimit);
+        }
+        let mut parts = Vec::new();
+        let mut seen = BTreeSet::new();
+        for atom in name.split('|') {
+            let lowered = self.lower_atom(atom)?;
+            if !seen.insert(lowered.clone()) {
+                return Err(RenderError::DuplicateName);
+            }
+            parts.push(lowered);
+        }
+        Ok(parts.join("|"))
+    }
+
+    fn lower_atom(&self, name: &str) -> Result<String, RenderError> {
         let primitive = match name {
             "bool" => Some("boolean"),
             "cstring" => Some("string"),
@@ -333,9 +349,15 @@ impl Renderer {
         let mut type_name =
             self.lower_type(field.inner_type.as_deref().unwrap_or(&field.type_name))?;
         if field.inner_type.is_some() {
+            if type_name.contains('|') {
+                type_name = format!("({type_name})");
+            }
             type_name.push_str("[]");
         }
         let optional = field.nilable || field.default_text.is_some();
+        if optional && type_name.contains('|') && field.inner_type.is_none() {
+            type_name = format!("({type_name})");
+        }
         let name = if field.variadic { "..." } else { &field.name };
         match position {
             Position::Param => {

@@ -35,7 +35,7 @@ enum labels and transitive same-corpus references resolve without runtime global
 Invalid declarations/groups do not erase valid siblings; conflicts remain errors.
 
 Declaration maps are source-bound; literal maps are whole-file. Named type/widget
-closure, corrections, fine-grained maps, persistent ReferenceView integration and
+closure, the remaining correction operations, fine-grained maps, persistent ReferenceView integration and
 real EmmyLua/LuaLS semantic consumer probes remain incomplete. Native projection
 is partial when data is omitted or unsupported; it never issues negative authority.
 
@@ -90,7 +90,22 @@ The real semantic `wow-emmy` adapter and public `wow` binary are not active.
 Service composition, project model, diagnostics, persistence, graph, search,
 transport, installation and release gates remain subsequent work.
 
-Next annotation work: reviewed Ketho correction/type/widget mappings and actual
+Next annotation work: remaining Ketho type resources, widget inheritance and actual
 dual-consumer probes. Keep the analyzer adapter on the R0 path, without delaying
 annotation parity behind unrelated future subsystems or restoring a parallel
 interpreter implementation.
+
+## Reviewed Ketho corrections
+
+`wow-reference::native_corrections` now applies independent reviewed Type/Nilable
+and widget-receiver corrections to a normalized copy of exact source documents.
+The native driver accepts `--corrections <pack.json>` explicitly. Guards bind the
+source revision/environment, normalizer, file hash, raw observation hash and old
+value; mismatch never refreshes itself. Duplicate targets and receiver collisions
+remain conflicts, including collisions exposed by another alias being rejected.
+Raw source is unchanged. Every record has an outcome and blocked corrections keep
+the result partial. Report v4 adds the canonical correction set/digest and outcomes;
+uncorrected builds still emit v3. The artifact checker accepts both and rejects
+false-clean correction reports. Named/primitive unions are now rendered with
+correct array grouping. No source acquisition, dependency or interpreter was added.
+See [usage and remaining correction scope](KETHO_NATIVE_CORRECTIONS.md).

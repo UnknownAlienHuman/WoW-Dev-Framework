@@ -311,3 +311,17 @@ canonicalize_correction_set_and_applications
 - no correction conflict first/last wins;
 - no authority upgrade without exact evidence/coverage;
 - no old ReferenceGeneration mutation.
+
+## Implemented native subset
+
+The in-memory `native_corrections` module implements independent reviewed
+Type/Nilable field edits and ScriptObject receiver-name edits. It normalizes
+validated input documents itself, checks revision/environment/normalizer and
+file/raw/old-value guards, detects competing edits and receiver collisions, and
+returns original raw observations plus normalized copies and one outcome per
+record. Matching and collision propagation are bounded and cancellation-aware.
+The annotation driver consumes this result before rendering. No source comments
+or implicit donor lookup can enable a correction. See
+[the executable input contract](../../../docs/KETHO_NATIVE_CORRECTIONS.md).
+This does not complete dependency-ordered corrections, persistent storage,
+ReferenceGeneration publication or the other operation kinds specified above.

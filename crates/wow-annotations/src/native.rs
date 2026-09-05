@@ -10,6 +10,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use serde::Serialize;
 use wow_reference::native::{DocumentationDocument, RawKind, RawValue, Span, source_digest};
 use wow_reference::native_constants::{ResolvedScalar, ScalarCatalog, ScalarError, ScalarValue};
+use wow_reference::native_corrections::{
+    self, CorrectionError, CorrectionReport, ValidatedCorrections,
+};
 use wow_reference::native_model::{
     CallableFact, FieldFact, SystemFacts, SystemOwner, TableFact, ValueFact, normalize_document,
 };
@@ -91,6 +94,8 @@ pub struct NativeLibrary<'a> {
     pub metadata_sidecars: Vec<MetadataSidecar>,
     pub scalar_resolutions: Vec<ScalarResolutionRecord>,
     pub name_projections: Vec<NameProjection>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub corrections: Option<CorrectionReport>,
     pub limitations: Vec<&'static str>,
 }
 
@@ -122,6 +127,17 @@ pub fn project<'a>(
     environment: &str,
     cancelled: &AtomicBool,
 ) -> Result<NativeLibrary<'a>, RenderError> {
+    project_with_corrections(documents, environment, None, cancelled)
+}
+
+/// Apply an explicitly reviewed, source-guarded Ketho correction set in the
+/// reference owner before rendering. No pack is discovered or enabled by default.
+pub fn project_with_corrections<'a>(
+    documents: &'a [DocumentationDocument],
+    environment: &str,
+    corrections: Option<&'a ValidatedCorrections>,
+    cancelled: &AtomicBool,
+) -> Result<NativeLibrary<'a>, RenderError> {
     if documents.is_empty() || documents.len() > MAX_FILES || environment.is_empty() {
         return Err(RenderError::InputLimit);
     }
@@ -144,6 +160,14 @@ pub fn project<'a>(
     {
         return Err(RenderError::InvalidSource);
     }
+    let corrected = corrections
+        .map(|set| native_corrections::apply_to_documents(documents, environment, set, cancelled))
+        .transpose()
+        .map_err(|error| match error {
+            CorrectionError::Cancelled => RenderError::Cancelled,
+            CorrectionError::Limit => RenderError::InputLimit,
+            _ => RenderError::InvalidSource,
+        })?;
     let normalized = sorted
         .iter()
         .map(|doc| normalize_document(doc))
@@ -179,6 +203,14 @@ pub fn project<'a>(
                 }),
             }
         }
+    }
+    if let Some(corpus) = &corrected {
+        systems = corpus
+            .systems()
+            .iter()
+            .filter(|(_, s)| s.environment.is_none_or(|e| e == "All" || e == environment))
+            .map(|(d, s)| (*d, s))
+            .collect();
     }
     let mut identities = BTreeMap::<String, usize>::new();
     let mut enum_names = BTreeSet::new();
@@ -528,9 +560,15 @@ pub fn project<'a>(
         return Err(RenderError::Cancelled);
     }
     Ok(NativeLibrary {
-        schema: "wow-native-annotation-library/3",
+        schema: if corrected.is_some() {
+            "wow-native-annotation-library/4"
+        } else {
+            "wow-native-annotation-library/3"
+        },
         revision,
-        projection: if issues.is_empty() {
+        projection: if issues.is_empty()
+            && corrected.as_ref().is_none_or(|c| !c.report.has_blockers())
+        {
             "projected_with_sidecars"
         } else {
             "partial"
@@ -542,6 +580,7 @@ pub fn project<'a>(
         metadata_sidecars,
         scalar_resolutions,
         name_projections,
+        corrections: corrected.map(|c| c.report),
         limitations: vec![
             "raw restriction and unknown metadata are retained, not interpreted as runtime safety",
             "named type closure and source-owned widget aliases require the correction/type mapping lane",

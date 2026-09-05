@@ -103,3 +103,14 @@ not a permanent client, dependency, or source-version requirement.
 ## Completion gate
 
 E1-C code is complete only after one exact ReferenceView produces byte-deterministic semantic, rendered-file, source-map, loss, parity, probe, and artifact manifests; every unsupported or transformed input is explicit; EmmyLua and LuaLS positive and negative probes pass without configuration mutation or diagnostic suppression; and all [`e1/TEST_MATRIX.md`](e1/TEST_MATRIX.md) cases and [`e1/examples/CHECKSUMS.json`](e1/examples/CHECKSUMS.json) vectors pass.
+
+## Explicit reviewed corrections
+
+The native connection can consume a validated reference-owned correction set via
+`project_with_corrections`; the Git driver exposes `--corrections <pack.json>`.
+Type/Nilable fields and ScriptObject receivers are changed only after exact
+source/value checks, without mutating raw source. Correction-enabled reports use
+v4 and retain the v3 fields; unconfigured reports stay v3. The renderer now accepts
+bounded named/primitive unions and preserves grouping for array elements.
+See [the correction contract](../../docs/KETHO_NATIVE_CORRECTIONS.md).
+Receiver naming does not implement full widget inheritance or named-type closure.

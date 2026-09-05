@@ -35,7 +35,10 @@ pub fn verify(root: &Path, require_input_complete: bool) -> Result<u8> {
         serde_json::from_slice(&read(&root.join("source-report.json"), 512 * 1024 * 1024)?)?;
     let library = &report["library"];
     if text(&report, "schema")? != "wow-native-source-build/1"
-        || text(library, "schema")? != "wow-native-annotation-library/3"
+        || !matches!(
+            text(library, "schema")?,
+            "wow-native-annotation-library/3" | "wow-native-annotation-library/4"
+        )
     {
         return Err("unsupported native report schema".into());
     }
@@ -100,7 +103,8 @@ pub fn verify(root: &Path, require_input_complete: bool) -> Result<u8> {
     if require_input_complete && !failures.is_empty() {
         return Err("native source admission is incomplete".into());
     }
-    let partial = !failures.is_empty() || !issues.is_empty();
+    let correction_blockers = verify_corrections(library)?;
+    let partial = !failures.is_empty() || !issues.is_empty() || correction_blockers;
     if text(&report, "status")?
         != if partial {
             "partial"
@@ -108,7 +112,7 @@ pub fn verify(root: &Path, require_input_complete: bool) -> Result<u8> {
             "projected_with_sidecars"
         }
         || text(library, "projection")?
-            != if issues.is_empty() {
+            != if issues.is_empty() && !correction_blockers {
                 "projected_with_sidecars"
             } else {
                 "partial"
@@ -180,4 +184,55 @@ pub fn verify(root: &Path, require_input_complete: bool) -> Result<u8> {
         json!({"status":if partial {"partial"} else {"verified_artifact"},"revision":revision,"admitted_files":sources.len(),"input_failures":failures.len(),"projection_issues":issues.len(),"annotation_files":files.len(),"negative_authority":false,"semantic_consumer_compatibility":"not_evaluated"})
     );
     Ok(if partial { 3 } else { 0 })
+}
+
+// Consistency checks only: do not reproduce correction matching here or pretend
+// a self-consistent report proves external review/source truth.
+fn verify_corrections(library: &Value) -> Result<bool> {
+    if library["schema"] == "wow-native-annotation-library/3" {
+        if library.get("corrections").is_some() {
+            return Err("unexpected correction report in v3".into());
+        }
+        return Ok(false);
+    }
+    let report = &library["corrections"];
+    if report["schema"] != "wow-native-correction-applications/1" {
+        return Err("missing correction report".into());
+    }
+    let set = &report["corrections"]["set"];
+    let hash = format!("sha256:{}", manifest::digest(&serde_json::to_vec(set)?));
+    if report["corrections"]["id"] != hash {
+        return Err("correction set digest mismatch".into());
+    }
+    let records = list(set, "records")?;
+    let applications = list(report, "applications")?;
+    if records.len() != applications.len() {
+        return Err("missing correction outcomes".into());
+    }
+    let mut blocked = false;
+    for (record, application) in records.iter().zip(applications) {
+        if record["id"] != application["correction_id"] || record["target"] != application["target"]
+        {
+            return Err("correction target/outcome mismatch".into());
+        }
+        match text(application, "status")? {
+            "applied" => {
+                if application["after"] != record["after"]
+                    || application["before"] != record["before"]
+                    || application["observed_source_sha256"] != record["expected_source_sha256"]
+                    || application["observed_raw_sha256"] != record["expected_raw_sha256"]
+                {
+                    return Err("inconsistent applied correction".into());
+                }
+            }
+            "expired" | "rejected" | "conflict" | "not_applicable" => {
+                if !application["after"].is_null() {
+                    return Err("blocked correction has replacement".into());
+                }
+                blocked |= application["status"] != "not_applicable";
+            }
+            _ => return Err("unknown correction outcome".into()),
+        }
+    }
+    Ok(blocked)
 }

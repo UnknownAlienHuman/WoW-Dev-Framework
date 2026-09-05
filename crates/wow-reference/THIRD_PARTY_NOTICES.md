@@ -1,16 +1,10 @@
-# Third-party notice
+# Ketho implementation notice
 
-`src/ketho.rs` ports the annotation behavior of Ketho/vscode-wow-api:
-`luasrc/annotate/init.lua` and the naming helpers in `wowdoc/init.lua`.
-`src/literals.rs` ports `luasrc/annotate/literals.lua` rendering, with
-explicit formatting policies, deterministic ties and escaped string values.
-The committed synthetic golden outputs are derived from that renderer.
-Reviewed revision: d0b5b51fac4c52c493371b9b18e66ce604ea4326.
-Source: https://github.com/Ketho/vscode-wow-api
-
-The native loader/projection connection follows the same donor's
-`wowdoc/loader/init.lua`, system/member naming and literal-generation behavior.
-It uses the EmmyLua Rust syntax frontend; no source Lua is executed.
+`src/native_corrections.rs` ports the name-addressed patching and receiver mapping
+behavior of Ketho/vscode-wow-api (`wowdoc/loader/patches.lua`, `doc_widgets.lua`).
+The Rust implementation adds the project correction contract's source guards.
+Reviewed donor revision: d0b5b51fac4c52c493371b9b18e66ce604ea4326.
+No donor runtime or source-specific inventory is included.
 
 ## Ketho — MIT License
 
@@ -33,8 +27,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
-The optional native correction connection consumes the reference-owned port of
-`wowdoc/loader/patches.lua` and `doc_widgets.lua`; see the reference crate's notice.
-The renderer's bounded union support also covers the donor's `string|number`
-correction without copying source execution or arbitrary type syntax.

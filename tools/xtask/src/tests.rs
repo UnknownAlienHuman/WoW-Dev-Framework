@@ -250,3 +250,64 @@ fn native_artifact_verifier_rejects_bad_mapping_and_source_count() -> Result<()>
     assert!(crate::library::verify(&fixture.0.join("output"), false).is_err());
     Ok(())
 }
+
+fn corrected_artifact(fixture: &Fixture, status: &str) -> Result<serde_json::Value> {
+    let mut report = artifact(fixture)?;
+    let source_digest = format!("sha256:{}", "b".repeat(64));
+    let raw_digest = format!("sha256:{}", "c".repeat(64));
+    let target =
+        serde_json::json!({"path":"API.lua","registration":0,"projection":{"kind":"widget_owner"}});
+    let before = serde_json::json!({"kind":"text","value":"Original"});
+    let after = serde_json::json!({"kind":"text","value":"Renamed"});
+    let set = serde_json::json!({"schema":"wow-native-corrections/1","version":1,"revision":"a".repeat(40),"environment":"Mainline","normalizer":"native-model/1","records":[{"id":"one","target":target,"expected_source_sha256":source_digest,"expected_raw_sha256":raw_digest,"before":before,"after":after,"reviewer":"synthetic","rationale":"synthetic report test","evidence":[]} ]});
+    let id = format!("sha256:{}", manifest::digest(&serde_json::to_vec(&set)?));
+    report["library"]["schema"] = serde_json::json!("wow-native-annotation-library/4");
+    report["library"]["corrections"] = serde_json::json!({"schema":"wow-native-correction-applications/1","corrections":{"id":id,"set":set},"applications":[{"correction_id":"one","target":target,"status":status,"before":before,"after":if status=="applied" {after} else {serde_json::Value::Null},"observed_source_sha256":source_digest,"observed_raw_sha256":raw_digest}]});
+    if status == "expired" {
+        report["status"] = serde_json::json!("partial");
+        report["library"]["projection"] = serde_json::json!("partial");
+    }
+    fixture.put("output/source-report.json", &serde_json::to_vec(&report)?)?;
+    Ok(report)
+}
+#[test]
+fn native_v4_verifier_checks_correction_identity_and_preserves_v3() -> Result<()> {
+    let fixture = Fixture::new("sha1")?;
+    let mut report = corrected_artifact(&fixture, "applied")?;
+    assert_eq!(crate::library::verify(&fixture.0.join("output"), true)?, 0);
+    report["library"]["corrections"]["corrections"]["set"]["version"] = serde_json::json!(2);
+    fixture.put("output/source-report.json", &serde_json::to_vec(&report)?)?;
+    assert!(crate::library::verify(&fixture.0.join("output"), true).is_err());
+    artifact(&fixture)?;
+    assert_eq!(crate::library::verify(&fixture.0.join("output"), true)?, 0);
+    Ok(())
+}
+#[test]
+fn expired_corrections_cannot_be_hidden_behind_empty_projection_issues() -> Result<()> {
+    let fixture = Fixture::new("sha1")?;
+    let mut report = corrected_artifact(&fixture, "expired")?;
+    assert_eq!(crate::library::verify(&fixture.0.join("output"), true)?, 3);
+    report["status"] = serde_json::json!("projected_with_sidecars");
+    report["library"]["projection"] = serde_json::json!("projected_with_sidecars");
+    fixture.put("output/source-report.json", &serde_json::to_vec(&report)?)?;
+    assert!(crate::library::verify(&fixture.0.join("output"), true).is_err());
+    Ok(())
+}
+#[test]
+fn correction_report_cannot_drop_outcomes_or_claim_changed_replacement() -> Result<()> {
+    let fixture = Fixture::new("sha1")?;
+    for mode in 0..3 {
+        let mut report = corrected_artifact(&fixture, "applied")?;
+        if mode == 0 {
+            report["library"]["corrections"]["applications"] = serde_json::json!([]);
+        } else if mode == 1 {
+            report["library"]["corrections"]["applications"][0]["after"] = serde_json::Value::Null;
+        } else {
+            report["library"]["corrections"]["applications"][0]["status"] =
+                serde_json::json!("unknown");
+        }
+        fixture.put("output/source-report.json", &serde_json::to_vec(&report)?)?;
+        assert!(crate::library::verify(&fixture.0.join("output"), true).is_err());
+    }
+    Ok(())
+}

@@ -14,7 +14,7 @@ use wow_reference::native::{NativeError, ingest_document, source_digest};
 
 const LIMIT: usize = 1024 * 1024;
 const TOTAL_LIMIT: usize = 64 * LIMIT;
-const USAGE: &str = "native_library <git-checkout> <revision-or-ref> <generated-api.toc> <environment> <new-output-directory>";
+const USAGE: &str = "native_library <git-checkout> <revision-or-ref> <generated-api.toc> <environment> <new-output-directory> [--corrections <reviewed-pack.json>]";
 
 #[derive(Serialize)]
 struct Failure {
@@ -43,7 +43,7 @@ fn run(args: Vec<OsString>) -> Result<bool, Box<dyn std::error::Error>> {
         println!("{USAGE}");
         return Ok(false);
     }
-    if args.len() != 5 {
+    if args.len() != 5 && !(args.len() == 7 && args[5] == "--corrections") {
         return Err(USAGE.into());
     }
     let root = Path::new(&args[0]);
@@ -134,8 +134,30 @@ fn run(args: Vec<OsString>) -> Result<bool, Box<dyn std::error::Error>> {
     if documents.is_empty() {
         return Err("no source registrations could be admitted".into());
     }
-    let library = wow_annotations::native::project(&documents, environment, &cancelled)?;
-    let partial = !failures.is_empty() || !library.issues.is_empty();
+    let corrections = if args.len() == 7 {
+        let path = Path::new(&args[6]);
+        let metadata = fs::symlink_metadata(path)?;
+        if !metadata.is_file()
+            || metadata.file_type().is_symlink()
+            || metadata.len() > 2 * LIMIT as u64
+        {
+            return Err("correction pack must be a bounded regular file".into());
+        }
+        let mut bytes = Vec::new();
+        fs::File::open(path)?
+            .take((2 * LIMIT + 1) as u64)
+            .read_to_end(&mut bytes)?;
+        Some(wow_reference::native_corrections::ValidatedCorrections::from_json(&bytes)?)
+    } else {
+        None
+    };
+    let library = wow_annotations::native::project_with_corrections(
+        &documents,
+        environment,
+        corrections.as_ref(),
+        &cancelled,
+    )?;
+    let partial = !failures.is_empty() || library.projection == "partial";
     let report = serde_json::json!({
         "schema": "wow-native-source-build/1", "revision": revision, "selector": selector,
         "freshness": "not_network_verified", "environment": environment,
@@ -342,6 +364,121 @@ mod tests {
         fixture.command(&["commit", "-m", "unsafe fixture"])?;
         assert!(run(fixture.args("out")).is_err());
         assert!(!fixture.0.join("out").exists());
+        Ok(())
+    }
+    fn correction_file(
+        fixture: &Fixture,
+        stale: bool,
+    ) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
+        use wow_reference::native_corrections::*;
+        let revision = String::from_utf8(git(&fixture.0, &["rev-parse", "HEAD"], 128)?)?
+            .trim()
+            .to_owned();
+        let source = String::from_utf8(git(&fixture.0, &["show", "HEAD:API.lua"], LIMIT)?)?;
+        let document = ingest_document(
+            &revision,
+            "API.lua",
+            &source,
+            &source_digest(source.as_bytes()),
+            &AtomicBool::new(false),
+        )?;
+        let normalized = wow_reference::native_model::normalize_document(&document);
+        let field = normalized.systems[0]
+            .as_ref()
+            .map_err(|_| "fixture normalization")?
+            .functions[0]
+            .returns[0]
+            .raw;
+        let data = CorrectionSet {
+            schema: SCHEMA.into(),
+            version: 1,
+            revision: if stale { "b".repeat(40) } else { revision },
+            environment: "Mainline".into(),
+            normalizer: NORMALIZER.into(),
+            records: vec![Correction {
+                id: "fixture-return".into(),
+                target: Target {
+                    path: "API.lua".into(),
+                    registration: 0,
+                    projection: Projection::CallableField {
+                        function: "Read".into(),
+                        lane: Lane::Returns,
+                        member: "value".into(),
+                        property: Property::Nilable,
+                    },
+                },
+                expected_source_sha256: document.sha256().into(),
+                expected_raw_sha256: raw_digest(field)?,
+                before: Value::Absent,
+                after: Value::Boolean(true),
+                reviewer: "test".into(),
+                rationale: "Synthetic driver test".into(),
+                evidence: vec![Evidence {
+                    revision: "a".repeat(40),
+                    path: "fixture.lua".into(),
+                    sha256: source_digest(b"fixture"),
+                }],
+            }],
+        };
+        let path = fixture.0.join("corrections.json");
+        fs::write(&path, serde_json::to_vec(&data)?)?;
+        Ok(path)
+    }
+    #[test]
+    fn explicit_reviewed_correction_flows_through_git_driver()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let fixture = Fixture::new()?;
+        let pack = correction_file(&fixture, false)?;
+        let mut args = fixture.args("corrected");
+        args.extend(["--corrections".into(), pack.into_os_string()]);
+        assert!(!run(args)?);
+        let report: serde_json::Value =
+            serde_json::from_slice(&fs::read(fixture.0.join("corrected/source-report.json"))?)?;
+        assert_eq!(
+            report["library"]["schema"],
+            "wow-native-annotation-library/4"
+        );
+        assert_eq!(
+            report["library"]["corrections"]["applications"][0]["status"],
+            "applied"
+        );
+        assert!(
+            fs::read_to_string(fixture.0.join("corrected/api-0000.lua"))?
+                .contains("---@return boolean? value")
+        );
+        Ok(())
+    }
+    #[test]
+    fn expired_correction_makes_driver_partial_and_keeps_original_value()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let fixture = Fixture::new()?;
+        let pack = correction_file(&fixture, true)?;
+        let mut args = fixture.args("expired");
+        args.extend(["--corrections".into(), pack.into_os_string()]);
+        assert!(run(args)?);
+        let report: serde_json::Value =
+            serde_json::from_slice(&fs::read(fixture.0.join("expired/source-report.json"))?)?;
+        assert_eq!(
+            report["library"]["corrections"]["applications"][0]["status"],
+            "expired"
+        );
+        assert_eq!(report["status"], "partial");
+        assert!(
+            fs::read_to_string(fixture.0.join("expired/api-0000.lua"))?
+                .contains("---@return boolean value")
+        );
+        Ok(())
+    }
+    #[test]
+    fn malformed_correction_input_never_creates_an_output_directory()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let fixture = Fixture::new()?;
+        let path = fixture.0.join("corrections.json");
+        fs::write(&path, b"{}")?;
+        let mut args = fixture.args("invalid");
+        args.extend(["--corrections".into(), path.into_os_string()]);
+        assert!(run(args).is_err());
+        assert!(!fixture.0.join("invalid").exists());
         Ok(())
     }
 }

@@ -63,3 +63,9 @@ direction, not renamed, archived, wrapped or hidden behind Rust. Existing v1 JSO
 importers remain supported as compatibility readers. Full native topology
 production and the former upstream source-manager/probe command family have not
 been ported wholesale and must not be advertised as implemented.
+
+Native library verification accepts v3 and optional-correction v4. The latter
+checks correction-set digest, per-record outcomes, exact applied before/after
+bindings and partial-state propagation. It does not execute corrections itself,
+authenticate reviewers or certify consumer semantics. An expired/conflicted/
+rejected correction cannot become clean by clearing the ordinary issue list.

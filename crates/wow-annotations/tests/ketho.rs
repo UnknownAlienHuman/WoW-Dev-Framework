@@ -109,7 +109,7 @@ fn donor_type_lowering_preserves_unknown_names_without_widening() -> TestResult 
     assert_eq!(without_enums.lower_type("AccountData")?, "AccountData");
     assert_eq!(
         renderer.lower_type("FutureType|nil"),
-        Err(RenderError::UnsupportedType)
+        Ok("FutureType|nil".into())
     );
     Ok(())
 }
