@@ -78,3 +78,36 @@ jobs:
       - run: cargo +stable update
       - run: cargo +stable test --workspace --all-targets --all-features
       - run: cargo +stable clippy --workspace --all-targets --all-features -- -D warnings
+  parser-compatibility:
+    name: Rolling Emmy parser compatibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install stable --profile minimal
+      - name: Resolve current parser in isolated CI checkout
+        run: cargo +stable add --package wow-reference --git https://github.com/EmmyLuaLs/emmylua-analyzer-rust --branch main emmylua_parser
+      - name: Test reference consumer against current parser
+        run: cargo +stable test --package wow-reference --all-targets --all-features
+      - name: Retain exact offline dependency inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/parser-inputs"
+          cargo +stable vendor --locked "$RUNNER_TEMP/parser-inputs/vendor" > "$RUNNER_TEMP/parser-inputs/vendor-config.toml"
+          cp Cargo.lock "$RUNNER_TEMP/parser-inputs/Cargo.lock"
+          cp crates/wow-reference/Cargo.toml "$RUNNER_TEMP/parser-inputs/reference-Cargo.toml"
+          git rev-parse HEAD > "$RUNNER_TEMP/parser-inputs/COMMIT_SHA"
+          rustc +stable -Vv > "$RUNNER_TEMP/parser-inputs/rust-version.txt"
+          tar -czf "$RUNNER_TEMP/parser-inputs.tar.gz" -C "$RUNNER_TEMP/parser-inputs" .
+          sha256sum "$RUNNER_TEMP/parser-inputs.tar.gz" > "$RUNNER_TEMP/parser-inputs.sha256"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: parser-inputs-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/parser-inputs.tar.gz
+            ${{ runner.temp }}/parser-inputs.sha256
+          retention-days: 3
+          if-no-files-found: error
