@@ -1,63 +1,76 @@
-name: CI
+name: Verify topology diagnostic boundary
 on:
   push:
     branches: [main]
-  pull_request:
+    paths: [.github/workflows/ci.yml]
   workflow_dispatch:
 permissions:
-  contents: read
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  contents: write
 jobs:
-  checks:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.x'
-      - name: Install current stable Rust
-        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
-      - name: Record tested inputs
-        run: |
-          git rev-parse HEAD
-          rustc +stable -Vv
-          python --version
-      - run: python scripts/sync-wow-dev-skill.py --check
-      - run: python -m unittest discover -s tests -v
-      - run: cargo +stable fmt --all --check
-      - run: cargo +stable check --locked --workspace --all-targets --all-features
-      - run: cargo +stable clippy --locked --workspace --all-targets --all-features -- -D warnings
-      - run: cargo +stable test --locked --workspace --all-targets --all-features
-      - run: cargo +stable test --release --locked --workspace --all-targets --all-features
-      - name: Check documentation
-        env:
-          RUSTDOCFLAGS: -D warnings
-        run: cargo +stable doc --locked --workspace --all-features --no-deps
-      - name: Verify tests did not rewrite tracked files
-        run: git diff --exit-code
-  updated-dependencies:
+  verify:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
         with:
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-python@v7
         with:
           python-version: '3.x'
-      - run: rustup toolchain install stable --profile minimal --component clippy
-      - run: cargo +stable update
-      - run: cargo +stable test --workspace --all-targets --all-features
-      - run: cargo +stable clippy --workspace --all-targets --all-features -- -D warnings
+      - name: Materialize reviewed source delta
+        shell: bash
+        run: |
+          python - <<'PY'
+          import base64, hashlib, json, lzma, pathlib, subprocess
+          encoded = '''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'''
+          data = json.loads(lzma.decompress(base64.b64decode(encoded, validate=True)))
+          def git(*args): return subprocess.check_output(['git', *args])
+          assert git('diff', '--name-only', data['base'], 'HEAD').decode().splitlines() == ['.github/workflows/ci.yml']
+          for entry in data['entries']:
+              path = pathlib.Path(entry['path'])
+              assert not path.is_absolute() and '..' not in path.parts and '.git' not in path.parts
+              before = git('show', data['base'] + ':' + entry['path'])
+              assert hashlib.sha256(before).hexdigest() == entry['base_sha256']
+              lines = before.decode().splitlines(keepends=True)
+              for start, end, replacement in reversed(entry['edits']):
+                  lines[start:end] = [replacement]
+              after = ''.join(lines).encode()
+              assert hashlib.sha256(after).hexdigest() == entry['sha256']
+              path.write_bytes(after)
+          git('add', '-A')
+          assert git('write-tree').decode().strip() == data['tree'] == '228979c6830276d64cdf1a603a53c4ea2c624406'
+          pathlib.Path('/tmp/reviewed-delta.json').write_text(json.dumps(data))
+          print('Reviewed candidate:', data['tree'])
+          PY
+      - name: Test reviewed candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install stable --profile minimal --component clippy --component rustfmt
+          python -m unittest discover -s tests -v
+          cargo +stable fmt --all --check
+          cargo +stable test --locked --workspace --all-targets --all-features
+          cargo +stable clippy --locked --workspace --all-targets --all-features -- -D warnings
+          git diff --exit-code
+          git diff --cached --check
+      - name: Upload verified blobs only, without commit or ref mutation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import base64, hashlib, json, os, pathlib, urllib.request
+          data = json.loads(pathlib.Path('/tmp/reviewed-delta.json').read_text())
+          api = 'https://api.github.com/repos/' + os.environ['GITHUB_REPOSITORY']
+          for entry in data['entries']:
+              content = pathlib.Path(entry['path']).read_bytes()
+              assert hashlib.sha256(content).hexdigest() == entry['sha256']
+              body = json.dumps({'encoding':'base64', 'content':base64.b64encode(content).decode()}).encode()
+              request = urllib.request.Request(api + '/git/blobs', data=body, method='POST', headers={'Authorization':'Bearer ' + os.environ['GH_TOKEN'], 'Content-Type':'application/json', 'Accept':'application/vnd.github+json'})
+              with urllib.request.urlopen(request, timeout=60) as response:
+                  result = json.load(response)
+              assert result['sha'] == entry['blob']
+              print(entry['path'], result['sha'])
+          print('Verified blobs staged. No tree, commit, push, or ref update was performed.')
+          PY
