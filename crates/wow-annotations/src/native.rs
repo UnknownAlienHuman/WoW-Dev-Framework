@@ -69,6 +69,15 @@ pub struct ScalarResolutionRecord {
     pub result: Result<ResolvedScalar, ScalarError>,
 }
 
+/// An explicit consumer-specific label change, not a change to the source API.
+#[derive(Clone, Debug, Serialize)]
+pub struct NameProjection {
+    pub source: SourceLink,
+    pub original: String,
+    pub rendered: String,
+    pub rule: &'static str,
+}
+
 #[derive(Debug, Serialize)]
 pub struct NativeLibrary<'a> {
     pub schema: &'static str,
@@ -81,6 +90,7 @@ pub struct NativeLibrary<'a> {
     pub issues: Vec<ProjectionIssue>,
     pub metadata_sidecars: Vec<MetadataSidecar>,
     pub scalar_resolutions: Vec<ScalarResolutionRecord>,
+    pub name_projections: Vec<NameProjection>,
     pub limitations: Vec<&'static str>,
 }
 
@@ -141,6 +151,7 @@ pub fn project<'a>(
     let mut issues = Vec::new();
     let mut metadata_sidecars = Vec::new();
     let mut scalar_resolutions = Vec::new();
+    let mut name_projections = Vec::new();
     let mut resolution_budget = MAX_LIBRARY_BYTES;
     let mut systems = Vec::new();
     for document in &normalized {
@@ -314,14 +325,21 @@ pub fn project<'a>(
                 continue;
             }
             match callable(function, &mut scalars) {
-                Ok(f) => {
+                Ok(projected) => {
                     let candidate = System {
                         owner: input.owner.clone(),
-                        functions: vec![f],
+                        functions: vec![projected.function],
                         tables: Vec::new(),
                     };
                     match renderer.render(&candidate) {
                         Ok(_) => {
+                            name_projections.extend(projected.names);
+                            if projected.escaped_documentation {
+                                metadata_sidecars.push(MetadataSidecar {
+                                    field: "Documentation:escaped_control_characters".into(),
+                                    source: link(document, function.raw),
+                                });
+                            }
                             input.functions.extend(candidate.functions);
                             function_sources.push(link(document, function.raw));
                         }
@@ -367,24 +385,40 @@ pub fn project<'a>(
                 TableFact::Enumeration { name, values, .. } => {
                     let converted = convert_values(values, false, &mut scalars, &mut issues);
                     if values.is_empty() || !converted.is_empty() {
-                        enums.push(EnumDeclaration {
+                        let declaration = EnumDeclaration {
                             name: (*name).into(),
                             values: converted,
                             integer_format: IntegerFormat::Decimal,
-                        });
-                        literal_sources.push(link(document, raw));
+                        };
+                        match literals.render_enums(std::slice::from_ref(&declaration), &[]) {
+                            Ok(_) => {
+                                enums.push(declaration);
+                                literal_sources.push(link(document, raw));
+                            }
+                            Err(error) => {
+                                issues.push(issue(document, raw, format!("renderer_{error:?}")))
+                            }
+                        }
                     }
                     Ok(None)
                 }
                 TableFact::Constants { name, values, .. } => {
                     let converted = convert_values(values, true, &mut scalars, &mut issues);
                     if values.is_empty() || !converted.is_empty() {
-                        constants.push(ConstantGroup {
+                        let declaration = ConstantGroup {
                             name: (*name).into(),
                             values: converted,
                             order: MemberOrder::Name,
-                        });
-                        literal_sources.push(link(document, raw));
+                        };
+                        match literals.render_enums(&[], std::slice::from_ref(&declaration)) {
+                            Ok(_) => {
+                                constants.push(declaration);
+                                literal_sources.push(link(document, raw));
+                            }
+                            Err(error) => {
+                                issues.push(issue(document, raw, format!("renderer_{error:?}")))
+                            }
+                        }
                     }
                     Ok(None)
                 }
@@ -494,7 +528,7 @@ pub fn project<'a>(
         return Err(RenderError::Cancelled);
     }
     Ok(NativeLibrary {
-        schema: "wow-native-annotation-library/2",
+        schema: "wow-native-annotation-library/3",
         revision,
         projection: if issues.is_empty() {
             "projected_with_sidecars"
@@ -507,6 +541,7 @@ pub fn project<'a>(
         issues,
         metadata_sidecars,
         scalar_resolutions,
+        name_projections,
         limitations: vec![
             "raw restriction and unknown metadata are retained, not interpreted as runtime safety",
             "named type closure and source-owned widget aliases require the correction/type mapping lane",
@@ -630,20 +665,115 @@ impl ScalarProjection<'_, '_> {
         value
     }
 }
+struct CallableProjection {
+    function: Function,
+    names: Vec<NameProjection>,
+    escaped_documentation: bool,
+}
+
 fn callable(
     value: &CallableFact<'_>,
     scalars: &mut ScalarProjection<'_, '_>,
-) -> Result<Function, RenderError> {
-    Ok(Function {
-        name: value.name.into(),
-        documentation: value
-            .documentation
-            .as_ref()
-            .map(|d| d.iter().map(|s| (*s).into()).collect()),
-        arguments: convert_fields(&value.arguments, scalars)?,
-        returns: convert_fields(&value.returns, scalars)?,
+) -> Result<CallableProjection, RenderError> {
+    let mut escaped_documentation = false;
+    let documentation = value
+        .documentation
+        .as_ref()
+        .map(|parts| {
+            parts
+                .iter()
+                .map(|part| {
+                    let (text, changed) = sanitize_documentation(part)?;
+                    escaped_documentation |= changed;
+                    Ok(text)
+                })
+                .collect::<Result<Vec<_>, RenderError>>()
+        })
+        .transpose()?;
+    let arguments = convert_fields(&value.arguments, scalars)?;
+    let mut returns = convert_fields(&value.returns, scalars)?;
+    let mut occupied = returns
+        .iter()
+        .map(|f| f.name.clone())
+        .collect::<BTreeSet<_>>();
+    if occupied.len() != returns.len() {
+        return Err(RenderError::DuplicateName);
+    }
+    let mut names = Vec::new();
+    for (index, field) in returns.iter_mut().enumerate() {
+        if crate::ketho::is_keyword(&field.name) {
+            let mut rendered = format!("__wow_return_{}", index + 1);
+            while occupied.contains(&rendered) {
+                rendered.push('_');
+            }
+            occupied.insert(rendered.clone());
+            names.push(NameProjection {
+                source: link(scalars.document, value.returns[index].raw),
+                original: field.name.clone(),
+                rendered: rendered.clone(),
+                rule: "reserved-return-label/1",
+            });
+            field.name = rendered;
+        }
+    }
+    Ok(CallableProjection {
+        function: Function {
+            name: value.name.into(),
+            documentation,
+            arguments,
+            returns,
+        },
+        names,
+        escaped_documentation,
     })
 }
+
+// Preserve prose as one inert comment line. Do not turn source-provided
+// annotation directives into trusted tags, even when preceded by a newline.
+fn sanitize_documentation(text: &str) -> Result<(String, bool), RenderError> {
+    if text.len() > crate::ketho::MAX_TEXT_BYTES {
+        return Err(RenderError::InputLimit);
+    }
+    if text
+        .split(['\n', '\r', '\u{2028}', '\u{2029}'])
+        .any(|line| {
+            line.trim_start()
+                .trim_start_matches('-')
+                .trim_start()
+                .starts_with('@')
+        })
+    {
+        return Err(RenderError::UnsafeDocumentation);
+    }
+    let mut result = String::new();
+    let mut changed = false;
+    for character in text.chars() {
+        match character {
+            '\n' => {
+                result.push_str("\\n");
+                changed = true;
+            }
+            '\r' => {
+                result.push_str("\\r");
+                changed = true;
+            }
+            '\t' => {
+                result.push_str("\\t");
+                changed = true;
+            }
+            c if c.is_control() || matches!(c, '\u{2028}' | '\u{2029}') => {
+                result.push_str(&format!("\\u{{{:x}}}", c as u32));
+                changed = true;
+            }
+            c => result.push(c),
+        }
+        if result.len() > crate::ketho::MAX_TEXT_BYTES {
+            return Err(RenderError::InputLimit);
+        }
+    }
+    Ok((result, changed))
+}
+
 fn convert_fields(
     fields: &[FieldFact<'_>],
     scalars: &mut ScalarProjection<'_, '_>,
@@ -684,7 +814,15 @@ fn convert_values(
     issues: &mut Vec<ProjectionIssue>,
 ) -> Vec<LiteralMember> {
     let mut result = Vec::new();
+    let mut names = BTreeMap::new();
     for value in values {
+        *names.entry(value.name).or_insert(0usize) += 1;
+    }
+    for value in values {
+        if names[value.name] > 1 {
+            issues.push(issue(scalars.document, value.raw, "value_DuplicateName"));
+            continue;
+        }
         let resolved = scalars.resolve(
             value.value,
             if typed_constants {

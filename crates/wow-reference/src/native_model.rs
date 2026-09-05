@@ -283,6 +283,9 @@ fn table(value: &RawValue) -> Result<TableFact<'_>> {
     let map = object(value)?;
     let name = required_text(&map, "Name", value)?;
     let type_name = required_text(&map, "Type", value)?;
+    if type_name == "Enumeration" && map.contains_key("Values") {
+        return Err(error(ModelErrorCode::WrongType, value));
+    }
     Ok(match type_name {
         "Structure" => TableFact::Structure {
             name,

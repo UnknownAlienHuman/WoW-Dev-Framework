@@ -294,3 +294,205 @@ Tables={{Name="GoodRecord",Type="Structure",Fields={{Name="ok",Type="bool"}}},{N
         assert!(original.contains("Good"));
     }
 }
+
+#[test]
+fn malformed_callable_is_quarantined_at_declaration_not_system_scope() {
+    let source = r#"APIDocumentation:AddDocumentationTable({Name="X",Type="System",Namespace="C_X",Functions={
+      {Name="Before"},{Name="Broken",Returns={{Name="one",Type="number",StrideIndex=1},{Name="two",Type="number",StrideIndex=2}}},{Name="After"}}})"#;
+    let docs = [doc("A.lua", source)];
+    let library = project(&docs, "Mainline", &AtomicBool::new(false)).unwrap();
+    let text = &library.files[0].text;
+    assert!(text.contains("C_X.Before()"));
+    assert!(text.contains("C_X.After()"));
+    assert!(!text.contains("C_X.Broken()"));
+    assert_eq!(library.files[0].mappings.len(), 2);
+    assert_eq!(library.issues.len(), 1);
+    assert_eq!(library.issues[0].code, "renderer_InvalidVariadic");
+    let span = library.issues[0].source.span;
+    assert!(source[span.start..span.end].starts_with("{Name=\"Broken\""));
+}
+
+#[test]
+fn keyword_return_label_is_not_an_executable_lua_parameter() {
+    let docs = [doc(
+        "A.lua",
+        r#"APIDocumentation:AddDocumentationTable({Name="X",Type="System",Functions={{Name="Stats",Returns={{Name="in",Type="number"},{Name="out",Type="number"}}}}})"#,
+    )];
+    let library = project(&docs, "Mainline", &AtomicBool::new(false)).unwrap();
+    assert!(library.issues.is_empty(), "{:?}", library.issues);
+    assert!(
+        library.files[0]
+            .text
+            .contains("---@return number __wow_return_1")
+    );
+    assert_eq!(library.name_projections[0].original, "in");
+    assert_eq!(library.name_projections[0].rendered, "__wow_return_1");
+    let parsed = emmylua_parser::LuaParser::parse(
+        &library.files[0].text,
+        emmylua_parser::ParserConfig::with_level(emmylua_parser::LuaLanguageLevel::Lua51),
+    );
+    assert!(parsed.get_errors().is_empty(), "{:?}", parsed.get_errors());
+    let docs = [doc(
+        "B.lua",
+        r#"APIDocumentation:AddDocumentationTable({Name="X",Type="System",Functions={{Name="Bad",Arguments={{Name="in",Type="number"}}},{Name="Good"}}})"#,
+    )];
+    let library = project(&docs, "Mainline", &AtomicBool::new(false)).unwrap();
+    assert_eq!(library.issues[0].code, "renderer_InvalidIdentifier");
+    assert!(!library.files[0].text.contains("function Bad"));
+}
+
+#[test]
+fn prose_controls_are_escaped_with_raw_text_and_loss_sidecar() {
+    let docs = [doc(
+        "A.lua",
+        r#"APIDocumentation:AddDocumentationTable({Name="X",Type="System",Functions={{Name="Clean",Documentation={"Line\nfunction Injected() end\r\tend"}}}})"#,
+    )];
+    let library = project(&docs, "Mainline", &AtomicBool::new(false)).unwrap();
+    assert!(library.issues.is_empty(), "{:?}", library.issues);
+    let text = &library.files[0].text;
+    assert!(text.contains("---Line\\nfunction Injected() end\\r\\tend"));
+    assert!(
+        !text
+            .lines()
+            .any(|line| line.starts_with("function Injected"))
+    );
+    assert!(
+        library
+            .metadata_sidecars
+            .iter()
+            .any(|s| s.field == "Documentation:escaped_control_characters")
+    );
+    let parsed = emmylua_parser::LuaParser::parse(
+        text,
+        emmylua_parser::ParserConfig::with_level(emmylua_parser::LuaLanguageLevel::Lua51),
+    );
+    assert!(parsed.get_errors().is_empty());
+}
+
+#[test]
+fn directive_text_still_cannot_control_annotations() {
+    let docs = [doc(
+        "A.lua",
+        r#"APIDocumentation:AddDocumentationTable({Name="X",Type="System",Functions={{Name="Bad",Documentation={"@diagnostic disable: all"}},{Name="Good"}}})"#,
+    )];
+    let library = project(&docs, "Mainline", &AtomicBool::new(false)).unwrap();
+    assert_eq!(library.issues[0].code, "callable_UnsafeDocumentation");
+    assert!(library.files[0].text.contains("function Good()"));
+    assert!(!library.files[0].text.contains("@diagnostic"));
+}
+
+#[test]
+fn duplicate_constant_members_do_not_hide_the_remaining_group() {
+    let docs = [doc(
+        "A.lua",
+        r#"APIDocumentation:AddDocumentationTable({Tables={{Name="X",Type="Constants",Values={{Name="Bad",Value=1},{Name="Bad",Value=2},{Name="Good",Value=3}}}}})"#,
+    )];
+    let library = project(&docs, "Mainline", &AtomicBool::new(false)).unwrap();
+    assert_eq!(library.issues.len(), 2);
+    assert!(library.files[0].text.contains("Good = 3,"));
+    assert!(!library.files[0].text.contains("Bad ="));
+}
+
+#[test]
+fn return_name_projection_does_not_erase_duplicate_name_conflicts() {
+    let docs = [doc(
+        "Duplicate.lua",
+        r#"APIDocumentation:AddDocumentationTable({Name="X",Type="System",Functions={{Name="Bad",Returns={{Name="in",Type="number"},{Name="in",Type="number"}}},{Name="Good"}}})"#,
+    )];
+    let library = project(&docs, "Mainline", &AtomicBool::new(false)).unwrap();
+    assert_eq!(library.issues.len(), 1);
+    assert_eq!(library.issues[0].code, "callable_DuplicateName");
+    assert!(library.name_projections.is_empty());
+    assert!(!library.files[0].text.contains("function Bad"));
+    assert!(library.files[0].text.contains("function Good"));
+}
+
+#[test]
+fn return_name_projection_avoids_collision_and_keeps_source_order() {
+    let docs = [doc(
+        "Collision.lua",
+        r#"APIDocumentation:AddDocumentationTable({Name="X",Type="System",Functions={{Name="Stats",Returns={{Name="in",Type="number"},{Name="__wow_return_1",Type="string"},{Name="out",Type="number"}}}}})"#,
+    )];
+    let library = project(&docs, "Mainline", &AtomicBool::new(false)).unwrap();
+    assert!(library.issues.is_empty(), "{:?}", library.issues);
+    assert_eq!(library.name_projections[0].rendered, "__wow_return_1_");
+    let text = &library.files[0].text;
+    assert!(text.contains(
+        "---@return number __wow_return_1_\n---@return string __wow_return_1\n---@return number out"
+    ));
+}
+
+#[test]
+fn rejected_callable_does_not_publish_unapplied_name_or_prose_projections() {
+    let docs = [doc(
+        "A.lua",
+        r#"APIDocumentation:AddDocumentationTable({Name="X",Type="System",Functions={
+        {Name="Bad",Documentation={"line\nprose"},Arguments={{Name="end",Type="number"}},Returns={{Name="in",Type="number"}}},
+        {Name="Good"}}})"#,
+    )];
+    let library = project(&docs, "Mainline", &AtomicBool::new(false)).unwrap();
+    assert_eq!(library.issues.len(), 1);
+    assert!(library.name_projections.is_empty());
+    assert!(
+        !library
+            .metadata_sidecars
+            .iter()
+            .any(|s| s.field == "Documentation:escaped_control_characters")
+    );
+    assert!(library.files[0].text.contains("function Good"));
+    assert!(!library.files[0].text.contains("function Bad"));
+}
+
+#[test]
+fn invalid_literal_group_does_not_erase_other_groups() {
+    let docs = [doc(
+        "A.lua",
+        r#"APIDocumentation:AddDocumentationTable({Tables={
+        {Name="Bad",Type="Enumeration",Fields={{Name="end",EnumValue=1}}},
+        {Name="Good",Type="Enumeration",Fields={{Name="Ok",EnumValue=2}}},
+        {Name="BadConstants",Type="Constants",Values={{Name="end",Value=3}}},
+        {Name="GoodConstants",Type="Constants",Values={{Name="Ok",Value=4}}}}})"#,
+    )];
+    let library = project(&docs, "Mainline", &AtomicBool::new(false)).unwrap();
+    assert_eq!(library.issues.len(), 2);
+    assert_eq!(library.projection, "partial");
+    let text = &library.files[0].text;
+    assert!(text.contains("Enum.Good = {"));
+    assert!(text.contains("GoodConstants = {"));
+    assert!(!text.contains("Bad"));
+}
+
+#[test]
+fn escaped_documentation_is_bounded_after_expansion() {
+    let raw = format!(
+        r#"APIDocumentation:AddDocumentationTable({{Name="X",Type="System",Functions={{{{Name="Large",Documentation={{"{}"}}}},{{Name="Good"}}}}}})"#,
+        "\\t".repeat(40_000)
+    );
+    let docs = [doc("Large.lua", &raw)];
+    let library = project(&docs, "Mainline", &AtomicBool::new(false)).unwrap();
+    assert!(
+        library
+            .issues
+            .iter()
+            .any(|i| i.code == "callable_InputLimit")
+    );
+    assert!(library.files[0].text.contains("function Good"));
+    assert!(!library.files[0].text.contains("function Large"));
+}
+
+#[test]
+fn name_projection_binds_to_exact_source_and_versioned_report() {
+    let raw = r#"APIDocumentation:AddDocumentationTable({Name="X",Type="System",Functions={{Name="Stats",Returns={{Name="in",Type="number"}}}}})"#;
+    let docs = [doc("Stats.lua", raw)];
+    let library = project(&docs, "Mainline", &AtomicBool::new(false)).unwrap();
+    assert_eq!(library.schema, "wow-native-annotation-library/3");
+    let name = &library.name_projections[0];
+    assert_eq!(name.source.path, "Stats.lua");
+    assert_eq!(name.source.sha256, source_digest(raw.as_bytes()));
+    assert_eq!(
+        &raw[name.source.span.start..name.source.span.end],
+        r#"{Name="in",Type="number"}"#
+    );
+    assert_eq!(name.rule, "reserved-return-label/1");
+    assert!(!library.negative_authority);
+}

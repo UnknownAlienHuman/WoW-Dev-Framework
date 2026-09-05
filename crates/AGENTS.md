@@ -9,12 +9,14 @@ These instructions apply to every crate directory and cross-crate owner seam.
 ```text
 documentation frontier: E7-B / planned architecture
 implementation: partial executable foundation and source bridge
-active workspace: wow-core, wow-reference
-next owner implementation: I0-C / real wow-emmy analyzer adapter
+active workspace: wow-core, wow-reference, wow-annotations
+current port: Ketho native source-to-annotations in wow-reference / wow-annotations
+next port: reviewed correction/type/widget mappings and consumer probes
+separate R0 owner: I0-C / real wow-emmy semantic analyzer adapter
 full R0, runtime, installation and release gates: NotEvaluated
 ```
 
-A crate README and contract define implementation responsibilities; directory presence is not implementation. Do not create the final workspace topology as empty crates. Activate one owner package only when its exact implementation slice, toolchain and dependency inputs, fixtures, tests, and first-commit freeze gate are ready.
+A crate README and contract define implementation responsibilities; directory presence is not implementation. Do not create the final workspace topology as empty crates. Activate one owner package only when its exact implementation slice, toolchain and dependency inputs, fixtures, tests, and applicable acceptance gate are ready. Exact test inputs identify a run; they are not permanent compiler or source pins.
 
 ## Required reading
 
@@ -42,7 +44,7 @@ Each crate owns one stable semantic responsibility. It may expose only the narro
 wow-core        generic exact semantic primitives
 wow-store       generic persistence, effects, leases, retention, and recovery
 wow-reference   exact platform and reference facts and views
-wow-emmy        pinned analyzer adapter
+wow-emmy        versioned analyzer adapter with rolling compatibility checks
 wow-project     source, project, load, index, and overlay ownership
 wow-graph       typed graph, lineage, impact, and producer partitions
 wow-recognizers declarative recognizers and calibration semantics
@@ -86,7 +88,7 @@ Before adding a crate to the root Cargo workspace:
 
 ```text
 owned contract slice selected
-prerequisite implementations frozen
+prerequisite implementations and exact tested input identities recorded
 exact Rust toolchain, target, dependency, and feature inputs selected
 public types and operations fully specified
 fixtures, golden bytes, and mutation cases ready
@@ -94,7 +96,7 @@ no placeholder public behavior
 focused acceptance gate executable
 ```
 
-The first workspace activation contains only `crates/wow-core`.
+The initial bootstrap activated only `crates/wow-core`; current active membership is listed above and in Cargo.toml.
 
 ## Public API and semantic discipline
 
@@ -189,8 +191,9 @@ remaining exact blockers
 ## Next implementation
 
 ```text
-I0-A / crates/wow-core E0-A
-workspace membership after first activation: crates/wow-core only
+Ketho native source-to-library port: docs/KETHO_RUST_PORT.md
+current workspace: wow-core, wow-reference, wow-annotations
+full wow-emmy semantic integration and product gates remain incomplete
 ```
 
 Do not start another primary crate until the current worktree is merged, quarantined, or deleted.

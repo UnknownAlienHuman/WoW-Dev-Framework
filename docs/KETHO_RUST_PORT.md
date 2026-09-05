@@ -173,7 +173,7 @@ explicit nil, unresolved names and original expressions remain in raw sidecars.
 Unrendered source fields have
 individual metadata links; unsupported constructs have explicit error records.
 The evaluator profile is `ketho-apidoc-declarative/2`; the native library report
-is `wow-native-annotation-library/2`. `scalar_resolutions` links every requested
+is `wow-native-annotation-library/3`. `scalar_resolutions` links every requested
 constant/default resolution to its source value and, on success, every transitive
 value used. Conflicts, cycles, absent references, cancellation and limits have
 separate error classes. Bare unknown names in data are captured, never looked up
@@ -213,6 +213,25 @@ raw metadata, enum ownership, duplicate conflicts, UTF-8 ranges, bounded input,
 malicious source rejection, cancellation, deterministic ordering, local Git/TOC
 reading and no-clobber output. Parsing a generated fixture with EmmyLua is a
 syntax check only. Real EmmyLua/LuaLS semantic consumer probes remain required.
+
+The reconciled native adapter records collision-checked reserved return labels in
+`name_projections` (source path/hash/span, original, rendered, rule). Original
+labels and order remain in raw source; executable parameter identifiers remain
+strict. Duplicate labels are rejected before renaming. These records are emitted
+only for admitted callables, never for declarations rejected by the renderer.
+The report is version 3; it preserves the version-2 `scalar_resolutions` field.
+
+Control characters in source prose become visible escapes on one inert comment
+line, with a `Documentation:escaped_control_characters` metadata link. Both input
+and expanded text are bounded. Annotation directives on any source line remain
+rejected; this is an explicit safety/consumer projection, not a Blizzard fact.
+
+Enum/constant groups are validated independently before aggregation. Duplicate
+members produce per-member conflict issues and do not erase valid siblings.
+Malformed groups cannot abort unrelated valid groups. Enumeration `Values` and
+mixed `Fields`/`Values` forms fail normalization rather than producing empty enums;
+Constants still require the existing `Values` shape. These are regressions in
+`wow-annotations/tests/native.rs` and `wow-reference/tests/native.rs`.
 
 Next: port reviewed correction/type/widget mappings and remaining consumer-specific
 type losses, then run real dual-consumer probes. Runtime-only global defaults and

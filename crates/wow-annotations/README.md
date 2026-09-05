@@ -21,6 +21,12 @@ fields, source hashes and declaration maps. The complete service still needs
 persistent ReferenceView integration, correction/type closure, full fine-grained
 maps, artifact publication and real language-server semantic probes.
 
+The native report is `wow-native-annotation-library/3`: scalar-resolution evidence
+is retained and reserved return labels have explicit collision-safe name maps.
+Prose controls are escaped with source links; directives remain rejected.
+Invalid literal groups and duplicate members do not erase valid sibling groups.
+These are bounded consumer projections, not changes to Blizzard facts.
+
 ```text
 cargo test -p wow-annotations
 cargo clippy -p wow-annotations --all-targets -- -D warnings

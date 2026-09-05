@@ -478,35 +478,39 @@ pub(crate) fn identifier(value: &str) -> Result<(), RenderError> {
         .next()
         .is_some_and(|b| b == b'_' || b.is_ascii_alphabetic())
         || !chars.all(|b| b == b'_' || b.is_ascii_alphanumeric())
-        || matches!(
-            value,
-            "and"
-                | "break"
-                | "do"
-                | "else"
-                | "elseif"
-                | "end"
-                | "false"
-                | "for"
-                | "function"
-                | "goto"
-                | "if"
-                | "in"
-                | "local"
-                | "nil"
-                | "not"
-                | "or"
-                | "repeat"
-                | "return"
-                | "then"
-                | "true"
-                | "until"
-                | "while"
-        )
+        || is_keyword(value)
     {
         return Err(RenderError::InvalidIdentifier);
     }
     Ok(())
+}
+
+pub(crate) fn is_keyword(value: &str) -> bool {
+    matches!(
+        value,
+        "and"
+            | "break"
+            | "do"
+            | "else"
+            | "elseif"
+            | "end"
+            | "false"
+            | "for"
+            | "function"
+            | "goto"
+            | "if"
+            | "in"
+            | "local"
+            | "nil"
+            | "not"
+            | "or"
+            | "repeat"
+            | "return"
+            | "then"
+            | "true"
+            | "until"
+            | "while"
+    )
 }
 
 pub(crate) fn safe_text(value: &str) -> Result<(), RenderError> {

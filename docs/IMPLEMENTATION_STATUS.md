@@ -90,3 +90,18 @@ capabilities, and verify resulting libraries in both annotation consumers.
 Keep the separate real wow-emmy analyzer adapter on the R0 path. Do not postpone
 annotation parity behind unrelated graph/governance work or extend the legacy
 Python pipeline. Activate only implemented owner slices and report exact scope.
+
+## Native declaration recovery
+
+The native Ketho source-to-library adapter now retains valid siblings when a
+literal group is malformed, reports duplicate literal members individually, and
+rejects enum `Values`/mixed collection shapes. Reserved return labels have explicit
+collision-checked `name_projections`; prose controls are escaped with source-linked
+metadata while source annotation directives remain rejected. Library report v3
+preserves v2 scalar-resolution evidence. Tests cover source links, output bounds,
+name conflicts and rejection without spurious projection records.
+
+The concurrent `native_constants` resolver remains the only scalar-resolution
+implementation; no parallel resolver or Python product path was introduced.
+Full corrections/widget/type closure and dual-consumer semantic certification
+remain incomplete. Local or CI success is not a full product-release claim.

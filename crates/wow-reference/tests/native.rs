@@ -286,3 +286,19 @@ fn unknown_table_type_remains_explicitly_unsupported() {
         }
     ));
 }
+
+#[test]
+fn enum_values_and_mixed_collections_are_not_successful_empty_groups() {
+    for raw in [
+        r#"APIDocumentation:AddDocumentationTable({Tables={{Name="Wrong",Type="Enumeration",Values={{Name="A",Value=1}}}}})"#,
+        r#"APIDocumentation:AddDocumentationTable({Tables={{Name="Wrong",Type="Enumeration",Fields={},Values={}}}})"#,
+    ] {
+        let document = read(raw);
+        let normalized = normalize_document(&document);
+        assert_eq!(normalized.systems.len(), 1);
+        assert_eq!(
+            normalized.systems[0].as_ref().unwrap_err().code,
+            wow_reference::native_model::ModelErrorCode::WrongType
+        );
+    }
+}
