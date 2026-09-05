@@ -1,0 +1,123 @@
+name: Blizzard UI topology
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/wow_ui_topology.py"
+      - "scripts/build-blizzard-ui-topology.py"
+      - "scripts/verify-blizzard-ui-topology.py"
+      - "scripts/build-blizzard-source-manifest.py"
+      - "scripts/verify-blizzard-source-manifest.py"
+      - "tests/test_blizzard_ui_topology.py"
+      - "docs/BLIZZARD_UI_TOPOLOGY.md"
+      - ".github/workflows/blizzard-ui-topology.yml"
+  pull_request:
+    paths:
+      - "scripts/wow_ui_topology.py"
+      - "scripts/build-blizzard-ui-topology.py"
+      - "scripts/verify-blizzard-ui-topology.py"
+      - "tests/test_blizzard_ui_topology.py"
+      - ".github/workflows/blizzard-ui-topology.yml"
+  schedule:
+    - cron: "41 9 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: blizzard-ui-topology-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: unit (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+      - name: Compile producer and tests
+        run: >-
+          python -m py_compile
+          scripts/wow_ui_topology.py
+          scripts/build-blizzard-ui-topology.py
+          scripts/verify-blizzard-ui-topology.py
+          tests/test_blizzard_ui_topology.py
+      - name: Run topology regression suite
+        run: python -m unittest -v tests/test_blizzard_ui_topology.py
+
+  current-source:
+    name: current source smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+      - name: Clone current Blizzard UI source locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --filter=blob:none --depth=1 --no-tags --single-branch --branch live \
+            https://github.com/Gethe/wow-ui-source.git "$RUNNER_TEMP/wow-ui-source"
+          git -C "$RUNNER_TEMP/wow-ui-source" rev-parse HEAD > "$RUNNER_TEMP/source-revision"
+      - name: Build exact source manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          revision="$(cat "$RUNNER_TEMP/source-revision")"
+          python scripts/build-blizzard-source-manifest.py \
+            --source "$RUNNER_TEMP/wow-ui-source" \
+            --revision "$revision" \
+            --selector live \
+            --output "$RUNNER_TEMP/source-manifest.json"
+      - name: Build and verify TOC XML topology
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/build-blizzard-ui-topology.py \
+            --source "$RUNNER_TEMP/wow-ui-source" \
+            --manifest "$RUNNER_TEMP/source-manifest.json" \
+            --output "$RUNNER_TEMP/ui-topology.json" \
+            --json
+          python scripts/verify-blizzard-ui-topology.py \
+            "$RUNNER_TEMP/ui-topology.json" \
+            --source "$RUNNER_TEMP/wow-ui-source" \
+            --manifest "$RUNNER_TEMP/source-manifest.json" \
+            --current-ref origin/live \
+            --json
+          python - "$RUNNER_TEMP/ui-topology.json" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          topology = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          coverage = topology["coverage"]
+          assert coverage["candidate_toc_files"] == coverage["parsed_toc_files"]
+          assert coverage["candidate_xml_files"] == coverage["parsed_xml_files"]
+          assert coverage["failed_files"] == 0
+          print(json.dumps({
+              "revision": topology["source"]["revision"],
+              "version": topology["source"].get("version"),
+              "coverage": coverage["status"],
+              "unresolved_references": coverage["unresolved_references"],
+              "toc_files": coverage["parsed_toc_files"],
+              "xml_files": coverage["parsed_xml_files"],
+              "edges": len(topology["edges"]),
+              "cycles": len(topology["include_cycles"]),
+              "topology_sha256": topology["topology_sha256"],
+          }, sort_keys=True))
+          PY
