@@ -358,7 +358,11 @@ impl UiLoadEdge {
         self.target.as_deref()
     }
 
-    /// Original declared path text.
+    /// Original source declaration, not a validated path.
+    ///
+    /// Invalid declarations retain their diagnostic text, including whitespace
+    /// and controls. Use `target` and `resolution` for navigation; escape raw
+    /// declarations when rendering them outside structured JSON.
     #[must_use]
     pub fn declared(&self) -> &str {
         &self.declared
@@ -767,6 +771,7 @@ pub fn import_ui_topology_draft(bytes: &[u8]) -> UiTopologyImportResult<UiTopolo
 
     let issue_values = array(required(root, "issues", "issues")?, "issues")?;
     let issues = parse_issues(issue_values)?;
+    validate_reference_issues(&edges, &issues)?;
     let unresolved_references = u64::try_from(
         issues
             .iter()
@@ -1025,12 +1030,6 @@ fn parse_reference_key(
     record: &Map<String, Value>,
 ) -> UiTopologyImportResult<EdgeKey> {
     let declared = text(record, "declared", "declared reference")?.to_owned();
-    if declared.is_empty() || declared.chars().any(char::is_control) {
-        return Err(failure(
-            UiTopologyImportErrorCode::InvalidEdge,
-            "declared reference is empty or contains control characters",
-        ));
-    }
     let resolution =
         UiReferenceResolution::parse(text(record, "resolution", "reference resolution")?)
             .ok_or_else(|| {
@@ -1039,6 +1038,18 @@ fn parse_reference_key(
                     "reference resolution is invalid",
                 )
             })?;
+    // `declared` is source evidence, not a resolved path. The producer trims
+    // surrounding whitespace before resolution and preserves invalid declarations.
+    // Such diagnostics must remain importable without gaining a valid target.
+    let trimmed = declared.trim();
+    if resolution != UiReferenceResolution::Invalid
+        && (trimmed.is_empty() || trimmed.chars().any(char::is_control))
+    {
+        return Err(failure(
+            UiTopologyImportErrorCode::InvalidEdge,
+            "resolved reference contains an invalid declaration",
+        ));
+    }
     let target = optional_text(record, "target")?;
     match resolution {
         UiReferenceResolution::Invalid if target.is_some() => {
@@ -1200,6 +1211,55 @@ struct IssueSortKey {
     declared: String,
     target: String,
     metadata_key: String,
+}
+
+// Every unresolved edge needs its matching diagnostic, and every reference
+// diagnostic must describe an actual edge. Counts alone could otherwise turn
+// an invalid source declaration into complete coverage after issue removal.
+fn validate_reference_issues(
+    edges: &[UiLoadEdge],
+    issues: &[UiTopologyIssue],
+) -> UiTopologyImportResult<()> {
+    let mut expected = BTreeMap::new();
+    for edge in edges {
+        let code = match edge.resolution {
+            UiReferenceResolution::Exact => continue,
+            UiReferenceResolution::Invalid => "invalid_reference",
+            UiReferenceResolution::Missing => "missing_target",
+            UiReferenceResolution::CaseMismatch => "case_mismatch",
+            UiReferenceResolution::AmbiguousCase => "ambiguous_case",
+        };
+        let key = (
+            code.to_owned(),
+            edge.source.clone(),
+            edge.line,
+            edge.declared.clone(),
+            edge.target.clone(),
+        );
+        *expected.entry(key).or_insert(0_usize) += 1;
+    }
+    let mut actual = BTreeMap::new();
+    for issue in issues {
+        if !REFERENCE_ISSUES.contains(&issue.code.as_str()) {
+            continue;
+        }
+        let record = object(&issue.normalized, "reference issue")?;
+        let key = (
+            issue.code.clone(),
+            issue.source_path.clone(),
+            issue.line,
+            text(record, "declared", "issue declaration")?.to_owned(),
+            optional_text(record, "target")?,
+        );
+        *actual.entry(key).or_insert(0_usize) += 1;
+    }
+    if actual != expected {
+        return Err(failure(
+            UiTopologyImportErrorCode::InvalidIssue,
+            "unresolved edges and reference diagnostics do not match",
+        ));
+    }
+    Ok(())
 }
 
 fn parse_coverage(
@@ -1871,6 +1931,71 @@ mod tests {
             index.lookup_document("Interface/AddOns/Blizzard_Test/Missing.xml"),
             UiTopologyDocumentLookup::NotAuthoritative
         ));
+        Ok(())
+    }
+
+    fn invalid_declaration(declared: &str) -> Value {
+        let mut value = draft(false);
+        value["descriptors"][0]["entries"][0]["declared"] = json!(declared);
+        value["descriptors"][0]["entries"][0]["target"] = Value::Null;
+        value["descriptors"][0]["entries"][0]["resolution"] = json!("invalid");
+        value["edges"][0]["declared"] = json!(declared);
+        value["edges"][0]["target"] = Value::Null;
+        value["edges"][0]["resolution"] = json!("invalid");
+        value["issues"][0]["declared"] = json!(declared);
+        value["issues"][0]["target"] = Value::Null;
+        value["issues"][0]["code"] = json!("invalid_reference");
+        value
+    }
+
+    #[test]
+    fn invalid_source_text_remains_diagnostic_not_a_target() -> UiTopologyImportResult<()> {
+        for declared in ["", "   ", "Bad\nName.lua", "Bad\0Name.lua"] {
+            let index = import_ui_topology_draft(&seal(invalid_declaration(declared))?)?;
+            assert!(!index.coverage().negative_authority());
+            let outgoing = index.outgoing(TOC);
+            assert_eq!(outgoing.len(), 1);
+            assert_eq!(outgoing[0].declared(), declared);
+            assert_eq!(outgoing[0].target(), None);
+            assert_eq!(outgoing[0].resolution(), UiReferenceResolution::Invalid);
+            assert!(matches!(
+                index.lookup_document("Interface/AddOns/Missing.xml"),
+                UiTopologyDocumentLookup::NotAuthoritative
+            ));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn source_whitespace_is_preserved_around_resolved_reference() -> UiTopologyImportResult<()> {
+        let mut value = draft(true);
+        let declared = "\tLogic.lua\r\n";
+        value["descriptors"][0]["entries"][0]["declared"] = json!(declared);
+        value["edges"][0]["declared"] = json!(declared);
+        let index = import_ui_topology_draft(&seal(value)?)?;
+        let outgoing = index.outgoing(TOC);
+        assert_eq!(outgoing[0].declared(), declared);
+        assert_eq!(outgoing[0].target(), Some(LUA));
+        Ok(())
+    }
+
+    #[test]
+    fn invalid_diagnostics_cannot_be_removed_or_promoted() -> UiTopologyImportResult<()> {
+        let mut hidden = invalid_declaration("Bad\nName.lua");
+        hidden["issues"] = json!([]);
+        hidden["coverage"]["unresolved_references"] = json!(0);
+        hidden["coverage"]["status"] = json!("complete");
+        hidden["coverage"]["negative_authority"] = json!(true);
+        assert!(import_ui_topology_draft(&seal(hidden)?).is_err());
+
+        let mut promoted = draft(true);
+        promoted["descriptors"][0]["entries"][0]["declared"] = json!("Bad\nName.lua");
+        promoted["edges"][0]["declared"] = json!("Bad\nName.lua");
+        assert!(import_ui_topology_draft(&seal(promoted)?).is_err());
+
+        let mut orphan = draft(false);
+        orphan["issues"][0]["declared"] = json!("unrelated.lua");
+        assert!(import_ui_topology_draft(&seal(orphan)?).is_err());
         Ok(())
     }
 

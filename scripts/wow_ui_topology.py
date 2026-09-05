@@ -11,6 +11,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import unicodedata
 import xml.parsers.expat as expat
 from collections import defaultdict
 from pathlib import Path, PurePosixPath
@@ -19,7 +20,7 @@ from typing import Any, Iterable, Mapping, Sequence
 SCHEMA = "wow-dev-framework/blizzard-ui-topology-draft"
 SCHEMA_VERSION = 1
 PRODUCER_ID = "blizzard-ui-topology"
-PRODUCER_VERSION = 1
+PRODUCER_VERSION = 2
 DEFAULT_MAX_FILE_BYTES = 32 * 1024 * 1024
 DEFAULT_MAX_TOTAL_BYTES = 1024 * 1024 * 1024
 DEFAULT_MAX_XML_ELEMENTS = 2_000_000
@@ -328,7 +329,7 @@ def _source_record(path: str, data: bytes, git_object: str, line_start: int = 1,
 
 def _resolve_reference(source_path: str, declared: str) -> tuple[str | None, str | None]:
     value = declared.strip().replace("\\", "/")
-    if not value or "\x00" in value or "\n" in value or "\r" in value:
+    if not value or any(unicodedata.category(character) == "Cc" for character in value):
         return None, "empty or control-bearing reference"
     if re.match(r"^[A-Za-z]:", value) or value.startswith("/") or "://" in value:
         return None, "absolute or external reference"
@@ -538,7 +539,7 @@ class XmlTopologyParser:
         tag = local_name.casefold()
         if tag in {"include", "script"}:
             file_value = lowered.get("file")
-            if file_value:
+            if file_value is not None:
                 self.references.append({"kind": "xml_include" if tag == "include" else "xml_script", "declared": file_value, "line": line})
             elif tag == "script":
                 self.inline_scripts += 1

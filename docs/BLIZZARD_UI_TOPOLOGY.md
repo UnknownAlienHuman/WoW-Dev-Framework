@@ -26,7 +26,16 @@ The implementation reads blobs with `git cat-file --batch` from the exact manife
 
 Repository hooks, submodules, package managers, Lua, XML scripts, build tools, and generated code are never executed.
 
-Relative `.` and `..` references are normalized only while they remain inside the repository `Interface/` tree. Absolute paths, URLs, drive paths, control characters, and root escapes are invalid.
+Relative `.` and `..` references are normalized only while they remain inside the repository `Interface/` tree. Absolute paths, URLs, drive paths, interior control characters, and root escapes are invalid.
+
+`declared` retains original source text, including surrounding whitespace or an invalid
+empty/control-bearing declaration. It is diagnostic data, never a validated navigation
+path; structured output escapes control characters. Resolution trims surrounding
+whitespace. Only a non-invalid reference may have a canonical `target`; an invalid
+reference has no target. Empty XML `file` attributes are invalid references, not inline
+scripts or silently absent includes. Rust checks that each unresolved edge has a matching
+issue and no reference issue is orphaned, including multiplicity. Removing diagnostics
+and recomputing hashes cannot promote an invalid edge to complete coverage.
 
 ## Build and verify
 

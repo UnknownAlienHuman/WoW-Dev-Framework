@@ -122,6 +122,26 @@ class BlizzardUiTopologyTests(unittest.TestCase):
             self.assertEqual(template["inherits"], ["Base", "Mix"])
             self.assertTrue(template["virtual"])
 
+    def test_reference_source_text_is_not_a_normalized_target(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manifest, raw, _ = self.fixture(root, main_xml=(
+                '<Ui><Script file="&#x9;Logic.lua&#x9;"/>'
+                '<Script file="Bad&#xA;Name.lua"/>'
+                '<Include file=""/><Include file="   "/>'
+                '<Script file="Bad&#x9;Name.lua"/></Ui>'
+            ))
+            draft = MODULE.build_topology(source=root, manifest=manifest, manifest_bytes=raw)
+            MODULE.verify_topology(draft)
+            valid = next(edge for edge in draft["edges"] if edge["declared"] == "\tLogic.lua\t")
+            self.assertEqual(valid["resolution"], "exact")
+            self.assertEqual(valid["target"], "Interface/AddOns/Blizzard_Test/Logic.lua")
+            invalid = [edge for edge in draft["edges"] if edge["resolution"] == "invalid"]
+            self.assertEqual(len(invalid), 4)
+            self.assertTrue(all(edge["target"] is None for edge in invalid))
+            self.assertEqual(draft["coverage"]["unresolved_references"], 4)
+            self.assertFalse(draft["coverage"]["negative_authority"])
+
     def test_reads_committed_revision_not_dirty_worktree(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

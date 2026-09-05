@@ -1,6 +1,7 @@
 """Cross-language contract test; invoked by Cargo with its actual built binaries."""
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -83,6 +84,35 @@ def run(algorithm: str) -> None:
         Path(bundle).write_bytes(b"existing unrelated file")
         command(source_bin, "materialize", api, topology, bundle, expected=2)
         assert Path(bundle).read_bytes() == b"existing unrelated file", "publication clobbered an existing file"
+        # Invalid declarations are source evidence, not trustworthy paths.
+        (source / "Interface/AddOns/Fixture/Fixture.xml").write_text(
+            '<Ui><Script file="&#x9;Fixture.lua&#x9;"/>'
+            '<Script file="Bad&#xA;Name.lua"/><Include file=""/>'
+            '<Script file="Bad&#x9;Name.lua"/></Ui>\n', encoding="utf-8")
+        git("add", ".")
+        git("commit", "-qm", "diagnostic references")
+        diagnostic_manifest = str(root / "diagnostic-manifest.json")
+        diagnostic_topology = str(root / "diagnostic-topology.json")
+        script("build-blizzard-source-manifest.py", "--source", str(source), "--revision", git("rev-parse", "HEAD"), "--selector", "live", "--output", diagnostic_manifest)
+        script("build-blizzard-ui-topology.py", "--source", str(source), "--manifest", diagnostic_manifest, "--output", diagnostic_topology, "--json")
+        diagnostic = json.loads(command(topology_bin, "verify", diagnostic_topology))
+        assert diagnostic["coverage"] == "partial" and not diagnostic["negative_authority"]
+        assert diagnostic["issues"] == 3
+        outgoing = json.loads(command(topology_bin, "outgoing", diagnostic_topology, "Interface/AddOns/Fixture/Fixture.xml"))
+        invalid_edges = [edge for edge in outgoing["edges"] if edge["resolution"] == "invalid"]
+        assert len(invalid_edges) == 3 and all(edge["target"] is None for edge in invalid_edges)
+        assert json.loads(command(topology_bin, "document", diagnostic_topology, "Interface/AddOns/Missing.xml"))["status"] == "not_authoritative"
+        script("verify-blizzard-ui-topology.py", diagnostic_topology, "--source", str(source), "--manifest", diagnostic_manifest, "--require-complete", "--json", expected=2)
+        invalid = json.loads(Path(diagnostic_topology).read_text(encoding="utf-8"))
+        invalid["issues"] = []
+        invalid["coverage"]["unresolved_references"] = 0
+        invalid["coverage"]["status"] = "complete"
+        invalid["coverage"]["negative_authority"] = True
+        del invalid["topology_sha256"]
+        raw = json.dumps(invalid, ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(",", ":")).encode()
+        invalid["topology_sha256"] = "sha256:" + hashlib.sha256(raw).hexdigest()
+        Path(diagnostic_topology).write_text(json.dumps(invalid), encoding="utf-8")
+        command(topology_bin, "verify", diagnostic_topology, expected=2)
         # Dirty worktree content must not affect a committed source revision.
         (source / "version.txt").write_text("dirty worktree\n", encoding="utf-8")
         script("verify-blizzard-source-manifest.py", manifest, "--source", str(source))
