@@ -927,7 +927,7 @@ def build_cli(argv: Sequence[str] | None = None) -> int:
             max_xml_elements=arguments.max_xml_elements,
             max_xml_depth=arguments.max_xml_depth,
         )
-        verify_topology(draft, require_complete=not arguments.allow_partial)
+        verify_topology(draft)
         write_json_atomic(arguments.output, draft)
     except TopologyError as error:
         output = {"status": "error", "error": error.record()}
