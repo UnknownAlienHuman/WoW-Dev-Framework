@@ -10,7 +10,9 @@ These rules apply to every human or automated contributor.
 - Blizzard source manifest: exact per-operation source inventory with file hashes and Git object identity.
 - Generated API producer: safe declarative-Lua parser and normalized reference draft.
 - Normalized facts are connected to Rust; next implement a real `wow-emmy` analyzer seam.
-- `wow-annotations`: active Rust port of Ketho's pure emitter; the complete ReferenceView-to-artifact service is still pending.
+- `wow-annotations`: active Rust Ketho emitters plus native source-to-library
+  projection; corrections, full ReferenceView publication and semantic consumer
+  probes remain incomplete. `examples/native_library.rs` is the native driver.
 - Current executable scope and nonclaims: `docs/IMPLEMENTATION_STATUS.md`.
 
 The public repository must remain useful without any operator-only context source.

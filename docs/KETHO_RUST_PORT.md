@@ -12,9 +12,9 @@ annotation libraries; the framework's semantic analyzer remains behind wow-emmy.
 |---|---|---|
 | `luasrc/annotate/init.lua` | `wow-annotations`: GetType, GetField, GetFunction, GetTable, GetCallbackType, GetSystem | Pure emitter implemented |
 | `wowdoc/init.lua`: GetBaseName/GetArguments/GetFullName | `wow-annotations`: globals, namespaces, ScriptObject receivers and varargs | Implemented with explicitly supplied widget alias |
-| `wowdoc/loader/init.lua` | `wow-reference`: selected TOC corpus, documentation systems, separate ScriptObject output, correction dispatch | Native source-to-renderer integration pending |
+| `wowdoc/loader/init.lua` | `wow-reference`: selected TOC corpus, documentation systems, separate ScriptObject output, correction dispatch | Native declarative input, typed normalization and emitter integration implemented; correction dispatch pending |
 | `wowdoc/loader/doc_widgets.lua`, `patches.lua`, `TypeDocumentation.lua`, `luasrc/custom_doc` | reference-owned type/widget mapping and reviewed corrections | Port required; no permanent build assumptions |
-| `luasrc/annotate/literals.lua` and the enum/event/CVar paths invoked by `luasrc/init.lua` | typed enum/event/CVar data and annotation projection | Pure literal renderer implemented; acquisition/reference integration pending |
+| `luasrc/annotate/literals.lua` and the enum/event/CVar paths invoked by `luasrc/init.lua` | typed enum/event/CVar data and annotation projection | Native event/enum/constant projection connected; external CVar/resource acquisition pending |
 | `luasrc/WikiParser`, `wowdoc` resource acquisition, TypeScript resource export | explicit enrichment and equivalent native query data where required | Port/select by feature parity, not a mandatory extra runtime |
 | VS Code activation and LuaLS configuration | thin host adapter over an editor-independent Rust service | Port behavior, not an extension/Node dependency |
 
@@ -111,7 +111,86 @@ Explicit differences from donor rendering:
   fractional enum declarations reject explicitly;
 - input and output size bounds apply before successful artifact return.
 
-The pure emitter slice does not yet provide E1 source maps, projection-loss
-sidecars, source-bound artifact identities, or full consumer compatibility.
+The pure emitter alone does not provide the full E1 artifact contract. The native
+connection below now adds source links and raw/metadata sidecars; full E1 fine-grained
+maps and semantic consumer compatibility remain incomplete.
 Unsupported input fails with no output; the future reference adapter must turn
 that failure into its explicit projection status, not drop a field or use `any`.
+
+
+## Native source-to-library path
+
+The restricted evaluator and typed loader model are implemented in
+`wow-reference/src/native.rs` and `native_model.rs`; the in-memory projection is
+`wow-annotations/src/native.rs`. This follows the documented E1-B/E1-C owner
+split: the external EmmyLua Rust parser is used by the reference owner, not a
+second lexer/parser or a Lua runtime. The separate semantic analyzer adapter is
+not claimed implemented by using its upstream syntax frontend.
+
+```text
+exact selected Git revision + documentation TOC
+-> EmmyLua Lua 5.1 syntax + restricted declarative evaluator
+-> raw ordered fields, literals, symbolic references and UTF-8 byte spans
+-> typed systems/owners, callables, tables classified by Type, events
+-> Ketho Rust callable/structure/callback/literal emitters
+-> annotation files, source mappings and raw/metadata/error report
+```
+
+Run the native development driver (Git and the compiled Rust executable only):
+
+```sh
+cargo run -p wow-annotations --example native_library -- \
+  /path/to/wow-ui-source HEAD \
+  Interface/AddOns/Blizzard_APIDocumentationGenerated/Blizzard_APIDocumentationGenerated.toc \
+  Mainline /path/to/new-output
+```
+
+The output directory must not exist. Exit 0 means selected declarations projected
+with explicit sidecars, 3 means partial input/projection with a report, and 2 is
+an operation failure. Neither 0 nor 3 certifies reference completeness or consumer
+compatibility. `source-report.json` is written last; failed filesystem writes can
+leave an incomplete directory and never constitute successful publication.
+This development driver is not the service-owned public `wow` CLI or the full
+persistent ReferenceView implementation.
+
+The caller selects the flavor, ref, TOC and environment. The driver resolves the
+ref once, reads Git blobs from that revision rather than dirty files, and records
+`not_network_verified` freshness. Materialize a partial clone's missing objects
+explicitly before using it. It never auto-fetches, executes Lua, follows XML load
+entries as Lua, mutates a checkout, or enables additional resource providers.
+
+Functions preserve namespace/ScriptObject ownership; enum/constant kinds are
+selected from the source Type, including entries inside Tables. Duplicate exact
+callable/type/event identities are excluded as conflicts, never first/last-wins.
+One corpus-wide literal file per lane avoids redefining FrameEvent or enum roots
+for every source document. Enum membership is read from this input, not compiled
+into a list. Exact nonconflicted scalar Enum/Constants defaults are resolved from this same
+selected corpus. Unknown metadata, raw numeric lexemes, explicit nil and unresolved
+Enum/Constants references remain in raw sidecars. Unrendered source fields have
+individual metadata links; unsupported constructs have explicit error records.
+No negative/absence or runtime-safety authority is issued by this path.
+
+Declaration maps bind final generated byte ranges and file hashes to exact source
+ranges/hashes. Literal maps are explicitly whole-file mappings, not fine-grained
+member maps. The Ketho nilability/default convention is preserved while raw fields
+remain distinguishable. Numeric defaults retain the source lexeme in comments;
+unsupported literal numeric forms are reported rather than rounded.
+
+Deliberately unsupported in this bounded evaluator/projection: general Lua code,
+mutation/control flow/helper execution, computed keys, numeric/hex/Unicode string
+escapes requiring byte-string semantics, CR-bearing long-string normalization,
+callback returns/arrays not supported by the current emitter, and unrepresentable
+numbers/types. Restriction metadata remains advisory sidecar data, not invented
+runtime wrapper types. Corrected widget aliases and named-type closure still need
+the Ketho correction/type-resource port. No generated body is executable addon logic.
+
+Rust tests exercise the actual source-to-renderer connection, source identity,
+raw metadata, enum ownership, duplicate conflicts, UTF-8 ranges, bounded input,
+malicious source rejection, cancellation, deterministic ordering, local Git/TOC
+reading and no-clobber output. Parsing a generated fixture with EmmyLua is a
+syntax check only. Real EmmyLua/LuaLS semantic consumer probes remain required.
+
+Next: port reviewed correction/type/widget mappings, resolve supported literal
+references and consumer-specific type losses, then run real dual-consumer probes.
+Retire legacy Python paths only after their native replacements cover the same
+verified use cases; never extend that legacy product pipeline.

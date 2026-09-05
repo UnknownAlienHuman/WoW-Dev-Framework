@@ -1,6 +1,6 @@
 # `wow-annotations` contract router
 
-**Status:** the Rust Ketho emitter slice is implemented and active in Cargo.
+**Status:** the Rust Ketho emitters and native source-to-library connection are active in Cargo.
 The full E1-C ReferenceView-to-artifact service is not complete.
 
 See [`src/ketho.rs`](src/ketho.rs), [`src/literals.rs`](src/literals.rs),
@@ -8,15 +8,18 @@ See [`src/ketho.rs`](src/ketho.rs), [`src/literals.rs`](src/literals.rs),
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and the
 [Rust port map](../../docs/KETHO_RUST_PORT.md).
 
-This slice ports Ketho's GetType/GetField/GetFunction/GetTable/GetCallbackType/
+The pure emitter slice ports Ketho's GetType/GetField/GetFunction/GetTable/GetCallbackType/
 GetSystem behavior and explicit function/method naming. It has no dependencies,
 source ingestion, IO, Python/Lua runtime, editor mutation, or reference-authority
 claims. Callers provide ordered declaration data, enum membership and resolved
 widget aliases. Unsafe/unrepresentable input is rejected, not widened or dropped.
 The literal lane also ports event/CVar aliases and enum/constant files from
 typed input, including scalar-preserving values and explicit order/format policy.
-The complete service still needs the source-bound ReferenceView adapter, loss
-sidecars, source maps, artifact publication and real language-server probes.
+The native connection in `src/native.rs` uses the reference-owned restricted
+EmmyLua evaluator and typed normalization. It retains raw metadata, unprojected
+fields, source hashes and declaration maps. The complete service still needs
+persistent ReferenceView integration, correction/type closure, full fine-grained
+maps, artifact publication and real language-server semantic probes.
 
 ```text
 cargo test -p wow-annotations

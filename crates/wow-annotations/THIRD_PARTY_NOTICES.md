@@ -8,6 +8,10 @@ The committed synthetic golden outputs are derived from that renderer.
 Reviewed revision: d0b5b51fac4c52c493371b9b18e66ce604ea4326.
 Source: https://github.com/Ketho/vscode-wow-api
 
+The native loader/projection connection follows the same donor's
+`wowdoc/loader/init.lua`, system/member naming and literal-generation behavior.
+It uses the EmmyLua Rust syntax frontend; no source Lua is executed.
+
 ## Ketho — MIT License
 
 Copyright (c) 2020 Ketho

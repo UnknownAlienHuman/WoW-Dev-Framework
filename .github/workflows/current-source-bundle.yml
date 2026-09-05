@@ -12,6 +12,7 @@ on:
       - "scripts/verify-blizzard-ui-topology.py"
       - "scripts/build-blizzard-source-manifest.py"
       - "crates/wow-reference/**"
+      - "crates/wow-annotations/**"
       - "crates/wow-core/**"
       - "Cargo.toml"
       - "Cargo.lock"
@@ -25,6 +26,7 @@ on:
       - "scripts/wow_api_reference.py"
       - "scripts/wow_ui_topology.py"
       - "crates/wow-reference/**"
+      - "crates/wow-annotations/**"
       - "crates/wow-core/**"
       - "Cargo.toml"
       - "Cargo.lock"
@@ -116,6 +118,30 @@ jobs:
             "$RUNNER_TEMP/ui-topology.json" \
             "$RUNNER_TEMP/source-bundle.json"
           test -s "$RUNNER_TEMP/source-bundle.json"
+      - name: Native Ketho source-to-annotation smoke (partial reported explicitly)
+        shell: bash
+        run: |
+          set -euo pipefail
+          revision="$(cat "$RUNNER_TEMP/source-revision")"
+          result=0
+          cargo +stable run --locked -p wow-annotations --example native_library -- \
+            "$RUNNER_TEMP/wow-ui-source" "$revision" \
+            Interface/AddOns/Blizzard_APIDocumentationGenerated/Blizzard_APIDocumentationGenerated.toc \
+            Mainline "$RUNNER_TEMP/native-annotations" || result=$?
+          case "$result" in
+            0) echo 'Native projection completed with explicit sidecars' ;;
+            3) echo '::warning::Native projection is partial; inspect source-report.json' ;;
+            *) exit "$result" ;;
+          esac
+          test -s "$RUNNER_TEMP/native-annotations/source-report.json"
+          find "$RUNNER_TEMP/native-annotations" -maxdepth 1 -name '*.lua' -print -quit | grep -q .
+      - name: Retain native source report
+        uses: actions/upload-artifact@v7
+        with:
+          name: native-source-report-${{ github.sha }}
+          path: ${{ runner.temp }}/native-annotations/source-report.json
+          retention-days: 3
+          if-no-files-found: error
       - name: Report bounded source diagnostics
         if: failure()
         shell: bash

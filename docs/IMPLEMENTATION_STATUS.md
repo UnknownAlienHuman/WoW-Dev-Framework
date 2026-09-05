@@ -16,12 +16,18 @@ Active Cargo workspace members:
   argument-only callbacks, varargs, defaults and ScriptObject receivers are
   implemented. Native event/CVar literal unions and typed enum/constant output
   are also implemented, with explicit ordering/formatting, escaped strings and
-  bounded output. The crate has no runtime dependencies or source/IO execution.
+  bounded output. A native reference-to-renderer connection now accepts exact
+  source documents through the EmmyLua parser and emits annotations plus raw
+  metadata, explicit loss/error records and declaration source mappings.
+  Its library remains nonexecuting and free of IO; a Rust development driver
+  performs local Git/TOC reads and writes a new output directory.
 
-The emitter is a partial annotation-service implementation, not full E1-C. It
-is not connected to the ReferenceView-to-artifact path yet. Source maps, loss
-sidecars, source loading/corrections and real EmmyLua/LuaLS consumer probes are
-pending. Scoped golden parity does not certify a complete annotation library.
+The native source-to-library path is runnable without Python or a Lua runtime;
+see [the exact command and limits](KETHO_RUST_PORT.md#native-source-to-library-path).
+It is still a bounded in-memory E1-B/E1-C slice, not full ReferenceView persistence,
+correction/type closure or consumer certification. Declaration maps are present;
+literal maps are whole-file. Full fine-grained E1 maps and actual EmmyLua/LuaLS
+semantic consumer probes remain incomplete. Existing donor goldens still pass.
 
 Legacy Python source tools still provide local Git snapshot inventory,
 declarative API and XML/TOC producers/verifiers. They are migration debt, not the
@@ -70,8 +76,8 @@ platform/install/signing and WoW runtime gates are not complete.
 
 ## Next implementation
 
-Port the remaining annotation-service behavior from Ketho into Rust, connect
-source-bound typed inputs to the emitter, and verify both annotation consumers.
+Port Ketho correction/type/widget mappings, complete the selected projection
+capabilities, and verify resulting libraries in both annotation consumers.
 Keep the separate real wow-emmy analyzer adapter on the R0 path. Do not postpone
 annotation parity behind unrelated graph/governance work or extend the legacy
 Python pipeline. Activate only implemented owner slices and report exact scope.

@@ -75,6 +75,8 @@ pub struct System {
 /// Fixed, non-source-bearing failure classes. No invalid source text is echoed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RenderError {
+    Cancelled,
+    InvalidSource,
     InvalidIdentifier,
     UnsupportedType,
     UnsafeDocumentation,
@@ -88,6 +90,8 @@ pub enum RenderError {
 impl fmt::Display for RenderError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
+            Self::Cancelled => "annotation projection cancelled",
+            Self::InvalidSource => "annotation sources are inconsistent",
             Self::InvalidIdentifier => "annotation identifier is not representable",
             Self::UnsupportedType => "annotation type is not supported by this renderer profile",
             Self::UnsafeDocumentation => "annotation documentation requires explicit sanitization",
@@ -101,6 +105,22 @@ impl fmt::Display for RenderError {
 }
 
 impl std::error::Error for RenderError {}
+
+/// Declaration ranges measured on the final UTF-8 output. Indices refer to the
+/// ordered renderer input; source identities are joined by the reference adapter.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RenderedDeclaration {
+    pub table: bool,
+    pub index: usize,
+    pub start: usize,
+    pub end: usize,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RenderedSystem {
+    pub text: String,
+    pub declarations: Vec<RenderedDeclaration>,
+}
 
 /// A pure, bounded Ketho-compatible rendering profile. It has no runtime or IO
 /// dependencies. The enum set belongs to the selected input, not a global cache.
@@ -147,6 +167,11 @@ impl Renderer {
 
     /// Ketho `GetSystem` plus its analysis-only `---@meta _` file header.
     pub fn render(&self, system: &System) -> Result<String, RenderError> {
+        Ok(self.render_mapped(system)?.text)
+    }
+
+    pub fn render_mapped(&self, system: &System) -> Result<RenderedSystem, RenderError> {
+        let mut declarations = Vec::new();
         validate_owner(&system.owner)?;
         if system.functions.len().saturating_add(system.tables.len()) > MAX_ITEMS {
             return Err(RenderError::InputLimit);
@@ -165,16 +190,23 @@ impl Renderer {
             output.push(" = {}")?;
             separated = true;
         }
-        for function in &system.functions {
+        for (index, function) in system.functions.iter().enumerate() {
             identifier(&function.name)?;
             if !function_names.insert(&function.name) {
                 return Err(RenderError::DuplicateName);
             }
             output.separate(&mut separated)?;
+            let start = output.bytes.len();
             self.function(&mut output, &system.owner, function)?;
+            declarations.push(RenderedDeclaration {
+                table: false,
+                index,
+                start,
+                end: output.bytes.len(),
+            });
         }
         let mut table_names = BTreeSet::new();
-        for table in &system.tables {
+        for (index, table) in system.tables.iter().enumerate() {
             let name = match table {
                 Table::Structure { name, .. } | Table::Callback { name, .. } => name,
             };
@@ -183,6 +215,7 @@ impl Renderer {
                 return Err(RenderError::DuplicateName);
             }
             output.separate(&mut separated)?;
+            let start = output.bytes.len();
             match table {
                 Table::Structure { name, fields } => {
                     validate_fields(fields, false)?;
@@ -220,8 +253,17 @@ impl Renderer {
                     output.push(")")?;
                 }
             }
+            declarations.push(RenderedDeclaration {
+                table: true,
+                index,
+                start,
+                end: output.bytes.len(),
+            });
         }
-        Ok(output.bytes)
+        Ok(RenderedSystem {
+            text: output.bytes,
+            declarations,
+        })
     }
 
     fn function(
