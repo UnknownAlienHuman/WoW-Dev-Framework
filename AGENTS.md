@@ -10,9 +10,21 @@ These rules apply to every human or automated contributor.
 - Blizzard source manifest: exact per-operation source inventory with file hashes and Git object identity.
 - Generated API producer: safe declarative-Lua parser and normalized reference draft.
 - Normalized facts are connected to Rust; next implement a real `wow-emmy` analyzer seam.
+- `wow-annotations`: active Rust port of Ketho's pure emitter; the complete ReferenceView-to-artifact service is still pending.
 - Current executable scope and nonclaims: `docs/IMPLEMENTATION_STATUS.md`.
 
 The public repository must remain useful without any operator-only context source.
+
+## Rust port direction
+
+Ketho/vscode-wow-api is the primary implementation donor for the WoW annotation
+service, not merely a comparison oracle. Read the actual donor modules and
+`docs/KETHO_RUST_PORT.md` before changing source loading, normalization, type
+lowering, annotation output, or consumer integration. Port their behavior into
+Rust within the existing owner crates. Do not invent an unrelated extractor or
+add/expand Python product components. Existing Python source tools are migration
+debt, not the architecture to extend. Ketho output is also the parity baseline;
+current Gethe source remains the authority for current Blizzard facts.
 
 ## Mandatory route
 

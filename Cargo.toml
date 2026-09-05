@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "crates/wow-core",
     "crates/wow-reference",
+    "crates/wow-annotations",
 ]
 
 [workspace.package]

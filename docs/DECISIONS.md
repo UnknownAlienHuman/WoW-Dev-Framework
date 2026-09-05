@@ -15,7 +15,7 @@ A decision remains accepted until a later ADR explicitly supersedes it and recor
 
 ### ADR-001 — Use upstream EmmyLua behind one adapter
 
-Pin the upstream Rust analysis implementation. Do not maintain a default fork or a second correctness-path Lua parser.
+Use an updateable upstream Rust analysis dependency behind the adapter. Record the exact dependency selected for each tested build; no revision is permanently current. Do not maintain a default fork or a second correctness-path Lua parser.
 
 ### ADR-002 — One host merges generic and WoW diagnostics
 
@@ -25,9 +25,23 @@ Pin the upstream Rust analysis implementation. Do not maintain a default fork or
 
 Product delivery does not depend on an upstream provider change. The adapter remains narrow, replaceable, and compatibility-probed.
 
-### ADR-004 — Ketho is an annotation compatibility oracle
+### ADR-004 — Ketho is the primary Rust annotation-service donor
 
-Use Ketho behavior, field corrections, and output semantics for parity fixtures. Do not copy editor-setting mutation policy.
+Revised by explicit owner direction on 2026-09-05. Port Ketho/vscode-wow-api's
+source-loading, normalization/correction, type-lowering, annotation-emission and
+editor-independent consumer behavior into Rust. Ketho is an implementation
+baseline as well as the semantic/output parity baseline, not only an oracle.
+The module map and migration order are in [KETHO_RUST_PORT.md](KETHO_RUST_PORT.md).
+No new or expanded Python product pipeline is accepted. Existing Python tools
+remain migration debt until their Rust replacements pass the relevant tests.
+Current Gethe data, not a historical Ketho snapshot, defines current Blizzard
+facts. Preserve required third-party notices; do not copy source execution or
+editor-setting/diagnostic-suppression policies as hidden product behavior.
+
+The pure renderer may be ported/tested in wow-annotations before the persistent
+E1 ReferenceView adapter exists. This activates that executable slice only; it
+does not complete E1-C, infer reference coverage, or bypass the later source-map,
+loss and EmmyLua/LuaLS consumer-probe contracts.
 
 ### ADR-005 — Numy is a differential oracle
 
@@ -231,13 +245,13 @@ Revocation addresses unsafe or ineligible artifacts, manifests, releases, keys, 
 
 Support is limited to tested target, OS, architecture, runtime, path, IPC, protocol, store, schema, data-pack, WoW-profile, client, feature, resource, installation, update, and rollback combinations. Portability intent is not support.
 
-### ADR-055 — CI invokes real frozen commands and owns no semantics
+### ADR-055 — CI invokes real tested commands and owns no semantics
 
 CI is added only after commands exist and pass locally. It cannot hide skipped gates, reimplement release logic in YAML or shell, access secrets through public payloads, or publish merely because tests pass.
 
 ### ADR-056 — Architecture planning is complete through E7-B
 
-The default next work is I0-A `wow-core` implementation. New architecture requires a concrete implementation or test failure, the smallest proposed seam or ADR change, and compatibility, security, privacy, license, supply-chain, and evidence analysis.
+Follow the current implementation ledger and the Ketho Rust port route, not the historical I0-A bootstrap instruction. New architecture requires a concrete implementation or test failure, the smallest proposed seam or ADR change, and compatibility, security, privacy, license, supply-chain, and evidence analysis.
 
 ## Corrected earlier assumptions
 

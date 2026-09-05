@@ -1,6 +1,24 @@
 # `wow-annotations` contract router
 
-**Status:** E1-C contract package is implementation-ready; Rust implementation has not started.
+**Status:** the Rust Ketho emitter slice is implemented and active in Cargo.
+The full E1-C ReferenceView-to-artifact service is not complete.
+
+See [`src/ketho.rs`](src/ketho.rs), [`tests/ketho.rs`](tests/ketho.rs),
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and the
+[Rust port map](../../docs/KETHO_RUST_PORT.md).
+
+This slice ports Ketho's GetType/GetField/GetFunction/GetTable/GetCallbackType/
+GetSystem behavior and explicit function/method naming. It has no dependencies,
+source ingestion, IO, Python/Lua runtime, editor mutation, or reference-authority
+claims. Callers provide ordered declaration data, enum membership and resolved
+widget aliases. Unsafe/unrepresentable input is rejected, not widened or dropped.
+The complete service still needs the source-bound ReferenceView adapter, loss
+sidecars, source maps, artifact publication and real language-server probes.
+
+```text
+cargo test -p wow-annotations
+cargo clippy -p wow-annotations --all-targets -- -D warnings
+```
 
 `wow-annotations` projects one exact read-only `wow-reference` generation into deterministic, analysis-only LuaCATS/Emmy annotation artifacts. It owns semantic projection, type lowering, versioned layout/rendering, source maps, projection-loss reporting, Ketho semantic parity, and consumer compatibility profiles. It does not own platform truth.
 
@@ -63,15 +81,12 @@ No dependency on `wow-store`, `wow-emmy`, `wow-project`, `wow-service`, applicat
 
 ## Current implementation state
 
-```text
-documentation contract: complete
-closed fixture shapes: complete
-required pins and SHA-256 freeze: pending prerequisite implementations
-Cargo workspace activation: not started
-Rust source: absent
-```
-
-Null IDs, pins, and SHA-256 values in E1-C examples are valid only while implementation state remains `not-started`. They must be frozen before the first Rust implementation commit; tests must verify and never rewrite committed golden bytes automatically.
+The pure emitter is a bounded executable slice authorized by revised ADR-004.
+The full E1 examples remain design fixtures and do not certify this slice or
+pretend its source maps, artifact manifests or consumer probes already exist.
+The Rust tests verify committed Ketho-derived byte vectors; they never generate
+or rewrite the expected files. Historical donor revisions identify test evidence,
+not a permanent client, dependency, or source-version requirement.
 
 ## Completion gate
 

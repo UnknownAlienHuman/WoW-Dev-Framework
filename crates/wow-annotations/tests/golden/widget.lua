@@ -1,0 +1,16 @@
+---@meta _
+---Inspect values.; No runtime body.
+---
+---[Documentation](https://warcraft.wiki.gg/wiki/API_Frame_Inspect)
+---@param enabled? boolean Default = false
+---@param count? number Default = 0
+---@param items? Enum.AccountData[]
+---@param ... string values
+---@return string? result
+---@return Enum.AccountData kind
+function Frame:Inspect(enabled, count, items, ...) end
+
+---@class Record
+---@field items Enum.AccountData[]?
+
+---@alias OnResult FunctionContainer|fun(count?: number)
