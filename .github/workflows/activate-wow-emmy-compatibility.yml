@@ -1,0 +1,184 @@
+name: Activate wow-emmy compatibility bridge
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/activate-wow-emmy-compatibility.yml"
+  workflow_run:
+    workflows:
+      - "Activate wow-emmy workspace v2"
+      - "Publish rolling EmmyLua manager"
+      - "Repair current-source reference bridges"
+    types: [completed]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: activate-wow-emmy-compatibility
+  cancel-in-progress: true
+
+jobs:
+  activate:
+    if: >-
+      github.event_name == 'push' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+
+      - name: Route the compatibility bridge and resolve inherited metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          git pull --ff-only origin main
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          import tomllib
+
+          root_manifest = Path("Cargo.toml")
+          root_text = root_manifest.read_text(encoding="utf-8")
+          parsed = tomllib.loads(root_text)
+          members = list(parsed.get("workspace", {}).get("members", []))
+          if "crates/wow-emmy" not in members:
+              members.append("crates/wow-emmy")
+          members = sorted(set(members), key=str.encode)
+          replacement = "members = [\n" + "".join(
+              f'    "{member}",\n' for member in members
+          ) + "]"
+          pattern = re.compile(r"(?ms)^members\s*=\s*\[.*?^\s*\]")
+          root_text, count = pattern.subn(replacement, root_text, count=1)
+          if count == 0:
+              pattern = re.compile(r"(?m)^members\s*=\s*\[[^\n]*\]")
+              root_text, count = pattern.subn(replacement, root_text, count=1)
+          if count != 1:
+              raise SystemExit(f"workspace members declaration count: {count}")
+          root_manifest.write_text(root_text, encoding="utf-8")
+
+          crate_manifest = Path("crates/wow-emmy/Cargo.toml")
+          crate_text = crate_manifest.read_text(encoding="utf-8")
+          if not re.search(r"(?m)^serde_json\s*=", crate_text):
+              crate_text = crate_text.replace(
+                  'serde = { version = "1.0", features = ["derive"] }\n',
+                  'serde = { version = "1.0", features = ["derive"] }\nserde_json = "1.0"\n',
+                  1,
+              )
+          crate_manifest.write_text(crate_text, encoding="utf-8")
+
+          library = Path("crates/wow-emmy/src/lib.rs")
+          lib = library.read_text(encoding="utf-8")
+          if "pub mod compatibility;" not in lib:
+              lib = lib.replace("pub mod workspace;", "pub mod compatibility;\npub mod workspace;", 1)
+          export = '''pub use compatibility::{
+              EmmyCompatibilityError, EmmyCompatibilityErrorCode, EmmyCompatibilityResult,
+              backend_identity_from_report,
+          };
+          '''
+          export = "\n".join(
+              line[10:] if line.startswith("          ") else line
+              for line in export.splitlines()
+          ) + "\n"
+          if "pub use compatibility::{" not in lib:
+              marker = "pub use workspace::{"
+              if marker not in lib:
+                  raise SystemExit("wow-emmy export seam is unavailable")
+              lib = lib.replace(marker, export + "\n" + marker, 1)
+          library.write_text(lib, encoding="utf-8")
+
+          manager = Path("scripts/wow_emmy_source.py")
+          manager_text = manager.read_text(encoding="utf-8")
+          helper_marker = "def build_report(\n"
+          if "def _resolved_package_value(" not in manager_text:
+              helper = '''def _resolved_package_value(
+              package: Mapping[str, Any],
+              workspace_package: Mapping[str, Any],
+              key: str,
+          ) -> Any:
+              value = package.get(key)
+              if isinstance(value, Mapping) and value.get("workspace") is True:
+                  return workspace_package.get(key)
+              return value
+
+
+          '''
+              helper = "\n".join(
+                  line[10:] if line.startswith("          ") else line
+                  for line in helper.splitlines()
+              )
+              if helper_marker not in manager_text:
+                  raise SystemExit("manager report seam is unavailable")
+              manager_text = manager_text.replace(helper_marker, helper + helper_marker, 1)
+          for field in ("version", "edition", "rust-version", "license"):
+              json_key = "rust_version" if field == "rust-version" else field
+              old = f'            "{json_key}": package.get("{field}"),'
+              new = f'            "{json_key}": _resolved_package_value(package, workspace_package, "{field}"),'
+              manager_text = manager_text.replace(old, new)
+          manager.write_text(manager_text, encoding="utf-8")
+
+          status = Path("docs/CURRENT_IMPLEMENTATION.md")
+          if status.exists():
+              current = status.read_text(encoding="utf-8")
+              bullet = (
+                  "- Rust validation of rolling EmmyLua compatibility reports before analyzer "
+                  "identity may enter a content-addressed Lua workspace;\n"
+              )
+              if bullet not in current:
+                  status.write_text(current.rstrip() + "\n" + bullet, encoding="utf-8")
+          PY
+
+      - name: Update lockfile and run complete workspace gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/wow_emmy_source.py scripts/check-emmylua-version.py tests/test_wow_emmy_source.py
+          python -m unittest -v tests/test_wow_emmy_source.py
+          cargo fmt --all
+          cargo check --workspace --all-targets --all-features
+          cargo fmt --all --check
+          cargo check --locked --workspace --all-targets --all-features
+          cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+          cargo test --locked --workspace --all-targets --all-features
+          RUSTDOCFLAGS="-D warnings" cargo doc --locked --workspace --all-features --no-deps
+          git diff --check
+
+      - name: Verify a current report through the Rust boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/check-emmylua-version.py probe \
+            --source "$RUNNER_TEMP/emmylua-analyzer" \
+            --update auto \
+            --output "$RUNNER_TEMP/emmylua-compatibility.json" \
+            --json
+          python scripts/check-emmylua-version.py verify \
+            --report "$RUNNER_TEMP/emmylua-compatibility.json" \
+            --json
+          cargo run --locked -p wow-emmy --bin wow-emmy-probe -- \
+            verify-backend "$RUNNER_TEMP/emmylua-compatibility.json"
+
+      - name: Publish validated compatibility bridge
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f \
+            .github/workflows/activate-wow-emmy-workspace.yml \
+            .github/workflows/activate-wow-emmy-workspace-v2.yml \
+            .github/workflows/activate-wow-emmy-compatibility.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "feat(wow-emmy): validate rolling backend identity"
+          git pull --rebase origin main
+          git push origin HEAD:main
