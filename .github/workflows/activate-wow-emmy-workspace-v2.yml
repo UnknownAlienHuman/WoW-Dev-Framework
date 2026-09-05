@@ -1,0 +1,113 @@
+name: Activate wow-emmy workspace v2
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/activate-wow-emmy-workspace-v2.yml"
+  workflow_run:
+    workflows:
+      - "Repair current-source reference bridges"
+      - "Publish rolling EmmyLua manager"
+    types: [completed]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: activate-wow-emmy-workspace
+  cancel-in-progress: true
+
+jobs:
+  activate:
+    if: >-
+      github.event_name == 'push' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+      - name: Add the implemented crate to the workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          git pull --ff-only origin main
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          import tomllib
+
+          path = Path("Cargo.toml")
+          text = path.read_text(encoding="utf-8")
+          manifest = tomllib.loads(text)
+          members = list(manifest.get("workspace", {}).get("members", []))
+          member = "crates/wow-emmy"
+          if member not in members:
+              members.append(member)
+          members = sorted(set(members), key=str.encode)
+          replacement = "members = [\n" + "".join(
+              f'    "{value}",\n' for value in members
+          ) + "]"
+          pattern = re.compile(r"(?ms)^members\s*=\s*\[.*?^\s*\]")
+          updated, count = pattern.subn(replacement, text, count=1)
+          if count == 0:
+              pattern = re.compile(r"(?m)^members\s*=\s*\[[^\n]*\]")
+              updated, count = pattern.subn(replacement, text, count=1)
+          if count != 1:
+              raise SystemExit(f"workspace members declaration count: {count}")
+          path.write_text(updated, encoding="utf-8")
+
+          status = Path("docs/CURRENT_IMPLEMENTATION.md")
+          if status.exists():
+              current = status.read_text(encoding="utf-8")
+              bullet = (
+                  "- explicit content-addressed `wow-emmy` Lua workspace snapshots bound to one "
+                  "verified analyzer identity and one source universe, with bounded UTF-8 inputs, "
+                  "canonical paths, collision rejection, and no hidden filesystem discovery;\n"
+              )
+              if bullet not in current:
+                  status.write_text(current.rstrip() + "\n" + bullet, encoding="utf-8")
+          PY
+
+      - name: Validate manager and update the intentional workspace lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/wow_emmy_source.py scripts/check-emmylua-version.py tests/test_wow_emmy_source.py
+          python -m unittest -v tests/test_wow_emmy_source.py
+          cargo fmt --all
+          cargo check --workspace --all-targets --all-features
+
+      - name: Re-run complete workspace from the resulting lockfile
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo fmt --all --check
+          cargo check --locked --workspace --all-targets --all-features
+          cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+          cargo test --locked --workspace --all-targets --all-features
+          RUSTDOCFLAGS="-D warnings" cargo doc --locked --workspace --all-features --no-deps
+          git diff --check
+
+      - name: Publish activated crate
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f \
+            .github/workflows/activate-wow-emmy-workspace.yml \
+            .github/workflows/activate-wow-emmy-workspace-v2.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "feat(wow-emmy): activate explicit Lua workspace"
+          git pull --rebase origin main
+          git push origin HEAD:main
