@@ -1,0 +1,281 @@
+name: Finalize generated API end to end
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/finalize-generated-api-e2e.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: generated-api-main-writer
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    if: ${{ !startsWith(github.event.head_commit.message, 'feat(wow-reference): complete generated API bridge') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+      - name: Refresh current main and complete validation seams
+        shell: bash
+        run: |
+          set -euo pipefail
+          git pull --ff-only origin main
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          import subprocess
+
+          root = Path.cwd()
+          module = root / "crates/wow-reference/src/generated_api.rs"
+          text = module.read_text(encoding="utf-8")
+
+          text = text.replace(
+              "facts.push(import_member(kind, member)?);",
+              "facts.push(import_member(\n                    kind,\n                    member,\n                    &parsed_paths,\n                    &draft.source.revision,\n                )?);",
+          )
+          text = text.replace(
+              "fn import_member(\n    kind: GeneratedApiFactKind,\n    member: &DraftMember,\n) -> GeneratedApiImportResult<GeneratedApiFact> {",
+              "fn import_member(\n    kind: GeneratedApiFactKind,\n    member: &DraftMember,\n    parsed_paths: &BTreeSet<&str>,\n    revision: &str,\n) -> GeneratedApiImportResult<GeneratedApiFact> {",
+          )
+          member_marker = '    reject_nonempty_extensions(&member.extra, "member")?;\n'
+          member_validation = '''    validate_source_span(&member.source, parsed_paths, revision)?;
+              for (label, records) in [
+                  ("arguments", member.arguments.as_slice()),
+                  ("returns", member.returns.as_slice()),
+                  ("payload", member.payload.as_slice()),
+                  ("fields", member.fields.as_slice()),
+                  ("values", member.values.as_slice()),
+              ] {
+                  validate_nested_source_records(records, parsed_paths, revision, label)?;
+              }
+          '''
+          member_validation = "\n".join(
+              line[10:] if line.startswith("          ") else line
+              for line in member_validation.splitlines()
+          ) + "\n"
+          if "validate_nested_source_records(records" not in text:
+              if member_marker not in text:
+                  raise SystemExit("member validation marker not found")
+              text = text.replace(member_marker, member_marker + member_validation, 1)
+
+          source_marker = "fn validate_source_span(\n"
+          helper = '''fn validate_nested_source_records(
+              records: &[Value],
+              parsed_paths: &BTreeSet<&str>,
+              revision: &str,
+              label: &str,
+          ) -> GeneratedApiImportResult<()> {
+              for record in records {
+                  let object = record.as_object().ok_or_else(|| {
+                      GeneratedApiImportError::new(
+                          GeneratedApiImportErrorCode::InvalidFact,
+                          format!("generated API {label} record is not an object"),
+                      )
+                  })?;
+                  let source_value = object.get("source").ok_or_else(|| {
+                      GeneratedApiImportError::new(
+                          GeneratedApiImportErrorCode::InvalidSource,
+                          format!("generated API {label} record has no source"),
+                      )
+                  })?;
+                  let source = serde_json::from_value::<DraftSourceSpan>(source_value.clone())
+                      .map_err(|error| {
+                          GeneratedApiImportError::new(
+                              GeneratedApiImportErrorCode::InvalidSource,
+                              format!("generated API {label} source is invalid: {error}"),
+                          )
+                      })?;
+                  validate_source_span(&source, parsed_paths, revision)?;
+              }
+              Ok(())
+          }
+
+          '''
+          helper = "\n".join(
+              line[10:] if line.startswith("          ") else line
+              for line in helper.splitlines()
+          ) + "\n"
+          if "fn validate_nested_source_records(" not in text:
+              if source_marker not in text:
+                  raise SystemExit("source validation marker not found")
+              text = text.replace(source_marker, helper + source_marker, 1)
+          module.write_text(text, encoding="utf-8")
+
+          lib = root / "crates/wow-reference/src/lib.rs"
+          lib_text = lib.read_text(encoding="utf-8")
+          if "pub mod generated_api;" not in lib_text:
+              lib.write_text(lib_text.rstrip() + "\n\npub mod generated_api;\n", encoding="utf-8")
+
+          binary = root / "crates/wow-reference/src/bin/wow-reference-api.rs"
+          binary_text = binary.read_text(encoding="utf-8")
+          binary_text = binary_text.replace("use serde_json::{Value, json};", "use serde_json::json;")
+          output_marker = "fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> Result<(), String> {\n"
+          if "refusing to replace existing output" not in binary_text:
+              replacement = output_marker + '''    if path.exists() {
+                  return Err(format!(
+                      "refusing to replace existing output {}",
+                      path.display()
+                  ));
+              }
+          '''
+              replacement = "\n".join(
+                  line[10:] if line.startswith("          ") else line
+                  for line in replacement.splitlines()
+              ) + "\n"
+              binary_text = binary_text.replace(output_marker, replacement, 1)
+          binary.write_text(binary_text, encoding="utf-8")
+
+          workflow = root / ".github/workflows/blizzard-api-reference.yml"
+          workflow_text = workflow.read_text(encoding="utf-8")
+          rust_smoke = '''          cargo run --locked -p wow-reference --bin wow-reference-api -- \\
+                    verify "$RUNNER_TEMP/api-reference.json"
+                  cargo run --locked -p wow-reference --bin wow-reference-api -- \\
+                    materialize "$RUNNER_TEMP/api-reference.json" "$RUNNER_TEMP/api-index.json"
+          '''
+          rust_smoke = "\n".join(
+              line[10:] if line.startswith("          ") else line
+              for line in rust_smoke.splitlines()
+          ) + "\n"
+          anchor = '''          python scripts/verify-blizzard-api-reference.py \\
+                    "$RUNNER_TEMP/api-reference.json" \\
+                    --source "$RUNNER_TEMP/wow-ui-source" \\
+                    --manifest "$RUNNER_TEMP/source-manifest.json" \\
+                    --current-ref origin/live \\
+                    --require-complete \\
+                    --json
+          '''
+          anchor = "\n".join(
+              line[10:] if line.startswith("          ") else line
+              for line in anchor.splitlines()
+          ) + "\n"
+          if "wow-reference-api --" not in workflow_text:
+              if anchor not in workflow_text:
+                  raise SystemExit("API reference workflow smoke anchor not found")
+              workflow.write_text(workflow_text.replace(anchor, anchor + rust_smoke, 1), encoding="utf-8")
+
+          status = root / "docs/CURRENT_IMPLEMENTATION.md"
+          status_text = status.read_text(encoding="utf-8")
+          needle = "- safe normalization of generated Blizzard API documentation into a self-digested reference draft;\n"
+          addition = needle + "- independent Rust import of that draft into content-addressed facts with exact lookup, conflicts, provenance, and coverage-aware negative authority;\n"
+          if "independent Rust import of that draft" not in status_text:
+              if needle not in status_text:
+                  raise SystemExit("current implementation marker not found")
+              status.write_text(status_text.replace(needle, addition, 1), encoding="utf-8")
+
+          replacements = {
+              "https://github.com/UnknownAlienHuman/wow-addon-engineering-kb": "operator-configured advisory context provider",
+              "UnknownAlienHuman/wow-addon-engineering-kb": "operator-configured advisory context provider",
+              "wow-addon-engineering-kb": "operator-configured advisory context provider",
+              "WoW Addon Engineering KB": "operator-configured advisory context provider",
+          }
+          listed = subprocess.run(
+              ["git", "ls-files", "-z"], check=True, stdout=subprocess.PIPE
+          ).stdout.split(b"\0")
+          for raw_path in listed:
+              if not raw_path:
+                  continue
+              path = root / raw_path.decode("utf-8")
+              try:
+                  current = path.read_text(encoding="utf-8")
+              except (UnicodeDecodeError, OSError):
+                  continue
+              updated = current
+              for old, new in replacements.items():
+                  updated = updated.replace(old, new)
+              if updated != current:
+                  path.write_text(updated, encoding="utf-8")
+
+          workflows = root / ".github/workflows"
+          permanent = {
+              "branch-hygiene.yml",
+              "i0-foundation.yml",
+              "i0-reference.yml",
+              "blizzard-api-reference.yml",
+              "source-health.yml",
+              "rolling-dependencies.yml",
+              "skill-matrix.yml",
+              "validate-addon-action.yml",
+          }
+          transient = re.compile(r"^(?:finalize-|implement-|export-|publish-|repair-|bootstrap-|i0-a-export-)")
+          if workflows.is_dir():
+              for candidate in workflows.glob("*.yml"):
+                  if candidate.name not in permanent and transient.match(candidate.name):
+                      candidate.unlink()
+          PY
+      - name: Format and validate local owners
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo fmt --all
+          python -m py_compile \
+            scripts/wow_api_reference.py \
+            scripts/build-blizzard-api-reference.py \
+            scripts/verify-blizzard-api-reference.py \
+            tests/test_blizzard_api_reference.py
+          python -m unittest -v tests/test_blizzard_api_reference.py
+          python scripts/sync-wow-dev-skill.py --check
+          cargo fmt --all --check
+          cargo check --locked --workspace --all-targets --all-features
+          cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+          cargo test --locked --workspace --all-targets --all-features
+          RUSTDOCFLAGS="-D warnings" cargo doc --locked --workspace --all-features --no-deps
+      - name: Resolve and test current Blizzard source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --filter=blob:none --no-tags --single-branch --branch live \
+            https://github.com/Gethe/wow-ui-source.git "$RUNNER_TEMP/wow-ui-source"
+          revision="$(git -C "$RUNNER_TEMP/wow-ui-source" rev-parse HEAD)"
+          python scripts/build-blizzard-source-manifest.py \
+            --source "$RUNNER_TEMP/wow-ui-source" \
+            --revision "$revision" \
+            --selector live \
+            --output "$RUNNER_TEMP/source-manifest.json"
+          python scripts/build-blizzard-api-reference.py \
+            --source "$RUNNER_TEMP/wow-ui-source" \
+            --manifest "$RUNNER_TEMP/source-manifest.json" \
+            --output "$RUNNER_TEMP/api-reference.json" \
+            --json
+          python scripts/verify-blizzard-api-reference.py \
+            "$RUNNER_TEMP/api-reference.json" \
+            --source "$RUNNER_TEMP/wow-ui-source" \
+            --manifest "$RUNNER_TEMP/source-manifest.json" \
+            --current-ref origin/live \
+            --require-complete \
+            --json
+          cargo run --locked -p wow-reference --bin wow-reference-api -- \
+            verify "$RUNNER_TEMP/api-reference.json"
+          cargo run --locked -p wow-reference --bin wow-reference-api -- \
+            materialize "$RUNNER_TEMP/api-reference.json" "$RUNNER_TEMP/api-index.json"
+          test -s "$RUNNER_TEMP/api-index.json"
+      - name: Enforce privacy and repository hygiene
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -RIlE 'wow-addon-engineering-kb|UnknownAlienHuman/wow-addon-engineering-kb|WoW Addon Engineering KB' --exclude-dir=.git --exclude-dir=target .; then
+            echo 'operator-only provider identity leaked into public tree' >&2
+            exit 1
+          fi
+          test "$(git branch --format='%(refname:short)' | wc -l)" -eq 1
+      - name: Publish end-to-end bridge
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/finalize-generated-api-e2e.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat(wow-reference): complete generated API bridge"
+          git pull --rebase origin main
+          git push origin HEAD:main
