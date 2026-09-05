@@ -1,0 +1,53 @@
+name: Fix topology CLI semantics
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/fix-topology-cli-semantics.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+      - name: Separate parse completeness from resolved-reference authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          git pull --ff-only origin main
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("scripts/wow_ui_topology.py")
+          text = path.read_text(encoding="utf-8")
+          old = "        verify_topology(draft, require_complete=not arguments.allow_partial)\n"
+          new = "        verify_topology(draft)\n"
+          count = text.count(old)
+          if count == 1:
+              path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          elif new not in text:
+              raise SystemExit(f"unexpected topology build validation seam: {count}")
+          PY
+          python -m py_compile scripts/wow_ui_topology.py scripts/build-blizzard-ui-topology.py scripts/verify-blizzard-ui-topology.py tests/test_blizzard_ui_topology.py
+          python -m unittest -v tests/test_blizzard_ui_topology.py
+      - name: Commit validated correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/fix-topology-cli-semantics.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix(source): separate topology parsing from negative authority"
+          git pull --rebase origin main
+          git push origin HEAD:main
