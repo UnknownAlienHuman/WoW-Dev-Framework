@@ -133,7 +133,7 @@ When unconfigured, unavailable, stale, or timed out:
 - [`../../docs/SECURITY_MODEL.md`](../../docs/SECURITY_MODEL.md)
 - [`../../docs/GRAPH_SEARCH_AND_PLANNING.md`](../../docs/GRAPH_SEARCH_AND_PLANNING.md)
 - [`../../docs/TEST_STRATEGY.md`](../../docs/TEST_STRATEGY.md)
-- [Current external repository policy](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb/blob/main/KB/external/External_Repositories.md)
+- Optional operator context is advisory, disabled by default, and configured outside the repository; current Blizzard source remains authoritative.
 
 ## Definition of done
 

@@ -1,5 +1,7 @@
 # Project completion matrix
 
+> Current implementation and update policy: [status ledger](IMPLEMENTATION_STATUS.md). Earlier bootstrap schedules below are design history, not instructions to recreate the workspace or permanently pin versions.
+
 **Status:** normative state ledger. Updated 2026-09-02.
 
 ## Meaning of states
@@ -23,23 +25,19 @@ Documentation completion never implies implementation or release readiness.
 ## Current repository state
 
 ```text
-documentation frontier: E7-B / planned architecture complete
-implementation frontier: not started
-next owned work: I0-A / wow-core E0-A
-Cargo workspace: absent
-Rust source: absent
-Cargo.lock: absent
-rust-toolchain: absent
-CI/workflows: absent
-supported public release: none
+documentation frontier: E7-B / planned architecture
+implementation: partial executable foundation and source bridge
+active workspace: wow-core, wow-reference
+next owner implementation: I0-C / real wow-emmy analyzer adapter
+full R0, runtime, installation and release gates: NotEvaluated
 ```
 
 ## Work-package matrix
 
 | Work package | Owner | Documentation | Implementation | First launch gate using it |
 |---|---|---|---|---|
-| E0-A | `wow-core` | Complete | Not started | R0 |
-| E0-B | `wow-reference` fixture slice | Complete | Not started | R0 |
+| E0-A | `wow-core` | Complete | Partial executable | R0 |
+| E0-B | `wow-reference` fixture slice | Complete | Partial executable | R0 |
 | E0-C | `wow-emmy` | Complete | Not started | R0 |
 | E0-D | `wow-project` fixture slice | Complete | Not started | R0 |
 | E0-E | `wow-rules` | Complete | Not started | R0 |

@@ -21,7 +21,7 @@ Read the E1-C contract package in this order:
 11. [`e1/ERROR_MODEL.md`](e1/ERROR_MODEL.md), [`e1/TEST_MATRIX.md`](e1/TEST_MATRIX.md), and [`e1/IMPLEMENTATION_PLAN.md`](e1/IMPLEMENTATION_PLAN.md).
 12. [`e1/CONTRACT.json`](e1/CONTRACT.json) and the closed [`e1/examples/`](e1/examples/README.md) fixture package.
 
-Also read the repository-level [`../AGENTS.md`](../AGENTS.md), [`../DEPENDENCY_GRAPH.md`](../DEPENDENCY_GRAPH.md), and [`../WORKSTREAMS.md`](../WORKSTREAMS.md), plus the current [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb) routes.
+Optional operator context is advisory, disabled by default, and configured outside the repository; current Blizzard source remains authoritative.
 
 ## Direct framework dependencies
 

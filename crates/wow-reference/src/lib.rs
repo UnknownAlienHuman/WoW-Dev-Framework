@@ -7,3 +7,7 @@ pub use deterministic_view::{
     ReferencePartition, ReferenceRecord, ReferenceRecordKind, ReferenceView, ReferenceViewError,
     ReferenceViewResult, RestrictionFacet, RestrictionState,
 };
+
+pub mod generated_api;
+pub mod ui_topology;
+pub mod wire_json;

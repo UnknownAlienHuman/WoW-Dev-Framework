@@ -23,7 +23,7 @@ No WoW API lookup, Secret rule, parser, graph, database, search, project indexin
 11. [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md)
 12. [`CONTRACT.json`](CONTRACT.json)
 13. [`../DEPENDENCY_GRAPH.md`](../DEPENDENCY_GRAPH.md)
-14. current WoW Addon Engineering KB [`AGENTS.md`](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb/blob/main/AGENTS.md) and [`INDEX_MINI.md`](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb/blob/main/INDEX_MINI.md)
+14. Optional operator context is advisory, disabled by default, and configured outside the repository; current Blizzard source remains authoritative.
 
 ## Implementation constraints
 

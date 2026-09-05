@@ -7,10 +7,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
+use crate::wire_json::canonical_json_bytes;
 use serde::Serialize;
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
-use wow_core::canonical_json_bytes;
 
 const SCHEMA: &str = "wow-dev-framework/blizzard-ui-topology-draft";
 const SCHEMA_VERSION: u64 = 1;
@@ -580,8 +580,7 @@ impl UiTopologyIndex {
     /// Performs one exact case-sensitive descriptor/XML document lookup.
     #[must_use]
     pub fn lookup_document(&self, path: &str) -> UiTopologyDocumentLookup<'_> {
-        if !path.starts_with(INTERFACE_ROOT)
-            || !(path.ends_with(".toc") || path.ends_with(".xml"))
+        if !path.starts_with(INTERFACE_ROOT) || !(path.ends_with(".toc") || path.ends_with(".xml"))
         {
             return UiTopologyDocumentLookup::OutOfScope;
         }
@@ -709,10 +708,7 @@ pub fn import_ui_topology_draft(bytes: &[u8]) -> UiTopologyImportResult<UiTopolo
         configuration,
     };
 
-    let descriptor_values = array(
-        required(root, "descriptors", "descriptors")?,
-        "descriptors",
-    )?;
+    let descriptor_values = array(required(root, "descriptors", "descriptors")?, "descriptors")?;
     let xml_values = array(
         required(root, "xml_documents", "XML documents")?,
         "XML documents",
@@ -890,8 +886,14 @@ fn parse_descriptor(
         revision,
         &path,
     )?;
-    object(required(descriptor, "metadata", "TOC metadata")?, "TOC metadata")?;
-    let entries = array(required(descriptor, "entries", "TOC entries")?, "TOC entries")?;
+    object(
+        required(descriptor, "metadata", "TOC metadata")?,
+        "TOC metadata",
+    )?;
+    let entries = array(
+        required(descriptor, "entries", "TOC entries")?,
+        "TOC entries",
+    )?;
     let mut previous_line = 0_u64;
     for entry_value in entries {
         let entry = object(entry_value, "TOC entry")?;
@@ -958,12 +960,11 @@ fn parse_xml_document(
         ));
     }
     let inline_scripts = unsigned(document, "inline_scripts", "inline script count")?;
-    let source = parse_source(
-        required(document, "source", "XML source")?,
-        revision,
-        &path,
+    let source = parse_source(required(document, "source", "XML source")?, revision, &path)?;
+    array(
+        required(document, "templates", "XML templates")?,
+        "XML templates",
     )?;
-    array(required(document, "templates", "XML templates")?, "XML templates")?;
     let reference_values = array(
         required(document, "references", "XML references")?,
         "XML references",
@@ -986,7 +987,10 @@ fn parse_xml_document(
         )?;
         let kind = UiLoadEdgeKind::parse(text(reference, "kind", "XML reference kind")?)
             .filter(|candidate| {
-                matches!(candidate, UiLoadEdgeKind::XmlInclude | UiLoadEdgeKind::XmlScript)
+                matches!(
+                    candidate,
+                    UiLoadEdgeKind::XmlInclude | UiLoadEdgeKind::XmlScript
+                )
             })
             .ok_or_else(|| {
                 failure(
@@ -1027,17 +1031,14 @@ fn parse_reference_key(
             "declared reference is empty or contains control characters",
         ));
     }
-    let resolution = UiReferenceResolution::parse(text(
-        record,
-        "resolution",
-        "reference resolution",
-    )?)
-    .ok_or_else(|| {
-        failure(
-            UiTopologyImportErrorCode::InvalidEdge,
-            "reference resolution is invalid",
-        )
-    })?;
+    let resolution =
+        UiReferenceResolution::parse(text(record, "resolution", "reference resolution")?)
+            .ok_or_else(|| {
+                failure(
+                    UiTopologyImportErrorCode::InvalidEdge,
+                    "reference resolution is invalid",
+                )
+            })?;
     let target = optional_text(record, "target")?;
     match resolution {
         UiReferenceResolution::Invalid if target.is_some() => {
@@ -1102,7 +1103,10 @@ fn parse_edges(
         }
         let key = parse_reference_key(kind, &source, edge)?;
         let sort_key = EdgeSortKey::from_key(&key);
-        if previous.as_ref().is_some_and(|candidate| candidate > &sort_key) {
+        if previous
+            .as_ref()
+            .is_some_and(|candidate| candidate > &sort_key)
+        {
             return Err(failure(
                 UiTopologyImportErrorCode::InvalidOrdering,
                 "load edges are not canonically ordered",
@@ -1137,7 +1141,12 @@ impl EdgeSortKey {
             line: key.line,
             kind: key.kind,
             declared: key.declared.as_bytes().to_vec(),
-            target: key.target.as_deref().unwrap_or_default().as_bytes().to_vec(),
+            target: key
+                .target
+                .as_deref()
+                .unwrap_or_default()
+                .as_bytes()
+                .to_vec(),
         }
     }
 }
@@ -1341,7 +1350,11 @@ fn parse_cycles(
             edge.kind == UiLoadEdgeKind::XmlInclude
                 && edge.resolution == UiReferenceResolution::Exact
         })
-        .filter_map(|edge| edge.target.as_ref().map(|target| (edge.source.as_str(), target.as_str())))
+        .filter_map(|edge| {
+            edge.target
+                .as_ref()
+                .map(|target| (edge.source.as_str(), target.as_str()))
+        })
         .collect::<BTreeSet<_>>();
     let mut output = Vec::with_capacity(values.len());
     let mut previous: Option<Vec<Vec<u8>>> = None;
@@ -1463,16 +1476,15 @@ fn parse_source(
     })
 }
 
-fn validate_document_order(
-    values: &[Value],
-    key: &str,
-    label: &str,
-) -> UiTopologyImportResult<()> {
+fn validate_document_order(values: &[Value], key: &str, label: &str) -> UiTopologyImportResult<()> {
     let mut previous: Option<Vec<u8>> = None;
     for value in values {
         let record = object(value, label)?;
         let current = nonempty_text(record, key, label)?.as_bytes().to_vec();
-        if previous.as_ref().is_some_and(|candidate| candidate >= &current) {
+        if previous
+            .as_ref()
+            .is_some_and(|candidate| candidate >= &current)
+        {
             return Err(failure(
                 UiTopologyImportErrorCode::InvalidOrdering,
                 format!("{label} are not uniquely byte-sorted"),
@@ -1572,10 +1584,7 @@ fn allowed_keys(
     allowed: &[&str],
     label: &str,
 ) -> UiTopologyImportResult<()> {
-    if let Some(unexpected) = object
-        .keys()
-        .find(|key| !allowed.contains(&key.as_str()))
-    {
+    if let Some(unexpected) = object.keys().find(|key| !allowed.contains(&key.as_str())) {
         return Err(failure(
             UiTopologyImportErrorCode::UnsupportedSchema,
             format!("{label} contains unsupported field {unexpected:?}"),
@@ -1632,14 +1641,12 @@ fn text<'a>(
     key: &str,
     label: &str,
 ) -> UiTopologyImportResult<&'a str> {
-    required(object, key, label)?
-        .as_str()
-        .ok_or_else(|| {
-            failure(
-                UiTopologyImportErrorCode::InvalidJson,
-                format!("{label} must be text"),
-            )
-        })
+    required(object, key, label)?.as_str().ok_or_else(|| {
+        failure(
+            UiTopologyImportErrorCode::InvalidJson,
+            format!("{label} must be text"),
+        )
+    })
 }
 
 fn nonempty_text<'a>(
@@ -1657,10 +1664,7 @@ fn nonempty_text<'a>(
     Ok(value)
 }
 
-fn optional_text(
-    object: &Map<String, Value>,
-    key: &str,
-) -> UiTopologyImportResult<Option<String>> {
+fn optional_text(object: &Map<String, Value>, key: &str) -> UiTopologyImportResult<Option<String>> {
     match object.get(key) {
         None | Some(Value::Null) => Ok(None),
         Some(Value::String(value)) => Ok(Some(value.clone())),
@@ -1671,11 +1675,7 @@ fn optional_text(
     }
 }
 
-fn unsigned(
-    object: &Map<String, Value>,
-    key: &str,
-    label: &str,
-) -> UiTopologyImportResult<u64> {
+fn unsigned(object: &Map<String, Value>, key: &str, label: &str) -> UiTopologyImportResult<u64> {
     required(object, key, label)?.as_u64().ok_or_else(|| {
         failure(
             UiTopologyImportErrorCode::InvalidJson,
@@ -1703,11 +1703,7 @@ fn optional_unsigned(
     }
 }
 
-fn boolean(
-    object: &Map<String, Value>,
-    key: &str,
-    label: &str,
-) -> UiTopologyImportResult<bool> {
+fn boolean(object: &Map<String, Value>, key: &str, label: &str) -> UiTopologyImportResult<bool> {
     required(object, key, label)?.as_bool().ok_or_else(|| {
         failure(
             UiTopologyImportErrorCode::InvalidJson,
@@ -1725,7 +1721,13 @@ fn value_map(object: &Map<String, Value>) -> BTreeMap<String, Value> {
 
 fn sha256(bytes: &[u8]) -> String {
     let digest = Sha256::digest(bytes);
-    format!("sha256:{digest:x}")
+    format!(
+        "sha256:{}",
+        digest
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>()
+    )
 }
 
 fn failure(code: UiTopologyImportErrorCode, message: impl Into<String>) -> UiTopologyImportError {
@@ -1836,10 +1838,8 @@ mod tests {
                 format!("test topology cannot be canonicalized: {source}"),
             )
         })?;
-        object_mut(&mut value, "test topology")?.insert(
-            "topology_sha256".to_owned(),
-            Value::String(sha256(&bytes)),
-        );
+        object_mut(&mut value, "test topology")?
+            .insert("topology_sha256".to_owned(), Value::String(sha256(&bytes)));
         serde_json::to_vec(&value).map_err(|source| {
             failure(
                 UiTopologyImportErrorCode::InvalidJson,
@@ -1908,24 +1908,20 @@ mod tests {
                 format!("test topology cannot be parsed: {source}"),
             )
         })?;
-        object_mut(&mut value, "test topology")?.insert(
-            "schema_version".to_owned(),
-            Value::from(SCHEMA_VERSION + 1),
-        );
+        object_mut(&mut value, "test topology")?
+            .insert("producer".to_owned(), serde_json::json!({"tampered": true}));
         let tampered = serde_json::to_vec(&value).map_err(|source| {
             failure(
                 UiTopologyImportErrorCode::InvalidJson,
                 format!("test topology cannot be serialized: {source}"),
             )
         })?;
-        let error = import_ui_topology_draft(&tampered)
-            .err()
-            .ok_or_else(|| {
-                failure(
-                    UiTopologyImportErrorCode::InvalidDigest,
-                    "tampered topology unexpectedly imported",
-                )
-            })?;
+        let error = import_ui_topology_draft(&tampered).err().ok_or_else(|| {
+            failure(
+                UiTopologyImportErrorCode::InvalidDigest,
+                "tampered topology unexpectedly imported",
+            )
+        })?;
         assert_eq!(error.code(), UiTopologyImportErrorCode::InvalidDigest);
         Ok(())
     }

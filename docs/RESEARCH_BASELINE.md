@@ -5,7 +5,7 @@
 
 This document records the external inputs that informed architecture v8.0. It is not a claim that every listed revision is the newest available revision.
 
-Live WoW patch, API, security, regression, and field-note guidance is maintained separately in the [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb). This repository links to that source rather than duplicating its living content.
+Optional operator context is advisory, disabled by default, and configured outside the repository; current Blizzard source remains authoritative.
 
 ## 1. Authority model
 

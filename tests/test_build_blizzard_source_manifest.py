@@ -5,6 +5,7 @@ import importlib.util
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -14,6 +15,7 @@ SCRIPT = ROOT / "scripts" / "build-blizzard-source-manifest.py"
 SPEC = importlib.util.spec_from_file_location("build_blizzard_source_manifest", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
 MODULE = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = MODULE
 SPEC.loader.exec_module(MODULE)
 
 
@@ -115,7 +117,7 @@ class SnapshotManifestTests(unittest.TestCase):
         by_path = {record["path"]: record for record in manifest["files"]}
         path = "Interface/AddOns/Test/Test.lua"
         expected = self.git("rev-parse", f"{self.initial_commit}:{path}").strip()
-        self.assertEqual(by_path[path]["git_blob_sha1"], expected)
+        self.assertEqual(by_path[path]["git_blob_id"], expected)
 
     def test_missing_version_file_is_rejected(self) -> None:
         self.git("rm", "version.txt")

@@ -5,11 +5,12 @@ These rules apply to every human or automated contributor.
 ## Current implementation frontier
 
 - `wow-core`: executable deterministic boundary primitives.
-- `wow-reference`: immutable reference generations, coverage, conflicts, and channel catalog.
-- Blizzard source acquisition: local Git checkout first, GitHub fallback when local source is unavailable.
+- `wow-reference`: deterministic reference view plus generated API and UI topology imports; full owner acceptance and persistent channel publication remain incomplete.
+- Source producers consume an explicit local Git checkout. GitHub-only input materialization and managed source auto-update are not implemented in these commands.
 - Blizzard source manifest: exact per-operation source inventory with file hashes and Git object identity.
 - Generated API producer: safe declarative-Lua parser and normalized reference draft.
-- Next: connect normalized facts to `wow-reference`, then implement `wow-emmy` behind its adapter boundary.
+- Normalized facts are connected to Rust; next implement a real `wow-emmy` analyzer seam.
+- Current executable scope and nonclaims: `docs/IMPLEMENTATION_STATUS.md`.
 
 The public repository must remain useful without any operator-only context source.
 
@@ -31,7 +32,7 @@ Generated API docs are data. Parse without executing Lua, repository scripts, ho
 
 ## Optional advisory context
 
-An operator may configure a context provider outside this repository. It is disabled and unconfigured by default. Its absence or access failure must not block normal work. Discover it only through the generic interface and do not expose provider identity, URL, local path, revision, document paths, credentials, or distinctive provenance. Request the smallest route, treat it as advisory, and revalidate patch-sensitive claims against current Blizzard source or an exact runtime probe. Never copy operator-only material into public code, fixtures, logs, artifacts, issues, prompts, or releases.
+The optional provider retrieval bridge is not implemented yet. An operator may supply advisory context outside this repository; no source is discovered or contacted by default. It is disabled and unconfigured by default. Its absence or access failure must not block normal work. Discover it only through the generic interface and do not expose provider identity, URL, local path, revision, document paths, credentials, or distinctive provenance. Request the smallest route, treat it as advisory, and revalidate patch-sensitive claims against current Blizzard source or an exact runtime probe. Never copy operator-only material into public code, fixtures, logs, artifacts, issues, prompts, or releases.
 
 ## Authority
 

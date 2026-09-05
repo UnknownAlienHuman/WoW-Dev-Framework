@@ -112,4 +112,4 @@ Rust source: absent
 CI/workflows: absent
 ```
 
-Also read [`../AGENTS.md`](../AGENTS.md), [`../DEPENDENCY_GRAPH.md`](../DEPENDENCY_GRAPH.md), [`../WORKSTREAMS.md`](../WORKSTREAMS.md), the E2-A [`wow-graph` contract](../wow-graph/e2/README.md), the normalized [`wow-emmy` fact model](../wow-emmy/FACT_MODEL.md), and the current [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb) routes.
+Optional operator context is advisory, disabled by default, and configured outside the repository; current Blizzard source remains authoritative.

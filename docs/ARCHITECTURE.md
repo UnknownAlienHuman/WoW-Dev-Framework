@@ -261,7 +261,7 @@ structured runtime evidence
 
 Data, state, hotfix, combat, taint, or Secret-dependent behavior requires an exact client-build scenario and runtime evidence when runtime proof is claimed.
 
-Patch-sensitive knowledge routes through the current [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb), then exact pinned Blizzard, Reference, and runtime evidence. Stable contracts link rather than copy mutable facts.
+Optional operator context is advisory, disabled by default, and configured outside the repository; current Blizzard source remains authoritative.
 
 ## 10. Storage
 

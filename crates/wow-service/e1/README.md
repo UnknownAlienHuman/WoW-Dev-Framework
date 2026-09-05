@@ -44,7 +44,7 @@ explicit materialized source snapshot + exact profile + frozen component contrac
 19. [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md)
 20. [`CONTRACT.json`](CONTRACT.json)
 21. [`../../../apps/wow-reference-builder/README.md`](../../../apps/wow-reference-builder/README.md)
-22. current routes in the external [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb)
+22. Optional operator context is advisory, disabled by default, and configured outside the repository; current Blizzard source remains authoritative.
 
 Normative repository sources:
 

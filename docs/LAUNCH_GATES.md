@@ -85,7 +85,7 @@ Required evidence:
 - run EmmyLua, declarative recognizers, graph publication, diagnostics, and bounded context;
 - prove clean negative authority only for complete exact partitions;
 - test malformed and untrusted repositories, load variants, partial source, profile mismatch, unknown restriction fields, cancellation, recovery, retention, and deterministic rebuilds;
-- recheck patch-sensitive claims through the current `wow-addon-engineering-kb`, pinned Blizzard source, and required runtime probes before declaring profile support.
+- recheck patch-sensitive claims through the currently selected Blizzard source and required runtime probes before declaring profile support.
 
 A0 may remain one-shot CLI-only.
 

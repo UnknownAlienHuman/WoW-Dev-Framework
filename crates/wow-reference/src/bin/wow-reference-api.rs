@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use serde::Serialize;
-use serde_json::{Value, json};
+use serde_json::json;
 use wow_reference::generated_api::{
     GeneratedApiFactKind, GeneratedApiIndex, GeneratedApiLookup, import_generated_api_draft,
 };
@@ -64,8 +64,8 @@ fn usage() -> String {
 }
 
 fn load_index(path: &Path) -> Result<GeneratedApiIndex, String> {
-    let bytes = fs::read(path)
-        .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
+    let bytes =
+        fs::read(path).map_err(|error| format!("cannot read {}: {error}", path.display()))?;
     import_generated_api_draft(&bytes).map_err(|error| {
         format!(
             "generated API import failed ({:?}): {}",

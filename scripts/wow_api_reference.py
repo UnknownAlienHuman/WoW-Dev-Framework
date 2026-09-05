@@ -677,7 +677,7 @@ def _candidate_records(manifest: Mapping[str, Any]) -> list[dict[str, Any]]:
         if not (path.startswith(GENERATED_ROOT) and path.endswith(GENERATED_SUFFIX)): continue
         if path in seen: raise ReferenceBuildError("manifest_duplicate_path", f"duplicate source path {path!r}")
         seen.add(path)
-        output.append({"path": path, "sha256": _normalize_sha256(_record_value(record, ("sha256", "content_sha256", "content_digest", "digest"))), "git_object": _record_value(record, ("git_object", "git_blob", "blob", "blob_id", "object_id"))})
+        output.append({"path": path, "sha256": _normalize_sha256(_record_value(record, ("sha256", "content_sha256", "content_digest", "digest"))), "git_object": _record_value(record, ("git_blob_id", "git_object", "git_blob", "blob", "blob_id", "object_id"))})
     output.sort(key=lambda item: item["path"].encode())
     if not output: raise ReferenceBuildError("manifest_no_generated_docs", f"source manifest contains no {GENERATED_ROOT}*{GENERATED_SUFFIX} files")
     return output

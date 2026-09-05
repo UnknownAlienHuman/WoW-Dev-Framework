@@ -28,7 +28,7 @@ Parent contracts still apply:
 - [`../../docs/PROVENANCE_AND_COVERAGE.md`](../../docs/PROVENANCE_AND_COVERAGE.md)
 - [`../../docs/TEST_STRATEGY.md`](../../docs/TEST_STRATEGY.md)
 
-Before implementation, also read the current [`AGENTS.md`](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb/blob/main/AGENTS.md) and [`INDEX_MINI.md`](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb/blob/main/INDEX_MINI.md) in the WoW Addon Engineering Knowledge Base. Patch-sensitive facts remain there; they are not copied into this crate.
+Optional operator context is advisory, disabled by default, and configured outside the repository; current Blizzard source remains authoritative.
 
 ## Mission
 

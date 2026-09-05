@@ -92,7 +92,7 @@ Read in order:
 19. [`TEST_MATRIX.md`](TEST_MATRIX.md)
 20. [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md)
 21. [`CONTRACT.json`](CONTRACT.json)
-22. current external [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb) routes for patch-sensitive context
+22. Optional operator context is advisory, disabled by default, and configured outside the repository; current Blizzard source remains authoritative.
 
 Normative repository sources:
 

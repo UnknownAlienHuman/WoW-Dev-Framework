@@ -28,7 +28,7 @@ Read in order:
 20. [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md)
 21. [`CONTRACT.json`](CONTRACT.json)
 22. [`../../apps/wow/README.md`](../../apps/wow/README.md)
-23. current `AGENTS.md` and `INDEX_MINI.md` in the external [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb)
+23. Optional operator context is advisory, disabled by default, and configured outside the repository; current Blizzard source remains authoritative.
 
 ## E0-F scope
 

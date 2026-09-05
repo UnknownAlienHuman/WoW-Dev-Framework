@@ -11,7 +11,10 @@ on:
       - "scripts/build-blizzard-ui-topology.py"
       - "scripts/verify-blizzard-ui-topology.py"
       - "scripts/build-blizzard-source-manifest.py"
-      - "crates/wow-reference/src/generated_api.rs"
+      - "crates/wow-reference/**"
+      - "crates/wow-core/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
       - "crates/wow-reference/src/ui_topology.rs"
       - "crates/wow-reference/src/bin/wow-reference-api.rs"
       - "crates/wow-reference/src/bin/wow-reference-topology.rs"
@@ -21,7 +24,10 @@ on:
     paths:
       - "scripts/wow_api_reference.py"
       - "scripts/wow_ui_topology.py"
-      - "crates/wow-reference/src/generated_api.rs"
+      - "crates/wow-reference/**"
+      - "crates/wow-core/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
       - "crates/wow-reference/src/ui_topology.rs"
       - "crates/wow-reference/src/bin/wow-reference-source.rs"
       - ".github/workflows/current-source-bundle.yml"
@@ -47,6 +53,8 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.x"
+      - name: Install current stable Rust
+        run: rustup toolchain install stable --profile minimal
       - name: Clone the current Blizzard UI source locally
         shell: bash
         run: |
@@ -96,13 +104,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cargo run --locked -p wow-reference --bin wow-reference-api -- \
+          cargo +stable run --locked -p wow-reference --bin wow-reference-api -- \
             verify "$RUNNER_TEMP/api-reference.json"
-          cargo run --locked -p wow-reference --bin wow-reference-topology -- \
+          cargo +stable run --locked -p wow-reference --bin wow-reference-topology -- \
             verify "$RUNNER_TEMP/ui-topology.json"
-          cargo run --locked -p wow-reference --bin wow-reference-source -- \
+          cargo +stable run --locked -p wow-reference --bin wow-reference-source -- \
             verify "$RUNNER_TEMP/api-reference.json" "$RUNNER_TEMP/ui-topology.json"
-          cargo run --locked -p wow-reference --bin wow-reference-source -- \
+          cargo +stable run --locked -p wow-reference --bin wow-reference-source -- \
             materialize \
             "$RUNNER_TEMP/api-reference.json" \
             "$RUNNER_TEMP/ui-topology.json" \

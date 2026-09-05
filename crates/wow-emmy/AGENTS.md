@@ -23,7 +23,7 @@ Read in order:
 15. [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md)
 16. [`CONTRACT.json`](CONTRACT.json)
 17. the current upstream source at [EmmyLuaLs/emmylua-analyzer-rust](https://github.com/EmmyLuaLs/emmylua-analyzer-rust)
-18. current `AGENTS.md` and `INDEX_MINI.md` in the external [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb)
+18. Optional operator context is advisory, disabled by default, and configured outside the repository; current Blizzard source remains authoritative.
 
 The historical pin in `docs/RESEARCH_BASELINE.md` is research context only. Re-pin and probe before implementation.
 

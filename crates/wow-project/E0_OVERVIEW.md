@@ -87,7 +87,7 @@ Before implementation, read:
 14. [`TEST_MATRIX.md`](TEST_MATRIX.md)
 15. [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md)
 16. [`CONTRACT.json`](CONTRACT.json)
-17. current `AGENTS.md` and `INDEX_MINI.md` in the external [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb)
+17. Optional operator context is advisory, disabled by default, and configured outside the repository; current Blizzard source remains authoritative.
 
 Normative repository sources:
 

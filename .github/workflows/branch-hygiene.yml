@@ -17,11 +17,11 @@ concurrency:
 
 jobs:
   prune:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - name: Check out full repository
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v7
         with:
           ref: main
           fetch-depth: 0

@@ -74,8 +74,8 @@ fn usage() -> String {
 }
 
 fn load_index(path: &Path) -> Result<UiTopologyIndex, String> {
-    let bytes = fs::read(path)
-        .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
+    let bytes =
+        fs::read(path).map_err(|error| format!("cannot read {}: {error}", path.display()))?;
     import_ui_topology_draft(&bytes).map_err(|error| {
         format!(
             "topology import failed ({:?}): {}",

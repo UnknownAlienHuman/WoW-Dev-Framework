@@ -23,8 +23,20 @@ def load(name: str, path: Path):
     return module
 
 
-BUILD = load("build_blizzard_api_reference", BUILD_PATH)
-VERIFY = load("verify_blizzard_api_reference", VERIFY_PATH)
+BUILD = load("wow_api_reference", ROOT / "scripts" / "wow_api_reference.py")
+VERIFY = BUILD
+
+
+def build_draft(manifest, source, allow_partial=False):
+    value, raw = BUILD.load_json(manifest)
+    return BUILD.build_reference_draft(source=source, manifest=value, manifest_bytes=raw,
+                                       allow_partial=allow_partial)
+
+
+def verify(path):
+    value, _ = BUILD.load_json(path)
+    BUILD.verify_reference_draft(value, require_complete=True)
+    return {"coverage": value["coverage"]["status"]}
 DOC_PATH = "Interface/AddOns/Blizzard_APIDocumentationGenerated/ExampleDocumentation.lua"
 DOCUMENT = r'''
 local Example = {
@@ -102,7 +114,7 @@ class Fixture:
                 "sha256": f"sha256:{self.sha256}",
             }],
         }
-        value["manifest_digest"] = BUILD._digest(value)
+        value["manifest_digest"] = BUILD.sha256_id(BUILD.canonical_json_bytes(value))
         path.write_text(json.dumps(value), encoding="utf-8")
         return path
 
@@ -113,16 +125,16 @@ class BlizzardApiReferenceTests(unittest.TestCase):
             root = Path(directory)
             fixture = Fixture(root / "source")
             manifest = fixture.manifest(root / "manifest.json")
-            first = BUILD.build_draft(manifest, fixture.root, None, None, False)
-            second = BUILD.build_draft(manifest, fixture.root, None, None, False)
+            first = build_draft(manifest, fixture.root)
+            second = build_draft(manifest, fixture.root)
             self.assertEqual(first, second)
             self.assertEqual(first["coverage"]["status"], "complete")
             self.assertTrue(first["coverage"]["negative_authority"])
             function = first["systems"][0]["functions"][0]
             self.assertEqual(function["qualified_name"], "C_Example.Lookup")
-            self.assertEqual(function["restrictions"]["HasRestrictions"], True)
+            self.assertEqual(function["restrictions"]["has_restrictions"], True)
             default = first["systems"][0]["tables"][0]["fields"][1]["default"]
-            self.assertEqual(default, {"symbol": "Enum.ExampleKind.One"})
+            self.assertEqual(default, {"$lua_symbol": "Enum.ExampleKind.One"})
 
     def test_exact_commit_ignores_dirty_worktree(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -130,7 +142,7 @@ class BlizzardApiReferenceTests(unittest.TestCase):
             fixture = Fixture(root / "source")
             manifest = fixture.manifest(root / "manifest.json")
             (fixture.root / DOC_PATH).write_text("not valid Lua", encoding="utf-8")
-            draft = BUILD.build_draft(manifest, fixture.root, None, None, False)
+            draft = build_draft(manifest, fixture.root)
             self.assertEqual(draft["coverage"]["parsed_files"], 1)
 
     def test_manifest_byte_mismatch_is_rejected(self) -> None:
@@ -141,8 +153,8 @@ class BlizzardApiReferenceTests(unittest.TestCase):
             value = json.loads(manifest.read_text(encoding="utf-8"))
             value["files"][0]["sha256"] = "sha256:" + "0" * 64
             manifest.write_text(json.dumps(value), encoding="utf-8")
-            with self.assertRaises(BUILD.DraftError):
-                BUILD.build_draft(manifest, fixture.root, None, None, False)
+            with self.assertRaises(BUILD.ReferenceBuildError):
+                build_draft(manifest, fixture.root)
 
     def test_partial_coverage_disables_negative_authority(self) -> None:
         broken = DOCUMENT.replace('Name = "Lookup"', "Name = function() end", 1)
@@ -150,12 +162,12 @@ class BlizzardApiReferenceTests(unittest.TestCase):
             root = Path(directory)
             fixture = Fixture(root / "source", broken)
             manifest = fixture.manifest(root / "manifest.json")
-            with self.assertRaises(BUILD.DraftError):
-                BUILD.build_draft(manifest, fixture.root, None, None, False)
-            draft = BUILD.build_draft(manifest, fixture.root, None, None, True)
+            with self.assertRaises(BUILD.ReferenceBuildError):
+                build_draft(manifest, fixture.root)
+            draft = build_draft(manifest, fixture.root, True)
             self.assertEqual(draft["coverage"]["status"], "partial")
             self.assertFalse(draft["coverage"]["negative_authority"])
-            self.assertEqual(len(draft["coverage"]["failed_files"]), 1)
+            self.assertEqual(draft["coverage"]["failed_files"], 1)
 
     def test_cli_output_verifies_and_tampering_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -168,13 +180,13 @@ class BlizzardApiReferenceTests(unittest.TestCase):
                 "--source", str(fixture.root), "--output", str(output), "--json",
             ], capture_output=True, text=True, check=False)
             self.assertEqual(built.returncode, 0, built.stderr)
-            summary = VERIFY.verify(output)
+            summary = verify(output)
             self.assertEqual(summary["coverage"], "complete")
             draft = json.loads(output.read_text(encoding="utf-8"))
             draft["source"]["version"] = "tampered"
             output.write_text(json.dumps(draft), encoding="utf-8")
-            with self.assertRaises(VERIFY.VerificationError):
-                VERIFY.verify(output)
+            with self.assertRaises(BUILD.ReferenceBuildError):
+                verify(output)
 
 
 if __name__ == "__main__":

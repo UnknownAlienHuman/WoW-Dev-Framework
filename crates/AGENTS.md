@@ -1,13 +1,17 @@
 # AGENTS.md — crate implementation contracts
 
+> Current implementation and update policy: [status ledger](../docs/IMPLEMENTATION_STATUS.md). Earlier bootstrap schedules below are design history, not instructions to recreate the workspace or permanently pin versions.
+
 These instructions apply to every crate directory and cross-crate owner seam.
 
 ## Current state
 
 ```text
-planned architecture/documentation: complete through E7-B
-implementation: not started
-next implementation package: I0-A / wow-core E0-A
+documentation frontier: E7-B / planned architecture
+implementation: partial executable foundation and source bridge
+active workspace: wow-core, wow-reference
+next owner implementation: I0-C / real wow-emmy analyzer adapter
+full R0, runtime, installation and release gates: NotEvaluated
 ```
 
 A crate README and contract define implementation responsibilities; directory presence is not implementation. Do not create the final workspace topology as empty crates. Activate one owner package only when its exact implementation slice, toolchain and dependency inputs, fixtures, tests, and first-commit freeze gate are ready.

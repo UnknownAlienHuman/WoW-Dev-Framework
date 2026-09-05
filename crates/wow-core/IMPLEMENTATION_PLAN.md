@@ -41,7 +41,7 @@ Do not edit another production crate's API to make `wow-core` easier. Submit a s
 13. [`../WORKSTREAMS.md`](../WORKSTREAMS.md)
 14. [`../../docs/PROVENANCE_AND_COVERAGE.md`](../../docs/PROVENANCE_AND_COVERAGE.md)
 15. [`../../docs/TEST_STRATEGY.md`](../../docs/TEST_STRATEGY.md)
-16. current [`AGENTS.md`](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb/blob/main/AGENTS.md) and [`INDEX_MINI.md`](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb/blob/main/INDEX_MINI.md) in the WoW Addon Engineering KB
+16. Optional operator context is advisory, disabled by default, and configured outside the repository; current Blizzard source remains authoritative.
 
 `wow-core` must not copy patch-specific KB content into code. The KB read is required to preserve authority/evidence terminology and avoid contradicting repository policy.
 

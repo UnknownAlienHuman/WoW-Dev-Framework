@@ -127,4 +127,4 @@ implement the complete E0-A primitives and tests
 populate fixture and checksum gates
 ```
 
-Patch-sensitive WoW facts remain in the separate [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb). Stable contracts link to current routes and require exact pinned source or runtime evidence for release claims.
+Optional operator context is advisory, disabled by default, and configured outside the repository; current Blizzard source remains authoritative.

@@ -1,13 +1,15 @@
 # Roadmap
 
+> Current implementation and update policy: [status ledger](IMPLEMENTATION_STATUS.md). Earlier bootstrap schedules below are design history, not instructions to recreate the workspace or permanently pin versions.
+
 **Status:** normative implementation and launch routing.
 
 ```text
-planned architecture/documentation: complete through E7-B
-implementation frontier: not started
-next owned work package: I0-A / wow-core E0-A
-first runnable gate: R0 / E0-A through E0-F
-first supported target intent: Windows x86-64 MSVC after complete evidence
+documentation frontier: E7-B / planned architecture
+implementation: partial executable foundation and source bridge
+active workspace: wow-core, wow-reference
+next owner implementation: I0-C / real wow-emmy analyzer adapter
+full R0, runtime, installation and release gates: NotEvaluated
 ```
 
 Documentation completion does not activate a Cargo workspace, implement an operation, prove a platform, or create a release. Remaining project work is implementation, conformance, integration, and release evidence in dependency order.
@@ -16,9 +18,9 @@ Documentation completion does not activate a Cargo workspace, implement an opera
 
 | Package | Responsibility | Documentation | Implementation | First gate |
 |---|---|---:|---:|---:|
-| E0-A | `wow-core` identities, evidence, coverage, results | Complete | Not started | R0 |
-| E0-B | frozen `wow-reference` fixture | Complete | Not started | R0 |
-| E0-C | pinned `wow-emmy` adapter | Complete | Not started | R0 |
+| E0-A | `wow-core` identities, evidence, coverage, results | Complete | Partial executable | R0 |
+| E0-B | deterministic `wow-reference` fixture | Complete | Partial executable | R0 |
+| E0-C | updateable `wow-emmy` adapter | Complete | Not started | R0 |
 | E0-D | minimal `wow-project` generation | Complete | Not started | R0 |
 | E0-E | first bounded diagnostics | Complete | Not started | R0 |
 | E0-F | `wow-service` plus `apps/wow` status/check | Complete | Not started | R0 |

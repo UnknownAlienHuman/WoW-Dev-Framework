@@ -1,24 +1,18 @@
 const ROOT_MANIFEST: &str = include_str!("../../../Cargo.toml");
 const CRATE_MANIFEST: &str = include_str!("../Cargo.toml");
-const TOOLCHAIN: &str = include_str!("../../../rust-toolchain.toml");
 
 #[test]
 fn workspace_activates_foundation_crates() {
-    assert!(
-        ROOT_MANIFEST.contains("\"crates/wow-core\"") || ROOT_MANIFEST.contains("\"crates/*\"")
-    );
-    assert!(
-        ROOT_MANIFEST.contains("\"crates/wow-reference\"")
-            || ROOT_MANIFEST.contains("\"crates/*\"")
-    );
+    for member in ["crates/wow-core", "crates/wow-reference"] {
+        assert!(ROOT_MANIFEST.contains(member));
+    }
 }
 
 #[test]
-fn exact_rust_toolchain_and_edition_are_frozen() {
-    assert!(TOOLCHAIN.contains("channel = \"1.98.0\""));
-    assert!(ROOT_MANIFEST.contains("edition = \"2024\""));
-    assert!(ROOT_MANIFEST.contains("rust-version = \"1.98\""));
-    assert!(ROOT_MANIFEST.contains("resolver = \"3\""));
+fn workspace_does_not_require_a_toolchain_patch() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    assert!(!root.join("rust-toolchain.toml").exists());
+    assert!(!root.join("rust-toolchain").exists());
 }
 
 #[test]
@@ -47,29 +41,25 @@ fn core_has_no_forbidden_runtime_dependency() {
 }
 
 #[test]
-fn production_dependencies_are_exactly_pinned() {
-    for (name, version) in [
-        ("semver", "1.0.28"),
-        ("serde", "1.0.228"),
-        ("serde_json", "1.0.150"),
-        ("sha2", "0.11.0"),
-    ] {
+fn production_dependencies_allow_compatible_updates() {
+    for name in ["semver", "serde", "serde_json", "sha2"] {
         let assignment = format!("{name} =");
-        let exact_plain = format!("{name} = \"={version}\"");
-        let exact_inline = format!("version = \"={version}\"");
         let declaration = CRATE_MANIFEST
             .lines()
             .map(str::trim)
             .find(|line| line.starts_with(&assignment));
-
         assert!(
             declaration.is_some(),
             "missing production dependency {name}"
         );
         if let Some(declaration) = declaration {
             assert!(
-                declaration == exact_plain || declaration.contains(&exact_inline),
-                "production dependency {name} is not pinned exactly to {version}: {declaration}"
+                !declaration.contains("\"="),
+                "exact version pin: {declaration}"
+            );
+            assert!(
+                !declaration.contains("\"*\""),
+                "unbounded version: {declaration}"
             );
         }
     }

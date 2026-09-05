@@ -18,7 +18,7 @@ Read:
 6. [`e4/LINEAGE_CANDIDATE_HANDOFF.md`](e4/LINEAGE_CANDIDATE_HANDOFF.md) for the E4-B Candidate-only producer seam;
 7. [`../wow-graph/e4/README.md`](../wow-graph/e4/README.md) for accepted lineage/change/migration/static-impact ownership;
 8. [`../wow-service/e4/README.md`](../wow-service/e4/README.md) for E4-C public orchestration;
-9. current [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb) routing when interpreting patch-sensitive WoW facts;
+9. Optional operator context is advisory, disabled by default, and configured outside the repository; current Blizzard source remains authoritative.
 10. exact pinned owner repositories/snapshots used by the assigned fixture.
 
 ## Active E4-A contract

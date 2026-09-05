@@ -29,7 +29,7 @@ Read in order:
 21. [`TEST_MATRIX.md`](TEST_MATRIX.md)
 22. [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md)
 23. [`CONTRACT.json`](CONTRACT.json)
-24. current `AGENTS.md` and `INDEX_MINI.md` in the external [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb)
+24. Optional operator context is advisory, disabled by default, and configured outside the repository; current Blizzard source remains authoritative.
 
 For current Blizzard source routes, security restrictions, and patch-sensitive facts, use the KB and exact pinned source. Do not copy a floating current baseline into this contract.
 

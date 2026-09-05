@@ -1,6 +1,8 @@
 # Workspace and build plan
 
-**Status:** normative implementation handoff. No Cargo workspace or Rust source exists yet.
+> Current implementation and update policy: [status ledger](IMPLEMENTATION_STATUS.md). Earlier bootstrap schedules below are design history, not instructions to recreate the workspace or permanently pin versions.
+
+**Status:** normative implementation handoff. The two-crate foundation and source bridge are executable; final product topology remains planned.
 
 ## Goal
 

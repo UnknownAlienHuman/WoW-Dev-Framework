@@ -27,8 +27,8 @@
     "../WORKSTREAMS.md"
   ],
   "external_routes": [
-    "https://github.com/UnknownAlienHuman/wow-addon-engineering-kb/blob/main/AGENTS.md",
-    "https://github.com/UnknownAlienHuman/wow-addon-engineering-kb/blob/main/INDEX_MINI.md"
+    "docs/IMPLEMENTATION_STATUS.md#optional-context",
+    "docs/IMPLEMENTATION_STATUS.md#optional-context"
   ],
   "decisions": [
     "CORE-001",

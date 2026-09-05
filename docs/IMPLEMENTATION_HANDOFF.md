@@ -1,18 +1,17 @@
 # Implementation handoff
 
+> Current implementation and update policy: [status ledger](IMPLEMENTATION_STATUS.md). Earlier bootstrap schedules below are design history, not instructions to recreate the workspace or permanently pin versions.
+
 **Status:** normative execution plan after architecture/documentation freeze.
 
 ## Handoff state
 
 ```text
-documentation architecture: complete through E7-B
-implementation: not started
-next owned package: I0-A / wow-core E0-A
-first runnable gate: R0 / E0-A through E0-F
-first useful internal alpha: A0 / E1 through E3
-first developer preview: A1 / E4 plus implemented E7-A frontend
-first governed beta: B0 / E5 and optionally enabled E6
-first supported public v1: V1 / selected scope plus implemented E7-A/E7-B
+documentation frontier: E7-B / planned architecture
+implementation: partial executable foundation and source bridge
+active workspace: wow-core, wow-reference
+next owner implementation: I0-C / real wow-emmy analyzer adapter
+full R0, runtime, installation and release gates: NotEvaluated
 ```
 
 This document turns the completed contracts into agent-sized implementation work. It does not authorize bypassing freeze gates or writing all crates at once.

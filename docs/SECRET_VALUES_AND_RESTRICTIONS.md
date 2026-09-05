@@ -2,7 +2,7 @@
 
 **Status: normative design**
 
-This document defines how the framework stores and reasons about WoW restriction metadata. It does not duplicate the live patch-specific security knowledge maintained in the [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb).
+Optional operator context is advisory, disabled by default, and configured outside the repository; current Blizzard source remains authoritative.
 
 ## 1. Open facet model
 

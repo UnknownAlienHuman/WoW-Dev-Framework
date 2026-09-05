@@ -6,15 +6,15 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use serde::Serialize;
-use serde_json::{Value, json};
+use serde_json::Value;
 use sha2::{Digest, Sha256};
-use wow_core::canonical_json_bytes;
 use wow_reference::generated_api::{
     GeneratedApiCoverageStatus, GeneratedApiIndex, import_generated_api_draft,
 };
 use wow_reference::ui_topology::{
     UiTopologyCoverageStatus, UiTopologyIndex, import_ui_topology_draft,
 };
+use wow_reference::wire_json::canonical_json_bytes;
 
 fn main() -> ExitCode {
     match run(env::args_os().skip(1).collect()) {
@@ -62,8 +62,8 @@ fn usage() -> String {
 }
 
 fn load_api(path: &Path) -> Result<GeneratedApiIndex, String> {
-    let bytes = fs::read(path)
-        .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
+    let bytes =
+        fs::read(path).map_err(|error| format!("cannot read {}: {error}", path.display()))?;
     import_generated_api_draft(&bytes).map_err(|error| {
         format!(
             "generated API import failed ({:?}): {}",
@@ -74,8 +74,8 @@ fn load_api(path: &Path) -> Result<GeneratedApiIndex, String> {
 }
 
 fn load_topology(path: &Path) -> Result<UiTopologyIndex, String> {
-    let bytes = fs::read(path)
-        .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
+    let bytes =
+        fs::read(path).map_err(|error| format!("cannot read {}: {error}", path.display()))?;
     import_ui_topology_draft(&bytes).map_err(|error| {
         format!(
             "UI topology import failed ({:?}): {}",
@@ -98,7 +98,7 @@ impl SourceIdentity {
     fn from_api(index: &GeneratedApiIndex) -> Self {
         let provenance = index.provenance();
         Self {
-            manifest_sha256: provenance.source_manifest_sha256().to_owned(),
+            manifest_sha256: provenance.manifest_sha256().to_owned(),
             source_id: provenance.source_id().map(str::to_owned),
             selector: provenance.selector().map(str::to_owned),
             revision: provenance.revision().to_owned(),
@@ -149,7 +149,7 @@ fn build_bundle(api: &GeneratedApiIndex, topology: &UiTopologyIndex) -> Result<V
         schema_version: 1,
         source: &api_source,
         generated_api: ProductIdentity {
-            id: api.generation_id(),
+            id: api.index_id(),
             draft_sha256: api.draft_sha256(),
             coverage: match api.coverage().status() {
                 GeneratedApiCoverageStatus::Complete => "complete",
@@ -181,7 +181,13 @@ fn build_bundle(api: &GeneratedApiIndex, topology: &UiTopologyIndex) -> Result<V
 
 fn sha256(bytes: &[u8]) -> String {
     let digest = Sha256::digest(bytes);
-    format!("sha256:{digest:x}")
+    format!(
+        "sha256:{}",
+        digest
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>()
+    )
 }
 
 fn print_json<T: Serialize>(value: &T) -> Result<(), String> {
@@ -195,49 +201,62 @@ fn print_json<T: Serialize>(value: &T) -> Result<(), String> {
 }
 
 fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> Result<(), String> {
-    if path.exists() {
-        return Err(format!(
-            "refusing to replace existing output {}",
-            path.display()
-        ));
+    let mut bytes = serde_json::to_vec_pretty(value)
+        .map_err(|error| format!("cannot serialize bundle: {error}"))?;
+    bytes.push(b'\n');
+    let matches_existing = || -> Result<(), String> {
+        let metadata = fs::symlink_metadata(path)
+            .map_err(|error| format!("cannot inspect output: {error}"))?;
+        if !metadata.is_file() || metadata.file_type().is_symlink() {
+            return Err("existing output is not a regular file".to_owned());
+        }
+        let existing = fs::read(path).map_err(|error| format!("cannot read output: {error}"))?;
+        if existing != bytes {
+            return Err("refusing to replace different existing output".to_owned());
+        }
+        Ok(())
+    };
+    match fs::symlink_metadata(path) {
+        Ok(_) => return matches_existing(),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+        Err(error) => return Err(format!("cannot inspect output: {error}")),
     }
     let parent = path
         .parent()
-        .filter(|candidate| !candidate.as_os_str().is_empty())
+        .filter(|value| !value.as_os_str().is_empty())
         .unwrap_or_else(|| Path::new("."));
     fs::create_dir_all(parent)
-        .map_err(|error| format!("cannot create {}: {error}", parent.display()))?;
-    let file_name = path
+        .map_err(|error| format!("cannot create output directory: {error}"))?;
+    let mut temporary_name = path
         .file_name()
-        .ok_or_else(|| format!("output path {} has no file name", path.display()))?;
-    let mut temporary_name = file_name.to_os_string();
+        .ok_or("output has no file name")?
+        .to_os_string();
     temporary_name.push(format!(".{}.tmp", std::process::id()));
     let temporary = parent.join(PathBuf::from(temporary_name));
+    // Do not remove a pre-existing temporary file that this operation did not create.
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&temporary)
+        .map_err(|error| format!("cannot create temporary output: {error}"))?;
     let result = (|| {
-        let mut file = fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&temporary)
-            .map_err(|error| format!("cannot create {}: {error}", temporary.display()))?;
-        serde_json::to_writer_pretty(&mut file, value)
-            .map_err(|error| format!("cannot serialize {}: {error}", temporary.display()))?;
-        file.write_all(b"\n")
-            .map_err(|error| format!("cannot write {}: {error}", temporary.display()))?;
+        file.write_all(&bytes)
+            .map_err(|error| format!("cannot write bundle: {error}"))?;
         file.sync_all()
-            .map_err(|error| format!("cannot sync {}: {error}", temporary.display()))?;
+            .map_err(|error| format!("cannot sync bundle: {error}"))?;
         drop(file);
-        fs::rename(&temporary, path).map_err(|error| {
-            format!(
-                "cannot atomically publish {} as {}: {error}",
-                temporary.display(),
-                path.display()
-            )
-        })
+        // A hard link atomically publishes the complete file without replacing a
+        // concurrently created destination. Both paths are on the same filesystem.
+        match fs::hard_link(&temporary, path) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => matches_existing(),
+            Err(error) => Err(format!("cannot publish bundle: {error}")),
+        }
     })();
-    if result.is_err() {
-        let _ = fs::remove_file(&temporary);
-    }
-    result
+    let cleanup = fs::remove_file(&temporary).map_err(|error| {
+        format!("bundle publication attempted but temporary cleanup failed: {error}")
+    });
+    result.and(cleanup)
 }
 
 #[cfg(test)]
@@ -246,8 +265,8 @@ mod tests {
 
     fn identity(revision: &str) -> SourceIdentity {
         SourceIdentity {
-            manifest_sha256: "sha256:1111111111111111111111111111111111111111111111111111111111111111"
-                .to_owned(),
+            manifest_sha256:
+                "sha256:1111111111111111111111111111111111111111111111111111111111111111".to_owned(),
             source_id: Some("public-source".to_owned()),
             selector: Some("live".to_owned()),
             revision: revision.to_owned(),
@@ -276,8 +295,7 @@ mod tests {
 
         let mut changed = first.clone();
         changed.manifest_sha256 =
-            "sha256:4444444444444444444444444444444444444444444444444444444444444444"
-                .to_owned();
+            "sha256:4444444444444444444444444444444444444444444444444444444444444444".to_owned();
         assert_ne!(first, changed);
     }
 }

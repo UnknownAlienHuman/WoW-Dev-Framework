@@ -87,7 +87,7 @@ wow-store
 5. [`../../wow-recognizers/e2/README.md`](../../wow-recognizers/e2/README.md);
 6. [`../../wow-store/e2/README.md`](../../wow-store/e2/README.md);
 7. this complete E3-A package;
-8. current external [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb) routing for Blizzard UI source, lifecycle/load, events, hooks, XML, security, Secret Values, and relevant subsystems.
+8. Optional operator context is advisory, disabled by default, and configured outside the repository; current Blizzard source remains authoritative.
 
 Candidate materialization source: [Gethe/wow-ui-source](https://github.com/Gethe/wow-ui-source). It is a mirror/provider input, not floating authority; implementation requires an exact commit/tree/content manifest and applicable provenance/license evidence.
 

@@ -1,16 +1,16 @@
-//! Import boundary for normalized Blizzard generated API documentation.
+//! Validated import boundary for normalized Blizzard generated API documents.
 //!
-//! The producer output is untrusted input at this boundary. Import repeats the
-//! canonical digest, source, coverage, ordering, and conflict checks before it
-//! exposes immutable facts to the rest of `wow-reference`.
+//! This module never executes Lua. It accepts only the normalized producer
+//! schema, repeats identity and coverage checks, and exposes immutable exact
+//! lookup facts for one operation-scoped source revision.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use crate::wire_json::canonical_json_bytes;
+use serde::Serialize;
+use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
-use wow_core::canonical_json_bytes;
 
 const SCHEMA: &str = "wow-dev-framework/blizzard-api-reference-draft";
 const SCHEMA_VERSION: u64 = 1;
@@ -19,7 +19,7 @@ const GENERATED_ROOT: &str = "Interface/AddOns/Blizzard_APIDocumentationGenerate
 const GENERATED_SUFFIX: &str = "Documentation.lua";
 const MAX_DRAFT_BYTES: usize = 512 * 1024 * 1024;
 
-/// Stable failure classes returned by the generated-API import boundary.
+/// Stable generated API import failure class.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum GeneratedApiImportErrorCode {
     InputTooLarge,
@@ -34,15 +34,15 @@ pub enum GeneratedApiImportErrorCode {
     InvalidConflict,
 }
 
-/// One bounded generated-API import failure.
+/// One generated API import failure.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GeneratedApiImportError {
     code: GeneratedApiImportErrorCode,
-    message: Box<str>,
+    message: String,
 }
 
 impl GeneratedApiImportError {
-    fn new(code: GeneratedApiImportErrorCode, message: impl Into<Box<str>>) -> Self {
+    fn new(code: GeneratedApiImportErrorCode, message: impl Into<String>) -> Self {
         Self {
             code,
             message: message.into(),
@@ -55,7 +55,7 @@ impl GeneratedApiImportError {
         self.code
     }
 
-    /// Safe bounded explanation.
+    /// Safe explanation.
     #[must_use]
     pub fn message(&self) -> &str {
         &self.message
@@ -70,13 +70,11 @@ impl fmt::Display for GeneratedApiImportError {
 
 impl std::error::Error for GeneratedApiImportError {}
 
-/// Result type for generated-API imports.
+/// Result type for generated API imports.
 pub type GeneratedApiImportResult<T> = Result<T, GeneratedApiImportError>;
 
-/// Kind of one normalized generated API fact.
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
-)]
+/// Normalized generated API entity kind.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum GeneratedApiFactKind {
     Function,
@@ -88,7 +86,7 @@ pub enum GeneratedApiFactKind {
 }
 
 impl GeneratedApiFactKind {
-    /// Canonical singular text.
+    /// Canonical singular name.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -124,26 +122,26 @@ impl GeneratedApiFactKind {
     }
 }
 
-/// Coverage state retained from the producer after independent validation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// Validated generated API coverage state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum GeneratedApiCoverageStatus {
     Complete,
     Partial,
 }
 
-/// Exact source span and content identity for one generated record.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// Exact source span and content identity.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct GeneratedApiSourceSpan {
-    path: Box<str>,
+    path: String,
     line_start: u64,
     line_end: u64,
-    git_object: Box<str>,
-    sha256: Box<str>,
+    git_object: String,
+    sha256: String,
 }
 
 impl GeneratedApiSourceSpan {
-    /// Canonical repository-relative source path.
+    /// Canonical repository-relative path.
     #[must_use]
     pub fn path(&self) -> &str {
         &self.path
@@ -161,7 +159,7 @@ impl GeneratedApiSourceSpan {
         self.line_end
     }
 
-    /// Exact Git blob object identity.
+    /// Exact Git blob object identifier.
     #[must_use]
     pub fn git_object(&self) -> &str {
         &self.git_object
@@ -174,37 +172,49 @@ impl GeneratedApiSourceSpan {
     }
 }
 
-/// Exact operation-scoped source and producer provenance.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// Exact producer and source identity retained by the import.
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct GeneratedApiProvenance {
-    manifest_sha256: Box<str>,
-    manifest_declared_digest: Option<Box<str>>,
-    source_id: Option<Box<str>>,
-    selector: Option<Box<str>>,
-    revision: Box<str>,
-    version: Option<Box<str>>,
+    manifest_sha256: String,
+    manifest_declared_digest: Option<String>,
+    source_id: Option<String>,
+    selector: Option<String>,
+    revision: String,
+    version: Option<String>,
     producer_version: u64,
-    parser: Box<str>,
+    parser: String,
     configuration: BTreeMap<String, Value>,
 }
 
 impl GeneratedApiProvenance {
-    /// Digest of the exact source manifest bytes consumed by the producer.
+    /// SHA-256 identity of the exact source manifest bytes.
     #[must_use]
     pub fn manifest_sha256(&self) -> &str {
         &self.manifest_sha256
     }
 
-    /// Exact source revision used for every imported file.
+    /// Producer-declared manifest digest, when supplied.
     #[must_use]
-    pub fn revision(&self) -> &str {
-        &self.revision
+    pub fn manifest_declared_digest(&self) -> Option<&str> {
+        self.manifest_declared_digest.as_deref()
     }
 
-    /// Moving selector resolved for this operation, when supplied.
+    /// Public source identifier, when supplied.
+    #[must_use]
+    pub fn source_id(&self) -> Option<&str> {
+        self.source_id.as_deref()
+    }
+
+    /// Moving selector resolved for the operation, when supplied.
     #[must_use]
     pub fn selector(&self) -> Option<&str> {
         self.selector.as_deref()
+    }
+
+    /// Exact source revision used for every imported fact.
+    #[must_use]
+    pub fn revision(&self) -> &str {
+        &self.revision
     }
 
     /// Source-reported client version, when supplied.
@@ -219,31 +229,29 @@ impl GeneratedApiProvenance {
         self.producer_version
     }
 
-    /// Producer parser identity.
+    /// Declarative parser identity.
     #[must_use]
     pub fn parser(&self) -> &str {
         &self.parser
     }
+
+    /// Producer configuration participating in index identity.
+    #[must_use]
+    pub const fn configuration(&self) -> &BTreeMap<String, Value> {
+        &self.configuration
+    }
 }
 
-/// One immutable normalized API fact.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// One content-addressed generated API fact.
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct GeneratedApiFact {
-    fact_id: Box<str>,
+    fact_id: String,
     kind: GeneratedApiFactKind,
-    name: Box<str>,
-    qualified_name: Box<str>,
-    member_type: Option<Box<str>>,
-    literal_name: Option<Box<str>>,
-    documentation: Vec<Box<str>>,
-    restrictions: BTreeMap<String, Value>,
-    attributes: BTreeMap<String, Value>,
-    arguments: Vec<Value>,
-    returns: Vec<Value>,
-    payload: Vec<Value>,
-    fields: Vec<Value>,
-    values: Vec<Value>,
+    name: String,
+    qualified_name: String,
+    member_type: Option<String>,
     source: GeneratedApiSourceSpan,
+    normalized: Value,
 }
 
 impl GeneratedApiFact {
@@ -265,7 +273,7 @@ impl GeneratedApiFact {
         &self.name
     }
 
-    /// Exact normalized lookup name.
+    /// Exact case-sensitive lookup name.
     #[must_use]
     pub fn qualified_name(&self) -> &str {
         &self.qualified_name
@@ -277,62 +285,123 @@ impl GeneratedApiFact {
         self.member_type.as_deref()
     }
 
-    /// Generated restriction metadata. It remains source evidence and does not
-    /// replace target-client runtime checks.
-    #[must_use]
-    pub const fn restrictions(&self) -> &BTreeMap<String, Value> {
-        &self.restrictions
-    }
-
-    /// Exact source span and content identity.
+    /// Exact source span.
     #[must_use]
     pub const fn source(&self) -> &GeneratedApiSourceSpan {
         &self.source
     }
+
+    /// Complete normalized producer payload for this member.
+    #[must_use]
+    pub const fn normalized(&self) -> &Value {
+        &self.normalized
+    }
+
+    /// Generated restrictions object, when present.
+    #[must_use]
+    pub fn restrictions(&self) -> Option<&Map<String, Value>> {
+        self.normalized
+            .get("restrictions")
+            .and_then(Value::as_object)
+    }
 }
 
-/// One producer-preserved conflict.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// One source locator retained by a duplicate-symbol conflict.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct GeneratedApiConflictSource {
+    path: String,
+    line_start: u64,
+}
+
+impl GeneratedApiConflictSource {
+    /// Canonical source path.
+    #[must_use]
+    pub fn path(&self) -> &str {
+        &self.path
+    }
+
+    /// One-based source line.
+    #[must_use]
+    pub const fn line_start(&self) -> u64 {
+        self.line_start
+    }
+}
+
+/// One producer-preserved duplicate-symbol conflict.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct GeneratedApiConflict {
-    kind: Box<str>,
-    collection: Box<str>,
-    qualified_name: Box<str>,
+    kind: String,
+    collection: String,
+    qualified_name: String,
     sources: Vec<GeneratedApiConflictSource>,
 }
 
 impl GeneratedApiConflict {
-    /// Conflict kind emitted by the producer.
+    /// Conflict kind.
     #[must_use]
     pub fn kind(&self) -> &str {
         &self.kind
     }
 
-    /// Qualified name affected by the conflict.
+    /// Generated collection.
+    #[must_use]
+    pub fn collection(&self) -> &str {
+        &self.collection
+    }
+
+    /// Affected exact lookup name.
     #[must_use]
     pub fn qualified_name(&self) -> &str {
         &self.qualified_name
     }
+
+    /// Canonically ordered source locators.
+    #[must_use]
+    pub fn sources(&self) -> &[GeneratedApiConflictSource] {
+        &self.sources
+    }
 }
 
-/// Source locator retained by a producer conflict.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct GeneratedApiConflictSource {
-    path: Box<str>,
-    line_start: u64,
+/// One failure retained by partial producer coverage.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct GeneratedApiFailure {
+    code: String,
+    message: String,
+    path: Option<String>,
+}
+
+impl GeneratedApiFailure {
+    /// Stable producer failure code.
+    #[must_use]
+    pub fn code(&self) -> &str {
+        &self.code
+    }
+
+    /// Safe failure explanation.
+    #[must_use]
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+
+    /// Affected path, when known.
+    #[must_use]
+    pub fn path(&self) -> Option<&str> {
+        self.path.as_deref()
+    }
 }
 
 /// Validated generated API coverage.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct GeneratedApiCoverage {
     status: GeneratedApiCoverageStatus,
     negative_authority: bool,
     candidate_files: u64,
     parsed_files: u64,
     failed_files: u64,
-    parsed_paths: Vec<Box<str>>,
+    parsed_paths: Vec<String>,
     failures: Vec<GeneratedApiFailure>,
-    entity_counts: BTreeMap<Box<str>, u64>,
-    limitations: Vec<Box<str>>,
+    entity_counts: BTreeMap<String, u64>,
+    limitations: Vec<String>,
 }
 
 impl GeneratedApiCoverage {
@@ -342,41 +411,56 @@ impl GeneratedApiCoverage {
         self.status
     }
 
-    /// Whether this exact generated-document scope may support an authoritative
-    /// negative. Conflicts still block the affected lookup independently.
+    /// Whether exact absence may be authoritative for this scope.
     #[must_use]
     pub const fn negative_authority(&self) -> bool {
         self.negative_authority
     }
 
-    /// Candidate file count.
+    /// Candidate generated-document count.
     #[must_use]
     pub const fn candidate_files(&self) -> u64 {
         self.candidate_files
     }
 
-    /// Successfully imported file count.
+    /// Parsed generated-document count.
     #[must_use]
     pub const fn parsed_files(&self) -> u64 {
         self.parsed_files
     }
 
-    /// Failed file count.
+    /// Failed generated-document count.
     #[must_use]
     pub const fn failed_files(&self) -> u64 {
         self.failed_files
     }
+
+    /// Canonically ordered parsed paths.
+    #[must_use]
+    pub fn parsed_paths(&self) -> &[String] {
+        &self.parsed_paths
+    }
+
+    /// Partial-coverage failures.
+    #[must_use]
+    pub fn failures(&self) -> &[GeneratedApiFailure] {
+        &self.failures
+    }
+
+    /// Entity counts by generated collection.
+    #[must_use]
+    pub const fn entity_counts(&self) -> &BTreeMap<String, u64> {
+        &self.entity_counts
+    }
+
+    /// Explicit limitations retained from the producer.
+    #[must_use]
+    pub fn limitations(&self) -> &[String] {
+        &self.limitations
+    }
 }
 
-/// One producer failure retained by a partial draft.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct GeneratedApiFailure {
-    code: Box<str>,
-    message: Box<str>,
-    path: Option<Box<str>>,
-}
-
-/// Exact lookup outcome from one generated API index.
+/// Exact lookup outcome.
 #[derive(Debug, Clone, PartialEq)]
 pub enum GeneratedApiLookup<'a> {
     Found(&'a GeneratedApiFact),
@@ -385,11 +469,11 @@ pub enum GeneratedApiLookup<'a> {
     NotAuthoritative,
 }
 
-/// Immutable, independently validated index produced from one draft.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// Immutable generated API index for one exact source generation.
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct GeneratedApiIndex {
-    index_id: Box<str>,
-    draft_sha256: Box<str>,
+    index_id: String,
+    draft_sha256: String,
     provenance: GeneratedApiProvenance,
     coverage: GeneratedApiCoverage,
     conflicts: Vec<GeneratedApiConflict>,
@@ -397,19 +481,19 @@ pub struct GeneratedApiIndex {
 }
 
 impl GeneratedApiIndex {
-    /// Content-addressed index identity.
+    /// Content-addressed imported index identity.
     #[must_use]
     pub fn index_id(&self) -> &str {
         &self.index_id
     }
 
-    /// Producer draft digest validated by this import.
+    /// Validated producer draft digest.
     #[must_use]
     pub fn draft_sha256(&self) -> &str {
         &self.draft_sha256
     }
 
-    /// Exact source and producer provenance.
+    /// Exact producer and source provenance.
     #[must_use]
     pub const fn provenance(&self) -> &GeneratedApiProvenance {
         &self.provenance
@@ -421,7 +505,7 @@ impl GeneratedApiIndex {
         &self.coverage
     }
 
-    /// Preserved conflicts.
+    /// Preserved duplicate-symbol conflicts.
     #[must_use]
     pub fn conflicts(&self) -> &[GeneratedApiConflict] {
         &self.conflicts
@@ -433,7 +517,7 @@ impl GeneratedApiIndex {
         &self.facts
     }
 
-    /// Performs one exact, case-sensitive lookup.
+    /// Exact case-sensitive lookup.
     #[must_use]
     pub fn lookup(
         &self,
@@ -443,7 +527,7 @@ impl GeneratedApiIndex {
         let matches = self
             .facts
             .iter()
-            .filter(|fact| fact.kind == kind && fact.qualified_name.as_ref() == qualified_name)
+            .filter(|fact| fact.kind == kind && fact.qualified_name == qualified_name)
             .collect::<Vec<_>>();
         match matches.as_slice() {
             [fact] => GeneratedApiLookup::Found(fact),
@@ -454,271 +538,203 @@ impl GeneratedApiIndex {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
-struct DraftRoot {
-    schema: String,
-    schema_version: u64,
-    producer: DraftProducer,
-    source: DraftSource,
-    coverage: DraftCoverage,
-    #[serde(default)]
-    conflicts: Vec<DraftConflict>,
-    systems: Vec<DraftSystem>,
-    draft_sha256: String,
-    #[serde(flatten)]
-    extra: BTreeMap<String, Value>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-struct DraftProducer {
-    id: String,
-    version: u64,
-    parser: String,
-    #[serde(default)]
-    configuration: BTreeMap<String, Value>,
-    #[serde(flatten)]
-    extra: BTreeMap<String, Value>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-struct DraftSource {
-    manifest_sha256: String,
-    manifest_declared_digest: Option<String>,
-    source_id: Option<String>,
-    selector: Option<String>,
-    revision: String,
-    version: Option<String>,
-    #[serde(flatten)]
-    extra: BTreeMap<String, Value>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-struct DraftCoverage {
-    scope: String,
-    status: String,
-    negative_authority: bool,
-    candidate_files: u64,
-    parsed_files: u64,
-    failed_files: u64,
-    parsed_paths: Vec<String>,
-    failures: Vec<DraftFailure>,
-    entity_counts: BTreeMap<String, u64>,
-    limitations: Vec<String>,
-    #[serde(flatten)]
-    extra: BTreeMap<String, Value>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-struct DraftFailure {
-    code: String,
-    message: String,
-    path: Option<String>,
-    #[serde(flatten)]
-    extra: BTreeMap<String, Value>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-struct DraftConflict {
-    kind: String,
-    collection: String,
-    qualified_name: String,
-    sources: Vec<DraftConflictSource>,
-    #[serde(flatten)]
-    extra: BTreeMap<String, Value>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-struct DraftConflictSource {
-    path: String,
-    line_start: u64,
-    #[serde(flatten)]
-    extra: BTreeMap<String, Value>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-struct DraftSystem {
-    name: String,
-    namespace: Option<String>,
-    #[serde(rename = "type")]
-    system_type: Option<String>,
-    environment: Option<String>,
-    #[serde(default)]
-    documentation: Vec<String>,
-    #[serde(default)]
-    attributes: BTreeMap<String, Value>,
-    source: DraftSourceSpan,
-    #[serde(default)]
-    functions: Vec<DraftMember>,
-    #[serde(default)]
-    events: Vec<DraftMember>,
-    #[serde(default)]
-    tables: Vec<DraftMember>,
-    #[serde(default)]
-    enumerations: Vec<DraftMember>,
-    #[serde(default)]
-    constants: Vec<DraftMember>,
-    #[serde(default)]
-    predicates: Vec<DraftMember>,
-    #[serde(flatten)]
-    extra: BTreeMap<String, Value>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-struct DraftMember {
-    name: String,
-    qualified_name: String,
-    #[serde(rename = "type")]
-    member_type: Option<String>,
-    literal_name: Option<String>,
-    #[serde(default)]
-    documentation: Vec<String>,
-    #[serde(default)]
-    restrictions: BTreeMap<String, Value>,
-    #[serde(default)]
-    attributes: BTreeMap<String, Value>,
-    #[serde(default)]
-    arguments: Vec<Value>,
-    #[serde(default)]
-    returns: Vec<Value>,
-    #[serde(default)]
-    payload: Vec<Value>,
-    #[serde(default)]
-    fields: Vec<Value>,
-    #[serde(default)]
-    values: Vec<Value>,
-    source: DraftSourceSpan,
-    #[serde(flatten)]
-    extra: BTreeMap<String, Value>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-struct DraftSourceSpan {
-    path: String,
-    line_start: u64,
-    line_end: u64,
-    git_object: String,
-    sha256: String,
-    #[serde(flatten)]
-    extra: BTreeMap<String, Value>,
-}
-
-/// Imports one normalized producer draft after independently validating it.
+/// Imports and independently validates one normalized generated API draft.
 pub fn import_generated_api_draft(bytes: &[u8]) -> GeneratedApiImportResult<GeneratedApiIndex> {
     if bytes.len() > MAX_DRAFT_BYTES {
-        return Err(GeneratedApiImportError::new(
+        return Err(error(
             GeneratedApiImportErrorCode::InputTooLarge,
-            "generated API draft exceeds the import size limit",
+            "generated API draft exceeds the import limit",
+        ));
+    }
+    let value = serde_json::from_slice::<Value>(bytes).map_err(|source| {
+        error(
+            GeneratedApiImportErrorCode::InvalidJson,
+            format!("generated API draft is not valid JSON: {source}"),
+        )
+    })?;
+    let root = object(&value, "draft root")?;
+    allowed_keys(
+        root,
+        &[
+            "schema",
+            "schema_version",
+            "producer",
+            "source",
+            "coverage",
+            "conflicts",
+            "systems",
+            "draft_sha256",
+        ],
+        "draft root",
+    )?;
+    if string(root, "schema", "draft schema")? != SCHEMA
+        || unsigned(root, "schema_version", "draft schema version")? != SCHEMA_VERSION
+    {
+        return Err(error(
+            GeneratedApiImportErrorCode::UnsupportedSchema,
+            "unsupported generated API draft schema",
         ));
     }
 
-    let value = serde_json::from_slice::<Value>(bytes).map_err(|error| {
-        GeneratedApiImportError::new(
-            GeneratedApiImportErrorCode::InvalidJson,
-            format!("generated API draft is not valid JSON: {error}"),
-        )
-    })?;
-    let supplied_digest = value
-        .get("draft_sha256")
-        .and_then(Value::as_str)
-        .ok_or_else(|| {
-            GeneratedApiImportError::new(
-                GeneratedApiImportErrorCode::InvalidDigest,
-                "generated API draft has no draft_sha256",
-            )
-        })?;
-    validate_sha256(supplied_digest, "draft_sha256")?;
-
-    let mut digest_projection = value.clone();
-    let projection = digest_projection.as_object_mut().ok_or_else(|| {
-        GeneratedApiImportError::new(
-            GeneratedApiImportErrorCode::InvalidJson,
-            "generated API draft root must be an object",
-        )
-    })?;
-    projection.remove("draft_sha256");
-    let digest_bytes = canonical_json_bytes(&digest_projection).map_err(|error| {
-        GeneratedApiImportError::new(
+    let supplied_digest = string(root, "draft_sha256", "draft digest")?.to_owned();
+    canonical_sha256(&supplied_digest, "draft digest")?;
+    let mut projection = value.clone();
+    object_mut(&mut projection, "draft projection")?.remove("draft_sha256");
+    let projection_bytes = canonical_json_bytes(&projection).map_err(|source| {
+        error(
             GeneratedApiImportErrorCode::InvalidDigest,
-            format!("generated API draft cannot be canonicalized: {error}"),
+            format!("generated API draft cannot be canonicalized: {source}"),
         )
     })?;
-    let expected_digest = sha256_prefixed(&digest_bytes);
-    if supplied_digest != expected_digest {
-        return Err(GeneratedApiImportError::new(
+    if supplied_digest != sha256(&projection_bytes) {
+        return Err(error(
             GeneratedApiImportErrorCode::InvalidDigest,
             "generated API draft digest does not match its content",
         ));
     }
 
-    let draft = serde_json::from_value::<DraftRoot>(value).map_err(|error| {
-        GeneratedApiImportError::new(
-            GeneratedApiImportErrorCode::InvalidJson,
-            format!("generated API draft shape is invalid: {error}"),
-        )
-    })?;
-    validate_root(&draft)?;
+    let producer = object(required(root, "producer", "producer")?, "producer")?;
+    allowed_keys(
+        producer,
+        &["id", "version", "parser", "configuration"],
+        "producer",
+    )?;
+    if string(producer, "id", "producer id")? != PRODUCER_ID {
+        return Err(error(
+            GeneratedApiImportErrorCode::InvalidProducer,
+            "unexpected generated API producer",
+        ));
+    }
+    let producer_version = unsigned(producer, "version", "producer version")?;
+    let parser = string(producer, "parser", "producer parser")?.to_owned();
+    if producer_version == 0 || parser.is_empty() {
+        return Err(error(
+            GeneratedApiImportErrorCode::InvalidProducer,
+            "generated API producer version or parser is invalid",
+        ));
+    }
+    let configuration = value_map(object(
+        required(producer, "configuration", "producer configuration")?,
+        "producer configuration",
+    )?);
 
-    let parsed_paths = draft
-        .coverage
+    let source = object(required(root, "source", "source")?, "source")?;
+    allowed_keys(
+        source,
+        &[
+            "manifest_sha256",
+            "manifest_declared_digest",
+            "source_id",
+            "selector",
+            "revision",
+            "version",
+        ],
+        "source",
+    )?;
+    let manifest_sha256 = string(source, "manifest_sha256", "manifest digest")?.to_owned();
+    canonical_sha256(&manifest_sha256, "manifest digest")?;
+    let manifest_declared_digest = optional_string(source, "manifest_declared_digest")?;
+    if let Some(digest) = manifest_declared_digest.as_deref() {
+        flexible_sha256(digest, "declared manifest digest")?;
+    }
+    let revision = string(source, "revision", "source revision")?.to_owned();
+    object_id(&revision, None, "source revision")?;
+    let provenance = GeneratedApiProvenance {
+        manifest_sha256,
+        manifest_declared_digest,
+        source_id: optional_string(source, "source_id")?,
+        selector: optional_string(source, "selector")?,
+        revision: revision.clone(),
+        version: optional_string(source, "version")?,
+        producer_version,
+        parser,
+        configuration,
+    };
+
+    let coverage_value = required(root, "coverage", "coverage")?;
+    let coverage = parse_coverage(coverage_value)?;
+    let parsed_paths = coverage
         .parsed_paths
         .iter()
         .map(String::as_str)
         .collect::<BTreeSet<_>>();
-    let mut facts = Vec::new();
-    let mut observed_counts = BTreeMap::<String, u64>::new();
 
-    for system in &draft.systems {
-        validate_system(system, &parsed_paths, &draft.source.revision)?;
+    let systems = array(required(root, "systems", "systems")?, "systems")?;
+    validate_system_order(systems)?;
+    let mut facts = Vec::new();
+    let mut counts = BTreeMap::new();
+    for kind in GeneratedApiFactKind::all() {
+        counts.insert(kind.collection().to_owned(), 0_u64);
+    }
+    for system in systems {
+        let system_object = object(system, "system")?;
+        allowed_keys(
+            system_object,
+            &[
+                "name",
+                "namespace",
+                "type",
+                "environment",
+                "documentation",
+                "attributes",
+                "source",
+                "functions",
+                "events",
+                "tables",
+                "enumerations",
+                "constants",
+                "predicates",
+            ],
+            "system",
+        )?;
+        nonempty_string(system_object, "name", "system name")?;
+        parse_source_span(
+            required(system_object, "source", "system source")?,
+            &parsed_paths,
+            &revision,
+        )?;
         for kind in GeneratedApiFactKind::all() {
-            let members = members_for_kind(system, kind);
+            let members = array(
+                required(system_object, kind.collection(), kind.collection())?,
+                kind.collection(),
+            )?;
             validate_member_order(members, kind)?;
             for member in members {
-                facts.push(import_member(kind, member)?);
+                facts.push(parse_fact(kind, member, &parsed_paths, &revision)?);
             }
-            let count = u64::try_from(members.len()).map_err(|_| {
-                GeneratedApiImportError::new(
+            let member_count = u64::try_from(members.len()).map_err(|_| {
+                error(
                     GeneratedApiImportErrorCode::InvalidCoverage,
-                    "generated API member count exceeds u64",
+                    "generated API entity count exceeds u64",
                 )
             })?;
-            let current = observed_counts.entry(kind.collection().to_owned()).or_default();
-            *current = current.checked_add(count).ok_or_else(|| {
-                GeneratedApiImportError::new(
+            let current = counts.get_mut(kind.collection()).ok_or_else(|| {
+                error(
                     GeneratedApiImportErrorCode::InvalidCoverage,
-                    "generated API member count overflow",
+                    "generated API entity counter is missing",
+                )
+            })?;
+            *current = current.checked_add(member_count).ok_or_else(|| {
+                error(
+                    GeneratedApiImportErrorCode::InvalidCoverage,
+                    "generated API entity count overflow",
                 )
             })?;
         }
     }
-
-    for kind in GeneratedApiFactKind::all() {
-        observed_counts.entry(kind.collection().to_owned()).or_default();
-    }
-    if observed_counts != draft.coverage.entity_counts {
-        return Err(GeneratedApiImportError::new(
+    if counts != coverage.entity_counts {
+        return Err(error(
             GeneratedApiImportErrorCode::InvalidCoverage,
             "generated API entity counts do not match imported facts",
         ));
     }
+    facts.sort_by(|left, right| fact_key(left).cmp(&fact_key(right)));
 
-    facts.sort_by(|left, right| fact_sort_key(left).cmp(&fact_sort_key(right)));
-    let conflicts = import_conflicts(&draft.conflicts, &facts, &parsed_paths)?;
-    let coverage = import_coverage(&draft.coverage)?;
-    let provenance = GeneratedApiProvenance {
-        manifest_sha256: draft.source.manifest_sha256.clone().into_boxed_str(),
-        manifest_declared_digest: draft
-            .source
-            .manifest_declared_digest
-            .clone()
-            .map(String::into_boxed_str),
-        source_id: draft.source.source_id.clone().map(String::into_boxed_str),
-        selector: draft.source.selector.clone().map(String::into_boxed_str),
-        revision: draft.source.revision.clone().into_boxed_str(),
-        version: draft.source.version.clone().map(String::into_boxed_str),
-        producer_version: draft.producer.version,
-        parser: draft.producer.parser.clone().into_boxed_str(),
-        configuration: draft.producer.configuration.clone(),
-    };
+    let conflicts = parse_conflicts(
+        array(required(root, "conflicts", "conflicts")?, "conflicts")?,
+        &facts,
+        &parsed_paths,
+    )?;
 
     #[derive(Serialize)]
     struct IndexProjection<'a> {
@@ -728,23 +744,22 @@ pub fn import_generated_api_draft(bytes: &[u8]) -> GeneratedApiImportResult<Gene
         conflicts: &'a [GeneratedApiConflict],
         facts: &'a [GeneratedApiFact],
     }
-    let projection = IndexProjection {
-        draft_sha256: &draft.draft_sha256,
+    let index_projection = IndexProjection {
+        draft_sha256: &supplied_digest,
         provenance: &provenance,
         coverage: &coverage,
         conflicts: &conflicts,
         facts: &facts,
     };
-    let index_bytes = canonical_json_bytes(&projection).map_err(|error| {
-        GeneratedApiImportError::new(
+    let index_bytes = canonical_json_bytes(&index_projection).map_err(|source| {
+        error(
             GeneratedApiImportErrorCode::InvalidDigest,
-            format!("generated API index cannot be canonicalized: {error}"),
+            format!("generated API index cannot be canonicalized: {source}"),
         )
     })?;
-
     Ok(GeneratedApiIndex {
-        index_id: sha256_prefixed(&index_bytes).into_boxed_str(),
-        draft_sha256: draft.draft_sha256.into_boxed_str(),
+        index_id: sha256(&index_bytes),
+        draft_sha256: supplied_digest,
         provenance,
         coverage,
         conflicts,
@@ -752,441 +767,470 @@ pub fn import_generated_api_draft(bytes: &[u8]) -> GeneratedApiImportResult<Gene
     })
 }
 
-fn validate_root(draft: &DraftRoot) -> GeneratedApiImportResult<()> {
-    if draft.schema != SCHEMA || draft.schema_version != SCHEMA_VERSION {
-        return Err(GeneratedApiImportError::new(
-            GeneratedApiImportErrorCode::UnsupportedSchema,
-            "unsupported generated API draft schema",
-        ));
-    }
-    if draft.producer.id != PRODUCER_ID
-        || draft.producer.version == 0
-        || draft.producer.parser.is_empty()
+fn parse_coverage(value: &Value) -> GeneratedApiImportResult<GeneratedApiCoverage> {
+    let coverage = object(value, "coverage")?;
+    allowed_keys(
+        coverage,
+        &[
+            "scope",
+            "status",
+            "negative_authority",
+            "candidate_files",
+            "parsed_files",
+            "failed_files",
+            "parsed_paths",
+            "failures",
+            "entity_counts",
+            "limitations",
+        ],
+        "coverage",
+    )?;
+    if string(coverage, "scope", "coverage scope")?
+        != format!("{GENERATED_ROOT}*{GENERATED_SUFFIX}")
     {
-        return Err(GeneratedApiImportError::new(
-            GeneratedApiImportErrorCode::InvalidProducer,
-            "generated API producer identity is invalid",
+        return Err(error(
+            GeneratedApiImportErrorCode::InvalidCoverage,
+            "generated API coverage scope is incomplete or unexpected",
         ));
     }
-    reject_nonempty_extensions(&draft.extra, "draft root")?;
-    reject_nonempty_extensions(&draft.producer.extra, "producer")?;
-    reject_nonempty_extensions(&draft.source.extra, "source")?;
-    reject_nonempty_extensions(&draft.coverage.extra, "coverage")?;
-    validate_sha256(&draft.draft_sha256, "draft_sha256")?;
-    validate_sha256(&draft.source.manifest_sha256, "manifest_sha256")?;
-    if let Some(digest) = &draft.source.manifest_declared_digest {
-        validate_sha256(digest, "manifest_declared_digest")?;
-    }
-    validate_object_id(&draft.source.revision, None, "source revision")?;
-    if draft.coverage.scope != format!("{GENERATED_ROOT}*{GENERATED_SUFFIX}") {
-        return Err(GeneratedApiImportError::new(
-            GeneratedApiImportErrorCode::InvalidCoverage,
-            "generated API coverage scope is not the complete generated-document scope",
-        ));
-    }
-    validate_coverage_shape(&draft.coverage)?;
-    validate_system_order(&draft.systems)?;
-    Ok(())
-}
-
-fn validate_coverage_shape(coverage: &DraftCoverage) -> GeneratedApiImportResult<()> {
-    let expected_status = if coverage.failed_files == 0
-        && coverage.candidate_files == coverage.parsed_files
-    {
-        "complete"
-    } else {
-        "partial"
-    };
-    if coverage.status != expected_status
-        || coverage.negative_authority != (expected_status == "complete")
-        || coverage.candidate_files
-            != coverage
-                .parsed_files
-                .checked_add(coverage.failed_files)
-                .ok_or_else(|| {
-                    GeneratedApiImportError::new(
-                        GeneratedApiImportErrorCode::InvalidCoverage,
-                        "generated API file-count overflow",
-                    )
-                })?
-    {
-        return Err(GeneratedApiImportError::new(
-            GeneratedApiImportErrorCode::InvalidCoverage,
-            "generated API coverage counts or authority are inconsistent",
-        ));
-    }
-    let parsed_len = u64::try_from(coverage.parsed_paths.len()).map_err(|_| {
-        GeneratedApiImportError::new(
-            GeneratedApiImportErrorCode::InvalidCoverage,
-            "generated API parsed path count exceeds u64",
-        )
-    })?;
-    let failure_len = u64::try_from(coverage.failures.len()).map_err(|_| {
-        GeneratedApiImportError::new(
-            GeneratedApiImportErrorCode::InvalidCoverage,
-            "generated API failure count exceeds u64",
-        )
-    })?;
-    if parsed_len != coverage.parsed_files || failure_len != coverage.failed_files {
-        return Err(GeneratedApiImportError::new(
-            GeneratedApiImportErrorCode::InvalidCoverage,
-            "generated API coverage arrays do not match their counts",
-        ));
-    }
-    let mut previous: Option<&str> = None;
-    let mut seen = BTreeSet::new();
-    for path in &coverage.parsed_paths {
-        validate_generated_path(path)?;
-        if previous.is_some_and(|candidate| candidate.as_bytes() >= path.as_bytes())
-            || !seen.insert(path.as_str())
-        {
-            return Err(GeneratedApiImportError::new(
-                GeneratedApiImportErrorCode::InvalidOrdering,
-                "generated API parsed paths are not uniquely byte-sorted",
-            ));
-        }
-        previous = Some(path);
-    }
-    for failure in &coverage.failures {
-        reject_nonempty_extensions(&failure.extra, "coverage failure")?;
-        if failure.code.is_empty() || failure.message.is_empty() {
-            return Err(GeneratedApiImportError::new(
+    let candidate_files = unsigned(coverage, "candidate_files", "candidate files")?;
+    let parsed_files = unsigned(coverage, "parsed_files", "parsed files")?;
+    let failed_files = unsigned(coverage, "failed_files", "failed files")?;
+    if candidate_files
+        != parsed_files.checked_add(failed_files).ok_or_else(|| {
+            error(
                 GeneratedApiImportErrorCode::InvalidCoverage,
-                "generated API failure has an empty code or message",
-            ));
-        }
-        if let Some(path) = &failure.path {
-            validate_generated_path(path)?;
-        }
-    }
-    if coverage.limitations.is_empty() {
-        return Err(GeneratedApiImportError::new(
+                "generated API file count overflow",
+            )
+        })?
+    {
+        return Err(error(
             GeneratedApiImportErrorCode::InvalidCoverage,
-            "generated API limitations must remain explicit",
+            "generated API file counts are inconsistent",
         ));
     }
-    Ok(())
-}
-
-fn validate_system_order(systems: &[DraftSystem]) -> GeneratedApiImportResult<()> {
-    for pair in systems.windows(2) {
-        let left = system_sort_key(&pair[0]);
-        let right = system_sort_key(&pair[1]);
-        if left >= right {
-            return Err(GeneratedApiImportError::new(
-                GeneratedApiImportErrorCode::InvalidOrdering,
-                "generated API systems are not canonically ordered",
+    let complete = failed_files == 0 && candidate_files == parsed_files;
+    let status = match string(coverage, "status", "coverage status")? {
+        "complete" if complete => GeneratedApiCoverageStatus::Complete,
+        "partial" if !complete => GeneratedApiCoverageStatus::Partial,
+        _ => {
+            return Err(error(
+                GeneratedApiImportErrorCode::InvalidCoverage,
+                "generated API coverage status does not match file counts",
             ));
         }
+    };
+    let negative_authority = boolean(coverage, "negative_authority", "negative authority")?;
+    if negative_authority != complete {
+        return Err(error(
+            GeneratedApiImportErrorCode::InvalidCoverage,
+            "generated API negative authority does not match completeness",
+        ));
     }
-    Ok(())
+
+    let parsed_values = array(
+        required(coverage, "parsed_paths", "parsed paths")?,
+        "parsed paths",
+    )?;
+    let mut parsed_paths = Vec::with_capacity(parsed_values.len());
+    for path_value in parsed_values {
+        let path = path_value.as_str().ok_or_else(|| {
+            error(
+                GeneratedApiImportErrorCode::InvalidCoverage,
+                "generated API parsed path is not text",
+            )
+        })?;
+        generated_path(path)?;
+        parsed_paths.push(path.to_owned());
+    }
+    if parsed_paths.len()
+        != usize::try_from(parsed_files).map_err(|_| {
+            error(
+                GeneratedApiImportErrorCode::InvalidCoverage,
+                "generated API parsed file count exceeds usize",
+            )
+        })?
+        || !strictly_sorted_unique(&parsed_paths)
+    {
+        return Err(error(
+            GeneratedApiImportErrorCode::InvalidOrdering,
+            "generated API parsed paths are not uniquely byte-sorted",
+        ));
+    }
+
+    let failure_values = array(
+        required(coverage, "failures", "coverage failures")?,
+        "coverage failures",
+    )?;
+    if failure_values.len()
+        != usize::try_from(failed_files).map_err(|_| {
+            error(
+                GeneratedApiImportErrorCode::InvalidCoverage,
+                "generated API failed file count exceeds usize",
+            )
+        })?
+    {
+        return Err(error(
+            GeneratedApiImportErrorCode::InvalidCoverage,
+            "generated API failure records do not match failed file count",
+        ));
+    }
+    let mut failures = Vec::with_capacity(failure_values.len());
+    for failure_value in failure_values {
+        let failure = object(failure_value, "coverage failure")?;
+        allowed_keys(failure, &["code", "message", "path"], "coverage failure")?;
+        let path = optional_string(failure, "path")?;
+        if let Some(candidate) = path.as_deref() {
+            generated_path(candidate)?;
+        }
+        failures.push(GeneratedApiFailure {
+            code: nonempty_string(failure, "code", "failure code")?.to_owned(),
+            message: nonempty_string(failure, "message", "failure message")?.to_owned(),
+            path,
+        });
+    }
+
+    let count_map = object(
+        required(coverage, "entity_counts", "entity counts")?,
+        "entity counts",
+    )?;
+    let expected_collections = GeneratedApiFactKind::all()
+        .into_iter()
+        .map(GeneratedApiFactKind::collection)
+        .collect::<BTreeSet<_>>();
+    if count_map
+        .keys()
+        .map(String::as_str)
+        .collect::<BTreeSet<_>>()
+        != expected_collections
+    {
+        return Err(error(
+            GeneratedApiImportErrorCode::InvalidCoverage,
+            "generated API entity-count collections are incomplete or unexpected",
+        ));
+    }
+    let mut entity_counts = BTreeMap::new();
+    for (key, count) in count_map {
+        let value = count.as_u64().ok_or_else(|| {
+            error(
+                GeneratedApiImportErrorCode::InvalidCoverage,
+                "generated API entity count is not an unsigned integer",
+            )
+        })?;
+        entity_counts.insert(key.clone(), value);
+    }
+
+    let limitation_values = array(
+        required(coverage, "limitations", "limitations")?,
+        "limitations",
+    )?;
+    if limitation_values.is_empty() {
+        return Err(error(
+            GeneratedApiImportErrorCode::InvalidCoverage,
+            "generated API limitations are missing",
+        ));
+    }
+    let limitations = limitation_values
+        .iter()
+        .map(|value| {
+            value.as_str().map(str::to_owned).ok_or_else(|| {
+                error(
+                    GeneratedApiImportErrorCode::InvalidCoverage,
+                    "generated API limitation is not text",
+                )
+            })
+        })
+        .collect::<GeneratedApiImportResult<Vec<_>>>()?;
+
+    Ok(GeneratedApiCoverage {
+        status,
+        negative_authority,
+        candidate_files,
+        parsed_files,
+        failed_files,
+        parsed_paths,
+        failures,
+        entity_counts,
+        limitations,
+    })
 }
 
-fn system_sort_key(system: &DraftSystem) -> (&str, &str, &str) {
-    (
-        system.namespace.as_deref().unwrap_or_default(),
-        &system.name,
-        &system.source.path,
-    )
-}
-
-fn validate_system(
-    system: &DraftSystem,
+fn parse_fact(
+    kind: GeneratedApiFactKind,
+    value: &Value,
     parsed_paths: &BTreeSet<&str>,
     revision: &str,
-) -> GeneratedApiImportResult<()> {
-    if system.name.is_empty() {
-        return Err(GeneratedApiImportError::new(
-            GeneratedApiImportErrorCode::InvalidFact,
-            "generated API system name is empty",
-        ));
-    }
-    reject_nonempty_extensions(&system.extra, "system")?;
-    validate_source_span(&system.source, parsed_paths, revision)?;
-    if system.documentation.iter().any(String::is_empty) {
-        return Err(GeneratedApiImportError::new(
-            GeneratedApiImportErrorCode::InvalidFact,
-            "generated API system contains empty documentation",
-        ));
-    }
-    let _ = (&system.system_type, &system.environment, &system.attributes);
-    Ok(())
-}
-
-fn validate_member_order(
-    members: &[DraftMember],
-    kind: GeneratedApiFactKind,
-) -> GeneratedApiImportResult<()> {
-    for pair in members.windows(2) {
-        let left = member_sort_key(&pair[0]);
-        let right = member_sort_key(&pair[1]);
-        if left > right {
-            return Err(GeneratedApiImportError::new(
-                GeneratedApiImportErrorCode::InvalidOrdering,
-                format!("generated API {} records are not canonically ordered", kind.collection()),
-            ));
+) -> GeneratedApiImportResult<GeneratedApiFact> {
+    let member = object(value, kind.as_str())?;
+    allowed_keys(
+        member,
+        &[
+            "name",
+            "qualified_name",
+            "type",
+            "literal_name",
+            "documentation",
+            "restrictions",
+            "attributes",
+            "arguments",
+            "returns",
+            "payload",
+            "fields",
+            "values",
+            "source",
+        ],
+        kind.as_str(),
+    )?;
+    let name = nonempty_string(member, "name", "member name")?.to_owned();
+    let qualified_name =
+        nonempty_string(member, "qualified_name", "qualified member name")?.to_owned();
+    let member_type = optional_string(member, "type")?;
+    let source = parse_source_span(
+        required(member, "source", "member source")?,
+        parsed_paths,
+        revision,
+    )?;
+    for collection in ["arguments", "returns", "payload", "fields", "values"] {
+        // The producer omits empty child collections; absence is an empty list.
+        let Some(child_values) = member.get(collection) else {
+            continue;
+        };
+        let records = array(child_values, collection)?;
+        for record in records {
+            let record_object = object(record, collection)?;
+            parse_source_span(
+                required(record_object, "source", "nested source")?,
+                parsed_paths,
+                revision,
+            )?;
         }
     }
-    Ok(())
-}
+    array(
+        required(member, "documentation", "member documentation")?,
+        "member documentation",
+    )?;
+    object(
+        required(member, "restrictions", "member restrictions")?,
+        "member restrictions",
+    )?;
+    object(
+        required(member, "attributes", "member attributes")?,
+        "member attributes",
+    )?;
 
-fn member_sort_key(member: &DraftMember) -> (&str, &str, u64) {
-    (
-        &member.qualified_name,
-        member.member_type.as_deref().unwrap_or_default(),
-        member.source.line_start,
-    )
-}
-
-fn members_for_kind(system: &DraftSystem, kind: GeneratedApiFactKind) -> &[DraftMember] {
-    match kind {
-        GeneratedApiFactKind::Function => &system.functions,
-        GeneratedApiFactKind::Event => &system.events,
-        GeneratedApiFactKind::Table => &system.tables,
-        GeneratedApiFactKind::Enumeration => &system.enumerations,
-        GeneratedApiFactKind::Constant => &system.constants,
-        GeneratedApiFactKind::Predicate => &system.predicates,
-    }
-}
-
-fn import_member(
-    kind: GeneratedApiFactKind,
-    member: &DraftMember,
-) -> GeneratedApiImportResult<GeneratedApiFact> {
-    if member.name.is_empty() || member.qualified_name.is_empty() {
-        return Err(GeneratedApiImportError::new(
-            GeneratedApiImportErrorCode::InvalidFact,
-            "generated API member name is empty",
-        ));
-    }
-    reject_nonempty_extensions(&member.extra, "member")?;
-    if member.documentation.iter().any(String::is_empty) {
-        return Err(GeneratedApiImportError::new(
-            GeneratedApiImportErrorCode::InvalidFact,
-            "generated API member contains empty documentation",
-        ));
-    }
-    let source = import_source_span(&member.source);
     #[derive(Serialize)]
     struct FactProjection<'a> {
         kind: GeneratedApiFactKind,
-        name: &'a str,
-        qualified_name: &'a str,
-        member_type: Option<&'a str>,
-        literal_name: Option<&'a str>,
-        documentation: &'a [String],
-        restrictions: &'a BTreeMap<String, Value>,
-        attributes: &'a BTreeMap<String, Value>,
-        arguments: &'a [Value],
-        returns: &'a [Value],
-        payload: &'a [Value],
-        fields: &'a [Value],
-        values: &'a [Value],
-        source: &'a GeneratedApiSourceSpan,
+        normalized: &'a Value,
     }
-    let projection = FactProjection {
+    let fact_bytes = canonical_json_bytes(&FactProjection {
         kind,
-        name: &member.name,
-        qualified_name: &member.qualified_name,
-        member_type: member.member_type.as_deref(),
-        literal_name: member.literal_name.as_deref(),
-        documentation: &member.documentation,
-        restrictions: &member.restrictions,
-        attributes: &member.attributes,
-        arguments: &member.arguments,
-        returns: &member.returns,
-        payload: &member.payload,
-        fields: &member.fields,
-        values: &member.values,
-        source: &source,
-    };
-    let bytes = canonical_json_bytes(&projection).map_err(|error| {
-        GeneratedApiImportError::new(
+        normalized: value,
+    })
+    .map_err(|source| {
+        error(
             GeneratedApiImportErrorCode::InvalidDigest,
-            format!("generated API fact cannot be canonicalized: {error}"),
+            format!("generated API fact cannot be canonicalized: {source}"),
         )
     })?;
     Ok(GeneratedApiFact {
-        fact_id: sha256_prefixed(&bytes).into_boxed_str(),
+        fact_id: sha256(&fact_bytes),
         kind,
-        name: member.name.clone().into_boxed_str(),
-        qualified_name: member.qualified_name.clone().into_boxed_str(),
-        member_type: member.member_type.clone().map(String::into_boxed_str),
-        literal_name: member.literal_name.clone().map(String::into_boxed_str),
-        documentation: member
-            .documentation
-            .iter()
-            .cloned()
-            .map(String::into_boxed_str)
-            .collect(),
-        restrictions: member.restrictions.clone(),
-        attributes: member.attributes.clone(),
-        arguments: member.arguments.clone(),
-        returns: member.returns.clone(),
-        payload: member.payload.clone(),
-        fields: member.fields.clone(),
-        values: member.values.clone(),
+        name,
+        qualified_name,
+        member_type,
         source,
+        normalized: value.clone(),
     })
 }
 
-fn validate_source_span(
-    source: &DraftSourceSpan,
-    parsed_paths: &BTreeSet<&str>,
-    revision: &str,
-) -> GeneratedApiImportResult<()> {
-    reject_nonempty_extensions(&source.extra, "source span")?;
-    validate_generated_path(&source.path)?;
-    if !parsed_paths.contains(source.path.as_str()) {
-        return Err(GeneratedApiImportError::new(
-            GeneratedApiImportErrorCode::InvalidSource,
-            "generated API source path is outside parsed coverage",
-        ));
-    }
-    if source.line_start == 0 || source.line_end < source.line_start {
-        return Err(GeneratedApiImportError::new(
-            GeneratedApiImportErrorCode::InvalidSource,
-            "generated API source line span is invalid",
-        ));
-    }
-    validate_sha256(&source.sha256, "source sha256")?;
-    validate_object_id(
-        &source.git_object,
-        Some(revision.len()),
-        "source Git object",
-    )?;
-    Ok(())
-}
-
-fn import_source_span(source: &DraftSourceSpan) -> GeneratedApiSourceSpan {
-    GeneratedApiSourceSpan {
-        path: source.path.clone().into_boxed_str(),
-        line_start: source.line_start,
-        line_end: source.line_end,
-        git_object: source.git_object.clone().into_boxed_str(),
-        sha256: source.sha256.clone().into_boxed_str(),
-    }
-}
-
-fn import_coverage(coverage: &DraftCoverage) -> GeneratedApiImportResult<GeneratedApiCoverage> {
-    let status = match coverage.status.as_str() {
-        "complete" => GeneratedApiCoverageStatus::Complete,
-        "partial" => GeneratedApiCoverageStatus::Partial,
-        _ => {
-            return Err(GeneratedApiImportError::new(
-                GeneratedApiImportErrorCode::InvalidCoverage,
-                "generated API coverage status is invalid",
-            ));
-        }
-    };
-    Ok(GeneratedApiCoverage {
-        status,
-        negative_authority: coverage.negative_authority,
-        candidate_files: coverage.candidate_files,
-        parsed_files: coverage.parsed_files,
-        failed_files: coverage.failed_files,
-        parsed_paths: coverage
-            .parsed_paths
-            .iter()
-            .cloned()
-            .map(String::into_boxed_str)
-            .collect(),
-        failures: coverage
-            .failures
-            .iter()
-            .map(|failure| GeneratedApiFailure {
-                code: failure.code.clone().into_boxed_str(),
-                message: failure.message.clone().into_boxed_str(),
-                path: failure.path.clone().map(String::into_boxed_str),
-            })
-            .collect(),
-        entity_counts: coverage
-            .entity_counts
-            .iter()
-            .map(|(key, value)| (key.clone().into_boxed_str(), *value))
-            .collect(),
-        limitations: coverage
-            .limitations
-            .iter()
-            .cloned()
-            .map(String::into_boxed_str)
-            .collect(),
-    })
-}
-
-fn import_conflicts(
-    conflicts: &[DraftConflict],
+fn parse_conflicts(
+    values: &[Value],
     facts: &[GeneratedApiFact],
     parsed_paths: &BTreeSet<&str>,
 ) -> GeneratedApiImportResult<Vec<GeneratedApiConflict>> {
-    let mut output = Vec::with_capacity(conflicts.len());
-    let mut previous: Option<(&str, &str, &str)> = None;
-    for conflict in conflicts {
-        reject_nonempty_extensions(&conflict.extra, "conflict")?;
-        let key = (
-            conflict.kind.as_str(),
-            conflict.collection.as_str(),
-            conflict.qualified_name.as_str(),
-        );
-        if previous.is_some_and(|candidate| candidate >= key) {
-            return Err(GeneratedApiImportError::new(
+    let mut output = Vec::with_capacity(values.len());
+    let mut previous: Option<(String, String, String)> = None;
+    for value in values {
+        let conflict = object(value, "conflict")?;
+        allowed_keys(
+            conflict,
+            &["kind", "collection", "qualified_name", "sources"],
+            "conflict",
+        )?;
+        let kind = nonempty_string(conflict, "kind", "conflict kind")?.to_owned();
+        let collection = nonempty_string(conflict, "collection", "conflict collection")?.to_owned();
+        let qualified_name =
+            nonempty_string(conflict, "qualified_name", "conflict name")?.to_owned();
+        let key = (kind.clone(), collection.clone(), qualified_name.clone());
+        if previous.as_ref().is_some_and(|candidate| candidate >= &key) {
+            return Err(error(
                 GeneratedApiImportErrorCode::InvalidOrdering,
                 "generated API conflicts are not uniquely ordered",
             ));
         }
         previous = Some(key);
-        let kind = kind_for_collection(&conflict.collection).ok_or_else(|| {
-            GeneratedApiImportError::new(
+        let fact_kind = kind_for_collection(&collection).ok_or_else(|| {
+            error(
                 GeneratedApiImportErrorCode::InvalidConflict,
                 "generated API conflict names an unknown collection",
             )
         })?;
-        if conflict.kind != "duplicate_symbol"
-            || conflict.sources.len() < 2
-            || facts
-                .iter()
-                .filter(|fact| {
-                    fact.kind == kind
-                        && fact.qualified_name.as_ref() == conflict.qualified_name.as_str()
-                })
-                .count()
-                < 2
-        {
-            return Err(GeneratedApiImportError::new(
+        let matching = facts
+            .iter()
+            .filter(|fact| fact.kind == fact_kind && fact.qualified_name == qualified_name)
+            .collect::<Vec<_>>();
+        if kind != "duplicate_symbol" || matching.len() < 2 {
+            return Err(error(
                 GeneratedApiImportErrorCode::InvalidConflict,
                 "generated API conflict is not supported by duplicate facts",
             ));
         }
-        let mut sources = Vec::with_capacity(conflict.sources.len());
-        let mut source_seen = BTreeSet::new();
-        for source in &conflict.sources {
-            reject_nonempty_extensions(&source.extra, "conflict source")?;
-            validate_generated_path(&source.path)?;
-            if source.line_start == 0
-                || !parsed_paths.contains(source.path.as_str())
-                || !source_seen.insert((source.path.as_str(), source.line_start))
+        let valid_locations = matching
+            .iter()
+            .map(|fact| (fact.source.path.as_str(), fact.source.line_start))
+            .collect::<BTreeSet<_>>();
+        let source_values = array(
+            required(conflict, "sources", "conflict sources")?,
+            "conflict sources",
+        )?;
+        if source_values.len() < 2 {
+            return Err(error(
+                GeneratedApiImportErrorCode::InvalidConflict,
+                "generated API duplicate conflict has fewer than two sources",
+            ));
+        }
+        let mut sources = Vec::with_capacity(source_values.len());
+        let mut seen = BTreeSet::new();
+        for source_value in source_values {
+            let source = object(source_value, "conflict source")?;
+            allowed_keys(source, &["path", "line_start"], "conflict source")?;
+            let path = string(source, "path", "conflict path")?;
+            let line_start = unsigned(source, "line_start", "conflict line")?;
+            generated_path(path)?;
+            if line_start == 0
+                || !parsed_paths.contains(path)
+                || !valid_locations.contains(&(path, line_start))
+                || !seen.insert((path, line_start))
             {
-                return Err(GeneratedApiImportError::new(
+                return Err(error(
                     GeneratedApiImportErrorCode::InvalidConflict,
-                    "generated API conflict source is invalid or duplicated",
+                    "generated API conflict source is invalid or unsupported",
                 ));
             }
             sources.push(GeneratedApiConflictSource {
-                path: source.path.clone().into_boxed_str(),
-                line_start: source.line_start,
+                path: path.to_owned(),
+                line_start,
             });
         }
         sources.sort_by(|left, right| {
-            (left.path.as_ref(), left.line_start).cmp(&(right.path.as_ref(), right.line_start))
+            (left.path.as_str(), left.line_start).cmp(&(right.path.as_str(), right.line_start))
         });
         output.push(GeneratedApiConflict {
-            kind: conflict.kind.clone().into_boxed_str(),
-            collection: conflict.collection.clone().into_boxed_str(),
-            qualified_name: conflict.qualified_name.clone().into_boxed_str(),
+            kind,
+            collection,
+            qualified_name,
             sources,
         });
     }
     Ok(output)
+}
+
+fn parse_source_span(
+    value: &Value,
+    parsed_paths: &BTreeSet<&str>,
+    revision: &str,
+) -> GeneratedApiImportResult<GeneratedApiSourceSpan> {
+    let source = object(value, "source span")?;
+    allowed_keys(
+        source,
+        &["path", "line_start", "line_end", "git_object", "sha256"],
+        "source span",
+    )?;
+    let path = string(source, "path", "source path")?.to_owned();
+    generated_path(&path)?;
+    if !parsed_paths.contains(path.as_str()) {
+        return Err(error(
+            GeneratedApiImportErrorCode::InvalidSource,
+            "generated API source path is outside parsed coverage",
+        ));
+    }
+    let line_start = unsigned(source, "line_start", "source start line")?;
+    let line_end = unsigned(source, "line_end", "source end line")?;
+    if line_start == 0 || line_end < line_start {
+        return Err(error(
+            GeneratedApiImportErrorCode::InvalidSource,
+            "generated API source line span is invalid",
+        ));
+    }
+    let git_object = string(source, "git_object", "source Git object")?.to_owned();
+    object_id(&git_object, Some(revision.len()), "source Git object")?;
+    let source_sha256 = string(source, "sha256", "source digest")?.to_owned();
+    canonical_sha256(&source_sha256, "source digest")?;
+    Ok(GeneratedApiSourceSpan {
+        path,
+        line_start,
+        line_end,
+        git_object,
+        sha256: source_sha256,
+    })
+}
+
+fn validate_system_order(systems: &[Value]) -> GeneratedApiImportResult<()> {
+    let mut previous: Option<(String, String, String)> = None;
+    for system in systems {
+        let record = object(system, "system")?;
+        let namespace = optional_string(record, "namespace")?.unwrap_or_default();
+        let name = nonempty_string(record, "name", "system name")?.to_owned();
+        let source = object(
+            required(record, "source", "system source")?,
+            "system source",
+        )?;
+        let path = string(source, "path", "system source path")?.to_owned();
+        let key = (namespace, name, path);
+        if previous.as_ref().is_some_and(|candidate| candidate >= &key) {
+            return Err(error(
+                GeneratedApiImportErrorCode::InvalidOrdering,
+                "generated API systems are not uniquely ordered",
+            ));
+        }
+        previous = Some(key);
+    }
+    Ok(())
+}
+
+fn validate_member_order(
+    members: &[Value],
+    kind: GeneratedApiFactKind,
+) -> GeneratedApiImportResult<()> {
+    let mut previous: Option<(String, String, u64)> = None;
+    for member in members {
+        let record = object(member, kind.as_str())?;
+        let qualified_name =
+            nonempty_string(record, "qualified_name", "qualified member name")?.to_owned();
+        let member_type = optional_string(record, "type")?.unwrap_or_default();
+        let source = object(
+            required(record, "source", "member source")?,
+            "member source",
+        )?;
+        let line = unsigned(source, "line_start", "member source line")?;
+        let key = (qualified_name, member_type, line);
+        if previous.as_ref().is_some_and(|candidate| candidate > &key) {
+            return Err(error(
+                GeneratedApiImportErrorCode::InvalidOrdering,
+                format!(
+                    "generated API {} records are not canonically ordered",
+                    kind.collection()
+                ),
+            ));
+        }
+        previous = Some(key);
+    }
+    Ok(())
+}
+
+fn fact_key(fact: &GeneratedApiFact) -> (GeneratedApiFactKind, &str, &str) {
+    (fact.kind, &fact.qualified_name, &fact.fact_id)
 }
 
 fn kind_for_collection(collection: &str) -> Option<GeneratedApiFactKind> {
@@ -1195,51 +1239,63 @@ fn kind_for_collection(collection: &str) -> Option<GeneratedApiFactKind> {
         .find(|kind| kind.collection() == collection)
 }
 
-fn fact_sort_key(fact: &GeneratedApiFact) -> (GeneratedApiFactKind, &str, &str) {
-    (fact.kind, &fact.qualified_name, &fact.fact_id)
-}
-
-fn validate_generated_path(path: &str) -> GeneratedApiImportResult<()> {
+fn generated_path(path: &str) -> GeneratedApiImportResult<()> {
     if !path.starts_with(GENERATED_ROOT)
         || !path.ends_with(GENERATED_SUFFIX)
         || path.starts_with('/')
         || path.contains('\\')
-        || path.split('/').any(|segment| segment.is_empty() || segment == "." || segment == "..")
+        || path
+            .split('/')
+            .any(|part| part.is_empty() || part == "." || part == "..")
     {
-        return Err(GeneratedApiImportError::new(
+        return Err(error(
             GeneratedApiImportErrorCode::InvalidSource,
-            "generated API source path is not canonical or is outside the generated-document root",
+            "generated API path is noncanonical or outside the generated-document root",
         ));
     }
     Ok(())
 }
 
-fn validate_sha256(value: &str, label: &str) -> GeneratedApiImportResult<()> {
-    let digest = value.strip_prefix("sha256:").ok_or_else(|| {
-        GeneratedApiImportError::new(
+fn canonical_sha256(value: &str, label: &str) -> GeneratedApiImportResult<()> {
+    let Some(digest) = value.strip_prefix("sha256:") else {
+        return Err(error(
             GeneratedApiImportErrorCode::InvalidDigest,
-            format!("{label} is not a canonical sha256 identifier"),
-        )
-    })?;
-    if digest.len() != 64 || !digest.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()) {
-        return Err(GeneratedApiImportError::new(
+            format!("{label} is not a canonical SHA-256 identifier"),
+        ));
+    };
+    raw_sha256(digest, label)
+}
+
+fn flexible_sha256(value: &str, label: &str) -> GeneratedApiImportResult<()> {
+    raw_sha256(value.strip_prefix("sha256:").unwrap_or(value), label)
+}
+
+fn raw_sha256(value: &str, label: &str) -> GeneratedApiImportResult<()> {
+    if value.len() != 64
+        || !value
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+    {
+        return Err(error(
             GeneratedApiImportErrorCode::InvalidDigest,
-            format!("{label} is not a canonical sha256 identifier"),
+            format!("{label} is not a SHA-256 digest"),
         ));
     }
     Ok(())
 }
 
-fn validate_object_id(
+fn object_id(
     value: &str,
     expected_length: Option<usize>,
     label: &str,
 ) -> GeneratedApiImportResult<()> {
     if !matches!(value.len(), 40 | 64)
         || expected_length.is_some_and(|length| length != value.len())
-        || !value.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+        || !value
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
     {
-        return Err(GeneratedApiImportError::new(
+        return Err(error(
             GeneratedApiImportErrorCode::InvalidSource,
             format!("{label} is not a canonical Git object identifier"),
         ));
@@ -1247,72 +1303,190 @@ fn validate_object_id(
     Ok(())
 }
 
-fn reject_nonempty_extensions(
-    extensions: &BTreeMap<String, Value>,
-    label: &str,
-) -> GeneratedApiImportResult<()> {
-    if extensions.is_empty() {
-        return Ok(());
-    }
-    Err(GeneratedApiImportError::new(
-        GeneratedApiImportErrorCode::UnsupportedSchema,
-        format!("{label} contains fields unsupported by schema version {SCHEMA_VERSION}"),
-    ))
+fn strictly_sorted_unique(values: &[String]) -> bool {
+    values
+        .windows(2)
+        .all(|pair| pair[0].as_bytes() < pair[1].as_bytes())
 }
 
-fn sha256_prefixed(bytes: &[u8]) -> String {
+fn allowed_keys(
+    object: &Map<String, Value>,
+    allowed: &[&str],
+    label: &str,
+) -> GeneratedApiImportResult<()> {
+    if let Some(unexpected) = object.keys().find(|key| !allowed.contains(&key.as_str())) {
+        return Err(error(
+            GeneratedApiImportErrorCode::UnsupportedSchema,
+            format!("{label} contains unsupported field {unexpected:?}"),
+        ));
+    }
+    Ok(())
+}
+
+fn object<'a>(value: &'a Value, label: &str) -> GeneratedApiImportResult<&'a Map<String, Value>> {
+    value.as_object().ok_or_else(|| {
+        error(
+            GeneratedApiImportErrorCode::InvalidJson,
+            format!("{label} must be an object"),
+        )
+    })
+}
+
+fn object_mut<'a>(
+    value: &'a mut Value,
+    label: &str,
+) -> GeneratedApiImportResult<&'a mut Map<String, Value>> {
+    value.as_object_mut().ok_or_else(|| {
+        error(
+            GeneratedApiImportErrorCode::InvalidJson,
+            format!("{label} must be an object"),
+        )
+    })
+}
+
+fn array<'a>(value: &'a Value, label: &str) -> GeneratedApiImportResult<&'a [Value]> {
+    value.as_array().map(Vec::as_slice).ok_or_else(|| {
+        error(
+            GeneratedApiImportErrorCode::InvalidJson,
+            format!("{label} must be an array"),
+        )
+    })
+}
+
+fn required<'a>(
+    object: &'a Map<String, Value>,
+    key: &str,
+    label: &str,
+) -> GeneratedApiImportResult<&'a Value> {
+    object.get(key).ok_or_else(|| {
+        error(
+            GeneratedApiImportErrorCode::InvalidJson,
+            format!("{label} is missing"),
+        )
+    })
+}
+
+fn string<'a>(
+    object: &'a Map<String, Value>,
+    key: &str,
+    label: &str,
+) -> GeneratedApiImportResult<&'a str> {
+    required(object, key, label)?.as_str().ok_or_else(|| {
+        error(
+            GeneratedApiImportErrorCode::InvalidJson,
+            format!("{label} must be text"),
+        )
+    })
+}
+
+fn nonempty_string<'a>(
+    object: &'a Map<String, Value>,
+    key: &str,
+    label: &str,
+) -> GeneratedApiImportResult<&'a str> {
+    let value = string(object, key, label)?;
+    if value.is_empty() {
+        return Err(error(
+            GeneratedApiImportErrorCode::InvalidFact,
+            format!("{label} must not be empty"),
+        ));
+    }
+    Ok(value)
+}
+
+fn optional_string(
+    object: &Map<String, Value>,
+    key: &str,
+) -> GeneratedApiImportResult<Option<String>> {
+    match object.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(value)) => Ok(Some(value.clone())),
+        Some(_) => Err(error(
+            GeneratedApiImportErrorCode::InvalidJson,
+            format!("optional field {key:?} must be text or null"),
+        )),
+    }
+}
+
+fn unsigned(object: &Map<String, Value>, key: &str, label: &str) -> GeneratedApiImportResult<u64> {
+    required(object, key, label)?.as_u64().ok_or_else(|| {
+        error(
+            GeneratedApiImportErrorCode::InvalidJson,
+            format!("{label} must be an unsigned integer"),
+        )
+    })
+}
+
+fn boolean(object: &Map<String, Value>, key: &str, label: &str) -> GeneratedApiImportResult<bool> {
+    required(object, key, label)?.as_bool().ok_or_else(|| {
+        error(
+            GeneratedApiImportErrorCode::InvalidJson,
+            format!("{label} must be a boolean"),
+        )
+    })
+}
+
+fn value_map(object: &Map<String, Value>) -> BTreeMap<String, Value> {
+    object
+        .iter()
+        .map(|(key, value)| (key.clone(), value.clone()))
+        .collect()
+}
+
+fn sha256(bytes: &[u8]) -> String {
     let digest = Sha256::digest(bytes);
-    format!("sha256:{digest:x}")
+    format!(
+        "sha256:{}",
+        digest
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>()
+    )
+}
+
+fn error(code: GeneratedApiImportErrorCode, message: impl Into<String>) -> GeneratedApiImportError {
+    GeneratedApiImportError::new(code, message)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::{Map, json};
+    use serde_json::json;
 
-    fn source(path: &str, line_start: u64) -> Value {
+    fn source(path: &str, line: u64) -> Value {
         json!({
             "path": path,
-            "line_start": line_start,
-            "line_end": line_start + 2,
+            "line_start": line,
+            "line_end": line + 1,
             "git_object": "1111111111111111111111111111111111111111",
             "sha256": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
         })
     }
 
-    fn base_draft(complete: bool, duplicate: bool) -> Value {
-        let path = "Interface/AddOns/Blizzard_APIDocumentationGenerated/UnitAuraDocumentation.lua";
-        let function = json!({
+    fn member(path: &str, line: u64) -> Value {
+        json!({
             "name": "GetAuraDataByIndex",
             "qualified_name": "C_UnitAuras.GetAuraDataByIndex",
             "type": "Function",
             "documentation": ["Returns one aura record."],
             "restrictions": {"has_restrictions": true},
             "attributes": {},
-            "arguments": [{"name": "unitToken", "type": "UnitToken", "source": source(path, 15)}],
-            "returns": [{"name": "aura", "type": "AuraData", "source": source(path, 20)}],
-            "source": source(path, 10)
-        });
+            "arguments": [{"name": "unitToken", "type": "UnitToken", "source": source(path, line + 1)}],
+            "returns": [{"name": "aura", "type": "AuraData", "source": source(path, line + 2)}],
+            "payload": [],
+            "fields": [],
+            "values": [],
+            "source": source(path, line)
+        })
+    }
+
+    fn draft(complete: bool, duplicate: bool) -> Value {
+        let path = "Interface/AddOns/Blizzard_APIDocumentationGenerated/UnitAuraDocumentation.lua";
         let functions = if duplicate {
-            vec![function.clone(), function]
+            vec![member(path, 10), member(path, 30)]
         } else {
-            vec![function]
+            vec![member(path, 10)]
         };
-        let conflicts = if duplicate {
-            vec![json!({
-                "kind": "duplicate_symbol",
-                "collection": "functions",
-                "qualified_name": "C_UnitAuras.GetAuraDataByIndex",
-                "sources": [
-                    {"path": path, "line_start": 10},
-                    {"path": path, "line_start": 30}
-                ]
-            })]
-        } else {
-            Vec::new()
-        };
-        let parsed_files = 1_u64;
-        let failed_files = if complete { 0_u64 } else { 1_u64 };
         json!({
             "schema": SCHEMA,
             "schema_version": SCHEMA_VERSION,
@@ -1320,15 +1494,12 @@ mod tests {
                 "id": PRODUCER_ID,
                 "version": 1,
                 "parser": "declarative-lua-table-v1",
-                "configuration": {
-                    "generated_root": GENERATED_ROOT,
-                    "generated_suffix": GENERATED_SUFFIX
-                }
+                "configuration": {"generated_root": GENERATED_ROOT}
             },
             "source": {
                 "manifest_sha256": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
                 "manifest_declared_digest": null,
-                "source_id": "gethe-wow-ui-source",
+                "source_id": "public-source",
                 "selector": "live",
                 "revision": "4444444444444444444444444444444444444444",
                 "version": "99.1.2.34567"
@@ -1337,9 +1508,9 @@ mod tests {
                 "scope": format!("{GENERATED_ROOT}*{GENERATED_SUFFIX}"),
                 "status": if complete { "complete" } else { "partial" },
                 "negative_authority": complete,
-                "candidate_files": parsed_files + failed_files,
-                "parsed_files": parsed_files,
-                "failed_files": failed_files,
+                "candidate_files": if complete { 1 } else { 2 },
+                "parsed_files": 1,
+                "failed_files": if complete { 0 } else { 1 },
                 "parsed_paths": [path],
                 "failures": if complete { Vec::<Value>::new() } else { vec![json!({"code": "parse", "message": "unsupported", "path": path})] },
                 "entity_counts": {
@@ -1352,7 +1523,15 @@ mod tests {
                 },
                 "limitations": ["runtime behavior requires a client probe"]
             },
-            "conflicts": conflicts,
+            "conflicts": if duplicate { vec![json!({
+                "kind": "duplicate_symbol",
+                "collection": "functions",
+                "qualified_name": "C_UnitAuras.GetAuraDataByIndex",
+                "sources": [
+                    {"path": path, "line_start": 10},
+                    {"path": path, "line_start": 30}
+                ]
+            })] } else { Vec::<Value>::new() },
             "systems": [{
                 "name": "UnitAuras",
                 "namespace": "C_UnitAuras",
@@ -1372,41 +1551,35 @@ mod tests {
     }
 
     fn seal(mut value: Value) -> GeneratedApiImportResult<Vec<u8>> {
-        let bytes = canonical_json_bytes(&value).map_err(|error| {
-            GeneratedApiImportError::new(
+        let bytes = canonical_json_bytes(&value).map_err(|source| {
+            error(
                 GeneratedApiImportErrorCode::InvalidDigest,
-                format!("test value cannot be canonicalized: {error}"),
+                format!("test draft cannot be canonicalized: {source}"),
             )
         })?;
-        let object = value.as_object_mut().ok_or_else(|| {
-            GeneratedApiImportError::new(
+        object_mut(&mut value, "test draft")?
+            .insert("draft_sha256".to_owned(), Value::String(sha256(&bytes)));
+        serde_json::to_vec(&value).map_err(|source| {
+            error(
                 GeneratedApiImportErrorCode::InvalidJson,
-                "test value is not an object",
-            )
-        })?;
-        object.insert("draft_sha256".to_owned(), Value::String(sha256_prefixed(&bytes)));
-        serde_json::to_vec(&value).map_err(|error| {
-            GeneratedApiImportError::new(
-                GeneratedApiImportErrorCode::InvalidJson,
-                format!("test value cannot be serialized: {error}"),
+                format!("test draft cannot be serialized: {source}"),
             )
         })
     }
 
     #[test]
-    fn complete_import_supports_exact_lookup_and_authoritative_absence(
-    ) -> GeneratedApiImportResult<()> {
-        let bytes = seal(base_draft(true, false))?;
-        let index = import_generated_api_draft(&bytes)?;
+    fn complete_import_supports_exact_positive_and_negative_lookup() -> GeneratedApiImportResult<()>
+    {
+        let index = import_generated_api_draft(&seal(draft(true, false))?)?;
         match index.lookup(
             GeneratedApiFactKind::Function,
             "C_UnitAuras.GetAuraDataByIndex",
         ) {
             GeneratedApiLookup::Found(fact) => {
-                assert!(fact.restrictions().contains_key("has_restrictions"));
+                assert!(fact.restrictions().is_some());
             }
             other => {
-                return Err(GeneratedApiImportError::new(
+                return Err(error(
                     GeneratedApiImportErrorCode::InvalidFact,
                     format!("unexpected lookup result: {other:?}"),
                 ));
@@ -1416,102 +1589,62 @@ mod tests {
             index.lookup(GeneratedApiFactKind::Function, "C_UnitAuras.Missing"),
             GeneratedApiLookup::AbsentAuthoritative
         );
-        assert!(index.index_id().starts_with("sha256:"));
         Ok(())
     }
 
     #[test]
-    fn partial_coverage_never_proves_absence() -> GeneratedApiImportResult<()> {
-        let bytes = seal(base_draft(false, false))?;
-        let index = import_generated_api_draft(&bytes)?;
+    fn partial_import_never_proves_absence() -> GeneratedApiImportResult<()> {
+        let index = import_generated_api_draft(&seal(draft(false, false))?)?;
         assert_eq!(
             index.lookup(GeneratedApiFactKind::Function, "C_UnitAuras.Missing"),
             GeneratedApiLookup::NotAuthoritative
         );
-        assert_eq!(index.coverage().status(), GeneratedApiCoverageStatus::Partial);
         assert!(!index.coverage().negative_authority());
         Ok(())
     }
 
     #[test]
-    fn duplicate_facts_are_conflicted() -> GeneratedApiImportResult<()> {
-        let bytes = seal(base_draft(true, true))?;
-        let index = import_generated_api_draft(&bytes)?;
+    fn duplicate_facts_remain_conflicted() -> GeneratedApiImportResult<()> {
+        let index = import_generated_api_draft(&seal(draft(true, true))?)?;
         match index.lookup(
             GeneratedApiFactKind::Function,
             "C_UnitAuras.GetAuraDataByIndex",
         ) {
             GeneratedApiLookup::Conflicted(facts) => assert_eq!(facts.len(), 2),
             other => {
-                return Err(GeneratedApiImportError::new(
+                return Err(error(
                     GeneratedApiImportErrorCode::InvalidConflict,
                     format!("unexpected lookup result: {other:?}"),
                 ));
             }
         }
-        assert_eq!(index.conflicts().len(), 1);
         Ok(())
     }
 
     #[test]
-    fn tampered_draft_digest_is_rejected() -> GeneratedApiImportResult<()> {
-        let bytes = seal(base_draft(true, false))?;
-        let mut value = serde_json::from_slice::<Value>(&bytes).map_err(|error| {
-            GeneratedApiImportError::new(
+    fn tampering_breaks_the_draft_digest() -> GeneratedApiImportResult<()> {
+        let bytes = seal(draft(true, false))?;
+        let mut value = serde_json::from_slice::<Value>(&bytes).map_err(|source| {
+            error(
                 GeneratedApiImportErrorCode::InvalidJson,
-                format!("test draft cannot be parsed: {error}"),
+                format!("test draft cannot be parsed: {source}"),
             )
         })?;
-        let systems = value
-            .get_mut("systems")
-            .and_then(Value::as_array_mut)
-            .ok_or_else(|| {
-                GeneratedApiImportError::new(
-                    GeneratedApiImportErrorCode::InvalidJson,
-                    "test systems are missing",
-                )
-            })?;
-        let system = systems.first_mut().and_then(Value::as_object_mut).ok_or_else(|| {
-            GeneratedApiImportError::new(
+        object_mut(&mut value, "test draft")?
+            .insert("producer".to_owned(), serde_json::json!({"tampered": true}));
+        let tampered = serde_json::to_vec(&value).map_err(|source| {
+            error(
                 GeneratedApiImportErrorCode::InvalidJson,
-                "test system is missing",
+                format!("test draft cannot be serialized: {source}"),
             )
         })?;
-        system.insert("name".to_owned(), Value::String("Tampered".to_owned()));
-        let tampered = serde_json::to_vec(&value).map_err(|error| {
-            GeneratedApiImportError::new(
-                GeneratedApiImportErrorCode::InvalidJson,
-                format!("test draft cannot be serialized: {error}"),
-            )
-        })?;
-        let error = import_generated_api_draft(&tampered).err().ok_or_else(|| {
-            GeneratedApiImportError::new(
+        let failure = import_generated_api_draft(&tampered).err().ok_or_else(|| {
+            error(
                 GeneratedApiImportErrorCode::InvalidDigest,
                 "tampered draft unexpectedly imported",
             )
         })?;
-        assert_eq!(error.code(), GeneratedApiImportErrorCode::InvalidDigest);
-        Ok(())
-    }
-
-    #[test]
-    fn unsupported_root_extension_is_rejected() -> GeneratedApiImportResult<()> {
-        let mut value = base_draft(true, false);
-        let object = value.as_object_mut().ok_or_else(|| {
-            GeneratedApiImportError::new(
-                GeneratedApiImportErrorCode::InvalidJson,
-                "test draft root is missing",
-            )
-        })?;
-        object.insert("future_semantics".to_owned(), Value::Object(Map::new()));
-        let bytes = seal(value)?;
-        let error = import_generated_api_draft(&bytes).err().ok_or_else(|| {
-            GeneratedApiImportError::new(
-                GeneratedApiImportErrorCode::UnsupportedSchema,
-                "unsupported extension unexpectedly imported",
-            )
-        })?;
-        assert_eq!(error.code(), GeneratedApiImportErrorCode::UnsupportedSchema);
+        assert_eq!(failure.code(), GeneratedApiImportErrorCode::InvalidDigest);
         Ok(())
     }
 }

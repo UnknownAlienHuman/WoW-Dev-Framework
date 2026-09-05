@@ -4,13 +4,13 @@
 
 > **Planned architecture:** complete through E7-B.
 >
-> **Implementation frontier:** not started. The next owned work package is **I0-A / `wow-core` E0-A**.
+> **Implementation frontier:** executable `wow-core` foundation and `wow-reference` source bridge. Full package acceptance remains incomplete. Next owner: the real `wow-emmy` adapter.
 >
 > **First runnable gate:** E0-A through E0-F (`wow status` and `wow check`).
 >
 > **First public target intent:** Windows x86-64 MSVC, not supported or advertised until the full implementation, platform, client, installation, update, rollback, and release matrix passes.
 >
-> Patch-sensitive WoW guidance remains in the separate [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb).
+> Optional operator context is advisory, disabled by default, and configured outside the repository; current Blizzard source remains authoritative.
 
 WoW Dev Framework is designed to provide exact, generation-bound, evidence-preserving technical context over addon repositories, Blizzard API/UI source, diagnostics, typed graphs, search, lineage, migration evidence, static impact, Project Maps, L0/L1/L2 context, governed structural-recognizer evolution, optional external semantic candidates, editor frontends, and reproducible public releases.
 
@@ -147,26 +147,16 @@ Private signing, build, distribution, provider, and installation credentials nev
 
 Updates are explicit by default. Check, download, verify, stage, backup, migrate, activate, self-check, designate LKR, clean up, and roll back are separate exact states. The public app never overwrites its running executable or executes arbitrary installer commands. Windows replacement uses the exact verified installation-owner helper protocol.
 
-## Current evidence state
+## Current executable state
 
-```text
-Cargo workspace: absent
-Cargo.lock and rust-toolchain: absent
-Rust source: absent
-implemented operations: 0
-real Reference Packs/project generations: 0
-real analyzer/diagnostic/search/context executions: 0
-real calibration/core publication evidence: 0
-live external provider adapters: 0
-LSP/MCP/daemon conformance: 0
-reproducible release builds: 0
-signed public bundles: 0
-installation/update/rollback rehearsals: 0
-supported targets: 0
-CI/workflows: absent
-```
+The active workspace has `wow-core` and `wow-reference`. Source manifests,
+generated API drafts and XML/TOC topology are produced without executing source
+Lua and imported through the Rust reference boundary. Python and Rust are tested
+end to end against synthetic Git SHA-1 and SHA-256 repositories.
 
-Everything executable remains `not-started` or `NotEvaluated`; documentation fixtures are not implementation evidence. The repository is not currently buildable.
+See [the implementation ledger](docs/IMPLEMENTATION_STATUS.md) for implemented
+commands, update policy and explicit nonclaims. The planned public `wow` binary,
+real analyzer adapter and full release gates are not implemented.
 
 ## Launch path
 
@@ -180,20 +170,9 @@ V1  selected scope plus complete E7-A/E7-B Windows release evidence
 
 ## Next implementation step
 
-```text
-I0-A / wow-core E0-A
-
-1. Freeze the exact Rust toolchain and minimal dependencies.
-2. Create the root workspace with only crates/wow-core active.
-3. Implement exact IDs, profiles, generations, evidence, confidence,
-   coverage, conflicts, status, error, cancellation, budgets, and canonical bytes.
-4. Populate immutable fixtures and checksums.
-5. Pass the complete E0-A acceptance, property, mutation, determinism,
-   resource, security, and dependency gate.
-6. Merge before activating I0-B or I0-C.
-```
-
-Do not create every empty crate, placeholder trait, fake adapter, fake passing test, or decorative CI workflow first.
+Implement I0-C behind the `wow-emmy` adapter, without a permanent upstream
+revision or client-build dependency. Preserve current source-bridge tests. Do
+not activate placeholder crates or treat a compiled upstream as our adapter.
 
 ## Routes
 

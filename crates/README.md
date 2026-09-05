@@ -16,7 +16,7 @@ A documented directory is not an activated Rust crate. No `Cargo.toml`, `.rs` pl
 8. [`../docs/IMPLEMENTATION_HANDOFF.md`](../docs/IMPLEMENTATION_HANDOFF.md)
 9. [`../docs/CONFORMANCE_COMMANDS.md`](../docs/CONFORMANCE_COMMANDS.md)
 10. the target crate, application, or tool router and complete owned contract
-11. current [WoW Addon Engineering Knowledge Base](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb) routes
+11. Optional operator context is advisory, disabled by default, and configured outside the repository; current Blizzard source remains authoritative.
 12. the actual addon repository and local instructions for addon-facing work
 
 ## Final production ownership

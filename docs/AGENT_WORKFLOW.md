@@ -25,7 +25,7 @@ Do not interpret a search miss until the relevant coverage is known.
 
 For every World of Warcraft engineering task:
 
-1. read the current [`AGENTS.md`](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb/blob/main/AGENTS.md) and [`INDEX_MINI.md`](https://github.com/UnknownAlienHuman/wow-addon-engineering-kb/blob/main/INDEX_MINI.md) in the separate WoW Addon Engineering Knowledge Base;
+1. Optional operator context is advisory, disabled by default, and configured outside the repository; current Blizzard source remains authoritative.
 2. select the current task-specific route from that index;
 3. for a concrete addon, resolve the actual repository under [UnknownAlienHuman repositories](https://github.com/UnknownAlienHuman?tab=repositories);
 4. read that repository's instructions and TOC files;

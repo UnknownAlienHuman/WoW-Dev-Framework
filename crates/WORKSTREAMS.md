@@ -1,11 +1,15 @@
 # Agent workstreams and integration order
 
+> Current implementation and update policy: [status ledger](../docs/IMPLEMENTATION_STATUS.md). Earlier bootstrap schedules below are design history, not instructions to recreate the workspace or permanently pin versions.
+
 **Status:** normative implementation routing after E7-B architecture completion.
 
 ```text
-planned architecture/documentation: complete through E7-B
-implementation: not started
-next implementation package: I0-A / wow-core E0-A
+documentation frontier: E7-B / planned architecture
+implementation: partial executable foundation and source bridge
+active workspace: wow-core, wow-reference
+next owner implementation: I0-C / real wow-emmy analyzer adapter
+full R0, runtime, installation and release gates: NotEvaluated
 ```
 
 Documentation-ready remains `implementation_state = not-started` until executable owner code, exact fixture and checksum closure, required adapters, probes, benchmarks, platforms, clients, runtime evidence, and acceptance tests exist.
