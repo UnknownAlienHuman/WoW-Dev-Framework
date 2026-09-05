@@ -1,0 +1,110 @@
+name: Current-source reference bundle
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/wow_api_reference.py"
+      - "scripts/build-blizzard-api-reference.py"
+      - "scripts/verify-blizzard-api-reference.py"
+      - "scripts/wow_ui_topology.py"
+      - "scripts/build-blizzard-ui-topology.py"
+      - "scripts/verify-blizzard-ui-topology.py"
+      - "scripts/build-blizzard-source-manifest.py"
+      - "crates/wow-reference/src/generated_api.rs"
+      - "crates/wow-reference/src/ui_topology.rs"
+      - "crates/wow-reference/src/bin/wow-reference-api.rs"
+      - "crates/wow-reference/src/bin/wow-reference-topology.rs"
+      - "crates/wow-reference/src/bin/wow-reference-source.rs"
+      - ".github/workflows/current-source-bundle.yml"
+  pull_request:
+    paths:
+      - "scripts/wow_api_reference.py"
+      - "scripts/wow_ui_topology.py"
+      - "crates/wow-reference/src/generated_api.rs"
+      - "crates/wow-reference/src/ui_topology.rs"
+      - "crates/wow-reference/src/bin/wow-reference-source.rs"
+      - ".github/workflows/current-source-bundle.yml"
+  schedule:
+    - cron: "29 11 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: current-source-reference-bundle-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+      - name: Clone the current Blizzard UI source locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --filter=blob:none --depth=1 --no-tags --single-branch --branch live \
+            https://github.com/Gethe/wow-ui-source.git "$RUNNER_TEMP/wow-ui-source"
+          git -C "$RUNNER_TEMP/wow-ui-source" rev-parse HEAD > "$RUNNER_TEMP/source-revision"
+      - name: Build one exact source manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          revision="$(cat "$RUNNER_TEMP/source-revision")"
+          python scripts/build-blizzard-source-manifest.py \
+            --source "$RUNNER_TEMP/wow-ui-source" \
+            --revision "$revision" \
+            --selector live \
+            --output "$RUNNER_TEMP/source-manifest.json"
+      - name: Build and verify both source products
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/build-blizzard-api-reference.py \
+            --source "$RUNNER_TEMP/wow-ui-source" \
+            --manifest "$RUNNER_TEMP/source-manifest.json" \
+            --output "$RUNNER_TEMP/api-reference.json" \
+            --json
+          python scripts/verify-blizzard-api-reference.py \
+            "$RUNNER_TEMP/api-reference.json" \
+            --source "$RUNNER_TEMP/wow-ui-source" \
+            --manifest "$RUNNER_TEMP/source-manifest.json" \
+            --current-ref origin/live \
+            --require-complete \
+            --json
+          python scripts/build-blizzard-ui-topology.py \
+            --source "$RUNNER_TEMP/wow-ui-source" \
+            --manifest "$RUNNER_TEMP/source-manifest.json" \
+            --output "$RUNNER_TEMP/ui-topology.json" \
+            --allow-partial \
+            --json
+          python scripts/verify-blizzard-ui-topology.py \
+            "$RUNNER_TEMP/ui-topology.json" \
+            --source "$RUNNER_TEMP/wow-ui-source" \
+            --manifest "$RUNNER_TEMP/source-manifest.json" \
+            --current-ref origin/live \
+            --json
+      - name: Revalidate and bind both products in Rust
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo run --locked -p wow-reference --bin wow-reference-api -- \
+            verify "$RUNNER_TEMP/api-reference.json"
+          cargo run --locked -p wow-reference --bin wow-reference-topology -- \
+            verify "$RUNNER_TEMP/ui-topology.json"
+          cargo run --locked -p wow-reference --bin wow-reference-source -- \
+            verify "$RUNNER_TEMP/api-reference.json" "$RUNNER_TEMP/ui-topology.json"
+          cargo run --locked -p wow-reference --bin wow-reference-source -- \
+            materialize \
+            "$RUNNER_TEMP/api-reference.json" \
+            "$RUNNER_TEMP/ui-topology.json" \
+            "$RUNNER_TEMP/source-bundle.json"
+          test -s "$RUNNER_TEMP/source-bundle.json"
