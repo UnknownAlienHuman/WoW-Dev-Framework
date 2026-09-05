@@ -116,3 +116,19 @@ jobs:
             "$RUNNER_TEMP/ui-topology.json" \
             "$RUNNER_TEMP/source-bundle.json"
           test -s "$RUNNER_TEMP/source-bundle.json"
+      - name: Report generated API coverage failures
+        if: failure()
+        shell: bash
+        run: |
+          if test -f "$RUNNER_TEMP/source-manifest.json"; then
+            python scripts/build-blizzard-api-reference.py \
+              --source "$RUNNER_TEMP/wow-ui-source" \
+              --manifest "$RUNNER_TEMP/source-manifest.json" \
+              --output "$RUNNER_TEMP/api-diagnostic.json" --allow-partial --json
+            python - "$RUNNER_TEMP/api-diagnostic.json" <<'PYTHON'
+          import json, sys
+          with open(sys.argv[1], encoding="utf-8") as handle:
+              draft = json.load(handle)
+          print(json.dumps(draft["coverage"], indent=2))
+          PYTHON
+          fi

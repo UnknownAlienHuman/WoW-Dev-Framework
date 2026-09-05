@@ -20,7 +20,7 @@ from typing import Any, Iterable, Iterator, Mapping, Sequence
 SCHEMA = "wow-dev-framework/blizzard-api-reference-draft"
 SCHEMA_VERSION = 1
 PRODUCER_ID = "blizzard-generated-api-reference"
-PRODUCER_VERSION = 1
+PRODUCER_VERSION = 2
 PARSER_ID = "declarative-lua-table-v1"
 GENERATED_ROOT = "Interface/AddOns/Blizzard_APIDocumentationGenerated/"
 GENERATED_SUFFIX = "Documentation.lua"
@@ -570,7 +570,15 @@ def _normalize_member(node: LuaNode, *, collection: str, namespace: str | None, 
 
 def normalize_document(document: ParsedDocument, *, path: str, sha256: str, git_object: str) -> dict[str, Any]:
     fields = _field_nodes(document.table)
-    name = _required_string(fields.get("Name"), "System.Name")
+    # AddDocumentationTable explicitly accepts unnamed table-only groups.
+    # The registered local binding labels the document, never an API namespace.
+    unnamed_group = "Name" not in fields
+    if unnamed_group:
+        if "Tables" not in fields or any(key in fields for key in ("Namespace", "Functions", "Events")):
+            raise ReferenceBuildError("normalization_unnamed_group", "unnamed documentation must be a table-only group")
+        name = document.variable_name
+    else:
+        name = _required_string(fields.get("Name"), "System.Name")
     namespace = _optional_string(fields.get("Namespace"), "System.Namespace")
     collections = {"Functions": "functions", "Events": "events", "Tables": "tables", "Enumerations": "enumerations", "Constants": "constants", "Predicates": "predicates"}
     output_collections: dict[str, list[dict[str, Any]]] = {}
@@ -580,6 +588,9 @@ def normalize_document(document: ParsedDocument, *, path: str, sha256: str, git_
         output_collections[output_name] = members
     ignored = {"Name", "Namespace", "Type", "Environment", "Documentation", *collections.keys()}
     system: dict[str, Any] = {"name": name, "namespace": namespace, "type": _optional_string(fields.get("Type"), "System.Type"), "environment": _optional_string(fields.get("Environment"), "System.Environment"), "documentation": _documentation(fields.get("Documentation")), "attributes": {_snake_case(key): _normalized_plain(value) for key, value in fields.items() if key not in ignored}, "source": _source_record(path=path, sha256=sha256, git_object=git_object, document=document, node=document.table)}
+    if unnamed_group:
+        system["attributes"]["declaration_binding"] = document.variable_name
+        system["attributes"]["name_origin"] = "declaration_binding"
     system.update(output_collections)
     return system
 

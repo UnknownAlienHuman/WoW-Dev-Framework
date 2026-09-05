@@ -136,6 +136,23 @@ class BlizzardApiReferenceTests(unittest.TestCase):
             default = first["systems"][0]["tables"][0]["fields"][1]["default"]
             self.assertEqual(default, {"$lua_symbol": "Enum.ExampleKind.One"})
 
+    def test_unnamed_table_group_retains_binding_not_namespace(self) -> None:
+        document = '''local FixtureConstants = {Tables = {{Name = "FixtureKind", Type = "Enumeration",
+            Fields = {{Name = "First", Type = "FixtureKind", EnumValue = -1}}}}}
+            APIDocumentation:AddDocumentationTable(FixtureConstants)'''
+        parsed = BUILD.parse_generated_document(document)
+        group = BUILD.normalize_document(parsed, path=DOC_PATH, sha256="sha256:" + "0" * 64, git_object="a" * 40)
+        self.assertEqual(group["name"], "FixtureConstants")
+        self.assertIsNone(group["namespace"])
+        self.assertIsNone(group["type"])
+        self.assertEqual(group["attributes"]["name_origin"], "declaration_binding")
+        self.assertEqual(group["tables"][0]["qualified_name"], "FixtureKind")
+        self.assertEqual(group["tables"][0]["fields"][0]["enum_value"], -1)
+        with self.assertRaises(BUILD.ReferenceBuildError):
+            BUILD.normalize_document(BUILD.parse_generated_document(
+                'local Invalid = {Functions={}} APIDocumentation:AddDocumentationTable(Invalid)'),
+                path=DOC_PATH, sha256="sha256:" + "0" * 64, git_object="a" * 40)
+
     def test_exact_commit_ignores_dirty_worktree(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

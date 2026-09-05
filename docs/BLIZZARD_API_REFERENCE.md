@@ -52,4 +52,6 @@ Staleness preserves historical evidence and signals creation of a new generation
 
 The output retains producer/parser versions, source-manifest digest, selector, reported version, exact revision, per-file Git object and SHA-256, source line spans, normalized systems and members, declared restrictions, coverage, conflicts, limitations, and a canonical self-digest.
 
-The next package maps this producer-owned draft into `wow-reference` entities, evidence, coverage, and conflicts without weakening authority or mixing generations.
+The executable `wow-reference::generated_api` import validates this producer-owned draft and exposes source-bound facts, coverage and conflicts. `wow-reference-source` binds API and topology products from the same source. Further typed owner integration and the actual EmmyLua analyzer adapter remain subsequent work; see [implementation status](IMPLEMENTATION_STATUS.md).
+
+The producer accepts named systems and the unnamed table-only groups handled by Blizzard `APIDocumentationMixin:AddDocumentationTable`. For an unnamed group, `name` is only the registered local declaration binding: `attributes.name_origin = "declaration_binding"`. It is not a runtime system or namespace. Individual member names and source spans remain unchanged.

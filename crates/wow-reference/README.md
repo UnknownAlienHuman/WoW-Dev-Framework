@@ -1,6 +1,6 @@
 # `wow-reference` contract router
 
-**Status:** E0-B fixture, E1-B persistent ReferenceView, the E4-B transition-evidence seam, and the E6-B external-locator mapping seam are implementation-ready documentation; Rust implementation has not started.
+**Status:** executable E0-B slices and generated API/UI topology import are present. E1-B persistence, E4-B transitions and E6-B locator mapping remain planned contracts. See the [current implementation ledger](../../docs/IMPLEMENTATION_STATUS.md).
 
 `wow-reference` owns exact ReferenceProfiles, source ingestion/evaluation, raw metadata, normalized API/type/event/restriction facts, corrections, coverage/negative authority, immutable ReferenceView records, explicit cross-profile transition evidence, and exact mapping of bounded external locators into retained ReferenceViews. It does not own project-source continuity, external-provider semantics, candidate selection, search ranking, accepted lineage graph publication, migration application, runtime state, context orchestration, or service orchestration.
 
@@ -53,10 +53,10 @@ wow-store when persistent storage is active
 
 ```text
 documentation frontier: E6-B reference mapping seam
-implementation frontier: not-started
-Cargo.toml: absent
-Rust source: absent
-CI/workflows: absent
+implementation frontier: partial E0-B plus source-bound JSON imports and development CLIs
+Cargo.toml: active workspace member
+Rust source: src/ and tests/source_bridge.rs
+CI/workflows: repository CI and current-source reference bundle
 ```
 
-The E6-B seam cannot activate before the E1-B Reference implementation, exact mapping profiles/fixtures, owner coverage/negative-authority records, E6-A, and E6-B service gates are implemented and frozen.
+The E6-B seam cannot activate before the E1-B Reference implementation, exact mapping profiles/fixtures, owner coverage/negative-authority records, E6-A, and E6-B service gates are implemented and verified for their selected inputs.

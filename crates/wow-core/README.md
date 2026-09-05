@@ -1,6 +1,6 @@
 # `wow-core` implementation contract
 
-**Status:** E0-A implementation-ready contract pack; no Rust code or `Cargo.toml` yet.
+**Status:** active Cargo workspace member with deterministic boundary code and executable tests. Complete E0-A acceptance is not implied by those tests; see the [current implementation ledger](../../docs/IMPLEMENTATION_STATUS.md).
 
 `wow-core` owns the smallest transport-, storage-, parser-, and product-independent contracts required to describe an exact WoW analysis result. Every production crate may eventually depend on it, so its API must remain narrow, deterministic, typed, and free of domain workflows.
 

@@ -1,8 +1,8 @@
 # Crate implementation contracts
 
-**Planned architecture and documentation:** complete through E7-B. **Implementation:** not started.
+**Planned architecture and documentation:** complete through E7-B. **Implementation:** `wow-core` and `wow-reference` have executable slices. Other owner directories are not automatically active crates. The [implementation ledger](../docs/IMPLEMENTATION_STATUS.md) records the current boundary and remaining gates.
 
-A documented directory is not an activated Rust crate. No `Cargo.toml`, `.rs` placeholder, broad trait surface, or workspace membership is created before the owned implementation slice, toolchain and dependency profile, fixtures, and first-commit freeze gate are ready.
+A documented directory is not an activated Rust crate. Activate only a coherent owner implementation with tests and reviewed dependency boundaries. Do not create placeholder modules to inflate status. Compiler, upstream and client versions are updateable; exact versions describe a tested operation, not permanent project truth.
 
 ## Required reading
 
@@ -27,7 +27,7 @@ A documented directory is not an activated Rust crate. No `Cargo.toml`, `.rs` pl
 | `wow-store` | generic immutable objects, catalogs, effects, CAS, leases, retention, GC, migrations, and recovery | E7-B storage seams | I1-A |
 | `wow-reference` | Reference Pack and View, raw metadata, corrections, coverage, transitions, and exact locator mapping | E6-B mapping seam | I0-B / I1-B |
 | `wow-annotations` | deterministic annotation projections, source maps, loss, and parity | E1-C | I1-C |
-| `wow-emmy` | pinned upstream Lua analyzer adapter, facts, diagnostics, and overlay analysis | E7-A overlay seam | I0-C |
+| `wow-emmy` | updateable upstream Lua analyzer adapter, facts, diagnostics, and overlay analysis | E7-A overlay seam | I0-C |
 | `wow-project` | source, TOC, XML, load order, project generations, reindexing, locator mapping, and document overlays | E7-A overlay seam | I0-D / I2-C |
 | `wow-graph` | typed graph, relation partitions, lineage, migration, impact, and closure | E5-C and E7 inputs | I2-A |
 | `wow-recognizers` | universal structural rules, calibration, and core-pack semantics | E5-C | I2-B |
@@ -68,7 +68,7 @@ E6-A through E6-B
 E7-A through E7-B
 ```
 
-The next work package is not E8. It is **I0-A / `wow-core` E0-A** implementation.
+The next analyzer package is **I0-C / `wow-emmy`**, after maintaining the executable source bridge. The sequence below describes the full dependency order, not a claim that all earlier gates are complete.
 
 ## E5 separation
 
@@ -178,16 +178,16 @@ See [`../docs/PROJECT_COMPLETION_MATRIX.md`](../docs/PROJECT_COMPLETION_MATRIX.m
 - No arbitrary source or repository execution, raw SQL or database handles, generic MCP, tool, RPC, shell, script, plugin, or model executor.
 - No secret signing, provider, build, distribution, deployment, or installation material in repository, public configuration, fixtures, logs, or results.
 - No implicit network, current, project, provider, installation, or update behavior.
-- No CI or release workflow until real frozen commands exist and an explicit owner and gate require it.
+- CI runs existing, reviewed commands against explicit inputs. Release and mutation workflows require separate authorization.
 
-## First implementation target
+## Current implementation target
 
 ```text
-owner: wow-core
-implementation package: I0-A
-contract: crates/wow-core/CONTRACT.json
-launch gate: R0
-first workspace members: crates/wow-core only
+active workspace members: crates/wow-core, crates/wow-reference
+next analyzer owner: wow-emmy
+implementation package: I0-C
+contract: crates/wow-emmy/CONTRACT.json
+launch gate: R0 (not complete)
 ```
 
-Freeze the exact Rust toolchain and minimal dependencies, implement the complete E0-A invariant types and tests, populate its fixtures and checksum gate, and merge it before activating sibling crates.
+Preserve the working source bridge, implement the real analyzer boundary, and validate compatible upstream updates. Do not activate an empty crate or restore a permanent compiler patch override.

@@ -46,6 +46,10 @@ def run(algorithm: str) -> None:
         files = {
             "version.txt": "99.2.0.12345\n",
             "Interface/AddOns/Blizzard_APIDocumentationGenerated/FixtureDocumentation.lua": DOCUMENT,
+            "Interface/AddOns/Blizzard_APIDocumentationGenerated/FixtureConstantsDocumentation.lua":
+                'local FixtureConstants = {Tables={{Name="FixtureKind",Type="Enumeration",'
+                'Fields={{Name="First",Type="FixtureKind",EnumValue=-1}}}}} '
+                'APIDocumentation:AddDocumentationTable(FixtureConstants)\n',
             "Interface/AddOns/Fixture/Fixture.toc": "## Interface: 990200\nFixture.xml\n",
             "Interface/AddOns/Fixture/Fixture.xml": '<Ui><Script file="Fixture.lua"/></Ui>\n',
             "Interface/AddOns/Fixture/Fixture.lua": "-- $Format:%H$\nlocal value = 1\n",
@@ -67,9 +71,10 @@ def run(algorithm: str) -> None:
         script("verify-blizzard-ui-topology.py", topology, "--source", str(source), "--manifest", manifest, "--require-complete", "--json")
         api_bin, topology_bin, source_bin = (os.environ[key] for key in ("WDF_API_BIN", "WDF_TOPOLOGY_BIN", "WDF_SOURCE_BIN"))
         api_summary = json.loads(command(api_bin, "verify", api))
-        assert api_summary["facts"] == 1 and api_summary["coverage"] == "complete"
+        assert api_summary["facts"] == 2 and api_summary["coverage"] == "complete"
         assert json.loads(command(api_bin, "lookup", api, "function", "C_Fixture.Lookup"))["status"] == "found"
         assert json.loads(command(api_bin, "lookup", api, "function", "C_Fixture.Missing"))["status"] == "absent_authoritative"
+        assert json.loads(command(api_bin, "lookup", api, "table", "FixtureKind"))["status"] == "found"
         command(topology_bin, "verify", topology)
         command(source_bin, "materialize", api, topology, bundle)
         first = Path(bundle).read_bytes()

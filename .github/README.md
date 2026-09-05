@@ -1,13 +1,20 @@
 # Repository automation policy
 
-This repository is in bootstrap and intentionally contains no GitHub Actions workflows yet.
+The repository has three maintained workflows:
 
-A workflow may be added only when all of the following are true:
+- `ci.yml`: current stable Rust on Linux and Windows, Python/source-bridge tests,
+  strict Clippy and rustdoc, plus a compatible dependency-update lane.
+- `current-source-bundle.yml`: a current Gethe/live checkout, coherent source
+  manifest, generated API/topology producers and Rust validation.
+- `branch-hygiene.yml`: remove only branches already contained in main or with
+  an identical tree; do not discard unique divergent work.
 
-1. the underlying command exists and is reproducible locally;
-2. the workflow enforces a documented roadmap or release gate;
-3. inputs, caches, permissions, and artifacts are explicit;
-4. failure has a clear owner and remediation path;
-5. the workflow does not publish, release, or mutate external systems without a separate accepted decision.
+Build and source CI are read-only and never modify source or publish commits.
+The branch-hygiene job alone has the write permission needed for its stated role.
+No self-mutating finalizer, recovery payload or embedded implementation workflow
+is part of the supported development path. Publish reviewed changes separately,
+using a non-forced update of the expected branch, and verify the resulting commit.
 
-Decorative CI, scheduled jobs, release automation, CodeQL, Dependabot, Pages, and status bots are not enabled by convention during bootstrap. E7 defines the planned production automation milestone.
+A new workflow requires real executable commands, an explicit owner and gate,
+bounded inputs, minimal permissions and a documented failure path. A successful
+source/build job is not a supported release, in-client test or installer proof.
