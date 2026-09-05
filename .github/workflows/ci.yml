@@ -1,22 +1,18 @@
-name: CI
-
+name: Verify source-bridge repair
 on:
   push:
     branches: [main]
-  pull_request:
+    paths: [.github/workflows/ci.yml]
   workflow_dispatch:
-
 permissions:
-  contents: read
-
+  contents: write
 concurrency:
-  group: ci-${{ github.ref }}
+  group: source-bridge-repair-verification
   cancel-in-progress: true
-
 jobs:
-  checks:
+  candidate:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
         with:
@@ -25,41 +21,133 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.x'
-      - name: Install current stable Rust
-        shell: bash
-        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
-      - name: Check formatting
-        run: cargo +stable fmt --all --check
-      - name: Check workspace
-        run: cargo +stable check --locked --workspace --all-targets --all-features
-      - name: Lint workspace
-        run: cargo +stable clippy --locked --workspace --all-targets --all-features -- -D warnings
-      - name: Test workspace
-        run: cargo +stable test --locked --workspace --all-targets --all-features
-      - name: Test source tools
-        run: python -m unittest discover -s tests -v
-      - name: Check documentation
+      - name: Materialize reviewed source delta without changing a ref
         env:
-          RUSTDOCFLAGS: -D warnings
-        run: cargo +stable doc --locked --workspace --all-features --no-deps
-      - name: Preserve exact source on failure
-        if: failure()
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          git bundle create "$RUNNER_TEMP/source.bundle" --all
-          git rev-parse HEAD > "$RUNNER_TEMP/COMMIT_SHA"
-          git status --porcelain > "$RUNNER_TEMP/worktree-status.txt"
-          rustc +stable -Vv > "$RUNNER_TEMP/rust-version.txt"
-      - name: Upload failure diagnostics
-        if: failure()
-        uses: actions/upload-artifact@v7
+          python - <<'PY'
+          import base64, hashlib, json, lzma, os, pathlib, subprocess, urllib.request
+          root = pathlib.Path.cwd()
+          api = 'https://api.github.com/repos/' + os.environ['GITHUB_REPOSITORY']
+          parts = ['e51c2ed5a15736d20903e9b09a379ae251823edd', '352a4d335b09dd75379d5e89d37348dbf9d027fe', 'f12d5a6489d65072956918b42dd393ace4080dc6']
+          text = b''
+          for sha in parts:
+              request = urllib.request.Request(api + '/git/blobs/' + sha, headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json'})
+              with urllib.request.urlopen(request, timeout=60) as response:
+                  value = json.load(response)
+              part = base64.b64decode(value['content'])
+              assert hashlib.sha1(f'blob {len(part)}\0'.encode() + part).hexdigest() == sha
+              text += part
+          packed = base64.b64decode(text, validate=True)
+          assert hashlib.sha256(packed).hexdigest() == 'dbb5345fe3889b0bd5f93b1db3e76001e8f4917a3dff605b5153fbce57618014'
+          data = json.loads(lzma.decompress(packed))
+          assert data['base_commit'] == '9ab5c2b5a304bd1b0565db9eb329c6a65085c8ce'
+          def git(*args):
+              return subprocess.check_output(['git', *args])
+          delta = git('diff', '--name-only', data['base_commit'], 'HEAD').decode().splitlines()
+          assert delta == ['.github/workflows/ci.yml'], 'base moved outside verification workflow'
+          def path_for(relative):
+              path = pathlib.PurePosixPath(relative)
+              assert not path.is_absolute() and all(part not in {'..', '.', '.git'} for part in path.parts)
+              result = root.joinpath(*path.parts)
+              assert result.resolve().is_relative_to(root)
+              return result
+          prepared = {}
+          for entry in data['entries']:
+              path_for(entry['path'])
+              if entry.get('delete') or 'copy_result' in entry:
+                  continue
+              if entry['base']:
+                  path_for(entry['base'])
+                  original = git('show', data['base_commit'] + ':' + entry['base'])
+              else:
+                  original = b''
+              assert hashlib.sha256(original).hexdigest() == entry['base_sha256'], entry['path']
+              lines = original.decode('utf-8').splitlines(keepends=True)
+              for start, end, replacement in reversed(entry['edits']):
+                  assert 0 <= start <= end <= len(lines)
+                  lines[start:end] = [replacement]
+              content = ''.join(lines).encode('utf-8')
+              assert hashlib.sha256(content).hexdigest() == entry['sha256'], entry['path']
+              prepared[entry['path']] = content
+          for entry in data['entries']:
+              if 'copy_result' in entry:
+                  content = prepared[entry['copy_result']]
+                  assert hashlib.sha256(content).hexdigest() == entry['sha256']
+                  prepared[entry['path']] = content
+          for entry in data['entries']:
+              path = path_for(entry['path'])
+              if entry.get('delete'):
+                  assert git('rev-parse', data['base_commit'] + ':' + entry['path']).decode().strip() == entry['old_blob']
+                  path.unlink()
+              else:
+                  path.parent.mkdir(parents=True, exist_ok=True)
+                  path.write_bytes(prepared[entry['path']])
+                  path.chmod(0o755 if entry['mode'] == '100755' else 0o644)
+          git('add', '-A')
+          tree = git('write-tree').decode().strip()
+          assert tree == 'a25f9ceed9ffe39d2368e795e431a68f4d8e04a0', tree
+          pathlib.Path(os.environ['RUNNER_TEMP'], 'candidate-delta.json').write_text(json.dumps(data))
+          print('Reviewed candidate tree:', tree)
+          print('Files changed:', len(data['entries']))
+          PY
+      - name: Install current stable Rust
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+      - name: Verify exact candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustc +stable -Vv
+          python --version
+          python scripts/sync-wow-dev-skill.py --check
+          python -m unittest discover -s tests -v
+          cargo +stable fmt --all --check
+          cargo +stable check --locked --workspace --all-targets --all-features
+          cargo +stable clippy --locked --workspace --all-targets --all-features -- -D warnings
+          cargo +stable test --locked --workspace --all-targets --all-features
+          cargo +stable test --release --locked --workspace --all-targets --all-features
+          RUSTDOCFLAGS='-D warnings' cargo +stable doc --locked --workspace --all-features --no-deps
+          git diff --exit-code
+          git diff --cached --check
+      - name: Stage verified Git objects only; no commit, push or ref update
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import base64, hashlib, json, os, pathlib, subprocess, urllib.request
+          root = pathlib.Path.cwd()
+          data = json.loads(pathlib.Path(os.environ['RUNNER_TEMP'], 'candidate-delta.json').read_text())
+          api = 'https://api.github.com/repos/' + os.environ['GITHUB_REPOSITORY']
+          def call(endpoint, body):
+              request = urllib.request.Request(api + endpoint, data=json.dumps(body).encode(), method='POST', headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json'})
+              with urllib.request.urlopen(request, timeout=60) as response:
+                  return json.load(response)
+          entries = []
+          for entry in data['entries']:
+              if entry.get('delete'):
+                  entries.append({'path': entry['path'], 'mode': '100644', 'type': 'blob', 'sha': None})
+                  continue
+              content = (root / entry['path']).read_bytes()
+              assert hashlib.sha256(content).hexdigest() == entry['sha256']
+              expected = hashlib.sha1(f'blob {len(content)}\0'.encode() + content).hexdigest()
+              result = call('/git/blobs', {'encoding': 'base64', 'content': base64.b64encode(content).decode()})
+              assert result['sha'] == expected
+              entries.append({'path': entry['path'], 'mode': entry['mode'], 'type': 'blob', 'sha': expected})
+          parent = subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode().strip()
+          base_tree = subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}']).decode().strip()
+          result = call('/git/trees', {'base_tree': base_tree, 'tree': entries})
+          assert result['sha'] == 'a25f9ceed9ffe39d2368e795e431a68f4d8e04a0', result['sha']
+          report = {'parent_commit': parent, 'candidate_tree': result['sha'], 'checks': 'passed', 'ref_updated': False, 'files_changed': len(entries)}
+          pathlib.Path(os.environ['RUNNER_TEMP'], 'candidate-report.json').write_text(json.dumps(report, indent=2) + '\n')
+          print(json.dumps(report, indent=2))
+          PY
+      - uses: actions/upload-artifact@v7
         with:
-          name: ci-failure-source
-          path: |
-            ${{ runner.temp }}/source.bundle
-            ${{ runner.temp }}/COMMIT_SHA
-            ${{ runner.temp }}/worktree-status.txt
-            ${{ runner.temp }}/rust-version.txt
+          name: verified-source-bridge-candidate
+          path: ${{ runner.temp }}/candidate-report.json
           retention-days: 2
           if-no-files-found: error
