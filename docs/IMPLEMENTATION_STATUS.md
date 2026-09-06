@@ -128,5 +128,26 @@ type names and generated literal roots. A conflict excludes the ambiguous class
 and its methods, not independent table/event declarations. Projection stays
 partial. The wire shape remains v3/v4; generated file digests change with the
 combined class profile. Existing standalone Ketho emitter byte vectors are
-unchanged. General type aliases and widget inheritance remain the next port
-scope; syntax tests alone do not establish semantic consumer compatibility.
+unchanged. Primitive/named-union aliases are implemented below; remaining custom types
+and widget inheritance are subsequent scope; syntax tests alone do not establish semantic consumer compatibility.
+
+## Explicit annotation alias resources
+
+`native_aliases` reads caller-selected Ketho-style alias files through Emmy
+without executing Lua. The native generator projects primitive/named unions as
+an external annotation overlay. Raw resource bytes, independent revision/hash,
+per-alias outcomes and scoped generated maps are retained. Aliases cannot override
+native declarations; missing dependencies, duplicates, cycles and unsupported
+forms remain partial, not `any`. Named alias syntax errors are isolated using
+Emmy short-comment token boundaries; erroneous types are not repaired.
+
+The Git driver exposes `--alias-catalog <checkout> <ref> <resource>` alongside
+optional guarded corrections. No catalog is embedded or automatically enabled.
+The v5 artifact verifier checks outcome/mapping/byte consistency; without the
+optional input, v3/v4 remain unchanged. This development overlay is not a new
+ReferenceView authority or completion of E1-C. See [usage and limits](KETHO_RUST_PORT.md#alias-resource-connection).
+
+The existing source workflow also checks an explicit current public Ketho alias
+resource against its resolved Gethe source. Private configuration is unnecessary.
+Remaining custom type resources, widget inheritance and actual dual-consumer
+semantic probes are still incomplete.

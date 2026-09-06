@@ -131,5 +131,22 @@ reported before ambiguous receiver output is emitted. Independent table/event
 lanes remain available. See `tests/receivers.rs` for executable cases.
 
 This is receiver declaration closure only. Gethe system names are not shortened
-by convention. Full TypeDocumentation/custom aliases, widget inheritance and
+by convention. Remaining custom alias/type forms, widget inheritance and
 EmmyLua/LuaLS semantic certification remain incomplete.
+
+## Optional external alias resource
+
+`project_with_alias_catalog` consumes a reference-owned `AliasDocument` as an
+explicit annotation-only overlay. The Git development driver accepts
+`--alias-catalog <checkout> <ref> <resource.lua>`, independently of `--corrections`.
+Supported primitive/named unions require dependencies on builtins or actually
+projected source/catalog types. Source conflicts, duplicates, cycles and
+unsupported terms remain explicit. No raw Blizzard facts, signatures, globals
+or correction guards are replaced. This is not a source-authority path into
+ReferenceView.
+
+Catalog-enabled reports use v5 and scoped external maps; no catalog preserves
+v3/v4 output. Resource revision/hash/raw text and all outcomes remain available
+for review. Parser acceptance and artifact verification are not semantic
+certification. See [usage and licensing](../../docs/KETHO_RUST_PORT.md#alias-resource-connection)
+and [regressions](tests/aliases.rs).

@@ -320,6 +320,17 @@ all documentation required before first run
 - previous or newest installation inferred as LKR or rollback target;
 - decorative CI and release automation before real commands and evidence.
 
+## Native annotation alias seam
+
+Ketho's separate alias-resource gap is handled by explicit annotation-only input,
+not manufactured ReferenceView facts. The reference crate owns bounded Emmy
+parsing/raw identity; annotations owns conflict/dependency checks and rendering.
+The existing Git driver supplies exact independent inputs. V5 artifact checks
+retain source-universe separation and every outcome. Nothing is auto-discovered,
+executed or admitted as current Blizzard truth. No generic loader is introduced.
+The seam leaves E1 authority and consumer-completion gates unchanged; see
+[scope, license, compatibility and limits](KETHO_RUST_PORT.md#alias-resource-connection).
+
 ## Proposed decisions
 
 Future candidates remain in [`IDEAS.md`](IDEAS.md). After architecture freeze, a proposal requires a concrete implementation-discovered need, explicit owner, experiment, fixtures, security, privacy, license, and supply-chain analysis, and migration consequences.

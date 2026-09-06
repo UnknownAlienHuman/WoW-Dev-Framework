@@ -572,7 +572,7 @@ fn validate_fields(fields: &[Field], allow_variadic: bool) -> Result<(), RenderE
     Ok(())
 }
 
-fn qualified_identifier(value: &str) -> Result<(), RenderError> {
+pub(crate) fn qualified_identifier(value: &str) -> Result<(), RenderError> {
     if value.len() > MAX_NAME_BYTES {
         return Err(RenderError::InputLimit);
     }

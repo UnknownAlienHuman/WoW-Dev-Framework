@@ -349,3 +349,22 @@ planned service/release commands and full package acceptance: not complete
 ```
 
 The R0 `wow status` and `wow check` path still requires the remaining owner implementations. Native development checks do not certify the planned release conformance surface.
+
+## Implemented native alias-resource checks
+
+The development driver reads an explicitly selected local Git annotation catalog
+alongside Blizzard source; see [invocation](KETHO_RUST_PORT.md#alias-resource-connection).
+
+```text
+cargo test --locked -p wow-annotations --test aliases
+cargo test --locked -p wow-annotations --example native_library
+cargo test --locked -p xtask
+cargo xtask verify-library /new/output --require-input-complete
+```
+
+Library v5 retains separate alias identity and every outcome, alongside optional
+corrections. Verification rejects lost outcomes, altered declarations, wrong
+source-universe maps, raw hash mismatches and false-clean blockers. These are
+artifact checks, not semantic certification or reference completeness. Exit 3
+is partial, never success for a gate requiring complete semantic coverage.
+Without a catalog, v3/v4 behavior is unchanged.

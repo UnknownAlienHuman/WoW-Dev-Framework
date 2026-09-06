@@ -60,3 +60,9 @@ CI/workflows: repository CI and current-source reference bundle
 ```
 
 The E6-B seam cannot activate before the E1-B Reference implementation, exact mapping profiles/fixtures, owner coverage/negative-authority records, E6-A, and E6-B service gates are implemented and verified for their selected inputs.
+## Native annotation resource reader
+
+`src/native_aliases.rs` is the bounded nonexecuting Emmy adapter for explicit
+annotation-only alias resources. `AliasDocument` keeps raw identity/text/spans,
+not current Blizzard facts or negative authority. The optional annotation lane
+consumes it without discovery or IO. See [scope](../../docs/KETHO_RUST_PORT.md#alias-resource-connection).

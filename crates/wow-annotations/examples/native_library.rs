@@ -14,7 +14,7 @@ use wow_reference::native::{NativeError, ingest_document, source_digest};
 
 const LIMIT: usize = 1024 * 1024;
 const TOTAL_LIMIT: usize = 64 * LIMIT;
-const USAGE: &str = "native_library <git-checkout> <revision-or-ref> <generated-api.toc> <environment> <new-output-directory> [--corrections <reviewed-pack.json>]";
+const USAGE: &str = "native_library <git-checkout> <revision-or-ref> <generated-api.toc> <environment> <new-output-directory> [--corrections <reviewed-pack.json>] [--alias-catalog <git-checkout> <revision-or-ref> <alias-resource.lua>]";
 
 #[derive(Serialize)]
 struct Failure {
@@ -43,8 +43,23 @@ fn run(args: Vec<OsString>) -> Result<bool, Box<dyn std::error::Error>> {
         println!("{USAGE}");
         return Ok(false);
     }
-    if args.len() != 5 && !(args.len() == 7 && args[5] == "--corrections") {
+    if args.len() < 5 {
         return Err(USAGE.into());
+    }
+    let mut correction_path = None;
+    let mut alias_input = None;
+    let mut next = 5;
+    while next < args.len() {
+        if args[next] == "--corrections" && correction_path.is_none() && next + 1 < args.len() {
+            correction_path = Some(Path::new(&args[next + 1]));
+            next += 2;
+        } else if args[next] == "--alias-catalog" && alias_input.is_none() && next + 3 < args.len()
+        {
+            alias_input = Some((&args[next + 1], &args[next + 2], &args[next + 3]));
+            next += 4;
+        } else {
+            return Err(USAGE.into());
+        }
     }
     let root = Path::new(&args[0]);
     let selector = args[1].to_str().ok_or("ref is not UTF-8")?;
@@ -134,8 +149,7 @@ fn run(args: Vec<OsString>) -> Result<bool, Box<dyn std::error::Error>> {
     if documents.is_empty() {
         return Err("no source registrations could be admitted".into());
     }
-    let corrections = if args.len() == 7 {
-        let path = Path::new(&args[6]);
+    let corrections = if let Some(path) = correction_path {
         let metadata = fs::symlink_metadata(path)?;
         if !metadata.is_file()
             || metadata.file_type().is_symlink()
@@ -151,10 +165,60 @@ fn run(args: Vec<OsString>) -> Result<bool, Box<dyn std::error::Error>> {
     } else {
         None
     };
-    let library = wow_annotations::native::project_with_corrections(
+    let alias_catalog = if let Some((checkout, selector, path)) = alias_input {
+        let alias_root = Path::new(checkout);
+        let selector = selector.to_str().ok_or("alias ref is not UTF-8")?;
+        let path = path.to_str().ok_or("alias path is not UTF-8")?;
+        validate_path(path)?;
+        if selector.is_empty()
+            || selector.starts_with('-')
+            || selector.chars().any(char::is_control)
+        {
+            return Err("invalid alias source ref".into());
+        }
+        let resolved = git(
+            alias_root,
+            &[
+                "rev-parse",
+                "--verify",
+                "--end-of-options",
+                &format!("{selector}^{{commit}}"),
+            ],
+            128,
+        )?;
+        let alias_revision = std::str::from_utf8(&resolved)?.trim();
+        let entry = git(
+            alias_root,
+            &["ls-tree", "-z", alias_revision, "--", path],
+            8192,
+        )?;
+        let entry = std::str::from_utf8(&entry)?;
+        if !(entry.starts_with("100644 blob ") || entry.starts_with("100755 blob "))
+            || !entry.ends_with(&format!("\t{path}\0"))
+            || entry.matches('\0').count() != 1
+        {
+            return Err("alias resource must be an exact regular Git blob".into());
+        }
+        let bytes = git(
+            alias_root,
+            &["cat-file", "blob", &format!("{alias_revision}:{path}")],
+            256 * 1024,
+        )?;
+        Some(wow_reference::native_aliases::ingest_aliases(
+            alias_revision,
+            path,
+            std::str::from_utf8(&bytes)?,
+            &source_digest(&bytes),
+            &cancelled,
+        )?)
+    } else {
+        None
+    };
+    let library = wow_annotations::native::project_with_alias_catalog(
         &documents,
         environment,
         corrections.as_ref(),
+        alias_catalog.as_ref(),
         &cancelled,
     )?;
     let partial = !failures.is_empty() || library.projection == "partial";
@@ -505,6 +569,148 @@ mod tests {
         assert_eq!(maps.len(), 2);
         assert_eq!(maps[0]["source"]["path"], "API.lua");
         assert_eq!(report["library"]["negative_authority"], false);
+        Ok(())
+    }
+    fn alias_args(source: &Fixture, donor: &Fixture, output: &str) -> Vec<OsString> {
+        let mut args = source.args(output);
+        args.extend([
+            "--alias-catalog".into(),
+            donor.0.clone().into_os_string(),
+            "HEAD".into(),
+            "Aliases.lua".into(),
+        ]);
+        args
+    }
+    fn alias_fixture(text: &str) -> Result<Fixture, Box<dyn std::error::Error>> {
+        let donor = Fixture::new()?;
+        fs::write(donor.0.join("Aliases.lua"), text)?;
+        donor.command(&["add", "."])?;
+        donor.command(&["commit", "-m", "annotation catalog"])?;
+        Ok(donor)
+    }
+    #[test]
+    fn alias_git_driver_binds_exact_committed_resource_not_dirty_worktree()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let fixture = Fixture::new()?;
+        let donor = alias_fixture("---@meta _\n---@alias ExternalValue number|string\n")?;
+        fs::write(
+            donor.0.join("Aliases.lua"),
+            "os.execute('never read or run')",
+        )?;
+        assert!(!run(alias_args(&fixture, &donor, "out"))?);
+        let report: serde_json::Value =
+            serde_json::from_slice(&fs::read(fixture.0.join("out/source-report.json"))?)?;
+        let library = &report["library"];
+        assert_eq!(library["schema"], "wow-native-annotation-library/5");
+        assert_ne!(
+            library["revision"],
+            library["aliases"]["source"]["revision"]
+        );
+        assert_eq!(
+            library["aliases"]["authority"],
+            "external_annotation_overlay"
+        );
+        assert_eq!(library["aliases"]["outcomes"][0]["status"], "emitted");
+        assert!(
+            fs::read_to_string(fixture.0.join("out/aliases-0001.lua"))?
+                .contains("---@alias ExternalValue number|string")
+        );
+        assert!(!serde_json::to_string(library)?.contains(donor.0.to_str().ok_or("path")?));
+        assert!(run(alias_args(&fixture, &donor, "out")).is_err());
+        Ok(())
+    }
+    #[test]
+    fn alias_driver_and_correction_flags_compose_in_either_order()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let fixture = Fixture::new()?;
+        let donor = alias_fixture("---@alias ExternalValue number\n")?;
+        let pack = correction_file(&fixture, false)?;
+        let mut reports = Vec::new();
+        for (output, alias_first) in [("alias-first", true), ("correction-first", false)] {
+            let mut args = fixture.args(output);
+            let alias = alias_args(&fixture, &donor, output).split_off(5);
+            let correction = vec!["--corrections".into(), pack.clone().into_os_string()];
+            if alias_first {
+                args.extend(alias);
+                args.extend(correction);
+            } else {
+                args.extend(correction);
+                args.extend(alias);
+            }
+            assert!(!run(args)?);
+            let report: serde_json::Value = serde_json::from_slice(&fs::read(
+                fixture.0.join(output).join("source-report.json"),
+            )?)?;
+            assert_eq!(
+                report["library"]["schema"],
+                "wow-native-annotation-library/5"
+            );
+            assert_eq!(
+                report["library"]["corrections"]["applications"][0]["status"],
+                "applied"
+            );
+            reports.push(report["library"].clone());
+        }
+        assert_eq!(reports[0], reports[1]);
+        Ok(())
+    }
+    #[test]
+    fn missing_alias_dependency_keeps_valid_output_but_driver_is_partial()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let fixture = Fixture::new()?;
+        let donor = alias_fixture("---@alias Valid number\n---@alias Broken UnknownTarget\n")?;
+        assert!(run(alias_args(&fixture, &donor, "out"))?);
+        let report: serde_json::Value =
+            serde_json::from_slice(&fs::read(fixture.0.join("out/source-report.json"))?)?;
+        assert_eq!(report["status"], "partial");
+        assert_eq!(report["input_failures"], serde_json::json!([]));
+        let output = fs::read_to_string(fixture.0.join("out/aliases-0001.lua"))?;
+        assert!(output.contains("---@alias Valid number"));
+        assert!(!output.contains("---@alias Broken"));
+        Ok(())
+    }
+    #[test]
+    fn invalid_catalog_and_cli_options_reject_before_output_creation()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let fixture = Fixture::new()?;
+        let donor = alias_fixture("---@alias Valid number\nreturn {}\n")?;
+        assert!(run(alias_args(&fixture, &donor, "out")).is_err());
+        let args = alias_args(&fixture, &donor, "out");
+        for mode in 0..5 {
+            let mut bad = args.clone();
+            match mode {
+                0 => {
+                    bad.pop();
+                }
+                1 => {
+                    bad.extend(args[5..].iter().cloned());
+                }
+                2 => {
+                    bad[7] = "--help".into();
+                }
+                3 => {
+                    bad[8] = "../Aliases.lua".into();
+                }
+                _ => {
+                    bad[8] = "Missing.lua".into();
+                }
+            }
+            assert!(run(bad).is_err());
+            assert!(!fixture.0.join("out").exists());
+        }
+        Ok(())
+    }
+    #[cfg(unix)]
+    #[test]
+    fn alias_git_symlink_is_not_an_annotation_resource() -> Result<(), Box<dyn std::error::Error>> {
+        let fixture = Fixture::new()?;
+        let donor = Fixture::new()?;
+        fs::write(donor.0.join("Real.lua"), "---@alias Valid number\n")?;
+        std::os::unix::fs::symlink("Real.lua", donor.0.join("Aliases.lua"))?;
+        donor.command(&["add", "."])?;
+        donor.command(&["commit", "-m", "symlink input"])?;
+        assert!(run(alias_args(&fixture, &donor, "out")).is_err());
+        assert!(!fixture.0.join("out").exists());
         Ok(())
     }
 }

@@ -10,4 +10,5 @@ pub mod ketho;
 
 pub mod literals;
 
+pub mod aliases;
 pub mod native;

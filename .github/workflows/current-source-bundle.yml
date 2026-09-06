@@ -90,6 +90,30 @@ jobs:
             3) echo '::warning::Verified artifact remains semantically partial; not consumer certification' ;;
             *) exit "$result" ;;
           esac
+      - name: Probe an explicit current Ketho alias catalog
+        run: |
+          set -euo pipefail
+          git -c core.hooksPath=/dev/null clone --depth=1 --no-tags --single-branch \
+            https://github.com/Ketho/vscode-wow-api.git "$RUNNER_TEMP/ketho-source"
+          git -C "$RUNNER_TEMP/ketho-source" rev-parse HEAD > "$RUNNER_TEMP/alias-revision"
+          result=0
+          cargo +stable run --locked -p wow-annotations --example native_library -- \
+            "$RUNNER_TEMP/wow-ui-source" "$(cat "$RUNNER_TEMP/source-revision")" \
+            "$SOURCE_TOC" "$SOURCE_ENVIRONMENT" "$RUNNER_TEMP/native-aliased" \
+            --alias-catalog "$RUNNER_TEMP/ketho-source" "$(cat "$RUNNER_TEMP/alias-revision")" \
+            Annotations/Core/Type/BlizzardType.lua || result=$?
+          case "$result" in
+            0) ;;
+            3) echo '::warning::External aliases have explicit omissions; not type certification' ;;
+            *) exit "$result" ;;
+          esac
+          result=0
+          cargo +stable xtask verify-library "$RUNNER_TEMP/native-aliased" --require-input-complete || result=$?
+          case "$result" in
+            0) ;;
+            3) echo '::warning::Verified external overlay remains partial' ;;
+            *) exit "$result" ;;
+          esac
       - name: Retain source and projection evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -97,6 +121,8 @@ jobs:
           name: native-source-report-${{ github.sha }}
           path: |
             ${{ runner.temp }}/native-annotations/source-report.json
+            ${{ runner.temp }}/native-aliased/source-report.json
+            ${{ runner.temp }}/alias-revision
             ${{ runner.temp }}/source-manifest.json
             ${{ runner.temp }}/source-revision
           retention-days: 3

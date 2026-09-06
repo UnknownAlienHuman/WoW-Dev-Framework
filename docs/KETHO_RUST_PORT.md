@@ -292,7 +292,72 @@ individual methods do not invent members or erase the class declaration.
 No inheritance is inferred from donor folder structure, class names, overlapping
 methods or unimplemented source metadata. The reviewed donor's base-class list
 and handwritten methods are not copied as current platform truth. General
-TypeDocumentation/custom types, explicit proven inheritance, full type closure
+Remaining custom type resources, explicit proven inheritance, full type closure
 and semantic EmmyLua/LuaLS probes remain unimplemented. Receiver regressions cover
 exact bytes, original-name aliases, source ranges, deterministic order, bounds,
 conflicts and real native Git-driver output; parser acceptance is syntax only.
+
+## Alias resource connection
+
+The executable type slice consumes an explicitly selected annotation resource,
+not the wiki-oriented `wowdoc/loader/TypeDocumentation.lua` table. The reviewed
+Ketho resource is `Annotations/Core/Type/BlizzardType.lua` (blob
+`be1d04ece7d93840e485d6ab57f6e77f0beef4ba` at the donor revision recorded above).
+For example, the wiki table says `LuaValueVariant: any`, while the annotation
+resource says `LuaValueVariant: table`. Wiki replacements and descriptions are
+not annotation contracts.
+
+`wow-reference::native_aliases` uses Emmy AST nodes to retain names, primitive/
+named union terms and original byte ranges without executing Lua.
+`wow-annotations::native::project_with_alias_catalog` projects this resource as an
+**external annotation overlay**, not source-confirmed Blizzard facts or a new
+ReferenceView authority. No donor inventory is embedded in the binary. Ordinary
+generation and existing correction guards are unchanged.
+
+```sh
+cargo run --locked -p wow-annotations --example native_library -- \
+  /path/to/wow-ui-source live \
+  Interface/AddOns/Blizzard_APIDocumentationGenerated/Blizzard_APIDocumentationGenerated.toc \
+  Mainline /new/output \
+  --alias-catalog /path/to/vscode-wow-api HEAD Annotations/Core/Type/BlizzardType.lua
+```
+
+Both refs resolve independently. The driver reads committed regular Git blobs,
+not dirty files, symlinks or submodules; it never fetches or mutates checkouts.
+Select a reviewed resource appropriate to the chosen flavor. Its exact revision
+proves identity, not freshness or semantic validity. Only provide redistributable
+resources. Generated derivative Ketho aliases retain the existing MIT notice;
+this does not license unrelated inputs.
+
+This first profile supports primitive/named unions, inert comments and anonymous
+meta headers. Descriptions remain raw, not rendered. Arrays, generics, function
+signatures and other unsupported alias forms have explicit per-alias outcomes.
+Lua statements, diagnostic suppression, namespace/module changes, non-alias tags
+and multiline unions reject the resource. Input bytes, line complexity, alias
+count and term count are bounded before/after upstream parsing as appropriate.
+Each lexer-delimited short comment is parsed independently. A syntax error in a
+named alias excludes that entire declaration as `alias_syntax_error`; it never
+repairs its type or consumes neighboring declarations. Unowned syntax errors
+reject the resource. This handles the donor's ambiguous `[0.0 - 1.0]` suffix
+without treating the descriptive interval as a valid Emmy type.
+
+Aliases cannot override source identities, including declarations excluded for
+normalization/projection errors. Dependencies must resolve to builtins, actually
+emitted native types, or admitted aliases; merely mentioned types and namespaces
+are not definitions. Iterative graph resolution never expands alias chains into
+signatures. Duplicates, cycles and missing dependencies exclude affected aliases
+while preserving independent entries and marking the result partial. There is
+no implicit `any` fallback.
+
+Catalog-enabled reports use `wow-native-annotation-library/5`, retaining optional
+corrections, raw catalog text/hash/revision, one outcome per alias and mappings
+with `source.scope=annotation_alias_catalog`. Source universes stay separate even
+when relative paths coincide. Without a catalog, v3/v4 serialization is unchanged.
+`cargo xtask verify-library` validates identities, outcomes, final declarations
+and blockers, not language-server semantics. The existing source CI checks plain
+Gethe generation and a separate explicit current Ketho catalog run against the
+same resolved Gethe revision.
+
+This closes primitive/named-union catalog ingestion and projection, not all Ketho
+custom resources. Widget mappings/inheritance, string-enum resources, mixin
+classes, timer/custom signatures and real EmmyLua/LuaLS semantic probes remain.

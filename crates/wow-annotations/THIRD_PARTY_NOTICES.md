@@ -46,3 +46,10 @@ base classes, case aliases or handwritten methods from that file are imported.
 Receiver names come from selected source facts and explicit guarded corrections.
 Synthetic receiver tests check this representation and source mapping, not a
 byte-for-byte reproduction of the donor's complete handwritten class catalogue.
+
+The optional alias-resource reader/projection follows the declaration form in
+`Annotations/Core/Type/BlizzardType.lua` (reviewed blob
+`be1d04ece7d93840e485d6ab57f6e77f0beef4ba`). The inventory is caller-selected input,
+not embedded source truth. Generated derivative Ketho alias files retain this
+notice. Wiki TypeDocumentation is not copied or used as an annotation oracle.
+Other resources still require their own redistribution rights.

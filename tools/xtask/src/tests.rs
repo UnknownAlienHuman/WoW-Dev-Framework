@@ -311,3 +311,142 @@ fn correction_report_cannot_drop_outcomes_or_claim_changed_replacement() -> Resu
     }
     Ok(())
 }
+
+fn aliased_artifact(
+    fixture: &Fixture,
+    base: Option<serde_json::Value>,
+) -> Result<serde_json::Value> {
+    use serde_json::json;
+    let mut report = match base {
+        Some(base) => base,
+        None => artifact(fixture)?,
+    };
+    let raw = "---@meta _\n---@alias ExternalValue number|string\n";
+    let start = raw.find("---@alias").ok_or("alias fixture")?;
+    let span = json!({"start":start,"end":raw.len()-1});
+    let hash = format!("sha256:{}", manifest::digest(raw.as_bytes()));
+    let link =
+        json!({"scope":"annotation_alias_catalog","path":"API.lua","sha256":hash,"span":span});
+    report["library"]["schema"] = json!("wow-native-annotation-library/5");
+    report["library"]["aliases"] = json!({"schema":"wow-native-alias-projection/1","authority":"external_annotation_overlay","source":{"schema":"wow-native-alias-resource/1","revision":"d".repeat(40),"path":"API.lua","sha256":hash,"source_bytes":raw.len(),"text":raw,"aliases":[{"name":"ExternalValue","terms":["number","string"],"syntax_error":false,"span":span}]},"outcomes":[{"ordinal":0,"name":"ExternalValue","status":"emitted"}],"limitations":["synthetic artifact test, not semantic certification"]});
+    report["library"]["files"].as_array_mut().ok_or("files")?.push(json!({"path":"aliases-0001.lua","text":raw,"sha256":hash,"mappings":[{"granularity":"declaration","generated":span,"source":link}]}));
+    fixture.put("output/aliases-0001.lua", raw.as_bytes())?;
+    fixture.put("output/source-report.json", &serde_json::to_vec(&report)?)?;
+    Ok(report)
+}
+#[test]
+fn alias_artifact_has_separate_identity_even_when_paths_overlap() -> Result<()> {
+    let fixture = Fixture::new("sha1")?;
+    let original = aliased_artifact(&fixture, None)?;
+    assert_eq!(crate::library::verify(&fixture.0.join("output"), true)?, 0);
+    for mode in 0..4 {
+        let mut report = original.clone();
+        let blizzard_hash = report["library"]["sources"][0]["sha256"].clone();
+        let mapping = &mut report["library"]["files"][1]["mappings"][0]["source"];
+        match mode {
+            0 => {
+                mapping.as_object_mut().ok_or("mapping")?.remove("scope");
+            }
+            1 => {
+                mapping["scope"] = serde_json::json!("other");
+            }
+            2 => {
+                mapping["path"] = serde_json::json!("Other.lua");
+            }
+            _ => {
+                mapping["sha256"] = blizzard_hash;
+            }
+        }
+        fixture.put("output/source-report.json", &serde_json::to_vec(&report)?)?;
+        assert!(crate::library::verify(&fixture.0.join("output"), true).is_err());
+    }
+    Ok(())
+}
+#[test]
+fn alias_verifier_rejects_raw_identity_outcome_and_mapping_tampering() -> Result<()> {
+    let fixture = Fixture::new("sha1")?;
+    let original = aliased_artifact(&fixture, None)?;
+    for mode in 0..9 {
+        let mut report = original.clone();
+        let aliases = &mut report["library"]["aliases"];
+        match mode {
+            0 => aliases["source"]["text"] = serde_json::json!("changed"),
+            1 => aliases["source"]["revision"] = serde_json::json!("live"),
+            2 => aliases["authority"] = serde_json::json!("source_confirmed"),
+            3 => aliases["outcomes"] = serde_json::json!([]),
+            4 => aliases["outcomes"][0]["ordinal"] = serde_json::json!(1),
+            5 => aliases["outcomes"][0]["name"] = serde_json::json!("Impostor"),
+            6 => aliases["source"]["aliases"][0]["terms"] = serde_json::json!(["any"]),
+            7 => report["library"]["files"][1]["mappings"] = serde_json::json!([]),
+            _ => {
+                let mapping = report["library"]["files"][1]["mappings"][0].clone();
+                report["library"]["files"][1]["mappings"]
+                    .as_array_mut()
+                    .ok_or("mappings")?
+                    .push(mapping);
+            }
+        }
+        fixture.put("output/source-report.json", &serde_json::to_vec(&report)?)?;
+        assert!(
+            crate::library::verify(&fixture.0.join("output"), true).is_err(),
+            "mutation {mode}"
+        );
+    }
+    Ok(())
+}
+#[test]
+fn rejected_alias_outcome_requires_issue_and_cannot_be_false_clean() -> Result<()> {
+    use serde_json::json;
+    let fixture = Fixture::new("sha1")?;
+    let mut report = aliased_artifact(&fixture, None)?;
+    let source = report["library"]["files"][1]["mappings"][0]["source"].clone();
+    report["library"]["files"]
+        .as_array_mut()
+        .ok_or("files")?
+        .pop();
+    fs::remove_file(fixture.0.join("output/aliases-0001.lua"))?;
+    report["library"]["aliases"]["outcomes"][0]["status"] = json!("source_name_conflict");
+    report["library"]["issues"] = json!([{"code":"source_name_conflict","source":source}]);
+    report["status"] = json!("partial");
+    report["library"]["projection"] = json!("partial");
+    fixture.put("output/source-report.json", &serde_json::to_vec(&report)?)?;
+    assert_eq!(crate::library::verify(&fixture.0.join("output"), true)?, 3);
+    for mode in 0..3 {
+        let mut invalid = report.clone();
+        match mode {
+            0 => invalid["library"]["issues"] = json!([]),
+            1 => {
+                invalid["status"] = json!("projected_with_sidecars");
+                invalid["library"]["projection"] = json!("projected_with_sidecars");
+            }
+            _ => invalid["library"]["aliases"]["outcomes"][0]["status"] = json!("emitted"),
+        }
+        fixture.put("output/source-report.json", &serde_json::to_vec(&invalid)?)?;
+        assert!(crate::library::verify(&fixture.0.join("output"), true).is_err());
+    }
+    Ok(())
+}
+#[test]
+fn alias_v5_preserves_correction_blockers_and_cannot_downgrade_schema() -> Result<()> {
+    let fixture = Fixture::new("sha1")?;
+    let base = corrected_artifact(&fixture, "expired")?;
+    let original = aliased_artifact(&fixture, Some(base))?;
+    assert_eq!(crate::library::verify(&fixture.0.join("output"), true)?, 3);
+    for schema in [
+        "wow-native-annotation-library/3",
+        "wow-native-annotation-library/4",
+    ] {
+        let mut report = original.clone();
+        report["library"]["schema"] = serde_json::json!(schema);
+        fixture.put("output/source-report.json", &serde_json::to_vec(&report)?)?;
+        assert!(crate::library::verify(&fixture.0.join("output"), true).is_err());
+    }
+    let mut report = original;
+    report["library"]
+        .as_object_mut()
+        .ok_or("library")?
+        .remove("aliases");
+    fixture.put("output/source-report.json", &serde_json::to_vec(&report)?)?;
+    assert!(crate::library::verify(&fixture.0.join("output"), true).is_err());
+    Ok(())
+}

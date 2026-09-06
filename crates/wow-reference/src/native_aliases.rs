@@ -1,0 +1,257 @@
+//! Explicit, annotation-only alias resources for the Ketho port.
+//!
+//! This is NOT Blizzard reference truth or an automatic correction source.
+//! EmmyLua parses the input; no Lua statement, diagnostic directive, namespace
+//! change or loader is admitted. The original resource and all declarations
+//! survive in the report, including unsupported type forms and duplicates.
+
+use std::sync::atomic::{AtomicBool, Ordering};
+
+use emmylua_parser::{
+    LexerConfig, LuaAstNode, LuaDocTag, LuaDocType, LuaLanguageLevel, LuaLexer, LuaParser,
+    LuaTokenKind, LuaTypeBinaryOperator, ParserConfig, Reader,
+};
+use serde::Serialize;
+
+use crate::native::{NativeError, NativeErrorCode, Span, source_digest};
+
+const MAX_BYTES: usize = 256 * 1024;
+const MAX_ALIASES: usize = 4096;
+const MAX_TERMS: usize = 16;
+
+/// One observed alias. `terms == None` is explicitly unsupported, never `any`.
+#[derive(Clone, Debug, Serialize)]
+pub struct AliasFact {
+    pub name: String,
+    pub terms: Option<Vec<String>>,
+    pub syntax_error: bool,
+    pub span: Span,
+}
+
+/// Immutable external resource. Its own revision is independent of the selected
+/// Blizzard revision. Raw bytes are kept as UTF-8 text for review and provenance.
+#[derive(Clone, Debug, Serialize)]
+pub struct AliasDocument {
+    schema: &'static str,
+    revision: String,
+    path: String,
+    sha256: String,
+    source_bytes: usize,
+    text: String,
+    aliases: Vec<AliasFact>,
+}
+impl AliasDocument {
+    pub fn revision(&self) -> &str {
+        &self.revision
+    }
+    pub fn path(&self) -> &str {
+        &self.path
+    }
+    pub fn sha256(&self) -> &str {
+        &self.sha256
+    }
+    pub fn text(&self) -> &str {
+        &self.text
+    }
+    pub fn aliases(&self) -> &[AliasFact] {
+        &self.aliases
+    }
+}
+
+type Result<T> = std::result::Result<T, NativeError>;
+fn error(code: NativeErrorCode) -> NativeError {
+    NativeError { code, span: None }
+}
+fn location(node: &impl LuaAstNode) -> Span {
+    let range = node.syntax().text_range();
+    Span {
+        start: u32::from(range.start()) as usize,
+        end: u32::from(range.end()) as usize,
+    }
+}
+
+/// Admit an explicitly chosen alias resource without IO or discovery. The
+/// bounded first profile accepts named/primitive unions, not arbitrary LuaCATS
+/// types. Unsupported aliases remain recorded so callers cannot hide omissions.
+pub fn ingest_aliases(
+    revision: &str,
+    path: &str,
+    text: &str,
+    expected_sha256: &str,
+    cancelled: &AtomicBool,
+) -> Result<AliasDocument> {
+    if cancelled.load(Ordering::Relaxed) {
+        return Err(error(NativeErrorCode::Cancelled));
+    }
+    if !matches!(revision.len(), 40 | 64)
+        || !revision
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+        || path.is_empty()
+        || path.len() > 4096
+        || path.contains(['\\', ':'])
+        || path.chars().any(char::is_control)
+        || path
+            .split('/')
+            .any(|p| p.is_empty() || p == "." || p == "..")
+    {
+        return Err(error(NativeErrorCode::InvalidIdentity));
+    }
+    if text.len() > MAX_BYTES {
+        return Err(error(NativeErrorCode::Limit));
+    }
+    if text.contains('\0') {
+        return Err(error(NativeErrorCode::InvalidEncoding));
+    }
+    let digest = source_digest(text.as_bytes());
+    if digest != expected_sha256 {
+        return Err(error(NativeErrorCode::DigestMismatch));
+    }
+    // Replace the three-byte UTF-8 BOM with three spaces, preserving spans.
+    let input = text
+        .strip_prefix('\u{feff}')
+        .map(|rest| format!("   {rest}"));
+    let input = input.as_deref().unwrap_or(text);
+    // Conservative recursion budgets BEFORE the upstream doc parser. This is
+    // not a type parser: every actual declaration/type is read from Emmy AST.
+    // Multiline unions are outside this profile, and cannot form an unbounded
+    // chain across individually short lines.
+    for line in input.lines() {
+        if line.len() > 2048 || line.bytes().filter(|b| b"([{<?|".contains(b)).count() > 48 {
+            return Err(error(NativeErrorCode::Limit));
+        }
+        if line.trim_start().starts_with("---|") {
+            return Err(error(NativeErrorCode::UnsupportedExpression));
+        }
+    }
+    let mut errors = Vec::new();
+    let tokens = LuaLexer::new(
+        Reader::new(input),
+        LexerConfig::new(LuaLanguageLevel::Lua51),
+        Some(&mut errors),
+    )
+    .tokenize();
+    if !errors.is_empty() {
+        return Err(error(NativeErrorCode::Syntax));
+    }
+    if tokens.iter().any(|t| {
+        !matches!(
+            t.kind,
+            LuaTokenKind::TkShortComment
+                | LuaTokenKind::TkWhitespace
+                | LuaTokenKind::TkEndOfLine
+                | LuaTokenKind::TkEof
+        )
+    }) {
+        return Err(error(NativeErrorCode::UnsupportedStatement));
+    }
+    let mut aliases = Vec::new();
+    // Each alias is a single short comment in this profile. Use lexer token
+    // boundaries, not text matching, to prevent one malformed doc type from
+    // consuming or repairing another declaration through parser recovery.
+    for token in tokens
+        .iter()
+        .filter(|t| t.kind == LuaTokenKind::TkShortComment)
+    {
+        if cancelled.load(Ordering::Relaxed) {
+            return Err(error(NativeErrorCode::Cancelled));
+        }
+        let start = token.range.start_offset;
+        let end = token.range.end_offset();
+        let comment = input
+            .get(start..end)
+            .ok_or_else(|| error(NativeErrorCode::Syntax))?;
+        let tree = LuaParser::parse(comment, ParserConfig::with_level(LuaLanguageLevel::Lua51));
+        let syntax_error = !tree.get_errors().is_empty();
+        let mut observed_alias = false;
+        for tag in tree
+            .get_chunk_node()
+            .syntax()
+            .descendants()
+            .filter_map(LuaDocTag::cast)
+        {
+            match tag {
+                LuaDocTag::Alias(alias) => {
+                    if observed_alias || aliases.len() >= MAX_ALIASES {
+                        return Err(error(NativeErrorCode::Limit));
+                    }
+                    observed_alias = true;
+                    let name = alias
+                        .get_name_token()
+                        .ok_or_else(|| error(NativeErrorCode::Syntax))?
+                        .get_name_text()
+                        .to_owned();
+                    let mut terms = Vec::new();
+                    let supported = !syntax_error
+                        && alias.get_generic_decl_list().is_none()
+                        && alias.get_type_flag().is_none()
+                        && alias
+                            .get_type()
+                            .is_some_and(|ty| collect_terms(ty, &mut terms, 0));
+                    let span = if syntax_error {
+                        Span { start, end }
+                    } else {
+                        let local = location(&alias);
+                        Span {
+                            start: start + local.start,
+                            end: start + local.end,
+                        }
+                    };
+                    aliases.push(AliasFact {
+                        name,
+                        terms: supported.then_some(terms),
+                        syntax_error,
+                        span,
+                    });
+                }
+                LuaDocTag::Meta(meta)
+                    if !syntax_error
+                        && meta
+                            .get_name_token()
+                            .is_none_or(|t| t.get_name_text() == "_") => {}
+                _ => return Err(error(NativeErrorCode::UnsupportedStatement)),
+            }
+        }
+        if syntax_error && !observed_alias {
+            return Err(error(NativeErrorCode::Syntax));
+        }
+    }
+    if aliases.is_empty() {
+        return Err(error(NativeErrorCode::InvalidRegistration));
+    }
+    Ok(AliasDocument {
+        schema: "wow-native-alias-resource/1",
+        revision: revision.into(),
+        path: path.into(),
+        sha256: digest,
+        source_bytes: text.len(),
+        text: text.into(),
+        aliases,
+    })
+}
+
+fn collect_terms(ty: LuaDocType, terms: &mut Vec<String>, depth: usize) -> bool {
+    if depth >= MAX_TERMS || terms.len() >= MAX_TERMS {
+        return false;
+    }
+    match ty {
+        LuaDocType::Name(name) if name.get_generic_param().is_none() => {
+            let Some(name) = name.get_name_text() else {
+                return false;
+            };
+            terms.push(name);
+            true
+        }
+        LuaDocType::Binary(binary)
+            if binary
+                .get_op_token()
+                .is_some_and(|op| op.get_op() == LuaTypeBinaryOperator::Union) =>
+        {
+            let Some((left, right)) = binary.get_types() else {
+                return false;
+            };
+            collect_terms(left, terms, depth + 1) && collect_terms(right, terms, depth + 1)
+        }
+        _ => false,
+    }
+}

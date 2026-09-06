@@ -30,6 +30,9 @@ const MAX_FILE_BYTES: usize = 8 * 1024 * 1024;
 
 #[derive(Clone, Debug, Serialize)]
 pub struct SourceLink {
+    /// Separate optional annotation-resource universe; absent means Blizzard input.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scope: Option<&'static str>,
     pub path: String,
     pub sha256: String,
     pub span: Span,
@@ -96,11 +99,14 @@ pub struct NativeLibrary<'a> {
     pub name_projections: Vec<NameProjection>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub corrections: Option<CorrectionReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub aliases: Option<crate::aliases::AliasReport<'a>>,
     pub limitations: Vec<&'static str>,
 }
 
 fn link(document: &DocumentationDocument, raw: &RawValue) -> SourceLink {
     SourceLink {
+        scope: None,
         path: document.path().to_owned(),
         sha256: document.sha256().to_owned(),
         span: raw.span,
@@ -136,6 +142,19 @@ pub fn project_with_corrections<'a>(
     documents: &'a [DocumentationDocument],
     environment: &str,
     corrections: Option<&'a ValidatedCorrections>,
+    cancelled: &AtomicBool,
+) -> Result<NativeLibrary<'a>, RenderError> {
+    project_with_alias_catalog(documents, environment, corrections, None, cancelled)
+}
+
+/// Add an explicitly selected external alias catalog for annotation consumers.
+/// It remains a separate non-authoritative input; it never changes raw Blizzard
+/// facts, corrects source declarations or discovers a provider.
+pub fn project_with_alias_catalog<'a>(
+    documents: &'a [DocumentationDocument],
+    environment: &str,
+    corrections: Option<&'a ValidatedCorrections>,
+    aliases: Option<&'a wow_reference::native_aliases::AliasDocument>,
     cancelled: &AtomicBool,
 ) -> Result<NativeLibrary<'a>, RenderError> {
     if documents.is_empty() || documents.len() > MAX_FILES || environment.is_empty() {
@@ -196,6 +215,7 @@ pub fn project_with_corrections<'a>(
                 Err(error) => issues.push(ProjectionIssue {
                     code: format!("normalization_{:?}", error.code),
                     source: SourceLink {
+                        scope: None,
                         path: document.source.path().into(),
                         sha256: document.source.sha256().into(),
                         span: error.span,
@@ -247,6 +267,23 @@ pub fn project_with_corrections<'a>(
     })?;
     // Class names inhabit a shared annotation type space even though their
     // method bindings are file-local. Never merge distinct owners implicitly.
+    let mut reserved_alias_names = reserved_alias_names(&systems);
+    // Failed normalization cannot make an observed source identity available
+    // for an external alias to impersonate. This is conservative reservation,
+    // not an attempted repair or a positive fact from malformed source.
+    for normalized in &normalized {
+        for (registration, result) in normalized
+            .source
+            .registrations()
+            .iter()
+            .zip(&normalized.systems)
+        {
+            if result.is_err() {
+                reserve_unprojected_names(&registration.value, &mut reserved_alias_names);
+            }
+        }
+    }
+    let mut defined_alias_targets = BTreeSet::new();
     let blocked_receivers = blocked_receivers(&systems);
     let renderer = Renderer::new(enum_names, MAX_FILE_BYTES)?;
     let literals = LiteralRenderer::new(MAX_FILE_BYTES)?;
@@ -547,6 +584,16 @@ pub fn project_with_corrections<'a>(
                             },
                         );
                     }
+                    if bind_receiver && let SystemOwner::ScriptObject(name) = system.owner {
+                        defined_alias_targets.insert(name.to_owned());
+                        if let Some(original) = system.name {
+                            defined_alias_targets.insert(original.to_owned());
+                        }
+                    }
+                    for table in &input.tables {
+                        let (Table::Structure { name, .. } | Table::Callback { name, .. }) = table;
+                        defined_alias_targets.insert(name.clone());
+                    }
                     push_file(&mut files, &mut total_bytes, "api", rendered.text, mappings)?;
                 }
                 Err(error) => {
@@ -583,19 +630,47 @@ pub fn project_with_corrections<'a>(
     }
     if !all_enums.is_empty() || !all_constants.is_empty() {
         let text = literals.render_enums(&all_enums, &all_constants)?;
+        defined_alias_targets.extend(all_enums.iter().map(|e| format!("Enum.{}", e.name)));
         let maps = whole_file_maps(&text, all_literal_sources);
         push_file(&mut files, &mut total_bytes, "values", text, maps)?;
     }
     if !all_events.is_empty() {
         let text = literals.render_events(&all_events)?;
+        defined_alias_targets.insert("FrameEvent".into());
         let maps = whole_file_maps(&text, all_event_sources);
         push_file(&mut files, &mut total_bytes, "events", text, maps)?;
     }
     if cancelled.load(Ordering::Relaxed) {
         return Err(RenderError::Cancelled);
     }
+    let alias_report = aliases
+        .map(|source| {
+            let projected = crate::aliases::project(
+                source,
+                &defined_alias_targets,
+                &reserved_alias_names,
+                cancelled,
+            )?;
+            issues.extend(projected.issues);
+            if !projected.text.is_empty() {
+                push_file(
+                    &mut files,
+                    &mut total_bytes,
+                    "aliases",
+                    projected.text,
+                    projected.mappings,
+                )?;
+            }
+            Ok::<_, RenderError>(projected.report)
+        })
+        .transpose()?;
+    if cancelled.load(Ordering::Relaxed) {
+        return Err(RenderError::Cancelled);
+    }
     Ok(NativeLibrary {
-        schema: if corrected.is_some() {
+        schema: if alias_report.is_some() {
+            "wow-native-annotation-library/5"
+        } else if corrected.is_some() {
             "wow-native-annotation-library/4"
         } else {
             "wow-native-annotation-library/3"
@@ -616,6 +691,7 @@ pub fn project_with_corrections<'a>(
         scalar_resolutions,
         name_projections,
         corrections: corrected.map(|c| c.report),
+        aliases: alias_report,
         limitations: vec![
             "raw restriction and unknown metadata are retained, not interpreted as runtime safety",
             "ScriptObject classes are analysis-only local bindings; inheritance is not inferred",
@@ -626,6 +702,72 @@ pub fn project_with_corrections<'a>(
             "EmmyLua and LuaLS semantic consumer compatibility is not established by rendering",
         ],
     })
+}
+
+fn reserve_unprojected_names(raw: &RawValue, names: &mut BTreeSet<String>) {
+    use wow_reference::native::RawKey;
+    for field in raw.fields().into_iter().flatten() {
+        let RawKey::Name(key) = &field.key else {
+            continue;
+        };
+        match (key.as_str(), &field.value.kind) {
+            ("Name" | "Namespace", RawKind::String(name)) => {
+                names.insert(name.clone());
+            }
+            ("Tables" | "Functions", RawKind::Table(members)) => {
+                for member in members {
+                    for field in member.value.fields().into_iter().flatten() {
+                        if matches!(&field.key, RawKey::Name(key) if key == "Name")
+                            && let RawKind::String(name) = &field.value.kind
+                        {
+                            names.insert(name.clone());
+                            if key == "Tables" {
+                                names.insert(format!("Enum.{name}"));
+                            }
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Reserve every selected source identity, even when projection failed. An
+/// external alias cannot impersonate a declaration omitted for another reason.
+fn reserved_alias_names(
+    systems: &[(&DocumentationDocument, &SystemFacts<'_>)],
+) -> BTreeSet<String> {
+    let mut names = BTreeSet::from(["Enum".into(), "Constants".into()]);
+    for (_, system) in systems {
+        match system.owner {
+            SystemOwner::Global => names.extend(system.functions.iter().map(|f| f.name.to_owned())),
+            SystemOwner::Namespace(name) => {
+                names.insert(name.to_owned());
+            }
+            SystemOwner::ScriptObject(name) => {
+                names.insert(name.to_owned());
+                if let Some(original) = system.name {
+                    names.insert(original.to_owned());
+                }
+            }
+        }
+        if !system.events.is_empty() {
+            names.insert("FrameEvent".into());
+        }
+        for table in &system.tables {
+            let (TableFact::Structure { name, .. }
+            | TableFact::Callback { name, .. }
+            | TableFact::Enumeration { name, .. }
+            | TableFact::Constants { name, .. }
+            | TableFact::Unsupported { name, .. }) = table;
+            names.insert((*name).to_owned());
+            if matches!(table, TableFact::Enumeration { .. }) {
+                names.insert(format!("Enum.{name}"));
+            }
+        }
+    }
+    names
 }
 
 /// Block receiver declarations that would make type identity ambiguous. This
