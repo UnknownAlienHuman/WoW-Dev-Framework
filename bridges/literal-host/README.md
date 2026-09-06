@@ -34,3 +34,9 @@ prevents cold/warm translation charges from changing the same execution budget.
 The explicit real_guest CI suite includes a large whole-inventory regression.
 Only third-party interpreter packages use optimization in the test profile;
 framework assertions, sandbox guards and all tests remain enabled.
+
+`tests/fuel_boundary.rs` measures a synthetic module's actual execution fuel and
+checks fresh and repeated calls at that exact budget and one unit below it.
+Exhaustion must not alter other handles. This preserves the useful boundary
+regression from the earlier repair without restoring its superseded API/defaults
+or pinning a Wasmi/compiler-specific instruction count.
