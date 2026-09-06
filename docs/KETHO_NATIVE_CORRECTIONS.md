@@ -120,6 +120,16 @@ This is the independent Type/Nilable/widget-receiver subset, not every operation
 of E1-B. Dependency-ordered patches, restriction/deprecation corrections,
 persistent correction-store/generation publication, automatic donor-pack import,
 complete TypeDocumentation/custom annotations and widget inheritance remain
-unimplemented. Receiver naming is not class/inheritance/type closure. The current
+unimplemented. Receiver naming now feeds native class declarations and an original-name type
+alias in the same file. It does not establish inheritance or general type closure. The current
 emitter still requires real EmmyLua/LuaLS semantic probes; parser acceptance and
 unit/golden tests are not substitutes.
+
+
+The native class profile validates both original and corrected type names. An
+otherwise applicable rename can still yield a class projection conflict: for
+example `A -> B` and `B -> C` would require both a class and a conflicting alias
+named `B`. Such receivers are not emitted and the library remains partial.
+Correction application receipts describe the normalized edit, not successful
+class emission or external review authentication. No raw type reference or
+source observation is changed to hide this conflict.

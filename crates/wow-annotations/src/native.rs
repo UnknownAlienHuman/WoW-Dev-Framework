@@ -216,6 +216,9 @@ pub fn project_with_corrections<'a>(
     let mut enum_names = BTreeSet::new();
     let mut units = 0usize;
     for (_, system) in &systems {
+        if cancelled.load(Ordering::Relaxed) {
+            return Err(RenderError::Cancelled);
+        }
         for function in &system.functions {
             *identities
                 .entry(function_key(system, function.name))
@@ -233,7 +236,7 @@ pub fn project_with_corrections<'a>(
                 .or_default() += 1;
         }
         units = units
-            .saturating_add(system.functions.len() + system.tables.len() + system.events.len());
+            .saturating_add(1 + system.functions.len() + system.tables.len() + system.events.len());
         if units > MAX_UNITS {
             return Err(RenderError::InputLimit);
         }
@@ -242,6 +245,9 @@ pub fn project_with_corrections<'a>(
         ScalarError::InvalidSource => RenderError::InvalidSource,
         _ => RenderError::InputLimit,
     })?;
+    // Class names inhabit a shared annotation type space even though their
+    // method bindings are file-local. Never merge distinct owners implicitly.
+    let blocked_receivers = blocked_receivers(&systems);
     let renderer = Renderer::new(enum_names, MAX_FILE_BYTES)?;
     let literals = LiteralRenderer::new(MAX_FILE_BYTES)?;
     let mut files = Vec::new();
@@ -335,10 +341,16 @@ pub fn project_with_corrections<'a>(
             SystemOwner::Global => Owner::Global,
             SystemOwner::Namespace(n) => Owner::Namespace(n.into()),
             SystemOwner::ScriptObject(n) => Owner::ScriptObject {
-                system_name: n.into(),
-                annotation_name: None,
+                system_name: system.name.unwrap_or(n).into(),
+                annotation_name: (system.name != Some(n)).then(|| n.into()),
             },
         };
+        let receiver_blocked = matches!(system.owner, SystemOwner::ScriptObject(name) if blocked_receivers.contains(name));
+        if receiver_blocked {
+            issues.push(issue(document, system.raw, "script_object_name_conflict"));
+        }
+        let bind_receiver =
+            matches!(system.owner, SystemOwner::ScriptObject(_)) && !receiver_blocked;
         let mut input = System {
             owner,
             functions: Vec::new(),
@@ -354,6 +366,11 @@ pub fn project_with_corrections<'a>(
         for function in &system.functions {
             if identities[&function_key(system, function.name)] > 1 {
                 issues.push(issue(document, function.raw, "duplicate_callable"));
+                continue;
+            }
+            // The registration issue accounts for these omitted methods. Table
+            // and event lanes below remain independent of receiver admission.
+            if receiver_blocked {
                 continue;
             }
             match callable(function, &mut scalars) {
@@ -493,10 +510,15 @@ pub fn project_with_corrections<'a>(
             });
             event_sources.push(link(document, event.raw));
         }
-        if !input.functions.is_empty() || !input.tables.is_empty() {
-            match renderer.render_mapped(&input) {
+        if bind_receiver || !input.functions.is_empty() || !input.tables.is_empty() {
+            let rendered = if bind_receiver {
+                renderer.render_library_mapped(&input)
+            } else {
+                renderer.render_mapped(&input)
+            };
+            match rendered {
                 Ok(rendered) => {
-                    let mappings = rendered
+                    let mut mappings: Vec<SourceMapping> = rendered
                         .declarations
                         .iter()
                         .map(|d| SourceMapping {
@@ -512,6 +534,19 @@ pub fn project_with_corrections<'a>(
                             },
                         })
                         .collect();
+                    if let Some(receiver) = rendered.receiver {
+                        mappings.insert(
+                            0,
+                            SourceMapping {
+                                granularity: "declaration",
+                                generated: Span {
+                                    start: receiver.start,
+                                    end: receiver.end,
+                                },
+                                source: link(document, system.raw),
+                            },
+                        );
+                    }
                     push_file(&mut files, &mut total_bytes, "api", rendered.text, mappings)?;
                 }
                 Err(error) => {
@@ -583,13 +618,77 @@ pub fn project_with_corrections<'a>(
         corrections: corrected.map(|c| c.report),
         limitations: vec![
             "raw restriction and unknown metadata are retained, not interpreted as runtime safety",
-            "named type closure and source-owned widget aliases require the correction/type mapping lane",
+            "ScriptObject classes are analysis-only local bindings; inheritance is not inferred",
+            "named type closure and unconfigured widget aliases require the correction/type mapping lane",
             "parameter nilability and default rendering follow the Ketho compatibility profile",
             "declaration source maps; literal maps are file-level; fine-grained E1 maps remain incomplete",
             "CVars and extracted runtime resources are not inferred from documentation absence",
             "EmmyLua and LuaLS semantic consumer compatibility is not established by rendering",
         ],
     })
+}
+
+/// Block receiver declarations that would make type identity ambiguous. This
+/// uses selected normalized facts, including guarded corrections; filenames and
+/// names of familiar addons never determine ownership. Reserved generated roots
+/// are considered only when that lane exists in this selected corpus.
+fn blocked_receivers<'a>(
+    systems: &[(&DocumentationDocument, &SystemFacts<'a>)],
+) -> BTreeSet<&'a str> {
+    let mut receivers = BTreeMap::<&str, usize>::new();
+    let mut occupied = BTreeSet::new();
+    for (_, system) in systems {
+        match system.owner {
+            SystemOwner::ScriptObject(name) => {
+                *receivers.entry(name).or_default() += 1;
+                if let Some(original) = system.name.filter(|original| *original != name) {
+                    *receivers.entry(original).or_default() += 1;
+                }
+            }
+            SystemOwner::Namespace(name) => {
+                occupied.insert(name);
+            }
+            SystemOwner::Global => occupied.extend(system.functions.iter().map(|f| f.name)),
+        }
+        if !system.events.is_empty() {
+            occupied.insert("FrameEvent");
+        }
+        for table in &system.tables {
+            match table {
+                TableFact::Enumeration { name, .. } => {
+                    // Ketho lowers this source type token into Enum.<name>.
+                    // A same-token class cannot be assumed to mean the other.
+                    occupied.insert(name);
+                    occupied.insert("Enum");
+                }
+                TableFact::Constants { .. } => {
+                    occupied.insert("Constants");
+                }
+                TableFact::Structure { name, .. }
+                | TableFact::Callback { name, .. }
+                | TableFact::Unsupported { name, .. } => {
+                    occupied.insert(name);
+                }
+            }
+        }
+    }
+    systems
+        .iter()
+        .filter_map(|(_, system)| {
+            let SystemOwner::ScriptObject(name) = system.owner else {
+                return None;
+            };
+            let original = system.name.unwrap_or(name);
+            [name, original]
+                .into_iter()
+                .any(|token| {
+                    receivers.get(token).is_some_and(|count| *count != 1)
+                        || occupied.contains(token)
+                        || crate::ketho::reserved_type_name(token)
+                })
+                .then_some(name)
+        })
+        .collect()
 }
 
 fn push_file(

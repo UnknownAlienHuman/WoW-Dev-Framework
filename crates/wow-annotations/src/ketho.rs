@@ -119,7 +119,17 @@ pub struct RenderedDeclaration {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RenderedSystem {
     pub text: String,
+    /// Analysis-only ScriptObject class/local binding in the library profile.
+    /// Not an exported runtime global and not an inheritance claim.
+    pub receiver: Option<RenderedReceiver>,
     pub declarations: Vec<RenderedDeclaration>,
+}
+
+/// Final-byte range of the receiver class and local method binding.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RenderedReceiver {
+    pub start: usize,
+    pub end: usize,
 }
 
 /// A pure, bounded Ketho-compatible rendering profile. It has no runtime or IO
@@ -187,9 +197,46 @@ impl Renderer {
     }
 
     pub fn render_mapped(&self, system: &System) -> Result<RenderedSystem, RenderError> {
+        self.render_profile(system, false)
+    }
+
+    /// Compose Ketho's local widget class declaration and generated methods in
+    /// one lexical scope. The original emitter profile remains available for
+    /// donor byte-parity tests. No base class, constructor or global is inferred.
+    pub fn render_library_mapped(&self, system: &System) -> Result<RenderedSystem, RenderError> {
+        self.render_profile(system, true)
+    }
+
+    fn render_profile(
+        &self,
+        system: &System,
+        bind_receiver: bool,
+    ) -> Result<RenderedSystem, RenderError> {
         let mut declarations = Vec::new();
         validate_owner(&system.owner)?;
-        if system.functions.len().saturating_add(system.tables.len()) > MAX_ITEMS {
+        let receiver_count = match (&system.owner, bind_receiver) {
+            (
+                Owner::ScriptObject {
+                    system_name,
+                    annotation_name,
+                },
+                true,
+            ) => {
+                1 + usize::from(
+                    annotation_name
+                        .as_ref()
+                        .is_some_and(|name| name != system_name),
+                )
+            }
+            _ => 0,
+        };
+        if system
+            .functions
+            .len()
+            .saturating_add(system.tables.len())
+            .saturating_add(receiver_count)
+            > MAX_ITEMS
+        {
             return Err(RenderError::InputLimit);
         }
         let mut output = Output {
@@ -198,6 +245,49 @@ impl Renderer {
         };
         output.push("---@meta _\n")?;
         let mut separated = false;
+        let receiver = if bind_receiver && matches!(system.owner, Owner::ScriptObject { .. }) {
+            let (Some(name), true) = owner_name(&system.owner) else {
+                return Err(RenderError::InvalidSource);
+            };
+            let Owner::ScriptObject { system_name, .. } = &system.owner else {
+                return Err(RenderError::InvalidSource);
+            };
+            if reserved_type_name(name) || reserved_type_name(system_name) {
+                return Err(RenderError::UnsupportedType);
+            }
+            // Do not let a second type declaration silently redefine the class.
+            if self.enum_names.contains(name)
+                || self.enum_names.contains(system_name)
+                || system.tables.iter().any(|table| match table {
+                    Table::Structure { name: n, .. } | Table::Callback { name: n, .. } => {
+                        n == name || n == system_name
+                    }
+                })
+            {
+                return Err(RenderError::DuplicateName);
+            }
+            let start = output.bytes.len();
+            output.push("---@class ")?;
+            output.push(name)?;
+            output.push("\nlocal ")?;
+            output.push(name)?;
+            output.push(" = {}")?;
+            if system_name != name {
+                // This alias represents the exact reviewed receiver rename,
+                // not an inference from prefixes or a static widget catalog.
+                output.push("\n---@alias ")?;
+                output.push(system_name)?;
+                output.push(" ")?;
+                output.push(name)?;
+            }
+            separated = true;
+            Some(RenderedReceiver {
+                start,
+                end: output.bytes.len(),
+            })
+        } else {
+            None
+        };
         let mut function_names = BTreeSet::new();
         if !system.functions.is_empty()
             && let Owner::Namespace(name) = &system.owner
@@ -278,6 +368,7 @@ impl Renderer {
         }
         Ok(RenderedSystem {
             text: output.bytes,
+            receiver,
             declarations,
         })
     }
@@ -505,6 +596,28 @@ pub(crate) fn identifier(value: &str) -> Result<(), RenderError> {
         return Err(RenderError::InvalidIdentifier);
     }
     Ok(())
+}
+
+pub(crate) fn reserved_type_name(value: &str) -> bool {
+    matches!(
+        value,
+        "bool"
+            | "cstring"
+            | "luaIndex"
+            | "any"
+            | "unknown"
+            | "never"
+            | "nil"
+            | "boolean"
+            | "number"
+            | "integer"
+            | "string"
+            | "table"
+            | "function"
+            | "userdata"
+            | "lightuserdata"
+            | "thread"
+    )
 }
 
 pub(crate) fn is_keyword(value: &str) -> bool {

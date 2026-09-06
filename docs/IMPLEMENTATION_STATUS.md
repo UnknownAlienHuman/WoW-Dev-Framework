@@ -34,8 +34,10 @@ Constants use `Values`; enums use `Fields`. Exact integer additive expressions,
 enum labels and transitive same-corpus references resolve without runtime globals.
 Invalid declarations/groups do not erase valid siblings; conflicts remain errors.
 
-Declaration maps are source-bound; literal maps are whole-file. Named type/widget
-closure, the remaining correction operations, fine-grained maps, persistent ReferenceView integration and
+Declaration maps include ScriptObject class/local-binding blocks, original-name
+aliases from guarded receiver corrections, and individual methods. Literal maps
+are whole-file. General named-type/widget inheritance closure, the remaining
+correction operations, fine-grained maps, persistent ReferenceView integration and
 real EmmyLua/LuaLS semantic consumer probes remain incomplete. Native projection
 is partial when data is omitted or unsupported; it never issues negative authority.
 
@@ -109,3 +111,22 @@ uncorrected builds still emit v3. The artifact checker accepts both and rejects
 false-clean correction reports. Named/primitive unions are now rendered with
 correct array grouping. No source acquisition, dependency or interpreter was added.
 See [usage and remaining correction scope](KETHO_NATIVE_CORRECTIONS.md).
+
+## ScriptObject receiver declarations
+
+Native generation composes the reviewed Ketho class/local-table representation
+with generated methods in one lexical scope. Each unique selected ScriptObject
+produces its exact receiver class even when it has no admitted methods. No new
+runtime globals, constructors, suffix-based name mapping or inheritance is added.
+A reviewed owner rename retains the original source system name as a type alias
+when that identity is unambiguous. Source observations and correction receipts
+remain unchanged; class blocks and method ranges each have source links.
+
+The generator checks both original and corrected names against other receiver
+identities, structures/callbacks/unknown types, namespaces/globals, selected enum
+type names and generated literal roots. A conflict excludes the ambiguous class
+and its methods, not independent table/event declarations. Projection stays
+partial. The wire shape remains v3/v4; generated file digests change with the
+combined class profile. Existing standalone Ketho emitter byte vectors are
+unchanged. General type aliases and widget inheritance remain the next port
+scope; syntax tests alone do not establish semantic consumer compatibility.

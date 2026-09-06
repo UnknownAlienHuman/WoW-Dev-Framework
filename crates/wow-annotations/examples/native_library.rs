@@ -481,4 +481,30 @@ mod tests {
         assert!(!fixture.0.join("invalid").exists());
         Ok(())
     }
+    #[test]
+    fn native_git_driver_emits_source_bound_local_receiver_class()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let fixture = Fixture::new()?;
+        fs::write(
+            fixture.0.join("API.lua"),
+            r#"APIDocumentation:AddDocumentationTable({Name="SyntheticObjectAPI",Type="ScriptObject",Functions={{Name="Show"}}})"#,
+        )?;
+        fixture.command(&["add", "."])?;
+        fixture.command(&["commit", "-m", "object fixture"])?;
+        assert!(!run(fixture.args("out"))?);
+        let text = fs::read_to_string(fixture.0.join("out/api-0000.lua"))?;
+        assert!(text.starts_with(
+            "---@meta _\n---@class SyntheticObjectAPI\nlocal SyntheticObjectAPI = {}"
+        ));
+        assert!(text.contains("function SyntheticObjectAPI:Show() end"));
+        let report: serde_json::Value =
+            serde_json::from_slice(&fs::read(fixture.0.join("out/source-report.json"))?)?;
+        let maps = report["library"]["files"][0]["mappings"]
+            .as_array()
+            .ok_or("missing maps")?;
+        assert_eq!(maps.len(), 2);
+        assert_eq!(maps[0]["source"]["path"], "API.lua");
+        assert_eq!(report["library"]["negative_authority"], false);
+        Ok(())
+    }
 }

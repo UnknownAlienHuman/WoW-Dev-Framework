@@ -18,7 +18,7 @@ typed input, including scalar-preserving values and explicit order/format policy
 The native connection in `src/native.rs` uses the reference-owned restricted
 EmmyLua evaluator and typed normalization. It retains raw metadata, unprojected
 fields, source hashes and declaration maps. The complete service still needs
-persistent ReferenceView integration, correction/type closure, full fine-grained
+persistent ReferenceView integration, full correction/type closure, fine-grained
 maps, artifact publication and real language-server semantic probes.
 
 The native report is `wow-native-annotation-library/3`: scalar-resolution evidence
@@ -114,3 +114,22 @@ v4 and retain the v3 fields; unconfigured reports stay v3. The renderer now acce
 bounded named/primitive unions and preserves grouping for array elements.
 See [the correction contract](../../docs/KETHO_NATIVE_CORRECTIONS.md).
 Receiver naming does not implement full widget inheritance or named-type closure.
+
+## Source-owned ScriptObject classes
+
+The native library path now composes Ketho-style `---@class` and file-local
+receiver tables with methods in the same lexical scope. An explicit guarded
+widget-owner correction also emits an alias from the original source system name
+to the corrected class. There are no new runtime globals or constructor claims.
+Class/binding/alias blocks and individual methods retain final-byte source maps.
+
+The standalone `Renderer::render_mapped` donor-emitter profile is unchanged;
+`render_library_mapped` is the combined class/library profile used by native
+ScriptObject projection. Global/namespace output is unchanged. Duplicate owners,
+alias chains that collide, reserved type names and cross-kind collisions are
+reported before ambiguous receiver output is emitted. Independent table/event
+lanes remain available. See `tests/receivers.rs` for executable cases.
+
+This is receiver declaration closure only. Gethe system names are not shortened
+by convention. Full TypeDocumentation/custom aliases, widget inheritance and
+EmmyLua/LuaLS semantic certification remain incomplete.

@@ -11,7 +11,7 @@ annotation libraries; the framework's semantic analyzer remains behind wow-emmy.
 | Donor surface | Rust responsibility | Current scope |
 |---|---|---|
 | `luasrc/annotate/init.lua` | `wow-annotations`: GetType, GetField, GetFunction, GetTable, GetCallbackType, GetSystem | Pure emitter implemented |
-| `wowdoc/init.lua`: GetBaseName/GetArguments/GetFullName | `wow-annotations`: globals, namespaces, ScriptObject receivers and varargs | Implemented with explicitly supplied widget alias |
+| `wowdoc/init.lua`: GetBaseName/GetArguments/GetFullName | `wow-annotations`: globals, namespaces, ScriptObject receivers and varargs | Implemented with explicitly supplied widget alias; native class/local binding and source-name alias connected |
 | `wowdoc/loader/init.lua` | `wow-reference`: selected TOC corpus, documentation systems, separate ScriptObject output, correction dispatch | Native declarative input, typed normalization and emitter integration implemented; source-guarded Type/Nilable and widget receiver corrections connected |
 | `wowdoc/loader/doc_widgets.lua`, `patches.lua`, `TypeDocumentation.lua`, `luasrc/custom_doc` | reference-owned type/widget mapping and reviewed corrections | Reviewed Type/Nilable/receiver pack application implemented; full type/widget inventory and inheritance remain pending |
 | `luasrc/annotate/literals.lua` and the enum/event/CVar paths invoked by `luasrc/init.lua` | typed enum/event/CVar data and annotation projection | Native event/enum/constant projection connected; external CVar/resource acquisition pending |
@@ -251,3 +251,48 @@ No automatic source-digest refresh or compiled widget inventory is introduced.
 The optional v4 report retains the full canonical set and all applied/expired/
 rejected/conflict/not-applicable outcomes; unconfigured generation stays v3.
 See [native correction usage and limits](KETHO_NATIVE_CORRECTIONS.md).
+
+## ScriptObject class binding
+
+The native source-to-library path now uses the class/local binding pattern from
+Ketho's `Annotations/Core/Widget/Frame/Frame.lua` (reviewed donor blob
+`330d65b107817f0bd0914692e8d9f461285240fc`). It combines that declaration with the
+existing generated methods in one file, instead of depending on an undeclared
+receiver. The input is the selected ScriptObject fact, not a filename heuristic:
+
+```lua
+---@class ExactSourceObjectAPI
+local ExactSourceObjectAPI = {}
+
+function ExactSourceObjectAPI:Show() end
+```
+
+With an explicit guarded owner rename, the class and local binding use the
+corrected name and a type alias preserves the exact original system name. Raw
+member type tokens are not rewritten, allowing exact original-name references
+to resolve through that alias. This does not infer that `SimpleX`, `X` and
+`SimpleXAPI` are equivalent. No automatic case aliases are copied from Ketho.
+
+The combined profile is `Renderer::render_library_mapped`; the standalone
+`render_mapped`/`render` profile remains byte-compatible with its original
+committed donor vectors. Both use the same renderer implementation. The native
+report's wire shape stays v3/v4; changed output is identified by final file hashes.
+Receiver ranges cover the class/local-binding/optional-alias block and map to
+the exact source registration; methods retain separate source ranges. Review
+records remain in the existing correction report.
+
+Before rendering, original and corrected type identities are checked across the
+selected corpus. Duplicate owners with even disjoint methods, alias collisions,
+primitive/emitter-alias names, structures/callbacks, namespaces/globals, enum type
+tokens and active literal-root collisions cannot become merged classes. Their
+methods are omitted with `script_object_name_conflict`; independent table/event
+lanes survive. A valid empty source ScriptObject still declares its type. Invalid
+individual methods do not invent members or erase the class declaration.
+
+No inheritance is inferred from donor folder structure, class names, overlapping
+methods or unimplemented source metadata. The reviewed donor's base-class list
+and handwritten methods are not copied as current platform truth. General
+TypeDocumentation/custom types, explicit proven inheritance, full type closure
+and semantic EmmyLua/LuaLS probes remain unimplemented. Receiver regressions cover
+exact bytes, original-name aliases, source ranges, deterministic order, bounds,
+conflicts and real native Git-driver output; parser acceptance is syntax only.

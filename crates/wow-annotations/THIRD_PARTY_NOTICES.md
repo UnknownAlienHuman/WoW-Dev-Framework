@@ -38,3 +38,11 @@ The optional native correction connection consumes the reference-owned port of
 `wowdoc/loader/patches.lua` and `doc_widgets.lua`; see the reference crate's notice.
 The renderer's bounded union support also covers the donor's `string|number`
 correction without copying source execution or arbitrary type syntax.
+
+The combined ScriptObject library profile follows the class/local-table/method
+representation in `Annotations/Core/Widget/Frame/Frame.lua` at the reviewed
+revision above (blob `330d65b107817f0bd0914692e8d9f461285240fc`). No widget inventory,
+base classes, case aliases or handwritten methods from that file are imported.
+Receiver names come from selected source facts and explicit guarded corrections.
+Synthetic receiver tests check this representation and source mapping, not a
+byte-for-byte reproduction of the donor's complete handwritten class catalogue.
