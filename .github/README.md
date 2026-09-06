@@ -40,3 +40,9 @@ retained. This checks the real transport/guard path (often an idempotent current
 result); actual fast-forward and rejection cases run on Rust-owned Git fixtures.
 It does not grant write permission to the GitHub job or any filesystem/network
 capability to WASM guests.
+
+The CI consumer matrix resolves and hashes the two approved upstream checker
+packages, then explicitly runs `wow-annotations --test consumers -- --ignored`.
+The Rust test owns assertions; acquisition shell only selects/downloads test
+inputs. It does not install extensions, alter user settings or run addon Lua.
+Results identify a bounded synthetic semantic slice, not full product support.

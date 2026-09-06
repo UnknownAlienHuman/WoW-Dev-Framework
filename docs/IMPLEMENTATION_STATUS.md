@@ -19,8 +19,8 @@ architecture. Ketho is the annotation-service donor; the
   exact Git manifest build/verify and native
   artifact consistency verification. Not the public product/service CLI.
 
-There are no interpreter source files or interpreter invocations in the build,
-tests or CI. `cargo xtask check` enforces the native-only repository policy and
+There are no Python source files or Python invocations in the build, tests or
+CI. The separate consumer test runs approved analyzers, never addon/generated Lua. `cargo xtask check` enforces the native-only repository policy and
 skill consistency. See [xtask commands and limits](../tools/xtask/README.md).
 No replacement script is hidden in Rust, CI heredocs or generated payloads.
 
@@ -39,7 +39,8 @@ Declaration maps include ScriptObject class/local-binding blocks, original-name
 aliases from guarded receiver corrections, and individual methods. Literal maps
 are whole-file. General named-type/widget inheritance closure, the remaining
 correction operations, fine-grained maps, persistent ReferenceView integration and
-real EmmyLua/LuaLS semantic consumer probes remain incomplete. Native projection
+full-corpus EmmyLua/LuaLS semantic probes remain incomplete; the scoped executable
+consumer slice is described below. Native projection
 is partial when data is omitted or unsupported; it never issues negative authority.
 
 ## Retired source path and compatibility boundary
@@ -94,8 +95,8 @@ The real semantic `wow-emmy` adapter and public `wow` binary are not active.
 Service composition, project model, diagnostics, persistence, graph, search,
 transport, installation and release gates remain subsequent work.
 
-Next annotation work: remaining Ketho type resources, widget inheritance and actual
-dual-consumer probes. Keep the analyzer adapter on the R0 path, without delaying
+Next annotation work: remaining Ketho type resources, widget inheritance and
+expansion of the scoped dual-consumer probes to the full generated corpus. Keep the analyzer adapter on the R0 path, without delaying
 annotation parity behind unrelated future subsystems or restoring a parallel
 interpreter implementation.
 
@@ -151,8 +152,8 @@ ReferenceView authority or completion of E1-C. See [usage and limits](KETHO_RUST
 
 The existing source workflow also checks an explicit current public Ketho alias
 resource against its resolved Gethe source. Private configuration is unnecessary.
-Remaining custom type resources, widget inheritance and actual dual-consumer
-semantic probes are still incomplete.
+Remaining custom type resources, widget inheritance and full-corpus dual-consumer
+certification are still incomplete; see the scoped semantic test below.
 
 ## Micromodular literal bridge
 
@@ -193,3 +194,15 @@ generations; old manifests remain verifiable. `check-source` is still read-only.
 Missing-root cloning, private authentication, durable source service, incremental
 analysis and background scheduling remain separate work. See
 [SOURCE_CHECKOUT_UPDATES.md](SOURCE_CHECKOUT_UPDATES.md) for boundaries and tests.
+
+## Semantic annotation consumer slice
+
+The native source-to-Ketho output now has executable, test-only dual-consumer
+acceptance in `tests/consumers.rs`: actual EmmyLua and LuaLS CLI diagnostics,
+positive signatures/types plus nine exact negative cases, and real missing-library
+and erased-type mutations. Both dedicated CI jobs execute the external test;
+regular offline workspace runs do not claim it from the ignored test entry.
+The adapter retains binary/package/config/input identities and rejects unexpected
+input changes. See [scope and commands](ANNOTATION_CONSUMER_PROBES.md).
+This does not activate `wow-emmy`, certify the full Gethe corpus or replace the
+planned API-absence rule. Open Ketho namespaces retain explicit absence nonclaims.

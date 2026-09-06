@@ -186,3 +186,40 @@ jobs:
             ${{ runner.temp }}/WASM_SHA256SUMS
           retention-days: 3
           if-no-files-found: error
+  annotation-consumers:
+    name: Semantic annotation consumers (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install stable --profile minimal
+      - name: Resolve current test consumers and verify upstream asset hashes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/consumer-inputs.sh
+      - name: Run mandatory real positive, negative and mutation probes
+        env:
+          WDF_CONSUMER_OUTPUT: ${{ runner.temp }}/semantic-consumers
+        run: cargo +stable test --locked -p wow-annotations --test consumers -- --ignored --nocapture
+      - name: Verify tests did not modify tracked inputs
+        run: git diff --exit-code
+      - name: Retain exact consumer identities and semantic results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: annotation-consumers-${{ matrix.os }}-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/semantic-consumers/consumer-report.json
+            ${{ runner.temp }}/consumer-inputs/*-release.json
+            ${{ runner.temp }}/consumer-inputs/*-asset.json
+          retention-days: 3
+          if-no-files-found: error
