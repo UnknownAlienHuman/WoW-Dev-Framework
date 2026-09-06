@@ -52,7 +52,7 @@ fn primitive(name: &str) -> bool {
 fn reserved_name(name: &str, reserved: &BTreeSet<String>) -> bool {
     let mut current = name;
     loop {
-        if reserved.contains(current) || primitive(current) {
+        if reserved.contains(current) || crate::ketho::reserved_type_name(current) {
             return true;
         }
         let Some((parent, _)) = current.rsplit_once('.') else {
@@ -94,8 +94,7 @@ pub(crate) fn project<'a>(
             return Err(RenderError::Cancelled);
         }
         let status = if qualified_identifier(&fact.name).is_err()
-            || primitive(&fact.name)
-            || matches!(fact.name.as_str(), "bool" | "cstring" | "luaIndex")
+            || crate::ketho::reserved_type_name(&fact.name)
         {
             Some("invalid_alias_name")
         } else if counts[fact.name.as_str()] != 1 {
