@@ -8,6 +8,8 @@ use std::{
     path::{Path, PathBuf},
 };
 pub fn normalize(kind: Consumer, bytes: &[u8], input: &Path) -> Result<Vec<Value>> {
+    // Compare identities in the same canonical representation; CLI paths may differ.
+    let input = input.canonicalize()?;
     let raw: Value = serde_json::from_slice(bytes)?;
     let entries: Vec<(&str, &Value)> = match kind {
         Consumer::Emmy => raw
@@ -34,7 +36,7 @@ pub fn normalize(kind: Consumer, bytes: &[u8], input: &Path) -> Result<Vec<Value
         let path = source_path(kind, file)?;
         let path = path.canonicalize()?;
         let relative = path
-            .strip_prefix(input)
+            .strip_prefix(&input)
             .map_err(|_| "diagnostic outside probe input")?;
         let name = relative
             .to_str()
@@ -148,4 +150,28 @@ pub fn assert_behavior(records: &[Value], status: i32) -> Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn canonicalizes_both_root_and_diagnostic_before_containment() -> Result<()> {
+        let workspace = super::super::Workspace::new()?;
+        let input = workspace.path.join("input");
+        super::super::fixture::prepare(&input)?;
+        let raw = serde_json::to_vec(&json!([{
+            "file": input.join("argument.lua"),
+            "diagnostics": [{"code":"param-type-mismatch","severity":2,
+                "range":{"start":{"line":0,"character":0},
+                    "end":{"line":0,"character":1}}}]
+        }]))?;
+        for root in [input.clone(), input.join("..").join("input")] {
+            let records = normalize(Consumer::Emmy, &raw, &root)?;
+            assert_eq!(records.len(), 1);
+            assert_eq!(records[0]["file"], "argument.lua");
+        }
+        Ok(())
+    }
 }
