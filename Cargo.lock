@@ -686,6 +686,7 @@ dependencies = [
  "serde_json",
  "wow-ketho-literals",
  "wow-reference",
+ "wow-render-contract",
 ]
 
 [[package]]

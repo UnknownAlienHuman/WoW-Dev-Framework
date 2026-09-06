@@ -114,8 +114,38 @@ impl Response {
         Ok(response)
     }
 }
+/// An exact, immutable module selection. This is identity, not authorization.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SelectedModule {
+    pub sha256: String,
+    pub epoch: u64,
+}
+impl SelectedModule {
+    pub fn validate(&self) -> Result<(), LiteralError> {
+        let digest = self
+            .sha256
+            .strip_prefix("sha256:")
+            .ok_or(LiteralError::InvalidWire)?;
+        if digest.len() != 64
+            || !digest
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+        {
+            return Err(LiteralError::InvalidWire);
+        }
+        Ok(())
+    }
+}
+
 /// Both native and Wasm implementations consume the same closed operation set.
 /// Callers retain the selected implementation identity for the whole operation.
 pub trait LiteralBridge {
     fn render(&self, request: &Request) -> Result<String, LiteralError>;
+    /// Unidentified implementations may render standalone requests, but cannot
+    /// be selected for an audited source-library operation. No default module
+    /// identity is invented for a native implementation.
+    fn selected_module(&self) -> Option<SelectedModule> {
+        None
+    }
 }

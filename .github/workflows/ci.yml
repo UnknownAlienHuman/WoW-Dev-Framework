@@ -156,7 +156,7 @@ jobs:
         run: |
           cargo +stable fmt --manifest-path bridges/literal-host/Cargo.toml --all --check
           cargo +stable clippy --locked --manifest-path bridges/literal-host/Cargo.toml --all-targets -- -D warnings
-          cargo +stable test --locked --manifest-path bridges/literal-host/Cargo.toml --test runtime
+          cargo +stable test --locked --manifest-path bridges/literal-host/Cargo.toml --all-targets
       - name: Run mandatory compiled-guest parity, swap, retained operation and rollback
         env:
           WDF_WASM_A: ${{ github.workspace }}/target/wasm32-unknown-unknown/wasm-compact/wow_ketho_literals_wasm.wasm
@@ -164,6 +164,7 @@ jobs:
         run: |
           set -euo pipefail
           cargo +stable test --locked --manifest-path bridges/literal-host/Cargo.toml --test real_guest -- --ignored --nocapture | tee "$RUNNER_TEMP/wasm-probe.txt"
+          cargo +stable test --locked --manifest-path bridges/literal-host/Cargo.toml --test real_source -- --ignored --nocapture | tee "$RUNNER_TEMP/wasm-source-probe.txt"
           git rev-parse HEAD > "$RUNNER_TEMP/WASM_COMMIT_SHA"
           sha256sum "$WDF_WASM_A" "$WDF_WASM_B" > "$RUNNER_TEMP/WASM_SHA256SUMS"
       - name: Check host documentation
@@ -180,6 +181,7 @@ jobs:
             ${{ github.workspace }}/target/wasm32-unknown-unknown/wasm-speed/wow_ketho_literals_wasm.wasm
             ${{ github.workspace }}/bridges/literal-host/Cargo.lock
             ${{ runner.temp }}/wasm-probe.txt
+            ${{ runner.temp }}/wasm-source-probe.txt
             ${{ runner.temp }}/WASM_COMMIT_SHA
             ${{ runner.temp }}/WASM_SHA256SUMS
           retention-days: 3

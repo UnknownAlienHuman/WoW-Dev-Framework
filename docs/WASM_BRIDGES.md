@@ -16,12 +16,14 @@ generic plugin executor, a second Lua parser or uncontrolled repository code.
 `wow-annotations::literals` is a small compatibility bridge to the extracted
 algorithm. Its existing API and golden results remain unchanged. Stable owners
 never import Wasmi. The optional VM bridge imports the contract, not the source
-normalizer, analyzer, service or complete annotation crate. Its native-renderer
-dependency is test-only, for parity. There is exactly one literal algorithm.
+normalizer, analyzer, service or complete annotation crate. Its source/annotation dependencies are development-only, for the shared
+source driver and parity tests; the host library's production graph stays narrow. There is exactly one literal algorithm.
 
-The full source driver still uses the native bridge. The standalone Wasm bridge
-is executable and testable, but is not automatically selected by that driver or
-the unfinished public service. Do not describe the entire project as hot-swappable.
+The development source driver now supports an explicitly selected literal Wasm
+snapshot through the closed bridge. Normalization, callable/class rendering and
+source ownership remain native; only literal rendering is replaceable here.
+The unfinished public service is not implemented by this development composition.
+Do not describe the entire project as hot-swappable.
 
 ## Fixed operation and memory boundary
 
@@ -139,3 +141,47 @@ generations remain usable after rollback. The two Rust guest builds differ in
 optimization profile, not in claimed algorithm behavior; native parity is checked
 for both. Independently resolved host dependency inputs are retained by Linux CI
 for exact offline reproduction, outside the repository and public product bundle.
+
+## Source-library composition
+
+Build the small host composition once, then invoke the resulting executable with
+an explicitly approved module digest and the normal source-driver inputs:
+
+```sh
+cargo build --manifest-path bridges/literal-host/Cargo.toml --example source_library
+bridges/literal-host/target/debug/examples/source_library \
+  /path/to/module.wasm sha256:<approved-module-digest> \
+  /path/to/wow-ui-source <resolved-ref> <generated-API.toc> Mainline <new-output> \
+  --alias-catalog /path/to/ketho <resolved-donor-ref> Annotations/Core/Type/BlizzardType.lua
+cargo xtask verify-library <new-output> --require-input-complete --literal-module sha256:<approved-module-digest>
+```
+
+On Windows the executable has an .exe suffix. Both entrypoints share the same
+small Git/TOC driver modules; there is no copied source loader or VM dependency
+in the annotation owner. Reviewed corrections compose with aliases and the
+selected bridge. Updating only module bytes does not rebuild this executable.
+
+`project_with_literal_bridge` captures one validated module identity before
+literal dispatch. Every per-declaration validation and final aggregate uses that
+same implementation. An identity change, trap, invalid wire/schema, oversized
+response or cancellation aborts the operation before output publication. It
+never falls back to native. Domain rejections preserve the existing partial
+projection policy and valid siblings. With no bridge, native v3/v4/v5 output is
+unchanged; a selected bridge emits v6 plus `literal_execution`.
+
+The v6 trace records module digest/selection epoch, ordered operations, canonical
+request digests and returned-text digests, and binds each emitted literal file to
+the final matching call. Those text digests are not the host's response-envelope
+digests. The artifact verifier checks consistency, not signed module trust or
+semantic correctness. Supplying `--literal-module` independently requires the
+expected module; stripping the trace and downgrading to a native schema fails.
+No source-derived revision or compiled algorithm list is embedded in the bridge.
+
+The mandatory real_source test executes complete synthetic Git builds with aliases,
+a replacement during generation, retained A/B snapshots, rollback and actual
+execution failure. The current-source workflow additionally compares both freshly
+compiled guests with the native result for one actual Gethe/Ketho snapshot,
+including all files, raw metadata and source maps. Literal CVars remain available
+to standalone bridge calls; the documentation loader does not acquire new CVar
+resources merely because the bridge supports them. Signed delivery, durable
+activation and real EmmyLua/LuaLS semantic certification remain incomplete.

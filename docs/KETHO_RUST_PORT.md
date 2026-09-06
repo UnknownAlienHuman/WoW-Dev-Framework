@@ -361,3 +361,14 @@ same resolved Gethe revision.
 This closes primitive/named-union catalog ingestion and projection, not all Ketho
 custom resources. Widget mappings/inheritance, string-enum resources, mixin
 classes, timer/custom signatures and real EmmyLua/LuaLS semantic probes remain.
+
+## Selected Wasm literals
+
+The same native source/correction/alias pipeline can now invoke a retained literal
+Wasm module through `project_with_literal_bridge`. The shared development driver
+is split into acquisition/composition/tests and reused by the isolated host's
+`source_library` example; no VM enters the stable owner dependency graph.
+See [commands and failure/identity contract](WASM_BRIDGES.md#source-library-composition).
+This connects the existing literal port, not a new algorithm or a claim of
+consumer certification. Version-6 reports retain all existing source evidence
+and add module/call/final-file bindings. No module failure falls back to native.

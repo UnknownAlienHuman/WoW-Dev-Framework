@@ -150,3 +150,13 @@ v3/v4 output. Resource revision/hash/raw text and all outcomes remain available
 for review. Parser acceptance and artifact verification are not semantic
 certification. See [usage and licensing](../../docs/KETHO_RUST_PORT.md#alias-resource-connection)
 and [regressions](tests/aliases.rs).
+
+## Selected literal implementation
+
+`native::project_with_literal_bridge` accepts one immutable, identified
+`wow-render-contract::LiteralBridge` for a complete projection. Normalization,
+corrections and alias input remain under existing owners. The optional bridge
+emits a v6 execution sidecar; transport/identity/cancellation failure returns no
+library. The small `selected_literals` module owns dispatch and receipts only.
+No Wasmi, IO, interpreter or host dependency enters this crate. Native callers
+retain their previous output schemas and donor golden bytes.

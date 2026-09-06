@@ -6,6 +6,10 @@ on:
       - 'crates/wow-reference/**'
       - 'crates/wow-annotations/**'
       - 'tools/xtask/**'
+      - 'bridges/literal-host/**'
+      - 'crates/wow-render-contract/**'
+      - 'crates/wow-ketho-literals/**'
+      - 'modules/ketho-literals/**'
       - 'Cargo.*'
       - '.cargo/config.toml'
       - '.github/workflows/current-source-bundle.yml'
@@ -14,6 +18,10 @@ on:
       - 'crates/wow-reference/**'
       - 'crates/wow-annotations/**'
       - 'tools/xtask/**'
+      - 'bridges/literal-host/**'
+      - 'crates/wow-render-contract/**'
+      - 'crates/wow-ketho-literals/**'
+      - 'modules/ketho-literals/**'
       - 'Cargo.*'
       - '.cargo/config.toml'
       - '.github/workflows/current-source-bundle.yml'
@@ -54,7 +62,9 @@ jobs:
         with:
           persist-credentials: false
       - name: Install current stable Rust
-        run: rustup toolchain install stable --profile minimal
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup target add wasm32-unknown-unknown --toolchain stable
       - name: Clone current Blizzard source
         run: |
           set -euo pipefail
@@ -114,6 +124,36 @@ jobs:
             3) echo '::warning::Verified external overlay remains partial' ;;
             *) exit "$result" ;;
           esac
+      - name: Build replaceable literal guests
+        run: |
+          cargo +stable build --locked -p wow-ketho-literals-wasm --target wasm32-unknown-unknown --profile wasm-compact
+          cargo +stable build --locked -p wow-ketho-literals-wasm --target wasm32-unknown-unknown --profile wasm-speed
+          cargo +stable generate-lockfile --manifest-path bridges/literal-host/Cargo.toml
+      - name: Execute both guests on the same source generation with one host
+        env:
+          WDF_WASM_A: ${{ github.workspace }}/target/wasm32-unknown-unknown/wasm-compact/wow_ketho_literals_wasm.wasm
+          WDF_WASM_B: ${{ github.workspace }}/target/wasm32-unknown-unknown/wasm-speed/wow_ketho_literals_wasm.wasm
+        run: |
+          set -euo pipefail
+          export WDF_CORPUS_CHECKOUT="$RUNNER_TEMP/wow-ui-source"
+          export WDF_CORPUS_REVISION="$(cat "$RUNNER_TEMP/source-revision")"
+          export WDF_CORPUS_TOC="$SOURCE_TOC" WDF_CORPUS_ENVIRONMENT="$SOURCE_ENVIRONMENT"
+          export WDF_ALIAS_CHECKOUT="$RUNNER_TEMP/ketho-source"
+          export WDF_ALIAS_REVISION="$(cat "$RUNNER_TEMP/alias-revision")"
+          export WDF_ALIAS_PATH=Annotations/Core/Type/BlizzardType.lua
+          export WDF_OUTPUT_ROOT="$RUNNER_TEMP"
+          cargo +stable test --locked --manifest-path bridges/literal-host/Cargo.toml --test real_corpus -- --ignored --nocapture
+          for item in "wasm-a:$WDF_WASM_A" "wasm-b:$WDF_WASM_B"; do
+            name="${item%%:*}"; module="${item#*:}"
+            digest="sha256:$(sha256sum "$module" | cut -d' ' -f1)"
+            result=0
+            cargo +stable xtask verify-library "$RUNNER_TEMP/$name" --require-input-complete --literal-module "$digest" || result=$?
+            case "$result" in
+              0) ;;
+              3) echo '::warning::Source-Wasm parity passed with explicit source/type omissions' ;;
+              *) exit "$result" ;;
+            esac
+          done
       - name: Retain source and projection evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -122,6 +162,9 @@ jobs:
           path: |
             ${{ runner.temp }}/native-annotations/source-report.json
             ${{ runner.temp }}/native-aliased/source-report.json
+            ${{ runner.temp }}/wasm-a/source-report.json
+            ${{ runner.temp }}/wasm-b/source-report.json
+            ${{ runner.temp }}/source-wasm-comparison.json
             ${{ runner.temp }}/alias-revision
             ${{ runner.temp }}/source-manifest.json
             ${{ runner.temp }}/source-revision

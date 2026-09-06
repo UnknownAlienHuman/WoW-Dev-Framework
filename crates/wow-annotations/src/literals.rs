@@ -26,7 +26,7 @@ impl LiteralRenderer {
         self.0.render_enums(enums, constants).map_err(error)
     }
 }
-fn error(error: LiteralError) -> RenderError {
+pub(crate) fn error(error: LiteralError) -> RenderError {
     match error {
         LiteralError::InvalidIdentifier => RenderError::InvalidIdentifier,
         LiteralError::UnsafeDocumentation => RenderError::UnsafeDocumentation,
@@ -36,6 +36,6 @@ fn error(error: LiteralError) -> RenderError {
         LiteralError::UnsupportedLiteral => RenderError::UnsupportedLiteral,
         LiteralError::InvalidWire
         | LiteralError::IncompatibleSchema
-        | LiteralError::BridgeFailure => RenderError::InvalidSource,
+        | LiteralError::BridgeFailure => RenderError::BridgeFailure,
     }
 }

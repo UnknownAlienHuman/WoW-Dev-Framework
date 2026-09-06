@@ -19,9 +19,12 @@ use wow_reference::native_model::{
 
 use crate::ketho::{Field, Function, Owner, RenderError, Renderer, System, Table};
 use crate::literals::{
-    ConstantGroup, EnumDeclaration, EventLiteral, IntegerFormat, LiteralMember, LiteralRenderer,
-    LiteralValue, MemberOrder,
+    ConstantGroup, EnumDeclaration, EventLiteral, IntegerFormat, LiteralMember, LiteralValue,
+    MemberOrder,
 };
+
+use crate::selected_literals::{LiteralExecution, SelectedLiterals};
+use wow_render_contract::LiteralBridge;
 
 const MAX_FILES: usize = 4096;
 const MAX_UNITS: usize = 65_536;
@@ -101,6 +104,8 @@ pub struct NativeLibrary<'a> {
     pub corrections: Option<CorrectionReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub aliases: Option<crate::aliases::AliasReport<'a>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub literal_execution: Option<LiteralExecution>,
     pub limitations: Vec<&'static str>,
 }
 
@@ -155,6 +160,27 @@ pub fn project_with_alias_catalog<'a>(
     environment: &str,
     corrections: Option<&'a ValidatedCorrections>,
     aliases: Option<&'a wow_reference::native_aliases::AliasDocument>,
+    cancelled: &AtomicBool,
+) -> Result<NativeLibrary<'a>, RenderError> {
+    project_with_literal_bridge(
+        documents,
+        environment,
+        corrections,
+        aliases,
+        None,
+        cancelled,
+    )
+}
+
+/// Select one retained literal implementation for this entire projection.
+/// No VM dependency enters this owner. None preserves the existing native path;
+/// a selected bridge must identify itself and never falls back after failure.
+pub fn project_with_literal_bridge<'a>(
+    documents: &'a [DocumentationDocument],
+    environment: &str,
+    corrections: Option<&'a ValidatedCorrections>,
+    aliases: Option<&'a wow_reference::native_aliases::AliasDocument>,
+    bridge: Option<&dyn LiteralBridge>,
     cancelled: &AtomicBool,
 ) -> Result<NativeLibrary<'a>, RenderError> {
     if documents.is_empty() || documents.len() > MAX_FILES || environment.is_empty() {
@@ -286,7 +312,7 @@ pub fn project_with_alias_catalog<'a>(
     let mut defined_alias_targets = BTreeSet::new();
     let blocked_receivers = blocked_receivers(&systems);
     let renderer = Renderer::new(enum_names, MAX_FILE_BYTES)?;
-    let literals = LiteralRenderer::new(MAX_FILE_BYTES)?;
+    let literals = SelectedLiterals::new(bridge, MAX_FILE_BYTES, cancelled)?;
     let mut files = Vec::new();
     let mut total_bytes = 0usize;
     let mut all_enums = Vec::new();
@@ -295,6 +321,7 @@ pub fn project_with_alias_catalog<'a>(
     let mut all_literal_sources = Vec::new();
     let mut all_event_sources = Vec::new();
     for (document, system) in systems {
+        literals.check()?;
         if cancelled.load(Ordering::Relaxed) {
             return Err(RenderError::Cancelled);
         }
@@ -667,8 +694,11 @@ pub fn project_with_alias_catalog<'a>(
     if cancelled.load(Ordering::Relaxed) {
         return Err(RenderError::Cancelled);
     }
+    let literal_execution = literals.finish(&files)?;
     Ok(NativeLibrary {
-        schema: if alias_report.is_some() {
+        schema: if literal_execution.is_some() {
+            "wow-native-annotation-library/6"
+        } else if alias_report.is_some() {
             "wow-native-annotation-library/5"
         } else if corrected.is_some() {
             "wow-native-annotation-library/4"
@@ -692,6 +722,7 @@ pub fn project_with_alias_catalog<'a>(
         name_projections,
         corrections: corrected.map(|c| c.report),
         aliases: alias_report,
+        literal_execution,
         limitations: vec![
             "raw restriction and unknown metadata are retained, not interpreted as runtime safety",
             "ScriptObject classes are analysis-only local bindings; inheritance is not inferred",

@@ -73,6 +73,12 @@ impl Snapshot {
     }
 }
 impl LiteralBridge for Snapshot {
+    fn selected_module(&self) -> Option<crate::SelectedModule> {
+        Some(crate::SelectedModule {
+            sha256: self.selection.module_sha256.clone(),
+            epoch: self.selection.epoch,
+        })
+    }
     fn render(&self, request: &Request) -> std::result::Result<String, LiteralError> {
         Snapshot::render(self, request)
             .map(|receipt| receipt.text)

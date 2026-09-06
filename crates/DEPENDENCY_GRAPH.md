@@ -365,3 +365,11 @@ no source/reference/service owner. Its native renderer dependency is test-only.
 These are small implemented responsibilities, not placeholder final-topology
 crates. This refines the earlier service-only rule for this explicit internal
 bridge; public application/service boundaries remain unchanged.
+
+### Selected literal source composition
+
+`wow-annotations -> wow-render-contract` carries only immutable module identity
+and closed literal operations. The isolated literal host's source/annotation
+imports are dev dependencies for its shared driver and real-source probes, not
+production host edges. No stable owner imports the host/VM and no new crate or
+algorithm copy is introduced by source-to-Wasm routing.

@@ -69,3 +69,10 @@ checks correction-set digest, per-record outcomes, exact applied before/after
 bindings and partial-state propagation. It does not execute corrections itself,
 authenticate reviewers or certify consumer semantics. An expired/conflicted/
 rejected correction cannot become clean by clearing the ordinary issue list.
+
+For selected literal builds, `verify-library` accepts schema v6 and validates
+`literal_execution`: module identity, call order/results and final literal-file
+bindings. Add `--literal-module sha256:<expected-digest>` to require that exact
+module independently of the report. Downgraded native reports then reject. This
+is artifact consistency, not signature verification or consumer certification;
+correction and external-alias validation still apply to v6.

@@ -36,6 +36,11 @@ environment and a new output directory:
 cargo run -p wow-annotations --example native_library -- <checkout> <ref> <TOC> <environment> <new-output>
 ```
 
+For explicit replaceable literal algorithms, use the `source_library` host
+composition documented in `docs/WASM_BRIDGES.md`. Require its approved module
+digest, retain one snapshot for the entire operation and verify the v6 report
+with `--literal-module`. A rejected/trapped module must not fall back to native.
+
 Inspect `source-report.json`: exit 3 means partial, not success without omissions.
 Raw metadata and declaration source maps are retained. No reference completeness,
 run-time safety, or EmmyLua/LuaLS semantic compatibility follows from rendering.

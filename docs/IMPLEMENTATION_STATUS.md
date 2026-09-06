@@ -159,7 +159,10 @@ The literal algorithm has moved into `wow-ketho-literals` behind
 `modules/ketho-literals` builds a Rust core-Wasm guest without WASI. The separate
 `bridges/literal-host` workspace loads explicitly approved bytes, validates ABI,
 limits execution and supports retained snapshots, CAS replacement and rollback.
-The full source driver still selects the native facade; VM/service routing and
-signed/durable updates remain pending. The existing CI includes mandatory real
+An explicit development composition now routes the source pipeline's literal
+calls through one retained Wasm snapshot, without a VM dependency in stable
+owners or a native fallback. Schema v6 records selected-module/call/artifact
+bindings; unchanged native calls keep v3/v4/v5. The shared driver remains outside
+the product service; service routing and signed/durable updates remain pending. The existing CI includes mandatory real
 two-build guest probes on Linux/Windows. See [contract](WASM_BRIDGES.md); test
 results belong to the actual commit/run, not this status description.

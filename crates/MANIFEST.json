@@ -397,7 +397,8 @@
       "allowed_dependencies": [
         "wow-core",
         "wow-reference",
-        "wow-ketho-literals"
+        "wow-ketho-literals",
+        "wow-render-contract"
       ],
       "active_contracts": [
         "crates/wow-annotations/e1/CONTRACT.json"
@@ -756,7 +757,12 @@
         "wow-render-contract"
       ],
       "implementation_state": "implemented-scoped-in-memory",
-      "public_bundle_default": false
+      "public_bundle_default": false,
+      "development_dependencies": [
+        "wow-annotations",
+        "wow-reference",
+        "wow-ketho-literals"
+      ]
     }
   ],
   "modules": [

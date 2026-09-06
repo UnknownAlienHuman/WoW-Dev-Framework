@@ -13,6 +13,10 @@ wow-render-contract = { path = "../../crates/wow-render-contract" }
 sha2 = "0.11"
 
 [dev-dependencies]
+wow-annotations = { path = "../../crates/wow-annotations" }
+wow-reference = { path = "../../crates/wow-reference" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 wat = "1"
 wow-ketho-literals = { path = "../../crates/wow-ketho-literals" }
 

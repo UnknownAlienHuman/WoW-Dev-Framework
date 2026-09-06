@@ -75,6 +75,7 @@ pub struct System {
 /// Fixed, non-source-bearing failure classes. No invalid source text is echoed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RenderError {
+    BridgeFailure,
     Cancelled,
     InvalidSource,
     InvalidIdentifier,
@@ -90,6 +91,7 @@ pub enum RenderError {
 impl fmt::Display for RenderError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
+            Self::BridgeFailure => "selected literal bridge failed",
             Self::Cancelled => "annotation projection cancelled",
             Self::InvalidSource => "annotation sources are inconsistent",
             Self::InvalidIdentifier => "annotation identifier is not representable",

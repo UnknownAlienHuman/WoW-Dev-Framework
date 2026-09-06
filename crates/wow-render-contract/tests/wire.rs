@@ -66,3 +66,28 @@ fn oversized_counts_and_bytes_reject() {
     );
     assert!(Request::decode(&vec![0; MAX_REQUEST_BYTES + 1]).is_err());
 }
+
+#[test]
+fn selected_module_identity_is_canonical_not_a_moving_selector() {
+    use wow_render_contract::SelectedModule;
+    let valid = SelectedModule {
+        sha256: format!("sha256:{}", "ab".repeat(32)),
+        epoch: 0,
+    };
+    assert!(valid.validate().is_ok());
+    for digest in [
+        "main".into(),
+        "sha256:abc".into(),
+        format!("sha256:{}", "AB".repeat(32)),
+        format!("sha1:{}", "a".repeat(40)),
+    ] {
+        assert!(
+            SelectedModule {
+                sha256: digest,
+                epoch: u64::MAX
+            }
+            .validate()
+            .is_err()
+        );
+    }
+}

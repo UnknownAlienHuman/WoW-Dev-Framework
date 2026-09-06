@@ -6,7 +6,7 @@ pub use runtime::{Limits, ModuleHandle, Receipt};
 use sha2::{Digest, Sha256};
 pub use slot::{ModuleSlot, Selection, Snapshot};
 pub use wow_render_contract::{
-    LiteralBridge, LiteralError, LiteralInput, Request, Response, SCHEMA,
+    LiteralBridge, LiteralError, LiteralInput, Request, Response, SCHEMA, SelectedModule,
 };
 
 pub fn module_digest(bytes: &[u8]) -> String {

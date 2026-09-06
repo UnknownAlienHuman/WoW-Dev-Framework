@@ -27,3 +27,9 @@ interpreter assets and ordinary reintroduction through scripts or CI.
 The old v1 API/topology producer workflow has been retired. Native importers
 remain compatibility readers tested with synthetic JSON fixtures; they do not
 claim to regenerate full UI topology from current source.
+
+The Wasm matrix also runs complete synthetic source-library replacement/failure
+probes. Current-source automation runs the same generator with two actual Rust
+guests and compares every file and source metadata with its native baseline;
+module-bound artifact verification is mandatory. Only the selected literal
+algorithm is replaceable; a parity pass is not full analyzer certification.

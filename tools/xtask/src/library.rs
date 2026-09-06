@@ -31,6 +31,13 @@ fn read(path: &Path, limit: usize) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 pub fn verify(root: &Path, require_input_complete: bool) -> Result<u8> {
+    verify_with_module(root, require_input_complete, None)
+}
+pub fn verify_with_module(
+    root: &Path,
+    require_input_complete: bool,
+    expected_module: Option<&str>,
+) -> Result<u8> {
     let report: Value =
         serde_json::from_slice(&read(&root.join("source-report.json"), 512 * 1024 * 1024)?)?;
     let library = &report["library"];
@@ -40,6 +47,7 @@ pub fn verify(root: &Path, require_input_complete: bool) -> Result<u8> {
             "wow-native-annotation-library/3"
                 | "wow-native-annotation-library/4"
                 | "wow-native-annotation-library/5"
+                | "wow-native-annotation-library/6"
         )
     {
         return Err("unsupported native report schema".into());
@@ -105,6 +113,7 @@ pub fn verify(root: &Path, require_input_complete: bool) -> Result<u8> {
     if require_input_complete && !failures.is_empty() {
         return Err("native source admission is incomplete".into());
     }
+    crate::literal_execution::verify(library, expected_module)?;
     let correction_blockers = verify_corrections(library)?;
     let alias_blockers = verify_aliases(library)?;
     let partial =
@@ -158,7 +167,13 @@ pub fn verify(root: &Path, require_input_complete: bool) -> Result<u8> {
                     .ok_or("mapping points outside corpus")?,
                 Some(scope)
                     if scope == "annotation_alias_catalog"
-                        && library["schema"] == "wow-native-annotation-library/5" =>
+                        && matches!(
+                            library["schema"].as_str(),
+                            Some(
+                                "wow-native-annotation-library/5"
+                                    | "wow-native-annotation-library/6"
+                            )
+                        ) =>
                 {
                     let original = &library["aliases"]["source"];
                     if source["path"] != original["path"] {
@@ -212,8 +227,10 @@ fn verify_corrections(library: &Value) -> Result<bool> {
         }
         return Ok(false);
     }
-    if library["schema"] == "wow-native-annotation-library/5"
-        && library.get("corrections").is_none()
+    if matches!(
+        library["schema"].as_str(),
+        Some("wow-native-annotation-library/5" | "wow-native-annotation-library/6")
+    ) && library.get("corrections").is_none()
     {
         return Ok(false);
     }
@@ -262,7 +279,13 @@ fn verify_corrections(library: &Value) -> Result<bool> {
 // Structural artifact validation, not a second Lua parser or a semantic probe.
 // Alias source identity, all outcomes, and final mapped declarations must agree.
 fn verify_aliases(library: &Value) -> Result<bool> {
-    if library["schema"] != "wow-native-annotation-library/5" {
+    if library["schema"] == "wow-native-annotation-library/6" && library.get("aliases").is_none() {
+        return Ok(false);
+    }
+    if !matches!(
+        library["schema"].as_str(),
+        Some("wow-native-annotation-library/5" | "wow-native-annotation-library/6")
+    ) {
         if library.get("aliases").is_some() {
             return Err("unexpected alias report".into());
         }

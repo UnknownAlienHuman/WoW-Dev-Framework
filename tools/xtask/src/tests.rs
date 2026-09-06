@@ -450,3 +450,34 @@ fn alias_v5_preserves_correction_blockers_and_cannot_downgrade_schema() -> Resul
     assert!(crate::library::verify(&fixture.0.join("output"), true).is_err());
     Ok(())
 }
+
+#[test]
+fn selected_library_composes_aliases_corrections_and_required_module() -> Result<()> {
+    use serde_json::json;
+    let fixture = Fixture::new("sha1")?;
+    let base = corrected_artifact(&fixture, "expired")?;
+    let mut report = aliased_artifact(&fixture, Some(base))?;
+    let module = format!("sha256:{}", "c".repeat(64));
+    report["library"]["schema"] = json!("wow-native-annotation-library/6");
+    report["library"]["literal_execution"] = json!({"schema":"wow-literal-execution/1","module":{"sha256":module,"epoch":0},"calls":[],"artifacts":[]});
+    fixture.put("output/source-report.json", &serde_json::to_vec(&report)?)?;
+    assert_eq!(
+        crate::library::verify_with_module(&fixture.0.join("output"), true, Some(&module))?,
+        3
+    );
+    assert!(
+        crate::library::verify_with_module(
+            &fixture.0.join("output"),
+            true,
+            Some(&format!("sha256:{}", "d".repeat(64)))
+        )
+        .is_err()
+    );
+    report["status"] = json!("projected_with_sidecars");
+    report["library"]["projection"] = json!("projected_with_sidecars");
+    fixture.put("output/source-report.json", &serde_json::to_vec(&report)?)?;
+    assert!(
+        crate::library::verify_with_module(&fixture.0.join("output"), true, Some(&module)).is_err()
+    );
+    Ok(())
+}
