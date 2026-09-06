@@ -19,8 +19,7 @@ fn two_rust_guests_one_unchanged_host() -> TestResult<()> {
     let second = ModuleHandle::load(&b, &module_digest(&b), Limits::default())?;
     let slot = ModuleSlot::new(first.clone());
     let retained = slot.snapshot()?;
-    let generation = slot.replace(retained.selection(), second.clone())?;
-    let inputs = vec![
+    let inputs = [
         LiteralInput::CVars(vec!["zeta".into(), "alpha".into()]),
         LiteralInput::Events(vec![EventLiteral {
             name: "EVENT_TEST".into(),
@@ -38,7 +37,20 @@ fn two_rust_guests_one_unchanged_host() -> TestResult<()> {
             constants: vec![],
         },
     ];
-    for input in inputs {
+    let before = inputs
+        .iter()
+        .cloned()
+        .map(|input| {
+            retained.render(&Request {
+                schema: SCHEMA,
+                max_output_bytes: 4096,
+                input,
+            })
+        })
+        .collect::<wow_literal_host::Result<Vec<_>>>()?;
+    let generation = slot.replace(retained.selection(), second.clone())?;
+    let second_snapshot = slot.snapshot()?;
+    for (input, original) in inputs.iter().cloned().zip(&before) {
         let request = Request {
             schema: SCHEMA,
             max_output_bytes: 4096,
@@ -47,6 +59,7 @@ fn two_rust_guests_one_unchanged_host() -> TestResult<()> {
         let expected = wow_ketho_literals::LiteralRenderer::new(4096)?.render(&request)?;
         let old = retained.render(&request)?;
         let current = slot.snapshot()?.render(&request)?;
+        assert_eq!(&old, original);
         assert_eq!(old.text, expected);
         assert_eq!(current.text, expected);
         assert_eq!(old.module_sha256, first.digest());
@@ -60,7 +73,23 @@ fn two_rust_guests_one_unchanged_host() -> TestResult<()> {
             current.response_sha256
         );
     }
-    slot.replace(&generation, first.clone())?;
+    let rollback = slot.replace(&generation, first.clone())?;
+    assert_eq!(rollback.epoch(), generation.epoch() + 1);
+    for (input, original) in inputs.into_iter().zip(&before) {
+        let request = Request {
+            schema: SCHEMA,
+            max_output_bytes: 4096,
+            input,
+        };
+        assert_eq!(&slot.snapshot()?.render(&request)?, original);
+        let retained_second = second_snapshot.render(&request)?;
+        assert_eq!(retained_second.text, original.text);
+        assert_eq!(retained_second.module_sha256, second.digest());
+    }
+    println!(
+        "verified rollback and both retained generations: epoch={}",
+        rollback.epoch()
+    );
     assert_eq!(slot.snapshot()?.selection().module_sha256(), first.digest());
     assert_eq!(
         slot.replace(retained.selection(), second),

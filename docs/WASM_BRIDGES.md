@@ -121,3 +121,21 @@ These are bridge/parity checks, **not EmmyLua/LuaLS semantic certification**.
 Retain third-party notices with standalone guest distributions. No source corpus,
 private knowledge provider, data snapshot or client version is compiled into the
 bridge. No Python is used in source, builds, tests or workflow commands.
+
+### Memory-limit regression coverage
+
+The host-limit probe grows from one to two pages inside a module permitting two
+pages, with the host capped at one page. It must trap. A separate positive probe
+permits exactly two pages and checks both the previous and resulting memory size;
+repeated calls confirm that each request starts with fresh guest memory. Initial
+memory exceeding the host cap rejects admission. A module-maximum rejection is a
+separate case: Wasmi may return the Wasm `-1` failure value before invoking the
+host limiter, and the test checks that memory did not grow. None of these probes
+relaxes the host limit or disables traps on host-denied allocation.
+
+The real-guest test executes all three operations before replacement, after
+replacement, and after rollback using the same host. Snapshots captured for both
+generations remain usable after rollback. The two Rust guest builds differ in
+optimization profile, not in claimed algorithm behavior; native parity is checked
+for both. Independently resolved host dependency inputs are retained by Linux CI
+for exact offline reproduction, outside the repository and public product bundle.

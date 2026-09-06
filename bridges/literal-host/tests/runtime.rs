@@ -68,7 +68,7 @@ fn malformed_digest_imports_start_and_abi_are_rejected() -> TestResult<()> {
     Ok(())
 }
 #[test]
-fn fuel_and_memory_growth_are_bounded() -> TestResult<()> {
+fn fuel_is_bounded() -> TestResult<()> {
     let infinite = module(1, "(loop $forever br $forever) i32.const 0", 0, 33, "")?;
     let limited = ModuleHandle::load(
         &infinite,
@@ -82,8 +82,6 @@ fn fuel_and_memory_growth_are_bounded() -> TestResult<()> {
         limited.render(&request()),
         Err(BridgeError::ExecutionFailed)
     ));
-    let grow = module(1, "i32.const 100 memory.grow drop i32.const 0", 0, 33, "")?;
-    assert!(load(&grow)?.render(&request()).is_err());
     Ok(())
 }
 #[test]
@@ -130,5 +128,85 @@ fn snapshots_rollback_and_stale_cas_do_not_change_old_operations() -> TestResult
         slot.replace(old.selection(), b),
         Err(BridgeError::StaleSelection)
     );
+    Ok(())
+}
+
+#[test]
+fn host_memory_limit_traps_growth_permitted_by_the_module() -> TestResult<()> {
+    // Module: one initial page, two maximum. Grow to two pages so the guest's
+    // own maximum does not short-circuit the host's one-page resource limiter.
+    let grow = module(1, "i32.const 1 memory.grow drop i32.const 0", 0, 33, "")?;
+    let handle = ModuleHandle::load(
+        &grow,
+        &module_digest(&grow),
+        Limits {
+            memory_bytes: 65_536,
+            ..Limits::default()
+        },
+    )?;
+    assert_eq!(handle.render(&request()), Err(BridgeError::ExecutionFailed));
+    // Rejection must not poison the immutable compiled handle or remove limits.
+    assert_eq!(handle.render(&request()), Err(BridgeError::ExecutionFailed));
+    Ok(())
+}
+
+#[test]
+fn growth_at_host_limit_succeeds_and_each_request_has_fresh_memory() -> TestResult<()> {
+    let grow = module(
+        1,
+        "i32.const 1 memory.grow i32.const 1 i32.ne if unreachable end
+         memory.size i32.const 2 i32.ne if unreachable end i32.const 0",
+        0,
+        33,
+        "",
+    )?;
+    let handle = ModuleHandle::load(
+        &grow,
+        &module_digest(&grow),
+        Limits {
+            memory_bytes: 2 * 65_536,
+            ..Limits::default()
+        },
+    )?;
+    // The guest checks both memory.grow's previous-page result and final size.
+    // A shared instance would make the second invocation fail these checks.
+    let first = handle.render(&request())?;
+    assert_eq!(first.text, "ok");
+    assert_eq!(handle.render(&request())?, first);
+    Ok(())
+}
+
+#[test]
+fn module_maximum_failure_does_not_allocate_or_require_a_host_trap() -> TestResult<()> {
+    // Exceed the module's two-page maximum, not the host's 128 MiB limit.
+    // Wasmi can reject this before consulting the host limiter. Assert the
+    // Wasm failure value and unchanged memory, rather than mistaking -1 for a
+    // successful allocation or requiring a limiter trap that was never reached.
+    let grow = module(
+        1,
+        "i32.const 100 memory.grow i32.const -1 i32.ne if unreachable end
+         memory.size i32.const 1 i32.ne if unreachable end i32.const 0",
+        0,
+        33,
+        "",
+    )?;
+    assert_eq!(load(&grow)?.render(&request())?.text, "ok");
+    Ok(())
+}
+
+#[test]
+fn initial_memory_cannot_exceed_the_host_limit() -> TestResult<()> {
+    let bytes = module(1, "i32.const 0", 0, 33, "")?;
+    assert!(matches!(
+        ModuleHandle::load(
+            &bytes,
+            &module_digest(&bytes),
+            Limits {
+                memory_bytes: 65_535,
+                ..Limits::default()
+            }
+        ),
+        Err(BridgeError::ExecutionFailed)
+    ));
     Ok(())
 }
