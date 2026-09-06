@@ -166,3 +166,11 @@ bindings; unchanged native calls keep v3/v4/v5. The shared driver remains outsid
 the product service; service routing and signed/durable updates remain pending. The existing CI includes mandatory real
 two-build guest probes on Linux/Windows. See [contract](WASM_BRIDGES.md); test
 results belong to the actual commit/run, not this status description.
+
+The literal host uses a bounded full-inventory fuel default and explicit
+`--fuel`/`--memory-bytes` overrides in its source composition. Fixed host
+`FuelExhausted` diagnostics and successful-call metering expose capacity failures
+without hiding them behind native fallback. Eager translation keeps cold code-cache
+charges out of per-call budgets. The unchanged hard limits and actual compiled
+large-aggregate regressions remain mandatory; none of this certifies consumer
+semantics or implements signed/durable module updates.

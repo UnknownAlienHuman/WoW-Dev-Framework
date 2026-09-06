@@ -65,6 +65,9 @@ impl ModuleSlot {
     }
 }
 impl Snapshot {
+    pub fn limits(&self) -> crate::Limits {
+        self.module.limits()
+    }
     pub fn selection(&self) -> &Selection {
         &self.selection
     }

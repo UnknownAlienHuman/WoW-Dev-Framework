@@ -52,7 +52,9 @@ The VM adapter's fixed runtime failures are separate from source domain errors.
 
 Admission checks module bytes/digest, validates Wasm, denies *every* import and
 start section, checks export types and ABI. Wasmi validation/strict compilation
-limits are enabled. Each invocation uses a fresh store/instance, one memory and
+limits are enabled. Module translation is eager, before selection: lazy compilation
+charges must not make an identical execution budget depend on a warm code cache.
+Each invocation uses a fresh store/instance, one memory and
 one table, bounded memory/table/stack/recursion and fuel, and range-checked copies.
 Compiled code is shared by immutable handles; guest mutable state is not shared.
 No shell, WASI, filesystem, network, clocks, random, threads or credentials are
@@ -60,7 +62,7 @@ provided. Fuel bounds guest execution, not a promised wall-clock deadline for
 compilation. The byte ceiling and Wasmi compilation limits are separate guards.
 
 Hard limits: 8 MiB module, 8 MiB request, 8 MiB rendered output, bounded encoded
-response; at most 128 MiB guest memory and 500 million fuel (default 100 million).
+response; at most 128 MiB guest memory and 500 million fuel (default 250 million).
 These are versioned implementation limits, not estimates of throughput or safety
 certification. No transparent fallback hides a rejected/trapped guest.
 
@@ -77,7 +79,12 @@ The epoch participates in CAS, so A -> B -> A cannot make a stale request valid.
 Rollback reselects a retained, already validated handle with a new epoch. Failed
 admission/CAS leaves the current handle untouched. Each receipt binds module,
 canonical encoded request and exact encoded response hashes. A retained operation
-never follows a moving current pointer mid-request.
+never follows a moving current pointer mid-request. A handle also retains its
+validated fuel/memory limits. Replacing the handle, even with the same module bytes
+and different limits, requires a new selection epoch; old snapshots keep their
+old policy. Successful host receipts record those limits, consumed fuel (including
+ABI and buffer calls) and final linear-memory size. Measurements are scoped to
+the tested VM/module/profile, not a portable semantic digest or elapsed-time SLA.
 
 This selector is intentionally in-memory. Signed distribution, durable catalogs,
 crash recovery, persistent promotion and service-owned activation remain separate
@@ -150,7 +157,7 @@ an explicitly approved module digest and the normal source-driver inputs:
 ```sh
 cargo build --manifest-path bridges/literal-host/Cargo.toml --example source_library
 bridges/literal-host/target/debug/examples/source_library \
-  /path/to/module.wasm sha256:<approved-module-digest> \
+  /path/to/module.wasm sha256:<approved-module-digest> --fuel 250000000 \
   /path/to/wow-ui-source <resolved-ref> <generated-API.toc> Mainline <new-output> \
   --alias-catalog /path/to/ketho <resolved-donor-ref> Annotations/Core/Type/BlizzardType.lua
 cargo xtask verify-library <new-output> --require-input-complete --literal-module sha256:<approved-module-digest>
@@ -185,3 +192,33 @@ including all files, raw metadata and source maps. Literal CVars remain availabl
 to standalone bridge calls; the documentation loader does not acquire new CVar
 resources merely because the bridge supports them. Signed delivery, durable
 activation and real EmmyLua/LuaLS semantic certification remain incomplete.
+
+### Full-inventory budgets and actionable failure
+
+The source host accepts optional `--fuel N` and `--memory-bytes N` immediately
+after the approved digest, before the checkout argument. These are host limits,
+not source options or guest authority. Unsigned decimal values must be positive
+and at most the existing hard caps (500M fuel, 128 MiB memory). Duplicate/unknown
+flags reject before module/source IO. Changing a budget requires an explicit new
+operation/handle; no automatic escalation, retry or native fallback occurs.
+
+The original 100M default passed tiny guest probes but exhausted fuel in a full
+enum/constant aggregate. The default is now 250M within the unchanged 500M cap;
+the mandatory real-guest suite includes a synthetic 1,088-group/8,704-member
+aggregate for both builds. No client name/version or inventory is embedded in
+the host. Future corpora can still exceed a budget and must fail explicitly.
+
+`FuelExhausted` is a distinct fixed host error, including admission/ABI calls.
+`ObservedSnapshot` keeps the first fatal error while the stable wire contract
+continues to report `BridgeFailure`. The source CLI reports fixed classes and
+numeric limits/usage on stderr; it does not expose guest/VM error strings. Normal
+literal-domain errors retain partial projection and do not poison the operation.
+Counts/fuel/peak memory from successful calls are observational host sidecars;
+failed calls can also consume resources and are counted separately. This is not
+a whole-operation budget or an update-authorization/signature mechanism.
+
+The current-corpus test preserves numerical metering in its comparison report
+and a fixed-class failure report before propagating an error. Artifact schema6,
+guest ABI1, source maps and literal bytes are unchanged. Wasmi dependencies are
+optimized in the test profile to avoid running a full corpus through an
+unoptimized interpreter; framework debug assertions and fuel guards remain on.

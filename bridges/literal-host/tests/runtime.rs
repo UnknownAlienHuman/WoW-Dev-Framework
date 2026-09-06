@@ -80,7 +80,7 @@ fn fuel_is_bounded() -> TestResult<()> {
     )?;
     assert!(matches!(
         limited.render(&request()),
-        Err(BridgeError::ExecutionFailed)
+        Err(BridgeError::FuelExhausted)
     ));
     Ok(())
 }
@@ -208,5 +208,167 @@ fn initial_memory_cannot_exceed_the_host_limit() -> TestResult<()> {
         ),
         Err(BridgeError::ExecutionFailed)
     ));
+    Ok(())
+}
+
+#[test]
+fn limits_reject_unbounded_values_before_module_admission() -> TestResult<()> {
+    for limits in [
+        Limits {
+            fuel: 0,
+            ..Limits::default()
+        },
+        Limits {
+            fuel: MAX_FUEL + 1,
+            ..Limits::default()
+        },
+        Limits {
+            memory_bytes: 0,
+            ..Limits::default()
+        },
+        Limits {
+            memory_bytes: MAX_MEMORY_BYTES + 1,
+            ..Limits::default()
+        },
+    ] {
+        assert_eq!(limits.validate(), Err(BridgeError::InvalidLimits));
+        assert!(matches!(
+            ModuleHandle::load(b"bad", "bad", limits),
+            Err(BridgeError::InvalidLimits)
+        ));
+    }
+    Limits {
+        fuel: MAX_FUEL,
+        memory_bytes: MAX_MEMORY_BYTES,
+    }
+    .validate()?;
+    Ok(())
+}
+
+#[test]
+fn receipt_metering_is_exact_per_call_not_shared_between_invocations() -> TestResult<()> {
+    let bytes = module(1, "i32.const 0", 0, 33, "")?;
+    let limits = Limits {
+        fuel: 1000,
+        memory_bytes: 65_536,
+    };
+    let handle = ModuleHandle::load(&bytes, &module_digest(&bytes), limits)?;
+    let receipt = handle.render(&request())?;
+    assert_eq!(receipt.limits, limits);
+    assert_eq!(handle.limits(), limits);
+    assert!(receipt.fuel_consumed > 0 && receipt.fuel_consumed <= limits.fuel);
+    assert_eq!(receipt.memory_bytes, 65_536);
+    assert_eq!(handle.render(&request())?, receipt);
+    Ok(())
+}
+
+#[test]
+fn fuel_exhaustion_is_distinct_during_admission_and_execution() -> TestResult<()> {
+    // Exercise the ABI function too: admission must not escape metering.
+    let source = r#"(module
+      (memory (export "memory") 1)
+      (func (export "wow_abi_version") (result i32) (loop $spin br $spin) i32.const 1)
+    )"#;
+    let looping = wat::parse_str(source)?;
+    assert!(matches!(
+        ModuleHandle::load(
+            &looping,
+            &module_digest(&looping),
+            Limits {
+                fuel: 1000,
+                ..Limits::default()
+            }
+        ),
+        Err(BridgeError::FuelExhausted)
+    ));
+    let trapping = module(1, "unreachable", 0, 33, "")?;
+    assert_eq!(
+        load(&trapping)?.render(&request()),
+        Err(BridgeError::ExecutionFailed)
+    );
+    Ok(())
+}
+
+#[test]
+fn observed_operation_retains_first_failure_and_does_not_retry() -> TestResult<()> {
+    let bytes = module(1, "(loop $spin br $spin) i32.const 0", 0, 33, "")?;
+    let slot = ModuleSlot::new(ModuleHandle::load(
+        &bytes,
+        &module_digest(&bytes),
+        Limits {
+            fuel: 1000,
+            ..Limits::default()
+        },
+    )?);
+    let observed = ObservedSnapshot::new(slot.snapshot()?);
+    assert_eq!(
+        observed.render(&request()),
+        Err(LiteralError::BridgeFailure)
+    );
+    assert_eq!(observed.failure(), Some(BridgeError::FuelExhausted));
+    assert_eq!(observed.usage().failed_calls, 1);
+    assert_eq!(observed.usage().successful_calls, 0);
+    let frozen = observed.usage();
+    assert_eq!(
+        observed.render(&request()),
+        Err(LiteralError::BridgeFailure)
+    );
+    assert_eq!(observed.usage(), frozen);
+    Ok(())
+}
+
+#[test]
+fn observed_receipts_keep_the_old_limit_profile_after_replacement() -> TestResult<()> {
+    let bytes = module(1, "i32.const 0", 0, 33, "")?;
+    let old_limits = Limits {
+        fuel: 1000,
+        memory_bytes: 65_536,
+    };
+    let old = ModuleHandle::load(&bytes, &module_digest(&bytes), old_limits)?;
+    let slot = ModuleSlot::new(old);
+    let snapshot = slot.snapshot()?;
+    let observed = ObservedSnapshot::new(snapshot.clone());
+    slot.replace(snapshot.selection(), load(&bytes)?)?;
+    assert_eq!(observed.render(&request())?, "ok");
+    assert_eq!(observed.render(&request())?, "ok");
+    assert_eq!(observed.limits(), old_limits);
+    assert_eq!(slot.snapshot()?.limits(), Limits::default());
+    let usage = observed.usage();
+    assert_eq!(usage.successful_calls, 2);
+    assert_eq!(usage.failed_calls, 0);
+    assert_eq!(usage.successful_fuel, 2 * usage.peak_successful_fuel);
+    assert_eq!(usage.peak_successful_memory_bytes, 65_536);
+    assert!(observed.failure().is_none());
+    Ok(())
+}
+
+#[test]
+fn domain_rejection_does_not_poison_the_observed_bridge() -> TestResult<()> {
+    let json = r#"{"schema":1,"result":{"Err":"DuplicateName"}}"#;
+    let encoded = json
+        .bytes()
+        .map(|byte| format!("\\{byte:02x}"))
+        .collect::<String>();
+    let bytes = wat::parse_str(format!(
+        r#"(module
+        (memory (export "memory") 1)
+        (func (export "wow_abi_version") (result i32) i32.const 1)
+        (func (export "wow_request_buffer") (param i32) (result i32) i32.const 4096)
+        (func (export "wow_render") (result i32) i32.const 0)
+        (func (export "wow_response_ptr") (result i32) i32.const 0)
+        (func (export "wow_response_len") (result i32) i32.const {})
+        (data (i32.const 0) "{encoded}"))"#,
+        json.len()
+    ))?;
+    let observed = ObservedSnapshot::new(ModuleSlot::new(load(&bytes)?).snapshot()?);
+    for _ in 0..2 {
+        assert_eq!(
+            observed.render(&request()),
+            Err(LiteralError::DuplicateName)
+        );
+        assert!(observed.failure().is_none());
+    }
+    assert_eq!(observed.usage().failed_calls, 2);
+    assert_eq!(observed.usage().successful_fuel, 0);
     Ok(())
 }

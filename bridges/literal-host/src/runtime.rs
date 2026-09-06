@@ -1,37 +1,12 @@
-use crate::{BridgeError, Result, module_digest};
+use crate::{BridgeError, Limits, Result, module_digest};
 use std::sync::Arc;
 use wasmi::{
-    Config, EnforcedLimits, Engine, Instance, Linker, Module, Store, StoreLimits,
+    CompilationMode, Config, EnforcedLimits, Engine, Instance, Linker, Module, Store, StoreLimits,
     StoreLimitsBuilder,
 };
 use wow_render_contract::{ABI_VERSION, MAX_RESPONSE_BYTES, Request, Response};
 const MAX_MODULE_BYTES: usize = 8 * 1024 * 1024;
 
-#[derive(Clone, Copy, Debug)]
-pub struct Limits {
-    pub fuel: u64,
-    pub memory_bytes: usize,
-}
-impl Default for Limits {
-    fn default() -> Self {
-        Self {
-            fuel: 100_000_000,
-            memory_bytes: 128 * 1024 * 1024,
-        }
-    }
-}
-impl Limits {
-    fn validate(self) -> Result<()> {
-        if self.fuel == 0
-            || self.fuel > 500_000_000
-            || self.memory_bytes == 0
-            || self.memory_bytes > 128 * 1024 * 1024
-        {
-            return Err(BridgeError::InvalidLimits);
-        }
-        Ok(())
-    }
-}
 struct Compiled {
     engine: Engine,
     module: Module,
@@ -47,6 +22,11 @@ pub struct Receipt {
     pub request_sha256: String,
     pub response_sha256: String,
     pub text: String,
+    /// Metering covers the complete successful call, including ABI/buffer work.
+    /// Failed calls have no success receipt and are not included in these values.
+    pub limits: Limits,
+    pub fuel_consumed: u64,
+    pub memory_bytes: usize,
 }
 impl ModuleHandle {
     /// The expected digest must come from caller-approved metadata. A matching
@@ -63,6 +43,7 @@ impl ModuleHandle {
         let mut config = Config::default();
         config
             .consume_fuel(true)
+            .compilation_mode(CompilationMode::Eager)
             .allow_start_fn(false)
             .wasm_multi_memory(false)
             .set_max_recursion_depth(256)
@@ -86,6 +67,9 @@ impl ModuleHandle {
     pub fn digest(&self) -> &str {
         &self.0.digest
     }
+    pub fn limits(&self) -> Limits {
+        self.0.limits
+    }
     fn instantiate(&self) -> Result<(Store<StoreLimits>, Instance)> {
         let limits = StoreLimitsBuilder::new()
             .memory_size(self.0.limits.memory_bytes)
@@ -103,15 +87,11 @@ impl ModuleHandle {
         let linker = Linker::<StoreLimits>::new(&self.0.engine);
         let instance = linker
             .instantiate_and_start(&mut store, &self.0.module)
-            .map_err(|_| BridgeError::ExecutionFailed)?;
+            .map_err(execution_error)?;
         let abi = instance
             .get_typed_func::<(), i32>(&store, "wow_abi_version")
             .map_err(|_| BridgeError::IncompatibleAbi)?;
-        if abi
-            .call(&mut store, ())
-            .map_err(|_| BridgeError::ExecutionFailed)?
-            != ABI_VERSION
-        {
+        if abi.call(&mut store, ()).map_err(execution_error)? != ABI_VERSION {
             return Err(BridgeError::IncompatibleAbi);
         }
         instance
@@ -138,7 +118,7 @@ impl ModuleHandle {
             .map_err(|_| BridgeError::IncompatibleAbi)?;
         let pointer = allocate
             .call(&mut store, input.len() as i32)
-            .map_err(|_| BridgeError::ExecutionFailed)?;
+            .map_err(execution_error)?;
         if pointer < 0 {
             return Err(BridgeError::InvalidRange);
         }
@@ -150,7 +130,7 @@ impl ModuleHandle {
                 .get_typed_func::<(), i32>(&*store, name)
                 .map_err(|_| BridgeError::IncompatibleAbi)?
                 .call(store, ())
-                .map_err(|_| BridgeError::ExecutionFailed)
+                .map_err(execution_error)
         };
         if invoke(&mut store, "wow_render")? != 0 {
             return Err(BridgeError::ExecutionFailed);
@@ -179,6 +159,24 @@ impl ModuleHandle {
             request_sha256: module_digest(&input),
             response_sha256: module_digest(&output),
             text,
+            limits: self.0.limits,
+            fuel_consumed: self
+                .0
+                .limits
+                .fuel
+                .checked_sub(store.get_fuel().map_err(|_| BridgeError::InvalidLimits)?)
+                .ok_or(BridgeError::InvalidLimits)?,
+            memory_bytes: memory.data(&store).len(),
         })
+    }
+}
+
+// Preserve a fixed actionable failure class, never VM/source strings or traps
+// supplied by guest code. This includes Wasmi's memory/table fuel failures.
+fn execution_error(error: wasmi::Error) -> BridgeError {
+    if error.as_trap_code() == Some(wasmi::TrapCode::OutOfFuel) {
+        BridgeError::FuelExhausted
+    } else {
+        BridgeError::ExecutionFailed
     }
 }

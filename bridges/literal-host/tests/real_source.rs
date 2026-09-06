@@ -118,7 +118,10 @@ fn guest_execution_failure_creates_no_output_and_has_no_native_fallback() -> Tes
         },
     )?;
     let slot = ModuleSlot::new(module);
-    assert!(driver::run(fixture.args("failed"), Some(&slot.snapshot()?)).is_err());
+    let observed = ObservedSnapshot::new(slot.snapshot()?);
+    assert!(driver::run(fixture.args("failed"), Some(&observed)).is_err());
+    assert_eq!(observed.failure(), Some(BridgeError::FuelExhausted));
+    assert_eq!(observed.usage().failed_calls, 1);
     assert!(!fixture.0.join("failed").exists());
     assert!(!driver::run(fixture.args("native"), None)?);
     Ok(())

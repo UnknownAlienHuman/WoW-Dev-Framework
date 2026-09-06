@@ -5,7 +5,7 @@ mod compare;
 mod driver;
 use serde_json::{Value, json};
 use std::{error::Error, ffi::OsString, fs, path::PathBuf};
-use wow_literal_host::{Limits, ModuleHandle, ModuleSlot, module_digest};
+use wow_literal_host::{Limits, ModuleHandle, ModuleSlot, ObservedSnapshot, module_digest};
 #[test]
 #[ignore = "requires a selected local Gethe/Ketho corpus and two real guests; source CI only"]
 fn selected_current_corpus_matches_native_with_two_guests() -> Result<(), Box<dyn Error>> {
@@ -43,7 +43,23 @@ fn selected_current_corpus_matches_native_with_two_guests() -> Result<(), Box<dy
                 .into_iter()
                 .map(Into::into),
         );
-        let partial = driver::run(args, Some(&snapshot))?;
+        let observed = ObservedSnapshot::new(snapshot.clone());
+        let result = driver::run(args, Some(&observed));
+        let usage = observed.usage();
+        let limits = observed.limits();
+        // Numeric metering remains test/host evidence, not source truth or a
+        // promised whole-operation deadline. Do not hide actionable failures.
+        let metering = json!({"fuel_per_call":limits.fuel,"memory_bytes_per_call":limits.memory_bytes,"successful_calls":usage.successful_calls,"failed_calls":usage.failed_calls,"successful_fuel":usage.successful_fuel,"peak_successful_fuel":usage.peak_successful_fuel,"peak_successful_memory_bytes":usage.peak_successful_memory_bytes});
+        if let Some(error) = observed.failure() {
+            fs::write(
+                root.join("source-wasm-failure.json"),
+                serde_json::to_vec_pretty(
+                    &json!({"source_revision":revision,"alias_revision":donor_revision,"output":name,"module":snapshot.selection().module_sha256(),"host_error":error.to_string(),"metering":metering}),
+                )?,
+            )?;
+            return Err(error.into());
+        }
+        let partial = result?;
         let report: Value =
             serde_json::from_slice(&fs::read(root.join(name).join("source-report.json"))?)?;
         assert_eq!(partial, baseline["status"] == "partial");
@@ -62,7 +78,7 @@ fn selected_current_corpus_matches_native_with_two_guests() -> Result<(), Box<dy
                 fs::read(root.join("native-aliased").join(path))?
             );
         }
-        summaries.push(json!({"output":name,"module":report["library"]["literal_execution"]["module"],"candidate_files":report["candidate_files"],"admitted_files":report["admitted_files"],"input_failures":report["input_failures"].as_array().map(Vec::len),"annotation_files":files.len(),"calls":report["library"]["literal_execution"]["calls"].as_array().map(Vec::len),"status":report["status"],"native_files_and_metadata_identical":true}));
+        summaries.push(json!({"output":name,"module":report["library"]["literal_execution"]["module"],"candidate_files":report["candidate_files"],"admitted_files":report["admitted_files"],"input_failures":report["input_failures"].as_array().map(Vec::len),"annotation_files":files.len(),"calls":report["library"]["literal_execution"]["calls"].as_array().map(Vec::len),"status":report["status"],"native_files_and_metadata_identical":true,"metering":metering}));
     }
     fs::write(
         root.join("source-wasm-comparison.json"),

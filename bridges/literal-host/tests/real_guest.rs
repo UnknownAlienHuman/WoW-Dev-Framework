@@ -106,3 +106,69 @@ fn two_rust_guests_one_unchanged_host() -> TestResult<()> {
     );
     Ok(())
 }
+
+#[test]
+#[ignore = "requires two real compiled guests; mandatory whole-inventory budget regression"]
+fn whole_inventory_literals_fit_the_default_budget_without_native_fallback() -> TestResult<()> {
+    use wow_render_contract::{ConstantGroup, MAX_OUTPUT_BYTES, MemberOrder};
+    let members = || {
+        (0..8)
+            .rev()
+            .map(|index| LiteralMember {
+                name: format!("Member{index}"),
+                value: LiteralValue::Integer(index),
+            })
+            .collect::<Vec<_>>()
+    };
+    // More groups/members than tiny smoke fixtures, without client-version or
+    // upstream-name assumptions. The normal CI lane must test the aggregation.
+    let request = Request {
+        schema: SCHEMA,
+        max_output_bytes: MAX_OUTPUT_BYTES,
+        input: LiteralInput::Enums {
+            enums: (0..1024)
+                .rev()
+                .map(|index| EnumDeclaration {
+                    name: format!("SyntheticGroup{index}"),
+                    values: members(),
+                    integer_format: IntegerFormat::Decimal,
+                })
+                .collect(),
+            constants: (0..64)
+                .rev()
+                .map(|index| ConstantGroup {
+                    name: format!("SyntheticConstants{index}"),
+                    values: members(),
+                    order: MemberOrder::Name,
+                })
+                .collect(),
+        },
+    };
+    let expected = wow_ketho_literals::LiteralRenderer::new(MAX_OUTPUT_BYTES)?.render(&request)?;
+    for variable in ["WDF_WASM_A", "WDF_WASM_B"] {
+        let bytes = fs::read(std::env::var(variable)?)?;
+        let handle = ModuleHandle::load(&bytes, &module_digest(&bytes), Limits::default())?;
+        let receipt = handle.render(&request)?;
+        assert_eq!(receipt.text, expected);
+        assert!(receipt.fuel_consumed > 0 && receipt.fuel_consumed <= receipt.limits.fuel);
+        assert!(receipt.memory_bytes <= receipt.limits.memory_bytes);
+        let low = ModuleHandle::load(
+            &bytes,
+            &module_digest(&bytes),
+            Limits {
+                fuel: 1_000_000,
+                ..Limits::default()
+            },
+        )?;
+        assert_eq!(low.render(&request), Err(BridgeError::FuelExhausted));
+        println!(
+            "large aggregate {variable}: request_bytes={} output_bytes={} fuel={} memory={} module={}",
+            request.encode()?.len(),
+            receipt.text.len(),
+            receipt.fuel_consumed,
+            receipt.memory_bytes,
+            receipt.module_sha256
+        );
+    }
+    Ok(())
+}

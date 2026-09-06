@@ -1,8 +1,12 @@
 //! Narrow Wasm bridge for Ketho literal rendering; no generic plugin host, WASI,
 //! network, filesystem, process, source acquisition or signature authority.
+mod limits;
+mod observed;
 mod runtime;
 mod slot;
-pub use runtime::{Limits, ModuleHandle, Receipt};
+pub use limits::{Limits, MAX_FUEL, MAX_MEMORY_BYTES};
+pub use observed::{ObservedSnapshot, Usage};
+pub use runtime::{ModuleHandle, Receipt};
 use sha2::{Digest, Sha256};
 pub use slot::{ModuleSlot, Selection, Snapshot};
 pub use wow_render_contract::{
@@ -25,6 +29,7 @@ pub enum BridgeError {
     ImportsDenied,
     IncompatibleAbi,
     ExecutionFailed,
+    FuelExhausted,
     InvalidRange,
     InvalidResponse,
     StaleSelection,

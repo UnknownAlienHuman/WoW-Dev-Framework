@@ -27,3 +27,12 @@ all = { level = "deny", priority = -1 }
 unwrap_used = "deny"
 expect_used = "deny"
 panic = "deny"
+
+# Keep framework tests/debug assertions, but do not benchmark an unoptimized
+# interpreter for every complete corpus. Guest instructions remain fuel-metered.
+[profile.test.package.wasmi]
+opt-level = 3
+[profile.test.package.wasmi_core]
+opt-level = 3
+[profile.test.package.wasmi_ir]
+opt-level = 3

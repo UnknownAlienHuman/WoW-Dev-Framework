@@ -165,6 +165,7 @@ jobs:
             ${{ runner.temp }}/wasm-a/source-report.json
             ${{ runner.temp }}/wasm-b/source-report.json
             ${{ runner.temp }}/source-wasm-comparison.json
+            ${{ runner.temp }}/source-wasm-failure.json
             ${{ runner.temp }}/alias-revision
             ${{ runner.temp }}/source-manifest.json
             ${{ runner.temp }}/source-revision
