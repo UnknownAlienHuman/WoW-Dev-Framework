@@ -8,11 +8,54 @@ use std::time::Duration;
 /// Fixed Git subprocesses: no shell, no inherited Git root overrides, bounded
 /// output and deadline. Stderr is discarded: it can contain credentialed URLs.
 pub fn run(root: &Path, args: &[&str], input: Option<Vec<u8>>, limit: usize) -> Result<Vec<u8>> {
+    execute(root, args, input, limit, false)
+}
+
+/// Source-update commands do not inherit global/system configuration or attributes.
+pub fn isolated_run(
+    root: &Path,
+    args: &[&str],
+    input: Option<Vec<u8>>,
+    limit: usize,
+) -> Result<Vec<u8>> {
+    execute(root, args, input, limit, true)
+}
+pub fn isolated_text(root: &Path, args: &[&str]) -> Result<String> {
+    Ok(
+        String::from_utf8(isolated_run(root, args, None, 4 * 1024 * 1024)?)?
+            .trim()
+            .to_owned(),
+    )
+}
+fn execute(
+    root: &Path,
+    args: &[&str],
+    input: Option<Vec<u8>>,
+    limit: usize,
+    isolated: bool,
+) -> Result<Vec<u8>> {
     let mut command = Command::new("git");
     for (key, _) in std::env::vars_os() {
         if key.to_string_lossy().starts_with("GIT_") {
             command.env_remove(key);
         }
+    }
+    if isolated {
+        command
+            .env_remove("SSH_ASKPASS")
+            .env("GIT_ASKPASS", "")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env(
+                "GIT_CONFIG_GLOBAL",
+                if cfg!(windows) { "NUL" } else { "/dev/null" },
+            )
+            .env("GIT_ATTR_NOSYSTEM", "1")
+            .arg("-c")
+            .arg(if cfg!(windows) {
+                "core.attributesFile=NUL"
+            } else {
+                "core.attributesFile=/dev/null"
+            });
     }
     command
         .args([

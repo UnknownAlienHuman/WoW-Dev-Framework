@@ -23,7 +23,11 @@ For local source, use `git ls-remote` or fetch to check the configured remote
 branch. Offer an update when behind; only fast-forward a clean, matching,
 non-divergent checkout with owner authorization. Do not reset, stash, switch an
 unexpected branch, or silently use stale data. Offline freshness is unverified.
-The managed source auto-updater is not yet implemented; do not invent its CLI.
+For an explicitly authorized fast-forward of an exclusively owned standalone
+checkout, run `cargo xtask update-source <checkout> <branch> --expected-head <observed-local-SHA>`.
+Read `docs/SOURCE_CHECKOUT_UPDATES.md`. Dirty/unexpected/divergent state rejects.
+An interrupted apply retains a lock that requires reconciliation, not deletion
+and blind retry. Managed cloning and background update scheduling remain unfinished.
 
 ## Native annotation path
 
@@ -51,6 +55,7 @@ run-time safety, or EmmyLua/LuaLS semantic compatibility follows from rendering.
 cargo xtask check
 cargo xtask sync-skill --check
 cargo xtask check-source <checkout> <branch>
+cargo xtask update-source <checkout> <branch> --expected-head <observed-local-SHA>
 cargo xtask manifest <checkout> <resolved-ref> <selector> <new-manifest.json>
 cargo xtask verify-manifest <manifest.json> <checkout> <current-local-ref>
 ```

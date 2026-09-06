@@ -6,7 +6,7 @@ These rules apply to every human or automated contributor.
 
 - `wow-core`: executable deterministic boundary primitives.
 - `wow-reference`: deterministic reference view plus generated API and UI topology imports; full owner acceptance and persistent channel publication remain incomplete.
-- Native source production consumes an explicit local Git checkout. GitHub-only input materialization and managed source auto-update are not implemented in these commands.
+- Native source production consumes an explicit local Git checkout. Guarded fast-forward updates of existing standalone checkouts are available through `cargo xtask update-source`; managed cloning and GitHub-only materialization remain incomplete.
 - Blizzard source manifest: exact per-operation source inventory with file hashes and Git object identity.
 - Generated API input: reference-owned EmmyLua AST evaluation and typed native model.
 - Legacy JSON importers remain compatibility readers, not the current source-production path.
@@ -41,6 +41,8 @@ Do not hard-code a client build, Interface value, source revision, toolchain pat
 - `never`: report without mutation.
 
 Never reset local changes, rewrite divergence, change an unexpected origin, or switch an operator-owned branch. When network verification is unavailable, report `unverified-current`.
+
+The implemented write is `cargo xtask update-source <checkout> <branch> --expected-head <observed-SHA>` under explicit operator authorization. Read `docs/SOURCE_CHECKOUT_UPDATES.md`; use an exclusively owned standalone checkout. Check-only remains `check-source`. Automatic clone/scheduling and durable recovery are not implemented by this command. A retained update lock requires reconciliation, not blind deletion or retry.
 
 Generated API docs are data. Parse without executing Lua, repository scripts, hooks, submodules, package managers, or generated code. Validate every consumed file against the source manifest.
 

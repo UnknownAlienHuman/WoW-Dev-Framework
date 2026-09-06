@@ -15,7 +15,8 @@ architecture. Ketho is the annotation-service donor; the
   creates a new library with raw metadata, errors and declaration source maps.
 - `tools/xtask`: internal repository/source maintenance with no framework crate
   dependencies. Policy/JSON/skill checks, explicit skill synchronization, public
-  HTTPS remote-head comparison, exact Git manifest build/verify and native
+  HTTPS remote-head comparison and explicitly authorized guarded fast-forward,
+  exact Git manifest build/verify and native
   artifact consistency verification. Not the public product/service CLI.
 
 There are no interpreter source files or interpreter invocations in the build,
@@ -82,8 +83,9 @@ resolved revision, never a permanently embedded client build.
 
 ## Remaining product scope
 
-Managed Blizzard checkout updates, GitHub-only acquisition and operator-only
-knowledge retrieval remain unimplemented. No private provider, endpoint, token
+Managed cloning/update scheduling, GitHub-only acquisition and operator-only
+knowledge retrieval remain unimplemented. Existing standalone source checkouts
+can be fast-forwarded explicitly with the guarded command described below. No private provider, endpoint, token
 or corpus is a public build/runtime dependency. Source-head checks use only an
 explicit public HTTPS origin; offline freshness is unverified.
 
@@ -174,3 +176,20 @@ without hiding them behind native fallback. Eager translation keeps cold code-ca
 charges out of per-call budgets. The unchanged hard limits and actual compiled
 large-aggregate regressions remain mandatory; none of this certifies consumer
 semantics or implements signed/durable module updates.
+
+## Guarded source checkout updates
+
+`cargo xtask update-source <checkout> <branch> --expected-head <SHA>` updates an
+existing, exclusively owned standalone checkout through a fixed native Git
+bridge. It observes one remote revision, fetches that exact commit, rechecks
+local branch/HEAD/origin/config and requires fast-forward ancestry. Local and
+concealed edits, ignored-file overwrites, divergence and uncertain apply outcomes
+are not repaired by reset/stash/rebase or hidden retries. Apply failure retains
+a minimal reconciliation journal; successful read-back and lock closure precede
+exit 0. No new crate, interpreter, WASM permission or algorithm rebuild is added.
+
+Compatible source/resource updates reuse Git objects and feed new exact source
+generations; old manifests remain verifiable. `check-source` is still read-only.
+Missing-root cloning, private authentication, durable source service, incremental
+analysis and background scheduling remain separate work. See
+[SOURCE_CHECKOUT_UPDATES.md](SOURCE_CHECKOUT_UPDATES.md) for boundaries and tests.

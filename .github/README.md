@@ -14,7 +14,7 @@ Three maintained workflows run actual native commands:
   cleanup; a changed branch fails its lease. Equal trees with independent
   commits are retained until their history is explicitly reconciled.
 
-Build/source jobs are read-only. Only branch hygiene has contents-write access.
+Build/source jobs have read-only GitHub permissions. Only branch hygiene has contents-write access.
 It never merges code, chooses between competing implementations or overwrites
 main. A successful CI run does not authorize discarding unreconciled branches.
 The history bundle is retained before deletion, while merged histories remain
@@ -33,3 +33,10 @@ probes. Current-source automation runs the same generator with two actual Rust
 guests and compares every file and source metadata with its native baseline;
 module-bound artifact verification is mandatory. Only the selected literal
 algorithm is replaceable; a parity pass is not full analyzer certification.
+
+Current-source CI also invokes the guarded source updater on each explicitly
+cloned public HTTPS checkout before resolving build inputs. Its receipts are
+retained. This checks the real transport/guard path (often an idempotent current
+result); actual fast-forward and rejection cases run on Rust-owned Git fixtures.
+It does not grant write permission to the GitHub job or any filesystem/network
+capability to WASM guests.

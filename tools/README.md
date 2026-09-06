@@ -8,6 +8,9 @@ Implemented native repository maintenance: [commands, scope and limits](xtask/RE
 It has no framework crate dependencies and is not a product/service or release
 implementation. It owns the single current policy/skill/source-inventory check
 implementation. Development snapshot IO is explicit, not a hidden analysis port.
+Guarded updates of existing source checkouts use a separate fixed Git acquisition
+adapter; [expected-HEAD, safety and reconciliation rules](../docs/SOURCE_CHECKOUT_UPDATES.md)
+apply. Source libraries and WASM guests do not acquire filesystem/network access.
 
 ## `wow-release`
 

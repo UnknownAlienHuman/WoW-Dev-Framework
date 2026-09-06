@@ -6,7 +6,7 @@ The native maintenance inventory reads a materialized local Git checkout:
 
 ```sh
 cargo xtask manifest "$WOW_UI_SOURCE_DIR" HEAD live .wow-dev/source-manifest.json
-cargo xtask verify-manifest .wow-dev/source-manifest.json "$WOW_UI_SOURCE_DIR" origin/live
+cargo xtask verify-manifest .wow-dev/source-manifest.json "$WOW_UI_SOURCE_DIR" HEAD
 ```
 
 Create the destination parent first; the output file must not exist. The producer
@@ -25,8 +25,12 @@ historical evidence. A local ref check does not establish network freshness.
 
 Use `cargo xtask check-source <checkout> <branch>` to compare an explicit public
 HTTPS origin. It is read-only and reports unverified freshness on network failure.
-Managed cloning/automatic updating and GitHub-only acquisition are not implemented
-by these commands. A local clone is preferred; resolve a new revision for a new
+To explicitly update an existing clean standalone checkout, use
+`cargo xtask update-source <checkout> <branch> --expected-head <observed-local-SHA>`
+and follow [the update guards](SOURCE_CHECKOUT_UPDATES.md). It fetches the selected
+commit and fast-forwards only after local state and ancestry checks. Old manifests
+are not rewritten. Managed cloning, automatic scheduling and GitHub-only acquisition
+are not implemented by these commands. A local clone is preferred; resolve a new revision for a new
 operation, never mix files from different source revisions.
 
 An inventory proves selected byte identity, not semantic completeness or runtime

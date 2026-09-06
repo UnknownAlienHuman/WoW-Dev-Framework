@@ -71,6 +71,8 @@ jobs:
           git check-ref-format "refs/heads/$SOURCE_REF"
           git -c core.hooksPath=/dev/null clone --depth=1 --no-tags --single-branch --branch "$SOURCE_REF" \
             https://github.com/Gethe/wow-ui-source.git "$RUNNER_TEMP/wow-ui-source"
+          expected="$(git -C "$RUNNER_TEMP/wow-ui-source" rev-parse HEAD)"
+          cargo +stable xtask update-source "$RUNNER_TEMP/wow-ui-source" "$SOURCE_REF" --expected-head "$expected" > "$RUNNER_TEMP/source-update.json"
           git -C "$RUNNER_TEMP/wow-ui-source" rev-parse HEAD > "$RUNNER_TEMP/source-revision"
       - name: Build and independently verify exact source inventory in Rust
         run: |
@@ -105,6 +107,9 @@ jobs:
           set -euo pipefail
           git -c core.hooksPath=/dev/null clone --depth=1 --no-tags --single-branch \
             https://github.com/Ketho/vscode-wow-api.git "$RUNNER_TEMP/ketho-source"
+          expected="$(git -C "$RUNNER_TEMP/ketho-source" rev-parse HEAD)"
+          branch="$(git -C "$RUNNER_TEMP/ketho-source" symbolic-ref --quiet --short HEAD)"
+          cargo +stable xtask update-source "$RUNNER_TEMP/ketho-source" "$branch" --expected-head "$expected" > "$RUNNER_TEMP/alias-update.json"
           git -C "$RUNNER_TEMP/ketho-source" rev-parse HEAD > "$RUNNER_TEMP/alias-revision"
           result=0
           cargo +stable run --locked -p wow-annotations --example native_library -- \
@@ -169,5 +174,7 @@ jobs:
             ${{ runner.temp }}/alias-revision
             ${{ runner.temp }}/source-manifest.json
             ${{ runner.temp }}/source-revision
+            ${{ runner.temp }}/source-update.json
+            ${{ runner.temp }}/alias-update.json
           retention-days: 3
           if-no-files-found: error
