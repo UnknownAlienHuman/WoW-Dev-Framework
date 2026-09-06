@@ -1,66 +1,129 @@
 name: Branch hygiene
 
 on:
-  push:
-    branches:
-      - main
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
   schedule:
-    - cron: "17 8 * * *"
+    - cron: '17 8 * * *'
 
 permissions:
   contents: write
+  actions: read
+  pull-requests: read
 
 concurrency:
   group: branch-hygiene
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   prune:
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_repository.full_name == github.repository &&
+       github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EVENT_NAME: ${{ github.event_name }}
+      TESTED_HEAD: ${{ github.event.workflow_run.head_sha }}
     steps:
-      - name: Check out full repository
+      - name: Check out the trusted main branch
         uses: actions/checkout@v7
         with:
           ref: main
           fetch-depth: 0
           persist-credentials: true
 
-      - name: Delete only branches already represented by main
+      - name: Snapshot refs and require successful CI for this main
+        id: snapshot
         shell: bash
         run: |
           set -euo pipefail
           git fetch origin --prune '+refs/heads/*:refs/remotes/origin/*'
+          main_sha="$(git rev-parse refs/remotes/origin/main)"
+          if [[ "$EVENT_NAME" == workflow_run ]]; then
+            if [[ "$main_sha" != "$TESTED_HEAD" ]]; then
+              echo 'main advanced after the tested run; retaining all branches'
+              echo 'eligible=false' >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          else
+            conclusion="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?branch=main&event=push&head_sha=$main_sha&per_page=1" --jq '.workflow_runs[0].conclusion // "missing"')"
+            if [[ "$conclusion" != success ]]; then
+              echo 'Current main has no successful CI; retaining all branches'
+              echo 'eligible=false' >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          printf '%s\n' "$main_sha" > "$RUNNER_TEMP/prune-main"
+          git for-each-ref --format='%(objectname) %(refname:strip=3)' refs/remotes/origin > "$RUNNER_TEMP/prune-refs"
+          gh api --paginate "repos/$GITHUB_REPOSITORY/branches?per_page=100" --jq '.[] | select(.protected) | .name' > "$RUNNER_TEMP/protected-branches"
+          gh api --paginate "repos/$GITHUB_REPOSITORY/pulls?state=open&per_page=100" --jq '.[] | select(.head.repo.full_name == .base.repo.full_name) | .head.ref' > "$RUNNER_TEMP/open-pr-branches"
+          git bundle create "$RUNNER_TEMP/branch-history.bundle" --all
+          git bundle verify "$RUNNER_TEMP/branch-history.bundle"
+          sha256sum "$RUNNER_TEMP/branch-history.bundle" > "$RUNNER_TEMP/branch-history.sha256"
+          echo 'eligible=true' >> "$GITHUB_OUTPUT"
 
-          main_tree="$(git rev-parse 'origin/main^{tree}')"
+      - name: Preserve history before removing refs
+        if: steps.snapshot.outputs.eligible == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: branch-history-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/branch-history.bundle
+            ${{ runner.temp }}/branch-history.sha256
+            ${{ runner.temp }}/prune-main
+            ${{ runner.temp }}/prune-refs
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Delete only unchanged ancestor branches
+        if: steps.snapshot.outputs.eligible == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          main_sha="$(cat "$RUNNER_TEMP/prune-main")"
           deleted=0
           retained=0
-
-          while IFS= read -r branch; do
-            case "$branch" in
-              main|HEAD) continue ;;
-            esac
-
-            branch_ref="origin/$branch"
-            branch_tree="$(git rev-parse "$branch_ref^{tree}")"
-
-            if [[ "$branch_tree" == "$main_tree" ]] || git merge-base --is-ancestor "$branch_ref" origin/main; then
-              git push origin --delete "$branch"
-              printf 'deleted: %s\n' "$branch" >> "$GITHUB_STEP_SUMMARY"
+          while read -r tip branch; do
+            case "$branch" in main|HEAD) continue ;; esac
+            if grep -Fxq -- "$branch" "$RUNNER_TEMP/protected-branches" ||
+               grep -Fxq -- "$branch" "$RUNNER_TEMP/open-pr-branches"; then
+              printf 'retained (protected or open PR): %s\n' "$branch" >> "$GITHUB_STEP_SUMMARY"
+              retained=$((retained + 1))
+              continue
+            fi
+            if git merge-base --is-ancestor "$tip" "$main_sha"; then
+              # Tree equality alone cannot justify dropping independent history.
+              # The exact lease rejects a branch changed after our snapshot.
+              live_main="$(git ls-remote --exit-code --refs origin refs/heads/main)"
+              [[ "$live_main" == "$main_sha"$'\t'refs/heads/main ]] || {
+                echo 'main changed; stopping without deleting further refs' >&2
+                exit 1
+              }
+              git push "--force-with-lease=refs/heads/$branch:$tip" origin ":refs/heads/$branch"
+              status=0
+              git ls-remote --exit-code --refs origin "refs/heads/$branch" > /dev/null || status=$?
+              [[ "$status" == 2 ]] || {
+                echo 'Deletion read-back failed or the branch was recreated' >&2
+                exit 1
+              }
+              printf 'deleted (history retained): %s %s\n' "$branch" "$tip" >> "$GITHUB_STEP_SUMMARY"
               deleted=$((deleted + 1))
             else
-              printf 'retained (unmerged): %s\n' "$branch" >> "$GITHUB_STEP_SUMMARY"
+              printf 'retained (unreconciled history): %s %s\n' "$branch" "$tip" >> "$GITHUB_STEP_SUMMARY"
               retained=$((retained + 1))
             fi
-          done < <(
-            git for-each-ref \
-              --format='%(refname:strip=3)' \
-              refs/remotes/origin \
-              | sort -u
-          )
-
+          done < "$RUNNER_TEMP/prune-refs"
+          git fetch origin --prune '+refs/heads/*:refs/remotes/origin/*'
+          git ls-remote --heads origin > "$RUNNER_TEMP/branches-after"
           {
-            printf '\nDeleted merged/no-op branches: %d\n' "$deleted"
-            printf 'Retained genuinely divergent branches: %d\n' "$retained"
+            printf '\nDeleted: %d\nRetained: %d\n' "$deleted" "$retained"
+            printf '\nVerified remaining remote refs:\n'
+            cat "$RUNNER_TEMP/branches-after"
           } >> "$GITHUB_STEP_SUMMARY"
