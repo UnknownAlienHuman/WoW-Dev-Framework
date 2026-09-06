@@ -354,3 +354,14 @@ Implementation convenience alone is not sufficient.
 dependencies. It reuses the existing serde_json/sha2 dependency closure for
 repository, source inventory and artifact checks; it is not a semantic service
 or public release client. See [its scope](../tools/xtask/README.md).
+
+## Micromodular literal rendering (ADR-057)
+
+`wow-annotations -> wow-ketho-literals -> wow-render-contract`. The contract is
+owner-neutral DTO/wire data; the algorithm is an extracted pure rendering owner.
+`modules/ketho-literals -> wow-ketho-literals + wow-render-contract`.
+The independent `bridges/literal-host -> wow-render-contract + wasmi` imports
+no source/reference/service owner. Its native renderer dependency is test-only.
+These are small implemented responsibilities, not placeholder final-topology
+crates. This refines the earlier service-only rule for this explicit internal
+bridge; public application/service boundaries remain unchanged.

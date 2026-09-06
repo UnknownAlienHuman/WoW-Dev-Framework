@@ -1,0 +1,25 @@
+[package]
+name = "wow-literal-host"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+# An independently built bridge: updating a guest must not compile this host.
+[workspace]
+[dependencies]
+wasmi = { version = "2", default-features = false, features = ["std", "validate", "portable-dispatch"] }
+wow-render-contract = { path = "../../crates/wow-render-contract" }
+sha2 = "0.11"
+
+[dev-dependencies]
+wat = "1"
+wow-ketho-literals = { path = "../../crates/wow-ketho-literals" }
+
+[lints.rust]
+unsafe_code = "forbid"
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"

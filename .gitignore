@@ -47,3 +47,6 @@ Desktop.ini
 # Local source products
 /.wow-dev/
 /.wow-dev-skill.lock
+
+# Independently built Rust bridges
+**/target/

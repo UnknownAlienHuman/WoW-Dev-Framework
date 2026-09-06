@@ -75,3 +75,11 @@ RUSTDOCFLAGS="-D warnings" cargo doc --workspace --all-features --no-deps
 ```
 
 For source work, build and verify a source manifest with `cargo xtask`, then run the native Ketho annotation driver against the same current local revision. Missing tooling, credentials, network, or WoW runtime is a skip, never a pass.
+
+## Micromodular update boundary
+
+Keep experimental/frequently updated algorithms in small independently buildable
+modules behind typed versioned bridges; read `docs/WASM_BRIDGES.md`. Use data-only
+updates for compatible Gethe/Ketho resource changes and separately built Wasm for
+algorithm changes. Never embed a donor inventory, execute repository scripts or
+add a generic plugin capability. Full driver/service routing remains explicit.

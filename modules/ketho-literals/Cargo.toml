@@ -1,0 +1,18 @@
+[package]
+name = "wow-ketho-literals-wasm"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish = false
+[lib]
+crate-type = ["cdylib", "rlib"]
+[dependencies]
+wow-render-contract = { path = "../../crates/wow-render-contract" }
+wow-ketho-literals = { path = "../../crates/wow-ketho-literals" }
+[lints.rust]
+unsafe_code = "deny"
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"

@@ -25,6 +25,14 @@
     "supported_release_present": false,
     "maintenance_packages": [
       "tools/xtask"
+    ],
+    "algorithm_packages": [
+      "crates/wow-render-contract",
+      "crates/wow-ketho-literals",
+      "modules/ketho-literals"
+    ],
+    "independent_bridge_workspaces": [
+      "bridges/literal-host"
     ]
   },
   "protocol_profiles": {
@@ -388,7 +396,8 @@
       "implementation_state": "partial-executable",
       "allowed_dependencies": [
         "wow-core",
-        "wow-reference"
+        "wow-reference",
+        "wow-ketho-literals"
       ],
       "active_contracts": [
         "crates/wow-annotations/e1/CONTRACT.json"
@@ -558,6 +567,22 @@
         "crates/wow-service/e7/CONTRACT.json",
         "crates/wow-service/e7b/CONTRACT.json"
       ]
+    },
+    {
+      "name": "wow-render-contract",
+      "brief": "crates/wow-render-contract/README.md",
+      "implementation_state": "implemented-scoped-rendering",
+      "allowed_dependencies": [],
+      "active_contracts": []
+    },
+    {
+      "name": "wow-ketho-literals",
+      "brief": "crates/wow-ketho-literals/README.md",
+      "implementation_state": "implemented-scoped-rendering",
+      "allowed_dependencies": [
+        "wow-render-contract"
+      ],
+      "active_contracts": []
     }
   ],
   "applications": [
@@ -701,7 +726,7 @@
   ],
   "implementation_evidence_state": {
     "implemented_work_packages": 0,
-    "active_cargo_workspace_members": 4,
+    "active_cargo_workspace_members": 7,
     "real_reference_packs": 0,
     "real_project_generations": 0,
     "real_analyzer_diagnostic_search_context_runs": 0,
@@ -722,5 +747,28 @@
       "Publish only after tests and exact main read-back."
     ]
   },
-  "status_document": "docs/IMPLEMENTATION_STATUS.md"
+  "status_document": "docs/IMPLEMENTATION_STATUS.md",
+  "bridges": [
+    {
+      "name": "wow-literal-host",
+      "path": "bridges/literal-host",
+      "framework_dependencies": [
+        "wow-render-contract"
+      ],
+      "implementation_state": "implemented-scoped-in-memory",
+      "public_bundle_default": false
+    }
+  ],
+  "modules": [
+    {
+      "name": "wow-ketho-literals-wasm",
+      "path": "modules/ketho-literals",
+      "framework_dependencies": [
+        "wow-render-contract",
+        "wow-ketho-literals"
+      ],
+      "target": "wasm32-unknown-unknown",
+      "abi": "wow-literals/1"
+    }
+  ]
 }

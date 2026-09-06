@@ -684,6 +684,7 @@ dependencies = [
  "emmylua_parser",
  "serde",
  "serde_json",
+ "wow-ketho-literals",
  "wow-reference",
 ]
 
@@ -698,6 +699,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "wow-ketho-literals"
+version = "0.1.0"
+dependencies = [
+ "wow-render-contract",
+]
+
+[[package]]
+name = "wow-ketho-literals-wasm"
+version = "0.1.0"
+dependencies = [
+ "wow-ketho-literals",
+ "wow-render-contract",
+]
+
+[[package]]
 name = "wow-reference"
 version = "0.1.0"
 dependencies = [
@@ -706,6 +722,14 @@ dependencies = [
  "serde_json",
  "sha2",
  "wow-core",
+]
+
+[[package]]
+name = "wow-render-contract"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

@@ -5,7 +5,12 @@ members = [
     "crates/wow-reference",
     "crates/wow-annotations",
     "tools/xtask",
+    "crates/wow-render-contract",
+    "crates/wow-ketho-literals",
+    "modules/ketho-literals",
 ]
+
+exclude = ["bridges/literal-host"]
 
 [workspace.package]
 edition = "2024"
@@ -20,3 +25,14 @@ all = { level = "deny", priority = -1 }
 unwrap_used = "deny"
 expect_used = "deny"
 panic = "deny"
+
+[profile.wasm-compact]
+inherits = "release"
+opt-level = "z"
+lto = "thin"
+strip = "debuginfo"
+
+[profile.wasm-speed]
+inherits = "release"
+opt-level = 3
+strip = "debuginfo"

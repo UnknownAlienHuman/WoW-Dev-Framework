@@ -256,6 +256,17 @@ CI is added only after commands exist and pass locally. It cannot hide skipped g
 
 Follow the current implementation ledger and the Ketho Rust port route, not the historical I0-A bootstrap instruction. New architecture requires a concrete implementation or test failure, the smallest proposed seam or ADR change, and compatibility, security, privacy, license, supply-chain, and evidence analysis.
 
+### ADR-057 — Small independently updateable Wasm algorithm bridges
+
+Accepted by owner direction. Separate stable contracts, pure algorithms, Wasm
+guests and runtime adapters by owned responsibility, not arbitrary microcrate
+counts. This narrowly refines ADR-022/029 and the plugin prohibition: only a
+reviewed closed typed operation set, no WASI/host capabilities or source execution.
+Data updates do not rebuild code; compatible guest updates do not rebuild the
+host. Exact revisions identify artifacts/operations, not permanent source pins.
+See [implemented scope and checks](WASM_BRIDGES.md). Production service routing,
+signed distribution and durable activation are not claimed by the first bridge.
+
 ## Corrected earlier assumptions
 
 ```text
