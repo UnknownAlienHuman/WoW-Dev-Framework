@@ -37,7 +37,9 @@ for consumer in emmy luals; do
   else binary="$root/luals/bin/lua-language-server$extension"; key=WDF_LUALS; fi
   [[ -f "$binary" && ! -L "$binary" ]]
   chmod +x "$binary"
-  executable_digest="sha256:$(sha256sum "$binary" | cut -d' ' -f1)"
+  # Hash stdin in binary mode: filename escaping must not prefix the digest on Windows.
+  executable_digest="sha256:$(sha256sum --binary < "$binary" | cut -d' ' -f1)"
+  [[ "$executable_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
   if [[ "$RUNNER_OS" == Windows ]]; then binary="$(cygpath -m "$binary")"; fi
   printf '%s=%s\n%s_SHA256=%s\n' "$key" "$binary" "$key" "$executable_digest" >> "$GITHUB_ENV"
 done
