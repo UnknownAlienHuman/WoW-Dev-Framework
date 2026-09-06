@@ -66,6 +66,12 @@ Generated files/configs are hashed before and after. LuaLS's complete shipped
 resource tree is fingerprinted as well as its executable; changes fail the test.
 Archive/executable hashes identify bytes, not signing or authorship.
 
+On Windows, canonical test roots are projected to drive/UNC paths understood by
+the consumers instead of passing Rust verbatim prefixes into LuaLS URI/glob
+handling. Canonical read-back must prove the same directory; other device
+namespaces or a changed identity reject. The isolated homes, meta/log directories,
+JSON inputs, package checks and positive/negative diagnostics are unchanged.
+
 Reports are newly created, bounded to 8 MiB, limited to 4,096 diagnostics, and
 normalize local filenames to fixture-relative paths. Positions must fit the
 selected file; temp host paths and diagnostic prose are excluded from the stable

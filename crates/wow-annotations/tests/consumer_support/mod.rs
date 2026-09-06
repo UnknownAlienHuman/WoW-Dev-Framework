@@ -2,6 +2,7 @@
 pub mod fixture;
 pub mod mutations;
 pub mod package;
+mod paths;
 pub mod process;
 pub mod report;
 use std::{
@@ -28,7 +29,7 @@ impl Workspace {
         });
         // New-only, never repurpose the operator's existing directory.
         fs::create_dir(&path)?;
-        let path = path.canonicalize()?;
+        let path = paths::canonical_root(&path)?;
         fs::create_dir(path.join("home"))?;
         Ok(Self { path, retain })
     }
