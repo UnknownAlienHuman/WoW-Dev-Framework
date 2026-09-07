@@ -95,6 +95,8 @@ pub struct NameProjection {
 #[derive(Debug, Serialize)]
 pub struct NativeLibrary<'a> {
     pub schema: &'static str,
+    /// Explicit completeness and ordering contract for generated member mappings.
+    pub source_map_profile: &'static str,
     pub revision: &'a str,
     pub projection: &'static str,
     pub negative_authority: bool,
@@ -781,6 +783,7 @@ pub fn project_with_alias_catalogs_and_literal_bridge<'a>(
         } else {
             "wow-native-annotation-library/3"
         },
+        source_map_profile: "wow-native-field-maps/1",
         revision,
         projection: if issues.is_empty()
             && corrected.as_ref().is_none_or(|c| !c.report.has_blockers())

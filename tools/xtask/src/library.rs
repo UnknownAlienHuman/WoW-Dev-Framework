@@ -7,6 +7,7 @@ use std::fs;
 use std::io::Read;
 use std::path::Path;
 mod aliases;
+mod mappings;
 fn text<'a>(value: &'a Value, key: &str) -> Result<&'a str> {
     value[key]
         .as_str()
@@ -135,6 +136,9 @@ pub fn verify_with_module(
     {
         return Err("native report status mismatch".into());
     }
+    let detailed_maps = mappings::profile(library)?;
+    let mapped_tables = mappings::source_tables(&source_map, detailed_maps)?;
+    let mut mapping_count = 0;
     let mut expected = BTreeSet::from(["source-report.json"]);
     let mut total = 0usize;
     for file in files {
@@ -152,6 +156,7 @@ pub fn verify_with_module(
             return Err("generated file bytes/digest mismatch".into());
         }
         let generated = std::str::from_utf8(&bytes)?;
+        mappings::verify(file, detailed_maps, &mapped_tables, &mut mapping_count)?;
         for mapping in list(file, "mappings")? {
             let start = mapping["generated"]["start"]
                 .as_u64()
