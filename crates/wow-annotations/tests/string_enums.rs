@@ -183,10 +183,10 @@ fn continuation_budget_accepts_256_values_and_rejects_257_before_parsing() -> Re
         256
     );
     raw.push_str("---|\"OVER_BUDGET\"\n");
-    assert_eq!(
-        catalog(&raw).expect_err("limit").code,
-        NativeErrorCode::Limit
-    );
+    let Err(error) = catalog(&raw) else {
+        return Err("over-budget catalog was accepted".into());
+    };
+    assert_eq!(error.code, NativeErrorCode::Limit);
     Ok(())
 }
 
