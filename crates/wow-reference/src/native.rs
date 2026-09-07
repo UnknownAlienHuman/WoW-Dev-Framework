@@ -11,10 +11,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use emmylua_parser::{
     LexerConfig, LuaAstNode, LuaAstToken, LuaExpr, LuaIndexKey, LuaLanguageLevel, LuaLexer,
-    LuaLiteralToken, LuaParser, LuaStat, LuaTokenKind, ParserConfig, Reader, string_token_value,
+    LuaLiteralToken, LuaParser, LuaStat, LuaTokenKind, ParserConfig, Reader,
 };
 use serde::Serialize;
 use sha2::{Digest, Sha256};
+
+mod strings;
 
 const MAX_BYTES: usize = 1024 * 1024;
 const MAX_NODES: usize = 65_536;
@@ -258,6 +260,7 @@ pub fn ingest_document(
         bindings: BTreeMap::new(),
         remaining: MAX_NODES,
         bytes: MAX_BYTES * 4,
+        extended_strings: false,
         cancelled,
     };
     let mut registrations = Vec::new();
@@ -335,7 +338,11 @@ pub fn ingest_document(
     Ok(DocumentationDocument {
         revision: revision.to_owned(),
         source_bytes: text.len(),
-        evaluator: "ketho-apidoc-declarative/2",
+        evaluator: if evaluator.extended_strings {
+            "ketho-apidoc-declarative/3"
+        } else {
+            "ketho-apidoc-declarative/2"
+        },
         path: path.to_owned(),
         sha256: digest,
         registrations,
@@ -393,9 +400,15 @@ struct Evaluator<'a> {
     bindings: BTreeMap<String, RawValue>,
     remaining: usize,
     bytes: usize,
+    extended_strings: bool,
     cancelled: &'a AtomicBool,
 }
 impl Evaluator<'_> {
+    fn string(&mut self, token: &emmylua_parser::LuaSyntaxToken, location: Span) -> Result<String> {
+        let (value, extended) = strings::decode(token, location)?;
+        self.extended_strings |= extended;
+        Ok(value)
+    }
     fn tick(&mut self, nodes: usize, bytes: usize) -> Result<()> {
         if self.cancelled.load(Ordering::Relaxed) {
             return Err(fail(NativeErrorCode::Cancelled));
@@ -422,7 +435,7 @@ impl Evaluator<'_> {
                 .ok_or_else(|| fail(NativeErrorCode::Syntax))?
             {
                 LuaLiteralToken::String(token) => {
-                    let value = decode_string(token.syntax(), location)?;
+                    let value = self.string(token.syntax(), location)?;
                     self.tick(0, value.len())?;
                     RawKind::String(value)
                 }
@@ -450,7 +463,7 @@ impl Evaluator<'_> {
                                 RawKey::Name(name.get_name_text().to_owned())
                             }
                             LuaIndexKey::String(token) => {
-                                RawKey::Name(decode_string(token.syntax(), span(&field))?)
+                                RawKey::Name(self.string(token.syntax(), span(&field))?)
                             }
                             LuaIndexKey::Integer(token) => {
                                 RawKey::Index(token.syntax().text().parse::<u64>().map_err(
@@ -598,29 +611,4 @@ impl Evaluator<'_> {
             span: location,
         })
     }
-}
-
-// A conservative byte-string capability guard around the upstream decoder, not
-// a second decoder. Numeric/hex/Unicode escapes require a byte-valued raw lane.
-// Reject them rather than accepting upstream char-casts that change Lua bytes.
-fn decode_string(token: &emmylua_parser::LuaSyntaxToken, location: Span) -> Result<String> {
-    if token.text().starts_with(['\'', '"']) {
-        let mut chars = token.text().chars();
-        while let Some(c) = chars.next() {
-            if c == '\\'
-                && let Some(escape) = chars.next()
-                && (escape.is_ascii_digit() || matches!(escape, 'x' | 'u'))
-            {
-                return Err(at(NativeErrorCode::UnsupportedString, location));
-            }
-        }
-    }
-    let value =
-        string_token_value(token).map_err(|_| at(NativeErrorCode::UnsupportedString, location))?;
-    // Lua normalizes physical newline sequences in long strings. The upstream
-    // returns those bytes unchanged, so this lane reports them unsupported.
-    if token.text().starts_with('[') && token.text().contains('\r') {
-        return Err(at(NativeErrorCode::UnsupportedString, location));
-    }
-    Ok(value)
 }
