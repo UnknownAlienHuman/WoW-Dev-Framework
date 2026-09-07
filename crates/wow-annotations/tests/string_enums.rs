@@ -208,3 +208,20 @@ fn old_named_profile_and_uncataloged_bytes_are_unchanged() -> Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn explicit_inline_open_base_matches_multiline_hints() -> Result<()> {
+    let inline = project("---@alias Choice string|\"FIRST\"|'SECOND'\n")?;
+    let multiline = project("---@alias Choice string #hints\n---|\"FIRST\"\n---|'SECOND'\n")?;
+    for library in [&inline, &multiline] {
+        assert_eq!(library["projection"], "projected_with_sidecars");
+        assert_eq!(
+            library["aliases"]["source"]["aliases"][0]["string_base"],
+            "string"
+        );
+        let text = library["files"][1]["text"].as_str().ok_or("output")?;
+        assert!(text.contains("---@alias Choice string|\"FIRST\"|\"SECOND\""));
+    }
+    assert_eq!(inline["files"][1]["text"], multiline["files"][1]["text"]);
+    Ok(())
+}

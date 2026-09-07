@@ -1,11 +1,24 @@
-//! Ketho open string aliases: explicit base plus literal completion suggestions.
+//! Explicit open string aliases with bounded literal completion suggestions.
 use super::{catalog, location};
 use emmylua_parser::{
-    LuaAstNode, LuaDocTag, LuaDocTagAlias, LuaDocType, LuaLanguageLevel, LuaParser, ParserConfig,
+    LuaAstNode, LuaDocTag, LuaDocTagAlias, LuaDocType, LuaLanguageLevel, LuaParser,
+    LuaTypeBinaryOperator, ParserConfig,
 };
+use std::collections::BTreeSet;
 
 pub(super) fn values(alias: &LuaDocTagAlias, input: &str) -> Option<Vec<String>> {
-    let LuaDocType::Name(base) = alias.get_type()? else {
+    let ty = alias.get_type()?;
+    if !input.contains('\n') {
+        let mut values = Vec::new();
+        let mut base = false;
+        if !inline(ty, &mut base, &mut values, 0) || !base || values.is_empty() {
+            return None;
+        }
+        let unique = values.iter().collect::<BTreeSet<_>>();
+        return (unique.len() == values.len()).then_some(values);
+    }
+    let LuaDocType::Name(base) = ty else {
+        // Do not drop continuation lines from an already populated inline union.
         return None;
     };
     if base.get_generic_param().is_some() || base.get_name_text()?.as_str() != "string" {
@@ -13,18 +26,16 @@ pub(super) fn values(alias: &LuaDocTagAlias, input: &str) -> Option<Vec<String>>
     }
     let span = location(&base);
     let line_end = input.find('\n')?;
-    if span.end > line_end
-        || input.get(span.start..span.end)? != "string"
-        || !input.get(span.end..line_end)?.trim().is_empty()
+    let suffix = input.get(span.end..line_end)?.trim();
+    if input.get(span.start..span.end)? != "string"
+        || !(suffix.is_empty() || suffix.starts_with('#'))
     {
         return None;
     }
 
-    // Emmy parses a leading named type but does not attach its continuation
-    // comments as a MultiLineUnion. Parse the already bounded group a second
-    // time with only the AST-confirmed base token blanked. Byte offsets stay
-    // unchanged. Neither source bytes nor the original syntax status is changed;
-    // invalid literal hints never fall back to a bare string alias.
+    // Emmy does not attach continuation types after a named base. Only the
+    // AST-confirmed base token is blanked in a bounded parser view. Raw source,
+    // syntax status and byte offsets remain unchanged in the resource receipt.
     let mut view = input.to_owned();
     view.replace_range(span.start..span.end, "      ");
     let tree = LuaParser::parse(&view, ParserConfig::with_level(LuaLanguageLevel::Lua51));
@@ -47,4 +58,38 @@ pub(super) fn values(alias: &LuaDocTagAlias, input: &str) -> Option<Vec<String>>
         return None;
     };
     catalog::string_values(ty)
+}
+
+fn inline(ty: LuaDocType, base: &mut bool, values: &mut Vec<String>, depth: usize) -> bool {
+    if depth >= 16 {
+        return false;
+    }
+    match ty {
+        LuaDocType::Binary(binary)
+            if binary
+                .get_op_token()
+                .is_some_and(|op| op.get_op() == LuaTypeBinaryOperator::Union) =>
+        {
+            let Some((left, right)) = binary.get_types() else {
+                return false;
+            };
+            inline(left, base, values, depth + 1) && inline(right, base, values, depth + 1)
+        }
+        LuaDocType::Name(name) if !*base && values.is_empty() => {
+            *base = name.get_generic_param().is_none()
+                && name.get_name_text().is_some_and(|name| name == "string");
+            *base
+        }
+        ty @ LuaDocType::Literal(_) if *base => {
+            let Some(literals) = catalog::string_values(ty) else {
+                return false;
+            };
+            if values.len() + literals.len() > 256 {
+                return false;
+            }
+            values.extend(literals);
+            true
+        }
+        _ => false,
+    }
 }

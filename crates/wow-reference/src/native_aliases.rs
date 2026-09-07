@@ -94,7 +94,7 @@ pub fn ingest_aliases(
 }
 
 /// Admit named aliases and bounded Ketho string-enum resources. An explicit
-/// multiline `string` base remains open while its literal hints are preserved.
+/// leading `string` base remains open while its literal hints are preserved.
 /// Only contiguous continuation comments join an alias. Emmy owns type parsing;
 /// malformed declarations cannot consume their independently parsed siblings.
 pub fn ingest_alias_catalog(
@@ -233,13 +233,12 @@ fn ingest(
                     } else {
                         None
                     };
-                    let string_base =
-                        if string_enums && plain && multiline && string_values.is_none() {
-                            string_values = open_strings::values(&alias, comment);
-                            string_values.as_ref().map(|_| "string")
-                        } else {
-                            None
-                        };
+                    let string_base = if string_enums && plain && string_values.is_none() {
+                        string_values = open_strings::values(&alias, comment);
+                        string_values.as_ref().map(|_| "string")
+                    } else {
+                        None
+                    };
                     let span = if syntax_error || string_base.is_some() {
                         Span { start, end }
                     } else {
