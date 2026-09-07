@@ -210,7 +210,8 @@ mod tests {
 
     #[test]
     fn namespace_observations_never_replace_required_negative_evidence() -> Result<()> {
-        let observation = json!({"file":"open-namespace.lua","code":"undefined-field","severity":2});
+        let observation =
+            json!({"file":"open-namespace.lua","code":"undefined-field","severity":2});
         assert!(assert_behavior(std::slice::from_ref(&observation), 1).is_err());
         let mut records = expected_records();
         records.push(observation);

@@ -54,10 +54,7 @@ fn partial_stale_missing_and_duplicate_receipts_cannot_pass() -> Result<()> {
         ("/library/files/0/mappings", json!([])),
         ("/library/files/0/sha256", json!("sha256:wrong")),
         ("/library/files/0/path", json!("../foreign.lua")),
-        (
-            "/library/files/0/mappings/0/generated/end",
-            json!(u64::MAX),
-        ),
+        ("/library/files/0/mappings/0/generated/end", json!(u64::MAX)),
         (
             "/library/files/0/mappings/0/source/sha256",
             json!("sha256:wrong"),
@@ -68,7 +65,9 @@ fn partial_stale_missing_and_duplicate_receipts_cannot_pass() -> Result<()> {
         ),
     ] {
         let mut changed = report.clone();
-        *changed.pointer_mut(pointer).ok_or("missing mutation target")? = value;
+        *changed
+            .pointer_mut(pointer)
+            .ok_or("missing mutation target")? = value;
         assert!(
             validate(&changed, &input, &revision, SOURCE_FILES).is_err(),
             "{pointer}"
