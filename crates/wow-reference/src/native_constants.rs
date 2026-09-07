@@ -13,6 +13,9 @@ use serde::Serialize;
 use crate::native::{AdditiveOp, DocumentationDocument, RawKind, RawValue, Span};
 use crate::native_model::{SystemFacts, TableFact};
 
+mod numbers;
+pub use numbers::exact_integer_magnitude;
+
 const MAX_STEPS: usize = 4096;
 const MAX_DEPTH: usize = 48;
 const MAX_DEFINITIONS: usize = 65_536;
@@ -278,15 +281,8 @@ fn exact_integer(value: &ScalarValue) -> Result<i64, ScalarError> {
     let (negative, magnitude) = text
         .strip_prefix('-')
         .map_or((false, text.as_str()), |v| (true, v));
-    let number = if let Some(hex) = magnitude
-        .strip_prefix("0x")
-        .or_else(|| magnitude.strip_prefix("0X"))
-    {
-        i64::from_str_radix(hex, 16)
-    } else {
-        magnitude.parse::<i64>()
-    }
-    .map_err(|_| ScalarError::NonIntegralArithmetic)?;
+    let number = i64::try_from(exact_integer_magnitude(magnitude)?)
+        .map_err(|_| ScalarError::OutOfRange)?;
     let number = if negative {
         if number == 0 {
             return Err(ScalarError::NonIntegralArithmetic);
