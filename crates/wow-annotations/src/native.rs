@@ -26,6 +26,8 @@ use crate::literals::{
 use crate::selected_literals::{LiteralExecution, SelectedLiterals};
 use wow_render_contract::LiteralBridge;
 
+mod numbers;
+
 const MAX_FILES: usize = 4096;
 const MAX_UNITS: usize = 65_536;
 const MAX_LIBRARY_BYTES: usize = 64 * 1024 * 1024;
@@ -1189,7 +1191,7 @@ fn convert_values(
                 None
             },
         );
-        match resolved.and_then(scalar) {
+        match resolved.and_then(|value| numbers::literal(value, typed_constants)) {
             Ok(literal) => result.push(LiteralMember {
                 name: value.name.into(),
                 value: literal,
@@ -1202,29 +1204,6 @@ fn convert_values(
         }
     }
     result
-}
-fn scalar(value: ScalarValue) -> Result<LiteralValue, RenderError> {
-    match value {
-        ScalarValue::Boolean(b) => Ok(LiteralValue::Boolean(b)),
-        ScalarValue::String(s) => Ok(LiteralValue::String(s)),
-        ScalarValue::Number(s) => {
-            let (negative, magnitude) = s
-                .strip_prefix('-')
-                .map_or((false, s.as_str()), |v| (true, v));
-            let integer = if let Some(hex) = magnitude
-                .strip_prefix("0x")
-                .or_else(|| magnitude.strip_prefix("0X"))
-            {
-                i64::from_str_radix(hex, 16).ok()
-            } else {
-                magnitude.parse::<i64>().ok()
-            };
-            match integer.and_then(|v| if negative { v.checked_neg() } else { Some(v) }) {
-                Some(value) => Ok(LiteralValue::Integer(value)),
-                None => Err(RenderError::UnsupportedType),
-            }
-        }
-    }
 }
 
 fn metadata(
