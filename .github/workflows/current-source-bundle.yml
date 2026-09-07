@@ -102,7 +102,7 @@ jobs:
             3) echo '::warning::Verified artifact remains semantically partial; not consumer certification' ;;
             *) exit "$result" ;;
           esac
-      - name: Probe an explicit current Ketho alias catalog
+      - name: Compose current Ketho type and string-enum catalogs
         run: |
           set -euo pipefail
           git -c core.hooksPath=/dev/null clone --depth=1 --no-tags --single-branch \
@@ -116,7 +116,9 @@ jobs:
             "$RUNNER_TEMP/wow-ui-source" "$(cat "$RUNNER_TEMP/source-revision")" \
             "$SOURCE_TOC" "$SOURCE_ENVIRONMENT" "$RUNNER_TEMP/native-aliased" \
             --alias-catalog "$RUNNER_TEMP/ketho-source" "$(cat "$RUNNER_TEMP/alias-revision")" \
-            Annotations/Core/Type/BlizzardType.lua || result=$?
+            Annotations/Core/Type/BlizzardType.lua \
+            --alias-catalog "$RUNNER_TEMP/ketho-source" "$(cat "$RUNNER_TEMP/alias-revision")" \
+            Annotations/Core/Type/StringEnum.lua || result=$?
           case "$result" in
             0) ;;
             3) echo '::warning::External aliases have explicit omissions; not type certification' ;;

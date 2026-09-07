@@ -10,6 +10,11 @@ use wow_reference::native_aliases::AliasDocument;
 use crate::ketho::{RenderError, Renderer, qualified_identifier};
 use crate::native::{ProjectionIssue, SourceLink, SourceMapping};
 
+/// Bounds apply to the whole selected resource generation, not each file alone.
+pub const MAX_CATALOG_FILES: usize = 32;
+pub const MAX_CATALOG_BYTES: usize = 2 * 1024 * 1024;
+pub const MAX_CATALOG_ALIASES: usize = 4096;
+
 #[derive(Debug, Serialize)]
 pub struct AliasOutcome {
     pub ordinal: usize,
@@ -21,7 +26,12 @@ pub struct AliasOutcome {
 pub struct AliasReport<'a> {
     pub schema: &'static str,
     pub authority: &'static str,
+    /// First resource in canonical path order. Single-resource wire bytes are unchanged.
     pub source: &'a AliasDocument,
+    /// Further resources from the same external revision, in canonical path order.
+    /// In v3, outcome ordinals address the concatenated source alias lists.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub additional_sources: Vec<&'a AliasDocument>,
     pub outcomes: Vec<AliasOutcome>,
     pub limitations: Vec<&'static str>,
 }
@@ -97,16 +107,43 @@ fn string_union(values: &[String]) -> Option<String> {
 /// The dependency graph is processed without recursion and without expanding
 /// aliases into signatures, so a shared dependency cannot cause exponential output.
 pub(crate) fn project<'a>(
-    document: &'a AliasDocument,
+    catalogs: &[&'a AliasDocument],
     defined: &BTreeSet<String>,
     reserved: &BTreeSet<String>,
     cancelled: &AtomicBool,
 ) -> Result<ProjectedAliases<'a>, RenderError> {
+    if cancelled.load(Ordering::Relaxed) {
+        return Err(RenderError::Cancelled);
+    }
+    if catalogs.is_empty() || catalogs.len() > MAX_CATALOG_FILES {
+        return Err(RenderError::InputLimit);
+    }
+    let mut sources = catalogs.to_vec();
+    sources.sort_by_key(|source| source.path());
+    let document = sources[0];
+    if sources.windows(2).any(|pair| pair[0].path() == pair[1].path())
+        || sources
+            .iter()
+            .any(|source| source.revision() != document.revision())
+    {
+        return Err(RenderError::InvalidSource);
+    }
+    if sources.iter().map(|s| s.text().len()).sum::<usize>() > MAX_CATALOG_BYTES
+        || sources.iter().map(|s| s.aliases().len()).sum::<usize>() > MAX_CATALOG_ALIASES
+    {
+        return Err(RenderError::InputLimit);
+    }
+    // Resolve one graph across all files. Per-file rendering would incorrectly
+    // reject forward references and miss duplicates/cycles across resources.
+    let entries = sources
+        .iter()
+        .flat_map(|source| source.aliases().iter().map(move |fact| (*source, fact)))
+        .collect::<Vec<_>>();
+    let facts = entries.iter().map(|(_, fact)| *fact).collect::<Vec<_>>();
     let renderer = Renderer::new(BTreeSet::new(), 8 * 1024 * 1024)?;
-    let facts = document.aliases();
     let extended = facts.iter().any(|fact| fact.string_values.is_some());
     let mut counts = BTreeMap::<&str, usize>::new();
-    for fact in facts {
+    for fact in &facts {
         *counts.entry(&fact.name).or_default() += 1;
     }
     let mut states = vec![None; facts.len()];
@@ -201,7 +238,7 @@ pub(crate) fn project<'a>(
         } else {
             issues.push(ProjectionIssue {
                 code: status.into(),
-                source: source(document, fact.span),
+                source: source(entries[index].0, fact.span),
             });
         }
     }
@@ -230,7 +267,7 @@ pub(crate) fn project<'a>(
                     start,
                     end: text.len() - 1,
                 },
-                source: source(document, facts[index].span),
+                source: source(entries[index].0, facts[index].span),
             });
         }
     }
@@ -245,13 +282,16 @@ pub(crate) fn project<'a>(
     }
     Ok(ProjectedAliases {
         report: AliasReport {
-            schema: if extended {
+            schema: if sources.len() > 1 {
+                "wow-native-alias-projection/3"
+            } else if extended {
                 "wow-native-alias-projection/2"
             } else {
                 "wow-native-alias-projection/1"
             },
             authority: "external_annotation_overlay",
             source: document,
+            additional_sources: sources[1..].to_vec(),
             outcomes,
             limitations,
         },

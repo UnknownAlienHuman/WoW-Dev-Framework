@@ -12,7 +12,7 @@ use wow_reference::native::{NativeError, ingest_document, source_digest};
 
 const LIMIT: usize = 1024 * 1024;
 const TOTAL_LIMIT: usize = 64 * LIMIT;
-const USAGE: &str = "native_library <git-checkout> <revision-or-ref> <generated-api.toc> <environment> <new-output-directory> [--corrections <reviewed-pack.json>] [--alias-catalog <git-checkout> <revision-or-ref> <alias-resource.lua>]";
+const USAGE: &str = "native_library <git-checkout> <revision-or-ref> <generated-api.toc> <environment> <new-output-directory> [--corrections <reviewed-pack.json>] [--alias-catalog <git-checkout> <revision-or-ref> <alias-resource.lua>]...";
 
 #[derive(Serialize)]
 struct Failure {
@@ -21,6 +21,7 @@ struct Failure {
     error: NativeError,
 }
 
+mod catalogs;
 mod io;
 use io::{git, validate_path, write_new};
 #[cfg(test)]
@@ -38,15 +39,21 @@ pub fn run(
         return Err(USAGE.into());
     }
     let mut correction_path = None;
-    let mut alias_input = None;
+    let mut alias_inputs = Vec::new();
     let mut next = 5;
     while next < args.len() {
         if args[next] == "--corrections" && correction_path.is_none() && next + 1 < args.len() {
             correction_path = Some(Path::new(&args[next + 1]));
             next += 2;
-        } else if args[next] == "--alias-catalog" && alias_input.is_none() && next + 3 < args.len()
-        {
-            alias_input = Some((&args[next + 1], &args[next + 2], &args[next + 3]));
+        } else if args[next] == "--alias-catalog" && next + 3 < args.len() {
+            if alias_inputs.len() >= wow_annotations::aliases::MAX_CATALOG_FILES {
+                return Err("alias catalog file limit".into());
+            }
+            alias_inputs.push((
+                args[next + 1].as_os_str(),
+                args[next + 2].as_os_str(),
+                args[next + 3].as_os_str(),
+            ));
             next += 4;
         } else {
             return Err(USAGE.into());
@@ -156,60 +163,13 @@ pub fn run(
     } else {
         None
     };
-    let alias_catalog = if let Some((checkout, selector, path)) = alias_input {
-        let alias_root = Path::new(checkout);
-        let selector = selector.to_str().ok_or("alias ref is not UTF-8")?;
-        let path = path.to_str().ok_or("alias path is not UTF-8")?;
-        validate_path(path)?;
-        if selector.is_empty()
-            || selector.starts_with('-')
-            || selector.chars().any(char::is_control)
-        {
-            return Err("invalid alias source ref".into());
-        }
-        let resolved = git(
-            alias_root,
-            &[
-                "rev-parse",
-                "--verify",
-                "--end-of-options",
-                &format!("{selector}^{{commit}}"),
-            ],
-            128,
-        )?;
-        let alias_revision = std::str::from_utf8(&resolved)?.trim();
-        let entry = git(
-            alias_root,
-            &["ls-tree", "-z", alias_revision, "--", path],
-            8192,
-        )?;
-        let entry = std::str::from_utf8(&entry)?;
-        if !(entry.starts_with("100644 blob ") || entry.starts_with("100755 blob "))
-            || !entry.ends_with(&format!("\t{path}\0"))
-            || entry.matches('\0').count() != 1
-        {
-            return Err("alias resource must be an exact regular Git blob".into());
-        }
-        let bytes = git(
-            alias_root,
-            &["cat-file", "blob", &format!("{alias_revision}:{path}")],
-            256 * 1024,
-        )?;
-        Some(wow_reference::native_aliases::ingest_alias_catalog(
-            alias_revision,
-            path,
-            std::str::from_utf8(&bytes)?,
-            &source_digest(&bytes),
-            &cancelled,
-        )?)
-    } else {
-        None
-    };
-    let library = wow_annotations::native::project_with_literal_bridge(
+    let alias_catalogs = catalogs::read(&alias_inputs, &cancelled)?;
+    let selected_catalogs = alias_catalogs.iter().collect::<Vec<_>>();
+    let library = wow_annotations::native::project_with_alias_catalogs_and_literal_bridge(
         &documents,
         environment,
         corrections.as_ref(),
-        alias_catalog.as_ref(),
+        &selected_catalogs,
         bridge,
         &cancelled,
     )?;

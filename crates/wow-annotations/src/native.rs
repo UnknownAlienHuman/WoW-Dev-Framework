@@ -183,6 +183,53 @@ pub fn project_with_literal_bridge<'a>(
     bridge: Option<&dyn LiteralBridge>,
     cancelled: &AtomicBool,
 ) -> Result<NativeLibrary<'a>, RenderError> {
+    project_with_alias_catalogs_and_literal_bridge(
+        documents,
+        environment,
+        corrections,
+        aliases.as_slice(),
+        bridge,
+        cancelled,
+    )
+}
+
+/// Compose explicitly selected type resources from one external revision.
+/// Dependencies, duplicates and cycles are resolved across the whole resource set.
+/// The set remains an annotation overlay, independent of Blizzard source authority.
+/// Empty and singleton sets preserve the existing native and single-catalog reports.
+pub fn project_with_alias_catalogs<'a>(
+    documents: &'a [DocumentationDocument],
+    environment: &str,
+    corrections: Option<&'a ValidatedCorrections>,
+    aliases: &[&'a wow_reference::native_aliases::AliasDocument],
+    cancelled: &AtomicBool,
+) -> Result<NativeLibrary<'a>, RenderError> {
+    project_with_alias_catalogs_and_literal_bridge(
+        documents,
+        environment,
+        corrections,
+        aliases,
+        None,
+        cancelled,
+    )
+}
+
+/// Multi-resource projection using one retained literal implementation.
+/// Catalog resources are sorted by path, must share one exact external revision,
+/// and cannot repeat a path. The slice itself is not retained in the result.
+/// This adds alias-projection v3 inside the existing native v5/v6 envelope;
+/// every resource keeps its own v1/v2 identity, raw bytes and declaration spans.
+pub fn project_with_alias_catalogs_and_literal_bridge<'a>(
+    documents: &'a [DocumentationDocument],
+    environment: &str,
+    corrections: Option<&'a ValidatedCorrections>,
+    aliases: &[&'a wow_reference::native_aliases::AliasDocument],
+    bridge: Option<&dyn LiteralBridge>,
+    cancelled: &AtomicBool,
+) -> Result<NativeLibrary<'a>, RenderError> {
+    if aliases.len() > crate::aliases::MAX_CATALOG_FILES {
+        return Err(RenderError::InputLimit);
+    }
     if documents.is_empty() || documents.len() > MAX_FILES || environment.is_empty() {
         return Err(RenderError::InputLimit);
     }
@@ -670,10 +717,10 @@ pub fn project_with_literal_bridge<'a>(
     if cancelled.load(Ordering::Relaxed) {
         return Err(RenderError::Cancelled);
     }
-    let alias_report = aliases
-        .map(|source| {
+    let alias_report = (!aliases.is_empty())
+        .then(|| {
             let projected = crate::aliases::project(
-                source,
+                aliases,
                 &defined_alias_targets,
                 &reserved_alias_names,
                 cancelled,

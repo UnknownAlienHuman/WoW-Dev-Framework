@@ -2,11 +2,18 @@
 use super::{Result, list, manifest, text};
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
+mod resources;
 mod strings;
 
-pub(super) fn verify(library: &Value) -> Result<bool> {
+#[derive(Default)]
+pub(super) struct CheckedAliases<'a> {
+    pub blocked: bool,
+    pub sources: BTreeMap<&'a str, &'a Value>,
+}
+
+pub(super) fn verify(library: &Value) -> Result<CheckedAliases<'_>> {
     if library["schema"] == "wow-native-annotation-library/6" && library.get("aliases").is_none() {
-        return Ok(false);
+        return Ok(CheckedAliases::default());
     }
     if !matches!(
         library["schema"].as_str(),
@@ -15,45 +22,37 @@ pub(super) fn verify(library: &Value) -> Result<bool> {
         if library.get("aliases").is_some() {
             return Err("unexpected alias report".into());
         }
-        return Ok(false);
+        return Ok(CheckedAliases::default());
     }
     let report = &library["aliases"];
-    let resource = &report["source"];
-    let extended = match (report["schema"].as_str(), resource["schema"].as_str()) {
-        (Some("wow-native-alias-projection/1"), Some("wow-native-alias-resource/1")) => false,
-        (Some("wow-native-alias-projection/2"), Some("wow-native-alias-resource/2")) => true,
-        _ => return Err("invalid external alias schema pair".into()),
-    };
-    if report["authority"] != "external_annotation_overlay"
-        || !crate::git::oid(text(resource, "revision")?)
-    {
-        return Err("invalid external alias identity/authority".into());
+    let resources = resources::read(report)?;
+    let mut entries = Vec::new();
+    let mut source_map = BTreeMap::new();
+    for resource in resources {
+        source_map.insert(text(resource, "path")?, resource);
+        for alias in list(resource, "aliases")? {
+            entries.push((resource, alias));
+        }
     }
-    manifest::validate_path(text(resource, "path")?)?;
-    let raw = text(resource, "text")?;
-    if raw.len() > 256 * 1024
-        || resource["source_bytes"] != json!(raw.len())
-        || resource["sha256"] != format!("sha256:{}", manifest::digest(raw.as_bytes()))
-    {
-        return Err("alias resource digest/length mismatch".into());
-    }
-    let aliases = list(resource, "aliases")?;
     let outcomes = list(report, "outcomes")?;
-    if aliases.is_empty() || aliases.len() > 4096 || aliases.len() != outcomes.len() {
+    if entries.len() != outcomes.len() {
         return Err("missing alias outcomes".into());
-    }
-    if extended
-        != aliases
-            .iter()
-            .any(|alias| alias.get("string_values").is_some())
-    {
-        return Err("alias schema does not describe its literal terms".into());
     }
     let mut mapped = BTreeMap::new();
     for file in list(library, "files")? {
         for mapping in list(file, "mappings")? {
             if mapping["source"]["scope"] == "annotation_alias_catalog" {
-                let key = span_key(&mapping["source"]["span"])?;
+                let link = &mapping["source"];
+                let path = text(link, "path")?;
+                let resource = source_map.get(path).ok_or("unknown mapped alias resource")?;
+                let span = span_key(&link["span"])?;
+                if link["sha256"] != resource["sha256"]
+                    || span.0 == span.1
+                    || text(resource, "text")?.get(span.0..span.1).is_none()
+                {
+                    return Err("alias mapping source identity/range mismatch".into());
+                }
+                let key = (path, span);
                 let (start, end) = span_key(&mapping["generated"])?;
                 let fragment = text(file, "text")?
                     .get(start..end)
@@ -67,10 +66,12 @@ pub(super) fn verify(library: &Value) -> Result<bool> {
     let mut blocked = false;
     let mut emitted = BTreeSet::new();
     let mut observed_spans = BTreeSet::new();
-    for (index, (alias, outcome)) in aliases.iter().zip(outcomes).enumerate() {
-        let key = span_key(&alias["span"])?;
-        if raw.get(key.0..key.1).is_none()
-            || key.0 == key.1
+    for (index, ((resource, alias), outcome)) in entries.iter().zip(outcomes).enumerate() {
+        let raw = text(resource, "text")?;
+        let span = span_key(&alias["span"])?;
+        let key = (text(resource, "path")?, span);
+        if raw.get(span.0..span.1).is_none()
+            || span.0 == span.1
             || !observed_spans.insert(key)
             || outcome["ordinal"] != json!(index)
             || outcome["name"] != alias["name"]
@@ -135,7 +136,10 @@ pub(super) fn verify(library: &Value) -> Result<bool> {
     if !mapped.is_empty() {
         return Err("unaccounted alias output".into());
     }
-    Ok(blocked)
+    Ok(CheckedAliases {
+        blocked,
+        sources: source_map,
+    })
 }
 
 fn lower_terms(terms: &[Value]) -> Result<String> {

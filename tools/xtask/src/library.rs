@@ -116,7 +116,8 @@ pub fn verify_with_module(
     }
     crate::literal_execution::verify(library, expected_module)?;
     let correction_blockers = verify_corrections(library)?;
-    let alias_blockers = aliases::verify(library)?;
+    let checked_aliases = aliases::verify(library)?;
+    let alias_blockers = checked_aliases.blocked;
     let partial =
         !failures.is_empty() || !issues.is_empty() || correction_blockers || alias_blockers;
     if text(&report, "status")?
@@ -176,11 +177,10 @@ pub fn verify_with_module(
                             )
                         ) =>
                 {
-                    let original = &library["aliases"]["source"];
-                    if source["path"] != original["path"] {
-                        return Err("alias source path mismatch".into());
-                    }
-                    original
+                    *checked_aliases
+                        .sources
+                        .get(text(source, "path")?)
+                        .ok_or("alias source path mismatch")?
                 }
                 _ => return Err("unknown or unexpected source universe".into()),
             };
