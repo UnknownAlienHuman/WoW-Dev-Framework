@@ -62,8 +62,8 @@ impl<'a> Sources<'a> {
             {
                 return Err(LookupError::InvalidMapping);
             }
-            for document in std::iter::once(report.source)
-                .chain(report.additional_sources.iter().copied())
+            for document in
+                std::iter::once(report.source).chain(report.additional_sources.iter().copied())
             {
                 check_cancelled(cancelled)?;
                 if document.revision() != report.source.revision() {
