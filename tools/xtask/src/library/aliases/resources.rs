@@ -21,8 +21,13 @@ pub(super) fn read(report: &Value) -> Result<Vec<&Value>> {
         }
         if !matches!(
             (report["schema"].as_str(), primary["schema"].as_str()),
-            (Some("wow-native-alias-projection/1"), Some("wow-native-alias-resource/1"))
-                | (Some("wow-native-alias-projection/2"), Some("wow-native-alias-resource/2"))
+            (
+                Some("wow-native-alias-projection/1"),
+                Some("wow-native-alias-resource/1")
+            ) | (
+                Some("wow-native-alias-projection/2"),
+                Some("wow-native-alias-resource/2")
+            )
         ) {
             return Err("invalid external alias schema pair".into());
         }
@@ -65,7 +70,9 @@ pub(super) fn read(report: &Value) -> Result<Vec<&Value>> {
             return Err("alias schema does not describe its declarations".into());
         }
         bytes = bytes.checked_add(raw.len()).ok_or("alias byte limit")?;
-        count = count.checked_add(aliases.len()).ok_or("alias count limit")?;
+        count = count
+            .checked_add(aliases.len())
+            .ok_or("alias count limit")?;
         if bytes > 2 * 1024 * 1024 || count > 4096 {
             return Err("alias resource aggregate limit".into());
         }

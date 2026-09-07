@@ -121,7 +121,9 @@ pub(crate) fn project<'a>(
     let mut sources = catalogs.to_vec();
     sources.sort_by_key(|source| source.path());
     let document = sources[0];
-    if sources.windows(2).any(|pair| pair[0].path() == pair[1].path())
+    if sources
+        .windows(2)
+        .any(|pair| pair[0].path() == pair[1].path())
         || sources
             .iter()
             .any(|source| source.revision() != document.revision())

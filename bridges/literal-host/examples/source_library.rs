@@ -6,7 +6,7 @@ mod driver;
 mod limits_args;
 use std::{fs, io::Read, path::Path, process::ExitCode};
 use wow_literal_host::{ModuleHandle, ModuleSlot, ObservedSnapshot};
-const USAGE: &str = "source_library <module.wasm> <approved-sha256:...> [--fuel N] [--memory-bytes N] <checkout> <ref> <TOC> <environment> <new-output> [--corrections ...] [--alias-catalog ...]";
+const USAGE: &str = "source_library <module.wasm> <approved-sha256:...> [--fuel N] [--memory-bytes N] <checkout> <ref> <TOC> <environment> <new-output> [--corrections ...] [--alias-catalog ...]...";
 fn main() -> ExitCode {
     match run(std::env::args_os().skip(1).collect()) {
         Ok(partial) => ExitCode::from(if partial { 3 } else { 0 }),

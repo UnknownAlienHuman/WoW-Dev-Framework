@@ -44,7 +44,9 @@ pub(super) fn verify(library: &Value) -> Result<CheckedAliases<'_>> {
             if mapping["source"]["scope"] == "annotation_alias_catalog" {
                 let link = &mapping["source"];
                 let path = text(link, "path")?;
-                let resource = source_map.get(path).ok_or("unknown mapped alias resource")?;
+                let resource = source_map
+                    .get(path)
+                    .ok_or("unknown mapped alias resource")?;
                 let span = span_key(&link["span"])?;
                 if link["sha256"] != resource["sha256"]
                     || span.0 == span.1

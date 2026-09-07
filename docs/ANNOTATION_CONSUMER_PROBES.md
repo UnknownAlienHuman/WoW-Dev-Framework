@@ -87,12 +87,29 @@ or guest rebuild. This test approval does not promote or distribute product code
 
 ## Current resource integration
 
-The current-source workflow separately generates and verifies native libraries
-with `Annotations/Core/Type/BlizzardType.lua` and
-`Annotations/Core/Type/StringEnum.lua`. Both use the same resolved Gethe revision
-and the same independently resolved Ketho revision. Their reports retain resource
-hashes, raw data, mappings and omissions; they are not merged by this workflow.
-The existing Wasm comparison still selects `BlizzardType.lua` explicitly.
+The native generator now composes multiple alias resources in one library,
+resolving dependencies, duplicates and cycles across files. Repeat the option:
+
+```sh
+cargo run --locked -p wow-annotations --example native_library -- \
+  /path/to/wow-ui-source HEAD \
+  Interface/AddOns/Blizzard_APIDocumentationGenerated/Blizzard_APIDocumentationGenerated.toc \
+  Mainline /path/to/new-output \
+  --alias-catalog /path/to/ketho HEAD Annotations/Core/Type/BlizzardType.lua \
+  --alias-catalog /path/to/ketho HEAD Annotations/Core/Type/StringEnum.lua
+```
+
+All alias resources must share one exact external revision and distinct paths.
+The driver resolves each checkout/selector once; resource order does not change
+output. The aggregate limits are 32 files, 2 MiB and 4,096 aliases. Each resource
+retains its own raw bytes, hash and maps. Multi-resource alias reports use v3
+with `source` and `additional_sources`; single-resource v1/v2 output is unchanged.
+The same option works in the shared Wasm `source_library` driver.
+
+The current-source workflow combines `BlizzardType.lua` and `StringEnum.lua` in
+`native-aliased`, and also retains the standalone string-enum generation. Both
+use the same resolved Gethe and Ketho revisions. The existing Wasm comparison
+still selects `BlizzardType.lua` explicitly.
 
 Generation and structural artifact verification on current data do not certify
 full-corpus analyzer semantics. Exit 3 remains a partial result with retained

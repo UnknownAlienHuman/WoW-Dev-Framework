@@ -44,7 +44,12 @@ fn cross_file_dependencies_keep_provenance_and_canonical_output() -> Result<()> 
     assert_eq!(report.schema, "wow-native-alias-projection/3");
     assert_eq!(report.source.path(), "A.lua");
     assert_eq!(report.additional_sources[0].path(), "B.lua");
-    assert!(report.outcomes.iter().all(|outcome| outcome.status == "emitted"));
+    assert!(
+        report
+            .outcomes
+            .iter()
+            .all(|outcome| outcome.status == "emitted")
+    );
     let file = first.files.last().ok_or("file")?;
     assert_eq!(file.mappings.len(), 2);
     assert_eq!(file.mappings[0].source.path, "A.lua");
