@@ -83,7 +83,13 @@ fn string_union(values: &[String]) -> Option<String> {
     {
         return None;
     }
-    Some(values.iter().map(|value| format!("\"{value}\"")).collect::<Vec<_>>().join("|"))
+    Some(
+        values
+            .iter()
+            .map(|value| format!("\"{value}\""))
+            .collect::<Vec<_>>()
+            .join("|"),
+    )
 }
 
 /// Only types actually emitted by the native lane can satisfy an external alias

@@ -45,11 +45,21 @@ fn multiline_ketho_literals_reach_the_library_with_exact_scoped_maps() -> Result
     assert_eq!(library["schema"], "wow-native-annotation-library/5");
     assert_eq!(library["projection"], "projected_with_sidecars");
     assert_eq!(library["negative_authority"], false);
-    assert_eq!(library["aliases"]["schema"], "wow-native-alias-projection/2");
-    assert_eq!(library["aliases"]["source"]["schema"], "wow-native-alias-resource/2");
+    assert_eq!(
+        library["aliases"]["schema"],
+        "wow-native-alias-projection/2"
+    );
+    assert_eq!(
+        library["aliases"]["source"]["schema"],
+        "wow-native-alias-resource/2"
+    );
     assert_eq!(library["aliases"]["source"]["revision"], DONOR);
     assert_eq!(library["aliases"]["source"]["text"], raw);
-    let file = library["files"].as_array().ok_or("files")?.last().ok_or("file")?;
+    let file = library["files"]
+        .as_array()
+        .ok_or("files")?
+        .last()
+        .ok_or("file")?;
     let text = file["text"].as_str().ok_or("text")?;
     assert!(text.contains("---@alias Choice \"FIRST\"|\"SECOND\"\n"));
     let map = &file["mappings"][0];
@@ -65,13 +75,18 @@ fn inline_and_multiline_literals_have_identical_generated_bytes() -> Result<()> 
     let inline = project("---@alias Choice \"FIRST\"|'SECOND'\n")?;
     let multiline = project("---@alias Choice\n---|\"FIRST\"\n---|'SECOND'\n")?;
     assert_eq!(inline["files"][1]["text"], multiline["files"][1]["text"]);
-    assert_eq!(inline["files"][1]["sha256"], multiline["files"][1]["sha256"]);
+    assert_eq!(
+        inline["files"][1]["sha256"],
+        multiline["files"][1]["sha256"]
+    );
     Ok(())
 }
 
 #[test]
 fn named_dependencies_can_resolve_to_a_closed_string_enum_without_expansion() -> Result<()> {
-    let library = project("---@alias Choice LiteralChoice|nil\n---@alias LiteralChoice\n---|\"A|B\"\n---|\"number\"\n")?;
+    let library = project(
+        "---@alias Choice LiteralChoice|nil\n---@alias LiteralChoice\n---|\"A|B\"\n---|\"number\"\n",
+    )?;
     assert_eq!(library["projection"], "projected_with_sidecars");
     let text = library["files"][1]["text"].as_str().ok_or("text")?;
     assert!(text.contains("---@alias Choice LiteralChoice|nil"));
@@ -100,9 +115,28 @@ fn rejected_literal_forms_preserve_independent_aliases_and_remain_partial() -> R
 
 #[test]
 fn malformed_multiline_alias_does_not_consume_or_repair_its_neighbor() -> Result<()> {
-    let library = project("---@alias Broken\n---|\"unterminated\n---@alias Choice\n---|\"GOOD\"\n")?;
+    let library =
+        project("---@alias Broken\n---|\"unterminated\n---@alias Choice\n---|\"GOOD\"\n")?;
     assert_eq!(library["projection"], "partial");
-    assert_eq!(library["aliases"]["outcomes"][0]["status"], "alias_syntax_error");
+    // Emmy reports no parse error for this incomplete doc token. Preserve that
+    // observation, while the closed-literal adapter must still reject its type.
+    assert_eq!(
+        library["aliases"]["outcomes"][0]["status"],
+        "unsupported_alias_type"
+    );
+    assert_eq!(
+        library["aliases"]["source"]["aliases"][0]["syntax_error"],
+        false
+    );
+    assert_eq!(
+        library["aliases"]["source"]["aliases"][0]["terms"],
+        serde_json::Value::Null
+    );
+    assert!(
+        library["aliases"]["source"]["aliases"][0]
+            .get("string_values")
+            .is_none()
+    );
     assert_eq!(library["aliases"]["outcomes"][1]["status"], "emitted");
     Ok(())
 }
@@ -140,18 +174,37 @@ fn continuation_budget_accepts_256_values_and_rejects_257_before_parsing() -> Re
         raw.push_str(&format!("---|\"SYNTHETIC_{i}\"\n"));
     }
     let accepted = catalog(&raw)?;
-    assert_eq!(accepted.aliases()[0].string_values.as_ref().ok_or("values")?.len(), 256);
+    assert_eq!(
+        accepted.aliases()[0]
+            .string_values
+            .as_ref()
+            .ok_or("values")?
+            .len(),
+        256
+    );
     raw.push_str("---|\"OVER_BUDGET\"\n");
-    assert_eq!(catalog(&raw).expect_err("limit").code, NativeErrorCode::Limit);
+    assert_eq!(
+        catalog(&raw).expect_err("limit").code,
+        NativeErrorCode::Limit
+    );
     Ok(())
 }
 
 #[test]
 fn old_named_profile_and_uncataloged_bytes_are_unchanged() -> Result<()> {
     let raw = "---@meta _\n---@alias Choice bool|cstring|luaIndex\n";
-    let old = ingest_aliases(DONOR, "Types.lua", raw, &source_digest(raw.as_bytes()), &AtomicBool::new(false))?;
+    let old = ingest_aliases(
+        DONOR,
+        "Types.lua",
+        raw,
+        &source_digest(raw.as_bytes()),
+        &AtomicBool::new(false),
+    )?;
     let new = catalog(raw)?;
     assert_eq!(serde_json::to_value(old)?, serde_json::to_value(new)?);
-    assert_eq!(project(raw)?["aliases"]["schema"], "wow-native-alias-projection/1");
+    assert_eq!(
+        project(raw)?["aliases"]["schema"],
+        "wow-native-alias-projection/1"
+    );
     Ok(())
 }

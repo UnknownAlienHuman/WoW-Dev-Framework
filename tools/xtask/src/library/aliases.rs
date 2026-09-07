@@ -42,7 +42,11 @@ pub(super) fn verify(library: &Value) -> Result<bool> {
     if aliases.is_empty() || aliases.len() > 4096 || aliases.len() != outcomes.len() {
         return Err("missing alias outcomes".into());
     }
-    if extended != aliases.iter().any(|alias| alias.get("string_values").is_some()) {
+    if extended
+        != aliases
+            .iter()
+            .any(|alias| alias.get("string_values").is_some())
+    {
         return Err("alias schema does not describe its literal terms".into());
     }
     let mut mapped = BTreeMap::new();

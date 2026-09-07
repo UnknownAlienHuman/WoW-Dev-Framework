@@ -32,7 +32,10 @@ mod tests {
 
     #[test]
     fn literal_values_cannot_become_names_or_directives() -> Result<()> {
-        assert_eq!(lower(&json!(["A|B", "---@meta", ""]))?, "\"A|B\"|\"---@meta\"|\"\"");
+        assert_eq!(
+            lower(&json!(["A|B", "---@meta", ""]))?,
+            "\"A|B\"|\"---@meta\"|\"\""
+        );
         for values in [
             json!([]),
             json!(["A", "A"]),
