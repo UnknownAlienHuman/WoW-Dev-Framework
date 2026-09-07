@@ -281,8 +281,8 @@ fn exact_integer(value: &ScalarValue) -> Result<i64, ScalarError> {
     let (negative, magnitude) = text
         .strip_prefix('-')
         .map_or((false, text.as_str()), |v| (true, v));
-    let number = i64::try_from(exact_integer_magnitude(magnitude)?)
-        .map_err(|_| ScalarError::OutOfRange)?;
+    let number =
+        i64::try_from(exact_integer_magnitude(magnitude)?).map_err(|_| ScalarError::OutOfRange)?;
     let number = if negative {
         if number == 0 {
             return Err(ScalarError::NonIntegralArithmetic);

@@ -50,8 +50,7 @@ fn number(text: &str, constants: bool) -> Result<LiteralValue, RenderError> {
     if value.fract() == 0.0 {
         // A nonzero literal underflowing to zero, or a fractional/wide integer
         // rounded to an integer, cannot silently become a different declaration.
-        let exact = exact_integer_magnitude(magnitude)
-            .map_err(|_| RenderError::UnsupportedType)?;
+        let exact = exact_integer_magnitude(magnitude).map_err(|_| RenderError::UnsupportedType)?;
         if exact != value.abs() as u64 {
             return Err(RenderError::UnsupportedType);
         }

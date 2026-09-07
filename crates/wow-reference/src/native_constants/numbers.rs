@@ -16,10 +16,7 @@ pub fn exact_integer_magnitude(text: &str) -> Result<u64, ScalarError> {
     if text.len() > 2048 {
         return Err(ScalarError::Limit);
     }
-    let value = if let Some(hex) = text
-        .strip_prefix("0x")
-        .or_else(|| text.strip_prefix("0X"))
-    {
+    let value = if let Some(hex) = text.strip_prefix("0x").or_else(|| text.strip_prefix("0X")) {
         if hex.is_empty() || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
             return Err(ScalarError::NonIntegralArithmetic);
         }
@@ -48,7 +45,9 @@ fn decimal_magnitude(text: &str) -> Result<u64, ScalarError> {
     {
         return Err(ScalarError::NonIntegralArithmetic);
     }
-    let exponent = exponent.parse::<i64>().map_err(|_| ScalarError::OutOfRange)?;
+    let exponent = exponent
+        .parse::<i64>()
+        .map_err(|_| ScalarError::OutOfRange)?;
     let digits = [whole, fraction].concat();
     let digits = digits.trim_start_matches('0');
     if digits.is_empty() {
@@ -57,9 +56,7 @@ fn decimal_magnitude(text: &str) -> Result<u64, ScalarError> {
     let coefficient = digits.trim_end_matches('0');
     let scale = exponent
         .checked_sub(i64::try_from(fraction.len()).map_err(|_| ScalarError::Limit)?)
-        .and_then(|scale| {
-            scale.checked_add(i64::try_from(digits.len() - coefficient.len()).ok()?)
-        })
+        .and_then(|scale| scale.checked_add(i64::try_from(digits.len() - coefficient.len()).ok()?))
         .ok_or(ScalarError::OutOfRange)?;
     if scale < 0 {
         return Err(ScalarError::NonIntegralArithmetic);
