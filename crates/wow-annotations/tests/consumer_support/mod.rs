@@ -1,4 +1,6 @@
 //! Reviewed test-only consumer adapters, not the production semantic analyzer.
+pub mod catalog;
+mod catalog_source;
 pub mod fixture;
 pub mod mutations;
 pub mod package;

@@ -4,7 +4,7 @@ use serde_json::Value;
 use std::{collections::BTreeSet, ffi::OsString, fs, path::Path, process::Command};
 
 #[path = "../../examples/support/mod.rs"]
-mod driver;
+pub(super) mod driver;
 
 const TOC: &str = "API.toc";
 
@@ -72,7 +72,7 @@ pub(super) fn prepare(output: &Path, sources: &[(&str, &str)]) -> Result<()> {
     source_report::validate(&report, output, revision, sources)
 }
 
-fn git(checkout: &Path, args: &[&str]) -> Result<String> {
+pub(super) fn git(checkout: &Path, args: &[&str]) -> Result<String> {
     let mut command = Command::new("git");
     command.env_clear();
     for name in ["PATH", "SystemRoot", "WINDIR", "TEMP", "TMP"] {

@@ -1,7 +1,7 @@
 //! Real semantic checks, deliberately separate from syntax and Ketho byte parity.
 mod consumer_support;
 use consumer_support::{
-    Result, Workspace, fixture, mutations, package,
+    Result, Workspace, catalog, fixture, mutations, package,
     process::{Consumer, Executable},
     report,
 };
@@ -30,15 +30,17 @@ fn both_consumers_interpret_generated_library() -> Result<()> {
         let controls_pass = mutations
             .iter()
             .all(|m| m["detected"] == true && m["input_unchanged"] == true);
+        let catalog = catalog::run(&executable, &workspace.path)?;
         let package_unchanged = package::snapshot(&executable)? == package_before;
         results.push(json!({"consumer":executable.kind.name(),"version":version,"executable_sha256":executable.digest,
-            "exit":status,"diagnostics":diagnostics,"input_unchanged":unchanged,"passed":assertion.is_ok()&&unchanged&&controls_pass&&package_unchanged,"mutations":mutations,"package_unchanged":package_unchanged,"package_files":package_before.0,"package_sha256":package_before.1,
+            "exit":status,"diagnostics":diagnostics,"input_unchanged":unchanged,"passed":assertion.is_ok()&&unchanged&&controls_pass&&package_unchanged&&catalog["passed"]==true,"mutations":mutations,"catalog":catalog,"package_unchanged":package_unchanged,"package_files":package_before.0,"package_sha256":package_before.1,
             "failure":assertion.err().map(|e|e.to_string())}));
     }
     fs::write(
         workspace.path.join("consumer-report.json"),
         serde_json::to_vec_pretty(&json!({
             "schema":"wow-annotation-consumer-probe/1","scope":"synthetic-native-signatures/1",
+            "additional_scopes":["synthetic-native-string-enum/1"],
             "input_sha256":before,"results":results,"negative_cases":fixture::NEGATIVES.len(),
             "runtime_correctness":"not_evaluated","full_catalog_compatibility":"not_evaluated",
             "namespace_absence_authority":"unavailable: Ketho namespaces are open tables",
