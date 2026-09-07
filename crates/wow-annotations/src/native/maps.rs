@@ -1,7 +1,7 @@
 //! Join emitter-owned field ranges to the exact admitted source descriptors.
 use super::{
-    CallableFact, DocumentationDocument, FieldFact, RenderError, SourceMapping, Span,
-    TableFact, link,
+    CallableFact, DocumentationDocument, FieldFact, RenderError, SourceMapping, Span, TableFact,
+    link,
 };
 use crate::ketho::{MemberPosition, RenderedSystem};
 
@@ -50,7 +50,11 @@ pub(super) fn append_members(
             let function = functions
                 .get(declaration.index)
                 .ok_or(RenderError::InvalidSource)?;
-            (function.arguments.as_slice(), function.returns.as_slice(), empty)
+            (
+                function.arguments.as_slice(),
+                function.returns.as_slice(),
+                empty,
+            )
         };
         let mut ordinal = 0;
         let mut previous_end = declaration.start;
