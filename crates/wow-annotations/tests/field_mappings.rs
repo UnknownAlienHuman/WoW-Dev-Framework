@@ -53,7 +53,7 @@ fn fields_keep_exact_utf8_spans_after_filtered_declarations_and_return_renaming(
     let raw = r#"APIDocumentation:AddDocumentationTable({Name="Probe",Type="System",Namespace="C_Probe",Functions={
 {Name="Bad",Arguments={{Name="end",Type="number"}}},
 {Name="Read",Documentation={"é 🦀"},Arguments={{Name="id",Type="number"},{Name="items",Type="table",InnerType="number",Nilable=true}},Returns={{Name="end",Type="bool"}}}
-},Tables={{Name="Record",Type="Structure",Fields={{Name="text",Type="string"}}}})"#;
+},Tables={{Name="Record",Type="Structure",Fields={{Name="text",Type="string"}}}}})"#;
     let docs = [document(raw)?];
     let library = project(&docs, "Mainline", &AtomicBool::new(false))?;
     assert_eq!(library.projection, "partial");
@@ -99,11 +99,7 @@ fn callbacks_map_both_profiles_and_terminal_argument_packs() -> Result<()> {
         &library,
         raw,
         &[
-            (
-                "parameter",
-                "id: number",
-                r#"{Name="id",Type="number"}"#,
-            ),
+            ("parameter", "id: number", r#"{Name="id",Type="number"}"#),
             (
                 "parameter",
                 "values: number[]",
@@ -114,11 +110,7 @@ fn callbacks_map_both_profiles_and_terminal_argument_packs() -> Result<()> {
                 "...: string",
                 r#"{Name="rest",Type="string",StrideIndex=1}"#,
             ),
-            (
-                "return",
-                "boolean",
-                r#"{Name="ok",Type="bool"}"#,
-            ),
+            ("return", "boolean", r#"{Name="ok",Type="bool"}"#),
             (
                 "return",
                 "string[]?",
