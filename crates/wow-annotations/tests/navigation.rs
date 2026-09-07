@@ -94,7 +94,13 @@ fn same_named_catalog_and_blizzard_files_keep_independent_revisions() -> Result<
     let digest = file.sha256.clone();
     let mapping = file.mappings.first().ok_or("alias map")?.clone();
     file.mappings.push(mapping.clone());
-    let lookup = source_at(&library, &path, &digest, mapping.generated.start, &cancelled)?;
+    let lookup = source_at(
+        &library,
+        &path,
+        &digest,
+        mapping.generated.start,
+        &cancelled,
+    )?;
     let SourceLookup::Mapped {
         precision,
         candidates,

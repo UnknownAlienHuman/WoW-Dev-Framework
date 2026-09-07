@@ -17,9 +17,9 @@ The literal lane also ports event/CVar aliases and enum/constant files from
 typed input, including scalar-preserving values and explicit order/format policy.
 The native connection in `src/native.rs` uses the reference-owned restricted
 EmmyLua evaluator and typed normalization. It retains raw metadata, unprojected
-fields, source hashes and declaration maps. The complete service still needs
-persistent ReferenceView integration, full correction/type closure, fine-grained
-maps, artifact publication and real language-server semantic probes.
+fields, source hashes and declaration/ordered-member maps. The complete service
+still needs persistent ReferenceView integration, full correction/type closure,
+type/documentation-fragment maps, artifact publication and full-corpus semantic probes.
 
 The native report is `wow-native-annotation-library/3`: scalar-resolution evidence
 is retained and reserved return labels have explicit collision-safe name maps.
@@ -160,3 +160,31 @@ emits a v6 execution sidecar; transport/identity/cancellation failure returns no
 library. The small `selected_literals` module owns dispatch and receipts only.
 No Wasmi, IO, interpreter or host dependency enters this crate. Native callers
 retain their previous output schemas and donor golden bytes.
+
+## Generated-to-source navigation
+
+`navigation::source_at` resolves a zero-based UTF-8 byte position in an existing
+`NativeLibrary` to its source descriptors:
+
+```rust
+let result = wow_annotations::navigation::source_at(
+    &library,
+    generated_path,
+    viewed_file_sha256,
+    byte_offset,
+    &cancelled,
+)?;
+```
+
+The viewed-file digest and `wow-native-field-maps/1` profile are required.
+Parameter, return and field maps take precedence over declaration and whole-file
+maps; the smallest same-kind span wins and equal candidates remain explicit.
+Each candidate includes its original revision, path, digest and source range.
+External Ketho catalogs keep their own revision even when a source path matches
+one in the Blizzard input. Stale bytes, invalid links/ranges, unsupported profiles
+and cancellation return `LookupError`; headers/EOF without a map return `Unmapped`,
+not API-absence evidence. Partial generations retain their original limitations.
+
+This is a read-only Rust query over retained, already admitted inputs, not an
+arbitrary-JSON authenticator, source fetcher, LSP connection or editor installer.
+Offsets are bytes, not UTF-16 columns. The caller owns editor position conversion.
