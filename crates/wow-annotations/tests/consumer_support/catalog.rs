@@ -69,9 +69,11 @@ pub fn run(executable: &Executable, root: &Path) -> Result<Value> {
             "input_sha256":before,"input_unchanged":unchanged,"diagnostics":diagnostics,
             "passed":assertion.is_ok()&&unchanged,"failure":assertion.err().map(|e|e.to_string())}));
     }
-    Ok(json!({"scope":"synthetic-native-string-enum/1","negative_cases":NEGATIVES.len(),
+    Ok(
+        json!({"scope":"synthetic-native-string-enum/1","negative_cases":NEGATIVES.len(),
         "mutation":"widen one closed alias to string; lose exactly the invalid-literal check",
-        "passed":checks.iter().all(|c|c["passed"]==true),"checks":checks}))
+        "passed":checks.iter().all(|c|c["passed"]==true),"checks":checks}),
+    )
 }
 
 fn widen(input: &Path) -> Result<()> {

@@ -22,7 +22,10 @@ pub(super) fn prepare(input: &Path) -> Result<Value> {
     }
     fs::write(source_root.join("API.toc"), "uncommitted.lua\n")?;
     fs::write(source_root.join("API.lua"), "not committed documentation\n")?;
-    fs::write(catalog_root.join("Types.lua"), "not committed annotations\n")?;
+    fs::write(
+        catalog_root.join("Types.lua"),
+        "not committed annotations\n",
+    )?;
     if source::driver::run(
         vec![
             source_root.into_os_string(),
@@ -40,8 +43,10 @@ pub(super) fn prepare(input: &Path) -> Result<Value> {
         return Err("catalog consumer source build is partial".into());
     }
     verify(input, &revision, &catalog_revision)?;
-    Ok(json!({"revision":revision,"catalog_revision":catalog_revision,
-        "catalog_sha256":source_digest(CATALOG.as_bytes())}))
+    Ok(
+        json!({"revision":revision,"catalog_revision":catalog_revision,
+        "catalog_sha256":source_digest(CATALOG.as_bytes())}),
+    )
 }
 
 fn checkout(path: &Path, files: &[(&str, &str)]) -> Result<String> {
@@ -56,7 +61,10 @@ fn checkout(path: &Path, files: &[(&str, &str)]) -> Result<String> {
     let mut args = vec!["add", "--"];
     args.extend(files.iter().map(|(name, _)| *name));
     source::git(path, &args)?;
-    source::git(path, &["commit", "--no-gpg-sign", "-m", "catalog probe input"])?;
+    source::git(
+        path,
+        &["commit", "--no-gpg-sign", "-m", "catalog probe input"],
+    )?;
     let revision = source::git(path, &["rev-parse", "--verify", "HEAD^{commit}"])?;
     Ok(revision.trim().to_owned())
 }
