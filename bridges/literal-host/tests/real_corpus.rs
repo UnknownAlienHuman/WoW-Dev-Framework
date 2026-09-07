@@ -16,11 +16,27 @@ fn selected_current_corpus_matches_native_with_two_guests() -> Result<(), Box<dy
     let environment = get("WDF_CORPUS_ENVIRONMENT")?;
     let donor = get("WDF_ALIAS_CHECKOUT")?;
     let donor_revision = get("WDF_ALIAS_REVISION")?;
-    let donor_path = get("WDF_ALIAS_PATH")?;
     let root = PathBuf::from(get("WDF_OUTPUT_ROOT")?);
     let baseline: Value =
         serde_json::from_slice(&fs::read(root.join("native-aliased/source-report.json"))?)?;
     assert_eq!(baseline["revision"], revision);
+    // Replay the complete catalog selection recorded by the native build.
+    // A second independently maintained path list can silently compare different inputs.
+    let aliases = &baseline["library"]["aliases"];
+    let mut catalogs = vec![&aliases["source"]];
+    if let Some(additional) = aliases.get("additional_sources") {
+        catalogs.extend(additional.as_array().ok_or("invalid alias resource list")?);
+    }
+    if catalogs.len() > wow_annotations::aliases::MAX_CATALOG_FILES {
+        return Err("alias resource count exceeds the driver limit".into());
+    }
+    let mut catalog_paths = Vec::new();
+    for catalog in catalogs {
+        if catalog["revision"] != donor_revision {
+            return Err("baseline alias revision differs from selected donor".into());
+        }
+        catalog_paths.push(catalog["path"].as_str().ok_or("missing alias resource path")?);
+    }
     let a = fs::read(get("WDF_WASM_A")?)?;
     let b = fs::read(get("WDF_WASM_B")?)?;
     assert_ne!(module_digest(&a), module_digest(&b));
@@ -38,11 +54,13 @@ fn selected_current_corpus_matches_native_with_two_guests() -> Result<(), Box<dy
             .map(Into::into)
             .collect();
         args.push(root.join(name).into_os_string());
-        args.extend(
-            ["--alias-catalog", &donor, &donor_revision, &donor_path]
-                .into_iter()
-                .map(Into::into),
-        );
+        for path in &catalog_paths {
+            args.extend(
+                ["--alias-catalog", &donor, &donor_revision, path]
+                    .into_iter()
+                    .map(Into::into),
+            );
+        }
         let observed = ObservedSnapshot::new(snapshot.clone());
         let result = driver::run(args, Some(&observed));
         let usage = observed.usage();
