@@ -29,8 +29,10 @@ pub enum Owner {
     },
 }
 
-/// Ketho field inputs. Default text is already the selected scalar's display
-/// representation, not Lua code; `Some("false")` and `Some("0")` remain present.
+/// Ketho field inputs. Default text is inert display text, not executable Lua.
+/// `Some("false")` and `Some("0")` remain present. The native adapter may retain
+/// an explicitly labeled unresolved source symbol with a partial-result issue;
+/// that label never supplies a scalar value to the reference resolver.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Field {
     pub name: String,

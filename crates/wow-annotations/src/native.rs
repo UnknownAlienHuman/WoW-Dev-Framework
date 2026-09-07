@@ -26,6 +26,7 @@ use crate::literals::{
 use crate::selected_literals::{LiteralExecution, SelectedLiterals};
 use wow_render_contract::LiteralBridge;
 
+mod fields;
 mod numbers;
 
 const MAX_FILES: usize = 4096;
@@ -486,7 +487,7 @@ pub fn project_with_alias_catalogs_and_literal_bridge<'a>(
             if receiver_blocked {
                 continue;
             }
-            match callable(function, &mut scalars) {
+            match callable(function, &mut scalars, &mut issues) {
                 Ok(projected) => {
                     let candidate = System {
                         owner: input.owner.clone(),
@@ -524,20 +525,21 @@ pub fn project_with_alias_catalogs_and_literal_bridge<'a>(
                 continue;
             }
             let converted = match table {
-                TableFact::Structure { name, fields, .. } => convert_fields(fields, &mut scalars)
-                    .map(|fields| {
+                TableFact::Structure { name, fields, .. } => {
+                    fields::convert(fields, &mut scalars, &mut issues).map(|fields| {
                         Some(Table::Structure {
                             name: (*name).into(),
                             fields,
                         })
-                    }),
+                    })
+                }
                 TableFact::Callback {
                     name,
                     arguments,
                     returns,
                     ..
-                } => convert_fields(arguments, &mut scalars).and_then(|arguments| {
-                    let returns = convert_fields(returns, &mut scalars)?;
+                } => fields::convert(arguments, &mut scalars, &mut issues).and_then(|arguments| {
+                    let returns = fields::convert(returns, &mut scalars, &mut issues)?;
                     let extended = !returns.is_empty()
                         || arguments
                             .iter()
@@ -1044,6 +1046,7 @@ struct CallableProjection {
 fn callable(
     value: &CallableFact<'_>,
     scalars: &mut ScalarProjection<'_, '_>,
+    issues: &mut Vec<ProjectionIssue>,
 ) -> Result<CallableProjection, RenderError> {
     let mut escaped_documentation = false;
     let documentation = value
@@ -1060,8 +1063,8 @@ fn callable(
                 .collect::<Result<Vec<_>, RenderError>>()
         })
         .transpose()?;
-    let arguments = convert_fields(&value.arguments, scalars)?;
-    let mut returns = convert_fields(&value.returns, scalars)?;
+    let arguments = fields::convert(&value.arguments, scalars, issues)?;
+    let mut returns = fields::convert(&value.returns, scalars, issues)?;
     let mut occupied = returns
         .iter()
         .map(|f| f.name.clone())
@@ -1144,39 +1147,6 @@ fn sanitize_documentation(text: &str) -> Result<(String, bool), RenderError> {
     Ok((result, changed))
 }
 
-fn convert_fields(
-    fields: &[FieldFact<'_>],
-    scalars: &mut ScalarProjection<'_, '_>,
-) -> Result<Vec<Field>, RenderError> {
-    fields
-        .iter()
-        .map(|f| {
-            let default_text = match f.default {
-                None
-                | Some(RawValue {
-                    kind: RawKind::Nil, ..
-                }) => None,
-                Some(raw) => Some(match scalars.resolve(raw, None)? {
-                    ScalarValue::Boolean(value) => value.to_string(),
-                    ScalarValue::Number(value) | ScalarValue::String(value) => value,
-                }),
-            };
-            let variadic = match f.stride_index.map(|v| &v.kind) {
-                None | Some(RawKind::Nil | RawKind::Boolean(false)) => false,
-                Some(RawKind::Number(n)) if n.parse::<u64>().is_ok_and(|v| v > 0) => true,
-                _ => return Err(RenderError::InvalidVariadic),
-            };
-            Ok(Field {
-                name: f.name.into(),
-                type_name: f.type_name.into(),
-                inner_type: f.inner_type.map(Into::into),
-                nilable: f.nilable.unwrap_or(false),
-                default_text,
-                variadic,
-            })
-        })
-        .collect()
-}
 fn convert_values(
     values: &[ValueFact<'_>],
     typed_constants: bool,

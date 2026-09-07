@@ -257,7 +257,16 @@ Tables={{Name="PartialLimits",Type="Constants",Values={{Name="Good",Value=42},{N
         .join("\n");
     assert!(text.contains("function Good() end"));
     assert!(text.contains("Good = 42,"));
-    assert!(!text.contains("NeedsRuntime"));
+    assert!(text.contains("function NeedsRuntime(n) end"));
+    assert!(
+        text.contains("---@param n? number Default = UNKNOWN_GLOBAL (unresolved source symbol)")
+    );
+    assert!(
+        library
+            .issues
+            .iter()
+            .any(|issue| issue.code == "unresolved_symbolic_default")
+    );
     assert!(!text.contains("Unknown ="));
     assert_eq!(library.projection, "partial");
     assert_eq!(
