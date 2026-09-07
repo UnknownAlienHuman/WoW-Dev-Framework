@@ -71,7 +71,9 @@ pub(super) fn read(report: &Value) -> Result<Vec<&Value>> {
         let has_literals = aliases
             .iter()
             .any(|alias| alias.get("string_values").is_some());
-        let has_base = aliases.iter().any(|alias| alias.get("string_base").is_some());
+        let has_base = aliases
+            .iter()
+            .any(|alias| alias.get("string_base").is_some());
         if aliases.is_empty() || (profile >= 2) != has_literals || (profile == 3) != has_base {
             return Err("alias schema does not describe its declarations".into());
         }
@@ -79,7 +81,10 @@ pub(super) fn read(report: &Value) -> Result<Vec<&Value>> {
             if let Some(base) = alias.get("string_base")
                 && (base != "string"
                     || alias.get("terms") != Some(&Value::Null)
-                    || alias.get("string_values").and_then(Value::as_array).is_none())
+                    || alias
+                        .get("string_values")
+                        .and_then(Value::as_array)
+                        .is_none())
             {
                 return Err("invalid explicit open string declaration".into());
             }

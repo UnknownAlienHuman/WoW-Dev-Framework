@@ -37,8 +37,7 @@ pub(super) fn values(alias: &LuaDocTagAlias, input: &str) -> Option<Vec<String>>
         return None;
     };
     if tags.next().is_some()
-        || projected.get_name_token()?.get_name_text()
-            != alias.get_name_token()?.get_name_text()
+        || projected.get_name_token()?.get_name_text() != alias.get_name_token()?.get_name_text()
         || projected.get_generic_decl_list().is_some()
         || projected.get_type_flag().is_some()
     {

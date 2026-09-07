@@ -233,16 +233,13 @@ fn ingest(
                     } else {
                         None
                     };
-                    let string_base = if string_enums
-                        && plain
-                        && multiline
-                        && string_values.is_none()
-                    {
-                        string_values = open_strings::values(&alias, comment);
-                        string_values.as_ref().map(|_| "string")
-                    } else {
-                        None
-                    };
+                    let string_base =
+                        if string_enums && plain && multiline && string_values.is_none() {
+                            string_values = open_strings::values(&alias, comment);
+                            string_values.as_ref().map(|_| "string")
+                        } else {
+                            None
+                        };
                     let span = if syntax_error || string_base.is_some() {
                         Span { start, end }
                     } else {
