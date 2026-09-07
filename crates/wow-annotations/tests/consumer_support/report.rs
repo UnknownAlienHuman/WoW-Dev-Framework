@@ -126,30 +126,33 @@ pub fn assert_behavior(records: &[Value], status: i32) -> Result<()> {
         return Err("negative consumer run must report diagnostics with exit 1".into());
     }
     if records.iter().any(|d| {
-        d["file"] == "positive.lua"
-            || d["file"]
-                .as_str()
-                .is_some_and(|f| f.starts_with("api-") || f.starts_with("values-"))
+        d["file"].as_str().is_none_or(|file| {
+            file != "open-namespace.lua" && !NEGATIVES.iter().any(|(name, _, _)| *name == file)
+        })
     }) {
-        return Err("valid generated library/positive fixture has diagnostics".into());
+        return Err("diagnostic outside explicit negative/observation fixtures".into());
     }
     for (name, _, line) in NEGATIVES {
-        let expected = match *name {
-            "missing.lua" => "undefined-field",
-            "global.lua" => "undefined-global",
-            "return.lua" | "multiple.lua" | "structure.lua" | "array.lua" => "assign-type-mismatch",
-            _ => "param-type-mismatch",
-        };
+        let expected = expected_code(name);
         if !records.iter().any(|d| {
             d["file"] == *name
                 && d["code"] == expected
                 && d["range"]["start"]["line"] == *line
-                && d["severity"].as_u64().is_some_and(|s| s <= 2)
+                && d["severity"].as_u64().is_some_and(|s| (1..=2).contains(&s))
         }) {
             return Err(format!("missing required {expected} at {name}:{}", line + 1).into());
         }
     }
     Ok(())
+}
+
+fn expected_code(name: &str) -> &'static str {
+    match name {
+        "missing.lua" => "undefined-field",
+        "global.lua" => "undefined-global",
+        "return.lua" | "multiple.lua" | "structure.lua" | "array.lua" => "assign-type-mismatch",
+        _ => "param-type-mismatch",
+    }
 }
 
 #[cfg(test)]
@@ -172,6 +175,48 @@ mod tests {
             assert_eq!(records.len(), 1);
             assert_eq!(records[0]["file"], "argument.lua");
         }
+        Ok(())
+    }
+
+    fn expected_records() -> Vec<Value> {
+        NEGATIVES
+            .iter()
+            .map(|(name, _, line)| {
+                json!({"file":name,"code":expected_code(name),"severity":2,
+                    "range":{"start":{"line":line,"character":0},
+                        "end":{"line":line,"character":1}}})
+            })
+            .collect()
+    }
+
+    #[test]
+    fn generated_diagnostics_cannot_hide_behind_unrecognized_filenames() -> Result<()> {
+        let expected = expected_records();
+        assert_behavior(&expected, 1)?;
+        for file in [
+            "aliases-0000.lua",
+            "custom-types.lua",
+            "nested/library.lua",
+            "positive.lua",
+        ] {
+            for severity in 1..=4 {
+                let mut records = expected.clone();
+                records.push(json!({"file":file,"code":"undefined-doc-name","severity":severity}));
+                assert!(assert_behavior(&records, 1).is_err());
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn namespace_observations_never_replace_required_negative_evidence() -> Result<()> {
+        let observation = json!({"file":"open-namespace.lua","code":"undefined-field","severity":2});
+        assert!(assert_behavior(std::slice::from_ref(&observation), 1).is_err());
+        let mut records = expected_records();
+        records.push(observation);
+        assert_behavior(&records, 1)?;
+        records[0]["severity"] = json!(0);
+        assert!(assert_behavior(&records, 1).is_err());
         Ok(())
     }
 }

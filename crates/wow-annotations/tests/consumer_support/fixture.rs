@@ -1,7 +1,7 @@
-//! Synthetic declarations pass through the production source loader and emitter.
+//! Synthetic committed sources pass through the production Git/TOC driver.
 use super::Result;
-use std::{collections::BTreeMap, fs, path::Path, sync::atomic::AtomicBool};
-use wow_reference::native::{ingest_document, source_digest};
+use std::{collections::BTreeMap, fs, path::Path};
+use wow_reference::native::source_digest;
 
 const SYSTEM: &str = r#"APIDocumentation:AddDocumentationTable({Name="Probe",Type="System",Namespace="C_Probe",Functions={
 {Name="Read",Arguments={{Name="id",Type="number"}},Returns={{Name="count",Type="number"},{Name="label",Type="string"}}},
@@ -18,6 +18,8 @@ const OBJECT: &str = r#"APIDocumentation:AddDocumentationTable({Name="ProbeObjec
 {Name="SetLabel",Arguments={{Name="label",Type="string"}}},
 {Name="Label",Returns={{Name="label",Type="string"}}}
 }})"#;
+pub(super) const SOURCE_FILES: &[(&str, &str)] = &[("system.lua", SYSTEM), ("object.lua", OBJECT)];
+
 const POSITIVE: &str = r#"local count, label = C_Probe.Read(42)
 print(count + 1, label:upper())
 local record = C_Probe.Record()
@@ -64,27 +66,7 @@ pub const NEGATIVES: &[(&str, &str, u64)] = &[
     ("global.lua", "NonexistentProbeGlobal()\n", 0),
 ];
 pub fn prepare(root: &Path) -> Result<BTreeMap<String, String>> {
-    fs::create_dir(root)?;
-    let cancelled = AtomicBool::new(false);
-    let documents = [("system.lua", SYSTEM), ("object.lua", OBJECT)]
-        .iter()
-        .map(|(path, source)| {
-            ingest_document(
-                &"1".repeat(40),
-                path,
-                source,
-                &source_digest(source.as_bytes()),
-                &cancelled,
-            )
-        })
-        .collect::<std::result::Result<Vec<_>, _>>()?;
-    let library = wow_annotations::native::project(&documents, "Mainline", &cancelled)?;
-    if !library.issues.is_empty() {
-        return Err("probe source projection is incomplete".into());
-    }
-    for file in &library.files {
-        fs::write(root.join(&file.path), &file.text)?;
-    }
+    super::source::prepare(root, SOURCE_FILES)?;
     fs::write(root.join("positive.lua"), POSITIVE)?;
     // Ketho namespaces are open tables; this is an observed limitation, not a positive API assertion.
     fs::write(root.join("open-namespace.lua"), "C_Probe.Missing()\n")?;

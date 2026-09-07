@@ -5,6 +5,8 @@ pub mod package;
 mod paths;
 pub mod process;
 pub mod report;
+mod source;
+mod source_report;
 use std::{
     fs,
     path::PathBuf,
