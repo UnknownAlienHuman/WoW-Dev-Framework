@@ -45,9 +45,15 @@ fn native_arrays_returns_and_argument_packs_preserve_order_and_source_maps() -> 
             .ok_or("callback mapping")?;
         assert_eq!(map.source.path, "Callbacks.lua");
         assert_eq!(map.source.sha256, source_digest(raw.as_bytes()));
-        assert!(raw.get(map.source.span.start..map.source.span.end).is_some());
+        assert!(
+            raw.get(map.source.span.start..map.source.span.end)
+                .is_some()
+        );
     }
-    let tree = LuaParser::parse(&file.text, ParserConfig::with_level(LuaLanguageLevel::Lua51));
+    let tree = LuaParser::parse(
+        &file.text,
+        ParserConfig::with_level(LuaLanguageLevel::Lua51),
+    );
     assert!(tree.get_errors().is_empty(), "{:?}", tree.get_errors());
     let functions = tree
         .get_chunk_node()
@@ -91,7 +97,10 @@ fn unrepresentable_callback_stays_partial_without_erasing_valid_neighbor() -> Re
         assert_eq!(result.projection, "partial", "{fields}");
         assert_eq!(result.issues.len(), 1, "{fields}");
         let file = result.files.first().ok_or("valid neighbor")?;
-        assert!(file.text.contains("---@alias Good FunctionContainer|fun(): (boolean)"));
+        assert!(
+            file.text
+                .contains("---@alias Good FunctionContainer|fun(): (boolean)")
+        );
         assert!(!file.text.contains("---@alias Bad"));
     }
     Ok(())
@@ -145,7 +154,10 @@ fn function_type_return_tuple_keeps_union_array_and_optional_precedence() -> Res
         Renderer::new(BTreeSet::new(), text.len() - 1)?.render(&system),
         Err(RenderError::OutputLimit)
     );
-    assert_eq!(Renderer::new(BTreeSet::new(), text.len())?.render(&system)?, text);
+    assert_eq!(
+        Renderer::new(BTreeSet::new(), text.len())?.render(&system)?,
+        text
+    );
     Ok(())
 }
 

@@ -5,8 +5,7 @@ impl Renderer {
     /// The same type lowering serves fields and function-type components.
     /// Parentheses preserve union precedence before arrays and nilability.
     pub(super) fn field_type(&self, field: &Field) -> Result<String, RenderError> {
-        let mut name =
-            self.lower_type(field.inner_type.as_deref().unwrap_or(&field.type_name))?;
+        let mut name = self.lower_type(field.inner_type.as_deref().unwrap_or(&field.type_name))?;
         if field.inner_type.is_some() {
             if name.contains('|') {
                 name = format!("({name})");
@@ -47,7 +46,11 @@ impl Renderer {
             if index != 0 {
                 out.push(", ")?;
             }
-            out.push(if argument.variadic { "..." } else { &argument.name })?;
+            out.push(if argument.variadic {
+                "..."
+            } else {
+                &argument.name
+            })?;
             if !argument.variadic && (argument.nilable || argument.default_text.is_some()) {
                 out.push("?")?;
             }

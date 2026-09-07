@@ -48,10 +48,17 @@ This is scoped donor parity, not full Ketho parity or an EmmyLua/LuaLS load test
 
 The renderer deliberately rejects duplicate names, nonterminal varargs, unsafe
 identifiers, control-bearing/directive-like documentation, unsupported type
-expressions and callback arrays rather than copying malformed or lossy output.
-The initial callback surface is argument-only: adapters must report unsupported
-return/restriction metadata instead of omitting it. The complete E1 loss sidecar
-is still required before arbitrary reference facts can use this renderer.
+expressions rather than copying malformed or lossy output. The original
+`Table::Callback` donor profile remains argument-only and rejects callback arrays.
+The native adapter selects `Table::CallbackSignature` for ordered returns,
+array arguments/returns and terminal argument packs. Both paths share bounded
+type lowering; return-tuple parentheses retain union, array and nullable
+precedence. Declaration maps and original fields remain source-bound. Variadic
+return packs and variadic defaults still reject explicitly, without discarding
+valid neighboring callbacks. See `crates/wow-annotations/tests/callback_signatures.rs`.
+This extension does not claim donor byte parity for the additional shapes or
+semantic analyzer certification from syntax checks. Restriction metadata remains
+an explicit sidecar; the full E1 loss contract is still required.
 Input counts/text lengths and total emitted bytes are bounded. Errors return no
 artifact. Widget/enum inventories are caller-supplied, never global static truth.
 
@@ -204,8 +211,7 @@ unsupported literal numeric forms are reported rather than rounded.
 Deliberately unsupported in this bounded evaluator/projection: general Lua code,
 mutation/control flow/helper execution, computed keys, numeric/hex/Unicode string
 escapes requiring byte-string semantics, CR-bearing long-string normalization,
-callback returns/arrays not supported by the current emitter, and unrepresentable
-numbers/types. Restriction metadata remains advisory sidecar data, not invented
+variadic callback return packs, and unrepresentable numbers/types. Restriction metadata remains advisory sidecar data, not invented
 runtime wrapper types. Reviewed widget receiver aliases can be supplied through the correction pack. Named-type closure and widget inheritance still need
 the Ketho type-resource port. No generated body is executable addon logic.
 
