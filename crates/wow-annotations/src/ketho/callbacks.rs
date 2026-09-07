@@ -1,5 +1,8 @@
 //! Native callback signatures beyond the donor's argument-only byte profile.
-use super::{Field, Output, RenderError, Renderer, safe_text, validate_fields};
+use super::{
+    Field, MemberPosition, Output, RenderError, RenderedMember, Renderer, safe_text,
+    validate_fields,
+};
 
 impl Renderer {
     /// The same type lowering serves fields and function-type components.
@@ -27,6 +30,7 @@ impl Renderer {
         name: &str,
         arguments: &[Field],
         returns: &[Field],
+        members: &mut Vec<RenderedMember>,
     ) -> Result<(), RenderError> {
         validate_fields(arguments, true)?;
         // Variadic return packs are a distinct consumer contract, not a tuple.
@@ -46,6 +50,7 @@ impl Renderer {
             if index != 0 {
                 out.push(", ")?;
             }
+            let start = out.bytes.len();
             out.push(if argument.variadic {
                 "..."
             } else {
@@ -59,6 +64,12 @@ impl Renderer {
             if argument.variadic && argument.nilable {
                 out.push("?")?;
             }
+            members.push(RenderedMember {
+                position: MemberPosition::Parameter,
+                index,
+                start,
+                end: out.bytes.len(),
+            });
         }
         out.push(")")?;
         if !returns.is_empty() {
@@ -68,10 +79,17 @@ impl Renderer {
             if index != 0 {
                 out.push(", ")?;
             }
+            let start = out.bytes.len();
             out.push(&self.field_type(result)?)?;
             if result.nilable || result.default_text.is_some() {
                 out.push("?")?;
             }
+            members.push(RenderedMember {
+                position: MemberPosition::Return,
+                index,
+                start,
+                end: out.bytes.len(),
+            });
         }
         if !returns.is_empty() {
             out.push(")")?;

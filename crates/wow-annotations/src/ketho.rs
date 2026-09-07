@@ -11,6 +11,8 @@ use std::collections::BTreeSet;
 use std::fmt;
 
 mod callbacks;
+mod mappings;
+pub use mappings::{MemberPosition, RenderedMember};
 
 const MAX_NAME_BYTES: usize = 1024;
 pub(crate) const MAX_TEXT_BYTES: usize = 64 * 1024;
@@ -137,6 +139,8 @@ pub struct RenderedDeclaration {
     pub index: usize,
     pub start: usize,
     pub end: usize,
+    /// Nested field fragments in emission order, indexed against this declaration.
+    pub members: Vec<RenderedMember>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -325,12 +329,13 @@ impl Renderer {
             }
             output.separate(&mut separated)?;
             let start = output.bytes.len();
-            self.function(&mut output, &system.owner, function)?;
+            let members = self.function(&mut output, &system.owner, function)?;
             declarations.push(RenderedDeclaration {
                 table: false,
                 index,
                 start,
                 end: output.bytes.len(),
+                members,
             });
         }
         let mut table_names = BTreeSet::new();
@@ -342,21 +347,34 @@ impl Renderer {
             }
             output.separate(&mut separated)?;
             let start = output.bytes.len();
+            let mut members = Vec::new();
             match table {
                 Table::Structure { name, fields } => {
                     validate_fields(fields, false)?;
                     output.push("---@class ")?;
                     output.push(name)?;
-                    for field in fields {
+                    for (index, field) in fields.iter().enumerate() {
                         output.push("\n")?;
-                        self.field(&mut output, Position::Field, field)?;
+                        self.field_mapped(
+                            &mut output,
+                            MemberPosition::Field,
+                            index,
+                            field,
+                            &mut members,
+                        )?;
                     }
                 }
                 Table::CallbackSignature {
                     name,
                     arguments,
                     returns,
-                } => self.callback_signature(&mut output, name, arguments, returns)?,
+                } => self.callback_signature(
+                    &mut output,
+                    name,
+                    arguments,
+                    returns,
+                    &mut members,
+                )?,
                 Table::Callback { name, arguments } => {
                     validate_fields(arguments, false)?;
                     output.push("---@alias ")?;
@@ -371,6 +389,7 @@ impl Renderer {
                         if index != 0 {
                             output.push(", ")?;
                         }
+                        let start = output.bytes.len();
                         output.push(&argument.name)?;
                         if argument.nilable || argument.default_text.is_some() {
                             output.push("?")?;
@@ -380,6 +399,12 @@ impl Renderer {
                         if let Some(default) = &argument.default_text {
                             safe_text(default)?;
                         }
+                        members.push(RenderedMember {
+                            position: MemberPosition::Parameter,
+                            index,
+                            start,
+                            end: output.bytes.len(),
+                        });
                     }
                     output.push(")")?;
                 }
@@ -389,7 +414,11 @@ impl Renderer {
                 index,
                 start,
                 end: output.bytes.len(),
+                members,
             });
+        }
+        if declarations.iter().map(|d| d.members.len()).sum::<usize>() > mappings::MAX_MEMBERS {
+            return Err(RenderError::OutputLimit);
         }
         Ok(RenderedSystem {
             text: output.bytes,
@@ -403,7 +432,8 @@ impl Renderer {
         out: &mut Output,
         owner: &Owner,
         function: &Function,
-    ) -> Result<(), RenderError> {
+    ) -> Result<Vec<RenderedMember>, RenderError> {
+        let mut members = Vec::new();
         validate_fields(&function.arguments, true)?;
         validate_fields(&function.returns, true)?;
         if let Some(documentation) = &function.documentation {
@@ -432,12 +462,12 @@ impl Renderer {
         }
         out.push(&function.name)?;
         out.push(")\n")?;
-        for field in &function.arguments {
-            self.field(out, Position::Param, field)?;
+        for (index, field) in function.arguments.iter().enumerate() {
+            self.field_mapped(out, MemberPosition::Parameter, index, field, &mut members)?;
             out.push("\n")?;
         }
-        for field in &function.returns {
-            self.field(out, Position::Return, field)?;
+        for (index, field) in function.returns.iter().enumerate() {
+            self.field_mapped(out, MemberPosition::Return, index, field, &mut members)?;
             out.push("\n")?;
         }
         out.push("function ")?;
@@ -453,7 +483,8 @@ impl Renderer {
             }
             out.push(if field.variadic { "..." } else { &field.name })?;
         }
-        out.push(") end")
+        out.push(") end")?;
+        Ok(members)
     }
 
     fn field(
