@@ -536,14 +536,25 @@ pub fn project_with_alias_catalogs_and_literal_bridge<'a>(
                     arguments,
                     returns,
                     ..
-                } if returns.is_empty() => {
-                    convert_fields(arguments, &mut scalars).map(|arguments| {
-                        Some(Table::Callback {
+                } => convert_fields(arguments, &mut scalars).and_then(|arguments| {
+                    let returns = convert_fields(returns, &mut scalars)?;
+                    let extended = !returns.is_empty()
+                        || arguments
+                            .iter()
+                            .any(|field| field.inner_type.is_some() || field.variadic);
+                    Ok(Some(if extended {
+                        Table::CallbackSignature {
                             name: (*name).into(),
                             arguments,
-                        })
-                    })
-                }
+                            returns,
+                        }
+                    } else {
+                        Table::Callback {
+                            name: (*name).into(),
+                            arguments,
+                        }
+                    }))
+                }),
                 TableFact::Enumeration { name, values, .. } => {
                     let converted = convert_values(values, false, &mut scalars, &mut issues);
                     if values.is_empty() || !converted.is_empty() {
@@ -667,8 +678,7 @@ pub fn project_with_alias_catalogs_and_literal_bridge<'a>(
                         }
                     }
                     for table in &input.tables {
-                        let (Table::Structure { name, .. } | Table::Callback { name, .. }) = table;
-                        defined_alias_targets.insert(name.clone());
+                        defined_alias_targets.insert(table.name().to_owned());
                     }
                     push_file(&mut files, &mut total_bytes, "api", rendered.text, mappings)?;
                 }

@@ -10,6 +10,8 @@
 use std::collections::BTreeSet;
 use std::fmt;
 
+mod callbacks;
+
 const MAX_NAME_BYTES: usize = 1024;
 pub(crate) const MAX_TEXT_BYTES: usize = 64 * 1024;
 pub(crate) const MAX_ITEMS: usize = 4096;
@@ -56,12 +58,29 @@ pub enum Table {
         name: String,
         fields: Vec<Field>,
     },
-    /// Only argument-only callbacks are admitted by this initial donor slice.
-    /// A reference adapter must reject/report callbacks with unprojected returns.
+    /// Original argument-only donor profile. Native callbacks with additional
+    /// signature data use `CallbackSignature` rather than dropping that data.
     Callback {
         name: String,
         arguments: Vec<Field>,
     },
+    /// Native callback with ordered returns, arrays and a terminal argument pack.
+    /// Variadic returns remain unsupported; the donor-only variant is unchanged.
+    CallbackSignature {
+        name: String,
+        arguments: Vec<Field>,
+        returns: Vec<Field>,
+    },
+}
+
+impl Table {
+    pub(crate) fn name(&self) -> &str {
+        match self {
+            Self::Structure { name, .. }
+            | Self::Callback { name, .. }
+            | Self::CallbackSignature { name, .. } => name,
+        }
+    }
 }
 
 /// Ordered declaration model for the renderer, not an authoritative ReferenceView.
@@ -260,11 +279,10 @@ impl Renderer {
             // Do not let a second type declaration silently redefine the class.
             if self.enum_names.contains(name)
                 || self.enum_names.contains(system_name)
-                || system.tables.iter().any(|table| match table {
-                    Table::Structure { name: n, .. } | Table::Callback { name: n, .. } => {
-                        n == name || n == system_name
-                    }
-                })
+                || system
+                    .tables
+                    .iter()
+                    .any(|table| table.name() == name || table.name() == system_name)
             {
                 return Err(RenderError::DuplicateName);
             }
@@ -315,9 +333,7 @@ impl Renderer {
         }
         let mut table_names = BTreeSet::new();
         for (index, table) in system.tables.iter().enumerate() {
-            let name = match table {
-                Table::Structure { name, .. } | Table::Callback { name, .. } => name,
-            };
+            let name = table.name();
             identifier(name)?;
             if !table_names.insert(name) {
                 return Err(RenderError::DuplicateName);
@@ -334,6 +350,11 @@ impl Renderer {
                         self.field(&mut output, Position::Field, field)?;
                     }
                 }
+                Table::CallbackSignature {
+                    name,
+                    arguments,
+                    returns,
+                } => self.callback_signature(&mut output, name, arguments, returns)?,
                 Table::Callback { name, arguments } => {
                     validate_fields(arguments, false)?;
                     output.push("---@alias ")?;
@@ -439,18 +460,8 @@ impl Renderer {
         position: Position,
         field: &Field,
     ) -> Result<(), RenderError> {
-        let mut type_name =
-            self.lower_type(field.inner_type.as_deref().unwrap_or(&field.type_name))?;
-        if field.inner_type.is_some() {
-            if type_name.contains('|') {
-                type_name = format!("({type_name})");
-            }
-            type_name.push_str("[]");
-        }
+        let type_name = self.field_type(field)?;
         let optional = field.nilable || field.default_text.is_some();
-        if optional && type_name.contains('|') && field.inner_type.is_none() {
-            type_name = format!("({type_name})");
-        }
         let name = if field.variadic { "..." } else { &field.name };
         match position {
             Position::Param => {

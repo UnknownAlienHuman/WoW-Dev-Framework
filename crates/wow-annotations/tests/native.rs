@@ -89,8 +89,13 @@ fn unsupported_metadata_is_not_lost_with_the_raw_source() {
         r#"APIDocumentation:AddDocumentationTable({Tables={{Name="CB",Type="CallbackType",Returns={{Name="ok",Type="bool"}}},{Name="Wide",Type="Enumeration",Fields={{Name="TooWide",EnumValue=9223372036854775807}}},{Name="New",Type="FutureType"}}})"#,
     )];
     let library = project(&docs, "Mainline", &AtomicBool::new(false)).unwrap();
-    assert!(library.files.is_empty());
-    assert!(library.issues.len() >= 3);
+    assert!(
+        library.files.iter().any(|file| {
+            file.text.contains("---@alias CB FunctionContainer|fun(): (boolean)")
+        })
+    );
+    assert_eq!(library.issues.len(), 2);
+    assert_eq!(library.projection, "partial");
     assert_eq!(library.sources.len(), 1);
 }
 #[test]
