@@ -27,6 +27,7 @@ use crate::selected_literals::{LiteralExecution, SelectedLiterals};
 use wow_render_contract::LiteralBridge;
 
 mod fields;
+mod maps;
 mod numbers;
 
 const MAX_FILES: usize = 4096;
@@ -52,7 +53,8 @@ pub struct ProjectionIssue {
 
 #[derive(Clone, Debug, Serialize)]
 pub struct SourceMapping {
-    /// Declaration or whole literal-file range, never a fabricated member range.
+    /// Declaration, parameter, return or structure field; literal files remain coarse.
+    /// Field ranges are emitted directly and nested in their declaration ranges.
     pub granularity: &'static str,
     pub generated: Span,
     pub source: SourceLink,
@@ -365,6 +367,7 @@ pub fn project_with_alias_catalogs_and_literal_bridge<'a>(
     let literals = SelectedLiterals::new(bridge, MAX_FILE_BYTES, cancelled)?;
     let mut files = Vec::new();
     let mut total_bytes = 0usize;
+    let mut member_mapping_budget = maps::MAX_MEMBERS;
     let mut all_enums = Vec::new();
     let mut all_constants = Vec::new();
     let mut all_events = Vec::new();
@@ -472,6 +475,8 @@ pub fn project_with_alias_catalogs_and_literal_bridge<'a>(
         };
         let mut function_sources = Vec::new();
         let mut table_sources = Vec::new();
+        let mut function_facts = Vec::new();
+        let mut table_facts = Vec::new();
         let mut enums = Vec::new();
         let mut constants = Vec::new();
         let mut literal_sources = Vec::new();
@@ -505,6 +510,7 @@ pub fn project_with_alias_catalogs_and_literal_bridge<'a>(
                             }
                             input.functions.extend(candidate.functions);
                             function_sources.push(link(document, function.raw));
+                            function_facts.push(function);
                         }
                         Err(error) => issues.push(issue(
                             document,
@@ -600,16 +606,17 @@ pub fn project_with_alias_catalogs_and_literal_bridge<'a>(
                 _ => Err(RenderError::UnsupportedType),
             };
             match converted {
-                Ok(Some(table)) => {
+                Ok(Some(projected_table)) => {
                     let candidate = System {
                         owner: input.owner.clone(),
                         functions: Vec::new(),
-                        tables: vec![table],
+                        tables: vec![projected_table],
                     };
                     match renderer.render(&candidate) {
                         Ok(_) => {
                             input.tables.extend(candidate.tables);
                             table_sources.push(link(document, raw));
+                            table_facts.push(table);
                         }
                         Err(error) => {
                             issues.push(issue(document, raw, format!("renderer_{error:?}")))
@@ -660,6 +667,14 @@ pub fn project_with_alias_catalogs_and_literal_bridge<'a>(
                             },
                         })
                         .collect();
+                    maps::append_members(
+                        &rendered,
+                        document,
+                        &function_facts,
+                        &table_facts,
+                        &mut mappings,
+                        &mut member_mapping_budget,
+                    )?;
                     if let Some(receiver) = rendered.receiver {
                         mappings.insert(
                             0,
@@ -789,7 +804,7 @@ pub fn project_with_alias_catalogs_and_literal_bridge<'a>(
             "ScriptObject classes are analysis-only local bindings; inheritance is not inferred",
             "named type closure and unconfigured widget aliases require the correction/type mapping lane",
             "parameter nilability and default rendering follow the Ketho compatibility profile",
-            "declaration source maps; literal maps are file-level; fine-grained E1 maps remain incomplete",
+            "declaration and ordered parameter/return/structure-field source maps; literal maps remain file-level; full E1 map closure is incomplete",
             "CVars and extracted runtime resources are not inferred from documentation absence",
             "EmmyLua and LuaLS semantic consumer compatibility is not established by rendering",
         ],

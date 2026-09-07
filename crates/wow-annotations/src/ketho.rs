@@ -368,13 +368,9 @@ impl Renderer {
                     name,
                     arguments,
                     returns,
-                } => self.callback_signature(
-                    &mut output,
-                    name,
-                    arguments,
-                    returns,
-                    &mut members,
-                )?,
+                } => {
+                    self.callback_signature(&mut output, name, arguments, returns, &mut members)?
+                }
                 Table::Callback { name, arguments } => {
                     validate_fields(arguments, false)?;
                     output.push("---@alias ")?;

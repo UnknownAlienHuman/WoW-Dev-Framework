@@ -299,8 +299,25 @@ Tables={{Name="GoodRecord",Type="Structure",Fields={{Name="ok",Type="bool"}}},{N
     assert!(file.text.contains("---@class GoodRecord"));
     assert!(!file.text.contains("Bad"));
     assert!(!file.text.contains("Injection"));
-    assert_eq!(file.mappings.len(), 3);
-    for mapping in &file.mappings {
+    assert_eq!(file.mappings.len(), 4);
+    let field = file
+        .mappings
+        .iter()
+        .find(|mapping| mapping.granularity == "field")
+        .unwrap();
+    assert_eq!(
+        &file.text[field.generated.start..field.generated.end],
+        "---@field ok boolean"
+    );
+    assert_eq!(
+        &source[field.source.span.start..field.source.span.end],
+        r#"{Name="ok",Type="bool"}"#
+    );
+    for mapping in file
+        .mappings
+        .iter()
+        .filter(|mapping| mapping.granularity == "declaration")
+    {
         let generated = &file.text[mapping.generated.start..mapping.generated.end];
         let original = &source[mapping.source.span.start..mapping.source.span.end];
         assert!(generated.contains("Good"));
