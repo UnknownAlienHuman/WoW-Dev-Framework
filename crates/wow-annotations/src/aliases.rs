@@ -144,6 +144,7 @@ pub(crate) fn project<'a>(
     let facts = entries.iter().map(|(_, fact)| *fact).collect::<Vec<_>>();
     let renderer = Renderer::new(BTreeSet::new(), 8 * 1024 * 1024)?;
     let extended = facts.iter().any(|fact| fact.string_values.is_some());
+    let open = facts.iter().any(|fact| fact.string_base.is_some());
     let mut counts = BTreeMap::<&str, usize>::new();
     for fact in &facts {
         *counts.entry(&fact.name).or_default() += 1;
@@ -166,13 +167,21 @@ pub(crate) fn project<'a>(
         } else if fact.syntax_error {
             Some("alias_syntax_error")
         } else if let Some(values) = &fact.string_values {
-            match string_union(values).filter(|_| fact.terms.is_none()) {
+            match string_union(values).filter(|_| {
+                fact.terms.is_none() && matches!(fact.string_base, None | Some("string"))
+            }) {
                 Some(ty) => {
-                    lowered[index] = Some(ty);
+                    lowered[index] = Some(if fact.string_base.is_some() {
+                        format!("string|{ty}")
+                    } else {
+                        ty
+                    });
                     None
                 }
                 None => Some("unsupported_alias_type"),
             }
+        } else if fact.string_base.is_some() {
+            Some("unsupported_alias_type")
         } else if let Some(terms) = &fact.terms {
             match renderer.lower_type(&terms.join("|")) {
                 Ok(ty) => {
@@ -279,12 +288,16 @@ pub(crate) fn project<'a>(
         "description and non-directive comments are preserved in the raw resource, not rendered",
         "no automatic discovery, source correction, widget inheritance or language-server certification",
     ];
-    if extended {
+    if open {
+        limitations[1] = "named/primitive unions and printable-ASCII string enums; explicit open string bases retain completion hints, not whitelists; no other mixed unions or escape decoding";
+    } else if extended {
         limitations[1] = "named/primitive unions and closed printable-ASCII string enums; no mixed/open literal unions or escape decoding";
     }
     Ok(ProjectedAliases {
         report: AliasReport {
-            schema: if sources.len() > 1 {
+            schema: if open {
+                "wow-native-alias-projection/4"
+            } else if sources.len() > 1 {
                 "wow-native-alias-projection/3"
             } else if extended {
                 "wow-native-alias-projection/2"

@@ -81,6 +81,11 @@ pub(super) fn verify(library: &Value) -> Result<CheckedAliases<'_>> {
             return Err("alias source/outcome mismatch".into());
         }
         let literal = alias.get("string_values").map(strings::lower).transpose()?;
+        let open = match alias.get("string_base") {
+            None => false,
+            Some(Value::String(base)) if base == "string" && literal.is_some() => true,
+            _ => return Err("invalid open string alias base".into()),
+        };
         if literal.is_some() && alias.get("terms") != Some(&Value::Null) {
             return Err("literal and named alias terms overlap".into());
         }
@@ -99,7 +104,11 @@ pub(super) fn verify(library: &Value) -> Result<CheckedAliases<'_>> {
                 return Err("invalid emitted alias".into());
             }
             let lowered = if let Some(literal) = literal {
-                literal
+                if open {
+                    format!("string|{literal}")
+                } else {
+                    literal
+                }
             } else {
                 lower_terms(list(alias, "terms")?)?
             };

@@ -16,6 +16,7 @@ use serde::Serialize;
 use crate::native::{NativeError, NativeErrorCode, Span, source_digest};
 
 mod catalog;
+mod open_strings;
 
 const MAX_BYTES: usize = 256 * 1024;
 const MAX_ALIASES: usize = 4096;
@@ -27,9 +28,13 @@ const MAX_TERMS: usize = 16;
 pub struct AliasFact {
     pub name: String,
     pub terms: Option<Vec<String>>,
-    /// Closed literal union, disjoint from named/primitive `terms`.
+    /// Literal values, disjoint from named/primitive `terms`; closed unless `string_base` is set.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub string_values: Option<Vec<String>>,
+    /// An explicit open base with literal completion hints, not a closed whitelist.
+    /// Absent for the retained named and closed-literal resource profiles.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub string_base: Option<&'static str>,
     pub syntax_error: bool,
     pub span: Span,
 }
@@ -88,8 +93,9 @@ pub fn ingest_aliases(
     ingest(revision, path, text, expected_sha256, cancelled, false)
 }
 
-/// Admit named aliases and bounded Ketho closed string-enum resources. Only
-/// contiguous continuation comments join an alias. Emmy owns type parsing;
+/// Admit named aliases and bounded Ketho string-enum resources. An explicit
+/// multiline `string` base remains open while its literal hints are preserved.
+/// Only contiguous continuation comments join an alias. Emmy owns type parsing;
 /// malformed declarations cannot consume their independently parsed siblings.
 pub fn ingest_alias_catalog(
     revision: &str,
@@ -222,12 +228,22 @@ fn ingest(
                         && alias
                             .get_type()
                             .is_some_and(|ty| collect_terms(ty, &mut terms, 0));
-                    let string_values = if string_enums && plain {
+                    let mut string_values = if string_enums && plain {
                         alias.get_type().and_then(catalog::string_values)
                     } else {
                         None
                     };
-                    let span = if syntax_error {
+                    let string_base = if string_enums
+                        && plain
+                        && multiline
+                        && string_values.is_none()
+                    {
+                        string_values = open_strings::values(&alias, comment);
+                        string_values.as_ref().map(|_| "string")
+                    } else {
+                        None
+                    };
+                    let span = if syntax_error || string_base.is_some() {
                         Span { start, end }
                     } else {
                         let local = location(&alias);
@@ -240,6 +256,7 @@ fn ingest(
                         name,
                         terms: supported.then_some(terms),
                         string_values,
+                        string_base,
                         syntax_error,
                         span,
                     });
@@ -263,7 +280,9 @@ fn ingest(
         return Err(error(NativeErrorCode::InvalidRegistration));
     }
     Ok(AliasDocument {
-        schema: if aliases.iter().any(|alias| alias.string_values.is_some()) {
+        schema: if aliases.iter().any(|alias| alias.string_base.is_some()) {
+            "wow-native-alias-resource/3"
+        } else if aliases.iter().any(|alias| alias.string_values.is_some()) {
             "wow-native-alias-resource/2"
         } else {
             "wow-native-alias-resource/1"
