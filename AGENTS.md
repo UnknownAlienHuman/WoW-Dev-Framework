@@ -85,3 +85,19 @@ modules behind typed versioned bridges; read `docs/WASM_BRIDGES.md`. Use data-on
 updates for compatible Gethe/Ketho resource changes and separately built Wasm for
 algorithm changes. Never embed a donor inventory, execute repository scripts or
 add a generic plugin capability. Full driver/service routing remains explicit.
+
+## Publication checkpoint
+
+Publish each coherent authorized checkpoint to `main` without force-pushing;
+never leave its only copy in a temporary VM. A local commit, detached GitHub
+object or downloadable patch is not remote branch publication.
+
+When local Git transport is unavailable, use authorized GitHub API write actions.
+Do not infer read-only access from missing VM network or credentials. Re-read
+remote `main` and the changed blob identities after publication; report the
+verified remote commit SHA, not merely the locally created SHA. Reconcile a moved
+remote head without overwriting another contributor's work.
+
+Publication and validation are separate: record unexecuted checks as
+`NotEvaluated`, and never claim a checkpoint is tested or the task complete merely
+because its commit is published. A failed write must be reported as unpublished.
