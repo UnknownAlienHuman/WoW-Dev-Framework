@@ -65,9 +65,7 @@ fn number(text: &str, constants: bool) -> Result<LiteralValue, RenderError> {
 /// numeric lowering, not Lua lexing or expression evaluation. No float rounding
 /// participates in the coefficient/scale calculation, including exponent forms.
 fn decimal_integer(magnitude: &str) -> Option<u64> {
-    let (mantissa, exponent) = magnitude
-        .split_once(['e', 'E'])
-        .unwrap_or((magnitude, "0"));
+    let (mantissa, exponent) = magnitude.split_once(['e', 'E']).unwrap_or((magnitude, "0"));
     let exponent = exponent.parse::<i64>().ok()?;
     let fraction = mantissa.split_once('.').map_or(0, |(_, part)| part.len());
     let digits = mantissa.replace('.', "");
@@ -83,7 +81,11 @@ fn decimal_integer(magnitude: &str) -> Option<u64> {
         .checked_sub(i64::try_from(fraction).ok()?)?
         .checked_add(i64::try_from(digits.len() - coefficient.len()).ok()?)?;
     let scale = u32::try_from(scale).ok()?;
-    if coefficient.len().checked_add(usize::try_from(scale).ok()?)? > 16 {
+    if coefficient
+        .len()
+        .checked_add(usize::try_from(scale).ok()?)?
+        > 16
+    {
         return None;
     }
     coefficient

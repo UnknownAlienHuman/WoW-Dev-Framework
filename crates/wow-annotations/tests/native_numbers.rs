@@ -108,9 +108,12 @@ fn overflow_underflow_and_rounding_do_not_erase_valid_constant_siblings() -> Res
         "0x20000000000000",
         "0.25+0.5",
     ] {
-        let raw = format!(
-            "APIDocumentation:AddDocumentationTable({{Tables={{{{Name='Limits',Type='Constants',Values={{{{Name='Good',Type='number',Value=1.5}},{{Name='Bad',Type='number',Value={rejected}}}}}}}}}})",
-        );
+        let raw = [
+            "APIDocumentation:AddDocumentationTable({Tables={{Name='Limits',Type='Constants',Values={{Name='Good',Type='number',Value=1.5},{Name='Bad',Type='number',Value=",
+            rejected,
+            "}}}}})",
+        ]
+        .concat();
         let docs = [document("Values.lua", &raw)?];
         let library = project(&docs, "Mainline", &AtomicBool::new(false))?;
         assert_eq!(library.projection, "partial", "{rejected}");
