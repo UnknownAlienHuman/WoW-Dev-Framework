@@ -6,6 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::Read;
 use std::path::Path;
+mod aliases;
 fn text<'a>(value: &'a Value, key: &str) -> Result<&'a str> {
     value[key]
         .as_str()
@@ -115,7 +116,7 @@ pub fn verify_with_module(
     }
     crate::literal_execution::verify(library, expected_module)?;
     let correction_blockers = verify_corrections(library)?;
-    let alias_blockers = verify_aliases(library)?;
+    let alias_blockers = aliases::verify(library)?;
     let partial =
         !failures.is_empty() || !issues.is_empty() || correction_blockers || alias_blockers;
     if text(&report, "status")?
@@ -274,150 +275,4 @@ fn verify_corrections(library: &Value) -> Result<bool> {
         }
     }
     Ok(blocked)
-}
-
-// Structural artifact validation, not a second Lua parser or a semantic probe.
-// Alias source identity, all outcomes, and final mapped declarations must agree.
-fn verify_aliases(library: &Value) -> Result<bool> {
-    if library["schema"] == "wow-native-annotation-library/6" && library.get("aliases").is_none() {
-        return Ok(false);
-    }
-    if !matches!(
-        library["schema"].as_str(),
-        Some("wow-native-annotation-library/5" | "wow-native-annotation-library/6")
-    ) {
-        if library.get("aliases").is_some() {
-            return Err("unexpected alias report".into());
-        }
-        return Ok(false);
-    }
-    let report = &library["aliases"];
-    let resource = &report["source"];
-    if report["schema"] != "wow-native-alias-projection/1"
-        || report["authority"] != "external_annotation_overlay"
-        || resource["schema"] != "wow-native-alias-resource/1"
-        || !crate::git::oid(text(resource, "revision")?)
-    {
-        return Err("invalid external alias identity/authority".into());
-    }
-    manifest::validate_path(text(resource, "path")?)?;
-    let raw = text(resource, "text")?;
-    if raw.len() > 256 * 1024
-        || resource["source_bytes"] != json!(raw.len())
-        || resource["sha256"] != format!("sha256:{}", manifest::digest(raw.as_bytes()))
-    {
-        return Err("alias resource digest/length mismatch".into());
-    }
-    let aliases = list(resource, "aliases")?;
-    let outcomes = list(report, "outcomes")?;
-    if aliases.is_empty() || aliases.len() > 4096 || aliases.len() != outcomes.len() {
-        return Err("missing alias outcomes".into());
-    }
-    let mut mapped = BTreeMap::new();
-    for file in list(library, "files")? {
-        for mapping in list(file, "mappings")? {
-            if mapping["source"]["scope"] == "annotation_alias_catalog" {
-                let key = span_key(&mapping["source"]["span"])?;
-                let (start, end) = span_key(&mapping["generated"])?;
-                let fragment = text(file, "text")?
-                    .get(start..end)
-                    .ok_or("bad alias output range")?;
-                if mapped.insert(key, fragment).is_some() {
-                    return Err("duplicate alias mapping".into());
-                }
-            }
-        }
-    }
-    let mut blocked = false;
-    let mut emitted = BTreeSet::new();
-    let mut observed_spans = BTreeSet::new();
-    for (index, (alias, outcome)) in aliases.iter().zip(outcomes).enumerate() {
-        let key = span_key(&alias["span"])?;
-        if raw.get(key.0..key.1).is_none()
-            || key.0 == key.1
-            || !observed_spans.insert(key)
-            || outcome["ordinal"] != json!(index)
-            || outcome["name"] != alias["name"]
-        {
-            return Err("alias source/outcome mismatch".into());
-        }
-        let syntax_error = alias["syntax_error"]
-            .as_bool()
-            .ok_or("missing alias syntax status")?;
-        let status = text(outcome, "status")?;
-        if (status == "emitted" && syntax_error)
-            || (status == "alias_syntax_error" && !syntax_error)
-        {
-            return Err("inconsistent alias syntax outcome".into());
-        }
-        if status == "emitted" {
-            let name = text(alias, "name")?;
-            let terms = list(alias, "terms")?;
-            if !emitted.insert(name) || terms.is_empty() || terms.len() > 16 {
-                return Err("invalid emitted alias".into());
-            }
-            let lowered = terms
-                .iter()
-                .map(|term| {
-                    let term = term.as_str().ok_or("invalid alias term")?;
-                    if term.is_empty()
-                        || term
-                            .chars()
-                            .any(|c| c.is_control() || c.is_whitespace() || c == '|')
-                    {
-                        return Err("invalid alias term");
-                    }
-                    Ok(match term {
-                        "bool" => "boolean",
-                        "cstring" => "string",
-                        "luaIndex" => "number",
-                        other => other,
-                    })
-                })
-                .collect::<std::result::Result<Vec<_>, _>>()?
-                .join("|");
-            let expected = format!("---@alias {name} {lowered}");
-            if mapped.remove(&key) != Some(expected.as_str()) {
-                return Err("missing or changed emitted alias declaration".into());
-            }
-        } else {
-            if !matches!(
-                status,
-                "invalid_alias_name"
-                    | "alias_syntax_error"
-                    | "duplicate_alias"
-                    | "source_name_conflict"
-                    | "unsupported_alias_type"
-                    | "unresolved_alias_target"
-                    | "unresolved_or_cyclic_alias_dependency"
-            ) {
-                return Err("unknown alias outcome".into());
-            }
-            blocked = true;
-            if mapped.contains_key(&key) {
-                return Err("blocked alias has generated output".into());
-            }
-            if !list(library, "issues")?.iter().any(|issue| {
-                issue["code"] == status
-                    && issue["source"]["scope"] == "annotation_alias_catalog"
-                    && issue["source"]["path"] == resource["path"]
-                    && issue["source"]["sha256"] == resource["sha256"]
-                    && issue["source"]["span"] == alias["span"]
-            }) {
-                return Err("missing blocked alias issue".into());
-            }
-        }
-    }
-    if !mapped.is_empty() {
-        return Err("unaccounted alias output".into());
-    }
-    Ok(blocked)
-}
-fn span_key(span: &Value) -> Result<(usize, usize)> {
-    let start = usize::try_from(span["start"].as_u64().ok_or("invalid alias span")?)?;
-    let end = usize::try_from(span["end"].as_u64().ok_or("invalid alias span")?)?;
-    if start > end {
-        return Err("reversed alias span".into());
-    }
-    Ok((start, end))
 }

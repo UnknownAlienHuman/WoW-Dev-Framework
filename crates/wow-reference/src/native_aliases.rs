@@ -15,15 +15,21 @@ use serde::Serialize;
 
 use crate::native::{NativeError, NativeErrorCode, Span, source_digest};
 
+mod catalog;
+
 const MAX_BYTES: usize = 256 * 1024;
 const MAX_ALIASES: usize = 4096;
 const MAX_TERMS: usize = 16;
 
-/// One observed alias. `terms == None` is explicitly unsupported, never `any`.
+/// One observed alias. Unsupported forms have neither terms nor string values;
+/// they are retained, never replaced with `any`.
 #[derive(Clone, Debug, Serialize)]
 pub struct AliasFact {
     pub name: String,
     pub terms: Option<Vec<String>>,
+    /// Closed literal union, disjoint from named/primitive `terms`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub string_values: Option<Vec<String>>,
     pub syntax_error: bool,
     pub span: Span,
 }
@@ -70,15 +76,38 @@ fn location(node: &impl LuaAstNode) -> Span {
     }
 }
 
-/// Admit an explicitly chosen alias resource without IO or discovery. The
-/// bounded first profile accepts named/primitive unions, not arbitrary LuaCATS
-/// types. Unsupported aliases remain recorded so callers cannot hide omissions.
+/// Retained single-comment named/primitive-union profile. Existing callers keep
+/// their admission rules and v1 bytes; the Git driver uses `ingest_alias_catalog`.
 pub fn ingest_aliases(
     revision: &str,
     path: &str,
     text: &str,
     expected_sha256: &str,
     cancelled: &AtomicBool,
+) -> Result<AliasDocument> {
+    ingest(revision, path, text, expected_sha256, cancelled, false)
+}
+
+/// Admit named aliases and bounded Ketho closed string-enum resources. Only
+/// contiguous continuation comments join an alias. Emmy owns type parsing;
+/// malformed declarations cannot consume their independently parsed siblings.
+pub fn ingest_alias_catalog(
+    revision: &str,
+    path: &str,
+    text: &str,
+    expected_sha256: &str,
+    cancelled: &AtomicBool,
+) -> Result<AliasDocument> {
+    ingest(revision, path, text, expected_sha256, cancelled, true)
+}
+
+fn ingest(
+    revision: &str,
+    path: &str,
+    text: &str,
+    expected_sha256: &str,
+    cancelled: &AtomicBool,
+    string_enums: bool,
 ) -> Result<AliasDocument> {
     if cancelled.load(Ordering::Relaxed) {
         return Err(error(NativeErrorCode::Cancelled));
@@ -112,15 +141,13 @@ pub fn ingest_aliases(
         .strip_prefix('\u{feff}')
         .map(|rest| format!("   {rest}"));
     let input = input.as_deref().unwrap_or(text);
-    // Conservative recursion budgets BEFORE the upstream doc parser. This is
-    // not a type parser: every actual declaration/type is read from Emmy AST.
-    // Multiline unions are outside this profile, and cannot form an unbounded
-    // chain across individually short lines.
+    // Bound line complexity before invoking the upstream doc parser. The
+    // catalog also bounds continuation groups before parsing their type AST.
     for line in input.lines() {
         if line.len() > 2048 || line.bytes().filter(|b| b"([{<?|".contains(b)).count() > 48 {
             return Err(error(NativeErrorCode::Limit));
         }
-        if line.trim_start().starts_with("---|") {
+        if !string_enums && line.trim_start().starts_with("---|") {
             return Err(error(NativeErrorCode::UnsupportedExpression));
         }
     }
@@ -145,24 +172,29 @@ pub fn ingest_aliases(
     }) {
         return Err(error(NativeErrorCode::UnsupportedStatement));
     }
-    let mut aliases = Vec::new();
-    // Each alias is a single short comment in this profile. Use lexer token
-    // boundaries, not text matching, to prevent one malformed doc type from
-    // consuming or repairing another declaration through parser recovery.
-    for token in tokens
+    let comments = tokens
         .iter()
         .filter(|t| t.kind == LuaTokenKind::TkShortComment)
-    {
+        .map(|t| Span {
+            start: t.range.start_offset,
+            end: t.range.end_offset(),
+        });
+    let groups = if string_enums {
+        catalog::groups(input, comments)?
+    } else {
+        comments.collect()
+    };
+    let mut aliases = Vec::new();
+    for Span { start, end } in groups {
         if cancelled.load(Ordering::Relaxed) {
             return Err(error(NativeErrorCode::Cancelled));
         }
-        let start = token.range.start_offset;
-        let end = token.range.end_offset();
         let comment = input
             .get(start..end)
             .ok_or_else(|| error(NativeErrorCode::Syntax))?;
         let tree = LuaParser::parse(comment, ParserConfig::with_level(LuaLanguageLevel::Lua51));
         let syntax_error = !tree.get_errors().is_empty();
+        let multiline = comment.contains('\n');
         let mut observed_alias = false;
         for tag in tree
             .get_chunk_node()
@@ -181,13 +213,20 @@ pub fn ingest_aliases(
                         .ok_or_else(|| error(NativeErrorCode::Syntax))?
                         .get_name_text()
                         .to_owned();
-                    let mut terms = Vec::new();
-                    let supported = !syntax_error
+                    let plain = !syntax_error
                         && alias.get_generic_decl_list().is_none()
-                        && alias.get_type_flag().is_none()
+                        && alias.get_type_flag().is_none();
+                    let mut terms = Vec::new();
+                    let supported = plain
+                        && !multiline
                         && alias
                             .get_type()
                             .is_some_and(|ty| collect_terms(ty, &mut terms, 0));
+                    let string_values = if string_enums && plain {
+                        alias.get_type().and_then(catalog::string_values)
+                    } else {
+                        None
+                    };
                     let span = if syntax_error {
                         Span { start, end }
                     } else {
@@ -200,6 +239,7 @@ pub fn ingest_aliases(
                     aliases.push(AliasFact {
                         name,
                         terms: supported.then_some(terms),
+                        string_values,
                         syntax_error,
                         span,
                     });
@@ -212,6 +252,9 @@ pub fn ingest_aliases(
                 _ => return Err(error(NativeErrorCode::UnsupportedStatement)),
             }
         }
+        if multiline && !observed_alias {
+            return Err(error(NativeErrorCode::UnsupportedExpression));
+        }
         if syntax_error && !observed_alias {
             return Err(error(NativeErrorCode::Syntax));
         }
@@ -220,7 +263,11 @@ pub fn ingest_aliases(
         return Err(error(NativeErrorCode::InvalidRegistration));
     }
     Ok(AliasDocument {
-        schema: "wow-native-alias-resource/1",
+        schema: if aliases.iter().any(|alias| alias.string_values.is_some()) {
+            "wow-native-alias-resource/2"
+        } else {
+            "wow-native-alias-resource/1"
+        },
         revision: revision.into(),
         path: path.into(),
         sha256: digest,

@@ -70,6 +70,22 @@ fn source(document: &AliasDocument, span: Span) -> SourceLink {
     }
 }
 
+fn string_union(values: &[String]) -> Option<String> {
+    if values.is_empty()
+        || values.len() > 256
+        || values.iter().collect::<BTreeSet<_>>().len() != values.len()
+        || values.iter().any(|value| {
+            value.len() > 128
+                || !value
+                    .bytes()
+                    .all(|b| (b' '..=b'~').contains(&b) && b != b'"' && b != b'\\')
+        })
+    {
+        return None;
+    }
+    Some(values.iter().map(|value| format!("\"{value}\"")).collect::<Vec<_>>().join("|"))
+}
+
 /// Only types actually emitted by the native lane can satisfy an external alias
 /// dependency. Reserved but rejected source declarations cannot lend authority.
 /// The dependency graph is processed without recursion and without expanding
@@ -82,6 +98,7 @@ pub(crate) fn project<'a>(
 ) -> Result<ProjectedAliases<'a>, RenderError> {
     let renderer = Renderer::new(BTreeSet::new(), 8 * 1024 * 1024)?;
     let facts = document.aliases();
+    let extended = facts.iter().any(|fact| fact.string_values.is_some());
     let mut counts = BTreeMap::<&str, usize>::new();
     for fact in facts {
         *counts.entry(&fact.name).or_default() += 1;
@@ -103,6 +120,14 @@ pub(crate) fn project<'a>(
             Some("source_name_conflict")
         } else if fact.syntax_error {
             Some("alias_syntax_error")
+        } else if let Some(values) = &fact.string_values {
+            match string_union(values).filter(|_| fact.terms.is_none()) {
+                Some(ty) => {
+                    lowered[index] = Some(ty);
+                    None
+                }
+                None => Some("unsupported_alias_type"),
+            }
         } else if let Some(terms) = &fact.terms {
             match renderer.lower_type(&terms.join("|")) {
                 Ok(ty) => {
@@ -123,7 +148,10 @@ pub(crate) fn project<'a>(
     let mut dependents = vec![Vec::new(); facts.len()];
     let mut ready = BTreeSet::new();
     for (&name, &index) in &candidates {
-        if let Some(ty) = &lowered[index] {
+        // Literal values are not type names, even when they contain a pipe.
+        if facts[index].string_values.is_none()
+            && let Some(ty) = &lowered[index]
+        {
             for target in ty.split('|') {
                 if primitive(target) || defined.contains(target) {
                     continue;
@@ -200,18 +228,26 @@ pub(crate) fn project<'a>(
             });
         }
     }
+    let mut limitations = vec![
+        "explicit consumer overlay; not source-confirmed Blizzard types or runtime safety",
+        "only named/primitive unions; unsupported declarations and dependencies remain explicit",
+        "description and non-directive comments are preserved in the raw resource, not rendered",
+        "no automatic discovery, source correction, widget inheritance or language-server certification",
+    ];
+    if extended {
+        limitations[1] = "named/primitive unions and closed printable-ASCII string enums; no mixed/open literal unions or escape decoding";
+    }
     Ok(ProjectedAliases {
         report: AliasReport {
-            schema: "wow-native-alias-projection/1",
+            schema: if extended {
+                "wow-native-alias-projection/2"
+            } else {
+                "wow-native-alias-projection/1"
+            },
             authority: "external_annotation_overlay",
             source: document,
             outcomes,
-            limitations: vec![
-                "explicit consumer overlay; not source-confirmed Blizzard types or runtime safety",
-                "only named/primitive unions; unsupported declarations and dependencies remain explicit",
-                "description and non-directive comments are preserved in the raw resource, not rendered",
-                "no automatic discovery, source correction, widget inheritance or language-server certification",
-            ],
+            limitations,
         },
         text,
         mappings,

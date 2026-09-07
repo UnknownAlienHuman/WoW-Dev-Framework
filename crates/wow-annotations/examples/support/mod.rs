@@ -195,7 +195,7 @@ pub fn run(
             &["cat-file", "blob", &format!("{alias_revision}:{path}")],
             256 * 1024,
         )?;
-        Some(wow_reference::native_aliases::ingest_aliases(
+        Some(wow_reference::native_aliases::ingest_alias_catalog(
             alias_revision,
             path,
             std::str::from_utf8(&bytes)?,
