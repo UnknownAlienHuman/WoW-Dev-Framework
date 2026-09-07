@@ -70,7 +70,9 @@ pub(super) fn verify(
     count: &mut usize,
 ) -> Result<()> {
     let mappings = list(file, "mappings")?;
-    *count = count.checked_add(mappings.len()).ok_or("source map limit")?;
+    *count = count
+        .checked_add(mappings.len())
+        .ok_or("source map limit")?;
     if *count > MAX_MAPPINGS || (detailed && mappings.is_empty()) {
         return Err("source map inventory limit or empty mapped file".into());
     }
@@ -186,7 +188,11 @@ fn members(raw: &Value) -> Result<Vec<Member>> {
     }
     let kind = properties
         .get("Type")
-        .map(|value| value["kind"]["String"].as_str().ok_or("invalid declaration type"))
+        .map(|value| {
+            value["kind"]["String"]
+                .as_str()
+                .ok_or("invalid declaration type")
+        })
         .transpose()?;
     let collections: &[(&'static str, &'static str)] = match kind {
         Some("Structure") => &[("Fields", "field")],

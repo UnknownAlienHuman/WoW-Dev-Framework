@@ -61,7 +61,10 @@ fn incomplete_reordered_foreign_and_invalid_ranges_reject() -> Result<()> {
     let tables = source_tables(&sources, true)?;
     for index in 0..3 {
         let mut changed = file.clone();
-        changed["mappings"].as_array_mut().ok_or("maps")?.remove(index);
+        changed["mappings"]
+            .as_array_mut()
+            .ok_or("maps")?
+            .remove(index);
         assert!(verify(&changed, true, &tables, &mut 0).is_err());
     }
     for (pointer, replacement) in [
@@ -76,7 +79,10 @@ fn incomplete_reordered_foreign_and_invalid_ranges_reject() -> Result<()> {
     ] {
         let mut changed = file.clone();
         *changed.pointer_mut(pointer).ok_or("mutation target")? = replacement;
-        assert!(verify(&changed, true, &tables, &mut 0).is_err(), "{pointer}");
+        assert!(
+            verify(&changed, true, &tables, &mut 0).is_err(),
+            "{pointer}"
+        );
     }
     let mut changed = file.clone();
     let maps = changed["mappings"].as_array_mut().ok_or("maps")?;
