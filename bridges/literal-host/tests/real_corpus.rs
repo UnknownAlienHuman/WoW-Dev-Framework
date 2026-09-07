@@ -35,7 +35,11 @@ fn selected_current_corpus_matches_native_with_two_guests() -> Result<(), Box<dy
         if catalog["revision"] != donor_revision {
             return Err("baseline alias revision differs from selected donor".into());
         }
-        catalog_paths.push(catalog["path"].as_str().ok_or("missing alias resource path")?);
+        catalog_paths.push(
+            catalog["path"]
+                .as_str()
+                .ok_or("missing alias resource path")?,
+        );
     }
     let a = fs::read(get("WDF_WASM_A")?)?;
     let b = fs::read(get("WDF_WASM_B")?)?;

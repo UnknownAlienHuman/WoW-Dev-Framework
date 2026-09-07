@@ -1,8 +1,8 @@
 //! Native field projection keeps an unresolved symbolic default as provenance,
 //! not a fabricated scalar or a reason to erase the containing API declaration.
 use super::{
-    Field, FieldFact, ProjectionIssue, RawKind, RawValue, RenderError, ScalarError, ScalarProjection,
-    ScalarValue, issue,
+    Field, FieldFact, ProjectionIssue, RawKind, RawValue, RenderError, ScalarError,
+    ScalarProjection, ScalarValue, issue,
 };
 
 pub(super) fn convert(
