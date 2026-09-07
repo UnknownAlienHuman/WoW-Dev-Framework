@@ -53,11 +53,7 @@ fn long_string_newline_pairs_normalize_once_and_keep_literal_backslashes() -> Re
             );
         }
     }
-    for (raw, expected) in [
-        ("\r\n\r", "\n\n"),
-        ("\n\r\n", "\n\n"),
-        ("\r\r", "\n\n"),
-    ] {
+    for (raw, expected) in [("\r\n\r", "\n\n"), ("\n\r\n", "\n\n"), ("\r\r", "\n\n")] {
         let source = format!("APIDocumentation:AddDocumentationTable({{value=[[a{raw}b]]}})");
         let document = read(&source)?;
         assert_eq!(

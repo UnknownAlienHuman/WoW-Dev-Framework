@@ -66,3 +66,20 @@ The E6-B seam cannot activate before the E1-B Reference implementation, exact ma
 annotation-only alias resources. `AliasDocument` keeps raw identity/text/spans,
 not current Blizzard facts or negative authority. The optional annotation lane
 consumes it without discovery or IO. See [scope](../../docs/KETHO_RUST_PORT.md#alias-resource-connection).
+
+## Native source strings
+
+[`src/native/strings.rs`](src/native/strings.rs) extends the production
+APIDocumentation loader around Emmy's existing token decoder. Lua 5.1 decimal
+escapes of one to three digits are admitted for bytes 0–127, including embedded
+zero and escaped table keys. Values above 127, overflow, hex/Unicode escapes and
+quoted physical CR sequences remain explicit errors; they are never converted
+lossily into Unicode characters or silently removed.
+
+Long-bracket strings normalize CR, LF, CRLF and LFCR to LF, consuming each pair
+once and omitting the first newline as Lua specifies. Backslashes in these
+strings remain literal. Original file hashes and source byte spans are unchanged.
+Only inputs using expanded forms select `ketho-apidoc-declarative/3`; other
+admitted inputs retain v2 receipts. This does not execute Lua or add a byte-string
+wire type. See [Lua 5.1 lexical rules](https://www.lua.org/manual/5.1/manual.html#2.1)
+and the focused source-owner cases in `tests/native_string_forms.rs`.
