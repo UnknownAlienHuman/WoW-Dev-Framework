@@ -67,6 +67,20 @@ impl<'generation> NavigationIndex<'generation> {
 }
 
 impl<'generation> SourceNavigation<'_, 'generation> {
+    /// Convert a source byte range against this exact, previously verified buffer.
+    ///
+    /// Use the returned editor range alongside the stored source identity. No
+    /// generated/source offset is inferred, and an invalid endpoint is not clamped.
+    /// The encoding is explicit; the boundary inside a CRLF delimiter rejects.
+    pub fn source_text_range(
+        &self,
+        range: Span,
+        encoding: PositionEncoding,
+        cancelled: &AtomicBool,
+    ) -> Result<TextRange, LookupError> {
+        self.lines.text_range(range, encoding, cancelled)
+    }
+
     /// Find every generated occurrence of the most precise source descriptor
     /// containing this UTF-8 cursor. Exclusive ends and EOF are not clamped.
     pub fn generated_at(
