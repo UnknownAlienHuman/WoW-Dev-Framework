@@ -111,7 +111,10 @@ fn guarded_parent_chain_reaches_renderer_and_retains_raw_and_final_maps() -> Res
     assert!(ValidatedCorrections::new(legacy).is_err());
     let reversed = [docs[2].clone(), docs[0].clone(), docs[1].clone()];
     let repeated = project_with_corrections(&reversed, "Mainline", Some(&corrections), &stopped)?;
-    assert_eq!(serde_json::to_value(library)?, serde_json::to_value(repeated)?);
+    assert_eq!(
+        serde_json::to_value(library)?,
+        serde_json::to_value(repeated)?
+    );
     Ok(())
 }
 
@@ -121,8 +124,12 @@ fn parent_rename_keeps_original_alias_and_independent_child_base() -> Result<()>
     let mut rename = record(&docs[1], Projection::WidgetOwner, "RenamedParent")?;
     rename.before = Value::Text("Parent".into());
     let corrections = pack(vec![base(&docs[0], &docs[1])?, rename])?;
-    let library =
-        project_with_corrections(&docs, "Mainline", Some(&corrections), &AtomicBool::new(false))?;
+    let library = project_with_corrections(
+        &docs,
+        "Mainline",
+        Some(&corrections),
+        &AtomicBool::new(false),
+    )?;
     assert_eq!(library.projection, "projected_with_sidecars");
     let text = output(&library);
     assert!(text.contains("---@class Child : Parent"));
@@ -152,10 +159,18 @@ fn stale_parent_guards_do_not_erase_the_child_or_claim_an_applied_base() -> Resu
             _ => *expected_parent_raw_sha256 = source_digest(b"stale"),
         }
         let corrections = pack(vec![correction])?;
-        let library =
-            project_with_corrections(&docs, "Mainline", Some(&corrections), &AtomicBool::new(false))?;
+        let library = project_with_corrections(
+            &docs,
+            "Mainline",
+            Some(&corrections),
+            &AtomicBool::new(false),
+        )?;
         assert_eq!(library.projection, "partial");
-        let application = &library.corrections.as_ref().ok_or("corrections")?.applications[0];
+        let application = &library
+            .corrections
+            .as_ref()
+            .ok_or("corrections")?
+            .applications[0];
         assert_eq!(application.status, Status::Expired);
         assert!(application.after.is_none());
         let text = output(&library);
@@ -179,8 +194,12 @@ fn competing_parents_self_edges_and_cycles_cannot_be_applied() -> Result<()> {
         ],
     ] {
         let corrections = pack(records)?;
-        let library =
-            project_with_corrections(&docs, "Mainline", Some(&corrections), &AtomicBool::new(false))?;
+        let library = project_with_corrections(
+            &docs,
+            "Mainline",
+            Some(&corrections),
+            &AtomicBool::new(false),
+        )?;
         assert_eq!(library.projection, "partial");
         assert!(!output(&library).contains(" : "));
         assert!(
@@ -208,8 +227,12 @@ fn parent_receiver_conflict_blocks_only_the_inheritance_projection() -> Result<(
         &AtomicBool::new(false),
     )?);
     let corrections = pack(vec![base(&docs[0], &docs[1])?])?;
-    let library =
-        project_with_corrections(&docs, "Mainline", Some(&corrections), &AtomicBool::new(false))?;
+    let library = project_with_corrections(
+        &docs,
+        "Mainline",
+        Some(&corrections),
+        &AtomicBool::new(false),
+    )?;
     assert_eq!(library.projection, "partial");
     assert!(
         library
@@ -220,8 +243,13 @@ fn parent_receiver_conflict_blocks_only_the_inheritance_projection() -> Result<(
     assert!(output(&library).contains("---@class Child\nlocal Child = {}"));
     assert!(!output(&library).contains("---@class Child : Parent"));
     assert!(
-        project_with_corrections(&docs, "Mainline", Some(&corrections), &AtomicBool::new(true))
-            .is_err()
+        project_with_corrections(
+            &docs,
+            "Mainline",
+            Some(&corrections),
+            &AtomicBool::new(true)
+        )
+        .is_err()
     );
     Ok(())
 }

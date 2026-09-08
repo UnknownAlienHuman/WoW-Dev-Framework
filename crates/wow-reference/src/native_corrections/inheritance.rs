@@ -97,9 +97,12 @@ fn parent(
     else {
         return Err((Status::Rejected, "unsupported_widget_base"));
     };
-    let mut matches = systems.iter().enumerate().filter(|(_, (document, system))| {
-        document.path() == parent_path && system.registration_ordinal == *parent_registration
-    });
+    let mut matches = systems
+        .iter()
+        .enumerate()
+        .filter(|(_, (document, system))| {
+            document.path() == parent_path && system.registration_ordinal == *parent_registration
+        });
     let (index, (document, system)) = matches
         .next()
         .ok_or((Status::Expired, "widget_base_parent_missing"))?;

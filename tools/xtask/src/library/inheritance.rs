@@ -58,7 +58,9 @@ fn registration<'a>(
     expected_raw: &Value,
 ) -> Result<&'a Value> {
     let ordinal = usize::try_from(ordinal.as_u64().ok_or("invalid widget registration")?)?;
-    let mut sources = list(library, "sources")?.iter().filter(|s| s["path"] == path);
+    let mut sources = list(library, "sources")?
+        .iter()
+        .filter(|s| s["path"] == path);
     let source = sources.next().ok_or("widget source is not retained")?;
     if sources.next().is_some() || &source["sha256"] != expected_source {
         return Err("widget source guard mismatch".into());
@@ -75,7 +77,9 @@ fn registration<'a>(
 }
 
 fn property<'a>(raw: &'a Value, name: &str) -> Result<&'a str> {
-    let fields = raw["kind"]["Table"].as_array().ok_or("invalid widget source table")?;
+    let fields = raw["kind"]["Table"]
+        .as_array()
+        .ok_or("invalid widget source table")?;
     let mut matches = fields.iter().filter(|field| field["key"]["Name"] == name);
     let field = matches.next().ok_or("missing widget source property")?;
     if matches.next().is_some() {

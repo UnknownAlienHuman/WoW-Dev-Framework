@@ -551,11 +551,13 @@ fn apply<'a>(
             .iter()
             .enumerate()
             .filter_map(|(i, l)| {
-                l.filter(|l| !l.base && l.field.is_none() && applications[i].status == Status::Applied)
-                    .and_then(|l| match &set.records[i].after {
-                        Value::Text(s) => Some((l.system, s.as_str())),
-                        _ => None,
-                    })
+                l.filter(|l| {
+                    !l.base && l.field.is_none() && applications[i].status == Status::Applied
+                })
+                .and_then(|l| match &set.records[i].after {
+                    Value::Text(s) => Some((l.system, s.as_str())),
+                    _ => None,
+                })
             })
             .collect::<BTreeMap<_, _>>();
         let mut owners = BTreeMap::<&str, Vec<usize>>::new();

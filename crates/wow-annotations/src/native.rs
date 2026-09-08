@@ -483,7 +483,9 @@ pub fn project_with_alias_catalogs_and_literal_bridge<'a>(
         }
         let bind_receiver =
             matches!(system.owner, SystemOwner::ScriptObject(_)) && !receiver_blocked;
-        let base = system.widget_base.filter(|name| base_receivers.contains(name));
+        let base = system
+            .widget_base
+            .filter(|name| base_receivers.contains(name));
         if bind_receiver && system.widget_base.is_some() && base.is_none() {
             issues.push(issue(document, system.raw, "widget_base_not_projected"));
         }
