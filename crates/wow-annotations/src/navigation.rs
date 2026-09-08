@@ -9,8 +9,10 @@ use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering};
 use wow_reference::native::{Span, source_digest};
 
+mod index;
 mod positions;
 mod sources;
+pub use index::{GeneratedLocation, GeneratedLookup, NavigationIndex};
 pub use positions::{PositionEncoding, TextPosition, source_at_position};
 
 const MAX_FILES: usize = 4096;
@@ -64,7 +66,7 @@ impl fmt::Display for LookupError {
             Self::Cancelled => "annotation navigation was cancelled",
             Self::InputLimit => "annotation navigation input exceeds its bound",
             Self::UnknownGeneratedFile => "generated file is not in this library",
-            Self::StaleArtifact => "generated file bytes do not match the requested digest",
+            Self::StaleArtifact => "viewed artifact identity does not match the selected generation",
             Self::InvalidPosition => "position is not a valid code-point boundary in the file",
             Self::InvalidMapping => "annotation source-map identity or range is invalid",
             Self::UnsupportedProfile => "annotation navigation profile is unsupported",
@@ -99,6 +101,20 @@ fn viewed_file<'a>(
     expected_sha256: &str,
     cancelled: &AtomicBool,
 ) -> Result<&'a AnnotationFile, LookupError> {
+    validate_library(library, cancelled)?;
+    let mut files = library
+        .files
+        .iter()
+        .filter(|file| file.path == generated_path);
+    let file = files.next().ok_or(LookupError::UnknownGeneratedFile)?;
+    if files.next().is_some() {
+        return Err(LookupError::InvalidMapping);
+    }
+    validate_file(file, expected_sha256, cancelled)?;
+    Ok(file)
+}
+
+fn validate_library(library: &NativeLibrary<'_>, cancelled: &AtomicBool) -> Result<(), LookupError> {
     check_cancelled(cancelled)?;
     if !matches!(
         library.schema,
@@ -118,14 +134,15 @@ fn viewed_file<'a>(
     if library.files.len() > MAX_FILES {
         return Err(LookupError::InputLimit);
     }
-    let mut files = library
-        .files
-        .iter()
-        .filter(|file| file.path == generated_path);
-    let file = files.next().ok_or(LookupError::UnknownGeneratedFile)?;
-    if files.next().is_some() {
-        return Err(LookupError::InvalidMapping);
-    }
+    Ok(())
+}
+
+fn validate_file(
+    file: &AnnotationFile,
+    expected_sha256: &str,
+    cancelled: &AtomicBool,
+) -> Result<(), LookupError> {
+    check_cancelled(cancelled)?;
     if file.text.len() > crate::ketho::MAX_OUTPUT_BYTES || file.mappings.len() > MAX_MAPPINGS {
         return Err(LookupError::InputLimit);
     }
@@ -133,7 +150,7 @@ fn viewed_file<'a>(
         return Err(LookupError::StaleArtifact);
     }
     check_cancelled(cancelled)?;
-    Ok(file)
+    Ok(())
 }
 
 fn source_in_file<'a>(

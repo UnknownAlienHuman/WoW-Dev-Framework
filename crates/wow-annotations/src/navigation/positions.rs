@@ -46,7 +46,7 @@ pub fn source_at_position<'a>(
     source_in_file(library, file, offset, cancelled)
 }
 
-fn byte_offset(
+pub(super) fn byte_offset(
     text: &str,
     position: TextPosition,
     encoding: PositionEncoding,
