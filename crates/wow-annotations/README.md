@@ -275,3 +275,29 @@ budgets still apply; this is not a measured performance guarantee. The operation
 is source-descriptor navigation, not a general Lua reference finder or an LSP
 server. Returned generated and source ranges remain the original stored UTF-8
 ranges, with no offset interpolation.
+
+## Returning editor coordinates
+
+Navigation results retain canonical UTF-8 byte ranges. Convert those ranges
+without reimplementing coordinate rules in each host:
+
+- `NavigationIndex::generated_text_range(path, viewed_sha256, span, encoding,
+  &cancelled)` converts a generated range using the same immutable file and
+  required viewed-file digest.
+- `SourceNavigation::source_text_range(span, encoding, &cancelled)` converts a
+  source range against the exact buffer previously verified by `bind_source`.
+
+Both return `TextRange` with zero-based endpoints in the explicitly selected
+`PositionEncoding`. Preserve the original result's path, scope, revision and
+hash alongside the converted coordinates. Conversion does not select a new map,
+merge candidates or interpolate between source and generated spans.
+
+The existing sparse line checkpoints serve both directions. LF, CRLF and bare
+CR retain their original bytes; Unicode columns count the chosen code units,
+not display cells or graphemes. Valid endpoints round-trip to the same bytes.
+The boundary between CR and LF in a CRLF delimiter has no distinct editor
+coordinate and rejects as `InvalidPosition`, as do reversed ranges and endpoints
+inside UTF-8 characters. End-of-line, trailing empty lines, EOF and zero-width
+ranges remain representable. Cancellation and existing size limits apply.
+These operations do not implement LSP transport, protocol negotiation or editor
+mutation; the host still attaches document identities and its negotiated encoding.
