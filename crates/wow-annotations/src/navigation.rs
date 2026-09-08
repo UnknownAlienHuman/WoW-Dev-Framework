@@ -12,10 +12,12 @@ use wow_reference::native::{Span, source_digest};
 mod index;
 mod positions;
 mod ranges;
+mod source_queries;
 mod sources;
 pub use index::{GeneratedLocation, GeneratedLookup, NavigationIndex, SourceNavigation};
 pub use positions::{PositionEncoding, TextPosition, source_at_position};
 pub use ranges::{TextRange, source_for_range, source_for_text_range};
+pub use source_queries::SourceText;
 pub use sources::SourceFile;
 
 const MAX_FILES: usize = 4096;
