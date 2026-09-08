@@ -13,6 +13,9 @@ use crate::wire_json::canonical_json_bytes;
 
 pub const NORMALIZER: &str = "native-model/1";
 pub const SCHEMA: &str = "wow-native-corrections/1";
+/// Adds explicitly guarded widget inheritance; v1 packs retain their contract.
+pub const INHERITANCE_SCHEMA: &str = "wow-native-corrections/2";
+mod inheritance;
 const MAX_BYTES: usize = 2 * 1024 * 1024;
 const MAX_RECORDS: usize = 4096;
 
@@ -54,6 +57,14 @@ pub struct Target {
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Projection {
     WidgetOwner,
+    /// Add one reviewed base from the same exact source generation.
+    /// `after` names its original ScriptObject owner, not a renamed alias.
+    WidgetBase {
+        parent_path: String,
+        parent_registration: usize,
+        expected_parent_source_sha256: String,
+        expected_parent_raw_sha256: String,
+    },
     CallableField {
         function: String,
         lane: Lane,
@@ -231,7 +242,7 @@ impl ValidatedCorrections {
         if set.records.len() > MAX_RECORDS {
             return Err(CorrectionError::Limit);
         }
-        if set.schema != SCHEMA
+        if (set.schema != SCHEMA && set.schema != INHERITANCE_SCHEMA)
             || set.version == 0
             || !oid(&set.revision)
             || !label(&set.environment, 128)
@@ -259,6 +270,23 @@ impl ValidatedCorrections {
                 return Err(CorrectionError::InvalidSet);
             }
             let valid = match (&record.target.projection, &record.before, &record.after) {
+                (
+                    Projection::WidgetBase {
+                        parent_path,
+                        parent_registration,
+                        expected_parent_source_sha256,
+                        expected_parent_raw_sha256,
+                    },
+                    Value::Absent,
+                    Value::Text(after),
+                ) => {
+                    set.schema == INHERITANCE_SCHEMA
+                        && identifier(after)
+                        && path(parent_path)
+                        && *parent_registration < 128
+                        && digest(expected_parent_source_sha256)
+                        && digest(expected_parent_raw_sha256)
+                }
                 (Projection::WidgetOwner, Value::Text(before), Value::Text(after)) => {
                     identifier(before) && identifier(after)
                 }
@@ -323,6 +351,7 @@ pub fn raw_digest(value: &RawValue) -> Result<String> {
 #[derive(Clone, Copy)]
 struct Location {
     system: usize,
+    base: bool,
     field: Option<(usize, Lane, usize, Property)>,
 }
 fn locate(
@@ -345,7 +374,7 @@ fn locate(
     }
     let (system, (_, facts)) = matches[0];
     let field = match &target.projection {
-        Projection::WidgetOwner => {
+        Projection::WidgetOwner | Projection::WidgetBase { .. } => {
             if !matches!(facts.owner, SystemOwner::ScriptObject(_)) {
                 return Err(Status::Rejected);
             }
@@ -390,7 +419,11 @@ fn locate(
             Some((fi, *lane, fields[0].0, *property))
         }
     };
-    Ok(Location { system, field })
+    Ok(Location {
+        system,
+        field,
+        base: matches!(target.projection, Projection::WidgetBase { .. }),
+    })
 }
 fn field_at<'a, 's>(system: &'s SystemFacts<'a>, location: Location) -> Option<&'s FieldFact<'a>> {
     location.field.map(|(f, l, m, _)| match l {
@@ -399,7 +432,9 @@ fn field_at<'a, 's>(system: &'s SystemFacts<'a>, location: Location) -> Option<&
     })
 }
 fn observed<'a>(system: &SystemFacts<'a>, location: Location) -> (&'a RawValue, Value) {
-    if let Some(field) = field_at(system, location) {
+    if location.base {
+        (system.raw, Value::Absent)
+    } else if let Some(field) = field_at(system, location) {
         let value = match location.field.map(|v| v.3) {
             Some(Property::Type) => Value::Text(field.type_name.into()),
             _ => field.nilable.map_or(Value::Absent, Value::Boolean),
@@ -516,7 +551,7 @@ fn apply<'a>(
             .iter()
             .enumerate()
             .filter_map(|(i, l)| {
-                l.filter(|l| l.field.is_none() && applications[i].status == Status::Applied)
+                l.filter(|l| !l.base && l.field.is_none() && applications[i].status == Status::Applied)
                     .and_then(|l| match &set.records[i].after {
                         Value::Text(s) => Some((l.system, s.as_str())),
                         _ => None,
@@ -559,7 +594,7 @@ fn apply<'a>(
             .collect::<BTreeSet<_>>();
         let mut changed = false;
         for (i, location) in locations.iter().enumerate() {
-            if location.is_some_and(|l| l.field.is_none())
+            if location.is_some_and(|l| !l.base && l.field.is_none())
                 && applications[i].status == Status::Applied
             {
                 let Value::Text(name) = &set.records[i].after else {
@@ -587,6 +622,7 @@ fn apply<'a>(
     if cancelled.load(Ordering::Relaxed) {
         return Err(CorrectionError::Cancelled);
     }
+    inheritance::validate(set, systems, &locations, &mut applications, cancelled)?;
     for (index, location) in locations.into_iter().enumerate() {
         if applications[index].status != Status::Applied {
             continue;
@@ -596,7 +632,12 @@ fn apply<'a>(
         };
         let system = &mut systems[location.system].1;
         let after = &set.records[index].after;
-        if let Some((function, lane, member, property)) = location.field {
+        if location.base {
+            let Value::Text(name) = after else {
+                return Err(CorrectionError::InvalidSource);
+            };
+            system.widget_base = Some(name);
+        } else if let Some((function, lane, member, property)) = location.field {
             let field = match lane {
                 Lane::Arguments => &mut system.functions[function].arguments[member],
                 Lane::Returns => &mut system.functions[function].returns[member],

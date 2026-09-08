@@ -7,6 +7,7 @@ use std::fs;
 use std::io::Read;
 use std::path::Path;
 mod aliases;
+mod inheritance;
 mod mappings;
 fn text<'a>(value: &'a Value, key: &str) -> Result<&'a str> {
     value[key]
@@ -260,6 +261,7 @@ fn verify_corrections(library: &Value) -> Result<bool> {
         {
             return Err("correction target/outcome mismatch".into());
         }
+        inheritance::verify(library, set, record, application)?;
         match text(application, "status")? {
             "applied" => {
                 if application["after"] != record["after"]

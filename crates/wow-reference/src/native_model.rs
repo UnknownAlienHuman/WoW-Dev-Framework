@@ -113,6 +113,9 @@ pub enum TableFact<'a> {
 #[derive(Clone, Debug)]
 pub struct SystemFacts<'a> {
     pub owner: SystemOwner<'a>,
+    /// Reviewed single-parent overlay; raw documentation is never changed.
+    /// This names the parent's exact original ScriptObject identity.
+    pub widget_base: Option<&'a str>,
     pub name: Option<&'a str>,
     pub environment: Option<&'a str>,
     pub functions: Vec<CallableFact<'a>>,
@@ -349,6 +352,7 @@ fn normalize_system(value: &RawValue, ordinal: usize) -> Result<SystemFacts<'_>>
     };
     Ok(SystemFacts {
         owner,
+        widget_base: None,
         name,
         environment: optional_text(&map, "Environment")?,
         functions: collection(&map, "Functions")?

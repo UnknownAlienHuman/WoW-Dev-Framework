@@ -39,7 +39,7 @@ fn record(
     let normalized = normalize_document(document);
     let system = normalized.systems[0].as_ref().unwrap();
     let raw = match &projection {
-        Projection::WidgetOwner => system.raw,
+        Projection::WidgetOwner | Projection::WidgetBase { .. } => system.raw,
         Projection::CallableField {
             function,
             lane,

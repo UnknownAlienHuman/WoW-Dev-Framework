@@ -366,6 +366,19 @@ pub fn project_with_alias_catalogs_and_literal_bridge<'a>(
     let mut defined_alias_targets = BTreeSet::new();
     let blocked_receivers = blocked_receivers(&systems);
     let renderer = Renderer::new(enum_names, MAX_FILE_BYTES)?;
+    let base_receivers = systems
+        .iter()
+        .filter_map(|(_, system)| {
+            let SystemOwner::ScriptObject(name) = system.owner else {
+                return None;
+            };
+            let original = system.name.unwrap_or(name);
+            (!blocked_receivers.contains(name)
+                && crate::ketho::identifier(name).is_ok()
+                && crate::ketho::identifier(original).is_ok())
+            .then_some(original)
+        })
+        .collect::<BTreeSet<_>>();
     let literals = SelectedLiterals::new(bridge, MAX_FILE_BYTES, cancelled)?;
     let mut files = Vec::new();
     let mut total_bytes = 0usize;
@@ -470,6 +483,10 @@ pub fn project_with_alias_catalogs_and_literal_bridge<'a>(
         }
         let bind_receiver =
             matches!(system.owner, SystemOwner::ScriptObject(_)) && !receiver_blocked;
+        let base = system.widget_base.filter(|name| base_receivers.contains(name));
+        if bind_receiver && system.widget_base.is_some() && base.is_none() {
+            issues.push(issue(document, system.raw, "widget_base_not_projected"));
+        }
         let mut input = System {
             owner,
             functions: Vec::new(),
@@ -647,7 +664,10 @@ pub fn project_with_alias_catalogs_and_literal_bridge<'a>(
         }
         if bind_receiver || !input.functions.is_empty() || !input.tables.is_empty() {
             let rendered = if bind_receiver {
-                renderer.render_library_mapped(&input)
+                match base {
+                    Some(base) => renderer.render_library_inheriting(&input, base),
+                    None => renderer.render_library_mapped(&input),
+                }
             } else {
                 renderer.render_mapped(&input)
             };

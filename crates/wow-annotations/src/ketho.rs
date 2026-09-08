@@ -224,20 +224,44 @@ impl Renderer {
     }
 
     pub fn render_mapped(&self, system: &System) -> Result<RenderedSystem, RenderError> {
-        self.render_profile(system, false)
+        self.render_profile(system, false, None)
     }
 
     /// Compose Ketho's local widget class declaration and generated methods in
     /// one lexical scope. The original emitter profile remains available for
     /// donor byte-parity tests. No base class, constructor or global is inferred.
     pub fn render_library_mapped(&self, system: &System) -> Result<RenderedSystem, RenderError> {
-        self.render_profile(system, true)
+        self.render_profile(system, true, None)
+    }
+
+    /// Render a caller-validated single base on a ScriptObject class. The native
+    /// correction owner validates parent identity and cycles; this pure emitter
+    /// checks only the representable local shape and never invents a hierarchy.
+    pub fn render_library_inheriting(
+        &self,
+        system: &System,
+        base: &str,
+    ) -> Result<RenderedSystem, RenderError> {
+        identifier(base)?;
+        let Owner::ScriptObject { system_name, .. } = &system.owner else {
+            return Err(RenderError::InvalidSource);
+        };
+        if reserved_type_name(base)
+            || self.enum_names.contains(base)
+            || base == system_name
+            || owner_name(&system.owner).0 == Some(base)
+            || system.tables.iter().any(|table| table.name() == base)
+        {
+            return Err(RenderError::UnsupportedType);
+        }
+        self.render_profile(system, true, Some(base))
     }
 
     fn render_profile(
         &self,
         system: &System,
         bind_receiver: bool,
+        base: Option<&str>,
     ) -> Result<RenderedSystem, RenderError> {
         let mut declarations = Vec::new();
         validate_owner(&system.owner)?;
@@ -295,6 +319,10 @@ impl Renderer {
             let start = output.bytes.len();
             output.push("---@class ")?;
             output.push(name)?;
+            if let Some(base) = base {
+                output.push(" : ")?;
+                output.push(base)?;
+            }
             output.push("\nlocal ")?;
             output.push(name)?;
             output.push(" = {}")?;
