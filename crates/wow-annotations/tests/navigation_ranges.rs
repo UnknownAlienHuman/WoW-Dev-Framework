@@ -100,12 +100,7 @@ fn range_queries_retain_full_validation_and_encoded_endpoint_rules() -> Result<(
     let digest = file.sha256.clone();
     let unicode = file.text.find('🦀').ok_or("Unicode text")?;
     let line_start = file.text[..unicode].rfind('\n').map_or(0, |at| at + 1);
-    let line = u32::try_from(
-        file.text[..unicode]
-            .bytes()
-            .filter(|b| *b == b'\n')
-            .count(),
-    )?;
+    let line = u32::try_from(file.text[..unicode].bytes().filter(|b| *b == b'\n').count())?;
     let column = u32::try_from(file.text[line_start..unicode].encode_utf16().count())?;
     let span = Span {
         start: unicode,
@@ -130,7 +125,10 @@ fn range_queries_retain_full_validation_and_encoded_endpoint_rules() -> Result<(
         PositionEncoding::Utf16,
         &cancelled,
     )?;
-    assert_eq!(serde_json::to_value(expected)?, serde_json::to_value(actual)?);
+    assert_eq!(
+        serde_json::to_value(expected)?,
+        serde_json::to_value(actual)?
+    );
     for invalid in [
         Span {
             start: unicode + 1,
@@ -239,26 +237,30 @@ fn indexed_ranges_match_one_shot_queries_and_keep_equal_candidates() -> Result<(
             let actual = index.source_for_range(&file.path, &file.sha256, range, &cancelled);
             match (actual, expected) {
                 (Ok(actual), Ok(expected)) => {
-                    assert_eq!(serde_json::to_value(actual)?, serde_json::to_value(expected)?);
+                    assert_eq!(
+                        serde_json::to_value(actual)?,
+                        serde_json::to_value(expected)?
+                    );
                 }
                 (Err(actual), Err(expected)) => assert_eq!(actual, expected),
                 _ => return Err("indexed range result differs".into()),
             }
         }
     }
-    let SourceLookup::Mapped { candidates, .. } = index.source_for_range(
-        &file.path,
-        &file.sha256,
-        duplicate.generated,
-        &cancelled,
-    )? else {
+    let SourceLookup::Mapped { candidates, .. } =
+        index.source_for_range(&file.path, &file.sha256, duplicate.generated, &cancelled)?
+    else {
         return Err("duplicate member did not map".into());
     };
     assert_eq!(candidates.len(), 2);
     let unicode = file.text.find('🦀').ok_or("Unicode text")?;
     let line_start = file.text[..unicode].rfind('\n').map_or(0, |at| at + 1);
     let line = u32::try_from(file.text[..unicode].bytes().filter(|b| *b == b'\n').count())?;
-    for encoding in [PositionEncoding::Utf8, PositionEncoding::Utf16, PositionEncoding::Utf32] {
+    for encoding in [
+        PositionEncoding::Utf8,
+        PositionEncoding::Utf16,
+        PositionEncoding::Utf32,
+    ] {
         let prefix = &file.text[line_start..unicode];
         let (column, width) = match encoding {
             PositionEncoding::Utf8 => (prefix.len(), '🦀'.len_utf8()),
@@ -266,33 +268,61 @@ fn indexed_ranges_match_one_shot_queries_and_keep_equal_candidates() -> Result<(
             PositionEncoding::Utf32 => (prefix.chars().count(), 1),
         };
         let range = TextRange {
-            start: TextPosition { line, character: u32::try_from(column)? },
-            end: TextPosition { line, character: u32::try_from(column + width)? },
+            start: TextPosition {
+                line,
+                character: u32::try_from(column)?,
+            },
+            end: TextPosition {
+                line,
+                character: u32::try_from(column + width)?,
+            },
         };
         let expected = source_for_text_range(
-            &library, &file.path, &file.sha256, range, encoding, &cancelled,
+            &library,
+            &file.path,
+            &file.sha256,
+            range,
+            encoding,
+            &cancelled,
         )?;
-        let actual = index.source_for_text_range(
-            &file.path, &file.sha256, range, encoding, &cancelled,
-        )?;
-        assert_eq!(serde_json::to_value(actual)?, serde_json::to_value(expected)?);
+        let actual =
+            index.source_for_text_range(&file.path, &file.sha256, range, encoding, &cancelled)?;
+        assert_eq!(
+            serde_json::to_value(actual)?,
+            serde_json::to_value(expected)?
+        );
     }
     assert_eq!(
-        index.source_for_range(&file.path, "stale", duplicate.generated, &cancelled).err(),
+        index
+            .source_for_range(&file.path, "stale", duplicate.generated, &cancelled)
+            .err(),
         Some(LookupError::StaleArtifact)
     );
     assert_eq!(
-        index.source_for_range(
-            &file.path, &file.sha256, duplicate.generated, &AtomicBool::new(true),
-        ).err(),
+        index
+            .source_for_range(
+                &file.path,
+                &file.sha256,
+                duplicate.generated,
+                &AtomicBool::new(true),
+            )
+            .err(),
         Some(LookupError::Cancelled)
     );
     for range in [
-        Span { start: unicode + 1, end: unicode + 4 },
-        Span { start: 0, end: usize::MAX },
+        Span {
+            start: unicode + 1,
+            end: unicode + 4,
+        },
+        Span {
+            start: 0,
+            end: usize::MAX,
+        },
     ] {
         assert_eq!(
-            index.source_for_range(&file.path, &file.sha256, range, &cancelled).err(),
+            index
+                .source_for_range(&file.path, &file.sha256, range, &cancelled)
+                .err(),
             Some(LookupError::InvalidPosition)
         );
     }

@@ -226,3 +226,21 @@ generated file rejects the index. Total limits are 64 MiB of generated text and
 returns at most 65,536 candidates. Cancellation and unsupported profiles remain
 explicit errors. These bounds describe admitted data, not measured memory usage
 or an end-to-end performance guarantee.
+
+## Diagnostic ranges
+
+`navigation::source_for_range` accepts a half-open UTF-8 `Span`;
+`source_for_text_range` accepts `TextRange { start, end }` with an explicit
+`PositionEncoding`. Both endpoints use the same digest-bound generated file.
+`NavigationIndex` provides matching methods for repeated queries, reusing its
+interval index and previously validated immutable source identities.
+
+A nonempty selection requires one map containing its entire range. Crossing
+parameters can select their containing declaration, but independent declarations
+are never stitched into a fabricated source range. Precision, smallest-span
+ranking and equal-candidate order remain the same as for point queries. Empty
+ranges retain cursor behavior, including exclusive map ends and unmapped EOF.
+`Unmapped` means no single map contains the whole selection, not that every
+selected byte is unmapped or an API is absent. Invalid/reversed endpoints fail
+without clamping; returned source ranges remain actual stored descriptor ranges.
+This lookup does not publish diagnostics or certify analyzer results.
