@@ -244,3 +244,34 @@ ranges retain cursor behavior, including exclusive map ends and unmapped EOF.
 selected byte is unmapped or an API is absent. Invalid/reversed endpoints fail
 without clamping; returned source ranges remain actual stored descriptor ranges.
 This lookup does not publish diagnostics or certify analyzer results.
+
+## Source-buffer navigation
+
+`NavigationIndex::bind_source(SourceFile { scope, revision, path, sha256 }, text,
+&cancelled)` binds an immutable source buffer to the retained generation. Unlike
+`generated_for`, this entry point does not require knowing a descriptor's exact
+source range. `scope: None` selects Blizzard documentation; an external catalog
+uses `Some("annotation_alias_catalog")` and its independent revision and digest.
+
+The returned `SourceNavigation` provides `generated_at` and `generated_for_range`
+for UTF-8 byte coordinates, plus `generated_at_position` and
+`generated_for_text_range` for explicit UTF-8/UTF-16/UTF-32 editor coordinates.
+A cursor or selection chooses the most precise containing source descriptor;
+all equally precise generated occurrences are retained in generated path/range
+order. Shared local fields can therefore lead to several annotation locations.
+A selection spanning unrelated source declarations is not artificially joined.
+Zero-width ranges retain cursor semantics and exclusive ends, including EOF.
+
+Binding checks the viewed revision, scope, path, recorded length and actual text
+hash, then validates source-map UTF-8 boundaries against these exact bytes. Stale
+text or identity rejects. A known source with no emitted maps can still be bound:
+its `Unmapped` result is not evidence that the API or all selected source is absent.
+
+Only the selected source gets an additional interval index and sparse line
+checkpoints. The view borrows both its text and the prepared generation; rebuild
+it after a buffer edit. Repeated queries reuse these validated inputs without
+rehashing, fetching, parsing or executing source. Existing generation and result
+budgets still apply; this is not a measured performance guarantee. The operation
+is source-descriptor navigation, not a general Lua reference finder or an LSP
+server. Returned generated and source ranges remain the original stored UTF-8
+ranges, with no offset interpolation.

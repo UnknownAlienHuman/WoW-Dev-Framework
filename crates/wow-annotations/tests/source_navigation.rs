@@ -126,11 +126,8 @@ fn encoded_source_queries_preserve_unicode_and_invalid_endpoint_rules() -> Resul
                 line: 2,
                 character: u32::try_from(column + width)?,
             };
-            let result = source.generated_for_text_range(
-                TextRange { start, end },
-                encoding,
-                &cancelled,
-            )?;
+            let result =
+                source.generated_for_text_range(TextRange { start, end }, encoding, &cancelled)?;
             assert_eq!(serde_json::to_value(result)?, expected);
             assert_eq!(
                 serde_json::to_value(source.generated_at_position(start, encoding, &cancelled)?)?,
@@ -141,7 +138,9 @@ fn encoded_source_queries_preserve_unicode_and_invalid_endpoint_rules() -> Resul
                 end: start,
             };
             assert_eq!(
-                source.generated_for_text_range(reversed, encoding, &cancelled).err(),
+                source
+                    .generated_for_text_range(reversed, encoding, &cancelled)
+                    .err(),
                 Some(LookupError::InvalidPosition)
             );
             if width > 1 {
@@ -150,7 +149,9 @@ fn encoded_source_queries_preserve_unicode_and_invalid_endpoint_rules() -> Resul
                     ..start
                 };
                 assert_eq!(
-                    source.generated_at_position(interior, encoding, &cancelled).err(),
+                    source
+                        .generated_at_position(interior, encoding, &cancelled)
+                        .err(),
                     Some(LookupError::InvalidPosition)
                 );
             }
@@ -211,7 +212,10 @@ fn source_binding_rejects_stale_text_revision_scope_and_invalid_source_boundarie
     assert_eq!(candidates[0].source_revision, DONOR);
     assert_eq!(candidates[0].source.scope, id.scope);
     for bad in [
-        SourceFile { revision: REV, ..id },
+        SourceFile {
+            revision: REV,
+            ..id
+        },
         SourceFile { scope: None, ..id },
         SourceFile {
             sha256: "sha256:stale",
@@ -229,7 +233,14 @@ fn source_binding_rejects_stale_text_revision_scope_and_invalid_source_boundarie
         Err(LookupError::StaleArtifact)
     ));
     assert!(matches!(
-        index.bind_source(SourceFile { scope: Some("other"), ..id }, raw, &cancelled),
+        index.bind_source(
+            SourceFile {
+                scope: Some("other"),
+                ..id
+            },
+            raw,
+            &cancelled
+        ),
         Err(LookupError::UnsupportedProfile)
     ));
     assert!(matches!(
