@@ -82,8 +82,8 @@ impl<'a> Lines<'a> {
             .partition_point(|start| *start <= offset_u32)
             .checked_sub(1)
             .ok_or(LookupError::InvalidMapping)?;
-        let mut cursor = usize::try_from(self.starts[checkpoint])
-            .map_err(|_| LookupError::InvalidMapping)?;
+        let mut cursor =
+            usize::try_from(self.starts[checkpoint]).map_err(|_| LookupError::InvalidMapping)?;
         let mut line = u32::try_from(checkpoint)
             .ok()
             .and_then(|index| index.checked_mul(LINE_STRIDE))

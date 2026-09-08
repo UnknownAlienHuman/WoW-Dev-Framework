@@ -51,12 +51,8 @@ fn source_and_generated_result_ranges_round_trip_through_public_queries() -> Res
                 encoding,
                 &cancelled,
             )?;
-            let by_bytes = index.source_for_range(
-                &file.path,
-                &file.sha256,
-                map.generated,
-                &cancelled,
-            )?;
+            let by_bytes =
+                index.source_for_range(&file.path, &file.sha256, map.generated, &cancelled)?;
             assert_eq!(
                 serde_json::to_value(by_text)?,
                 serde_json::to_value(by_bytes)?
