@@ -56,21 +56,19 @@ pub(super) fn byte_offset(
     let bytes = text.as_bytes();
     let mut cursor = 0;
     let mut line = 0;
+    let mut next_check = 0;
     // File size was bounded by viewed_file; scanning uses no line-table allocation.
     while line < position.line {
-        if cursor & 4095 == 0 {
+        if cursor >= next_check {
             check_cancelled(cancelled)?;
+            next_check = cursor.saturating_add(4096);
         }
-        let byte = *bytes.get(cursor).ok_or(LookupError::InvalidPosition)?;
-        cursor += 1;
-        if byte == b'\r' {
-            if bytes.get(cursor) == Some(&b'\n') {
-                cursor += 1;
-            }
-            line += 1;
-        } else if byte == b'\n' {
-            line += 1;
+        if cursor >= bytes.len() {
+            return Err(LookupError::InvalidPosition);
         }
+        let width = line_break_width(bytes, cursor);
+        cursor += width.max(1);
+        line += u32::from(width != 0);
     }
     let target = usize::try_from(position.character).map_err(|_| LookupError::InvalidPosition)?;
     let tail = text.get(cursor..).ok_or(LookupError::InvalidPosition)?;
@@ -100,6 +98,15 @@ pub(super) fn byte_offset(
         Ok(text.len())
     } else {
         Err(LookupError::InvalidPosition)
+    }
+}
+
+/// One newline policy for both one-shot scanning and prepared line checkpoints.
+pub(super) fn line_break_width(bytes: &[u8], cursor: usize) -> usize {
+    match bytes.get(cursor) {
+        Some(b'\r') if bytes.get(cursor + 1) == Some(&b'\n') => 2,
+        Some(b'\r' | b'\n') => 1,
+        _ => 0,
     }
 }
 

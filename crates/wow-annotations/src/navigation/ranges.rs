@@ -62,15 +62,27 @@ pub(super) fn byte_span(
     encoding: PositionEncoding,
     cancelled: &AtomicBool,
 ) -> Result<Span, LookupError> {
+    byte_span_with(range, cancelled, |position| {
+        positions::byte_offset(text, position, encoding, cancelled)
+    })
+}
+
+/// Keep endpoint ordering, zero-width reuse and cancellation identical across
+/// indexed and one-shot conversion; only locating each line differs.
+pub(super) fn byte_span_with(
+    range: TextRange,
+    cancelled: &AtomicBool,
+    mut offset: impl FnMut(TextPosition) -> Result<usize, LookupError>,
+) -> Result<Span, LookupError> {
     check_cancelled(cancelled)?;
     if (range.start.line, range.start.character) > (range.end.line, range.end.character) {
         return Err(LookupError::InvalidPosition);
     }
-    let start = positions::byte_offset(text, range.start, encoding, cancelled)?;
+    let start = offset(range.start)?;
     let end = if range.start == range.end {
         start
     } else {
-        positions::byte_offset(text, range.end, encoding, cancelled)?
+        offset(range.end)?
     };
     check_cancelled(cancelled)?;
     Ok(Span { start, end })

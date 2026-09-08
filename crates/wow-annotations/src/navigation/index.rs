@@ -1,7 +1,7 @@
 //! Prepared bidirectional queries over one immutably borrowed native generation.
 use super::{
     LookupError, MAX_CANDIDATES, MappingPrecision, PositionEncoding, SourceLocation, SourceLookup,
-    TextPosition, TextRange, check_cancelled, positions, ranges, rank, sources, validate_file,
+    TextPosition, TextRange, check_cancelled, ranges, rank, sources, validate_file,
     validate_library,
 };
 use crate::native::{AnnotationFile, NativeLibrary, SourceLink};
@@ -11,6 +11,7 @@ use std::sync::atomic::AtomicBool;
 use wow_reference::native::Span;
 
 mod intervals;
+mod lines;
 mod reverse;
 
 const MAX_INDEX_BYTES: usize = 64 * 1024 * 1024;
@@ -41,6 +42,7 @@ pub enum GeneratedLookup<'a> {
 struct IndexedFile<'a> {
     file: &'a AnnotationFile,
     intervals: intervals::Intervals,
+    lines: lines::Lines<'a>,
 }
 
 /// Validates all generated files and map links once, then serves repeated queries.
@@ -103,7 +105,15 @@ impl<'a> NavigationIndex<'a> {
                 file.mappings.iter().map(|mapping| mapping.generated),
                 cancelled,
             )?;
-            files.insert(file.path.as_str(), IndexedFile { file, intervals });
+            let lines = lines::Lines::new(&file.text, cancelled)?;
+            files.insert(
+                file.path.as_str(),
+                IndexedFile {
+                    file,
+                    intervals,
+                    lines,
+                },
+            );
         }
         reverse.order(cancelled)?;
         check_cancelled(cancelled)?;
@@ -134,8 +144,8 @@ impl<'a> NavigationIndex<'a> {
         )
     }
 
-    /// Uses the existing strict coordinate conversion without changing encodings
-    /// or newline policy. Conversion still scans the selected file's line prefix.
+    /// Uses sparse line checkpoints with the existing strict coordinate rules.
+    /// At most 63 preceding line delimiters are scanned before the target line.
     pub fn source_at_position(
         &self,
         generated_path: &str,
@@ -145,7 +155,7 @@ impl<'a> NavigationIndex<'a> {
         cancelled: &AtomicBool,
     ) -> Result<SourceLookup<'a>, LookupError> {
         let file = self.viewed_file(generated_path, expected_sha256, cancelled)?;
-        let offset = positions::byte_offset(&file.file.text, position, encoding, cancelled)?;
+        let offset = file.lines.byte_offset(position, encoding, cancelled)?;
         self.lookup(
             file,
             Span {
@@ -180,7 +190,9 @@ impl<'a> NavigationIndex<'a> {
         cancelled: &AtomicBool,
     ) -> Result<SourceLookup<'a>, LookupError> {
         let file = self.viewed_file(generated_path, expected_sha256, cancelled)?;
-        let selected = ranges::byte_span(&file.file.text, range, encoding, cancelled)?;
+        let selected = ranges::byte_span_with(range, cancelled, |position| {
+            file.lines.byte_offset(position, encoding, cancelled)
+        })?;
         self.lookup(file, selected, cancelled)
     }
 
