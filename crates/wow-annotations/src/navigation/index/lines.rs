@@ -81,8 +81,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn checkpoints_preserve_all_coordinate_rules_across_multiple_blocks()
-    -> Result<(), LookupError> {
+    fn checkpoints_preserve_all_coordinate_rules_across_multiple_blocks() -> Result<(), LookupError>
+    {
         let cancelled = AtomicBool::new(false);
         let mut text = String::new();
         for line in 0..200 {
@@ -111,8 +111,8 @@ mod tests {
     }
 
     #[test]
-    fn sparse_storage_keeps_trailing_empty_line_and_checks_cancellation()
-    -> Result<(), LookupError> {
+    fn sparse_storage_keeps_trailing_empty_line_and_checks_cancellation() -> Result<(), LookupError>
+    {
         let cancelled = AtomicBool::new(false);
         let text = "\r\n".repeat(4096);
         let indexed = Lines::new(&text, &cancelled)?;
