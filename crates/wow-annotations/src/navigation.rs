@@ -13,9 +13,10 @@ mod index;
 mod positions;
 mod ranges;
 mod sources;
-pub use index::{GeneratedLocation, GeneratedLookup, NavigationIndex};
+pub use index::{GeneratedLocation, GeneratedLookup, NavigationIndex, SourceNavigation};
 pub use positions::{PositionEncoding, TextPosition, source_at_position};
 pub use ranges::{TextRange, source_for_range, source_for_text_range};
+pub use sources::SourceFile;
 
 const MAX_FILES: usize = 4096;
 const MAX_MAPPINGS: usize = 131_072;

@@ -13,11 +13,13 @@ use wow_reference::native::Span;
 mod intervals;
 mod lines;
 mod reverse;
+mod source_view;
+pub use source_view::SourceNavigation;
 
 const MAX_INDEX_BYTES: usize = 64 * 1024 * 1024;
 const MAX_INDEX_MAPPINGS: usize = 262_144;
 
-/// An exact occurrence of the requested source descriptor in generated output.
+/// An exact occurrence of a retained source descriptor in generated output.
 #[derive(Clone, Debug, Serialize)]
 pub struct GeneratedLocation<'a> {
     pub path: &'a str,
@@ -31,7 +33,7 @@ pub struct GeneratedLocation<'a> {
 #[derive(Clone, Debug, Serialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum GeneratedLookup<'a> {
-    /// No exact descriptor map is retained; not source/API absence evidence.
+    /// No retained map satisfies this source query; not source/API absence evidence.
     Unmapped,
     Mapped {
         /// All occurrences, ordered by generated path/range. Ties are preserved.

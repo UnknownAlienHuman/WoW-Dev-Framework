@@ -3,6 +3,17 @@ use super::{LookupError, MAX_FILES, check_cancelled};
 use crate::native::{NativeLibrary, SourceLink};
 use std::collections::BTreeMap;
 use std::sync::atomic::AtomicBool;
+use wow_reference::native::source_digest;
+
+/// A viewed source file, independent of any particular descriptor range.
+/// `None` identifies Blizzard input; external aliases use their explicit scope.
+#[derive(Clone, Copy, Debug)]
+pub struct SourceFile<'a> {
+    pub scope: Option<&'a str>,
+    pub revision: &'a str,
+    pub path: &'a str,
+    pub sha256: &'a str,
+}
 
 struct Identity<'a> {
     revision: &'a str,
@@ -82,15 +93,39 @@ impl<'a> Sources<'a> {
         Ok(result)
     }
 
-    pub(super) fn revision(&self, link: &SourceLink) -> Result<&'a str, LookupError> {
-        let sources = match link.scope {
+    pub(super) fn validate_text(
+        &self,
+        file: SourceFile<'_>,
+        text: &str,
+        cancelled: &AtomicBool,
+    ) -> Result<(), LookupError> {
+        check_cancelled(cancelled)?;
+        let identity = self.identity(file.scope, file.path)?;
+        // Check byte bounds and the recorded length before hashing caller input.
+        if text.len() > crate::ketho::MAX_OUTPUT_BYTES {
+            return Err(LookupError::InputLimit);
+        }
+        if file.revision != identity.revision
+            || file.sha256 != identity.sha256
+            || text.len() != identity.bytes
+            || source_digest(text.as_bytes()) != identity.sha256
+        {
+            return Err(LookupError::StaleArtifact);
+        }
+        check_cancelled(cancelled)
+    }
+
+    fn identity(&self, scope: Option<&str>, path: &str) -> Result<&Identity<'a>, LookupError> {
+        let sources = match scope {
             None => &self.blizzard,
             Some("annotation_alias_catalog") => &self.aliases,
             _ => return Err(LookupError::UnsupportedProfile),
         };
-        let identity = sources
-            .get(link.path.as_str())
-            .ok_or(LookupError::InvalidMapping)?;
+        sources.get(path).ok_or(LookupError::InvalidMapping)
+    }
+
+    pub(super) fn revision(&self, link: &SourceLink) -> Result<&'a str, LookupError> {
+        let identity = self.identity(link.scope, &link.path)?;
         if link.sha256 != identity.sha256
             || link.span.start >= link.span.end
             || link.span.end > identity.bytes

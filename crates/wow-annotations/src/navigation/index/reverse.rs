@@ -4,7 +4,7 @@ use crate::native::SourceLink;
 use std::collections::BTreeMap;
 use std::sync::atomic::AtomicBool;
 
-type Descriptors<'a> = BTreeMap<(usize, usize), Vec<GeneratedLocation<'a>>>;
+pub(super) type Descriptors<'a> = BTreeMap<(usize, usize), Vec<GeneratedLocation<'a>>>;
 type Files<'a> = BTreeMap<&'a str, Descriptors<'a>>;
 
 #[derive(Default)]
@@ -31,16 +31,24 @@ impl<'a> Reverse<'a> {
     }
 
     pub(super) fn get(&self, source: &SourceLink) -> Result<&[GeneratedLocation<'a>], LookupError> {
-        let files = match source.scope {
+        Ok(self
+            .descriptors(source.scope, &source.path)?
+            .and_then(|descriptors| descriptors.get(&(source.span.start, source.span.end)))
+            .map(Vec::as_slice)
+            .unwrap_or(&[]))
+    }
+
+    pub(super) fn descriptors(
+        &self,
+        scope: Option<&str>,
+        path: &str,
+    ) -> Result<Option<&Descriptors<'a>>, LookupError> {
+        let files = match scope {
             None => &self.blizzard,
             Some("annotation_alias_catalog") => &self.aliases,
             _ => return Err(LookupError::UnsupportedProfile),
         };
-        Ok(files
-            .get(source.path.as_str())
-            .and_then(|descriptors| descriptors.get(&(source.span.start, source.span.end)))
-            .map(Vec::as_slice)
-            .unwrap_or(&[]))
+        Ok(files.get(path))
     }
 
     pub(super) fn order(&mut self, cancelled: &AtomicBool) -> Result<(), LookupError> {
