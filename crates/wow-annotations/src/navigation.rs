@@ -3,13 +3,15 @@
 //! This consumes an existing native generation; it does not parse Lua, execute
 //! an analyzer, authenticate an external artifact, or infer API absence. The
 //! caller must retain the generation and provide the digest of the viewed file.
-use crate::native::{NativeLibrary, SourceLink};
+use crate::native::{AnnotationFile, NativeLibrary, SourceLink};
 use serde::Serialize;
 use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering};
 use wow_reference::native::{Span, source_digest};
 
+mod positions;
 mod sources;
+pub use positions::{PositionEncoding, TextPosition, source_at_position};
 
 const MAX_FILES: usize = 4096;
 const MAX_MAPPINGS: usize = 131_072;
@@ -63,7 +65,7 @@ impl fmt::Display for LookupError {
             Self::InputLimit => "annotation navigation input exceeds its bound",
             Self::UnknownGeneratedFile => "generated file is not in this library",
             Self::StaleArtifact => "generated file bytes do not match the requested digest",
-            Self::InvalidPosition => "position is not a UTF-8 byte boundary in the file",
+            Self::InvalidPosition => "position is not a valid code-point boundary in the file",
             Self::InvalidMapping => "annotation source-map identity or range is invalid",
             Self::UnsupportedProfile => "annotation navigation profile is unsupported",
         })
@@ -86,6 +88,17 @@ pub fn source_at<'a>(
     byte_offset: usize,
     cancelled: &AtomicBool,
 ) -> Result<SourceLookup<'a>, LookupError> {
+    let file = viewed_file(library, generated_path, expected_sha256, cancelled)?;
+    source_in_file(library, file, byte_offset, cancelled)
+}
+
+/// Bind both navigation entry points to the same immutable viewed-file bytes.
+fn viewed_file<'a>(
+    library: &'a NativeLibrary<'_>,
+    generated_path: &str,
+    expected_sha256: &str,
+    cancelled: &AtomicBool,
+) -> Result<&'a AnnotationFile, LookupError> {
     check_cancelled(cancelled)?;
     if !matches!(
         library.schema,
@@ -119,6 +132,16 @@ pub fn source_at<'a>(
     if file.sha256 != expected_sha256 || source_digest(file.text.as_bytes()) != expected_sha256 {
         return Err(LookupError::StaleArtifact);
     }
+    check_cancelled(cancelled)?;
+    Ok(file)
+}
+
+fn source_in_file<'a>(
+    library: &'a NativeLibrary<'_>,
+    file: &'a AnnotationFile,
+    byte_offset: usize,
+    cancelled: &AtomicBool,
+) -> Result<SourceLookup<'a>, LookupError> {
     check_cancelled(cancelled)?;
     if byte_offset > file.text.len() || !file.text.is_char_boundary(byte_offset) {
         return Err(LookupError::InvalidPosition);
