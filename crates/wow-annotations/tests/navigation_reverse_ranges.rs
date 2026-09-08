@@ -2,8 +2,8 @@
 use std::sync::atomic::AtomicBool;
 use wow_annotations::native::{project, project_with_alias_catalog};
 use wow_annotations::navigation::{
-    GeneratedLocation, GeneratedLookup, LookupError, NavigationIndex, PositionEncoding,
-    SourceFile, SourceText, TextPosition, TextRange,
+    GeneratedLocation, GeneratedLookup, LookupError, NavigationIndex, PositionEncoding, SourceFile,
+    SourceText, TextPosition, TextRange,
 };
 use wow_reference::native::{DocumentationDocument, Span, ingest_document, source_digest};
 use wow_reference::native_aliases::ingest_alias_catalog;
