@@ -88,11 +88,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn indexed_intervals_match_a_linear_scan_for_nested_and_crossing_ranges() -> Result<(), LookupError> {
+    fn indexed_intervals_match_a_linear_scan_for_nested_and_crossing_ranges()
+    -> Result<(), LookupError> {
         let spans = (0..257)
             .map(|ordinal| {
                 let start = (ordinal * 71) % 257;
-                Span { start, end: start + 1 + (ordinal * 43) % 257 }
+                Span {
+                    start,
+                    end: start + 1 + (ordinal * 43) % 257,
+                }
             })
             .collect::<Vec<_>>();
         let cancelled = AtomicBool::new(false);
@@ -104,7 +108,9 @@ mod tests {
                 Ok(())
             })?;
             actual.sort_unstable();
-            let expected = spans.iter().enumerate()
+            let expected = spans
+                .iter()
+                .enumerate()
                 .filter(|(_, span)| span.start <= offset && offset < span.end)
                 .map(|(ordinal, _)| ordinal)
                 .collect::<Vec<_>>();

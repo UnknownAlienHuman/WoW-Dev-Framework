@@ -2,8 +2,8 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use wow_annotations::native::{project, project_with_alias_catalog};
 use wow_annotations::navigation::{
-    GeneratedLookup, LookupError, NavigationIndex, PositionEncoding, SourceLookup,
-    TextPosition, source_at, source_at_position,
+    GeneratedLookup, LookupError, NavigationIndex, PositionEncoding, SourceLookup, TextPosition,
+    source_at, source_at_position,
 };
 use wow_reference::native::{DocumentationDocument, ingest_document, source_digest};
 use wow_reference::native_aliases::ingest_alias_catalog;
@@ -47,14 +47,27 @@ fn prepared_queries_match_one_shot_queries_at_every_generated_boundary() -> Resu
         for offset in 0..=file.text.len() {
             if !file.text.is_char_boundary(offset) {
                 assert_eq!(
-                    index.source_at(&file.path, &file.sha256, offset, &cancelled).err(),
+                    index
+                        .source_at(&file.path, &file.sha256, offset, &cancelled)
+                        .err(),
                     Some(LookupError::InvalidPosition)
                 );
                 continue;
             }
             assert_eq!(
-                serde_json::to_value(index.source_at(&file.path, &file.sha256, offset, &cancelled)?)?,
-                serde_json::to_value(source_at(&library, &file.path, &file.sha256, offset, &cancelled)?)?,
+                serde_json::to_value(index.source_at(
+                    &file.path,
+                    &file.sha256,
+                    offset,
+                    &cancelled
+                )?)?,
+                serde_json::to_value(source_at(
+                    &library,
+                    &file.path,
+                    &file.sha256,
+                    offset,
+                    &cancelled
+                )?)?,
                 "byte {offset}"
             );
         }
@@ -66,14 +79,26 @@ fn prepared_queries_match_one_shot_queries_at_every_generated_boundary() -> Resu
             for line in [0, 1, 2, 5, 7] {
                 let position = TextPosition { line, character: 0 };
                 let expected = source_at_position(
-                    &library, &file.path, &file.sha256, position, encoding, &cancelled,
+                    &library,
+                    &file.path,
+                    &file.sha256,
+                    position,
+                    encoding,
+                    &cancelled,
                 );
                 let actual = index.source_at_position(
-                    &file.path, &file.sha256, position, encoding, &cancelled,
+                    &file.path,
+                    &file.sha256,
+                    position,
+                    encoding,
+                    &cancelled,
                 );
                 match (actual, expected) {
                     (Ok(actual), Ok(expected)) => {
-                        assert_eq!(serde_json::to_value(actual)?, serde_json::to_value(expected)?);
+                        assert_eq!(
+                            serde_json::to_value(actual)?,
+                            serde_json::to_value(expected)?
+                        );
                     }
                     (Err(actual), Err(expected)) => assert_eq!(actual, expected),
                     _ => return Err("encoded query mismatch".into()),
@@ -81,7 +106,9 @@ fn prepared_queries_match_one_shot_queries_at_every_generated_boundary() -> Resu
             }
         }
         assert_eq!(
-            index.source_at(&file.path, "sha256:stale", 0, &cancelled).err(),
+            index
+                .source_at(&file.path, "sha256:stale", 0, &cancelled)
+                .err(),
             Some(LookupError::StaleArtifact)
         );
     }
@@ -119,11 +146,19 @@ fn reverse_query_returns_each_use_of_one_shared_source_descriptor() -> Result<()
     for candidate in candidates {
         assert_eq!(candidate.source_revision, REV);
         let SourceLookup::Mapped { candidates, .. } = index.source_at(
-            candidate.path, candidate.sha256, candidate.generated.start, &cancelled,
-        )? else {
+            candidate.path,
+            candidate.sha256,
+            candidate.generated.start,
+            &cancelled,
+        )?
+        else {
             return Err("reverse result did not map back".into());
         };
-        assert!(candidates.iter().any(|candidate| candidate.source.span == member.source.span));
+        assert!(
+            candidates
+                .iter()
+                .any(|candidate| candidate.source.span == member.source.span)
+        );
     }
     assert_eq!(
         index.generated_for(DONOR, &member.source, &cancelled).err(),
@@ -149,7 +184,11 @@ fn reverse_catalog_queries_keep_independent_revision_and_scope() -> Result<()> {
     let cancelled = AtomicBool::new(false);
     let raw = "---@alias Quantity number\n";
     let catalog = ingest_alias_catalog(
-        DONOR, "Types.lua", raw, &source_digest(raw.as_bytes()), &cancelled,
+        DONOR,
+        "Types.lua",
+        raw,
+        &source_digest(raw.as_bytes()),
+        &cancelled,
     )?;
     let library = project_with_alias_catalog(&docs, "Mainline", None, Some(&catalog), &cancelled)?;
     let index = NavigationIndex::new(&library, &cancelled)?;
@@ -211,7 +250,10 @@ fn preparation_rejects_inconsistent_files_and_maps_before_any_query() -> Result<
                 LookupError::InvalidMapping
             }
         };
-        assert_eq!(NavigationIndex::new(&library, &cancelled).err(), Some(expected));
+        assert_eq!(
+            NavigationIndex::new(&library, &cancelled).err(),
+            Some(expected)
+        );
     }
     Ok(())
 }

@@ -196,3 +196,33 @@ Columns beyond the line and positions inside UTF-8 characters or UTF-16 surrogat
 pairs reject; no encoding default or clamping is inferred. Returned ranges remain
 UTF-8 bytes, not grapheme counts or display-cell positions. The host still owns
 protocol negotiation and any protocol-specific position clamping.
+
+## Prepared bidirectional navigation
+
+Use `navigation::NavigationIndex::new(&library, &cancelled)` for repeated queries
+over one immutable native generation. Preparation validates every generated file
+and source link once, then builds per-file interval indexes and an exact reverse
+index. The index borrows the generation; rebuild it when the generation changes.
+No global cache, filesystem access or background refresh is involved.
+
+`NavigationIndex::source_at` and `source_at_position` retain the one-shot APIs'
+arguments, mapping precedence, tie order and coordinate rules. Each query still
+requires the viewed-file digest, but does not rehash its immutable bytes or
+revalidate every map. Coordinate conversion still scans the selected line prefix.
+The original one-shot functions remain available for occasional queries.
+
+`NavigationIndex::generated_for(source_revision, &source_link, &cancelled)`
+returns every generated occurrence of an exact source descriptor, ordered by
+generated path and range. Scope, revision, path, digest and both span boundaries
+must match. A local field descriptor shared by several callables can return
+several occurrences. Ketho resources retain their independent revision and scope.
+This is descriptor-to-output navigation, not a general Lua reference search:
+overlapping or valid unrecorded ranges return `GeneratedLookup::Unmapped`,
+not API-absence evidence. Stale or invalid source identities reject.
+
+Preparation is stricter than a one-shot selected-file query: corruption in any
+generated file rejects the index. Total limits are 64 MiB of generated text and
+262,144 mappings, in addition to existing per-file/source limits; each query
+returns at most 65,536 candidates. Cancellation and unsupported profiles remain
+explicit errors. These bounds describe admitted data, not measured memory usage
+or an end-to-end performance guarantee.

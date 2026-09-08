@@ -66,7 +66,9 @@ impl fmt::Display for LookupError {
             Self::Cancelled => "annotation navigation was cancelled",
             Self::InputLimit => "annotation navigation input exceeds its bound",
             Self::UnknownGeneratedFile => "generated file is not in this library",
-            Self::StaleArtifact => "viewed artifact identity does not match the selected generation",
+            Self::StaleArtifact => {
+                "viewed artifact identity does not match the selected generation"
+            }
             Self::InvalidPosition => "position is not a valid code-point boundary in the file",
             Self::InvalidMapping => "annotation source-map identity or range is invalid",
             Self::UnsupportedProfile => "annotation navigation profile is unsupported",
@@ -114,7 +116,10 @@ fn viewed_file<'a>(
     Ok(file)
 }
 
-fn validate_library(library: &NativeLibrary<'_>, cancelled: &AtomicBool) -> Result<(), LookupError> {
+fn validate_library(
+    library: &NativeLibrary<'_>,
+    cancelled: &AtomicBool,
+) -> Result<(), LookupError> {
     check_cancelled(cancelled)?;
     if !matches!(
         library.schema,

@@ -1,8 +1,7 @@
 //! Prepared bidirectional queries over one immutably borrowed native generation.
 use super::{
-    LookupError, MAX_CANDIDATES, MappingPrecision, PositionEncoding, SourceLocation,
-    SourceLookup, TextPosition, check_cancelled, positions, rank, sources,
-    validate_file, validate_library,
+    LookupError, MAX_CANDIDATES, MappingPrecision, PositionEncoding, SourceLocation, SourceLookup,
+    TextPosition, check_cancelled, positions, rank, sources, validate_file, validate_library,
 };
 use crate::native::{AnnotationFile, NativeLibrary, SourceLink};
 use serde::Serialize;
@@ -203,31 +202,39 @@ impl<'a> NavigationIndex<'a> {
             return Err(LookupError::InvalidPosition);
         }
         let mut best = None;
-        indexed.intervals.visit(offset, cancelled, |ordinal, span| {
-            let key = (
-                rank(file.mappings[ordinal].granularity)?,
-                span.end - span.start,
-            );
-            if best.is_none_or(|previous| key < previous) {
-                best = Some(key);
-            }
-            Ok(())
-        })?;
+        indexed
+            .intervals
+            .visit(offset, cancelled, |ordinal, span| {
+                let key = (
+                    rank(file.mappings[ordinal].granularity)?,
+                    span.end - span.start,
+                );
+                if best.is_none_or(|previous| key < previous) {
+                    best = Some(key);
+                }
+                Ok(())
+            })?;
         let Some(best) = best else {
             return Ok(SourceLookup::Unmapped);
         };
         let mut ordinals = Vec::new();
         // Count only final best matches. An earlier, less precise tie set must
         // not exhaust the candidate budget before a more precise match is found.
-        indexed.intervals.visit(offset, cancelled, |ordinal, span| {
-            if (rank(file.mappings[ordinal].granularity)?, span.end - span.start) == best {
-                if ordinals.len() >= MAX_CANDIDATES {
-                    return Err(LookupError::InputLimit);
+        indexed
+            .intervals
+            .visit(offset, cancelled, |ordinal, span| {
+                if (
+                    rank(file.mappings[ordinal].granularity)?,
+                    span.end - span.start,
+                ) == best
+                {
+                    if ordinals.len() >= MAX_CANDIDATES {
+                        return Err(LookupError::InputLimit);
+                    }
+                    ordinals.push(ordinal);
                 }
-                ordinals.push(ordinal);
-            }
-            Ok(())
-        })?;
+                Ok(())
+            })?;
         ordinals.sort_unstable();
         let mut candidates = Vec::with_capacity(ordinals.len());
         for ordinal in ordinals {
