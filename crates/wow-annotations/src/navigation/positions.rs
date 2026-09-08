@@ -54,7 +54,7 @@ pub(super) fn byte_offset(
 ) -> Result<usize, LookupError> {
     check_cancelled(cancelled)?;
     let bytes = text.as_bytes();
-    let mut cursor = 0;
+    let mut cursor = 0usize;
     let mut line = 0;
     let mut next_check = 0;
     // File size was bounded by viewed_file; scanning uses no line-table allocation.
