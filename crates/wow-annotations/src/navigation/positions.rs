@@ -88,7 +88,9 @@ fn byte_offset(
             PositionEncoding::Utf16 => ch.len_utf16(),
             PositionEncoding::Utf32 => 1,
         };
-        units = units.checked_add(width).ok_or(LookupError::InvalidPosition)?;
+        units = units
+            .checked_add(width)
+            .ok_or(LookupError::InvalidPosition)?;
         if units > target {
             return Err(LookupError::InvalidPosition);
         }

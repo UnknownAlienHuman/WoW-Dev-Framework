@@ -187,4 +187,12 @@ not API-absence evidence. Partial generations retain their original limitations.
 
 This is a read-only Rust query over retained, already admitted inputs, not an
 arbitrary-JSON authenticator, source fetcher, LSP connection or editor installer.
-Offsets are bytes, not UTF-16 columns. The caller owns editor position conversion.
+`source_at` expects UTF-8 bytes. For zero-based line/column input, use
+`navigation::source_at_position` with `TextPosition { line, character }` and an
+explicit `PositionEncoding::{Utf8, Utf16, Utf32}`. The adapter validates the
+viewed-file digest before converting coordinates and reuses the same source-map
+selection. LF, CRLF and bare CR delimit lines without rewriting file bytes.
+Columns beyond the line and positions inside UTF-8 characters or UTF-16 surrogate
+pairs reject; no encoding default or clamping is inferred. Returned ranges remain
+UTF-8 bytes, not grapheme counts or display-cell positions. The host still owns
+protocol negotiation and any protocol-specific position clamping.
