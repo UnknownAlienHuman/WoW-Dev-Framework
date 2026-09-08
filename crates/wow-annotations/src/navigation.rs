@@ -11,9 +11,11 @@ use wow_reference::native::{Span, source_digest};
 
 mod index;
 mod positions;
+mod ranges;
 mod sources;
 pub use index::{GeneratedLocation, GeneratedLookup, NavigationIndex};
 pub use positions::{PositionEncoding, TextPosition, source_at_position};
+pub use ranges::{TextRange, source_for_range, source_for_text_range};
 
 const MAX_FILES: usize = 4096;
 const MAX_MAPPINGS: usize = 131_072;
@@ -40,7 +42,7 @@ pub struct SourceLocation<'a> {
 #[derive(Clone, Debug, Serialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum SourceLookup<'a> {
-    /// No stored map covers this byte. This never means the source API is absent.
+    /// No stored map covers the whole query. This never means the source API is absent.
     Unmapped,
     Mapped {
         precision: MappingPrecision,
@@ -96,7 +98,7 @@ pub fn source_at<'a>(
     source_in_file(library, file, byte_offset, cancelled)
 }
 
-/// Bind both navigation entry points to the same immutable viewed-file bytes.
+/// Bind every navigation entry point to the same immutable viewed-file bytes.
 fn viewed_file<'a>(
     library: &'a NativeLibrary<'_>,
     generated_path: &str,
@@ -164,8 +166,26 @@ fn source_in_file<'a>(
     byte_offset: usize,
     cancelled: &AtomicBool,
 ) -> Result<SourceLookup<'a>, LookupError> {
+    source_for_span_in_file(
+        library,
+        file,
+        Span {
+            start: byte_offset,
+            end: byte_offset,
+        },
+        cancelled,
+    )
+}
+
+fn source_for_span_in_file<'a>(
+    library: &'a NativeLibrary<'_>,
+    file: &'a AnnotationFile,
+    selected: Span,
+    cancelled: &AtomicBool,
+) -> Result<SourceLookup<'a>, LookupError> {
     check_cancelled(cancelled)?;
-    if byte_offset > file.text.len() || !file.text.is_char_boundary(byte_offset) {
+    // str::get rejects reversed, out-of-file and mid-codepoint endpoints.
+    if file.text.get(selected.start..selected.end).is_none() {
         return Err(LookupError::InvalidPosition);
     }
     let sources = sources::Sources::new(library, cancelled)?;
@@ -180,7 +200,7 @@ fn source_in_file<'a>(
             return Err(LookupError::InvalidMapping);
         }
         sources.revision(&mapping.source)?;
-        if span.start <= byte_offset && byte_offset < span.end {
+        if ranges::covers(span, selected) {
             let key = (rank, span.end - span.start);
             if best.is_none_or(|previous| key < previous) {
                 best = Some(key);
@@ -195,8 +215,7 @@ fn source_in_file<'a>(
     for mapping in &file.mappings {
         check_cancelled(cancelled)?;
         let span = mapping.generated;
-        if span.start <= byte_offset
-            && byte_offset < span.end
+        if ranges::covers(span, selected)
             && (rank(mapping.granularity)?, span.end - span.start) == best
         {
             if candidates.len() >= MAX_CANDIDATES {

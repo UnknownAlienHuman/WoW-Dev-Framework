@@ -1,7 +1,8 @@
 //! Prepared bidirectional queries over one immutably borrowed native generation.
 use super::{
     LookupError, MAX_CANDIDATES, MappingPrecision, PositionEncoding, SourceLocation, SourceLookup,
-    TextPosition, check_cancelled, positions, rank, sources, validate_file, validate_library,
+    TextPosition, TextRange, check_cancelled, positions, ranges, rank, sources, validate_file,
+    validate_library,
 };
 use crate::native::{AnnotationFile, NativeLibrary, SourceLink};
 use serde::Serialize;
@@ -123,7 +124,14 @@ impl<'a> NavigationIndex<'a> {
         cancelled: &AtomicBool,
     ) -> Result<SourceLookup<'a>, LookupError> {
         let file = self.viewed_file(generated_path, expected_sha256, cancelled)?;
-        self.lookup(file, byte_offset, cancelled)
+        self.lookup(
+            file,
+            Span {
+                start: byte_offset,
+                end: byte_offset,
+            },
+            cancelled,
+        )
     }
 
     /// Uses the existing strict coordinate conversion without changing encodings
@@ -138,7 +146,42 @@ impl<'a> NavigationIndex<'a> {
     ) -> Result<SourceLookup<'a>, LookupError> {
         let file = self.viewed_file(generated_path, expected_sha256, cancelled)?;
         let offset = positions::byte_offset(&file.file.text, position, encoding, cancelled)?;
-        self.lookup(file, offset, cancelled)
+        self.lookup(
+            file,
+            Span {
+                start: offset,
+                end: offset,
+            },
+            cancelled,
+        )
+    }
+
+    /// Same whole-range containment and tie order as the one-shot range query.
+    /// The index remains immutable; the viewed digest is required on every query.
+    pub fn source_for_range(
+        &self,
+        generated_path: &str,
+        expected_sha256: &str,
+        range: Span,
+        cancelled: &AtomicBool,
+    ) -> Result<SourceLookup<'a>, LookupError> {
+        let file = self.viewed_file(generated_path, expected_sha256, cancelled)?;
+        self.lookup(file, range, cancelled)
+    }
+
+    /// Convert both endpoints using the shared strict encoding/newline policy.
+    /// A selection crossing independent declarations is never joined artificially.
+    pub fn source_for_text_range(
+        &self,
+        generated_path: &str,
+        expected_sha256: &str,
+        range: TextRange,
+        encoding: PositionEncoding,
+        cancelled: &AtomicBool,
+    ) -> Result<SourceLookup<'a>, LookupError> {
+        let file = self.viewed_file(generated_path, expected_sha256, cancelled)?;
+        let selected = ranges::byte_span(&file.file.text, range, encoding, cancelled)?;
+        self.lookup(file, selected, cancelled)
     }
 
     /// Find all generated occurrences of one exact source descriptor.
@@ -194,17 +237,23 @@ impl<'a> NavigationIndex<'a> {
     fn lookup(
         &self,
         indexed: &IndexedFile<'a>,
-        offset: usize,
+        selected: Span,
         cancelled: &AtomicBool,
     ) -> Result<SourceLookup<'a>, LookupError> {
+        check_cancelled(cancelled)?;
         let file = indexed.file;
-        if offset > file.text.len() || !file.text.is_char_boundary(offset) {
+        if file.text.get(selected.start..selected.end).is_none() {
             return Err(LookupError::InvalidPosition);
         }
         let mut best = None;
+        // A containing range must cover the first byte. Reuse the interval tree,
+        // then require its end to cover the entire selection before ranking it.
         indexed
             .intervals
-            .visit(offset, cancelled, |ordinal, span| {
+            .visit(selected.start, cancelled, |ordinal, span| {
+                if !ranges::covers(span, selected) {
+                    return Ok(());
+                }
                 let key = (
                     rank(file.mappings[ordinal].granularity)?,
                     span.end - span.start,
@@ -222,7 +271,10 @@ impl<'a> NavigationIndex<'a> {
         // not exhaust the candidate budget before a more precise match is found.
         indexed
             .intervals
-            .visit(offset, cancelled, |ordinal, span| {
+            .visit(selected.start, cancelled, |ordinal, span| {
+                if !ranges::covers(span, selected) {
+                    return Ok(());
+                }
                 if (
                     rank(file.mappings[ordinal].granularity)?,
                     span.end - span.start,
