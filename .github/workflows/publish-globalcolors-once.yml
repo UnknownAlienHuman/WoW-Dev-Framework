@@ -1,0 +1,169 @@
+name: Publish GlobalColors checkpoint once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-globalcolors-once.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-globalcolors-checkpoint
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Verify exact publication base
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = dc6c7801fd906bd288a45e07c8a94725cfdfbf9f
+
+      - name: Materialize already reviewed Git blobs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          candidates="$RUNNER_TEMP/globalcolors-candidates"
+          payload="$RUNNER_TEMP/globalcolors-payload"
+          mkdir -p "$candidates" "$payload"
+          for sha in \
+            6f73ee9c240e935ef3aca13cf4a7814307746437 \
+            06751301ec591764ed97a699c7304733e55c8b93 \
+            999bcf37918d915df0d1f55b8fa5edaa120c66b8 \
+            59339223d312b82f189bb0558c44fab2e049391d \
+            a810936e3d99c3ede8059a69675f7f7e05eb4d5a \
+            db2da9c2f68959f96d63913c1d0c64f22b60ca07 \
+            3b927fe43d1bd169656b0f445f87a880d90820f7 \
+            4cb61dc3fd2d785d3d4248d933bc292e20ca7e60 \
+            79b2352ed2f7bef21dc7b7289201c0bfb50b8505 \
+            a66f1eaf561bd6ecfc0628ef7d5bbb9657b3510d \
+            388c5599783655a56c201f9617f1b510e7b3e1d9 \
+            239fc3342890e4b99bf8bcb6ac22119c6c7d728a \
+            ba5fcb78fff20021b3bf2759422dcb6c3d8bcb69 \
+            3f65a1296a321e385f080f07594573c23a66ddd9 \
+            9e4dab06cb9d6fc245c6d621a5c1475330503fcb \
+            d94a804d597539c46c1c9ac966361a34d32e0d46
+          do
+            gh api "repos/${GITHUB_REPOSITORY}/git/blobs/$sha" --jq '.content' \
+              | tr -d '\n' | base64 --decode > "$candidates/$sha"
+          done
+          python3 - "$candidates" "$payload" <<'PY'
+          from pathlib import Path
+          import shutil
+          import sys
+
+          candidates = Path(sys.argv[1])
+          payload = Path(sys.argv[2])
+          texts = {path.name: path.read_text(encoding="utf-8") for path in candidates.iterdir()}
+
+          rules = {
+              "crates/wow-reference/src/native_aliases.rs": lambda t: (
+                  "pub struct AliasDocument" in t and "pub fn global_colors(" in t
+              ),
+              "crates/wow-reference/src/native_aliases/global_colors.rs": lambda t: (
+                  "pub struct GlobalColorFact" in t and "CreateColor" in t and "LuaAssignStat" in t
+              ),
+              "crates/wow-reference/tests/global_colors.rs": lambda t: (
+                  "#[test]" in t and "ingest_alias_catalog" in t
+                  and "GlobalColor" in t and "project_with_alias_catalog" not in t
+              ),
+              "crates/wow-annotations/src/aliases.rs": lambda t: (
+                  "pub struct AliasReport" in t and "global_color_outcomes" in t
+                  and "mod global_colors;" in t
+              ),
+              "crates/wow-annotations/src/aliases/global_colors.rs": lambda t: (
+                  "pub(super) struct GlobalColors" in t and "unresolved_types" in t
+                  and "colorRGBA" in t
+              ),
+              "crates/wow-annotations/tests/global_colors.rs": lambda t: (
+                  "#[test]" in t and "project_with_alias_catalog" in t
+                  and "NavigationIndex" in t and "global_color_outcomes" in t
+              ),
+              "crates/wow-annotations/src/navigation/sources.rs": lambda t: (
+                  "pub(super) struct Sources" in t and "wow-native-alias-projection/9" in t
+              ),
+              "crates/wow-annotations/examples/support/catalogs.rs": lambda t: (
+                  "alias acquisition cancelled" in t and "document.global_colors()" in t
+              ),
+              ".github/workflows/current-source-bundle.yml": lambda t: (
+                  t.startswith("name: Native current-source annotations") and "GlobalColors.lua" in t
+              ),
+              "tools/xtask/src/library/aliases.rs": lambda t: (
+                  "pub(super) struct CheckedAliases" in t and "mod global_colors;" in t
+              ),
+              "tools/xtask/src/library/aliases/global_colors.rs": lambda t: (
+                  "pub(super) fn verify" in t and "unresolved_global_color_types" in t
+                  and "valid_identifier" in t
+              ),
+              "tools/xtask/src/library/aliases/resources.rs": lambda t: (
+                  "pub(super) fn read(report" in t and "wow-native-alias-resource/7" in t
+              ),
+              "tools/xtask/src/library/mappings.rs": lambda t: (
+                  "Final-byte mapping layout" in t and "global color" in t.lower()
+              ),
+          }
+
+          selected = {}
+          for target, rule in rules.items():
+              matches = [sha for sha, text in texts.items() if rule(text)]
+              if len(matches) != 1:
+                  raise SystemExit(f"{target}: expected one candidate, got {matches}")
+              selected[target] = matches[0]
+
+          if len(set(selected.values())) != len(selected):
+              raise SystemExit("one candidate matched more than one target")
+
+          for target, sha in selected.items():
+              destination = payload / target
+              destination.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copyfile(candidates / sha, destination)
+          PY
+          cp -a "$payload"/. "$GITHUB_WORKSPACE"/
+
+      - name: Format and verify production tree
+        run: |
+          set -euo pipefail
+          rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+          cargo +stable fmt --all
+          cargo +stable fmt --all --check
+          cargo +stable xtask check
+          cargo +stable check --locked --workspace --all-targets --all-features
+          cargo +stable clippy --locked --workspace --all-targets --all-features -- -D warnings
+          cargo +stable test --locked --workspace --all-targets --all-features
+          RUSTDOCFLAGS='-D warnings' cargo +stable doc --locked --workspace --all-features --no-deps
+          git diff --check
+
+      - name: Publish exact checkpoint to main
+        run: |
+          set -euo pipefail
+          git config user.name 'Iurii Lisenkov'
+          git config user.email '71514792+UnknownAlienHuman@users.noreply.github.com'
+          git add \
+            crates/wow-reference/src/native_aliases.rs \
+            crates/wow-reference/src/native_aliases/global_colors.rs \
+            crates/wow-reference/tests/global_colors.rs \
+            crates/wow-annotations/src/aliases.rs \
+            crates/wow-annotations/src/aliases/global_colors.rs \
+            crates/wow-annotations/tests/global_colors.rs \
+            crates/wow-annotations/src/navigation/sources.rs \
+            crates/wow-annotations/examples/support/catalogs.rs \
+            tools/xtask/src/library/aliases.rs \
+            tools/xtask/src/library/aliases/global_colors.rs \
+            tools/xtask/src/library/aliases/resources.rs \
+            tools/xtask/src/library/mappings.rs \
+            .github/workflows/current-source-bundle.yml
+          git rm .github/workflows/publish-globalcolors-once.yml
+          git commit -m 'feat(annotations): project static Ketho global colors' \
+            -m 'Admit only top-level NAME = CreateColor(r, g, b, a) declarations through the Emmy AST without executing Lua. Preserve exact numeric lexemes, source identity and declaration spans; reject every other statement or call form.' \
+            -m 'Render inert colorRGBA globals with deterministic ordering, explicit duplicate and native-name conflict outcomes, unresolved-type evidence, exact bidirectional maps, resource v7/projection v9 verification and a moving-donor current-source probe. No dependency, Wasm ABI or Blizzard-authority change.'
+          git push origin HEAD:main
