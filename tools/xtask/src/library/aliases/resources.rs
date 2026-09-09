@@ -7,11 +7,13 @@ pub(super) fn read(report: &Value) -> Result<Vec<&Value>> {
         return Err("invalid external alias authority".into());
     }
     let primary = &report["source"];
+    let namespace_profile = report["schema"] == "wow-native-alias-projection/7";
     let structure_profile = matches!(
         report["schema"].as_str(),
         Some("wow-native-alias-projection/5" | "wow-native-alias-projection/6")
     );
-    let open_profile = report["schema"] == "wow-native-alias-projection/4" || structure_profile;
+    let extended_profile = structure_profile || namespace_profile;
+    let open_profile = report["schema"] == "wow-native-alias-projection/4" || extended_profile;
     let multiple = report["schema"] == "wow-native-alias-projection/3"
         || (open_profile && report.get("additional_sources").is_some());
     let mut resources = vec![primary];
@@ -49,13 +51,15 @@ pub(super) fn read(report: &Value) -> Result<Vec<&Value>> {
     let mut count = 0usize;
     let mut has_open_resource = false;
     let mut has_structures = false;
+    let mut has_namespaces = false;
     let mut field_count = 0usize;
     for resource in &resources {
         let profile = match resource["schema"].as_str() {
             Some("wow-native-alias-resource/1") => 1,
             Some("wow-native-alias-resource/2") => 2,
             Some("wow-native-alias-resource/3") if open_profile => 3,
-            Some("wow-native-alias-resource/4") if structure_profile => 4,
+            Some("wow-native-alias-resource/4") if extended_profile => 4,
+            Some("wow-native-alias-resource/5") if namespace_profile => 5,
             _ => return Err("unsupported alias resource schema".into()),
         };
         let path = text(resource, "path")?;
@@ -103,7 +107,20 @@ pub(super) fn read(report: &Value) -> Result<Vec<&Value>> {
             }
             0
         };
-        if (aliases.is_empty() && structures == 0)
+        let namespaces = if profile == 5 {
+            let namespaces = list(resource, "namespaces")?;
+            if namespaces.is_empty() || !aliases.is_empty() || structures != 0 {
+                return Err("invalid external namespace resource".into());
+            }
+            has_namespaces = true;
+            namespaces.len()
+        } else {
+            if resource.get("namespaces").is_some() {
+                return Err("unexpected external namespace field".into());
+            }
+            0
+        };
+        if (aliases.is_empty() && structures == 0 && namespaces == 0)
             || (profile < 4 && ((profile >= 2) != has_literals || (profile == 3) != has_base))
         {
             return Err("alias schema does not describe its declarations".into());
@@ -122,16 +139,17 @@ pub(super) fn read(report: &Value) -> Result<Vec<&Value>> {
         }
         bytes = bytes.checked_add(raw.len()).ok_or("alias byte limit")?;
         count = count
-            .checked_add(aliases.len() + structures)
+            .checked_add(aliases.len() + structures + namespaces)
             .ok_or("alias count limit")?;
         if bytes > 2 * 1024 * 1024 || count > 4096 {
             return Err("alias resource aggregate limit".into());
         }
     }
-    if structure_profile != has_structures
-        || (!structure_profile && open_profile != has_open_resource)
+    if namespace_profile != has_namespaces
+        || (structure_profile && !has_structures)
+        || (!namespace_profile && !structure_profile && open_profile != has_open_resource)
     {
-        return Err("alias projection profile does not match its open resources".into());
+        return Err("alias projection profile does not match its resources".into());
     }
     Ok(resources)
 }

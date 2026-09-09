@@ -68,7 +68,16 @@ pub(super) fn include_catalogs<'a>(
     sources: &BTreeMap<&'a str, &'a Value>,
     detailed: bool,
 ) -> Result<()> {
-    if library["aliases"]["schema"] != "wow-native-alias-projection/6" {
+    if !matches!(
+        library["aliases"]["schema"].as_str(),
+        Some("wow-native-alias-projection/6" | "wow-native-alias-projection/7")
+    ) {
+        return Ok(());
+    }
+    let has_structures = sources
+        .values()
+        .any(|resource| resource.get("structures").is_some());
+    if !has_structures {
         return Ok(());
     }
     if !detailed {

@@ -1,9 +1,10 @@
 //! Explicit, annotation-only alias resources for the Ketho port.
 //!
 //! This is NOT Blizzard reference truth or an automatic correction source.
-//! EmmyLua parses the input; no Lua statement, diagnostic directive, namespace
-//! change or loader is admitted. The original resource and all declarations
-//! survive in the report, including unsupported type forms and duplicates.
+//! EmmyLua parses the input. Only the dedicated namespace profile admits exact
+//! empty global table assignments; no statement is executed, and directives,
+//! namespace mutation and loaders remain rejected. The original resource and all
+//! declarations survive in the report, including unsupported forms and duplicates.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -16,8 +17,10 @@ use serde::Serialize;
 use crate::native::{NativeError, NativeErrorCode, Span, source_digest};
 
 mod catalog;
+mod namespaces;
 mod open_strings;
 mod structures;
+pub use namespaces::NamespaceFact;
 pub use structures::{StructureFact, StructureField, StructureFieldType};
 
 const MAX_BYTES: usize = 256 * 1024;
@@ -54,6 +57,8 @@ pub struct AliasDocument {
     aliases: Vec<AliasFact>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     structures: Vec<StructureFact>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    namespaces: Vec<NamespaceFact>,
 }
 impl AliasDocument {
     pub fn revision(&self) -> &str {
@@ -73,6 +78,9 @@ impl AliasDocument {
     }
     pub fn structures(&self) -> &[StructureFact] {
         &self.structures
+    }
+    pub fn namespaces(&self) -> &[NamespaceFact] {
+        &self.namespaces
     }
 }
 
@@ -104,6 +112,7 @@ pub fn ingest_aliases(
 /// leading `string` base remains open while its literal hints are preserved.
 /// Comment-only classes with named fields are also admitted as an external
 /// structure profile; they never replace Blizzard facts or imply inheritance.
+/// A standalone namespace resource may contain only exact `C_* = {}` bindings.
 /// Only contiguous continuation comments join an alias. Emmy owns type parsing;
 /// malformed declarations cannot consume their independently parsed siblings.
 pub fn ingest_alias_catalog(
@@ -176,16 +185,31 @@ fn ingest(
     if !errors.is_empty() {
         return Err(error(NativeErrorCode::Syntax));
     }
-    if tokens.iter().any(|t| {
+    let has_statements = tokens.iter().any(|token| {
         !matches!(
-            t.kind,
+            token.kind,
             LuaTokenKind::TkShortComment
                 | LuaTokenKind::TkWhitespace
                 | LuaTokenKind::TkEndOfLine
                 | LuaTokenKind::TkEof
         )
-    }) {
-        return Err(error(NativeErrorCode::UnsupportedStatement));
+    });
+    if has_statements {
+        if !string_enums {
+            return Err(error(NativeErrorCode::UnsupportedStatement));
+        }
+        let namespaces = namespaces::read(input, cancelled)?;
+        return Ok(AliasDocument {
+            schema: "wow-native-alias-resource/5",
+            revision: revision.into(),
+            path: path.into(),
+            sha256: digest,
+            source_bytes: text.len(),
+            text: text.into(),
+            aliases: Vec::new(),
+            structures: Vec::new(),
+            namespaces,
+        });
     }
     let comments = tokens
         .iter()
@@ -334,6 +358,7 @@ fn ingest(
         text: text.into(),
         aliases,
         structures,
+        namespaces: Vec::new(),
     })
 }
 

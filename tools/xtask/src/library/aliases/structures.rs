@@ -13,7 +13,10 @@ pub(super) fn verify<'a>(
     emitted: &mut BTreeSet<&'a str>,
 ) -> Result<bool> {
     let report = &library["aliases"];
-    let field_maps = report["schema"] == "wow-native-alias-projection/6";
+    let field_maps = matches!(
+        report["schema"].as_str(),
+        Some("wow-native-alias-projection/6" | "wow-native-alias-projection/7")
+    );
     if report["schema"] != "wow-native-alias-projection/5" && !field_maps {
         if report.get("structure_outcomes").is_some()
             || report.get("unresolved_structure_fields").is_some()
