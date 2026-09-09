@@ -151,7 +151,7 @@ pub(super) fn read(input: &str, cancelled: &AtomicBool) -> Result<Vec<FunctionCo
             || closure
                 .get_block()
                 .is_some_and(|body| body.get_stats().next().is_some())
-          {
+        {
             return Err(error(NativeErrorCode::UnsupportedStatement));
         }
         let function_span = location(&function);
