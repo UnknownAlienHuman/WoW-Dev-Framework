@@ -2,6 +2,7 @@
 use super::{Result, list, manifest, text};
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
+mod function_containers;
 mod namespaces;
 mod resources;
 mod strings;
@@ -148,6 +149,7 @@ pub(super) fn verify(library: &Value) -> Result<CheckedAliases<'_>> {
     }
     blocked |= structures::verify(library, &source_map, &mut mapped, &mut emitted)?;
     blocked |= namespaces::verify(library, &source_map, &mut mapped, &mut emitted)?;
+    blocked |= function_containers::verify(library, &source_map, &mut mapped, &mut emitted)?;
     if !mapped.is_empty() {
         return Err("unaccounted alias output".into());
     }

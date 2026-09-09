@@ -9,6 +9,7 @@ use wow_reference::native_aliases::AliasDocument;
 
 use crate::ketho::{RenderError, Renderer, qualified_identifier};
 use crate::native::{ProjectionIssue, SourceLink, SourceMapping};
+mod function_containers;
 mod namespaces;
 mod structures;
 
@@ -42,6 +43,10 @@ pub struct AliasReport<'a> {
     pub unresolved_structure_fields: Vec<SourceLink>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub namespace_outcomes: Vec<AliasOutcome>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub function_container_outcomes: Vec<AliasOutcome>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub unresolved_function_container_returns: Vec<SourceLink>,
     pub limitations: Vec<&'static str>,
 }
 
@@ -142,7 +147,15 @@ pub(crate) fn project<'a>(
     if sources.iter().map(|s| s.text().len()).sum::<usize>() > MAX_CATALOG_BYTES
         || sources
             .iter()
-            .map(|s| s.aliases().len() + s.structures().len() + s.namespaces().len())
+            .map(|s| {
+                s.aliases().len()
+                    + s.structures().len()
+                    + s.namespaces().len()
+                    + s.function_containers()
+                        .iter()
+                        .map(|container| 1 + container.methods.len())
+                        .sum::<usize>()
+            })
             .sum::<usize>()
             > MAX_CATALOG_ALIASES
     {
@@ -169,14 +182,21 @@ pub(crate) fn project<'a>(
         for fact in resource.namespaces() {
             *counts.entry(&fact.name).or_default() += 1;
         }
+        for fact in resource.function_containers() {
+            *counts.entry(&fact.name).or_default() += 1;
+        }
     }
     let mut namespaces =
         namespaces::Namespaces::prepare(&sources, &counts, defined, reserved, cancelled)?;
     let mut structures = structures::Structures::prepare(
         &sources, &renderer, &counts, defined, reserved, cancelled,
     )?;
+    let mut function_containers = function_containers::FunctionContainers::prepare(
+        &sources, &renderer, &counts, defined, reserved, cancelled,
+    )?;
     let mut known = defined.clone();
     known.extend(structures.defined.iter().cloned());
+    known.extend(function_containers.defined.iter().cloned());
     let mut states = vec![None; facts.len()];
     let mut lowered = vec![None; facts.len()];
     let mut candidates = BTreeMap::new();
@@ -283,10 +303,16 @@ pub(crate) fn project<'a>(
     }
     known.extend(emitted.iter().map(|&index| facts[index].name.clone()));
     let unresolved_structure_fields = structures.unresolved_fields(&renderer, &known, cancelled)?;
+    let unresolved_function_container_returns =
+        function_containers.unresolved_returns(&renderer, &known, cancelled)?;
     emitted.sort_by_key(|&index| &facts[index].name);
     let mut text = String::new();
     let mut mappings = Vec::new();
-    if !emitted.is_empty() || structures.has_output() || namespaces.has_output() {
+    if !emitted.is_empty()
+        || structures.has_output()
+        || namespaces.has_output()
+        || function_containers.has_output()
+    {
         text.push_str("---@meta _\n-- Explicit external annotation overlay; not Blizzard reference evidence.\n");
         // Retain the port donor's license with generated derivative annotations.
         // This static, framework-owned text cannot become source directives.
@@ -313,11 +339,16 @@ pub(crate) fn project<'a>(
         }
     }
     namespaces.append(&mut text, &mut mappings, cancelled)?;
+    function_containers.append(&mut text, &mut mappings, cancelled)?;
     structures.append(&mut text, &mut mappings, cancelled)?;
     issues.append(&mut structures.issues);
     issues.append(&mut namespaces.issues);
+    issues.append(&mut function_containers.issues);
     let has_structures = sources.iter().any(|source| !source.structures().is_empty());
     let has_namespaces = sources.iter().any(|source| !source.namespaces().is_empty());
+    let has_function_containers = sources
+        .iter()
+        .any(|source| !source.function_containers().is_empty());
     let mut limitations = vec![
         "explicit consumer overlay; not source-confirmed Blizzard types or runtime safety",
         "only named/primitive unions; unsupported declarations and dependencies remain explicit",
@@ -335,9 +366,14 @@ pub(crate) fn project<'a>(
     if has_namespaces {
         limitations.push("external namespaces are explicit empty table bindings from a standalone resource; no members, absence or runtime availability are inferred");
     }
+    if has_function_containers {
+        limitations.push("external function containers retain exact class and method maps; empty bodies are syntax-only declarations and do not imply runtime behavior");
+    }
     Ok(ProjectedAliases {
         report: AliasReport {
-            schema: if has_namespaces {
+            schema: if has_function_containers {
+                "wow-native-alias-projection/8"
+            } else if has_namespaces {
                 "wow-native-alias-projection/7"
             } else if has_structures {
                 "wow-native-alias-projection/6"
@@ -357,6 +393,8 @@ pub(crate) fn project<'a>(
             structure_outcomes: structures.outcomes,
             unresolved_structure_fields,
             namespace_outcomes: namespaces.outcomes,
+            function_container_outcomes: function_containers.outcomes,
+            unresolved_function_container_returns,
             limitations,
         },
         text,

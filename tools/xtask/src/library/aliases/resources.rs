@@ -7,14 +7,29 @@ pub(super) fn read(report: &Value) -> Result<Vec<&Value>> {
         return Err("invalid external alias authority".into());
     }
     let primary = &report["source"];
-    let namespace_profile = report["schema"] == "wow-native-alias-projection/7";
-    let structure_profile = matches!(
-        report["schema"].as_str(),
+    let schema = report["schema"].as_str();
+    let function_profile = schema == Some("wow-native-alias-projection/8");
+    let namespace_capable = matches!(
+        schema,
+        Some("wow-native-alias-projection/7" | "wow-native-alias-projection/8")
+    );
+    let namespace_required = schema == Some("wow-native-alias-projection/7");
+    let structure_capable = matches!(
+        schema,
+        Some(
+            "wow-native-alias-projection/5"
+                | "wow-native-alias-projection/6"
+                | "wow-native-alias-projection/7"
+                | "wow-native-alias-projection/8"
+        )
+    );
+    let structure_required = matches!(
+        schema,
         Some("wow-native-alias-projection/5" | "wow-native-alias-projection/6")
     );
-    let extended_profile = structure_profile || namespace_profile;
-    let open_profile = report["schema"] == "wow-native-alias-projection/4" || extended_profile;
-    let multiple = report["schema"] == "wow-native-alias-projection/3"
+    let extended_profile = structure_capable || namespace_capable || function_profile;
+    let open_profile = schema == Some("wow-native-alias-projection/4") || extended_profile;
+    let multiple = schema == Some("wow-native-alias-projection/3")
         || (open_profile && report.get("additional_sources").is_some());
     let mut resources = vec![primary];
     if multiple {
@@ -29,7 +44,7 @@ pub(super) fn read(report: &Value) -> Result<Vec<&Value>> {
         }
         if !open_profile
             && !matches!(
-                (report["schema"].as_str(), primary["schema"].as_str()),
+                (schema, primary["schema"].as_str()),
                 (
                     Some("wow-native-alias-projection/1"),
                     Some("wow-native-alias-resource/1")
@@ -52,14 +67,17 @@ pub(super) fn read(report: &Value) -> Result<Vec<&Value>> {
     let mut has_open_resource = false;
     let mut has_structures = false;
     let mut has_namespaces = false;
+    let mut has_function_containers = false;
     let mut field_count = 0usize;
+    let mut method_count = 0usize;
     for resource in &resources {
         let profile = match resource["schema"].as_str() {
             Some("wow-native-alias-resource/1") => 1,
             Some("wow-native-alias-resource/2") => 2,
             Some("wow-native-alias-resource/3") if open_profile => 3,
-            Some("wow-native-alias-resource/4") if extended_profile => 4,
-            Some("wow-native-alias-resource/5") if namespace_profile => 5,
+            Some("wow-native-alias-resource/4") if structure_capable => 4,
+            Some("wow-native-alias-resource/5") if namespace_capable => 5,
+            Some("wow-native-alias-resource/6") if function_profile => 6,
             _ => return Err("unsupported alias resource schema".into()),
         };
         let path = text(resource, "path")?;
@@ -120,7 +138,45 @@ pub(super) fn read(report: &Value) -> Result<Vec<&Value>> {
             }
             0
         };
-        if (aliases.is_empty() && structures == 0 && namespaces == 0)
+        let function_items = if profile == 6 {
+            let containers = list(resource, "function_containers")?;
+            if containers.is_empty()
+                || !aliases.is_empty()
+                || structures != 0
+                || namespaces != 0
+            {
+                return Err("invalid external function container resource".into());
+            }
+            has_function_containers = true;
+            let previous_methods = method_count;
+            for container in containers {
+                let methods = list(container, "methods")?;
+                if methods.is_empty() {
+                    return Err("empty external function container".into());
+                }
+                method_count = method_count
+                    .checked_add(methods.len())
+                    .ok_or("function container method limit")?;
+                for method in methods {
+                    if list(method, "returns")?.len() > 16 {
+                        return Err("function container return limit".into());
+                    }
+                }
+            }
+            if method_count > 65_536 || method_count - previous_methods > 4096 {
+                return Err("function container method limit".into());
+            }
+            containers.len() + method_count - previous_methods
+        } else {
+            if resource.get("function_containers").is_some() {
+                return Err("unexpected external function container field".into());
+            }
+            0
+        };
+        if (aliases.is_empty()
+            && structures == 0
+            && namespaces == 0
+            && function_items == 0)
             || (profile < 4 && ((profile >= 2) != has_literals || (profile == 3) != has_base))
         {
             return Err("alias schema does not describe its declarations".into());
@@ -139,15 +195,18 @@ pub(super) fn read(report: &Value) -> Result<Vec<&Value>> {
         }
         bytes = bytes.checked_add(raw.len()).ok_or("alias byte limit")?;
         count = count
-            .checked_add(aliases.len() + structures + namespaces)
+            .checked_add(aliases.len() + structures + namespaces + function_items)
             .ok_or("alias count limit")?;
         if bytes > 2 * 1024 * 1024 || count > 4096 {
             return Err("alias resource aggregate limit".into());
         }
     }
-    if namespace_profile != has_namespaces
-        || (structure_profile && !has_structures)
-        || (!namespace_profile && !structure_profile && open_profile != has_open_resource)
+    if function_profile != has_function_containers
+        || (!namespace_capable && has_namespaces)
+        || (namespace_required && !has_namespaces)
+        || (!structure_capable && has_structures)
+        || (structure_required && !has_structures)
+        || (!extended_profile && open_profile != has_open_resource)
     {
         return Err("alias projection profile does not match its resources".into());
     }

@@ -70,7 +70,11 @@ pub(super) fn include_catalogs<'a>(
 ) -> Result<()> {
     if !matches!(
         library["aliases"]["schema"].as_str(),
-        Some("wow-native-alias-projection/6" | "wow-native-alias-projection/7")
+        Some(
+            "wow-native-alias-projection/6"
+                | "wow-native-alias-projection/7"
+                | "wow-native-alias-projection/8"
+        )
     ) {
         return Ok(());
     }

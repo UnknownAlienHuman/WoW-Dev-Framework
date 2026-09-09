@@ -17,9 +17,13 @@ use serde::Serialize;
 use crate::native::{NativeError, NativeErrorCode, Span, source_digest};
 
 mod catalog;
+mod function_containers;
 mod namespaces;
 mod open_strings;
 mod structures;
+pub use function_containers::{
+    FunctionContainerFact, FunctionContainerMethod, FunctionContainerReturn,
+};
 pub use namespaces::NamespaceFact;
 pub use structures::{StructureFact, StructureField, StructureFieldType};
 
@@ -59,6 +63,8 @@ pub struct AliasDocument {
     structures: Vec<StructureFact>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     namespaces: Vec<NamespaceFact>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    function_containers: Vec<FunctionContainerFact>,
 }
 impl AliasDocument {
     pub fn revision(&self) -> &str {
@@ -81,6 +87,9 @@ impl AliasDocument {
     }
     pub fn namespaces(&self) -> &[NamespaceFact] {
         &self.namespaces
+    }
+    pub fn function_containers(&self) -> &[FunctionContainerFact] {
+        &self.function_containers
     }
 }
 
@@ -198,9 +207,27 @@ fn ingest(
         if !string_enums {
             return Err(error(NativeErrorCode::UnsupportedStatement));
         }
-        let namespaces = namespaces::read(input, cancelled)?;
+        match namespaces::read(input, cancelled) {
+            Ok(namespaces) => {
+                return Ok(AliasDocument {
+                    schema: "wow-native-alias-resource/5",
+                    revision: revision.into(),
+                    path: path.into(),
+                    sha256: digest,
+                    source_bytes: text.len(),
+                    text: text.into(),
+                    aliases: Vec::new(),
+                    structures: Vec::new(),
+                    namespaces,
+                    function_containers: Vec::new(),
+                });
+            }
+            Err(failure) if failure.code == NativeErrorCode::Cancelled => return Err(failure),
+            Err(_) => {}
+        }
+        let function_containers = function_containers::read(input, cancelled)?;
         return Ok(AliasDocument {
-            schema: "wow-native-alias-resource/5",
+            schema: "wow-native-alias-resource/6",
             revision: revision.into(),
             path: path.into(),
             sha256: digest,
@@ -208,7 +235,8 @@ fn ingest(
             text: text.into(),
             aliases: Vec::new(),
             structures: Vec::new(),
-            namespaces,
+            namespaces: Vec::new(),
+            function_containers,
         });
     }
     let comments = tokens
@@ -359,6 +387,7 @@ fn ingest(
         aliases,
         structures,
         namespaces: Vec::new(),
+        function_containers: Vec::new(),
     })
 }
 

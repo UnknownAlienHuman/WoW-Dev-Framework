@@ -12,7 +12,11 @@ pub(super) fn verify<'a>(
     emitted: &mut BTreeSet<&'a str>,
 ) -> Result<bool> {
     let report = &library["aliases"];
-    if report["schema"] != "wow-native-alias-projection/7" {
+    let schema = report["schema"].as_str();
+    if !matches!(
+        schema,
+        Some("wow-native-alias-projection/7" | "wow-native-alias-projection/8")
+    ) {
         if report.get("namespace_outcomes").is_some() {
             return Err("unexpected namespace projection field".into());
         }
@@ -26,8 +30,17 @@ pub(super) fn verify<'a>(
             }
         }
     }
+    if entries.is_empty() {
+        if report.get("namespace_outcomes").is_some() {
+            return Err("unexpected namespace projection field".into());
+        }
+        if schema == Some("wow-native-alias-projection/7") {
+            return Err("missing external namespace outcomes".into());
+        }
+        return Ok(false);
+    }
     let outcomes = list(report, "namespace_outcomes")?;
-    if entries.is_empty() || outcomes.len() != entries.len() {
+    if outcomes.len() != entries.len() {
         return Err("missing external namespace outcomes".into());
     }
     let mut blocked = false;
