@@ -189,10 +189,7 @@ fn declaration(
     renderer: &Renderer,
 ) -> Result<RenderedContainer, RenderError> {
     let mut names = BTreeSet::new();
-    let mut text = format!(
-        "---@class {}\nlocal {} = {{}}",
-        fact.name, fact.name
-    );
+    let mut text = format!("---@class {}\nlocal {} = {{}}", fact.name, fact.name);
     let header = Span {
         start: 0,
         end: text.len(),

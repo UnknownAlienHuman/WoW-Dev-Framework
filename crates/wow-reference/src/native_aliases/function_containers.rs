@@ -30,10 +30,7 @@ pub struct FunctionContainerReturn {
     pub span: Span,
 }
 
-pub(super) fn read(
-    input: &str,
-    cancelled: &AtomicBool,
-) -> Result<Vec<FunctionContainerFact>> {
+pub(super) fn read(input: &str, cancelled: &AtomicBool) -> Result<Vec<FunctionContainerFact>> {
     if cancelled.load(Ordering::Relaxed) {
         return Err(error(NativeErrorCode::Cancelled));
     }
@@ -130,7 +127,10 @@ pub(super) fn read(
         else {
             return Err(error(NativeErrorCode::UnsupportedStatement));
         };
-        if !index.get_index_token().is_some_and(|token| token.is_colon()) {
+        if !index
+            .get_index_token()
+            .is_some_and(|token| token.is_colon())
+        {
             return Err(error(NativeErrorCode::UnsupportedStatement));
         }
         let Some(LuaExpr::NameExpr(receiver)) = index.get_prefix_expr() else {

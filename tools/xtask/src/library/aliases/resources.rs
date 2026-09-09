@@ -140,11 +140,7 @@ pub(super) fn read(report: &Value) -> Result<Vec<&Value>> {
         };
         let function_items = if profile == 6 {
             let containers = list(resource, "function_containers")?;
-            if containers.is_empty()
-                || !aliases.is_empty()
-                || structures != 0
-                || namespaces != 0
-            {
+            if containers.is_empty() || !aliases.is_empty() || structures != 0 || namespaces != 0 {
                 return Err("invalid external function container resource".into());
             }
             has_function_containers = true;
@@ -173,10 +169,7 @@ pub(super) fn read(report: &Value) -> Result<Vec<&Value>> {
             }
             0
         };
-        if (aliases.is_empty()
-            && structures == 0
-            && namespaces == 0
-            && function_items == 0)
+        if (aliases.is_empty() && structures == 0 && namespaces == 0 && function_items == 0)
             || (profile < 4 && ((profile >= 2) != has_literals || (profile == 3) != has_base))
         {
             return Err("alias schema does not describe its declarations".into());

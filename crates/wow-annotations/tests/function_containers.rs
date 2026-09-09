@@ -8,9 +8,7 @@ use wow_reference::native_aliases::ingest_alias_catalog;
 const SOURCE_REVISION: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const DONOR_REVISION: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
-fn project(
-    raw: &str,
-) -> Result<wow_annotations::native::NativeLibrary<'static>, Box<dyn std::error::Error>> {
+fn project(raw: &str) -> Result<wow_annotations::native::NativeLibrary<'static>, Box<dyn std::error::Error>> {
     let source = r#"APIDocumentation:AddDocumentationTable({Name="Probe",Type="System",Namespace="C_Probe",Functions={{Name="Read"}}})"#;
     let documents = Box::leak(Box::new([ingest_document(
         SOURCE_REVISION,
@@ -59,7 +57,8 @@ fn current_static_container_shape_emits_exact_methods_and_bidirectional_maps()
             &file.sha256,
             mapping.generated.start,
             &AtomicBool::new(false),
-        )? else {
+        )?
+        else {
             return Err("generated method did not navigate".into());
         };
         assert_eq!(candidates.len(), 1);

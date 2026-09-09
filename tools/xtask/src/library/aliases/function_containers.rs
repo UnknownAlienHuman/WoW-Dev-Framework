@@ -347,8 +347,8 @@ mod tests {
     #[test]
     fn unresolved_return_requires_inventory_and_matching_issue() -> Result<()> {
         let mut value = fixture();
-        value["aliases"]["source"]["function_containers"][0]["methods"][0]["returns"][0]
-            ["terms"] = json!(["Missing"]);
+        value["aliases"]["source"]["function_containers"][0]["methods"][0]["returns"][0]["terms"] =
+            json!(["Missing"]);
         value["files"][0]["text"] = json!(
             "---@class FunctionContainer\nlocal FunctionContainer = {}\n\n---@return Missing\nfunction FunctionContainer:IsCancelled() end"
         );
