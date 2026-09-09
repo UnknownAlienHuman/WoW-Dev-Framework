@@ -297,9 +297,10 @@ fn ingest(
                     if !syntax_error
                         && meta
                             .get_name_token()
-                            .is_none_or(|t| t.get_name_text() == "_") => {
-                        active_structure = None;
-                    }
+                            .is_none_or(|t| t.get_name_text() == "_") =>
+                {
+                    active_structure = None;
+                }
                 _ => return Err(error(NativeErrorCode::UnsupportedStatement)),
             }
         }

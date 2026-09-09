@@ -164,12 +164,7 @@ pub(crate) fn project<'a>(
         }
     }
     let mut structures = structures::Structures::prepare(
-        &sources,
-        &renderer,
-        &counts,
-        defined,
-        reserved,
-        cancelled,
+        &sources, &renderer, &counts, defined, reserved, cancelled,
     )?;
     let mut known = defined.clone();
     known.extend(structures.defined.iter().cloned());
@@ -323,12 +318,12 @@ pub(crate) fn project<'a>(
         limitations[1] = "named/primitive unions and closed printable-ASCII string enums; no mixed/open literal unions or escape decoding";
     }
     if has_structures {
-        limitations.push("external classes use declaration-level maps; field descriptors stay in the raw resource; no inheritance, methods, generic/indexer or runtime claims");
+        limitations.push("external classes retain declaration and ordered field maps; no inheritance, methods, generic/indexer or runtime claims");
     }
     Ok(ProjectedAliases {
         report: AliasReport {
             schema: if has_structures {
-                "wow-native-alias-projection/5"
+                "wow-native-alias-projection/6"
             } else if open {
                 "wow-native-alias-projection/4"
             } else if sources.len() > 1 {

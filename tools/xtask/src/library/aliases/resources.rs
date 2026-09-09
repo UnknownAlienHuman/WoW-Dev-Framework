@@ -7,7 +7,10 @@ pub(super) fn read(report: &Value) -> Result<Vec<&Value>> {
         return Err("invalid external alias authority".into());
     }
     let primary = &report["source"];
-    let structure_profile = report["schema"] == "wow-native-alias-projection/5";
+    let structure_profile = matches!(
+        report["schema"].as_str(),
+        Some("wow-native-alias-projection/5" | "wow-native-alias-projection/6")
+    );
     let open_profile = report["schema"] == "wow-native-alias-projection/4" || structure_profile;
     let multiple = report["schema"] == "wow-native-alias-projection/3"
         || (open_profile && report.get("additional_sources").is_some());

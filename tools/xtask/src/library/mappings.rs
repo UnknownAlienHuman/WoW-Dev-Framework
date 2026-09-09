@@ -5,7 +5,13 @@ use std::collections::BTreeMap;
 
 const PROFILE: &str = "wow-native-field-maps/1";
 const MAX_MAPPINGS: usize = 1_048_576;
-type Tables<'a> = BTreeMap<(&'a str, usize, usize), &'a Value>;
+type Key<'a> = (&'a str, usize, usize);
+
+#[derive(Default)]
+pub(super) struct Tables<'a> {
+    native: BTreeMap<Key<'a>, &'a Value>,
+    external: BTreeMap<Key<'a>, Vec<Member>>,
+}
 
 pub(super) fn profile(library: &Value) -> Result<bool> {
     match library.get("source_map_profile") {
@@ -19,7 +25,7 @@ pub(super) fn source_tables<'a>(
     sources: &BTreeMap<&'a str, &'a Value>,
     detailed: bool,
 ) -> Result<Tables<'a>> {
-    let mut tables = BTreeMap::new();
+    let mut tables = Tables::default();
     if !detailed {
         return Ok(tables);
     }
@@ -38,12 +44,12 @@ pub(super) fn source_tables<'a>(
                 continue;
             };
             let (start, end) = span(&raw["span"])?;
-            if let Some(previous) = tables.insert((path, start, end), raw)
+            if let Some(previous) = tables.native.insert((path, start, end), raw)
                 && previous != raw
             {
                 return Err("conflicting raw tables at one source identity".into());
             }
-            if tables.len() > MAX_MAPPINGS {
+            if tables.native.len() > MAX_MAPPINGS {
                 return Err("raw source table limit".into());
             }
             for field in fields.as_array().ok_or("invalid raw source table")? {
@@ -52,6 +58,47 @@ pub(super) fn source_tables<'a>(
         }
     }
     Ok(tables)
+}
+
+/// Called only after external catalog outcomes, spans and emitted bytes pass
+/// their owner verifier. The two maps remain separate even for equal paths.
+pub(super) fn include_catalogs<'a>(
+    tables: &mut Tables<'a>,
+    library: &Value,
+    sources: &BTreeMap<&'a str, &'a Value>,
+    detailed: bool,
+) -> Result<()> {
+    if library["aliases"]["schema"] != "wow-native-alias-projection/6" {
+        return Ok(());
+    }
+    if !detailed {
+        return Err("catalog field mappings require the native field-map profile".into());
+    }
+    let mut count = 0usize;
+    for (&path, &resource) in sources {
+        if resource.get("structures").is_none() {
+            continue;
+        }
+        for structure in list(resource, "structures")? {
+            let (start, end) = span(&structure["span"])?;
+            let mut expected = Vec::new();
+            for field in list(structure, "fields")? {
+                count = count.checked_add(1).ok_or("catalog member limit")?;
+                if count > MAX_MAPPINGS {
+                    return Err("catalog member limit".into());
+                }
+                expected.push(("field", span(&field["span"])?));
+            }
+            if tables
+                .external
+                .insert((path, start, end), expected)
+                .is_some()
+            {
+                return Err("duplicate external class source identity".into());
+            }
+        }
+    }
+    Ok(())
 }
 
 struct Declaration<'a> {
@@ -101,14 +148,20 @@ pub(super) fn verify(
                     return Err("unordered or overlapping declaration maps".into());
                 }
                 let source = &mapping["source"];
-                let expected = if source.get("scope").is_none() {
-                    let (first, last) = span(&source["span"])?;
-                    let raw = tables
-                        .get(&(text(source, "path")?, first, last))
-                        .ok_or("declaration has no exact raw table")?;
-                    members(raw)?
-                } else {
-                    Vec::new()
+                let (first, last) = span(&source["span"])?;
+                let key = (text(source, "path")?, first, last);
+                let expected = match source.get("scope") {
+                    None => {
+                        let raw = tables
+                            .native
+                            .get(&key)
+                            .ok_or("declaration has no exact raw table")?;
+                        members(raw)?
+                    }
+                    Some(scope) if scope == "annotation_alias_catalog" => {
+                        tables.external.get(&key).cloned().unwrap_or_default()
+                    }
+                    _ => return Err("unknown declaration source scope".into()),
                 };
                 declarations.push(Declaration {
                     source,
@@ -149,8 +202,7 @@ pub(super) fn verify(
                     || start < owner.start
                     || end > owner.end
                     || start < owner.member_end
-                    || source.get("scope").is_some()
-                    || original.get("scope").is_some()
+                    || source.get("scope") != original.get("scope")
                     || source["path"] != original["path"]
                     || source["sha256"] != original["sha256"]
                 {

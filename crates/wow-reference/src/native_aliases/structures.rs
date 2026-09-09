@@ -32,11 +32,7 @@ pub struct StructureFieldType {
     pub nullable: bool,
 }
 
-pub(super) fn class(
-    tag: &LuaDocTagClass,
-    span: Span,
-    syntax_error: bool,
-) -> Result<StructureFact> {
+pub(super) fn class(tag: &LuaDocTagClass, span: Span, syntax_error: bool) -> Result<StructureFact> {
     let name = tag
         .get_name_token()
         .ok_or_else(|| error(NativeErrorCode::Syntax))?

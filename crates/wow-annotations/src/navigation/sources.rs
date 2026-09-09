@@ -66,6 +66,7 @@ impl<'a> Sources<'a> {
                     | "wow-native-alias-projection/3"
                     | "wow-native-alias-projection/4"
                     | "wow-native-alias-projection/5"
+                    | "wow-native-alias-projection/6"
             ) {
                 return Err(LookupError::UnsupportedProfile);
             }

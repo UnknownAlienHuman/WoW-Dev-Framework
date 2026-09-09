@@ -108,12 +108,71 @@ fn profile_and_whole_literal_maps_remain_distinct() -> Result<()> {
         mapping("literal_file", (0, 3), (1, 9)),
         mapping("literal_file", (0, 3), (40, 120))
     ]});
-    verify(&file, true, &Tables::new(), &mut 0)?;
+    verify(&file, true, &Tables::default(), &mut 0)?;
     let mut changed = file.clone();
     changed["mappings"][0]["generated"]["end"] = json!(2);
-    assert!(verify(&changed, true, &Tables::new(), &mut 0).is_err());
+    assert!(verify(&changed, true, &Tables::default(), &mut 0).is_err());
     let empty = json!({"text":"abc","mappings":[]});
-    assert!(verify(&empty, true, &Tables::new(), &mut 0).is_err());
-    verify(&empty, false, &Tables::new(), &mut 0)?;
+    assert!(verify(&empty, true, &Tables::default(), &mut 0).is_err());
+    verify(&empty, false, &Tables::default(), &mut 0)?;
+    Ok(())
+}
+
+#[test]
+fn external_fields_have_separate_identity_and_mandatory_ordered_members() -> Result<()> {
+    let (native, native_file) = fixture();
+    let sources = BTreeMap::from([("API.lua", &native)]);
+    let external = json!({"structures":[{
+        "span":{"start":40,"end":120},
+        "fields":[{"span":{"start":41,"end":50}}, {"span":{"start":90,"end":95}}]
+    }]});
+    let catalogs = BTreeMap::from([("API.lua", &external)]);
+    let report = json!({"aliases":{"schema":"wow-native-alias-projection/6"}});
+    let mut tables = source_tables(&sources, true)?;
+    include_catalogs(&mut tables, &report, &catalogs, true)?;
+    verify(&native_file, true, &tables, &mut 0)?;
+    let mut file = json!({"text":"éabcdefghijkl","mappings":[
+        mapping("declaration", (0, 14), (40, 120)),
+        mapping("field", (2, 5), (41, 50)),
+        mapping("field", (6, 9), (90, 95))
+    ]});
+    for map in file["mappings"].as_array_mut().ok_or("maps")? {
+        map["source"]["scope"] = json!("annotation_alias_catalog");
+    }
+    verify(&file, true, &tables, &mut 0)?;
+    for index in 0..3 {
+        let mut changed = file.clone();
+        changed["mappings"]
+            .as_array_mut()
+            .ok_or("maps")?
+            .remove(index);
+        assert!(verify(&changed, true, &tables, &mut 0).is_err());
+    }
+    for (pointer, value) in [
+        ("/mappings/1/granularity", json!("parameter")),
+        ("/mappings/1/source/span/start", json!(1)),
+        ("/mappings/1/source/scope", Value::Null),
+        ("/mappings/0/source/scope", json!("unknown")),
+        ("/mappings/1/source/sha256", json!("foreign")),
+        ("/mappings/2/generated/start", json!(4)),
+    ] {
+        let mut changed = file.clone();
+        *changed.pointer_mut(pointer).ok_or("target")? = value;
+        assert!(
+            verify(&changed, true, &tables, &mut 0).is_err(),
+            "{pointer}"
+        );
+    }
+    let mut changed = file.clone();
+    changed["mappings"]
+        .as_array_mut()
+        .ok_or("maps")?
+        .swap(1, 2);
+    assert!(verify(&changed, true, &tables, &mut 0).is_err());
+    let mut legacy = source_tables(&sources, true)?;
+    let old_report = json!({"aliases":{"schema":"wow-native-alias-projection/5"}});
+    include_catalogs(&mut legacy, &old_report, &catalogs, true)?;
+    assert!(verify(&file, true, &legacy, &mut 0).is_err());
+    assert!(include_catalogs(&mut legacy, &report, &catalogs, false).is_err());
     Ok(())
 }

@@ -1,7 +1,9 @@
 //! Explicit external structures supplement, but never replace, native source types.
 use std::sync::atomic::AtomicBool;
 use wow_annotations::native::project_with_alias_catalogs;
-use wow_annotations::navigation::{NavigationIndex, SourceLookup};
+use wow_annotations::navigation::{
+    GeneratedLookup, MappingPrecision, NavigationIndex, SourceFile, SourceLookup,
+};
 use wow_reference::native::{DocumentationDocument, ingest_document, source_digest};
 use wow_reference::native_aliases::{AliasDocument, ingest_alias_catalog, ingest_aliases};
 
@@ -51,8 +53,13 @@ fn classes_arrays_nullable_fields_and_cross_file_aliases_reach_native_output() -
     )?;
     assert_eq!(library.projection, "projected_with_sidecars");
     let report = library.aliases.as_ref().ok_or("report")?;
-    assert_eq!(report.schema, "wow-native-alias-projection/5");
-    assert!(report.outcomes.iter().all(|outcome| outcome.status == "emitted"));
+    assert_eq!(report.schema, "wow-native-alias-projection/6");
+    assert!(
+        report
+            .outcomes
+            .iter()
+            .all(|outcome| outcome.status == "emitted")
+    );
     assert!(
         report
             .structure_outcomes
@@ -88,7 +95,10 @@ fn classes_arrays_nullable_fields_and_cross_file_aliases_reach_native_output() -
         &[&aliases, &structures],
         &cancelled,
     )?;
-    assert_eq!(serde_json::to_value(&library)?, serde_json::to_value(reversed)?);
+    assert_eq!(
+        serde_json::to_value(&library)?,
+        serde_json::to_value(reversed)?
+    );
     Ok(())
 }
 
@@ -128,8 +138,7 @@ fn unresolved_fields_are_retained_without_widening_and_keep_the_overlay_partial(
         "---@class ExternalRecord\n---@field value MissingType?\n",
     )?;
     let cancelled = AtomicBool::new(false);
-    let library =
-        project_with_alias_catalogs(&docs, "Mainline", None, &[&resource], &cancelled)?;
+    let library = project_with_alias_catalogs(&docs, "Mainline", None, &[&resource], &cancelled)?;
     assert_eq!(library.projection, "partial");
     assert!(
         library
@@ -155,10 +164,12 @@ fn unresolved_fields_are_retained_without_widening_and_keep_the_overlay_partial(
 #[test]
 fn native_collisions_and_alias_class_duplicates_do_not_replace_definitions() -> Result<()> {
     let docs = [document()?];
-    let resource = catalog("Types.lua", "---@class NativeRecord\n---@field poison string\n---@class Duplicate\n---@field id number\n---@alias Duplicate string\n---@class ExternalRecord\n---@field id number\n")?;
+    let resource = catalog(
+        "Types.lua",
+        "---@class NativeRecord\n---@field poison string\n---@class Duplicate\n---@field id number\n---@alias Duplicate string\n---@class ExternalRecord\n---@field id number\n",
+    )?;
     let cancelled = AtomicBool::new(false);
-    let library =
-        project_with_alias_catalogs(&docs, "Mainline", None, &[&resource], &cancelled)?;
+    let library = project_with_alias_catalogs(&docs, "Mainline", None, &[&resource], &cancelled)?;
     assert_eq!(library.projection, "partial");
     let report = library.aliases.as_ref().ok_or("report")?;
     assert_eq!(report.structure_outcomes[0].status, "source_name_conflict");
@@ -204,6 +215,89 @@ fn directives_execution_and_orphan_fields_reject_and_legacy_bytes_stay_unchanged
             &AtomicBool::new(false)
         )
         .is_err()
+    );
+    Ok(())
+}
+
+#[test]
+fn external_field_maps_bind_exact_members_without_colliding_with_native_paths() -> Result<()> {
+    let docs = [document()?];
+    // Deliberately use the same path as the independent Blizzard input.
+    let raw = "\u{feff}---@meta _\r\n---@class ExternalRecord\r\n---@field id number\r\n---@field label string?\r\n---@class OtherRecord\r\n---@field id number\r\n";
+    let resource = catalog("API.lua", raw)?;
+    let cancelled = AtomicBool::new(false);
+    let library = project_with_alias_catalogs(&docs, "Mainline", None, &[&resource], &cancelled)?;
+    let file = library.files.last().ok_or("overlay")?;
+    let index = NavigationIndex::new(&library, &cancelled)?;
+    let source = index.bind_source(
+        SourceFile {
+            scope: Some("annotation_alias_catalog"),
+            revision: DONOR,
+            path: resource.path(),
+            sha256: resource.sha256(),
+        },
+        raw,
+        &cancelled,
+    )?;
+    let fields = resource
+        .structures()
+        .iter()
+        .flat_map(|structure| &structure.fields)
+        .collect::<Vec<_>>();
+    let maps = file
+        .mappings
+        .iter()
+        .filter(|map| map.granularity == "field")
+        .collect::<Vec<_>>();
+    assert_eq!(maps.len(), fields.len());
+    assert_eq!(maps.len(), 3);
+    for map in maps {
+        let field = fields
+            .iter()
+            .find(|field| field.span == map.source.span)
+            .ok_or("exact source field")?;
+        let generated = file
+            .text
+            .get(map.generated.start..map.generated.end)
+            .ok_or("generated member bytes")?;
+        let original = raw
+            .get(field.span.start..field.span.end)
+            .ok_or("source member bytes")?;
+        assert_eq!(generated, original);
+        let SourceLookup::Mapped {
+            precision,
+            candidates,
+        } = index.source_for_range(&file.path, &file.sha256, map.generated, &cancelled)?
+        else {
+            return Err("field range did not map".into());
+        };
+        assert_eq!(precision, MappingPrecision::Member);
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].revision, DONOR);
+        assert_eq!(candidates[0].source.sha256, resource.sha256());
+        assert_eq!(candidates[0].source.span, field.span);
+        let GeneratedLookup::Mapped { candidates } =
+            source.generated_for_range(field.span, &cancelled)?
+        else {
+            return Err("source field range did not map".into());
+        };
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].generated, map.generated);
+    }
+    let first_member = file
+        .mappings
+        .iter()
+        .position(|map| map.granularity == "field")
+        .ok_or("first member")?;
+    assert!(
+        file.mappings[..first_member]
+            .iter()
+            .all(|map| map.granularity == "declaration")
+    );
+    assert!(
+        file.mappings[first_member..]
+            .iter()
+            .all(|map| map.granularity == "field")
     );
     Ok(())
 }

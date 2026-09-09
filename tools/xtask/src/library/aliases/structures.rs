@@ -13,7 +13,8 @@ pub(super) fn verify<'a>(
     emitted: &mut BTreeSet<&'a str>,
 ) -> Result<bool> {
     let report = &library["aliases"];
-    if report["schema"] != "wow-native-alias-projection/5" {
+    let field_maps = report["schema"] == "wow-native-alias-projection/6";
+    if report["schema"] != "wow-native-alias-projection/5" && !field_maps {
         if report.get("structure_outcomes").is_some()
             || report.get("unresolved_structure_fields").is_some()
         {
@@ -95,8 +96,14 @@ pub(super) fn verify<'a>(
                 if nullable {
                     lowered.push('?');
                 }
-                expected.push_str(&format!("\n---@field {name} {lowered}"));
-                emitted_fields.insert((path, span_key(&field["span"])?));
+                let fragment = format!("---@field {name} {lowered}");
+                let key = (path, span_key(&field["span"])?);
+                if field_maps && mapped.remove(&key) != Some(fragment.as_str()) {
+                    return Err("missing or changed external structure field mapping".into());
+                }
+                expected.push('\n');
+                expected.push_str(&fragment);
+                emitted_fields.insert(key);
             }
             if mapped.remove(&(path, span)) != Some(expected.as_str()) {
                 return Err("missing or changed external structure declaration".into());
@@ -148,7 +155,9 @@ pub(super) fn verify<'a>(
         if issue["code"] == "unresolved_structure_field_type" {
             let source = &issue["source"];
             let path = text(source, "path")?;
-            let resource = sources.get(path).ok_or("unknown structure issue resource")?;
+            let resource = sources
+                .get(path)
+                .ok_or("unknown structure issue resource")?;
             if source["scope"] != "annotation_alias_catalog"
                 || source["sha256"] != resource["sha256"]
                 || !unresolved.contains(&(path, span_key(&source["span"])?))
@@ -197,22 +206,36 @@ mod tests {
             "files":[{"text":raw.trim_end(),"mappings":[{"granularity":"declaration","generated":span,"source":link}]}]});
         if unknown {
             value["aliases"]["unresolved_structure_fields"] = json!([field_link]);
-            value["issues"] = json!([{"code":"unresolved_structure_field_type","source":field_link}]);
+            value["issues"] =
+                json!([{"code":"unresolved_structure_field_type","source":field_link}]);
         }
         value
     }
 
     #[test]
-    fn structure_wire_requires_matching_profiles_fields_outcomes_and_generated_bytes() -> Result<()> {
+    fn structure_wire_requires_matching_profiles_fields_outcomes_and_generated_bytes() -> Result<()>
+    {
         let value = fixture(false);
         assert!(!super::super::verify(&value)?.blocked);
         for (pointer, replacement) in [
             ("/aliases/schema", json!("wow-native-alias-projection/4")),
-            ("/aliases/source/schema", json!("wow-native-alias-resource/3")),
+            (
+                "/aliases/source/schema",
+                json!("wow-native-alias-resource/3"),
+            ),
             ("/aliases/source/structures/0/fields", json!([])),
-            ("/aliases/source/structures/0/fields/0/field_type/nullable", json!(false)),
-            ("/aliases/source/structures/0/fields/0/span/end", json!(usize::MAX)),
-            ("/aliases/source/structures/0/header_supported", json!(false)),
+            (
+                "/aliases/source/structures/0/fields/0/field_type/nullable",
+                json!(false),
+            ),
+            (
+                "/aliases/source/structures/0/fields/0/span/end",
+                json!(usize::MAX),
+            ),
+            (
+                "/aliases/source/structures/0/header_supported",
+                json!(false),
+            ),
             ("/aliases/structure_outcomes", json!([])),
             ("/files/0/text", json!("---@class Other")),
             ("/files/0/mappings", json!([])),
@@ -237,6 +260,40 @@ mod tests {
             .ok_or("report")?
             .remove("unresolved_structure_fields");
         assert!(super::super::verify(&missing).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn member_profile_requires_exact_field_bytes_and_keeps_legacy_reports_readable() -> Result<()>
+    {
+        let mut value = fixture(false);
+        assert!(!super::super::verify(&value)?.blocked);
+        value["aliases"]["schema"] = json!("wow-native-alias-projection/6");
+        assert!(super::super::verify(&value).is_err());
+        let span = value["aliases"]["source"]["structures"][0]["fields"][0]["span"].clone();
+        let mut link = value["files"][0]["mappings"][0]["source"].clone();
+        link["span"] = span.clone();
+        value["files"][0]["mappings"]
+            .as_array_mut()
+            .ok_or("maps")?
+            .push(json!({"granularity":"field","generated":span,"source":link}));
+        assert!(!super::super::verify(&value)?.blocked);
+        for pointer in [
+            "/files/0/mappings/1/generated/start",
+            "/files/0/mappings/1/source/span/start",
+        ] {
+            let mut changed = value.clone();
+            *changed.pointer_mut(pointer).ok_or("target")? = json!(0);
+            assert!(super::super::verify(&changed).is_err());
+        }
+        let mut changed = value.clone();
+        changed["aliases"]["schema"] = json!("wow-native-alias-projection/5");
+        assert!(super::super::verify(&changed).is_err());
+        changed["files"][0]["mappings"]
+            .as_array_mut()
+            .ok_or("maps")?
+            .pop();
+        assert!(!super::super::verify(&changed)?.blocked);
         Ok(())
     }
 }

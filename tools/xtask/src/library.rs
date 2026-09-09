@@ -138,7 +138,13 @@ pub fn verify_with_module(
         return Err("native report status mismatch".into());
     }
     let detailed_maps = mappings::profile(library)?;
-    let mapped_tables = mappings::source_tables(&source_map, detailed_maps)?;
+    let mut mapped_tables = mappings::source_tables(&source_map, detailed_maps)?;
+    mappings::include_catalogs(
+        &mut mapped_tables,
+        library,
+        &checked_aliases.sources,
+        detailed_maps,
+    )?;
     let mut mapping_count = 0;
     let mut expected = BTreeSet::from(["source-report.json"]);
     let mut total = 0usize;

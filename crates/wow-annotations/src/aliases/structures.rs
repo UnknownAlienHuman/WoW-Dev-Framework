@@ -1,15 +1,20 @@
 //! External structures use the existing Ketho emitter, never raw resource text.
 use super::{AliasDocument, AliasOutcome, primitive, reserved_name, source};
-use crate::ketho::{Field, Owner, RenderError, Renderer, System, Table, identifier};
+use crate::ketho::{Field, MemberPosition, Owner, RenderError, Renderer, System, Table, identifier};
 use crate::native::{ProjectionIssue, SourceLink, SourceMapping};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use wow_reference::native::Span;
 use wow_reference::native_aliases::StructureFact;
 
+struct RenderedStructure {
+    text: String,
+    fields: Vec<Span>,
+}
+
 pub(super) struct Structures<'a> {
     entries: Vec<(&'a AliasDocument, &'a StructureFact)>,
-    rendered: Vec<Option<String>>,
+    rendered: Vec<Option<RenderedStructure>>,
     pub outcomes: Vec<AliasOutcome>,
     pub defined: BTreeSet<String>,
     pub issues: Vec<ProjectionIssue>,
@@ -106,7 +111,10 @@ impl<'a> Structures<'a> {
                 if cancelled.load(Ordering::Relaxed) {
                     return Err(RenderError::Cancelled);
                 }
-                let ty = field.field_type.as_ref().ok_or(RenderError::InvalidSource)?;
+                let ty = field
+                    .field_type
+                    .as_ref()
+                    .ok_or(RenderError::InvalidSource)?;
                 let lowered = renderer.lower_type(&ty.terms.join("|"))?;
                 if lowered
                     .split('|')
@@ -132,6 +140,7 @@ impl<'a> Structures<'a> {
     ) -> Result<(), RenderError> {
         let mut order = (0..self.entries.len()).collect::<Vec<_>>();
         order.sort_by_key(|&index| &self.entries[index].1.name);
+        let mut field_maps = Vec::new();
         for index in order {
             if cancelled.load(Ordering::Relaxed) {
                 return Err(RenderError::Cancelled);
@@ -139,13 +148,16 @@ impl<'a> Structures<'a> {
             let Some(fragment) = &self.rendered[index] else {
                 continue;
             };
-            if text.len().saturating_add(fragment.len()).saturating_add(1)
+            if text
+                .len()
+                .saturating_add(fragment.text.len())
+                .saturating_add(1)
                 > crate::ketho::MAX_OUTPUT_BYTES
             {
                 return Err(RenderError::OutputLimit);
             }
             let start = text.len();
-            text.push_str(fragment);
+            text.push_str(&fragment.text);
             let end = text.len();
             text.push('\n');
             let (document, fact) = self.entries[index];
@@ -154,18 +166,37 @@ impl<'a> Structures<'a> {
                 generated: Span { start, end },
                 source: source(document, fact.span),
             });
+            for (span, field) in fragment.fields.iter().zip(&fact.fields) {
+                if cancelled.load(Ordering::Relaxed) {
+                    return Err(RenderError::Cancelled);
+                }
+                field_maps.push(SourceMapping {
+                    granularity: "field",
+                    generated: Span {
+                        start: start + span.start,
+                        end: start + span.end,
+                    },
+                    source: source(document, field.span),
+                });
+            }
         }
+        // Keep all declaration maps before their ordered member maps, matching
+        // the native field-map profile and the independent artifact verifier.
+        mappings.extend(field_maps);
         Ok(())
     }
 }
 
-fn declaration(fact: &StructureFact, renderer: &Renderer) -> Result<String, RenderError> {
+fn declaration(fact: &StructureFact, renderer: &Renderer) -> Result<RenderedStructure, RenderError> {
     let fields = fact
         .fields
         .iter()
         .map(|field| {
             let name = field.name.as_ref().ok_or(RenderError::UnsupportedType)?;
-            let ty = field.field_type.as_ref().ok_or(RenderError::UnsupportedType)?;
+            let ty = field
+                .field_type
+                .as_ref()
+                .ok_or(RenderError::UnsupportedType)?;
             let type_name = ty.terms.join("|");
             Ok(Field {
                 name: name.clone(),
@@ -189,10 +220,37 @@ fn declaration(fact: &StructureFact, renderer: &Renderer) -> Result<String, Rend
             fields,
         }],
     })?;
-    let declaration = rendered.declarations.first().ok_or(RenderError::InvalidSource)?;
-    rendered
+    let declaration = rendered
+        .declarations
+        .first()
+        .ok_or(RenderError::InvalidSource)?;
+    let text = rendered
         .text
         .get(declaration.start..declaration.end)
-        .map(str::to_owned)
-        .ok_or(RenderError::InvalidSource)
+        .ok_or(RenderError::InvalidSource)?;
+    if rendered.declarations.len() != 1 || declaration.members.len() != fact.fields.len() {
+        return Err(RenderError::InvalidSource);
+    }
+    let mut fields = Vec::with_capacity(fact.fields.len());
+    let mut previous = declaration.start;
+    for (index, member) in declaration.members.iter().enumerate() {
+        if member.position != MemberPosition::Field
+            || member.index != index
+            || member.start < previous
+            || member.start >= member.end
+            || member.end > declaration.end
+            || rendered.text.get(member.start..member.end).is_none()
+        {
+            return Err(RenderError::InvalidSource);
+        }
+        fields.push(Span {
+            start: member.start - declaration.start,
+            end: member.end - declaration.start,
+        });
+        previous = member.end;
+    }
+    Ok(RenderedStructure {
+        text: text.to_owned(),
+        fields,
+    })
 }
