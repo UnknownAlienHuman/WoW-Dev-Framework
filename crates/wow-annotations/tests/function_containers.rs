@@ -8,7 +8,9 @@ use wow_reference::native_aliases::ingest_alias_catalog;
 const SOURCE_REVISION: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const DONOR_REVISION: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
-fn project(raw: &str) -> Result<wow_annotations::native::NativeLibrary<'static>, Box<dyn std::error::Error>> {
+fn project(
+    raw: &str,
+) -> Result<wow_annotations::native::NativeLibrary<'static>, Box<dyn std::error::Error>> {
     let source = r#"APIDocumentation:AddDocumentationTable({Name="Probe",Type="System",Namespace="C_Probe",Functions={{Name="Read"}}})"#;
     let documents = Box::leak(Box::new([ingest_document(
         SOURCE_REVISION,
