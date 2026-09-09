@@ -1,0 +1,93 @@
+name: Publish Ketho type-inventory drift gate once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-ketho-type-inventory-once.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-ketho-type-inventory
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Add exact donor inventory verification
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/workflows/current-source-bundle.yml')
+          text = path.read_text(encoding='utf-8')
+          anchor = '''          git -C "$RUNNER_TEMP/ketho-source" rev-parse HEAD > "$RUNNER_TEMP/alias-revision"
+          result=0'''
+          replacement = '''          git -C "$RUNNER_TEMP/ketho-source" rev-parse HEAD > "$RUNNER_TEMP/alias-revision"
+          alias_revision="$(cat "$RUNNER_TEMP/alias-revision")"
+          git -C "$RUNNER_TEMP/ketho-source" ls-tree -r "$alias_revision" -- Annotations/Core/Type \\
+            > "$RUNNER_TEMP/alias-type-tree.txt"
+          awk '$1 !~ /^100(644|755)$/ || $2 != "blob" { exit 1 }' \\
+            "$RUNNER_TEMP/alias-type-tree.txt"
+          cut -f2 "$RUNNER_TEMP/alias-type-tree.txt" | LC_ALL=C sort \\
+            > "$RUNNER_TEMP/alias-type-inventory.txt"
+          cat > "$RUNNER_TEMP/expected-alias-type-inventory.txt" <<'EOF'
+          Annotations/Core/Type/BlizzardType.lua
+          Annotations/Core/Type/EmoteToken.lua
+          Annotations/Core/Type/FunctionContainer.lua
+          Annotations/Core/Type/GlobalColors.lua
+          Annotations/Core/Type/Mixin.lua
+          Annotations/Core/Type/Namespace.lua
+          Annotations/Core/Type/StringEnum.lua
+          Annotations/Core/Type/Structure.lua
+          Annotations/Core/Type/UnitToken.lua
+          EOF
+          diff -u "$RUNNER_TEMP/expected-alias-type-inventory.txt" \\
+            "$RUNNER_TEMP/alias-type-inventory.txt"
+          result=0'''
+          if text.count(anchor) != 1:
+              raise SystemExit('alias revision anchor changed')
+          text = text.replace(anchor, replacement)
+          artifact_anchor = '''            ${{ runner.temp }}/alias-revision
+            ${{ runner.temp }}/source-manifest.json'''
+          artifact_replacement = '''            ${{ runner.temp }}/alias-revision
+            ${{ runner.temp }}/alias-type-tree.txt
+            ${{ runner.temp }}/alias-type-inventory.txt
+            ${{ runner.temp }}/expected-alias-type-inventory.txt
+            ${{ runner.temp }}/source-manifest.json'''
+          if text.count(artifact_anchor) != 1:
+              raise SystemExit('artifact inventory anchor changed')
+          path.write_text(text.replace(artifact_anchor, artifact_replacement), encoding='utf-8')
+          PY
+
+      - name: Validate repository after workflow change
+        run: |
+          set -euo pipefail
+          rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+          cargo +stable fmt --all --check
+          cargo +stable xtask check
+          cargo +stable check --locked --workspace --all-targets --all-features
+          cargo +stable clippy --locked --workspace --all-targets --all-features -- -D warnings
+          cargo +stable test --locked --workspace --all-targets --all-features
+          git diff --check
+
+      - name: Publish and remove this one-shot workflow
+        run: |
+          set -euo pipefail
+          git config user.name 'Iurii Lisenkov'
+          git config user.email '71514792+UnknownAlienHuman@users.noreply.github.com'
+          git add .github/workflows/current-source-bundle.yml
+          git rm .github/workflows/publish-ketho-type-inventory-once.yml
+          git commit -m 'ci(annotations): fail on unreviewed Ketho type inventory drift' \
+            -m 'Compare the exact regular-blob inventory under Annotations/Core/Type with the reviewed nine-resource set before composition. Retain both tree identities and normalized path inventories as workflow evidence so additions, deletions, symlinks and submodules fail explicitly instead of becoming silent coverage gaps.'
+          git push origin HEAD:main
