@@ -118,9 +118,6 @@ pub(super) fn read(input: &str, cancelled: &AtomicBool) -> Result<Vec<FunctionCo
         let LuaStat::FuncStat(function) = stat else {
             return Err(error(NativeErrorCode::UnsupportedStatement));
         };
-        if function.is_global() {
-            return Err(error(NativeErrorCode::UnsupportedStatement));
-        }
         let LuaVarExpr::IndexExpr(index) = function
             .get_func_name()
             .ok_or_else(|| error(NativeErrorCode::Syntax))?
