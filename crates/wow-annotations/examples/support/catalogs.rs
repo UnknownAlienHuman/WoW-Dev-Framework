@@ -104,7 +104,7 @@ pub(super) fn read(
             &source_digest(&bytes),
             cancelled,
         )?;
-        total_aliases += document.aliases().len();
+        total_aliases += document.aliases().len() + document.structures().len();
         if total_aliases > MAX_CATALOG_ALIASES {
             return Err("alias catalog aggregate declaration limit".into());
         }

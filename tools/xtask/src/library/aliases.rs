@@ -4,6 +4,7 @@ use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 mod resources;
 mod strings;
+mod structures;
 
 #[derive(Default)]
 pub(super) struct CheckedAliases<'a> {
@@ -144,6 +145,7 @@ pub(super) fn verify(library: &Value) -> Result<CheckedAliases<'_>> {
             }
         }
     }
+    blocked |= structures::verify(library, &source_map, &mut mapped, &mut emitted)?;
     if !mapped.is_empty() {
         return Err("unaccounted alias output".into());
     }

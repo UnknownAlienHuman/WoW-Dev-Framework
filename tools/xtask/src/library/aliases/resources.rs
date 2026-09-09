@@ -7,7 +7,8 @@ pub(super) fn read(report: &Value) -> Result<Vec<&Value>> {
         return Err("invalid external alias authority".into());
     }
     let primary = &report["source"];
-    let open_profile = report["schema"] == "wow-native-alias-projection/4";
+    let structure_profile = report["schema"] == "wow-native-alias-projection/5";
+    let open_profile = report["schema"] == "wow-native-alias-projection/4" || structure_profile;
     let multiple = report["schema"] == "wow-native-alias-projection/3"
         || (open_profile && report.get("additional_sources").is_some());
     let mut resources = vec![primary];
@@ -44,14 +45,16 @@ pub(super) fn read(report: &Value) -> Result<Vec<&Value>> {
     let mut bytes = 0usize;
     let mut count = 0usize;
     let mut has_open_resource = false;
+    let mut has_structures = false;
+    let mut field_count = 0usize;
     for resource in &resources {
         let profile = match resource["schema"].as_str() {
             Some("wow-native-alias-resource/1") => 1,
             Some("wow-native-alias-resource/2") => 2,
             Some("wow-native-alias-resource/3") if open_profile => 3,
+            Some("wow-native-alias-resource/4") if structure_profile => 4,
             _ => return Err("unsupported alias resource schema".into()),
         };
-        has_open_resource |= profile == 3;
         let path = text(resource, "path")?;
         manifest::validate_path(path)?;
         if text(resource, "revision")? != revision
@@ -74,7 +77,32 @@ pub(super) fn read(report: &Value) -> Result<Vec<&Value>> {
         let has_base = aliases
             .iter()
             .any(|alias| alias.get("string_base").is_some());
-        if aliases.is_empty() || (profile >= 2) != has_literals || (profile == 3) != has_base {
+        has_open_resource |= has_base;
+        let structures = if profile == 4 {
+            let structures = list(resource, "structures")?;
+            if structures.is_empty() {
+                return Err("empty external structure resource".into());
+            }
+            has_structures = true;
+            let previous_fields = field_count;
+            for structure in structures {
+                field_count = field_count
+                    .checked_add(list(structure, "fields")?.len())
+                    .ok_or("structure field limit")?;
+            }
+            if field_count > 65_536 || field_count - previous_fields > 4096 {
+                return Err("structure field limit".into());
+            }
+            structures.len()
+        } else {
+            if resource.get("structures").is_some() {
+                return Err("unexpected external structure field".into());
+            }
+            0
+        };
+        if (aliases.is_empty() && structures == 0)
+            || (profile < 4 && ((profile >= 2) != has_literals || (profile == 3) != has_base))
+        {
             return Err("alias schema does not describe its declarations".into());
         }
         for alias in aliases {
@@ -91,13 +119,15 @@ pub(super) fn read(report: &Value) -> Result<Vec<&Value>> {
         }
         bytes = bytes.checked_add(raw.len()).ok_or("alias byte limit")?;
         count = count
-            .checked_add(aliases.len())
+            .checked_add(aliases.len() + structures)
             .ok_or("alias count limit")?;
         if bytes > 2 * 1024 * 1024 || count > 4096 {
             return Err("alias resource aggregate limit".into());
         }
     }
-    if open_profile != has_open_resource {
+    if structure_profile != has_structures
+        || (!structure_profile && open_profile != has_open_resource)
+    {
         return Err("alias projection profile does not match its open resources".into());
     }
     Ok(resources)

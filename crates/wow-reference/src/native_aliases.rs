@@ -17,6 +17,8 @@ use crate::native::{NativeError, NativeErrorCode, Span, source_digest};
 
 mod catalog;
 mod open_strings;
+mod structures;
+pub use structures::{StructureFact, StructureField, StructureFieldType};
 
 const MAX_BYTES: usize = 256 * 1024;
 const MAX_ALIASES: usize = 4096;
@@ -50,6 +52,8 @@ pub struct AliasDocument {
     source_bytes: usize,
     text: String,
     aliases: Vec<AliasFact>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    structures: Vec<StructureFact>,
 }
 impl AliasDocument {
     pub fn revision(&self) -> &str {
@@ -66,6 +70,9 @@ impl AliasDocument {
     }
     pub fn aliases(&self) -> &[AliasFact] {
         &self.aliases
+    }
+    pub fn structures(&self) -> &[StructureFact] {
+        &self.structures
     }
 }
 
@@ -95,6 +102,8 @@ pub fn ingest_aliases(
 
 /// Admit named aliases and bounded Ketho string-enum resources. An explicit
 /// leading `string` base remains open while its literal hints are preserved.
+/// Comment-only classes with named fields are also admitted as an external
+/// structure profile; they never replace Blizzard facts or imply inheritance.
 /// Only contiguous continuation comments join an alias. Emmy owns type parsing;
 /// malformed declarations cannot consume their independently parsed siblings.
 pub fn ingest_alias_catalog(
@@ -191,6 +200,9 @@ fn ingest(
         comments.collect()
     };
     let mut aliases = Vec::new();
+    let mut structures = Vec::new();
+    let mut active_structure = None;
+    let mut field_count = 0usize;
     for Span { start, end } in groups {
         if cancelled.load(Ordering::Relaxed) {
             return Err(error(NativeErrorCode::Cancelled));
@@ -202,6 +214,7 @@ fn ingest(
         let syntax_error = !tree.get_errors().is_empty();
         let multiline = comment.contains('\n');
         let mut observed_alias = false;
+        let mut observed_structure = false;
         for tag in tree
             .get_chunk_node()
             .syntax()
@@ -209,7 +222,30 @@ fn ingest(
             .filter_map(LuaDocTag::cast)
         {
             match tag {
+                LuaDocTag::Class(class) if string_enums && !multiline => {
+                    observed_structure = true;
+                    structures.push(structures::class(
+                        &class,
+                        Span { start, end },
+                        syntax_error,
+                    )?);
+                    active_structure = Some(structures.len() - 1);
+                }
+                LuaDocTag::Field(field) if string_enums && !multiline => {
+                    observed_structure = true;
+                    let target = active_structure
+                        .and_then(|index| structures.get_mut(index))
+                        .ok_or_else(|| error(NativeErrorCode::UnsupportedStatement))?;
+                    structures::field(
+                        target,
+                        &field,
+                        Span { start, end },
+                        syntax_error,
+                        &mut field_count,
+                    )?;
+                }
                 LuaDocTag::Alias(alias) => {
+                    active_structure = None;
                     if observed_alias || aliases.len() >= MAX_ALIASES {
                         return Err(error(NativeErrorCode::Limit));
                     }
@@ -261,22 +297,29 @@ fn ingest(
                     if !syntax_error
                         && meta
                             .get_name_token()
-                            .is_none_or(|t| t.get_name_text() == "_") => {}
+                            .is_none_or(|t| t.get_name_text() == "_") => {
+                        active_structure = None;
+                    }
                 _ => return Err(error(NativeErrorCode::UnsupportedStatement)),
             }
         }
         if multiline && !observed_alias {
             return Err(error(NativeErrorCode::UnsupportedExpression));
         }
-        if syntax_error && !observed_alias {
+        if aliases.len() + structures.len() > MAX_ALIASES {
+            return Err(error(NativeErrorCode::Limit));
+        }
+        if syntax_error && !observed_alias && !observed_structure {
             return Err(error(NativeErrorCode::Syntax));
         }
     }
-    if aliases.is_empty() {
+    if aliases.is_empty() && structures.is_empty() {
         return Err(error(NativeErrorCode::InvalidRegistration));
     }
     Ok(AliasDocument {
-        schema: if aliases.iter().any(|alias| alias.string_base.is_some()) {
+        schema: if !structures.is_empty() {
+            "wow-native-alias-resource/4"
+        } else if aliases.iter().any(|alias| alias.string_base.is_some()) {
             "wow-native-alias-resource/3"
         } else if aliases.iter().any(|alias| alias.string_values.is_some()) {
             "wow-native-alias-resource/2"
@@ -289,6 +332,7 @@ fn ingest(
         source_bytes: text.len(),
         text: text.into(),
         aliases,
+        structures,
     })
 }
 
