@@ -102,7 +102,7 @@ jobs:
             3) echo '::warning::Verified artifact remains semantically partial; not consumer certification' ;;
             *) exit "$result" ;;
           esac
-      - name: Compose current Ketho type and string-enum catalogs
+      - name: Compose current Ketho type and string catalogs
         run: |
           set -euo pipefail
           git -c core.hooksPath=/dev/null clone --depth=1 --no-tags --single-branch \
@@ -117,6 +117,8 @@ jobs:
             "$SOURCE_TOC" "$SOURCE_ENVIRONMENT" "$RUNNER_TEMP/native-aliased" \
             --alias-catalog "$RUNNER_TEMP/ketho-source" "$(cat "$RUNNER_TEMP/alias-revision")" \
             Annotations/Core/Type/BlizzardType.lua \
+            --alias-catalog "$RUNNER_TEMP/ketho-source" "$(cat "$RUNNER_TEMP/alias-revision")" \
+            Annotations/Core/Type/EmoteToken.lua \
             --alias-catalog "$RUNNER_TEMP/ketho-source" "$(cat "$RUNNER_TEMP/alias-revision")" \
             Annotations/Core/Type/StringEnum.lua || result=$?
           case "$result" in

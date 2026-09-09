@@ -84,7 +84,7 @@ fn inline(ty: LuaDocType, base: &mut bool, values: &mut Vec<String>, depth: usiz
             let Some(literals) = catalog::string_values(ty) else {
                 return false;
             };
-            if values.len() + literals.len() > 256 {
+            if values.len() + literals.len() > catalog::MAX_VALUES {
                 return false;
             }
             values.extend(literals);

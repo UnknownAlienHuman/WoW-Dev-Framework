@@ -168,9 +168,9 @@ fn orphan_continuations_and_non_alias_side_effects_reject() {
 }
 
 #[test]
-fn continuation_budget_accepts_256_values_and_rejects_257_before_parsing() -> Result<()> {
+fn continuation_budget_accepts_512_values_and_rejects_513_before_parsing() -> Result<()> {
     let mut raw = String::from("---@alias Choice\n");
-    for i in 0..256 {
+    for i in 0..512 {
         raw.push_str(&format!("---|\"SYNTHETIC_{i}\"\n"));
     }
     let accepted = catalog(&raw)?;
@@ -180,7 +180,7 @@ fn continuation_budget_accepts_256_values_and_rejects_257_before_parsing() -> Re
             .as_ref()
             .ok_or("values")?
             .len(),
-        256
+        512
     );
     raw.push_str("---|\"OVER_BUDGET\"\n");
     let Err(error) = catalog(&raw) else {
@@ -223,5 +223,25 @@ fn explicit_inline_open_base_matches_multiline_hints() -> Result<()> {
         assert!(text.contains("---@alias Choice string|\"FIRST\"|\"SECOND\""));
     }
     assert_eq!(inline["files"][1]["text"], multiline["files"][1]["text"]);
+    Ok(())
+}
+
+#[test]
+fn large_open_hint_catalog_remains_open_and_retains_every_value() -> Result<()> {
+    let mut raw = String::from("---@alias EmoteToken string\n");
+    for i in 0..263 {
+        raw.push_str(&format!("---|\"EMOTE_{i}\"\n"));
+    }
+    let library = project(&raw)?;
+    assert_eq!(library["projection"], "projected_with_sidecars");
+    let fact = &library["aliases"]["source"]["aliases"][0];
+    assert_eq!(fact["string_base"], "string");
+    assert_eq!(
+        fact["string_values"].as_array().ok_or("values")?.len(),
+        263
+    );
+    let text = library["files"][1]["text"].as_str().ok_or("output")?;
+    assert!(text.contains("---@alias EmoteToken string|\"EMOTE_0\""));
+    assert!(text.contains("|\"EMOTE_262\""));
     Ok(())
 }

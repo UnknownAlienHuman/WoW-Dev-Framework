@@ -3,9 +3,11 @@ use crate::Result;
 use serde_json::Value;
 use std::collections::BTreeSet;
 
+const MAX_VALUES: usize = 512;
+
 pub(super) fn lower(values: &Value) -> Result<String> {
     let values = values.as_array().ok_or("invalid literal alias terms")?;
-    if values.is_empty() || values.len() > 256 {
+    if values.is_empty() || values.len() > MAX_VALUES {
         return Err("literal alias count limit".into());
     }
     let mut seen = BTreeSet::new();
@@ -49,6 +51,20 @@ mod tests {
         ] {
             assert!(lower(&values).is_err());
         }
+        Ok(())
+    }
+
+    #[test]
+    fn bounded_large_completion_sets_are_verified_without_an_unbounded_wire() -> Result<()> {
+        let values = Value::Array(
+            (0..MAX_VALUES)
+                .map(|index| Value::String(format!("SYNTHETIC_{index}")))
+                .collect(),
+        );
+        assert_eq!(lower(&values)?.matches('|').count(), MAX_VALUES - 1);
+        let mut over = values.as_array().ok_or("values")?.clone();
+        over.push(Value::String("OVER_BUDGET".into()));
+        assert!(lower(&Value::Array(over)).is_err());
         Ok(())
     }
 }

@@ -16,6 +16,7 @@ mod structures;
 pub const MAX_CATALOG_FILES: usize = 32;
 pub const MAX_CATALOG_BYTES: usize = 2 * 1024 * 1024;
 pub const MAX_CATALOG_ALIASES: usize = 4096;
+const MAX_STRING_VALUES: usize = 512;
 
 #[derive(Debug, Serialize)]
 pub struct AliasOutcome {
@@ -90,7 +91,7 @@ fn source(document: &AliasDocument, span: Span) -> SourceLink {
 
 fn string_union(values: &[String]) -> Option<String> {
     if values.is_empty()
-        || values.len() > 256
+        || values.len() > MAX_STRING_VALUES
         || values.iter().collect::<BTreeSet<_>>().len() != values.len()
         || values.iter().any(|value| {
             value.len() > 128

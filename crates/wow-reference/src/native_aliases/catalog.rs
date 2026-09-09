@@ -4,7 +4,9 @@ use crate::native::{NativeErrorCode, Span};
 use emmylua_parser::{LuaAstToken, LuaDocType, LuaLiteralToken, LuaTypeBinaryOperator};
 use std::collections::BTreeSet;
 
-const MAX_VALUES: usize = 256;
+/// One alias remains bounded independently of the aggregate catalog limits.
+/// This covers current large completion resources without admitting an inventory-sized blob.
+pub(super) const MAX_VALUES: usize = 512;
 
 pub(super) fn groups(input: &str, comments: impl Iterator<Item = Span>) -> Result<Vec<Span>> {
     let mut groups: Vec<Span> = Vec::new();
