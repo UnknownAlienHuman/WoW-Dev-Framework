@@ -264,8 +264,7 @@ mod tests {
     }
 
     #[test]
-    fn member_profile_requires_exact_field_bytes_and_keeps_legacy_reports_readable() -> Result<()>
-    {
+    fn member_profile_requires_exact_field_bytes_and_keeps_legacy_reports_readable() -> Result<()> {
         let mut value = fixture(false);
         assert!(!super::super::verify(&value)?.blocked);
         value["aliases"]["schema"] = json!("wow-native-alias-projection/6");

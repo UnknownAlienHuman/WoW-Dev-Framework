@@ -1,6 +1,8 @@
 //! External structures use the existing Ketho emitter, never raw resource text.
 use super::{AliasDocument, AliasOutcome, primitive, reserved_name, source};
-use crate::ketho::{Field, MemberPosition, Owner, RenderError, Renderer, System, Table, identifier};
+use crate::ketho::{
+    Field, MemberPosition, Owner, RenderError, Renderer, System, Table, identifier,
+};
 use crate::native::{ProjectionIssue, SourceLink, SourceMapping};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -187,7 +189,10 @@ impl<'a> Structures<'a> {
     }
 }
 
-fn declaration(fact: &StructureFact, renderer: &Renderer) -> Result<RenderedStructure, RenderError> {
+fn declaration(
+    fact: &StructureFact,
+    renderer: &Renderer,
+) -> Result<RenderedStructure, RenderError> {
     let fields = fact
         .fields
         .iter()

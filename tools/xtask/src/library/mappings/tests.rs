@@ -164,10 +164,7 @@ fn external_fields_have_separate_identity_and_mandatory_ordered_members() -> Res
         );
     }
     let mut changed = file.clone();
-    changed["mappings"]
-        .as_array_mut()
-        .ok_or("maps")?
-        .swap(1, 2);
+    changed["mappings"].as_array_mut().ok_or("maps")?.swap(1, 2);
     assert!(verify(&changed, true, &tables, &mut 0).is_err());
     let mut legacy = source_tables(&sources, true)?;
     let old_report = json!({"aliases":{"schema":"wow-native-alias-projection/5"}});
