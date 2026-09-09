@@ -169,9 +169,8 @@ pub(crate) fn project<'a>(
             *counts.entry(&fact.name).or_default() += 1;
         }
     }
-    let mut namespaces = namespaces::Namespaces::prepare(
-        &sources, &counts, defined, reserved, cancelled,
-    )?;
+    let mut namespaces =
+        namespaces::Namespaces::prepare(&sources, &counts, defined, reserved, cancelled)?;
     let mut structures = structures::Structures::prepare(
         &sources, &renderer, &counts, defined, reserved, cancelled,
     )?;

@@ -142,10 +142,7 @@ mod tests {
             ("/aliases/namespace_outcomes", json!([])),
             ("/files/0/text", json!("C_Other = {}")),
             ("/files/0/mappings", json!([])),
-            (
-                "/aliases/source/namespaces/0/span/end",
-                json!(usize::MAX),
-            ),
+            ("/aliases/source/namespaces/0/span/end", json!(usize::MAX)),
         ] {
             let mut changed = value.clone();
             *changed.pointer_mut(pointer).ok_or("mutation target")? = replacement;

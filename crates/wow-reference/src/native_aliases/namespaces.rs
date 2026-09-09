@@ -3,8 +3,8 @@
 use super::{Result, error, location};
 use crate::native::{NativeErrorCode, Span};
 use emmylua_parser::{
-    LuaAstNode, LuaAstToken, LuaDocTag, LuaExpr, LuaLanguageLevel, LuaParser, LuaStat,
-    LuaVarExpr, ParserConfig,
+    LuaAstNode, LuaAstToken, LuaDocTag, LuaExpr, LuaLanguageLevel, LuaParser, LuaStat, LuaVarExpr,
+    ParserConfig,
 };
 use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -24,11 +24,7 @@ pub(super) fn read(input: &str, cancelled: &AtomicBool) -> Result<Vec<NamespaceF
         return Err(error(NativeErrorCode::Syntax));
     }
     let chunk = tree.get_chunk_node();
-    for tag in chunk
-        .syntax()
-        .descendants()
-        .filter_map(LuaDocTag::cast)
-    {
+    for tag in chunk.syntax().descendants().filter_map(LuaDocTag::cast) {
         match tag {
             LuaDocTag::Meta(meta)
                 if meta

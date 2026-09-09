@@ -39,13 +39,7 @@ fn exact_namespace_assignments_project_with_independent_maps_and_conflicts() -> 
     assert!(resource.structures().is_empty());
     assert_eq!(resource.namespaces().len(), 3);
     let cancelled = AtomicBool::new(false);
-    let library = project_with_alias_catalogs(
-        &docs,
-        "Mainline",
-        None,
-        &[&resource],
-        &cancelled,
-    )?;
+    let library = project_with_alias_catalogs(&docs, "Mainline", None, &[&resource], &cancelled)?;
     assert_eq!(library.projection, "partial");
     let report = library.aliases.as_ref().ok_or("report")?;
     assert_eq!(report.schema, "wow-native-alias-projection/7");
@@ -55,7 +49,10 @@ fn exact_namespace_assignments_project_with_independent_maps_and_conflicts() -> 
     assert_eq!(report.namespace_outcomes[1].status, "source_name_conflict");
     assert_eq!(report.namespace_outcomes[2].status, "emitted");
     let file = library.files.last().ok_or("overlay")?;
-    let missing = file.text.find("C_Missing = {}").ok_or("missing namespace")?;
+    let missing = file
+        .text
+        .find("C_Missing = {}")
+        .ok_or("missing namespace")?;
     let other = file.text.find("C_Other = {}").ok_or("other namespace")?;
     assert!(missing < other);
     assert!(!file.text.contains("C_Known = {}"));
@@ -106,35 +103,31 @@ fn namespace_resources_are_order_independent_and_duplicates_remain_partial() -> 
     let first = catalog("A.lua", "C_Alpha = {}\n")?;
     let second = catalog("B.lua", "C_Beta = {}\n")?;
     let cancelled = AtomicBool::new(false);
-    let left = project_with_alias_catalogs(
-        &docs,
-        "Mainline",
-        None,
-        &[&first, &second],
-        &cancelled,
-    )?;
-    let right = project_with_alias_catalogs(
-        &docs,
-        "Mainline",
-        None,
-        &[&second, &first],
-        &cancelled,
-    )?;
+    let left =
+        project_with_alias_catalogs(&docs, "Mainline", None, &[&first, &second], &cancelled)?;
+    let right =
+        project_with_alias_catalogs(&docs, "Mainline", None, &[&second, &first], &cancelled)?;
     assert_eq!(serde_json::to_value(left)?, serde_json::to_value(right)?);
 
     let duplicate = catalog("B.lua", "C_Alpha = {}\n")?;
-    let library = project_with_alias_catalogs(
-        &docs,
-        "Mainline",
-        None,
-        &[&first, &duplicate],
-        &cancelled,
-    )?;
+    let library =
+        project_with_alias_catalogs(&docs, "Mainline", None, &[&first, &duplicate], &cancelled)?;
     assert_eq!(library.projection, "partial");
     let outcomes = &library.aliases.as_ref().ok_or("report")?.namespace_outcomes;
     assert_eq!(outcomes.len(), 2);
-    assert!(outcomes.iter().all(|outcome| outcome.status == "duplicate_namespace"));
-    assert!(!library.files.last().ok_or("native output")?.text.contains("C_Alpha = {}"));
+    assert!(
+        outcomes
+            .iter()
+            .all(|outcome| outcome.status == "duplicate_namespace")
+    );
+    assert!(
+        !library
+            .files
+            .last()
+            .ok_or("native output")?
+            .text
+            .contains("C_Alpha = {}")
+    );
     Ok(())
 }
 

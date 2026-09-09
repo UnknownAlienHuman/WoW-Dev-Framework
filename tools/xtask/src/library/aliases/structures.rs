@@ -13,11 +13,20 @@ pub(super) fn verify<'a>(
     emitted: &mut BTreeSet<&'a str>,
 ) -> Result<bool> {
     let report = &library["aliases"];
+    let schema = report["schema"].as_str();
+    let structure_profile = matches!(
+        schema,
+        Some(
+            "wow-native-alias-projection/5"
+                | "wow-native-alias-projection/6"
+                | "wow-native-alias-projection/7"
+        )
+    );
     let field_maps = matches!(
-        report["schema"].as_str(),
+        schema,
         Some("wow-native-alias-projection/6" | "wow-native-alias-projection/7")
     );
-    if report["schema"] != "wow-native-alias-projection/5" && !field_maps {
+    if !structure_profile {
         if report.get("structure_outcomes").is_some()
             || report.get("unresolved_structure_fields").is_some()
         {
@@ -33,8 +42,22 @@ pub(super) fn verify<'a>(
             }
         }
     }
+    if entries.is_empty() {
+        if report.get("structure_outcomes").is_some()
+            || report.get("unresolved_structure_fields").is_some()
+        {
+            return Err("unexpected structure projection fields".into());
+        }
+        if matches!(
+            schema,
+            Some("wow-native-alias-projection/5" | "wow-native-alias-projection/6")
+        ) {
+            return Err("missing external structure outcomes".into());
+        }
+        return Ok(false);
+    }
     let outcomes = list(report, "structure_outcomes")?;
-    if entries.is_empty() || outcomes.len() != entries.len() {
+    if outcomes.len() != entries.len() {
         return Err("missing external structure outcomes".into());
     }
     let mut blocked = false;
@@ -296,6 +319,33 @@ mod tests {
             .ok_or("maps")?
             .pop();
         assert!(!super::super::verify(&changed)?.blocked);
+        Ok(())
+    }
+
+    #[test]
+    fn namespace_only_profile_does_not_require_structure_outcomes() -> Result<()> {
+        let raw = "C_Missing = {}\n";
+        let span = json!({"start":0,"end":raw.len()-1});
+        let hash = format!("sha256:{}", crate::manifest::digest(raw.as_bytes()));
+        let link = json!({"scope":"annotation_alias_catalog","path":"Namespace.lua",
+            "sha256":hash,"span":span});
+        let value = json!({
+            "schema":"wow-native-annotation-library/5",
+            "issues":[],
+            "aliases":{
+                "schema":"wow-native-alias-projection/7",
+                "authority":"external_annotation_overlay",
+                "source":{"schema":"wow-native-alias-resource/5","revision":"a".repeat(40),
+                    "path":"Namespace.lua","sha256":hash,"source_bytes":raw.len(),"text":raw,
+                    "aliases":[],"namespaces":[{"name":"C_Missing","span":span}]},
+                "outcomes":[],
+                "namespace_outcomes":[{"ordinal":0,"name":"C_Missing","status":"emitted"}]
+            },
+            "files":[{"text":"C_Missing = {}","mappings":[{
+                "granularity":"declaration","generated":span,"source":link
+            }]}]
+        });
+        assert!(!super::super::verify(&value)?.blocked);
         Ok(())
     }
 }

@@ -24,7 +24,12 @@ impl<'a> Namespaces<'a> {
     ) -> Result<Self, RenderError> {
         let entries = resources
             .iter()
-            .flat_map(|document| document.namespaces().iter().map(move |fact| (*document, fact)))
+            .flat_map(|document| {
+                document
+                    .namespaces()
+                    .iter()
+                    .map(move |fact| (*document, fact))
+            })
             .collect::<Vec<_>>();
         let mut emitted = Vec::new();
         let mut outcomes = Vec::with_capacity(entries.len());
