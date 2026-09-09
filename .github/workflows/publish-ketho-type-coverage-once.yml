@@ -1,0 +1,88 @@
+name: Publish complete Ketho type-catalog probe once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-ketho-type-coverage-once.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-ketho-type-coverage
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Extend the exact-revision composition probe
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/workflows/current-source-bundle.yml')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace(
+              '      - name: Compose current Ketho type and string catalogs\n',
+              '      - name: Compose current complete Ketho type catalog\n',
+              1,
+          )
+          anchor = '''            --alias-catalog "$RUNNER_TEMP/ketho-source" "$(cat "$RUNNER_TEMP/alias-revision")" \\
+            Annotations/Core/Type/GlobalColors.lua \\
+            --alias-catalog "$RUNNER_TEMP/ketho-source" "$(cat "$RUNNER_TEMP/alias-revision")" \\
+            Annotations/Core/Type/StringEnum.lua || result=$?'''
+          replacement = '''            --alias-catalog "$RUNNER_TEMP/ketho-source" "$(cat "$RUNNER_TEMP/alias-revision")" \\
+            Annotations/Core/Type/GlobalColors.lua \\
+            --alias-catalog "$RUNNER_TEMP/ketho-source" "$(cat "$RUNNER_TEMP/alias-revision")" \\
+            Annotations/Core/Type/Mixin.lua \\
+            --alias-catalog "$RUNNER_TEMP/ketho-source" "$(cat "$RUNNER_TEMP/alias-revision")" \\
+            Annotations/Core/Type/Namespace.lua \\
+            --alias-catalog "$RUNNER_TEMP/ketho-source" "$(cat "$RUNNER_TEMP/alias-revision")" \\
+            Annotations/Core/Type/StringEnum.lua \\
+            --alias-catalog "$RUNNER_TEMP/ketho-source" "$(cat "$RUNNER_TEMP/alias-revision")" \\
+            Annotations/Core/Type/Structure.lua \\
+            --alias-catalog "$RUNNER_TEMP/ketho-source" "$(cat "$RUNNER_TEMP/alias-revision")" \\
+            Annotations/Core/Type/UnitToken.lua || result=$?'''
+          if text.count(anchor) != 1:
+              raise SystemExit('current-source composition anchor changed')
+          text = text.replace(anchor, replacement)
+          for resource in (
+              'BlizzardType.lua', 'EmoteToken.lua', 'FunctionContainer.lua',
+              'GlobalColors.lua', 'Mixin.lua', 'Namespace.lua', 'StringEnum.lua',
+              'Structure.lua', 'UnitToken.lua',
+          ):
+              if text.count(f'Annotations/Core/Type/{resource}') < 1:
+                  raise SystemExit(f'missing {resource}')
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Validate repository after workflow change
+        run: |
+          set -euo pipefail
+          rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+          cargo +stable fmt --all --check
+          cargo +stable xtask check
+          cargo +stable check --locked --workspace --all-targets --all-features
+          cargo +stable clippy --locked --workspace --all-targets --all-features -- -D warnings
+          cargo +stable test --locked --workspace --all-targets --all-features
+          git diff --check
+
+      - name: Publish and remove this one-shot workflow
+        run: |
+          set -euo pipefail
+          git config user.name 'Iurii Lisenkov'
+          git config user.email '71514792+UnknownAlienHuman@users.noreply.github.com'
+          git add .github/workflows/current-source-bundle.yml
+          git rm .github/workflows/publish-ketho-type-coverage-once.yml
+          git commit -m 'ci(annotations): probe the complete Ketho type catalog' \
+            -m 'Compose all nine Annotations/Core/Type resources from one once-resolved donor revision. This exercises cross-file aliases, strings, structures, namespaces, function containers and global colors together while retaining the existing focused probes and explicit partial-result handling.'
+          git push origin HEAD:main
