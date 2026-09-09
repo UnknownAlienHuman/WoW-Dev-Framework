@@ -15,7 +15,11 @@ pub(super) fn verify<'a>(
     let schema = report["schema"].as_str();
     if !matches!(
         schema,
-        Some("wow-native-alias-projection/7" | "wow-native-alias-projection/8")
+        Some(
+            "wow-native-alias-projection/7"
+                | "wow-native-alias-projection/8"
+                | "wow-native-alias-projection/9"
+        )
     ) {
         if report.get("namespace_outcomes").is_some() {
             return Err("unexpected namespace projection field".into());

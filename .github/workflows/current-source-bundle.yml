@@ -122,6 +122,8 @@ jobs:
             --alias-catalog "$RUNNER_TEMP/ketho-source" "$(cat "$RUNNER_TEMP/alias-revision")" \
             Annotations/Core/Type/FunctionContainer.lua \
             --alias-catalog "$RUNNER_TEMP/ketho-source" "$(cat "$RUNNER_TEMP/alias-revision")" \
+            Annotations/Core/Type/GlobalColors.lua \
+            --alias-catalog "$RUNNER_TEMP/ketho-source" "$(cat "$RUNNER_TEMP/alias-revision")" \
             Annotations/Core/Type/StringEnum.lua || result=$?
           case "$result" in
             0) ;;

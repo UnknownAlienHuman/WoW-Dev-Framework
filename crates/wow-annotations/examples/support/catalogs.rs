@@ -111,7 +111,8 @@ pub(super) fn read(
                 .function_containers()
                 .iter()
                 .map(|container| 1 + container.methods.len())
-                .sum::<usize>();
+                .sum::<usize>()
+            + document.global_colors().len();
         if total_aliases > MAX_CATALOG_ALIASES {
             return Err("alias catalog aggregate declaration limit".into());
         }

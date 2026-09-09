@@ -10,6 +10,7 @@ use wow_reference::native_aliases::AliasDocument;
 use crate::ketho::{RenderError, Renderer, qualified_identifier};
 use crate::native::{ProjectionIssue, SourceLink, SourceMapping};
 mod function_containers;
+mod global_colors;
 mod namespaces;
 mod structures;
 
@@ -47,6 +48,10 @@ pub struct AliasReport<'a> {
     pub function_container_outcomes: Vec<AliasOutcome>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub unresolved_function_container_returns: Vec<SourceLink>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub global_color_outcomes: Vec<AliasOutcome>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub unresolved_global_color_types: Vec<SourceLink>,
     pub limitations: Vec<&'static str>,
 }
 
@@ -155,6 +160,7 @@ pub(crate) fn project<'a>(
                         .iter()
                         .map(|container| 1 + container.methods.len())
                         .sum::<usize>()
+                    + s.global_colors().len()
             })
             .sum::<usize>()
             > MAX_CATALOG_ALIASES
@@ -185,6 +191,9 @@ pub(crate) fn project<'a>(
         for fact in resource.function_containers() {
             *counts.entry(&fact.name).or_default() += 1;
         }
+        for fact in resource.global_colors() {
+            *counts.entry(&fact.name).or_default() += 1;
+        }
     }
     let mut namespaces =
         namespaces::Namespaces::prepare(&sources, &counts, defined, reserved, cancelled)?;
@@ -194,6 +203,8 @@ pub(crate) fn project<'a>(
     let mut function_containers = function_containers::FunctionContainers::prepare(
         &sources, &renderer, &counts, defined, reserved, cancelled,
     )?;
+    let mut global_colors =
+        global_colors::GlobalColors::prepare(&sources, &counts, defined, reserved, cancelled)?;
     let mut known = defined.clone();
     known.extend(structures.defined.iter().cloned());
     known.extend(function_containers.defined.iter().cloned());
@@ -305,6 +316,7 @@ pub(crate) fn project<'a>(
     let unresolved_structure_fields = structures.unresolved_fields(&renderer, &known, cancelled)?;
     let unresolved_function_container_returns =
         function_containers.unresolved_returns(&renderer, &known, cancelled)?;
+    let unresolved_global_color_types = global_colors.unresolved_types(&known, cancelled)?;
     emitted.sort_by_key(|&index| &facts[index].name);
     let mut text = String::new();
     let mut mappings = Vec::new();
@@ -312,6 +324,7 @@ pub(crate) fn project<'a>(
         || structures.has_output()
         || namespaces.has_output()
         || function_containers.has_output()
+        || global_colors.has_output()
     {
         text.push_str("---@meta _\n-- Explicit external annotation overlay; not Blizzard reference evidence.\n");
         // Retain the port donor's license with generated derivative annotations.
@@ -340,15 +353,20 @@ pub(crate) fn project<'a>(
     }
     namespaces.append(&mut text, &mut mappings, cancelled)?;
     function_containers.append(&mut text, &mut mappings, cancelled)?;
+    global_colors.append(&mut text, &mut mappings, cancelled)?;
     structures.append(&mut text, &mut mappings, cancelled)?;
     issues.append(&mut structures.issues);
     issues.append(&mut namespaces.issues);
     issues.append(&mut function_containers.issues);
+    issues.append(&mut global_colors.issues);
     let has_structures = sources.iter().any(|source| !source.structures().is_empty());
     let has_namespaces = sources.iter().any(|source| !source.namespaces().is_empty());
     let has_function_containers = sources
         .iter()
         .any(|source| !source.function_containers().is_empty());
+    let has_global_colors = sources
+        .iter()
+        .any(|source| !source.global_colors().is_empty());
     let mut limitations = vec![
         "explicit consumer overlay; not source-confirmed Blizzard types or runtime safety",
         "only named/primitive unions; unsupported declarations and dependencies remain explicit",
@@ -369,9 +387,14 @@ pub(crate) fn project<'a>(
     if has_function_containers {
         limitations.push("external function containers retain exact class and method maps; empty bodies are syntax-only declarations and do not imply runtime behavior");
     }
+    if has_global_colors {
+        limitations.push("external CreateColor components are retained as source lexemes; output declares inert colorRGBA globals and does not execute calls or claim exact runtime values");
+    }
     Ok(ProjectedAliases {
         report: AliasReport {
-            schema: if has_function_containers {
+            schema: if has_global_colors {
+                "wow-native-alias-projection/9"
+            } else if has_function_containers {
                 "wow-native-alias-projection/8"
             } else if has_namespaces {
                 "wow-native-alias-projection/7"
@@ -395,6 +418,8 @@ pub(crate) fn project<'a>(
             namespace_outcomes: namespaces.outcomes,
             function_container_outcomes: function_containers.outcomes,
             unresolved_function_container_returns,
+            global_color_outcomes: global_colors.outcomes,
+            unresolved_global_color_types,
             limitations,
         },
         text,

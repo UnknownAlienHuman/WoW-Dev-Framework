@@ -21,6 +21,7 @@ pub(super) fn verify<'a>(
                 | "wow-native-alias-projection/6"
                 | "wow-native-alias-projection/7"
                 | "wow-native-alias-projection/8"
+                | "wow-native-alias-projection/9"
         )
     );
     let field_maps = matches!(
@@ -29,6 +30,7 @@ pub(super) fn verify<'a>(
             "wow-native-alias-projection/6"
                 | "wow-native-alias-projection/7"
                 | "wow-native-alias-projection/8"
+                | "wow-native-alias-projection/9"
         )
     );
     if !structure_profile {

@@ -8,10 +8,19 @@ pub(super) fn read(report: &Value) -> Result<Vec<&Value>> {
     }
     let primary = &report["source"];
     let schema = report["schema"].as_str();
-    let function_profile = schema == Some("wow-native-alias-projection/8");
+    let global_color_profile = schema == Some("wow-native-alias-projection/9");
+    let function_capable = matches!(
+        schema,
+        Some("wow-native-alias-projection/8" | "wow-native-alias-projection/9")
+    );
+    let function_required = schema == Some("wow-native-alias-projection/8");
     let namespace_capable = matches!(
         schema,
-        Some("wow-native-alias-projection/7" | "wow-native-alias-projection/8")
+        Some(
+            "wow-native-alias-projection/7"
+                | "wow-native-alias-projection/8"
+                | "wow-native-alias-projection/9"
+        )
     );
     let namespace_required = schema == Some("wow-native-alias-projection/7");
     let structure_capable = matches!(
@@ -21,13 +30,15 @@ pub(super) fn read(report: &Value) -> Result<Vec<&Value>> {
                 | "wow-native-alias-projection/6"
                 | "wow-native-alias-projection/7"
                 | "wow-native-alias-projection/8"
+                | "wow-native-alias-projection/9"
         )
     );
     let structure_required = matches!(
         schema,
         Some("wow-native-alias-projection/5" | "wow-native-alias-projection/6")
     );
-    let extended_profile = structure_capable || namespace_capable || function_profile;
+    let extended_profile =
+        structure_capable || namespace_capable || function_capable || global_color_profile;
     let open_profile = schema == Some("wow-native-alias-projection/4") || extended_profile;
     let multiple = schema == Some("wow-native-alias-projection/3")
         || (open_profile && report.get("additional_sources").is_some());
@@ -68,6 +79,7 @@ pub(super) fn read(report: &Value) -> Result<Vec<&Value>> {
     let mut has_structures = false;
     let mut has_namespaces = false;
     let mut has_function_containers = false;
+    let mut has_global_colors = false;
     let mut field_count = 0usize;
     let mut method_count = 0usize;
     for resource in &resources {
@@ -77,7 +89,8 @@ pub(super) fn read(report: &Value) -> Result<Vec<&Value>> {
             Some("wow-native-alias-resource/3") if open_profile => 3,
             Some("wow-native-alias-resource/4") if structure_capable => 4,
             Some("wow-native-alias-resource/5") if namespace_capable => 5,
-            Some("wow-native-alias-resource/6") if function_profile => 6,
+            Some("wow-native-alias-resource/6") if function_capable => 6,
+            Some("wow-native-alias-resource/7") if global_color_profile => 7,
             _ => return Err("unsupported alias resource schema".into()),
         };
         let path = text(resource, "path")?;
@@ -169,7 +182,41 @@ pub(super) fn read(report: &Value) -> Result<Vec<&Value>> {
             }
             0
         };
-        if (aliases.is_empty() && structures == 0 && namespaces == 0 && function_items == 0)
+        let global_colors = if profile == 7 {
+            let colors = list(resource, "global_colors")?;
+            if colors.is_empty()
+                || !aliases.is_empty()
+                || structures != 0
+                || namespaces != 0
+                || function_items != 0
+            {
+                return Err("invalid external global color resource".into());
+            }
+            for color in colors {
+                let components = list(color, "components")?;
+                if components.len() != 4
+                    || components.iter().any(|component| {
+                        component
+                            .as_str()
+                            .is_none_or(|component| component.is_empty() || component.len() > 64)
+                    })
+                {
+                    return Err("invalid external global color components".into());
+                }
+            }
+            has_global_colors = true;
+            colors.len()
+        } else {
+            if resource.get("global_colors").is_some() {
+                return Err("unexpected external global color field".into());
+            }
+            0
+        };
+        if (aliases.is_empty()
+            && structures == 0
+            && namespaces == 0
+            && function_items == 0
+            && global_colors == 0)
             || (profile < 4 && ((profile >= 2) != has_literals || (profile == 3) != has_base))
         {
             return Err("alias schema does not describe its declarations".into());
@@ -188,13 +235,17 @@ pub(super) fn read(report: &Value) -> Result<Vec<&Value>> {
         }
         bytes = bytes.checked_add(raw.len()).ok_or("alias byte limit")?;
         count = count
-            .checked_add(aliases.len() + structures + namespaces + function_items)
+            .checked_add(
+                aliases.len() + structures + namespaces + function_items + global_colors,
+            )
             .ok_or("alias count limit")?;
         if bytes > 2 * 1024 * 1024 || count > 4096 {
             return Err("alias resource aggregate limit".into());
         }
     }
-    if function_profile != has_function_containers
+    if global_color_profile != has_global_colors
+        || (!function_capable && has_function_containers)
+        || (function_required && !has_function_containers)
         || (!namespace_capable && has_namespaces)
         || (namespace_required && !has_namespaces)
         || (!structure_capable && has_structures)

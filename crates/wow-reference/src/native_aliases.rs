@@ -18,12 +18,14 @@ use crate::native::{NativeError, NativeErrorCode, Span, source_digest};
 
 mod catalog;
 mod function_containers;
+mod global_colors;
 mod namespaces;
 mod open_strings;
 mod structures;
 pub use function_containers::{
     FunctionContainerFact, FunctionContainerMethod, FunctionContainerReturn,
 };
+pub use global_colors::GlobalColorFact;
 pub use namespaces::NamespaceFact;
 pub use structures::{StructureFact, StructureField, StructureFieldType};
 
@@ -65,6 +67,8 @@ pub struct AliasDocument {
     namespaces: Vec<NamespaceFact>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     function_containers: Vec<FunctionContainerFact>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    global_colors: Vec<GlobalColorFact>,
 }
 impl AliasDocument {
     pub fn revision(&self) -> &str {
@@ -90,6 +94,9 @@ impl AliasDocument {
     }
     pub fn function_containers(&self) -> &[FunctionContainerFact] {
         &self.function_containers
+    }
+    pub fn global_colors(&self) -> &[GlobalColorFact] {
+        &self.global_colors
     }
 }
 
@@ -122,6 +129,8 @@ pub fn ingest_aliases(
 /// Comment-only classes with named fields are also admitted as an external
 /// structure profile; they never replace Blizzard facts or imply inheritance.
 /// A standalone namespace resource may contain only exact `C_* = {}` bindings.
+/// Static global-color resources admit only exact `NAME = CreateColor(r, g, b, a)`
+/// assignments and retain number lexemes without executing the calls.
 /// Only contiguous continuation comments join an alias. Emmy owns type parsing;
 /// malformed declarations cannot consume their independently parsed siblings.
 pub fn ingest_alias_catalog(
@@ -220,14 +229,34 @@ fn ingest(
                     structures: Vec::new(),
                     namespaces,
                     function_containers: Vec::new(),
+                    global_colors: Vec::new(),
                 });
             }
             Err(failure) if failure.code == NativeErrorCode::Cancelled => return Err(failure),
             Err(_) => {}
         }
-        let function_containers = function_containers::read(input, cancelled)?;
+        match function_containers::read(input, cancelled) {
+            Ok(function_containers) => {
+                return Ok(AliasDocument {
+                    schema: "wow-native-alias-resource/6",
+                    revision: revision.into(),
+                    path: path.into(),
+                    sha256: digest,
+                    source_bytes: text.len(),
+                    text: text.into(),
+                    aliases: Vec::new(),
+                    structures: Vec::new(),
+                    namespaces: Vec::new(),
+                    function_containers,
+                    global_colors: Vec::new(),
+                });
+            }
+            Err(failure) if failure.code == NativeErrorCode::Cancelled => return Err(failure),
+            Err(_) => {}
+        }
+        let global_colors = global_colors::read(input, cancelled)?;
         return Ok(AliasDocument {
-            schema: "wow-native-alias-resource/6",
+            schema: "wow-native-alias-resource/7",
             revision: revision.into(),
             path: path.into(),
             sha256: digest,
@@ -236,7 +265,8 @@ fn ingest(
             aliases: Vec::new(),
             structures: Vec::new(),
             namespaces: Vec::new(),
-            function_containers,
+            function_containers: Vec::new(),
+            global_colors,
         });
     }
     let comments = tokens
@@ -388,6 +418,7 @@ fn ingest(
         structures,
         namespaces: Vec::new(),
         function_containers: Vec::new(),
+        global_colors: Vec::new(),
     })
 }
 

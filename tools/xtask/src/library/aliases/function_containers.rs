@@ -12,7 +12,11 @@ pub(super) fn verify<'a>(
     emitted: &mut BTreeSet<&'a str>,
 ) -> Result<bool> {
     let report = &library["aliases"];
-    if report["schema"] != "wow-native-alias-projection/8" {
+    let schema = report["schema"].as_str();
+    if !matches!(
+        schema,
+        Some("wow-native-alias-projection/8" | "wow-native-alias-projection/9")
+    ) {
         if report.get("function_container_outcomes").is_some()
             || report
                 .get("unresolved_function_container_returns")
@@ -30,8 +34,21 @@ pub(super) fn verify<'a>(
             }
         }
     }
+    if entries.is_empty() {
+        if report.get("function_container_outcomes").is_some()
+            || report
+                .get("unresolved_function_container_returns")
+                .is_some()
+        {
+            return Err("unexpected function container projection field".into());
+        }
+        if schema == Some("wow-native-alias-projection/8") {
+            return Err("missing external function container outcomes".into());
+        }
+        return Ok(false);
+    }
     let outcomes = list(report, "function_container_outcomes")?;
-    if entries.is_empty() || outcomes.len() != entries.len() {
+    if outcomes.len() != entries.len() {
         return Err("missing external function container outcomes".into());
     }
     let mut blocked = false;
