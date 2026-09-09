@@ -150,8 +150,8 @@ pub(super) fn read(input: &str, cancelled: &AtomicBool) -> Result<Vec<FunctionCo
                 .is_none_or(|parameters| parameters.get_params().next().is_some())
             || closure
                 .get_block()
-                .is_none_or(|body| body.get_stats().next().is_some())
-        {
+                .is_some_and(|body| body.get_stats().next().is_some())
+          {
             return Err(error(NativeErrorCode::UnsupportedStatement));
         }
         let function_span = location(&function);
