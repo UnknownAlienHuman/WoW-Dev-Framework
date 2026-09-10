@@ -4,6 +4,7 @@ members = [
     "crates/wow-core",
     "crates/wow-reference",
     "crates/wow-annotations",
+    "crates/wow-emmy",
     "tools/xtask",
     "crates/wow-render-contract",
     "crates/wow-ketho-literals",

@@ -2,13 +2,17 @@
 name = "wow-emmy"
 version = "0.1.0"
 edition.workspace = true
-rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+publish = false
 
 [dependencies]
+emmylua_code_analysis = { git = "https://github.com/EmmyLuaLs/emmylua-analyzer-rust", rev = "aaaca68425d9362876228649b0b8d92f07654daa", default-features = false }
+lsp_types = { package = "emmy_lsp_types", version = "=0.1.0" }
 serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 sha2 = "0.11"
+tokio-util = "=0.7.19"
 wow-core = { path = "../wow-core" }
 
 [lints]
