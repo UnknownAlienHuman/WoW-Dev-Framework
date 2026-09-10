@@ -36,11 +36,13 @@ jobs:
           echo '1f23ea4b1612660501c73d31610cd70401d46d7b7e1cafd534f2897bb0ed13bd  .ci/materialize/project-e0/fix-02.patch' | sha256sum --check --status
           echo '2ae723bf5cd877a5a8b27b4073334be5f4dc7c68b149cc3dfe87672d2d90f073  .ci/materialize/project-e0/fix-03.patch' | sha256sum --check --status
           echo '593876605d176979fe7afd468d61fc19ced61273d3a320b03c38c0d837cc3b7b  .ci/materialize/project-e0/fix-04.patch' | sha256sum --check --status
+          echo '68f198f673b0cdc9fbc69fa3422926649485a8aaffb0279a608fcb2b0eee6282  .ci/materialize/project-e0/fix-05.patch' | sha256sum --check --status
           tar -xzf "$RUNNER_TEMP/project-e0.tar.gz" -C .
           git apply .ci/materialize/project-e0/fix-01.patch
           git apply .ci/materialize/project-e0/fix-02.patch
           git apply .ci/materialize/project-e0/fix-03.patch
           git apply .ci/materialize/project-e0/fix-04.patch
+          git apply .ci/materialize/project-e0/fix-05.patch
           rm -rf .ci/materialize/project-e0
           rm .github/workflows/materialize-project-e0.yml
           git add -A
