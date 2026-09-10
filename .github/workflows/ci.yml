@@ -83,11 +83,13 @@ jobs:
       - name: Isolate the rolling parser consumer workspace
         run: |
           set -euo pipefail
-          sed -i '/"crates\/wow-emmy",/d' Cargo.toml
-          if grep -Fq '"crates/wow-emmy",' Cargo.toml; then
-            echo 'wow-emmy remained in the parser-only workspace' >&2
-            exit 1
-          fi
+          sed -i -e '/"crates\/wow-emmy",/d' -e '/"crates\/wow-project",/d' Cargo.toml
+          for member in wow-emmy wow-project; do
+            if grep -Fq "\"crates/$member\"," Cargo.toml; then
+              echo "$member remained in the parser-only workspace" >&2
+              exit 1
+            fi
+          done
       - name: Resolve current parser in isolated CI checkout
         run: |
           cargo +stable update
