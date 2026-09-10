@@ -70,9 +70,9 @@ pub struct ProjectError {
     message: Box<str>,
     file_id: Option<Box<str>>,
     relative_path: Option<Box<str>>,
-    candidate_generation: Option<ProjectGenerationId>,
-    current_generation: Option<ProjectGenerationId>,
-    current_snapshot_digest: Option<ContentDigest<CanonicalResult>>,
+    candidate_generation: Option<Box<ProjectGenerationId>>,
+    current_generation: Option<Box<ProjectGenerationId>>,
+    current_snapshot_digest: Option<Box<ContentDigest<CanonicalResult>>>,
 }
 
 impl ProjectError {
@@ -107,22 +107,22 @@ impl ProjectError {
     }
 
     #[must_use]
-    pub(crate) const fn with_candidate_generation(
+    pub(crate) fn with_candidate_generation(
         mut self,
         generation: ProjectGenerationId,
     ) -> Self {
-        self.candidate_generation = Some(generation);
+        self.candidate_generation = Some(Box::new(generation));
         self
     }
 
     #[must_use]
-    pub(crate) const fn with_current(
+    pub(crate) fn with_current(
         mut self,
         generation: ProjectGenerationId,
         snapshot_digest: ContentDigest<CanonicalResult>,
     ) -> Self {
-        self.current_generation = Some(generation);
-        self.current_snapshot_digest = Some(snapshot_digest);
+        self.current_generation = Some(Box::new(generation));
+        self.current_snapshot_digest = Some(Box::new(snapshot_digest));
         self
     }
 
@@ -158,20 +158,20 @@ impl ProjectError {
 
     /// Candidate generation when derivation safely completed before failure.
     #[must_use]
-    pub const fn candidate_generation(&self) -> Option<ProjectGenerationId> {
-        self.candidate_generation
+    pub fn candidate_generation(&self) -> Option<ProjectGenerationId> {
+        self.candidate_generation.as_deref().copied()
     }
 
     /// Current published generation retained after failure.
     #[must_use]
-    pub const fn current_generation(&self) -> Option<ProjectGenerationId> {
-        self.current_generation
+    pub fn current_generation(&self) -> Option<ProjectGenerationId> {
+        self.current_generation.as_deref().copied()
     }
 
     /// Current immutable snapshot digest retained after failure.
     #[must_use]
-    pub const fn current_snapshot_digest(&self) -> Option<ContentDigest<CanonicalResult>> {
-        self.current_snapshot_digest
+    pub fn current_snapshot_digest(&self) -> Option<ContentDigest<CanonicalResult>> {
+        self.current_snapshot_digest.as_deref().copied()
     }
 }
 
