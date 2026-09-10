@@ -36,6 +36,7 @@ jobs:
           tar -xzf "$RUNNER_TEMP/emmy-local-flow.tar.gz" -C .
           rm -rf .ci/materialize/emmy-local-flow
           rm .github/workflows/materialize-emmy-local-flow.yml
+          git add -A
       - name: Format and verify exact implementation
         run: |
           set -euo pipefail
@@ -51,6 +52,7 @@ jobs:
           set -euo pipefail
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add -A crates/wow-emmy .ci/materialize/emmy-local-flow .github/workflows/materialize-emmy-local-flow.yml
+          git add -A
+          git diff --cached --check
           git commit -m 'feat(emmy): extract exact local flow and dominance facts'
           git push origin HEAD:work/emmy-local-flow
