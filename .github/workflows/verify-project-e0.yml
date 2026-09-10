@@ -154,10 +154,12 @@ jobs:
           PY
           rm .ci/project-e0-clippy.patch
           rm .github/workflows/verify-project-e0.yml
+          git add -A
       - name: Run complete E0-D gate
         run: |
           set -euo pipefail
           cargo +stable fmt --all
+          git add -A
           cargo +stable xtask check
           cargo +stable check --locked --workspace --all-targets --all-features
           cargo +stable test --locked --package wow-project --all-targets --all-features -- --nocapture
