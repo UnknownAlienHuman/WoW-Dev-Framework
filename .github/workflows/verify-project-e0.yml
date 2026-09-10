@@ -5,7 +5,6 @@ on:
     branches:
       - work/project-e0
     paths:
-      - .ci/project-e0-clippy.patch
       - .github/workflows/verify-project-e0.yml
 
 permissions:
@@ -28,8 +27,131 @@ jobs:
       - name: Apply reviewed structural corrections
         run: |
           set -euo pipefail
-          git apply --check .ci/project-e0-clippy.patch
-          git apply .ci/project-e0-clippy.patch
+          python3 - <<'PY'
+          from pathlib import Path
+
+          update = Path("crates/wow-project/src/update.rs")
+          text = update.read_text()
+          anchor = """use crate::{
+              ProjectConfiguration, ProjectError, ProjectErrorCode, ProjectFileId, ProjectInputFile,
+              ProjectPhase, ProjectResult, ProjectSnapshot,
+          };
+
+          """
+          alias = """type ProjectUpdateParts = (
+              Option<ProjectGenerationId>,
+              Option<ContentDigest<CanonicalResult>>,
+              ProjectConfiguration,
+              Vec<ProjectFileOperation>,
+              Vec<LuaWorkspaceSnapshot>,
+          );
+
+          """
+          if text.count(anchor) != 1:
+              raise SystemExit("unexpected update import anchor")
+          text = text.replace(anchor, anchor + alias, 1)
+          old_signature = """    pub(crate) fn into_parts(
+                  self,
+              ) -> (
+                  Option<ProjectGenerationId>,
+                  Option<ContentDigest<CanonicalResult>>,
+                  ProjectConfiguration,
+                  Vec<ProjectFileOperation>,
+                  Vec<LuaWorkspaceSnapshot>,
+              ) {
+          """
+          new_signature = """    pub(crate) fn into_parts(self) -> ProjectUpdateParts {
+          """
+          if text.count(old_signature) != 1:
+              raise SystemExit("unexpected update parts signature")
+          update.write_text(text.replace(old_signature, new_signature, 1))
+
+          snapshot = Path("crates/wow-project/src/snapshot.rs")
+          text = snapshot.read_text()
+          old_records = """    let mut records = Vec::new();
+              records.push(complete_coverage(
+                  context,
+                  "project.fixture.configuration.valid",
+                  CoveragePartitionId::new("project.configuration", None).map_err(core_snapshot_error)?,
+                  producer_id,
+                  producer_version,
+              )?);
+              records.push(complete_coverage(
+                  context,
+                  "project.fixture.files.complete",
+                  CoveragePartitionId::new(
+                      "project.workspace",
+                      Some(configuration.workspace_id().as_str()),
+                  )
+                  .map_err(core_snapshot_error)?,
+                  producer_id,
+                  producer_version,
+              )?);
+              records.push(complete_coverage(
+                  context,
+                  "project.source.registry.complete",
+                  CoveragePartitionId::new(
+                      "project.source_origin",
+                      Some(configuration.source_origin_id().as_str()),
+                  )
+                  .map_err(core_snapshot_error)?,
+                  producer_id,
+                  producer_version,
+              )?);
+              records.push(complete_coverage(
+                  context,
+                  "project.source.handle.resolve",
+                  CoveragePartitionId::new("project.source_registry", Some(registry.registry_id()))
+                      .map_err(core_snapshot_error)?,
+                  producer_id,
+                  producer_version,
+              )?);
+          """
+          new_records = """    let mut records = vec![
+                  complete_coverage(
+                      context,
+                      "project.fixture.configuration.valid",
+                      CoveragePartitionId::new("project.configuration", None)
+                          .map_err(core_snapshot_error)?,
+                      producer_id,
+                      producer_version,
+                  )?,
+                  complete_coverage(
+                      context,
+                      "project.fixture.files.complete",
+                      CoveragePartitionId::new(
+                          "project.workspace",
+                          Some(configuration.workspace_id().as_str()),
+                      )
+                      .map_err(core_snapshot_error)?,
+                      producer_id,
+                      producer_version,
+                  )?,
+                  complete_coverage(
+                      context,
+                      "project.source.registry.complete",
+                      CoveragePartitionId::new(
+                          "project.source_origin",
+                          Some(configuration.source_origin_id().as_str()),
+                      )
+                      .map_err(core_snapshot_error)?,
+                      producer_id,
+                      producer_version,
+                  )?,
+                  complete_coverage(
+                      context,
+                      "project.source.handle.resolve",
+                      CoveragePartitionId::new("project.source_registry", Some(registry.registry_id()))
+                          .map_err(core_snapshot_error)?,
+                      producer_id,
+                      producer_version,
+                  )?,
+              ];
+          """
+          if text.count(old_records) != 1:
+              raise SystemExit("unexpected coverage initialization block")
+          snapshot.write_text(text.replace(old_records, new_records, 1))
+          PY
           rm .ci/project-e0-clippy.patch
           rm .github/workflows/verify-project-e0.yml
       - name: Run complete E0-D gate
