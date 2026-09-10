@@ -18,10 +18,7 @@ pub(super) fn convert(text: &str, range: Range) -> Result<SourceSpan, EmmySyntax
 
 /// The pinned upstream LineIndex counts Unicode scalar values in its LSP-shaped
 /// character field. Preserve that observed contract, then publish UTF-8 bytes.
-fn scalar_position_to_byte(
-    text: &str,
-    position: Position,
-) -> Result<usize, EmmySyntaxErrorCode> {
+fn scalar_position_to_byte(text: &str, position: Position) -> Result<usize, EmmySyntaxErrorCode> {
     let requested_line = usize::try_from(position.line)
         .map_err(|_| EmmySyntaxErrorCode::CoordinateConversionFailed)?;
     let requested_column = usize::try_from(position.character)

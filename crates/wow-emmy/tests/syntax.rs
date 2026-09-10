@@ -55,7 +55,10 @@ fn exact_snapshot_produces_clean_and_malformed_file_results() -> TestResult {
             diagnostic.upstream_code(),
             "syntax-error" | "doc-syntax-error"
         ));
-        assert_eq!(diagnostic.normalized_severity(), EmmyDiagnosticSeverity::Error);
+        assert_eq!(
+            diagnostic.normalized_severity(),
+            EmmyDiagnosticSeverity::Error
+        );
         let start = usize::try_from(diagnostic.span().byte_start().ok_or("range start")?)?;
         let end = usize::try_from(diagnostic.span().byte_end().ok_or("range end")?)?;
         assert!(start <= end && end <= malformed.len());
@@ -78,7 +81,10 @@ fn file_order_does_not_change_report_identity_or_bytes() -> TestResult {
     let left_report = analyze_syntax(&left)?;
     let right_report = analyze_syntax(&right)?;
     assert_eq!(left_report, right_report);
-    assert_eq!(serde_json::to_vec(&left_report)?, serde_json::to_vec(&right_report)?);
+    assert_eq!(
+        serde_json::to_vec(&left_report)?,
+        serde_json::to_vec(&right_report)?
+    );
     Ok(())
 }
 
@@ -90,7 +96,9 @@ fn compiled_adapter_rejects_a_different_backend_before_analysis() -> TestResult 
         vec![LuaWorkspaceFileInput::new("clean.lua", "return true\n")],
         LuaWorkspaceLimits::new(4, 256, 4096, 4096)?,
     )?;
-    let error = analyze_syntax(&workspace).err().ok_or("expected incompatible backend")?;
+    let error = analyze_syntax(&workspace)
+        .err()
+        .ok_or("expected incompatible backend")?;
     assert_eq!(error.code(), EmmySyntaxErrorCode::IncompatibleBackend);
     assert!(error.path().is_none());
     Ok(())

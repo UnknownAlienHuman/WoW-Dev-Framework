@@ -15,10 +15,10 @@ pub use compatibility::{
     backend_identity_from_report,
 };
 pub use syntax::{
-    EMMYLUA_CODE_ANALYSIS_VERSION, EMMYLUA_REVISION, EMMYLUA_TREE,
-    EmmyDiagnosticClassification, EmmyDiagnosticRollout, EmmyDiagnosticSeverity,
-    EmmySyntaxDiagnostic, EmmySyntaxDiagnosticKind, EmmySyntaxError, EmmySyntaxErrorCode,
-    EmmySyntaxFileReport, EmmySyntaxReport, EmmySyntaxResult, analyze_syntax,
+    EMMYLUA_CODE_ANALYSIS_VERSION, EMMYLUA_REVISION, EMMYLUA_TREE, EmmyDiagnosticClassification,
+    EmmyDiagnosticRollout, EmmyDiagnosticSeverity, EmmySyntaxDiagnostic, EmmySyntaxDiagnosticKind,
+    EmmySyntaxError, EmmySyntaxErrorCode, EmmySyntaxFileReport, EmmySyntaxReport, EmmySyntaxResult,
+    analyze_syntax,
 };
 pub use workspace::{
     EmmyBackendIdentity, EmmyWorkspaceError, EmmyWorkspaceErrorCode, EmmyWorkspaceResult,

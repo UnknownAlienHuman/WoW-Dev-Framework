@@ -157,8 +157,7 @@ pub(super) fn analyze(snapshot: &LuaWorkspaceSnapshot) -> EmmySyntaxResult<EmmyS
     })?;
     Ok(EmmySyntaxReport {
         schema: REPORT_SCHEMA,
-        analysis_id: format!("emmy-syntax:sha256:{:x}", Sha256::digest(canonical))
-            .into_boxed_str(),
+        analysis_id: format!("emmy-syntax:sha256:{:x}", Sha256::digest(canonical)).into_boxed_str(),
         upstream_revision: EMMYLUA_REVISION,
         upstream_tree: EMMYLUA_TREE,
         upstream_crate_version: EMMYLUA_CODE_ANALYSIS_VERSION,

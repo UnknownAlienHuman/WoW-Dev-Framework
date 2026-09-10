@@ -63,9 +63,7 @@ impl std::error::Error for EmmyCompatibilityError {}
 pub type EmmyCompatibilityResult<T> = Result<T, EmmyCompatibilityError>;
 
 /// Imports one exact analyzer identity from a verified rolling compatibility report.
-pub fn backend_identity_from_report(
-    bytes: &[u8],
-) -> EmmyCompatibilityResult<EmmyBackendIdentity> {
+pub fn backend_identity_from_report(bytes: &[u8]) -> EmmyCompatibilityResult<EmmyBackendIdentity> {
     if bytes.len() > MAX_REPORT_BYTES {
         return Err(report_error(
             EmmyCompatibilityErrorCode::InputTooLarge,
@@ -160,7 +158,10 @@ pub fn backend_identity_from_report(
         ));
     }
 
-    let source = object(required(root, "source", "source identity")?, "source identity")?;
+    let source = object(
+        required(root, "source", "source identity")?,
+        "source identity",
+    )?;
     allowed_keys(
         source,
         &[
@@ -242,7 +243,10 @@ pub fn backend_identity_from_report(
         ));
     }
 
-    let surface = object(required(root, "surface", "public surface")?, "public surface")?;
+    let surface = object(
+        required(root, "surface", "public surface")?,
+        "public surface",
+    )?;
     allowed_keys(
         surface,
         &["files", "symbols", "surface_sha256"],
@@ -282,10 +286,7 @@ fn allowed_keys(
     allowed: &[&str],
     label: &str,
 ) -> EmmyCompatibilityResult<()> {
-    if let Some(unexpected) = object
-        .keys()
-        .find(|key| !allowed.contains(&key.as_str()))
-    {
+    if let Some(unexpected) = object.keys().find(|key| !allowed.contains(&key.as_str())) {
         return Err(report_error(
             EmmyCompatibilityErrorCode::UnsupportedSchema,
             format!("{label} contains unsupported field {unexpected:?}"),
@@ -294,10 +295,7 @@ fn allowed_keys(
     Ok(())
 }
 
-fn object<'a>(
-    value: &'a Value,
-    label: &str,
-) -> EmmyCompatibilityResult<&'a Map<String, Value>> {
+fn object<'a>(value: &'a Value, label: &str) -> EmmyCompatibilityResult<&'a Map<String, Value>> {
     value.as_object().ok_or_else(|| {
         report_error(
             EmmyCompatibilityErrorCode::InvalidJson,
@@ -336,14 +334,12 @@ fn text<'a>(
     key: &str,
     label: &str,
 ) -> EmmyCompatibilityResult<&'a str> {
-    required(object, key, label)?
-        .as_str()
-        .ok_or_else(|| {
-            report_error(
-                EmmyCompatibilityErrorCode::InvalidJson,
-                format!("{label} must be text"),
-            )
-        })
+    required(object, key, label)?.as_str().ok_or_else(|| {
+        report_error(
+            EmmyCompatibilityErrorCode::InvalidJson,
+            format!("{label} must be text"),
+        )
+    })
 }
 
 fn optional_scalar_text(
@@ -360,11 +356,7 @@ fn optional_scalar_text(
     }
 }
 
-fn unsigned(
-    object: &Map<String, Value>,
-    key: &str,
-    label: &str,
-) -> EmmyCompatibilityResult<u64> {
+fn unsigned(object: &Map<String, Value>, key: &str, label: &str) -> EmmyCompatibilityResult<u64> {
     required(object, key, label)?.as_u64().ok_or_else(|| {
         report_error(
             EmmyCompatibilityErrorCode::InvalidJson,
@@ -456,22 +448,26 @@ mod tests {
     use serde_json::json;
 
     fn report(relation: &str) -> Value {
+        let mut source = json!({
+            "branch": "main",
+            "revision": "1111111111111111111111111111111111111111",
+            "tree": "2222222222222222222222222222222222222222",
+            "relation": relation,
+            "network_checked": relation == "current"
+        });
+        if relation == "current"
+            && let Value::Object(fields) = &mut source
+        {
+            fields.insert(
+                "remote_head".to_owned(),
+                Value::String("1111111111111111111111111111111111111111".to_owned()),
+            );
+        }
         json!({
             "schema": REPORT_SCHEMA,
             "schema_version": REPORT_SCHEMA_VERSION,
             "producer_version": 1,
-            "source": {
-                "branch": "main",
-                "revision": "1111111111111111111111111111111111111111",
-                "tree": "2222222222222222222222222222222222222222",
-                "relation": relation,
-                "remote_head": if relation == "current" {
-                    Value::String("1111111111111111111111111111111111111111".to_owned())
-                } else {
-                    Value::Null
-                },
-                "network_checked": relation == "current"
-            },
+            "source": source,
             "workspace": {
                 "resolver": "2",
                 "edition": "2024",
@@ -508,10 +504,8 @@ mod tests {
                 format!("test report cannot be canonicalized: {source}"),
             )
         })?;
-        object_mut(&mut value, "test report")?.insert(
-            "report_sha256".to_owned(),
-            Value::String(sha256(&bytes)),
-        );
+        object_mut(&mut value, "test report")?
+            .insert("report_sha256".to_owned(), Value::String(sha256(&bytes)));
         serde_json::to_vec(&value).map_err(|source| {
             report_error(
                 EmmyCompatibilityErrorCode::InvalidJson,
@@ -537,7 +531,8 @@ mod tests {
     }
 
     #[test]
-    fn exact_offline_report_remains_usable_without_freshness_claim() -> EmmyCompatibilityResult<()> {
+    fn exact_offline_report_remains_usable_without_freshness_claim() -> EmmyCompatibilityResult<()>
+    {
         let identity = backend_identity_from_report(&seal(report("unverified_current"))?)?;
         assert_eq!(identity.tree(), "2222222222222222222222222222222222222222");
         Ok(())
@@ -571,11 +566,11 @@ mod tests {
                 })?,
             "test compatibility",
         )?;
+        compatibility.insert("missing_symbols".to_owned(), json!(["RequiredAdapterSeam"]));
         compatibility.insert(
-            "missing_symbols".to_owned(),
-            json!(["RequiredAdapterSeam"]),
+            "status".to_owned(),
+            Value::String("incompatible".to_owned()),
         );
-        compatibility.insert("status".to_owned(), Value::String("incompatible".to_owned()));
         let error = backend_identity_from_report(&seal(value)?)
             .err()
             .ok_or_else(|| {
@@ -597,10 +592,8 @@ mod tests {
                 format!("test report cannot be parsed: {source}"),
             )
         })?;
-        object_mut(&mut value, "test report")?.insert(
-            "producer_version".to_owned(),
-            Value::from(2_u64),
-        );
+        object_mut(&mut value, "test report")?
+            .insert("producer_version".to_owned(), Value::from(2_u64));
         let tampered = serde_json::to_vec(&value).map_err(|source| {
             report_error(
                 EmmyCompatibilityErrorCode::InvalidJson,

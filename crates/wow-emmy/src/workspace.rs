@@ -261,10 +261,7 @@ impl LuaWorkspaceFileInput {
     }
 
     /// Creates an input from exact bytes after UTF-8 validation.
-    pub fn from_bytes(
-        path: impl Into<String>,
-        content: Vec<u8>,
-    ) -> EmmyWorkspaceResult<Self> {
+    pub fn from_bytes(path: impl Into<String>, content: Vec<u8>) -> EmmyWorkspaceResult<Self> {
         let path = path.into();
         let text = String::from_utf8(content).map_err(|_| {
             workspace_error(
@@ -641,7 +638,10 @@ mod tests {
         assert_eq!(first.snapshot_id(), reordered.snapshot_id());
         assert_ne!(first.snapshot_id(), changed.snapshot_id());
         assert_eq!(first.files()[0].path(), "A.lua");
-        assert_eq!(first.file("B.lua").map(LuaWorkspaceFile::text), Some("return 2\r\n"));
+        assert_eq!(
+            first.file("B.lua").map(LuaWorkspaceFile::text),
+            Some("return 2\r\n")
+        );
         Ok(())
     }
 
