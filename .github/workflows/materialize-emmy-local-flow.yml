@@ -28,12 +28,13 @@ jobs:
       - name: Materialize exact reviewed payload
         run: |
           set -euo pipefail
-          test "$(find .ci/materialize/emmy-local-flow -maxdepth 1 -type f | wc -l)" -eq 8
-          cat .ci/materialize/emmy-local-flow/* > "$RUNNER_TEMP/emmy-local-flow.b64"
+          test "$(find .ci/materialize/emmy-local-flow -maxdepth 1 -type f | wc -l)" -eq 9
+          cat .ci/materialize/emmy-local-flow/0[0-7] > "$RUNNER_TEMP/emmy-local-flow.b64"
           echo '9bb3085b9595f60f1eb9d4764f95723db7b24632385f8ac9557dc5024f185d0a  '"$RUNNER_TEMP/emmy-local-flow.b64" | sha256sum --check --status
           base64 --decode "$RUNNER_TEMP/emmy-local-flow.b64" > "$RUNNER_TEMP/emmy-local-flow.tar.gz"
           echo '745a6289371abd1d6818a55c8904642827d68321ffb90b7b328af35db61baf12  '"$RUNNER_TEMP/emmy-local-flow.tar.gz" | sha256sum --check --status
           tar -xzf "$RUNNER_TEMP/emmy-local-flow.tar.gz" -C .
+          git apply .ci/materialize/emmy-local-flow/08.patch
           rm -rf .ci/materialize/emmy-local-flow
           rm .github/workflows/materialize-emmy-local-flow.yml
           git add -A
