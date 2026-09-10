@@ -1,0 +1,73 @@
+--- a/crates/wow-project/src/identity.rs
++++ b/crates/wow-project/src/identity.rs
+@@ -1,8 +1,7 @@
+ use serde::Serialize;
+ use sha2::{Digest, Sha256};
+ use wow_core::{
+-    CanonicalResult, ContentDigest, SourceContent, canonical_json_bytes,
+-    domain_separated_digest,
++    CanonicalResult, ContentDigest, SourceContent, domain_separated_digest,
+ };
+ 
+ use crate::{ProjectError, ProjectErrorCode, ProjectPhase, ProjectResult};
+@@ -45,19 +44,6 @@
+     Ok(format!("{prefix}{}", encode_hex(&bytes)).into_boxed_str())
+ }
+ 
+-pub(crate) fn canonical_bytes<T: Serialize + ?Sized>(
+-    value: &T,
+-    phase: ProjectPhase,
+-) -> ProjectResult<Vec<u8>> {
+-    canonical_json_bytes(value).map_err(|source| {
+-        ProjectError::new(
+-            ProjectErrorCode::CanonicalizationFailed,
+-            phase,
+-            format!("canonical serialization failed: {source}"),
+-        )
+-    })
+-}
+-
+ pub(crate) fn parse_source_digest(
+     value: &str,
+     phase: ProjectPhase,
+--- a/crates/wow-project/src/inventory.rs
++++ b/crates/wow-project/src/inventory.rs
+@@ -234,10 +234,6 @@
+     pub(crate) fn workspace_input(&self) -> LuaWorkspaceFileInput {
+         LuaWorkspaceFileInput::new(self.relative_path().as_str(), self.text.as_ref())
+     }
+-
+-    pub(crate) fn text(&self) -> &str {
+-        &self.text
+-    }
+ }
+ 
+ /// Validated closed project input inventory.
+--- a/crates/wow-project/tests/project_e0.rs
++++ b/crates/wow-project/tests/project_e0.rs
+@@ -65,10 +65,11 @@
+     budget_policy: ProjectBudgetPolicy,
+ ) -> Result<ProjectConfiguration, Box<dyn Error>> {
+     let backend = backend()?;
++    let compatibility_report_sha256 = backend.compatibility_report_sha256().to_owned();
+     let analyzer_binding = AnalyzerBindingDeclaration::new(
+         "wow-emmy/e0-c/1",
+         format!("emmy-pin:{EMMYLUA_REVISION}"),
+-        backend.compatibility_report_sha256(),
++        compatibility_report_sha256,
+         ContentDigest::<CanonicalResult>::from_bytes([3_u8; 32]),
+         "wow-emmy/e0-c/1",
+         "wow-emmy-e0-c-library-v1",
+@@ -179,10 +180,10 @@
+     snapshot: &'a wow_project::ProjectSnapshot,
+     path: &str,
+ ) -> Result<&'a wow_project::ProjectFileRecord, Box<dyn Error>> {
+-    snapshot
++    Ok(snapshot
+         .source_registry()
+         .file_by_path(path)?
+-        .ok_or_else(|| test_error(format!("missing project file {path}")))
++        .ok_or_else(|| test_error(format!("missing project file {path}")))?)
+ }
+ 
+ #[test]
