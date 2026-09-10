@@ -1,6 +1,6 @@
 --- a/crates/wow-project/tests/project_e0.rs
 +++ b/crates/wow-project/tests/project_e0.rs
-@@ -25,7 +25,7 @@
+@@ -25,6 +25,6 @@
  }
  
 -const LIBRARY_SOURCE: &str = "---@meta\n\nC_E0Fixture = {}\n\n---@param value string\n---@return boolean accepted\nfunction C_E0Fixture.KnownApi(value) end\n\n---@return string text\nfunction C_E0Fixture.SecretText() end\n\n---@param value any\n---@return boolean accessible\nfunction canaccessvalue(value) end\n";
