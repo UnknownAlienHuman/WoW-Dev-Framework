@@ -33,8 +33,10 @@ jobs:
           base64 --decode "$RUNNER_TEMP/project-e0.b64" > "$RUNNER_TEMP/project-e0.tar.gz"
           echo '2c05c7c58bf08435952d2749af5489e2fa4cb51a00f454a66045c94e2145fb69  '"$RUNNER_TEMP/project-e0.tar.gz" | sha256sum --check --status
           echo '5422ff6a6d84e2497995fc772b63dc2653cb835404c6a2a8b9ea809821da98dc  .ci/materialize/project-e0/fix-01.patch' | sha256sum --check --status
+          echo '1f23ea4b1612660501c73d31610cd70401d46d7b7e1cafd534f2897bb0ed13bd  .ci/materialize/project-e0/fix-02.patch' | sha256sum --check --status
           tar -xzf "$RUNNER_TEMP/project-e0.tar.gz" -C .
           git apply .ci/materialize/project-e0/fix-01.patch
+          git apply .ci/materialize/project-e0/fix-02.patch
           rm -rf .ci/materialize/project-e0
           rm .github/workflows/materialize-project-e0.yml
           git add -A
