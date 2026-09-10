@@ -107,10 +107,7 @@ impl ProjectError {
     }
 
     #[must_use]
-    pub(crate) fn with_candidate_generation(
-        mut self,
-        generation: ProjectGenerationId,
-    ) -> Self {
+    pub(crate) fn with_candidate_generation(mut self, generation: ProjectGenerationId) -> Self {
         self.candidate_generation = Some(Box::new(generation));
         self
     }

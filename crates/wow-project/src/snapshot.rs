@@ -428,44 +428,45 @@ fn build_project_coverage(
     producer_id: &ProducerId,
     producer_version: &ToolVersion,
 ) -> ProjectResult<Vec<CoverageRecord>> {
-    let mut records = Vec::new();
-    records.push(complete_coverage(
-        context,
-        "project.fixture.configuration.valid",
-        CoveragePartitionId::new("project.configuration", None).map_err(core_snapshot_error)?,
-        producer_id,
-        producer_version,
-    )?);
-    records.push(complete_coverage(
-        context,
-        "project.fixture.files.complete",
-        CoveragePartitionId::new(
-            "project.workspace",
-            Some(configuration.workspace_id().as_str()),
-        )
-        .map_err(core_snapshot_error)?,
-        producer_id,
-        producer_version,
-    )?);
-    records.push(complete_coverage(
-        context,
-        "project.source.registry.complete",
-        CoveragePartitionId::new(
-            "project.source_origin",
-            Some(configuration.source_origin_id().as_str()),
-        )
-        .map_err(core_snapshot_error)?,
-        producer_id,
-        producer_version,
-    )?);
-    records.push(complete_coverage(
-        context,
-        "project.source.handle.resolve",
-        CoveragePartitionId::new("project.source_registry", Some(registry.registry_id()))
+    let mut records = vec![
+        complete_coverage(
+            context,
+            "project.fixture.configuration.valid",
+            CoveragePartitionId::new("project.configuration", None).map_err(core_snapshot_error)?,
+            producer_id,
+            producer_version,
+        )?,
+        complete_coverage(
+            context,
+            "project.fixture.files.complete",
+            CoveragePartitionId::new(
+                "project.workspace",
+                Some(configuration.workspace_id().as_str()),
+            )
             .map_err(core_snapshot_error)?,
-        producer_id,
-        producer_version,
-    )?);
+            producer_id,
+            producer_version,
+        )?,
+        complete_coverage(
+            context,
+            "project.source.registry.complete",
+            CoveragePartitionId::new(
+                "project.source_origin",
+                Some(configuration.source_origin_id().as_str()),
+            )
+            .map_err(core_snapshot_error)?,
+            producer_id,
+            producer_version,
+        )?,
+        complete_coverage(
+            context,
+            "project.source.handle.resolve",
+            CoveragePartitionId::new("project.source_registry", Some(registry.registry_id()))
+                .map_err(core_snapshot_error)?,
+            producer_id,
+            producer_version,
+        )?,
+    ];
     let project_generation_key = context
         .project_generation()
         .ok_or_else(|| {

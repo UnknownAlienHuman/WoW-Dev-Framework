@@ -9,6 +9,14 @@ use crate::{
     ProjectPhase, ProjectResult, ProjectSnapshot,
 };
 
+type ProjectUpdateParts = (
+    Option<ProjectGenerationId>,
+    Option<ContentDigest<CanonicalResult>>,
+    ProjectConfiguration,
+    Vec<ProjectFileOperation>,
+    Vec<LuaWorkspaceSnapshot>,
+);
+
 /// Explicit E0 project-file operation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProjectFileOperation {
@@ -142,15 +150,7 @@ impl ProjectUpdateRequest {
         &self.target_libraries
     }
 
-    pub(crate) fn into_parts(
-        self,
-    ) -> (
-        Option<ProjectGenerationId>,
-        Option<ContentDigest<CanonicalResult>>,
-        ProjectConfiguration,
-        Vec<ProjectFileOperation>,
-        Vec<LuaWorkspaceSnapshot>,
-    ) {
+    pub(crate) fn into_parts(self) -> ProjectUpdateParts {
         (
             self.expected_current_project_generation,
             self.expected_current_snapshot_digest,
