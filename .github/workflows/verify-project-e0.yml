@@ -1,0 +1,53 @@
+name: Verify wow-project E0-D
+
+on:
+  push:
+    branches:
+      - work/project-e0
+    paths:
+      - .ci/project-e0-clippy.patch
+      - .github/workflows/verify-project-e0.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: verify-project-e0
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: true
+      - name: Install current stable Rust
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+      - name: Apply reviewed structural corrections
+        run: |
+          set -euo pipefail
+          git apply --check .ci/project-e0-clippy.patch
+          git apply .ci/project-e0-clippy.patch
+          rm .ci/project-e0-clippy.patch
+          rm .github/workflows/verify-project-e0.yml
+      - name: Run complete E0-D gate
+        run: |
+          set -euo pipefail
+          cargo +stable fmt --all
+          cargo +stable xtask check
+          cargo +stable check --locked --workspace --all-targets --all-features
+          cargo +stable test --locked --package wow-project --all-targets --all-features -- --nocapture
+          cargo +stable clippy --locked --workspace --all-targets --all-features -- -D warnings
+          RUSTDOCFLAGS='-D warnings' cargo +stable doc --locked --workspace --all-features --no-deps
+          git diff --check
+      - name: Commit verified E0-D
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git diff --cached --check
+          git commit -m 'fix(project): bound errors and satisfy strict workspace lint'
+          git push origin HEAD:work/project-e0
