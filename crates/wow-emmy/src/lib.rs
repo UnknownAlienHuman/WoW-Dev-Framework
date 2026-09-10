@@ -7,6 +7,7 @@
 //! by the single EmmyLua adapter; this crate does not contain a second parser.
 
 pub mod compatibility;
+pub mod flow;
 pub mod references;
 pub mod syntax;
 pub mod workspace;
@@ -14,6 +15,12 @@ pub mod workspace;
 pub use compatibility::{
     EmmyCompatibilityError, EmmyCompatibilityErrorCode, EmmyCompatibilityResult,
     backend_identity_from_report,
+};
+pub use flow::{
+    EmmyControlFlowFact, EmmyControlFlowRelationKind, EmmyGuardFact, EmmyGuardKind,
+    EmmyLocalBindingFact, EmmyLocalFlowError, EmmyLocalFlowErrorCode, EmmyLocalFlowFileReport,
+    EmmyLocalFlowFileStatus, EmmyLocalFlowReport, EmmyLocalFlowResult, EmmyLocalUseFact,
+    EmmyOperationFact, EmmyOperationKind, analyze_local_flow,
 };
 pub use references::{
     EmmyFactFileStatus, EmmyMemberCallError, EmmyMemberCallErrorCode, EmmyMemberCallFact,
