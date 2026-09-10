@@ -49,8 +49,8 @@ fn project(
 }
 
 #[test]
-fn exact_colors_emit_inert_globals_and_bidirectional_maps()
--> Result<(), Box<dyn std::error::Error>> {
+fn exact_colors_emit_inert_globals_and_bidirectional_maps() -> Result<(), Box<dyn std::error::Error>>
+{
     let raw = "---@meta _\nFIRST_COLOR = CreateColor(0.000, 0.500, 1.000, 1.000)\nSECOND_COLOR=CreateColor(1,0,0,1)\n";
     let library = project(raw, true)?;
     assert_eq!(library.projection, "projected_with_sidecars");
@@ -119,8 +119,14 @@ fn duplicates_are_explicit_while_independent_colors_survive()
     assert_eq!(library.projection, "partial");
     let report = library.aliases.as_ref().ok_or("alias report")?;
     assert_eq!(report.schema, "wow-native-alias-projection/9");
-    assert_eq!(report.global_color_outcomes[0].status, "duplicate_global_color");
-    assert_eq!(report.global_color_outcomes[1].status, "duplicate_global_color");
+    assert_eq!(
+        report.global_color_outcomes[0].status,
+        "duplicate_global_color"
+    );
+    assert_eq!(
+        report.global_color_outcomes[1].status,
+        "duplicate_global_color"
+    );
     assert_eq!(report.global_color_outcomes[2].status, "emitted");
     let text = &library.files.last().ok_or("external output")?.text;
     assert!(!text.contains("DUPLICATE_COLOR = nil"));
