@@ -7,8 +7,8 @@
 ```text
 documentation frontier: E7-B / planned architecture
 implementation: partial executable foundation and source bridge
-active workspace: wow-core, wow-reference
-next owner implementation: I0-C / real wow-emmy analyzer adapter
+active workspace: wow-core, wow-reference, wow-annotations, wow-emmy, render/literal modules; tools/xtask
+next owner implementation: continued I0-C / Main+Library semantic and reference-fact slice
 full R0, runtime, installation and release gates: NotEvaluated
 ```
 
@@ -20,7 +20,7 @@ Documentation completion does not activate a Cargo workspace, implement an opera
 |---|---|---:|---:|---:|
 | E0-A | `wow-core` identities, evidence, coverage, results | Complete | Partial executable | R0 |
 | E0-B | deterministic `wow-reference` fixture | Complete | Partial executable | R0 |
-| E0-C | updateable `wow-emmy` adapter | Complete | Not started | R0 |
+| E0-C | updateable `wow-emmy` adapter | Complete | Partial executable | R0 |
 | E0-D | minimal `wow-project` generation | Complete | Not started | R0 |
 | E0-E | first bounded diagnostics | Complete | Not started | R0 |
 | E0-F | `wow-service` plus `apps/wow` status/check | Complete | Not started | R0 |

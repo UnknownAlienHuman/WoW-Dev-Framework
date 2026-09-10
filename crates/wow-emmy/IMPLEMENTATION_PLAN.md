@@ -1,6 +1,6 @@
 # `wow-emmy` E0-C implementation plan
 
-**Status:** ordered handoff plan for a future coding agent. This documentation change adds no Rust code.
+**Status:** live ordered plan. Phases for exact workspace construction and pinned syntax diagnostics are partially implemented; later semantic/session phases remain open.
 
 Implementation must follow this order. A later phase may not compensate for an unproven earlier boundary.
 

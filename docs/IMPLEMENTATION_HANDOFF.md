@@ -9,8 +9,8 @@
 ```text
 documentation frontier: E7-B / planned architecture
 implementation: partial executable foundation and source bridge
-active workspace: wow-core, wow-reference
-next owner implementation: I0-C / real wow-emmy analyzer adapter
+active workspace: wow-core, wow-reference, wow-annotations, wow-emmy, render/literal modules; tools/xtask
+next owner implementation: continued I0-C / Main+Library semantic and reference-fact slice
 full R0, runtime, installation and release gates: NotEvaluated
 ```
 

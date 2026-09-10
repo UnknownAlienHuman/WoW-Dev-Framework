@@ -13,6 +13,10 @@ architecture. Ketho is the annotation-service donor; the
 - `wow-annotations`: Rust Ketho callable, structure, callback and literal
   emitters connected to native source documents. The Git/TOC development driver
   creates a new library with raw metadata, errors and declaration source maps.
+- `wow-emmy`: exact-pinned `emmylua_code_analysis` adapter over bounded,
+  content-addressed in-memory Lua snapshots. It registers only caller-supplied
+  files, emits accepted Lua/doc syntax diagnostics with logical path, exact
+  content digest and validated UTF-8 byte spans, and rejects backend-pin mismatch.
 - `tools/xtask`: internal repository/source maintenance with no framework crate
   dependencies. Policy/JSON/skill checks, explicit skill synchronization, public
   HTTPS remote-head comparison and explicitly authorized guarded fast-forward,
@@ -91,8 +95,10 @@ or corpus is a public build/runtime dependency. Source-head checks use only an
 explicit public HTTPS origin; offline freshness is unverified.
 
 Full I0-A/I0-B acceptance and persistent channel publication remain incomplete.
-The real semantic `wow-emmy` adapter and public `wow` binary are not active.
-Service composition, project model, diagnostics, persistence, graph, search,
+The first real `wow-emmy` analyzer operation is active, but combined Main/Library
+resolution, normalized reference/local-flow facts, session generations and full
+E0-C acceptance remain incomplete. The public `wow` binary is not active.
+Service composition, project model, rule diagnostics, persistence, graph, search,
 transport, installation and release gates remain subsequent work.
 
 Next annotation work: remaining Ketho type resources, widget inheritance and
@@ -204,5 +210,6 @@ and erased-type mutations. Both dedicated CI jobs execute the external test;
 regular offline workspace runs do not claim it from the ignored test entry.
 The adapter retains binary/package/config/input identities and rejects unexpected
 input changes. See [scope and commands](ANNOTATION_CONSUMER_PROBES.md).
-This does not activate `wow-emmy`, certify the full Gethe corpus or replace the
-planned API-absence rule. Open Ketho namespaces retain explicit absence nonclaims.
+This does not certify `wow-emmy` Main/Library semantic integration, the full
+Gethe corpus, or the planned API-absence rule. Open Ketho namespaces retain
+explicit absence nonclaims.

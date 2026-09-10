@@ -9,10 +9,10 @@ These instructions apply to every crate directory and cross-crate owner seam.
 ```text
 documentation frontier: E7-B / planned architecture
 implementation: partial executable foundation and source bridge
-active workspace: wow-core, wow-reference, wow-annotations; tools/xtask (maintenance)
-current port: Ketho native source-to-annotations in wow-reference / wow-annotations
-next port: reviewed correction/type/widget mappings and consumer probes
-separate R0 owner: I0-C / real wow-emmy semantic analyzer adapter
+active workspace: wow-core, wow-reference, wow-annotations, wow-emmy, wow-render-contract, wow-ketho-literals, modules/ketho-literals; tools/xtask (maintenance)
+current ports: Ketho native source-to-annotations and exact-pin wow-emmy syntax analysis
+next R0 owner package: continued I0-C / Main+Library semantic and reference-fact slice
+remaining annotation port: reviewed correction/type/widget mappings and full-corpus consumer probes
 full R0, runtime, installation and release gates: NotEvaluated
 ```
 
@@ -192,8 +192,9 @@ remaining exact blockers
 
 ```text
 Ketho native source-to-library port: docs/KETHO_RUST_PORT.md
-current workspace: wow-core, wow-reference, wow-annotations; tools/xtask (maintenance)
-full wow-emmy semantic integration and product gates remain incomplete
+current workspace includes wow-emmy's checked exact-pin syntax adapter
+next R0 package: explicit Main+Library analysis and normalized reference/call facts
+full wow-emmy session, local-flow, project, service, and product gates remain incomplete
 ```
 
 Do not start another primary crate until the current worktree is merged, quarantined, or deleted.

@@ -18,7 +18,10 @@ management, the old source-surface report commands and their former interpreter
 implementation have been retired, not silently replaced by equivalent claims.
 
 The maintained workflows are listed in [.github](../.github/README.md). The
-rolling parser lane compiles and tests the consumers actually present in the
-workspace. The semantic `wow-emmy` adapter is not active yet; parser compatibility
-is not proof of diagnostics, symbol queries or type behavior from that adapter.
-Current source checks are not a supported release/install or client-runtime gate.
+rolling parser lane deliberately isolates the branch-tracking parser consumer
+from `wow-emmy`'s separately exact-pinned analyzer graph, then tests and vendors
+that effective workspace. `wow-emmy` now executes the pinned analyzer for bounded
+Lua/doc syntax diagnostics over explicit snapshots. This does not yet prove
+combined Main/Library resolution, reference/local-flow facts, or full E0-C
+acceptance. Current source checks are not a supported release/install or
+client-runtime gate.

@@ -6,6 +6,7 @@ These rules apply to every human or automated contributor.
 
 - `wow-core`: executable deterministic boundary primitives.
 - `wow-reference`: deterministic reference view plus generated API and UI topology imports; full owner acceptance and persistent channel publication remain incomplete.
+- `wow-emmy`: active exact-pin analyzer adapter with bounded content-addressed Lua workspaces and normalized Lua/doc syntax diagnostics over caller-supplied bytes. Combined Main/Library semantics, reference/local-flow facts, generation envelopes, and full E0-C acceptance remain incomplete.
 - Native source production consumes an explicit local Git checkout. Guarded fast-forward updates of existing standalone checkouts are available through `cargo xtask update-source`; managed cloning and GitHub-only materialization remain incomplete.
 - Blizzard source manifest: exact per-operation source inventory with file hashes and Git object identity.
 - Generated API input: reference-owned EmmyLua AST evaluation and typed native model.

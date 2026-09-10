@@ -2,7 +2,7 @@
 
 > Current implementation and update policy: [status ledger](IMPLEMENTATION_STATUS.md). Earlier bootstrap schedules below are design history, not instructions to recreate the workspace or permanently pin versions.
 
-**Status:** normative state ledger. Updated 2026-09-02.
+**Status:** normative state ledger. Updated 2026-09-09.
 
 ## Meaning of states
 
@@ -27,8 +27,8 @@ Documentation completion never implies implementation or release readiness.
 ```text
 documentation frontier: E7-B / planned architecture
 implementation: partial executable foundation and source bridge
-active workspace: wow-core, wow-reference
-next owner implementation: I0-C / real wow-emmy analyzer adapter
+active workspace: wow-core, wow-reference, wow-annotations, wow-emmy, render/literal modules; tools/xtask
+next owner implementation: continued I0-C / Main+Library semantic and reference-fact slice
 full R0, runtime, installation and release gates: NotEvaluated
 ```
 
@@ -38,7 +38,7 @@ full R0, runtime, installation and release gates: NotEvaluated
 |---|---|---|---|---|
 | E0-A | `wow-core` | Complete | Partial executable | R0 |
 | E0-B | `wow-reference` fixture slice | Complete | Partial executable | R0 |
-| E0-C | `wow-emmy` | Complete | Not started | R0 |
+| E0-C | `wow-emmy` | Complete | Partial executable | R0 |
 | E0-D | `wow-project` fixture slice | Complete | Not started | R0 |
 | E0-E | `wow-rules` | Complete | Not started | R0 |
 | E0-F | `wow-service` + `apps/wow` | Complete | Not started | R0 |

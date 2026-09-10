@@ -1,6 +1,6 @@
 # `wow-emmy` implementation contract
 
-**Status:** E0-C implementation-ready contract; no Rust code yet and no upstream dependency is pinned by this documentation change.
+**Status:** partial executable E0-C implementation. Exact-snapshot syntax diagnostics are active; combined Main/Library semantics, normalized facts, session generations, and full acceptance remain incomplete.
 
 ## Mission
 
@@ -10,7 +10,7 @@ It does not own WoW platform truth. API existence and restriction facets come fr
 
 ## E0-C outcome
 
-A future implementation agent must be able to prove this seam:
+The complete E0-C implementation must prove this seam:
 
 ```text
 explicit candidate upstream commit + compatibility probe
