@@ -85,9 +85,7 @@ pub(super) fn verify<'a>(
         for link in types {
             let path = text(link, "path")?;
             let key = (path, span_key(&link["span"])?);
-            let resource = sources
-                .get(path)
-                .ok_or("unknown global color resource")?;
+            let resource = sources.get(path).ok_or("unknown global color resource")?;
             if link["scope"] != "annotation_alias_catalog"
                 || link["sha256"] != resource["sha256"]
                 || !emitted_colors.contains(&key)
@@ -137,9 +135,7 @@ fn verify_components(color: &Value, source: &str, name: &str) -> Result<()> {
         .get(call + "CreateColor".len()..)
         .ok_or("invalid global color source call")?;
     for component in components {
-        let component = component
-            .as_str()
-            .ok_or("invalid global color component")?;
+        let component = component.as_str().ok_or("invalid global color component")?;
         if component.is_empty()
             || component.len() > 64
             || !component.bytes().all(|byte| {
@@ -274,7 +270,10 @@ mod tests {
                 "/aliases/source/global_colors/0/components/0",
                 json!("0.125"),
             ),
-            ("/files/0/text", json!("SYNTHETIC_COLOR = CreateColor(0,0,0,1)")),
+            (
+                "/files/0/text",
+                json!("SYNTHETIC_COLOR = CreateColor(0,0,0,1)"),
+            ),
             ("/files/0/mappings", json!([])),
         ] {
             let mut changed = value.clone();
