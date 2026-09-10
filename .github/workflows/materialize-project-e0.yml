@@ -1,0 +1,56 @@
+name: Materialize wow-project E0-D
+
+on:
+  push:
+    branches:
+      - work/project-e0
+    paths:
+      - .github/workflows/materialize-project-e0.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: materialize-project-e0
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: true
+      - name: Install current stable Rust
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+      - name: Materialize reviewed package
+        run: |
+          set -euo pipefail
+          test "$(find .ci/materialize/project-e0 -maxdepth 1 -name 'part-*' -type f | wc -l)" -eq 5
+          cat .ci/materialize/project-e0/part-* > "$RUNNER_TEMP/project-e0.b64"
+          echo '22f9301227a83b0500c95f028b516b04b37508f9af2e78ecc8388b09bcecbc8f  '"$RUNNER_TEMP/project-e0.b64" | sha256sum --check --status
+          base64 --decode "$RUNNER_TEMP/project-e0.b64" > "$RUNNER_TEMP/project-e0.tar.gz"
+          echo '2c05c7c58bf08435952d2749af5489e2fa4cb51a00f454a66045c94e2145fb69  '"$RUNNER_TEMP/project-e0.tar.gz" | sha256sum --check --status
+          tar -xzf "$RUNNER_TEMP/project-e0.tar.gz" -C .
+          rm -rf .ci/materialize/project-e0
+          rm .github/workflows/materialize-project-e0.yml
+          git add -A
+      - name: Format and verify E0-D
+        run: |
+          set -euo pipefail
+          cargo +stable fmt --all
+          cargo +stable check --workspace --all-targets --all-features
+          cargo +stable test --package wow-project --all-targets --all-features -- --nocapture
+          cargo +stable clippy --workspace --all-targets --all-features -- -D warnings
+          RUSTDOCFLAGS='-D warnings' cargo +stable doc --workspace --all-features --no-deps
+          git diff --check
+      - name: Commit verified implementation
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git diff --cached --check
+          git commit -m 'feat(project): activate exact E0 project publication'
+          git push origin HEAD:work/project-e0
