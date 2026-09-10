@@ -1,0 +1,18 @@
+--- a/crates/wow-project/tests/project_e0.rs
++++ b/crates/wow-project/tests/project_e0.rs
+@@ -216,12 +216,12 @@
+ 
+     let secret = record_by_path(&snapshot, "main/secret-local.lua")?;
+     let flow = view.local_flow_report();
+-    assert!(!view.local_bindings_for_file(secret.file_id()).is_empty());
++    let secret_bindings = view.local_bindings_for_file(secret.file_id());
++    assert!(!secret_bindings.is_empty());
+     assert_eq!(flow.operations().len(), 4);
+     assert_eq!(flow.guards().len(), 3);
+     assert_eq!(flow.control_flow().len(), 1);
+-    assert!(flow
+-        .bindings()
++    assert!(secret_bindings
+         .iter()
+         .all(|binding| binding.initializer_member().is_none_or(|member| member == "SecretText")));
+ 
