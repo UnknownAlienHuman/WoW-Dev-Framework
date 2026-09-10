@@ -235,9 +235,7 @@ pub(super) fn read(report: &Value) -> Result<Vec<&Value>> {
         }
         bytes = bytes.checked_add(raw.len()).ok_or("alias byte limit")?;
         count = count
-            .checked_add(
-                aliases.len() + structures + namespaces + function_items + global_colors,
-            )
+            .checked_add(aliases.len() + structures + namespaces + function_items + global_colors)
             .ok_or("alias count limit")?;
         if bytes > 2 * 1024 * 1024 || count > 4096 {
             return Err("alias resource aggregate limit".into());
