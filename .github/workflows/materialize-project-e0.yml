@@ -27,7 +27,7 @@ jobs:
       - name: Materialize reviewed package
         run: |
           set -euo pipefail
-          test "$(find .ci/materialize/project-e0 -maxdepth 1 -name 'part-*' -type f | wc -l)" -eq 5
+          test "$(find .ci/materialize/project-e0 -maxdepth 1 -name 'part-*' -type f | wc -l)" -eq 6
           cat .ci/materialize/project-e0/part-* > "$RUNNER_TEMP/project-e0.b64"
           echo '22f9301227a83b0500c95f028b516b04b37508f9af2e78ecc8388b09bcecbc8f  '"$RUNNER_TEMP/project-e0.b64" | sha256sum --check --status
           base64 --decode "$RUNNER_TEMP/project-e0.b64" > "$RUNNER_TEMP/project-e0.tar.gz"
