@@ -11,25 +11,30 @@
 - Explicit content-addressed in-memory Lua workspaces bound to one backend identity and one source universe.
 - UTF-8/NUL, path, extension, file count, per-file bytes, total bytes, duplicate-path, and case-collision guards.
 - Exact source text preservation and case-sensitive file lookup.
-- Linux, Windows, and macOS manager tests plus current-upstream compatibility CI.
+- A direct pinned `emmylua_code_analysis` adapter operation for Lua/documentation syntax diagnostics.
+- Exact snapshot-relative source paths, content digests, canonical UTF-8 byte spans, deterministic diagnostic ordering, and content-addressed analysis identity.
+- Explicit Main plus Library semantic workspaces for direct static `receiver.member(...)` calls.
+- Linked member-reference and call facts with exact receiver/member/reference/call spans, argument count, colon-call shape, and `resolved` / `unresolved` / `possible` analyzer state.
+- Library parse-health fail-closed behavior and per-Main-file fact capability state.
+- Linux and Windows workspace tests plus rolling parser/current-source compatibility CI.
 
 ## Not yet implemented
 
-- Direct calls into `emmylua_code_analysis`.
-- Syntax tree and semantic-model ownership.
-- Diagnostics, symbols, definitions, references, types, hover, call hierarchy, or rename operations.
-- Mapping analyzer output into `wow-core` evidence, coverage, source handles, findings, and result envelopes.
-- Incremental overlays, cancellation, budgets, concurrent sessions, and multi-generation cache behavior.
-- Behavioral compatibility fixtures across analyzer updates.
+- General symbol, definition, reference, type, hover, call-hierarchy, or rename operations.
+- Non-call member/reference inventory and dynamic/computed member facts.
+- Local binding, producer/use, operation, guard, and control-flow facts.
+- Mapping analyzer output into complete `wow-core` evidence, coverage, generation contexts, findings, and result envelopes.
+- Incremental overlays, cancellation, budgets beyond the current bounded operations, concurrent sessions, and multi-generation cache behavior.
+- Behavioral compatibility fixtures for the remaining semantic surfaces across analyzer updates.
 
-No semantic capability is advertised until the corresponding adapter operation compiles against the current dependency and passes deterministic fixture tests. A successful source-manager report or upstream package compilation is compatibility evidence only; it is not a semantic-result claim.
+No semantic result is promoted into WoW platform truth. In particular, an unresolved member is an analyzer observation only; it does not prove API absence, Secret status, hook safety, replacement, or runtime behavior.
 
 ## Next package
 
-Implement the smallest direct adapter operation against the current upstream API:
+Implement the smallest function-local fact slice against the same exact upstream pin:
 
-1. construct one analyzer database from an explicit `LuaWorkspaceSnapshot`;
-2. ingest exact files without filesystem discovery;
-3. return syntax diagnostics with exact file/span identity;
-4. prove deterministic ordering, malformed-input behavior, and backend/source identity binding;
-5. add the operation's required symbols and behavior fixtures to the rolling compatibility gate.
+1. producer member call and local binding identity;
+2. direct local copies and selected operations;
+3. exact binding/use/operation spans under shadowing;
+4. `canaccessvalue(value)` guard observation without a safety verdict;
+5. deterministic facts, failure isolation, and compatibility fixtures.

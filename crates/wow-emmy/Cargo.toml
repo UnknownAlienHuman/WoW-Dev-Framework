@@ -8,7 +8,9 @@ publish = false
 
 [dependencies]
 emmylua_code_analysis = { git = "https://github.com/EmmyLuaLs/emmylua-analyzer-rust", rev = "aaaca68425d9362876228649b0b8d92f07654daa", default-features = false }
+emmylua_parser = { git = "https://github.com/EmmyLuaLs/emmylua-analyzer-rust", rev = "aaaca68425d9362876228649b0b8d92f07654daa", default-features = false }
 lsp_types = { package = "emmy_lsp_types", version = "=0.1.0" }
+rowan = "=0.17.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sha2 = "0.10"

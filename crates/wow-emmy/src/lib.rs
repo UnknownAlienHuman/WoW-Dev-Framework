@@ -7,12 +7,18 @@
 //! by the single EmmyLua adapter; this crate does not contain a second parser.
 
 pub mod compatibility;
+pub mod references;
 pub mod syntax;
 pub mod workspace;
 
 pub use compatibility::{
     EmmyCompatibilityError, EmmyCompatibilityErrorCode, EmmyCompatibilityResult,
     backend_identity_from_report,
+};
+pub use references::{
+    EmmyFactFileStatus, EmmyMemberCallError, EmmyMemberCallErrorCode, EmmyMemberCallFact,
+    EmmyMemberCallFileReport, EmmyMemberCallReport, EmmyMemberCallResult, EmmyMemberReferenceFact,
+    EmmyReferenceResolution, analyze_member_calls,
 };
 pub use syntax::{
     EMMYLUA_CODE_ANALYSIS_VERSION, EMMYLUA_REVISION, EMMYLUA_TREE, EmmyDiagnosticClassification,

@@ -2132,6 +2132,8 @@ version = "0.1.0"
 dependencies = [
  "emmy_lsp_types",
  "emmylua_code_analysis",
+ "emmylua_parser 0.29.1 (git+https://github.com/EmmyLuaLs/emmylua-analyzer-rust?rev=aaaca68425d9362876228649b0b8d92f07654daa)",
+ "rowan",
  "serde",
  "serde_json",
  "sha2 0.10.9",
