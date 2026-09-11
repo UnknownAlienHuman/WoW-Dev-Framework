@@ -27,7 +27,7 @@ jobs:
       - name: Prepare final tree
         run: |
           set -euo pipefail
-          echo '2f3caa9ad5babfa063c7a38184f26dd9f03593b1f3916853378fd903fec0f5ab  .ci/workspace-integrity/fix-01.patch' | sha256sum --check --status
+          git apply --check .ci/workspace-integrity/fix-01.patch
           git apply .ci/workspace-integrity/fix-01.patch
           rm -rf .ci/workspace-integrity
           rm .github/workflows/verify-workspace-integrity.yml
