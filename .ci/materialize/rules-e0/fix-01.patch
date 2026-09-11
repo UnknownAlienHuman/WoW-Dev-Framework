@@ -1,0 +1,122 @@
+--- a/crates/wow-rules/src/output.rs
++++ b/crates/wow-rules/src/output.rs
+@@ -160,7 +160,7 @@
+     rule_id: RuleId,
+     rule_version: ToolVersion,
+     context_id: GenerationContextId,
+-    fixture_policy_id: &'static str,
++    fixture_policy_id: Box<str>,
+     scope_id: Box<str>,
+     clean_claim_kind: RuleCleanClaimKind,
+     input_fact_ids: Vec<Box<str>>,
+@@ -178,7 +178,7 @@
+         rule_id: RuleId,
+         rule_version: ToolVersion,
+         context_id: GenerationContextId,
+-        fixture_policy_id: &'static str,
++        fixture_policy_id: &str,
+         scope_id: &str,
+         clean_claim_kind: RuleCleanClaimKind,
+         mut input_fact_ids: Vec<Box<str>>,
+@@ -199,7 +199,7 @@
+             rule_id: &'a RuleId,
+             rule_version: &'a ToolVersion,
+             context_id: GenerationContextId,
+-            fixture_policy_id: &'static str,
++            fixture_policy_id: &'a str,
+             scope_id: &'a str,
+             clean_claim_kind: RuleCleanClaimKind,
+             input_fact_ids: &'a [Box<str>],
+@@ -232,7 +232,7 @@
+             rule_id,
+             rule_version,
+             context_id,
+-            fixture_policy_id,
++            fixture_policy_id: fixture_policy_id.into(),
+             scope_id: scope_id.into(),
+             clean_claim_kind,
+             input_fact_ids,
+@@ -412,7 +412,7 @@
+ #[serde(deny_unknown_fields)]
+ pub struct RuleFindingSet {
+     evaluation_id: Box<str>,
+-    fixture_policy_id: &'static str,
++    fixture_policy_id: Box<str>,
+     input_fact_ids: Vec<Box<str>>,
+     findings: Vec<Finding>,
+     source_handles: Vec<SourceHandle>,
+@@ -426,7 +426,7 @@
+ 
+ impl RuleFindingSet {
+     pub(crate) fn build(
+-        fixture_policy_id: &'static str,
++        fixture_policy_id: &str,
+         mut input_fact_ids: Vec<Box<str>>,
+         findings: Vec<Finding>,
+         source_handles: Vec<SourceHandle>,
+@@ -444,7 +444,7 @@
+         }
+         #[derive(Serialize)]
+         struct Identity<'a> {
+-            fixture_policy_id: &'static str,
++            fixture_policy_id: &'a str,
+             input_fact_ids: &'a [Box<str>],
+             finding_ids: Vec<wow_core::FindingId>,
+             source_handle_ids: Vec<wow_core::StableHandleId>,
+@@ -487,7 +487,7 @@
+                 "wow-rules/findings/e0-e/1",
+                 &identity,
+             )?,
+-            fixture_policy_id,
++            fixture_policy_id: fixture_policy_id.into(),
+             input_fact_ids,
+             findings,
+             source_handles,
+@@ -505,8 +505,8 @@
+     }
+ 
+     #[must_use]
+-    pub const fn fixture_policy_id(&self) -> &str {
+-        self.fixture_policy_id
++    pub fn fixture_policy_id(&self) -> &str {
++        &self.fixture_policy_id
+     }
+ 
+     #[must_use]
+@@ -635,7 +635,7 @@
+     analyzer_snapshot_id: Box<str>,
+     reference_generation: Box<str>,
+     reference_view_digest: Box<str>,
+-    fixture_policy_id: &'static str,
++    fixture_policy_id: Box<str>,
+     evaluations: Vec<RuleEvaluationRecord>,
+     budget_usage: RuleBudgetUsage,
+ }
+@@ -649,7 +649,7 @@
+         analyzer_snapshot_id: &str,
+         reference_generation: &str,
+         reference_view_digest: &str,
+-        fixture_policy_id: &'static str,
++        fixture_policy_id: &str,
+         mut evaluations: Vec<RuleEvaluationRecord>,
+         budget_usage: RuleBudgetUsage,
+     ) -> RuleResult<Self> {
+@@ -701,7 +701,7 @@
+             analyzer_snapshot_id: analyzer_snapshot_id.into(),
+             reference_generation: reference_generation.into(),
+             reference_view_digest: reference_view_digest.into(),
+-            fixture_policy_id,
++            fixture_policy_id: fixture_policy_id.into(),
+             evaluations,
+             budget_usage,
+         })
+--- a/crates/wow-rules/src/engine.rs
++++ b/crates/wow-rules/src/engine.rs
+@@ -1,7 +1,6 @@
+ use std::collections::BTreeMap;
+ use std::str::FromStr;
+ 
+-use serde::Serialize;
+ use wow_core::{
+     BlockingPartitionRef, CapabilityId, ClaimScope, ContentDigest, CoverageId, CoverageStatus,
+     EvidenceConfidence, EvidenceRecord, FindingDraft, MessageArgument, MessageArgumentKind,
