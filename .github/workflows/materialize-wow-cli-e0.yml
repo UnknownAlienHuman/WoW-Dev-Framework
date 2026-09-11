@@ -34,7 +34,7 @@ jobs:
           wc -c .ci/materialize/wow-cli-e0/0[0-4]
           cat .ci/materialize/wow-cli-e0/0[0-4] > "$RUNNER_TEMP/wow-cli-e0.b64"
           sha256sum "$RUNNER_TEMP/wow-cli-e0.b64"
-          echo 'b61f9ab9676449eb197d9ebf0d3faebfd8db6f25e2028b2ee9412b34853bf917  '"$RUNNER_TEMP/wow-cli-e0.b64" | sha256sum --check
+          echo 'cf8aee1e99cf0ec51c5ec82b2de039d1a62d74a814c86e3cf255c8a9392fe7b0  '"$RUNNER_TEMP/wow-cli-e0.b64" | sha256sum --check
           base64 --decode "$RUNNER_TEMP/wow-cli-e0.b64" > "$RUNNER_TEMP/wow-cli-e0.tar.gz"
           sha256sum "$RUNNER_TEMP/wow-cli-e0.tar.gz"
           echo 'dca1cd74eae4908e8a564b8177f85b5438d93ee820283aafed961d67ed6843fb  '"$RUNNER_TEMP/wow-cli-e0.tar.gz" | sha256sum --check
