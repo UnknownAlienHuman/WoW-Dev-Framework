@@ -1,0 +1,59 @@
+name: Materialize apps/wow E0 CLI
+
+on:
+  push:
+    branches:
+      - work/wow-cli-e0
+    paths:
+      - .ci/materialize/wow-cli-e0/**
+      - .github/workflows/materialize-wow-cli-e0.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: materialize-wow-cli-e0
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: true
+      - name: Install current stable Rust
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+      - name: Materialize exact reviewed implementation
+        run: |
+          set -euo pipefail
+          test "$(find .ci/materialize/wow-cli-e0 -maxdepth 1 -type f | wc -l)" -eq 5
+          cat .ci/materialize/wow-cli-e0/0[0-4] > "$RUNNER_TEMP/wow-cli-e0.b64"
+          echo 'b61f9ab9676449eb197d9ebf0d3faebfd8db6f25e2028b2ee9412b34853bf917  '"$RUNNER_TEMP/wow-cli-e0.b64" | sha256sum --check --status
+          base64 --decode "$RUNNER_TEMP/wow-cli-e0.b64" > "$RUNNER_TEMP/wow-cli-e0.tar.gz"
+          echo 'dca1cd74eae4908e8a564b8177f85b5438d93ee820283aafed961d67ed6843fb  '"$RUNNER_TEMP/wow-cli-e0.tar.gz" | sha256sum --check --status
+          tar -xzf "$RUNNER_TEMP/wow-cli-e0.tar.gz" -C .
+          rm -rf .ci/materialize/wow-cli-e0
+          rm .github/workflows/materialize-wow-cli-e0.yml
+          git add -A
+      - name: Format and verify runnable E0 slice
+        run: |
+          set -euo pipefail
+          cargo +stable fmt --all
+          cargo +stable xtask check
+          cargo +stable check --locked --workspace --all-targets --all-features
+          cargo +stable clippy --locked --workspace --all-targets --all-features -- -D warnings
+          cargo +stable test --locked --workspace --all-targets --all-features
+          cargo +stable test --release --locked --workspace --all-targets --all-features
+          RUSTDOCFLAGS='-D warnings' cargo +stable doc --locked --workspace --all-features --no-deps
+          git diff --check
+      - name: Commit and push only verified production files
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git diff --cached --check
+          git commit -m 'feat(cli): activate deterministic E0 status and check'
+          git push origin HEAD:work/wow-cli-e0
