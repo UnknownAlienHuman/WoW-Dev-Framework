@@ -1,0 +1,240 @@
+name: Materialize reference service E1-D
+
+on:
+  push:
+    branches:
+      - work/reference-service-e1-d
+    paths:
+      - crates/wow-reference/src/publication.rs
+      - crates/wow-service/src/reference_admin.rs
+      - apps/wow-reference-builder/**
+      - .github/workflows/materialize-reference-service-e1-d.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: materialize-reference-service-e1-d
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: true
+      - name: Install current stable Rust
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+      - name: Normalize public seams and activate packages
+        run: |
+          set -euo pipefail
+          test -f crates/wow-reference/src/persistent.rs
+          test -f crates/wow-store/src/store.rs
+          python - <<'PY'
+          from pathlib import Path
+
+          publication = Path('crates/wow-reference/src/publication.rs')
+          text = publication.read_text()
+          text = text.replace(
+              'ReferencePublicationKey, ReferenceStoreError, ReferenceStoreResult,',
+              'ReferencePublicationKey, ReferenceStoreResult,',
+          )
+          marker = '\nimpl From<wow_store::StoreError> for ReferenceStoreError {'
+          if marker in text:
+              text = text.split(marker, 1)[0].rstrip() + '\n'
+          publication.write_text(text)
+
+          admin = Path('crates/wow-service/src/reference_admin.rs')
+          text = admin.read_text()
+          text = text.replace(
+              '    ReferenceViewInvalid,\n    PublicationConflict,',
+              '    ReferenceViewInvalid,\n    ReferenceObjectMissing,\n    PublicationConflict,',
+          )
+          text = text.replace(
+              '    pub fn message(&self) -> &str {\n        &self.message\n    }\n}',
+              '    pub fn message(&self) -> &str {\n        &self.message\n    }\n\n'
+              '    #[must_use]\n'
+              '    pub fn object_missing() -> Self {\n'
+              '        Self::new(\n'
+              '            ReferenceAdminErrorCode::ReferenceObjectMissing,\n'
+              '            "reference object was not found",\n'
+              '        )\n'
+              '    }\n'
+              '}',
+          )
+          aliases = '''
+
+pub type ReferenceAdminExpectation = CatalogExpectation;
+pub type ReferenceAdminObjectId = ObjectId;
+pub type ReferenceAdminOperationId = OperationId;
+pub type ReferenceAdminPublicationKey = ReferencePublicationKey;
+pub type ReferenceAdminStoreLimits = StoreLimits;
+pub type ReferenceAdminLogicalEpoch = LogicalEpoch;
+
+pub fn reference_publication_key(
+    profile: impl Into<Box<str>>,
+    channel: impl Into<Box<str>>,
+) -> ReferenceAdminResult<ReferencePublicationKey> {
+    Ok(ReferencePublicationKey::new(profile, channel)?)
+}
+
+pub fn parse_reference_object_id(value: impl Into<Box<str>>) -> ReferenceAdminResult<ObjectId> {
+    Ok(ObjectId::new(value)?)
+}
+
+pub fn parse_reference_operation_id(
+    value: impl Into<Box<str>>,
+) -> ReferenceAdminResult<OperationId> {
+    Ok(OperationId::new(value)?)
+}
+'''
+          if 'pub type ReferenceAdminExpectation' not in text:
+              text = text.rstrip() + aliases
+          admin.write_text(text)
+
+          cli = Path('apps/wow-reference-builder/src/lib.rs')
+          text = cli.read_text()
+          text = text.replace(
+              '    ReferenceAdminStoreLimits,\n};',
+              '    ReferenceAdminStoreLimits, parse_reference_object_id,\n'
+              '    parse_reference_operation_id, reference_publication_key,\n};',
+          )
+          text = text.replace('ReferenceAdminPublicationKey::new(', 'reference_publication_key(')
+          text = text.replace('ReferenceAdminObjectId::new(value)?', 'parse_reference_object_id(value)?')
+          text = text.replace(
+              'ReferenceAdminOperationId::new(options.required("--operation")?)?',
+              'parse_reference_operation_id(options.required("--operation")?)?',
+          )
+          text = text.replace(
+              'ReferenceAdminObjectId::new(options.required("--object")?)?',
+              'parse_reference_object_id(options.required("--object")?)?',
+          )
+          text = text.replace(
+              'CliError::Service(ReferenceAdminError::not_found())',
+              'CliError::Service(ReferenceAdminError::object_missing())',
+          )
+          text = text.replace('fs::metadata(path)', 'fs::symlink_metadata(path)')
+          cli.write_text(text)
+
+          test = Path('apps/wow-reference-builder/tests/e1_cli.rs')
+          test.write_text(r'''use std::{
+    error::Error,
+    fs,
+    path::PathBuf,
+    sync::atomic::{AtomicU64, Ordering},
+};
+
+static SEQUENCE: AtomicU64 = AtomicU64::new(0);
+
+type TestResult<T = ()> = Result<T, Box<dyn Error>>;
+
+fn path(label: &str, extension: &str) -> PathBuf {
+    let sequence = SEQUENCE.fetch_add(1, Ordering::Relaxed);
+    std::env::temp_dir().join(format!(
+        "wow-reference-builder-{label}-{}-{sequence}.{extension}",
+        std::process::id()
+    ))
+}
+
+#[test]
+fn status_uses_only_explicit_database_and_publication_key() -> TestResult {
+    let database = path("status", "sqlite3");
+    let _ = fs::remove_file(&database);
+    let arguments = vec![
+        "status".to_owned(),
+        "--db".to_owned(),
+        database.to_string_lossy().into_owned(),
+        "--store-profile".to_owned(),
+        "reference-cli-test".to_owned(),
+        "--profile".to_owned(),
+        "retail-12.1".to_owned(),
+        "--channel".to_owned(),
+        "stable".to_owned(),
+    ];
+    let mut stdout = Vec::new();
+    let mut stderr = Vec::new();
+    assert_eq!(
+        wow_reference_builder::run(arguments, &mut stdout, &mut stderr),
+        0
+    );
+    assert!(stderr.is_empty());
+    assert!(stdout.ends_with(b"\n"));
+    let value: serde_json::Value = serde_json::from_slice(&stdout)?;
+    assert_eq!(
+        value["publication_profile"],
+        serde_json::Value::String("retail-12.1".to_owned())
+    );
+    assert!(value["current_reference_object_id"].is_null());
+    let _ = fs::remove_file(database);
+    Ok(())
+}
+
+#[test]
+fn invalid_reference_input_produces_no_stdout_or_publication() -> TestResult {
+    let input = path("invalid", "json");
+    fs::write(&input, b"{\"not\":\"a-reference-view\"}\n")?;
+    let arguments = vec![
+        "validate".to_owned(),
+        "--store-profile".to_owned(),
+        "reference-cli-test".to_owned(),
+        "--input".to_owned(),
+        input.to_string_lossy().into_owned(),
+    ];
+    let mut stdout = Vec::new();
+    let mut stderr = Vec::new();
+    assert_eq!(
+        wow_reference_builder::run(arguments, &mut stdout, &mut stderr),
+        4
+    );
+    assert!(stdout.is_empty());
+    assert!(String::from_utf8_lossy(&stderr).contains("reference view"));
+    let _ = fs::remove_file(input);
+    Ok(())
+}
+''')
+          PY
+
+          if ! grep -Fq 'pub mod publication;' crates/wow-reference/src/lib.rs; then
+            printf '\npub mod publication;\n' >> crates/wow-reference/src/lib.rs
+          fi
+          sed -i '/^wow-store = { path = "\.\.\/wow-store" }$/d' crates/wow-service/Cargo.toml
+          sed -i '/^\[lints\]$/i wow-store = { path = "../wow-store" }\n' crates/wow-service/Cargo.toml
+          if ! grep -Fq 'pub mod reference_admin;' crates/wow-service/src/lib.rs; then
+            printf '\npub mod reference_admin;\n' >> crates/wow-service/src/lib.rs
+          fi
+          if ! grep -Fq '"apps/wow-reference-builder"' Cargo.toml; then
+            sed -i '/"apps\/wow",/a\    "apps/wow-reference-builder",' Cargo.toml
+          fi
+          cargo +stable generate-lockfile
+          rm .github/workflows/materialize-reference-service-e1-d.yml
+          git add -A
+      - name: Compiler-assisted mechanical cleanup
+        run: |
+          set -euo pipefail
+          cargo +stable fmt --all
+          cargo +stable fix --package wow-reference --package wow-service --package wow-reference-builder --all-targets --all-features --allow-dirty --allow-staged
+          cargo +stable clippy --fix --package wow-reference --package wow-service --package wow-reference-builder --all-targets --all-features --allow-dirty --allow-staged -- -D warnings
+          cargo +stable fmt --all
+      - name: Strict E1-D and repository gate
+        run: |
+          set -euo pipefail
+          cargo +stable check --workspace --all-targets --all-features
+          cargo +stable test --package wow-reference --package wow-service --package wow-reference-builder --all-targets --all-features -- --nocapture
+          cargo +stable xtask check
+          cargo +stable check --locked --workspace --all-targets --all-features
+          cargo +stable clippy --locked --workspace --all-targets --all-features -- -D warnings
+          cargo +stable test --locked --workspace --all-targets --all-features
+          cargo +stable test --release --locked --workspace --all-targets --all-features
+          RUSTDOCFLAGS='-D warnings' cargo +stable doc --locked --workspace --all-features --no-deps
+          git diff --check
+      - name: Commit verified production tree
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git diff --cached --check
+          git commit -m 'feat(service): add durable ReferenceView administration'
+          git push origin HEAD:work/reference-service-e1-d
