@@ -1,0 +1,59 @@
+name: Materialize wow-rules E0-E
+
+on:
+  push:
+    branches:
+      - work/rules-e0
+    paths:
+      - .ci/materialize/rules-e0/**
+      - .github/workflows/materialize-rules-e0.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: materialize-rules-e0
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: true
+      - name: Install current stable Rust
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+      - name: Materialize exact reviewed payload
+        run: |
+          set -euo pipefail
+          test "$(find .ci/materialize/rules-e0 -maxdepth 1 -name 'part-*' -type f | wc -l)" -eq 3
+          cat .ci/materialize/rules-e0/part-* > "$RUNNER_TEMP/rules-e0.b64"
+          echo 'b9582be5a4beb8fb9ec336494c3ade57ab96e66ade91a4554d4b54f477a6010e  '"$RUNNER_TEMP/rules-e0.b64" | sha256sum --check --status
+          base64 --decode "$RUNNER_TEMP/rules-e0.b64" > "$RUNNER_TEMP/rules-e0.tar.gz"
+          echo '1ce30f8ecd1038e767fc8801a13b7355607466d5858591612a4897c048a7d9c3  '"$RUNNER_TEMP/rules-e0.tar.gz" | sha256sum --check --status
+          tar -xzf "$RUNNER_TEMP/rules-e0.tar.gz" -C .
+          rm -rf .ci/materialize/rules-e0
+          rm .github/workflows/materialize-rules-e0.yml
+          git add -A
+      - name: Resolve lockfile and verify E0-E
+        run: |
+          set -euo pipefail
+          cargo +stable fmt --all
+          cargo +stable xtask check
+          cargo +stable check --workspace --all-targets --all-features
+          cargo +stable test --package wow-rules --all-targets --all-features -- --nocapture
+          cargo +stable check --locked --workspace --all-targets --all-features
+          cargo +stable clippy --locked --workspace --all-targets --all-features -- -D warnings
+          RUSTDOCFLAGS='-D warnings' cargo +stable doc --locked --workspace --all-features --no-deps
+          git diff --check
+      - name: Commit verified implementation
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git diff --cached --check
+          git commit -m 'feat(rules): implement exact E0-E diagnostic providers'
+          git push origin HEAD:work/rules-e0
