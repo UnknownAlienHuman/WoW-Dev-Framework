@@ -1,0 +1,57 @@
+name: Materialize wow-store E1-A
+
+on:
+  push:
+    branches:
+      - work/store-e1-a
+    paths:
+      - crates/wow-store/**
+      - .github/workflows/materialize-store-e1-a.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: materialize-store-e1-a
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: true
+      - name: Install current stable Rust
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+      - name: Activate exact package and resolve lockfile
+        run: |
+          set -euo pipefail
+          if ! grep -Fq '"crates/wow-store"' Cargo.toml; then
+            sed -i '/"crates\/wow-core",/a\    "crates/wow-store",' Cargo.toml
+          fi
+          cargo +stable generate-lockfile
+          rm .github/workflows/materialize-store-e1-a.yml
+          git add -A
+      - name: Verify complete E1-A implementation
+        run: |
+          set -euo pipefail
+          cargo +stable fmt --all
+          cargo +stable check --workspace --all-targets --all-features
+          cargo +stable xtask check
+          cargo +stable check --locked --workspace --all-targets --all-features
+          cargo +stable clippy --locked --workspace --all-targets --all-features -- -D warnings
+          cargo +stable test --locked --workspace --all-targets --all-features
+          cargo +stable test --release --locked --workspace --all-targets --all-features
+          RUSTDOCFLAGS='-D warnings' cargo +stable doc --locked --workspace --all-features --no-deps
+          git diff --check
+      - name: Commit verified production tree
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git diff --cached --check
+          git commit -m 'feat(store): implement E1-A durable object substrate'
+          git push origin HEAD:work/store-e1-a
