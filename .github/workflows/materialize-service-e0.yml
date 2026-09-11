@@ -1,0 +1,106 @@
+name: Materialize wow-service E0-F
+
+on:
+  push:
+    branches:
+      - work/service-e0
+    paths:
+      - .github/workflows/materialize-service-e0.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: materialize-service-e0
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: true
+      - name: Install current stable Rust
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+      - name: Wire E0-F into the exact workspace
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          root = Path('Cargo.toml')
+          text = root.read_text()
+          member = '    "crates/wow-service",\n'
+          if member not in text:
+              anchor = '    "crates/wow-rules",\n'
+              if anchor not in text:
+                  raise SystemExit('workspace member anchor not found')
+              text = text.replace(anchor, anchor + member, 1)
+              root.write_text(text)
+
+          lib = Path('crates/wow-service/src/lib.rs')
+          text = lib.read_text()
+          text = text.replace(
+              'pub use backend::{OwnedServiceBackend, ServiceBackend};',
+              'pub use backend::{OwnedServiceBackend, ServiceBackend, ServiceBackendStatus};',
+          )
+          text = text.replace(
+              '    RuleEvaluation, RuleEvaluationState, RuleFinding, ServiceSemanticStatus, StatusRequest,',
+              '    RuleBlocker, RuleEvaluation, RuleEvaluationState, RuleFinding, ServiceSemanticStatus,\n    StatusRequest,',
+          )
+          lib.write_text(text)
+
+          service = Path('crates/wow-service/src/service.rs')
+          text = service.read_text()
+          text = text.replace('        let mut context = self\n', '        let context = self\n', 1)
+          old = '''        context
+              .components
+              .sort_by(|left, right| left.component_id().cmp(right.component_id()));
+          context
+              .rule_evaluations
+              .sort_by(|left, right| left.evaluation_id().cmp(right.evaluation_id()));
+  '''
+          new = '''        let mut components = context.components().to_vec();
+          components.sort_by(|left, right| left.component_id().cmp(right.component_id()));
+          let mut rule_evaluations = context.rule_evaluations().to_vec();
+          rule_evaluations.sort_by(|left, right| left.evaluation_id().cmp(right.evaluation_id()));
+  '''
+          if old not in text:
+              raise SystemExit('service sort block not found')
+          text = text.replace(old, new, 1)
+          text = text.replace('            components: context.components(),', '            components: &components,', 1)
+          text = text.replace(
+              '            rule_evaluations: context.rule_evaluations(),',
+              '            rule_evaluations: &rule_evaluations,',
+              1,
+          )
+          text = text.replace('            components: context.components().to_vec(),', '            components,', 1)
+          text = text.replace(
+              '            rule_evaluations: context.rule_evaluations().to_vec(),',
+              '            rule_evaluations,',
+              1,
+          )
+          service.write_text(text)
+          PY
+      - name: Format and verify E0-F
+        run: |
+          set -euo pipefail
+          cargo +stable fmt --all
+          cargo +stable check --workspace --all-targets --all-features
+          cargo +stable test --package wow-service --all-targets --all-features -- --nocapture
+          cargo +stable check --locked --workspace --all-targets --all-features
+          cargo +stable clippy --locked --workspace --all-targets --all-features -- -D warnings
+          RUSTDOCFLAGS='-D warnings' cargo +stable doc --locked --workspace --all-features --no-deps
+          git diff --check
+      - name: Commit verified implementation
+        run: |
+          set -euo pipefail
+          rm .github/workflows/materialize-service-e0.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+UnknownAlienHuman@users.noreply.github.com
+          git add -A Cargo.toml Cargo.lock crates/wow-service .github/workflows/materialize-service-e0.yml
+          git diff --cached --check
+          git commit -m 'feat(service): implement exact E0-F status and check operations'
+          git push origin HEAD:work/service-e0
