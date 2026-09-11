@@ -7,7 +7,7 @@
 - Explicit content-addressed in-memory Lua workspaces bound to one backend identity and source universe.
 - UTF-8/NUL, normalized path, extension, file-count, per-file byte, total-byte, duplicate-path, and case-collision guards.
 - Exact source preservation, case-sensitive file lookup, and deterministic workspace identity.
-- Lua/documentation syntax diagnostics with exact snapshot-relative path, source digest, canonical UTF-8 byte span, stable classification, and deterministic report identity.
+- Lua/documentation syntax diagnostics plus the frozen `assign-type-mismatch` E0 generic family, with exact snapshot-relative path, source digest, canonical UTF-8 byte span, stable classification, and deterministic report identity.
 - Explicit Main plus Library semantic workspaces for direct static `receiver.member(...)` calls.
 - Linked member-reference and call facts with receiver/member/reference/call spans, argument count, colon-call shape, and analyzer-only `resolved`, `unresolved`, or `possible` state.
 - Function-local bindings linked to their analyzer declaration identity and, when present, their direct member-call initializer.
@@ -21,6 +21,8 @@
 These outputs are normalized analyzer and control-flow observations only. They do not prove that a WoW API exists or is absent, that a value is Secret, that an operation is safe, or that a client/runtime permits it. `wow-rules` must combine exact project facts with independently authoritative Reference coverage and restriction facets.
 
 ## Not yet implemented
+
+- Normalization of additional upstream diagnostic families beyond the three explicitly accepted E0 families.
 
 - General symbol, definition, reference, type, hover, call-hierarchy, or rename operations.
 - Non-call member/reference inventory and dynamic/computed member facts.

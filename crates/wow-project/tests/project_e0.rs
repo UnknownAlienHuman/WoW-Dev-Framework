@@ -8,8 +8,8 @@ use wow_core::{
 };
 use wow_emmy::{
     EMMYLUA_CODE_ANALYSIS_VERSION, EMMYLUA_REVISION, EMMYLUA_TREE, EmmyBackendIdentity,
-    EmmyReferenceResolution, LuaWorkspaceFileInput, LuaWorkspaceLimits, LuaWorkspaceSnapshot,
-    LuaWorkspaceUniverse,
+    EmmyReferenceResolution, EmmySyntaxDiagnosticKind, LuaWorkspaceFileInput, LuaWorkspaceLimits,
+    LuaWorkspaceSnapshot, LuaWorkspaceUniverse,
 };
 use wow_project::{
     AnalyzerBindingDeclaration, ProjectBudgetPolicy, ProjectCapabilityPolicy, ProjectConfiguration,
@@ -208,8 +208,16 @@ fn baseline_publication_binds_one_exact_generation() -> TestResult {
     );
     assert_eq!(snapshot.deferred_capabilities().len(), 8);
 
-    let missing = record_by_path(&snapshot, "main/missing-api.lua")?;
+    let generic = record_by_path(&snapshot, "main/generic-error.lua")?;
     let view = publisher.open_current()?;
+    let generic_diagnostics = view.generic_diagnostics_for_file(generic.file_id());
+    assert_eq!(generic_diagnostics.len(), 1);
+    assert_eq!(
+        generic_diagnostics[0].kind(),
+        EmmySyntaxDiagnosticKind::AssignmentTypeMismatch
+    );
+
+    let missing = record_by_path(&snapshot, "main/missing-api.lua")?;
     let removed = view
         .member_references_for_file(missing.file_id())
         .into_iter()

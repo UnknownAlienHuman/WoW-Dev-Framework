@@ -77,7 +77,7 @@ pub(super) fn analyze(snapshot: &LuaWorkspaceSnapshot) -> EmmySyntaxResult<EmmyS
             })?;
         let before = diagnostics.len();
         for diagnostic in upstream {
-            let Some((kind, code)) = syntax_code(diagnostic.code.as_ref()) else {
+            let Some((kind, code)) = accepted_code(diagnostic.code.as_ref()) else {
                 continue;
             };
             if diagnostics.len() - before >= MAX_DIAGNOSTICS_PER_FILE
@@ -85,7 +85,7 @@ pub(super) fn analyze(snapshot: &LuaWorkspaceSnapshot) -> EmmySyntaxResult<EmmyS
             {
                 return Err(EmmySyntaxError::new(
                     EmmySyntaxErrorCode::DiagnosticBudgetExceeded,
-                    "syntax diagnostic count exceeds the adapter budget",
+                    "accepted diagnostic count exceeds the adapter budget",
                     Some(file.path()),
                 ));
             }
@@ -117,7 +117,7 @@ pub(super) fn analyze(snapshot: &LuaWorkspaceSnapshot) -> EmmySyntaxResult<EmmyS
             diagnostic_count: u64::try_from(diagnostics.len() - before).map_err(|_| {
                 EmmySyntaxError::new(
                     EmmySyntaxErrorCode::DiagnosticBudgetExceeded,
-                    "syntax diagnostic count exceeds u64",
+                    "accepted diagnostic count exceeds u64",
                     Some(file.path()),
                 )
             })?,
@@ -151,13 +151,14 @@ pub(super) fn analyze(snapshot: &LuaWorkspaceSnapshot) -> EmmySyntaxResult<EmmyS
     let canonical = canonical_json_bytes(&identity).map_err(|_| {
         EmmySyntaxError::new(
             EmmySyntaxErrorCode::CanonicalizationFailed,
-            "syntax report identity cannot be canonicalized",
+            "diagnostic report identity cannot be canonicalized",
             None,
         )
     })?;
     Ok(EmmySyntaxReport {
         schema: REPORT_SCHEMA,
-        analysis_id: format!("emmy-syntax:sha256:{:x}", Sha256::digest(canonical)).into_boxed_str(),
+        analysis_id: format!("emmy-diagnostics:sha256:{:x}", Sha256::digest(canonical))
+            .into_boxed_str(),
         upstream_revision: EMMYLUA_REVISION,
         upstream_tree: EMMYLUA_TREE,
         upstream_crate_version: EMMYLUA_CODE_ANALYSIS_VERSION,
@@ -199,7 +200,9 @@ fn virtual_root(snapshot_id: &str) -> PathBuf {
     std::env::temp_dir().join("wow-emmy-v1").join(stable)
 }
 
-fn syntax_code(code: Option<&NumberOrString>) -> Option<(EmmySyntaxDiagnosticKind, &'static str)> {
+fn accepted_code(
+    code: Option<&NumberOrString>,
+) -> Option<(EmmySyntaxDiagnosticKind, &'static str)> {
     match code? {
         NumberOrString::String(value) if value == "syntax-error" => {
             Some((EmmySyntaxDiagnosticKind::LuaSyntax, "syntax-error"))
@@ -207,6 +210,10 @@ fn syntax_code(code: Option<&NumberOrString>) -> Option<(EmmySyntaxDiagnosticKin
         NumberOrString::String(value) if value == "doc-syntax-error" => Some((
             EmmySyntaxDiagnosticKind::DocumentationSyntax,
             "doc-syntax-error",
+        )),
+        NumberOrString::String(value) if value == "assign-type-mismatch" => Some((
+            EmmySyntaxDiagnosticKind::AssignmentTypeMismatch,
+            "assign-type-mismatch",
         )),
         NumberOrString::String(_) | NumberOrString::Number(_) => None,
     }

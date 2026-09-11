@@ -1,7 +1,7 @@
 use wow_emmy::{
     EMMYLUA_CODE_ANALYSIS_VERSION, EMMYLUA_REVISION, EMMYLUA_TREE, EmmyBackendIdentity,
-    EmmyDiagnosticSeverity, EmmySyntaxErrorCode, LuaWorkspaceFileInput, LuaWorkspaceLimits,
-    LuaWorkspaceSnapshot, LuaWorkspaceUniverse, analyze_syntax,
+    EmmyDiagnosticSeverity, EmmySyntaxDiagnosticKind, EmmySyntaxErrorCode, LuaWorkspaceFileInput,
+    LuaWorkspaceLimits, LuaWorkspaceSnapshot, LuaWorkspaceUniverse, analyze_syntax,
 };
 
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
@@ -101,5 +101,40 @@ fn compiled_adapter_rejects_a_different_backend_before_analysis() -> TestResult 
         .ok_or("expected incompatible backend")?;
     assert_eq!(error.code(), EmmySyntaxErrorCode::IncompatibleBackend);
     assert!(error.path().is_none());
+    Ok(())
+}
+
+#[test]
+fn frozen_assignment_type_mismatch_is_one_generic_diagnostic() -> TestResult {
+    let raw = "---@type string\nlocal value = 42\nreturn value\n";
+    let workspace = snapshot(vec![LuaWorkspaceFileInput::new(
+        "main/generic-error.lua",
+        raw,
+    )])?;
+    let report = analyze_syntax(&workspace)?;
+    assert_eq!(report.diagnostics().len(), 1);
+    assert_eq!(report.files()[0].diagnostic_count(), 1);
+    let diagnostic = &report.diagnostics()[0];
+    assert_eq!(diagnostic.category(), "emmy.generic.fixture_error");
+    assert_eq!(diagnostic.upstream_code(), "assign-type-mismatch");
+    assert_eq!(
+        diagnostic.kind(),
+        EmmySyntaxDiagnosticKind::AssignmentTypeMismatch
+    );
+    assert_eq!(
+        diagnostic.upstream_severity(),
+        EmmyDiagnosticSeverity::Warning
+    );
+    assert_eq!(
+        diagnostic.normalized_severity(),
+        EmmyDiagnosticSeverity::Error
+    );
+    assert_eq!(diagnostic.path(), "main/generic-error.lua");
+    assert_eq!(diagnostic.span().byte_start(), Some(22));
+    assert_eq!(diagnostic.span().byte_end(), Some(27));
+    assert_eq!(
+        diagnostic.content_sha256(),
+        workspace.files()[0].content_sha256()
+    );
     Ok(())
 }
