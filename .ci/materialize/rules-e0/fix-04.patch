@@ -1,0 +1,300 @@
+--- a/crates/wow-rules/src/engine.rs
++++ b/crates/wow-rules/src/engine.rs
+@@ -24,6 +24,7 @@
+ 
+ use crate::descriptor::{API_EXISTS_RULE, SECRET_LOCAL_RULE};
+ use crate::identity::canonical_id;
++use crate::output::RuleFindingSetInput;
+ use crate::{
+     CleanEvaluationRecord, RuleBlockerKind, RuleBudgetUsage, RuleCleanClaimKind, RuleError,
+     RuleErrorCode, RuleEvaluationOutcome, RuleEvaluationRecord, RuleExecutionContext,
+@@ -38,6 +39,24 @@
+ const PRODUCER_ID: &str = "wow.rules";
+ const PRODUCER_VERSION: &str = "1.0.0";
+ 
++struct ApiFindingInput<'a> {
++    file: &'a ProjectFileRecord,
++    fact: &'a EmmyMemberReferenceFact,
++    call: Option<&'a EmmyMemberCallFact>,
++    entity_lookup_key: &'a str,
++    lookup: RuleReferenceLookupRecord,
++    coverage_ids: Vec<CoverageId>,
++}
++
++struct CleanInput<'a> {
++    scope_id: &'a str,
++    claim: RuleCleanClaimKind,
++    fact_ids: Vec<Box<str>>,
++    lookup: &'a RuleReferenceLookupRecord,
++    coverage_ids: Vec<CoverageId>,
++    guard: Option<RuleGuardClassification>,
++}
++
+ /// Executes the closed E0-E registry synchronously over one immutable context.
+ pub fn execute_e0(
+     context: &RuleExecutionContext<'_>,
+@@ -189,12 +208,14 @@
+                     output.push(clean(
+                         context,
+                         descriptor,
+-                        &scope_id,
+-                        RuleCleanClaimKind::ApiExistsForExactUse,
+-                        fact_ids,
+-                        &lookup,
+-                        gate.coverage_ids,
+-                        None,
++                        CleanInput {
++                            scope_id: &scope_id,
++                            claim: RuleCleanClaimKind::ApiExistsForExactUse,
++                            fact_ids,
++                            lookup: &lookup,
++                            coverage_ids: gate.coverage_ids,
++                            guard: None,
++                        },
+                     )?);
+                 }
+                 RuleReferenceOutcome::AuthoritativeAbsent
+@@ -203,12 +224,14 @@
+                     output.push(api_finding(
+                         context,
+                         descriptor,
+-                        file,
+-                        fact,
+-                        call,
+-                        &entity_lookup_key,
+-                        lookup,
+-                        gate.coverage_ids,
++                        ApiFindingInput {
++                            file,
++                            fact,
++                            call,
++                            entity_lookup_key: &entity_lookup_key,
++                            lookup,
++                            coverage_ids: gate.coverage_ids,
++                        },
+                     )?);
+                 }
+                 RuleReferenceOutcome::AuthoritativeAbsent => {
+@@ -436,12 +459,14 @@
+                             output.push(clean(
+                                 context,
+                                 descriptor,
+-                                &scope_id,
+-                                RuleCleanClaimKind::SecretProducerHasNoMatchingFacet,
+-                                fact_ids,
+-                                &lookup,
+-                                gate.coverage_ids,
+-                                None,
++                                CleanInput {
++                                    scope_id: &scope_id,
++                                    claim: RuleCleanClaimKind::SecretProducerHasNoMatchingFacet,
++                                    fact_ids,
++                                    lookup: &lookup,
++                                    coverage_ids: gate.coverage_ids,
++                                    guard: None,
++                                },
+                             )?);
+                             continue;
+                         }
+@@ -478,12 +503,14 @@
+                         output.push(clean(
+                             context,
+                             descriptor,
+-                            &scope_id,
+-                            RuleCleanClaimKind::SecretFixtureOperationGuardedForExactValueAndScope,
+-                            fact_ids,
+-                            &lookup,
+-                            gate.coverage_ids,
+-                            Some(guard),
++                            CleanInput {
++                                scope_id: &scope_id,
++                                claim: RuleCleanClaimKind::SecretFixtureOperationGuardedForExactValueAndScope,
++                                fact_ids,
++                                lookup: &lookup,
++                                coverage_ids: gate.coverage_ids,
++                                guard: Some(guard),
++                            },
+                         )?);
+                     } else {
+                         output.push(secret_finding(
+@@ -507,12 +534,14 @@
+                     output.push(clean(
+                         context,
+                         descriptor,
+-                        &scope_id,
+-                        RuleCleanClaimKind::SecretProducerHasNoMatchingFacet,
+-                        fact_ids,
+-                        &lookup,
+-                        gate.coverage_ids,
+-                        None,
++                        CleanInput {
++                            scope_id: &scope_id,
++                            claim: RuleCleanClaimKind::SecretProducerHasNoMatchingFacet,
++                            fact_ids,
++                            lookup: &lookup,
++                            coverage_ids: gate.coverage_ids,
++                            guard: None,
++                        },
+                     )?);
+                 }
+                 RuleReferenceOutcome::Conflict => {
+@@ -646,13 +675,16 @@
+ fn api_finding(
+     context: &RuleExecutionContext<'_>,
+     descriptor: &crate::RuleDescriptor,
+-    file: &ProjectFileRecord,
+-    fact: &EmmyMemberReferenceFact,
+-    call: Option<&EmmyMemberCallFact>,
+-    entity_lookup_key: &str,
+-    lookup: RuleReferenceLookupRecord,
+-    coverage_ids: Vec<CoverageId>,
++    input: ApiFindingInput<'_>,
+ ) -> RuleResult<RuleEvaluationRecord> {
++    let ApiFindingInput {
++        file,
++        fact,
++        call,
++        entity_lookup_key,
++        lookup,
++        coverage_ids,
++    } = input;
+     let input_fact_ids = api_fact_ids(fact, call);
+     let entity = wow_core::EntityKey::new(
+         "function",
+@@ -755,14 +787,16 @@
+     };
+     let result = RuleFindingSet::build(
+         context.fixture_policy().policy_id(),
+-        input_fact_ids,
+-        vec![finding],
+-        source_handles,
+-        evidence,
+-        coverage_ids,
+-        lookup,
+-        None,
+-        usage,
++        RuleFindingSetInput {
++            input_fact_ids,
++            findings: vec![finding],
++            source_handles,
++            evidence_records: evidence,
++            coverage_ids,
++            reference_lookup: lookup,
++            guard_classification: None,
++            budget_usage: usage,
++        },
+     )?;
+     Ok(RuleEvaluationRecord::new(
+         descriptor.rule_id().clone(),
+@@ -884,14 +918,16 @@
+     };
+     let result = RuleFindingSet::build(
+         context.fixture_policy().policy_id(),
+-        input_fact_ids,
+-        vec![finding],
+-        source_handles,
+-        evidence,
+-        coverage_ids,
+-        lookup,
+-        Some(guard),
+-        usage,
++        RuleFindingSetInput {
++            input_fact_ids,
++            findings: vec![finding],
++            source_handles,
++            evidence_records: evidence,
++            coverage_ids,
++            reference_lookup: lookup,
++            guard_classification: Some(guard),
++            budget_usage: usage,
++        },
+     )?;
+     Ok(RuleEvaluationRecord::new(
+         descriptor.rule_id().clone(),
+@@ -911,11 +947,15 @@
+     operation: &EmmyOperationFact,
+ ) {
+     let operation_span = operation.operation_span();
+-    fact_ids.extend(guards.iter().filter_map(|guard| {
+-        (guard.guarded_binding_fact_id() == binding.fact_id()
+-            || span_contains(guard.guarded_block_span(), operation_span))
+-        .then(|| Box::<str>::from(guard.fact_id()))
+-    }));
++    fact_ids.extend(
++        guards
++            .iter()
++            .filter(|guard| {
++                guard.guarded_binding_fact_id() == binding.fact_id()
++                    || span_contains(guard.guarded_block_span(), operation_span)
++            })
++            .map(|guard| Box::<str>::from(guard.fact_id())),
++    );
+     fact_ids.extend(
+         relations
+             .iter()
+@@ -945,13 +985,16 @@
+ fn clean(
+     context: &RuleExecutionContext<'_>,
+     descriptor: &crate::RuleDescriptor,
+-    scope_id: &str,
+-    claim: RuleCleanClaimKind,
+-    fact_ids: Vec<Box<str>>,
+-    lookup: &RuleReferenceLookupRecord,
+-    coverage_ids: Vec<CoverageId>,
+-    guard: Option<RuleGuardClassification>,
++    input: CleanInput<'_>,
+ ) -> RuleResult<RuleEvaluationRecord> {
++    let CleanInput {
++        scope_id,
++        claim,
++        fact_ids,
++        lookup,
++        coverage_ids,
++        guard,
++    } = input;
+     let record = CleanEvaluationRecord::build(
+         descriptor.rule_id().clone(),
+         descriptor.rule_version().clone(),
+--- a/crates/wow-rules/src/output.rs
++++ b/crates/wow-rules/src/output.rs
+@@ -428,18 +428,32 @@
+     budget_usage: RuleBudgetUsage,
+ }
+ 
++pub(crate) struct RuleFindingSetInput {
++    pub input_fact_ids: Vec<Box<str>>,
++    pub findings: Vec<Finding>,
++    pub source_handles: Vec<SourceHandle>,
++    pub evidence_records: Vec<EvidenceRecord>,
++    pub coverage_ids: Vec<CoverageId>,
++    pub reference_lookup: RuleReferenceLookupRecord,
++    pub guard_classification: Option<RuleGuardClassification>,
++    pub budget_usage: RuleBudgetUsage,
++}
++
+ impl RuleFindingSet {
+     pub(crate) fn build(
+         fixture_policy_id: &str,
+-        mut input_fact_ids: Vec<Box<str>>,
+-        findings: Vec<Finding>,
+-        source_handles: Vec<SourceHandle>,
+-        evidence_records: Vec<EvidenceRecord>,
+-        mut coverage_ids: Vec<CoverageId>,
+-        reference_lookup: RuleReferenceLookupRecord,
+-        guard_classification: Option<RuleGuardClassification>,
+-        budget_usage: RuleBudgetUsage,
++        input: RuleFindingSetInput,
+     ) -> RuleResult<Self> {
++        let RuleFindingSetInput {
++            mut input_fact_ids,
++            findings,
++            source_handles,
++            evidence_records,
++            mut coverage_ids,
++            reference_lookup,
++            guard_classification,
++            budget_usage,
++        } = input;
+         if findings.is_empty() {
+             return Err(RuleError::new(
+                 RuleErrorCode::RuleOutcomeInvalid,
