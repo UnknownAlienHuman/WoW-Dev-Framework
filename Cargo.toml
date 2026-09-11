@@ -7,6 +7,7 @@ members = [
     "crates/wow-emmy",
     "crates/wow-project",
     "crates/wow-rules",
+    "crates/wow-service",
     "tools/xtask",
     "crates/wow-render-contract",
     "crates/wow-ketho-literals",

@@ -87,8 +87,9 @@ jobs:
             -e '/"crates\/wow-emmy",/d' \
             -e '/"crates\/wow-project",/d' \
             -e '/"crates\/wow-rules",/d' \
+            -e '/"crates\/wow-service",/d' \
             Cargo.toml
-          for member in wow-emmy wow-project wow-rules; do
+          for member in wow-emmy wow-project wow-rules wow-service; do
             if grep -Fq "\"crates/$member\"," Cargo.toml; then
               echo "$member remained in the parser-only workspace" >&2
               exit 1

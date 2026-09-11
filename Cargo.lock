@@ -2199,6 +2199,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "wow-service"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "wow-core",
+ "wow-emmy",
+ "wow-project",
+ "wow-reference",
+ "wow-rules",
+]
+
+[[package]]
 name = "writeable"
 version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
