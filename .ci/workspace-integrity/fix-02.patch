@@ -1,0 +1,16 @@
+--- a/crates/wow-reference/src/persistent.rs
++++ b/crates/wow-reference/src/persistent.rs
+@@ -8 +8 @@
+-use serde::{Deserialize, Serialize, de::DeserializeOwned};
++use serde::Serialize;
+--- a/crates/wow-reference/src/publication.rs
++++ b/crates/wow-reference/src/publication.rs
+@@ -79,8 +79,2 @@
+     }
+ }
+-
+-impl From<wow_store::StoreError> for ReferenceStoreError {
+-    fn from(source: wow_store::StoreError) -> Self {
+-        crate::persistent::map_store_error(source)
+-    }
+-}
