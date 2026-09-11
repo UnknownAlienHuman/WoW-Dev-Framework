@@ -1,0 +1,202 @@
+name: Finalize reference service E1-D
+
+on:
+  push:
+    branches:
+      - work/reference-service-e1-d
+    paths:
+      - .github/workflows/reference-service-e1-d-finalize.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: finalize-reference-service-e1-d
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: true
+      - name: Install current stable Rust
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+      - name: Normalize exact replay and workspace boundaries
+        run: |
+          set -euo pipefail
+          test -f crates/wow-reference/src/persistent.rs
+          test -f crates/wow-store/src/store.rs
+          python - <<'PY'
+          from pathlib import Path
+
+          publication = Path('crates/wow-reference/src/publication.rs')
+          text = publication.read_text()
+          text = text.replace(
+              'ReferencePublicationKey, ReferenceStoreError, ReferenceStoreResult,',
+              'ReferencePublicationKey, ReferenceStoreResult,',
+          )
+          marker = '\nimpl From<wow_store::StoreError> for ReferenceStoreError {'
+          if marker in text:
+              text = text.split(marker, 1)[0].rstrip() + '\n'
+          publication.write_text(text)
+
+          admin = Path('crates/wow-service/src/reference_admin.rs')
+          text = admin.read_text()
+          text = text.replace(
+              '    ReferenceViewInvalid,\n    PublicationConflict,',
+              '    ReferenceViewInvalid,\n    ReferenceObjectMissing,\n    PublicationConflict,',
+          )
+          if 'pub fn object_missing() -> Self' not in text:
+              text = text.replace(
+                  '    pub fn message(&self) -> &str {\n        &self.message\n    }\n}',
+                  '    pub fn message(&self) -> &str {\n        &self.message\n    }\n\n'
+                  '    #[must_use]\n'
+                  '    pub fn object_missing() -> Self {\n'
+                  '        Self::new(\n'
+                  '            ReferenceAdminErrorCode::ReferenceObjectMissing,\n'
+                  '            "reference object was not found",\n'
+                  '        )\n'
+                  '    }\n'
+                  '}',
+              )
+          text = text.replace(
+              'self.read_publish_result(result_object_id, &request_digest)',
+              'self.read_publish_result(\n'
+              '                        result_object_id,\n'
+              '                        &request.operation_id,\n'
+              '                        &request_digest,\n'
+              '                    )',
+          )
+          text = text.replace(
+              '        object_id: &ObjectId,\n        expected_request_digest: &RequestDigest,\n',
+              '        object_id: &ObjectId,\n'
+              '        expected_operation_id: &OperationId,\n'
+              '        expected_request_digest: &RequestDigest,\n',
+          )
+          text = text.replace(
+              '        if result.request_digest() != expected_request_digest {',
+              '        if result.operation_id() != expected_operation_id\n'
+              '            || result.request_digest() != expected_request_digest\n'
+              '        {',
+          )
+          aliases = '''
+
+pub type ReferenceAdminExpectation = CatalogExpectation;
+pub type ReferenceAdminObjectId = ObjectId;
+pub type ReferenceAdminOperationId = OperationId;
+pub type ReferenceAdminPublicationKey = ReferencePublicationKey;
+pub type ReferenceAdminStoreLimits = StoreLimits;
+pub type ReferenceAdminLogicalEpoch = LogicalEpoch;
+
+pub fn reference_publication_key(
+    profile: impl Into<Box<str>>,
+    channel: impl Into<Box<str>>,
+) -> ReferenceAdminResult<ReferencePublicationKey> {
+    Ok(ReferencePublicationKey::new(profile, channel)?)
+}
+
+pub fn parse_reference_object_id(value: impl Into<Box<str>>) -> ReferenceAdminResult<ObjectId> {
+    Ok(ObjectId::new(value)?)
+}
+
+pub fn parse_reference_operation_id(
+    value: impl Into<Box<str>>,
+) -> ReferenceAdminResult<OperationId> {
+    Ok(OperationId::new(value)?)
+}
+'''
+          if 'pub type ReferenceAdminExpectation' not in text:
+              text = text.rstrip() + aliases
+          admin.write_text(text)
+
+          cli = Path('apps/wow-reference-builder/src/lib.rs')
+          text = cli.read_text()
+          if 'parse_reference_object_id' not in text.split('};', 1)[0]:
+              text = text.replace(
+                  '    ReferenceAdminStoreLimits,\n};',
+                  '    ReferenceAdminStoreLimits, parse_reference_object_id,\n'
+                  '    parse_reference_operation_id, reference_publication_key,\n};',
+              )
+          text = text.replace('ReferenceAdminPublicationKey::new(', 'reference_publication_key(')
+          text = text.replace('ReferenceAdminObjectId::new(value)?', 'parse_reference_object_id(value)?')
+          text = text.replace(
+              'ReferenceAdminOperationId::new(options.required("--operation")?)?',
+              'parse_reference_operation_id(options.required("--operation")?)?',
+          )
+          text = text.replace(
+              'ReferenceAdminObjectId::new(options.required("--object")?)?',
+              'parse_reference_object_id(options.required("--object")?)?',
+          )
+          text = text.replace(
+              'ReferenceAdminError::not_found()',
+              'ReferenceAdminError::object_missing()',
+          )
+          text = text.replace('fs::metadata(path)', 'fs::symlink_metadata(path)')
+          cli.write_text(text)
+
+          ci = Path('.github/workflows/ci.yml')
+          text = ci.read_text()
+          deletion = "            -e '/\"apps\\/wow-reference-builder\",/d' \\\n"
+          if deletion not in text:
+              anchor = "            -e '/\"apps\\/wow\",/d' \\\n"
+              if anchor in text:
+                  text = text.replace(anchor, anchor + deletion, 1)
+              else:
+                  anchor = "            -e '/\"crates\\/wow-service\",/d' \\\n"
+                  text = text.replace(anchor, anchor + deletion, 1)
+          old = 'for member in wow-emmy wow-project wow-rules wow-service wow; do'
+          if old in text:
+              text = text.replace(
+                  old,
+                  'for member in wow-emmy wow-project wow-rules wow-service wow wow-reference-builder; do',
+                  1,
+              )
+          ci.write_text(text)
+          PY
+
+          if ! grep -Fq 'pub mod publication;' crates/wow-reference/src/lib.rs; then
+            printf '\npub mod publication;\n' >> crates/wow-reference/src/lib.rs
+          fi
+          sed -i '/^wow-store = { path = "\.\.\/wow-store" }$/d' crates/wow-service/Cargo.toml
+          sed -i '/^\[lints\]$/i wow-store = { path = "../wow-store" }\n' crates/wow-service/Cargo.toml
+          if ! grep -Fq 'pub mod reference_admin;' crates/wow-service/src/lib.rs; then
+            printf '\npub mod reference_admin;\n' >> crates/wow-service/src/lib.rs
+          fi
+          if ! grep -Fq '"apps/wow-reference-builder"' Cargo.toml; then
+            sed -i '/"apps\/wow",/a\    "apps/wow-reference-builder",' Cargo.toml
+          fi
+          cargo +stable generate-lockfile
+          rm -f .github/workflows/materialize-reference-service-e1-d.yml
+          rm .github/workflows/reference-service-e1-d-finalize.yml
+          git add -A
+      - name: Compiler-assisted mechanical cleanup
+        run: |
+          set -euo pipefail
+          cargo +stable fmt --all
+          cargo +stable fix --package wow-reference --package wow-service --package wow-reference-builder --all-targets --all-features --allow-dirty --allow-staged
+          cargo +stable clippy --fix --package wow-reference --package wow-service --package wow-reference-builder --all-targets --all-features --allow-dirty --allow-staged -- -D warnings
+          cargo +stable fmt --all
+      - name: Strict E1-D and repository gate
+        run: |
+          set -euo pipefail
+          cargo +stable check --workspace --all-targets --all-features
+          cargo +stable test --package wow-reference --package wow-service --package wow-reference-builder --all-targets --all-features -- --nocapture
+          cargo +stable xtask check
+          cargo +stable check --locked --workspace --all-targets --all-features
+          cargo +stable clippy --locked --workspace --all-targets --all-features -- -D warnings
+          cargo +stable test --locked --workspace --all-targets --all-features
+          cargo +stable test --release --locked --workspace --all-targets --all-features
+          RUSTDOCFLAGS='-D warnings' cargo +stable doc --locked --workspace --all-features --no-deps
+          git diff --check
+      - name: Commit verified production tree
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git diff --cached --check
+          git commit -m 'feat(service): add durable ReferenceView administration'
+          git push origin HEAD:work/reference-service-e1-d
