@@ -1,0 +1,11 @@
+--- a/crates/wow-service/src/backend.rs
++++ b/crates/wow-service/src/backend.rs
+@@ -77,7 +77,7 @@
+     ) -> ServiceResult<Self> {
+         let mut by_generation = BTreeMap::new();
+         for context in contexts {
+-            let generation = context.identity().project_generation_id().into();
++            let generation: Box<str> = context.identity().project_generation_id().into();
+             if by_generation.insert(generation, context).is_some() {
+                 return Err(ServiceError::new(
+                     ServiceErrorCode::InvalidContext,
