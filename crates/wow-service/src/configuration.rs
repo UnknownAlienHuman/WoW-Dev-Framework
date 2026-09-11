@@ -217,10 +217,8 @@ impl ServiceConfigurationBuilder {
     pub fn build(self) -> ServiceResult<ServiceConfiguration> {
         let project_id = required(self.project_id, "project_id")?;
         let profile_id = required(self.profile_id, "profile_id")?;
-        let reference_generation_id = required(
-            self.reference_generation_id,
-            "reference_generation_id",
-        )?;
+        let reference_generation_id =
+            required(self.reference_generation_id, "reference_generation_id")?;
         let analyzer_pin_id = required(self.analyzer_pin_id, "analyzer_pin_id")?;
         let rule_registry_id = required(self.rule_registry_id, "rule_registry_id")?;
         let budgets = self.budgets.unwrap_or_default();
@@ -229,7 +227,11 @@ impl ServiceConfigurationBuilder {
             .deferred_operations
             .unwrap_or_else(|| DeferredOperation::ALL.to_vec());
         deferred_operations.sort_unstable();
-        if deferred_operations.iter().copied().collect::<BTreeSet<_>>().len()
+        if deferred_operations
+            .iter()
+            .copied()
+            .collect::<BTreeSet<_>>()
+            .len()
             != deferred_operations.len()
         {
             return Err(ServiceError::new(

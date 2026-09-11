@@ -37,8 +37,13 @@ fn components(order_reversed: bool) -> TestResult<Vec<ComponentSnapshot>> {
     .into_iter()
     .enumerate()
     .map(|(index, name)| {
-        ComponentSnapshot::new(name, "0.1.0", format!("{name}:snapshot:{index}"), ComponentHealth::Ready)?
-            .with_capability(format!("{name}.e0.available"), CapabilityState::Available)
+        ComponentSnapshot::new(
+            name,
+            "0.1.0",
+            format!("{name}:snapshot:{index}"),
+            ComponentHealth::Ready,
+        )?
+        .with_capability(format!("{name}.e0.available"), CapabilityState::Available)
     })
     .collect::<Result<Vec<_>, _>>()?;
     if order_reversed {
@@ -188,9 +193,11 @@ fn status_reports_exact_state_without_claiming_a_check_passed() -> TestResult {
     assert_eq!(result.health(), ComponentHealth::Ready);
     assert_eq!(result.components().len(), 5);
     assert_eq!(result.deferred_operations().len(), 12);
-    assert!(result
-        .deferred_operations()
-        .contains(&DeferredOperation::Release));
+    assert!(
+        result
+            .deferred_operations()
+            .contains(&DeferredOperation::Release)
+    );
     assert_eq!(
         result
             .current_context()
@@ -221,14 +228,18 @@ fn full_check_preserves_all_raw_findings_and_structured_folding() -> TestResult 
     assert_eq!(result.presentation_graph().nodes().len(), 5);
     assert_eq!(result.presentation_graph().relations().len(), 1);
     assert_eq!(result.presentation_graph().display_root_ids().len(), 4);
-    assert!(result
-        .raw_findings()
-        .iter()
-        .any(|finding| matches!(finding, RawFinding::Generic(_))));
-    assert!(result
-        .rule_evaluations()
-        .iter()
-        .any(|evaluation| !evaluation.clean_records().is_empty()));
+    assert!(
+        result
+            .raw_findings()
+            .iter()
+            .any(|finding| matches!(finding, RawFinding::Generic(_)))
+    );
+    assert!(
+        result
+            .rule_evaluations()
+            .iter()
+            .any(|evaluation| !evaluation.clean_records().is_empty())
+    );
     Ok(())
 }
 

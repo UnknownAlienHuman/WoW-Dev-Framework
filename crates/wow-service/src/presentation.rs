@@ -2,7 +2,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
     CausalRelation, PresentationGraph, PresentationNode, PresentationNodeKind,
-    PresentationRelation, RawFinding, RuleEvaluation, ServiceError, ServiceErrorCode, ServiceResult,
+    PresentationRelation, RawFinding, RuleEvaluation, ServiceError, ServiceErrorCode,
+    ServiceResult,
 };
 
 pub(crate) fn build(
@@ -61,11 +62,7 @@ pub(crate) fn build(
                 "presentation relation references an unknown node",
             ));
         }
-        let key = (
-            relation.parent_id(),
-            relation.child_id(),
-            relation.kind(),
-        );
+        let key = (relation.parent_id(), relation.child_id(), relation.kind());
         if !observed.insert(key) {
             return Err(ServiceError::new(
                 ServiceErrorCode::InvalidContext,

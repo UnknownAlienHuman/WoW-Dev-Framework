@@ -16,7 +16,7 @@ mod operation;
 mod presentation;
 mod service;
 
-pub use backend::{OwnedServiceBackend, ServiceBackend};
+pub use backend::{OwnedServiceBackend, ServiceBackend, ServiceBackendStatus};
 pub use configuration::{
     DeferredOperation, ServiceBudgets, ServiceConfiguration, ServiceConfigurationBuilder,
 };
@@ -25,7 +25,7 @@ pub use model::{
     BlockerKind, CapabilityState, CausalRelation, CheckContext, CheckRequest, CheckScope,
     CleanEvaluation, ComponentHealth, ComponentSnapshot, ContextIdentity, ExactSourceLocation,
     FindingOrigin, GenerationSelector, GenericFinding, PresentationGraph, PresentationNode,
-    PresentationNodeKind, PresentationRelation, PresentationRelationKind, RawFinding,
+    PresentationNodeKind, PresentationRelation, PresentationRelationKind, RawFinding, RuleBlocker,
     RuleEvaluation, RuleEvaluationState, RuleFinding, ServiceSemanticStatus, StatusRequest,
 };
 pub use operation::{OperationId, OperationRegistrySnapshot};

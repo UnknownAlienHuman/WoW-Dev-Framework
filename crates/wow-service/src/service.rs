@@ -1,15 +1,13 @@
 use std::collections::BTreeSet;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::Serialize;
 
 use crate::backend::ServiceBackendStatus;
 use crate::configuration::{RESULT_SCHEMA, SERVICE_SCHEMA, SERVICE_VERSION};
 use crate::identity::canonical_digest;
-use crate::operation::{
-    CompletedResult, OperationKind, OperationRegistry, RegistryDecision,
-};
+use crate::operation::{CompletedResult, OperationKind, OperationRegistry, RegistryDecision};
 use crate::presentation;
 use crate::{
     CapabilityState, CheckContext, CheckRequest, CheckScope, ComponentHealth, ComponentSnapshot,
@@ -322,7 +320,7 @@ impl<B: ServiceBackend> Service<B> {
         cancelled: &AtomicBool,
     ) -> ServiceResult<CheckResult> {
         check_cancelled(cancelled, request.operation_id())?;
-        let mut context = self
+        let context = self
             .backend
             .acquire_context(request.selector(), request.scope())?;
         self.validate_context(&context, request)?;
@@ -355,7 +353,11 @@ impl<B: ServiceBackend> Service<B> {
             ));
         }
 
-        let semantic_status = derive_status(context.components(), context.rule_evaluations(), &raw_findings);
+        let semantic_status = derive_status(
+            context.components(),
+            context.rule_evaluations(),
+            &raw_findings,
+        );
         let presentation_graph = presentation::build(
             &raw_findings,
             context.rule_evaluations(),
@@ -364,12 +366,10 @@ impl<B: ServiceBackend> Service<B> {
         )?;
         check_cancelled(cancelled, request.operation_id())?;
 
-        context
-            .components
-            .sort_by(|left, right| left.component_id().cmp(right.component_id()));
-        context
-            .rule_evaluations
-            .sort_by(|left, right| left.evaluation_id().cmp(right.evaluation_id()));
+        let mut components = context.components().to_vec();
+        components.sort_by(|left, right| left.component_id().cmp(right.component_id()));
+        let mut rule_evaluations = context.rule_evaluations().to_vec();
+        rule_evaluations.sort_by(|left, right| left.evaluation_id().cmp(right.evaluation_id()));
 
         #[derive(Serialize)]
         struct Identity<'a> {
@@ -398,10 +398,10 @@ impl<B: ServiceBackend> Service<B> {
             semantic_status,
             context: context.identity(),
             selected_scope: context.selected_scope(),
-            components: context.components(),
+            components: &components,
             raw_findings: &raw_findings,
             presentation_graph: &presentation_graph,
-            rule_evaluations: context.rule_evaluations(),
+            rule_evaluations: &rule_evaluations,
             deferred_operations: self.configuration.deferred_operations(),
         };
         let result_id = canonical_digest("service-result:sha256:", &identity)?;
@@ -416,10 +416,10 @@ impl<B: ServiceBackend> Service<B> {
             semantic_status,
             context: context.identity().clone(),
             selected_scope: context.selected_scope().clone(),
-            components: context.components().to_vec(),
+            components,
             raw_findings,
             presentation_graph,
-            rule_evaluations: context.rule_evaluations().to_vec(),
+            rule_evaluations,
             deferred_operations: self.configuration.deferred_operations().to_vec(),
         })
     }
@@ -450,7 +450,11 @@ impl<B: ServiceBackend> Service<B> {
         Ok(())
     }
 
-    fn validate_context(&self, context: &CheckContext, request: &CheckRequest) -> ServiceResult<()> {
+    fn validate_context(
+        &self,
+        context: &CheckContext,
+        request: &CheckRequest,
+    ) -> ServiceResult<()> {
         self.validate_identity(context.identity())?;
         if context.selected_scope() != request.scope() {
             return Err(ServiceError::new(
@@ -496,11 +500,9 @@ impl<B: ServiceBackend> Service<B> {
                 .map(RuleEvaluation::evaluation_id),
             "rule evaluation identity",
         )?;
-        if context
-            .rule_evaluations()
-            .iter()
-            .any(|evaluation| evaluation.state() == RuleEvaluationState::Failed && !evaluation.degradable())
-        {
+        if context.rule_evaluations().iter().any(|evaluation| {
+            evaluation.state() == RuleEvaluationState::Failed && !evaluation.degradable()
+        }) {
             return Err(ServiceError::new(
                 ServiceErrorCode::ComponentUnavailable,
                 "mandatory rule evaluation failed",
@@ -545,10 +547,7 @@ fn ensure_required_components(components: &[ComponentSnapshot]) -> ServiceResult
     Ok(())
 }
 
-fn ensure_unique<'a>(
-    values: impl IntoIterator<Item = &'a str>,
-    label: &str,
-) -> ServiceResult<()> {
+fn ensure_unique<'a>(values: impl IntoIterator<Item = &'a str>, label: &str) -> ServiceResult<()> {
     let values = values.into_iter().collect::<Vec<_>>();
     if values.iter().copied().collect::<BTreeSet<_>>().len() != values.len() {
         return Err(ServiceError::new(

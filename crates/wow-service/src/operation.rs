@@ -191,9 +191,7 @@ impl OperationRegistry {
         })
     }
 
-    fn lock(
-        &self,
-    ) -> ServiceResult<std::sync::MutexGuard<'_, BTreeMap<Box<str>, RegistryEntry>>> {
+    fn lock(&self) -> ServiceResult<std::sync::MutexGuard<'_, BTreeMap<Box<str>, RegistryEntry>>> {
         self.entries.lock().map_err(|_| {
             ServiceError::new(
                 ServiceErrorCode::InternalContractViolation,

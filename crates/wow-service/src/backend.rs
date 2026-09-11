@@ -72,10 +72,7 @@ pub struct OwnedServiceBackend {
 }
 
 impl OwnedServiceBackend {
-    pub fn new(
-        status: ServiceBackendStatus,
-        contexts: Vec<CheckContext>,
-    ) -> ServiceResult<Self> {
+    pub fn new(status: ServiceBackendStatus, contexts: Vec<CheckContext>) -> ServiceResult<Self> {
         let mut by_generation = BTreeMap::new();
         for context in contexts {
             let generation = context.identity().project_generation_id().into();

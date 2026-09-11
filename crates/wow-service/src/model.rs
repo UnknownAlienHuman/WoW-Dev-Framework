@@ -75,20 +75,14 @@ impl ComponentSnapshot {
         Ok(self)
     }
 
-    pub fn with_last_known_good(
-        mut self,
-        identity: impl Into<Box<str>>,
-    ) -> ServiceResult<Self> {
+    pub fn with_last_known_good(mut self, identity: impl Into<Box<str>>) -> ServiceResult<Self> {
         let identity = identity.into();
         validate_identifier(&identity, "last-known-good identity")?;
         self.last_known_good_identity = Some(identity);
         Ok(self)
     }
 
-    pub fn with_failed_target(
-        mut self,
-        identity: impl Into<Box<str>>,
-    ) -> ServiceResult<Self> {
+    pub fn with_failed_target(mut self, identity: impl Into<Box<str>>) -> ServiceResult<Self> {
         let identity = identity.into();
         validate_identifier(&identity, "failed target identity")?;
         self.failed_target_identity = Some(identity);
@@ -329,10 +323,7 @@ impl ContextIdentityBuilder {
                 "project_generation_id",
             )?,
             project_snapshot_id: context_field(self.project_snapshot_id, "project_snapshot_id")?,
-            analyzer_snapshot_id: context_field(
-                self.analyzer_snapshot_id,
-                "analyzer_snapshot_id",
-            )?,
+            analyzer_snapshot_id: context_field(self.analyzer_snapshot_id, "analyzer_snapshot_id")?,
             analyzer_pin_id: context_field(self.analyzer_pin_id, "analyzer_pin_id")?,
             rule_registry_id: context_field(self.rule_registry_id, "rule_registry_id")?,
         })
@@ -341,10 +332,7 @@ impl ContextIdentityBuilder {
 
 fn context_field(value: Option<Box<str>>, field: &str) -> ServiceResult<Box<str>> {
     let value = value.ok_or_else(|| {
-        ServiceError::new(
-            ServiceErrorCode::InvalidContext,
-            format!("missing {field}"),
-        )
+        ServiceError::new(ServiceErrorCode::InvalidContext, format!("missing {field}"))
     })?;
     validate_identifier(&value, field)?;
     Ok(value)
