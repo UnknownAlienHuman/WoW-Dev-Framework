@@ -10,7 +10,7 @@ permissions:
 
 concurrency:
   group: workspace-integrity
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   verify:
@@ -27,6 +27,9 @@ jobs:
       - name: Prepare final tree
         run: |
           set -euo pipefail
+          echo '5fb9b6240f91ab98dba8e9a128996737ee0bd3ccebf476b269984429da8d4b46  .ci/workspace-integrity/fix-01.patch' | sha256sum --check --status
+          git apply .ci/workspace-integrity/fix-01.patch
+          rm -rf .ci/workspace-integrity
           rm .github/workflows/verify-workspace-integrity.yml
           cargo +stable generate-lockfile
           cargo +stable fmt --all
