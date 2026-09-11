@@ -35,9 +35,11 @@ jobs:
           echo '1ce30f8ecd1038e767fc8801a13b7355607466d5858591612a4897c048a7d9c3  '"$RUNNER_TEMP/rules-e0.tar.gz" | sha256sum --check --status
           echo '8d6ae8c5502526726d58e9db1ba4e934a48d8da3fd0fd9d6964a808312a78f14  .ci/materialize/rules-e0/fix-01.patch' | sha256sum --check --status
           echo 'dbfd0a2418d629d7e3fbcb3529457fc660047320a67861c24ab74bdeb4adf190  .ci/materialize/rules-e0/fix-02.patch' | sha256sum --check --status
+          echo '353be4da58521c9b1b071589ba36f41d913253ea0c45bf7f7cc9f01adcf7d96b  .ci/materialize/rules-e0/fix-03.patch' | sha256sum --check --status
           tar -xzf "$RUNNER_TEMP/rules-e0.tar.gz" -C .
           git apply .ci/materialize/rules-e0/fix-01.patch
           git apply .ci/materialize/rules-e0/fix-02.patch
+          git apply .ci/materialize/rules-e0/fix-03.patch
           rm -rf .ci/materialize/rules-e0
           rm .github/workflows/materialize-rules-e0.yml
           git add -A
