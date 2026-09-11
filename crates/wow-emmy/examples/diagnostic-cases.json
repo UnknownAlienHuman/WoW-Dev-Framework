@@ -1,19 +1,19 @@
 {
   "schema_version": 1,
   "case_set_id": "wow-emmy-e0-c-diagnostics-v1",
-  "state": "documentation-only-pending-upstream-probe-and-byte-freeze",
+  "state": "active-e0-fixture-freeze",
   "profile_id": "fixture-retail-120100-e0-v1",
   "project_generation_id": null,
   "analyzer_snapshot_id": null,
   "upstream_pin_id": null,
   "framework_category": "emmy.generic.fixture_error",
   "upstream_diagnostic_mapping": {
-    "code": null,
-    "name": null,
-    "upstream_severity": null,
-    "normalized_severity": null,
-    "rollout_policy": null,
-    "state": "must-be-frozen-by-compatibility-probe-before-first-rust-implementation"
+    "code": "assign-type-mismatch",
+    "name": "AssignTypeMismatch",
+    "upstream_severity": "warning",
+    "normalized_severity": "error",
+    "rollout_policy": "advisory",
+    "state": "frozen-e0"
   },
   "cases": [
     {
@@ -48,14 +48,14 @@
           "emmy.generic.fixture_error"
         ],
         "accepted_count": 1,
-        "upstream_code": null,
-        "upstream_code_freeze_required": true,
-        "normalized_severity": null,
-        "rollout_policy": null,
+        "upstream_code": "assign-type-mismatch",
+        "upstream_code_freeze_required": false,
+        "normalized_severity": "error",
+        "rollout_policy": "advisory",
         "primary_source_role": "Main",
         "primary_source_path": "main/generic-error.lua",
-        "primary_byte_span": null,
-        "primary_span_freeze_required": true,
+        "primary_byte_span": {"start": 22, "end": 27},
+        "primary_span_freeze_required": false,
         "content_digest_required": true,
         "structured_arguments_required": true,
         "rendered_message_is_identity": false,

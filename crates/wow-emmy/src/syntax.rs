@@ -1,4 +1,4 @@
-//! Exact-snapshot syntax diagnostics through the pinned upstream analyzer.
+//! Exact-snapshot accepted diagnostics through the pinned upstream analyzer.
 //!
 //! Upstream database, URI, LSP range, and diagnostic types remain private.
 //! Public spans are exact, end-exclusive UTF-8 byte ranges over snapshot text.
@@ -16,7 +16,7 @@ use crate::{LuaWorkspaceSnapshot, LuaWorkspaceUniverse};
 pub const EMMYLUA_REVISION: &str = "aaaca68425d9362876228649b0b8d92f07654daa";
 pub const EMMYLUA_TREE: &str = "9175c01384e650b9a5bd64da69c36f47dbeaaf67";
 pub const EMMYLUA_CODE_ANALYSIS_VERSION: &str = "0.25.1";
-pub(crate) const REPORT_SCHEMA: &str = "wow-emmy/syntax-diagnostics/1";
+pub(crate) const REPORT_SCHEMA: &str = "wow-emmy/diagnostics/2";
 pub(crate) const FRAMEWORK_CATEGORY: &str = "emmy.generic.fixture_error";
 pub(crate) const CAPABILITY_ID: &str = "emmy.file.diagnostics";
 pub(crate) const MAX_DIAGNOSTICS: usize = 65_536;
@@ -87,6 +87,7 @@ pub type EmmySyntaxResult<T> = Result<T, EmmySyntaxError>;
 pub enum EmmySyntaxDiagnosticKind {
     LuaSyntax,
     DocumentationSyntax,
+    AssignmentTypeMismatch,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
@@ -221,7 +222,7 @@ impl EmmySyntaxReport {
 }
 
 /// Builds one analyzer instance from exact supplied bytes and returns only the
-/// accepted Lua/doc syntax families. No source file is read or executed.
+/// accepted Lua syntax, documentation syntax, and frozen E0 generic families. No source file is read or executed.
 pub fn analyze_syntax(snapshot: &LuaWorkspaceSnapshot) -> EmmySyntaxResult<EmmySyntaxReport> {
     analyzer::analyze(snapshot)
 }

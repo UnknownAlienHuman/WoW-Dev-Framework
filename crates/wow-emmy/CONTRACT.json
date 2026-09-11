@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "contract_id": "wow-emmy/e0-c/1",
-  "state": "implementation-ready-documentation-no-rust-code",
+  "state": "implemented-e0-c-active",
   "work_package": "E0-C",
   "crate": "wow-emmy",
   "direct_framework_dependencies": [
@@ -17,8 +17,8 @@
   ],
   "upstream": {
     "repository": "EmmyLuaLs/emmylua-analyzer-rust",
-    "commit_sha": null,
-    "pin_state": "must-be-selected-and-probed-before-first-rust-implementation",
+    "commit_sha": "aaaca68425d9362876228649b0b8d92f07654daa",
+    "pin_state": "accepted-and-compiled",
     "historical_research_pin_is_not_automatic": true,
     "fork_policy": "no-default-fork",
     "compatibility_probe": "crates/wow-emmy/PIN_AND_PROBE.md"
@@ -226,8 +226,8 @@
   ],
   "generic_diagnostic": {
     "framework_category": "emmy.generic.fixture_error",
-    "upstream_diagnostic_code": null,
-    "mapping_state": "must-be-frozen-by-compatibility-probe-before-code-activation",
+    "upstream_diagnostic_code": "assign-type-mismatch",
+    "mapping_state": "frozen-e0",
     "message_text_is_identity": false,
     "default_rollout_requires_explicit_mapping": true
   },
