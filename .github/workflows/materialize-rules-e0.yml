@@ -28,7 +28,7 @@ jobs:
       - name: Materialize exact reviewed payload
         run: |
           set -euo pipefail
-          test "$(find .ci/materialize/rules-e0 -maxdepth 1 -name 'part-*' -type f | wc -l)" -eq 3
+          test "$(find .ci/materialize/rules-e0 -maxdepth 1 -name 'part-*' -type f | wc -l)" -eq 5
           cat .ci/materialize/rules-e0/part-* > "$RUNNER_TEMP/rules-e0.b64"
           echo 'b9582be5a4beb8fb9ec336494c3ade57ab96e66ade91a4554d4b54f477a6010e  '"$RUNNER_TEMP/rules-e0.b64" | sha256sum --check --status
           base64 --decode "$RUNNER_TEMP/rules-e0.b64" > "$RUNNER_TEMP/rules-e0.tar.gz"
