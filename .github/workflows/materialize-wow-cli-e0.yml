@@ -28,11 +28,17 @@ jobs:
       - name: Materialize exact reviewed implementation
         run: |
           set -euo pipefail
-          test "$(find .ci/materialize/wow-cli-e0 -maxdepth 1 -type f | wc -l)" -eq 5
+          count="$(find .ci/materialize/wow-cli-e0 -maxdepth 1 -type f | wc -l)"
+          printf 'payload files: %s\n' "$count"
+          test "$count" -eq 5
+          wc -c .ci/materialize/wow-cli-e0/0[0-4]
           cat .ci/materialize/wow-cli-e0/0[0-4] > "$RUNNER_TEMP/wow-cli-e0.b64"
-          echo 'b61f9ab9676449eb197d9ebf0d3faebfd8db6f25e2028b2ee9412b34853bf917  '"$RUNNER_TEMP/wow-cli-e0.b64" | sha256sum --check --status
+          sha256sum "$RUNNER_TEMP/wow-cli-e0.b64"
+          echo 'b61f9ab9676449eb197d9ebf0d3faebfd8db6f25e2028b2ee9412b34853bf917  '"$RUNNER_TEMP/wow-cli-e0.b64" | sha256sum --check
           base64 --decode "$RUNNER_TEMP/wow-cli-e0.b64" > "$RUNNER_TEMP/wow-cli-e0.tar.gz"
-          echo 'dca1cd74eae4908e8a564b8177f85b5438d93ee820283aafed961d67ed6843fb  '"$RUNNER_TEMP/wow-cli-e0.tar.gz" | sha256sum --check --status
+          sha256sum "$RUNNER_TEMP/wow-cli-e0.tar.gz"
+          echo 'dca1cd74eae4908e8a564b8177f85b5438d93ee820283aafed961d67ed6843fb  '"$RUNNER_TEMP/wow-cli-e0.tar.gz" | sha256sum --check
+          tar -tzf "$RUNNER_TEMP/wow-cli-e0.tar.gz"
           tar -xzf "$RUNNER_TEMP/wow-cli-e0.tar.gz" -C .
           rm -rf .ci/materialize/wow-cli-e0
           rm .github/workflows/materialize-wow-cli-e0.yml
