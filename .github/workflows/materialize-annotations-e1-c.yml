@@ -1,0 +1,66 @@
+name: Materialize wow-annotations E1-C
+
+on:
+  push:
+    branches:
+      - work/annotations-e1-c
+    paths:
+      - crates/wow-annotations/src/persistent.rs
+      - .github/workflows/materialize-annotations-e1-c.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: materialize-annotations-e1-c
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: true
+      - name: Install current stable Rust
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+      - name: Activate exact owner dependency
+        run: |
+          set -euo pipefail
+          sed -i '/^wow-store = { path = "\.\.\/wow-store" }$/d' crates/wow-annotations/Cargo.toml
+          sed -i '/^\[lints\]$/i wow-store = { path = "../wow-store" }\n' crates/wow-annotations/Cargo.toml
+          if ! grep -Fq 'pub mod persistent;' crates/wow-annotations/src/lib.rs; then
+            printf '\npub mod persistent;\n' >> crates/wow-annotations/src/lib.rs
+          fi
+          cargo +stable generate-lockfile
+          rm .github/workflows/materialize-annotations-e1-c.yml
+          git add -A
+      - name: Mechanical compiler cleanup
+        run: |
+          set -euo pipefail
+          cargo +stable fmt --all
+          cargo +stable fix --package wow-annotations --all-targets --all-features --allow-dirty --allow-staged
+          cargo +stable clippy --fix --package wow-annotations --all-targets --all-features --allow-dirty --allow-staged -- -D warnings
+          cargo +stable fmt --all
+      - name: Strict E1-C and repository gate
+        run: |
+          set -euo pipefail
+          cargo +stable check --workspace --all-targets --all-features
+          cargo +stable test --package wow-annotations --all-targets --all-features -- --nocapture
+          cargo +stable xtask check
+          cargo +stable check --locked --workspace --all-targets --all-features
+          cargo +stable clippy --locked --workspace --all-targets --all-features -- -D warnings
+          cargo +stable test --locked --workspace --all-targets --all-features
+          cargo +stable test --release --locked --workspace --all-targets --all-features
+          RUSTDOCFLAGS='-D warnings' cargo +stable doc --locked --workspace --all-features --no-deps
+          git diff --check
+      - name: Commit verified production tree
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git diff --cached --check
+          git commit -m 'feat(annotations): persist exact annotation artifacts'
+          git push origin HEAD:work/annotations-e1-c
