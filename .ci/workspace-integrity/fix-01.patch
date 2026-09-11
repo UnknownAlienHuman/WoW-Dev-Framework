@@ -11,7 +11,7 @@
      objects: Vec<PendingObject>,
 --- a/crates/wow-store/src/store.rs
 +++ b/crates/wow-store/src/store.rs
-@@ -6,7 +6,7 @@
+@@ -6,6 +6,6 @@
      CatalogChange, CatalogEntry, CatalogExpectation, CatalogMutation, CatalogName, CatalogPath,
      CommitReceipt, GarbageCollectionReceipt, IntegrityReport, LeaseId, LeaseRecord, LogicalEpoch,
      LogicalManifest, ObjectId, ObjectRecord, OperationBegin, OperationId, OperationRecord,
