@@ -37,7 +37,7 @@ jobs:
           echo 'cf8aee1e99cf0ec51c5ec82b2de039d1a62d74a814c86e3cf255c8a9392fe7b0  '"$RUNNER_TEMP/wow-cli-e0.b64" | sha256sum --check
           base64 --decode "$RUNNER_TEMP/wow-cli-e0.b64" > "$RUNNER_TEMP/wow-cli-e0.tar.gz"
           sha256sum "$RUNNER_TEMP/wow-cli-e0.tar.gz"
-          echo 'dca1cd74eae4908e8a564b8177f85b5438d93ee820283aafed961d67ed6843fb  '"$RUNNER_TEMP/wow-cli-e0.tar.gz" | sha256sum --check
+          echo '3f223328a8cb03965771d0c518de3ca503683c561e03e8ee78cd8a73399719f8  '"$RUNNER_TEMP/wow-cli-e0.tar.gz" | sha256sum --check
           tar -tzf "$RUNNER_TEMP/wow-cli-e0.tar.gz"
           tar -xzf "$RUNNER_TEMP/wow-cli-e0.tar.gz" -C .
           rm -rf .ci/materialize/wow-cli-e0
