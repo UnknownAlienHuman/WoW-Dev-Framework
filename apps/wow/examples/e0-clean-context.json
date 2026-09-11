@@ -1,0 +1,109 @@
+{
+  "schema": "wow-app/e0-input/1",
+  "configuration": {
+    "project_id": "project:fixture",
+    "profile_id": "profile:retail-e0",
+    "reference_generation_id": "reference:g1",
+    "analyzer_pin_id": "emmy:aaaca684",
+    "rule_registry_id": "rules:e0",
+    "budgets": null
+  },
+  "components": [
+    {
+      "component_id": "wow-core",
+      "producer_version": "0.1.0",
+      "exact_identity": "wow-core:snapshot:1",
+      "health": "ready",
+      "capabilities": {"wow-core.e0.available": "available"},
+      "last_known_good_identity": null,
+      "failed_target_identity": null
+    },
+    {
+      "component_id": "wow-reference",
+      "producer_version": "0.1.0",
+      "exact_identity": "wow-reference:snapshot:1",
+      "health": "ready",
+      "capabilities": {"wow-reference.e0.available": "available"},
+      "last_known_good_identity": null,
+      "failed_target_identity": null
+    },
+    {
+      "component_id": "wow-emmy",
+      "producer_version": "0.1.0",
+      "exact_identity": "wow-emmy:snapshot:1",
+      "health": "ready",
+      "capabilities": {"wow-emmy.e0.available": "available"},
+      "last_known_good_identity": null,
+      "failed_target_identity": null
+    },
+    {
+      "component_id": "wow-project",
+      "producer_version": "0.1.0",
+      "exact_identity": "wow-project:snapshot:1",
+      "health": "ready",
+      "capabilities": {"wow-project.e0.available": "available"},
+      "last_known_good_identity": null,
+      "failed_target_identity": null
+    },
+    {
+      "component_id": "wow-rules",
+      "producer_version": "0.1.0",
+      "exact_identity": "wow-rules:snapshot:1",
+      "health": "ready",
+      "capabilities": {"wow-rules.e0.available": "available"},
+      "last_known_good_identity": null,
+      "failed_target_identity": null
+    }
+  ],
+  "current_generation": "project-generation:g1",
+  "contexts": [
+    {
+      "project_generation_id": "project-generation:g1",
+      "project_snapshot_id": "project-snapshot:g1",
+      "analyzer_snapshot_id": "analyzer-snapshot:g1",
+      "scope": {"kind": "whole_project"},
+      "generic_findings": [],
+      "rule_evaluations": [
+        {
+          "evaluation_id": "evaluation:api:clean",
+          "rule_id": "wow.api.exists",
+          "scope_id": "scope:whole-project",
+          "state": "evaluated_clean",
+          "findings": [],
+          "clean_records": [
+            {
+              "record_id": "clean:api:whole-project",
+              "rule_id": "wow.api.exists",
+              "scope_id": "scope:whole-project",
+              "claim": "api_exists_for_exact_use",
+              "coverage_ids": ["coverage:api:complete"]
+            }
+          ],
+          "blocker": null,
+          "failure_code": null,
+          "degradable": false
+        },
+        {
+          "evaluation_id": "evaluation:secret:clean",
+          "rule_id": "wow.secret.local_operation",
+          "scope_id": "scope:whole-project",
+          "state": "evaluated_clean",
+          "findings": [],
+          "clean_records": [
+            {
+              "record_id": "clean:secret:whole-project",
+              "rule_id": "wow.secret.local_operation",
+              "scope_id": "scope:whole-project",
+              "claim": "secret_producer_has_no_matching_facet",
+              "coverage_ids": ["coverage:secret:complete"]
+            }
+          ],
+          "blocker": null,
+          "failure_code": null,
+          "degradable": false
+        }
+      ],
+      "causal_relations": []
+    }
+  ]
+}
