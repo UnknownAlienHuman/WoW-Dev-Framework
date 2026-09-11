@@ -1,0 +1,340 @@
+name: Recover and publish wow-service E0-F
+
+on:
+  push:
+    branches:
+      - work/service-e0
+    paths:
+      - .github/workflows/service-e0-recover-and-publish.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: recover-publish-service-e0
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Install current stable Rust
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+      - name: Rebase exact implementation tree onto current main
+        run: |
+          set -euo pipefail
+          git fetch origin main work/service-e0
+          base="$(git rev-parse origin/main)"
+          printf '%s\n' "$base" > "$RUNNER_TEMP/base-sha"
+          if git cat-file -e origin/main:crates/wow-service/src/service.rs 2>/dev/null; then
+            echo 'E0-F already exists in main; hardening the published tree'
+          else
+            test -f crates/wow-service/src/service.rs
+            cp -a crates/wow-service "$RUNNER_TEMP/wow-service"
+          fi
+          git checkout -B work/service-e0 origin/main
+          if ! test -f crates/wow-service/src/service.rs; then
+            rm -rf crates/wow-service
+            cp -a "$RUNNER_TEMP/wow-service" crates/wow-service
+          fi
+      - name: Normalize and harden exact E0-F contracts
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          root = Path('Cargo.toml')
+          text = root.read_text()
+          member = '    "crates/wow-service",\n'
+          if member not in text:
+              anchor = '    "crates/wow-rules",\n'
+              if anchor not in text:
+                  raise SystemExit('workspace member anchor not found')
+              root.write_text(text.replace(anchor, anchor + member, 1))
+
+          lib = Path('crates/wow-service/src/lib.rs')
+          text = lib.read_text()
+          text = text.replace(
+              'pub use backend::{OwnedServiceBackend, ServiceBackend};',
+              'pub use backend::{OwnedServiceBackend, ServiceBackend, ServiceBackendStatus};',
+          )
+          if 'RuleBlocker,' not in text:
+              text = text.replace('    RuleEvaluation,', '    RuleBlocker, RuleEvaluation,', 1)
+          lib.write_text(text)
+
+          backend = Path('crates/wow-service/src/backend.rs')
+          backend.write_text(backend.read_text().replace(
+              'let generation = context.identity().project_generation_id().into();',
+              'let generation: Box<str> = context.identity().project_generation_id().into();',
+          ))
+
+          operation = Path('crates/wow-service/src/operation.rs')
+          operation.write_text(operation.read_text().replace(
+              'matches!(entry.state, RegistryState::InProgress)',
+              'matches!(&entry.state, RegistryState::InProgress)',
+          ))
+
+          model = Path('crates/wow-service/src/model.rs')
+          text = model.read_text()
+          text = text.replace('#[allow(clippy::too_many_arguments)]\n    fn build(', '    fn build(')
+          text = text.replace(
+              'pub enum ServiceResultEnvelope {\n    Status(StatusResult),\n    Check(CheckResult),\n}',
+              'pub enum ServiceResultEnvelope {\n    Status(Box<StatusResult>),\n    Check(Box<CheckResult>),\n}',
+          )
+          model.write_text(text)
+
+          service = Path('crates/wow-service/src/service.rs')
+          text = service.read_text().replace('let mut context = self', 'let context = self')
+          text = re.sub(
+              r'\n\s*context\s*\.components\s*\.sort_by\(\|left, right\| left\.component_id\(\)\.cmp\(right\.component_id\(\)\)\);\s*'
+              r'context\s*\.rule_evaluations\s*\.sort_by\(\|left, right\| left\.evaluation_id\(\)\.cmp\(right\.evaluation_id\(\)\)\);',
+              '\n        let mut components = context.components().to_vec();\n'
+              '        components.sort_by(|left, right| left.component_id().cmp(right.component_id()));\n'
+              '        let mut rule_evaluations = context.rule_evaluations().to_vec();\n'
+              '        rule_evaluations.sort_by(|left, right| left.evaluation_id().cmp(right.evaluation_id()));',
+              text,
+              count=1,
+          )
+          text = text.replace('components: context.components(),', 'components: &components,')
+          text = text.replace('rule_evaluations: context.rule_evaluations(),', 'rule_evaluations: &rule_evaluations,')
+          text = text.replace('components: context.components().to_vec(),', 'components,')
+          text = text.replace('rule_evaluations: context.rule_evaluations().to_vec(),', 'rule_evaluations,')
+          text = text.replace(
+              '.any(|state| *state == CapabilityState::Partial)',
+              '.any(|state| *state != CapabilityState::Available)',
+          )
+          text = text.replace(
+              'count > usize::try_from(self.configuration.budgets().max_scope_files).unwrap_or(0)',
+              'count > limit(self.configuration.budgets().max_scope_files)',
+          )
+          for field in ('max_components', 'max_generic_findings', 'max_rule_evaluations', 'max_raw_findings'):
+              text = text.replace(f'limit(self.configuration.budgets().{field})?', f'limit(self.configuration.budgets().{field})')
+          text = re.sub(
+              r'fn limit\(value: u32\) -> ServiceResult<usize> \{.*?\n\}',
+              'const fn limit(value: u32) -> usize {\n    value as usize\n}',
+              text,
+              flags=re.S,
+          )
+          text = text.replace(
+              'if names.len() != components.len()\n        || REQUIRED_COMPONENTS',
+              'if names.len() != components.len()\n        || names.len() != REQUIRED_COMPONENTS.len()\n        || REQUIRED_COMPONENTS',
+          )
+          mandatory = '''        if context.components().iter().any(|component| {
+              matches!(
+                  component.health(),
+                  ComponentHealth::Failed | ComponentHealth::Unavailable
+              )
+          }) {
+              return Err(ServiceError::new(
+                  ServiceErrorCode::ComponentUnavailable,
+                  "mandatory E0 component is failed or unavailable",
+              ));
+          }
+  '''
+          marker = '        ensure_required_components(context.components())?;\n'
+          if mandatory.strip() not in text and marker in text:
+              text = text.replace(marker, marker + mandatory, 1)
+          service.write_text(text)
+
+          Path('crates/wow-service/src/presentation.rs').write_text(r'''use std::collections::{BTreeMap, BTreeSet};
+
+use crate::{
+    CausalRelation, PresentationGraph, PresentationNode, PresentationNodeKind,
+    PresentationRelation, RawFinding, RuleEvaluation, ServiceError, ServiceErrorCode, ServiceResult,
+};
+
+pub(crate) fn build(
+    raw_findings: &[RawFinding],
+    evaluations: &[RuleEvaluation],
+    relations: &[CausalRelation],
+    relation_budget: u32,
+) -> ServiceResult<PresentationGraph> {
+    if relations.len() > relation_budget as usize {
+        return Err(ServiceError::new(
+            ServiceErrorCode::BudgetExceeded,
+            "presentation relation budget exceeded",
+        ));
+    }
+    let mut nodes = BTreeMap::<Box<str>, PresentationNodeKind>::new();
+    for finding in raw_findings {
+        if nodes
+            .insert(finding.finding_id().into(), PresentationNodeKind::Finding)
+            .is_some()
+        {
+            return Err(ServiceError::new(
+                ServiceErrorCode::InvalidContext,
+                "duplicate raw finding identity",
+            ));
+        }
+    }
+    for evaluation in evaluations {
+        if let Some(blocker) = evaluation.blocker()
+            && nodes
+                .insert(blocker.blocker_id().into(), PresentationNodeKind::Blocker)
+                .is_some()
+        {
+            return Err(ServiceError::new(
+                ServiceErrorCode::InvalidContext,
+                "blocker identity collides with another presentation node",
+            ));
+        }
+    }
+    let mut observed = BTreeSet::new();
+    let mut children = BTreeSet::<Box<str>>::new();
+    let mut edges = BTreeMap::<Box<str>, Vec<Box<str>>>::new();
+    let mut output_relations = Vec::with_capacity(relations.len());
+    for relation in relations {
+        if !nodes.contains_key(relation.parent_id()) || !nodes.contains_key(relation.child_id()) {
+            return Err(ServiceError::new(
+                ServiceErrorCode::InvalidContext,
+                "presentation relation references an unknown node",
+            ));
+        }
+        let key = (relation.parent_id(), relation.child_id(), relation.kind());
+        if !observed.insert(key) {
+            return Err(ServiceError::new(
+                ServiceErrorCode::InvalidContext,
+                "duplicate presentation relation",
+            ));
+        }
+        children.insert(relation.child_id().into());
+        edges
+            .entry(relation.parent_id().into())
+            .or_default()
+            .push(relation.child_id().into());
+        output_relations.push(PresentationRelation::from_relation(relation));
+    }
+    ensure_acyclic(&nodes, &edges)?;
+    let output_nodes = nodes
+        .iter()
+        .map(|(node_id, kind)| PresentationNode::new(node_id.clone(), *kind))
+        .collect::<Vec<_>>();
+    let display_root_ids = nodes
+        .keys()
+        .filter(|node_id| !children.contains(*node_id))
+        .cloned()
+        .collect::<Vec<_>>();
+    output_relations.sort();
+    Ok(PresentationGraph::new(output_nodes, display_root_ids, output_relations))
+}
+
+fn ensure_acyclic(
+    nodes: &BTreeMap<Box<str>, PresentationNodeKind>,
+    edges: &BTreeMap<Box<str>, Vec<Box<str>>>,
+) -> ServiceResult<()> {
+    let mut indegrees = nodes
+        .keys()
+        .map(|node| (node.clone(), 0usize))
+        .collect::<BTreeMap<_, _>>();
+    for children in edges.values() {
+        for child in children {
+            let indegree = indegrees.get_mut(child.as_ref()).ok_or_else(|| {
+                ServiceError::new(
+                    ServiceErrorCode::InvalidContext,
+                    "presentation edge references an unknown child",
+                )
+            })?;
+            *indegree = indegree.checked_add(1).ok_or_else(|| {
+                ServiceError::new(
+                    ServiceErrorCode::BudgetExceeded,
+                    "presentation indegree overflow",
+                )
+            })?;
+        }
+    }
+    let mut ready = indegrees
+        .iter()
+        .filter_map(|(node, indegree)| (*indegree == 0).then_some(node.clone()))
+        .collect::<BTreeSet<_>>();
+    let mut visited = 0usize;
+    while let Some(node) = ready.pop_first() {
+        visited += 1;
+        if let Some(children) = edges.get(node.as_ref()) {
+            for child in children {
+                let indegree = indegrees.get_mut(child.as_ref()).ok_or_else(|| {
+                    ServiceError::new(
+                        ServiceErrorCode::InvalidContext,
+                        "presentation edge references an unknown child",
+                    )
+                })?;
+                *indegree -= 1;
+                if *indegree == 0 {
+                    ready.insert(child.clone());
+                }
+            }
+        }
+    }
+    if visited != indegrees.len() {
+        return Err(ServiceError::new(
+            ServiceErrorCode::InvalidContext,
+            "presentation graph contains a cycle",
+        ));
+    }
+    Ok(())
+}
+''')
+
+          agents = Path('crates/wow-service/AGENTS.md')
+          agents.write_text(agents.read_text().replace(
+              'planned service documentation: complete through E7-B\nservice implementation: not started\nfirst service implementation package: I0-F / E0-F\nrepository next package: I0-A / wow-core E0-A',
+              'planned service documentation: complete through E7-B\nservice implementation: E0-F active\nactive operations: status and check\nnext service package: E1-D after prerequisite owner packages',
+          ))
+          overview = Path('crates/wow-service/E0_F_OVERVIEW.md')
+          text = overview.read_text().replace(
+              '**Status:** E0-F implementation-ready contract; no Rust code yet. Only `status` and `check` activate in E0.',
+              '**Status:** E0-F implemented and active. Only `status` and `check` are available in E0.',
+          )
+          overview.write_text(
+              text.replace('- No `Cargo.toml` or Rust source in this documentation phase.\n', '')
+                  .replace('- No CI.\n', '')
+          )
+          contract = Path('crates/wow-service/CONTRACT.json')
+          contract.write_text(contract.read_text().replace(
+              '"state": "implementation-ready-documentation-no-rust-code"',
+              '"state": "implemented-e0-f-active"',
+          ))
+          PY
+          rm -rf .ci/service-e0
+          find .github/workflows -maxdepth 1 -type f -name '*service-e0*.yml' -delete
+          rm -f .github/workflows/export-service-fragments.yml
+      - name: Compiler-assisted cleanup
+        run: |
+          set -euo pipefail
+          cargo +stable fmt --all
+          cargo +stable fix --workspace --all-targets --all-features --allow-dirty --allow-staged
+          cargo +stable clippy --fix --workspace --all-targets --all-features --allow-dirty --allow-staged -- -D warnings
+          cargo +stable fmt --all
+      - name: Strict repository gate
+        run: |
+          set -euo pipefail
+          cargo +stable xtask check
+          cargo +stable check --workspace --all-targets --all-features
+          cargo +stable test --workspace --all-targets --all-features
+          cargo +stable test --release --workspace --all-targets --all-features
+          cargo +stable check --locked --workspace --all-targets --all-features
+          cargo +stable clippy --locked --workspace --all-targets --all-features -- -D warnings
+          RUSTDOCFLAGS='-D warnings' cargo +stable doc --locked --workspace --all-features --no-deps
+          git diff --check
+      - name: Publish fast-forward commit
+        run: |
+          set -euo pipefail
+          base="$(cat "$RUNNER_TEMP/base-sha")"
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = "$base" || {
+            echo 'main changed during verification; refusing stale publication' >&2
+            exit 1
+          }
+          git config user.name 'Iurii Lisenkov'
+          git config user.email '71514792+UnknownAlienHuman@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          git commit -m 'feat(service): implement exact E0-F status and check operations'
+          commit="$(git rev-parse HEAD)"
+          git push origin "$commit":refs/heads/main
+          git push --force origin "$commit":refs/heads/work/service-e0
