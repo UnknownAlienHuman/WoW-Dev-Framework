@@ -1,0 +1,135 @@
+name: Materialize wow-service E0-F
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/materialize-service-e0.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: materialize-service-e0
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: true
+          fetch-depth: 0
+      - name: Install current stable Rust
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+      - name: Materialize staged package
+        run: |
+          set -euo pipefail
+          test "$(find .ci/materialize/service-e0 -type f | wc -l)" -eq 10
+          mkdir -p crates/wow-service/src crates/wow-service/tests
+          cp .ci/materialize/service-e0/Cargo.toml crates/wow-service/Cargo.toml
+          cp .ci/materialize/service-e0/README.md crates/wow-service/README.md
+          cp .ci/materialize/service-e0/IMPLEMENTATION_STATUS.md crates/wow-service/IMPLEMENTATION_STATUS.md
+          cp .ci/materialize/service-e0/src/*.rs crates/wow-service/src/
+          cp .ci/materialize/service-e0/tests/*.rs crates/wow-service/tests/
+          python3 - <<'PY'
+          from pathlib import Path
+          import copy
+          import json
+
+          cargo = Path('Cargo.toml')
+          text = cargo.read_text(encoding='utf-8')
+          if '"crates/wow-service"' not in text:
+              marker = '    "crates/wow-rules",\n'
+              if marker not in text:
+                  raise SystemExit('wow-rules workspace marker missing')
+              text = text.replace(marker, marker + '    "crates/wow-service",\n')
+              cargo.write_text(text, encoding='utf-8')
+
+          manifest = Path('crates/MANIFEST.json')
+          data = json.loads(manifest.read_text(encoding='utf-8'))
+          found = []
+
+          def visit(node):
+              if isinstance(node, list):
+                  for index, item in enumerate(node):
+                      if isinstance(item, dict) and any(
+                          item.get(key) == 'wow-rules'
+                          for key in ('name', 'id', 'crate', 'package')
+                      ):
+                          found.append((node, index, item))
+                      visit(item)
+              elif isinstance(node, dict):
+                  for value in node.values():
+                      visit(value)
+
+          visit(data)
+          if len(found) != 1:
+              raise SystemExit(f'expected one wow-rules manifest record, got {len(found)}')
+          container, index, record = found[0]
+          already = any(
+              isinstance(item, dict)
+              and any(item.get(key) == 'wow-service' for key in ('name', 'id', 'crate', 'package'))
+              for item in container
+          )
+          if not already:
+              new = copy.deepcopy(record)
+
+              def rewrite(value):
+                  if isinstance(value, str):
+                      return (
+                          value.replace('wow-rules', 'wow-service')
+                          .replace('E0-E', 'E0-F')
+                          .replace('Rules', 'Service')
+                          .replace('rules', 'service')
+                      )
+                  if isinstance(value, list):
+                      return [rewrite(item) for item in value]
+                  if isinstance(value, dict):
+                      return {key: rewrite(item) for key, item in value.items()}
+                  return value
+
+              new = rewrite(new)
+              for key in list(new):
+                  if 'depend' in key.lower() and isinstance(new[key], list):
+                      new[key] = ['wow-core', 'wow-project', 'wow-reference', 'wow-rules']
+              for key in ('description', 'summary', 'purpose'):
+                  if key in new and isinstance(new[key], str):
+                      new[key] = (
+                          'Versioned E0-F operations and atomic immutable service snapshots '
+                          'over project, Reference, and rules evidence.'
+                      )
+              container.insert(index + 1, new)
+          manifest.write_text(json.dumps(data, indent=2) + '\n', encoding='utf-8')
+          PY
+      - name: Resolve lockfile and apply machine-safe formatting
+        run: |
+          set -euo pipefail
+          cargo +stable fmt --all
+          cargo +stable check --workspace --all-targets --all-features
+          cargo +stable clippy --fix --package wow-service --all-targets --all-features --allow-dirty --allow-staged -- -D warnings
+          cargo +stable fmt --all
+      - name: Run release-grade workspace gate
+        run: |
+          set -euo pipefail
+          cargo +stable xtask check
+          cargo +stable fmt --all --check
+          cargo +stable check --locked --workspace --all-targets --all-features
+          cargo +stable test --locked --workspace --all-targets --all-features
+          cargo +stable test --release --locked --package wow-service --all-targets --all-features
+          cargo +stable clippy --locked --workspace --all-targets --all-features -- -D warnings
+          RUSTDOCFLAGS='-D warnings' cargo +stable doc --locked --workspace --all-features --no-deps
+          git diff --check
+      - name: Commit verified package and remove staging machinery
+        run: |
+          set -euo pipefail
+          rm -rf .ci/materialize/service-e0
+          rm .github/workflows/materialize-service-e0.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A Cargo.toml Cargo.lock crates/MANIFEST.json crates/wow-service .ci/materialize/service-e0 .github/workflows/materialize-service-e0.yml
+          git diff --cached --check
+          git commit -m 'feat(service): activate versioned E0-F operations'
+          git push origin HEAD:main
