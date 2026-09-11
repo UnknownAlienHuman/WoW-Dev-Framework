@@ -11,3 +11,4 @@ serde = { version = "1.0.228", features = ["derive"] }
 serde_json = { version = "1.0.150", features = ["arbitrary_precision"] }
 sha2 = "0.11.0"
 wow-core = { path = "../wow-core" }
+wow-store = { path = "../wow-store" }

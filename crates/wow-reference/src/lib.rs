@@ -19,3 +19,5 @@ pub mod native_model;
 pub mod native_corrections;
 
 pub mod native_aliases;
+pub mod persistent;
+pub mod publication;

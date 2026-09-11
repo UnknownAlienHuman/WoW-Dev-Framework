@@ -13,4 +13,5 @@ pub mod literals;
 pub mod aliases;
 pub mod native;
 pub mod navigation;
+pub mod persistent;
 pub mod selected_literals;
