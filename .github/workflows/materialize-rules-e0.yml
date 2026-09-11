@@ -33,7 +33,9 @@ jobs:
           echo 'b9582be5a4beb8fb9ec336494c3ade57ab96e66ade91a4554d4b54f477a6010e  '"$RUNNER_TEMP/rules-e0.b64" | sha256sum --check --status
           base64 --decode "$RUNNER_TEMP/rules-e0.b64" > "$RUNNER_TEMP/rules-e0.tar.gz"
           echo '1ce30f8ecd1038e767fc8801a13b7355607466d5858591612a4897c048a7d9c3  '"$RUNNER_TEMP/rules-e0.tar.gz" | sha256sum --check --status
+          echo '8d6ae8c5502526726d58e9db1ba4e934a48d8da3fd0fd9d6964a808312a78f14  .ci/materialize/rules-e0/fix-01.patch' | sha256sum --check --status
           tar -xzf "$RUNNER_TEMP/rules-e0.tar.gz" -C .
+          git apply .ci/materialize/rules-e0/fix-01.patch
           rm -rf .ci/materialize/rules-e0
           rm .github/workflows/materialize-rules-e0.yml
           git add -A
@@ -52,7 +54,7 @@ jobs:
         run: |
           set -euo pipefail
           git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git config user.email 41898282+UnknownAlienHuman@users.noreply.github.com
           git add -A
           git diff --cached --check
           git commit -m 'feat(rules): implement exact E0-E diagnostic providers'
