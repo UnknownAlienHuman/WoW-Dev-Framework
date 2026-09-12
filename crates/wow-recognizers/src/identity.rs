@@ -70,7 +70,12 @@ fn digest_id(value: &str, prefix: &str) -> bool {
 
 text_id!(RecognizerId, "recognizer id", 256, component);
 text_id!(RecognizerVersion, "recognizer version", 128, component);
-text_id!(StructuredObservationId, "observation id", 128, observation_id);
+text_id!(
+    StructuredObservationId,
+    "observation id",
+    128,
+    observation_id
+);
 text_id!(RecognitionAssertionId, "assertion id", 128, assertion_id);
 text_id!(RecognitionReportId, "report id", 128, report_id);
 text_id!(RecognizerRegistryId, "registry id", 128, registry_id);
