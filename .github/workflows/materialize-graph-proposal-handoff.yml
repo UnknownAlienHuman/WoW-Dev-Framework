@@ -34,8 +34,10 @@ jobs:
           base64 --decode "$RUNNER_TEMP/graph-proposal-handoff.b64" > "$RUNNER_TEMP/graph-proposal-handoff.tar.gz"
           echo 'db99d327d4f364cfb0dee0802c78c4236ae1eeea0d3558fff9c05a2c13196f47  '"$RUNNER_TEMP/graph-proposal-handoff.tar.gz" | sha256sum --check --status
           echo '74e07203aa5a5089999d10f85b574d611ca62675025faa9a0ea4388ec8c2426b  .ci/materialize/graph-proposal-handoff/fix-01.patch' | sha256sum --check --status
+          echo '634f707ec1310d00fef58fca20d35b5be2b35cee476a8c5689ef5f2205f10f6d  .ci/materialize/graph-proposal-handoff/fix-02.patch' | sha256sum --check --status
           tar -xzf "$RUNNER_TEMP/graph-proposal-handoff.tar.gz" -C .
           git apply .ci/materialize/graph-proposal-handoff/fix-01.patch
+          git apply .ci/materialize/graph-proposal-handoff/fix-02.patch
           rm -rf .ci/materialize/graph-proposal-handoff
           rm .github/workflows/materialize-graph-proposal-handoff.yml
           git add -A
