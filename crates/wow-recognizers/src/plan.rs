@@ -201,7 +201,9 @@ impl CompiledRecognizerPlan {
 
     pub fn validate(&self) -> RecognizerResult<()> {
         if self.schema.as_ref() != RECOGNIZER_PLAN_SCHEMA
-            || !self.source_pack_digest.starts_with("recognizer-pack:sha256:")
+            || !self
+                .source_pack_digest
+                .starts_with("recognizer-pack:sha256:")
             || self.rules.is_empty()
         {
             return Err(RecognizerError::new(
@@ -268,7 +270,10 @@ impl RecognizerPlanBounds {
             .fact_scans
             .checked_add(rule.fact_scans)
             .ok_or_else(plan_overflow)?;
-        self.joins = self.joins.checked_add(rule.joins).ok_or_else(plan_overflow)?;
+        self.joins = self
+            .joins
+            .checked_add(rule.joins)
+            .ok_or_else(plan_overflow)?;
         self.predicates = self
             .predicates
             .checked_add(rule.predicates)
@@ -319,13 +324,7 @@ pub fn compile_recognizer_plan(
     let mut aggregate = RecognizerPlanBounds::zero();
     for rule in &document.pack.rules {
         let mut steps = Vec::new();
-        flatten_clauses(
-            &rule.rule_id,
-            rule.version,
-            &rule.clauses,
-            &[],
-            &mut steps,
-        )?;
+        flatten_clauses(&rule.rule_id, rule.version, &rule.clauses, &[], &mut steps)?;
         steps.sort_by(|left, right| {
             (left.cost_class, left.clause_path.as_slice())
                 .cmp(&(right.cost_class, right.clause_path.as_slice()))
@@ -572,16 +571,10 @@ fn rule_bounds(
             RecognizerPlanCostClass::BooleanComposite
             | RecognizerPlanCostClass::PositiveExistence
             | RecognizerPlanCostClass::NegativeExistence => {
-                bounds.composites = bounds
-                    .composites
-                    .checked_add(1)
-                    .ok_or_else(plan_overflow)?;
+                bounds.composites = bounds.composites.checked_add(1).ok_or_else(plan_overflow)?;
             }
             _ => {
-                bounds.predicates = bounds
-                    .predicates
-                    .checked_add(1)
-                    .ok_or_else(plan_overflow)?;
+                bounds.predicates = bounds.predicates.checked_add(1).ok_or_else(plan_overflow)?;
             }
         }
     }
@@ -621,7 +614,10 @@ fn validate_rule_plan(rule: &CompiledRecognizerRulePlan) -> RecognizerResult<()>
             ));
         }
         previous = Some(key);
-        if step.required_aliases.windows(2).any(|pair| pair[0] >= pair[1])
+        if step
+            .required_aliases
+            .windows(2)
+            .any(|pair| pair[0] >= pair[1])
             || step
                 .required_capabilities
                 .windows(2)
@@ -678,7 +674,11 @@ fn step_id(
         kind,
     })
     .map_err(|_| plan_identity_error())?;
-    Ok(format!("recognizer-plan-step:sha256:{}", hex(&Sha256::digest(bytes))).into_boxed_str())
+    Ok(format!(
+        "recognizer-plan-step:sha256:{}",
+        hex(&Sha256::digest(bytes))
+    )
+    .into_boxed_str())
 }
 
 fn plan_id(

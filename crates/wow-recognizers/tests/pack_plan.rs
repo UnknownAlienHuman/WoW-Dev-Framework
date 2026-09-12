@@ -98,7 +98,9 @@ fn document() -> RecognizerPackDocument {
     }
 }
 
-fn compiled_pack(document: &RecognizerPackDocument) -> TestResult<wow_recognizers::CompiledRecognizerPack> {
+fn compiled_pack(
+    document: &RecognizerPackDocument,
+) -> TestResult<wow_recognizers::CompiledRecognizerPack> {
     Ok(parse_recognizer_pack(&canonical_json_bytes(document)?)?)
 }
 
@@ -108,14 +110,20 @@ fn plan_is_content_addressed_ordered_and_resource_bounded() -> TestResult {
     let plan = compile_recognizer_plan(&pack)?;
     let repeated = compile_recognizer_plan(&pack)?;
     assert_eq!(plan, repeated);
-    assert!(plan.plan_id().as_str().starts_with("recognizer-plan:sha256:"));
+    assert!(
+        plan.plan_id()
+            .as_str()
+            .starts_with("recognizer-plan:sha256:")
+    );
     assert_eq!(plan.source_pack_digest(), pack.pack_digest());
     assert_eq!(plan.rules().len(), 1);
     let rule = &plan.rules()[0];
     assert_eq!(rule.rule_id(), "core.direct-call-plan");
     assert_eq!(rule.rule_version(), 1);
-    assert_eq!(rule.capture_names(), ["member"]);
-    assert_eq!(rule.output_ids(), ["called_member"]);
+    assert_eq!(rule.capture_names().len(), 1);
+    assert_eq!(rule.capture_names()[0].as_ref(), "member");
+    assert_eq!(rule.output_ids().len(), 1);
+    assert_eq!(rule.output_ids()[0].as_ref(), "called_member");
     let costs = rule
         .evaluation_order()
         .iter()
@@ -152,9 +160,15 @@ fn nested_clause_paths_and_step_ids_are_unique() -> TestResult {
     assert!(paths.contains(&vec![4, 1, 0]));
     let negative = steps
         .iter()
-        .find(|step| step.required_capabilities() == ["reference.api.complete"])
+        .find(|step| {
+            step.required_capabilities().len() == 1
+                && step.required_capabilities()[0].as_ref() == "reference.api.complete"
+        })
         .ok_or("negative-existence step")?;
-    assert_eq!(negative.cost_class(), RecognizerPlanCostClass::NegativeExistence);
+    assert_eq!(
+        negative.cost_class(),
+        RecognizerPlanCostClass::NegativeExistence
+    );
     Ok(())
 }
 
