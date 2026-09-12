@@ -25,6 +25,8 @@ jobs:
       - name: Materialize final tree
         run: |
           set -euo pipefail
+          git apply .ci/recognizers-fact-bundle/fix-01.patch
+          rm -rf .ci/recognizers-fact-bundle
           rm .github/workflows/finalize-recognizers-fact-bundle.yml
           cargo +stable fmt --all
           git add -A
