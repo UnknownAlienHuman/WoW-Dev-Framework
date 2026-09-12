@@ -1,0 +1,10 @@
+--- a/crates/wow-reference/src/persistent.rs
++++ b/crates/wow-reference/src/persistent.rs
+@@ -5,6 +5,8 @@
+ 
+ use std::fmt;
+ 
++#[cfg(test)]
++use serde::de::DeserializeOwned;
+ use serde::Serialize;
+ use wow_store::{
