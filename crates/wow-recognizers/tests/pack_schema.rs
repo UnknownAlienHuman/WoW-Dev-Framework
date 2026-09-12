@@ -87,7 +87,11 @@ fn canonical_pack_compiles_and_round_trips_identity() -> TestResult {
     let document = valid_document();
     let bytes = canonical(&document)?;
     let compiled = parse_recognizer_pack(&bytes)?;
-    assert!(compiled.pack_digest().starts_with("recognizer-pack:sha256:"));
+    assert!(
+        compiled
+            .pack_digest()
+            .starts_with("recognizer-pack:sha256:")
+    );
     assert_eq!(compiled.document(), &document);
     compiled.validate()?;
     let encoded = serde_json::to_vec(&compiled)?;
@@ -103,7 +107,10 @@ fn noncanonical_json_unknown_fields_null_and_floats_fail_closed() -> TestResult 
     let mut padded = canonical.clone();
     padded.push(b'\n');
     assert_eq!(
-        parse_recognizer_pack(&padded).err().ok_or("padded pack must fail")?.code(),
+        parse_recognizer_pack(&padded)
+            .err()
+            .ok_or("padded pack must fail")?
+            .code(),
         RecognizerErrorCode::PackNonCanonical
     );
 
@@ -150,7 +157,8 @@ fn duplicate_rules_unsorted_ids_and_excessive_budgets_are_rejected() -> TestResu
     );
 
     let mut document = valid_document();
-    document.pack.rules[0].required_capabilities = vec!["z.capability".into(), "a.capability".into()];
+    document.pack.rules[0].required_capabilities =
+        vec!["z.capability".into(), "a.capability".into()];
     assert_eq!(
         parse_recognizer_pack(&canonical(&document)?)
             .err()
@@ -174,13 +182,15 @@ fn duplicate_rules_unsorted_ids_and_excessive_budgets_are_rejected() -> TestResu
 #[test]
 fn negative_clause_requires_declared_complete_coverage() -> TestResult {
     let mut document = valid_document();
-    document.pack.rules[0].clauses.push(RecognizerClause::NotExists {
-        clauses: vec![RecognizerClause::FieldEq {
-            field: "call.member".into(),
-            value: RecognizerPackLiteral::String("Removed".into()),
-        }],
-        required_complete_capability: "reference.api.complete".into(),
-    });
+    document.pack.rules[0]
+        .clauses
+        .push(RecognizerClause::NotExists {
+            clauses: vec![RecognizerClause::FieldEq {
+                field: "call.member".into(),
+                value: RecognizerPackLiteral::String("Removed".into()),
+            }],
+            required_complete_capability: "reference.api.complete".into(),
+        });
     assert_eq!(
         parse_recognizer_pack(&canonical(&document)?)
             .err()

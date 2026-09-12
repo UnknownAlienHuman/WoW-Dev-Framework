@@ -347,13 +347,7 @@ fn validate_rule(rule: &RecognizerRule, budgets: &RecognizerPackBudgets) -> Reco
 
     let mut aliases = BTreeSet::new();
     let mut clause_count = 0usize;
-    collect_aliases(
-        &rule.clauses,
-        1,
-        budgets,
-        &mut aliases,
-        &mut clause_count,
-    )?;
+    collect_aliases(&rule.clauses, 1, budgets, &mut aliases, &mut clause_count)?;
     validate_clauses(
         &rule.clauses,
         1,
@@ -627,17 +621,20 @@ fn validate_component(value: &str, code: RecognizerErrorCode) -> RecognizerResul
             byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-' | b':' | b'@')
         })
     {
-        return Err(RecognizerError::new(code, "recognizer pack component is invalid"));
+        return Err(RecognizerError::new(
+            code,
+            "recognizer pack component is invalid",
+        ));
     }
     Ok(())
 }
 
 fn validate_text(value: &str, code: RecognizerErrorCode) -> RecognizerResult<()> {
-    if value.is_empty()
-        || value.len() > MAX_TEXT
-        || value.chars().any(char::is_control)
-    {
-        return Err(RecognizerError::new(code, "recognizer pack text is invalid"));
+    if value.is_empty() || value.len() > MAX_TEXT || value.chars().any(char::is_control) {
+        return Err(RecognizerError::new(
+            code,
+            "recognizer pack text is invalid",
+        ));
     }
     Ok(())
 }
