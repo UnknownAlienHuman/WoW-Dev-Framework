@@ -1,0 +1,29 @@
+--- a/crates/wow-recognizers/src/matcher.rs
++++ b/crates/wow-recognizers/src/matcher.rs
+@@ -382,6 +382,26 @@
+         self.context_id
+     }
+ 
++    #[must_use]
++    pub fn source_pack_digest(&self) -> &str {
++        &self.source_pack_digest
++    }
++
++    #[must_use]
++    pub fn plan_id(&self) -> &RecognizerPlanId {
++        &self.plan_id
++    }
++
++    #[must_use]
++    pub fn fact_bundle_id(&self) -> &crate::RecognizerFactBundleId {
++        &self.fact_bundle_id
++    }
++
++    #[must_use]
++    pub fn producer_partition_id(&self) -> &str {
++        &self.producer_partition_id
++    }
++
+     #[must_use]
+     pub fn outcomes(&self) -> &[RecognizerRuleOutcome] {
+         &self.outcomes
