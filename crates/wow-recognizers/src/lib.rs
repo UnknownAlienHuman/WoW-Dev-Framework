@@ -10,6 +10,7 @@ mod emmy;
 mod engine;
 mod error;
 mod facts;
+mod graph;
 mod identity;
 mod matcher;
 mod model;
@@ -27,6 +28,7 @@ pub use facts::{
     RecognizerFactCoverageInput, RecognizerFactCoverageState, RecognizerFactInput,
     RecognizerFactLimits, RecognizerFactScope, RecognizerFactScopeKind, RecognizerFactValue,
 };
+pub use graph::adapt_recognizer_output_to_graph;
 pub use identity::{
     EmmyDirectCallAdapterId, RecognitionAssertionId, RecognitionReportId, RecognizerFactBundleId,
     RecognizerFactId, RecognizerId, RecognizerMatchId, RecognizerOutputPartitionId,
