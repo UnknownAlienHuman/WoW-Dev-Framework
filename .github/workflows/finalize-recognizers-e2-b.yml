@@ -25,8 +25,7 @@ jobs:
       - name: Prepare final tree
         run: |
           set -euo pipefail
-          git apply --check .ci/recognizers-e2-b/fix-01.patch
-          git apply .ci/recognizers-e2-b/fix-01.patch
+          python3 .ci/recognizers-e2-b/fix.py
           rm -rf .ci/recognizers-e2-b
           rm .github/workflows/finalize-recognizers-e2-b.yml
           cargo +stable fmt --all
