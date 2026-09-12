@@ -1,0 +1,59 @@
+name: Materialize graph partition replacement
+
+on:
+  push:
+    branches:
+      - work/graph-partition-replacement
+    paths:
+      - .ci/materialize/graph-partition/**
+      - .github/workflows/materialize-graph-partition-replacement.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: materialize-graph-partition-replacement
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: true
+      - name: Install stable Rust
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+      - name: Materialize reviewed payload
+        run: |
+          set -euo pipefail
+          test "$(find .ci/materialize/graph-partition -maxdepth 1 -name 'part-*' -type f | wc -l)" -eq 2
+          cat .ci/materialize/graph-partition/part-* > "$RUNNER_TEMP/graph-partition.b64"
+          echo 'ddb4845432e91039d33745b9fa31afa1e865fa0f275ce697610f5fe066b27424  '"$RUNNER_TEMP/graph-partition.b64" | sha256sum --check --status
+          base64 --decode "$RUNNER_TEMP/graph-partition.b64" > "$RUNNER_TEMP/graph-partition.tar.gz"
+          echo '4e2b0c5a8cba7303a3c4da4d12be7bd1bb82e0eef5dcdb9b54573e600bcb3560  '"$RUNNER_TEMP/graph-partition.tar.gz" | sha256sum --check --status
+          tar -xzf "$RUNNER_TEMP/graph-partition.tar.gz" -C .
+          rm -rf .ci/materialize/graph-partition
+          rm .github/workflows/materialize-graph-partition-replacement.yml
+          cargo +stable fmt --all
+          git add -A
+          git diff --cached --check
+      - name: Verify partition replacement and workspace
+        run: |
+          set -euo pipefail
+          cargo +stable xtask check
+          cargo +stable check --locked --workspace --all-targets --all-features
+          cargo +stable test --locked --package wow-graph --all-targets --all-features -- --nocapture
+          cargo +stable test --locked --workspace --all-targets --all-features
+          cargo +stable clippy --locked --workspace --all-targets --all-features -- -D warnings
+          RUSTDOCFLAGS='-D warnings' cargo +stable doc --locked --workspace --all-features --no-deps
+      - name: Commit verified implementation
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+UnknownAlienHuman@users.noreply.github.com
+          git add -A
+          git diff --cached --check
+          git commit -m 'feat(graph): plan exact producer partition replacement'
+          git push origin HEAD:work/graph-partition-replacement
