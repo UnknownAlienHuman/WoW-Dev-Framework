@@ -26,6 +26,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 .ci/recognizers-e2-b/fix.py
+          python3 .ci/recognizers-e2-b/fix-tests.py
           rm -rf .ci/recognizers-e2-b
           rm .github/workflows/finalize-recognizers-e2-b.yml
           cargo +stable fmt --all
