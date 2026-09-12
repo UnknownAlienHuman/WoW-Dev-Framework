@@ -28,16 +28,14 @@ jobs:
       - name: Materialize reviewed payload
         run: |
           set -euo pipefail
-          test "$(find .ci/materialize/graph-partition -maxdepth 1 -name 'part-*' -type f | wc -l)" -eq 2
-          wc -c .ci/materialize/graph-partition/part-*
-          cat .ci/materialize/graph-partition/part-* > "$RUNNER_TEMP/graph-partition.b64"
-          echo "combined bytes: $(wc -c < "$RUNNER_TEMP/graph-partition.b64")"
-          sha256sum "$RUNNER_TEMP/graph-partition.b64"
-          base64 --decode "$RUNNER_TEMP/graph-partition.b64" > "$RUNNER_TEMP/graph-partition.tar.gz"
-          sha256sum "$RUNNER_TEMP/graph-partition.tar.gz"
-          tar -tzf "$RUNNER_TEMP/graph-partition.tar.gz" | sed -n '1,20p'
+          test "$(find .ci/materialize/graph-partition -maxdepth 1 -name 'chunk-*' -type f | wc -l)" -eq 5
+          wc -c .ci/materialize/graph-partition/chunk-*
+          cat .ci/materialize/graph-partition/chunk-* > "$RUNNER_TEMP/graph-partition.b64"
+          test "$(wc -c < "$RUNNER_TEMP/graph-partition.b64")" -eq 19620
           echo 'ddb4845432e91039d33745b9fa31afa1e865fa0f275ce697610f5fe066b27424  '"$RUNNER_TEMP/graph-partition.b64" | sha256sum --check
+          base64 --decode "$RUNNER_TEMP/graph-partition.b64" > "$RUNNER_TEMP/graph-partition.tar.gz"
           echo '4e2b0c5a8cba7303a3c4da4d12be7bd1bb82e0eef5dcdb9b54573e600bcb3560  '"$RUNNER_TEMP/graph-partition.tar.gz" | sha256sum --check
+          tar -tzf "$RUNNER_TEMP/graph-partition.tar.gz"
           tar -xzf "$RUNNER_TEMP/graph-partition.tar.gz" -C .
           rm -rf .ci/materialize/graph-partition
           rm .github/workflows/materialize-graph-partition-replacement.yml
