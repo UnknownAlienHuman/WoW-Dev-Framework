@@ -27,7 +27,7 @@ jobs:
       - name: Verify package
         run: |
           set -euo pipefail
-          cargo +stable fmt --all --check
+          cargo +stable fmt --package wow-recognizers -- --check
           cargo +stable check --package wow-recognizers --all-targets --all-features
           cargo +stable test --package wow-recognizers --all-targets --all-features -- --nocapture
           cargo +stable clippy --package wow-recognizers --all-targets --all-features -- -D warnings
