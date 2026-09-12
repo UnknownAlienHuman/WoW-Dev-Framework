@@ -13,10 +13,10 @@ use wow_recognizers::{
 
 type TestResult<T = ()> = Result<T, Box<dyn Error>>;
 
-fn source_graph() -> TestResult<(GraphSnapshot, Vec<GraphNode>)> {
+fn source_graph(generation_name: &str) -> TestResult<(GraphSnapshot, Vec<GraphNode>)> {
     let limits = GraphLimits::default();
     let universe = GraphUniverseId::new("fixture")?;
-    let generation = GraphGenerationId::new("generation-1")?;
+    let generation = GraphGenerationId::new(generation_name)?;
     let nodes = [
         ("function", "file:A.lua#caller"),
         ("function", "api:C_Test.First"),
@@ -85,7 +85,7 @@ fn observation(
 #[test]
 fn exact_observations_produce_stable_assertions_edges_and_non_authoritative_coverage()
 -> TestResult {
-    let (snapshot, nodes) = source_graph()?;
+    let (snapshot, nodes) = source_graph("generation-1")?;
     let limits = RecognizerLimits::default();
     let registry = RecognizerRegistry::e2_default()?;
     let first = observation(
@@ -152,7 +152,7 @@ fn exact_observations_produce_stable_assertions_edges_and_non_authoritative_cove
 
 #[test]
 fn output_limit_truncates_canonically_and_downgrades_only_affected_coverage() -> TestResult {
-    let (snapshot, nodes) = source_graph()?;
+    let (snapshot, nodes) = source_graph("generation-1")?;
     let limits = RecognizerLimits::new(16, 1, 64, 64)?;
     let registry = RecognizerRegistry::e2_default()?;
     let observations = vec![
@@ -193,7 +193,11 @@ fn output_limit_truncates_canonically_and_downgrades_only_affected_coverage() ->
         .find(|record| record.family() == ObservationFamily::DirectCall)
         .ok_or("direct-call coverage")?;
     assert_eq!(direct.state(), RecognitionCoverageState::Truncated);
-    assert_eq!(direct.blocker_ids(), ["recognizer-budget:max-assertions"]);
+    assert_eq!(direct.blocker_ids().len(), 1);
+    assert_eq!(
+        direct.blocker_ids()[0].as_ref(),
+        "recognizer-budget:max-assertions"
+    );
     let projected = project_graph_coverage(&report, GraphLimits::default(), &cancelled)?;
     let direct = projected
         .iter()
@@ -206,7 +210,7 @@ fn output_limit_truncates_canonically_and_downgrades_only_affected_coverage() ->
 
 #[test]
 fn stale_endpoints_duplicate_inputs_failed_coverage_and_cancellation_fail_closed() -> TestResult {
-    let (snapshot, nodes) = source_graph()?;
+    let (snapshot, nodes) = source_graph("generation-1")?;
     let limits = RecognizerLimits::default();
     let registry = RecognizerRegistry::e2_default()?;
     let valid = observation(
@@ -231,7 +235,7 @@ fn stale_endpoints_duplicate_inputs_failed_coverage_and_cancellation_fail_closed
     .expect_err("duplicate observation must fail");
     assert_eq!(duplicate.code(), RecognizerErrorCode::ObservationDuplicate);
 
-    let (other_snapshot, _) = source_graph()?;
+    let (other_snapshot, _) = source_graph("generation-2")?;
     let stale = StructuredObservation::new(
         other_snapshot.snapshot_id().clone(),
         ObservationFamily::DirectCall,
@@ -291,7 +295,7 @@ fn stale_endpoints_duplicate_inputs_failed_coverage_and_cancellation_fail_closed
 
 #[test]
 fn external_candidates_never_become_derived_or_proven() -> TestResult {
-    let (snapshot, nodes) = source_graph()?;
+    let (snapshot, nodes) = source_graph("generation-1")?;
     let limits = RecognizerLimits::default();
     let report = run_recognizers(
         &RecognizerRegistry::e2_default()?,
