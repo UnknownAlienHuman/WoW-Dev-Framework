@@ -74,6 +74,18 @@ fn fact_bundle_id(value: &str) -> bool {
     digest_id(value, "recognizer-fact-bundle:sha256:")
 }
 
+fn match_id(value: &str) -> bool {
+    digest_id(value, "recognizer-match:sha256:")
+}
+
+fn proposal_id(value: &str) -> bool {
+    digest_id(value, "recognizer-proposal:sha256:")
+}
+
+fn output_partition_id(value: &str) -> bool {
+    digest_id(value, "recognizer-output-partition:sha256:")
+}
+
 fn digest_id(value: &str, prefix: &str) -> bool {
     let Some(hex) = value.strip_prefix(prefix) else {
         return false;
@@ -108,4 +120,18 @@ text_id!(
     "recognizer fact bundle id",
     160,
     fact_bundle_id
+);
+
+text_id!(RecognizerMatchId, "recognizer match id", 128, match_id);
+text_id!(
+    RecognizerProposalId,
+    "recognizer proposal id",
+    128,
+    proposal_id
+);
+text_id!(
+    RecognizerOutputPartitionId,
+    "recognizer output partition id",
+    160,
+    output_partition_id
 );
