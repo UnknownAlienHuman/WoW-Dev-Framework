@@ -25,6 +25,8 @@ jobs:
       - name: Materialize final tree
         run: |
           set -euo pipefail
+          python3 .ci/recognizers-pack-plan/fix-tests.py
+          rm -rf .ci/recognizers-pack-plan
           rm .github/workflows/finalize-recognizers-pack-plan.yml
           cargo +stable fmt --all
           cargo +stable generate-lockfile
