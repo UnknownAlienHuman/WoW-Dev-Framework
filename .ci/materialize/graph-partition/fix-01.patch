@@ -1,0 +1,93 @@
+--- a/crates/wow-graph/src/proposal.rs
++++ b/crates/wow-graph/src/proposal.rs
+@@ -377,16 +377,6 @@
+     }
+ 
+     #[must_use]
+-    pub fn registry_bundle_id(&self) -> &str {
+-        &self.registry_bundle_id
+-    }
+-
+-    #[must_use]
+-    pub fn registry_digest(&self) -> &str {
+-        &self.registry_digest
+-    }
+-
+-    #[must_use]
+     pub fn universe(&self) -> &GraphUniverseId {
+         &self.universe
+     }
+@@ -508,6 +498,16 @@
+     }
+ 
+     #[must_use]
++    pub fn registry_bundle_id(&self) -> &str {
++        &self.registry_bundle_id
++    }
++
++    #[must_use]
++    pub fn registry_digest(&self) -> &str {
++        &self.registry_digest
++    }
++
++    #[must_use]
+     pub fn accepted_entities(&self) -> &[GraphAcceptedEntityProposal] {
+         &self.accepted_entities
+     }
+--- a/crates/wow-graph/src/partition.rs
++++ b/crates/wow-graph/src/partition.rs
+@@ -5,8 +5,8 @@
+ use wow_core::{GenerationContextId, canonical_json_bytes};
+ 
+ use crate::{
+-    GraphCoverageRecord, GraphCoverageState, GraphEdge, GraphError, GraphErrorCode,
+-    GraphGenerationId, GraphLimits, GraphNode, GraphPartitionSetId, GraphPartitionVersionId,
++    GraphCoverageRecord, GraphCoverageState, GraphError, GraphErrorCode, GraphGenerationId,
++    GraphLimits, GraphPartitionSetId, GraphPartitionVersionId,
+     GraphProposalBatch, GraphProposalValidationReport, GraphRegistryBundle, GraphRelationKind,
+     GraphReplacementPlanId, GraphResult, GraphSnapshot, GraphSnapshotId, GraphUniverseId,
+     validate_graph_proposal_batch,
+@@ -81,9 +81,9 @@
+                 "empty partition replacement requires an explicit coverage downgrade",
+             ));
+         }
+-        let producer_partition_id = batch.producer_partition_id().into();
+-        let registry_bundle_id = batch.registry_bundle_id().into();
+-        let registry_digest = batch.registry_digest().into();
++        let producer_partition_id: Box<str> = batch.producer_partition_id().into();
++        let registry_bundle_id: Box<str> = batch.registry_bundle_id().into();
++        let registry_digest: Box<str> = batch.registry_digest().into();
+         let universe = batch.universe().clone();
+         let generation = batch.generation().clone();
+         let source_context_id = batch.source_context_id();
+@@ -317,8 +317,8 @@
+         for partition in &partitions {
+             partition.validate_against(registry, &snapshot, limits)?;
+         }
+-        let registry_bundle_id = registry.bundle_id().into();
+-        let registry_digest = registry.registry_digest().into();
++        let registry_bundle_id: Box<str> = registry.bundle_id().into();
++        let registry_digest: Box<str> = registry.registry_digest().into();
+         let partition_set_id = derive_partition_set_id(PartitionSetIdentity {
+             registry_bundle_id: &registry_bundle_id,
+             registry_digest: &registry_digest,
+@@ -512,8 +512,8 @@
+             limits,
+             partitions,
+         )?;
+-        let registry_bundle_id = registry.bundle_id().into();
+-        let registry_digest = registry.registry_digest().into();
++        let registry_bundle_id: Box<str> = registry.bundle_id().into();
++        let registry_digest: Box<str> = registry.registry_digest().into();
+         let expected_base_snapshot_id = base.map(|base| base.snapshot.snapshot_id().clone());
+         let producer_partition_id = replacement.producer_partition_id.clone();
+         let replacement_partition_version_id = replacement.partition_version_id.clone();
+@@ -592,7 +592,7 @@
+                     ));
+                 }
+                 for partition in base.partitions() {
+-                    if partition.producer_partition_id() == self.producer_partition_id {
++                    if partition.producer_partition_id() == self.producer_partition_id.as_ref() {
+                         continue;
+                     }
+                     if self.target.partition(partition.producer_partition_id()) != Some(partition) {
