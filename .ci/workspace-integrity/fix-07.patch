@@ -9,7 +9,7 @@
 +    #[serde(skip_serializing_if = "Option::is_none")]
      current: Option<ObjectId>,
  }
-@@ -544,6 +546,7 @@
+@@ -544,5 +546,6 @@
      operation_id: OperationId,
      request_digest: RequestDigest,
      state: OperationState,
