@@ -1,5 +1,3 @@
-use std::collections::BTreeSet;
-
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use wow_core::canonical_json_bytes;
@@ -194,6 +192,18 @@ impl Default for RecognizerLimits {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct StructuredObservationInput {
+    pub source_snapshot_id: GraphSnapshotId,
+    pub family: ObservationFamily,
+    pub from: GraphNodeId,
+    pub to: GraphNodeId,
+    pub origin: ObservationOrigin,
+    pub confidence: GraphConfidence,
+    pub evidence_ids: Vec<Box<str>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct StructuredObservation {
     observation_id: StructuredObservationId,
     source_snapshot_id: GraphSnapshotId,
@@ -207,15 +217,18 @@ pub struct StructuredObservation {
 
 impl StructuredObservation {
     pub fn new(
-        source_snapshot_id: GraphSnapshotId,
-        family: ObservationFamily,
-        from: GraphNodeId,
-        to: GraphNodeId,
-        origin: ObservationOrigin,
-        confidence: GraphConfidence,
-        evidence_ids: Vec<Box<str>>,
+        input: StructuredObservationInput,
         limits: RecognizerLimits,
     ) -> RecognizerResult<Self> {
+        let StructuredObservationInput {
+            source_snapshot_id,
+            family,
+            from,
+            to,
+            origin,
+            confidence,
+            evidence_ids,
+        } = input;
         limits.validate()?;
         if from == to {
             return Err(RecognizerError::new(
@@ -251,13 +264,15 @@ impl StructuredObservation {
 
     pub fn validate(&self, limits: RecognizerLimits) -> RecognizerResult<()> {
         let rebuilt = Self::new(
-            self.source_snapshot_id.clone(),
-            self.family,
-            self.from.clone(),
-            self.to.clone(),
-            self.origin,
-            self.confidence,
-            self.evidence_ids.clone(),
+            StructuredObservationInput {
+                source_snapshot_id: self.source_snapshot_id.clone(),
+                family: self.family,
+                from: self.from.clone(),
+                to: self.to.clone(),
+                origin: self.origin,
+                confidence: self.confidence,
+                evidence_ids: self.evidence_ids.clone(),
+            },
             limits,
         )?;
         if rebuilt != *self {
@@ -457,10 +472,7 @@ impl RecognizerRegistry {
     }
 
     #[must_use]
-    pub(crate) fn descriptor(
-        &self,
-        family: ObservationFamily,
-    ) -> Option<&RecognizerDescriptor> {
+    pub(crate) fn descriptor(&self, family: ObservationFamily) -> Option<&RecognizerDescriptor> {
         self.descriptors
             .binary_search_by_key(&family, RecognizerDescriptor::family)
             .ok()
@@ -941,9 +953,7 @@ fn normalize_ids(
     Ok(values)
 }
 
-pub(crate) fn weakest_confidence<const N: usize>(
-    values: [GraphConfidence; N],
-) -> GraphConfidence {
+pub(crate) fn weakest_confidence<const N: usize>(values: [GraphConfidence; N]) -> GraphConfidence {
     values
         .into_iter()
         .max_by_key(|confidence| confidence_rank(*confidence))

@@ -8,7 +8,7 @@ use wow_graph::{
 use wow_recognizers::{
     ObservationFamily, ObservationOrigin, RecognitionCoverage, RecognitionCoverageState,
     RecognizerErrorCode, RecognizerLimits, RecognizerRegistry, StructuredObservation,
-    project_graph_coverage, project_graph_edges, run_recognizers,
+    StructuredObservationInput, project_graph_coverage, project_graph_edges, run_recognizers,
 };
 
 type TestResult<T = ()> = Result<T, Box<dyn Error>>;
@@ -60,52 +60,62 @@ fn complete_coverage(limits: RecognizerLimits) -> TestResult<Vec<RecognitionCove
         .collect::<Result<Vec<_>, _>>()?)
 }
 
-fn observation(
-    snapshot: &GraphSnapshot,
-    nodes: &[GraphNode],
+struct ObservationSpec<'a> {
     family: ObservationFamily,
     target: usize,
     origin: ObservationOrigin,
     confidence: GraphConfidence,
-    evidence: &str,
+    evidence: &'a str,
+}
+
+fn observation(
+    snapshot: &GraphSnapshot,
+    nodes: &[GraphNode],
+    spec: ObservationSpec<'_>,
     limits: RecognizerLimits,
 ) -> TestResult<StructuredObservation> {
     Ok(StructuredObservation::new(
-        snapshot.snapshot_id().clone(),
-        family,
-        nodes[0].node_id().clone(),
-        nodes[target].node_id().clone(),
-        origin,
-        confidence,
-        vec![evidence.into()],
+        StructuredObservationInput {
+            source_snapshot_id: snapshot.snapshot_id().clone(),
+            family: spec.family,
+            from: nodes[0].node_id().clone(),
+            to: nodes[spec.target].node_id().clone(),
+            origin: spec.origin,
+            confidence: spec.confidence,
+            evidence_ids: vec![spec.evidence.into()],
+        },
         limits,
     )?)
 }
 
 #[test]
-fn exact_observations_produce_stable_assertions_edges_and_non_authoritative_coverage()
--> TestResult {
+fn exact_observations_produce_stable_assertions_edges_and_non_authoritative_coverage() -> TestResult
+{
     let (snapshot, nodes) = source_graph("generation-1")?;
     let limits = RecognizerLimits::default();
     let registry = RecognizerRegistry::e2_default()?;
     let first = observation(
         &snapshot,
         &nodes,
-        ObservationFamily::DirectCall,
-        1,
-        ObservationOrigin::AnalyzerFact,
-        GraphConfidence::Proven,
-        "emmy-call:1",
+        ObservationSpec {
+            family: ObservationFamily::DirectCall,
+            target: 1,
+            origin: ObservationOrigin::AnalyzerFact,
+            confidence: GraphConfidence::Proven,
+            evidence: "emmy-call:1",
+        },
         limits,
     )?;
     let second = observation(
         &snapshot,
         &nodes,
-        ObservationFamily::ApiUse,
-        2,
-        ObservationOrigin::ReferenceFact,
-        GraphConfidence::Derived,
-        "reference-use:1",
+        ObservationSpec {
+            family: ObservationFamily::ApiUse,
+            target: 2,
+            origin: ObservationOrigin::ReferenceFact,
+            confidence: GraphConfidence::Derived,
+            evidence: "reference-use:1",
+        },
         limits,
     )?;
     let cancelled = AtomicBool::new(false);
@@ -141,8 +151,7 @@ fn exact_observations_produce_stable_assertions_edges_and_non_authoritative_cove
             .iter()
             .any(|id| id.starts_with("recognizer-assertion:sha256:"))
     }));
-    let graph_coverage =
-        project_graph_coverage(&report, GraphLimits::default(), &cancelled)?;
+    let graph_coverage = project_graph_coverage(&report, GraphLimits::default(), &cancelled)?;
     assert_eq!(graph_coverage.len(), ObservationFamily::ALL.len());
     assert!(graph_coverage.iter().all(|record| {
         record.state() == GraphCoverageState::Complete && !record.negative_authority()
@@ -159,21 +168,25 @@ fn output_limit_truncates_canonically_and_downgrades_only_affected_coverage() ->
         observation(
             &snapshot,
             &nodes,
-            ObservationFamily::DirectCall,
-            1,
-            ObservationOrigin::AnalyzerFact,
-            GraphConfidence::Derived,
-            "emmy-call:one",
+            ObservationSpec {
+                family: ObservationFamily::DirectCall,
+                target: 1,
+                origin: ObservationOrigin::AnalyzerFact,
+                confidence: GraphConfidence::Derived,
+                evidence: "emmy-call:one",
+            },
             limits,
         )?,
         observation(
             &snapshot,
             &nodes,
-            ObservationFamily::DirectCall,
-            2,
-            ObservationOrigin::AnalyzerFact,
-            GraphConfidence::Derived,
-            "emmy-call:two",
+            ObservationSpec {
+                family: ObservationFamily::DirectCall,
+                target: 2,
+                origin: ObservationOrigin::AnalyzerFact,
+                confidence: GraphConfidence::Derived,
+                evidence: "emmy-call:two",
+            },
             limits,
         )?,
     ];
@@ -216,11 +229,13 @@ fn stale_endpoints_duplicate_inputs_failed_coverage_and_cancellation_fail_closed
     let valid = observation(
         &snapshot,
         &nodes,
-        ObservationFamily::DirectCall,
-        1,
-        ObservationOrigin::AnalyzerFact,
-        GraphConfidence::Derived,
-        "emmy-call:valid",
+        ObservationSpec {
+            family: ObservationFamily::DirectCall,
+            target: 1,
+            origin: ObservationOrigin::AnalyzerFact,
+            confidence: GraphConfidence::Derived,
+            evidence: "emmy-call:valid",
+        },
         limits,
     )?;
     let cancelled = AtomicBool::new(false);
@@ -232,18 +247,21 @@ fn stale_endpoints_duplicate_inputs_failed_coverage_and_cancellation_fail_closed
         limits,
         &cancelled,
     )
-    .expect_err("duplicate observation must fail");
+    .err()
+    .ok_or("duplicate observation must fail")?;
     assert_eq!(duplicate.code(), RecognizerErrorCode::ObservationDuplicate);
 
     let (other_snapshot, _) = source_graph("generation-2")?;
     let stale = StructuredObservation::new(
-        other_snapshot.snapshot_id().clone(),
-        ObservationFamily::DirectCall,
-        nodes[0].node_id().clone(),
-        nodes[1].node_id().clone(),
-        ObservationOrigin::AnalyzerFact,
-        GraphConfidence::Derived,
-        vec!["emmy-call:stale".into()],
+        StructuredObservationInput {
+            source_snapshot_id: other_snapshot.snapshot_id().clone(),
+            family: ObservationFamily::DirectCall,
+            from: nodes[0].node_id().clone(),
+            to: nodes[1].node_id().clone(),
+            origin: ObservationOrigin::AnalyzerFact,
+            confidence: GraphConfidence::Derived,
+            evidence_ids: vec!["emmy-call:stale".into()],
+        },
         limits,
     )?;
     let stale = run_recognizers(
@@ -254,8 +272,12 @@ fn stale_endpoints_duplicate_inputs_failed_coverage_and_cancellation_fail_closed
         limits,
         &cancelled,
     )
-    .expect_err("stale observation must fail");
-    assert_eq!(stale.code(), RecognizerErrorCode::ObservationSnapshotMismatch);
+    .err()
+    .ok_or("stale observation must fail")?;
+    assert_eq!(
+        stale.code(),
+        RecognizerErrorCode::ObservationSnapshotMismatch
+    );
 
     let mut failed_coverage = complete_coverage(limits)?;
     let index = failed_coverage
@@ -276,7 +298,8 @@ fn stale_endpoints_duplicate_inputs_failed_coverage_and_cancellation_fail_closed
         limits,
         &cancelled,
     )
-    .expect_err("failed coverage cannot carry observations");
+    .err()
+    .ok_or("failed coverage cannot carry observations")?;
     assert_eq!(failed.code(), RecognizerErrorCode::ObservationInvalid);
 
     let stopped = AtomicBool::new(true);
@@ -288,7 +311,8 @@ fn stale_endpoints_duplicate_inputs_failed_coverage_and_cancellation_fail_closed
         limits,
         &stopped,
     )
-    .expect_err("cancelled operation must fail");
+    .err()
+    .ok_or("cancelled operation must fail")?;
     assert_eq!(stopped.code(), RecognizerErrorCode::Cancelled);
     Ok(())
 }
@@ -303,17 +327,22 @@ fn external_candidates_never_become_derived_or_proven() -> TestResult {
         vec![observation(
             &snapshot,
             &nodes,
-            ObservationFamily::FactoryCreation,
-            1,
-            ObservationOrigin::ExternalCandidate,
-            GraphConfidence::Proven,
-            "candidate-provider:1",
+            ObservationSpec {
+                family: ObservationFamily::FactoryCreation,
+                target: 1,
+                origin: ObservationOrigin::ExternalCandidate,
+                confidence: GraphConfidence::Proven,
+                evidence: "candidate-provider:1",
+            },
             limits,
         )?],
         complete_coverage(limits)?,
         limits,
         &AtomicBool::new(false),
     )?;
-    assert_eq!(report.assertions()[0].confidence(), GraphConfidence::Candidate);
+    assert_eq!(
+        report.assertions()[0].confidence(),
+        GraphConfidence::Candidate
+    );
     Ok(())
 }

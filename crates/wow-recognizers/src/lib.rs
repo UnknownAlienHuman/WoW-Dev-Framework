@@ -20,5 +20,5 @@ pub use identity::{
 pub use model::{
     ObservationFamily, ObservationOrigin, RecognitionAssertion, RecognitionCoverage,
     RecognitionCoverageState, RecognitionReport, RecognizerDescriptor, RecognizerLimits,
-    RecognizerRegistry, StructuredObservation,
+    RecognizerRegistry, StructuredObservation, StructuredObservationInput,
 };
