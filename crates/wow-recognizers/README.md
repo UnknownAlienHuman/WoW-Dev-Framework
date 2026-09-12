@@ -1,6 +1,6 @@
 # `wow-recognizers` contract router
 
-**Status:** E2-B core structural recognizers and E5-A calibration-corpus/named-pack contracts are implementation-ready documentation. Rust implementation has not started.
+**Status:** the bounded E2-B matcher core is executable in Cargo. Typed owner adapters, declarative pack parsing, active structural rule families, producer partitions, mutation evaluation, and the E5-A calibration system remain incomplete.
 
 `wow-recognizers` deterministically matches reviewed structural conventions over normalized facts and emits proposed universal graph assertions. It never reparses source, branches on repository/addon identity, executes code, decides platform truth, runs diagnostics, publishes graph generations, or authorizes pack promotion.
 
@@ -54,62 +54,64 @@ Read in order:
 
 E5-A defines exact candidate-source admission, immutable corpora/labels/provenance/splits, leakage and sealed-holdout semantics, shadow-only calibration packs, independent graph validation, anti-overfitting mutations, per-case-first metrics, candidate artifacts, and partition-local deactivation.
 
-The eight pinned user repositories are candidate inputs only. A commit pin is not an admitted corpus member. Exact source/publication/fact/provenance/license/label/split gates remain blocking until implementation.
+The pinned user repositories are candidate inputs only. A commit pin is not an admitted corpus member. Exact source/publication/fact/provenance/license/label/split gates remain blocking until implementation.
+
+## Executable E2-B core
+
+The active crate currently provides:
+
+- a closed registry for the nineteen documented observation families;
+- content-addressed registry, observation, assertion, and report identities;
+- exact binding to one immutable `GraphSnapshot` and existing graph endpoints;
+- deterministic observation ordering and duplicate rejection;
+- confidence ceilings that prevent an observation from being strengthened;
+- explicit Complete, Partial, Truncated, NotEvaluated, and Failed family coverage;
+- bounded assertion truncation with an explicit family blocker;
+- cancellation and input/output budget checks;
+- conversion of assertions to graph-owned edges;
+- conversion of recognizer coverage to graph coverage without negative authority.
+
+This is a low-level structured-observation matcher and graph handoff. It is not yet the full E2-B package described by the normative documents. In particular, callers must not treat a manually constructed `StructuredObservation` as independently established semantic evidence.
 
 ## Direct framework dependencies
 
 ```text
 wow-core
-wow-emmy
 wow-graph
 ```
 
-`wow-project` supplies exact TOC/XML/project fact publications through orchestration, but `wow-recognizers` does not depend on `wow-project`. `wow-store`, `wow-service`, and applications own retention/orchestration/transport outside this crate.
+The future typed owner-adapter slice also depends on frozen `wow-emmy` fact schemas. `wow-project` will supply exact TOC/XML/project fact publications through orchestration, but `wow-recognizers` must not depend on `wow-project`. `wow-store`, `wow-service`, and applications own retention, orchestration, and transport outside this crate.
 
 ## Active semantic boundary
 
 ```text
-exact normalized fact partitions
-+ bounded E2-B declarative pack
-+ exact profiles and graph registry
--> deterministic matches and ambiguity
--> universal entity/relation proposals
--> graph validation receipts
--> exact producer-owned output partitions
+exact structured owner observations
++ closed recognizer registry
++ exact graph snapshot and endpoints
+-> deterministic bounded assertions
+-> graph-owned edge and coverage records
 ```
 
-E5-A adds audit/evaluation artifacts around this path. Repository, owner, addon, path, popularity, split, expected label, reviewer, search, model, and prompt metadata cannot enter matcher clauses, captures, semantic keys, confidence, coverage, ordering, or budgets.
+Future E2-B phases add typed fact adapters, declarative packs, active core families, producer partitions, and evaluation. Repository, owner, addon, path popularity, labels, splits, reviews, holdouts, canaries, providers, and model metadata cannot enter matcher semantics or confidence.
 
-## Confidence and rollout
+## Confidence and authority
 
-Recognizer proposal confidence is limited to:
+Recognizer output cannot exceed the observation and descriptor confidence ceilings. External provider observations are always reduced to `Candidate`. Graph coverage projected by this crate always has `negative_authority = false`, including Complete recognizer coverage.
 
-```text
-Derived
-Possible
-```
-
-E5-A packs use:
-
-```text
-trust_class = calibration
-rollout_state = shadow_only
-```
-
-`ShadowValidated` and `PromotionEligibleByMetrics` are evaluation states, not default activation. E5-B owns durable orchestration, reviewer authorization, holdout unsealing audit, and promotion submissions. E5-C owns immutable core-pack publication, canary, rollout, rollback, and last-known-good.
+No recognizer result proves WoW API existence or absence, runtime availability, Secret state, operation safety, or graph publication success.
 
 ## Current state
 
 ```text
-documentation frontier: E5-A
-implementation frontier: not-started
-E2-B implementation/checksum freeze: pending
-E5-A real corpus admission: pending
-sealed holdout/reviewer authorization: deferred to E5-B
-core-pack publication/rollback: deferred to E5-C
-Cargo.toml: absent
-Rust source: absent
-CI/workflows: absent
+Cargo.toml: active
+Rust source: active
+bounded registry/matcher/graph handoff: implemented and tested
+typed wow-emmy/project fact adapters: pending
+declarative pack parser and operator DAG: pending
+active structural rule families: pending
+producer partition/replacement model: pending
+mutation/evaluation harness and checksum freeze: pending
+E5-A real corpus admission and calibration: not started
 ```
 
 Optional operator context is advisory, disabled by default, and configured outside the repository; current Blizzard source remains authoritative.
