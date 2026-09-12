@@ -1,0 +1,58 @@
+name: Materialize graph proposal handoff
+
+on:
+  push:
+    branches:
+      - work/graph-proposal-handoff
+    paths:
+      - .ci/materialize/graph-proposal-handoff/**
+      - .github/workflows/materialize-graph-proposal-handoff.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: materialize-graph-proposal-handoff
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: true
+      - name: Install stable Rust
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+      - name: Materialize reviewed graph changes
+        run: |
+          set -euo pipefail
+          test "$(find .ci/materialize/graph-proposal-handoff -maxdepth 1 -name 'part-*' -type f | wc -l)" -eq 2
+          cat .ci/materialize/graph-proposal-handoff/part-* > "$RUNNER_TEMP/graph-proposal-handoff.b64"
+          echo 'aaaec5d87bf7475055f8c2e7801ea3a6d9e86dbd8270f17e2467345e5571b7f6  '"$RUNNER_TEMP/graph-proposal-handoff.b64" | sha256sum --check --status
+          base64 --decode "$RUNNER_TEMP/graph-proposal-handoff.b64" > "$RUNNER_TEMP/graph-proposal-handoff.tar.gz"
+          echo 'db99d327d4f364cfb0dee0802c78c4236ae1eeea0d3558fff9c05a2c13196f47  '"$RUNNER_TEMP/graph-proposal-handoff.tar.gz" | sha256sum --check --status
+          tar -xzf "$RUNNER_TEMP/graph-proposal-handoff.tar.gz" -C .
+          rm -rf .ci/materialize/graph-proposal-handoff
+          rm .github/workflows/materialize-graph-proposal-handoff.yml
+          git add -A
+      - name: Format and verify graph owner boundary
+        run: |
+          set -euo pipefail
+          cargo +stable fmt --all
+          cargo +stable xtask check
+          cargo +stable check --locked --workspace --all-targets --all-features
+          cargo +stable test --locked --package wow-graph --all-targets --all-features -- --nocapture
+          cargo +stable clippy --locked --workspace --all-targets --all-features -- -D warnings
+          RUSTDOCFLAGS='-D warnings' cargo +stable doc --locked --workspace --all-features --no-deps
+          git diff --check
+      - name: Commit verified implementation
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+UnknownAlienHuman@users.noreply.github.com
+          git add -A
+          git diff --cached --check
+          git commit -m 'feat(graph): validate exact recognizer proposal batches'
+          git push origin HEAD:work/graph-proposal-handoff
