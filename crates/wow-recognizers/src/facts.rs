@@ -91,7 +91,12 @@ impl Default for RecognizerFactLimits {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(tag = "type", content = "value", rename_all = "snake_case", deny_unknown_fields)]
+#[serde(
+    tag = "type",
+    content = "value",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
 pub enum RecognizerFactValue {
     Nil,
     Boolean(bool),
@@ -237,16 +242,18 @@ impl RecognizerFact {
             RecognizerErrorCode::FactInvalid,
             "recognizer fact evidence is empty or exceeds the configured limit",
         )?;
-        let fact_id = derive_fact_id(
+        let identity = FactIdentity {
+            schema: "wow-recognizers/fact/e2-b/1",
             context_id,
-            &kind,
-            &partition_id,
-            &scope,
-            &producer_id,
-            &producer_version,
+            kind: &kind,
+            partition_id: &partition_id,
+            scope: &scope,
+            producer_id: &producer_id,
+            producer_version: &producer_version,
             confidence,
-            &fields,
-        )?;
+            fields: &fields,
+        };
+        let fact_id = derive_fact_id(&identity)?;
         Ok(Self {
             fact_id,
             context_id,
@@ -400,6 +407,17 @@ pub enum RecognizerFactCoverageState {
     Cancelled,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecognizerFactCoverageInput {
+    pub context_id: GenerationContextId,
+    pub partition_id: Box<str>,
+    pub capability_id: Box<str>,
+    pub producer_id: Box<str>,
+    pub producer_version: Box<str>,
+    pub state: RecognizerFactCoverageState,
+    pub blocker_ids: Vec<Box<str>>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RecognizerFactCoverage {
@@ -415,27 +433,23 @@ pub struct RecognizerFactCoverage {
 
 impl RecognizerFactCoverage {
     pub fn new(
-        context_id: GenerationContextId,
-        partition_id: impl Into<Box<str>>,
-        capability_id: impl Into<Box<str>>,
-        producer_id: impl Into<Box<str>>,
-        producer_version: impl Into<Box<str>>,
-        state: RecognizerFactCoverageState,
-        blocker_ids: Vec<Box<str>>,
+        input: RecognizerFactCoverageInput,
         limits: RecognizerFactLimits,
     ) -> RecognizerResult<Self> {
         limits.validate()?;
-        let partition_id = partition_id.into();
-        let capability_id = capability_id.into();
-        let producer_id = producer_id.into();
-        let producer_version = producer_version.into();
+        let RecognizerFactCoverageInput {
+            context_id,
+            partition_id,
+            capability_id,
+            producer_id,
+            producer_version,
+            state,
+            blocker_ids,
+        } = input;
         validate_bounded_text(&partition_id, RecognizerErrorCode::FactCoverageInvalid)?;
         validate_component(&capability_id, RecognizerErrorCode::FactCoverageInvalid)?;
         validate_component(&producer_id, RecognizerErrorCode::FactCoverageInvalid)?;
-        validate_bounded_text(
-            &producer_version,
-            RecognizerErrorCode::FactCoverageInvalid,
-        )?;
+        validate_bounded_text(&producer_version, RecognizerErrorCode::FactCoverageInvalid)?;
         let blocker_ids = normalize_optional_text_ids(
             blocker_ids,
             limits.max_blockers_per_coverage as usize,
@@ -476,13 +490,15 @@ impl RecognizerFactCoverage {
 
     pub fn validate(&self, limits: RecognizerFactLimits) -> RecognizerResult<()> {
         let rebuilt = Self::new(
-            self.context_id,
-            self.partition_id.clone(),
-            self.capability_id.clone(),
-            self.producer_id.clone(),
-            self.producer_version.clone(),
-            self.state,
-            self.blocker_ids.clone(),
+            RecognizerFactCoverageInput {
+                context_id: self.context_id,
+                partition_id: self.partition_id.clone(),
+                capability_id: self.capability_id.clone(),
+                producer_id: self.producer_id.clone(),
+                producer_version: self.producer_version.clone(),
+                state: self.state,
+                blocker_ids: self.blocker_ids.clone(),
+            },
             limits,
         )?;
         if rebuilt != *self {
@@ -622,7 +638,8 @@ impl RecognizerFactBundle {
             (left.partition_id.as_ref(), left.capability_id.as_ref())
                 .cmp(&(right.partition_id.as_ref(), right.capability_id.as_ref()))
         });
-        let mut canonical_coverage = Vec::with_capacity(coverage.len());
+        let mut canonical_coverage: Vec<RecognizerFactCoverage> =
+            Vec::with_capacity(coverage.len());
         for record in coverage {
             if let Some(previous) = canonical_coverage.last()
                 && previous.partition_id == record.partition_id
@@ -722,7 +739,6 @@ impl RecognizerFactBundle {
             .map(|index| &self.facts[index])
     }
 
-    #[must_use]
     pub fn facts_by_kind<'a>(
         &'a self,
         kind: &'a str,
@@ -738,8 +754,7 @@ impl RecognizerFactBundle {
     ) -> Option<&RecognizerFactCoverage> {
         self.coverage
             .binary_search_by(|record| {
-                (record.partition_id(), record.capability_id())
-                    .cmp(&(partition_id, capability_id))
+                (record.partition_id(), record.capability_id()).cmp(&(partition_id, capability_id))
             })
             .ok()
             .map(|index| &self.coverage[index])
@@ -777,28 +792,9 @@ struct FactIdentity<'a> {
     fields: &'a BTreeMap<Box<str>, RecognizerFactValue>,
 }
 
-fn derive_fact_id(
-    context_id: GenerationContextId,
-    kind: &str,
-    partition_id: &str,
-    scope: &RecognizerFactScope,
-    producer_id: &str,
-    producer_version: &str,
-    confidence: GraphConfidence,
-    fields: &BTreeMap<Box<str>, RecognizerFactValue>,
-) -> RecognizerResult<RecognizerFactId> {
-    let bytes = canonical_json_bytes(&FactIdentity {
-        schema: "wow-recognizers/fact/e2-b/1",
-        context_id,
-        kind,
-        partition_id,
-        scope,
-        producer_id,
-        producer_version,
-        confidence,
-        fields,
-    })
-    .map_err(|_| identity_error("recognizer fact identity cannot be canonicalized"))?;
+fn derive_fact_id(identity: &FactIdentity<'_>) -> RecognizerResult<RecognizerFactId> {
+    let bytes = canonical_json_bytes(identity)
+        .map_err(|_| identity_error("recognizer fact identity cannot be canonicalized"))?;
     RecognizerFactId::new(format!(
         "recognizer-fact:sha256:{}",
         encode_hex(&Sha256::digest(bytes))

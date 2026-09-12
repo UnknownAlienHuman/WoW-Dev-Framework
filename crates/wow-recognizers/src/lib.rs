@@ -22,8 +22,8 @@ pub use emmy::{
 pub use engine::{project_graph_coverage, project_graph_edges, run_recognizers};
 pub use error::{RecognizerError, RecognizerErrorCode, RecognizerResult};
 pub use facts::{
-    RECOGNIZER_FACT_BUNDLE_SCHEMA, RecognizerFact, RecognizerFactBundle,
-    RecognizerFactCoverage, RecognizerFactCoverageState, RecognizerFactInput,
+    RECOGNIZER_FACT_BUNDLE_SCHEMA, RecognizerFact, RecognizerFactBundle, RecognizerFactCoverage,
+    RecognizerFactCoverageInput, RecognizerFactCoverageState, RecognizerFactInput,
     RecognizerFactLimits, RecognizerFactScope, RecognizerFactScopeKind, RecognizerFactValue,
 };
 pub use identity::{

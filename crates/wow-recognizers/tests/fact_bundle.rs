@@ -11,8 +11,8 @@ use wow_core::{
 use wow_graph::GraphConfidence;
 use wow_recognizers::{
     RecognizerErrorCode, RecognizerFact, RecognizerFactBundle, RecognizerFactCoverage,
-    RecognizerFactCoverageState, RecognizerFactInput, RecognizerFactLimits, RecognizerFactScope,
-    RecognizerFactScopeKind, RecognizerFactValue,
+    RecognizerFactCoverageInput, RecognizerFactCoverageState, RecognizerFactInput,
+    RecognizerFactLimits, RecognizerFactScope, RecognizerFactScopeKind, RecognizerFactValue,
 };
 
 type TestResult<T = ()> = Result<T, Box<dyn Error>>;
@@ -58,10 +58,7 @@ fn fields(member: &str) -> BTreeMap<Box<str>, RecognizerFactValue> {
             Box::<str>::from("receiver"),
             RecognizerFactValue::Identifier("Frame".into()),
         ),
-        (
-            Box::<str>::from("arity"),
-            RecognizerFactValue::Integer(1),
-        ),
+        (Box::<str>::from("arity"), RecognizerFactValue::Integer(1)),
     ])
 }
 
@@ -99,13 +96,15 @@ fn coverage(
     blocker: Option<&str>,
 ) -> TestResult<RecognizerFactCoverage> {
     Ok(RecognizerFactCoverage::new(
-        context.context_id(),
-        partition,
-        capability,
-        "wow.emmy",
-        "e0-c.1",
-        state,
-        blocker.into_iter().map(Into::into).collect(),
+        RecognizerFactCoverageInput {
+            context_id: context.context_id(),
+            partition_id: partition.into(),
+            capability_id: capability.into(),
+            producer_id: "wow.emmy".into(),
+            producer_version: "e0-c.1".into(),
+            state,
+            blocker_ids: blocker.into_iter().map(Into::into).collect(),
+        },
         RecognizerFactLimits::default(),
     )?)
 }
@@ -153,9 +152,7 @@ fn bundle_is_order_invariant_and_queries_exact_partitions() -> TestResult {
     assert_eq!(left.facts_by_kind("lua.member_call").count(), 2);
     assert!(left.has_complete_capability("project.main", "emmy.fact.calls"));
     assert!(!left.has_complete_capability("reference.api", "emmy.fact.calls"));
-    assert!(left
-        .fact_by_id(left.facts()[0].fact_id())
-        .is_some());
+    assert!(left.fact_by_id(left.facts()[0].fact_id()).is_some());
     left.validate(&context, RecognizerFactLimits::default())?;
     Ok(())
 }
@@ -247,12 +244,7 @@ fn conflicting_coverage_and_incomplete_negative_authority_fail_closed() -> TestR
             &context,
             "project.main",
             Vec::new(),
-            vec![fact(
-                &context,
-                "project.main",
-                "RegisterEvent",
-                "call",
-            )?],
+            vec![fact(&context, "project.main", "RegisterEvent", "call",)?],
             vec![complete, partial],
             RecognizerFactLimits::default(),
         )
@@ -266,12 +258,7 @@ fn conflicting_coverage_and_incomplete_negative_authority_fail_closed() -> TestR
         &context,
         "project.main",
         Vec::new(),
-        vec![fact(
-            &context,
-            "project.main",
-            "RegisterEvent",
-            "call",
-        )?],
+        vec![fact(&context, "project.main", "RegisterEvent", "call")?],
         vec![coverage(
             &context,
             "project.main",
@@ -292,12 +279,7 @@ fn tampered_bundle_identity_is_rejected_on_read_back() -> TestResult {
         &context,
         "project.main",
         Vec::new(),
-        vec![fact(
-            &context,
-            "project.main",
-            "RegisterEvent",
-            "call",
-        )?],
+        vec![fact(&context, "project.main", "RegisterEvent", "call")?],
         vec![coverage(
             &context,
             "project.main",
@@ -308,10 +290,8 @@ fn tampered_bundle_identity_is_rejected_on_read_back() -> TestResult {
         RecognizerFactLimits::default(),
     )?;
     let mut value = serde_json::to_value(&bundle)?;
-    value["bundle_id"] = serde_json::json!(format!(
-        "recognizer-fact-bundle:sha256:{}",
-        "f".repeat(64)
-    ));
+    value["bundle_id"] =
+        serde_json::json!(format!("recognizer-fact-bundle:sha256:{}", "f".repeat(64)));
     let tampered: RecognizerFactBundle = serde_json::from_value(value)?;
     assert_eq!(
         tampered
