@@ -58,6 +58,10 @@ fn registry_id(value: &str) -> bool {
     digest_id(value, "recognizer-registry:sha256:")
 }
 
+fn emmy_adapter_id(value: &str) -> bool {
+    digest_id(value, "recognizer-emmy-adapter:sha256:")
+}
+
 fn digest_id(value: &str, prefix: &str) -> bool {
     let Some(hex) = value.strip_prefix(prefix) else {
         return false;
@@ -79,3 +83,9 @@ text_id!(
 text_id!(RecognitionAssertionId, "assertion id", 128, assertion_id);
 text_id!(RecognitionReportId, "report id", 128, report_id);
 text_id!(RecognizerRegistryId, "registry id", 128, registry_id);
+text_id!(
+    EmmyDirectCallAdapterId,
+    "Emmy adapter id",
+    128,
+    emmy_adapter_id
+);

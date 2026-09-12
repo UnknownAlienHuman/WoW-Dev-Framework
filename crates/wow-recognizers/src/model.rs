@@ -920,7 +920,7 @@ fn report_id(
     ))
 }
 
-fn normalize_ids(
+pub(crate) fn normalize_ids(
     mut values: Vec<Box<str>>,
     max: usize,
     code: RecognizerErrorCode,
