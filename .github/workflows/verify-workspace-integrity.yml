@@ -31,6 +31,8 @@ jobs:
           git apply .ci/workspace-integrity/fix-01.patch
           git apply --check .ci/workspace-integrity/fix-02.patch
           git apply .ci/workspace-integrity/fix-02.patch
+          git apply --check .ci/workspace-integrity/fix-03.patch
+          git apply .ci/workspace-integrity/fix-03.patch
           rm -rf .ci/workspace-integrity
           rm .github/workflows/verify-workspace-integrity.yml
           cargo +stable generate-lockfile
