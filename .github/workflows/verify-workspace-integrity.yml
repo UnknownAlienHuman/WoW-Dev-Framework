@@ -27,12 +27,10 @@ jobs:
       - name: Prepare final tree
         run: |
           set -euo pipefail
-          git apply --check .ci/workspace-integrity/fix-01.patch
-          git apply .ci/workspace-integrity/fix-01.patch
-          git apply --check .ci/workspace-integrity/fix-02.patch
-          git apply .ci/workspace-integrity/fix-02.patch
-          git apply --check .ci/workspace-integrity/fix-03.patch
-          git apply .ci/workspace-integrity/fix-03.patch
+          for patch in .ci/workspace-integrity/fix-*.patch; do
+            git apply --check "$patch"
+            git apply "$patch"
+          done
           rm -rf .ci/workspace-integrity
           rm .github/workflows/verify-workspace-integrity.yml
           cargo +stable generate-lockfile
