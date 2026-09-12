@@ -251,8 +251,5 @@ fn check_cancelled(cancelled: &AtomicBool) -> RecognizerResult<()> {
 }
 
 fn graph_projection_error(source: GraphError) -> RecognizerError {
-    RecognizerError::new(
-        RecognizerErrorCode::GraphProjectionFailed,
-        source.message(),
-    )
+    RecognizerError::new(RecognizerErrorCode::GraphProjectionFailed, source.message())
 }
