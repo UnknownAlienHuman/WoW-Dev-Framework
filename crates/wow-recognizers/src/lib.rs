@@ -9,6 +9,7 @@
 mod emmy;
 mod engine;
 mod error;
+mod facts;
 mod identity;
 mod model;
 mod pack;
@@ -20,9 +21,15 @@ pub use emmy::{
 };
 pub use engine::{project_graph_coverage, project_graph_edges, run_recognizers};
 pub use error::{RecognizerError, RecognizerErrorCode, RecognizerResult};
+pub use facts::{
+    RECOGNIZER_FACT_BUNDLE_SCHEMA, RecognizerFact, RecognizerFactBundle, RecognizerFactCoverage,
+    RecognizerFactCoverageInput, RecognizerFactCoverageState, RecognizerFactInput,
+    RecognizerFactLimits, RecognizerFactScope, RecognizerFactScopeKind, RecognizerFactValue,
+};
 pub use identity::{
-    EmmyDirectCallAdapterId, RecognitionAssertionId, RecognitionReportId, RecognizerId,
-    RecognizerPlanId, RecognizerRegistryId, RecognizerVersion, StructuredObservationId,
+    EmmyDirectCallAdapterId, RecognitionAssertionId, RecognitionReportId, RecognizerFactBundleId,
+    RecognizerFactId, RecognizerId, RecognizerPlanId, RecognizerRegistryId, RecognizerVersion,
+    StructuredObservationId,
 };
 pub use model::{
     ObservationFamily, ObservationOrigin, RecognitionAssertion, RecognitionCoverage,
