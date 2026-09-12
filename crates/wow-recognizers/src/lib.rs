@@ -12,6 +12,7 @@ mod error;
 mod identity;
 mod model;
 mod pack;
+mod plan;
 
 pub use emmy::{
     EMMY_DIRECT_CALL_ADAPTER_SCHEMA, EmmyDirectCallAdaptation, EmmyDirectCallBinding,
@@ -21,7 +22,7 @@ pub use engine::{project_graph_coverage, project_graph_edges, run_recognizers};
 pub use error::{RecognizerError, RecognizerErrorCode, RecognizerResult};
 pub use identity::{
     EmmyDirectCallAdapterId, RecognitionAssertionId, RecognitionReportId, RecognizerId,
-    RecognizerRegistryId, RecognizerVersion, StructuredObservationId,
+    RecognizerPlanId, RecognizerRegistryId, RecognizerVersion, StructuredObservationId,
 };
 pub use model::{
     ObservationFamily, ObservationOrigin, RecognitionAssertion, RecognitionCoverage,
@@ -34,4 +35,9 @@ pub use pack::{
     RecognizerOutputConfidence, RecognizerPack, RecognizerPackBudgets, RecognizerPackDocument,
     RecognizerPackLiteral, RecognizerPackRollout, RecognizerPackTrustClass, RecognizerRule,
     parse_recognizer_pack,
+};
+pub use plan::{
+    CompiledRecognizerPlan, CompiledRecognizerRulePlan, RECOGNIZER_PLAN_SCHEMA,
+    RecognizerPlanBounds, RecognizerPlanCostClass, RecognizerPlanStep, RecognizerPlanStepKind,
+    RecognizerRulePlanBounds, compile_recognizer_plan,
 };

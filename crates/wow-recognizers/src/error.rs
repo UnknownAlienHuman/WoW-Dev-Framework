@@ -30,6 +30,8 @@ pub enum RecognizerErrorCode {
     PackNegativeCoverageMissing,
     PackOutputInvalid,
     PackIdentityMismatch,
+    PlanInvalid,
+    PlanIdentityMismatch,
     ObservationDuplicate,
     ObservationInvalid,
     ObservationSnapshotMismatch,
