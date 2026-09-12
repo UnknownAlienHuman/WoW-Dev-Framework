@@ -11,6 +11,7 @@ mod engine;
 mod error;
 mod identity;
 mod model;
+mod pack;
 
 pub use emmy::{
     EMMY_DIRECT_CALL_ADAPTER_SCHEMA, EmmyDirectCallAdaptation, EmmyDirectCallBinding,
@@ -26,4 +27,11 @@ pub use model::{
     ObservationFamily, ObservationOrigin, RecognitionAssertion, RecognitionCoverage,
     RecognitionCoverageState, RecognitionReport, RecognizerDescriptor, RecognizerLimits,
     RecognizerRegistry, StructuredObservation, StructuredObservationInput,
+};
+pub use pack::{
+    CompiledRecognizerPack, MAX_RECOGNIZER_PACK_BYTES, RECOGNIZER_PACK_SCHEMA_VERSION,
+    RecognizerCapture, RecognizerCaptureCardinality, RecognizerClause, RecognizerOutput,
+    RecognizerOutputConfidence, RecognizerPack, RecognizerPackBudgets, RecognizerPackDocument,
+    RecognizerPackLiteral, RecognizerPackRollout, RecognizerPackTrustClass, RecognizerRule,
+    parse_recognizer_pack,
 };
