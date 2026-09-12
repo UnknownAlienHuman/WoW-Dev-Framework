@@ -1,0 +1,51 @@
+name: Finalize recognizers graph adapter
+
+on:
+  push:
+    branches:
+      - work/recognizers-graph-adapter
+
+permissions:
+  contents: write
+
+concurrency:
+  group: finalize-recognizers-graph-adapter
+  cancel-in-progress: true
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: true
+      - name: Install stable Rust
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+      - name: Materialize final adapter tree
+        run: |
+          set -euo pipefail
+          echo '66a83245c59ceb070962d9829f9a4b237162986bfbaa5472c2b0f0038c3b5ae6  .ci/recognizers-graph-adapter/getters.patch' | sha256sum --check --status
+          git apply .ci/recognizers-graph-adapter/getters.patch
+          rm -rf .ci/recognizers-graph-adapter
+          rm .github/workflows/finalize-recognizers-graph-adapter.yml
+          cargo +stable fmt --all
+          git add -A
+          git diff --cached --check
+      - name: Verify adapter and workspace
+        run: |
+          set -euo pipefail
+          cargo +stable xtask check
+          cargo +stable check --locked --workspace --all-targets --all-features
+          cargo +stable test --locked --package wow-recognizers --all-targets --all-features -- --nocapture
+          cargo +stable clippy --locked --workspace --all-targets --all-features -- -D warnings
+          RUSTDOCFLAGS='-D warnings' cargo +stable doc --locked --workspace --all-features --no-deps
+      - name: Commit verified implementation
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+UnknownAlienHuman@users.noreply.github.com
+          git add -A
+          git diff --cached --check
+          git commit -m 'feat(recognizers): adapt complete outputs to graph proposals'
+          git push origin HEAD:work/recognizers-graph-adapter
