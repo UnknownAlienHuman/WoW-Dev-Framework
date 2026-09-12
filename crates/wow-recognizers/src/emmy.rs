@@ -4,9 +4,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use wow_core::canonical_json_bytes;
-use wow_emmy::{
-    EmmyFactFileStatus, EmmyMemberCallReport, EmmyReferenceResolution,
-};
+use wow_emmy::{EmmyFactFileStatus, EmmyMemberCallReport, EmmyReferenceResolution};
 use wow_graph::{GraphConfidence, GraphNodeId, GraphSnapshot, GraphSnapshotId};
 
 use crate::model::normalize_ids;
@@ -16,8 +14,7 @@ use crate::{
     RecognizerResult, StructuredObservation, StructuredObservationInput,
 };
 
-pub const EMMY_DIRECT_CALL_ADAPTER_SCHEMA: &str =
-    "wow-recognizers/emmy-direct-call-adapter/e2-b/1";
+pub const EMMY_DIRECT_CALL_ADAPTER_SCHEMA: &str = "wow-recognizers/emmy-direct-call-adapter/e2-b/1";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -361,12 +358,8 @@ pub fn adapt_emmy_direct_calls(
     } else {
         RecognitionCoverageState::Partial
     };
-    let coverage = RecognitionCoverage::new(
-        ObservationFamily::DirectCall,
-        state,
-        blockers,
-        limits,
-    )?;
+    let coverage =
+        RecognitionCoverage::new(ObservationFamily::DirectCall, state, blockers, limits)?;
     check_cancelled(cancelled)?;
     EmmyDirectCallAdaptation::build(
         report.analysis_id().into(),

@@ -157,7 +157,10 @@ fn explicit_bindings_preserve_resolution_without_name_inference() -> TestResult 
     assert_eq!(adapted.source_analysis_id(), report.analysis_id());
     assert_eq!(adapted.source_main_snapshot_id(), main.snapshot_id());
     assert_eq!(adapted.graph_snapshot_id(), graph.snapshot_id());
-    assert_eq!(adapted.coverage().state(), RecognitionCoverageState::Complete);
+    assert_eq!(
+        adapted.coverage().state(),
+        RecognitionCoverageState::Complete
+    );
     assert_eq!(adapted.observations().len(), 2);
     let known = adapted
         .observations()
@@ -172,7 +175,12 @@ fn explicit_bindings_preserve_resolution_without_name_inference() -> TestResult 
     assert_eq!(known.family(), ObservationFamily::DirectCall);
     assert_eq!(known.confidence(), GraphConfidence::Derived);
     assert_eq!(missing.confidence(), GraphConfidence::Possible);
-    assert!(known.evidence_ids().iter().any(|id| id.as_ref() == known_call.fact_id()));
+    assert!(
+        known
+            .evidence_ids()
+            .iter()
+            .any(|id| id.as_ref() == known_call.fact_id())
+    );
     assert!(
         missing
             .evidence_ids()
@@ -200,7 +208,10 @@ fn malformed_main_file_produces_partial_coverage_without_invented_calls() -> Tes
         &AtomicBool::new(false),
     )?;
     assert!(adapted.observations().is_empty());
-    assert_eq!(adapted.coverage().state(), RecognitionCoverageState::Partial);
+    assert_eq!(
+        adapted.coverage().state(),
+        RecognitionCoverageState::Partial
+    );
     assert_eq!(adapted.coverage().blocker_ids().len(), 1);
     assert!(adapted.coverage().blocker_ids()[0].starts_with("emmy-file-parse-failed:sha256:"));
     Ok(())
@@ -218,15 +229,10 @@ fn missing_unknown_and_duplicate_bindings_fail_closed() -> TestResult {
     let call = report.calls().first().ok_or("call fact")?;
     let (graph, nodes) = graph()?;
     let limits = RecognizerLimits::default();
-    let missing = adapt_emmy_direct_calls(
-        &report,
-        &graph,
-        Vec::new(),
-        limits,
-        &AtomicBool::new(false),
-    )
-    .err()
-    .ok_or("missing binding must fail")?;
+    let missing =
+        adapt_emmy_direct_calls(&report, &graph, Vec::new(), limits, &AtomicBool::new(false))
+            .err()
+            .ok_or("missing binding must fail")?;
     assert_eq!(missing.code(), RecognizerErrorCode::AdapterBindingMissing);
 
     let valid = EmmyDirectCallBinding::new(
@@ -245,7 +251,10 @@ fn missing_unknown_and_duplicate_bindings_fail_closed() -> TestResult {
     )
     .err()
     .ok_or("duplicate binding must fail")?;
-    assert_eq!(duplicate.code(), RecognizerErrorCode::AdapterBindingDuplicate);
+    assert_eq!(
+        duplicate.code(),
+        RecognizerErrorCode::AdapterBindingDuplicate
+    );
 
     let unknown_id = format!("emmy-call:sha256:{}", "f".repeat(64));
     let unknown = adapt_emmy_direct_calls(
