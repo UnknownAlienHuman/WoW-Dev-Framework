@@ -1,6 +1,6 @@
 --- a/crates/wow-reference/src/publication.rs
 +++ b/crates/wow-reference/src/publication.rs
-@@ -7,9 +7,8 @@
+@@ -7,8 +7,8 @@
  
  use crate::{
      ReferenceView,
