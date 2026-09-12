@@ -1,11 +1,19 @@
 --- a/crates/wow-reference/src/persistent.rs
 +++ b/crates/wow-reference/src/persistent.rs
-@@ -8 +8 @@
+@@ -4,7 +4,7 @@
+ //! strict wire representation to immutable store objects and explicit publication CAS.
+ 
+ use std::fmt;
+ 
 -use serde::{Deserialize, Serialize, de::DeserializeOwned};
 +use serde::Serialize;
+ use wow_store::{
+     CatalogExpectation, CatalogMutation, CatalogName, CatalogPath, CommitReceipt,
 --- a/crates/wow-reference/src/publication.rs
 +++ b/crates/wow-reference/src/publication.rs
-@@ -79,8 +79,2 @@
+@@ -77,10 +77,4 @@
+         ))?;
+         Ok(batch)
      }
  }
 -
