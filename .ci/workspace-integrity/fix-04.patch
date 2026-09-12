@@ -1,6 +1,6 @@
 --- a/crates/wow-store/tests/store_e1.rs
 +++ b/crates/wow-store/tests/store_e1.rs
-@@ -262,9 +262,9 @@
+@@ -262,8 +262,8 @@
  fn logical_manifest_is_order_invariant_and_persists_across_reopen() -> TestResult {
      let path = temporary_database("reopen");
      remove_database(&path);
@@ -11,7 +11,7 @@
 +        let mut store = Store::open(&path, store_configuration.clone())?;
          let first = pending(json!({"value":"a"}))?;
          let second = pending(json!({"value":"b"}))?;
-@@ -276,7 +276,7 @@
+@@ -276,5 +276,5 @@
          assert!(report.complete());
          store.logical_manifest()?
      };
@@ -20,7 +20,7 @@
      let manifest_after = reopened.logical_manifest()?;
 --- a/crates/wow-graph/src/lib.rs
 +++ b/crates/wow-graph/src/lib.rs
-@@ -16,7 +16,8 @@
+@@ -16,6 +16,7 @@
      GraphRelationKind, GraphSnapshot,
  };
  pub use persistent::{
