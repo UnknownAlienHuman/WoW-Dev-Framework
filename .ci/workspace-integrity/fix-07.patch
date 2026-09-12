@@ -1,6 +1,6 @@
 --- a/crates/wow-store/src/model.rs
 +++ b/crates/wow-store/src/model.rs
-@@ -445,7 +445,9 @@
+@@ -445,6 +445,8 @@
  pub struct CatalogChange {
      catalog: CatalogName,
      path: CatalogPath,
