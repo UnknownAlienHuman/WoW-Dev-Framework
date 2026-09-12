@@ -1,0 +1,21 @@
+--- a/crates/wow-graph/tests/proposal_e2.rs
++++ b/crates/wow-graph/tests/proposal_e2.rs
+@@ -12,6 +12,7 @@
+ };
+ 
+ type TestResult<T = ()> = Result<T, Box<dyn Error>>;
++type ProposalSupport = (Vec<StableHandleId>, Vec<EvidenceId>, Vec<CoverageId>);
+ 
+ fn universe() -> Result<GraphUniverseId, wow_graph::GraphError> {
+     GraphUniverseId::new("project:proposal-fixture")
+@@ -25,9 +26,7 @@
+     GenerationContextId::derive(&"graph-proposal-fixture")
+ }
+ 
+-fn support(
+-    value: &str,
+-) -> Result<(Vec<StableHandleId>, Vec<EvidenceId>, Vec<CoverageId>), wow_core::CoreError> {
++fn support(value: &str) -> Result<ProposalSupport, wow_core::CoreError> {
+     Ok((
+         vec![StableHandleId::derive(&(value, "handle"))?],
+         vec![EvidenceId::derive(&(value, "evidence"))?],
