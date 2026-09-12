@@ -66,6 +66,14 @@ fn plan_id(value: &str) -> bool {
     digest_id(value, "recognizer-plan:sha256:")
 }
 
+fn fact_id(value: &str) -> bool {
+    digest_id(value, "recognizer-fact:sha256:")
+}
+
+fn fact_bundle_id(value: &str) -> bool {
+    digest_id(value, "recognizer-fact-bundle:sha256:")
+}
+
 fn digest_id(value: &str, prefix: &str) -> bool {
     let Some(hex) = value.strip_prefix(prefix) else {
         return false;
@@ -94,3 +102,10 @@ text_id!(
     emmy_adapter_id
 );
 text_id!(RecognizerPlanId, "recognizer plan id", 128, plan_id);
+text_id!(RecognizerFactId, "recognizer fact id", 128, fact_id);
+text_id!(
+    RecognizerFactBundleId,
+    "recognizer fact bundle id",
+    160,
+    fact_bundle_id
+);
