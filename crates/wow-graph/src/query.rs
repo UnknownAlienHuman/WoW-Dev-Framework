@@ -3,8 +3,8 @@ use std::collections::BTreeSet;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    GraphCoverageRecord, GraphCoverageState, GraphDirection, GraphEdge, GraphError,
-    GraphErrorCode, GraphNode, GraphNodeId, GraphRelationKind, GraphResult, GraphSnapshot,
+    GraphCoverageRecord, GraphCoverageState, GraphEdge, GraphError, GraphErrorCode, GraphNode,
+    GraphNodeId, GraphRelationKind, GraphResult, GraphSnapshot,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -103,9 +103,7 @@ impl GraphNeighborQuery {
             .filter(|edge| match self.direction {
                 GraphDirection::Outgoing => edge.from() == &self.node_id,
                 GraphDirection::Incoming => edge.to() == &self.node_id,
-                GraphDirection::Both => {
-                    edge.from() == &self.node_id || edge.to() == &self.node_id
-                }
+                GraphDirection::Both => edge.from() == &self.node_id || edge.to() == &self.node_id,
             })
             .cloned()
             .collect::<Vec<_>>();

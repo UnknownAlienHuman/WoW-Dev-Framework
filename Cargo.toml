@@ -2,12 +2,14 @@
 resolver = "3"
 members = [
     "crates/wow-core",
+    "crates/wow-store",
     "crates/wow-reference",
     "crates/wow-annotations",
     "crates/wow-emmy",
     "crates/wow-project",
     "crates/wow-rules",
     "crates/wow-service",
+    "crates/wow-graph",
     "tools/xtask",
     "crates/wow-render-contract",
     "crates/wow-ketho-literals",

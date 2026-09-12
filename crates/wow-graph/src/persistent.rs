@@ -4,9 +4,7 @@ use wow_store::{
     PendingObject, Store, WriteBatch,
 };
 
-use crate::{
-    GraphError, GraphErrorCode, GraphPublicationKey, GraphResult, GraphSnapshot,
-};
+use crate::{GraphError, GraphErrorCode, GraphPublicationKey, GraphResult, GraphSnapshot};
 
 pub const GRAPH_STORE_SCHEMA: &str = "wow-graph/store/e2-a/1";
 pub const GRAPH_SNAPSHOT_OBJECT_KIND: &str = "wow.graph.snapshot";
@@ -76,10 +74,7 @@ impl<'store> PersistentGraphStore<'store> {
         Self { store }
     }
 
-    pub fn store_snapshot(
-        &mut self,
-        snapshot: &GraphSnapshot,
-    ) -> GraphResult<StoredGraphSnapshot> {
+    pub fn store_snapshot(&mut self, snapshot: &GraphSnapshot) -> GraphResult<StoredGraphSnapshot> {
         snapshot.validate()?;
         let pending = self.pending(snapshot)?;
         let object_id = pending.object_id().clone();

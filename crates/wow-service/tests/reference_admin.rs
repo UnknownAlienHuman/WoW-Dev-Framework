@@ -8,7 +8,8 @@ use wow_service::reference_admin::{
 
 type TestResult<T = ()> = Result<T, Box<dyn Error>>;
 
-fn configuration() -> Result<ReferenceAdminConfiguration, wow_service::reference_admin::ReferenceAdminError> {
+fn configuration()
+-> Result<ReferenceAdminConfiguration, wow_service::reference_admin::ReferenceAdminError> {
     ReferenceAdminConfiguration::new(
         "reference-admin-test",
         ReferenceAdminStoreLimits::default(),
@@ -46,9 +47,17 @@ fn malformed_view_fails_before_any_publication() -> TestResult {
         ReferenceAdminExpectation::Absent,
         br#"{"not":"a-reference-view"}"#.to_vec(),
     );
-    let error = service.publish(request).err().ok_or("expected invalid view")?;
+    let error = service
+        .publish(request)
+        .err()
+        .ok_or("expected invalid view")?;
     assert_eq!(error.code(), ReferenceAdminErrorCode::ReferenceViewInvalid);
-    assert!(service.status(&key, 100)?.current_reference_object_id().is_none());
+    assert!(
+        service
+            .status(&key, 100)?
+            .current_reference_object_id()
+            .is_none()
+    );
     Ok(())
 }
 

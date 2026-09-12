@@ -11,9 +11,8 @@ use sha2::{Digest, Sha256};
 use wow_core::canonical_json_bytes;
 use wow_store::{
     CatalogExpectation, CatalogMutation, CatalogName, CatalogPath, CommitReceipt,
-    GarbageCollectionReceipt, IntegrityReport, LeaseId, LeaseRecord, LogicalEpoch,
-    LogicalManifest, ObjectId, ObjectRecord, PendingObject, Store, StoreError, StoreErrorCode,
-    WriteBatch,
+    GarbageCollectionReceipt, IntegrityReport, LeaseId, LeaseRecord, LogicalEpoch, LogicalManifest,
+    ObjectId, ObjectRecord, PendingObject, Store, StoreError, StoreErrorCode, WriteBatch,
 };
 
 use crate::native::NativeLibrary;
@@ -102,9 +101,7 @@ impl From<StoreError> for AnnotationStoreError {
             }
             StoreErrorCode::LeaseConflict => AnnotationStoreErrorCode::StoreLeaseConflict,
             StoreErrorCode::LeaseInvalid => AnnotationStoreErrorCode::StoreLeaseInvalid,
-            StoreErrorCode::IntegrityViolation => {
-                AnnotationStoreErrorCode::StoreIntegrityViolation
-            }
+            StoreErrorCode::IntegrityViolation => AnnotationStoreErrorCode::StoreIntegrityViolation,
             StoreErrorCode::BudgetExceeded => AnnotationStoreErrorCode::StoreBudgetExceeded,
             StoreErrorCode::DatabaseUnavailable => {
                 AnnotationStoreErrorCode::StoreDatabaseUnavailable
@@ -218,10 +215,7 @@ impl AnnotationArtifact {
                 "annotation artifact payload is invalid JSON",
             )
         })?;
-        let payload_sha256 = format!(
-            "sha256:{}",
-            hex(&Sha256::digest(&self.canonical_payload))
-        );
+        let payload_sha256 = format!("sha256:{}", hex(&Sha256::digest(&self.canonical_payload)));
         if self.payload_sha256.as_ref() != payload_sha256 {
             return Err(AnnotationStoreError::new(
                 AnnotationStoreErrorCode::ArtifactPayloadInvalid,
@@ -295,9 +289,7 @@ impl AnnotationPublicationKey {
         ] {
             validate_identity_component(value)?;
         }
-        let catalog_path = CatalogPath::new(format!(
-            "{profile}/{environment}/{artifact_family}"
-        ))?;
+        let catalog_path = CatalogPath::new(format!("{profile}/{environment}/{artifact_family}"))?;
         Ok(Self {
             profile,
             environment,
@@ -527,10 +519,7 @@ impl<'store> PersistentAnnotationStore<'store> {
         Ok(self.store.collect_garbage(now, max_deletes)?)
     }
 
-    pub fn validate_integrity(
-        &self,
-        max_objects: u32,
-    ) -> AnnotationStoreResult<IntegrityReport> {
+    pub fn validate_integrity(&self, max_objects: u32) -> AnnotationStoreResult<IntegrityReport> {
         Ok(self.store.validate_integrity(max_objects)?)
     }
 
@@ -555,9 +544,7 @@ fn current_catalog() -> AnnotationStoreResult<CatalogName> {
     Ok(CatalogName::new(CURRENT_CATALOG)?)
 }
 
-fn decode_annotation_artifact(
-    record: &ObjectRecord,
-) -> AnnotationStoreResult<AnnotationArtifact> {
+fn decode_annotation_artifact(record: &ObjectRecord) -> AnnotationStoreResult<AnnotationArtifact> {
     if record.kind() != ANNOTATION_OBJECT_KIND {
         return Err(AnnotationStoreError::new(
             AnnotationStoreErrorCode::ArtifactKindMismatch,
@@ -660,21 +647,25 @@ mod tests {
         let left = artifact(json!({"zeta":2,"alpha":1}))?;
         let right = artifact(json!({"alpha":1,"zeta":2}))?;
         assert_eq!(left, right);
-        assert!(left.artifact_id().starts_with("annotation-artifact:sha256:"));
+        assert!(
+            left.artifact_id()
+                .starts_with("annotation-artifact:sha256:")
+        );
         left.validate()?;
         Ok(())
     }
 
     #[test]
-    fn exact_publish_read_and_cas_are_store_owned()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn exact_publish_read_and_cas_are_store_owned() -> Result<(), Box<dyn std::error::Error>> {
         let configuration = StoreConfiguration::new("annotation-test", StoreLimits::default())?;
         let mut store = Store::open_in_memory(configuration)?;
         let mut facade = PersistentAnnotationStore::new(&mut store);
         let key = AnnotationPublicationKey::new("retail-12.1", "mainline", "emmy-library")?;
         let first = artifact(json!({"files":[{"path":"A.lua"}]}))?;
         let stored = facade.publish_current(key.clone(), &first, CatalogExpectation::Absent)?;
-        let current = facade.read_current(&key)?.ok_or("missing current artifact")?;
+        let current = facade
+            .read_current(&key)?
+            .ok_or("missing current artifact")?;
         assert_eq!(current.object_id(), stored.object_id());
         assert_eq!(current.artifact(), &first);
         let second = artifact(json!({"files":[{"path":"B.lua"}]}))?;
@@ -699,8 +690,7 @@ mod tests {
     }
 
     #[test]
-    fn wrong_kind_and_tampered_artifact_fail_closed()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn wrong_kind_and_tampered_artifact_fail_closed() -> Result<(), Box<dyn std::error::Error>> {
         let configuration = StoreConfiguration::new("annotation-kind", StoreLimits::default())?;
         let mut store = Store::open_in_memory(configuration)?;
         let pending = PendingObject::from_json(

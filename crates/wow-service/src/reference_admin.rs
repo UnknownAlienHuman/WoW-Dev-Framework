@@ -23,6 +23,11 @@ pub const REFERENCE_ADMIN_SCHEMA: &str = "wow-service/reference-admin/e1-d/1";
 const PUBLISH_RESULT_KIND: &str = "wow.service.reference_publish_result";
 const PUBLISH_RESULT_SCHEMA_VERSION: u32 = 1;
 
+pub type ReferenceAdminExpectation = CatalogExpectation;
+pub type ReferenceAdminOperationId = OperationId;
+pub type ReferenceAdminPublicationKey = ReferencePublicationKey;
+pub type ReferenceAdminStoreLimits = StoreLimits;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ReferenceAdminErrorCode {
@@ -389,8 +394,7 @@ impl ReferenceAdminService {
         request: PublishReferenceRequest,
     ) -> ReferenceAdminResult<ReferencePublishResult> {
         let (view, canonical) = self.parse_view(&request.reference_view_json)?;
-        let view_sha256 =
-            format!("sha256:{}", hex(&Sha256::digest(&canonical))).into_boxed_str();
+        let view_sha256 = format!("sha256:{}", hex(&Sha256::digest(&canonical))).into_boxed_str();
         let prepared = PreparedReferencePublication::new(
             request.publication_key.clone(),
             &view,
@@ -436,12 +440,10 @@ impl ReferenceAdminService {
                     ReferenceAdminErrorCode::OutcomeUnknown,
                     "reference publication outcome requires external reconciliation",
                 )),
-                OperationState::NoEffect | OperationState::Failed => {
-                    Err(ReferenceAdminError::new(
-                        ReferenceAdminErrorCode::OperationIncomplete,
-                        "reference publication operation is already terminal without success",
-                    ))
-                }
+                OperationState::NoEffect | OperationState::Failed => Err(ReferenceAdminError::new(
+                    ReferenceAdminErrorCode::OperationIncomplete,
+                    "reference publication operation is already terminal without success",
+                )),
             },
         }
     }
