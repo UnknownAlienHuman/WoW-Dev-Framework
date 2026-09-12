@@ -10,6 +10,7 @@ members = [
     "crates/wow-rules",
     "crates/wow-service",
     "crates/wow-graph",
+    "crates/wow-recognizers",
     "tools/xtask",
     "crates/wow-render-contract",
     "crates/wow-ketho-literals",
