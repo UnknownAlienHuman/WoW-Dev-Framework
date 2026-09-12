@@ -1,0 +1,34 @@
+name: Verify recognizers E2-B
+
+on:
+  push:
+    branches:
+      - work/recognizers-e2-b
+
+permissions:
+  contents: read
+
+concurrency:
+  group: recognizers-e2-b
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Install stable Rust
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+      - name: Activate recognizer package in isolated checkout
+        run: sed -i '/"crates\/wow-service",/a\    "crates/wow-recognizers",' Cargo.toml
+      - name: Verify package
+        run: |
+          set -euo pipefail
+          cargo +stable fmt --all --check
+          cargo +stable check --package wow-recognizers --all-targets --all-features
+          cargo +stable test --package wow-recognizers --all-targets --all-features -- --nocapture
+          cargo +stable clippy --package wow-recognizers --all-targets --all-features -- -D warnings
+          RUSTDOCFLAGS='-D warnings' cargo +stable doc --package wow-recognizers --all-features --no-deps
