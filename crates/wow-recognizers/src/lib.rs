@@ -11,6 +11,7 @@ mod engine;
 mod error;
 mod facts;
 mod identity;
+mod matcher;
 mod model;
 mod pack;
 mod plan;
@@ -28,8 +29,14 @@ pub use facts::{
 };
 pub use identity::{
     EmmyDirectCallAdapterId, RecognitionAssertionId, RecognitionReportId, RecognizerFactBundleId,
-    RecognizerFactId, RecognizerId, RecognizerPlanId, RecognizerRegistryId, RecognizerVersion,
+    RecognizerFactId, RecognizerId, RecognizerMatchId, RecognizerOutputPartitionId,
+    RecognizerPlanId, RecognizerProposalId, RecognizerRegistryId, RecognizerVersion,
     StructuredObservationId,
+};
+pub use matcher::{
+    RECOGNIZER_OUTPUT_PARTITION_SCHEMA, RecognizerCapturedValue, RecognizerMatch,
+    RecognizerOutputPartition, RecognizerProposedAssertion, RecognizerRuleOutcome,
+    RecognizerRuleOutcomeState, execute_recognizer_plan,
 };
 pub use model::{
     ObservationFamily, ObservationOrigin, RecognitionAssertion, RecognitionCoverage,
