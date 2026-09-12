@@ -1,0 +1,147 @@
+--- a/crates/wow-graph/src/registry.rs
++++ b/crates/wow-graph/src/registry.rs
+@@ -376,7 +376,7 @@
+     Ok(())
+ }
+ 
+-fn normalize_components(values: &mut Vec<Box<str>>, label: &str) -> GraphResult<()> {
++fn normalize_components(values: &mut [Box<str>], label: &str) -> GraphResult<()> {
+     for value in values.iter() {
+         validate_component(value, label)?;
+     }
+--- a/crates/wow-graph/src/proposal.rs
++++ b/crates/wow-graph/src/proposal.rs
+@@ -150,6 +150,17 @@
+ 
+ #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+ #[serde(deny_unknown_fields)]
++pub struct GraphRelationProposalInput {
++    pub source: GraphProposalEndpoint,
++    pub target: GraphProposalEndpoint,
++    pub confidence: GraphConfidence,
++    pub source_handle_ids: Vec<StableHandleId>,
++    pub evidence_ids: Vec<EvidenceId>,
++    pub coverage_ids: Vec<CoverageId>,
++}
++
++#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
+ pub struct GraphRelationProposal {
+     proposal_id: Box<str>,
+     relation_kind_id: Box<str>,
+@@ -165,15 +176,18 @@
+     pub fn new(
+         proposal_id: impl Into<Box<str>>,
+         relation_kind_id: impl Into<Box<str>>,
+-        source: GraphProposalEndpoint,
+-        target: GraphProposalEndpoint,
+-        confidence: GraphConfidence,
+-        source_handle_ids: Vec<StableHandleId>,
+-        evidence_ids: Vec<EvidenceId>,
+-        coverage_ids: Vec<CoverageId>,
++        input: GraphRelationProposalInput,
+     ) -> GraphResult<Self> {
+         let proposal_id = proposal_id.into();
+         let relation_kind_id = relation_kind_id.into();
++        let GraphRelationProposalInput {
++            source,
++            target,
++            confidence,
++            source_handle_ids,
++            evidence_ids,
++            coverage_ids,
++        } = input;
+         validate_external_id(&proposal_id)?;
+         crate::registry::validate_component(&relation_kind_id, "relation proposal kind")?;
+         source.validate()?;
+@@ -203,12 +217,14 @@
+         if Self::new(
+             self.proposal_id.clone(),
+             self.relation_kind_id.clone(),
+-            self.source.clone(),
+-            self.target.clone(),
+-            self.confidence,
+-            self.source_handle_ids.clone(),
+-            self.evidence_ids.clone(),
+-            self.coverage_ids.clone(),
++            GraphRelationProposalInput {
++                source: self.source.clone(),
++                target: self.target.clone(),
++                confidence: self.confidence,
++                source_handle_ids: self.source_handle_ids.clone(),
++                evidence_ids: self.evidence_ids.clone(),
++                coverage_ids: self.coverage_ids.clone(),
++            },
+         )? != *self
+         {
+             return Err(GraphError::new(
+--- a/crates/wow-graph/src/lib.rs
++++ b/crates/wow-graph/src/lib.rs
+@@ -23,7 +23,8 @@
+     GRAPH_PROPOSAL_BATCH_SCHEMA, GRAPH_PROPOSAL_REPORT_SCHEMA, GraphAcceptedEntityProposal,
+     GraphAcceptedRelationProposal, GraphEntityProposal, GraphProposalBatch, GraphProposalEndpoint,
+     GraphProposalRejection, GraphProposalRejectionCode, GraphProposalValidationReport,
+-    GraphProposalValue, GraphRelationProposal, validate_graph_proposal_batch,
++    GraphProposalValue, GraphRelationProposal, GraphRelationProposalInput,
++    validate_graph_proposal_batch,
+ };
+ pub use persistent::{
+     GRAPH_SNAPSHOT_OBJECT_KIND, GRAPH_SNAPSHOT_OBJECT_SCHEMA_VERSION, GRAPH_STORE_SCHEMA,
+--- a/crates/wow-graph/tests/proposal_e2.rs
++++ b/crates/wow-graph/tests/proposal_e2.rs
+@@ -7,7 +7,8 @@
+     GraphConfidence, GraphEntityKindDefinition, GraphEntityProposal, GraphErrorCode,
+     GraphGenerationId, GraphLimits, GraphProposalBatch, GraphProposalEndpoint,
+     GraphProposalRejectionCode, GraphProposalValue, GraphRegistryBundle,
+-    GraphRelationKind, GraphRelationKindDefinition, GraphRelationProposal, GraphUniverseId,
++    GraphRelationKind, GraphRelationKindDefinition, GraphRelationProposal,
++    GraphRelationProposalInput, GraphUniverseId,
+     validate_graph_proposal_batch,
+ };
+ 
+@@ -109,12 +110,14 @@
+     let relation = GraphRelationProposal::new(
+         "recognizer-proposal:uses-api",
+         "uses_api",
+-        GraphProposalEndpoint::Proposed("recognizer-proposal:function".into()),
+-        GraphProposalEndpoint::Proposed("recognizer-proposal:api".into()),
+-        GraphConfidence::Derived,
+-        handles,
+-        evidence,
+-        coverage,
++        GraphRelationProposalInput {
++            source: GraphProposalEndpoint::Proposed("recognizer-proposal:function".into()),
++            target: GraphProposalEndpoint::Proposed("recognizer-proposal:api".into()),
++            confidence: GraphConfidence::Derived,
++            source_handle_ids: handles,
++            evidence_ids: evidence,
++            coverage_ids: coverage,
++        },
+     )?;
+     let mut entities = vec![function, api];
+     if reverse {
+@@ -193,12 +196,18 @@
+     let relation = GraphRelationProposal::new(
+         "recognizer-proposal:wrong-pair",
+         "uses_api",
+-        GraphProposalEndpoint::Proposed("recognizer-proposal:wrong-confidence".into()),
+-        GraphProposalEndpoint::Proposed("recognizer-proposal:wrong-confidence".into()),
+-        GraphConfidence::Derived,
+-        handles,
+-        evidence,
+-        coverage,
++        GraphRelationProposalInput {
++            source: GraphProposalEndpoint::Proposed(
++                "recognizer-proposal:wrong-confidence".into(),
++            ),
++            target: GraphProposalEndpoint::Proposed(
++                "recognizer-proposal:wrong-confidence".into(),
++            ),
++            confidence: GraphConfidence::Derived,
++            source_handle_ids: handles,
++            evidence_ids: evidence,
++            coverage_ids: coverage,
++        },
+     )?;
+     let batch = GraphProposalBatch::build(
+         registry.bundle_id(),
