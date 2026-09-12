@@ -5,12 +5,13 @@
 
 use std::fmt;
 
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde::Serialize;
+#[cfg(test)]
+use serde::de::DeserializeOwned;
 use wow_store::{
     CatalogExpectation, CatalogMutation, CatalogName, CatalogPath, CommitReceipt,
-    GarbageCollectionReceipt, IntegrityReport, LeaseId, LeaseRecord, LogicalEpoch,
-    LogicalManifest, ObjectId, ObjectRecord, PendingObject, Store, StoreError, StoreErrorCode,
-    WriteBatch,
+    GarbageCollectionReceipt, IntegrityReport, LeaseId, LeaseRecord, LogicalEpoch, LogicalManifest,
+    ObjectId, ObjectRecord, PendingObject, Store, StoreError, StoreErrorCode, WriteBatch,
 };
 
 use crate::ReferenceView;
@@ -96,9 +97,7 @@ impl From<StoreError> for ReferenceStoreError {
             }
             StoreErrorCode::LeaseConflict => ReferenceStoreErrorCode::StoreLeaseConflict,
             StoreErrorCode::LeaseInvalid => ReferenceStoreErrorCode::StoreLeaseInvalid,
-            StoreErrorCode::IntegrityViolation => {
-                ReferenceStoreErrorCode::StoreIntegrityViolation
-            }
+            StoreErrorCode::IntegrityViolation => ReferenceStoreErrorCode::StoreIntegrityViolation,
             StoreErrorCode::BudgetExceeded => ReferenceStoreErrorCode::StoreBudgetExceeded,
             StoreErrorCode::DatabaseUnavailable => {
                 ReferenceStoreErrorCode::StoreDatabaseUnavailable
@@ -271,10 +270,7 @@ impl<'store> PersistentReferenceStore<'store> {
         Ok(self.store.commit(batch)?)
     }
 
-    pub fn read_exact(
-        &self,
-        object_id: &ObjectId,
-    ) -> ReferenceStoreResult<Option<ReferenceView>> {
+    pub fn read_exact(&self, object_id: &ObjectId) -> ReferenceStoreResult<Option<ReferenceView>> {
         let Some(record) = self.store.object(object_id)? else {
             return Ok(None);
         };
@@ -346,10 +342,7 @@ impl<'store> PersistentReferenceStore<'store> {
         Ok(self.store.collect_garbage(now, max_deletes)?)
     }
 
-    pub fn validate_integrity(
-        &self,
-        max_objects: u32,
-    ) -> ReferenceStoreResult<IntegrityReport> {
+    pub fn validate_integrity(&self, max_objects: u32) -> ReferenceStoreResult<IntegrityReport> {
         Ok(self.store.validate_integrity(max_objects)?)
     }
 
@@ -425,7 +418,8 @@ mod tests {
     }
 
     #[test]
-    fn wrong_object_kind_never_decodes_as_reference_view() -> Result<(), Box<dyn std::error::Error>> {
+    fn wrong_object_kind_never_decodes_as_reference_view() -> Result<(), Box<dyn std::error::Error>>
+    {
         let configuration = StoreConfiguration::new("reference-test", StoreLimits::default())?;
         let mut store = Store::open_in_memory(configuration)?;
         let pending = PendingObject::from_json(

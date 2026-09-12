@@ -18,8 +18,7 @@ pub use model::{
     GraphRelationKind, GraphSnapshot,
 };
 pub use persistent::{
+    GRAPH_SNAPSHOT_OBJECT_KIND, GRAPH_SNAPSHOT_OBJECT_SCHEMA_VERSION, GRAPH_STORE_SCHEMA,
     PersistentGraphStore, PublishedGraphSnapshot, StoredGraphSnapshot,
 };
-pub use query::{
-    GraphDirection, GraphNeighborQuery, GraphNeighborResult, GraphQueryState,
-};
+pub use query::{GraphDirection, GraphNeighborQuery, GraphNeighborResult, GraphQueryState};

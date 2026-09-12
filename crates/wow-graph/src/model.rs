@@ -472,14 +472,8 @@ impl GraphSnapshot {
                 "graph snapshot contains duplicate relation coverage",
             ));
         }
-        let snapshot_id = derive_snapshot_id(
-            &universe,
-            &generation,
-            limits,
-            &nodes,
-            &edges,
-            &coverage,
-        )?;
+        let snapshot_id =
+            derive_snapshot_id(&universe, &generation, limits, &nodes, &edges, &coverage)?;
         Ok(Self {
             schema: GRAPH_SNAPSHOT_SCHEMA.into(),
             snapshot_id,
@@ -564,10 +558,7 @@ impl GraphSnapshot {
     }
 
     #[must_use]
-    pub(crate) fn coverage_for(
-        &self,
-        relation: GraphRelationKind,
-    ) -> Option<&GraphCoverageRecord> {
+    pub(crate) fn coverage_for(&self, relation: GraphRelationKind) -> Option<&GraphCoverageRecord> {
         self.coverage
             .binary_search_by_key(&relation, GraphCoverageRecord::relation)
             .ok()

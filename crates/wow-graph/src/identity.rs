@@ -80,10 +80,7 @@ pub struct GraphPublicationKey {
 }
 
 impl GraphPublicationKey {
-    pub fn new(
-        universe: GraphUniverseId,
-        profile: impl Into<Box<str>>,
-    ) -> GraphResult<Self> {
+    pub fn new(universe: GraphUniverseId, profile: impl Into<Box<str>>) -> GraphResult<Self> {
         let profile = profile.into();
         if profile.is_empty() || profile.len() > 256 || !component(&profile) {
             return Err(GraphError::new(

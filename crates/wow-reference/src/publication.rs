@@ -8,8 +8,8 @@ use wow_store::{
 use crate::{
     ReferenceView,
     persistent::{
-        REFERENCE_VIEW_OBJECT_KIND, REFERENCE_VIEW_OBJECT_SCHEMA_VERSION,
-        ReferencePublicationKey, ReferenceStoreError, ReferenceStoreResult,
+        REFERENCE_VIEW_OBJECT_KIND, REFERENCE_VIEW_OBJECT_SCHEMA_VERSION, ReferencePublicationKey,
+        ReferenceStoreResult,
     },
 };
 
@@ -76,11 +76,5 @@ impl PreparedReferencePublication {
             object_id,
         ))?;
         Ok(batch)
-    }
-}
-
-impl From<wow_store::StoreError> for ReferenceStoreError {
-    fn from(source: wow_store::StoreError) -> Self {
-        crate::persistent::map_store_error(source)
     }
 }

@@ -6,8 +6,8 @@ use crate::{
     CatalogChange, CatalogEntry, CatalogExpectation, CatalogMutation, CatalogName, CatalogPath,
     CommitReceipt, GarbageCollectionReceipt, IntegrityReport, LeaseId, LeaseRecord, LogicalEpoch,
     LogicalManifest, ObjectId, ObjectRecord, OperationBegin, OperationId, OperationRecord,
-    OperationState, PendingObject, RequestDigest, StoreConfiguration, StoreError, StoreErrorCode,
-    StoreResult, WriteBatch,
+    OperationState, RequestDigest, StoreConfiguration, StoreError, StoreErrorCode, StoreResult,
+    WriteBatch,
 };
 
 const APPLICATION_ID: i64 = 0x5744_4631;
@@ -294,12 +294,7 @@ impl Store {
         operation_id: &OperationId,
         request_digest: &RequestDigest,
     ) -> StoreResult<OperationRecord> {
-        self.transition_operation(
-            operation_id,
-            request_digest,
-            OperationState::NoEffect,
-            None,
-        )
+        self.transition_operation(operation_id, request_digest, OperationState::NoEffect, None)
     }
 
     pub fn mark_outcome_unknown(
@@ -320,12 +315,7 @@ impl Store {
         operation_id: &OperationId,
         request_digest: &RequestDigest,
     ) -> StoreResult<OperationRecord> {
-        self.transition_operation(
-            operation_id,
-            request_digest,
-            OperationState::Failed,
-            None,
-        )
+        self.transition_operation(operation_id, request_digest, OperationState::Failed, None)
     }
 
     fn transition_operation(
@@ -761,22 +751,20 @@ fn read_object(connection: &Connection, object_id: &ObjectId) -> StoreResult<Opt
         )
         .optional()
         .map_err(StoreError::database)?;
-    row.map(
-        |(kind, schema_version, content_sha256, canonical_json)| {
-            ObjectRecord::from_parts(
-                object_id.clone(),
-                kind.into(),
-                u32::try_from(schema_version).map_err(|_| {
-                    StoreError::new(
-                        StoreErrorCode::IntegrityViolation,
-                        "stored object schema version is invalid",
-                    )
-                })?,
-                content_sha256.into(),
-                canonical_json.into_boxed_slice(),
-            )
-        },
-    )
+    row.map(|(kind, schema_version, content_sha256, canonical_json)| {
+        ObjectRecord::from_parts(
+            object_id.clone(),
+            kind.into(),
+            u32::try_from(schema_version).map_err(|_| {
+                StoreError::new(
+                    StoreErrorCode::IntegrityViolation,
+                    "stored object schema version is invalid",
+                )
+            })?,
+            content_sha256.into(),
+            canonical_json.into_boxed_slice(),
+        )
+    })
     .transpose()
 }
 

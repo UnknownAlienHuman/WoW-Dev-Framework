@@ -285,10 +285,7 @@ impl ObjectRecord {
 
     pub fn decode<T: DeserializeOwned>(&self) -> StoreResult<T> {
         serde_json::from_slice(&self.canonical_json).map_err(|_| {
-            StoreError::new(
-                StoreErrorCode::JsonInvalid,
-                "stored object JSON is invalid",
-            )
+            StoreError::new(StoreErrorCode::JsonInvalid, "stored object JSON is invalid")
         })
     }
 }
@@ -356,7 +353,7 @@ impl CatalogMutation {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct WriteBatch {
     objects: Vec<PendingObject>,
@@ -446,7 +443,9 @@ impl CatalogEntry {
 pub struct CatalogChange {
     catalog: CatalogName,
     path: CatalogPath,
+    #[serde(skip_serializing_if = "Option::is_none")]
     previous: Option<ObjectId>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     current: Option<ObjectId>,
 }
 
@@ -572,6 +571,7 @@ pub struct OperationRecord {
     operation_id: OperationId,
     request_digest: RequestDigest,
     state: OperationState,
+    #[serde(skip_serializing_if = "Option::is_none")]
     result_object_id: Option<ObjectId>,
 }
 
@@ -832,10 +832,7 @@ pub(crate) fn derive_object_id(
     hash.update(schema_version.to_be_bytes());
     hash.update([0]);
     hash.update(canonical_json);
-    ObjectId::new(format!(
-        "store-object:sha256:{}",
-        hex(&hash.finalize())
-    ))
+    ObjectId::new(format!("store-object:sha256:{}", hex(&hash.finalize())))
 }
 
 fn validate_kind(kind: &str) -> StoreResult<()> {

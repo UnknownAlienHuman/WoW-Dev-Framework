@@ -88,11 +88,7 @@ fn snapshot(reverse: bool) -> Result<GraphSnapshot, wow_graph::GraphError> {
     let mut nodes = vec![alpha, beta, gamma];
     let mut edges = vec![call_beta, call_gamma, signal, api];
     let mut coverage = vec![
-        coverage(
-            GraphRelationKind::Calls,
-            GraphCoverageState::Complete,
-            true,
-        )?,
+        coverage(GraphRelationKind::Calls, GraphCoverageState::Complete, true)?,
         coverage(
             GraphRelationKind::UsesApi,
             GraphCoverageState::Complete,
@@ -114,14 +110,7 @@ fn snapshot(reverse: bool) -> Result<GraphSnapshot, wow_graph::GraphError> {
         edges.reverse();
         coverage.reverse();
     }
-    GraphSnapshot::build(
-        universe()?,
-        generation()?,
-        limits(),
-        nodes,
-        edges,
-        coverage,
-    )
+    GraphSnapshot::build(universe()?, generation()?, limits(), nodes, edges, coverage)
 }
 
 #[test]

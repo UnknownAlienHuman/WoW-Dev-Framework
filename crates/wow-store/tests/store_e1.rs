@@ -8,8 +8,8 @@ use std::{
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use wow_store::{
-    CatalogExpectation, CatalogMutation, CatalogName, CatalogPath, LeaseId, LogicalEpoch,
-    ObjectId, OperationBegin, OperationId, OperationState, PendingObject, RequestDigest, Store,
+    CatalogExpectation, CatalogMutation, CatalogName, CatalogPath, LeaseId, LogicalEpoch, ObjectId,
+    OperationBegin, OperationId, OperationState, PendingObject, RequestDigest, Store,
     StoreConfiguration, StoreErrorCode, StoreLimits, WriteBatch,
 };
 
@@ -262,9 +262,9 @@ fn leases_and_durable_roots_bound_garbage_collection() -> TestResult {
 fn logical_manifest_is_order_invariant_and_persists_across_reopen() -> TestResult {
     let path = temporary_database("reopen");
     remove_database(&path);
-    let configuration = configuration("persistent")?;
+    let store_configuration = configuration("persistent")?;
     let manifest_before = {
-        let mut store = Store::open(&path, configuration.clone())?;
+        let mut store = Store::open(&path, store_configuration.clone())?;
         let first = pending(json!({"value":"a"}))?;
         let second = pending(json!({"value":"b"}))?;
         let mut batch = WriteBatch::new();
@@ -275,7 +275,7 @@ fn logical_manifest_is_order_invariant_and_persists_across_reopen() -> TestResul
         assert!(report.complete());
         store.logical_manifest()?
     };
-    let reopened = Store::open(&path, configuration.clone())?;
+    let reopened = Store::open(&path, store_configuration)?;
     let manifest_after = reopened.logical_manifest()?;
     assert_eq!(manifest_before, manifest_after);
     assert_eq!(manifest_before.objects().len(), 2);
