@@ -8,6 +8,7 @@ pub enum RecognizerErrorCode {
     IdentifierInvalid,
     LimitsInvalid,
     BudgetExceeded,
+    Cancelled,
     RegistryEmpty,
     RegistryDuplicate,
     RegistryIncomplete,
