@@ -1,8 +1,8 @@
 # `wow-graph` contract router
 
-**Status:** E2-A typed graph and E4-B cross-generation lineage/migration/static-impact contracts are implementation-ready documentation; E4-C public orchestration is defined in `wow-service`. Rust implementation has not started.
+**Status:** E2-A is partially implemented: typed graphs, proposal validation, bounded direct queries and in-memory producer partition replacement are executable. See [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) and [PARTITION_USAGE.md](PARTITION_USAGE.md). E4-B lineage/migration/static-impact and E4-C orchestration remain contracts, not implemented capabilities.
 
-`wow-graph` owns versioned graph schemas, semantic entity/relation assertions, producer partitions, immutable graph snapshots, bounded graph queries, and E4-B cross-generation lineage/change/impact overlays. It does not parse source, run recognizers/search, infer platform facts, rank candidates, resolve current publications, authorize reviewers, or expose raw storage internals.
+`wow-graph` owns versioned graph schemas, semantic entity/relation assertions, producer partitions, immutable graph snapshots, bounded graph queries, and E4-B cross-generation lineage/change/impact overlays. It does not parse source, run recognizers/search, infer platform facts, rank candidates, resolve project current publications, authorize reviewers, or expose raw storage internals.
 
 ## E2-A — generation-local typed graph
 
@@ -18,11 +18,13 @@ E2-A defines:
 - bounded exact entity/neighbor/axis/path/subgraph/explanation queries;
 - logical `wow-store` persistence boundary.
 
+The current partition session publishes immutable Arc views only. The older standalone snapshot store facade is not a substitute for the selected coherent E2-D ProjectPublicationSet protocol.
+
 ## E4-B — cross-generation lineage, migration and static impact
 
 Read [`e4/README.md`](e4/README.md) and its complete route.
 
-E4-B adds a separate immutable comparison overlay:
+E4-B specifies a separate immutable comparison overlay:
 
 ```text
 exact before/after owner generations
@@ -45,7 +47,7 @@ wow-core
 wow-store
 ```
 
-`wow-project`, `wow-reference`, and `wow-search` produce typed E4-B inputs through their own public contracts. [`wow-service/e4`](../wow-service/e4/README.md) coordinates exact acquisition, producer execution, review authorization, lineage publication/query, migration validation and static-impact use cases. `wow-graph` never depends directly on those higher/domain producers or service.
+`wow-project`, `wow-reference`, and `wow-search` produce typed E4-B inputs through their own public contracts. [`wow-service/e4`](../wow-service/e4/README.md) specifies coordination of exact acquisition, producer execution, review authorization, lineage publication/query, migration validation and static-impact use cases. `wow-graph` never depends directly on those higher/domain producers or service.
 
 ## E4-C orchestration boundary
 
@@ -74,10 +76,10 @@ Review authorization does not create lineage proof. Graph validity does not auth
 
 ```text
 documentation frontier: E4-B owner contract; E4-C service boundary linked
-implementation frontier: not-started
-Cargo.toml: absent
-Rust source: absent
-CI/workflows: absent
+implementation frontier: partial E2-A, detailed in IMPLEMENTATION_STATUS.md
+Cargo.toml and Rust source: active workspace member
+CI: Linux/Windows workspace and owner tests
+coherent E2-D publication and E4-B implementation: not implemented
 ```
 
 No E4-B Rust work starts before the E2 graph implementation, E4-A search implementation, exact comparison inputs, candidate/proof/review profiles, paired corpora, and all fixture/checksum gates are frozen.
