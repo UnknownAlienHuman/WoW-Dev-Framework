@@ -12,9 +12,9 @@ use sha2::{Digest, Sha256};
 use wow_core::{GenerationContextId, canonical_json_bytes};
 
 use crate::{
-    GraphCoverageRecord, GraphError, GraphErrorCode, GraphGenerationId,
-    GraphProposalBatch, GraphProposalValidationReport, GraphRegistryBundle, GraphResult,
-    GraphSnapshot, GraphSnapshotId, validate_graph_proposal_batch,
+    GraphCoverageRecord, GraphError, GraphErrorCode, GraphGenerationId, GraphProposalBatch,
+    GraphProposalValidationReport, GraphRegistryBundle, GraphResult, GraphSnapshot,
+    GraphSnapshotId, validate_graph_proposal_batch,
 };
 
 pub const GRAPH_PARTITION_SNAPSHOT_SCHEMA: &str = "wow-graph/partition-snapshot/e2-a/1";
@@ -241,7 +241,6 @@ impl GraphPartitionSnapshot {
     ) -> GraphResult<GraphPartitionReplacementPlan> {
         transaction::prepare(self, requests, cancelled)
     }
-
 }
 
 fn rebuild(

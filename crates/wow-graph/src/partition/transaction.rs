@@ -28,13 +28,18 @@ pub(super) fn prepare(
         ));
     }
     requests.sort_by(|left, right| {
-        left.batch.producer_partition_id().cmp(right.batch.producer_partition_id())
+        left.batch
+            .producer_partition_id()
+            .cmp(right.batch.producer_partition_id())
     });
-    let replaced = requests.iter()
+    let replaced = requests
+        .iter()
         .map(|item| item.batch.producer_partition_id())
         .collect::<BTreeSet<_>>();
     if replaced.len() != requests.len() {
-        return Err(invalid("graph replacement set names a partition more than once"));
+        return Err(invalid(
+            "graph replacement set names a partition more than once",
+        ));
     }
     base.validate(cancelled)?;
     let limits = base.foundation.limits();
@@ -53,25 +58,40 @@ pub(super) fn prepare(
             ));
         }
         crate::registry::validate_component(&request.producer_version, "producer version")?;
-        check_batch(&base.registry, &base.foundation, base.source_context_id, &request.batch)?;
+        check_batch(
+            &base.registry,
+            &base.foundation,
+            base.source_context_id,
+            &request.batch,
+        )?;
         if request.coverage.len() > limits.max_coverage_records as usize {
-            return Err(GraphError::new(GraphErrorCode::BudgetExceeded, "partition coverage budget"));
+            return Err(GraphError::new(
+                GraphErrorCode::BudgetExceeded,
+                "partition coverage budget",
+            ));
         }
         for record in &request.coverage {
             check_cancelled(cancelled)?;
             record.validate(limits)?;
             if record.negative_authority() {
-                return Err(invalid("producer partition cannot grant graph negative authority"));
+                return Err(invalid(
+                    "producer partition cannot grant graph negative authority",
+                ));
             }
         }
     }
-    let mut partitions = base.partitions.iter()
+    let mut partitions = base
+        .partitions
+        .iter()
         .filter(|item| !replaced.contains(item.partition_id()))
         .cloned()
         .collect::<Vec<_>>();
     drop(replaced);
     if partitions.len() + requests.len() > MAX_GRAPH_PRODUCER_PARTITIONS {
-        return Err(GraphError::new(GraphErrorCode::BudgetExceeded, "producer partition limit"));
+        return Err(GraphError::new(
+            GraphErrorCode::BudgetExceeded,
+            "producer partition limit",
+        ));
     }
     // Drop ALL replaced ownership before endpoint resolution. The fixed view
     // prevents a removed peer from satisfying an Existing endpoint, and avoids
@@ -87,7 +107,10 @@ pub(super) fn prepare(
     for request in requests {
         check_cancelled(cancelled)?;
         let report = validate_graph_proposal_batch(
-            &base.registry, Some(&endpoints), &request.batch, limits,
+            &base.registry,
+            Some(&endpoints),
+            &request.batch,
+            limits,
         )?;
         if !report.ready_for_publication() {
             return Err(GraphError::new(
@@ -98,26 +121,41 @@ pub(super) fn prepare(
         nodes = nodes.saturating_add(report.accepted_entities().len());
         edges = edges.saturating_add(report.accepted_relations().len());
         if nodes > limits.max_nodes as usize || edges > limits.max_edges as usize {
-            return Err(GraphError::new(GraphErrorCode::BudgetExceeded, "partition assertion budget"));
+            return Err(GraphError::new(
+                GraphErrorCode::BudgetExceeded,
+                "partition assertion budget",
+            ));
         }
         let previous = base.partition(request.batch.producer_partition_id());
         let mut coverage = request.coverage;
         if let Some(previous) = previous {
             for old in &previous.coverage {
                 check_cancelled(cancelled)?;
-                if !coverage.iter().any(|item| item.relation() == old.relation()) {
+                if !coverage
+                    .iter()
+                    .any(|item| item.relation() == old.relation())
+                {
                     coverage.push(GraphCoverageRecord::new(
-                        old.relation(), GraphCoverageState::NotEvaluated, false,
-                        vec!["graph.partition.coverage_unreported".into()], limits,
+                        old.relation(),
+                        GraphCoverageState::NotEvaluated,
+                        false,
+                        vec!["graph.partition.coverage_unreported".into()],
+                        limits,
                     )?);
                 }
             }
         }
         coverage.sort_by_key(GraphCoverageRecord::relation);
         if coverage.len() > limits.max_coverage_records as usize {
-            return Err(GraphError::new(GraphErrorCode::BudgetExceeded, "partition coverage budget"));
+            return Err(GraphError::new(
+                GraphErrorCode::BudgetExceeded,
+                "partition coverage budget",
+            ));
         }
-        if coverage.windows(2).any(|pair| pair[0].relation() == pair[1].relation()) {
+        if coverage
+            .windows(2)
+            .any(|pair| pair[0].relation() == pair[1].relation())
+        {
             return Err(invalid("duplicate relation coverage in producer partition"));
         }
         let mut partition = GraphProducerPartition {
@@ -139,8 +177,11 @@ pub(super) fn prepare(
     // Removing their producer in the same transaction is valid; silently pruning
     // an unchanged producer's edges is not.
     let candidate = rebuild(
-        base.registry.clone(), base.foundation.clone(), base.source_context_id,
-        partitions, cancelled,
+        base.registry.clone(),
+        base.foundation.clone(),
+        base.source_context_id,
+        partitions,
+        cancelled,
     )?;
     check_cancelled(cancelled)?;
     Ok(GraphPartitionReplacementPlan {
