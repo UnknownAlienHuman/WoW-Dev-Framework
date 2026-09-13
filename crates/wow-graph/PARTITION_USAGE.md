@@ -33,6 +33,28 @@ Create the session with `GraphPartitionSession::new(initial, cancelled)`. It req
 
 The plan is built without changing current state. Publish rechecks its expected snapshot and validates the candidate before a single Arc assignment. Validation failure, stale state or cancellation before that assignment preserves the current Arc. Cancellation after an accepted assignment cannot retroactively undo it. Reapplying identical partition content returns the same current Arc.
 
+## Atomic replacement sets
+
+`prepare_replacements(requests, cancelled)` prepares one plan for 1–64 independent producer partitions. Every request must name the same current `expected_snapshot_id` and the exact previous digest for its own partition (`None` remains create-only). Duplicate partition IDs are rejected, not merged or applied last-wins.
+
+```rust,ignore
+let before = session.view();
+// Both requests were constructed against `before`, not intermediate candidates.
+let plan = before.prepare_replacements(vec![replacement_a, replacement_b], &cancelled)?;
+for change in plan.changes() {
+    // Canonical partition order; exact previous and target ownership digests.
+    let _ = (change.partition_id(), change.previous_partition_digest(),
+             change.target_partition_digest());
+}
+let after = session.publish(plan, &cancelled)?;
+```
+
+Planning removes all selected old partitions before resolving any replacement. Each batch may reference the immutable foundation, unchanged surviving partitions, or its own same-batch proposals. It cannot borrow another replaced partition's old nodes or another new batch's intermediate output. Batches requiring such cross-replacement dependencies are outside this independent-set profile; request order is never an implicit dependency schedule.
+
+The complete final graph is validated only after every replacement is assembled. Consequently an endpoint-owning partition and its dependent edge-owning partition can be disabled together, even when removing the first alone would leave dangling edges. An unchanged producer's dangling edge still rejects the entire set.
+
+One invalid, stale, over-budget, or cancelled member aborts the whole plan. Publication uses the existing single Arc assignment; it never loops over individual publications. The plan lists every requested before/after partition digest, including tombstones and unchanged requests. Repeating an unchanged set retains the exact current Arc. Permuting independent requests produces identical plans and snapshot bytes. Single-partition preparation delegates to this same implementation.
+
 ## Removal and ownership
 
 Replace a producer with an empty batch and explicit downgraded coverage to disable it. The empty partition is retained as a tombstone. Omitting previously declared relation coverage inserts a NotEvaluated record instead of erasing coverage loss.
@@ -49,4 +71,4 @@ This profile bounds producer partitions to 64 and counts all retained node/edge 
 
 ## Durable boundary
 
-Do not publish this ownership stream through the older `PersistentGraphStore::publish_current` facade. The selected E2-D contract requires a coherent ProjectPublicationSet, inactive generation, exact post-open validation and compare-and-swap activation. That integration, multi-partition replacement, richer conflicts and multi-process recovery remain unimplemented.
+Do not publish this ownership stream through the older `PersistentGraphStore::publish_current` facade. The selected E2-D contract requires a coherent ProjectPublicationSet, inactive generation, exact post-open validation and compare-and-swap activation. That integration, cross-replacement dependency scheduling, richer conflicts and multi-process recovery remain unimplemented.
