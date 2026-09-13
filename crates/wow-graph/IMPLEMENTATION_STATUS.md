@@ -11,6 +11,20 @@
 - Accepted proposal records retain source/evidence/coverage IDs; rejected proposals retain typed reasons.
 - Existing E1-style immutable snapshot storage and catalog compare-and-swap, retention leases, bounded GC, integrity scans and logical manifests. This is not the selected E2-D coherent ProjectStore publication protocol.
 
+## Bounded path queries
+
+`GraphPathQuery` implements the Phase 4 simple-path reader. See [PATH_USAGE.md](PATH_USAGE.md).
+
+- Exact snapshot identity, distinct existing root/target, direction and canonical relation whitelist.
+- Iterative cycle-safe traversal in deterministic edge-ID order; no shortest-path or cyclic-walk claim.
+- Proven/Derived defaults; Possible and Candidate require explicit inclusion. Path confidence never exceeds its weakest edge.
+- Original nodes, edges and evidence remain unchanged. Transitive paths do not create direct edges.
+- Validated depth, page-path, expansion, returned-edge and full canonical-output byte budgets.
+- Separate depth/expansion/path-count/byte truncation reasons and typed cancellation.
+- Checked query-bound continuation for count/byte pages, with replay work inside the same expansion budget and explicit prior truncation.
+- Complete/Partial/NotEvaluated/Truncated coverage; continued, candidate-inclusive, incomplete or truncated queries cannot authorize absence.
+- Seven grouped acceptance tests exercise direction, cycles, confidence, evidence, determinism, pagination, cursor/request/snapshot tampering, limits, cancellation, coverage and oversized output.
+
 ## Producer partition replacement
 
 `GraphPartitionSnapshot`, `GraphPartitionReplacementPlan` and `GraphPartitionSession` implement the in-memory ownership/publication boundary. See [PARTITION_USAGE.md](PARTITION_USAGE.md).
@@ -34,12 +48,12 @@ The partition acceptance tests cover atomic multi-partition publication, combine
 ## Remaining E2-A scope
 
 - Cross-replacement dependency scheduling and richer assertion/conflict/attribute policies.
-- Axis/path/subgraph/explanation queries and full normative fixture closure.
+- Axis/subgraph/explanation queries and full normative fixture closure.
 - Cross-store source/evidence/coverage resolution, beyond preserved and validated IDs.
 - Inactive durable generation, post-open golden validation and coherent ProjectPublicationSet activation through E2-D.
 - Multi-process reader leases, crash recovery and durable last-known-good policy for partition snapshots.
 
-The new partition session deliberately does not write the legacy graph.current catalog. E2-C/E2-D must bind it to coherent project/store generations before durable use.
+The partition session deliberately does not write the legacy graph.current catalog. E2-C/E2-D must bind it to coherent project/store generations before durable use.
 
 ## Authority boundary
 
