@@ -7,6 +7,7 @@ mod identity;
 mod model;
 mod partition;
 mod partition_session;
+mod paths;
 mod persistent;
 mod proposal;
 mod query;
@@ -27,6 +28,10 @@ pub use partition::{
     MAX_GRAPH_PRODUCER_PARTITIONS,
 };
 pub use partition_session::GraphPartitionSession;
+pub use paths::{
+    GRAPH_PATH_QUERY_SCHEMA, GraphPath, GraphPathConfidence, GraphPathCursor, GraphPathLimits,
+    GraphPathQuery, GraphPathResult, GraphPathTruncation,
+};
 pub use persistent::{
     GRAPH_SNAPSHOT_OBJECT_KIND, GRAPH_SNAPSHOT_OBJECT_SCHEMA_VERSION, GRAPH_STORE_SCHEMA,
     PersistentGraphStore, PublishedGraphSnapshot, StoredGraphSnapshot,
