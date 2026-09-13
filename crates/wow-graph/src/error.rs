@@ -44,7 +44,10 @@ pub struct GraphError {
 
 impl GraphError {
     pub(crate) fn new(code: GraphErrorCode, message: impl Into<Box<str>>) -> Self {
-        Self { code, message: message.into() }
+        Self {
+            code,
+            message: message.into(),
+        }
     }
 
     #[must_use]

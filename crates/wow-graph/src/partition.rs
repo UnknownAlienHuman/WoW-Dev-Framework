@@ -61,7 +61,15 @@ impl GraphProducerPartition {
     }
 
     fn derive_digest(&self) -> GraphResult<Box<str>> {
-        digest("graph-partition", &(&self.producer_version, &self.batch, &self.report, &self.coverage))
+        digest(
+            "graph-partition",
+            &(
+                &self.producer_version,
+                &self.batch,
+                &self.report,
+                &self.coverage,
+            ),
+        )
     }
 }
 
@@ -117,7 +125,13 @@ impl GraphPartitionSnapshot {
         source_context_id: GenerationContextId,
         cancelled: &AtomicBool,
     ) -> GraphResult<Self> {
-        rebuild(registry, foundation, source_context_id, Vec::new(), cancelled)
+        rebuild(
+            registry,
+            foundation,
+            source_context_id,
+            Vec::new(),
+            cancelled,
+        )
     }
 
     #[must_use]
@@ -155,7 +169,9 @@ impl GraphPartitionSnapshot {
         if self.schema.as_ref() != GRAPH_PARTITION_SNAPSHOT_SCHEMA
             || self.partitions.len() > MAX_GRAPH_PRODUCER_PARTITIONS
         {
-            return Err(invalid("graph partition snapshot schema or count is invalid"));
+            return Err(invalid(
+                "graph partition snapshot schema or count is invalid",
+            ));
         }
         let rebuilt = rebuild(
             self.registry.clone(),
@@ -165,7 +181,9 @@ impl GraphPartitionSnapshot {
             cancelled,
         )?;
         if rebuilt != *self {
-            return Err(invalid("graph partition snapshot order, identity, or projection changed"));
+            return Err(invalid(
+                "graph partition snapshot order, identity, or projection changed",
+            ));
         }
         Ok(())
     }
@@ -187,21 +205,33 @@ impl GraphPartitionSnapshot {
             ));
         }
         crate::registry::validate_component(&request.producer_version, "producer version")?;
-        check_batch(&self.registry, &self.foundation, self.source_context_id, &request.batch)?;
-        let mut partitions = self.partitions
+        check_batch(
+            &self.registry,
+            &self.foundation,
+            self.source_context_id,
+            &request.batch,
+        )?;
+        let mut partitions = self
+            .partitions
             .iter()
             .filter(|item| item.partition_id() != request.batch.producer_partition_id())
             .cloned()
             .collect::<Vec<_>>();
         if partitions.len() >= MAX_GRAPH_PRODUCER_PARTITIONS {
-            return Err(GraphError::new(GraphErrorCode::BudgetExceeded, "producer partition limit"));
+            return Err(GraphError::new(
+                GraphErrorCode::BudgetExceeded,
+                "producer partition limit",
+            ));
         }
         // Do not let removed, exclusively owned nodes satisfy new endpoints.
         // Surviving edges are checked only after the replacement is assembled:
         // the new batch may legitimately restore an endpoint with the same key.
         let endpoints = materialize::input_view(&self.foundation, &partitions, true, cancelled)?;
         let report = validate_graph_proposal_batch(
-            &self.registry, Some(&endpoints), &request.batch, self.foundation.limits(),
+            &self.registry,
+            Some(&endpoints),
+            &request.batch,
+            self.foundation.limits(),
         )?;
         if !report.ready_for_publication() {
             return Err(GraphError::new(
@@ -214,28 +244,41 @@ impl GraphPartitionSnapshot {
         // of the fact that this producer participated in that relation.
         if let Some(previous) = previous {
             for old in &previous.coverage {
-                if !coverage.iter().any(|item| item.relation() == old.relation()) {
+                if !coverage
+                    .iter()
+                    .any(|item| item.relation() == old.relation())
+                {
                     coverage.push(GraphCoverageRecord::new(
-                        old.relation(), GraphCoverageState::NotEvaluated, false,
-                        vec!["graph.partition.coverage_unreported".into()], self.foundation.limits(),
+                        old.relation(),
+                        GraphCoverageState::NotEvaluated,
+                        false,
+                        vec!["graph.partition.coverage_unreported".into()],
+                        self.foundation.limits(),
                     )?);
                 }
             }
         }
         coverage.sort_by_key(GraphCoverageRecord::relation);
         let mut partition = GraphProducerPartition {
-            partition_digest: "".into(), producer_version: request.producer_version,
-            batch: request.batch, report, coverage,
+            partition_digest: "".into(),
+            producer_version: request.producer_version,
+            batch: request.batch,
+            report,
+            coverage,
         };
         partition.partition_digest = partition.derive_digest()?;
         partitions.push(partition);
         let candidate = rebuild(
-            self.registry.clone(), self.foundation.clone(), self.source_context_id,
-            partitions, cancelled,
+            self.registry.clone(),
+            self.foundation.clone(),
+            self.source_context_id,
+            partitions,
+            cancelled,
         )?;
         check_cancelled(cancelled)?;
         Ok(GraphPartitionReplacementPlan {
-            expected_snapshot_id: request.expected_snapshot_id, candidate,
+            expected_snapshot_id: request.expected_snapshot_id,
+            candidate,
         })
     }
 }
@@ -251,10 +294,16 @@ fn rebuild(
     registry.validate()?;
     foundation.validate()?;
     if partitions.len() > MAX_GRAPH_PRODUCER_PARTITIONS {
-        return Err(GraphError::new(GraphErrorCode::BudgetExceeded, "producer partition limit"));
+        return Err(GraphError::new(
+            GraphErrorCode::BudgetExceeded,
+            "producer partition limit",
+        ));
     }
     partitions.sort_by(|left, right| left.partition_id().cmp(right.partition_id()));
-    if partitions.windows(2).any(|pair| pair[0].partition_id() == pair[1].partition_id()) {
+    if partitions
+        .windows(2)
+        .any(|pair| pair[0].partition_id() == pair[1].partition_id())
+    {
         return Err(invalid("duplicate producer partition"));
     }
     let limits = foundation.limits();
@@ -269,20 +318,30 @@ fn rebuild(
             || item.report.batch_id() != item.batch.batch_id()
             || item.partition_digest != item.derive_digest()?
             || item.coverage.len() > limits.max_coverage_records as usize
-            || item.coverage.windows(2).any(|pair| pair[0].relation() >= pair[1].relation())
+            || item
+                .coverage
+                .windows(2)
+                .any(|pair| pair[0].relation() >= pair[1].relation())
         {
-            return Err(invalid("invalid producer partition report, coverage, or identity"));
+            return Err(invalid(
+                "invalid producer partition report, coverage, or identity",
+            ));
         }
         for record in &item.coverage {
             record.validate(limits)?;
             if record.negative_authority() {
-                return Err(invalid("producer partition cannot grant graph negative authority"));
+                return Err(invalid(
+                    "producer partition cannot grant graph negative authority",
+                ));
             }
         }
         nodes = nodes.saturating_add(item.report.accepted_entities().len());
         edges = edges.saturating_add(item.report.accepted_relations().len());
         if nodes > limits.max_nodes as usize || edges > limits.max_edges as usize {
-            return Err(GraphError::new(GraphErrorCode::BudgetExceeded, "partition assertion budget"));
+            return Err(GraphError::new(
+                GraphErrorCode::BudgetExceeded,
+                "partition assertion budget",
+            ));
         }
     }
     let input = materialize::input_view(&foundation, &partitions, false, cancelled)?;
@@ -290,18 +349,29 @@ fn rebuild(
         check_cancelled(cancelled)?;
         let verified = validate_graph_proposal_batch(&registry, Some(&input), &item.batch, limits)?;
         if verified != item.report {
-            return Err(invalid("producer report does not match its exact batch and endpoints"));
+            return Err(invalid(
+                "producer report does not match its exact batch and endpoints",
+            ));
         }
     }
     let generation = GraphGenerationId::new(digest(
         "graph-generation",
-        &(GRAPH_PARTITION_SNAPSHOT_SCHEMA, registry.registry_digest(),
-            source_context_id, foundation.snapshot_id(), &partitions),
+        &(
+            GRAPH_PARTITION_SNAPSHOT_SCHEMA,
+            registry.registry_digest(),
+            source_context_id,
+            foundation.snapshot_id(),
+            &partitions,
+        ),
     )?)?;
     let snapshot = materialize::rebind(&input, generation, cancelled)?;
     Ok(GraphPartitionSnapshot {
-        schema: GRAPH_PARTITION_SNAPSHOT_SCHEMA.into(), registry, source_context_id,
-        foundation, partitions, snapshot,
+        schema: GRAPH_PARTITION_SNAPSHOT_SCHEMA.into(),
+        registry,
+        source_context_id,
+        foundation,
+        partitions,
+        snapshot,
     })
 }
 
@@ -315,20 +385,34 @@ fn check_batch(
     if batch.registry_digest() != registry.registry_digest()
         || batch.registry_bundle_id() != registry.bundle_id()
     {
-        return Err(GraphError::new(GraphErrorCode::RegistryIdentityMismatch, "partition registry mismatch"));
+        return Err(GraphError::new(
+            GraphErrorCode::RegistryIdentityMismatch,
+            "partition registry mismatch",
+        ));
     }
-    if batch.generation() != foundation.generation() || batch.source_context_id() != source_context_id {
-        return Err(GraphError::new(GraphErrorCode::GenerationMismatch, "partition input generation mismatch"));
+    if batch.generation() != foundation.generation()
+        || batch.source_context_id() != source_context_id
+    {
+        return Err(GraphError::new(
+            GraphErrorCode::GenerationMismatch,
+            "partition input generation mismatch",
+        ));
     }
     if batch.universe() != foundation.universe() {
-        return Err(GraphError::new(GraphErrorCode::UniverseMismatch, "partition universe mismatch"));
+        return Err(GraphError::new(
+            GraphErrorCode::UniverseMismatch,
+            "partition universe mismatch",
+        ));
     }
     Ok(())
 }
 
 pub(crate) fn check_cancelled(cancelled: &AtomicBool) -> GraphResult<()> {
     if cancelled.load(Ordering::Relaxed) {
-        Err(GraphError::new(GraphErrorCode::Cancelled, "graph replacement cancelled before publication"))
+        Err(GraphError::new(
+            GraphErrorCode::Cancelled,
+            "graph replacement cancelled before publication",
+        ))
     } else {
         Ok(())
     }

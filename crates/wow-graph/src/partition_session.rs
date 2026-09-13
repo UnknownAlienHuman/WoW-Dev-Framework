@@ -1,8 +1,8 @@
 use std::sync::{Arc, atomic::AtomicBool};
 
 use crate::{
-    GraphError, GraphErrorCode, GraphPartitionReplacementPlan, GraphPartitionSnapshot,
-    GraphResult, partition::check_cancelled,
+    GraphError, GraphErrorCode, GraphPartitionReplacementPlan, GraphPartitionSnapshot, GraphResult,
+    partition::check_cancelled,
 };
 
 /// Synchronous in-memory owner. Retained Arc views never change after publication.
@@ -16,7 +16,9 @@ impl GraphPartitionSession {
     pub fn new(initial: GraphPartitionSnapshot, cancelled: &AtomicBool) -> GraphResult<Self> {
         initial.validate(cancelled)?;
         check_cancelled(cancelled)?;
-        Ok(Self { current: Arc::new(initial) })
+        Ok(Self {
+            current: Arc::new(initial),
+        })
     }
 
     #[must_use]
