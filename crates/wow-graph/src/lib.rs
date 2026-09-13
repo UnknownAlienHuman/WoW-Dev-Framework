@@ -22,7 +22,8 @@ pub use model::{
     GraphRelationKind, GraphSnapshot,
 };
 pub use partition::{
-    GRAPH_PARTITION_SNAPSHOT_SCHEMA, GraphPartitionReplacement, GraphPartitionReplacementPlan,
+    GRAPH_PARTITION_SNAPSHOT_SCHEMA, GraphPartitionChange, GraphPartitionReplacement,
+    GraphPartitionReplacementPlan,
     GraphPartitionSnapshot, GraphProducerPartition, MAX_GRAPH_PRODUCER_PARTITIONS,
 };
 pub use partition_session::GraphPartitionSession;
