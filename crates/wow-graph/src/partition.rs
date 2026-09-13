@@ -3,6 +3,7 @@
 //! Proposal endpoints use the exact input-generation view, not the materialized
 //! publication IDs. A new input generation requires a new foundation.
 mod materialize;
+mod transaction;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -11,9 +12,9 @@ use sha2::{Digest, Sha256};
 use wow_core::{GenerationContextId, canonical_json_bytes};
 
 use crate::{
-    GraphCoverageRecord, GraphCoverageState, GraphError, GraphErrorCode, GraphGenerationId,
-    GraphProposalBatch, GraphProposalValidationReport, GraphRegistryBundle, GraphResult,
-    GraphSnapshot, GraphSnapshotId, validate_graph_proposal_batch,
+    GraphCoverageRecord, GraphError, GraphErrorCode, GraphGenerationId, GraphProposalBatch,
+    GraphProposalValidationReport, GraphRegistryBundle, GraphResult, GraphSnapshot,
+    GraphSnapshotId, validate_graph_proposal_batch,
 };
 
 pub const GRAPH_PARTITION_SNAPSHOT_SCHEMA: &str = "wow-graph/partition-snapshot/e2-a/1";
@@ -102,6 +103,34 @@ pub struct GraphPartitionReplacement {
 pub struct GraphPartitionReplacementPlan {
     expected_snapshot_id: GraphSnapshotId,
     candidate: GraphPartitionSnapshot,
+    changes: Vec<GraphPartitionChange>,
+}
+
+/// One exact before/after ownership change in a validated replacement plan.
+/// Entries are ordered by partition ID, including unchanged requests and empty
+/// tombstones. Digests bind producer version, raw batch, report and coverage.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GraphPartitionChange {
+    partition_id: Box<str>,
+    previous_partition_digest: Option<Box<str>>,
+    target_partition_digest: Box<str>,
+}
+
+impl GraphPartitionChange {
+    #[must_use]
+    pub fn partition_id(&self) -> &str {
+        &self.partition_id
+    }
+
+    #[must_use]
+    pub fn previous_partition_digest(&self) -> Option<&str> {
+        self.previous_partition_digest.as_deref()
+    }
+
+    #[must_use]
+    pub fn target_partition_digest(&self) -> &str {
+        &self.target_partition_digest
+    }
 }
 
 impl GraphPartitionReplacementPlan {
@@ -113,6 +142,11 @@ impl GraphPartitionReplacementPlan {
     #[must_use]
     pub fn candidate(&self) -> &GraphPartitionSnapshot {
         &self.candidate
+    }
+
+    #[must_use]
+    pub fn changes(&self) -> &[GraphPartitionChange] {
+        &self.changes
     }
 }
 
@@ -193,93 +227,19 @@ impl GraphPartitionSnapshot {
         request: GraphPartitionReplacement,
         cancelled: &AtomicBool,
     ) -> GraphResult<GraphPartitionReplacementPlan> {
-        self.validate(cancelled)?;
-        let previous = self.partition(request.batch.producer_partition_id());
-        if &request.expected_snapshot_id != self.snapshot.snapshot_id()
-            || previous.map(GraphProducerPartition::partition_digest)
-                != request.expected_partition_digest.as_deref()
-        {
-            return Err(GraphError::new(
-                GraphErrorCode::PartitionStale,
-                "graph replacement base or previous producer partition is stale",
-            ));
-        }
-        crate::registry::validate_component(&request.producer_version, "producer version")?;
-        check_batch(
-            &self.registry,
-            &self.foundation,
-            self.source_context_id,
-            &request.batch,
-        )?;
-        let mut partitions = self
-            .partitions
-            .iter()
-            .filter(|item| item.partition_id() != request.batch.producer_partition_id())
-            .cloned()
-            .collect::<Vec<_>>();
-        if partitions.len() >= MAX_GRAPH_PRODUCER_PARTITIONS {
-            return Err(GraphError::new(
-                GraphErrorCode::BudgetExceeded,
-                "producer partition limit",
-            ));
-        }
-        // Do not let removed, exclusively owned nodes satisfy new endpoints.
-        // Surviving edges are checked only after the replacement is assembled:
-        // the new batch may legitimately restore an endpoint with the same key.
-        let endpoints = materialize::input_view(&self.foundation, &partitions, true, cancelled)?;
-        let report = validate_graph_proposal_batch(
-            &self.registry,
-            Some(&endpoints),
-            &request.batch,
-            self.foundation.limits(),
-        )?;
-        if !report.ready_for_publication() {
-            return Err(GraphError::new(
-                GraphErrorCode::PartitionRejected,
-                "rejected proposals cannot publish a partial producer partition",
-            ));
-        }
-        let mut coverage = request.coverage;
-        // Omitting a previously declared relation is coverage loss, not erasure
-        // of the fact that this producer participated in that relation.
-        if let Some(previous) = previous {
-            for old in &previous.coverage {
-                if !coverage
-                    .iter()
-                    .any(|item| item.relation() == old.relation())
-                {
-                    coverage.push(GraphCoverageRecord::new(
-                        old.relation(),
-                        GraphCoverageState::NotEvaluated,
-                        false,
-                        vec!["graph.partition.coverage_unreported".into()],
-                        self.foundation.limits(),
-                    )?);
-                }
-            }
-        }
-        coverage.sort_by_key(GraphCoverageRecord::relation);
-        let mut partition = GraphProducerPartition {
-            partition_digest: "".into(),
-            producer_version: request.producer_version,
-            batch: request.batch,
-            report,
-            coverage,
-        };
-        partition.partition_digest = partition.derive_digest()?;
-        partitions.push(partition);
-        let candidate = rebuild(
-            self.registry.clone(),
-            self.foundation.clone(),
-            self.source_context_id,
-            partitions,
-            cancelled,
-        )?;
-        check_cancelled(cancelled)?;
-        Ok(GraphPartitionReplacementPlan {
-            expected_snapshot_id: request.expected_snapshot_id,
-            candidate,
-        })
+        self.prepare_replacements(vec![request], cancelled)
+    }
+
+    /// Plans a nonempty, bounded set of independent partition replacements.
+    /// All requests name this same base snapshot. Endpoints resolve against
+    /// unchanged partitions and the batch's own proposals, never an old removed
+    /// partition or another replacement's intermediate output.
+    pub fn prepare_replacements(
+        &self,
+        requests: Vec<GraphPartitionReplacement>,
+        cancelled: &AtomicBool,
+    ) -> GraphResult<GraphPartitionReplacementPlan> {
+        transaction::prepare(self, requests, cancelled)
     }
 }
 

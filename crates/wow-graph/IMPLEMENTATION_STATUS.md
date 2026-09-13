@@ -17,8 +17,9 @@
 
 - One immutable foundation, registry bundle and source context bind the input stream.
 - Each producer partition retains its complete original batch, version, validation report and coverage under an exact digest.
-- One replacement names both the expected graph snapshot and previous partition digest; absent means create-only.
-- The owner removes only the named partition, validates the replacement against surviving endpoints and checks the final graph for dangling references.
+- Single and bounded multi-partition replacements name one expected graph snapshot and each previous partition digest; absent means create-only.
+- Multi-partition plans reject duplicates, validate all guards against the same base, use one fixed surviving endpoint view and publish all or none. The ordered change manifest retains exact before/after partition digests.
+- The owner removes only the named partitions, validates independent replacements against surviving endpoints and checks the complete final graph for dangling references. Endpoint and dependent-edge owners can be disabled together.
 - Rejected proposals cannot become a partially accepted replacement.
 - Shared semantic nodes retain other producers' evidence; original assertions remain separate and unchanged.
 - Empty replacements retain partition tombstones. Omitted previously declared coverage becomes NotEvaluated. Aggregation never grants negative authority to producer observations.
@@ -28,11 +29,11 @@
 - Exact deserialized snapshots revalidate their batches, reports, ownership, coverage, generation and materialized projection.
 - Partition count and total node/edge assertions are bounded before materialization.
 
-The partition acceptance tests cover independent input order, shared ownership, removal, stale state, version changes, cancellation, dangling dependencies, no-change identity, tampering, budget excess and source-context mismatch. These are synthetic owner-boundary tests, not WoW runtime evidence.
+The partition acceptance tests cover atomic multi-partition publication, combined budgets and 64-partition boundaries, independent input order, shared ownership, removal, stale state, version changes, cancellation, dangling dependencies, no-change identity, tampering, budget excess and source-context mismatch. These are synthetic owner-boundary tests, not WoW runtime evidence.
 
 ## Remaining E2-A scope
 
-- Multi-partition transactions and richer assertion/conflict/attribute policies.
+- Cross-replacement dependency scheduling and richer assertion/conflict/attribute policies.
 - Axis/path/subgraph/explanation queries and full normative fixture closure.
 - Cross-store source/evidence/coverage resolution, beyond preserved and validated IDs.
 - Inactive durable generation, post-open golden validation and coherent ProjectPublicationSet activation through E2-D.

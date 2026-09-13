@@ -461,3 +461,6 @@ fn mixed_source_context_is_rejected_before_plan_creation() -> TestResult {
     );
     Ok(())
 }
+
+#[path = "partition_e2/transactions.rs"]
+mod transactions;
