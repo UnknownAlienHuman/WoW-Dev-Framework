@@ -7,6 +7,7 @@ mod identity;
 mod model;
 mod partition;
 mod partition_session;
+mod paths;
 mod persistent;
 mod proposal;
 mod query;
@@ -42,4 +43,8 @@ pub use query::{GraphDirection, GraphNeighborQuery, GraphNeighborResult, GraphQu
 pub use registry::{
     GRAPH_REGISTRY_SCHEMA, GraphEntityKindDefinition, GraphRegistryBundle,
     GraphRelationKindDefinition,
+};
+pub use paths::{
+    GRAPH_PATH_QUERY_SCHEMA, GraphPath, GraphPathConfidence, GraphPathCursor, GraphPathLimits,
+    GraphPathQuery, GraphPathResult, GraphPathTruncation,
 };
