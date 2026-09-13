@@ -28,12 +28,13 @@ pub enum GraphPathConfidence {
 
 impl GraphPathConfidence {
     fn admits(self, confidence: GraphConfidence) -> bool {
-        confidence <= match self {
-            Self::Proven => GraphConfidence::Proven,
-            Self::ProvenAndDerived => GraphConfidence::Derived,
-            Self::IncludePossible => GraphConfidence::Possible,
-            Self::IncludeCandidate => GraphConfidence::Candidate,
-        }
+        confidence
+            <= match self {
+                Self::Proven => GraphConfidence::Proven,
+                Self::ProvenAndDerived => GraphConfidence::Derived,
+                Self::IncludePossible => GraphConfidence::Possible,
+                Self::IncludeCandidate => GraphConfidence::Candidate,
+            }
     }
 }
 
@@ -61,7 +62,12 @@ impl GraphPathLimits {
 
 impl Default for GraphPathLimits {
     fn default() -> Self {
-        Self { max_depth: 16, max_paths: 64, max_expansions: 100_000, max_output_bytes: 1_048_576 }
+        Self {
+            max_depth: 16,
+            max_paths: 64,
+            max_expansions: 100_000,
+            max_output_bytes: 1_048_576,
+        }
     }
 }
 
@@ -87,8 +93,15 @@ impl GraphPathQuery {
         limits: GraphPathLimits,
     ) -> GraphResult<Self> {
         relations.sort();
-        let query = Self { snapshot_id, root, target, direction, relations,
-            confidence: GraphPathConfidence::default(), limits };
+        let query = Self {
+            snapshot_id,
+            root,
+            target,
+            direction,
+            relations,
+            confidence: GraphPathConfidence::default(),
+            limits,
+        };
         query.validate()?;
         Ok(query)
     }
@@ -104,11 +117,14 @@ impl GraphPathQuery {
         GraphSnapshotId::new(self.snapshot_id.as_str())?;
         GraphNodeId::new(self.root.as_str())?;
         GraphNodeId::new(self.target.as_str())?;
-        if self.root == self.target || self.relations.is_empty()
+        if self.root == self.target
+            || self.relations.is_empty()
             || self.relations.len() > 19
             || self.relations.windows(2).any(|pair| pair[0] >= pair[1])
         {
-            return Err(invalid("paths require distinct endpoints and unique ordered relations"));
+            return Err(invalid(
+                "paths require distinct endpoints and unique ordered relations",
+            ));
         }
         Ok(())
     }
@@ -124,16 +140,22 @@ impl GraphPathQuery {
         check_cancelled(cancelled)?;
         self.validate()?;
         if &self.snapshot_id != snapshot.snapshot_id() {
-            return Err(GraphError::new(GraphErrorCode::SnapshotIdentityMismatch,
-                "path query names another graph snapshot"));
+            return Err(GraphError::new(
+                GraphErrorCode::SnapshotIdentityMismatch,
+                "path query names another graph snapshot",
+            ));
         }
         snapshot.validate()?;
         check_cancelled(cancelled)?;
         if snapshot.node(&self.root).is_none() || snapshot.node(&self.target).is_none() {
-            return Err(invalid("path query endpoint is absent from the selected snapshot"));
+            return Err(invalid(
+                "path query endpoint is absent from the selected snapshot",
+            ));
         }
         if self.limits.max_depth * self.limits.max_paths > snapshot.limits().max_query_edges {
-            return Err(budget("path query returned-edge bound exceeds snapshot policy"));
+            return Err(budget(
+                "path query returned-edge bound exceeds snapshot policy",
+            ));
         }
         let query_digest = digest(GRAPH_PATH_QUERY_SCHEMA, self)?;
         if let Some(cursor) = cursor {
@@ -153,35 +175,58 @@ pub struct GraphPathCursor {
 
 impl GraphPathCursor {
     fn new(query_digest: &str, after: Vec<GraphEdgeId>) -> GraphResult<Self> {
-        Ok(Self { query_digest: query_digest.into(),
-            integrity_digest: digest("graph-path-cursor/1", &(query_digest, &after))?, after })
+        Ok(Self {
+            query_digest: query_digest.into(),
+            integrity_digest: digest("graph-path-cursor/1", &(query_digest, &after))?,
+            after,
+        })
     }
 
-    fn validate(&self, query: &GraphPathQuery, snapshot: &GraphSnapshot,
-        query_digest: &str, cancelled: &AtomicBool) -> GraphResult<()> {
-        if self.query_digest.as_ref() != query_digest || self.after.is_empty()
+    fn validate(
+        &self,
+        query: &GraphPathQuery,
+        snapshot: &GraphSnapshot,
+        query_digest: &str,
+        cancelled: &AtomicBool,
+    ) -> GraphResult<()> {
+        if self.query_digest.as_ref() != query_digest
+            || self.after.is_empty()
             || self.after.len() > query.limits.max_depth as usize
-            || self.after.iter().any(|id| GraphEdgeId::new(id.as_str()).is_err())
+            || self
+                .after
+                .iter()
+                .any(|id| GraphEdgeId::new(id.as_str()).is_err())
             || self.integrity_digest != digest("graph-path-cursor/1", &(query_digest, &self.after))?
         {
-            return Err(invalid("path cursor is stale, oversized, or has changed identity"));
+            return Err(invalid(
+                "path cursor is stale, oversized, or has changed identity",
+            ));
         }
         let mut node = &query.root;
         let mut visited = std::collections::BTreeSet::from([node]);
         for id in &self.after {
             check_cancelled(cancelled)?;
-            let edge = snapshot.edges().binary_search_by(|edge| edge.edge_id().cmp(id))
-                .ok().map(|index| &snapshot.edges()[index])
+            let edge = snapshot
+                .edges()
+                .binary_search_by(|edge| edge.edge_id().cmp(id))
+                .ok()
+                .map(|index| &snapshot.edges()[index])
                 .ok_or_else(|| invalid("path cursor references an absent edge"))?;
-            if node == &query.target || !query.confidence.admits(edge.confidence())
-                || query.relations.binary_search(&edge.relation()).is_err() {
+            if node == &query.target
+                || !query.confidence.admits(edge.confidence())
+                || query.relations.binary_search(&edge.relation()).is_err()
+            {
                 return Err(invalid("path cursor violates the selected query policy"));
             }
             node = walk::next_node(edge, node, query.direction)
                 .ok_or_else(|| invalid("path cursor is not a connected directed path"))?;
-            if !visited.insert(node) { return Err(invalid("path cursor repeats a node")); }
+            if !visited.insert(node) {
+                return Err(invalid("path cursor repeats a node"));
+            }
         }
-        if node != &query.target { return Err(invalid("path cursor does not reach the target")); }
+        if node != &query.target {
+            return Err(invalid("path cursor does not reach the target"));
+        }
         Ok(())
     }
 }
@@ -196,19 +241,33 @@ pub struct GraphPath {
 
 impl GraphPath {
     #[must_use]
-    pub fn nodes(&self) -> &[GraphNode] { &self.nodes }
+    pub fn nodes(&self) -> &[GraphNode] {
+        &self.nodes
+    }
     #[must_use]
-    pub fn edges(&self) -> &[GraphEdge] { &self.edges }
+    pub fn edges(&self) -> &[GraphEdge] {
+        &self.edges
+    }
     #[must_use]
-    pub const fn confidence(&self) -> GraphConfidence { self.confidence }
+    pub const fn confidence(&self) -> GraphConfidence {
+        self.confidence
+    }
     fn key(&self) -> Vec<GraphEdgeId> {
-        self.edges.iter().map(|edge| edge.edge_id().clone()).collect()
+        self.edges
+            .iter()
+            .map(|edge| edge.edge_id().clone())
+            .collect()
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum GraphPathTruncation { Depth, Expansions, Paths, OutputBytes }
+pub enum GraphPathTruncation {
+    Depth,
+    Expansions,
+    Paths,
+    OutputBytes,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -229,34 +288,63 @@ pub struct GraphPathResult {
 
 impl GraphPathResult {
     #[must_use]
-    pub fn snapshot_id(&self) -> &GraphSnapshotId { &self.snapshot_id }
+    pub fn snapshot_id(&self) -> &GraphSnapshotId {
+        &self.snapshot_id
+    }
     #[must_use]
-    pub fn query_digest(&self) -> &str { &self.query_digest }
+    pub fn query_digest(&self) -> &str {
+        &self.query_digest
+    }
     #[must_use]
-    pub const fn state(&self) -> GraphQueryState { self.state }
+    pub const fn state(&self) -> GraphQueryState {
+        self.state
+    }
     #[must_use]
-    pub fn paths(&self) -> &[GraphPath] { &self.paths }
+    pub fn paths(&self) -> &[GraphPath] {
+        &self.paths
+    }
     #[must_use]
-    pub fn coverage(&self) -> &[GraphCoverageRecord] { &self.coverage }
+    pub fn coverage(&self) -> &[GraphCoverageRecord] {
+        &self.coverage
+    }
     #[must_use]
-    pub const fn expansions(&self) -> u32 { self.expansions }
+    pub const fn expansions(&self) -> u32 {
+        self.expansions
+    }
     #[must_use]
-    pub const fn prior_truncation(&self) -> bool { self.prior_truncation }
+    pub const fn prior_truncation(&self) -> bool {
+        self.prior_truncation
+    }
     #[must_use]
-    pub const fn absence_authoritative(&self) -> bool { self.absence_authoritative }
+    pub const fn absence_authoritative(&self) -> bool {
+        self.absence_authoritative
+    }
     #[must_use]
-    pub fn truncations(&self) -> &[GraphPathTruncation] { &self.truncations }
+    pub fn truncations(&self) -> &[GraphPathTruncation] {
+        &self.truncations
+    }
     #[must_use]
-    pub fn continuation(&self) -> Option<&GraphPathCursor> { self.continuation.as_ref() }
+    pub fn continuation(&self) -> Option<&GraphPathCursor> {
+        self.continuation.as_ref()
+    }
 }
 
 fn check_cancelled(cancelled: &AtomicBool) -> GraphResult<()> {
     if cancelled.load(Ordering::Relaxed) {
-        Err(GraphError::new(GraphErrorCode::Cancelled, "graph path query cancelled"))
-    } else { Ok(()) }
+        Err(GraphError::new(
+            GraphErrorCode::Cancelled,
+            "graph path query cancelled",
+        ))
+    } else {
+        Ok(())
+    }
 }
-fn invalid(message: &str) -> GraphError { GraphError::new(GraphErrorCode::QueryInvalid, message) }
-fn budget(message: &str) -> GraphError { GraphError::new(GraphErrorCode::BudgetExceeded, message) }
+fn invalid(message: &str) -> GraphError {
+    GraphError::new(GraphErrorCode::QueryInvalid, message)
+}
+fn budget(message: &str) -> GraphError {
+    GraphError::new(GraphErrorCode::BudgetExceeded, message)
+}
 fn encoded<T: Serialize>(value: &T) -> GraphResult<Vec<u8>> {
     canonical_json_bytes(value).map_err(|_| invalid("path query serialization failed"))
 }

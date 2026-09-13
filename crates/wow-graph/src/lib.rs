@@ -28,6 +28,10 @@ pub use partition::{
     MAX_GRAPH_PRODUCER_PARTITIONS,
 };
 pub use partition_session::GraphPartitionSession;
+pub use paths::{
+    GRAPH_PATH_QUERY_SCHEMA, GraphPath, GraphPathConfidence, GraphPathCursor, GraphPathLimits,
+    GraphPathQuery, GraphPathResult, GraphPathTruncation,
+};
 pub use persistent::{
     GRAPH_SNAPSHOT_OBJECT_KIND, GRAPH_SNAPSHOT_OBJECT_SCHEMA_VERSION, GRAPH_STORE_SCHEMA,
     PersistentGraphStore, PublishedGraphSnapshot, StoredGraphSnapshot,
@@ -43,8 +47,4 @@ pub use query::{GraphDirection, GraphNeighborQuery, GraphNeighborResult, GraphQu
 pub use registry::{
     GRAPH_REGISTRY_SCHEMA, GraphEntityKindDefinition, GraphRegistryBundle,
     GraphRelationKindDefinition,
-};
-pub use paths::{
-    GRAPH_PATH_QUERY_SCHEMA, GraphPath, GraphPathConfidence, GraphPathCursor, GraphPathLimits,
-    GraphPathQuery, GraphPathResult, GraphPathTruncation,
 };
