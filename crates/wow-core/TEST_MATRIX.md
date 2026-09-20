@@ -233,6 +233,13 @@ Domain-separation vectors:
 
 ## 10. Generation-context cases
 
+Regression source: `tests/e0_generation_conformance.rs` exercises constructors,
+wire validation, ID retrieval, both merge entrypoints and both strict-guard
+entrypoints. It includes independently resealed invalid contexts so a stale hash
+cannot mask a missing nested check, and 64 fixed-seed input permutations. Test
+source is not a passing execution receipt; these cases still require fresh native
+CI results before their acceptance status can advance.
+
 | ID | Case | Expected |
 |---|---|---|
 | `CONTEXT-001` | profile + reference only | valid context |
@@ -262,6 +269,33 @@ Merge matrix minimum:
 | `CONTEXT-MERGE-010` | schema v1 | schema v2 | any | conflict |
 | `CONTEXT-MERGE-011` | producer v1 | producer v2 | any | conflict |
 | `CONTEXT-MERGE-012` | contexts with reordered sets | strict | success |
+| `CONTEXT-MERGE-013` | schema/producer inventory subset | complete inventory | strict | `merge_mode_violation` |
+| `CONTEXT-MERGE-014` | schema/producer inventory subset | complete inventory | extend | `merge_mode_violation` |
+| `CONTEXT-MERGE-015` | schema/producer inventory subset | complete inventory | external_union | `merge_mode_violation` |
+| `CONTEXT-MERGE-016` | disjoint version inventories | disjoint version inventories | any | `merge_mode_violation` |
+| `CONTEXT-MERGE-017` | distinct external scopes | distinct external scopes | strict/extend | `merge_mode_violation`; only external_union admits them |
+| `CONTEXT-MERGE-018` | external scope/gen A/revision A | same scope/gen A/revision B | external_union | `duplicate_external_generation_scope` |
+
+Strict same-generation guard:
+
+| ID | Case | Expected |
+|---|---|---|
+| `CONTEXT-SAME-001` | independently rebuilt and decoded golden context | success; exact bytes and ID preserved |
+| `CONTEXT-SAME-002` | unchanged supplied ID, mutated right-hand identity fields | validation failure before equality |
+| `CONTEXT-SAME-003` | unchanged supplied ID, mutated left-hand identity fields | validation failure before equality |
+| `CONTEXT-SAME-004` | two references to the same stale-ID record | validation failure, not self-equality success |
+| `CONTEXT-SAME-005` | valid distinct contexts and valid distinct IDs | `generation_mismatch` |
+| `CONTEXT-SAME-006` | equal IDs but invalid nested profile or external entry | narrow validation error propagated |
+
+Nested external-record admission (constructor, context builder and decoded context):
+
+| ID | Case | Expected |
+|---|---|---|
+| `CONTEXT-EXTERNAL-001` | provider differs from typed generation's provider | `generation_mismatch`, even with recomputed context digest |
+| `CONTEXT-EXTERNAL-002` | invalid, overlong or reserved provider | existing identifier error; no normalization into another provider |
+| `CONTEXT-EXTERNAL-003` | empty, padded, control-containing or overlong scope | `invalid_identifier` |
+| `CONTEXT-EXTERNAL-004` | empty, padded, control-containing or overlong supplied revision | `invalid_identifier` |
+| `CONTEXT-EXTERNAL-005` | exact byte limit, multibyte scope and absent optional revision | valid; round-trip and guard agree |
 
 `require_same_generation` must reject every pair with different context IDs even when an extend/union merge could theoretically succeed.
 

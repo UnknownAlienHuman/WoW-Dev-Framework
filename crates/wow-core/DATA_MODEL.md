@@ -221,6 +221,11 @@ source_revision?
 - Exactly one profile and one reference generation exist.
 - At most one project generation exists.
 - Two external generation entries cannot share the same `(provider_id, scope_id)` with different generation IDs.
+- An external entry's `provider_id` must match the provider inside its typed
+  `external_generation_id`; it follows the existing lowercase segment grammar.
+  Scope and any supplied source revision are nonempty, at most 1,024 UTF-8 bytes,
+  without controls or surrounding whitespace. Context admission rechecks these
+  constructor invariants even when the entry came from deserialization.
 - Every schema/producer ID appears at most once.
 - `context_id` is derived from all identity-relevant fields except itself.
 - A project generation is meaningful only with the reference generation used to produce it.
@@ -242,7 +247,10 @@ external_union
   profile/reference/project must match; nonconflicting external scopes may be united
 ```
 
-There is no implicit “best available” mode.
+Schema and producer version inventories remain identical in all three modes.
+Neither optional-project extension nor external-scope union authorizes filling a
+missing version entry or selecting a different version. There is no implicit
+“best available” mode.
 
 ## 6. Source handle
 

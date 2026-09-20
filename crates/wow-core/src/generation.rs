@@ -57,14 +57,25 @@ impl ExternalGeneration {
         external_generation_id: ExternalGenerationId,
         source_revision: Option<String>,
     ) -> CoreResult<Self> {
-        let provider_id = provider_id.into();
-        let scope_id = scope_id.into();
+        let entry = Self {
+            provider_id: provider_id.into(),
+            scope_id: scope_id.into(),
+            external_generation_id,
+            source_revision,
+        };
+        entry.validate()?;
+        Ok(entry)
+    }
+
+    // Serde may construct this record without using `new`. Context admission
+    // must enforce the same provider binding and text limits as construction.
+    fn validate(&self) -> CoreResult<()> {
         validate_lower_segment(
-            &provider_id,
+            &self.provider_id,
             "validate_generation_context",
             "external_generations.provider_id",
         )?;
-        if external_generation_id.provider() != provider_id {
+        if self.external_generation_id.provider() != self.provider_id {
             return Err(mismatch_error(
                 "validate_generation_context",
                 CoreErrorCode::GenerationMismatch,
@@ -72,23 +83,18 @@ impl ExternalGeneration {
             ));
         }
         validate_bounded_text(
-            &scope_id,
+            &self.scope_id,
             "external_generations.scope_id",
             "validate_generation_context",
         )?;
-        if let Some(revision) = &source_revision {
+        if let Some(revision) = &self.source_revision {
             validate_bounded_text(
                 revision,
                 "external_generations.source_revision",
                 "validate_generation_context",
             )?;
         }
-        Ok(Self {
-            provider_id,
-            scope_id,
-            external_generation_id,
-            source_revision,
-        })
+        Ok(())
     }
 
     /// Provider identifier.
@@ -200,8 +206,12 @@ impl GenerationContext {
         Ok(())
     }
 
-    /// Requires byte-for-byte exact generation context identity.
+    /// Validates both contexts before requiring exact generation identity.
     pub fn require_same_generation(&self, other: &Self) -> CoreResult<()> {
+        // A matching caller-supplied ID is not proof that either decoded record
+        // still describes the fields used to derive that ID.
+        self.validate()?;
+        other.validate()?;
         if self.context_id == other.context_id {
             Ok(())
         } else {
@@ -237,13 +247,11 @@ impl GenerationContext {
             &self.schema_versions,
             &other.schema_versions,
             "schema_versions",
-            CoreErrorCode::DuplicateSchemaId,
         )?;
         let producer_versions = merge_identical_entries(
             &self.producer_versions,
             &other.producer_versions,
             "producer_versions",
-            CoreErrorCode::DuplicateProducerId,
         )?;
         let external_generations = merge_external_generations(
             &self.external_generations,
@@ -409,27 +417,22 @@ fn merge_project_generation(
     }
 }
 
-fn merge_identical_entries<T: Clone + Ord + PartialEq>(
+fn merge_identical_entries<T: Clone + PartialEq>(
     left: &[T],
     right: &[T],
     field: &'static str,
-    code: CoreErrorCode,
 ) -> CoreResult<Vec<T>> {
-    if left == right {
-        return Ok(left.to_vec());
+    // Extension applies only to the optional project generation; external
+    // union applies only to external scopes. Neither permits filling missing
+    // schema/producer identities or changing their versions.
+    if left != right {
+        return Err(validation_error(
+            "merge_generation_context",
+            CoreErrorCode::MergeModeViolation,
+            field,
+        ));
     }
-    let mut combined = left.to_vec();
-    combined.extend_from_slice(right);
-    combined.sort();
-    combined.dedup();
-    if combined.len() == left.len().max(right.len())
-        && left.iter().all(|entry| combined.contains(entry))
-        && right.iter().all(|entry| combined.contains(entry))
-    {
-        Ok(combined)
-    } else {
-        Err(validation_error("merge_generation_context", code, field))
-    }
+    Ok(left.to_vec())
 }
 
 fn merge_external_generations(
@@ -514,6 +517,9 @@ fn validate_sorted_unique_producers(entries: &[ProducerVersionEntry]) -> CoreRes
 }
 
 fn validate_sorted_unique_external(entries: &[ExternalGeneration]) -> CoreResult<()> {
+    for entry in entries {
+        entry.validate()?;
+    }
     for pair in entries.windows(2) {
         if pair[0].provider_id == pair[1].provider_id && pair[0].scope_id == pair[1].scope_id {
             return Err(validation_error(

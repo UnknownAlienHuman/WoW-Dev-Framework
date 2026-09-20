@@ -348,3 +348,17 @@ do not replace missing records with defaults or catch admission errors as clean.
 No current sibling Rust crate called these operations at this checkpoint; the
 existing core regression caller is migrated. Future consumers must use the
 checked seam. See [selection rules and limits](COVERAGE_CONSUMERS.md).
+
+## Checked generation composition
+
+Use `require_same_generation` for exact multi-input admission, not a comparison
+of caller-supplied `context_id` fields. The guard validates both complete contexts
+before comparing their identities and propagates nested errors. A matching digest
+is neither authenticity evidence nor proof of an external revision's existence.
+
+`merge_generation_context` does not repair malformed inputs or choose versions.
+Schema and producer inventories must match exactly in every mode. Only
+`ExtendMissingOptional` can fill an absent project generation; only `ExternalUnion`
+can combine compatible external scopes. Neither mode replaces existing owner
+identities. Decode first, then use the checked owner operations; direct Serde
+construction is not equivalent to validated admission.

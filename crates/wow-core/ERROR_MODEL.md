@@ -75,6 +75,13 @@ No automatic retry is performed by `wow-core`.
 | `duplicate_schema_id` | validation | Schema ID appears more than once. | after_input_change |
 | `duplicate_producer_id` | validation | Producer/tool ID appears more than once. | after_input_change |
 
+Generation-context admission propagates nested profile, provider and text-bound
+validation errors rather than replacing them with an ID mismatch. The strict
+same-generation guard validates both operands, including an operand compared to
+itself. Merge inputs must already be valid; schema/producer inventory differences
+(including subsets and conflicting versions) return `merge_mode_violation` on the
+affected collection. Duplicate IDs inside one input retain their duplicate codes.
+
 ### Source handles
 
 | Code | Category | Trigger | Retry |

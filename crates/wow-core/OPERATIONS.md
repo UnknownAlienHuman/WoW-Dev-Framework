@@ -376,11 +376,17 @@ Checks:
 - one valid profile/reference generation;
 - at most one project generation;
 - unique external `(provider, scope)` entries;
+- every external entry passes the same provider grammar, provider-to-generation
+  binding and bounded scope/revision checks as `ExternalGeneration::new`, including
+  records obtained through deserialization;
 - unique schema/producer IDs;
 - canonical ordering;
 - supplied context ID matches derived ID.
 
-Returns structured errors rather than rewriting mismatched IDs.
+Returns structured errors rather than rewriting mismatched IDs. Profile and nested
+external-entry admission errors propagate unchanged through validation, context-ID
+retrieval, merge and the strict same-generation guard. A correctly recomputed
+context digest does not waive nested-record validation.
 
 Required tests: `CONTEXT-001..018`.
 
@@ -407,13 +413,22 @@ Rules by mode:
 - `strict`: every present identity field and collection must be identical.
 - `extend_missing_optional`: profile/reference must match; an absent optional project field may be filled, but conflicting project values fail.
 - `external_union`: profile/reference/project must match; nonconflicting external scopes may be combined.
-- Schema or producer version conflicts always fail.
+- Schema and producer inventories must be identical in every mode, including
+  absent/present entries. Only the optional project field or external scopes named
+  by the chosen mode may change. Missing entries and version conflicts return
+  `merge_mode_violation` on the affected version collection; input duplicates are
+  rejected by context validation before merging.
 
 Required tests: full matrix `CONTEXT-MERGE-001..028`.
 
 ### `require_same_generation`
 
-Strict guard for multi-input operations. It returns success only when context IDs match exactly. It does not call a permissive merge mode.
+Strict guard for multi-input operations. Revalidate both complete contexts before
+comparing their IDs: matching caller-supplied IDs are not evidence that decoded
+records retain the fields that produced those IDs. This also applies to two
+references to the same decoded record. Propagate narrow context/profile validation
+errors without rewriting IDs. Return success only when both contexts validate and
+their exact IDs match; never call a permissive merge mode.
 
 Required tests: `CONTEXT-SAME-001..006`.
 

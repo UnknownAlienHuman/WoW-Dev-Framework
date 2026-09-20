@@ -741,7 +741,13 @@
         "invalid_profile_identity",
         "generation_mismatch",
         "duplicate_external_generation_scope",
-        "canonicalization_failure"
+        "canonicalization_failure",
+        "invalid_identifier",
+        "reserved_identifier_segment",
+        "identifier_too_long",
+        "profile_kind_violation",
+        "duplicate_schema_id",
+        "duplicate_producer_id"
       ]
     },
     {
@@ -752,7 +758,13 @@
         "generation_mismatch",
         "duplicate_external_generation_scope",
         "duplicate_schema_id",
-        "duplicate_producer_id"
+        "duplicate_producer_id",
+        "invalid_identifier",
+        "reserved_identifier_segment",
+        "identifier_too_long",
+        "invalid_profile_identity",
+        "profile_kind_violation",
+        "canonicalization_failure"
       ]
     },
     {
@@ -763,7 +775,15 @@
         "generation_mismatch",
         "profile_mismatch",
         "duplicate_external_generation_scope",
-        "merge_mode_violation"
+        "merge_mode_violation",
+        "invalid_identifier",
+        "reserved_identifier_segment",
+        "identifier_too_long",
+        "invalid_profile_identity",
+        "profile_kind_violation",
+        "duplicate_schema_id",
+        "duplicate_producer_id",
+        "canonicalization_failure"
       ]
     },
     {
@@ -771,7 +791,16 @@
       "status": "required",
       "doc": "OPERATIONS.md#require_same_generation",
       "errors": [
-        "generation_mismatch"
+        "generation_mismatch",
+        "invalid_identifier",
+        "reserved_identifier_segment",
+        "identifier_too_long",
+        "invalid_profile_identity",
+        "profile_kind_violation",
+        "duplicate_external_generation_scope",
+        "duplicate_schema_id",
+        "duplicate_producer_id",
+        "canonicalization_failure"
       ]
     },
     {
