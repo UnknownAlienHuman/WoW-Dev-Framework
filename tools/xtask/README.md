@@ -20,8 +20,15 @@ cargo xtask verify-library /path/to/native-output --require-input-complete
 
 `check` and `sync-skill` accept `--root DIR`; otherwise the framework source root
 is used. Check is read-only. It scans distributable tracked/untracked files for
-forbidden interpreter assets/invocations, validates JSON and verifies identical
-skill discovery copies. It does not certify every planned conformance gate and
+forbidden interpreter assets/invocations, validates JSON syntax and rejects
+duplicate decoded object keys at every nesting level, then verifies identical
+skill discovery copies. Independent objects may reuse names; arbitrary-precision
+numbers and normal JSON string/recursion rules remain supported. Duplicate errors
+include the file and UTF-8 byte offset, without echoing key/value contents.
+
+This is not full JSON-schema, contract-ID, fixture/checksum or dependency-graph
+closure. Those remaining gates are listed in the root completion matrix.
+`check` does not certify every planned conformance gate and
 is not a defense against intentionally obfuscated programs.
 
 Skill writes are explicit, preflight all paths, reject symlinks, use a single

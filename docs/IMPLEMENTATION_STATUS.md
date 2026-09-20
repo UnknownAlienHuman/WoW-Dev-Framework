@@ -1,208 +1,142 @@
 # Implementation status and update policy
 
-This ledger describes executable scope, not completion of the planned E0-E7
-architecture. Ketho is the annotation-service donor; the
-[port map](KETHO_RUST_PORT.md) defines the native migration route.
+**Current census:** [PROJECT_COMPLETION_MATRIX.md](PROJECT_COMPLETION_MATRIX.md).
+**Execution findings:** [AUDIT_2026-09-19.md](AUDIT_2026-09-19.md).
+**Normative order:** [IMPLEMENTATION_HANDOFF.md](IMPLEMENTATION_HANDOFF.md), I0–I7.
 
-## Active workspace
+This ledger describes executable scope, not completion of the E0–E7 architecture.
+Do not use old bootstrap or owner README status lines as evidence that existing
+Rust implementations must be written again.
 
-- `wow-core`: deterministic identity, evidence, coverage and result primitives.
-- `wow-reference`: deterministic fixture reference view; native EmmyLua-AST
-  documentation loading/normalization and exact scalar resolution; retained
-  v1 API/topology wire importers and development CLIs.
-- `wow-annotations`: Rust Ketho callable, structure, callback and literal
-  emitters connected to native source documents. The Git/TOC development driver
-  creates a new library with raw metadata, errors and declaration source maps.
-- `tools/xtask`: internal repository/source maintenance with no framework crate
-  dependencies. Policy/JSON/skill checks, explicit skill synchronization, public
-  HTTPS remote-head comparison and explicitly authorized guarded fast-forward,
-  exact Git manifest build/verify and native
-  artifact consistency verification. Not the public product/service CLI.
+## Active workspace and unaccepted scope
 
-There are no Python source files or Python invocations in the build, tests or
-CI. The separate consumer test runs approved analyzers, never addon/generated Lua. `cargo xtask check` enforces the native-only repository policy and
-skill consistency. See [xtask commands and limits](../tools/xtask/README.md).
-No replacement script is hidden in Rust, CI heredocs or generated payloads.
+The root Cargo workspace has **14 members**: `wow-core`, `wow-store`,
+`wow-reference`, `wow-annotations`, `wow-emmy`, `wow-project`, `wow-rules`,
+`wow-service`, `wow-graph`, `wow-recognizers`, `xtask`, `wow-render-contract`,
+`wow-ketho-literals` and the guest in `modules/ketho-literals`.
+The separate `bridges/literal-host` workspace has dedicated CI and is deliberately
+excluded from the root workspace.
 
-## Native source and annotations
+Real analyzer, project-generation, diagnostic, service, persistence, graph and
+recognizer slices exist. E0-B–E0-F normative checksum manifests nevertheless
+retain required pending/null fields. Partial executable state is not complete
+package acceptance. This correction does not manufacture missing evidence or
+waive the earlier fixture-freeze policy.
 
-The [native command](KETHO_RUST_PORT.md#native-source-to-library-path) reads one
-materialized local Git revision and selected documentation TOC. Source worktree
-changes are ignored; source Lua and generated stubs are never executed.
-Report `wow-native-annotation-library/3` retains raw metadata, scalar-resolution
-outcomes/evidence, explicit return-name transformations and escaped prose links.
-Constants use `Values`; enums use `Fields`. Exact integer additive expressions,
-enum labels and transitive same-corpus references resolve without runtime globals.
-Invalid declarations/groups do not erase valid siblings; conflicts remain errors.
+`apps/wow` has no Rust implementation. `apps/wow-reference-builder` has inactive
+source/tests with missing service symbols, command-contract differences and
+input-boundary issues; root workspace CI does not test it. Search, context,
+optional external bridge and supported release owners remain planned.
 
-Declaration maps include ScriptObject class/local-binding blocks, original-name
-aliases from guarded receiver corrections, and individual methods. Literal maps
-are whole-file. General named-type/widget inheritance closure, the remaining
-correction operations, fine-grained maps, persistent ReferenceView integration and
-full-corpus EmmyLua/LuaLS semantic probes remain incomplete; the scoped executable
-consumer slice is described below. Native projection
-is partial when data is omitted or unsupported; it never issues negative authority.
+Next: close exact E0 prerequisite fixtures and I0-F's owner-composed `wow status`
+/ `wow check` slice, using the existing owners. All launch gates remain blocked.
 
-## Retired source path and compatibility boundary
+## Native source and annotation boundary
 
-The former interpreter-based source producers, their tests and setup/workflow
-calls are removed, not retained as migration fallback. Native Ketho generation
-replaces the annotation input/output path, not every old wire command.
+Ketho/vscode-wow-api remains the annotation implementation donor; the
+[port map](KETHO_RUST_PORT.md) is the route for changes. Current Gethe source,
+resolved once per operation, supplies Blizzard facts. Source and generated Lua
+are data and must not be executed.
 
-- Source manifests now build/verify through native `cargo xtask` commands.
-- Skill maintenance now uses native `cargo xtask sync-skill`.
-- v1 API/topology JSON readers remain for existing artifacts. Native Rust CLI
-  fixtures cover lookup, digest tampering, source mismatch, partial authority and
-  idempotent/no-clobber bundle publication. These fixtures do not regenerate
-  current Gethe topology or prove a real source inventory.
-- A full native XML/TOC topology producer and v1 API wire producer are not
-  implemented. The annotation TOC reader is not a full topology replacement.
-- The old upstream source-manager/public-symbol-report command family is retired.
-  `check-source` is a read-only replacement for remote-head comparison only, not
-  managed cloning, auto-update or analyzer semantic compatibility.
+Native source/model/scalar/correction/alias handling, library projection,
+receiver/type/catalog/inheritance/navigation slices and bounded literal rendering
+already exist. Exact native scope is in their code, focused tests and port/usage
+contracts. Scoped dual-consumer tests, source-bundle validation and a Wasm swap
+probe do not establish universal corpus parity, platform truth or E1 acceptance.
 
-Rust manifest regressions use synthetic SHA-1/SHA-256 Git repositories and cover
-raw blobs, export attributes, dirty worktrees, digest tampering, source movement,
-path rejection and new-only output. Native Ketho source/model/renderer tests
-remain active. No language-server, installation or client result is fabricated.
+The development driver is `crates/wow-annotations/examples/native_library.rs`;
+use its documented explicit inputs rather than inventing a public `wow` command.
+Raw source observations remain unchanged by reviewed projections. Missing,
+conflicting, failed, omitted or unsupported inputs remain partial/NotEvaluated,
+never `any`, a clean negative, or authoritative runtime safety.
 
-## CI and update policy
+Legacy v1 API/topology readers remain compatibility boundaries. The retired
+interpreter producers are not a fallback, and the annotation TOC loader is not a
+full E2 TOC/XML/load/project index. Do not restore Python, embedded interpreters,
+wrappers or interpreter-based project tests.
 
-CI checks Linux/Windows, current stable Rust, fmt/check/strict Clippy, debug/release
-workspace tests, rustdoc, repository policy and exact skill copies. Separate
-updated-dependency and rolling-parser lanes exercise the reference/annotation
-consumers. No permanent toolchain override exists; compatible requirements and
-Cargo.lock describe a reproducible build without forbidding updates.
+## Implemented maintenance commands
 
-The current-source workflow resolves the selected Gethe branch, builds/rebuilds
-its Git manifest and generates annotations through Rust only. Final output bytes,
-hashes, source counts and mapping ranges are checked. Source admission failures
-fail the job; explicit projection omissions remain partial, not a semantic pass.
-The default branch/environment can be changed for an explicit dispatched run;
-this does not certify every flavor. The source check and generator share one
-resolved revision, never a permanently embedded client build.
+See [xtask commands and limits](../tools/xtask/README.md):
 
-## Remaining product scope
+```sh
+cargo xtask check
+cargo xtask sync-skill --check
+cargo xtask sync-skill --write
+cargo xtask check-source /path/to/checkout live
+cargo xtask update-source /path/to/checkout live --expected-head <observed-SHA>
+cargo xtask manifest /path/to/checkout HEAD live /path/to/new-manifest.json
+cargo xtask verify-manifest /path/to/manifest.json /path/to/checkout HEAD
+cargo xtask verify-library /path/to/native-output --require-input-complete
+```
 
-Managed cloning/update scheduling, GitHub-only acquisition and operator-only
-knowledge retrieval remain unimplemented. Existing standalone source checkouts
-can be fast-forwarded explicitly with the guarded command described below. No private provider, endpoint, token
-or corpus is a public build/runtime dependency. Source-head checks use only an
-explicit public HTTPS origin; offline freshness is unverified.
+These are internal maintenance/development operations, not a replacement product
+service or public CLI. Repository checks enforce native-only assets/invocations,
+JSON syntax, **unique decoded object keys**, and synchronized skill copies.
+They do not yet prove full contract-schema/ID/dependency/fixture/Markdown closure.
+Eight duplicate-key regression groups were added at implementation checkpoint
+`c10579d359b5f0044fc6fcdfef3b353c5caa65dc` without changing dependencies.
 
-Full I0-A/I0-B acceptance and persistent channel publication remain incomplete.
-The real semantic `wow-emmy` adapter and public `wow` binary are not active.
-Service composition, project model, diagnostics, persistence, graph, search,
-transport, installation and release gates remain subsequent work.
+## Source update and provenance policy
 
-Next annotation work: remaining Ketho type resources, widget inheritance and
-expansion of the scoped dual-consumer probes to the full generated corpus. Keep the analyzer adapter on the R0 path, without delaying
-annotation parity behind unrelated future subsystems or restoring a parallel
-interpreter implementation.
+Choose an explicit flavor/moving source selector at operation start and record
+one exact source revision, version and manifest. Re-resolve on a new operation.
+A recorded commit/build/toolchain is evidence for a run, not permanently embedded
+current truth. Offline or unavailable remote observation is `unverified-current`.
 
-## Reviewed Ketho corrections
+`check-source` is read-only. `update-source` is an explicitly authorized guarded
+fast-forward for an existing, exclusively owned standalone checkout; see
+[SOURCE_CHECKOUT_UPDATES.md](SOURCE_CHECKOUT_UPDATES.md). Expected HEAD/branch,
+origin, dirty/ignored state, divergence and races are checked. Never reset/stash
+operator changes, switch unexpected branches, force-push or retry an uncertain
+apply. Managed cloning, GitHub-only materialization and update scheduling are
+not implemented by this command.
 
-`wow-reference::native_corrections` now applies independent reviewed Type/Nilable
-and widget-receiver corrections to a normalized copy of exact source documents.
-The native driver accepts `--corrections <pack.json>` explicitly. Guards bind the
-source revision/environment, normalizer, file hash, raw observation hash and old
-value; mismatch never refreshes itself. Duplicate targets and receiver collisions
-remain conflicts, including collisions exposed by another alias being rejected.
-Raw source is unchanged. Every record has an outcome and blocked corrections keep
-the result partial. Report v4 adds the canonical correction set/digest and outcomes;
-uncorrected builds still emit v3. The artifact checker accepts both and rejects
-false-clean correction reports. Named/primitive unions are now rendered with
-correct array grouping. No source acquisition, dependency or interpreter was added.
-See [usage and remaining correction scope](KETHO_NATIVE_CORRECTIONS.md).
+The planned `auto`/`prompt`/`never` policy does not imply those missing acquisition
+paths already exist. Optional operator-only context is advisory, disabled by
+default and configured outside the repository. No private endpoint, token,
+provider or corpus is a public build/runtime prerequisite.
 
-## ScriptObject receiver declarations
+## CI and exact evidence
 
-Native generation composes the reviewed Ketho class/local-table representation
-with generated methods in one lexical scope. Each unique selected ScriptObject
-produces its exact receiver class even when it has no admitted methods. No new
-runtime globals, constructors, suffix-based name mapping or inheritance is added.
-A reviewed owner rename retains the original source system name as a type alias
-when that identity is unambiguous. Source observations and correction receipts
-remain unchanged; class blocks and method ranges each have source links.
+Root CI exercises Linux/Windows repository policy, formatting, locked workspace
+check, strict Clippy, debug/release tests and rustdoc. Other lanes exercise updated
+dependencies, rolling parser consumers, isolated literal-host/guest swap/rollback
+and semantic annotation consumers. The rolling parser lane deliberately excludes
+semantic analyzer consumers; it is not proof that the entire analyzer adapter was
+tested against a new upstream revision.
 
-The generator checks both original and corrected names against other receiver
-identities, structures/callbacks/unknown types, namespaces/globals, selected enum
-type names and generated literal roots. A conflict excludes the ambiguous class
-and its methods, not independent table/event declarations. Projection stays
-partial. The wire shape remains v3/v4; generated file digests change with the
-combined class profile. Existing standalone Ketho emitter byte vectors are
-unchanged. Primitive/named-union aliases are implemented below; remaining custom types
-and widget inheritance are subsequent scope; syntax tests alone do not establish semantic consumer compatibility.
+The current-source workflow resolves explicit Gethe/Ketho inputs and retains
+source identities, counts, output bytes/hashes and reports. Source admission
+failures are errors; explicit projection omissions remain partial, not a semantic
+pass or an R0 product evaluation.
 
-## Explicit annotation alias resources
+Baseline source `e2c74314bb7ccde4a9b48c049dfeacc157259960` passed
+[CI 34735568141](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/34735568141).
+The duplicate-key implementation is associated with
+[CI 35487232004](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/35487232004).
+Use each run's exact head and actual conclusions; later documentation commits have
+their own CI. A source archive and successful CI are not a release signature,
+full fixture-freeze acceptance, real-addon runtime test or supported installation.
 
-`native_aliases` reads caller-selected Ketho-style alias files through Emmy
-without executing Lua. The native generator projects primitive/named unions as
-an external annotation overlay. Raw resource bytes, independent revision/hash,
-per-alias outcomes and scoped generated maps are retained. Aliases cannot override
-native declarations; missing dependencies, duplicates, cycles and unsupported
-forms remain partial, not `any`. Named alias syntax errors are isolated using
-Emmy short-comment token boundaries; erroneous types are not repaired.
+## Updating this ledger
 
-The Git driver exposes `--alias-catalog <checkout> <ref> <resource>` alongside
-optional guarded corrections. No catalog is embedded or automatically enabled.
-The v5 artifact verifier checks outcome/mapping/byte consistency; without the
-optional input, v3/v4 remain unchanged. This development overlay is not a new
-ReferenceView authority or completion of E1-C. See [usage and limits](KETHO_RUST_PORT.md#alias-resource-connection).
+Work sequentially in `main`, one owned slice at a time, without task branches or
+worktrees. Read owner contracts and prerequisites; execute applicable checks;
+publish without force and read back exact remote HEAD/blob identities. Record
+failed, skipped and unavailable checks separately. Do not claim a local cargo
+run when validation came from Actions.
 
-The existing source workflow also checks an explicit current public Ketho alias
-resource against its resolved Gethe source. Private configuration is unnecessary.
-Remaining custom type resources, widget inheritance and full-corpus dual-consumer
-certification are still incomplete; see the scoped semantic test below.
+Update the machine inventory, current matrix and affected owner status together
+when executable scope changes. An Implemented/Complete gate requires its full
+reviewed fixtures and evidence, not only code presence. Historical annotation
+checkpoint details remain available in Git history and their focused port/usage
+documents; they must not be recycled as a current backlog without checking code.
 
-## Micromodular literal bridge
+## Verified code checkpoint
 
-The literal algorithm has moved into `wow-ketho-literals` behind
-`wow-render-contract`; wow-annotations retains only a compatibility facade.
-`modules/ketho-literals` builds a Rust core-Wasm guest without WASI. The separate
-`bridges/literal-host` workspace loads explicitly approved bytes, validates ABI,
-limits execution and supports retained snapshots, CAS replacement and rollback.
-An explicit development composition now routes the source pipeline's literal
-calls through one retained Wasm snapshot, without a VM dependency in stable
-owners or a native fallback. Schema v6 records selected-module/call/artifact
-bindings; unchanged native calls keep v3/v4/v5. The shared driver remains outside
-the product service; service routing and signed/durable updates remain pending. The existing CI includes mandatory real
-two-build guest probes on Linux/Windows. See [contract](WASM_BRIDGES.md); test
-results belong to the actual commit/run, not this status description.
-
-The literal host uses a bounded full-inventory fuel default and explicit
-`--fuel`/`--memory-bytes` overrides in its source composition. Fixed host
-`FuelExhausted` diagnostics and successful-call metering expose capacity failures
-without hiding them behind native fallback. Eager translation keeps cold code-cache
-charges out of per-call budgets. The unchanged hard limits and actual compiled
-large-aggregate regressions remain mandatory; none of this certifies consumer
-semantics or implements signed/durable module updates.
-
-## Guarded source checkout updates
-
-`cargo xtask update-source <checkout> <branch> --expected-head <SHA>` updates an
-existing, exclusively owned standalone checkout through a fixed native Git
-bridge. It observes one remote revision, fetches that exact commit, rechecks
-local branch/HEAD/origin/config and requires fast-forward ancestry. Local and
-concealed edits, ignored-file overwrites, divergence and uncertain apply outcomes
-are not repaired by reset/stash/rebase or hidden retries. Apply failure retains
-a minimal reconciliation journal; successful read-back and lock closure precede
-exit 0. No new crate, interpreter, WASM permission or algorithm rebuild is added.
-
-Compatible source/resource updates reuse Git objects and feed new exact source
-generations; old manifests remain verifiable. `check-source` is still read-only.
-Missing-root cloning, private authentication, durable source service, incremental
-analysis and background scheduling remain separate work. See
-[SOURCE_CHECKOUT_UPDATES.md](SOURCE_CHECKOUT_UPDATES.md) for boundaries and tests.
-
-## Semantic annotation consumer slice
-
-The native source-to-Ketho output now has executable, test-only dual-consumer
-acceptance in `tests/consumers.rs`: actual EmmyLua and LuaLS CLI diagnostics,
-positive signatures/types plus nine exact negative cases, and real missing-library
-and erased-type mutations. Both dedicated CI jobs execute the external test;
-regular offline workspace runs do not claim it from the ignored test entry.
-The adapter retains binary/package/config/input identities and rejects unexpected
-input changes. See [scope and commands](ANNOTATION_CONSUMER_PROBES.md).
-This does not activate `wow-emmy`, certify the full Gethe corpus or replace the
-planned API-absence rule. Open Ketho namespaces retain explicit absence nonclaims.
+All eight jobs in CI run `35487232004` concluded success for
+`c10579d359b5f0044fc6fcdfef3b353c5caa65dc`: Linux/Windows locked checks,
+strict Clippy, debug/release tests and rustdoc; updated dependencies; rolling
+parser; Linux/Windows semantic consumers; Linux/Windows Wasm swap/rollback.
+This is code-checkpoint evidence, not a full package or public launch certificate.

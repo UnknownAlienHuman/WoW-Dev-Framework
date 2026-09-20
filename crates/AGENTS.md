@@ -8,12 +8,11 @@ These instructions apply to every crate directory and cross-crate owner seam.
 
 ```text
 documentation frontier: E7-B / planned architecture
-implementation: partial executable foundation and source bridge
-active workspace: wow-core, wow-reference, wow-annotations; tools/xtask (maintenance)
-current port: Ketho native source-to-annotations in wow-reference / wow-annotations
-next port: reviewed correction/type/widget mappings and consumer probes
-separate R0 owner: I0-C / real wow-emmy semantic analyzer adapter
-full R0, runtime, installation and release gates: NotEvaluated
+implementation: partial executable E0/E1/E2 owner slices
+active workspace: 14 members; Cargo.toml and the current completion matrix
+current state and concrete blockers: docs/PROJECT_COMPLETION_MATRIX.md
+next: E0 prerequisite fixture/identity/checksum closure, then I0-F / R0
+full product, real-addon, installation and release gates: blocked / NotEvaluated
 ```
 
 A crate README and contract define implementation responsibilities; directory presence is not implementation. Do not create the final workspace topology as empty crates. Activate one owner package only when its exact implementation slice, toolchain and dependency inputs, fixtures, tests, and applicable acceptance gate are ready. Exact test inputs identify a run; they are not permanent compiler or source pins.
@@ -59,7 +58,7 @@ Cross-crate seam Markdown files are normative operations and projections, not se
 
 ## Scope discipline
 
-- One implementation agent owns one primary crate or one explicitly named seam and one worktree until merged, quarantined, or deleted.
+- Work sequentially in `main`, one primary crate or explicitly named seam at a time; do not create task branches or worktrees.
 - Do not edit sibling owners to make a local implementation convenient.
 - If implementation proves a contract contradictory or insufficient, record the exact failing use case and propose the smallest seam or ADR correction.
 - Do not create every planned crate during I0. Activate only the current implementation package and exact prerequisites.
@@ -190,10 +189,11 @@ remaining exact blockers
 
 ## Next implementation
 
-```text
-Ketho native source-to-library port: docs/KETHO_RUST_PORT.md
-current workspace: wow-core, wow-reference, wow-annotations; tools/xtask (maintenance)
-full wow-emmy semantic integration and product gates remain incomplete
-```
+Use [the current completion matrix](../docs/PROJECT_COMPLETION_MATRIX.md) and
+[the execution audit](../docs/AUDIT_2026-09-19.md). Existing analyzer, project,
+service, store, graph and recognizer code must not be recreated because of an old
+README status line. Resolve the required E0 fixture gates and missing I0-F app;
+retain the [Ketho port route](../docs/KETHO_RUST_PORT.md) for annotation changes.
 
-Do not start another primary crate until the current worktree is merged, quarantined, or deleted.
+Do not start another primary owner until the current checkpoint is validated,
+published to `main` and read back, or explicitly recorded as blocked.

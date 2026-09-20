@@ -3,17 +3,19 @@
   "repository": "UnknownAlienHuman/WoW-Dev-Framework",
   "architecture_state": "planned-complete-through-E7-B",
   "documentation_frontier": "E7-B",
-  "implementation_frontier": "partial-foundation-and-source-bridge",
+  "implementation_frontier": "partial-executable-E0-E1-E2-owner-slices",
   "contract_state": "planned-contracts-with-partial-executable-implementation",
   "launch_gate_document": "docs/LAUNCH_GATES.md",
   "next_implementation_work_package": {
-    "id": "I0-C",
-    "owner": "wow-emmy",
-    "manifest": "crates/wow-emmy/CONTRACT.json",
+    "id": "I0-F",
+    "owner": "wow-service",
+    "application": "apps/wow",
+    "manifest": "crates/wow-service/CONTRACT.json",
     "launch_gate": "R0",
     "scope": [
-      "Implement and probe a real upstream analyzer adapter; retain update compatibility.",
-      "Do not claim full I0-A/I0-B acceptance from the current foundation tests."
+      "Close required E0-A through E0-E fixture, identity and checksum prerequisites against the existing code.",
+      "Complete the owner-composed E0-F fixture and implement the missing thin wow status / wow check application.",
+      "Use docs/PROJECT_COMPLETION_MATRIX.md and docs/AUDIT_2026-09-19.md; do not recreate implemented owner slices or treat partial code as acceptance."
     ]
   },
   "workspace_state": {
@@ -33,6 +35,10 @@
     ],
     "independent_bridge_workspaces": [
       "bridges/literal-host"
+    ],
+    "active_member_manifest": "Cargo.toml",
+    "unintegrated_cargo_packages": [
+      "apps/wow-reference-builder"
     ]
   },
   "protocol_profiles": {
@@ -108,7 +114,8 @@
       "contract_id": "wow-core/e0-a/1",
       "manifest": "crates/wow-core/CONTRACT.json",
       "documentation_state": "complete",
-      "implementation_state": "not-started"
+      "implementation_state": "partial-executable",
+      "acceptance_state": "not-certified; see docs/PROJECT_COMPLETION_MATRIX.md"
     },
     {
       "work_package": "E0-B",
@@ -116,7 +123,8 @@
       "contract_id": "wow-reference/e0-b/1",
       "manifest": "crates/wow-reference/CONTRACT.json",
       "documentation_state": "complete",
-      "implementation_state": "not-started"
+      "implementation_state": "partial-executable",
+      "acceptance_state": "not-certified; see docs/PROJECT_COMPLETION_MATRIX.md"
     },
     {
       "work_package": "E0-C",
@@ -124,7 +132,8 @@
       "contract_id": "wow-emmy/e0-c/1",
       "manifest": "crates/wow-emmy/CONTRACT.json",
       "documentation_state": "complete",
-      "implementation_state": "not-started"
+      "implementation_state": "partial-executable",
+      "acceptance_state": "not-certified; see docs/PROJECT_COMPLETION_MATRIX.md"
     },
     {
       "work_package": "E0-D",
@@ -132,7 +141,8 @@
       "contract_id": "wow-project/e0-d/1",
       "manifest": "crates/wow-project/CONTRACT.json",
       "documentation_state": "complete",
-      "implementation_state": "not-started"
+      "implementation_state": "partial-executable",
+      "acceptance_state": "not-certified; see docs/PROJECT_COMPLETION_MATRIX.md"
     },
     {
       "work_package": "E0-E",
@@ -140,7 +150,8 @@
       "contract_id": "wow-rules/e0-e/1",
       "manifest": "crates/wow-rules/CONTRACT.json",
       "documentation_state": "complete",
-      "implementation_state": "not-started"
+      "implementation_state": "partial-executable",
+      "acceptance_state": "not-certified; see docs/PROJECT_COMPLETION_MATRIX.md"
     },
     {
       "work_package": "E0-F",
@@ -150,7 +161,8 @@
       "manifest": "crates/wow-service/CONTRACT.json",
       "application_manifest": "apps/wow/CONTRACT.json",
       "documentation_state": "complete",
-      "implementation_state": "not-started"
+      "implementation_state": "partial-executable",
+      "acceptance_state": "not-certified; see docs/PROJECT_COMPLETION_MATRIX.md"
     },
     {
       "work_package": "E1-A",
@@ -158,7 +170,8 @@
       "contract_id": "wow-store/e1-a/1",
       "manifest": "crates/wow-store/CONTRACT.json",
       "documentation_state": "complete",
-      "implementation_state": "not-started"
+      "implementation_state": "partial-executable",
+      "acceptance_state": "not-certified; see docs/PROJECT_COMPLETION_MATRIX.md"
     },
     {
       "work_package": "E1-B",
@@ -166,7 +179,8 @@
       "contract_id": "wow-reference/e1-persistent-schema-and-build-plan",
       "manifest": "crates/wow-reference/e1/CONTRACT.json",
       "documentation_state": "complete",
-      "implementation_state": "not-started"
+      "implementation_state": "partial-executable",
+      "acceptance_state": "not-certified; see docs/PROJECT_COMPLETION_MATRIX.md"
     },
     {
       "work_package": "E1-C",
@@ -174,7 +188,8 @@
       "contract_id": "wow-annotations/e1-projection-and-parity",
       "manifest": "crates/wow-annotations/e1/CONTRACT.json",
       "documentation_state": "complete",
-      "implementation_state": "not-started"
+      "implementation_state": "partial-executable",
+      "acceptance_state": "not-certified; see docs/PROJECT_COMPLETION_MATRIX.md"
     },
     {
       "work_package": "E1-D",
@@ -184,7 +199,8 @@
       "manifest": "crates/wow-service/e1/CONTRACT.json",
       "application_manifest": "apps/wow-reference-builder/CONTRACT.json",
       "documentation_state": "complete",
-      "implementation_state": "not-started"
+      "implementation_state": "partial-executable",
+      "acceptance_state": "not-certified; see docs/PROJECT_COMPLETION_MATRIX.md"
     },
     {
       "work_package": "E2-A",
@@ -192,7 +208,8 @@
       "contract_id": "wow-graph/e2-a/typed-assertion-partition-query-core",
       "manifest": "crates/wow-graph/e2/CONTRACT.json",
       "documentation_state": "complete",
-      "implementation_state": "not-started"
+      "implementation_state": "partial-executable",
+      "acceptance_state": "not-certified; see docs/PROJECT_COMPLETION_MATRIX.md"
     },
     {
       "work_package": "E2-B",
@@ -200,7 +217,8 @@
       "contract_id": "wow-recognizers/e2-b/core-structural-rules",
       "manifest": "crates/wow-recognizers/e2/CONTRACT.json",
       "documentation_state": "complete",
-      "implementation_state": "not-started"
+      "implementation_state": "partial-executable",
+      "acceptance_state": "not-certified; see docs/PROJECT_COMPLETION_MATRIX.md"
     },
     {
       "work_package": "E2-C",
@@ -357,7 +375,7 @@
       "name": "wow-store",
       "brief": "crates/wow-store/README.md",
       "first_implementation_package": "I1-A",
-      "implementation_state": "not-started",
+      "implementation_state": "partial-executable",
       "allowed_dependencies": [
         "wow-core"
       ],
@@ -408,7 +426,7 @@
       "name": "wow-emmy",
       "brief": "crates/wow-emmy/README.md",
       "first_implementation_package": "I0-C",
-      "implementation_state": "not-started",
+      "implementation_state": "partial-executable",
       "allowed_dependencies": [
         "wow-core"
       ],
@@ -423,7 +441,7 @@
       "name": "wow-project",
       "brief": "crates/wow-project/README.md",
       "first_implementation_package": "I0-D",
-      "implementation_state": "not-started",
+      "implementation_state": "partial-executable",
       "allowed_dependencies": [
         "wow-core",
         "wow-store",
@@ -446,7 +464,7 @@
       "name": "wow-graph",
       "brief": "crates/wow-graph/README.md",
       "first_implementation_package": "I2-A",
-      "implementation_state": "not-started",
+      "implementation_state": "partial-executable",
       "allowed_dependencies": [
         "wow-core",
         "wow-store"
@@ -460,7 +478,7 @@
       "name": "wow-recognizers",
       "brief": "crates/wow-recognizers/README.md",
       "first_implementation_package": "I2-B",
-      "implementation_state": "not-started",
+      "implementation_state": "partial-executable",
       "allowed_dependencies": [
         "wow-core",
         "wow-emmy",
@@ -475,7 +493,7 @@
       "name": "wow-rules",
       "brief": "crates/wow-rules/README.md",
       "first_implementation_package": "I0-E",
-      "implementation_state": "not-started",
+      "implementation_state": "partial-executable",
       "allowed_dependencies": [
         "wow-core",
         "wow-reference",
@@ -542,7 +560,7 @@
       "name": "wow-service",
       "brief": "crates/wow-service/README.md",
       "first_implementation_package": "I0-F",
-      "implementation_state": "not-started",
+      "implementation_state": "partial-executable",
       "allowed_dependencies": [
         "wow-core",
         "wow-store",
@@ -618,14 +636,16 @@
       "name": "wow-reference-builder",
       "path": "apps/wow-reference-builder",
       "first_implementation_package": "I1-D",
-      "implementation_state": "not-started",
+      "implementation_state": "inactive-source-not-accepted",
       "framework_dependencies": [
         "wow-service"
       ],
       "public_bundle_default": false,
       "active_contracts": [
         "apps/wow-reference-builder/CONTRACT.json"
-      ]
+      ],
+      "workspace_member": false,
+      "blocker_document": "docs/AUDIT_2026-09-19.md"
     }
   ],
   "tools": [
@@ -727,7 +747,7 @@
   ],
   "implementation_evidence_state": {
     "implemented_work_packages": 0,
-    "active_cargo_workspace_members": 7,
+    "active_cargo_workspace_members": 14,
     "real_reference_packs": 0,
     "real_project_generations": 0,
     "real_analyzer_diagnostic_search_context_runs": 0,
@@ -736,16 +756,21 @@
     "daemon_lsp_mcp_conformance_profiles": 0,
     "reproducible_unsigned_release_builds": 0,
     "signed_public_release_bundles": 0,
-    "supported_targets": 0
+    "supported_targets": 0,
+    "observed_code_commit": "c10579d359b5f0044fc6fcdfef3b353c5caa65dc",
+    "ordinary_ci_run": 35487232004,
+    "count_scope": "Admitted full-package/launch evidence, not mere code presence. This census advances no full acceptance gate.",
+    "required_E0_fixture_freeze_state": "blocked; required pending/null fields remain in E0-B through E0-F checksum manifests"
   },
   "next_action": {
-    "work_package": "I0-C",
-    "branch_intent": "main; no new task branch",
+    "work_package": "I0-F",
+    "branch_intent": "main; no task branches or worktrees",
     "steps": [
-      "Read docs/IMPLEMENTATION_STATUS.md and the target contract.",
-      "Preserve passing source-bridge conformance.",
-      "Implement one real analyzer seam and test against an updateable upstream version.",
-      "Publish only after tests and exact main read-back."
+      "Read docs/PROJECT_COMPLETION_MATRIX.md and docs/AUDIT_2026-09-19.md, then the exact owner contract.",
+      "Close E0 prerequisite fixtures and reviewed checksum/identity chains against the existing implementations, one owner at a time.",
+      "Complete the real owner-composed E0-F fixture and missing thin apps/wow status/check frontend.",
+      "Preserve native source/annotation and isolated parser/bridge CI; do not silently activate the dormant builder.",
+      "Publish each coherent checkpoint with actual check outcomes, then verify exact remote main and blob identities."
     ]
   },
   "status_document": "docs/IMPLEMENTATION_STATUS.md",

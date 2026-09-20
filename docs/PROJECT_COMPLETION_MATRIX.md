@@ -1,224 +1,121 @@
 # Project completion matrix
 
-> Current implementation and update policy: [status ledger](IMPLEMENTATION_STATUS.md). Earlier bootstrap schedules below are design history, not instructions to recreate the workspace or permanently pin versions.
+**Audited:** 2026-09-19 America/New_York. Code inventory: `c10579d359b5f0044fc6fcdfef3b353c5caa65dc`.
 
-**Status:** normative state ledger. Updated 2026-09-02.
+This is the current execution ledger. [IMPLEMENTATION_HANDOFF.md](IMPLEMENTATION_HANDOFF.md)
+remains the normative I0–I7 plan; do not restart its historical bootstrap steps.
+The [audit](AUDIT_2026-09-19.md) records evidence, defects and bounded next tasks.
 
-## Meaning of states
+## State vocabulary
 
-```text
-DocumentationComplete
-    owner, operations, data, boundaries, tests, implementation order and freeze gate exist.
+- **Partial executable:** real Rust implementation exists; this is not full package acceptance.
+- **Inactive code:** source exists outside the tested workspace; no build or acceptance claim.
+- **Not started:** no Rust owner implementation for the named scope.
+- **Implemented:** every required operation, fixture, checksum and acceptance gate for the named package passes.
+- **LaunchGateComplete:** all evidence for the selected launch scope passes independently of ordinary workspace CI.
 
-ImplementationNotStarted
-    no executable owner code or passing implementation evidence exists.
+The audit advances no full package or launch gate to Implemented/Complete. Existing
+code already crossed several historical pre-implementation fixture-freeze gates;
+recording that code honestly does not waive those gates or populate missing evidence.
 
-Implemented
-    exact package implementation, fixtures/checksums and required tests pass.
+## Executable inventory
 
-LaunchGateComplete
-    every package/evidence requirement for the named launch scope passes.
-```
+The root [Cargo.toml](../Cargo.toml) activates **14 members**, not two, four or seven.
 
-Documentation completion never implies implementation or release readiness.
+| Component | Observed executable slice | Remaining acceptance boundary |
+|---|---|---|
+| `wow-core` | Typed identities, canonical JSON, evidence, coverage, results and operation primitives | Reconcile the complete E0-A contract/test matrix; compilation is not the acceptance ledger |
+| `wow-emmy` | Real pinned analyzer adapter, explicit Main/Library workspaces, syntax/generic diagnostics, direct member calls and scoped local-flow facts | E0-C fixture/pin/checksum closure; additional semantic operations and update probes are not inferred from parser compatibility |
+| `wow-project` | Explicit input inventories, analyzer bindings, immutable generations, guarded updates and publication | E0-D fixture identity closure; full TOC/XML/load indexing, overlays and durable project publication |
+| `wow-rules` | `wow.api.exists@1` and `wow.secret.local_operation@1` | E0-E normative fixtures, exact prerequisite identities and complete capability/negative-authority cases |
+| `wow-service` | E0 status/check over immutable normalized contexts; separate ReferenceView administration/publication | E0-F end-to-end fixture/CLI closure; full E1 Reference Pack and later public operation families |
+| `wow-store` | Typed SQLite objects, catalogs/CAS, operation journal, leases, GC and integrity | Full E1-A migration/crash/backup acceptance; coherent E2-D ProjectStore is not the generic store |
+| `wow-reference` | Native source/model/corrections/aliases, compatibility imports, persistent ReferenceView and publication | E0-B/E1-B normative fixture and full Reference Pack/coverage acceptance |
+| `wow-annotations` | Native Ketho-derived library projection, alias/type/catalog/inheritance/navigation slices and consumer tests | Full E1-C contract/corpus parity; scoped passing consumers are not universal semantic certification |
+| `wow-graph` | Immutable snapshots, proposals/registries, neighbors, producer partitions, bounded paths and scoped persistence | Axes/subgraph/explanation, cross-owner evidence resolution, normative fixtures and coherent E2-D publication |
+| `wow-recognizers` | Structured facts, pack parser/compiler, bounded matcher and Emmy direct-call adapter | Full E2-B producer/fixture/calibration prerequisites; E5 governance is separate |
+| `wow-render-contract`, `wow-ketho-literals`, `modules/ketho-literals` | Typed literal wire contract, native renderer and Wasm guest | Scoped algorithm implementation, not public application/release acceptance |
+| `tools/xtask` | Native policy/source/manifest/library checks; duplicate JSON member rejection added in this checkpoint | Full schema/contract-ID/dependency/fixture/link closure remains incomplete |
 
-## Current repository state
+`bridges/literal-host` is an intentionally separate Cargo workspace with its own
+CI lane. It is not a fifteenth root member.
 
-```text
-documentation frontier: E7-B / planned architecture
-implementation: partial executable foundation and source bridge
-active workspace: wow-core, wow-reference
-next owner implementation: I0-C / real wow-emmy analyzer adapter
-full R0, runtime, installation and release gates: NotEvaluated
-```
+`apps/wow-reference-builder` is different: Cargo/source/tests exist, but it is
+neither a root member nor an independently declared workspace. Its source also
+calls absent service symbols and diverges from its documented command contract.
+Do not count it as tested or simply activate it to make the table look complete.
 
-## Work-package matrix
+`apps/wow`, `wow-search`, `wow-context`, `wow-cbm` and `tools/wow-release` have
+no Rust implementation in the audited source. Their documentation is not a binary.
 
-| Work package | Owner | Documentation | Implementation | First launch gate using it |
-|---|---|---|---|---|
-| E0-A | `wow-core` | Complete | Partial executable | R0 |
-| E0-B | `wow-reference` fixture slice | Complete | Partial executable | R0 |
-| E0-C | `wow-emmy` | Complete | Not started | R0 |
-| E0-D | `wow-project` fixture slice | Complete | Not started | R0 |
-| E0-E | `wow-rules` | Complete | Not started | R0 |
-| E0-F | `wow-service` + `apps/wow` | Complete | Not started | R0 |
-| E1-A | `wow-store` | Complete | Not started | A0 |
-| E1-B | `wow-reference` persistent | Complete | Not started | A0 |
-| E1-C | `wow-annotations` | Complete | Not started | A0 |
-| E1-D | service + `wow-reference-builder` | Complete | Not started | A0 |
-| E2-A | `wow-graph` | Complete | Not started | A0 |
-| E2-B | `wow-recognizers` | Complete | Not started | A0 |
-| E2-C | `wow-project` full index | Complete | Not started | A0 |
-| E2-D | `wow-store` ProjectStore | Complete | Not started | A0 |
-| E3-A | Blizzard UI source in `wow-project` | Complete | Not started | A0 |
-| E3-B | `wow-context` | Complete | Not started | A0 |
-| E3-C | context service + CLI | Complete | Not started | A0 |
-| E4-A | `wow-search` | Complete | Not started | A1 |
-| E4-B | graph lineage/migration/impact | Complete | Not started | A1 |
-| E4-C | search/lineage/impact service + CLI | Complete | Not started | A1 |
-| E5-A | recognizer calibration owner | Complete | Not started | B0 governed recognizers |
-| E5-B | review/holdout/submission service | Complete | Not started | B0 governed recognizers |
-| E5-C | core publication/canary/rollout/rollback | Complete | Not started | B0 governed recognizers |
-| E6-A | optional `wow-cbm` Candidate bridge | Complete | Not started | B0 optional external lane |
-| E6-B | provider session/mapping/selection/context | Complete | Not started | B0 optional external lane |
-| E7-A | service sessions/overlays + CLI/daemon/LSP/MCP | Complete | Not started | A1/V1 |
-| E7-B | build/sign/bundle/channel/install/update/support | Complete | Not started | V1 |
+## Work-package ledger
 
-## Crate/application/tool matrix
+| Packages | Actual state | Next requirement |
+|---|---|---|
+| E0-A–E0-E | Partial executable | Close exact normative fixtures and prerequisite identity/checksum chains, one owner at a time |
+| E0-F | Partial service; public app absent | Thin `wow status`/`wow check`, owner-composed fixture, output/exit/cancellation/resource gates |
+| E1-A–E1-C | Partial executable | Finish only verified missing contract/acceptance slices; do not recreate existing store/reference/annotation implementations |
+| E1-D | Partial ReferenceView service; inactive, inconsistent builder source | Repair the frontend/service contract and then include real package tests in CI |
+| E2-A–E2-B | Partial executable | Remaining graph queries, normative recognizer coverage and owner seams |
+| E2-C–E2-D | Full package implementation not started | TOC/XML/load/incremental project index and coherent ProjectStore protocol; generic snapshots are prerequisites, not substitutes |
+| E3-A–E3-C | Not started | Exact Blizzard source universe, context owners and service/CLI after E2 closure |
+| E4-A–E4-C | Not started | Search, lineage/migration/static impact and routing after A0 prerequisites |
+| E5-A–E5-C | Not started | Calibration, independent review/holdout and governed publication lifecycle |
+| E6-A–E6-B | Not started; optional/disabled | External candidates never block the local lane or gain exact/negative authority |
+| E7-A–E7-B | Not started | Selected frontend conformance, then build/sign/bundle/install/update/rollback/support |
 
-| Component | Final responsibility | Documentation | Cargo/Rust | Implementation evidence |
-|---|---|---|---|---|
-| `wow-core` | exact shared semantic primitives | Complete | Absent | None |
-| `wow-store` | generic durable objects/catalogs/effects/leases/GC | Complete | Absent | None |
-| `wow-reference` | Reference Pack/View and exact platform mapping | Complete | Absent | None |
-| `wow-annotations` | deterministic annotation projections | Complete | Absent | None |
-| `wow-emmy` | pinned upstream Lua analyzer adapter | Complete | Absent | None |
-| `wow-project` | source/TOC/XML/load/project generations/overlays | Complete | Absent | None |
-| `wow-graph` | typed graph, lineage, impact, partitions | Complete | Absent | None |
-| `wow-recognizers` | universal recognizers and calibration owner | Complete | Absent | None |
-| `wow-rules` | diagnostics/capability gates/remediation tiers | Complete | Absent | None |
-| `wow-search` | exact-generation search/ranking/explanations | Complete | Absent | None |
-| `wow-context` | Project Map/L0/L1/L2/context | Complete | Absent | None |
-| `wow-cbm` | optional external Candidate normalization | Complete | Absent | None |
-| `wow-service` | all multi-owner use cases/effects/envelopes | Complete through E7-B | Absent | None |
-| `apps/wow` | public one-shot CLI/daemon/LSP/MCP/update client | Complete through E7-B | Absent | None |
-| `apps/wow-reference-builder` | Reference Pack build/validation client | Complete | Absent | None |
-| `tools/wow-release` | internal release publisher client | Complete | Absent | None |
+## Immediate execution order
 
-## Launch-gate matrix
+1. **I0 prerequisite closure:** compare E0-A–E0-E operations and fixtures with the
+   existing code. In particular, E0-B/C/D/E/F `examples/CHECKSUMS.json` still have
+   required null identities/digests. Connect fixtures to real tests before freezing
+   reviewed bytes; never fill hashes mechanically merely to silence the gate.
+2. **I0-F / R0:** reuse the implemented owners. Complete one actual owner-composed
+   fixture path and implement the missing thin `apps/wow` commands. No new parser,
+   duplicate rule engine, implicit source discovery or fake clean backend.
+3. **I1:** close remaining store/reference/annotation acceptance, then repair the
+   dormant builder against its E1 contract. Workspace inclusion and isolated parser
+   CI membership must be updated together; adding an app introduces a transitive
+   `wow-service` dependency into that lane.
+4. **I2 then I3:** finish graph/recognizers, full project indexing and coherent
+   persistence before context. Run one exact real-addon/profile evaluation for A0.
+5. **I4–I7:** follow the existing handoff; do not front-load optional providers,
+   transports or release scaffolding ahead of the runnable local product.
 
-### R0 — first runnable executable
+[The audit task table](AUDIT_2026-09-19.md#bounded-follow-up-tasks) supplies file
+boundaries and acceptance criteria. Work sequentially in `main`, without task
+branches/worktrees or force pushes. Read back each published checkpoint.
 
-Required:
+## Launch gates
 
-```text
-E0-A through E0-F implemented
-Cargo workspace/toolchain/lockfile frozen
-wow status and wow check work against frozen fixtures
-canonical output/exit/cancellation/broken-pipe/resource tests pass
-```
+| Gate | State | Concrete reason |
+|---|---|---|
+| R0 | Blocked | Missing `apps/wow`; required E0 fixture/checksum and whole-command evidence not closed |
+| A0 | Blocked | R0 plus full E1–E3 acceptance and real-addon/profile evaluation |
+| A1 | Blocked | A0, E4 and the selected implemented E7-A frontend |
+| B0 | Blocked | A1 and real E5 governance evidence; E6 remains optional |
+| V1 | Blocked | Selected product scope, full E7-A/E7-B and supported Windows clean-install/update/rollback evidence |
 
-Current: **Blocked — all implementation absent.**
+## Evidence rules
 
-### A0 — useful internal alpha
+Baseline `e2c74314bb7ccde4a9b48c049dfeacc157259960` passed
+[CI 34735568141](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/34735568141).
+The duplicate-key implementation is
+[`c10579d`](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/commit/c10579d359b5f0044fc6fcdfef3b353c5caa65dc),
+with exact checks in
+[CI 35487232004](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/35487232004).
+A subsequent documentation commit has a different SHA and its own CI record.
 
-Required:
+The audit used that CI's retained source artifact and verified both the archive
+SHA-256 and embedded commit identity. Local Rust execution was unavailable; no
+local cargo, Windows runtime, installation or product acceptance run is claimed.
+Passing code tests are not evidence that dormant apps, placeholder fixture
+manifests, a current WoW profile or later release gates passed.
 
-```text
-R0
-E1 Reference Pack stack
-E2 project/graph/recognizers/store
-E3 Blizzard UI source and context
-one exact real addon/WoW profile evaluation
-```
+## Verified code checkpoint
 
-Current: **Blocked by R0 and all E1–E3 implementation.**
-
-### A1 — developer preview
-
-Required:
-
-```text
-A0
-E4 search/lineage/impact
-implemented selected E7-A CLI + at least one LSP or MCP frontend
-real task usefulness and platform/resource evidence
-```
-
-Current: **Blocked by A0, E4 and E7-A implementation.**
-
-### B0 — governed beta/full planned intelligence
-
-Required for governed recognizer evolution:
-
-```text
-A1
-E5-A/B/C real calibration/review/holdout/signing/canary/rollback evidence
-```
-
-Optional external lane additionally requires E6-A/B and a real provider adapter/benefit evaluation. E6 may remain disabled without blocking the local product.
-
-Current: **Blocked by prior gates and E5/E6 implementation.**
-
-### V1 — public supported release
-
-Required:
-
-```text
-selected implemented product scope
-E7-A product host/client conformance
-E7-B reproducible build/evidence/sign/bundle/support/channel/install/update/rollback
-complete Windows x86-64 support matrix and clean-machine rehearsal
-signed public artifact and exact read-back/verification
-```
-
-Current: **Blocked — no implementation or release evidence.**
-
-## Required implementation evidence families
-
-None currently exists. Every family below remains `NotEvaluated`:
-
-```text
-implementation commits and public API closure
-Rust/toolchain/dependency/vendor/source pins
-fixture/member/bundle SHA-256 closure
-unit/property/integration/mutation tests
-crash/response-loss/recovery tests
-security/fuzz/path/resource tests
-Reference Pack and real project generations
-Blizzard UI/reference/current profile evidence
-graph/search/context correctness and benchmarks
-calibration/review/holdout/signing/canary evidence
-external provider adapter/mapping/benefit evidence
-session/overlay/daemon/LSP/MCP client conformance
-independent reproducible Windows builds
-SBOM/provenance/license/notices/signatures
-installation/update/migration/rollback rehearsal
-public channel/read-back/support/incident readiness
-```
-
-## Documentation closure requirements
-
-Architecture is considered planned-complete only while these remain true:
-
-- every package has an owner and machine contract;
-- every public operation is routed to an owner/service/frontend;
-- every effect has idempotency/reconciliation/retention/audit/close behavior;
-- exact/Candidate/coverage/authorization/runtime boundaries are explicit;
-- session/editor/release/install/update/support surfaces are documented;
-- final workspace, conformance commands and implementation order are defined;
-- global routers/manifest/dependency graph/roadmap/glossary are consistent;
-- patch-sensitive WoW facts remain in the external KB rather than copied here.
-
-A later implementation-discovered gap is handled by the smallest seam/ADR change with tests; it does not reopen unlimited architecture planning.
-
-## Next action
-
-```text
-create I0-A implementation branch/worktree
-freeze exact Rust toolchain and minimal dependencies
-activate only crates/wow-core in Cargo workspace
-implement wow-core E0-A contract and fixtures
-run its complete acceptance/checksum gate
-merge before starting the next owned package
-```
-
-Do not create all empty crates, fake operations, placeholder traits or CI workflows first.
-
-## Project-complete definition
-
-For the selected V1 scope, project completion requires:
-
-```text
-all required matrix rows Implemented
-all selected launch gates Complete
-no required blocker/skipped/NotEvaluated state
-complete checksum and compatibility manifests
-one reproducible signed bundle
-one public read-back-verified release
-one clean supported Windows install, update and rollback rehearsal
-one admitted real addon/client end-to-end evaluation
-current support/incident/revocation/retirement policy active
-```
-
-Until then, state the exact achieved gate rather than “ready” or a percentage.
+All eight jobs in CI run `35487232004` concluded success for
+`c10579d359b5f0044fc6fcdfef3b353c5caa65dc`: Linux/Windows locked checks,
+strict Clippy, debug/release tests and rustdoc; updated dependencies; rolling
+parser; Linux/Windows semantic consumers; Linux/Windows Wasm swap/rollback.
+This is code-checkpoint evidence, not a full package or public launch certificate.

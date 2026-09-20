@@ -8,19 +8,20 @@
 
 ```text
 documentation frontier: E7-B / planned architecture
-implementation: partial executable foundation and source bridge
-active workspace: wow-core, wow-reference
-next owner implementation: I0-C / real wow-emmy analyzer adapter
-full R0, runtime, installation and release gates: NotEvaluated
+implementation: partial executable E0/E1/E2 owner slices
+active workspace: 14 members; Cargo.toml is authoritative
+current census and blockers: PROJECT_COMPLETION_MATRIX.md
+next: close E0 prerequisite fixture gates, then I0-F / public wow status + wow check
+full R0, real-addon, installation and release gates: blocked / NotEvaluated
 ```
 
 This document turns the completed contracts into agent-sized implementation work. It does not authorize bypassing freeze gates or writing all crates at once.
 
 ## Global execution rule
 
-One agent owns one implementation package/crate/worktree until it is merged, quarantined or deleted. An agent reads repository instructions, the target package and all prerequisite public contracts before coding.
+Work sequentially in `main`, one owned implementation slice at a time, without task branches or worktrees. Publish and read back each coherent checkpoint before changing owner. An agent reads repository instructions, the target package and all prerequisite public contracts before coding.
 
-Every implementation PR states:
+Every implementation checkpoint states:
 
 ```text
 owned work package and crate

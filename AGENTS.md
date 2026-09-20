@@ -4,16 +4,23 @@ These rules apply to every human or automated contributor.
 
 ## Current implementation frontier
 
-- `wow-core`: executable deterministic boundary primitives.
-- `wow-reference`: deterministic reference view plus generated API and UI topology imports; full owner acceptance and persistent channel publication remain incomplete.
-- Native source production consumes an explicit local Git checkout. Guarded fast-forward updates of existing standalone checkouts are available through `cargo xtask update-source`; managed cloning and GitHub-only materialization remain incomplete.
-- Blizzard source manifest: exact per-operation source inventory with file hashes and Git object identity.
-- Generated API input: reference-owned EmmyLua AST evaluation and typed native model.
-- Legacy JSON importers remain compatibility readers, not the current source-production path.
-- `wow-annotations`: active Rust Ketho emitters plus native source-to-library
-  projection; corrections, full ReferenceView publication and semantic consumer
-  probes remain incomplete. `examples/native_library.rs` is the native driver.
-- Current executable scope and nonclaims: `docs/IMPLEMENTATION_STATUS.md`.
+- Read `docs/PROJECT_COMPLETION_MATRIX.md` for the audited code/acceptance census
+  and `docs/AUDIT_2026-09-19.md` for concrete remaining tasks.
+- `Cargo.toml` activates 14 members, including real `wow-emmy`, `wow-project`,
+  `wow-rules`, `wow-service`, `wow-store`, `wow-graph` and `wow-recognizers` slices.
+  Do not follow obsolete instructions to recreate these owners from scratch.
+- Partial executable code and ordinary CI are not complete package acceptance.
+  Required E0 fixture/identity/checksum gates remain open; the public `apps/wow`
+  executable is absent. Close prerequisites and I0-F/R0 before claiming a product.
+- Native reference/annotation production remains source-driven and nonexecuting.
+  Guarded fast-forward of existing standalone source checkouts is available;
+  managed cloning and GitHub-only materialization remain incomplete.
+- `apps/wow-reference-builder` contains inactive source with service/contract
+  mismatches; it is not tested by the root workspace. Do not silently activate it.
+- Work sequentially in `main`; no new task branches or worktrees. Publish and
+  read back each coherent checkpoint without force-pushing.
+- Current commands, source-update policy and nonclaims:
+  `docs/IMPLEMENTATION_STATUS.md`. I0–I7 remains the normative implementation plan.
 
 The public repository must remain useful without any operator-only context source.
 

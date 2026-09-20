@@ -4,7 +4,7 @@
 
 > **Planned architecture:** complete through E7-B.
 >
-> **Implementation frontier:** executable `wow-core` foundation and `wow-reference` source bridge. Full package acceptance remains incomplete. Next owner: the real `wow-emmy` adapter.
+> **Implementation frontier:** 14 active workspace members, including real analyzer, project, rules, service, storage, graph and recognizer slices. Full package acceptance remains incomplete. Next: close the E0 fixture prerequisites and I0-F/R0; do not recreate the existing owners.
 >
 > **First runnable gate:** E0-A through E0-F (`wow status` and `wow check`).
 >
@@ -149,17 +149,20 @@ Updates are explicit by default. Check, download, verify, stage, backup, migrate
 
 ## Current executable state
 
-The active workspace contains `wow-core`, `wow-reference`, `wow-annotations`
-and the internal `xtask` maintenance tool. The Rust Ketho path loads current
-Blizzard documentation and generates annotation libraries without an external
-interpreter. `cargo xtask check` validates repository policy and synchronized
-skills; `manifest`/`verify-manifest` inventory exact local Git snapshots.
-Existing API/topology JSON importers remain native compatibility readers. The
-retired legacy topology producer has not yet been replaced by a full native one.
+The root workspace has 14 members. Real analyzer, project-generation, diagnostic,
+service, persistence, graph and recognizer implementations already exist alongside
+the native reference/annotation pipeline and literal/Wasm modules. This is a
+partial executable product, not an empty documentation repository.
 
-See [the implementation ledger](docs/IMPLEMENTATION_STATUS.md) for implemented
-commands, update policy and explicit nonclaims. The planned public `wow` binary,
-real analyzer adapter and full release gates are not implemented.
+The public `apps/wow` CLI is still absent. `apps/wow-reference-builder` has source
+outside the workspace, with unresolved service/contract mismatches; it is not
+covered by ordinary workspace CI. Required E0 fixture/checksum gates remain open.
+Passing workspace tests do not establish R0, real-addon or release readiness.
+
+Start with [the current completion matrix](docs/PROJECT_COMPLETION_MATRIX.md),
+[the execution audit](docs/AUDIT_2026-09-19.md) and
+[the implementation/update ledger](docs/IMPLEMENTATION_STATUS.md).
+Owner contracts define requirements; older owner status prose is not a code census.
 
 ## Launch path
 
@@ -173,9 +176,11 @@ V1  selected scope plus complete E7-A/E7-B Windows release evidence
 
 ## Next implementation step
 
-Implement I0-C behind the `wow-emmy` adapter, without a permanent upstream
-revision or client-build dependency. Preserve native source and wire-compatibility tests. Do
-not activate placeholder crates or treat a compiled upstream as our adapter.
+Follow the existing [I0–I7 plan](docs/IMPLEMENTATION_HANDOFF.md), starting with
+unclosed E0 prerequisite fixture/identity/checksum gates, then I0-F's missing thin
+`wow status` / `wow check` frontend and whole-command acceptance. Reuse the real
+`wow-emmy`, project, rules and service code. Do not activate placeholder crates,
+freeze unreviewed output, or mistake an annotation development command for R0.
 
 ## Routes
 
