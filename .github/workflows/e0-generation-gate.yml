@@ -1,0 +1,152 @@
+name: E0 generation guarded acceptance
+on:
+  push:
+    branches: [main]
+    paths:
+      - .ci/e0-generation/**
+      - .github/workflows/e0-generation-gate.yml
+permissions:
+  contents: read
+concurrency:
+  group: e0-generation-acceptance
+  cancel-in-progress: false
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    env:
+      CARGO_TERM_COLOR: never
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Admit reviewed bytes on the exact base
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = 9987180924765227427de3cfed07ba949d2db14a
+          cat .ci/e0-generation/00 .ci/e0-generation/01 .ci/e0-generation/02 .ci/e0-generation/03 .ci/e0-generation/04 .ci/e0-generation/05 .ci/e0-generation/06 > "$RUNNER_TEMP/generation.patch.gz"
+          echo "afcc42f6f0c7d8768f6f4d38f9e44626837b64bc5f6dbbb9542653d43ae93aa0  $RUNNER_TEMP/generation.patch.gz" | sha256sum -c -
+          gzip -dc "$RUNNER_TEMP/generation.patch.gz" > "$RUNNER_TEMP/generation.patch"
+          echo "5dd5f25e74450265ed83336a243f0e2cc439aba3afbd174ae6b04207f445ef99  $RUNNER_TEMP/generation.patch" | sha256sum -c -
+          git apply --index --check "$RUNNER_TEMP/generation.patch"
+          git apply --index "$RUNNER_TEMP/generation.patch"
+          git rm -r .ci/e0-generation .github/workflows/e0-generation-gate.yml
+          test "$(git write-tree)" = 36b19d61ca03fa72483a99a6bb1041ce2f15b72a
+      - name: Install and record current stable Rust
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+          mkdir -p "$RUNNER_TEMP/generation-evidence"
+          git rev-parse HEAD > "$RUNNER_TEMP/generation-evidence/BASE_SHA"
+          rustc +stable -Vv > "$RUNNER_TEMP/generation-evidence/RUST_VERSION"
+      - name: Format only reviewed Rust and retain the exact tree
+        run: |
+          set -euo pipefail
+          cargo +stable fmt --all
+          git diff --exit-code -- . ':(exclude)crates/wow-core/src/generation.rs' ':(exclude)crates/wow-core/tests/e0_generation_conformance.rs'
+          git add crates/wow-core/src/generation.rs crates/wow-core/tests/e0_generation_conformance.rs
+          git diff --exit-code
+          git diff --cached --check
+          git write-tree > "$RUNNER_TEMP/generation-evidence/TREE_SHA"
+      - name: Run all 19 generation regressions
+        run: |
+          set -euo pipefail
+          cargo +stable test --locked -p wow-core --test e0_generation_conformance -- --test-threads=1 2>&1 | tee "$RUNNER_TEMP/generation-evidence/generation-tests.txt"
+          grep -F '19 passed; 0 failed' "$RUNNER_TEMP/generation-evidence/generation-tests.txt"
+      - name: Prove the regressions detect the unchanged baseline defects
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          cp crates/wow-core/src/generation.rs "$RUNNER_TEMP/fixed-generation.rs"
+          trap 'cp "$RUNNER_TEMP/fixed-generation.rs" crates/wow-core/src/generation.rs' EXIT
+          git show HEAD:crates/wow-core/src/generation.rs > crates/wow-core/src/generation.rs
+          set +e
+          cargo +stable test --locked -p wow-core --test e0_generation_conformance -- --test-threads=1 > "$RUNNER_TEMP/generation-evidence/baseline-negative-control.txt" 2>&1
+          status=$?
+          set -e
+          test "$status" -eq 101
+          grep -F 'running 19 tests' "$RUNNER_TEMP/generation-evidence/baseline-negative-control.txt"
+          grep -F 'test context_same_002_003_004_reject_stale_ids_on_either_operand_or_both ... FAILED' "$RUNNER_TEMP/generation-evidence/baseline-negative-control.txt"
+          grep -F 'test context_merge_013_014_015_forbid_missing_version_entries_in_every_mode ... FAILED' "$RUNNER_TEMP/generation-evidence/baseline-negative-control.txt"
+          grep -F 'test context_external_001_provider_binding_is_checked_after_deserialization ... FAILED' "$RUNNER_TEMP/generation-evidence/baseline-negative-control.txt"
+          grep -F 'test result: FAILED' "$RUNNER_TEMP/generation-evidence/baseline-negative-control.txt"
+      - name: Repository policy and formatting
+        run: |
+          cargo +stable xtask check
+          cargo +stable fmt --all --check
+      - name: Locked workspace check
+        run: cargo +stable check --locked --workspace --all-targets --all-features
+      - name: Strict workspace Clippy
+        run: cargo +stable clippy --locked --workspace --all-targets --all-features -- -D warnings
+      - name: Locked debug workspace tests
+        run: cargo +stable test --locked --workspace --all-targets --all-features
+      - name: Locked release workspace tests
+        run: cargo +stable test --release --locked --workspace --all-targets --all-features
+      - name: Rust documentation
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo +stable doc --locked --workspace --all-features --no-deps
+      - name: Verify retained bytes and export tested change
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          test "$(git write-tree)" = "$(cat "$RUNNER_TEMP/generation-evidence/TREE_SHA")"
+          git diff --cached --binary --full-index > "$RUNNER_TEMP/generation-evidence/verified.patch"
+          cd "$RUNNER_TEMP/generation-evidence"
+          sha256sum verified.patch > SHA256SUMS
+      - uses: actions/upload-artifact@v7
+        with:
+          name: e0-generation-${{ matrix.os }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/generation-evidence/
+          retention-days: 3
+          if-no-files-found: error
+  publish:
+    needs: verify
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: e0-generation-ubuntu-latest-${{ github.run_id }}
+          path: ${{ runner.temp }}/generation-linux
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: e0-generation-windows-latest-${{ github.run_id }}
+          path: ${{ runner.temp }}/generation-windows
+      - name: Publish identical tested trees only if main is unchanged
+        run: |
+          set -euo pipefail
+          linux="$RUNNER_TEMP/generation-linux"
+          windows="$RUNNER_TEMP/generation-windows"
+          (cd "$linux" && sha256sum -c SHA256SUMS)
+          (cd "$windows" && sha256sum -c SHA256SUMS)
+          cmp "$linux/TREE_SHA" "$windows/TREE_SHA"
+          cmp "$linux/BASE_SHA" "$windows/BASE_SHA"
+          cmp "$linux/verified.patch" "$windows/verified.patch"
+          test "$(cat "$linux/BASE_SHA")" = "$GITHUB_SHA"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$GITHUB_SHA"
+          git apply --index --check "$linux/verified.patch"
+          git apply --index "$linux/verified.patch"
+          test "$(git write-tree)" = "$(cat "$linux/TREE_SHA")"
+          git diff --exit-code
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix(core): validate exact generation contexts before comparison and merge' -m "Continue R0-01 on the retained coverage checkpoint. Validate both strict-guard operands, revalidate decoded external records, and require identical schema/producer inventories in every merge mode. Preserve explicit project extension and external union. Nineteen conformance tests preserve golden identities, exercise resealed mutations and 64 deterministic permutations; baseline negative controls reproduced all three defects. Linux and Windows locked workspace check, strict Clippy, debug/release tests, rustdoc, policy and formatting passed on this exact tree in acceptance run $GITHUB_RUN_ID. No dependency or fixture baseline changed. Temporary gate inputs are removed; full E0-A/R0 and runtime acceptance remain incomplete."
+          git push origin HEAD:refs/heads/main
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$(git rev-parse HEAD)"
+          git rev-parse HEAD
+          git rev-parse HEAD^{tree}
