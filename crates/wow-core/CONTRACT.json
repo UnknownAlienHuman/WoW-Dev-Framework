@@ -2,7 +2,7 @@
   "schema_version": 1,
   "crate": "wow-core",
   "work_package": "E0-A",
-  "state": "implementation-ready-contract-no-rust-code",
+  "state": "partial-executable-acceptance-incomplete",
   "current_milestone": "E0",
   "canonicalization_version": "wow-core-json/e0-1",
   "digest_algorithm": "sha256",
@@ -15,7 +15,8 @@
     "ERROR_MODEL.md",
     "TEST_MATRIX.md",
     "CONSUMER_GUIDE.md",
-    "IMPLEMENTATION_PLAN.md"
+    "IMPLEMENTATION_PLAN.md",
+    "COVERAGE_CONSUMERS.md"
   ],
   "repository_documents": [
     "../../docs/PROVENANCE_AND_COVERAGE.md",
@@ -519,7 +520,8 @@
     },
     {
       "id": "NegativeAuthorityDecision",
-      "doc": "DATA_MODEL.md#9-negative-authority-decision"
+      "doc": "DATA_MODEL.md#9-negative-authority-decision",
+      "required_context": "context_id"
     },
     {
       "id": "Finding",
@@ -893,9 +895,21 @@
       "doc": "OPERATIONS.md#evaluate_capability_availability",
       "errors": [
         "coverage_record_missing",
+        "coverage_conflict",
+        "duplicate_coverage_record",
+        "coverage_context_mismatch",
+        "conflict_context_mismatch",
         "missing_conflict_reference",
-        "result_context_violation"
-      ]
+        "duplicate_conflict_reference",
+        "result_context_violation",
+        "invalid_identifier",
+        "identifier_too_long",
+        "reserved_identifier_segment",
+        "canonical_digest_mismatch",
+        "canonicalization_failure",
+        "conflict_scope_empty"
+      ],
+      "input_admission": "explicit-context-raw-coverage-and-conflicts"
     },
     {
       "id": "derive_not_evaluated_id",
@@ -921,10 +935,24 @@
       "status": "required",
       "doc": "OPERATIONS.md#evaluate_negative_authority",
       "errors": [
-        "result_context_violation",
         "coverage_record_missing",
-        "missing_conflict_reference"
-      ]
+        "coverage_conflict",
+        "duplicate_coverage_record",
+        "coverage_context_mismatch",
+        "conflict_context_mismatch",
+        "missing_conflict_reference",
+        "duplicate_conflict_reference",
+        "result_context_violation",
+        "invalid_identifier",
+        "identifier_too_long",
+        "reserved_identifier_segment",
+        "canonical_digest_mismatch",
+        "canonicalization_failure",
+        "conflict_scope_empty"
+      ],
+      "input_admission": "explicit-context-raw-coverage-and-conflicts",
+      "rust_result": "CoreResult<NegativeAuthorityDecision>",
+      "lookup_precondition": "caller-reported-exact-miss-only"
     },
     {
       "id": "validate_message_arguments",

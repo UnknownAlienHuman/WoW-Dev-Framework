@@ -112,27 +112,31 @@ fn partial_coverage_denies_absence_and_duplicate_partitions_are_rejected() -> Re
     let good = summarize(std::slice::from_ref(complete))?;
     assert_eq!(
         evaluate_negative_authority(
+            ctx.context_id(),
             true,
             true,
             &[good],
+            std::slice::from_ref(complete),
             &[],
             vec![],
             None,
             &TruncationState::NotTruncated
-        )
+        )?
         .outcome(),
         NegativeAuthorityOutcome::AuthoritativeAbsent
     );
     let incomplete = summarize(std::slice::from_ref(&partial))?;
     let decision = evaluate_negative_authority(
+        ctx.context_id(),
         true,
         true,
         &[incomplete],
+        std::slice::from_ref(&partial),
         &[],
         vec![],
         None,
         &TruncationState::NotTruncated,
-    );
+    )?;
     assert_eq!(
         decision.outcome(),
         NegativeAuthorityOutcome::NotAuthoritative

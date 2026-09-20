@@ -11,6 +11,8 @@ use crate::ids::{
 };
 use crate::integrity;
 
+mod admission;
+
 /// Exact coverage state for one capability partition.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -149,6 +151,14 @@ impl CoverageRecord {
     }
 
     pub fn validate(&self) -> CoreResult<()> {
+        validate_missing_input_ids(&self.missing_input_ids, "missing_input_ids")?;
+        for reference in &self.truncation_refs {
+            validate_lower_segment(
+                reference.collection_id(),
+                "validate_coverage_record",
+                "truncation_refs.collection_id",
+            )?;
+        }
         validate_coverage_state(
             self.status,
             &self.missing_input_ids,
@@ -309,6 +319,7 @@ impl CapabilitySummary {
         let mut truncation_refs = Vec::new();
         let mut applicable_status: Option<CoverageStatus> = None;
         let mut applicable_count = 0_usize;
+        let mut record_keys = BTreeSet::new();
 
         for record in records {
             record.validate()?;
@@ -324,6 +335,15 @@ impl CapabilitySummary {
                     "combine_coverage",
                     CoreErrorCode::CoverageConflict,
                     "records.capability_id",
+                ));
+            }
+            // Digest order is not logical-key order. Check the complete owner
+            // key before sorting refs; conflicting records need not be adjacent.
+            if !record_keys.insert((&record.partition_id, &record.producer_id)) {
+                return Err(validation_error(
+                    "combine_coverage",
+                    CoreErrorCode::DuplicateCoverageRecord,
+                    "records.partition_id",
                 ));
             }
             partition_refs.push(CoveragePartitionRef {
@@ -343,16 +363,6 @@ impl CapabilitySummary {
         }
 
         partition_refs.sort();
-        if partition_refs
-            .windows(2)
-            .any(|pair| pair[0].partition_id == pair[1].partition_id)
-        {
-            return Err(validation_error(
-                "combine_coverage",
-                CoreErrorCode::DuplicateCoverageRecord,
-                "records.partition_id",
-            ));
-        }
         conflict_ids.sort_unstable();
         conflict_ids.dedup();
         truncation_refs.sort();
@@ -655,19 +665,17 @@ pub fn evaluate_capability_availability(
     reason_code: MessageCode,
     summaries: &[CapabilitySummary],
     coverage_records: &[CoverageRecord],
+    conflicts: &[ConflictRecord],
 ) -> CoreResult<CapabilityAvailability> {
+    admission::validate_inputs(context_id, summaries, coverage_records, conflicts)?;
+    let subject_kind = subject_kind.into();
+    let subject_id = subject_id.into();
+    validate_subject(&subject_kind, &subject_id)?;
     let mut blocking_capability_ids = Vec::new();
     let mut blocking_partitions = Vec::new();
     let mut conflict_ids = Vec::new();
 
     for summary in summaries {
-        if summary.context_id != context_id {
-            return Err(validation_error(
-                "evaluate_capability_availability",
-                CoreErrorCode::CoverageContextMismatch,
-                "summaries.context_id",
-            ));
-        }
         let blocked = summary.status != CoverageStatus::Complete
             || !summary.conflict_ids.is_empty()
             || !summary.truncation_refs.is_empty();
@@ -698,6 +706,14 @@ pub fn evaluate_capability_availability(
     if blocking_capability_ids.is_empty() {
         return Ok(CapabilityAvailability::Runnable);
     }
+    // Different summary producers can retain the same exact blocker. This is
+    // explicit set aggregation, not permission for duplicate input records.
+    blocking_capability_ids.sort();
+    blocking_capability_ids.dedup();
+    blocking_partitions.sort();
+    blocking_partitions.dedup();
+    conflict_ids.sort();
+    conflict_ids.dedup();
     Ok(CapabilityAvailability::NotEvaluated(Box::new(
         NotEvaluatedRecord::new(
             context_id,
@@ -743,6 +759,7 @@ pub enum NegativeAuthorityReason {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct NegativeAuthorityDecision {
+    context_id: GenerationContextId,
     outcome: NegativeAuthorityOutcome,
     reasons: Vec<NegativeAuthorityReason>,
     capability_ids: Vec<CapabilityId>,
@@ -752,6 +769,11 @@ pub struct NegativeAuthorityDecision {
 }
 
 impl NegativeAuthorityDecision {
+    #[must_use]
+    pub const fn context_id(&self) -> GenerationContextId {
+        self.context_id
+    }
+
     #[must_use]
     pub const fn outcome(&self) -> NegativeAuthorityOutcome {
         self.outcome
@@ -763,22 +785,35 @@ impl NegativeAuthorityDecision {
     }
 }
 
+/// Evaluates a caller-reported exact miss; a positive lookup must not call this
+/// operation. The selected summaries are verified against retained raw coverage
+/// and conflicts before they can support any decision. No source is acquired.
+#[allow(clippy::too_many_arguments)]
 pub fn evaluate_negative_authority(
+    context_id: GenerationContextId,
     scope_known: bool,
     lookup_completed: bool,
     summaries: &[CapabilitySummary],
+    coverage_records: &[CoverageRecord],
     conflicts: &[ConflictRecord],
     candidate_evidence_ids: Vec<EvidenceId>,
     evaluation: Option<&NotEvaluatedRecord>,
     truncation: &TruncationState,
-) -> NegativeAuthorityDecision {
+) -> CoreResult<NegativeAuthorityDecision> {
+    admission::validate_inputs(context_id, summaries, coverage_records, conflicts)?;
+    if let Some(record) = evaluation {
+        admission::validate_evaluation(context_id, record, coverage_records, conflicts)?;
+    }
     let mut reasons = BTreeSet::new();
     let mut capability_ids = BTreeSet::new();
     let mut coverage_ids = BTreeSet::new();
     let mut conflict_ids = BTreeSet::new();
 
-    if !scope_known || !lookup_completed {
+    if !scope_known {
         reasons.insert(NegativeAuthorityReason::ScopeUnknown);
+    }
+    if !lookup_completed {
+        reasons.insert(NegativeAuthorityReason::CapabilityNotEvaluated);
     }
     for summary in summaries {
         capability_ids.insert(summary.capability_id.clone());
@@ -787,43 +822,41 @@ pub fn evaluate_negative_authority(
         if !summary.truncation_refs.is_empty() {
             reasons.insert(NegativeAuthorityReason::ResultTruncated);
         }
-        match summary.status {
-            CoverageStatus::Complete => {}
-            CoverageStatus::Partial => {
-                reasons.insert(NegativeAuthorityReason::PartitionPartial);
-            }
-            CoverageStatus::Unknown | CoverageStatus::NotApplicable => {
-                reasons.insert(NegativeAuthorityReason::PartitionUnknown);
-            }
-            CoverageStatus::Failed => {
-                reasons.insert(NegativeAuthorityReason::PartitionFailed);
+        // Preserve every applicable denial, not just the summary's worst rank.
+        for partition in &summary.partition_refs {
+            match partition.status {
+                CoverageStatus::Complete | CoverageStatus::NotApplicable => {}
+                CoverageStatus::Partial => {
+                    reasons.insert(NegativeAuthorityReason::PartitionPartial);
+                }
+                CoverageStatus::Unknown => {
+                    reasons.insert(NegativeAuthorityReason::PartitionUnknown);
+                }
+                CoverageStatus::Failed => {
+                    reasons.insert(NegativeAuthorityReason::PartitionFailed);
+                }
             }
         }
     }
-    if summaries
-        .iter()
-        .all(|summary| summary.status == CoverageStatus::NotApplicable)
-        && !summaries.is_empty()
-        && reasons.is_empty()
-    {
-        return NegativeAuthorityDecision {
-            outcome: NegativeAuthorityOutcome::NotApplicable,
-            reasons: Vec::new(),
-            capability_ids: capability_ids.into_iter().collect(),
-            coverage_ids: coverage_ids.into_iter().collect(),
-            conflict_ids: conflict_ids.into_iter().collect(),
-            candidate_evidence_ids: Vec::new(),
-        };
-    }
-    if !conflicts.is_empty() || !conflict_ids.is_empty() {
+    if !conflict_ids.is_empty() {
         reasons.insert(NegativeAuthorityReason::UnresolvedConflict);
-        conflict_ids.extend(conflicts.iter().map(ConflictRecord::conflict_id));
     }
     if !candidate_evidence_ids.is_empty() {
         reasons.insert(NegativeAuthorityReason::CandidateOnlyEvidence);
     }
-    if evaluation.is_some() {
+    if let Some(record) = evaluation {
         reasons.insert(NegativeAuthorityReason::CapabilityNotEvaluated);
+        capability_ids.extend(record.blocking_capability_ids.iter().cloned());
+        coverage_ids.extend(
+            record
+                .blocking_partitions
+                .iter()
+                .map(|item| item.coverage_id),
+        );
+        conflict_ids.extend(record.conflict_ids.iter().copied());
+        if !record.conflict_ids.is_empty() {
+            reasons.insert(NegativeAuthorityReason::UnresolvedConflict);
+        }
     }
     if truncation.is_truncated() {
         reasons.insert(NegativeAuthorityReason::ResultTruncated);
@@ -832,19 +865,25 @@ pub fn evaluate_negative_authority(
     let mut candidate_evidence_ids = candidate_evidence_ids;
     candidate_evidence_ids.sort_unstable();
     candidate_evidence_ids.dedup();
-    let outcome = if reasons.is_empty() {
-        NegativeAuthorityOutcome::AuthoritativeAbsent
-    } else {
+    let outcome = if !reasons.is_empty() {
         NegativeAuthorityOutcome::NotAuthoritative
+    } else if summaries
+        .iter()
+        .all(|summary| summary.status == CoverageStatus::NotApplicable)
+    {
+        NegativeAuthorityOutcome::NotApplicable
+    } else {
+        NegativeAuthorityOutcome::AuthoritativeAbsent
     };
-    NegativeAuthorityDecision {
+    Ok(NegativeAuthorityDecision {
+        context_id,
         outcome,
         reasons: reasons.into_iter().collect(),
         capability_ids: capability_ids.into_iter().collect(),
         coverage_ids: coverage_ids.into_iter().collect(),
         conflict_ids: conflict_ids.into_iter().collect(),
         candidate_evidence_ids,
-    }
+    })
 }
 
 pub(crate) fn conflict_affects_coverage(
@@ -913,8 +952,7 @@ fn validate_subject(subject_kind: &str, subject_id: &str) -> CoreResult<()> {
     Ok(())
 }
 
-fn sort_unique_strings(values: &mut [String], field: &'static str) -> CoreResult<()> {
-    values.sort_unstable();
+fn validate_missing_input_ids(values: &[String], field: &'static str) -> CoreResult<()> {
     if values.iter().any(|value| {
         value.is_empty()
             || value.len() > 512
@@ -927,6 +965,12 @@ fn sort_unique_strings(values: &mut [String], field: &'static str) -> CoreResult
             field,
         ));
     }
+    Ok(())
+}
+
+fn sort_unique_strings(values: &mut [String], field: &'static str) -> CoreResult<()> {
+    values.sort_unstable();
+    validate_missing_input_ids(values, field)?;
     ensure_sorted_unique(
         values,
         "validate_coverage_record",

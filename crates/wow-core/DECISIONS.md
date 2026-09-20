@@ -1,6 +1,6 @@
 # `wow-core` decisions
 
-**Status:** normative for E0-A; implementation has not started.
+**Status:** normative for E0-A; partial executable implementation, acceptance incomplete.
 
 These decisions refine the repository-wide architecture for the smallest shared crate. A coding agent may improve names, but it must not change the semantics below without updating this file, the affected contract, the machine manifest, and the tests in the same change.
 
@@ -222,3 +222,14 @@ project-source observation of the API use
 ```
 
 Core validates handle existence, context coherence, and record structure. Because `origin_id` is an opaque source-registry identity, the owning producer/source registry must validate that a handle is eligible for the claimed provenance before constructing the evidence record. No caller may treat the finding's primary project span as platform-contract proof.
+
+
+### CORE-010/CORE-022 implementation clarification — checked coverage consumers
+
+No proof policy is changed. Availability and negative-authority calls admit raw
+records/conflicts in one expected context and recompute required summaries before
+using their status. Absence cannot follow from an empty required set, a summary
+alone, digest-sorted duplicate statements, or an omitted affecting blocker.
+Distinct producer statements remain distinct; shared blocking references are
+set-aggregated without erasing conflict. See `COVERAGE_CONSUMERS.md` for the Rust
+call migration and the remaining owner/envelope obligations.

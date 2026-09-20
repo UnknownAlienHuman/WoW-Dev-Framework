@@ -596,7 +596,7 @@ errors:
 
 Algorithm:
 
-1. Select exactly one record for each required `(capability, partition, producer)` statement requested by the caller.
+1. Select exactly one record for each required `(capability, partition, producer)` statement requested by the caller. Validate uniqueness by this semantic key across the entire input, not by adjacency after digest sorting. Different producers remain independent statements, even on the same partition.
 2. If no required partition is applicable, return `not_applicable`.
 3. Ignore `not_applicable` only when another required partition is applicable.
 4. Among applicable partitions, use precedence `failed > unknown > partial > complete`.
@@ -638,6 +638,15 @@ Rules:
 - Affecting unresolved conflicts block even when source coverage is `complete`.
 - Return exact blocking capabilities, blocking coverage IDs/partitions, and conflict IDs.
 - Never return a clean evaluated result when capability proof is absent.
+- The Rust entrypoint takes an explicit conflict registry as its last argument.
+  Before returning either result it validates the subject, one context, nonempty
+  required summaries, logical record uniqueness, every raw record, conflict
+  closure/scope, and recomputes summaries from all supplied records for each
+  required capability. Even a nominally complete summary is untrusted input.
+- A missing or omitted required record, contradictory status, mixed generation,
+  or omitted affecting conflict is an error; valid incomplete input becomes
+  `NotEvaluated`. Optional capabilities not selected by a required summary do not
+  block the subject. Shared blockers are explicitly deduplicated during aggregation.
 
 Required tests: `CAPABILITY-001..024`.
 
@@ -690,6 +699,25 @@ subject was evaluated
 
 Every denial reason and exact blocker is returned; do not stop at the first reason when the complete bounded safe reason set is available.
 
+The Rust operation returns `CoreResult<NegativeAuthorityDecision>` and requires
+`context_id` and the raw `coverage_records` alongside the summaries and conflict
+registry. It shares admission with capability availability. An empty required
+summary set is `coverage_record_missing`, never vacuous authoritative absence.
+The result retains that exact `context_id`. A contradictory generation is an
+error rather than a synthesized absence decision.
+
+`lookup_completed` describes a caller-reported exact **miss**. Do not call this
+operation for a positive lookup. This pure helper does not perform or attest
+lookup execution, source acquisition, profile availability, registry completeness,
+or the external eligibility of evidence. Those are caller/owner obligations.
+
+A known scope with a lookup that did not run retains `capability_not_evaluated`,
+not `scope_unknown`. Nonapplicable partitions are neutral alongside applicable
+ones; all-nonapplicable input yields `not_applicable` only after evaluating every
+candidate/evaluation/truncation/conflict blocker. Every partial/unknown/failed
+partition contributes its reason, not only the summary's worst status.
+
+See [coverage consumer admission and migration](COVERAGE_CONSUMERS.md).
 Required tests: `NEGATIVE-001..032`.
 
 

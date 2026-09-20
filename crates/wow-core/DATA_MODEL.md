@@ -539,6 +539,13 @@ result_truncated
 
 The decision records the exact capabilities, partitions, conflicts, and context used. A caller cannot replace this object with an unqualified boolean.
 
+The executable projection is `context_id`, `outcome`, sorted unique `reasons`,
+`capability_ids`, `coverage_ids`, `conflict_ids`, and `candidate_evidence_ids`.
+The context is mandatory; raw records and conflict scope must pass admission
+before constructing it. Supplied `NotEvaluated` records are context-bound and
+retain their exact blocker IDs in the resulting denial. The presence of a digest
+or a decoded summary does not authenticate source completeness.
+
 ## 10. Structured finding
 
 ### Fields

@@ -1,6 +1,6 @@
 # `wow-core` E0 consumer guide
 
-**Status:** normative E0-A seam contract; no Rust code yet.
+**Status:** normative E0-A seam contract; partial executable implementation.
 
 This document defines the smallest `wow-core` surface that each downstream E0 work package may consume. It prevents future agents from exporting every internal helper, reconstructing identity from strings, or moving orchestration into core.
 
@@ -323,3 +323,28 @@ canonical bytes remain stable under randomized input order
 ```
 
 The committed examples in [`examples/`](examples/) are the initial seam fixtures. Downstream crates may add fixture inputs, but they may not weaken these outputs to simplify their implementation.
+
+
+## Coverage consumer call migration
+
+The checked coverage calls implement the existing CORE-010/CORE-022 proof boundary:
+
+```text
+evaluate_capability_availability(
+    context_id, producer_id, producer_version, subject_kind, subject_id,
+    reason_code, required_summaries, coverage_records, conflicts,
+) -> CoreResult<CapabilityAvailability>
+
+evaluate_negative_authority(
+    context_id, scope_known, lookup_completed, required_summaries,
+    coverage_records, conflicts, candidate_evidence_ids, evaluation, truncation,
+) -> CoreResult<NegativeAuthorityDecision>
+```
+
+Availability now requires a conflict registry. Negative authority now requires
+an expected context and raw records, is fallible, and retains `context_id` in its
+output. The old unchecked seven-argument negative call is intentionally removed;
+do not replace missing records with defaults or catch admission errors as clean.
+No current sibling Rust crate called these operations at this checkpoint; the
+existing core regression caller is migrated. Future consumers must use the
+checked seam. See [selection rules and limits](COVERAGE_CONSUMERS.md).

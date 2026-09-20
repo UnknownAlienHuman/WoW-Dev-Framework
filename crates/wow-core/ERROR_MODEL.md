@@ -206,3 +206,18 @@ E0 may stop at the first error in low-level constructors, but envelope validatio
 Applications may map errors to CLI exit codes, MCP errors, or LSP responses. `wow-core` does not define HTTP status codes, process exit codes, localization, or retry scheduling.
 
 The stable error `code`, `category`, and structured arguments remain unchanged across transports.
+
+
+## Checked coverage consumers
+
+`evaluate_capability_availability` and `evaluate_negative_authority` propagate
+record validation failures before any clean result. Empty/missing coverage uses
+`coverage_record_missing`; duplicate logical record/summary keys use
+`duplicate_coverage_record`; contradictory or omitted coverage/conflict scope uses
+`coverage_conflict`; mixed records/summaries use `coverage_context_mismatch`;
+mixed conflicts use `conflict_context_mismatch`. Missing or duplicate conflict IDs
+use `missing_conflict_reference` / `duplicate_conflict_reference` respectively.
+A foreign evaluation context uses `result_context_violation`. Malformed decoded
+record metadata uses the same narrow identifier errors as construction; invalid
+record identities use `canonical_digest_mismatch`. Valid partial/unknown/failed
+coverage is not an operation error and still produces an explicit blocked result.

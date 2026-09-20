@@ -14,6 +14,18 @@ on decoded and finalized envelopes, with independently resealed digests/byte
 counts so a stale hash cannot mask missing schema admission. These focused
 suites do not close the whole E0-A gate.
 
+`tests/e0_coverage_conformance.rs` and `tests/coverage/` exercise raw coverage,
+checked capability availability and negative authority. Coverage truth-table
+cases run all 125 status triples under all six input orders. Native regressions
+cover digest-interleaved duplicate logical keys; distinct producer preservation;
+recomputed invalid record metadata; missing/forged/omitted summary input; context
+and conflict closure; shared blockers; optional-lane isolation; nonapplicable,
+not-run, candidate and truncation decisions; exact denial IDs and deterministic
+ordering. This is a scoped acceptance slice, not complete E0-A certification.
+`NEGATIVE-012` remains a caller obligation: the pure function is invoked only for
+reported misses, not positive lookups. Conflict evidence closure and source
+eligibility remain responsibilities of the complete envelope/owner registry.
+
 The first coding agent must turn these cases into tests that prove the target path executed. Test names should preserve the case IDs so failures map back to this contract.
 
 ## 1. Test rules
@@ -524,3 +536,24 @@ cargo fmt/clippy/test results are reported fresh
 ```
 
 Until Rust code exists, documentation validation may report only JSON/link/hash-vector checks; it must not claim the executable E0-A gate passed.
+
+
+## Coverage admission regression extensions
+
+| ID | Case | Expected |
+|---|---|---|
+| `CAPABILITY-015` / `NEGATIVE-015` | Empty required summaries or evidence | `coverage_record_missing`, never runnable/absence |
+| `CAPABILITY-016` / `NEGATIVE-016` | Decoded complete summary over partial raw coverage | `coverage_conflict` |
+| `CAPABILITY-017` / `NEGATIVE-017` | Consistent subset summary omits a supplied worse partition | `coverage_conflict` |
+| `CAPABILITY-018` | Complete path with invalid subject | Same constructor identifier error |
+| `COVERAGE-COMBINE-015` | Same owner key separated by unrelated digest-sorted ref | `duplicate_coverage_record` |
+| `COVERAGE-COMBINE-016` | Same partition, distinct producer statements | Both retained; conservative precedence |
+| `COVERAGE-VALIDATE-009` | Resealed invalid missing-input/truncation metadata | Same validation as construction |
+| `COVERAGE-VALIDATE-010` | Affecting known conflict omitted from records and summary | `coverage_conflict` |
+| `NEGATIVE-018` | Nonapplicable with candidate/truncation blocker | `not_authoritative`, blocker retained |
+| `NEGATIVE-019` | Several partial/unknown/failed partitions in one summary | Every denial reason retained |
+| `NEGATIVE-020` | Evaluation context or blocker record differs | Context/reference error |
+
+`COVERAGE-COMBINE-013` denotes an outer operation's truncation affecting complete
+source coverage. It does not authorize a contradictory `complete` raw record
+with a nonempty `truncation_refs` field; see `validate_coverage_record`.
