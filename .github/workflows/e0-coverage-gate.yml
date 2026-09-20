@@ -1,0 +1,182 @@
+name: E0 coverage guarded acceptance
+on:
+  push:
+    branches: [main]
+    paths:
+      - .ci/e0-coverage.patch.gz
+      - .github/workflows/e0-coverage-gate.yml
+permissions:
+  contents: read
+concurrency:
+  group: e0-coverage-acceptance-main
+  cancel-in-progress: false
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Admit the exact reviewed coverage patch
+        env:
+          EXPECTED_HEAD: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          test "$(sha256sum .ci/e0-coverage.patch.gz | cut -d ' ' -f 1)" = 05839d94bcb14f2c39f9676261996649bde1cd9586a0a48a54460a6f2798ca7f
+          gzip -dc .ci/e0-coverage.patch.gz > "$RUNNER_TEMP/e0-coverage.patch"
+          test "$(sha256sum "$RUNNER_TEMP/e0-coverage.patch" | cut -d ' ' -f 1)" = 180df20577c0d5e9204fb67a54f5a3d6abd14e056eb19a1861c074b614c5bec5
+          git apply --check --index "$RUNNER_TEMP/e0-coverage.patch"
+          git apply --index "$RUNNER_TEMP/e0-coverage.patch"
+          git rm .ci/e0-coverage.patch.gz .github/workflows/e0-coverage-gate.yml
+          test "$(git write-tree)" = b2e61afcd8e7bff380cb3ec3aebedfd9a62e0d57
+      - name: Install current stable Rust
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+      - name: Format reviewed Rust and retain exact inputs
+        run: |
+          set -euo pipefail
+          cargo +stable fmt --all
+          git add crates/wow-core
+          mkdir -p "$RUNNER_TEMP/e0-coverage-evidence"
+          git write-tree > "$RUNNER_TEMP/e0-coverage-evidence/TREE_SHA"
+          git rev-parse HEAD > "$RUNNER_TEMP/e0-coverage-evidence/BASE_SHA"
+          rustc +stable -Vv > "$RUNNER_TEMP/e0-coverage-evidence/RUST_VERSION"
+      - name: Focused coverage admission and authority regressions
+        run: |
+          set -euo pipefail
+          cargo +stable test --locked -p wow-core --test e0_coverage_conformance -- --nocapture 2>&1 | tee "$RUNNER_TEMP/e0-coverage-evidence/coverage-tests.txt"
+      - name: Repository policy
+        run: cargo +stable xtask check
+      - name: Formatting
+        run: cargo +stable fmt --all --check
+      - name: Locked workspace check
+        run: cargo +stable check --locked --workspace --all-targets --all-features
+      - name: Strict workspace Clippy
+        run: cargo +stable clippy --locked --workspace --all-targets --all-features -- -D warnings
+      - name: Locked debug workspace tests
+        run: cargo +stable test --locked --workspace --all-targets --all-features
+      - name: Locked release workspace tests
+        run: cargo +stable test --release --locked --workspace --all-targets --all-features
+      - name: Rust documentation
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo +stable doc --locked --workspace --all-features --no-deps
+      - name: Prove four defects on the unchanged baseline using its original API
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          git show HEAD:crates/wow-core/src/coverage.rs > crates/wow-core/src/coverage.rs
+          cat > crates/wow-core/tests/e0_coverage_baseline_probe.rs <<'RUST'
+          use std::error::Error;
+          use wow_core::{CapabilitySummary, CoverageRecord, CoverageStatus, GenerationContextId,
+              NegativeAuthorityOutcome, NegativeAuthorityReason, TruncationState,
+              combine_coverage, evaluate_capability_availability, evaluate_negative_authority};
+          type TestResult<T = ()> = Result<T, Box<dyn Error>>;
+          fn fixture(status: CoverageStatus) -> TestResult<(GenerationContextId, CoverageRecord, CapabilitySummary)> {
+              let context = GenerationContextId::derive(&"baseline-coverage-control")?;
+              let record = CoverageRecord::new(context, "fixture.coverage".parse()?,
+                  "partition:fixture:main".parse()?, status, "fixture.owner".parse()?,
+                  "0.1.0".parse()?, Vec::new(), None, Vec::new(), Vec::new())?;
+              let summary = combine_coverage(context, record.capability_id().clone(),
+                  "fixture.summary".parse()?, "0.1.0".parse()?, std::slice::from_ref(&record))?;
+              Ok((context, record, summary))
+          }
+          #[test]
+          fn empty_coverage_must_not_authorize_absence() {
+              let decision = evaluate_negative_authority(true, true, &[], &[], Vec::new(), None, &TruncationState::NotTruncated);
+              assert_ne!(decision.outcome(), NegativeAuthorityOutcome::AuthoritativeAbsent);
+          }
+          #[test]
+          fn not_applicable_must_remain_distinct() -> TestResult {
+              let (_, _, summary) = fixture(CoverageStatus::NotApplicable)?;
+              let decision = evaluate_negative_authority(true, true, &[summary], &[], Vec::new(), None, &TruncationState::NotTruncated);
+              assert_eq!(decision.outcome(), NegativeAuthorityOutcome::NotApplicable);
+              Ok(())
+          }
+          #[test]
+          fn complete_summary_without_records_must_reject() -> TestResult {
+              let (context, _, summary) = fixture(CoverageStatus::Complete)?;
+              let result = evaluate_capability_availability(context, "fixture.evaluator".parse()?, "0.1.0".parse()?,
+                  "rule", "fixture.rule", "fixture.not_evaluated".parse()?, &[summary], &[]);
+              assert!(result.is_err());
+              Ok(())
+          }
+          #[test]
+          fn skipped_lookup_must_not_be_called_unknown_scope() -> TestResult {
+              let (_, _, summary) = fixture(CoverageStatus::Complete)?;
+              let decision = evaluate_negative_authority(true, false, &[summary], &[], Vec::new(), None, &TruncationState::NotTruncated);
+              assert!(decision.reasons().contains(&NegativeAuthorityReason::CapabilityNotEvaluated));
+              Ok(())
+          }
+          RUST
+          set +e
+          cargo +stable test --locked -p wow-core --test e0_coverage_baseline_probe > "$RUNNER_TEMP/e0-coverage-evidence/baseline-negative-control.txt" 2>&1
+          probe_status=$?
+          set -e
+          git checkout-index --force -- crates/wow-core/src/coverage.rs
+          rm crates/wow-core/tests/e0_coverage_baseline_probe.rs
+          test "$probe_status" -ne 0
+          for name in empty_coverage_must_not_authorize_absence not_applicable_must_remain_distinct complete_summary_without_records_must_reject skipped_lookup_must_not_be_called_unknown_scope; do
+            grep -F "test $name ... FAILED" "$RUNNER_TEMP/e0-coverage-evidence/baseline-negative-control.txt"
+          done
+          git diff --exit-code
+      - name: Verify retained bytes and export the tested change
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          test "$(git write-tree)" = "$(cat "$RUNNER_TEMP/e0-coverage-evidence/TREE_SHA")"
+          git diff --cached --binary > "$RUNNER_TEMP/e0-coverage-evidence/verified.patch"
+          sha256sum "$RUNNER_TEMP/e0-coverage-evidence/verified.patch" > "$RUNNER_TEMP/e0-coverage-evidence/SHA256SUMS"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: e0-coverage-${{ matrix.os }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/e0-coverage-evidence/
+          retention-days: 3
+          if-no-files-found: error
+  publish:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: e0-coverage-ubuntu-latest-${{ github.run_id }}
+          path: ${{ runner.temp }}/e0-coverage-linux
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: e0-coverage-windows-latest-${{ github.run_id }}
+          path: ${{ runner.temp }}/e0-coverage-windows
+      - name: Publish only the identical Linux and Windows tested tree
+        env:
+          EXPECTED_HEAD: ${{ github.sha }}
+          ACCEPTANCE_RUN: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          test "$(cat "$RUNNER_TEMP/e0-coverage-linux/BASE_SHA")" = "$EXPECTED_HEAD"
+          test "$(cat "$RUNNER_TEMP/e0-coverage-windows/BASE_SHA")" = "$EXPECTED_HEAD"
+          cmp "$RUNNER_TEMP/e0-coverage-linux/TREE_SHA" "$RUNNER_TEMP/e0-coverage-windows/TREE_SHA"
+          cmp "$RUNNER_TEMP/e0-coverage-linux/verified.patch" "$RUNNER_TEMP/e0-coverage-windows/verified.patch"
+          git apply --check --index "$RUNNER_TEMP/e0-coverage-linux/verified.patch"
+          git apply --index "$RUNNER_TEMP/e0-coverage-linux/verified.patch"
+          test "$(git write-tree)" = "$(cat "$RUNNER_TEMP/e0-coverage-linux/TREE_SHA")"
+          git diff --exit-code
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'fix(core): require retained coverage proof before readiness or absence' -m "Continue R0-01 in wow-core. Validate complete and blocked summaries against exact raw partitions and scoped conflicts, reject empty or forged proof, preserve NotApplicable and every denial reason, and bind negative decisions to context. Fix logical duplicate-partition checks and shared-conflict aggregation. Thirty-four focused tests include exhaustive status permutations, resealed mutations and four demonstrated baseline defects. Linux and Windows locked workspace checks, strict Clippy, debug/release tests, rustdoc, policy and formatting passed on this exact tree in acceptance run $ACCEPTANCE_RUN. No dependency or fixture baseline changed. Both consumers now require retained coverage/conflict input; no unchecked fallback remains. Temporary gate and patch are removed; full E0-A/R0 and runtime acceptance remain incomplete."
+          git push origin HEAD:refs/heads/main
+          git rev-parse HEAD
+          git rev-parse HEAD^{tree}
