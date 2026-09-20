@@ -124,10 +124,8 @@ fn validate_json(text: &str) -> Result<()> {
                     let key: String = serde_json::from_str(&text[start..cursor])?;
                     let object = objects.last_mut().ok_or("JSON key outside object")?;
                     if !object.insert(key) {
-                        return Err(format!(
-                            "duplicate JSON object key at UTF-8 byte {start}"
-                        )
-                        .into());
+                        let message = format!("duplicate JSON object key at UTF-8 byte {start}");
+                        return Err(message.into());
                     }
                 }
             }
@@ -319,16 +317,14 @@ mod tests {
     }
 
     #[test]
-    fn duplicate_errors_report_location_without_echoing_data() {
-        let result = validate_json(r#"{"private-name":1,"private-name":"private-value"}"#);
-        match result {
-            Ok(()) => assert!(false, "duplicate names must reject"),
-            Err(error) => {
-                let message = error.to_string();
-                assert!(message.contains("duplicate JSON object key at UTF-8 byte"));
-                assert!(!message.contains("private-name"));
-                assert!(!message.contains("private-value"));
-            }
-        }
+    fn duplicate_errors_report_location_without_echoing_data() -> Result<()> {
+        let error = validate_json(r#"{"private-name":1,"private-name":"private-value"}"#)
+            .err()
+            .ok_or("duplicate names must reject")?;
+        let message = error.to_string();
+        assert!(message.contains("duplicate JSON object key at UTF-8 byte"));
+        assert!(!message.contains("private-name"));
+        assert!(!message.contains("private-value"));
+        Ok(())
     }
 }
