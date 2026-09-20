@@ -67,6 +67,16 @@ impl NormalizedSourcePath {
         }
 
         let canonical = components.join("/");
+        // Removing leading dot components must not expose a Windows drive root
+        // (./C:/file) or a drive-relative path (./C:file). Validate the value
+        // actually returned, not only the spelling supplied by the caller.
+        if is_absolute_or_host_path(&canonical) {
+            return Err(validation_error(
+                OPERATION,
+                CoreErrorCode::AbsolutePathForbidden,
+                "candidate",
+            ));
+        }
         Ok(Parsed::new(Self(canonical.clone()), canonical == candidate))
     }
 

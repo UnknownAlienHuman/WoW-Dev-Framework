@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use wow_core::canonical_json_string;
+use wow_core::{canonical_json_string, domain_separated_digest};
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -50,9 +50,28 @@ fn committed_hash_vectors_are_byte_exact() -> Result<(), Box<dyn std::error::Err
             "digest mismatch for {}",
             vector.vector_id
         );
+        assert_eq!(
+            encode_hex(&domain_separated_digest(&vector.domain, &vector.value)?),
+            vector.sha256,
+            "public digest operation mismatch for {}",
+            vector.vector_id
+        );
         if let Some(typed_id) = vector.typed_id {
-            assert!(
-                typed_id.ends_with(&actual_digest),
+            let family = match vector.domain.as_str() {
+                "wow-core/source-handle/e0-1" => "handle",
+                "wow-core/generation-context/e0-1" => "context",
+                "wow-core/coverage/e0-1" => "coverage",
+                "wow-core/evidence/e0-1" => "evidence",
+                "wow-core/conflict/e0-1" => "conflict",
+                "wow-core/warning/e0-1" => "warning",
+                "wow-core/not-evaluated/e0-1" => "not-evaluated",
+                "wow-core/finding-fingerprint/e0-1" => "finding-fingerprint",
+                "wow-core/finding/e0-1" => "finding",
+                _ => return Err("typed vector uses an unreviewed digest domain".into()),
+            };
+            assert_eq!(
+                typed_id,
+                format!("{family}:sha256:{actual_digest}"),
                 "typed ID mismatch for {}",
                 vector.vector_id
             );

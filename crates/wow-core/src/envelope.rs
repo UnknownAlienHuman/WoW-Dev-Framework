@@ -14,6 +14,9 @@ use crate::ids::{OperationId, SchemaId, ToolVersion};
 use crate::profile::SchemaVersionEntry;
 
 const FINALIZATION_PASSES: usize = 6;
+const CHECK_RESULT_SCHEMA: &str = "schema:wow:check-result";
+const OPERATION_ERROR_SCHEMA: &str = "schema:wow:operation-error";
+const ENVELOPE_SCHEMA_VERSION: &str = "0.1.0";
 
 /// Canonical E0 check-result state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -55,12 +58,7 @@ pub struct E0CheckResultEnvelope {
 impl E0CheckResultEnvelope {
     /// Validates identities, references, ordering, status, budgets, and digest.
     pub fn validate(&self) -> CoreResult<()> {
-        validate_schema_version(
-            self.schema.schema_id(),
-            self.schema.version(),
-            self.schema.schema_id(),
-            self.schema.version(),
-        )?;
+        validate_envelope_schema(&self.schema, CHECK_RESULT_SCHEMA)?;
         if self.canonicalization_version != CANONICALIZATION_VERSION {
             return Err(validation_error(
                 "validate_result_envelope",
@@ -307,11 +305,13 @@ impl E0OperationErrorEnvelope {
             canonical_digest: zero,
         };
         envelope.canonical_digest = error_envelope_digest(&envelope)?;
+        envelope.validate()?;
         Ok(envelope)
     }
 
     /// Verifies schema, canonicalization profile, and digest.
     pub fn validate(&self) -> CoreResult<()> {
+        validate_envelope_schema(&self.schema, OPERATION_ERROR_SCHEMA)?;
         if self.canonicalization_version != CANONICALIZATION_VERSION {
             return Err(validation_error(
                 "validate_result_envelope",
@@ -335,6 +335,18 @@ impl E0OperationErrorEnvelope {
         self.validate()?;
         canonical_json_bytes(self)
     }
+}
+
+// The decoder's supported schema is fixed by this implementation, never by
+// the untrusted envelope. A self-consistent digest does not admit a new schema.
+fn validate_envelope_schema(schema: &SchemaVersionEntry, supported_id: &str) -> CoreResult<()> {
+    validate_schema_version(
+        schema.schema_id(),
+        schema.version(),
+        &supported_id.parse()?,
+        &ENVELOPE_SCHEMA_VERSION.parse()?,
+    )?;
+    Ok(())
 }
 
 /// Validates exact-major schema compatibility.

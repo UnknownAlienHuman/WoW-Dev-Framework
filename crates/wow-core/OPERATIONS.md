@@ -243,6 +243,8 @@ Algorithm:
 6. Reject any `..` component.
 7. Rejoin with `/` and preserve component case/text exactly.
 8. Reject an empty result.
+9. Recheck the normalized result for host/drive prefixes: removing leading `.`
+   components must not turn `./C:/file` or `./C:file` into an accepted path.
 
 Core does not resolve symlinks or test path existence.
 
@@ -936,6 +938,12 @@ errors:
 ```
 
 E0 internal contracts use exact major compatibility. Unknown major versions fail. Unknown required fields fail even within a nominally compatible version.
+
+The concrete E0 decoders bind this check to their own supported schema:
+`schema:wow:check-result` or `schema:wow:operation-error`, version `0.1.0`.
+They must never use the encountered schema as its own supported baseline.
+Both finalization and validation reject another schema family or a future
+version, even when the supplied digest and output-byte count are self-consistent.
 
 Required tests: `SCHEMA-001..010`.
 

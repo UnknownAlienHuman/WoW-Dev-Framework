@@ -1,6 +1,18 @@
 # `wow-core` E0-A test matrix
 
-**Status:** normative implementation gate; no executable tests yet.
+**Status:** normative implementation gate with partial executable coverage.
+
+`tests/e0_source_conformance.rs` covers PATH-001–021, PATH-023–024 and
+SPAN-001–014 through the actual path/span/handle APIs. PATH-024 includes
+1,248 drive-prefix mutations through both path and handle admission plus
+20 parent-component mutations. PATH-022 (an OS non-UTF-8 adapter) is not
+implemented by this UTF-8-only core surface and is not claimed as tested.
+`tests/e0_examples.rs` compares every committed envelope against canonical
+fixture bytes; `tests/hash_vectors.rs` checks the public digest operation and
+exact typed-ID families. `tests/e0_schema_conformance.rs` covers ENVELOPE-016/017
+on decoded and finalized envelopes, with independently resealed digests/byte
+counts so a stale hash cannot mask missing schema admission. These focused
+suites do not close the whole E0-A gate.
 
 The first coding agent must turn these cases into tests that prove the target path executed. Test names should preserve the case IDs so failures map back to this contract.
 
