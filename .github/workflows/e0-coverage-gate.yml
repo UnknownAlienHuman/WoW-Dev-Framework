@@ -32,9 +32,9 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
-          test "$(sha256sum .ci/e0-coverage.patch.gz | cut -d ' ' -f 1)" = 05839d94bcb14f2c39f9676261996649bde1cd9586a0a48a54460a6f2798ca7f
+          test "$(sha256sum < .ci/e0-coverage.patch.gz | cut -d ' ' -f 1)" = 05839d94bcb14f2c39f9676261996649bde1cd9586a0a48a54460a6f2798ca7f
           gzip -dc .ci/e0-coverage.patch.gz > "$RUNNER_TEMP/e0-coverage.patch"
-          test "$(sha256sum "$RUNNER_TEMP/e0-coverage.patch" | cut -d ' ' -f 1)" = 180df20577c0d5e9204fb67a54f5a3d6abd14e056eb19a1861c074b614c5bec5
+          test "$(sha256sum < "$RUNNER_TEMP/e0-coverage.patch" | cut -d ' ' -f 1)" = 180df20577c0d5e9204fb67a54f5a3d6abd14e056eb19a1861c074b614c5bec5
           git apply --check --index "$RUNNER_TEMP/e0-coverage.patch"
           git apply --index "$RUNNER_TEMP/e0-coverage.patch"
           git rm .ci/e0-coverage.patch.gz .github/workflows/e0-coverage-gate.yml
