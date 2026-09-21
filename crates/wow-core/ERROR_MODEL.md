@@ -238,3 +238,16 @@ A foreign evaluation context uses `result_context_violation`. Malformed decoded
 record metadata uses the same narrow identifier errors as construction; invalid
 record identities use `canonical_digest_mismatch`. Valid partial/unknown/failed
 coverage is not an operation error and still produces an explicit blocked result.
+
+## Truncation admission detail
+
+Malformed retained truncation propagates through budget validation, byte-count
+replacement, envelope finalization and the negative-authority consumer.
+`contract_violation` identifies empty/noncanonical/duplicate outer entries,
+noncanonical/duplicate capability IDs or contradictory known/unknown counts at
+`truncation.entries`, `entries.capability_ids`, or `entries.omitted_count`.
+Collection-name failures retain the existing `invalid_identifier`,
+`identifier_too_long`, or `reserved_identifier_segment` code at
+`entries.collection_id`. These are existing validation codes, not new enums.
+No raw offending collection string is echoed. Strict Serde field/type failures
+remain decoding errors; this slice does not add a host error-normalization API.

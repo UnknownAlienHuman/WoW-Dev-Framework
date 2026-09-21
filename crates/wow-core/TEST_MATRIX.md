@@ -33,6 +33,13 @@ a 16,384-record chain on a 256 KiB test-thread stack and shared-input DAGs. Gold
 record/envelope bytes remain unchanged. These tests do not certify provenance
 acquisition, standalone source/coverage joins, input-size ceilings or full E0-A.
 
+`tests/e0_budget_conformance.rs` adds 23 grouped public-path tests under
+`tests/budget/`: all nine numeric dimensions and overflow boundaries; strict wire
+types; explicit known/unknown counts; decoded truncation admission through every
+consumer; 64 deterministic input permutations; byte/count limits; and resealed
+envelope mutations. Golden fixture bytes are unchanged. Producer honesty and
+host decoding-size ceilings are outside this pure validation slice.
+
 The first coding agent must turn these cases into tests that prove the target path executed. Test names should preserve the case IDs so failures map back to this contract.
 
 ## 1. Test rules
@@ -624,3 +631,34 @@ hash recomputation. `tests/evidence/conflicts.rs` checks capability-wide/partiti
 scopes, minimum membership, all canonical sets, unknown fields and hash admission.
 Conflict-reference and source-registry ownership checks remain distinct consumer
 tests, not conclusions from a conflict's local structural validity.
+
+## Budget/truncation admission regression extensions
+
+| ID | Case | Expected |
+|---|---|---|
+| `BUDGET-005` | Each usage dimension exceeds limit with valid truncation | `budget_exceeded`, no waiver |
+| `BUDGET-006` | Replace output-byte usage | Revalidated budget, all other truth unchanged |
+| `TRUNCATION-007` | Decoded empty, duplicate or unordered outer entries | `contract_violation` |
+| `TRUNCATION-008` | Decoded contradictory known/unknown count | Same rejection as entry construction |
+| `TRUNCATION-009` | Negative-authority caller supplies malformed truncation | Error, not a denial receipt |
+| `TRUNCATION-010` | Decoded unordered/duplicate capability IDs | Reject without silent repair |
+| `TRUNCATION-011` | Invalid decoded collection name | Same grammar/code as constructor, no raw echo |
+| `TRUNCATION-012` | Same collection, different payload | Duplicate collection rejected |
+| `TRUNCATION-013` | Unknown variant/field or duplicate field | Strict wire decoding rejects |
+| `ENVELOPE-025` | Resealed partial envelope with empty truncation | Invalid retained truth rejected |
+| `ENVELOPE-026` | Resealed contradictory/nonnormal nested truncation | Same entry admission at envelope/finalizer |
+| `FINALIZE-001` | All four committed check envelopes | Exact golden bytes and byte counts |
+| `FINALIZE-002` | Final byte limit with omission metadata and digest | Exact fit accepted, excess rejected |
+
+`TRUNCATION-004` detects collection clipping when retained usage contradicts actual
+records, with an independently correct result hash. It is not proof against an
+upstream producer falsifying both counts and omission claims. `TRUNCATION-005`
+also checks that valid omission metadata requires partial status and denies
+negative authority; no complete/clean result follows from truncation.
+
+The Linux job in budget/truncation run `35622629254` passed 22 focused cases and exposed
+an additional `TRUNCATION-013` wire defect: serde's tagged unit variant ignored
+payload fields on `not_truncated`. The test is retained; a private empty-struct
+wire variant now preserves strict admission without changing canonical output.
+The final accepted checkpoint must rerun all focused and workspace checks; this
+failed run is not acceptance evidence.

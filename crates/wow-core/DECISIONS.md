@@ -241,3 +241,12 @@ alone, digest-sorted duplicate statements, or an omitted affecting blocker.
 Distinct producer statements remain distinct; shared blocking references are
 set-aggregated without erasing conflict. See `COVERAGE_CONSUMERS.md` for the Rust
 call migration and the remaining owner/envelope obligations.
+
+### CORE-017 implementation clarification — retained truncation proof
+
+Budget and negative-authority consumers revalidate retained truncation records,
+not only the status tag and numeric limits. Empty `truncated` state, ambiguous
+omission counts and invalid reference sets cannot authorize a result status or
+denial receipt. Fresh set ordering remains explicit construction behavior;
+decoded invalid metadata is not repaired. No new schema, identity projection,
+collection-selection policy or source-completeness assertion is introduced.

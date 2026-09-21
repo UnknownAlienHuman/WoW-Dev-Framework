@@ -887,32 +887,63 @@ Required tests: `WARNING-001..014`.
 
 ### `validate_budget`
 
-Validates positive limits, implementation maximums, and absence of unknown budget dimensions.
+`validate_budget(&BudgetLimits)` validates the nine positive limit dimensions.
+Collection maxima are 10,000,000; output-byte maximum is 1,073,741,824. The wire
+structs reject unknown/duplicate dimensions and invalid integer types during
+Serde decoding. No new boundary decoder or CoreError conversion is claimed.
 
-Required tests: `BUDGET-001..012`.
+`Budget::validate_limits` additionally admits retained truncation entries and
+checks actual usage. `Budget::new` may sort outer entries but never repairs
+invalid nested metadata; `with_output_bytes` revalidates the resulting budget.
+Truncation does not waive an exceeded count or byte limit. Count and byte usage
+remain checked against actual envelope output, not inferred omission counts.
+
+Executable cases: `BUDGET-001..006` in `tests/budget/limits.rs`.
 
 ### `accumulate_budget_usage`
 
 Purely adds usage values with checked arithmetic. Overflow returns `usage_overflow`; it never wraps.
 
-Required tests: `BUDGET-USAGE-001..008`.
+Executable cases: `BUDGET-USAGE-001/002` exercise all nine dimensions, zero,
+commutativity, exact maximum addition and overflow without operand mutation.
 
 ### `classify_truncation`
 
-```text
-input:
-  validated budget
-  observed usage
-  omitted counts and affected collections/capabilities
+The existing Rust operation accepts `Vec<TruncationEntry>`. Empty input means
+`NotTruncated`; nonempty input is ordered and admitted as `Truncated`. Numeric
+limits and usage are separate `Budget`/envelope checks, not extra implicit inputs.
 
-success:
-  not_truncated
-  or explicit truncated state
-```
+The shared admission checks nonempty retained truncation, collection grammar,
+unique ordered collection IDs, unique ordered capability IDs and exactly one
+known-count/unknown-count representation. A fresh entry constructor orders and
+deduplicates its capability set. Decoded entries must already be canonical.
+`Truncated { entries: [] }` is invalid; it is not silently converted to clean.
 
-If a producer cannot know an omitted count, it records `count_unknown`; it does not write zero.
+If a producer cannot know an omitted count, it records `count_unknown`; it does
+not write zero. Exact known zero remains supported by the nonnegative contract.
+Collection/capability selection is still the producer's responsibility; the core
+validator does not rediscover omitted source data or certify a claimed count.
 
-Required tests: `TRUNCATION-001..012`.
+Invalid names return the existing identifier errors at `entries.collection_id`.
+Contradictory counts and invalid sets return `contract_violation` at
+`entries.omitted_count`, `entries.capability_ids`, or `truncation.entries`.
+Errors do not copy raw collection names into messages.
+
+`evaluate_negative_authority` validates this same retained state before using it
+as a denial condition. Valid truncation still denies absence conservatively;
+validation does not broaden the authority scope or invent missing coverage.
+
+Executable cases: `TRUNCATION-001..013`, `ENVELOPE-025/026`, and
+`FINALIZE-001/002` in `tests/e0_budget_conformance.rs` and `tests/budget/`.
+
+### Truncation wire admission
+
+The retained `not_truncated` variant accepts no payload fields. Decoding uses a
+private empty-struct wire variant, because a tagged unit variant can silently
+ignore additional fields even when the container requests strict field handling.
+The public enum, serialized bytes, constructor normalization and semantic
+validation rules above are unchanged. `TRUNCATION-013` exercises the actual wire
+decoder, including discarded-omission attempts and duplicate status fields.
 
 ## 9. Result-envelope operations
 

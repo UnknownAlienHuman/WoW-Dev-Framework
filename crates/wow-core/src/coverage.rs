@@ -801,6 +801,7 @@ pub fn evaluate_negative_authority(
     truncation: &TruncationState,
 ) -> CoreResult<NegativeAuthorityDecision> {
     admission::validate_inputs(context_id, summaries, coverage_records, conflicts)?;
+    truncation.validate()?;
     if let Some(record) = evaluation {
         admission::validate_evaluation(context_id, record, coverage_records, conflicts)?;
     }

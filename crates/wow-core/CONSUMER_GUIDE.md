@@ -380,3 +380,20 @@ conflict is rewritten, selected as a winner or promoted by validation.
 The traversal is iterative and input-proportional, including deep/shared DAGs. Hosts
 still enforce acquisition/decoding/result-size budgets. Structural acceptance of an
 empty registry is not proof of source coverage, absence, or runtime behavior.
+
+## Retained budget and truncation admission
+
+The existing budget/authority seams share truncation validation. A raw
+`TruncationState` status tag is not proof: decoded entries must retain canonical
+collection/capability sets and unambiguous omission counts. `Budget::new`,
+`Budget::validate_limits`, `with_output_bytes`, `classify_truncation`, envelope
+validation/finalization, and `evaluate_negative_authority` reject malformed
+nested truth; there is no new unchecked fallback or public API requirement.
+
+Fresh construction can order sets. Decoded invalid sets are rejected, not
+silently deduplicated. Exact known zero and explicit unknown remain distinct.
+Usage counts include only returned records and final serialized bytes; omission
+metadata does not increase allowed output. Producers still own completeness and
+omission selection, and hosts still enforce acquisition/decoding-size budgets.
+The pure core cannot detect a producer that changes both source claims and all
+counts consistently without independently supplied source evidence.

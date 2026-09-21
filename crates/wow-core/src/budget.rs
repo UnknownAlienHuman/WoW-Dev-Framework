@@ -103,13 +103,61 @@ impl BudgetUsage {
 
 /// Explicit truncation state.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "status", rename_all = "snake_case", deny_unknown_fields)]
+#[serde(tag = "status", rename_all = "snake_case", from = "TruncationWire")]
 pub enum TruncationState {
     NotTruncated,
     Truncated { entries: Vec<TruncationEntry> },
 }
 
+// A tagged unit variant lets serde ignore payload fields. Decode through an
+// empty struct variant instead, so "not_truncated" cannot discard omissions.
+// The public enum and its canonical serialization remain unchanged.
+#[derive(Deserialize)]
+#[serde(tag = "status", rename_all = "snake_case", deny_unknown_fields)]
+enum TruncationWire {
+    NotTruncated {},
+    Truncated { entries: Vec<TruncationEntry> },
+}
+
+impl From<TruncationWire> for TruncationState {
+    fn from(wire: TruncationWire) -> Self {
+        match wire {
+            TruncationWire::NotTruncated {} => Self::NotTruncated,
+            TruncationWire::Truncated { entries } => Self::Truncated { entries },
+        }
+    }
+}
+
 impl TruncationState {
+    // Deserialization bypasses constructors. Admit retained omission records
+    // before a budget or authority consumer uses the status tag as truth.
+    pub(crate) fn validate(&self) -> CoreResult<()> {
+        let Self::Truncated { entries } = self else {
+            return Ok(());
+        };
+        if entries.is_empty() {
+            return Err(validation_error(
+                "classify_truncation",
+                CoreErrorCode::ContractViolation,
+                "truncation.entries",
+            ));
+        }
+        for entry in entries {
+            entry.validate()?;
+        }
+        for pair in entries.windows(2) {
+            if pair[0].collection_id >= pair[1].collection_id {
+                return Err(validation_error(
+                    "classify_truncation",
+                    CoreErrorCode::ContractViolation,
+                    "truncation.entries",
+                )
+                .with_argument("reason", "noncanonical_or_duplicate_collection"));
+            }
+        }
+        Ok(())
+    }
+
     /// Whether any collection is explicitly truncated.
     #[must_use]
     pub const fn is_truncated(&self) -> bool {
@@ -147,28 +195,44 @@ impl TruncationEntry {
         count_unknown: bool,
         reason_code: MessageCode,
     ) -> CoreResult<Self> {
-        let collection_id = collection_id.into();
+        capability_ids.sort();
+        capability_ids.dedup();
+        let entry = Self {
+            collection_id: collection_id.into(),
+            capability_ids,
+            omitted_count,
+            count_unknown,
+            reason_code,
+        };
+        entry.validate()?;
+        Ok(entry)
+    }
+
+    fn validate(&self) -> CoreResult<()> {
         validate_lower_segment(
-            &collection_id,
+            &self.collection_id,
             "classify_truncation",
             "entries.collection_id",
         )?;
-        if omitted_count.is_some() == count_unknown {
+        if self.omitted_count.is_some() == self.count_unknown {
             return Err(validation_error(
                 "classify_truncation",
                 CoreErrorCode::ContractViolation,
                 "entries.omitted_count",
             ));
         }
-        capability_ids.sort();
-        capability_ids.dedup();
-        Ok(Self {
-            collection_id,
-            capability_ids,
-            omitted_count,
-            count_unknown,
-            reason_code,
-        })
+        if self
+            .capability_ids
+            .windows(2)
+            .any(|pair| pair[0] >= pair[1])
+        {
+            return Err(validation_error(
+                "classify_truncation",
+                CoreErrorCode::ContractViolation,
+                "entries.capability_ids",
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -190,24 +254,9 @@ impl Budget {
     ) -> CoreResult<Self> {
         limits.validate()?;
         if let TruncationState::Truncated { entries } = &mut truncation {
-            if entries.is_empty() {
-                return Err(validation_error(
-                    "classify_truncation",
-                    CoreErrorCode::ContractViolation,
-                    "truncation.entries",
-                ));
-            }
+            // Fresh assembly may order outer entries, but must not repair an
+            // invalid decoded entry or silently collapse duplicate collections.
             entries.sort();
-            for pair in entries.windows(2) {
-                if pair[0].collection_id == pair[1].collection_id {
-                    return Err(validation_error(
-                        "classify_truncation",
-                        CoreErrorCode::ContractViolation,
-                        "truncation.entries",
-                    )
-                    .with_argument("reason", "duplicate_collection"));
-                }
-            }
         }
         let budget = Self {
             limits,
@@ -243,9 +292,10 @@ impl Budget {
         Ok(self)
     }
 
-    /// Validates observed usage against explicit limits.
+    /// Validates limits, retained truncation records, and observed usage.
     pub fn validate_limits(&self) -> CoreResult<()> {
         self.limits.validate()?;
+        self.truncation.validate()?;
         let pairs = [
             (
                 self.usage.coverage_records,
@@ -284,16 +334,9 @@ pub fn classify_truncation(mut entries: Vec<TruncationEntry>) -> CoreResult<Trun
         return Ok(TruncationState::NotTruncated);
     }
     entries.sort();
-    for pair in entries.windows(2) {
-        if pair[0].collection_id == pair[1].collection_id {
-            return Err(validation_error(
-                "classify_truncation",
-                CoreErrorCode::ContractViolation,
-                "entries",
-            ));
-        }
-    }
-    Ok(TruncationState::Truncated { entries })
+    let state = TruncationState::Truncated { entries };
+    state.validate()?;
+    Ok(state)
 }
 
 /// Operation wrapper for validating one budget limit set.

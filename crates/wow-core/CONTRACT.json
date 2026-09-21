@@ -533,7 +533,8 @@
     },
     {
       "id": "TruncationState",
-      "doc": "DATA_MODEL.md#12-budget-and-truncation"
+      "doc": "DATA_MODEL.md#12-budget-and-truncation",
+      "consumer_validation": "nonempty-truncated; canonical-unique-collections-and-capabilities; exclusive-known-or-unknown-count"
     },
     {
       "id": "CoreError",
@@ -997,11 +998,13 @@
         "reserved_identifier_segment",
         "canonical_digest_mismatch",
         "canonicalization_failure",
-        "conflict_scope_empty"
+        "conflict_scope_empty",
+        "contract_violation"
       ],
       "input_admission": "explicit-context-raw-coverage-and-conflicts",
       "rust_result": "CoreResult<NegativeAuthorityDecision>",
-      "lookup_precondition": "caller-reported-exact-miss-only"
+      "lookup_precondition": "caller-reported-exact-miss-only",
+      "truncation_admission": "revalidate-retained-entries-before-decision"
     },
     {
       "id": "validate_message_arguments",
@@ -1078,7 +1081,9 @@
       "doc": "OPERATIONS.md#validate_budget",
       "errors": [
         "budget_invalid"
-      ]
+      ],
+      "rust_input": "&BudgetLimits",
+      "budget_record_validation": "Budget::validate_limits admits retained truncation and numeric usage"
     },
     {
       "id": "accumulate_budget_usage",
@@ -1094,8 +1099,14 @@
       "doc": "OPERATIONS.md#classify_truncation",
       "errors": [
         "budget_invalid",
-        "contract_violation"
-      ]
+        "contract_violation",
+        "invalid_identifier",
+        "identifier_too_long",
+        "reserved_identifier_segment"
+      ],
+      "rust_input": "Vec<TruncationEntry>",
+      "input_admission": "validated-canonical-nested-omission-records",
+      "executable_tests": "tests/e0_budget_conformance.rs"
     },
     {
       "id": "validate_result_envelope",

@@ -728,6 +728,13 @@ count_unknown                    # explicit boolean
 reason_code
 ```
 
+A retained `truncated` state has at least one entry. Collection IDs follow the
+existing lowercase-segment grammar and occur once; entries are strictly ordered
+by collection ID. Capability IDs within a retained entry are strictly ordered and
+unique. A known count (including exact zero) requires `count_unknown = false`;
+no count requires `count_unknown = true`. Constructors may order fresh sets, but
+consumers reject malformed decoded records rather than repairing their truth.
+
 Silent clipping is invalid. Producers decide what can be omitted under their own correctness contracts; core only validates/records the result. Affecting truncation makes envelope status at least `partial` and denies negative authority for affected scopes.
 
 ## 13. E0 check result envelope
