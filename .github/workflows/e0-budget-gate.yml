@@ -1,0 +1,165 @@
+name: E0 budget guarded acceptance
+on:
+  push:
+    branches: [main]
+    paths:
+      - .ci/e0-budget/**
+      - .github/workflows/e0-budget-gate.yml
+permissions:
+  contents: read
+concurrency:
+  group: e0-budget-acceptance
+  cancel-in-progress: false
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    env:
+      CARGO_TERM_COLOR: never
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+          ref: ${{ github.sha }}
+      - name: Admit reviewed bytes on the exact base
+        run: |
+          set -euo pipefail
+          cat .ci/e0-budget/00 .ci/e0-budget/01 .ci/e0-budget/02 .ci/e0-budget/03 .ci/e0-budget/04 .ci/e0-budget/05 > "$RUNNER_TEMP/budget.patch.gz"
+          echo "a1cbd385c84fedf1d358ae8c49e57a91ebe12352e917aac5aa27601d7c127440  $RUNNER_TEMP/budget.patch.gz" | sha256sum -c -
+          gzip -dc "$RUNNER_TEMP/budget.patch.gz" > "$RUNNER_TEMP/budget.patch"
+          echo "ea6343809ccbebf876a3309c939ef38f55b5ced8f006b70204bcd671fd3d8414  $RUNNER_TEMP/budget.patch" | sha256sum -c -
+          git rm -r .ci/e0-budget .github/workflows/e0-budget-gate.yml
+          test "$(git write-tree)" = 7094f7271612a7d351def9dd789bd05a6db3b5ce
+          git apply --index --check "$RUNNER_TEMP/budget.patch"
+          git apply --index "$RUNNER_TEMP/budget.patch"
+          test "$(git write-tree)" = e362858a608cc63bcd881840be53bc10f07e54d8
+      - name: Install and record current stable Rust
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+          mkdir -p "$RUNNER_TEMP/budget-results"
+          git rev-parse HEAD > "$RUNNER_TEMP/budget-results/BASE_SHA"
+          rustc +stable -Vv > "$RUNNER_TEMP/budget-results/RUST_VERSION"
+      - name: Format only reviewed Rust and retain the exact tree
+        run: |
+          set -euo pipefail
+          cargo +stable fmt --all
+          git diff --exit-code -- . ':(exclude)crates/wow-core/src/budget.rs' ':(exclude)crates/wow-core/src/coverage.rs' ':(exclude)crates/wow-core/tests/e0_budget_conformance.rs' ':(exclude)crates/wow-core/tests/budget/*.rs'
+          git add crates/wow-core/src/budget.rs crates/wow-core/src/coverage.rs crates/wow-core/tests/e0_budget_conformance.rs crates/wow-core/tests/budget/
+          git diff --exit-code
+          git diff --cached --check
+          git write-tree > "$RUNNER_TEMP/budget-results/TREE_SHA"
+      - name: Run all 23 budget regressions
+        run: |
+          set -euo pipefail
+          cargo +stable test --locked -p wow-core --test e0_budget_conformance -- --test-threads=1 2>&1 | tee "$RUNNER_TEMP/budget-results/budget-tests.txt"
+          grep -F '23 passed; 0 failed' "$RUNNER_TEMP/budget-results/budget-tests.txt"
+      - name: Prove the regressions detect the unchanged baseline defects
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          trap 'git checkout-index -a -f' EXIT
+          for source in budget.rs coverage.rs; do
+            git show "HEAD:crates/wow-core/src/$source" > "crates/wow-core/src/$source"
+          done
+          cases=(
+            truncation::truncation_007_decoded_budget_rejects_empty_duplicate_and_unordered_records
+            truncation::truncation_008_classifier_and_budget_reject_decoded_count_contradictions
+            truncation::truncation_009_negative_authority_validates_retained_truncation
+            envelope::envelope_025_resealed_truncation_cannot_fake_partial_status
+          )
+          for index in "${!cases[@]}"; do
+            case="${cases[$index]}"
+            log="$RUNNER_TEMP/budget-results/baseline-$index.txt"
+            set +e
+            cargo +stable test --locked -p wow-core --test e0_budget_conformance "$case" -- --exact --test-threads=1 > "$log" 2>&1
+            status=$?
+            set -e
+            test "$status" -eq 101
+            grep -F 'running 1 test' "$log"
+            grep -F "test $case ... FAILED" "$log"
+            grep -F 'test result: FAILED. 0 passed; 1 failed' "$log"
+          done
+      - name: Repository policy and formatting
+        run: |
+          cargo +stable xtask check
+          cargo +stable fmt --all --check
+      - name: Locked workspace check
+        run: cargo +stable check --locked --workspace --all-targets --all-features
+      - name: Strict workspace Clippy
+        run: cargo +stable clippy --locked --workspace --all-targets --all-features -- -D warnings
+      - name: Locked debug workspace tests
+        run: cargo +stable test --locked --workspace --all-targets --all-features
+      - name: Locked release workspace tests
+        run: cargo +stable test --release --locked --workspace --all-targets --all-features
+      - name: Rust documentation
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo +stable doc --locked --workspace --all-features --no-deps
+      - name: Verify retained bytes and export tested change
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          test "$(git write-tree)" = "$(cat "$RUNNER_TEMP/budget-results/TREE_SHA")"
+          git diff --cached --binary --full-index > "$RUNNER_TEMP/budget-results/verified.patch"
+          cd "$RUNNER_TEMP/budget-results"
+          sha256sum verified.patch > SHA256SUMS
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: e0-budget-${{ matrix.os }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/budget-results/
+          retention-days: 3
+          if-no-files-found: error
+  publish:
+    needs: verify
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: e0-budget-ubuntu-latest-${{ github.run_id }}
+          path: ${{ runner.temp }}/budget-linux
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: e0-budget-windows-latest-${{ github.run_id }}
+          path: ${{ runner.temp }}/budget-windows
+      - name: Publish identical tested trees only if main is unchanged
+        run: |
+          set -euo pipefail
+          linux="$RUNNER_TEMP/budget-linux"
+          windows="$RUNNER_TEMP/budget-windows"
+          (cd "$linux" && sha256sum -c SHA256SUMS)
+          (cd "$windows" && sha256sum -c SHA256SUMS)
+          cmp "$linux/TREE_SHA" "$windows/TREE_SHA"
+          cmp "$linux/BASE_SHA" "$windows/BASE_SHA"
+          cmp "$linux/verified.patch" "$windows/verified.patch"
+          test "$(cat "$linux/BASE_SHA")" = "$GITHUB_SHA"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$GITHUB_SHA"
+          git apply --index --check "$linux/verified.patch"
+          git apply --index "$linux/verified.patch"
+          test "$(git write-tree)" = "$(cat "$linux/TREE_SHA")"
+          git diff --exit-code
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix(core): validate retained truncation across budget and authority boundaries' -m "Continue R0-01 in wow-core. Share entry/state admission across fresh construction, decoded budgets, byte replacement, envelope validation and the negative-authority consumer. Reject empty truncated states, contradictory omission counts and invalid collection/capability sets without silent repair. Twenty-three grouped tests cover every numeric dimension, overflow, exact final-byte limits, golden envelopes, independently resealed mutations and 64 seeded input permutations. Four negative controls reproduced baseline defects. Linux and Windows locked workspace check, strict Clippy, debug/release tests, rustdoc, policy and formatting passed on this exact tree in acceptance run $GITHUB_RUN_ID. No dependency or fixture baseline changed. Temporary gate inputs are removed. Full E0-A/R0, producer omission honesty and host decoding-size limits remain separate gates."
+          git push origin HEAD:refs/heads/main
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$(git rev-parse HEAD)"
+          git rev-parse HEAD
+          git rev-parse HEAD^{tree}
