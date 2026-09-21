@@ -36,11 +36,16 @@ jobs:
           echo "a1cbd385c84fedf1d358ae8c49e57a91ebe12352e917aac5aa27601d7c127440  $RUNNER_TEMP/budget.patch.gz" | sha256sum -c -
           gzip -dc "$RUNNER_TEMP/budget.patch.gz" > "$RUNNER_TEMP/budget.patch"
           echo "ea6343809ccbebf876a3309c939ef38f55b5ced8f006b70204bcd671fd3d8414  $RUNNER_TEMP/budget.patch" | sha256sum -c -
+          cp .ci/e0-budget/wire-fix.patch "$RUNNER_TEMP/wire-fix.patch"
+          echo "40e252af12ebd0878adca0d4aeee2781e72288b1232ba96d0bc2dfa4829f5f56  $RUNNER_TEMP/wire-fix.patch" | sha256sum -c -
           git rm -r .ci/e0-budget .github/workflows/e0-budget-gate.yml
           test "$(git write-tree)" = 7094f7271612a7d351def9dd789bd05a6db3b5ce
           git apply --index --check "$RUNNER_TEMP/budget.patch"
           git apply --index "$RUNNER_TEMP/budget.patch"
           test "$(git write-tree)" = e362858a608cc63bcd881840be53bc10f07e54d8
+          git apply --index --check "$RUNNER_TEMP/wire-fix.patch"
+          git apply --index "$RUNNER_TEMP/wire-fix.patch"
+          test "$(git write-tree)" = d8a4c07838bc3c40690a8b85e62859419479dbee
       - name: Install and record current stable Rust
         run: |
           rustup toolchain install stable --profile minimal --component rustfmt --component clippy
@@ -74,6 +79,7 @@ jobs:
             truncation::truncation_008_classifier_and_budget_reject_decoded_count_contradictions
             truncation::truncation_009_negative_authority_validates_retained_truncation
             envelope::envelope_025_resealed_truncation_cannot_fake_partial_status
+            truncation::truncation_013_strict_wire_rejects_unknown_variants_and_payload_fields
           )
           for index in "${!cases[@]}"; do
             case="${cases[$index]}"
@@ -158,7 +164,7 @@ jobs:
           git diff --exit-code
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'fix(core): validate retained truncation across budget and authority boundaries' -m "Continue R0-01 in wow-core. Share entry/state admission across fresh construction, decoded budgets, byte replacement, envelope validation and the negative-authority consumer. Reject empty truncated states, contradictory omission counts and invalid collection/capability sets without silent repair. Twenty-three grouped tests cover every numeric dimension, overflow, exact final-byte limits, golden envelopes, independently resealed mutations and 64 seeded input permutations. Four negative controls reproduced baseline defects. Linux and Windows locked workspace check, strict Clippy, debug/release tests, rustdoc, policy and formatting passed on this exact tree in acceptance run $GITHUB_RUN_ID. No dependency or fixture baseline changed. Temporary gate inputs are removed. Full E0-A/R0, producer omission honesty and host decoding-size limits remain separate gates."
+          git commit -m 'fix(core): validate retained truncation across budget and authority boundaries' -m "Continue R0-01 in wow-core. Share entry/state admission across fresh construction, decoded budgets, byte replacement, envelope validation and the negative-authority consumer. Reject empty truncated states, contradictory omission counts and invalid collection/capability sets without silent repair. Strict no-payload decoding prevents not_truncated from discarding omission fields. Twenty-three grouped tests cover every numeric dimension, overflow, exact final-byte limits, golden envelopes, independently resealed mutations and 64 seeded input permutations. Five negative controls reproduced baseline defects, including the tagged-unit payload loss discovered in the first gate run. Linux and Windows locked workspace check, strict Clippy, debug/release tests, rustdoc, policy and formatting passed on this exact tree in acceptance run $GITHUB_RUN_ID. No dependency or fixture baseline changed. Temporary gate inputs are removed. Full E0-A/R0, producer omission honesty and host decoding-size limits remain separate gates."
           git push origin HEAD:refs/heads/main
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$(git rev-parse HEAD)"
           git rev-parse HEAD
