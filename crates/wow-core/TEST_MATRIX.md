@@ -26,6 +26,13 @@ ordering. This is a scoped acceptance slice, not complete E0-A certification.
 reported misses, not positive lookups. Conflict evidence closure and source
 eligibility remain responsibilities of the complete envelope/owner registry.
 
+`tests/e0_evidence_conformance.rs` adds 24 grouped public-path tests: local evidence
+and conflict admission, one-context DAG closure, every confidence edge, direct and
+transitive runtime restrictions, hostile cyclic wire IDs, 64 deterministic orders,
+a 16,384-record chain on a 256 KiB test-thread stack and shared-input DAGs. Golden
+record/envelope bytes remain unchanged. These tests do not certify provenance
+acquisition, standalone source/coverage joins, input-size ceilings or full E0-A.
+
 The first coding agent must turn these cases into tests that prove the target path executed. Test names should preserve the case IDs so failures map back to this contract.
 
 ## 1. Test rules
@@ -591,3 +598,29 @@ Until Rust code exists, documentation validation may report only JSON/link/hash-
 `COVERAGE-COMBINE-013` denotes an outer operation's truncation affecting complete
 source coverage. It does not authorize a contradictory `complete` raw record
 with a nonempty `truncation_refs` field; see `validate_coverage_record`.
+
+## Evidence-DAG executable cases
+
+| ID | Case | Expected |
+|---|---|---|
+| `EVIDENCE-GRAPH-001/002` | Empty registry, leaf and diamond | Acyclic, unchanged input; empty is not absence |
+| `EVIDENCE-GRAPH-003` | Connected or disconnected mixed contexts | `evidence_context_mismatch` |
+| `EVIDENCE-GRAPH-004` | All parent/child confidence combinations | No strengthening, including Possible→Derived and Candidate→Possible |
+| `EVIDENCE-GRAPH-005` | Runtime→project→project→platform, direct graph and envelope | `evidence_authority_violation` |
+| `EVIDENCE-GRAPH-006` | One scenario-tainted branch in a diamond | Platform conclusion rejected |
+| `EVIDENCE-GRAPH-007` | Safe platform derivation plus unrelated runtime component | Accepted |
+| `EVIDENCE-GRAPH-008` | Missing input; duplicate ID, same/different bytes | Narrow missing/duplicate error |
+| `EVIDENCE-GRAPH-009/010` | Direct and two-record cyclic wire mutations | `evidence_derivation_cycle`; no hash fixed point assumed |
+| `EVIDENCE-GRAPH-011` | Acyclic registry with an invalid parent hash | `canonical_digest_mismatch` |
+| `EVIDENCE-GRAPH-012` | 64 seeded registry orders | Identical finalized envelope bytes |
+| `EVIDENCE-GRAPH-013` | 16,384-deep evidence chain | Succeeds on bounded test-thread stack; no recursive traversal |
+| `EVIDENCE-GRAPH-014` | Explicit synthetic context, correctly resealed | Structurally valid, no provenance certificate |
+| `EVIDENCE-GRAPH-015` | 64 shared-input layers with exponentially many paths | Each input visited once, no path enumeration |
+
+`tests/evidence/records.rs` exercises the committed examples and EVIDENCE local
+constructor/decoded-validation cases with independently resealed IDs. In particular,
+coverage-ref duplicates and reversed order must reject, not disappear through
+hash recomputation. `tests/evidence/conflicts.rs` checks capability-wide/partition
+scopes, minimum membership, all canonical sets, unknown fields and hash admission.
+Conflict-reference and source-registry ownership checks remain distinct consumer
+tests, not conclusions from a conflict's local structural validity.

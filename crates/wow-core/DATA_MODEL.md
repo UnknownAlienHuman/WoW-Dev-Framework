@@ -401,6 +401,13 @@ Validation rules:
 - The owning producer/source registry validates that each opaque `origin_id` is eligible for the claimed provenance; core does not infer repository authority from the text of `origin_id`.
 - Source excerpts, prose explanations, notes, display labels, and conflict back-references are not fields of the canonical E0 `EvidenceRecord`.
 - Combining records preserves each record; it never mutates them into a stronger aggregate record.
+- Derivation confidence cannot exceed the weakest input, including Possible and
+  Candidate inputs. Runtime-probe or runtime-scenario ancestry remains restricted
+  through every intermediate record and cannot justify a platform contract.
+- Standalone derivation registries require a single context, even across disconnected
+  components. Iterative validation preserves input bytes and verifies all IDs.
+- Decoded source/input/coverage refs and conflict affected refs must remain sorted
+  and unique; resealing their hashes is not normalization or admission.
 
 ### Conflict record
 

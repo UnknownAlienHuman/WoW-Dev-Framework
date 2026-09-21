@@ -603,61 +603,6 @@ fn validate_reference_closure(envelope: &E0CheckResultEnvelope) -> CoreResult<()
         validate_string_array_refs(record, "related_source_handle_ids", &handles, "warnings")?;
         validate_string_array_refs(record, "evidence_ids", &evidence, "warnings")?;
     }
-    validate_evidence_acyclic(&envelope.evidence_records)?;
-    Ok(())
-}
-
-fn validate_evidence_acyclic(records: &[crate::EvidenceRecord]) -> CoreResult<()> {
-    let mut edges = std::collections::BTreeMap::<String, Vec<String>>::new();
-    for record in records {
-        let value = record_value(record, "evidence_records")?;
-        let id = required_string(&value, "evidence_id", "evidence_records")?;
-        let inputs = value
-            .get("derivation_input_ids")
-            .and_then(Value::as_array)
-            .map_or_else(Vec::new, |items| {
-                items
-                    .iter()
-                    .filter_map(Value::as_str)
-                    .map(str::to_owned)
-                    .collect()
-            });
-        edges.insert(id, inputs);
-    }
-    let mut permanent = BTreeSet::new();
-    let mut temporary = BTreeSet::new();
-    for node in edges.keys() {
-        visit_evidence(node, &edges, &mut temporary, &mut permanent)?;
-    }
-    Ok(())
-}
-
-fn visit_evidence(
-    node: &str,
-    edges: &std::collections::BTreeMap<String, Vec<String>>,
-    temporary: &mut BTreeSet<String>,
-    permanent: &mut BTreeSet<String>,
-) -> CoreResult<()> {
-    if permanent.contains(node) {
-        return Ok(());
-    }
-    if !temporary.insert(node.to_owned()) {
-        return Err(validation_error(
-            "validate_evidence_derivation_graph",
-            CoreErrorCode::EvidenceDerivationCycle,
-            "evidence_records.derivation_input_ids",
-        ));
-    }
-    if let Some(inputs) = edges.get(node) {
-        for input in inputs {
-            if !edges.contains_key(input) {
-                return Err(reference_error("evidence_records.derivation_input_ids"));
-            }
-            visit_evidence(input, edges, temporary, permanent)?;
-        }
-    }
-    temporary.remove(node);
-    permanent.insert(node.to_owned());
     Ok(())
 }
 

@@ -814,7 +814,9 @@
         "coverage_record_missing",
         "missing_evidence_reference",
         "derived_evidence_missing_inputs",
-        "duplicate_evidence_reference"
+        "duplicate_evidence_reference",
+        "duplicate_coverage_record",
+        "canonical_digest_mismatch"
       ]
     },
     {
@@ -830,8 +832,23 @@
       "status": "required",
       "doc": "OPERATIONS.md#validate_evidence_derivation_graph",
       "errors": [
+        "evidence_context_mismatch",
+        "duplicate_evidence_reference",
         "missing_evidence_reference",
-        "evidence_derivation_cycle"
+        "evidence_authority_violation",
+        "evidence_derivation_cycle",
+        "derived_evidence_missing_inputs",
+        "duplicate_coverage_record",
+        "canonical_digest_mismatch",
+        "canonicalization_failure"
+      ],
+      "invariants": [
+        "one context including disconnected components",
+        "confidence never exceeds an input",
+        "runtime/scenario ancestry cannot become platform contract",
+        "iterative traversal with one active frame per record",
+        "all content-addressed IDs verified before success",
+        "no source/provenance or absence authority from structural success"
       ]
     },
     {
@@ -862,7 +879,8 @@
         "conflict_scope_empty",
         "missing_evidence_reference",
         "duplicate_evidence_reference",
-        "canonicalization_failure"
+        "canonicalization_failure",
+        "canonical_digest_mismatch"
       ]
     },
     {
@@ -874,7 +892,9 @@
         "evidence_authority_violation",
         "evidence_context_mismatch",
         "missing_evidence_reference",
-        "evidence_derivation_cycle"
+        "evidence_derivation_cycle",
+        "duplicate_coverage_record",
+        "canonical_digest_mismatch"
       ]
     },
     {

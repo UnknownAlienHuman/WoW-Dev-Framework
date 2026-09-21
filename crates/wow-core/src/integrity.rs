@@ -23,29 +23,7 @@ pub(crate) fn validate_evidence(record: &crate::EvidenceRecord) -> CoreResult<()
         "wow-core/evidence/e0-1",
         "evidence:sha256:",
         "validate_evidence_record",
-    )?;
-    let value = object_value(record, "validate_evidence_record")?;
-    let provenance = required_string(&value, "provenance", "validate_evidence_record")?;
-    let confidence = required_string(&value, "confidence", "validate_evidence_record")?;
-    if matches!(provenance, "semantic_candidate" | "model_inference") && confidence != "candidate" {
-        return Err(validation_error(
-            "validate_evidence_record",
-            CoreErrorCode::EvidenceAuthorityViolation,
-            "confidence",
-        ));
-    }
-    let inputs = string_array(&value, "derivation_input_ids", "validate_evidence_record")?;
-    if confidence == "derived" && inputs.is_empty() {
-        return Err(validation_error(
-            "validate_evidence_record",
-            CoreErrorCode::DerivedEvidenceMissingInputs,
-            "derivation_input_ids",
-        ));
-    }
-    ensure_sorted_unique(&inputs, "validate_evidence_record", "derivation_input_ids")?;
-    let handles = string_array(&value, "source_handle_ids", "validate_evidence_record")?;
-    ensure_sorted_unique(&handles, "validate_evidence_record", "source_handle_ids")?;
-    Ok(())
+    )
 }
 
 pub(crate) fn validate_conflict(record: &crate::ConflictRecord) -> CoreResult<()> {
@@ -55,29 +33,7 @@ pub(crate) fn validate_conflict(record: &crate::ConflictRecord) -> CoreResult<()
         "wow-core/conflict/e0-1",
         "conflict:sha256:",
         "validate_conflict_record",
-    )?;
-    let value = object_value(record, "validate_conflict_record")?;
-    let evidence = string_array(&value, "evidence_ids", "validate_conflict_record")?;
-    if evidence.len() < 2 {
-        return Err(validation_error(
-            "validate_conflict_record",
-            CoreErrorCode::ConflictScopeEmpty,
-            "evidence_ids",
-        ));
-    }
-    ensure_sorted_unique(&evidence, "validate_conflict_record", "evidence_ids")?;
-    let affected = value
-        .get("affected_refs")
-        .and_then(Value::as_array)
-        .ok_or_else(|| contract_error("validate_conflict_record", "affected_refs"))?;
-    if affected.is_empty() {
-        return Err(validation_error(
-            "validate_conflict_record",
-            CoreErrorCode::ConflictScopeEmpty,
-            "affected_refs",
-        ));
-    }
-    Ok(())
+    )
 }
 
 pub(crate) fn validate_coverage(record: &crate::CoverageRecord) -> CoreResult<()> {

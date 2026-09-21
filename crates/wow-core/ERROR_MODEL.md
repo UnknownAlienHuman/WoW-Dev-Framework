@@ -111,6 +111,16 @@ affected collection. Duplicate IDs inside one input retain their duplicate codes
 | `duplicate_conflict_reference` | validation | Duplicate conflict reference appears where uniqueness is required. | after_input_change |
 | `coverage_conflict` | mismatch | Duplicate, irreconcilable, or summary-inconsistent coverage records. | after_input_change |
 
+Evidence-DAG admission returns `evidence_context_mismatch` for mixed registries,
+including disconnected components. Missing inputs, confidence escalation and
+runtime-to-platform ancestry have distinct reference/authority errors. Cyclic wire
+IDs may yield `evidence_derivation_cycle` before a digest error; no successful
+validation skips the ID checks. `duplicate_evidence_reference` covers noncanonical
+source/input/evidence arrays; `duplicate_coverage_record` covers noncanonical
+semantic coverage refs. Conflict affected-scope duplicates/order violations retain
+the constructor's `conflict_scope_empty` error. Diagnostics name fixed fields;
+they do not echo evidence contents or source text.
+
 ### Coverage and authority
 
 | Code | Category | Trigger | Retry |

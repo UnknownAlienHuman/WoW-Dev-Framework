@@ -83,6 +83,14 @@ An evidence record states:
 
 Known candidate-only provenance cannot claim `Proven` or `Derived` confidence. Combining evidence records never upgrades confidence. A deterministic higher-layer derivation creates a new `Derived` record with explicit input evidence IDs and producer identity. Evidence conflicts are separate records over evidence IDs; evidence records do not point back to conflicts.
 
+E0 derivation admission enforces the existing ceiling on each input edge, not
+only on explicitly candidate-provenance records: Possible cannot yield Derived,
+and Candidate cannot yield Possible. Runtime-scenario ancestry cannot be erased
+by an intermediate producer/provenance label. These are rejection rules; source
+provenance admission remains with source owners and the canonical schema/IDs do
+not change. The one-context evidence DAG uses an iterative traversal, not the
+public project/graph algorithms owned by `wow-graph`.
+
 ## CORE-009 — coverage and evaluation are related but not interchangeable
 
 The public vocabulary keeps the repository-wide statuses:

@@ -1,3 +1,5 @@
+mod derivation;
+
 use serde::{Deserialize, Serialize};
 
 use crate::digest::{ConflictId, EvidenceId, GenerationContextId, StableHandleId};
@@ -165,8 +167,33 @@ impl EvidenceRecord {
     }
 
     pub fn validate(&self) -> CoreResult<()> {
-        validate_evidence_authority(self)?;
+        self.validate_fields()?;
         integrity::validate_evidence(self)
+    }
+
+    // The graph checks shape before walking untrusted links, then validates every
+    // content-addressed ID before success. Constructors and decoded records share
+    // these checks; recomputing an ID never repairs noncanonical references.
+    fn validate_fields(&self) -> CoreResult<()> {
+        validate_evidence_authority(self)?;
+        validate_sorted_unique(
+            &self.source_handle_ids,
+            "validate_evidence_record",
+            "source_handle_ids",
+            CoreErrorCode::DuplicateEvidenceReference,
+        )?;
+        validate_sorted_unique(
+            &self.coverage_refs,
+            "validate_evidence_record",
+            "coverage_refs",
+            CoreErrorCode::DuplicateCoverageRecord,
+        )?;
+        validate_sorted_unique(
+            &self.derivation_input_ids,
+            "validate_evidence_record",
+            "derivation_input_ids",
+            CoreErrorCode::DuplicateEvidenceReference,
+        )
     }
 
     #[must_use]
@@ -333,6 +360,32 @@ impl ConflictRecord {
     }
 
     pub fn validate(&self) -> CoreResult<()> {
+        if self.evidence_ids.len() < 2 {
+            return Err(validation_error(
+                "validate_conflict_record",
+                CoreErrorCode::ConflictScopeEmpty,
+                "evidence_ids",
+            ));
+        }
+        if self.affected_refs.is_empty() {
+            return Err(validation_error(
+                "validate_conflict_record",
+                CoreErrorCode::ConflictScopeEmpty,
+                "affected_refs",
+            ));
+        }
+        validate_sorted_unique(
+            &self.evidence_ids,
+            "validate_conflict_record",
+            "evidence_ids",
+            CoreErrorCode::DuplicateEvidenceReference,
+        )?;
+        validate_sorted_unique(
+            &self.affected_refs,
+            "validate_conflict_record",
+            "affected_refs",
+            CoreErrorCode::ConflictScopeEmpty,
+        )?;
         integrity::validate_conflict(self)
     }
 
@@ -423,6 +476,15 @@ fn sort_unique<T: Ord>(
     code: CoreErrorCode,
 ) -> CoreResult<()> {
     values.sort_unstable();
+    validate_sorted_unique(values, operation, field, code)
+}
+
+fn validate_sorted_unique<T: Ord>(
+    values: &[T],
+    operation: &'static str,
+    field: &'static str,
+    code: CoreErrorCode,
+) -> CoreResult<()> {
     if values.windows(2).any(|pair| pair[0] >= pair[1]) {
         Err(validation_error(operation, code, field))
     } else {
@@ -450,91 +512,13 @@ pub fn derive_evidence_id(record: &EvidenceRecord) -> CoreResult<EvidenceId> {
     })
 }
 
-/// Validates reference closure, authority monotonicity, and acyclicity.
+/// Validates one context's evidence DAG without recursive graph traversal.
+///
+/// No output may strengthen an input's confidence or turn runtime-scenario
+/// ancestry into a platform contract. Local shape and graph errors precede ID
+/// verification; every record ID is nevertheless verified before success.
 pub fn validate_evidence_derivation_graph(records: &[EvidenceRecord]) -> CoreResult<()> {
-    use std::collections::{BTreeMap, BTreeSet};
-
-    for record in records {
-        record.validate()?;
-    }
-    let index = records
-        .iter()
-        .map(|record| (record.evidence_id, record))
-        .collect::<BTreeMap<_, _>>();
-    if index.len() != records.len() {
-        return Err(validation_error(
-            "validate_evidence_derivation_graph",
-            CoreErrorCode::DuplicateEvidenceReference,
-            "evidence_records.evidence_id",
-        ));
-    }
-    for record in records {
-        for input_id in &record.derivation_input_ids {
-            let input = index.get(input_id).ok_or_else(|| {
-                validation_error(
-                    "validate_evidence_derivation_graph",
-                    CoreErrorCode::MissingEvidenceReference,
-                    "evidence_records.derivation_input_ids",
-                )
-            })?;
-            if record.confidence == EvidenceConfidence::Derived
-                && input.confidence == EvidenceConfidence::Candidate
-            {
-                return Err(validation_error(
-                    "validate_evidence_derivation_graph",
-                    CoreErrorCode::EvidenceAuthorityViolation,
-                    "evidence_records.derivation_input_ids",
-                ));
-            }
-            if record.claim_scope == ClaimScope::PlatformContract
-                && input.provenance == ProvenanceClass::RuntimeProbe
-            {
-                return Err(validation_error(
-                    "validate_evidence_derivation_graph",
-                    CoreErrorCode::EvidenceAuthorityViolation,
-                    "evidence_records.claim_scope",
-                ));
-            }
-        }
-    }
-
-    fn visit(
-        id: EvidenceId,
-        index: &BTreeMap<EvidenceId, &EvidenceRecord>,
-        temporary: &mut BTreeSet<EvidenceId>,
-        permanent: &mut BTreeSet<EvidenceId>,
-    ) -> CoreResult<()> {
-        if permanent.contains(&id) {
-            return Ok(());
-        }
-        if !temporary.insert(id) {
-            return Err(validation_error(
-                "validate_evidence_derivation_graph",
-                CoreErrorCode::EvidenceDerivationCycle,
-                "evidence_records.derivation_input_ids",
-            ));
-        }
-        let record = index.get(&id).ok_or_else(|| {
-            validation_error(
-                "validate_evidence_derivation_graph",
-                CoreErrorCode::MissingEvidenceReference,
-                "evidence_records.evidence_id",
-            )
-        })?;
-        for input in &record.derivation_input_ids {
-            visit(*input, index, temporary, permanent)?;
-        }
-        temporary.remove(&id);
-        permanent.insert(id);
-        Ok(())
-    }
-
-    let mut temporary = BTreeSet::new();
-    let mut permanent = BTreeSet::new();
-    for id in index.keys().copied() {
-        visit(id, &index, &mut temporary, &mut permanent)?;
-    }
-    Ok(())
+    derivation::validate(records)
 }
 
 /// Constructs one immutable conflict relation.

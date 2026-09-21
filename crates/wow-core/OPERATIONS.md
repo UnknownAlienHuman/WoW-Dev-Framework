@@ -459,7 +459,17 @@ derived_evidence_missing_inputs
 duplicate_evidence_reference
 ```
 
-Required tests: `EVIDENCE-001..026`.
+The executable single-record API validates local authority, canonical reference
+arrays and the content-addressed ID; it does not own a source/coverage registry.
+Derivation-input closure belongs to `validate_evidence_derivation_graph`; source
+handles, coverage triples and the containing context are joined by the envelope
+and source-owning producer. Neither constructor nor local validation certifies
+source provenance. All three reference arrays reject duplicate or noncanonical
+order after decoding, even when an attacker recomputes the record ID. Explicit
+constructors may sort inputs, but validators do not repair decoded records.
+
+Required tests: `EVIDENCE-001..030`, including the scoped executable cases in
+`tests/evidence/records.rs`; remaining owner joins are not certified by those tests.
 
 ### `derive_evidence_id`
 
@@ -477,13 +487,42 @@ success:
   acyclic derivation graph
 
 errors:
+  evidence_context_mismatch
+  duplicate_evidence_reference
   missing_evidence_reference
+  evidence_authority_violation
   evidence_derivation_cycle
+  local evidence shape/identity errors
 ```
 
-Every `derivation_input_id` is an edge from the derived record to an existing input. The graph must be acyclic. Validation does not require evidence arrays to be topologically sorted because canonical order is by ID.
+Every input must resolve once in a single context, including disconnected records.
+For each edge, output confidence cannot exceed input confidence in the order
+`proven > derived > possible > candidate`. In particular, Possible cannot become
+Derived and Candidate cannot become Possible by changing producer or provenance.
+A proven record cannot carry derivation inputs at all. Weak input records remain
+valid evidence; only an attempted strengthening is rejected.
 
-Required tests: `EVIDENCE-GRAPH-001..012`.
+Runtime-probe provenance or a runtime-scenario claim anywhere in a record's
+ancestry prohibits a platform-contract conclusion. Changing an intermediate
+record's provenance or using a diamond/shared input does not erase that restriction.
+Unrelated runtime records do not block an independent platform derivation. This
+is a proof ceiling, not a source-authority or runtime-behavior certification.
+
+The validator sorts borrowed record references by ID, validates one-context shape,
+checks edge closure/confidence, and walks the DAG iteratively with one active
+frame per record. Shared inputs are visited once, not once per path. Temporary
+storage is O(V); indexed graph work is O((V + E) log V), plus record-byte validation.
+There is no recursion proportional to derivation depth and no copied JSON graph.
+Callers still bound total input/serialized sizes; this operation does not replace
+result/host budgets, count empty input as absence, or expose a traversal service.
+
+Shape/graph errors precede ID verification so hostile cyclic wire data can be
+rejected as a cycle without constructing a cryptographic hash fixed point. Every
+record ID is nevertheless verified before success. The envelope calls this same
+validator, rather than maintaining a second recursive implementation. Caller
+records are never reordered or rewritten.
+
+Required tests: `EVIDENCE-GRAPH-001..015` in `tests/evidence/derivation.rs`.
 
 ### `relate_evidence_conflict`
 
@@ -506,6 +545,13 @@ errors:
 ```
 
 This operation records a conflict. It does not choose a winner, rewrite confidence, mutate evidence, or apply a correction.
+
+The constructor and decoded-record validator both require canonical unique evidence
+and affected-scope arrays, at least two evidence IDs, and a nonempty affected scope.
+A recomputed ConflictId does not admit duplicate or reversed affected refs. Scope
+validation does not itself resolve opaque evidence IDs: the containing registry
+must still join them and validate context. Capability-wide and partition-specific
+refs are distinct allowed scope entries, not duplicates of each other.
 
 Required tests: `EVIDENCE-CONFLICT-001..014`.
 

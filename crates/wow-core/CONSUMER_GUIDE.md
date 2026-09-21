@@ -362,3 +362,21 @@ Schema and producer inventories must match exactly in every mode. Only
 can combine compatible external scopes. Neither mode replaces existing owner
 identities. Decode first, then use the checked owner operations; direct Serde
 construction is not equivalent to validated admission.
+
+## Evidence registry admission
+
+Use `validate_evidence_derivation_graph` on the complete retained evidence registry
+before consuming derivation authority. It validates one context, every input link,
+confidence ceilings, transitive scenario restrictions, acyclicity and all record
+IDs. The check-result envelope uses the same operation. Single-record validation
+cannot resolve missing source, coverage or evidence records on its own.
+
+Possible/Candidate parents cannot support a stronger child; runtime ancestry cannot
+be relabeled into a platform contract. Independent components retain their own
+ancestry. Constructors may sort set inputs, while decoded validators reject
+noncanonical/duplicate references even with recomputed hashes. No input record or
+conflict is rewritten, selected as a winner or promoted by validation.
+
+The traversal is iterative and input-proportional, including deep/shared DAGs. Hosts
+still enforce acquisition/decoding/result-size budgets. Structural acceptance of an
+empty registry is not proof of source coverage, absence, or runtime behavior.
