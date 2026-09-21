@@ -1,0 +1,166 @@
+name: E0 evidence guarded acceptance
+on:
+  push:
+    branches: [main]
+    paths:
+      - .ci/e0-evidence/**
+      - .github/workflows/e0-evidence-gate.yml
+permissions:
+  contents: read
+concurrency:
+  group: e0-evidence-acceptance
+  cancel-in-progress: false
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    env:
+      CARGO_TERM_COLOR: never
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+          ref: ${{ github.sha }}
+      - name: Admit reviewed bytes on the exact base
+        run: |
+          set -euo pipefail
+          cat .ci/e0-evidence/00 .ci/e0-evidence/01 .ci/e0-evidence/02a .ci/e0-evidence/02b .ci/e0-evidence/02c .ci/e0-evidence/02d .ci/e0-evidence/03 > "$RUNNER_TEMP/evidence.patch.gz"
+          echo "ae1b657ce39e0cfc2386f40ac9e67e9c451e1f43cee8295159a52ccaf7c2dc36  $RUNNER_TEMP/evidence.patch.gz" | sha256sum -c -
+          gzip -dc "$RUNNER_TEMP/evidence.patch.gz" > "$RUNNER_TEMP/evidence.patch"
+          echo "71a54285c255be741fbddd65ac7d1f1e62fe1319119f382f442e57af4b4865c3  $RUNNER_TEMP/evidence.patch" | sha256sum -c -
+          git rm -r .ci/e0-evidence .github/workflows/e0-evidence-gate.yml
+          test "$(git write-tree)" = 820cb64a25d9ac18b2c437b86a79bd8978db231e
+          git apply --index --check "$RUNNER_TEMP/evidence.patch"
+          git apply --index "$RUNNER_TEMP/evidence.patch"
+          test "$(git write-tree)" = a302c60c92f0dd13530aad2bd878b015f4effb47
+      - name: Install and record current stable Rust
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+          mkdir -p "$RUNNER_TEMP/evidence-results"
+          git rev-parse HEAD > "$RUNNER_TEMP/evidence-results/BASE_SHA"
+          rustc +stable -Vv > "$RUNNER_TEMP/evidence-results/RUST_VERSION"
+      - name: Format only reviewed Rust and retain the exact tree
+        run: |
+          set -euo pipefail
+          cargo +stable fmt --all
+          git diff --exit-code -- . ':(exclude)crates/wow-core/src/evidence.rs' ':(exclude)crates/wow-core/src/evidence/derivation.rs' ':(exclude)crates/wow-core/src/envelope.rs' ':(exclude)crates/wow-core/src/integrity.rs' ':(exclude)crates/wow-core/tests/e0_evidence_conformance.rs' ':(exclude)crates/wow-core/tests/evidence/*.rs'
+          git add crates/wow-core/src/evidence.rs crates/wow-core/src/evidence/derivation.rs crates/wow-core/src/envelope.rs crates/wow-core/src/integrity.rs crates/wow-core/tests/e0_evidence_conformance.rs crates/wow-core/tests/evidence/
+          git diff --exit-code
+          git diff --cached --check
+          git write-tree > "$RUNNER_TEMP/evidence-results/TREE_SHA"
+      - name: Run all 24 evidence regressions
+        run: |
+          set -euo pipefail
+          cargo +stable test --locked -p wow-core --test e0_evidence_conformance -- --test-threads=1 2>&1 | tee "$RUNNER_TEMP/evidence-results/evidence-tests.txt"
+          grep -F '24 passed; 0 failed' "$RUNNER_TEMP/evidence-results/evidence-tests.txt"
+      - name: Prove the regressions detect the unchanged baseline defects
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          trap 'git checkout-index -a -f' EXIT
+          for source in evidence.rs envelope.rs integrity.rs; do
+            git show "HEAD:crates/wow-core/src/$source" > "crates/wow-core/src/$source"
+          done
+          cases=(
+            derivation::evidence_graph_003_rejects_mixed_contexts_in_connected_and_disconnected_records
+            derivation::evidence_graph_004_checks_every_confidence_edge_not_only_candidate_to_derived
+            derivation::evidence_graph_005_rejects_transitive_runtime_laundering
+            records::evidence_009_013_021_resealed_reference_arrays_require_canonical_unique_entries
+            conflicts::conflict_002_003_006_constructor_and_resealed_wire_reject_invalid_sets
+          )
+          for index in "${!cases[@]}"; do
+            case="${cases[$index]}"
+            log="$RUNNER_TEMP/evidence-results/baseline-$index.txt"
+            set +e
+            cargo +stable test --locked -p wow-core --test e0_evidence_conformance "$case" -- --exact --test-threads=1 > "$log" 2>&1
+            status=$?
+            set -e
+            test "$status" -eq 101
+            grep -F 'running 1 test' "$log"
+            grep -F "test $case ... FAILED" "$log"
+            grep -F 'test result: FAILED. 0 passed; 1 failed' "$log"
+          done
+      - name: Repository policy and formatting
+        run: |
+          cargo +stable xtask check
+          cargo +stable fmt --all --check
+      - name: Locked workspace check
+        run: cargo +stable check --locked --workspace --all-targets --all-features
+      - name: Strict workspace Clippy
+        run: cargo +stable clippy --locked --workspace --all-targets --all-features -- -D warnings
+      - name: Locked debug workspace tests
+        run: cargo +stable test --locked --workspace --all-targets --all-features
+      - name: Locked release workspace tests
+        run: cargo +stable test --release --locked --workspace --all-targets --all-features
+      - name: Rust documentation
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo +stable doc --locked --workspace --all-features --no-deps
+      - name: Verify retained bytes and export tested change
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          test "$(git write-tree)" = "$(cat "$RUNNER_TEMP/evidence-results/TREE_SHA")"
+          git diff --cached --binary --full-index > "$RUNNER_TEMP/evidence-results/verified.patch"
+          cd "$RUNNER_TEMP/evidence-results"
+          sha256sum verified.patch > SHA256SUMS
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: e0-evidence-${{ matrix.os }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/evidence-results/
+          retention-days: 3
+          if-no-files-found: error
+  publish:
+    needs: verify
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: e0-evidence-ubuntu-latest-${{ github.run_id }}
+          path: ${{ runner.temp }}/evidence-linux
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: e0-evidence-windows-latest-${{ github.run_id }}
+          path: ${{ runner.temp }}/evidence-windows
+      - name: Publish identical tested trees only if main is unchanged
+        run: |
+          set -euo pipefail
+          linux="$RUNNER_TEMP/evidence-linux"
+          windows="$RUNNER_TEMP/evidence-windows"
+          (cd "$linux" && sha256sum -c SHA256SUMS)
+          (cd "$windows" && sha256sum -c SHA256SUMS)
+          cmp "$linux/TREE_SHA" "$windows/TREE_SHA"
+          cmp "$linux/BASE_SHA" "$windows/BASE_SHA"
+          cmp "$linux/verified.patch" "$windows/verified.patch"
+          test "$(cat "$linux/BASE_SHA")" = "$GITHUB_SHA"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$GITHUB_SHA"
+          git apply --index --check "$linux/verified.patch"
+          git apply --index "$linux/verified.patch"
+          test "$(git write-tree)" = "$(cat "$linux/TREE_SHA")"
+          git diff --exit-code
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix(core): enforce evidence ancestry and canonical reference admission' -m "Continue R0-01 in wow-core. Reject mixed evidence contexts and confidence escalation, retain transitive runtime-scenario restrictions, and validate decoded evidence/conflict reference sets before ID acceptance. Replace both recursive DAG walks with one typed iterative validator. Twenty-four focused tests cover golden bytes, resealed mutations, five demonstrated baseline defects, 64 seeded permutations, a 16384-record bounded-stack chain and shared-input DAGs. Linux and Windows locked workspace check, strict Clippy, debug/release tests, rustdoc, policy and formatting passed on this exact tree in acceptance run $GITHUB_RUN_ID. No dependency or fixture baseline changed. Temporary gate and patch are removed. Full E0-A/R0, host input-size limits and provenance/runtime certification remain separate gates."
+          git push origin HEAD:refs/heads/main
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$(git rev-parse HEAD)"
+          git rev-parse HEAD
+          git rev-parse HEAD^{tree}
