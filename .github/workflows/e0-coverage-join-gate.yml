@@ -38,6 +38,8 @@ jobs:
           echo "20203e206cf7c52a769a1a17e05ece76f1e9be7b2b1944179504efb724163291  $RUNNER_TEMP/coverage-join.patch" | sha256sum -c -
           cp .ci/e0-coverage-join/correction.patch "$RUNNER_TEMP/join-correction.patch"
           echo "4fba3dc776f8db40e458a9986610cd811b83328a211e08e65060a64d438b91a8  $RUNNER_TEMP/join-correction.patch" | sha256sum -c -
+          cp .ci/e0-coverage-join/oracle-correction.patch "$RUNNER_TEMP/join-oracle-correction.patch"
+          echo "6b1dfb86c11eea88db81196c31725cdba0de3a89c2c8b9cd079f97a6bf1151f8  $RUNNER_TEMP/join-oracle-correction.patch" | sha256sum -c -
           git rm -r .ci/e0-coverage-join .github/workflows/e0-coverage-join-gate.yml
           test "$(git write-tree)" = ef9cdba6a6b2e28c7ced6396957bc6244519d75c
           git apply --index --check "$RUNNER_TEMP/coverage-join.patch"
@@ -46,6 +48,9 @@ jobs:
           git apply --index --check "$RUNNER_TEMP/join-correction.patch"
           git apply --index "$RUNNER_TEMP/join-correction.patch"
           test "$(git write-tree)" = b12866db51499cb05a03b3a3af0da9439abbe88b
+          git apply --index --check "$RUNNER_TEMP/join-oracle-correction.patch"
+          git apply --index "$RUNNER_TEMP/join-oracle-correction.patch"
+          test "$(git write-tree)" = 47e47f8e45c14e1b0cca5ab70daf7e2ef20f1ba5
       - name: Install and record current stable Rust
         run: |
           rustup toolchain install stable --profile minimal --component rustfmt --component clippy
@@ -169,7 +174,7 @@ jobs:
           git diff --exit-code
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'fix(core): share retained coverage and evaluation joins with envelopes' -m "Continue R0-01 in wow-core. Recompute envelope summaries from all retained capability partitions, reject hidden conflicts and logical owner duplicates, and join NotEvaluated blockers to exact coverage and conflict truth. Preserve the compact committed conflict representation without treating missing nested fields as unverified truth. Twenty-two conformance tests preserve all golden envelope bytes, independently reseal mutations and check 64 deterministic input permutations. Eight baseline controls reproduced the mismatches. Linux and Windows locked workspace check, strict Clippy, debug/release tests, rustdoc, policy and formatting passed on this exact tree in acceptance run $GITHUB_RUN_ID. No dependency or fixture baseline changed. Temporary inputs are removed. Full E0-A/R0, source provenance and producer coverage completeness remain separate gates."
+          git commit -m 'fix(core): share retained coverage and evaluation joins with envelopes' -m "Continue R0-01 in wow-core. Recompute envelope summaries from all retained capability partitions, reject hidden conflicts and logical owner duplicates, and join NotEvaluated blockers to exact coverage and conflict truth. Preserve the compact committed conflict representation without treating missing nested fields as unverified truth. Recovery audit records the two failed attempts and fixes the raw-fixture canonical-byte oracle without regenerating expectations from the typed output. Twenty-two conformance tests preserve all canonical golden envelope bytes, independently reseal mutations and check 64 deterministic input permutations. Eight baseline controls reproduced the mismatches. Linux and Windows locked workspace check, strict Clippy, debug/release tests, rustdoc, policy and formatting passed on this exact tree in acceptance run $GITHUB_RUN_ID. No dependency or fixture baseline changed. Temporary inputs are removed. Full E0-A/R0, source provenance and producer coverage completeness remain separate gates."
           git push origin HEAD:refs/heads/main
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$(git rev-parse HEAD)"
           git rev-parse HEAD
