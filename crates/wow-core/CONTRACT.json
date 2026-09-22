@@ -16,7 +16,8 @@
     "TEST_MATRIX.md",
     "CONSUMER_GUIDE.md",
     "IMPLEMENTATION_PLAN.md",
-    "COVERAGE_CONSUMERS.md"
+    "COVERAGE_CONSUMERS.md",
+    "JSON_ADMISSION.md"
   ],
   "repository_documents": [
     "../../docs/PROVENANCE_AND_COVERAGE.md",
@@ -451,6 +452,11 @@
     {
       "id": "TruncationEntry",
       "doc": "DATA_MODEL.md#12-budget-and-truncation"
+    },
+    {
+      "id": "E0DecodeLimits",
+      "doc": "JSON_ADMISSION.md#limits",
+      "wire_type": false
     }
   ],
   "e0_types": [
@@ -1220,6 +1226,25 @@
       "errors": [
         "schema_version_unsupported"
       ]
+    },
+    {
+      "id": "decode_result_envelope",
+      "status": "required",
+      "doc": "OPERATIONS.md#decode_result_envelope",
+      "rust_entrypoints": [
+        "E0CheckResultEnvelope::from_json_slice",
+        "E0OperationErrorEnvelope::from_json_slice"
+      ],
+      "errors": [
+        "budget_invalid",
+        "budget_exceeded",
+        "duplicate_field",
+        "canonicalization_failure",
+        "contract_violation"
+      ],
+      "propagates": [
+        "validate_result_envelope"
+      ]
     }
   ],
   "forbidden_operations": [
@@ -1340,6 +1365,18 @@
       "recovery of keys already discarded by a caller",
       "raw-byte derivation input validation",
       "complete E0-A acceptance"
+    ]
+  },
+  "e0_json_admission": {
+    "implementation": "src/envelope_decode.rs",
+    "conformance_tests": "tests/e0_decode_conformance.rs",
+    "golden_consumers": "tests/e0_examples.rs",
+    "input": "borrowed UTF-8 JSON byte slice with caller-owned validated E0DecodeLimits",
+    "output": "one validated concrete E0 envelope, never a generic JSON bag",
+    "nonclaims": [
+      "filesystem/network acquisition limits or source parsing",
+      "protection of callers that continue using raw serde_json deserialization",
+      "complete E0-A or R0 acceptance"
     ]
   }
 }

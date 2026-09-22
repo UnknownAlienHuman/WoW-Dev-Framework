@@ -824,3 +824,12 @@ and its capability/partition/status must match the retained record. The record
 must actually be unavailable, nonapplicable, conflicted or truncated. A missing
 capability with no known partition may still have no blocking partition refs;
 this is a denial explanation, not complete coverage.
+
+## 14. E0 decode limits
+
+`E0DecodeLimits` is a validated non-wire policy for the two concrete E0 byte
+entrypoints. It is supplied by the caller, not extracted from the result Budget.
+Its private fields bound total raw bytes, simultaneously nested containers,
+tokens and raw string-interior bytes. It has no default or deserializer. Exact
+counting rules, implementation ceilings and admission order are defined in
+[`JSON_ADMISSION.md`](JSON_ADMISSION.md#limits). No E0 wire field is added.

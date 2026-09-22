@@ -296,3 +296,15 @@ numeric values, malformed map emission, invalid keys and unsupported raw JSON.
 A custom serializer error receives a fixed safe reason rather than copying the
 upstream diagnostic. These checks do not turn errors into findings/NotEvaluated,
 add automatic retry, or certify general secret redaction or host JSON admission.
+
+## Raw E0 decode boundary
+
+The `decode_result_envelope` operation reports fixed field paths only. Bad
+caller limits: `budget_invalid`; exceeded raw budgets: `budget_exceeded`.
+Repeated decoded keys: `duplicate_field`. Raw null/noncanonical numeric tokens:
+`canonicalization_failure`. Invalid UTF-8/JSON, unknown or missing fields and
+other structural decoding errors: `contract_violation` at `input`. Structural
+errors deliberately do not classify Serde's string messages as stable codes.
+Existing semantic validation errors propagate after decoding. No parser error
+prose, raw member name/value, snippet or host path is copied to CoreError.
+See [`JSON_ADMISSION.md`](JSON_ADMISSION.md#errors-and-scope).

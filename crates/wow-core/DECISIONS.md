@@ -274,3 +274,12 @@ representation and its golden bytes: resolve the exact raw record and require it
 whole conflict set in the enclosing `NotEvaluatedRecord`. A nonempty nested set
 must equal that raw set. This is not an unchecked fallback or a schema migration.
 A complete, unconflicted and untruncated record cannot explain a blocked partition.
+
+### CORE-001/CORE-019 clarification — concrete raw E0 admission
+
+Core may admit raw byte slices for its own two E0 envelopes under caller-owned
+limits, without becoming a generic source JSON parser or transport. A bounded
+iterative preflight preserves duplicate-key and numeric-token truth before
+Serde's structural decoder, followed by complete semantic validation. Existing
+raw `Deserialize` remains structural, not validated input admission. See
+`JSON_ADMISSION.md`; canonical valid bytes and identity projections are unchanged.

@@ -735,3 +735,22 @@ are detected. Baseline controls do not run the forged allocation-hint test.
 Full E0-A, host duplicate-aware decoding/size limits and producer provenance remain
 separate gates. No fixture is regenerated or expected output derived from a typed
 actual envelope during this checkpoint.
+
+## Bounded raw E0 envelope admission
+
+Executable cases: `tests/e0_decode_conformance.rs`; existing golden consumers:
+`tests/e0_examples.rs`. Run the focused cases in both core-only and unified
+`serde_json/arbitrary_precision` feature profiles.
+
+| Case | Required invariant |
+|---|---|
+| DECODE-001/002 | All five golden envelopes and canonical round trips; whitespace, key order and escaped key identity preserved |
+| DECODE-003/004 | Duplicate decoded keys at every depth; optional null cannot disappear through structural decoding |
+| DECODE-005 | Raw negative zero, sign/leading-zero/fraction/exponent/overflow rejection before numeric normalization |
+| DECODE-006–010 | Exact external byte, token, depth and raw-string boundaries; zero/above-ceiling/usize-max limits reject |
+| DECODE-011/012 | UTF-8/BOM/escape/surrogate/grammar/trailing input and strict nested schema admission |
+| DECODE-013 | Existing schema and digest errors propagate, never replaced by success |
+| DECODE-014/015 | No unsafe error echo; quoted structure and independent objects do not create false duplicates |
+
+Full E0-A/R0, host acquisition limits, source provenance and producer completeness
+remain separate. No fixture is rewritten or derived from the actual typed output.

@@ -11,6 +11,7 @@ pub mod contract;
 pub mod coverage;
 pub mod digest;
 pub mod envelope;
+mod envelope_decode;
 pub mod error;
 pub mod evidence;
 pub mod finding;
@@ -47,6 +48,7 @@ pub use envelope::{
     SchemaCompatibility, canonical_result_digest, canonical_result_order, finalize_result_envelope,
     validate_result_envelope, validate_schema_version,
 };
+pub use envelope_decode::E0DecodeLimits;
 pub use error::{
     CoreError, CoreErrorCode, CoreResult, ErrorArgument, ErrorArgumentKind, ErrorCategory,
     RetryClass,

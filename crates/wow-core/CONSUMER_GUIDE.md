@@ -432,3 +432,13 @@ fabricate blocking status, or treat a valid local NotEvaluatedId as owner proof.
 
 Run `cargo test --locked -p wow-core --test e0_coverage_join_conformance` for the
 focused join regressions, in addition to the existing owner/workspace gates.
+
+## Importing complete E0 JSON
+
+Use `E0CheckResultEnvelope::from_json_slice` or
+`E0OperationErrorEnvelope::from_json_slice` with an explicit `E0DecodeLimits` for
+untrusted serialized core results. They combine bounded raw admission with the
+existing complete validator; direct Serde deserialization is structural only.
+Limits come from the caller, never from the input Budget. Bound host acquisition
+before producing the slice. Exact API, limits and error rules are in
+[`JSON_ADMISSION.md`](JSON_ADMISSION.md). No general-purpose JSON API is exported.

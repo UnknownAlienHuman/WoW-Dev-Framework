@@ -1179,3 +1179,20 @@ This does not change the precondition of the raw-byte `derive_typed_digest_id`
 operation or add JSON parsing to that helper. Container semantics, accepted golden
 bytes, domain tags and public signatures remain unchanged. See the serializer
 admission section in `CANONICALIZATION.md` and `tests/e0_canonical_conformance.rs`.
+
+### `decode_result_envelope`
+
+Rust entrypoints: `E0CheckResultEnvelope::from_json_slice(input, limits)` and
+`E0OperationErrorEnvelope::from_json_slice(input, limits)`, where input is `&[u8]`
+and limits is a validated `E0DecodeLimits`. Return only the selected fully
+validated envelope. No public generic parser is exposed.
+
+Validate limits at construction, raw size/UTF-8 and bounded token admission,
+then decode the original slice and invoke the existing envelope validator.
+Reject duplicate decoded keys, null, noncanonical unsigned numeric tokens,
+invalid strings/grammar, unknown/missing fields and trailing input. Do not
+normalize collection order, recompute input identities or repair a digest.
+
+Policy/shape errors use safe fixed paths and `budget_invalid`, `budget_exceeded`,
+`duplicate_field`, `canonicalization_failure` or `contract_violation`; semantic
+errors propagate. Full rules and nonclaims: [`JSON_ADMISSION.md`](JSON_ADMISSION.md).

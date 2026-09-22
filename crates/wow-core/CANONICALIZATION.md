@@ -570,3 +570,12 @@ lexical information (serde_json 1.0.151 with `arbitrary_precision` turns JSON
 `-0` into integer zero). This Serialize boundary cannot reconstruct that token;
 strict lexical JSON admission belongs before the decoder's Value projection.
 The feature-profile regression explicitly distinguishes both representations.
+
+## Raw E0 envelope input
+
+The bounded `from_json_slice` methods admit duplicate-free UTF-8 and unsigned
+integer tokens before typed decoding, then validate the full envelope. They
+reject `null` and lexical `-0` even when direct Serde decoding would discard or
+normalize them. Whitespace and key-order variations remain valid input and
+produce unchanged canonical output. This does not alter the serializer or
+retroactively protect callers of raw Serde APIs. See `JSON_ADMISSION.md`.

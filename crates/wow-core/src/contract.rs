@@ -54,4 +54,5 @@ pub const E0_OPERATION_IDS: &[&str] = &[
     "canonical_result_digest",
     "finalize_result_envelope",
     "validate_schema_version",
+    "decode_result_envelope",
 ];
