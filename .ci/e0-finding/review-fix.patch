@@ -1,0 +1,33 @@
+diff --git a/crates/wow-core/CONSUMER_GUIDE.md b/crates/wow-core/CONSUMER_GUIDE.md
+index cd2b68b679a20a8d14a56cb10f61b9cd309c2c6c..faf3bf9b78b4e7a9b436afbf6178c175d68e12af 100644
+--- a/crates/wow-core/CONSUMER_GUIDE.md
++++ b/crates/wow-core/CONSUMER_GUIDE.md
+@@ -404,7 +404,7 @@ ## Retained finding and warning inputs
+ when calling existing bind/validate operations. An ID inventory alone no longer
+ passes: the actual retained records must validate in the requested evidence
+ context. The public signatures are unchanged; `wow-rules` already supplies the
+-owned source/evidence bundles. `wow-service` envelope validation shares a private
++owned source/evidence bundles. E0 envelope validation shares a private
+ admitted registry across the whole result rather than repeating admission per item.
+ 
+ Fresh constructors retain set normalization. Do not pass duplicate/unsorted decoded
+diff --git a/crates/wow-core/src/finding.rs b/crates/wow-core/src/finding.rs
+index 5aea2ea8ad981d130f77220081893f3a925dbcf6..6b573c7013cac81981b3c2a0eaf5887173ab258c 100644
+--- a/crates/wow-core/src/finding.rs
++++ b/crates/wow-core/src/finding.rs
+@@ -1,4 +1,4 @@
+-use std::collections::{BTreeMap, BTreeSet};
++use std::collections::BTreeMap;
+ 
+ use serde::{Deserialize, Serialize};
+ 
+diff --git a/crates/wow-core/tests/finding/records.rs b/crates/wow-core/tests/finding/records.rs
+index cd4ff2623d3217c204df12bfe91cfa6b2561624b..394bb27d4ca7e10c8e7f9e9c965e4f004b2e2305 100644
+--- a/crates/wow-core/tests/finding/records.rs
++++ b/crates/wow-core/tests/finding/records.rs
+@@ -1,4 +1,4 @@
+-use serde_json::{Value, json};
++use serde_json::json;
+ use wow_core::{ClaimScope, CoreErrorCode, EvidenceConfidence, EvidenceRecord,
+     Finding, FindingId, MessageArgument, MessageArgumentKind, ProvenanceClass, Remediation,
+     RemediationClass, SourceHandle, WarningRecord, canonical_json_bytes, deduplicate_findings,

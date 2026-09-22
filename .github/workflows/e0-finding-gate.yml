@@ -34,11 +34,16 @@ jobs:
           set -euo pipefail
           cat .ci/e0-finding/{00,01,02,03,04,05,06,07,08,09,10,11} > "$RUNNER_TEMP/finding.patch"
           echo "61e52cf2e2ca788ebad3d3d7f4a675b6b69ae3b4886441021c0b44500a5e1a53  $RUNNER_TEMP/finding.patch" | sha256sum -c -
+          cp .ci/e0-finding/review-fix.patch "$RUNNER_TEMP/review-fix.patch"
+          echo "9eb226aa0c1e7db0357f733458edd9dc722c1d4dd011abaa7e6c07e0a9698c25  $RUNNER_TEMP/review-fix.patch" | sha256sum -c -
           git rm -r .ci/e0-finding .github/workflows/e0-finding-gate.yml
           test "$(git write-tree)" = 3730dc8e9824d700d0665b71ba7de9c74625e118
           git apply --index --check "$RUNNER_TEMP/finding.patch"
           git apply --index "$RUNNER_TEMP/finding.patch"
           test "$(git write-tree)" = 4cf1bc71de3599a59403519a3f13c9c6874ebf42
+          git apply --index --check "$RUNNER_TEMP/review-fix.patch"
+          git apply --index "$RUNNER_TEMP/review-fix.patch"
+          test "$(git write-tree)" = 1d5d6a8baa0a57f6794a214e2c373d84d1da61b2
       - name: Install and record stable Rust
         run: |
           rustup toolchain install stable --profile minimal --component rustfmt --component clippy
