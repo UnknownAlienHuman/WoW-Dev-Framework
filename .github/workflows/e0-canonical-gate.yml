@@ -38,6 +38,8 @@ jobs:
           echo "d71a95a20c5255757e2a217529bca5879d7967d589e44278f9a725b280f4815d  $RUNNER_TEMP/canonical.patch" | sha256sum -c -
           cp .ci/e0-canonical/correction.patch "$RUNNER_TEMP/canonical-correction.patch"
           echo "763796ca08f56ff335de74682bad1fd03ac3022244516a3e3379c6a595850418  $RUNNER_TEMP/canonical-correction.patch" | sha256sum -c -
+          cp .ci/e0-canonical/number-correction.patch "$RUNNER_TEMP/number-correction.patch"
+          echo "fba3f3bcaf27921b86dd8dbc251eaa15c43d894ae567279da0c19b760cc3f004  $RUNNER_TEMP/number-correction.patch" | sha256sum -c -
           git rm -r .ci/e0-canonical .github/workflows/e0-canonical-gate.yml
           test "$(git write-tree)" = f219bf119468e974f4ec4fd59f5d73f2be565cf9
           git apply --index --check "$RUNNER_TEMP/canonical.patch"
@@ -46,6 +48,9 @@ jobs:
           git apply --index --check "$RUNNER_TEMP/canonical-correction.patch"
           git apply --index "$RUNNER_TEMP/canonical-correction.patch"
           test "$(git write-tree)" = c394273255c711fe0ee570036d40d1729f68b0a2
+          git apply --index --check "$RUNNER_TEMP/number-correction.patch"
+          git apply --index "$RUNNER_TEMP/number-correction.patch"
+          test "$(git write-tree)" = 4fae22401a512b62354be0db8a6a5007b9296405
       - name: Install and record current stable Rust
         run: |
           rustup toolchain install stable --profile minimal --component rustfmt --component clippy
