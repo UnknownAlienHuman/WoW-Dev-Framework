@@ -1,0 +1,169 @@
+name: E0 coverage join guarded acceptance
+on:
+  push:
+    branches: [main]
+    paths:
+      - .ci/e0-coverage-join/**
+      - .github/workflows/e0-coverage-join-gate.yml
+permissions:
+  contents: read
+concurrency:
+  group: e0-coverage-join-acceptance
+  cancel-in-progress: false
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    env:
+      CARGO_TERM_COLOR: never
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+          ref: ${{ github.sha }}
+      - name: Admit exact reviewed bytes and source tree
+        run: |
+          set -euo pipefail
+          cat .ci/e0-coverage-join/{00,01,02,03,04,05,06} > "$RUNNER_TEMP/coverage-join.patch.gz"
+          echo "7f865c855c62b9529bc767a95629bc9c754db0f98411080aec7cb910573bc255  $RUNNER_TEMP/coverage-join.patch.gz" | sha256sum -c -
+          gzip -dc "$RUNNER_TEMP/coverage-join.patch.gz" > "$RUNNER_TEMP/coverage-join.patch"
+          echo "20203e206cf7c52a769a1a17e05ece76f1e9be7b2b1944179504efb724163291  $RUNNER_TEMP/coverage-join.patch" | sha256sum -c -
+          git rm -r .ci/e0-coverage-join .github/workflows/e0-coverage-join-gate.yml
+          test "$(git write-tree)" = ef9cdba6a6b2e28c7ced6396957bc6244519d75c
+          git apply --index --check "$RUNNER_TEMP/coverage-join.patch"
+          git apply --index "$RUNNER_TEMP/coverage-join.patch"
+          test "$(git write-tree)" = 738f6655d7a3d37a4b37b414b5cf935a60d9baa1
+      - name: Install and record current stable Rust
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+          mkdir -p "$RUNNER_TEMP/join-results"
+          git rev-parse HEAD > "$RUNNER_TEMP/join-results/BASE_SHA"
+          rustc +stable -Vv > "$RUNNER_TEMP/join-results/RUST_VERSION"
+      - name: Format reviewed Rust and retain the exact tree
+        run: |
+          set -euo pipefail
+          cargo +stable fmt --all
+          git diff --exit-code -- . ':(exclude)crates/wow-core/src/coverage.rs' ':(exclude)crates/wow-core/src/coverage/admission.rs' ':(exclude)crates/wow-core/src/envelope.rs' ':(exclude)crates/wow-core/tests/e0_coverage_join_conformance.rs' ':(exclude)crates/wow-core/tests/coverage_join/*.rs'
+          git add crates/wow-core/src/coverage.rs crates/wow-core/src/coverage/admission.rs crates/wow-core/src/envelope.rs crates/wow-core/tests/e0_coverage_join_conformance.rs crates/wow-core/tests/coverage_join/
+          git diff --exit-code
+          git diff --cached --check
+          git write-tree > "$RUNNER_TEMP/join-results/TREE_SHA"
+      - name: Run all 22 coverage join regressions
+        run: |
+          set -euo pipefail
+          cargo +stable test --locked -p wow-core --test e0_coverage_join_conformance -- --test-threads=1 2>&1 | tee "$RUNNER_TEMP/join-results/join-tests.txt"
+          grep -F '22 passed; 0 failed' "$RUNNER_TEMP/join-results/join-tests.txt"
+      - name: Prove eight negative controls against unchanged owner code
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          trap 'git checkout-index -a -f' EXIT
+          for source in coverage.rs coverage/admission.rs envelope.rs; do
+            git show "HEAD:crates/wow-core/src/$source" > "crates/wow-core/src/$source"
+          done
+          cases=(
+            envelopes::envelope_join_002_summary_cannot_select_away_a_retained_worse_partition
+            envelopes::envelope_join_003_logical_duplicate_without_a_summary_is_still_rejected
+            envelopes::envelope_join_004_omitted_affecting_conflict_cannot_disappear_from_raw_coverage
+            envelopes::envelope_join_005_summary_producer_versions_do_not_create_two_logical_owners
+            evaluations::not_evaluated_join_001_compact_golden_conflicts_are_admitted_without_rewriting
+            evaluations::not_evaluated_join_004_nested_conflicts_must_be_retained_by_the_parent
+            evaluations::not_evaluated_join_005_one_coverage_id_cannot_describe_two_different_blockers
+            evaluations::not_evaluated_join_007_nonblocking_complete_partition_cannot_fake_a_blocker
+          )
+          for index in "${!cases[@]}"; do
+            case="${cases[$index]}"
+            log="$RUNNER_TEMP/join-results/baseline-$index.txt"
+            set +e
+            cargo +stable test --locked -p wow-core --test e0_coverage_join_conformance "$case" -- --exact --test-threads=1 > "$log" 2>&1
+            status=$?
+            set -e
+            test "$status" -eq 101
+            grep -F 'running 1 test' "$log"
+            grep -F "test $case ... FAILED" "$log"
+            grep -F 'test result: FAILED. 0 passed; 1 failed' "$log"
+          done
+      - name: Repository policy and formatting
+        run: |
+          cargo +stable xtask check
+          cargo +stable fmt --all --check
+      - name: Locked workspace check
+        run: cargo +stable check --locked --workspace --all-targets --all-features
+      - name: Strict workspace Clippy
+        run: cargo +stable clippy --locked --workspace --all-targets --all-features -- -D warnings
+      - name: Locked debug workspace tests
+        run: cargo +stable test --locked --workspace --all-targets --all-features
+      - name: Locked release workspace tests
+        run: cargo +stable test --release --locked --workspace --all-targets --all-features
+      - name: Rust documentation
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo +stable doc --locked --workspace --all-features --no-deps
+      - name: Verify retained bytes and export tested change
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          test "$(git write-tree)" = "$(cat "$RUNNER_TEMP/join-results/TREE_SHA")"
+          git diff --cached --binary --full-index > "$RUNNER_TEMP/join-results/verified.patch"
+          cd "$RUNNER_TEMP/join-results"
+          sha256sum verified.patch > SHA256SUMS
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: e0-coverage-join-${{ matrix.os }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/join-results/
+          retention-days: 3
+          if-no-files-found: error
+  publish:
+    needs: verify
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: e0-coverage-join-ubuntu-latest-${{ github.run_id }}
+          path: ${{ runner.temp }}/join-linux
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: e0-coverage-join-windows-latest-${{ github.run_id }}
+          path: ${{ runner.temp }}/join-windows
+      - name: Publish identical tested trees only while main is unchanged
+        run: |
+          set -euo pipefail
+          linux="$RUNNER_TEMP/join-linux"
+          windows="$RUNNER_TEMP/join-windows"
+          (cd "$linux" && sha256sum -c SHA256SUMS)
+          (cd "$windows" && sha256sum -c SHA256SUMS)
+          cmp "$linux/TREE_SHA" "$windows/TREE_SHA"
+          cmp "$linux/BASE_SHA" "$windows/BASE_SHA"
+          cmp "$linux/verified.patch" "$windows/verified.patch"
+          test "$(cat "$linux/BASE_SHA")" = "$GITHUB_SHA"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$GITHUB_SHA"
+          git apply --index --check "$linux/verified.patch"
+          git apply --index "$linux/verified.patch"
+          test "$(git write-tree)" = "$(cat "$linux/TREE_SHA")"
+          git diff --exit-code
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix(core): share retained coverage and evaluation joins with envelopes' -m "Continue R0-01 in wow-core. Recompute envelope summaries from all retained capability partitions, reject hidden conflicts and logical owner duplicates, and join NotEvaluated blockers to exact coverage and conflict truth. Preserve the compact committed conflict representation without treating missing nested fields as unverified truth. Twenty-two conformance tests preserve all golden envelope bytes, independently reseal mutations and check 64 deterministic input permutations. Eight baseline controls reproduced the mismatches. Linux and Windows locked workspace check, strict Clippy, debug/release tests, rustdoc, policy and formatting passed on this exact tree in acceptance run $GITHUB_RUN_ID. No dependency or fixture baseline changed. Temporary inputs are removed. Full E0-A/R0, source provenance and producer coverage completeness remain separate gates."
+          git push origin HEAD:refs/heads/main
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$(git rev-parse HEAD)"
+          git rev-parse HEAD
+          git rev-parse HEAD^{tree}
