@@ -937,6 +937,11 @@
         "coverage_record_missing",
         "coverage_conflict",
         "result_context_violation"
+      ],
+      "retained_consumers": [
+        "E0CheckResultEnvelope",
+        "evaluate_capability_availability",
+        "evaluate_negative_authority"
       ]
     },
     {
@@ -977,7 +982,16 @@
         "coverage_record_missing",
         "missing_conflict_reference",
         "result_context_violation",
-        "canonicalization_failure"
+        "canonicalization_failure",
+        "coverage_conflict",
+        "duplicate_coverage_record",
+        "duplicate_conflict_reference",
+        "canonical_digest_mismatch"
+      ],
+      "local_admission": "canonical-blocker-ids-capabilities-and-nested-conflict-sets",
+      "retained_consumers": [
+        "E0CheckResultEnvelope",
+        "evaluate_negative_authority"
       ]
     },
     {
@@ -1162,8 +1176,15 @@
         "unknown_field",
         "duplicate_field",
         "canonical_digest_mismatch",
-        "contract_violation"
-      ]
+        "contract_violation",
+        "coverage_record_missing",
+        "duplicate_coverage_record",
+        "duplicate_conflict_reference",
+        "coverage_context_mismatch",
+        "conflict_context_mismatch"
+      ],
+      "coverage_admission": "shared-retained-records-conflicts-and-all-capability-partitions",
+      "evaluation_admission": "exact-owner-join-with-compact-conflict-projection"
     },
     {
       "id": "canonical_result_order",

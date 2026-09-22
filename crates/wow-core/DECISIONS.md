@@ -260,3 +260,17 @@ spelling. Reusing a private admitted registry avoids per-diagnostic registry
 revalidation without adding an unchecked public route. This enforces existing
 identity/authority policy; it does not execute fixes, attest source provenance,
 change valid hash material or introduce another owning subsystem.
+
+### CORE-010/CORE-022 implementation clarification — envelope coverage joins
+
+The complete E0 envelope uses the same retained coverage/conflict admission as
+availability and negative-authority decisions. A summary covers all retained
+statements of its capability; its own ref list cannot narrow that scope. Logical
+owner uniqueness is independent of producer version or cryptographic ID. Distinct
+producers remain distinct. No statement may omit a known affecting conflict.
+
+The E0 compact `BlockingPartitionRef` omits redundant `conflict_ids`. Preserve that
+representation and its golden bytes: resolve the exact raw record and require its
+whole conflict set in the enclosing `NotEvaluatedRecord`. A nonempty nested set
+must equal that raw set. This is not an unchecked fallback or a schema migration.
+A complete, unconflicted and untruncated record cannot explain a blocked partition.

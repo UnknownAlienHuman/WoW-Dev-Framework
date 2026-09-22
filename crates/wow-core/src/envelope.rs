@@ -835,26 +835,12 @@ fn validate_records(envelope: &E0CheckResultEnvelope) -> CoreResult<()> {
         &envelope.evidence_records,
         "validate_result_envelope",
     )?;
-    for conflict in &envelope.conflicts {
-        conflict.validate()?;
-    }
-    for coverage in &envelope.coverage_records {
-        coverage.validate()?;
-        for conflict_id in coverage.conflict_ids() {
-            let conflict = envelope
-                .conflicts
-                .iter()
-                .find(|conflict| conflict.conflict_id() == *conflict_id)
-                .ok_or_else(|| reference_error("coverage_records.conflict_ids"))?;
-            if !crate::coverage::conflict_affects_coverage(conflict, coverage) {
-                return Err(validation_error(
-                    "validate_coverage_record",
-                    CoreErrorCode::CoverageConflict,
-                    "coverage_records.conflict_ids",
-                ));
-            }
-        }
-    }
+    crate::coverage::validate_retained_inputs(
+        envelope.context.context_id(),
+        &envelope.capability_summaries,
+        &envelope.coverage_records,
+        &envelope.conflicts,
+    )?;
     for evidence in &envelope.evidence_records {
         for reference in evidence.coverage_refs() {
             let matches = envelope
@@ -871,36 +857,13 @@ fn validate_records(envelope: &E0CheckResultEnvelope) -> CoreResult<()> {
             }
         }
     }
-    for summary in &envelope.capability_summaries {
-        let selected = summary
-            .partition_refs()
-            .iter()
-            .map(|partition| {
-                envelope
-                    .coverage_records
-                    .iter()
-                    .find(|coverage| coverage.coverage_id() == partition.coverage_id())
-                    .cloned()
-                    .ok_or_else(|| reference_error("capability_summaries.partition_refs"))
-            })
-            .collect::<CoreResult<Vec<_>>>()?;
-        summary.validate(&selected)?;
-    }
     for record in &envelope.not_evaluated {
-        record.validate()?;
-        for blocker in record.blocking_partitions() {
-            let coverage = envelope
-                .coverage_records
-                .iter()
-                .find(|coverage| coverage.coverage_id() == blocker.coverage_id())
-                .ok_or_else(|| reference_error("not_evaluated.blocking_partitions"))?;
-            if coverage.capability_id() != blocker.capability_id()
-                || coverage.partition_id() != blocker.partition_id()
-                || coverage.status() != blocker.status()
-            {
-                return Err(reference_error("not_evaluated.blocking_partitions"));
-            }
-        }
+        crate::coverage::validate_evaluation(
+            envelope.context.context_id(),
+            record,
+            &envelope.coverage_records,
+            &envelope.conflicts,
+        )?;
     }
     for finding in &envelope.findings {
         finding.validate_admitted(&diagnostics)?;

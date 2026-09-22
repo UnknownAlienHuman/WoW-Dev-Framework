@@ -269,3 +269,17 @@ at `remediation.plan_handle_id`. Class/recipe failures retain
 constructor's identifier/text error and safe field path. Noncanonical integer/path
 arguments use `invalid_message_argument` at `arguments.value`. Raw offending data
 is not echoed. No new error enum, silent repair or schema version is introduced.
+
+## Coverage/evaluation joins in result envelopes
+
+Envelope coverage admission propagates the existing narrow coverage errors:
+`duplicate_coverage_record` for logical statement/summary-owner collisions,
+`coverage_conflict` for incomplete summaries or inaccurate conflict projections,
+and `coverage_record_missing` / `missing_conflict_reference` for unresolved joins.
+`NotEvaluated` local shape uses `blocking_partitions`,
+`blocking_partitions.capability_id` and `blocking_partitions.conflict_ids` field
+paths. Retained evaluation joins use `evaluation.blocking_partitions` and
+`evaluation.conflict_ids`, including when propagated through the envelope.
+A well-formed blocker on healthy complete coverage is `coverage_conflict`, not a
+valid denial receipt. A wrong self-ID still returns `canonical_digest_mismatch`.
+No raw subject, source text or caller-provided identifier is echoed by these checks.

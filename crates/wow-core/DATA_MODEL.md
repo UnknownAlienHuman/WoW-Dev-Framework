@@ -804,3 +804,23 @@ Decoded diagnostic reference arrays are canonical sets. Warning subjects form
 an optional pair. Decoded remediation has the same recipe requirements as fresh
 construction; optional plan handles must resolve and exact edits require nonempty,
 non-Candidate evidence. These constraints do not change valid identity projections.
+
+## Retained coverage and evaluation join constraints
+
+Within one E0 envelope, `(capability_id, partition_id, producer_id)` identifies a
+unique coverage statement. A producer-version change does not create a second
+statement in the same generation. Summary uniqueness likewise uses capability
+and summary producer, and every summary includes all retained records of that
+capability. Raw conflicts must match the retained conflict registry's affecting
+capability/partition scopes, including capability-wide scopes.
+
+`BlockingPartitionRef.conflict_ids` is an optional redundant array, omitted when
+empty by canonical serialization. Empty means compact projection, not evidence
+that no conflict exists. Its exact raw record supplies conflict truth; every such
+conflict must also occur in the parent evaluation's `conflict_ids`. A nonempty
+nested array must be sorted, unique and exactly equal to the raw record's set.
+Each blocker CoverageId occurs once, its capability belongs to the parent set,
+and its capability/partition/status must match the retained record. The record
+must actually be unavailable, nonapplicable, conflicted or truncated. A missing
+capability with no known partition may still have no blocking partition refs;
+this is a denial explanation, not complete coverage.

@@ -414,3 +414,21 @@ handle must be retained. This does not certify or execute remediation. Supply
 canonical integer/path argument strings; use Text for non-path prose. Source
 eligibility, coverage completeness and actual target-client behavior are not proved
 by diagnostic binding or by computing its digest.
+
+## E0 envelope coverage scope and compact evaluation blockers
+
+Assemble every raw record for each summarized capability. Do not put unrelated
+partitions of the same capability into an envelope while claiming that a summary
+represents only a selected subset: E0 does not encode such a scope selector.
+Distinct capabilities can remain optional; availability still evaluates only
+required summaries, even if other valid raw records are retained.
+
+Both the complete envelope and negative-authority operation now use the shared
+coverage/evaluation admission. Preserve the existing public API and exact golden
+bytes. A legacy compact blocker without nested `conflict_ids` is valid when its
+raw record and parent evaluation retain all actual conflicts. An explicitly
+populated nested set must be exact. Do not strip conflicts from the parent,
+fabricate blocking status, or treat a valid local NotEvaluatedId as owner proof.
+
+Run `cargo test --locked -p wow-core --test e0_coverage_join_conformance` for the
+focused join regressions, in addition to the existing owner/workspace gates.

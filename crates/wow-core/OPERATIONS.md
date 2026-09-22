@@ -669,7 +669,14 @@ Required tests include `COVERAGE-COMBINE-001..034`.
 
 ### `validate_capability_summary`
 
-Recompute the summary from its referenced coverage records and compare context, producer, status, partition refs, conflicts, and truncation. A summary cannot introduce authority not present in its records.
+Recompute the summary and compare context, producer, status, partition refs,
+conflicts, and truncation. The record-local API operates on an explicit selected
+record slice. Before consuming it, availability, negative authority and the E0
+envelope all validate the retained owner registry and select **all supplied
+records for that capability**, not only the summary's advertised refs. A summary
+cannot hide a worse partition or omit an affecting conflict by dropping its ref.
+Logical duplicate statements and summary owners reject even if their version or
+content-addressed ID differs; independent producers are preserved.
 
 Required tests: `CAPABILITY-SUMMARY-001..014`.
 
@@ -719,7 +726,24 @@ Required tests: `NOT-EVALUATED-ID-001..008`.
 
 ### `validate_not_evaluated_record`
 
-Checks context/producer, subject identity, reason-specific required fields, exact coverage/conflict references, canonical order, and supplied ID.
+The local API checks context/producer, subject identity, canonical reference sets,
+nonempty blocking capabilities and supplied ID. It also rejects duplicate blocker
+CoverageIds, blockers outside the parent capability set, noncanonical nested
+conflict arrays and nested conflict IDs absent from the parent. Constructors sort
+outer sets; decoded validators never repair them.
+
+Both the envelope and negative-authority consumer then join each blocker against
+an already admitted raw coverage/conflict registry. Capability, partition and
+status match exactly. Empty nested conflict arrays are the E0 compact projection:
+the raw record supplies its full conflict set, all of which must occur in the
+parent. Nonempty nested arrays match that set exactly. Complete coverage without
+conflict or truncation is not a blocking partition. Evaluation conflicts resolve
+and affect a declared blocking capability. Local ID validity alone is insufficient.
+Errors propagate as `coverage_record_missing`, `coverage_conflict`,
+`duplicate_coverage_record`, `duplicate_conflict_reference`,
+`missing_conflict_reference`, `result_context_violation`, or the narrower local
+identity/subject error. Record validation does not prove producer honesty or
+exhaustiveness of a caller-selected required scope.
 
 Required tests: `NOT-EVALUATED-001..016`.
 
@@ -1128,3 +1152,15 @@ coverage/conflict registry or source bytes. Expected source-generation binding,
 coverage/eligibility, root-cause closure, actual source content and producer
 truth remain envelope/owner obligations. `derive_warning_id` is still a pure
 identity computation, not a substitute for `validate_warning_record`.
+
+### E0 envelope retained coverage admission
+
+`validate_result_envelope`, finalization and canonical reordering require the
+same raw-statement/conflict/summary and evaluation joins described above. The
+shared checker runs even when no summaries reference a retained statement.
+No separate weaker envelope implementation remains. Required-capability calls
+still reject empty summaries/records; an envelope may represent an operation
+with no retained coverage, such as a failed result. Structural validation of
+that case is not an evaluation or negative-authority certificate. Root status
+classification, requested-scope selection, source provenance, result ordering
+and host input limits remain their separate contracts.

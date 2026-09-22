@@ -92,3 +92,13 @@ This is not a full audit of all deserializers, full evidence-DAG admission,
 complete fixture closure for downstream E0 owners, or implementation of the
 public `wow` executable. Continue the existing implementation handoff, not a new
 architecture or a replacement source parser.
+
+## Envelope integration checkpoint
+
+The E0 envelope now calls the same retained-record admission before accepting
+summaries and NotEvaluated records. This closes its former subset-only summary
+validation and one-direction conflict check. Compact golden evaluation blockers
+are compatible with the negative-authority consumer through an exact raw-record
+join; no fixture is regenerated or silently enriched. Empty required decisions
+still reject. The focused suite is `e0_coverage_join_conformance`; a test run and
+exact published tree, not this description, provide acceptance evidence.

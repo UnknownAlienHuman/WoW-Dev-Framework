@@ -1,4 +1,4 @@
-//! Shared admission for the two correctness-affecting coverage consumers.
+//! Shared admission for coverage decisions and the complete result envelope.
 //! A deserialized summary is a claim, not a substitute for its owner records.
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -23,6 +23,19 @@ pub(super) fn validate_inputs(
         ));
     }
 
+    validate_retained_inputs(context_id, summaries, records, conflicts)
+}
+
+// The envelope may retain no coverage (for example, a failed operation). That
+// structural case is not a required-capability decision or proof of absence.
+// Every supplied summary still describes ALL retained records of its capability.
+pub(crate) fn validate_retained_inputs(
+    context_id: GenerationContextId,
+    summaries: &[CapabilitySummary],
+    records: &[CoverageRecord],
+    conflicts: &[ConflictRecord],
+) -> CoreResult<()> {
+    const OPERATION: &str = "validate_capability_summary";
     let mut conflict_index = BTreeMap::new();
     let mut affected = BTreeMap::<_, BTreeSet<_>>::new();
     for conflict in conflicts {
@@ -161,7 +174,7 @@ pub(super) fn validate_inputs(
     Ok(())
 }
 
-pub(super) fn validate_evaluation(
+pub(crate) fn validate_evaluation(
     context_id: GenerationContextId,
     evaluation: &NotEvaluatedRecord,
     records: &[CoverageRecord],
@@ -188,14 +201,22 @@ pub(super) fn validate_evaluation(
                 "evaluation.blocking_partitions",
             )
         })?;
-        if BlockingPartitionRef::from_record(record) != *blocker
-            || !evaluation
-                .blocking_capability_ids
-                .contains(&blocker.capability_id)
-            || blocker
+        // E0 golden records omit the redundant per-partition conflict set.
+        // That compact form is valid only when the admitted raw record's full
+        // conflict set is retained by the enclosing evaluation. A supplied
+        // nonempty set must match exactly; it cannot replace owner truth.
+        let exact = BlockingPartitionRef::from_record(record);
+        if exact.capability_id != blocker.capability_id
+            || exact.partition_id != blocker.partition_id
+            || exact.status != blocker.status
+            || (!blocker.conflict_ids.is_empty() && exact.conflict_ids != blocker.conflict_ids)
+            || exact
                 .conflict_ids
                 .iter()
                 .any(|id| !evaluation.conflict_ids.contains(id))
+            || (record.status == super::CoverageStatus::Complete
+                && record.conflict_ids.is_empty()
+                && record.truncation_refs.is_empty())
         {
             return Err(validation_error(
                 OPERATION,
@@ -224,6 +245,51 @@ pub(super) fn validate_evaluation(
                 OPERATION,
                 CoreErrorCode::CoverageConflict,
                 "evaluation.conflict_ids",
+            ));
+        }
+    }
+    Ok(())
+}
+
+// This is record-local shape validation. Coverage identity/status and conflict
+// scope are joined later against retained owner records, never inferred from IDs.
+pub(super) fn validate_blocking_partitions(record: &NotEvaluatedRecord) -> CoreResult<()> {
+    const OPERATION: &str = "validate_not_evaluated_record";
+    let mut coverage_ids = BTreeSet::new();
+    for blocker in &record.blocking_partitions {
+        if !coverage_ids.insert(blocker.coverage_id) {
+            return Err(validation_error(
+                OPERATION,
+                CoreErrorCode::DuplicateCoverageRecord,
+                "blocking_partitions",
+            ));
+        }
+        if record
+            .blocking_capability_ids
+            .binary_search(&blocker.capability_id)
+            .is_err()
+        {
+            return Err(validation_error(
+                OPERATION,
+                CoreErrorCode::CoverageConflict,
+                "blocking_partitions.capability_id",
+            ));
+        }
+        ensure_sorted_unique(
+            &blocker.conflict_ids,
+            OPERATION,
+            "blocking_partitions.conflict_ids",
+            CoreErrorCode::DuplicateConflictReference,
+        )?;
+        if blocker
+            .conflict_ids
+            .iter()
+            .any(|id| record.conflict_ids.binary_search(id).is_err())
+        {
+            return Err(validation_error(
+                OPERATION,
+                CoreErrorCode::CoverageConflict,
+                "blocking_partitions.conflict_ids",
             ));
         }
     }

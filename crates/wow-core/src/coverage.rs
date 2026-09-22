@@ -12,6 +12,7 @@ use crate::ids::{
 use crate::integrity;
 
 mod admission;
+pub(crate) use admission::{validate_evaluation, validate_retained_inputs};
 
 /// Exact coverage state for one capability partition.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -606,6 +607,7 @@ impl NotEvaluatedRecord {
             "conflict_ids",
             CoreErrorCode::DuplicateConflictReference,
         )?;
+        admission::validate_blocking_partitions(self)?;
         integrity::validate_not_evaluated(self)
     }
 
@@ -884,18 +886,6 @@ pub fn evaluate_negative_authority(
         coverage_ids: coverage_ids.into_iter().collect(),
         conflict_ids: conflict_ids.into_iter().collect(),
         candidate_evidence_ids,
-    })
-}
-
-pub(crate) fn conflict_affects_coverage(
-    conflict: &ConflictRecord,
-    record: &CoverageRecord,
-) -> bool {
-    conflict.affected_refs().iter().any(|affected| {
-        affected.capability_id() == record.capability_id()
-            && affected
-                .partition_id()
-                .is_none_or(|partition| partition == record.partition_id())
     })
 }
 

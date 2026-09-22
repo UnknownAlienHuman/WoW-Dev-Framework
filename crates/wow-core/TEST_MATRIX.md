@@ -671,3 +671,37 @@ payload fields on `not_truncated`. The test is retained; a private empty-struct
 wire variant now preserves strict admission without changing canonical output.
 The final accepted checkpoint must rerun all focused and workspace checks; this
 failed run is not acceptance evidence.
+
+## Envelope coverage/evaluation join regressions
+
+`tests/e0_coverage_join_conformance.rs` contains 22 grouped tests, with independently
+resealed envelope/record hashes and byte/count bookkeeping. It covers the following
+cases through local validation, finalization, canonical reordering and the existing
+negative-authority operation where applicable:
+
+| Case | Required behavior |
+|---|---|
+| ENVELOPE-JOIN-001 | All four existing golden envelopes retain exact canonical bytes from the raw fixture JSON, not its pretty-print whitespace |
+| ENVELOPE-JOIN-002 | A summary cannot omit a retained partial/unknown/failed partition; full recomputation passes |
+| ENVELOPE-JOIN-003 | Logical duplicate raw statements reject even without a summary |
+| ENVELOPE-JOIN-004 | Retained affecting conflicts cannot disappear from raw coverage and its summary |
+| ENVELOPE-JOIN-005/006 | Same-owner version collisions reject; independent producers remain valid |
+| ENVELOPE-JOIN-007/008 | Optional capability isolation and empty required-scope rejection remain intact |
+| ENVELOPE-JOIN-009/010 | Missing summary refs reject; 64 seeded permutations preserve golden bytes |
+| NOT-EVALUATED-JOIN-001/002 | Compact golden and explicit exact nested conflicts both pass |
+| NOT-EVALUATED-JOIN-003/004 | Missing enclosing conflicts and invented nested references reject |
+| NOT-EVALUATED-JOIN-005/006 | Duplicate CoverageIds and undeclared blocker capabilities reject locally and at envelope boundary |
+| NOT-EVALUATED-JOIN-007/008 | Healthy complete records and unrelated conflicts cannot explain a blocker |
+| NOT-EVALUATED-JOIN-009/010 | Missing/misdescribed owner records and noncanonical nested sets reject |
+| NOT-EVALUATED-JOIN-011/012 | Unknown partition/nonapplicable denial remains valid; wrong identity still rejects |
+
+This slice does not certify source completeness, request-scope exhaustiveness,
+producer provenance, full E0-A closure or public R0 availability. No new public
+operation, dependency, schema version or golden fixture is introduced.
+
+The coverage-join golden oracle uses the committed JSON as an untyped `Value`,
+then applies the existing canonical JSON encoder. It never obtains expectations
+from the typed envelope, its finalizer or mutated test input. No fixture fields,
+array order, identities, digests or counters are rewritten. The permutation test
+computes its expected bytes once, before any shuffle. See
+[COVERAGE_JOIN_RECOVERY.md](COVERAGE_JOIN_RECOVERY.md) for the interrupted-run audit.
