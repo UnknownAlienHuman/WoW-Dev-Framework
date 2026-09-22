@@ -1328,5 +1328,18 @@
     "Fresh fmt, clippy, test, and dependency-policy results are reported.",
     "coverage records and capability summaries reconcile exactly",
     "evidence/conflict/coverage reference graph is acyclic and fully resolved"
-  ]
+  ],
+  "canonical_serialization_admission": {
+    "implementation": "src/canonical/admission.rs",
+    "conformance_tests": "tests/e0_canonical_conformance.rs",
+    "duplicate_keys": "rejected before object materialization; duplicate_field",
+    "serializer_error_payload": "fixed safe canonicalization_failure reason; no input echo",
+    "compatibility": "core-only and workspace-unified serde_json features; existing golden bytes unchanged",
+    "nonclaims": [
+      "host JSON decoding and input-size admission",
+      "recovery of keys already discarded by a caller",
+      "raw-byte derivation input validation",
+      "complete E0-A acceptance"
+    ]
+  }
 }

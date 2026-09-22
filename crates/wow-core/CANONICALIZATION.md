@@ -1,6 +1,6 @@
 # `wow-core` canonicalization and hashing
 
-**Status:** normative E0-A canonical profile; no Rust code yet.
+**Status:** normative E0-A profile with executable serialization admission; full E0-A acceptance remains incomplete.
 
 Canonicalization makes equivalent logical results byte-identical. It is not a cosmetic pretty-printer and must not be delegated to incidental map iteration or a transport library's defaults.
 
@@ -527,3 +527,46 @@ alternative identity material for the same integer. A path argument uses the sam
 canonical repository-relative path grammar as `NormalizedSourcePath`; validators
 do not silently rewrite path spelling. Plain text is not reinterpreted as a path.
 Valid argument, finding, warning and envelope hash domains/bytes are unchanged.
+
+## Serialization admission before projection
+
+`canonical_json_bytes`, `canonical_json_string`, `domain_separated_digest`, and
+value-based typed-ID derivation use one checked Serde traversal. Object entries
+remain distinct until key uniqueness is checked. Repeated keys are `duplicate_field`
+even with identical values, in nested containers, in manual structs, and across
+flattened fields. Keys are compared after the existing JSON key spelling conversion
+(e.g. integer `1` and string `"1"` collide). Ordinary maps containing a reserved-looking
+key remain ordinary maps; they are not reinterpreted as scalar protocol messages.
+
+Valid canonical bytes, hash domains and `wow-core-json/e0-1` are unchanged. The
+serializer retains the existing unsigned `u64` numeric subset, tuple/enum/byte
+representations, exact strings and array order. Schema owners retain narrower
+numeric, key, depth and collection limits. Untrusted sequence/map length hints
+are not allocation budgets. The payload is serialized once, not replayed as a
+validation pass followed by a potentially different serialization.
+
+The active workspace enables `serde_json/arbitrary_precision` through other
+owners. Its structured Number serialization is delegated to serde_json and then
+checked against the E0 integer subset without conversion through `f64`. The tests
+run in both core-only and unified-workspace feature configurations. Raw JSON
+serialization is rejected because it could bypass admission of embedded keys.
+This is an explicit serializer compatibility seam, not a JSON source parser.
+
+A custom serialization error returns `canonicalization_failure` with a fixed safe
+reason. Untrusted diagnostic prose is never copied into the CoreError. Duplicate
+errors do not echo the key. This is not a general-purpose secret detector or a
+sandbox for executing arbitrary Rust Serialize implementations.
+
+Already-decoded `Value`/maps cannot reveal keys discarded before this boundary;
+strict duplicate detection remains required at the host JSON decoding boundary.
+The raw-byte `derive_typed_digest_id` utility retains its separate contract: its
+caller supplies canonical material. No new host input-size or runtime acceptance
+claim follows from this serializer checkpoint.
+
+A retained arbitrary-precision Number token must itself spell one canonical
+unsigned integer before delegation: signs, leading zeros, fractional/exponential
+forms and overflow reject. An upstream decoder may already have discarded
+lexical information (serde_json 1.0.151 with `arbitrary_precision` turns JSON
+`-0` into integer zero). This Serialize boundary cannot reconstruct that token;
+strict lexical JSON admission belongs before the decoder's Value projection.
+The feature-profile regression explicitly distinguishes both representations.

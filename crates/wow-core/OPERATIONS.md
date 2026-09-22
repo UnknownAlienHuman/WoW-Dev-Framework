@@ -1164,3 +1164,18 @@ with no retained coverage, such as a failed result. Structural validation of
 that case is not an evaluation or negative-authority certificate. Root status
 classification, requested-scope selection, source provenance, result ordering
 and host input limits remain their separate contracts.
+
+## Canonical serialization primitive admission
+
+The value-based primitives `canonical_json_bytes`, `canonical_json_string`,
+`domain_separated_digest` and typed `Id::derive` implementations reject duplicate
+object fields before value projection. They return the existing `duplicate_field`
+code, without key echo. Unsupported scalar values, malformed map emission and
+custom Serialize errors return `canonicalization_failure`; custom error prose is
+replaced with a fixed safe reason. Numeric wrappers under the workspace's unified
+serde_json feature selection preserve exact allowed integer semantics.
+
+This does not change the precondition of the raw-byte `derive_typed_digest_id`
+operation or add JSON parsing to that helper. Container semantics, accepted golden
+bytes, domain tags and public signatures remain unchanged. See the serializer
+admission section in `CANONICALIZATION.md` and `tests/e0_canonical_conformance.rs`.

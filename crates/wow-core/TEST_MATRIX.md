@@ -705,3 +705,33 @@ from the typed envelope, its finalizer or mutated test input. No fixture fields,
 array order, identities, digests or counters are rewritten. The permutation test
 computes its expected bytes once, before any shuffle. See
 [COVERAGE_JOIN_RECOVERY.md](COVERAGE_JOIN_RECOVERY.md) for the interrupted-run audit.
+
+## Canonical serialization admission regression extensions
+
+`tests/e0_canonical_conformance.rs` contains 19 grouped executable tests. Run the
+focused target without sibling feature unification and again in the full workspace.
+The existing `tests/hash_vectors.rs` remains the exact canonical-text/hash oracle.
+
+| Case | Executed invariant |
+|---|---|
+| CANONICAL-001 | Equal/different duplicate map values reject through bytes, text, domain hashes and typed handle derivation. |
+| CANONICAL-002 | Nested arrays/tuples/options/structs/newtypes/enum containers retain duplicate rejection. |
+| CANONICAL-003 | Flattened fields cannot overwrite declared fields; disjoint fields retain exact bytes. |
+| CANONICAL-004 | Integer, boolean and character keys collide with equivalent JSON string keys. |
+| CANONICAL-005 | Manual SerializeStruct duplicate fields reject. |
+| CANONICAL-006/007 | Custom serializer diagnostic payloads are not exposed; custom value-error prose is not formatted. |
+| CANONICAL-008/009 | Exact scalar bytes, unsigned bounds, null/negative/float/oversized rejection. |
+| CANONICAL-010/011 | All Serde container forms and existing key spellings keep bytewise ordering. |
+| CANONICAL-012/013 | Invalid keys reject before their values are serialized; malformed map emission returns an error. |
+| CANONICAL-014 | Payload serialized once; forged sequence/map capacity hints do not allocate those capacities. |
+| CANONICAL-015 | 64 seeded permutations and 1/2/4 workers give identical output; arrays are not reordered. |
+| CANONICAL-016 | All five committed envelopes match independently encoded raw JSON, with unchanged stored digests. |
+| CANONICAL-017 | Feature-unified arbitrary-precision Number handling retains the E0 subset; a normal marker-looking map is not a Number. |
+| CANONICAL-018/019 | Raw JSON cannot bypass entry admission; bytes/display/omitted optional fields keep their wire contract. |
+
+Negative controls restore the prior canonical serializer and prove duplicate maps,
+flattened collisions, coerced keys, repeated struct fields and custom-error echo
+are detected. Baseline controls do not run the forged allocation-hint test.
+Full E0-A, host duplicate-aware decoding/size limits and producer provenance remain
+separate gates. No fixture is regenerated or expected output derived from a typed
+actual envelope during this checkpoint.

@@ -283,3 +283,16 @@ paths. Retained evaluation joins use `evaluation.blocking_partitions` and
 A well-formed blocker on healthy complete coverage is `coverage_conflict`, not a
 valid denial receipt. A wrong self-ID still returns `canonical_digest_mismatch`.
 No raw subject, source text or caller-provided identifier is echoed by these checks.
+
+## Canonical serializer errors
+
+Repeated object keys emitted by a Serialize implementation return `duplicate_field`
+(category `validation`, operation `canonical_json`, retry `after_input_change`).
+The key and its values are not echoed. This applies to nested maps, declared or
+flattened struct fields and keys colliding after JSON spelling conversion.
+
+`canonicalization_failure` remains the code for null/negative/floating/oversized
+numeric values, malformed map emission, invalid keys and unsupported raw JSON.
+A custom serializer error receives a fixed safe reason rather than copying the
+upstream diagnostic. These checks do not turn errors into findings/NotEvaluated,
+add automatic retry, or certify general secret redaction or host JSON admission.
