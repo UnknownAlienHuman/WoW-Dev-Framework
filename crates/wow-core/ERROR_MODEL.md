@@ -251,3 +251,21 @@ Collection-name failures retain the existing `invalid_identifier`,
 `entries.collection_id`. These are existing validation codes, not new enums.
 No raw offending collection string is echoed. Strict Serde field/type failures
 remain decoding errors; this slice does not add a host error-normalization API.
+
+## Finding/warning admission detail
+
+Malformed diagnostic references return `result_duplicate_id` at
+`related_source_handle_ids`, `evidence_ids` or `required_capability_ids` with a
+fixed noncanonical/duplicate reason. A duplicated source registry uses
+`result_duplicate_id` at `source_handles`; duplicate evidence IDs propagate
+`duplicate_evidence_reference`. Foreign evidence uses `evidence_context_mismatch`
+at `evidence_records.context_id`. Existing source/evidence validators propagate
+their narrow shape, digest and ancestry errors before a diagnostic is accepted.
+Missing evidence source links use `missing_source_handle` at
+`evidence_records.source_handle_ids`; missing remediation plans use the same code
+at `remediation.plan_handle_id`. Class/recipe failures retain
+`remediation_authority_violation`. Incomplete warning subject pairs use
+`invalid_message_argument` at `subject`; malformed subject values retain the
+constructor's identifier/text error and safe field path. Noncanonical integer/path
+arguments use `invalid_message_argument` at `arguments.value`. Raw offending data
+is not echoed. No new error enum, silent repair or schema version is introduced.

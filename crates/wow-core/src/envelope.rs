@@ -828,10 +828,13 @@ fn record_status<T: Serialize>(record: &T) -> Option<String> {
 }
 
 fn validate_records(envelope: &E0CheckResultEnvelope) -> CoreResult<()> {
-    for handle in &envelope.source_handles {
-        handle.validate()?;
-    }
-    crate::validate_evidence_derivation_graph(&envelope.evidence_records)?;
+    // Admit the retained registry once, not once per finding or warning.
+    let diagnostics = crate::finding::DiagnosticRegistry::new(
+        envelope.context.context_id(),
+        &envelope.source_handles,
+        &envelope.evidence_records,
+        "validate_result_envelope",
+    )?;
     for conflict in &envelope.conflicts {
         conflict.validate()?;
     }
@@ -899,20 +902,11 @@ fn validate_records(envelope: &E0CheckResultEnvelope) -> CoreResult<()> {
             }
         }
     }
-    let context_id = envelope.context.context_id();
     for finding in &envelope.findings {
-        finding.validate(
-            context_id,
-            &envelope.source_handles,
-            &envelope.evidence_records,
-        )?;
+        finding.validate_admitted(&diagnostics)?;
     }
     for warning in &envelope.warnings {
-        warning.validate(
-            context_id,
-            &envelope.source_handles,
-            &envelope.evidence_records,
-        )?;
+        warning.validate_admitted(&diagnostics)?;
     }
     Ok(())
 }

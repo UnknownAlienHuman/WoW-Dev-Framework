@@ -250,3 +250,13 @@ omission counts and invalid reference sets cannot authorize a result status or
 denial receipt. Fresh set ordering remains explicit construction behavior;
 decoded invalid metadata is not repaired. No new schema, identity projection,
 collection-selection policy or source-completeness assertion is introduced.
+
+### CORE-012/CORE-015 implementation clarification — diagnostic admission
+
+Diagnostic consumers validate the retained source/evidence registry and decoded
+field invariants before using IDs, confidence or remediation class as input.
+Canonical references are sets and typed integer/path arguments have one accepted
+spelling. Reusing a private admitted registry avoids per-diagnostic registry
+revalidation without adding an unchecked public route. This enforces existing
+identity/authority policy; it does not execute fixes, attest source provenance,
+change valid hash material or introduce another owning subsystem.

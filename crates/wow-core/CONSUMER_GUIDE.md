@@ -397,3 +397,20 @@ metadata does not increase allowed output. Producers still own completeness and
 omission selection, and hosts still enforce acquisition/decoding-size budgets.
 The pure core cannot detect a producer that changes both source claims and all
 counts consistently without independently supplied source evidence.
+
+## Retained finding and warning inputs
+
+Keep each diagnostic's complete evidence ancestry and referenced handles available
+when calling existing bind/validate operations. An ID inventory alone no longer
+passes: the actual retained records must validate in the requested evidence
+context. The public signatures are unchanged; `wow-rules` already supplies the
+owned source/evidence bundles. E0 envelope validation shares a private
+admitted registry across the whole result rather than repeating admission per item.
+
+Fresh constructors retain set normalization. Do not pass duplicate/unsorted decoded
+reference arrays, half-present warning subjects or constructor-bypassing remediation.
+Exact-edit metadata needs a recipe and nonempty, non-Candidate evidence; any plan
+handle must be retained. This does not certify or execute remediation. Supply
+canonical integer/path argument strings; use Text for non-path prose. Source
+eligibility, coverage completeness and actual target-client behavior are not proved
+by diagnostic binding or by computing its digest.

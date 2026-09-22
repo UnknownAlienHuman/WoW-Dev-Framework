@@ -1090,3 +1090,41 @@ best_effort_merge
 ```
 
 Those operations require state or domain ownership outside this crate.
+
+### Finding/warning implementation admission
+
+`FindingDraft::bind`, `Finding::validate` and `WarningRecord::validate` now admit
+one retained source/evidence registry before resolving diagnostic references.
+Handles are validated and their IDs must be unique. All supplied evidence must
+belong to the requested context, pass the existing typed derivation validator
+(including ancestor closure and confidence constraints), and resolve its source
+handles. A matching caller-supplied ID is not validation. The envelope reuses one
+private admitted registry for all findings/warnings instead of revalidating or
+JSON-serializing the entire evidence registry per diagnostic.
+
+Finding related-handle/evidence/required-capability arrays and warning reference
+arrays must already be sorted and unique when decoded. Existing fresh constructors
+still canonicalize their set inputs; validators never repair retained records.
+Warning subject kind and ID are both present or both absent; present values use
+the same grammar and bounds as construction. Fingerprint and record IDs are checked
+after field/reference admission. Existing hash projections remain unchanged.
+
+`Remediation::new` and retained finding validation share class-specific shape:
+`exact_edit`/`validated_recipe` require a recipe ID; every supplied plan handle
+must resolve. An `exact_edit` with empty or Candidate evidence is rejected. This
+is a necessary metadata check, not permission to apply a recipe or proof that an
+edit is correct. Rule-specific recipe guards remain with the rule/remediation owner.
+Unreferenced optional candidates do not taint an otherwise valid local finding.
+
+Message integers retain the existing unsigned 0..9,007,199,254,740,991 range and
+now require minimal decimal spelling (no sign or leading zero except `0`). Path
+arguments must already be canonical `NormalizedSourcePath` values. Absolute/drive/
+UNC/traversal and normalization-requiring spellings reject; a filename containing
+`..` without a parent component remains valid. Text/identifier/boolean/digest
+semantics and the existing 128-argument/4096-byte value bounds remain unchanged.
+
+Standalone registry admission does not possess a complete `GenerationContext`,
+coverage/conflict registry or source bytes. Expected source-generation binding,
+coverage/eligibility, root-cause closure, actual source content and producer
+truth remain envelope/owner obligations. `derive_warning_id` is still a pure
+identity computation, not a substitute for `validate_warning_record`.

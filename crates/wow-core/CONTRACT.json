@@ -1011,8 +1011,12 @@
       "status": "required",
       "doc": "OPERATIONS.md#validate_message_arguments",
       "errors": [
-        "invalid_message_argument"
-      ]
+        "invalid_message_argument",
+        "invalid_identifier",
+        "identifier_too_long",
+        "reserved_identifier_segment"
+      ],
+      "scalar_admission": "minimal-safe-unsigned-decimal; canonical-NormalizedSourcePath"
     },
     {
       "id": "derive_root_cause_key",
@@ -1038,8 +1042,23 @@
         "finding_context_mismatch",
         "missing_source_handle",
         "missing_evidence_reference",
-        "remediation_authority_violation"
-      ]
+        "remediation_authority_violation",
+        "result_duplicate_id",
+        "duplicate_evidence_reference",
+        "evidence_context_mismatch",
+        "evidence_authority_violation",
+        "evidence_derivation_cycle",
+        "canonical_digest_mismatch",
+        "invalid_message_argument",
+        "invalid_source_handle",
+        "invalid_identifier",
+        "identifier_too_long",
+        "reserved_identifier_segment"
+      ],
+      "input_admission": "validated-retained-source-and-evidence-registry",
+      "reference_sets": "decoded-sorted-unique; fresh-constructor-normalization-preserved",
+      "registry_scope": "same-context-evidence-ancestry-and-source-reference-closure; full-owner-joins-separate",
+      "remediation_admission": "recipe-shape; plan-handle-closure; nonempty-noncandidate-exact-edit-evidence"
     },
     {
       "id": "canonical_finding_order",
@@ -1072,8 +1091,22 @@
         "missing_source_handle",
         "missing_evidence_reference",
         "invalid_message_argument",
-        "canonicalization_failure"
-      ]
+        "canonicalization_failure",
+        "result_duplicate_id",
+        "duplicate_evidence_reference",
+        "evidence_context_mismatch",
+        "evidence_authority_violation",
+        "evidence_derivation_cycle",
+        "canonical_digest_mismatch",
+        "invalid_source_handle",
+        "invalid_identifier",
+        "identifier_too_long",
+        "reserved_identifier_segment"
+      ],
+      "input_admission": "validated-retained-source-and-evidence-registry",
+      "reference_sets": "decoded-sorted-unique; fresh-constructor-normalization-preserved",
+      "registry_scope": "same-context-evidence-ancestry-and-source-reference-closure; full-owner-joins-separate",
+      "subject_admission": "optional-pair; constructor-grammar-and-bounds"
     },
     {
       "id": "validate_budget",

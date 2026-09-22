@@ -518,3 +518,12 @@ expected type-tagged ID when applicable
 ```
 
 The first coding agent must run these vectors before integrating any higher E0 crate. A serializer that passes round-trip tests but fails the hash vectors is not compatible.
+
+## Typed diagnostic scalar clarification
+
+An integer message argument has one minimal unsigned decimal spelling within the
+existing safe-integer range. `+1` and `01` are rejected, not normalized or assigned
+alternative identity material for the same integer. A path argument uses the same
+canonical repository-relative path grammar as `NormalizedSourcePath`; validators
+do not silently rewrite path spelling. Plain text is not reinterpreted as a path.
+Valid argument, finding, warning and envelope hash domains/bytes are unchanged.

@@ -793,3 +793,14 @@ The internal E0 envelope is strict:
 - fields are never silently ignored;
 - free-form notes, line hints, rendered messages, and source excerpts are not canonical E0 fields and belong to transport presentation outside this envelope;
 - public forward-compatible extension points are deferred until a versioned external schema exists.
+
+## Diagnostic registry admission detail
+
+A finding/warning uses the caller's whole retained source/evidence registry, not
+an ID-to-string confidence projection. Records and ancestry are validated before
+lookup; evidence context and source-reference closure are mandatory. Complete
+profile/source-generation and coverage joins still require their owner inputs.
+Decoded diagnostic reference arrays are canonical sets. Warning subjects form
+an optional pair. Decoded remediation has the same recipe requirements as fresh
+construction; optional plan handles must resolve and exact edits require nonempty,
+non-Candidate evidence. These constraints do not change valid identity projections.

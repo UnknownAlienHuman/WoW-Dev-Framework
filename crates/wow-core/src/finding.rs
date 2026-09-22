@@ -1,7 +1,6 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 use crate::digest::{
     EvidenceId, FindingFingerprint, FindingId, GenerationContextId, RootCauseKey, StableHandleId,
@@ -9,6 +8,9 @@ use crate::digest::{
 };
 use crate::error::{CoreErrorCode, CoreResult, validation_error};
 use crate::ids::{EntityKey, MessageCode, ProducerId, RuleId, ToolVersion, validate_lower_segment};
+
+mod admission;
+pub(crate) use admission::DiagnosticRegistry;
 
 const MAX_MESSAGE_ARGUMENTS: usize = 128;
 const MAX_ARGUMENT_VALUE_BYTES: usize = 4096;
@@ -158,22 +160,29 @@ impl Remediation {
         recipe_id: Option<RuleId>,
         plan_handle_id: Option<StableHandleId>,
     ) -> CoreResult<Self> {
-        let valid = match class {
-            RemediationClass::ExactEdit | RemediationClass::ValidatedRecipe => recipe_id.is_some(),
-            RemediationClass::PlanOnly | RemediationClass::CandidateOnly => true,
+        let remediation = Self {
+            class,
+            recipe_id,
+            plan_handle_id,
         };
-        if !valid {
+        remediation.validate()?;
+        Ok(remediation)
+    }
+
+    // Decoding bypasses `new`; keep class-specific shape admission in one place.
+    fn validate(&self) -> CoreResult<()> {
+        if matches!(
+            self.class,
+            RemediationClass::ExactEdit | RemediationClass::ValidatedRecipe
+        ) && self.recipe_id.is_none()
+        {
             return Err(validation_error(
                 "bind_finding_to_context",
                 CoreErrorCode::RemediationAuthorityViolation,
                 "remediation.recipe_id",
             ));
         }
-        Ok(Self {
-            class,
-            recipe_id,
-            plan_handle_id,
-        })
+        Ok(())
     }
 
     /// Remediation authority class.
@@ -345,52 +354,6 @@ impl FindingDraft {
             ));
         }
         validate_message_arguments(&self.message_arguments)?;
-        let source_ids = source_handles
-            .iter()
-            .map(crate::SourceHandle::handle_id)
-            .collect::<BTreeSet<_>>();
-        if !source_ids.contains(&self.primary_source_handle_id)
-            || self
-                .related_source_handle_ids
-                .iter()
-                .any(|id| !source_ids.contains(id))
-        {
-            return Err(validation_error(
-                "bind_finding_to_context",
-                CoreErrorCode::MissingSourceHandle,
-                "source_handle_ids",
-            ));
-        }
-
-        let evidence = evidence_index(evidence_records)?;
-        if self
-            .evidence_ids
-            .iter()
-            .any(|id| !evidence.contains_key(id))
-        {
-            return Err(validation_error(
-                "bind_finding_to_context",
-                CoreErrorCode::MissingEvidenceReference,
-                "evidence_ids",
-            ));
-        }
-        if self
-            .remediation
-            .as_ref()
-            .is_some_and(|remediation| remediation.class() == RemediationClass::ExactEdit)
-            && self.evidence_ids.iter().any(|id| {
-                evidence
-                    .get(id)
-                    .is_some_and(|confidence| confidence == "candidate")
-            })
-        {
-            return Err(validation_error(
-                "bind_finding_to_context",
-                CoreErrorCode::RemediationAuthorityViolation,
-                "remediation.class",
-            ));
-        }
-
         let fingerprint = self.fingerprint()?;
         #[derive(Serialize)]
         struct FindingIdentity {
@@ -401,7 +364,7 @@ impl FindingDraft {
             context_id,
             finding_fingerprint: fingerprint,
         })?;
-        Ok(Finding {
+        let finding = Finding {
             finding_id,
             fingerprint,
             context_id: self.context_id,
@@ -420,7 +383,9 @@ impl FindingDraft {
             root_cause_key: self.root_cause_key,
             caused_by_root_cause_key: self.caused_by_root_cause_key,
             remediation: self.remediation,
-        })
+        };
+        finding.validate(context_id, source_handles, evidence_records)?;
+        Ok(finding)
     }
 }
 
@@ -650,37 +615,53 @@ impl WarningRecord {
                 "context_id",
             ));
         }
+        let registry = DiagnosticRegistry::new(
+            context_id,
+            source_handles,
+            evidence_records,
+            "validate_warning_record",
+        )?;
+        self.validate_admitted(&registry)
+    }
+
+    pub(crate) fn validate_admitted(&self, registry: &DiagnosticRegistry<'_>) -> CoreResult<()> {
+        const OPERATION: &str = "validate_warning_record";
+        if self.context_id != registry.context_id() {
+            return Err(validation_error(
+                OPERATION,
+                CoreErrorCode::WarningContextMismatch,
+                "context_id",
+            ));
+        }
+        match (&self.subject_kind, &self.subject_id) {
+            (Some(kind), Some(id)) => {
+                validate_lower_segment(kind, OPERATION, "subject_kind")?;
+                validate_bounded_text(id, OPERATION, "subject_id")?;
+            }
+            (None, None) => {}
+            _ => {
+                return Err(validation_error(
+                    OPERATION,
+                    CoreErrorCode::InvalidMessageArgument,
+                    "subject",
+                ));
+            }
+        }
         validate_message_arguments(&self.message_arguments)?;
-        let sources = source_handles
-            .iter()
-            .map(crate::SourceHandle::handle_id)
-            .collect::<BTreeSet<_>>();
-        if self
-            .primary_source_handle_id
-            .is_some_and(|id| !sources.contains(&id))
-            || self
-                .related_source_handle_ids
-                .iter()
-                .any(|id| !sources.contains(id))
-        {
-            return Err(validation_error(
-                "validate_warning_record",
-                CoreErrorCode::MissingSourceHandle,
-                "source_handle_ids",
-            ));
-        }
-        let evidence = evidence_index(evidence_records)?;
-        if self
-            .evidence_ids
-            .iter()
-            .any(|id| !evidence.contains_key(id))
-        {
-            return Err(validation_error(
-                "validate_warning_record",
-                CoreErrorCode::MissingEvidenceReference,
-                "evidence_ids",
-            ));
-        }
+        validate_reference_set(
+            &self.related_source_handle_ids,
+            OPERATION,
+            "related_source_handle_ids",
+        )?;
+        validate_reference_set(&self.evidence_ids, OPERATION, "evidence_ids")?;
+        registry.require_sources(
+            self.primary_source_handle_id
+                .into_iter()
+                .chain(self.related_source_handle_ids.iter().copied()),
+            OPERATION,
+            "source_handle_ids",
+        )?;
+        registry.require_evidence(&self.evidence_ids, OPERATION)?;
         crate::integrity::validate_warning(self)
     }
 
@@ -697,48 +678,18 @@ impl WarningRecord {
     }
 }
 
-fn evidence_index(records: &[crate::EvidenceRecord]) -> CoreResult<BTreeMap<EvidenceId, String>> {
-    let mut index = BTreeMap::new();
-    for record in records {
-        let value = serde_json::to_value(record).map_err(|error| {
-            validation_error(
-                "bind_finding_to_context",
-                CoreErrorCode::ContractViolation,
-                "evidence_records",
-            )
-            .with_argument("reason", error.to_string())
-        })?;
-        let Value::Object(object) = value else {
-            return Err(validation_error(
-                "bind_finding_to_context",
-                CoreErrorCode::ContractViolation,
-                "evidence_records",
-            ));
-        };
-        let Some(Value::String(id)) = object.get("evidence_id") else {
-            return Err(validation_error(
-                "bind_finding_to_context",
-                CoreErrorCode::ContractViolation,
-                "evidence_records.evidence_id",
-            ));
-        };
-        let Some(Value::String(confidence)) = object.get("confidence") else {
-            return Err(validation_error(
-                "bind_finding_to_context",
-                CoreErrorCode::ContractViolation,
-                "evidence_records.confidence",
-            ));
-        };
-        let id = id.parse::<EvidenceId>()?;
-        if index.insert(id, confidence.clone()).is_some() {
-            return Err(validation_error(
-                "bind_finding_to_context",
-                CoreErrorCode::ResultDuplicateId,
-                "evidence_records",
-            ));
-        }
+fn validate_reference_set<T: Ord>(
+    values: &[T],
+    operation: &'static str,
+    field: &'static str,
+) -> CoreResult<()> {
+    if values.windows(2).any(|pair| pair[0] >= pair[1]) {
+        return Err(
+            validation_error(operation, CoreErrorCode::ResultDuplicateId, field)
+                .with_argument("reason", "noncanonical_or_duplicate_reference"),
+        );
     }
-    Ok(index)
+    Ok(())
 }
 
 fn source_sort_key(handle: &crate::SourceHandle) -> (String, String, String, u8, u64, u64) {
@@ -773,13 +724,13 @@ fn validate_argument_value(kind: MessageArgumentKind, value: &str) -> CoreResult
         MessageArgumentKind::Text => true,
         MessageArgumentKind::Integer => value
             .parse::<u64>()
-            .is_ok_and(|number| number <= 9_007_199_254_740_991),
+            .is_ok_and(|number| number <= 9_007_199_254_740_991 && number.to_string() == value),
         MessageArgumentKind::Boolean => matches!(value, "true" | "false"),
         MessageArgumentKind::Identifier => {
             !value.is_empty() && !value.chars().any(char::is_whitespace)
         }
         MessageArgumentKind::Path => {
-            !value.is_empty() && !value.starts_with('/') && !value.contains("..")
+            crate::NormalizedSourcePath::parse(value).is_ok_and(|path| path.was_canonical())
         }
         MessageArgumentKind::Digest => value.strip_prefix("sha256:").is_some_and(|hex| {
             hex.len() == 64
@@ -834,50 +785,59 @@ impl Finding {
                 "context_id",
             ));
         }
+        let registry = DiagnosticRegistry::new(
+            context_id,
+            source_handles,
+            evidence_records,
+            "bind_finding_to_context",
+        )?;
+        self.validate_admitted(&registry)
+    }
+
+    pub(crate) fn validate_admitted(&self, registry: &DiagnosticRegistry<'_>) -> CoreResult<()> {
+        const OPERATION: &str = "bind_finding_to_context";
+        if self.context_id != registry.context_id() {
+            return Err(validation_error(
+                OPERATION,
+                CoreErrorCode::FindingContextMismatch,
+                "context_id",
+            ));
+        }
         validate_message_arguments(&self.message_arguments)?;
-        let source_ids = source_handles
-            .iter()
-            .map(crate::SourceHandle::handle_id)
-            .collect::<BTreeSet<_>>();
-        if !source_ids.contains(&self.primary_source_handle_id)
-            || self
-                .related_source_handle_ids
-                .iter()
-                .any(|id| !source_ids.contains(id))
-        {
-            return Err(validation_error(
-                "bind_finding_to_context",
-                CoreErrorCode::MissingSourceHandle,
-                "source_handle_ids",
-            ));
-        }
-        let evidence = evidence_index(evidence_records)?;
-        if self
-            .evidence_ids
-            .iter()
-            .any(|id| !evidence.contains_key(id))
-        {
-            return Err(validation_error(
-                "bind_finding_to_context",
-                CoreErrorCode::MissingEvidenceReference,
-                "evidence_ids",
-            ));
-        }
-        if self
-            .remediation
-            .as_ref()
-            .is_some_and(|remediation| remediation.class() == RemediationClass::ExactEdit)
-            && self.evidence_ids.iter().any(|id| {
-                evidence
-                    .get(id)
-                    .is_some_and(|confidence| confidence == "candidate")
-            })
-        {
-            return Err(validation_error(
-                "bind_finding_to_context",
-                CoreErrorCode::RemediationAuthorityViolation,
-                "remediation.class",
-            ));
+        validate_reference_set(
+            &self.related_source_handle_ids,
+            OPERATION,
+            "related_source_handle_ids",
+        )?;
+        validate_reference_set(&self.evidence_ids, OPERATION, "evidence_ids")?;
+        validate_reference_set(
+            &self.required_capability_ids,
+            OPERATION,
+            "required_capability_ids",
+        )?;
+        registry.require_sources(
+            std::iter::once(self.primary_source_handle_id)
+                .chain(self.related_source_handle_ids.iter().copied()),
+            OPERATION,
+            "source_handle_ids",
+        )?;
+        let has_candidate = registry.require_evidence(&self.evidence_ids, OPERATION)?;
+        if let Some(remediation) = &self.remediation {
+            remediation.validate()?;
+            registry.require_sources(
+                remediation.plan_handle_id,
+                OPERATION,
+                "remediation.plan_handle_id",
+            )?;
+            if remediation.class() == RemediationClass::ExactEdit
+                && (has_candidate || self.evidence_ids.is_empty())
+            {
+                return Err(validation_error(
+                    OPERATION,
+                    CoreErrorCode::RemediationAuthorityViolation,
+                    "remediation.class",
+                ));
+            }
         }
         crate::integrity::validate_finding(self)
     }

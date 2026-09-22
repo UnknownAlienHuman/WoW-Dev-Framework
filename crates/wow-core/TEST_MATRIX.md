@@ -40,6 +40,15 @@ consumer; 64 deterministic input permutations; byte/count limits; and resealed
 envelope mutations. Golden fixture bytes are unchanged. Producer honesty and
 host decoding-size ceilings are outside this pure validation slice.
 
+`tests/e0_finding_conformance.rs` adds 26 grouped tests under `tests/finding/`:
+typed argument boundaries, golden finding reconstruction, fingerprint/context
+separation, all three diagnostic binding/validation paths, retained registry
+integrity/ancestry/source closure, decoded reference sets and remediation, warning
+subject/ID admission, explicit deduplication, 64 deterministic input permutations
+and independently resealed envelopes. Correct fixture bytes remain unchanged.
+Standalone source-generation/coverage/provenance and recipe execution/safety are
+not certified by these tests. Remaining E0-A acceptance stays separate.
+
 The first coding agent must turn these cases into tests that prove the target path executed. Test names should preserve the case IDs so failures map back to this contract.
 
 ## 1. Test rules
