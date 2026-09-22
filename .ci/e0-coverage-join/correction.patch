@@ -1,0 +1,18 @@
+diff --git a/crates/wow-core/tests/coverage_join/envelopes.rs b/crates/wow-core/tests/coverage_join/envelopes.rs
+index d6540d17f2ddaa68586b8b7cc964244c4483832d..05bb2f9a269a68ef8680cf15aeffe88ccdd4c5ef 100644
+--- a/crates/wow-core/tests/coverage_join/envelopes.rs
++++ b/crates/wow-core/tests/coverage_join/envelopes.rs
+@@ -7,9 +7,10 @@ fn envelope_join_001_all_golden_bytes_and_both_evaluation_representations_are_pr
+     for golden in GOLDENS {
+         let value = serde_json::from_str(golden)?;
+         let envelope: wow_core::E0CheckResultEnvelope = serde_json::from_str(golden)?;
+-        assert_eq!(envelope.canonical_bytes()?, golden.as_bytes());
+-        assert_eq!(draft(&value)?.finalize()?.canonical_bytes()?, golden.as_bytes());
+-        assert_eq!(canonical_result_order(envelope)?.canonical_bytes()?, golden.as_bytes());
++        let expected: &[u8] = golden.as_bytes();
++        assert_eq!(envelope.canonical_bytes()?.as_slice(), expected);
++        assert_eq!(draft(&value)?.finalize()?.canonical_bytes()?.as_slice(), expected);
++        assert_eq!(canonical_result_order(envelope)?.canonical_bytes()?.as_slice(), expected);
+     }
+     Ok(())
+ }

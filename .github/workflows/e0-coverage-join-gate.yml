@@ -36,11 +36,16 @@ jobs:
           echo "7f865c855c62b9529bc767a95629bc9c754db0f98411080aec7cb910573bc255  $RUNNER_TEMP/coverage-join.patch.gz" | sha256sum -c -
           gzip -dc "$RUNNER_TEMP/coverage-join.patch.gz" > "$RUNNER_TEMP/coverage-join.patch"
           echo "20203e206cf7c52a769a1a17e05ece76f1e9be7b2b1944179504efb724163291  $RUNNER_TEMP/coverage-join.patch" | sha256sum -c -
+          cp .ci/e0-coverage-join/correction.patch "$RUNNER_TEMP/join-correction.patch"
+          echo "4fba3dc776f8db40e458a9986610cd811b83328a211e08e65060a64d438b91a8  $RUNNER_TEMP/join-correction.patch" | sha256sum -c -
           git rm -r .ci/e0-coverage-join .github/workflows/e0-coverage-join-gate.yml
           test "$(git write-tree)" = ef9cdba6a6b2e28c7ced6396957bc6244519d75c
           git apply --index --check "$RUNNER_TEMP/coverage-join.patch"
           git apply --index "$RUNNER_TEMP/coverage-join.patch"
           test "$(git write-tree)" = 738f6655d7a3d37a4b37b414b5cf935a60d9baa1
+          git apply --index --check "$RUNNER_TEMP/join-correction.patch"
+          git apply --index "$RUNNER_TEMP/join-correction.patch"
+          test "$(git write-tree)" = b12866db51499cb05a03b3a3af0da9439abbe88b
       - name: Install and record current stable Rust
         run: |
           rustup toolchain install stable --profile minimal --component rustfmt --component clippy
@@ -56,6 +61,8 @@ jobs:
           git diff --exit-code
           git diff --cached --check
           git write-tree > "$RUNNER_TEMP/join-results/TREE_SHA"
+          cp crates/wow-core/tests/coverage_join/envelopes.rs "$RUNNER_TEMP/join-results/envelopes.rs"
+          sha256sum crates/wow-core/src/coverage.rs crates/wow-core/src/coverage/admission.rs crates/wow-core/src/envelope.rs crates/wow-core/tests/coverage_join/*.rs > "$RUNNER_TEMP/join-results/SOURCE_SHA256SUMS"
       - name: Run all 22 coverage join regressions
         run: |
           set -euo pipefail
