@@ -1,0 +1,158 @@
+-            || self
+-                .related_source_handle_ids
+-                .iter()
+-                .any(|id| !source_ids.contains(id))
+-        {
+-            return Err(validation_error(
+-                "bind_finding_to_context",
+-                CoreErrorCode::MissingSourceHandle,
+-                "source_handle_ids",
+-            ));
+-        }
+-
+-        let evidence = evidence_index(evidence_records)?;
+-        if self
+-            .evidence_ids
+-            .iter()
+-            .any(|id| !evidence.contains_key(id))
+-        {
+-            return Err(validation_error(
+-                "bind_finding_to_context",
+-                CoreErrorCode::MissingEvidenceReference,
+-                "evidence_ids",
+-            ));
+-        }
+-        if self
+-            .remediation
+-            .as_ref()
+-            .is_some_and(|remediation| remediation.class() == RemediationClass::ExactEdit)
+-            && self.evidence_ids.iter().any(|id| {
+-                evidence
+-                    .get(id)
+-                    .is_some_and(|confidence| confidence == "candidate")
+-            })
+-        {
+-            return Err(validation_error(
+-                "bind_finding_to_context",
+-                CoreErrorCode::RemediationAuthorityViolation,
+-                "remediation.class",
+-            ));
+-        }
+-
+         let fingerprint = self.fingerprint()?;
+         #[derive(Serialize)]
+         struct FindingIdentity {
+@@ -401,7 +358,7 @@ struct FindingIdentity {
+             context_id,
+             finding_fingerprint: fingerprint,
+         })?;
+-        Ok(Finding {
++        let finding = Finding {
+             finding_id,
+             fingerprint,
+             context_id: self.context_id,
+@@ -420,7 +377,9 @@ struct FindingIdentity {
+             root_cause_key: self.root_cause_key,
+             caused_by_root_cause_key: self.caused_by_root_cause_key,
+             remediation: self.remediation,
+-        })
++        };
++        finding.validate(context_id, source_handles, evidence_records)?;
++        Ok(finding)
+     }
+ }
+ 
+@@ -650,37 +609,33 @@ pub fn validate(
+                 "context_id",
+             ));
+         }
+-        validate_message_arguments(&self.message_arguments)?;
+-        let sources = source_handles
+-            .iter()
+-            .map(crate::SourceHandle::handle_id)
+-            .collect::<BTreeSet<_>>();
+-        if self
+-            .primary_source_handle_id
+-            .is_some_and(|id| !sources.contains(&id))
+-            || self
+-                .related_source_handle_ids
+-                .iter()
+-                .any(|id| !sources.contains(id))
+-        {
+-            return Err(validation_error(
+-                "validate_warning_record",
+-                CoreErrorCode::MissingSourceHandle,
+-                "source_handle_ids",
+-            ));
++        let registry = DiagnosticRegistry::new(
++            context_id, source_handles, evidence_records, "validate_warning_record",
++        )?;
++        self.validate_admitted(&registry)
++    }
++
++    pub(crate) fn validate_admitted(&self, registry: &DiagnosticRegistry<'_>) -> CoreResult<()> {
++        const OPERATION: &str = "validate_warning_record";
++        if self.context_id != registry.context_id() {
++            return Err(validation_error(OPERATION, CoreErrorCode::WarningContextMismatch, "context_id"));
+         }
+-        let evidence = evidence_index(evidence_records)?;
+-        if self
+-            .evidence_ids
+-            .iter()
+-            .any(|id| !evidence.contains_key(id))
+-        {
+-            return Err(validation_error(
+-                "validate_warning_record",
+-                CoreErrorCode::MissingEvidenceReference,
+-                "evidence_ids",
+-            ));
++        match (&self.subject_kind, &self.subject_id) {
++            (Some(kind), Some(id)) => {
++                validate_lower_segment(kind, OPERATION, "subject_kind")?;
++                validate_bounded_text(id, OPERATION, "subject_id")?;
++            }
++            (None, None) => {}
++            _ => return Err(validation_error(OPERATION, CoreErrorCode::InvalidMessageArgument, "subject")),
+         }
++        validate_message_arguments(&self.message_arguments)?;
++        validate_reference_set(&self.related_source_handle_ids, OPERATION, "related_source_handle_ids")?;
++        validate_reference_set(&self.evidence_ids, OPERATION, "evidence_ids")?;
++        registry.require_sources(
++            self.primary_source_handle_id.into_iter().chain(self.related_source_handle_ids.iter().copied()),
++            OPERATION, "source_handle_ids",
++        )?;
++        registry.require_evidence(&self.evidence_ids, OPERATION)?;
+         crate::integrity::validate_warning(self)
+     }
+ 
+@@ -697,48 +652,12 @@ pub const fn context_id(&self) -> GenerationContextId {
+     }
+ }
+ 
+-fn evidence_index(records: &[crate::EvidenceRecord]) -> CoreResult<BTreeMap<EvidenceId, String>> {
+-    let mut index = BTreeMap::new();
+-    for record in records {
+-        let value = serde_json::to_value(record).map_err(|error| {
+-            validation_error(
+-                "bind_finding_to_context",
+-                CoreErrorCode::ContractViolation,
+-                "evidence_records",
+-            )
+-            .with_argument("reason", error.to_string())
+-        })?;
+-        let Value::Object(object) = value else {
+-            return Err(validation_error(
+-                "bind_finding_to_context",
+-                CoreErrorCode::ContractViolation,
+-                "evidence_records",
+-            ));
+-        };
+-        let Some(Value::String(id)) = object.get("evidence_id") else {
+-            return Err(validation_error(
+-                "bind_finding_to_context",
+-                CoreErrorCode::ContractViolation,
+-                "evidence_records.evidence_id",
+-            ));
+-        };
+-        let Some(Value::String(confidence)) = object.get("confidence") else {
+-            return Err(validation_error(

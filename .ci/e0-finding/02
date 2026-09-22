@@ -1,0 +1,138 @@
++arguments must already be canonical `NormalizedSourcePath` values. Absolute/drive/
++UNC/traversal and normalization-requiring spellings reject; a filename containing
++`..` without a parent component remains valid. Text/identifier/boolean/digest
++semantics and the existing 128-argument/4096-byte value bounds remain unchanged.
++
++Standalone registry admission does not possess a complete `GenerationContext`,
++coverage/conflict registry or source bytes. Expected source-generation binding,
++coverage/eligibility, root-cause closure, actual source content and producer
++truth remain envelope/owner obligations. `derive_warning_id` is still a pure
++identity computation, not a substitute for `validate_warning_record`.
+diff --git a/crates/wow-core/TEST_MATRIX.md b/crates/wow-core/TEST_MATRIX.md
+index 883349385910980663b7076fdd28d9d6311f0492..78a7c02bc96bd58e9bcceaa867a65ae022dcc3e0 100644
+--- a/crates/wow-core/TEST_MATRIX.md
++++ b/crates/wow-core/TEST_MATRIX.md
+@@ -40,6 +40,15 @@ # `wow-core` E0-A test matrix
+ envelope mutations. Golden fixture bytes are unchanged. Producer honesty and
+ host decoding-size ceilings are outside this pure validation slice.
+ 
++`tests/e0_finding_conformance.rs` adds 26 grouped tests under `tests/finding/`:
++typed argument boundaries, golden finding reconstruction, fingerprint/context
++separation, all three diagnostic binding/validation paths, retained registry
++integrity/ancestry/source closure, decoded reference sets and remediation, warning
++subject/ID admission, explicit deduplication, 64 deterministic input permutations
++and independently resealed envelopes. Correct fixture bytes remain unchanged.
++Standalone source-generation/coverage/provenance and recipe execution/safety are
++not certified by these tests. Remaining E0-A acceptance stays separate.
++
+ The first coding agent must turn these cases into tests that prove the target path executed. Test names should preserve the case IDs so failures map back to this contract.
+ 
+ ## 1. Test rules
+diff --git a/crates/wow-core/src/envelope.rs b/crates/wow-core/src/envelope.rs
+index 067899ee9b5b1336ded667321cd0d9999352e739..067a71753a93a9ad99f1df1db958276fb21679cd 100644
+--- a/crates/wow-core/src/envelope.rs
++++ b/crates/wow-core/src/envelope.rs
+@@ -828,10 +828,11 @@ fn record_status<T: Serialize>(record: &T) -> Option<String> {
+ }
+ 
+ fn validate_records(envelope: &E0CheckResultEnvelope) -> CoreResult<()> {
+-    for handle in &envelope.source_handles {
+-        handle.validate()?;
+-    }
+-    crate::validate_evidence_derivation_graph(&envelope.evidence_records)?;
++    // Admit the retained registry once, not once per finding or warning.
++    let diagnostics = crate::finding::DiagnosticRegistry::new(
++        envelope.context.context_id(), &envelope.source_handles, &envelope.evidence_records,
++        "validate_result_envelope",
++    )?;
+     for conflict in &envelope.conflicts {
+         conflict.validate()?;
+     }
+@@ -899,20 +900,11 @@ fn validate_records(envelope: &E0CheckResultEnvelope) -> CoreResult<()> {
+             }
+         }
+     }
+-    let context_id = envelope.context.context_id();
+     for finding in &envelope.findings {
+-        finding.validate(
+-            context_id,
+-            &envelope.source_handles,
+-            &envelope.evidence_records,
+-        )?;
++        finding.validate_admitted(&diagnostics)?;
+     }
+     for warning in &envelope.warnings {
+-        warning.validate(
+-            context_id,
+-            &envelope.source_handles,
+-            &envelope.evidence_records,
+-        )?;
++        warning.validate_admitted(&diagnostics)?;
+     }
+     Ok(())
+ }
+diff --git a/crates/wow-core/src/finding.rs b/crates/wow-core/src/finding.rs
+index 1fec74d0ce045a5cda43acd90daeea6c7b241ba0..5aea2ea8ad981d130f77220081893f3a925dbcf6 100644
+--- a/crates/wow-core/src/finding.rs
++++ b/crates/wow-core/src/finding.rs
+@@ -1,7 +1,6 @@
+ use std::collections::{BTreeMap, BTreeSet};
+ 
+ use serde::{Deserialize, Serialize};
+-use serde_json::Value;
+ 
+ use crate::digest::{
+     EvidenceId, FindingFingerprint, FindingId, GenerationContextId, RootCauseKey, StableHandleId,
+@@ -10,6 +9,9 @@
+ use crate::error::{CoreErrorCode, CoreResult, validation_error};
+ use crate::ids::{EntityKey, MessageCode, ProducerId, RuleId, ToolVersion, validate_lower_segment};
+ 
++mod admission;
++pub(crate) use admission::DiagnosticRegistry;
++
+ const MAX_MESSAGE_ARGUMENTS: usize = 128;
+ const MAX_ARGUMENT_VALUE_BYTES: usize = 4096;
+ 
+@@ -158,22 +160,23 @@ pub fn new(
+         recipe_id: Option<RuleId>,
+         plan_handle_id: Option<StableHandleId>,
+     ) -> CoreResult<Self> {
+-        let valid = match class {
+-            RemediationClass::ExactEdit | RemediationClass::ValidatedRecipe => recipe_id.is_some(),
+-            RemediationClass::PlanOnly | RemediationClass::CandidateOnly => true,
+-        };
+-        if !valid {
++        let remediation = Self { class, recipe_id, plan_handle_id };
++        remediation.validate()?;
++        Ok(remediation)
++    }
++
++    // Decoding bypasses `new`; keep class-specific shape admission in one place.
++    fn validate(&self) -> CoreResult<()> {
++        if matches!(self.class, RemediationClass::ExactEdit | RemediationClass::ValidatedRecipe)
++            && self.recipe_id.is_none()
++        {
+             return Err(validation_error(
+                 "bind_finding_to_context",
+                 CoreErrorCode::RemediationAuthorityViolation,
+                 "remediation.recipe_id",
+             ));
+         }
+-        Ok(Self {
+-            class,
+-            recipe_id,
+-            plan_handle_id,
+-        })
++        Ok(())
+     }
+ 
+     /// Remediation authority class.
+@@ -345,52 +348,6 @@ pub fn bind(
+             ));
+         }
+         validate_message_arguments(&self.message_arguments)?;
+-        let source_ids = source_handles
+-            .iter()
+-            .map(crate::SourceHandle::handle_id)
+-            .collect::<BTreeSet<_>>();
+-        if !source_ids.contains(&self.primary_source_handle_id)

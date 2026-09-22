@@ -1,0 +1,99 @@
++fn finding_bind_009_validates_handle_content_before_registry_membership() -> TestResult {
++    let f = Fixture::new()?;
++    let mut sources = f.sources.clone();
++    let mut value = serde_json::to_value(&sources[0])?;
++    value["revision"] = json!("fixture:changed-with-stale-id");
++    sources[0] = serde_json::from_value(value)?;
++    registry_error(&f,&sources,&f.evidence,CoreErrorCode::CanonicalDigestMismatch,"handle_id")?;
++    let mut sources = f.sources.clone(); sources.push(sources[0].clone());
++    registry_error(&f,&sources,&f.evidence,CoreErrorCode::ResultDuplicateId,"source_handles")
++}
++
++#[test]
++fn finding_bind_010_validates_evidence_before_reading_confidence() -> TestResult {
++    let f = Fixture::new()?;
++    let mut evidence = f.evidence.clone();
++    let mut value = serde_json::to_value(&evidence[0])?;
++    value["producer_version"] = json!("99.0.0");
++    evidence[0] = serde_json::from_value(value)?;
++    registry_error(&f,&f.sources,&evidence,CoreErrorCode::CanonicalDigestMismatch,"evidence_id")?;
++    let mut evidence = f.evidence.clone(); evidence.push(evidence[0].clone());
++    registry_error(&f,&f.sources,&evidence,CoreErrorCode::DuplicateEvidenceReference,"evidence_records.evidence_id")
++}
++
++#[test]
++fn finding_bind_011_requires_full_ancestry_and_rejects_confidence_laundering() -> TestResult {
++    let mut f = Fixture::new()?;
++    let candidate = leaf(f.context,true)?;
++    let child = EvidenceRecord::new(f.context,ProvenanceClass::ProjectSource,EvidenceConfidence::Derived,
++        ClaimScope::ProjectFact,"fixture.child".parse()?,"0.1.0".parse()?,Vec::new(),Vec::new(),vec![candidate.evidence_id()])?;
++    f.value["findings"][1]["evidence_ids"] = json!([child.evidence_id()]);
++    f.finding = serde_json::from_value(f.value["findings"][1].clone())?;
++    f.evidence = vec![child.clone()];
++    registry_error(&f,&f.sources,std::slice::from_ref(&child),CoreErrorCode::MissingEvidenceReference,"evidence_records.derivation_input_ids")?;
++    registry_error(&f,&f.sources,&[candidate,child],CoreErrorCode::EvidenceAuthorityViolation,"evidence_records.derivation_input_ids")
++}
++
++#[test]
++fn finding_bind_012_requires_evidence_source_closure() -> TestResult {
++    let mut f = Fixture::new()?;
++    let mut value = serde_json::to_value(leaf(f.context,false)?)?;
++    value["source_handle_ids"] = json!([format!("handle:sha256:{}", "ff".repeat(32))]);
++    let evidence = reseal_evidence(&mut value)?;
++    evidence.validate()?;
++    f.value["findings"][1]["evidence_ids"] = json!([evidence.evidence_id()]);
++    f.finding = serde_json::from_value(f.value["findings"][1].clone())?;
++    f.evidence = vec![evidence.clone()];
++    registry_error(&f,&f.sources,&[evidence],CoreErrorCode::MissingSourceHandle,"evidence_records.source_handle_ids")
++}
++
++#[test]
++fn finding_bind_013_retained_reference_sets_are_not_silently_repaired() -> TestResult {
++    let f = Fixture::new()?;
++    let mut base = f.value["findings"][1].clone();
++    base["related_source_handle_ids"] = json!([f.sources[0].handle_id(),f.sources[1].handle_id()]);
++    for key in ["evidence_ids","related_source_handle_ids","required_capability_ids"] {
++        for duplicate in [false,true] {
++            let mut value = base.clone();
++            let entries = value[key].as_array_mut().ok_or("reference array")?;
++            if duplicate { entries.insert(0,entries[0].clone()); } else { entries.reverse(); }
++            // These fields are outside fingerprint material: IDs still match.
++            assert_error(f.check(value)?,CoreErrorCode::ResultDuplicateId,key)?;
++        }
++    }
++    Ok(())
++}
++
++#[test]
++fn finding_bind_014_decoded_remediation_requires_recipe_and_plan_reference() -> TestResult {
++    let f = Fixture::new()?;
++    for class in [RemediationClass::ExactEdit,RemediationClass::ValidatedRecipe] {
++        assert_error(Remediation::new(class,None,None),CoreErrorCode::RemediationAuthorityViolation,"remediation.recipe_id")?;
++        let wire = json!({"class":class});
++        let mut value = f.value["findings"][1].clone(); value["remediation"] = wire.clone();
++        assert_error(f.check(value)?,CoreErrorCode::RemediationAuthorityViolation,"remediation.recipe_id")?;
++        let decoded: Remediation = serde_json::from_value(wire)?;
++        assert_error(f.draft()?.remediation(decoded).bind(f.context,&f.sources,&f.evidence),CoreErrorCode::RemediationAuthorityViolation,"remediation.recipe_id")?;
++    }
++    let mut value = f.value["findings"][1].clone();
++    value["remediation"] = json!({"class":"plan_only","plan_handle_id":format!("handle:sha256:{}", "ff".repeat(32))});
++    assert_error(f.check(value)?,CoreErrorCode::MissingSourceHandle,"remediation.plan_handle_id")
++}
++
++#[test]
++fn finding_bind_005_015_candidate_and_empty_evidence_cannot_authorize_exact_edit() -> TestResult {
++    let f = Fixture::new()?;
++    let candidate = leaf(f.context,true)?;
++    let edit = Remediation::new(RemediationClass::ExactEdit,Some("fixture.recipe".parse()?),None)?;
++    for records in [Vec::new(),vec![candidate.clone()]] {
++        let ids = records.iter().map(EvidenceRecord::evidence_id).collect();
++        assert_error(f.draft()?.evidence_ids(ids).remediation(edit.clone()).bind(f.context,&f.sources,&records),CoreErrorCode::RemediationAuthorityViolation,"remediation.class")?;
++    }
++    for class in [RemediationClass::PlanOnly,RemediationClass::CandidateOnly] {
++        let finding = f.draft()?.evidence_ids(vec![candidate.evidence_id()]).remediation(Remediation::new(class,None,None)?)
++            .bind(f.context,&f.sources,std::slice::from_ref(&candidate))?;
++        finding.validate(f.context,&f.sources,std::slice::from_ref(&candidate))?;
++    }
++    // Unreferenced optional candidates do not taint admitted local evidence.
++    let mut evidence = f.evidence.clone(); evidence.push(candidate);
++    let accepted = f.draft()?.remediation(edit).bind(f.context,&f.sources,&evidence)?;

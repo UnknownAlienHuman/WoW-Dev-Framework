@@ -1,0 +1,5 @@
++        if value["budget"]["usage"]["output_bytes"].as_u64() == Some(bytes) { return Ok(serde_json::from_value(value.clone())?); }
++        value["budget"]["usage"]["output_bytes"] = bytes.into();
++    }
++    Err("test resealing did not converge".into())
++}

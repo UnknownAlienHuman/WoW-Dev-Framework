@@ -1,0 +1,129 @@
+-                "bind_finding_to_context",
+-                CoreErrorCode::ContractViolation,
+-                "evidence_records.confidence",
+-            ));
+-        };
+-        let id = id.parse::<EvidenceId>()?;
+-        if index.insert(id, confidence.clone()).is_some() {
+-            return Err(validation_error(
+-                "bind_finding_to_context",
+-                CoreErrorCode::ResultDuplicateId,
+-                "evidence_records",
+-            ));
+-        }
++fn validate_reference_set<T: Ord>(values: &[T], operation: &'static str, field: &'static str) -> CoreResult<()> {
++    if values.windows(2).any(|pair| pair[0] >= pair[1]) {
++        return Err(validation_error(operation, CoreErrorCode::ResultDuplicateId, field)
++            .with_argument("reason", "noncanonical_or_duplicate_reference"));
+     }
+-    Ok(index)
++    Ok(())
+ }
+ 
+ fn source_sort_key(handle: &crate::SourceHandle) -> (String, String, String, u8, u64, u64) {
+@@ -773,14 +692,13 @@ fn validate_argument_value(kind: MessageArgumentKind, value: &str) -> CoreResult
+         MessageArgumentKind::Text => true,
+         MessageArgumentKind::Integer => value
+             .parse::<u64>()
+-            .is_ok_and(|number| number <= 9_007_199_254_740_991),
++            .is_ok_and(|number| number <= 9_007_199_254_740_991 && number.to_string() == value),
+         MessageArgumentKind::Boolean => matches!(value, "true" | "false"),
+         MessageArgumentKind::Identifier => {
+             !value.is_empty() && !value.chars().any(char::is_whitespace)
+         }
+-        MessageArgumentKind::Path => {
+-            !value.is_empty() && !value.starts_with('/') && !value.contains("..")
+-        }
++        MessageArgumentKind::Path => crate::NormalizedSourcePath::parse(value)
++            .is_ok_and(|path| path.was_canonical()),
+         MessageArgumentKind::Digest => value.strip_prefix("sha256:").is_some_and(|hex| {
+             hex.len() == 64
+                 && hex
+@@ -834,50 +752,32 @@ pub fn validate(
+                 "context_id",
+             ));
+         }
+-        validate_message_arguments(&self.message_arguments)?;
+-        let source_ids = source_handles
+-            .iter()
+-            .map(crate::SourceHandle::handle_id)
+-            .collect::<BTreeSet<_>>();
+-        if !source_ids.contains(&self.primary_source_handle_id)
+-            || self
+-                .related_source_handle_ids
+-                .iter()
+-                .any(|id| !source_ids.contains(id))
+-        {
+-            return Err(validation_error(
+-                "bind_finding_to_context",
+-                CoreErrorCode::MissingSourceHandle,
+-                "source_handle_ids",
+-            ));
+-        }
+-        let evidence = evidence_index(evidence_records)?;
+-        if self
+-            .evidence_ids
+-            .iter()
+-            .any(|id| !evidence.contains_key(id))
+-        {
+-            return Err(validation_error(
+-                "bind_finding_to_context",
+-                CoreErrorCode::MissingEvidenceReference,
+-                "evidence_ids",
+-            ));
++        let registry = DiagnosticRegistry::new(
++            context_id, source_handles, evidence_records, "bind_finding_to_context",
++        )?;
++        self.validate_admitted(&registry)
++    }
++
++    pub(crate) fn validate_admitted(&self, registry: &DiagnosticRegistry<'_>) -> CoreResult<()> {
++        const OPERATION: &str = "bind_finding_to_context";
++        if self.context_id != registry.context_id() {
++            return Err(validation_error(OPERATION, CoreErrorCode::FindingContextMismatch, "context_id"));
+         }
+-        if self
+-            .remediation
+-            .as_ref()
+-            .is_some_and(|remediation| remediation.class() == RemediationClass::ExactEdit)
+-            && self.evidence_ids.iter().any(|id| {
+-                evidence
+-                    .get(id)
+-                    .is_some_and(|confidence| confidence == "candidate")
+-            })
+-        {
+-            return Err(validation_error(
+-                "bind_finding_to_context",
+-                CoreErrorCode::RemediationAuthorityViolation,
+-                "remediation.class",
+-            ));
++        validate_message_arguments(&self.message_arguments)?;
++        validate_reference_set(&self.related_source_handle_ids, OPERATION, "related_source_handle_ids")?;
++        validate_reference_set(&self.evidence_ids, OPERATION, "evidence_ids")?;
++        validate_reference_set(&self.required_capability_ids, OPERATION, "required_capability_ids")?;
++        registry.require_sources(
++            std::iter::once(self.primary_source_handle_id).chain(self.related_source_handle_ids.iter().copied()),
++            OPERATION, "source_handle_ids",
++        )?;
++        let has_candidate = registry.require_evidence(&self.evidence_ids, OPERATION)?;
++        if let Some(remediation) = &self.remediation {
++            remediation.validate()?;
++            registry.require_sources(remediation.plan_handle_id, OPERATION, "remediation.plan_handle_id")?;
++            if remediation.class() == RemediationClass::ExactEdit && (has_candidate || self.evidence_ids.is_empty()) {
++                return Err(validation_error(OPERATION, CoreErrorCode::RemediationAuthorityViolation, "remediation.class"));
++            }
+         }
+         crate::integrity::validate_finding(self)
+     }
+diff --git a/crates/wow-core/src/finding/admission.rs b/crates/wow-core/src/finding/admission.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..beb3f55a710c145a556a97eeb937226dc79f8848
+--- /dev/null
++++ b/crates/wow-core/src/finding/admission.rs
+@@ -0,0 +1,72 @@
++//! One immutable, registry-local admission shared by diagnostics and envelopes.
++//! Coverage/source eligibility still belongs to the complete context/owner joins.
++
++use std::collections::{BTreeMap, BTreeSet};
++
++use crate::{CoreErrorCode, CoreResult, EvidenceConfidence, EvidenceId, EvidenceRecord,
