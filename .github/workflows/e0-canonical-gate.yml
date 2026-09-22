@@ -36,11 +36,16 @@ jobs:
           echo "080432dec277db092234d82242475ff24a84a38d2010b15fd9fe7e0e2c8dbf70  $RUNNER_TEMP/canonical.patch.gz" | sha256sum -c -
           gzip -dc "$RUNNER_TEMP/canonical.patch.gz" > "$RUNNER_TEMP/canonical.patch"
           echo "d71a95a20c5255757e2a217529bca5879d7967d589e44278f9a725b280f4815d  $RUNNER_TEMP/canonical.patch" | sha256sum -c -
+          cp .ci/e0-canonical/correction.patch "$RUNNER_TEMP/canonical-correction.patch"
+          echo "763796ca08f56ff335de74682bad1fd03ac3022244516a3e3379c6a595850418  $RUNNER_TEMP/canonical-correction.patch" | sha256sum -c -
           git rm -r .ci/e0-canonical .github/workflows/e0-canonical-gate.yml
           test "$(git write-tree)" = f219bf119468e974f4ec4fd59f5d73f2be565cf9
           git apply --index --check "$RUNNER_TEMP/canonical.patch"
           git apply --index "$RUNNER_TEMP/canonical.patch"
           test "$(git write-tree)" = 163612e04f9f429d584e6955b2ddd2228b34eefa
+          git apply --index --check "$RUNNER_TEMP/canonical-correction.patch"
+          git apply --index "$RUNNER_TEMP/canonical-correction.patch"
+          test "$(git write-tree)" = c394273255c711fe0ee570036d40d1729f68b0a2
       - name: Install and record current stable Rust
         run: |
           rustup toolchain install stable --profile minimal --component rustfmt --component clippy

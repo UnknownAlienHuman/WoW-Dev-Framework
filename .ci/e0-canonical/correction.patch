@@ -1,0 +1,13 @@
+diff --git a/crates/wow-core/src/canonical/admission.rs b/crates/wow-core/src/canonical/admission.rs
+index 05c7456d64b4d89155b95e7939b5165a6d93e7e0..413676662e6e3a8d9c181d0903255c0774af7232 100644
+--- a/crates/wow-core/src/canonical/admission.rs
++++ b/crates/wow-core/src/canonical/admission.rs
+@@ -371,7 +371,7 @@ fn json_key<T: Serialize + ?Sized>(key: &T) -> Result<String> {
+     let mut map = serde::Serializer::serialize_map(serde_json::value::Serializer, Some(1))
+         .map_err(|_| invalid())?;
+     map.serialize_entry(key, &true).map_err(|_| invalid())?;
+-    let Value::Object(map) = map.end().map_err(|_| invalid())? else {
++    let Value::Object(map) = SerializeMap::end(map).map_err(|_| invalid())? else {
+         return Err(invalid());
+     };
+     map.into_iter().next().map(|(key, _)| key).ok_or_else(invalid)
