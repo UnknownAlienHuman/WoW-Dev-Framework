@@ -36,10 +36,14 @@ jobs:
           echo "6af60155a038e29838aff3245169fa56564cbc2b2825fe5eb9cc433fd777c175  $RUNNER_TEMP/xml.patch.gz" | sha256sum -c -
           gzip -dc "$RUNNER_TEMP/xml.patch.gz" > "$RUNNER_TEMP/xml.patch"
           echo "4e01d31c6753a78f55a83814bf9f792c6f9f7009f915d65060cffd37a20a95e7  $RUNNER_TEMP/xml.patch" | sha256sum -c -
+          cp .ci/xml-index/correction.patch "$RUNNER_TEMP/xml-correction.patch"
+          echo "ee3933d7a0d1b6bc749a93128daba4c0b444825f7e1378367d5185373d0ac99e  $RUNNER_TEMP/xml-correction.patch" | sha256sum -c -
           git rm -r .ci/xml-index .github/workflows/xml-index-build.yml
           test "$(git write-tree)" = a05ea152e594515e903150a46218aaa2b0dd481c
           git apply --index "$RUNNER_TEMP/xml.patch"
           test "$(git write-tree)" = 324652084639760c2d9df3baa0c6dd7caa53f9b2
+          git apply --index "$RUNNER_TEMP/xml-correction.patch"
+          test "$(git write-tree)" = 4e7981f06c62178da4abe211266eacf65cbc9f13
           git rev-parse HEAD > "$RUNNER_TEMP/xml-results/BASE_SHA"
       - name: Format the reviewed implementation
         run: |
