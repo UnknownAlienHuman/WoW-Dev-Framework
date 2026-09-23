@@ -418,6 +418,18 @@ pub struct Finding {
 }
 
 impl Finding {
+    /// Technical severity retained by this finding's owner.
+    #[must_use]
+    pub const fn severity(&self) -> Severity {
+        self.severity
+    }
+
+    /// Exact evidence references; consumers must resolve these without substitution.
+    #[must_use]
+    pub fn evidence_ids(&self) -> &[EvidenceId] {
+        &self.evidence_ids
+    }
+
     /// Stable context-bound finding ID.
     #[must_use]
     pub const fn finding_id(&self) -> FindingId {

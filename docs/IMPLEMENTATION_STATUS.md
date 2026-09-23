@@ -10,10 +10,10 @@ Rust implementations must be written again.
 
 ## Active workspace and unaccepted scope
 
-The root Cargo workspace has **14 members**: `wow-core`, `wow-store`,
+The root Cargo workspace has **15 members**: `wow-core`, `wow-store`,
 `wow-reference`, `wow-annotations`, `wow-emmy`, `wow-project`, `wow-rules`,
 `wow-service`, `wow-graph`, `wow-recognizers`, `xtask`, `wow-render-contract`,
-`wow-ketho-literals` and the guest in `modules/ketho-literals`.
+`wow-ketho-literals`, `wow-cli` and the guest in `modules/ketho-literals`.
 The separate `bridges/literal-host` workspace has dedicated CI and is deliberately
 excluded from the root workspace.
 
@@ -23,13 +23,15 @@ retain required pending/null fields. Partial executable state is not complete
 package acceptance. This correction does not manufacture missing evidence or
 waive the earlier fixture-freeze policy.
 
-`apps/wow` has no Rust implementation. `apps/wow-reference-builder` has inactive
+`apps/wow` now implements one-shot `status/check` over explicit materialized input
+through real project/analyzer/rule owners; see [local input](../apps/wow/LOCAL_INPUT.md). `apps/wow-reference-builder` has inactive
 source/tests with missing service symbols, command-contract differences and
 input-boundary issues; root workspace CI does not test it. Search, context,
 optional external bridge and supported release owners remain planned.
 
-Next: close exact E0 prerequisite fixtures and I0-F's owner-composed `wow status`
-/ `wow check` slice, using the existing owners. All launch gates remain blocked.
+Next: complete functional source/Library input materialization and supported-profile
+owner routing, then the dormant builder. Do not block missing code on new test
+matrices. Existing full acceptance and launch gates remain open.
 
 ## Native source and annotation boundary
 

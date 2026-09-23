@@ -82,9 +82,26 @@ pub struct CheckResult {
     presentation_graph: PresentationGraph,
     rule_evaluations: Vec<RuleEvaluation>,
     deferred_operations: Vec<DeferredOperation>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    owner_analysis: Option<Box<crate::local::OwnerAnalysis>>,
 }
 
 impl CheckResult {
+    #[must_use]
+    pub fn components(&self) -> &[ComponentSnapshot] {
+        &self.components
+    }
+
+    #[must_use]
+    pub fn deferred_operations(&self) -> &[DeferredOperation] {
+        &self.deferred_operations
+    }
+
+    #[must_use]
+    pub fn owner_analysis(&self) -> Option<&crate::local::OwnerAnalysis> {
+        self.owner_analysis.as_deref()
+    }
+
     #[must_use]
     pub fn result_id(&self) -> &str {
         &self.result_id
@@ -320,9 +337,7 @@ impl<B: ServiceBackend> Service<B> {
         cancelled: &AtomicBool,
     ) -> ServiceResult<CheckResult> {
         check_cancelled(cancelled, request.operation_id())?;
-        let context = self
-            .backend
-            .acquire_context(request.selector(), request.scope())?;
+        let context = self.backend.acquire_for_check(request, cancelled)?;
         self.validate_context(&context, request)?;
         check_cancelled(cancelled, request.operation_id())?;
 
@@ -387,6 +402,8 @@ impl<B: ServiceBackend> Service<B> {
             presentation_graph: &'a PresentationGraph,
             rule_evaluations: &'a [RuleEvaluation],
             deferred_operations: &'a [DeferredOperation],
+            #[serde(skip_serializing_if = "Option::is_none")]
+            owner_analysis: Option<&'a crate::local::OwnerAnalysis>,
         }
         let identity = Identity {
             schema: RESULT_SCHEMA,
@@ -403,6 +420,7 @@ impl<B: ServiceBackend> Service<B> {
             presentation_graph: &presentation_graph,
             rule_evaluations: &rule_evaluations,
             deferred_operations: self.configuration.deferred_operations(),
+            owner_analysis: context.owner_analysis(),
         };
         let result_id = canonical_digest("service-result:sha256:", &identity)?;
         Ok(CheckResult {
@@ -421,6 +439,7 @@ impl<B: ServiceBackend> Service<B> {
             presentation_graph,
             rule_evaluations,
             deferred_operations: self.configuration.deferred_operations().to_vec(),
+            owner_analysis: context.owner_analysis().cloned().map(Box::new),
         })
     }
 

@@ -13,9 +13,9 @@
     "manifest": "crates/wow-service/CONTRACT.json",
     "launch_gate": "R0",
     "scope": [
-      "Close required E0-A through E0-E fixture, identity and checksum prerequisites against the existing code.",
-      "Complete the owner-composed E0-F fixture and implement the missing thin wow status / wow check application.",
-      "Use docs/PROJECT_COMPLETION_MATRIX.md and docs/AUDIT_2026-09-19.md; do not recreate implemented owner slices or treat partial code as acceptance."
+      "Complete explicit host input materialization and supported-profile routing through existing owners.",
+      "Continue missing functional code before expanding acceptance matrices; preserve existing unresolved acceptance honestly.",
+      "The status/check binary exists: apps/wow/LOCAL_INPUT.md."
     ]
   },
   "workspace_state": {
@@ -747,7 +747,7 @@
   ],
   "implementation_evidence_state": {
     "implemented_work_packages": 0,
-    "active_cargo_workspace_members": 14,
+    "active_cargo_workspace_members": 15,
     "real_reference_packs": 0,
     "real_project_generations": 0,
     "real_analyzer_diagnostic_search_context_runs": 0,
@@ -767,8 +767,8 @@
     "branch_intent": "main; no task branches or worktrees",
     "steps": [
       "Read docs/PROJECT_COMPLETION_MATRIX.md and docs/AUDIT_2026-09-19.md, then the exact owner contract.",
-      "Close E0 prerequisite fixtures and reviewed checksum/identity chains against the existing implementations, one owner at a time.",
-      "Complete the real owner-composed E0-F fixture and missing thin apps/wow status/check frontend.",
+      "Finish functional owners and public commands first; reconcile E0 acceptance evidence after the executable product is assembled.",
+      "Extend the implemented materialized-input CLI with explicit host source/Library materialization and non-fixture WoW profiles.",
       "Preserve native source/annotation and isolated parser/bridge CI; do not silently activate the dormant builder.",
       "Publish each coherent checkpoint with actual check outcomes, then verify exact remote main and blob identities."
     ]

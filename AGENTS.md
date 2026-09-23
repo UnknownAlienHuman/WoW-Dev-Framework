@@ -2,16 +2,23 @@
 
 These rules apply to every human or automated contributor.
 
+## Current execution priority
+
+Implement missing functional code first, then build it. Do not turn expanding
+unit-test matrices or fixture acceptance into a prerequisite for writing missing
+owners/apps. Preserve existing tests and report unexecuted acceptance separately.
+
 ## Current implementation frontier
 
 - Read `docs/PROJECT_COMPLETION_MATRIX.md` for the audited code/acceptance census
   and `docs/AUDIT_2026-09-19.md` for concrete remaining tasks.
-- `Cargo.toml` activates 14 members, including real `wow-emmy`, `wow-project`,
+- `Cargo.toml` activates 15 members, including real `wow-emmy`, `wow-project`,
   `wow-rules`, `wow-service`, `wow-store`, `wow-graph` and `wow-recognizers` slices.
   Do not follow obsolete instructions to recreate these owners from scratch.
 - Partial executable code and ordinary CI are not complete package acceptance.
   Required E0 fixture/identity/checksum gates remain open; the public `apps/wow`
-  executable is absent. Close prerequisites and I0-F/R0 before claiming a product.
+  executable now has one-shot materialized-input status/check; see apps/wow/LOCAL_INPUT.md.
+  Full R0 remains unaccepted.
 - Native reference/annotation production remains source-driven and nonexecuting.
   Guarded fast-forward of existing standalone source checkouts is available;
   managed cloning and GitHub-only materialization remain incomplete.

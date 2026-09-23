@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "contract_id": "apps/wow/e0-f/1",
-  "state": "implementation-ready-documentation-no-rust-code",
+  "state": "partial-executable-materialized-input-status-check",
   "application": "wow",
   "work_package": "E0-F",
   "framework_dependencies": [
@@ -184,5 +184,9 @@
     "all exit codes map exactly",
     "no source/lower-crate/runtime/edit behavior",
     "all required tests pass"
-  ]
+  ],
+  "startup_options": [
+    "--config <materialized-project.json>"
+  ],
+  "implementation_boundary": "LOCAL_INPUT.md"
 }

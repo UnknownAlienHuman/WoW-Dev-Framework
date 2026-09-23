@@ -11,6 +11,7 @@ mod backend;
 mod configuration;
 mod error;
 mod identity;
+pub mod local;
 mod model;
 mod operation;
 mod presentation;
@@ -31,3 +32,8 @@ pub use model::{
 };
 pub use operation::{OperationId, OperationRegistrySnapshot};
 pub use service::{CheckResult, Service, ServiceResultEnvelope, StatusResult};
+
+pub use local::{
+    LOCAL_INPUT_MAX_BYTES, LocalCommand, LocalOperationResult, LocalProjectBackend,
+    LocalProjectInput, execute_local,
+};

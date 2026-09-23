@@ -133,6 +133,8 @@ impl GenerationSelector {
 pub enum CheckScope {
     WholeProject,
     Files(Vec<Box<str>>),
+    /// Exact logical owner IDs, not host filesystem paths.
+    ProjectFiles(Vec<Box<str>>),
 }
 
 impl CheckScope {
@@ -155,11 +157,28 @@ impl CheckScope {
         Ok(Self::Files(paths))
     }
 
+    pub fn project_files(ids: Vec<Box<str>>) -> ServiceResult<Self> {
+        let mut ids = ids;
+        for id in &ids {
+            wow_project::ProjectFileId::parse(id).map_err(|_| {
+                ServiceError::new(ServiceErrorCode::InvalidRequest, "invalid ProjectFileId")
+            })?;
+        }
+        ids.sort();
+        if ids.is_empty() || ids.windows(2).any(|pair| pair[0] == pair[1]) {
+            return Err(ServiceError::new(
+                ServiceErrorCode::InvalidRequest,
+                "file IDs must be nonempty and unique",
+            ));
+        }
+        Ok(Self::ProjectFiles(ids))
+    }
+
     #[must_use]
     pub fn file_count(&self) -> Option<usize> {
         match self {
             Self::WholeProject => None,
-            Self::Files(paths) => Some(paths.len()),
+            Self::Files(paths) | Self::ProjectFiles(paths) => Some(paths.len()),
         }
     }
 }
@@ -188,6 +207,8 @@ pub struct CheckRequest {
     operation_id: OperationId,
     selector: GenerationSelector,
     scope: CheckScope,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    rules: Vec<Box<str>>,
 }
 
 impl CheckRequest {
@@ -201,7 +222,36 @@ impl CheckRequest {
             operation_id,
             selector,
             scope,
+            rules: Vec::new(),
         }
+    }
+
+    pub fn with_rules(mut self, rules: Vec<Box<str>>) -> ServiceResult<Self> {
+        for rule in &rules {
+            if !matches!(
+                rule.as_ref(),
+                "wow.api.exists@1" | "wow.secret.local_operation@1"
+            ) {
+                return Err(ServiceError::new(
+                    ServiceErrorCode::InvalidRequest,
+                    "rule is not active in E0",
+                ));
+            }
+        }
+        self.rules = rules;
+        self.rules.sort();
+        if self.rules.windows(2).any(|pair| pair[0] == pair[1]) {
+            return Err(ServiceError::new(
+                ServiceErrorCode::InvalidRequest,
+                "duplicate rule selector",
+            ));
+        }
+        Ok(self)
+    }
+
+    #[must_use]
+    pub fn rules(&self) -> &[Box<str>] {
+        &self.rules
     }
 
     #[must_use]
@@ -994,6 +1044,8 @@ pub struct CheckContext {
     generic_findings: Vec<GenericFinding>,
     rule_evaluations: Vec<RuleEvaluation>,
     causal_relations: Vec<CausalRelation>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    owner_analysis: Option<Box<crate::local::OwnerAnalysis>>,
 }
 
 impl CheckContext {
@@ -1013,7 +1065,18 @@ impl CheckContext {
             generic_findings,
             rule_evaluations,
             causal_relations,
+            owner_analysis: None,
         }
+    }
+
+    pub(crate) fn with_owner_analysis(mut self, analysis: crate::local::OwnerAnalysis) -> Self {
+        self.owner_analysis = Some(Box::new(analysis));
+        self
+    }
+
+    #[must_use]
+    pub fn owner_analysis(&self) -> Option<&crate::local::OwnerAnalysis> {
+        self.owner_analysis.as_deref()
     }
 
     #[must_use]

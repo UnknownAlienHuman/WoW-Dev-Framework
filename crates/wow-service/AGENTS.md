@@ -4,9 +4,9 @@
 
 ```text
 planned service documentation: complete through E7-B
-service implementation: not started
+service implementation: E0 orchestration, ReferenceView administration and local owner composition
 first service implementation package: I0-F / E0-F
-repository next package: I0-A / wow-core E0-A
+repository next work: missing functional owner and application code
 ```
 
 Do not implement E7 service operations before prerequisite owner packages. Later documentation defines the final interface, but implementation follows the dependency and launch order.
@@ -125,11 +125,12 @@ Applications and tools depend only on `wow-service`, invoke one operation per se
 
 Service semantic code cannot execute source, repository, build, release, installer, or migration scripts; raw shell, SQL, RPC, MCP, tools, models, provider APIs, or arbitrary callbacks. Source, provider, client, and release text remains data. All bytes, collections, nesting, time, memory, calls, queues, streams, and retries are bounded by exact profiles.
 
-## Documentation versus implementation
+## Active implementation
 
-Do not add service Cargo or Rust code, workflows, placeholder modules, fake owner effects, fake reviewers, vaults, providers, builders, signers, publishers, installers, or passing measurements until prerequisite packages and first-commit freeze gates exist.
-
-When implementation begins, activate only the selected service slice and populate every required freeze field before the first corresponding Rust commit.
+`src/local/` composes real project/analyzer/reference/rule owners for the one-shot
+application. Read `../../apps/wow/LOCAL_INPUT.md`. Implement missing behavior
+before new acceptance matrices; do not recreate owners or promote partial code
+to full package acceptance. The operator's current code-first priority applies.
 
 ## Completion report
 

@@ -20,7 +20,7 @@ recording that code honestly does not waive those gates or populate missing evid
 
 ## Executable inventory
 
-The root [Cargo.toml](../Cargo.toml) activates **14 members**, not two, four or seven.
+The root [Cargo.toml](../Cargo.toml) activates **15 members**, not two, four or seven.
 
 | Component | Observed executable slice | Remaining acceptance boundary |
 |---|---|---|
@@ -45,7 +45,8 @@ neither a root member nor an independently declared workspace. Its source also
 calls absent service symbols and diverges from its documented command contract.
 Do not count it as tested or simply activate it to make the table look complete.
 
-`apps/wow`, `wow-search`, `wow-context`, `wow-cbm` and `tools/wow-release` have
+`apps/wow` now provides a materialized-input one-shot CLI; see
+[LOCAL_INPUT.md](../apps/wow/LOCAL_INPUT.md). `wow-search`, `wow-context`, `wow-cbm` and `tools/wow-release` have
 no Rust implementation in the audited source. Their documentation is not a binary.
 
 ## Work-package ledger
@@ -53,7 +54,7 @@ no Rust implementation in the audited source. Their documentation is not a binar
 | Packages | Actual state | Next requirement |
 |---|---|---|
 | E0-A–E0-E | Partial executable | Close exact normative fixtures and prerequisite identity/checksum chains, one owner at a time |
-| E0-F | Partial service; public app absent | Thin `wow status`/`wow check`, owner-composed fixture, output/exit/cancellation/resource gates |
+| E0-F | Partial service and materialized-input public CLI | Thin `wow status`/`wow check`, owner-composed fixture, output/exit/cancellation/resource gates |
 | E1-A–E1-C | Partial executable | Finish only verified missing contract/acceptance slices; do not recreate existing store/reference/annotation implementations |
 | E1-D | Partial ReferenceView service; inactive, inconsistent builder source | Repair the frontend/service contract and then include real package tests in CI |
 | E2-A–E2-B | Partial executable | Remaining graph queries, normative recognizer coverage and owner seams |
@@ -66,13 +67,14 @@ no Rust implementation in the audited source. Their documentation is not a binar
 
 ## Immediate execution order
 
-1. **I0 prerequisite closure:** compare E0-A–E0-E operations and fixtures with the
-   existing code. In particular, E0-B/C/D/E/F `examples/CHECKSUMS.json` still have
-   required null identities/digests. Connect fixtures to real tests before freezing
-   reviewed bytes; never fill hashes mechanically merely to silence the gate.
-2. **I0-F / R0:** reuse the implemented owners. Complete one actual owner-composed
-   fixture path and implement the missing thin `apps/wow` commands. No new parser,
-   duplicate rule engine, implicit source discovery or fake clean backend.
+The operator's 2026-09-23 priority is functional code before expanded tests.
+Existing acceptance requirements remain separate and must not be reported passed.
+
+1. **I0-F functional path:** `apps/wow` now routes explicit materialized inputs
+   through actual project/analyzer/reference/rule owners. Finish explicit host
+   source/Library materialization and supported-profile rule routing next.
+2. **E0 acceptance:** retain existing fixtures/checksums; close their remaining
+   evidence after functional implementation, not as an endless prerequisite for it.
 3. **I1:** close remaining store/reference/annotation acceptance, then repair the
    dormant builder against its E1 contract. Workspace inclusion and isolated parser
    CI membership must be updated together; adding an app introduces a transitive
@@ -90,7 +92,7 @@ branches/worktrees or force pushes. Read back each published checkpoint.
 
 | Gate | State | Concrete reason |
 |---|---|---|
-| R0 | Blocked | Missing `apps/wow`; required E0 fixture/checksum and whole-command evidence not closed |
+| R0 | Blocked | Materialized-input CLI exists; required E0 fixture/checksum and whole-command acceptance remain open |
 | A0 | Blocked | R0 plus full E1–E3 acceptance and real-addon/profile evaluation |
 | A1 | Blocked | A0, E4 and the selected implemented E7-A frontend |
 | B0 | Blocked | A1 and real E5 governance evidence; E6 remains optional |

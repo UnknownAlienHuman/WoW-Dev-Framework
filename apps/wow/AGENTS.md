@@ -4,9 +4,9 @@
 
 ```text
 planned application documentation: complete through E7-B
-application implementation: not started
+application implementation: partial executable status/check over explicit materialized inputs
 first application package: I0-F / wow status and wow check
-repository next package: I0-A / wow-core E0-A
+repository next work: functional input materialization and supported owner routing
 ```
 
 ## Required routing
@@ -97,9 +97,11 @@ There is no generic invoke, call-service, call-tool, raw RPC, shell, script, plu
 - All argv, configuration, frame, JSON, path, URI, content, collection, queue, stream, and output limits are exact and bounded.
 - Close app-owned resources synchronously; no detached work.
 
-## Documentation-only phase
+## Active implementation
 
-Do not add Cargo, Rust, workflows, placeholder hosts, fake service calls, fake clients, fake helper or update behavior, or passing protocol and platform claims before prerequisites and freeze gates exist.
+Read LOCAL_INPUT.md. Complete missing functional code before extending test
+matrices. Existing E0-F/R0 acceptance remains separate; do not claim it from build
+success. Keep only main, no worktrees or task branches.
 
 ## Completion report
 
@@ -114,4 +116,4 @@ commands and tests with pass, fail, skipped, or NotEvaluated
 launch and completion state advanced or unchanged
 ```
 
-Merge, quarantine, or delete the worktree before starting another primary task.
+Publish coherent work to main without a force push.

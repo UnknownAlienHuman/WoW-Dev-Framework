@@ -54,6 +54,28 @@ impl ServiceBackendStatus {
 /// Minimal E0 owner port. Implementations return immutable, already normalized
 /// owner output and must not switch generation after selector resolution.
 pub trait ServiceBackend: Send + Sync {
+    /// Request-aware acquisition for real owner execution. Legacy precomputed
+    /// backends explicitly reject unsupported rule selection.
+    fn acquire_for_check(
+        &self,
+        request: &crate::CheckRequest,
+        cancelled: &std::sync::atomic::AtomicBool,
+    ) -> ServiceResult<CheckContext> {
+        if cancelled.load(std::sync::atomic::Ordering::Acquire) {
+            return Err(ServiceError::new(
+                ServiceErrorCode::Cancelled,
+                "operation cancelled",
+            ));
+        }
+        if !request.rules().is_empty() {
+            return Err(ServiceError::new(
+                ServiceErrorCode::InvalidRequest,
+                "backend does not support rule selection",
+            ));
+        }
+        self.acquire_context(request.selector(), request.scope())
+    }
+
     fn status(&self) -> ServiceResult<ServiceBackendStatus>;
 
     fn acquire_context(

@@ -1,5 +1,8 @@
 # `apps/wow` contract router
 
+Executable one-shot `status` / `check`: [LOCAL_INPUT.md](LOCAL_INPUT.md).
+Full roadmap/transport acceptance is not implied.
+
 **Status:** planned public application documentation is complete through E7-B; no Rust code exists.
 
 `apps/wow` is the public product transport and host over `wow-service`. Its only framework dependency is `wow-service`.

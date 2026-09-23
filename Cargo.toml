@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
+    "apps/wow",
     "crates/wow-core",
     "crates/wow-store",
     "crates/wow-reference",

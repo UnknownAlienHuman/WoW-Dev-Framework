@@ -1,0 +1,118 @@
+use super::args::Format;
+use std::fmt::Write as _;
+use wow_service::{LocalOperationResult, local::LocalOutcome};
+
+pub fn exit_code(result: &LocalOperationResult) -> u8 {
+    match result.outcome_code() {
+        LocalOutcome::Available => 0,
+        LocalOutcome::Findings => 1,
+        LocalOutcome::Partial => 2,
+        LocalOutcome::Unavailable => 3,
+        LocalOutcome::InternalFailure => 4,
+        LocalOutcome::Cancelled => 130,
+    }
+}
+
+pub fn render(
+    result: &LocalOperationResult,
+    format: Format,
+    capabilities: bool,
+) -> Result<Vec<u8>, ()> {
+    if format == Format::Json {
+        let mut bytes = result.canonical_bytes().map_err(|_| ())?;
+        bytes.push(b'\n');
+        return Ok(bytes);
+    }
+    let mut text = String::new();
+    match result {
+        LocalOperationResult::Status(status) => {
+            writeln!(text, "status: {:?}", status.health()).map_err(|_| ())?;
+            if let Some(context) = status.current_context() {
+                writeln!(
+                    text,
+                    "project: {:?}\nprofile: {:?}\ngeneration: {:?}",
+                    context.project_id(),
+                    context.profile_id(),
+                    context.project_generation_id()
+                )
+                .map_err(|_| ())?;
+            } else {
+                writeln!(
+                    text,
+                    "project snapshot: not materialized (status does not run analysis)"
+                )
+                .map_err(|_| ())?;
+            }
+            for component in status.components() {
+                writeln!(
+                    text,
+                    "component {:?}: {:?}, identity {:?}",
+                    component.component_id(),
+                    component.health(),
+                    component.exact_identity()
+                )
+                .map_err(|_| ())?;
+                if capabilities {
+                    for (id, state) in component.capabilities() {
+                        writeln!(text, "  {:?}: {:?}", id, state).map_err(|_| ())?;
+                    }
+                }
+            }
+            writeln!(text, "deferred: {:?}", status.deferred_operations()).map_err(|_| ())?;
+        }
+        LocalOperationResult::Check(check) => {
+            let context = check.context();
+            writeln!(text, "check: {:?}\nproject: {:?}\nprofile: {:?}\ngeneration: {:?}\nreference: {:?}\nanalyzer: {:?}",
+                check.semantic_status(), context.project_id(), context.profile_id(), context.project_generation_id(),
+                context.reference_generation_id(), context.analyzer_snapshot_id()).map_err(|_| ())?;
+            writeln!(
+                text,
+                "raw findings: {}\ndisplay roots: {}",
+                check.raw_findings().len(),
+                check.presentation_graph().display_root_ids().len()
+            )
+            .map_err(|_| ())?;
+            for component in check.components() {
+                writeln!(
+                    text,
+                    "component {:?}: {:?}, capabilities {:?}",
+                    component.component_id(),
+                    component.health(),
+                    component.capabilities()
+                )
+                .map_err(|_| ())?;
+            }
+            writeln!(text, "deferred: {:?}", check.deferred_operations()).map_err(|_| ())?;
+            for finding in check.raw_findings() {
+                // Serialize the service finding unchanged; JSON string escaping also prevents terminal injection.
+                let data = serde_json::to_string(finding).map_err(|_| ())?;
+                writeln!(text, "finding: {data}").map_err(|_| ())?;
+            }
+            for evaluation in check.rule_evaluations() {
+                let data = serde_json::to_string(evaluation).map_err(|_| ())?;
+                writeln!(text, "evaluation: {data}").map_err(|_| ())?;
+            }
+            for relation in check.presentation_graph().relations() {
+                writeln!(
+                    text,
+                    "relation: {}",
+                    serde_json::to_string(relation).map_err(|_| ())?
+                )
+                .map_err(|_| ())?;
+            }
+            writeln!(
+                text,
+                "runtime: NotEvaluated; clean/findings describe only the selected implemented scope"
+            )
+            .map_err(|_| ())?;
+        }
+        LocalOperationResult::Failure(_) | LocalOperationResult::Cancelled(_) => {
+            text = String::from_utf8(result.canonical_bytes().map_err(|_| ())?).map_err(|_| ())?;
+            text.push('\n');
+        }
+    }
+    if text.len() > 32 * 1024 * 1024 {
+        return Err(());
+    }
+    Ok(text.into_bytes())
+}

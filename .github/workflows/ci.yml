@@ -84,6 +84,7 @@ jobs:
         run: |
           set -euo pipefail
           sed -i \
+            -e '/"apps\/wow",/d' \
             -e '/"crates\/wow-emmy",/d' \
             -e '/"crates\/wow-project",/d' \
             -e '/"crates\/wow-rules",/d' \

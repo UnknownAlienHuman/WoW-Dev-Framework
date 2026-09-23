@@ -1,6 +1,6 @@
 # `apps/wow` E0 CLI contract
 
-**Status:** E0-F implementation-ready transport contract; no Rust code yet.
+**Status:** partial executable implementation; [LOCAL_INPUT.md](LOCAL_INPUT.md) defines the explicit startup/input boundary. Full E0-F acceptance remains open.
 
 ## Mission
 
