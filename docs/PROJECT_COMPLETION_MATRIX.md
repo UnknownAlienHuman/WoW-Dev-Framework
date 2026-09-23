@@ -122,3 +122,11 @@ All eight jobs in CI run `35487232004` concluded success for
 strict Clippy, debug/release tests and rustdoc; updated dependencies; rolling
 parser; Linux/Windows semantic consumers; Linux/Windows Wasm swap/rollback.
 This is code-checkpoint evidence, not a full package or public launch certificate.
+
+## XML inline syntax implementation
+
+TOC/XML source capture, syntax indexing and inline extraction now feed a bounded,
+generation-bound EmmyLua syntax pass. Mapped XML diagnostics participate in normal
+local-check findings and file selection. See [XML_ANALYSIS.md](../apps/wow/XML_ANALYSIS.md).
+This advances functional code, not the existing E2/R0 acceptance gates. Virtual
+Main/Library semantics, inheritance/reference resolution and runtime remain open.

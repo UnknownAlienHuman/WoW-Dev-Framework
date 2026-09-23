@@ -130,6 +130,13 @@ pub fn render(
                     .map_err(|_| ())?;
                 }
             }
+            if let Some(report) = check
+                .owner_analysis()
+                .and_then(|analysis| analysis.xml_lua_report())
+            {
+                writeln!(text, "xml inline syntax: units={}, diagnostics={}, unresolved_scripts={}, identity={:?}",
+                    report.units().len(), report.diagnostic_count(), report.unresolved_scripts().len(), report.analysis_id()).map_err(|_| ())?;
+            }
             for finding in check.raw_findings() {
                 // Serialize the service finding unchanged; JSON string escaping also prevents terminal injection.
                 let data = serde_json::to_string(finding).map_err(|_| ())?;

@@ -55,6 +55,7 @@ pub enum ProjectErrorCode {
     ExpectedFileDigestMismatch,
     UpdateBudgetExceeded,
     AnalyzerFailed,
+    AnalysisCancelled,
     AnalyzerSnapshotMismatch,
     AnalyzerManifestMismatch,
     MandatoryCapabilityUnavailable,

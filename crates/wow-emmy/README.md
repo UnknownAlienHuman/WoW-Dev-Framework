@@ -1,6 +1,6 @@
 # `wow-emmy` implementation contract
 
-**Status:** E0-C implementation-ready contract; no Rust code yet and no upstream dependency is pinned by this documentation change.
+**Status:** executable physical-workspace analysis and a generation-bound virtual Lua syntax adapter exist in `src/`. The Cargo manifest/lockfile identify the compiled upstream revision; full E0-C and virtual-unit semantic acceptance remain open.
 
 ## Mission
 

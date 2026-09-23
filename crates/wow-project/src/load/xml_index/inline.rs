@@ -56,7 +56,13 @@ impl XmlInlineLua {
             return Err(invalid("invalid nonempty inline Lua range"));
         }
         let mut result = Vec::new();
-        for segment in &self.segments {
+        let first = self
+            .segments
+            .partition_point(|segment| segment.lua_byte_end <= start as u64);
+        for segment in self.segments[first..]
+            .iter()
+            .take_while(|segment| segment.lua_byte_start < end as u64)
+        {
             let low = start.max(segment.lua_byte_start as usize);
             let high = end.min(segment.lua_byte_end as usize);
             if low >= high {
@@ -69,6 +75,44 @@ impl XmlInlineLua {
             } else {
                 result.push(segment.xml_span.clone());
             }
+        }
+        Ok(result)
+    }
+
+    /// Map a UTF-8 caret to every exact XML boundary. At a removed comment or
+    /// CDATA delimiter the two neighboring boundaries stay separate candidates.
+    /// Never widen the result across a gap or choose an arbitrary neighbor.
+    pub fn map_position(&self, offset: usize) -> ProjectResult<Vec<XmlSourceSpan>> {
+        if offset > self.text.len() || !self.text.is_char_boundary(offset) {
+            return Err(invalid("invalid inline Lua caret"));
+        }
+        let offset = offset as u64;
+        let first = self
+            .segments
+            .partition_point(|segment| segment.lua_byte_end < offset);
+        let mut result = Vec::new();
+        for segment in self.segments[first..]
+            .iter()
+            .take_while(|segment| segment.lua_byte_start <= offset)
+        {
+            let position = if segment.kind == XmlLuaMapKind::Identity {
+                segment.xml_span.byte_start + offset - segment.lua_byte_start
+            } else if offset == segment.lua_byte_start {
+                segment.xml_span.byte_start
+            } else if offset == segment.lua_byte_end {
+                segment.xml_span.byte_end
+            } else {
+                return Err(invalid(
+                    "inline Lua caret lies inside a transformed character",
+                ));
+            };
+            let mapped = span(&self.lines, position as usize, position as usize);
+            if result.last() != Some(&mapped) {
+                result.push(mapped);
+            }
+        }
+        if result.is_empty() {
+            return Err(invalid("inline Lua caret has no source mapping"));
         }
         Ok(result)
     }

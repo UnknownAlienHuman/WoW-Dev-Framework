@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::Serialize;
 use wow_core::{CanonicalResult, CapabilityId, ContentDigest, ProjectGenerationId};
@@ -85,6 +86,7 @@ pub struct ProjectAnalyzerBinding {
     syntax_report: EmmySyntaxReport,
     member_call_report: EmmyMemberCallReport,
     local_flow_report: EmmyLocalFlowReport,
+    xml_lua_analysis: Option<crate::xml_lua::ProjectXmlLuaAnalysis>,
     capability_records: Vec<ProjectAnalyzerCapabilityRecord>,
 }
 
@@ -129,6 +131,11 @@ impl ProjectAnalyzerBinding {
     }
 
     #[must_use]
+    pub fn xml_lua_analysis(&self) -> Option<&crate::xml_lua::ProjectXmlLuaAnalysis> {
+        self.xml_lua_analysis.as_ref()
+    }
+
+    #[must_use]
     pub fn capability_records(&self) -> &[ProjectAnalyzerCapabilityRecord] {
         &self.capability_records
     }
@@ -161,7 +168,9 @@ pub(crate) fn build_analyzer_binding(
     inventory: &ProjectInputInventory,
     generation: &ProjectGenerationCandidate,
     libraries: &[LuaWorkspaceSnapshot],
+    stop: &AtomicBool,
 ) -> ProjectResult<ProjectAnalyzerBinding> {
+    checkpoint(stop)?;
     generation.validate(configuration, inventory)?;
     if libraries.is_empty() {
         return Err(ProjectError::new(
@@ -221,6 +230,18 @@ pub(crate) fn build_analyzer_binding(
         .with_candidate_generation(generation.project_generation())
     })?;
     validate_workspace_manifest(&main_workspace, inventory)?;
+    let xml_lua_analysis = crate::xml_lua::analyze(
+        configuration,
+        generation.project_generation(),
+        inventory.files().len(),
+        inventory
+            .files()
+            .iter()
+            .map(crate::ProjectInputFile::byte_length)
+            .sum(),
+        stop,
+    )?;
+    checkpoint(stop)?;
 
     let syntax_report = analyze_syntax(&main_workspace).map_err(|source| {
         ProjectError::new(
@@ -230,6 +251,7 @@ pub(crate) fn build_analyzer_binding(
         )
         .with_candidate_generation(generation.project_generation())
     })?;
+    checkpoint(stop)?;
     let library_refs = ordered_libraries.iter().collect::<Vec<_>>();
     let member_call_report =
         analyze_member_calls(&main_workspace, &library_refs).map_err(|source| {
@@ -240,6 +262,7 @@ pub(crate) fn build_analyzer_binding(
             )
             .with_candidate_generation(generation.project_generation())
         })?;
+    checkpoint(stop)?;
     let local_flow_report =
         analyze_local_flow(&main_workspace, &library_refs).map_err(|source| {
             ProjectError::new(
@@ -250,6 +273,20 @@ pub(crate) fn build_analyzer_binding(
             .with_candidate_generation(generation.project_generation())
         })?;
 
+    checkpoint(stop)?;
+    if syntax_report.diagnostics().len().saturating_add(
+        xml_lua_analysis
+            .as_ref()
+            .map_or(0, |report| report.diagnostic_count()),
+    ) as u64
+        > budget.max_generic_findings()
+    {
+        return Err(ProjectError::new(
+            ProjectErrorCode::SourceBudgetExceeded,
+            ProjectPhase::Analyzer,
+            "combined physical and XML Lua diagnostic budget exceeded",
+        ));
+    }
     validate_report_bindings(
         &main_workspace,
         inventory,
@@ -295,6 +332,8 @@ pub(crate) fn build_analyzer_binding(
         syntax_analysis_id: &'a str,
         member_call_analysis_id: &'a str,
         local_flow_analysis_id: &'a str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        xml_lua_analysis_id: Option<&'a str>,
         file_manifest_digest: ContentDigest<CanonicalResult>,
         capability_records: &'a [ProjectAnalyzerCapabilityRecord],
     }
@@ -316,6 +355,7 @@ pub(crate) fn build_analyzer_binding(
             syntax_analysis_id: syntax_report.analysis_id(),
             member_call_analysis_id: member_call_report.analysis_id(),
             local_flow_analysis_id: local_flow_report.analysis_id(),
+            xml_lua_analysis_id: xml_lua_analysis.as_ref().map(|report| report.analysis_id()),
             file_manifest_digest: inventory.manifest_digest(),
             capability_records: &capability_records,
         },
@@ -332,6 +372,7 @@ pub(crate) fn build_analyzer_binding(
         syntax_report,
         member_call_report,
         local_flow_report,
+        xml_lua_analysis,
         capability_records,
     })
 }
@@ -663,4 +704,17 @@ fn parse_capability(value: &str) -> ProjectResult<CapabilityId> {
             format!("invalid analyzer capability ID {value:?}: {source}"),
         )
     })
+}
+
+/// Cooperative boundary around upstream calls and before snapshot publication.
+pub(crate) fn checkpoint(stop: &AtomicBool) -> ProjectResult<()> {
+    if stop.load(Ordering::Relaxed) {
+        Err(ProjectError::new(
+            ProjectErrorCode::AnalysisCancelled,
+            ProjectPhase::Analyzer,
+            "project analysis cancelled",
+        ))
+    } else {
+        Ok(())
+    }
 }

@@ -649,6 +649,8 @@ fn derive_snapshot_identity(
         syntax_analysis_id: &'a str,
         member_call_analysis_id: &'a str,
         local_flow_analysis_id: &'a str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        xml_lua_analysis_id: Option<&'a str>,
     }
     let coverage_ids = coverage
         .iter()
@@ -683,6 +685,9 @@ fn derive_snapshot_identity(
         syntax_analysis_id: analyzer.syntax_report().analysis_id(),
         member_call_analysis_id: analyzer.member_call_report().analysis_id(),
         local_flow_analysis_id: analyzer.local_flow_report().analysis_id(),
+        xml_lua_analysis_id: analyzer
+            .xml_lua_analysis()
+            .map(|report| report.analysis_id()),
     };
     let identity = Identity {
         snapshot_schema_version: PROJECT_SNAPSHOT_SCHEMA_VERSION,

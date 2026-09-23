@@ -458,6 +458,16 @@ impl ExactSourceLocation {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+struct GenericSourceMapping {
+    profile: &'static str,
+    virtual_unit_id: Box<str>,
+    virtual_byte_start: u64,
+    virtual_byte_end: u64,
+    kind: &'static str,
+    locations: Vec<ExactSourceLocation>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct GenericFinding {
     finding_id: Box<str>,
@@ -465,6 +475,8 @@ pub struct GenericFinding {
     upstream_code: Box<str>,
     severity: Box<str>,
     location: ExactSourceLocation,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    source_mapping: Option<GenericSourceMapping>,
 }
 
 impl GenericFinding {
@@ -489,7 +501,49 @@ impl GenericFinding {
             upstream_code,
             severity,
             location,
+            source_mapping: None,
         })
+    }
+
+    /// The primary location is only a display anchor. Preserve every exact
+    /// source piece/caret boundary without widening across removed XML markup.
+    pub(crate) fn with_xml_source_mapping(
+        mut self,
+        unit: &wow_project::xml_lua::XmlLuaUnitAnalysis,
+        diagnostic: &wow_project::xml_lua::XmlLuaDiagnostic,
+    ) -> ServiceResult<Self> {
+        let locations = diagnostic
+            .xml_spans
+            .iter()
+            .map(|span| {
+                ExactSourceLocation::new(
+                    unit.document.as_str(),
+                    unit.document_digest.to_string(),
+                    span.byte_start,
+                    span.byte_end,
+                )
+            })
+            .collect::<ServiceResult<Vec<_>>>()?;
+        if locations.first() != Some(&self.location) {
+            return Err(ServiceError::new(
+                ServiceErrorCode::InvalidContext,
+                "XML diagnostic display anchor differs from its mapping",
+            ));
+        }
+        self.source_mapping = Some(GenericSourceMapping {
+            profile: wow_project::xml_lua::XML_LUA_ANALYSIS_PROFILE,
+            virtual_unit_id: unit.unit_id.clone(),
+            virtual_byte_start: diagnostic.parser_diagnostic.byte_start,
+            virtual_byte_end: diagnostic.parser_diagnostic.byte_end,
+            kind: match diagnostic.mapping {
+                wow_project::xml_lua::XmlLuaDiagnosticMapping::ExactPieces => "exact_pieces",
+                wow_project::xml_lua::XmlLuaDiagnosticMapping::CaretBoundaries => {
+                    "caret_boundaries"
+                }
+            },
+            locations,
+        });
+        Ok(self)
     }
 
     #[must_use]

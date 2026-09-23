@@ -109,9 +109,25 @@ impl LocalProjectBackend {
             None => {
                 // Publication is in-memory only. No source or persistent current pointer is written.
                 let mut publisher = ProjectPublisher::new();
-                let snapshot = publisher.publish_initial(self.input.clone()).map_err(|_| {
-                    owner_error("project/analyzer could not publish a coherent snapshot")
-                })?;
+                let snapshot = publisher
+                    .publish_initial_cancellable(self.input.clone(), stop)
+                    .map_err(|error| {
+                        if error.code() == wow_project::ProjectErrorCode::AnalysisCancelled {
+                            ServiceError::new(
+                                ServiceErrorCode::Cancelled,
+                                "project analysis cancelled",
+                            )
+                        } else if error.code()
+                            == wow_project::ProjectErrorCode::SourceBudgetExceeded
+                        {
+                            ServiceError::new(
+                                ServiceErrorCode::BudgetExceeded,
+                                "project analysis budget exceeded",
+                            )
+                        } else {
+                            owner_error("project/analyzer could not publish a coherent snapshot")
+                        }
+                    })?;
                 cancelled(stop)?;
                 let view = snapshot.open_view();
                 if view.project_generation().to_string() != self.target_generation {

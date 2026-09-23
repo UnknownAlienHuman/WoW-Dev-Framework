@@ -40,13 +40,12 @@ is introduced.
 `map_range(start, end)` maps a nonempty, UTF-8-boundary extracted range to exact
 XML source pieces. Literal pieces map byte-for-byte, normalized newlines and
 entities map to their complete original spellings. Gaps remain gaps, not a widened
-single range. Empty/caret ranges reject rather than selecting a guessed neighbor.
+single range. Empty ranges use `map_position` instead; it retains all exact caret boundaries without selecting a guessed neighbor.
 
-This is **extraction**, not analyzer integration. Bodies are not registered as
-physical Main files, no callback wrapper/parameters are invented, and no inline
-analyzer diagnostics are claimed. A versioned virtual-unit/source-map adapter is
-still required. Existing incomplete-load blockers remain; syntax indexing does not
-make object/lifecycle/inheritance semantics complete or certify runtime loading.
+Extracted bodies now have a generation-bound [EmmyLua syntax pass](XML_ANALYSIS.md)
+and mapped CLI diagnostics. They are not registered as physical Main files and
+no callback parameters/wrappers are invented. Semantic Main/Library integration,
+XML object/lifecycle/inheritance resolution and runtime validation remain separate.
 
 XML character-data normalization follows the W3C XML 1.0 specification,
 sections 2.11 and 4.1 (`https://www.w3.org/TR/xml/`). Raw attribute values are
@@ -67,7 +66,7 @@ attributes and 65,536 inline map segments. Existing 1 MiB/document, 16 MiB/closu
 Literal extraction is bounded by the source document; no unbounded DOM is built.
 
 Text `check` output adds document/node/declaration/script/extracted-body counts
-and each index digest. Status exposes `project.xml.syntax.indexed`; pending inline
+and each index digest. Status exposes `project.xml.syntax.indexed`; pending inline semantic
 analysis remains partial. Plain external-file XML without inline bodies does not
 become degraded merely because the syntax index exists.
 

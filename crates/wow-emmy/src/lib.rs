@@ -10,6 +10,7 @@ pub mod compatibility;
 pub mod flow;
 pub mod references;
 pub mod syntax;
+pub mod virtual_syntax;
 pub mod workspace;
 
 pub use compatibility::{

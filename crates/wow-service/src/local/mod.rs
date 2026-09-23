@@ -5,6 +5,7 @@ mod disk_input;
 mod input;
 mod projection;
 mod response;
+mod xml_lua;
 
 pub use backend::LocalProjectBackend;
 pub use disk_input::{LOCAL_FILES_SCHEMA, LOCAL_TOC_SCHEMA};

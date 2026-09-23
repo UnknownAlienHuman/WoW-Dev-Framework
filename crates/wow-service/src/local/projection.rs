@@ -10,8 +10,7 @@ use std::collections::BTreeSet;
 use std::sync::atomic::AtomicBool;
 use wow_emmy::{EmmyDiagnosticSeverity, EmmySyntaxReport};
 use wow_project::{
-    ProjectAnalyzerCapabilityRecord, ProjectAnalyzerCapabilityState, ProjectFileId,
-    ProjectFileRecord, ProjectView,
+    ProjectAnalyzerCapabilityRecord, ProjectAnalyzerCapabilityState, ProjectFileRecord, ProjectView,
 };
 use wow_reference::{CoverageStatus, ReferenceView};
 use wow_rules::{
@@ -38,9 +37,15 @@ pub struct OwnerAnalysis {
     runtime_status: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     load_plan: Option<wow_project::load::ProjectLoadPlan>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    xml_lua_report: Option<wow_project::xml_lua::ProjectXmlLuaAnalysis>,
 }
 
 impl OwnerAnalysis {
+    #[must_use]
+    pub fn xml_lua_report(&self) -> Option<&wow_project::xml_lua::ProjectXmlLuaAnalysis> {
+        self.xml_lua_report.as_ref()
+    }
     #[must_use]
     pub fn load_plan(&self) -> Option<&wow_project::load::ProjectLoadPlan> {
         self.load_plan.as_ref()
@@ -177,6 +182,16 @@ pub(super) fn components(
             )?
             .with_capability("project.xml.syntax.indexed", CapabilityState::Available)?;
             if pending_inline {
+                let parsed =
+                    project.and_then(|view| view.snapshot().analyzer_binding().xml_lua_analysis());
+                xml = xml.with_capability(
+                    "project.xml.inline_lua.syntax",
+                    if parsed.is_some_and(|report| report.unresolved_scripts().is_empty()) {
+                        CapabilityState::Available
+                    } else {
+                        CapabilityState::Partial
+                    },
+                )?;
                 xml = xml
                     .with_capability("project.xml.inline_lua.analyzed", CapabilityState::Partial)?;
             }
@@ -198,7 +213,9 @@ pub(super) fn check_context(
     load_plan: Option<&wow_project::load::ProjectLoadPlan>,
     stop: &AtomicBool,
 ) -> ServiceResult<CheckContext> {
-    let files = resolve_scope(project, scope)?;
+    let resolved = super::xml_lua::resolve_scope(project, scope)?;
+    let files = resolved.physical;
+    let xml_report = project.snapshot().analyzer_binding().xml_lua_analysis();
     let paths: BTreeSet<&str> = files
         .iter()
         .map(|file| file.relative_path().as_str())
@@ -234,6 +251,7 @@ pub(super) fn check_context(
             location,
         )?);
     }
+    super::xml_lua::append_findings(xml_report, &resolved.xml_documents, &mut generic, stop)?;
     let rules: Vec<Box<str>> = if selected.is_empty() {
         registry
             .descriptors()
@@ -244,7 +262,7 @@ pub(super) fn check_context(
         selected.to_vec()
     };
     let mut evaluations = Vec::new();
-    let report = if identity.profile_id() == wow_rules::FIXTURE_PROFILE_ID {
+    let report = if identity.profile_id() == wow_rules::FIXTURE_PROFILE_ID && !files.is_empty() {
         let policy =
             RuleFixturePolicy::e0().map_err(|_| owner_error("fixture rule policy failed"))?;
         let budget = RuleExecutionBudget::new(65_536, 65_536, 262_144, 262_144, 16 * 1024 * 1024)
@@ -265,26 +283,25 @@ pub(super) fn check_context(
         }
         Some(report)
     } else {
-        // A real repository profile must never acquire E0 fixture-only authority.
+        // Inline syntax does not create WoW semantic facts or fixture authority.
+        let (reason, capability) = if files.is_empty() {
+            (
+                "xml_scope_has_no_rule_semantics",
+                "project.xml.inline_lua.semantic",
+            )
+        } else {
+            ("unsupported_rule_profile", "rules.profile.supported")
+        };
         for rule in &rules {
             let id = crate::identity::canonical_digest(
                 "service-not-evaluated:sha256:",
-                &(
-                    project.snapshot_id(),
-                    rule,
-                    scope,
-                    "unsupported_rule_profile",
-                ),
+                &(project.snapshot_id(), rule, scope, reason),
             )?;
             evaluations.push(RuleEvaluation::not_evaluated(
                 id.clone(),
                 rule.clone(),
                 "selected_project_scope",
-                RuleBlocker::new(
-                    id,
-                    BlockerKind::MissingCapability,
-                    Some("rules.profile.supported".into()),
-                )?,
+                RuleBlocker::new(id, BlockerKind::MissingCapability, Some(capability.into()))?,
             )?);
         }
         None
@@ -319,6 +336,7 @@ pub(super) fn check_context(
         rule_report: report,
         runtime_status: "not_evaluated",
         load_plan: load_plan.cloned(),
+        xml_lua_report: xml_report.cloned(),
     };
     Ok(CheckContext::new(
         identity,
@@ -329,35 +347,6 @@ pub(super) fn check_context(
         Vec::new(),
     )
     .with_owner_analysis(analysis))
-}
-
-fn resolve_scope<'a>(
-    project: &'a ProjectView,
-    scope: &CheckScope,
-) -> ServiceResult<Vec<&'a ProjectFileRecord>> {
-    let files = match scope {
-        CheckScope::WholeProject => project.file_manifest().iter().collect(),
-        CheckScope::ProjectFiles(ids) => ids
-            .iter()
-            .map(|id| {
-                let id = ProjectFileId::parse(id).map_err(|_| invalid_scope())?;
-                project.file_by_id(&id).ok_or_else(invalid_scope)
-            })
-            .collect::<ServiceResult<Vec<_>>>()?,
-        CheckScope::Files(paths) => paths
-            .iter()
-            .map(|path| {
-                project
-                    .file_by_path(path)
-                    .map_err(|_| invalid_scope())?
-                    .ok_or_else(invalid_scope)
-            })
-            .collect::<ServiceResult<Vec<_>>>()?,
-    };
-    if files.is_empty() {
-        return Err(invalid_scope());
-    }
-    Ok(files)
 }
 
 fn invalid_scope() -> ServiceError {

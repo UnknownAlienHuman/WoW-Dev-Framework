@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 use wow_core::ProjectGenerationId;
 use wow_emmy::LuaWorkspaceSnapshot;
@@ -39,6 +40,17 @@ impl ProjectPublisher {
         &mut self,
         bundle: ProjectInputBundle,
     ) -> ProjectResult<Arc<ProjectSnapshot>> {
+        self.publish_initial_cancellable(bundle, &AtomicBool::new(false))
+    }
+
+    /// Publish only after all owner stages finish without cancellation. Upstream
+    /// analyzer/parser calls are cooperative at their boundaries, not preemptible.
+    pub fn publish_initial_cancellable(
+        &mut self,
+        bundle: ProjectInputBundle,
+        stop: &AtomicBool,
+    ) -> ProjectResult<Arc<ProjectSnapshot>> {
+        crate::analyzer::checkpoint(stop)?;
         if self.current.is_some() {
             return Err(ProjectError::new(
                 ProjectErrorCode::AlreadyPublished,
@@ -47,7 +59,7 @@ impl ProjectPublisher {
             ));
         }
         let (configuration, inventory, libraries) = bundle.into_parts();
-        match build_snapshot(configuration, inventory.clone(), libraries.clone()) {
+        match build_snapshot(configuration, inventory.clone(), libraries.clone(), stop) {
             Ok(snapshot) => {
                 let snapshot = Arc::new(snapshot);
                 self.current_inputs = inventory.files().to_vec();
@@ -153,7 +165,12 @@ impl ProjectPublisher {
             self.last_failure = None;
             return Ok(ProjectUpdateOutcome::NoChange(current));
         }
-        match build_snapshot(target_configuration, inventory.clone(), libraries.clone()) {
+        match build_snapshot(
+            target_configuration,
+            inventory.clone(),
+            libraries.clone(),
+            &AtomicBool::new(false),
+        ) {
             Ok(snapshot) => {
                 let snapshot = Arc::new(snapshot);
                 self.current_inputs = inventory.files().to_vec();
@@ -238,14 +255,19 @@ fn build_snapshot(
     configuration: ProjectConfiguration,
     inventory: ProjectInputInventory,
     libraries: Vec<LuaWorkspaceSnapshot>,
+    stop: &AtomicBool,
 ) -> ProjectResult<ProjectSnapshot> {
     let generation = ProjectGenerationCandidate::derive(&configuration, &inventory)?;
-    let analyzer = build_analyzer_binding(&configuration, &inventory, &generation, &libraries)?;
+    let analyzer =
+        build_analyzer_binding(&configuration, &inventory, &generation, &libraries, stop)?;
     let registry = ProjectSourceRegistry::build(
         &configuration,
         &inventory,
         &analyzer,
         generation.project_generation(),
     )?;
-    ProjectSnapshot::build(configuration, generation, inventory, registry, analyzer)
+    let snapshot =
+        ProjectSnapshot::build(configuration, generation, inventory, registry, analyzer)?;
+    crate::analyzer::checkpoint(stop)?;
+    Ok(snapshot)
 }

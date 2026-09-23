@@ -151,8 +151,11 @@ artifacts plus explicitly listed Main/Library files below the config directory.
 same owner composition. See [FILES_INPUT.md](../apps/wow/FILES_INPUT.md).
 The separate `wow-service/local-project-toc/1` mode adds selected TOC/XML external-
 file expansion, a generation-bound load receipt and explicit partial blockers;
-see [TOC_INPUT.md](../apps/wow/TOC_INPUT.md). No source scan, inline-Lua/object index,
-live-rule expansion, full E2-C or R0 acceptance is inferred.
+see [TOC_INPUT.md](../apps/wow/TOC_INPUT.md). There is no source scan, live-rule expansion, full E2-C or R0 acceptance.
+XML now has a source-backed syntax index and extracted inline units; check parses
+those units with the pinned EmmyLua grammar and returns mapped XML diagnostics.
+See [XML_ANALYSIS.md](../apps/wow/XML_ANALYSIS.md). Virtual-unit semantics and XML
+inheritance/reference resolution remain unimplemented.
 
 Selected-TOC acquisition now preflights package-wide target filters before any
 Lua/XML descendant read. Included declarations enter the v3 load receipt; excluded
