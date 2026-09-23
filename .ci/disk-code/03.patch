@@ -1,0 +1,183 @@
++        if before.len() != bytes.len() as u64 || before.len() != after.len()
++            || modified != after.modified().map_err(|_| read_error())? {
++            return Err(failure(ProjectErrorCode::SourceChangedDuringRead, "input file changed during acquisition"));
++        }
++        selected.verify(&bytes)?;
++        checkpoint(stop)?;
++        Ok(bytes)
++    }
++}
++
++fn descend(root: &Dir, path: &str) -> ProjectResult<Dir> {
++    if path != "." { validate_path(path)?; }
++    let mut directory = root.try_clone().map_err(|_| read_error())?;
++    if path != "." {
++        // Each open retains its parent handle. No check-then-open absolute path.
++        for component in path.split('/') {
++            directory = directory.open_dir_nofollow(component).map_err(|_| {
++                failure(ProjectErrorCode::SourceReadFailed, "input subdirectory is unavailable or linked")
++            })?;
++        }
++    }
++    Ok(directory)
++}
++
++fn validate_path(path: &str) -> ProjectResult<()> {
++    let admitted = path.len() <= 4096
++        && path.parse::<NormalizedSourcePath>().is_ok()
++        && path.split('/').all(|part| {
++            !part.ends_with(['.', ' '])
++                && !part.chars().any(|c| matches!(c, ':' | '*' | '?' | '"' | '<' | '>' | '|'))
++                && !is_device_component(part)
++        });
++    if !admitted {
++        return Err(failure(ProjectErrorCode::InvalidFilePath, "input path is not a portable canonical relative path"));
++    }
++    Ok(())
++}
++
++fn is_device_component(part: &str) -> bool {
++    let stem = part.split('.').next().unwrap_or("").trim_end_matches(' ').to_ascii_uppercase();
++    if matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$") {
++        return true;
++    }
++    stem.strip_prefix("COM").or_else(|| stem.strip_prefix("LPT"))
++        .is_some_and(|suffix| matches!(suffix, "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "¹" | "²" | "³"))
++}
++
++fn checkpoint(stop: &AtomicBool) -> ProjectResult<()> {
++    if stop.load(Ordering::Acquire) {
++        Err(failure(ProjectErrorCode::SourceReadCancelled, "input acquisition cancelled"))
++    } else { Ok(()) }
++}
++fn read_error() -> ProjectError {
++    failure(ProjectErrorCode::SourceReadFailed, "input acquisition failed")
++}
++fn failure(code: ProjectErrorCode, message: &'static str) -> ProjectError {
++    ProjectError::new(code, ProjectPhase::Inventory, message)
++}
+diff --git a/crates/wow-project/src/error.rs b/crates/wow-project/src/error.rs
+index 685a2d2240e58fdbc8ea6e798fd4279372ec2f3f..e4da68e368d01c2ca1078f73ef108de8756aa163 100644
+--- a/crates/wow-project/src/error.rs
++++ b/crates/wow-project/src/error.rs
+@@ -29,0 +30,4 @@ pub enum ProjectErrorCode {
++    SourceReadFailed,
++    SourceBudgetExceeded,
++    SourceChangedDuringRead,
++    SourceReadCancelled,
+diff --git a/crates/wow-project/src/inventory.rs b/crates/wow-project/src/inventory.rs
+index d5dec7795e527c26fd2ed7f2433afdb1d93f09d9..b403c4e3c5c69cd7d380481bf0359b8b325c92a9 100644
+--- a/crates/wow-project/src/inventory.rs
++++ b/crates/wow-project/src/inventory.rs
+@@ -233,0 +234,7 @@ pub fn source_fixture_ref(&self) -> Option<&str> {
++    /// Transfer already admitted Lua bytes to the analyzer without reading the host again.
++    #[must_use]
++    pub fn into_workspace_input(self) -> LuaWorkspaceFileInput {
++        let path = self.relative_path().as_str().to_owned();
++        LuaWorkspaceFileInput::new(path, self.text.into_string())
++    }
++
+diff --git a/crates/wow-project/src/lib.rs b/crates/wow-project/src/lib.rs
+index e960631f515dfc559a44d965b35a47cc955629be..01baca249f3fef95f560de0ff1a10b8b734de2d2 100644
+--- a/crates/wow-project/src/lib.rs
++++ b/crates/wow-project/src/lib.rs
+@@ -12,0 +13 @@
++pub mod disk;
+diff --git a/crates/wow-service/src/local/disk_input.rs b/crates/wow-service/src/local/disk_input.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..648c422f5bd0f97f8a954e6f192fa9aa9f7032b8
+--- /dev/null
++++ b/crates/wow-service/src/local/disk_input.rs
+@@ -0,0 +1,134 @@
++//! Resolve only the explicit files in a local configuration. File acquisition is
++//! owned by wow-project; profile, reference and analyzer semantics stay with owners.
++use std::path::Path;
++use std::sync::atomic::AtomicBool;
++
++use serde::Deserialize;
++use wow_core::{CanonicalResult, ContentDigest, ProfileIdentity};
++use wow_project::disk::{ProjectDiskFile, ProjectInputDirectory};
++use wow_project::{
++    ProjectError, ProjectErrorCode, ProjectFileRole, ProjectId, ProjectSourceOriginId,
++    ProjectWorkspaceId,
++};
++use wow_reference::ReferenceView;
++
++use super::LocalProjectInput;
++use super::input::{AnalyzerInput, LOCAL_INPUT_SCHEMA, ProjectMetadata, invalid};
++use crate::{ServiceError, ServiceErrorCode, ServiceResult};
++
++pub const LOCAL_FILES_SCHEMA: &str = "wow-service/local-project-files/1";
++
++#[derive(Deserialize)]
++struct SchemaSelector { schema: String }
++
++#[derive(Deserialize)]
++#[serde(deny_unknown_fields)]
++struct DiskInput {
++    schema: String,
++    project_id: ProjectId,
++    workspace_id: ProjectWorkspaceId,
++    source_origin_id: ProjectSourceOriginId,
++    logical_root: String,
++    profile: ProjectDiskFile,
++    reference_view: ProjectDiskFile,
++    analyzer: DiskAnalyzer,
++    main: DiskInventory,
++    library: DiskInventory,
++}
++
++#[derive(Deserialize)]
++#[serde(deny_unknown_fields)]
++struct DiskAnalyzer {
++    compatibility_report: ProjectDiskFile,
++    accepted_pin_id: String,
++    configuration_digest: ContentDigest<CanonicalResult>,
++    contract_id: String,
++    fixture_contract_id: String,
++    library_contract_id: String,
++}
++
++#[derive(Deserialize)]
++#[serde(deny_unknown_fields)]
++struct DiskInventory {
++    root: String,
++    files: Vec<ProjectDiskFile>,
++}
++
++impl LocalProjectInput {
++    /// Read one explicit config and its declared inputs. The selected config's
++    /// parent is registered once; all manifest paths are relative to that handle.
++    /// Inline inputs remain supported; neither schema scans a directory or writes.
++    pub fn from_config_path(path: &Path, stop: &AtomicBool) -> ServiceResult<Self> {
++        super::cancelled(stop)?;
++        let parent = path.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or(Path::new("."));
++        let name = path.file_name().and_then(|n| n.to_str())
++            .ok_or_else(|| invalid("configuration must name a UTF-8 JSON file"))?;
++        let directory = ProjectInputDirectory::open(parent).map_err(acquisition_error)?;
++        let bytes = directory.read_configuration(name, stop).map_err(acquisition_error)?;
++        let selector: SchemaSelector = serde_json::from_slice(&bytes)
++            .map_err(|_| invalid("invalid local input schema selector"))?;
++        let result = match selector.schema.as_str() {
++            LOCAL_INPUT_SCHEMA => Self::from_json_slice(&bytes),
++            LOCAL_FILES_SCHEMA => Self::from_disk_manifest(&bytes, &directory, stop),
++            _ => Err(invalid("unsupported local input schema")),
++        }?;
++        super::cancelled(stop)?;
++        Ok(result)
++    }
++
++    fn from_disk_manifest(
++        bytes: &[u8], directory: &ProjectInputDirectory, stop: &AtomicBool,
++    ) -> ServiceResult<Self> {
++        let input: DiskInput = serde_json::from_slice(bytes)
++            .map_err(|_| invalid("invalid local file manifest"))?;
++        if input.schema != LOCAL_FILES_SCHEMA {
++            return Err(invalid("unsupported local file manifest"));
++        }
++        let profile: ProfileIdentity = serde_json::from_slice(
++            &directory.read_json_artifact(&input.profile, stop).map_err(acquisition_error)?,
++        ).map_err(|_| invalid("profile artifact was rejected"))?;
++        profile.validate().map_err(|_| invalid("profile artifact was rejected"))?;
++        let reference: ReferenceView = serde_json::from_slice(
++            &directory.read_json_artifact(&input.reference_view, stop).map_err(acquisition_error)?,

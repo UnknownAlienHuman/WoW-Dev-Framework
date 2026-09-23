@@ -1,0 +1,119 @@
+diff --git a/apps/wow/FILES_INPUT.md b/apps/wow/FILES_INPUT.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..9660bc526b3a041833b5ed306fd74c7f83ee2e6d
+--- /dev/null
++++ b/apps/wow/FILES_INPUT.md
+@@ -0,0 +1,77 @@
++# Local files input
++
++```text
++cargo build --locked -p wow-cli --bin wow
++wow status --config workspace/project.json --format text
++wow check --config workspace/project.json --project my-addon --format text
++wow check --config workspace/project.json --project my-addon --file project-file:Init.lua
++```
++
++`--config` accepts either the existing inline `wow-service/local-project-input/1`
++package or `wow-service/local-project-files/1`. The new schema reads declared files
++from disk; no source bodies are embedded in configuration. The config's explicitly
++selected parent directory is registered once by `wow-project`. All manifest paths
++are relative to that retained directory, not cwd. Neither the CLI nor service
++opens individual source files. No directory scan, TOC/XML interpretation, glob,
++include expansion, environment substitution, URL fetch, source execution or write.
++
++## File manifest schema
++
++| Field | Value |
++|---|---|
++| `schema` | `wow-service/local-project-files/1` |
++| `project_id`, `workspace_id`, `source_origin_id`, `logical_root` | Same logical identities as [inline input](LOCAL_INPUT.md); `logical_root` is not a disk path |
++| `profile` | Pinned file reference to the existing `ProfileIdentity` JSON |
++| `reference_view` | Pinned file reference to the existing `ReferenceView` JSON |
++| `analyzer` | Same declaration as inline input, but replace `compatibility_report_json` with a pinned `compatibility_report` file reference |
++| `main` | `{ "root": "addon", "files": [{ "path": "Init.lua" }, { "path": "UI/Frames.lua" }] }` |
++| `library` | `{ "root": "library", "files": [{ "path": "api.lua" }] }` |
++
++A **pinned file reference** has `path`, `content_digest` (`sha256:` plus 64 lowercase
++hex digits) and `byte_length`. Hash and length cover the exact file bytes, including
++whitespace and line endings. All three metadata artifacts must be pinned. Their
++existing owner validators still check schema, self-digest, profile/generation and
++compiled analyzer compatibility. No report, profile, source revision or reference
++coverage is invented merely to make the CLI run.
++
++Main and Library entries may also carry `content_digest` and `byte_length` as a
++pair. Without them the reader captures current file bytes and computes their exact
++identity; edits are therefore picked up on the next invocation without manually
++rebuilding JSON. With them, changed content fails before project publication.
++`root` is `.` or a canonical subdirectory relative to the config's directory.
++`path` is relative to that inventory root. Logical file IDs exclude both physical
++root paths. Moving an unchanged workspace does not itself change source identities.
++
++The complete file list must be explicit and nonempty for each role. Only `.lua`
++files enter this E0 acquisition path. Omitted files are outside the supplied
++universe, not proven absent from an addon. Full TOC/XML/load completeness remains
++unavailable. Main and Library are independently admitted and never merged.
++
++## Acquisition and limits
++
++`wow-project::disk::ProjectInputDirectory` owns a private `cap_std::fs::Dir`.
++The only ambient open registers the caller-selected config directory. Every
++subdirectory is opened by handle with `open_dir_nofollow`; every final file is
++opened read-only with no-follow and checked as a regular file. Unix opens are
++nonblocking to reject a racing FIFO replacement. Absolute/traversal paths,
++Windows device names, alternate streams, backslashes, noncanonical spelling and
++case-fold collisions within each declared inventory are rejected.
++
++Limits: config 32 MiB; each metadata artifact 8 MiB; each inventory 1,024 files,
++1 MiB per source, 16 MiB cumulative. Acquisition checks the stream itself, not
++just metadata, and polls cancellation between chunks/files. Detected size or
++modification-time changes during one read reject without retry. Expected digests
++provide stronger frozen-input checks. File and directory handles close before
++analysis begins. Errors use fixed messages, not OS error strings or host paths.
++
++This captures exact **read bytes**, not an atomic filesystem-wide snapshot or a
++Git-revision attestation. Concurrent in-place edits can escape timestamp-based
++change detection; pin every file or use a stable checkout for frozen provenance.
++The caller-selected directory is an explicit capability: its own resolution and
++hard-linked regular files are not a sandbox against a hostile directory owner.
++Network filesystem calls and analyzer calls are not forcibly preemptible.
++
++Both transports use the same project/analyzer/reference/rule composition and
++existing output/exit semantics. The fixture-only WoW rule restriction is unchanged;
++unsupported live profiles remain `NotEvaluated`. No test matrix or fixture is
++changed by this implementation; full R0 and host-race acceptance remain separate.
+diff --git a/apps/wow/LOCAL_INPUT.md b/apps/wow/LOCAL_INPUT.md
+index ae0367e35295ab813d86339c6eab962e5ec2ddca..e7979c42dc55622e1be6c71a463c85ab219bd6bf 100644
+--- a/apps/wow/LOCAL_INPUT.md
++++ b/apps/wow/LOCAL_INPUT.md
+@@ -47,3 +47,3 @@ ## Input: `wow-service/local-project-input/1`
+-Host file/manifest materialization is not implemented by this checkpoint. An
+-operator/producer must supply this package explicitly; the application does not
+-infer it from cwd, editor configuration, addon folders or a client installation.
++For disk files, use the [explicit file manifest](FILES_INPUT.md). This inline
++schema remains supported for embedders. Neither mode infers inputs from cwd,
++editor configuration, addon folders or a client installation.
+diff --git a/apps/wow/src/args.rs b/apps/wow/src/args.rs
+index 5dd7fbfba54153b336815a117a0ded50b26c2866..6eb1f5a391e9f7ac4cbe9ece786eda1d338f0e1c 100644
+--- a/apps/wow/src/args.rs
++++ b/apps/wow/src/args.rs
+@@ -5 +5 @@
+-pub const HELP: &str = "wow status --config <materialized-project.json> [--project <ProjectId>] [--detail summary|capabilities] [--format json|text]\nwow check --config <materialized-project.json> --project <ProjectId> [--generation current|<ProjectGenerationId>] [--file <ProjectFileId> ...] [--rule <RuleId>@1 ...] [--format json|text]\n\nInput is an explicit materialized project, Library and reference view. No discovery, source execution, source writes or persistent current pointer.\n";
++pub const HELP: &str = "wow status --config <project.json> [--project <ProjectId>] [--detail summary|capabilities] [--format json|text]\nwow check --config <project.json> --project <ProjectId> [--generation current|<ProjectGenerationId>] [--file <ProjectFileId> ...] [--rule <RuleId>@1 ...] [--format json|text]\n\nInput is an explicit file manifest or materialized project, Library and reference view. No discovery, source execution, source writes or persistent current pointer.\n";
+diff --git a/apps/wow/src/main.rs b/apps/wow/src/main.rs
+index 348e2cb0170b0e049bd211e5d2c9ab83b575c874..617e5e3f7b3f129116e73d6462af1422757cab97 100644
+--- a/apps/wow/src/main.rs
++++ b/apps/wow/src/main.rs
+@@ -5,2 +5 @@
+-use std::fs::File;
+-use std::io::{Read, Write};
++use std::io::Write;
+@@ -10 +9 @@
+-use wow_service::{LOCAL_INPUT_MAX_BYTES, LocalOperationResult, LocalProjectInput, execute_local};
++use wow_service::{LocalOperationResult, LocalProjectInput, ServiceErrorCode, execute_local};
+@@ -40,32 +39,9 @@ fn run() -> u8 {
+-    // Reject ordinary special files before open; the opened handle is checked again.
+-    if !std::fs::symlink_metadata(&arguments.config).is_ok_and(|metadata| metadata.is_file()) {
+-        return usage("configuration must be a regular file, not a symlink");
+-    }
+-    let file = match File::open(&arguments.config) {
+-        Ok(file) => file,

@@ -1,0 +1,138 @@
++            .map_err(|_| invalid("invalid capability policy"))?)
+@@ -138,22 +136 @@ pub fn from_json_slice(bytes: &[u8]) -> ServiceResult<Self> {
+-        .build()
+-        .map_err(|_| invalid("project configuration was rejected"))?;
+-        let main = admit_files(input.main_files, ProjectFileRole::FirstPartyMain)?;
+-        // Libraries use the same exact-byte admission, but never enter Main.
+-        let library_inputs = input.library_files;
+-        if library_inputs.is_empty() {
+-            return Err(invalid(
+-                "an explicit nonempty Library inventory is required",
+-            ));
+-        }
+-        let _ = admit_files(
+-            library_inputs
+-                .iter()
+-                .map(|file| SourceInput {
+-                    path: file.path.clone(),
+-                    text: file.text.clone(),
+-                    content_digest: file.content_digest,
+-                    byte_length: file.byte_length,
+-                })
+-                .collect(),
+-            ProjectFileRole::FirstPartyMain,
+-        )?;
++        .build().map_err(|_| invalid("project configuration was rejected"))?;
+@@ -161,6 +138,2 @@ pub fn from_json_slice(bytes: &[u8]) -> ServiceResult<Self> {
+-            backend,
+-            universe,
+-            library_inputs
+-                .into_iter()
+-                .map(|file| LuaWorkspaceFileInput::new(file.path, file.text))
+-                .collect(),
++            backend, universe,
++            libraries.into_iter().map(ProjectInputFile::into_workspace_input).collect(),
+@@ -169,2 +142 @@ pub fn from_json_slice(bytes: &[u8]) -> ServiceResult<Self> {
+-        )
+-        .map_err(|_| invalid("Library input was rejected"))?;
++        ).map_err(|_| invalid("Library input was rejected"))?;
+@@ -173,4 +145 @@ pub fn from_json_slice(bytes: &[u8]) -> ServiceResult<Self> {
+-        Ok(Self {
+-            bundle,
+-            reference: input.reference_view,
+-        })
++        Self::new(bundle, reference)
+@@ -181,7 +150,2 @@ pub fn new(bundle: ProjectInputBundle, reference: ReferenceView) -> ServiceResul
+-        bundle
+-            .configuration()
+-            .validate()
+-            .map_err(|_| invalid("project configuration was rejected"))?;
+-        reference
+-            .validate()
+-            .map_err(|_| invalid("reference view was rejected"))?;
++        bundle.configuration().validate().map_err(|_| invalid("project configuration was rejected"))?;
++        reference.validate().map_err(|_| invalid("reference view was rejected"))?;
+@@ -195,4 +159 @@ pub fn new(bundle: ProjectInputBundle, reference: ReferenceView) -> ServiceResul
+-fn admit_files(
+-    files: Vec<SourceInput>,
+-    role: ProjectFileRole,
+-) -> ServiceResult<Vec<ProjectInputFile>> {
++fn admit_files(files: Vec<SourceInput>, role: ProjectFileRole) -> ServiceResult<Vec<ProjectInputFile>> {
+@@ -200,3 +161 @@ fn admit_files(
+-        return Err(invalid(
+-            "source inventory must contain between 1 and 1024 files",
+-        ));
++        return Err(invalid("source inventory must contain between 1 and 1024 files"));
+@@ -205,21 +164,10 @@ fn admit_files(
+-    files
+-        .into_iter()
+-        .map(|file| {
+-            total = total
+-                .checked_add(file.text.len())
+-                .ok_or_else(|| invalid("source size overflow"))?;
+-            if file.text.len() > 1024 * 1024 || total > 16 * 1024 * 1024 {
+-                return Err(invalid("source inventory exceeds local byte limits"));
+-            }
+-            ProjectInputFile::declared_with_identity(
+-                file.path,
+-                file.text.into_bytes(),
+-                ProjectLanguageKind::Lua,
+-                role,
+-                file.content_digest,
+-                file.byte_length,
+-                None::<String>,
+-            )
+-            .map_err(|_| invalid("source path, content digest or length was rejected"))
+-        })
+-        .collect()
++    files.into_iter().map(|file| {
++        total = total.checked_add(file.text.len()).ok_or_else(|| invalid("source size overflow"))?;
++        if file.text.len() > 1024 * 1024 || total > 16 * 1024 * 1024 {
++            return Err(invalid("source inventory exceeds local byte limits"));
++        }
++        ProjectInputFile::declared_with_identity(
++            file.path, file.text.into_bytes(), ProjectLanguageKind::Lua, role,
++            file.content_digest, file.byte_length, None::<String>,
++        ).map_err(|_| invalid("source path, content digest or length was rejected"))
++    }).collect()
+@@ -228 +176 @@ fn admit_files(
+-fn invalid(message: &'static str) -> ServiceError {
++pub(super) fn invalid(message: &'static str) -> ServiceError {
+diff --git a/crates/wow-service/src/local/mod.rs b/crates/wow-service/src/local/mod.rs
+index 44aebf1bf6533c802aaf9d698eb35cda8bf46a12..e537a58d5e0857e2226732a5b8f8772ab24b2746 100644
+--- a/crates/wow-service/src/local/mod.rs
++++ b/crates/wow-service/src/local/mod.rs
+@@ -2 +2 @@
+-//! No source discovery, filesystem access, source execution or persistent current pointer.
++//! Explicit disk inputs use the project acquisition port; no discovery, source execution or persistent current pointer.
+@@ -3,0 +4 @@
++mod disk_input;
+@@ -8,0 +10 @@
++pub use disk_input::LOCAL_FILES_SCHEMA;
+diff --git a/docs/IMPLEMENTATION_STATUS.md b/docs/IMPLEMENTATION_STATUS.md
+index 8a83a0e2888b202822a99855df0083a713023ff2..904df92b5d52a420d8f8fe8d07b03ea0f920ace4 100644
+--- a/docs/IMPLEMENTATION_STATUS.md
++++ b/docs/IMPLEMENTATION_STATUS.md
+@@ -144,0 +145,8 @@ ## Verified code checkpoint
++
++## Explicit disk inputs
++
++The one-shot CLI also accepts `wow-service/local-project-files/1`: pinned metadata
++artifacts plus explicitly listed Main/Library files below the config directory.
++`wow-project::disk` owns bounded read-only acquisition; both input modes use the
++same owner composition. See [FILES_INPUT.md](../apps/wow/FILES_INPUT.md).
++No TOC/XML scan, live-rule expansion or full R0 acceptance is inferred.
+diff --git a/docs/PROJECT_COMPLETION_MATRIX.md b/docs/PROJECT_COMPLETION_MATRIX.md
+index 17ec7563f12ec6b99de8dd099efff284cc7906fb..8349c79d20bf564462a95a5de5581c4940b38c44 100644
+--- a/docs/PROJECT_COMPLETION_MATRIX.md
++++ b/docs/PROJECT_COMPLETION_MATRIX.md
+@@ -29 +29 @@ ## Executable inventory
+-| `wow-project` | Explicit input inventories, analyzer bindings, immutable generations, guarded updates and publication | E0-D fixture identity closure; full TOC/XML/load indexing, overlays and durable project publication |
++| `wow-project` | Explicit input inventories and bounded disk acquisition, analyzer bindings, immutable generations, guarded updates and publication | E0-D fixture identity closure; full TOC/XML/load indexing, overlays and durable project publication |
+@@ -48 +48,2 @@ ## Executable inventory
+-`apps/wow` now provides a materialized-input one-shot CLI; see
++`apps/wow` now provides a one-shot CLI over inline inputs or an explicit
++[disk file manifest](../apps/wow/FILES_INPUT.md); see
+@@ -57 +58 @@ ## Work-package ledger
+-| E0-F | Partial service and materialized-input public CLI | Thin `wow status`/`wow check`, owner-composed fixture, output/exit/cancellation/resource gates |
++| E0-F | Partial service and inline/disk-input public CLI | Thin `wow status`/`wow check`, owner-composed fixture, output/exit/cancellation/resource gates |

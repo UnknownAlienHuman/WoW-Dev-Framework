@@ -1,0 +1,170 @@
++        ).map_err(|_| invalid("reference artifact was rejected"))?;
++        reference.validate().map_err(|_| invalid("reference artifact was rejected"))?;
++        let report = String::from_utf8(
++            directory.read_json_artifact(&input.analyzer.compatibility_report, stop)
++                .map_err(acquisition_error)?,
++        ).map_err(|_| invalid("analyzer report must contain UTF-8"))?;
++        let main = directory.read_lua_inventory(
++            &input.main.root, &input.main.files, ProjectFileRole::FirstPartyMain, stop,
++        ).map_err(acquisition_error)?;
++        let library = directory.read_lua_inventory(
++            &input.library.root, &input.library.files, ProjectFileRole::Library, stop,
++        ).map_err(acquisition_error)?;
++        super::cancelled(stop)?;
++        Self::assemble(
++            ProjectMetadata {
++                project_id: input.project_id,
++                workspace_id: input.workspace_id,
++                source_origin_id: input.source_origin_id,
++                logical_root: input.logical_root,
++                profile,
++                analyzer: AnalyzerInput {
++                    compatibility_report_json: report,
++                    accepted_pin_id: input.analyzer.accepted_pin_id,
++                    configuration_digest: input.analyzer.configuration_digest,
++                    contract_id: input.analyzer.contract_id,
++                    fixture_contract_id: input.analyzer.fixture_contract_id,
++                    library_contract_id: input.analyzer.library_contract_id,
++                },
++            }, reference, main, library,
++        )
++    }
++}
++
++fn acquisition_error(error: ProjectError) -> ServiceError {
++    let code = match error.code() {
++        ProjectErrorCode::SourceReadCancelled => ServiceErrorCode::Cancelled,
++        ProjectErrorCode::SourceBudgetExceeded => ServiceErrorCode::BudgetExceeded,
++        _ => ServiceErrorCode::InvalidConfiguration,
++    };
++    // The project reader emits only fixed messages; never forward OS error prose.
++    ServiceError::new(code, error.message())
++}
+diff --git a/crates/wow-service/src/local/input.rs b/crates/wow-service/src/local/input.rs
+index d570ede9a5fa79f89999663a58a7b6de2823cae8..4238d0c35483435778d647a76886a943da434732 100644
+--- a/crates/wow-service/src/local/input.rs
++++ b/crates/wow-service/src/local/input.rs
+@@ -3,3 +3 @@
+-use wow_emmy::{
+-    LuaWorkspaceFileInput, LuaWorkspaceLimits, LuaWorkspaceSnapshot, LuaWorkspaceUniverse,
+-};
++use wow_emmy::{LuaWorkspaceLimits, LuaWorkspaceSnapshot, LuaWorkspaceUniverse};
+@@ -16 +14 @@
+-pub const LOCAL_INPUT_MAX_BYTES: usize = 32 * 1024 * 1024;
++pub const LOCAL_INPUT_MAX_BYTES: usize = wow_project::disk::DISK_CONFIGURATION_MAX_BYTES;
+@@ -43 +41 @@ struct WireInput {
+-struct AnalyzerInput {
++pub(super) struct AnalyzerInput {
+@@ -45,6 +43,15 @@ struct AnalyzerInput {
+-    compatibility_report_json: String,
+-    accepted_pin_id: String,
+-    configuration_digest: ContentDigest<CanonicalResult>,
+-    contract_id: String,
+-    fixture_contract_id: String,
+-    library_contract_id: String,
++    pub(super) compatibility_report_json: String,
++    pub(super) accepted_pin_id: String,
++    pub(super) configuration_digest: ContentDigest<CanonicalResult>,
++    pub(super) contract_id: String,
++    pub(super) fixture_contract_id: String,
++    pub(super) library_contract_id: String,
++}
++
++pub(super) struct ProjectMetadata {
++    pub(super) project_id: ProjectId,
++    pub(super) workspace_id: ProjectWorkspaceId,
++    pub(super) source_origin_id: ProjectSourceOriginId,
++    pub(super) logical_root: String,
++    pub(super) profile: ProfileIdentity,
++    pub(super) analyzer: AnalyzerInput,
+@@ -67,4 +74,2 @@ pub fn from_json_slice(bytes: &[u8]) -> ServiceResult<Self> {
+-            return Err(ServiceError::new(
+-                ServiceErrorCode::BudgetExceeded,
+-                "local input exceeds its byte limit",
+-            ));
++            return Err(ServiceError::new(ServiceErrorCode::BudgetExceeded,
++                "local input exceeds its byte limit"));
+@@ -72,6 +77,2 @@ pub fn from_json_slice(bytes: &[u8]) -> ServiceResult<Self> {
+-        let input: WireInput = serde_json::from_slice(bytes).map_err(|_| {
+-            ServiceError::new(
+-                ServiceErrorCode::InvalidConfiguration,
+-                "invalid local project input",
+-            )
+-        })?;
++        let input: WireInput = serde_json::from_slice(bytes)
++            .map_err(|_| invalid("invalid local project input"))?;
+@@ -81,12 +82,25 @@ pub fn from_json_slice(bytes: &[u8]) -> ServiceResult<Self> {
+-        input
+-            .profile
+-            .validate()
+-            .map_err(|_| invalid("invalid selected profile"))?;
+-        input
+-            .reference_view
+-            .validate()
+-            .map_err(|_| invalid("invalid reference view"))?;
+-        let reference_generation = input
+-            .reference_view
+-            .generation_id()
+-            .parse()
++        Self::assemble(
++            ProjectMetadata {
++                project_id: input.project_id,
++                workspace_id: input.workspace_id,
++                source_origin_id: input.source_origin_id,
++                logical_root: input.logical_root,
++                profile: input.profile,
++                analyzer: input.analyzer,
++            },
++            input.reference_view,
++            admit_files(input.main_files, ProjectFileRole::FirstPartyMain)?,
++            admit_files(input.library_files, ProjectFileRole::Library)?,
++        )
++    }
++
++    /// Both inline and on-disk transports converge on the same owner composition.
++    pub(super) fn assemble(
++        input: ProjectMetadata,
++        reference: ReferenceView,
++        main: Vec<ProjectInputFile>,
++        libraries: Vec<ProjectInputFile>,
++    ) -> ServiceResult<Self> {
++        input.profile.validate().map_err(|_| invalid("invalid selected profile"))?;
++        reference.validate().map_err(|_| invalid("invalid reference view"))?;
++        let reference_generation = reference.generation_id().parse()
+@@ -96,3 +110 @@ pub fn from_json_slice(bytes: &[u8]) -> ServiceResult<Self> {
+-        )
+-        .map_err(|_| invalid("analyzer compatibility report was rejected"))?;
+-        let probe = backend.compatibility_report_sha256().to_owned();
++        ).map_err(|_| invalid("analyzer compatibility report was rejected"))?;
+@@ -102 +114 @@ pub fn from_json_slice(bytes: &[u8]) -> ServiceResult<Self> {
+-            probe,
++            backend.compatibility_report_sha256().to_owned(),
+@@ -107,2 +119 @@ pub fn from_json_slice(bytes: &[u8]) -> ServiceResult<Self> {
+-        )
+-        .map_err(|_| invalid("analyzer declaration does not match the compiled backend"))?;
++        ).map_err(|_| invalid("analyzer declaration does not match the compiled backend"))?;
+@@ -114,9 +125,2 @@ pub fn from_json_slice(bytes: &[u8]) -> ServiceResult<Self> {
+-            1024,
+-            16 * 1024 * 1024,
+-            1024 * 1024,
+-            1024,
+-            262_144,
+-            65_536,
+-            16 * 1024 * 1024,
+-        )
+-        .map_err(|_| invalid("invalid local project budgets"))?;
++            1024, 16 * 1024 * 1024, 1024 * 1024, 1024, 262_144, 65_536, 16 * 1024 * 1024,
++        ).map_err(|_| invalid("invalid local project budgets"))?;
+@@ -124,5 +128 @@ pub fn from_json_slice(bytes: &[u8]) -> ServiceResult<Self> {
+-            input.project_id,
+-            kind,
+-            input.profile,
+-            reference_generation,
+-            declaration,
++            input.project_id, kind, input.profile, reference_generation, declaration,
+@@ -133,4 +133,2 @@ pub fn from_json_slice(bytes: &[u8]) -> ServiceResult<Self> {
+-        .capability_policy(
+-            ProjectCapabilityPolicy::degraded_e0()
+-                .map_err(|_| invalid("invalid capability policy"))?,
+-        )
++        .capability_policy(ProjectCapabilityPolicy::degraded_e0()

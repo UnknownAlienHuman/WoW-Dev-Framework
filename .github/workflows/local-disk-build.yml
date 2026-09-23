@@ -1,0 +1,130 @@
+name: Local disk build
+on:
+  push:
+    branches: [main]
+    paths: ['.ci/disk-code/**', '.github/workflows/local-disk-build.yml']
+permissions:
+  contents: read
+concurrency:
+  group: local-disk-build
+  cancel-in-progress: true
+env:
+  CARGO_TERM_COLOR: never
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Apply exact disk input implementation
+        run: |
+          set -euo pipefail
+          cat .ci/disk-code/{00,01,02,03,04,05}.patch > "$RUNNER_TEMP/disk.patch"
+          echo "e48c56e10640919b6678ef0788c9488308efdf56e5ce17b55a10969ceadbdbee  $RUNNER_TEMP/disk.patch" | sha256sum -c -
+          git rm -r .ci/disk-code .github/workflows/local-disk-build.yml
+          test "$(git write-tree)" = 1265b2871179334fe99738ee4b10afa367c391b2
+          git apply --unidiff-zero --index --check "$RUNNER_TEMP/disk.patch"
+          git apply --unidiff-zero --index "$RUNNER_TEMP/disk.patch"
+          test "$(git write-tree)" = 5a0da3983840e52bf494126751c8c4634c25c7c1
+      - name: Build application and source loader
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/disk-linux"
+          rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+          rustc +stable -Vv > "$RUNNER_TEMP/disk-linux/RUST_VERSION"
+          cargo +stable fmt --all
+          cargo +stable build -p wow-cli --bin wow 2>&1 | tee "$RUNNER_TEMP/disk-linux/build.txt"
+          cargo +stable clippy --locked -p wow-project -p wow-service -p wow-cli --lib --bins -- -D warnings 2>&1 | tee "$RUNNER_TEMP/disk-linux/clippy.txt"
+      - name: Retain compiled source and resolved dependencies
+        run: |
+          set -euo pipefail
+          git diff --exit-code -- . ':(exclude)apps/wow/src' ':(exclude)crates/wow-project/src' ':(exclude)crates/wow-service/src/local' ':(exclude)Cargo.lock'
+          git add apps/wow/src crates/wow-project/src crates/wow-service/src/local Cargo.lock
+          git diff --exit-code
+          git diff --cached --check
+          git rev-parse HEAD > "$RUNNER_TEMP/disk-linux/BASE_SHA"
+          git write-tree > "$RUNNER_TEMP/disk-linux/TREE_SHA"
+          git diff --cached --binary --full-index HEAD > "$RUNNER_TEMP/disk-linux/compiled.patch"
+          cp Cargo.lock "$RUNNER_TEMP/disk-linux/Cargo.lock"
+          (cd "$RUNNER_TEMP/disk-linux" && sha256sum compiled.patch Cargo.lock > SHA256SUMS)
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: local-disk-linux-${{ github.run_id }}
+          path: ${{ runner.temp }}/disk-linux/
+          retention-days: 3
+          if-no-files-found: error
+  windows:
+    needs: linux
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: local-disk-linux-${{ github.run_id }}
+          path: ${{ runner.temp }}/disk-linux
+      - name: Build identical source with the same lockfile
+        run: |
+          set -euo pipefail
+          (cd "$RUNNER_TEMP/disk-linux" && sha256sum -c SHA256SUMS)
+          test "$(cat "$RUNNER_TEMP/disk-linux/BASE_SHA")" = "$GITHUB_SHA"
+          git apply --index "$RUNNER_TEMP/disk-linux/compiled.patch"
+          test "$(git write-tree)" = "$(cat "$RUNNER_TEMP/disk-linux/TREE_SHA")"
+          mkdir -p "$RUNNER_TEMP/disk-windows"
+          rustup toolchain install stable --profile minimal
+          rustc +stable -Vv > "$RUNNER_TEMP/disk-windows/RUST_VERSION"
+          cargo +stable build --locked -p wow-cli --bin wow 2>&1 | tee "$RUNNER_TEMP/disk-windows/build.txt"
+          git diff --exit-code
+          git write-tree > "$RUNNER_TEMP/disk-windows/TREE_SHA"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: local-disk-windows-${{ github.run_id }}
+          path: ${{ runner.temp }}/disk-windows/
+          retention-days: 3
+          if-no-files-found: error
+  publish:
+    needs: [linux, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: local-disk-linux-${{ github.run_id }}
+          path: ${{ runner.temp }}/disk-linux
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: local-disk-windows-${{ github.run_id }}
+          path: ${{ runner.temp }}/disk-windows
+      - name: Publish compiled disk loader to unchanged main
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(cat "$RUNNER_TEMP/disk-linux/BASE_SHA")" = "$GITHUB_SHA"
+          cmp "$RUNNER_TEMP/disk-linux/TREE_SHA" "$RUNNER_TEMP/disk-windows/TREE_SHA"
+          (cd "$RUNNER_TEMP/disk-linux" && sha256sum -c SHA256SUMS)
+          git apply --index "$RUNNER_TEMP/disk-linux/compiled.patch"
+          test "$(git write-tree)" = "$(cat "$RUNNER_TEMP/disk-linux/TREE_SHA")"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$GITHUB_SHA"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat(project): load explicit disk inputs for local status and check' -m "Add project-owned bounded no-follow file acquisition and a service file-manifest loader. Read Main/Library source bytes directly from explicit paths; verify pinned profile/reference/analyzer artifacts; preserve inline input and share owner composition. No source scans, TOC/XML expansion, source execution or writes. Linux/Windows compilation and Linux selected-owner Clippy passed on this exact tree in run $GITHUB_RUN_ID. No tests or fixture baselines changed; full runtime/host-race/R0 acceptance is not claimed. Temporary build inputs removed."
+          git push origin HEAD:main
