@@ -34,6 +34,7 @@ jobs:
           test "$(git hash-object .ci/xml-bindings/project.rs)" = 731291336841f66f48845ea70f035a609d7c1eaa
           test "$(git hash-object .ci/xml-bindings/service.rs)" = ca5dfebd11c4ea2c0945ef33b903a4eef348f64b
           test "$(git hash-object .ci/xml-bindings/integration.patch)" = 1cd2da629cc132df853e754c368361cf3a7cc487
+          test "$(git hash-object .ci/xml-bindings/canonical-fix.patch)" = 8bbf98be183c60d32a20d1994e9261c2a12105f7
           cp .ci/xml-bindings/* "$RUNNER_TEMP/xml-bindings-input/"
           git rm -r -- .ci/xml-bindings .github/workflows/xml-bindings-build.yml
           test "$(git write-tree)" = cae17aa8542024201f4514f7b7209e41a7c8a844
@@ -42,6 +43,7 @@ jobs:
           cp "$RUNNER_TEMP/xml-bindings-input/project.rs" crates/wow-project/src/xml_bindings.rs
           cp "$RUNNER_TEMP/xml-bindings-input/service.rs" crates/wow-service/src/local/xml_bindings.rs
           git add crates/wow-emmy/src/bindings.rs crates/wow-project/src/xml_bindings.rs crates/wow-service/src/local/xml_bindings.rs
+          git apply --index "$RUNNER_TEMP/xml-bindings-input/canonical-fix.patch"
       - name: Format the reviewed implementation
         run: |
           set -euo pipefail
@@ -110,5 +112,5 @@ jobs:
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$GITHUB_SHA"
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'feat(project): link XML Lua references through the existing Emmy session' -m "Query mixin and function declarations and direct-mixin method candidates in the existing Main/Library member-analysis session. Retain exact source targets, ambiguity and unknown scope, without synthetic Lua or runtime receiver claims. Integrate ordinary XML-scoped findings, owner reports and snapshot/configuration identities. Linux/Windows CLI builds, selected-owner Clippy, formatting and repository policy passed on this exact source tree in run $GITHUB_RUN_ID. No dependencies, lockfile, tests or fixtures changed. Full inherited callback semantics and real-addon/client behavior remain unverified. Temporary build inputs removed."
+          git commit -m 'feat(project): link XML Lua references through the existing Emmy session' -m "Query mixin and function declarations and direct-mixin method candidates in the existing Main/Library member-analysis session. Retain exact source targets, ambiguity and unknown scope, without synthetic Lua or runtime receiver claims. Integrate ordinary XML-scoped findings, owner reports and snapshot/configuration identities. Omit absent lookup identity rather than serializing a forbidden null. Linux/Windows CLI builds, selected-owner Clippy, formatting and repository policy passed on this exact source tree in run $GITHUB_RUN_ID. No dependencies, lockfile, tests or fixtures changed. Full inherited callback semantics and real-addon/client behavior remain unverified. Temporary build inputs removed."
           git push origin HEAD:main
