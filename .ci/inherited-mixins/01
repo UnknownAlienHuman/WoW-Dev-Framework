@@ -1,0 +1,267 @@
+                         .as_deref()
+                         .and_then(|id| owners.get(id));
+-                    let mixins = owner
+-                        .and_then(|e| e.declaration.as_ref())
+-                        .map(|d| d.mixins.as_slice())
+-                        .unwrap_or_default();
+-                    let queries = if supported_path(method) && !method.contains('.') {
+-                        mixins
+-                            .iter()
+-                            .map(|mixin| format!("{mixin}.{method}"))
+-                            .collect()
+-                    } else {
+-                        Vec::new()
+-                    };
++                    let mut queries = Vec::new();
++                    let mut receiver_source_id = None;
+                     let state = if script.source_kind != XmlScriptSource::ReferenceOnly
++                        || !element.issues.is_empty()
+                         || owner.is_some_and(|e| !e.issues.is_empty())
+                     {
+                         XmlLuaBindingState::InvalidSource
+                     } else if !supported_path(method) || method.contains('.') {
+                         XmlLuaBindingState::UnsupportedPath
+-                    } else if mixins.is_empty() {
+-                        XmlLuaBindingState::ReceiverNotResolved
++                    } else if let Some(owner) = owner {
++                        let sources = receivers.resolve(&owner.occurrence_id, stop)?;
++                        let mut distinct = BTreeSet::new();
++                        let mut query_bytes = 0usize;
++                        let mut unsupported = false;
++                        for mixin in &sources.mixins {
++                            crate::analyzer::checkpoint(stop)?;
++                            query_visits = query_visits.checked_add(1).ok_or_else(exhausted)?;
++                            if query_visits > 262_144 {
++                                return Err(exhausted());
++                            }
++                            let length = mixin
++                                .name
++                                .len()
++                                .checked_add(method.len())
++                                .and_then(|n| n.checked_add(1))
++                                .ok_or_else(exhausted)?;
++                            if length > 4096 {
++                                unsupported = true;
++                                break;
++                            }
++                            let query = format!("{}.{method}", mixin.name);
++                            if !supported_path(&query) {
++                                unsupported = true;
++                                break;
++                            }
++                            // Bound expansion before retaining per-handler copies;
++                            // repeated names keep their distinct XML origins above.
++                            if distinct.insert(query) {
++                                query_bytes = query_bytes.checked_add(length).ok_or_else(exhausted)?;
++                                let total_refs = query_refs
++                                    .checked_add(distinct.len())
++                                    .ok_or_else(exhausted)?;
++                                let total_bytes = text_bytes
++                                    .checked_add(query_bytes)
++                                    .ok_or_else(exhausted)?;
++                                if total_refs > MAX_QUERY_REFS
++                                    || distinct.len() > 4096
++                                    || total_bytes > 16 * 1024 * 1024
++                                {
++                                    return Err(exhausted());
++                                }
++                            }
++                        }
++                        receiver_source_id = Some(sources.owner_id.clone());
++                        if unsupported {
++                            XmlLuaBindingState::UnsupportedPath
++                        } else {
++                            queries = distinct.into_iter().collect();
++                            if !sources.complete || queries.is_empty() {
++                                XmlLuaBindingState::ReceiverNotResolved
++                            } else {
++                                XmlLuaBindingState::Indeterminate
++                            }
++                        }
+                     } else {
+-                        XmlLuaBindingState::Indeterminate
++                        XmlLuaBindingState::ReceiverNotResolved
+                     };
+                     pending.push((
+                         XmlLuaBindingKind::Method,
+@@ -236,10 +300,11 @@ pub(crate) fn prepare(
+                         attribute_span(element, "method")?,
+                         queries,
+                         state,
++                        receiver_source_id,
+                     ));
+                 }
+             }
+-            for (kind, ordinal, span, mut queries, mut state) in pending {
++            for (kind, ordinal, span, mut queries, mut state, receiver_source_id) in pending {
+                 crate::analyzer::checkpoint(stop)?;
+                 if bindings.len() >= MAX_BINDINGS {
+                     return Err(exhausted());
+@@ -260,7 +325,11 @@ pub(crate) fn prepare(
+                     .checked_add(queries.len())
+                     .ok_or_else(exhausted)?;
+                 text_bytes = text_bytes
+-                    .checked_add(path.len() + queries.iter().map(String::len).sum::<usize>())
++                    .checked_add(
++                        path.len()
++                            + receiver_source_id.as_ref().map_or(0, String::len)
++                            + queries.iter().map(String::len).sum::<usize>(),
++                    )
+                     .ok_or_else(exhausted)?;
+                 if query_refs > MAX_QUERY_REFS || text_bytes > 16 * 1024 * 1024 {
+                     return Err(exhausted());
+@@ -277,6 +346,7 @@ pub(crate) fn prepare(
+                     ordinal,
+                     attribute_span: span,
+                     queries,
++                    receiver_source_id,
+                     state,
+                 });
+             }
+@@ -284,6 +354,7 @@ pub(crate) fn prepare(
+     }
+     Ok(PreparedBindings {
+         bindings,
++        receiver_sources: receivers.into_sources(),
+         queries: all_queries.into_iter().collect(),
+     })
+ }
+@@ -311,6 +382,17 @@ pub(crate) fn finish(
+                 binding.state = XmlLuaBindingState::SourceParseFailed;
+                 continue;
+             }
++            if binding.kind == XmlLuaBindingKind::Method {
++                let sources = binding
++                    .receiver_source_id
++                    .as_ref()
++                    .and_then(|id| prepared.receiver_sources.get(id))
++                    .ok_or_else(invalid)?;
++                if !sources.complete {
++                    binding.state = XmlLuaBindingState::ReceiverNotResolved;
++                    continue;
++                }
++            }
+             let results = binding
+                 .queries
+                 .iter()
+@@ -337,8 +419,8 @@ pub(crate) fn finish(
+             {
+                 XmlLuaBindingState::UnsupportedPath
+             } else if binding.kind == XmlLuaBindingKind::Method {
+-                // Direct declared mixins provide candidates, not the constructed
+-                // receiver or inherited runtime method precedence.
++                // Direct and inherited source mixins provide candidates, not
++                // a constructed receiver or runtime method precedence.
+                 let targets: BTreeSet<_> = results
+                     .iter()
+                     .filter(|r| r.state == SymbolLookupState::UniqueAnalyzerDeclaration)
+@@ -366,6 +448,7 @@ struct Identity<'a> {
+         generation: ProjectGenerationId,
+         load_plan: ContentDigest<CanonicalResult>,
+         bindings: &'a [XmlLuaBinding],
++        receiver_sources: &'a BTreeMap<String, XmlReceiverSources>,
+         #[serde(skip_serializing_if = "Option::is_none")]
+         symbol_analysis_id: Option<&'a str>,
+     }
+@@ -376,6 +459,7 @@ struct Identity<'a> {
+             generation,
+             load_plan: plan.digest(),
+             bindings: &prepared.bindings,
++            receiver_sources: &prepared.receiver_sources,
+             symbol_analysis_id: lookup.as_ref().map(SymbolLookupReport::analysis_id),
+         },
+         ProjectPhase::Analyzer,
+@@ -385,6 +469,7 @@ struct Identity<'a> {
+         project_generation: generation,
+         load_plan_digest: plan.digest(),
+         bindings: prepared.bindings,
++        receiver_sources: prepared.receiver_sources,
+         symbol_lookup: lookup,
+         receiver_semantics: "not_evaluated",
+         analysis_id,
+diff --git a/crates/wow-project/src/xml_bindings/receivers.rs b/crates/wow-project/src/xml_bindings/receivers.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..4091c81cbc667b73b684bf16e66478c113458bc4
+--- /dev/null
++++ b/crates/wow-project/src/xml_bindings/receivers.rs
+@@ -0,0 +1,335 @@
++//! Enumerate source-declared mixins across the existing XML inheritance graph.
++//! This retains candidate provenance, not effective receiver state or precedence.
++use std::collections::{BTreeMap, BTreeSet, VecDeque};
++use std::sync::atomic::AtomicBool;
++
++use serde::Serialize;
++
++use super::{MAX_BINDINGS, attribute_span, exhausted, invalid};
++use crate::ProjectResult;
++use crate::load::xml_references::{
++    XmlDeclarationSite, XmlReferenceKind, XmlReferenceOrder, XmlReferenceRecord,
++    XmlReferenceResolution,
++};
++use crate::load::{ProjectLoadPlan, XmlElementRecord, XmlSourceSpan};
++
++const MAX_EXPANSION_STEPS: usize = 262_144;
++const MAX_RECEIVER_RECORDS: usize = 65_536;
++const MAX_RECEIVER_TEXT_BYTES: usize = 16 * 1024 * 1024;
++
++#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
++pub struct XmlReceiverMixinSource {
++    /// Key into the load plan's XML declaration table, not a Lua symbol ID.
++    pub declaration_id: String,
++    /// Source order within this declaration only; not inheritance precedence.
++    pub ordinal: usize,
++    pub name: String,
++    pub attribute_span: XmlSourceSpan,
++}
++
++#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
++#[serde(rename_all = "snake_case")]
++pub enum XmlReceiverBlockerKind {
++    NoDeclaration,
++    InvalidDeclaration,
++    DeclarationConflict,
++    SourceLoadUnresolved,
++    UnresolvedInheritance,
++    TargetNotDeclaredTemplate,
++    InheritanceOrderUnresolved,
++    InheritanceConflict,
++}
++
++#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
++pub struct XmlReceiverBlocker {
++    pub source_id: String,
++    pub reason: XmlReceiverBlockerKind,
++    /// Key into the existing XML reference table, which retains the full cause.
++    #[serde(skip_serializing_if = "Option::is_none")]
++    pub reference_id: Option<String>,
++}
++
++/// Cached once per exact method owner; all its handlers share this source graph.
++/// A complete enumeration still does not establish a runtime receiver or method.
++#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
++pub struct XmlReceiverSources {
++    pub owner_id: String,
++    /// Distinct visited XML declaration IDs. Diamond paths do not copy nodes.
++    pub declarations: Vec<String>,
++    /// All inspected inheritance references, including rejected and shared edges.
++    pub references: Vec<String>,
++    pub mixins: Vec<XmlReceiverMixinSource>,
++    pub blockers: Vec<XmlReceiverBlocker>,
++    pub complete: bool,
++}
++
++#[derive(Default)]
++struct Budget {
++    steps: usize,
++    records: usize,
++    text_bytes: usize,
++}
++impl Budget {
++    fn step(&mut self) -> ProjectResult<()> {
++        self.steps = self.steps.checked_add(1).ok_or_else(exhausted)?;
++        if self.steps > MAX_EXPANSION_STEPS {
++            return Err(exhausted());
++        }
++        Ok(())
++    }
++

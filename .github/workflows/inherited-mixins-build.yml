@@ -1,0 +1,118 @@
+name: Inherited XML mixins build
+on:
+  push:
+    branches: [main]
+    paths: ['.ci/inherited-mixins/**', '.github/workflows/inherited-mixins-build.yml']
+permissions:
+  contents: read
+concurrency:
+  group: inherited-mixins-main
+  cancel-in-progress: false
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Admit the reviewed functional patch
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git config core.autocrlf false
+          mkdir -p "$RUNNER_TEMP/inherited-mixins"
+          git rev-parse HEAD > "$RUNNER_TEMP/inherited-mixins/BASE_SHA"
+          test "$(git hash-object .ci/inherited-mixins/00)" = 1fe8a6f16f6911513a4f306a15efa4fb449b056c
+          test "$(git hash-object .ci/inherited-mixins/01)" = 02a842046dbb878a1fd01d2f3f4ee7dfa770de67
+          test "$(git hash-object .ci/inherited-mixins/02)" = db8f15f01c0a5c0f9b7ac52a8c384e124efdba82
+          cat .ci/inherited-mixins/00 .ci/inherited-mixins/01 .ci/inherited-mixins/02 > "$RUNNER_TEMP/inherited-mixins/input.patch"
+          echo '448485cea2e447b20f52986943dced31ff5055ddd2e4330344a692cdcfd20b00  input.patch' > "$RUNNER_TEMP/inherited-mixins/INPUT_SHA256"
+          (cd "$RUNNER_TEMP/inherited-mixins" && sha256sum -c INPUT_SHA256)
+          git rm -r -- .ci/inherited-mixins .github/workflows/inherited-mixins-build.yml
+          test "$(git write-tree)" = 13ce58148991f2387b48784eaeb807b37e2a03b1
+          git apply --index "$RUNNER_TEMP/inherited-mixins/input.patch"
+          test "$(git write-tree)" = a75e07b7c9ae78fff7ff09ee220a3e1c47e2a0b9
+      - name: Format the reviewed Rust code
+        run: |
+          set -euo pipefail
+          rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+          rustc +stable -Vv > "$RUNNER_TEMP/inherited-mixins/RUST_VERSION"
+          cargo +stable fmt --all
+          git add -u
+          git diff --cached --check
+          printf '%s\n' apps/wow/XML_BINDINGS.md apps/wow/src/output.rs crates/wow-project/src/xml_bindings.rs crates/wow-project/src/xml_bindings/receivers.rs > "$RUNNER_TEMP/inherited-mixins/EXPECTED_FILES"
+          git diff --cached --name-only 13ce58148991f2387b48784eaeb807b37e2a03b1 > "$RUNNER_TEMP/inherited-mixins/CHANGED_FILES"
+          diff -u "$RUNNER_TEMP/inherited-mixins/EXPECTED_FILES" "$RUNNER_TEMP/inherited-mixins/CHANGED_FILES"
+          git write-tree > "$RUNNER_TEMP/inherited-mixins/TREE_SHA"
+      - name: Build the application with the existing lockfile
+        run: |
+          set -euo pipefail
+          cargo +stable build --locked -p wow-cli --bin wow 2>&1 | tee "$RUNNER_TEMP/inherited-mixins/build.log"
+      - name: Check changed components
+        run: |
+          set -euo pipefail
+          cargo +stable clippy --locked -p wow-project -p wow-service -p wow-cli --all-features -- -D warnings 2>&1 | tee "$RUNNER_TEMP/inherited-mixins/clippy.log"
+          cargo +stable xtask check 2>&1 | tee "$RUNNER_TEMP/inherited-mixins/policy.log"
+          cargo +stable fmt --all --check
+          git diff --exit-code
+      - name: Retain the compiled source tree
+        run: |
+          set -euo pipefail
+          test "$(git write-tree)" = "$(cat "$RUNNER_TEMP/inherited-mixins/TREE_SHA")"
+          git diff --cached --binary HEAD > "$RUNNER_TEMP/inherited-mixins/compiled.patch"
+          git archive --format=tar --output="$RUNNER_TEMP/inherited-mixins/compiled-source.tar" "$(git write-tree)"
+          (cd "$RUNNER_TEMP/inherited-mixins" && sha256sum compiled.patch compiled-source.tar > SHA256SUMS)
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: inherited-mixins-${{ matrix.os }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/inherited-mixins/
+          retention-days: 3
+          if-no-files-found: error
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: inherited-mixins-ubuntu-latest-${{ github.run_id }}
+          path: ${{ runner.temp }}/inherited-linux
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: inherited-mixins-windows-latest-${{ github.run_id }}
+          path: ${{ runner.temp }}/inherited-windows
+      - name: Publish identical compiled code to unchanged main
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          for platform in linux windows; do
+            evidence="$RUNNER_TEMP/inherited-$platform"
+            test "$(cat "$evidence/BASE_SHA")" = "$GITHUB_SHA"
+            (cd "$evidence" && sha256sum -c SHA256SUMS)
+          done
+          cmp "$RUNNER_TEMP/inherited-linux/TREE_SHA" "$RUNNER_TEMP/inherited-windows/TREE_SHA"
+          cmp "$RUNNER_TEMP/inherited-linux/compiled.patch" "$RUNNER_TEMP/inherited-windows/compiled.patch"
+          git apply --index "$RUNNER_TEMP/inherited-linux/compiled.patch"
+          test "$(git write-tree)" = "$(cat "$RUNNER_TEMP/inherited-linux/TREE_SHA")"
+          git diff --cached --check
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$GITHUB_SHA"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat(project): resolve inherited XML mixin method candidates' -m "Follow captured inheritance links to collect direct and inherited mixin source candidates for XML method references. Reuse a bounded source graph across handlers of one owner, preserve source conflicts and incomplete ancestry, and query the existing Emmy session without constructing runtime receivers. Include receiver provenance in JSON, CLI summaries and versioned project identity. Linux and Windows CLI builds, selected-component Clippy, formatting and repository policy passed on this exact tree in run $GITHUB_RUN_ID. No tests, fixtures, dependencies or lockfile changed. Runtime precedence, inherited script instantiation and full E2/R0 acceptance remain unverified. Temporary build inputs removed."
+          git push origin HEAD:main

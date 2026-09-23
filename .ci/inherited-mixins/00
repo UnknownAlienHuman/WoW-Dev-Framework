@@ -1,0 +1,229 @@
+diff --git a/apps/wow/XML_BINDINGS.md b/apps/wow/XML_BINDINGS.md
+index 3146e0da022c22cce2e05e9d82bf1791eaeb9d4c..dfd2b36170754c1629a4603927a20f59af3542fc 100644
+--- a/apps/wow/XML_BINDINGS.md
++++ b/apps/wow/XML_BINDINGS.md
+@@ -1,7 +1,8 @@
+ # XML to Lua declaration lookup
+ 
+-`wow check` now resolves XML `mixin` and `function` spellings and queries direct
+-mixin candidates for `method` references. Commands and input schemas are unchanged.
++`wow check` resolves XML `mixin` and `function` spellings and queries direct and
++inherited source mixin candidates for `method` references. Commands and input
++schemas are unchanged.
+ `--file project-file:UI/Frames.xml` selects findings anchored in that XML file;
+ lookup still uses the complete captured Main and explicit Library universes.
+ 
+@@ -27,17 +28,53 @@ ## Results
+ number of components processed; prefix candidates are not final-member matches.
+ `not_observed` means absent from this query result, not absent from the WoW client.
+ 
+-For `method`, only the owner's explicitly declared mixins form queries such as
+-`ExampleMixin.OnLoad`. A single observed target is `declared_mixin_candidates`,
+-not an accepted runtime binding. Different targets remain ambiguous; no mixin,
+-unknown receiver or unsupported expression is unresolved. XML inheritance is not
+-flattened, mixin precedence is not invented, and `CreateFromMixins` is never run.
++For `method`, the owner's direct mixins and explicitly declared mixins in linked
++XML templates form queries such as `ExampleMixin.OnLoad`. Lookup reuses the same
++Emmy session and shared query table. A single observed target is still
++`declared_mixin_candidates`, not an accepted runtime binding; different targets
++remain ambiguous. An unknown receiver or incomplete inheritance stays unresolved, rather
++than implying that the method does not exist. Mixin precedence is not invented,
++and `CreateFromMixins` is never run.
++
++### Inherited receiver sources
++
++`owner_analysis.xml_binding_report.receiver_sources` stores one source graph per
++exact method-owner XML occurrence. Method records reference it by
++`receiver_source_id`; other binding kinds omit that field. The graph retains
++visited declaration IDs, ordered inheritance reference IDs, mixin spelling/list
++ordinal/attribute span, and explicit blockers. IDs address the existing load-plan
++XML element/declaration/reference tables, which retain document digests and locations.
++All handlers on one owner share that graph, and identical queries are deduplicated
++without discarding distinct mixin source occurrences.
++
++Only the existing `inherits` links are traversed, never XML containment or
++`parent`. A target must be a unique, valid local declaration explicitly marked
++`virtual="true"` or `intrinsic="true"`. Unsupported/dynamic names, missing and
++ambiguous declarations are not expanded into guessed candidates. A unique name
++alone does not attest a template kind; other targets retain a blocker.
++
++Forward, repeated-load, duplicate-inheritance and cyclic links preserve any
++independently inspectable source candidates, but the graph stays incomplete.
++`complete` means only that this bounded source enumeration had no blockers;
++it does not certify client load order or effective method precedence. An
++incomplete receiver graph cannot become an accepted candidate result merely
++because a Lua query found one declaration: the method stays
++`receiver_not_resolved` and its useful lookup results remain in the owner report.
++
++Traversal is iterative. Each declaration is visited once per owner; all inspected
++edges are retained, including shared and rejected edges. A diamond does not copy
++the common ancestor for every route, and a cycle does not loop. Inheritance order
++is retained per declaration, not advertised as a flattened runtime method order.
++This does not instantiate inherited Script elements or materialize inherited
++fields, callbacks, parameters, metatables or Lua runtime receivers.
++
+ Function and mixin spellings use a closed ASCII dotted-identifier dialect; calls,
+ index expressions and `$parent` substitution are not evaluated.
+ 
+ Unresolved/candidate records enter ordinary informational findings with fixed
+ `xml.lua.*` codes and exact XML anchors. Successful declaration lookups remain in
+-the detailed report. Text output includes reference/unresolved counts. Status does
++the detailed report. Text output includes reference/unresolved counts and shared
++receiver/partial-receiver counts. Status does
+ not run Emmy: it reports pending lookup only when XML actually contains these
+ references. The `project.xml.lua_bindings.queried` capability denotes that queries
+ ran; receiver capability remains partial for method references. File-only XML
+@@ -47,8 +84,10 @@ ## Identity and limits
+ 
+ The adapter profile enters TOC configuration identity before project-generation
+ derivation. The final report binds the generation, load plan, Main/Library analyzer
+-identities, source health and lookup results; the analyzer snapshot binds that
+-report. Inline-input/explicit-file E0 identity fields are unchanged when no TOC
++identities, source health, receiver-source graphs and lookup results; the analyzer
++snapshot binds that report. The XML binding profile advances to
++`wow-project/xml-lua-bindings/2`, including in TOC configuration identity before
++deriving the project generation. Inline-input/explicit-file E0 identity fields are unchanged when no TOC
+ plan is present. Existing APIs remain available; the cancellable member-call
+ entry point also accepts explicit symbol queries.
+ 
+@@ -58,10 +97,18 @@ ## Identity and limits
+ report have a 16 MiB aggregate bound. Budget exhaustion rejects, not truncates.
+ Cancellation is polled between files, syntax visits and query stages; one upstream
+ semantic operation is not forcibly interruptible. No dependency/lockfile/fixture
+-changes accompany this checkpoint.
++changes accompany this extension.
++
++Receiver enumeration additionally caps shared owners at 4,096, aggregate retained
++receiver records at 65,536 and their variable strings at 16 MiB. At most 262,144
++graph expansion steps and 262,144 method-query expansion visits are allowed per
++operation, shared across all owners/handlers. Existing global query/output limits
++still apply, including before retaining inherited per-handler query copies.
++Exceeded budgets and cancellation abort the operation, never silently shorten a
++receiver graph. No additional Lua compilation, parser or dependency is introduced.
+ 
+ Implementation: `crates/wow-emmy/src/bindings.rs`,
+-`crates/wow-project/src/xml_bindings.rs`, and
++`crates/wow-project/src/xml_bindings.rs` (with `xml_bindings/receivers.rs`), and
+ `crates/wow-service/src/local/xml_bindings.rs`.
+ Contract: `crates/wow-project/e2/XML_MODEL.md` (Scripts, Inheritance, Coverage).
+ The existing pinned Emmy revision `aaaca68425d9362876228649b0b8d92f07654daa`
+diff --git a/apps/wow/src/output.rs b/apps/wow/src/output.rs
+index e95a4ff2a78823e02c3df67b6aedad366a69a01c..a0f7de1cde45f173af99efaafdbaef97fbd9d7fb 100644
+--- a/apps/wow/src/output.rs
++++ b/apps/wow/src/output.rs
+@@ -148,9 +148,15 @@ pub fn render(
+             if let Some(report) = check.owner_analysis().and_then(|a| a.xml_binding_report()) {
+                 writeln!(
+                     text,
+-                    "xml Lua bindings: references={}, unresolved_or_candidates={}, identity={:?}",
++                    "xml Lua bindings: references={}, unresolved_or_candidates={}, receiver_sources={}, partial_receivers={}, identity={:?}",
+                     report.bindings().len(),
+                     report.unresolved_count(),
++                    report.receiver_sources().len(),
++                    report
++                        .receiver_sources()
++                        .values()
++                        .filter(|r| !r.complete)
++                        .count(),
+                     report.analysis_id()
+                 )
+                 .map_err(|_| ())?;
+diff --git a/crates/wow-project/src/xml_bindings.rs b/crates/wow-project/src/xml_bindings.rs
+index b7ce6ed6842e5b1afa8180fc6b4b63f1115d7cc0..715730b21606b2f5f2211af14f7b64733c812a2d 100644
+--- a/crates/wow-project/src/xml_bindings.rs
++++ b/crates/wow-project/src/xml_bindings.rs
+@@ -1,5 +1,11 @@
+ //! XML-to-Lua source linking. XML owners form data queries; only wow-emmy
+ //! resolves Lua declarations. No receiver construction or callback invocation.
++mod receivers;
++
++pub use receivers::{
++    XmlReceiverBlocker, XmlReceiverBlockerKind, XmlReceiverMixinSource, XmlReceiverSources,
++};
++
+ use crate::load::{ProjectLoadPlan, XmlElementRecord, XmlScriptSource, XmlSourceSpan};
+ use crate::{ProjectError, ProjectErrorCode, ProjectPhase, ProjectResult};
+ use serde::Serialize;
+@@ -8,7 +14,7 @@
+ use wow_core::{CanonicalResult, ContentDigest, ProjectGenerationId, SourceContent};
+ use wow_emmy::bindings::{SymbolLookupReport, SymbolLookupState, supported_path};
+ 
+-pub const XML_LUA_BINDING_PROFILE: &str = "wow-project/xml-lua-bindings/1";
++pub const XML_LUA_BINDING_PROFILE: &str = "wow-project/xml-lua-bindings/2";
+ const MAX_BINDINGS: usize = 4096;
+ const MAX_QUERY_REFS: usize = 16_384;
+ 
+@@ -60,6 +66,9 @@ pub struct XmlLuaBinding {
+     pub attribute_span: XmlSourceSpan,
+     /// Keys into the shared analyzer report, never executable expressions.
+     pub queries: Vec<String>,
++    /// Key into the shared receiver-source graph; omitted for non-method records.
++    #[serde(skip_serializing_if = "Option::is_none")]
++    pub receiver_source_id: Option<String>,
+     pub state: XmlLuaBindingState,
+ }
+ 
+@@ -69,6 +78,7 @@ pub struct ProjectXmlLuaBindings {
+     project_generation: ProjectGenerationId,
+     load_plan_digest: ContentDigest<CanonicalResult>,
+     bindings: Vec<XmlLuaBinding>,
++    receiver_sources: BTreeMap<String, XmlReceiverSources>,
+     #[serde(skip_serializing_if = "Option::is_none")]
+     symbol_lookup: Option<SymbolLookupReport>,
+     receiver_semantics: &'static str,
+@@ -84,6 +94,10 @@ pub fn bindings(&self) -> &[XmlLuaBinding] {
+         &self.bindings
+     }
+     #[must_use]
++    pub fn receiver_sources(&self) -> &BTreeMap<String, XmlReceiverSources> {
++        &self.receiver_sources
++    }
++    #[must_use]
+     pub fn symbol_lookup(&self) -> Option<&SymbolLookupReport> {
+         self.symbol_lookup.as_ref()
+     }
+@@ -98,6 +112,7 @@ pub fn unresolved_count(&self) -> usize {
+ 
+ pub(crate) struct PreparedBindings {
+     bindings: Vec<XmlLuaBinding>,
++    receiver_sources: BTreeMap<String, XmlReceiverSources>,
+     queries: Vec<String>,
+ }
+ impl PreparedBindings {
+@@ -125,6 +140,7 @@ fn exhausted() -> ProjectError {
+     XmlSourceSpan,
+     Vec<String>,
+     XmlLuaBindingState,
++    Option<String>,
+ );
+ 
+ fn attribute_span(element: &XmlElementRecord, name: &str) -> ProjectResult<XmlSourceSpan> {
+@@ -165,8 +181,10 @@ pub(crate) fn prepare(
+     stop: &AtomicBool,
+ ) -> ProjectResult<PreparedBindings> {
+     let mut bindings = Vec::new();
++    let mut receivers = receivers::Resolver::new(plan, stop)?;
+     let mut all_queries = BTreeSet::new();
+     let mut query_refs = 0usize;
++    let mut query_visits = 0usize;
+     let mut text_bytes = 0usize;
+     for (path, index) in plan.xml_documents() {
+         let owners: BTreeMap<_, _> = index
+@@ -185,6 +203,7 @@ pub(crate) fn prepare(
+                         attribute_span(element, "mixin")?,
+                         vec![mixin.clone()],
+                         XmlLuaBindingState::Indeterminate,
++                        None,
+                     ));
+                 }
+             }
+@@ -200,6 +219,7 @@ pub(crate) fn prepare(
+                         } else {
+                             XmlLuaBindingState::InvalidSource
+                         },
++                        None,
+                     ));
+                 }
+                 if let Some(method) = &script.method_reference {
+@@ -207,28 +227,72 @@ pub(crate) fn prepare(
+                         .owner_occurrence_id
