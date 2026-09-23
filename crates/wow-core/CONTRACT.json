@@ -748,15 +748,33 @@
       "status": "required",
       "doc": "OPERATIONS.md#verify_source_handle_content",
       "errors": [
-        "digest_mismatch",
-        "digest_purpose_mismatch"
-      ]
+        "invalid_source_handle",
+        "invalid_source_span",
+        "span_state_conflict",
+        "canonical_digest_mismatch",
+        "digest_mismatch"
+      ],
+      "rust_entrypoints": [
+        "verify_source_handle_content"
+      ],
+      "admission": "validate retained handle fields and self-ID before comparing source-content digests; purpose enforced by Rust types"
     },
     {
       "id": "compare_source_handles",
       "status": "required",
       "doc": "OPERATIONS.md#compare_source_handles",
-      "errors": []
+      "errors": [
+        "invalid_source_handle",
+        "invalid_source_span",
+        "span_state_conflict",
+        "canonical_digest_mismatch"
+      ],
+      "rust_entrypoints": [
+        "compare_source_handles",
+        "SourceHandle::compare"
+      ],
+      "rust_return": "CoreResult<SourceHandleComparison>",
+      "admission": "validate left and right before equality/classification, including self-comparison"
     },
     {
       "id": "derive_generation_context_id",

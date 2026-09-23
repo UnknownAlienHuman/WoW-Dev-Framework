@@ -309,21 +309,26 @@ impl SourceHandle {
         &self.content_digest
     }
 
-    /// Compares two handles without implying lineage or replacement.
-    #[must_use]
-    pub fn compare(&self, other: &Self) -> SourceHandleComparison {
+    /// Validates both handles before comparing their immutable identities.
+    ///
+    /// Deserialization alone does not verify a handle's fields or derived ID.
+    /// Even comparing a decoded handle with itself requires admission. The
+    /// categories describe identity differences, never lineage or replacement.
+    pub fn compare(&self, other: &Self) -> CoreResult<SourceHandleComparison> {
+        self.validate()?;
+        other.validate()?;
         if self == other {
-            return SourceHandleComparison::Identical;
+            return Ok(SourceHandleComparison::Identical);
         }
         if self.same_except_span(other) {
-            return SourceHandleComparison::SameFileDifferentSpan;
+            return Ok(SourceHandleComparison::SameFileDifferentSpan);
         }
         if self.origin_kind == other.origin_kind
             && self.origin_id == other.origin_id
             && self.path == other.path
             && self.revision != other.revision
         {
-            return SourceHandleComparison::SameOriginPathDifferentRevision;
+            return Ok(SourceHandleComparison::SameOriginPathDifferentRevision);
         }
         if self.origin_kind == other.origin_kind
             && self.origin_id == other.origin_id
@@ -331,9 +336,9 @@ impl SourceHandle {
             && self.path == other.path
             && self.content_digest != other.content_digest
         {
-            return SourceHandleComparison::SameOriginRevisionPathDifferentContent;
+            return Ok(SourceHandleComparison::SameOriginRevisionPathDifferentContent);
         }
-        SourceHandleComparison::Unrelated
+        Ok(SourceHandleComparison::Unrelated)
     }
 
     fn same_except_span(&self, other: &Self) -> bool {
@@ -572,17 +577,32 @@ pub fn build_source_handle(builder: SourceHandleBuilder) -> CoreResult<SourceHan
     builder.build()
 }
 
-/// Verifies that supplied content has the digest bound into a source handle.
+/// Validates a handle before comparing its bound source-content digest.
+///
+/// The caller computes the digest from the intended complete artifact. This
+/// operation performs no IO and does not validate span bounds against content.
+/// A matching supplied digest cannot admit malformed fields or a forged handle ID.
+/// Digest purposes remain separate at compile time:
+///
+/// ```compile_fail
+/// use wow_core::{CanonicalResult, ContentDigest, SourceHandle, verify_source_handle_content};
+/// fn wrong_purpose(handle: &SourceHandle, digest: &ContentDigest<CanonicalResult>) {
+///     let _ = verify_source_handle_content(handle, digest);
+/// }
+/// ```
 pub fn verify_source_handle_content(
     handle: &SourceHandle,
     supplied: &ContentDigest<SourceContent>,
 ) -> CoreResult<()> {
+    handle.validate()?;
     handle.content_digest.verify(supplied)
 }
 
-/// Compares two immutable source handles without inferring lineage.
-#[must_use]
-pub fn compare_source_handles(left: &SourceHandle, right: &SourceHandle) -> SourceHandleComparison {
+/// Validates both source handles and compares them without inferring lineage.
+pub fn compare_source_handles(
+    left: &SourceHandle,
+    right: &SourceHandle,
+) -> CoreResult<SourceHandleComparison> {
     left.compare(right)
 }
 

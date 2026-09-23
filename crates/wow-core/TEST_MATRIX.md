@@ -285,6 +285,41 @@ The previously referenced comparison cases are made explicit:
 | `HANDLE-019` | duplicate handle ID with different record | envelope `result_duplicate_id` |
 | `HANDLE-020` | hash vector | exact expected ID |
 
+### Checked handle consumer cases
+
+Executable targets: `tests/e0_handle_conformance.rs` and
+`tests/e0_handle_compare_conformance.rs`, with shared fixture reconstruction in
+`tests/handle/support.rs`. The construction suite executes HANDLE-001–020 and
+all four origin classes under every generation-presence combination; existing
+path/span tests remain required. HANDLE-012 covers bounded text and credential
+rejection only, not external registry eligibility. SPAN-015/016 are exercised
+with multibyte fixture text and a separate transport-hint projection; core does
+not become a content resolver.
+
+| Case | Required invariant |
+|---|---|
+| HANDLE-VERIFY-001/002 | Matching full-artifact digest succeeds; mismatch retains its narrow code |
+| HANDLE-VERIFY-003 | A substituted handle ID cannot pass on matching content |
+| HANDLE-VERIFY-004 | A resealed illegal origin/generation combination rejects |
+| HANDLE-VERIFY-005 | A resealed invalid span rejects before digest comparison |
+| HANDLE-VERIFY-006 | The digest identifies the entire supplied artifact, not the selected span |
+| HANDLE-COMPARE-001 | Identical/round-tripped valid handles compare identically |
+| HANDLE-COMPARE-002 | Unknown, whole-file, empty and nonempty byte spans remain distinct (HANDLE-016) |
+| HANDLE-COMPARE-003/004 | Revision and content differences keep their existing categories |
+| HANDLE-COMPARE-005 | Origin, path and entity changes alone are unrelated |
+| HANDLE-COMPARE-006 | Changed generations cannot be classified as a span-only change |
+| HANDLE-COMPARE-007 | Revision/content/span classification precedence is explicit |
+| HANDLE-COMPARE-008/009 | Forged IDs reject in either position and on self-comparison through both APIs |
+| HANDLE-COMPARE-010 | Resealed invalid fields reject rather than producing a category |
+
+Three negative controls restore the entire previous `source.rs` and execute only
+the HANDLE-VERIFY-003/004/005 cases. The separate comparison target is not compiled
+under the old infallible signature; no comparison-baseline execution is claimed.
+The compile-fail doctest preserves source/result digest type separation. Sixty-four
+recorded-seed wire-key permutations preserve the exact normative handle vector.
+Existing E0 envelope consumers and all golden bytes/digests remain unchanged.
+Full E0-A/R0, PATH-022's OS adapter and source-owner attestation remain separate.
+
 ## 10. Generation-context cases
 
 Regression source: `tests/e0_generation_conformance.rs` exercises constructors,

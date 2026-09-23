@@ -318,24 +318,40 @@ Required tests: `HANDLE-001..020`.
 
 ```text
 input:
-  validated SourceHandle
-  supplied source content digest
+  SourceHandle (including structurally decoded values)
+  supplied ContentDigest<SourceContent>
 
 success:
-  verified
+  validated handle whose content digest equals the supplied digest
 
 errors:
+  invalid_source_handle
+  invalid_source_span
+  span_state_conflict
+  canonical_digest_mismatch
   digest_mismatch
-  digest_purpose_mismatch
 ```
 
-This operation compares digests only. It never reads source content or a filesystem.
+Validate the handle's retained fields, origin/generation matrix and derived ID
+before comparing content digests. Matching content cannot admit a malformed
+handle. Digest-purpose substitution is rejected by the Rust signature, not a
+runtime cast. A valid handle with mismatching content retains `digest_mismatch`.
 
-Required tests: `HANDLE-VERIFY-001..006`.
+This operation never reads bytes or a filesystem. The caller computes the digest
+of the intended complete artifact; verifying a selected span's digest is not
+whole-artifact verification. Actual span bounds/UTF-8 boundaries and source
+registry/revision authority require the owning content resolver.
+
+Required tests: `HANDLE-VERIFY-001..006`; the digest-purpose compile-fail doctest.
 
 ### `compare_source_handles`
 
-Returns:
+Both this function and `SourceHandle::compare` return
+`CoreResult<SourceHandleComparison>`. Validate the left handle, then the right
+handle, before checking equality or classifying a difference. An invalid object
+compared with itself returns its validation error, never `identical`.
+
+Successful categories and precedence remain:
 
 ```text
 identical
@@ -345,7 +361,18 @@ same_origin_revision_path_different_content
 unrelated
 ```
 
-No category implies automatic lineage or replacement.
+`same_file_different_span` requires every other identity field to match,
+including generation bindings and the optional entity key. Revision difference
+takes precedence over content/span difference for the same origin and path.
+The operation does not require the two handles to belong to one generation;
+that cross-record requirement belongs to the containing owner/context.
+No category implies automatic lineage, source authority or replacement.
+
+Errors propagate from either handle: `invalid_source_handle`,
+`invalid_source_span`, `span_state_conflict`, `canonical_digest_mismatch`.
+Migration from the former infallible API: handle the returned Result (normally
+with `?`); no new unchecked comparator is provided. All wire fields, IDs and
+classification rules for valid handles remain unchanged.
 
 Required tests: `HANDLE-COMPARE-001..010`.
 

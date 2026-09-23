@@ -71,6 +71,12 @@ byte_range [start, end)
 
 An empty byte range is valid. An inverted range is invalid.
 
+Source-handle content verification and comparison revalidate each supplied
+handle, including its self-ID, before any successful decision. Structurally
+decoded values are not exempt. Both comparison entrypoints return a typed
+Result; neither same-object equality nor matching content can bypass admission.
+This refines the checked boundary, not the canonical handle or its hash domain.
+
 ## CORE-008 — provenance, confidence, and claim scope remain separate
 
 An evidence record states:

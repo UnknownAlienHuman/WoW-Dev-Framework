@@ -452,3 +452,13 @@ operands, including self-comparison. The nonfallible `ProfileIdentity::compare`
 method assumes admitted inputs and is not a replacement for these boundaries.
 Optional fixture builds must be positive and optional builder ID/version must
 be paired. Text bounds and rejection rules are in `DATA_MODEL.md#4-profile-identity`.
+
+## Checked source-handle consumers
+
+Use `verify_source_handle_content(&handle, &source_digest)?` and
+`compare_source_handles(&left, &right)?` (or `left.compare(&right)?`). Comparison
+now returns `CoreResult<SourceHandleComparison>`; callers must handle rejection.
+Both sides are validated before a category is returned, including self-comparison.
+The verifier validates handle fields/ID before digest equality. No IO, provenance
+attestation, content-span boundary check, context merge or lineage inference is
+performed. Raw Serde decoding and `PartialEq` are not substitutes for these APIs.

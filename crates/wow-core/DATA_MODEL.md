@@ -333,6 +333,12 @@ entity_key when present
 - Generation fields obey the origin matrix and, inside an envelope, match its context.
 - A source handle grants no filesystem access and carries no host root.
 
+`SourceHandle` deserialization is structural; it does not establish a valid
+self-ID or origin/generation combination. `verify_source_handle_content`,
+`compare_source_handles` and `SourceHandle::compare` revalidate retained handles
+before returning success. Equality alone is not admission. Comparisons are
+fallible, but valid-handle categories and canonical identities do not change.
+
 ## 7. Evidence and conflicts
 
 ### Provenance classes

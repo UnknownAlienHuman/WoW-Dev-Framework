@@ -318,3 +318,14 @@ scope uses `profile_kind_violation` at `fixture_scope`. No offending text is
 echoed. Builder, decoded-profile validation, checked comparison/equality,
 generation and envelope admission share these failures. A release missing both
 builder fields still reports `builder_id`. Raw Serde decoding is structural.
+
+### Checked source-handle operations
+
+Verification and both comparison entrypoints propagate retained-handle errors
+before returning success. Invalid origin text/generation combinations or mutable
+revision aliases use `invalid_source_handle`; malformed spans use
+`invalid_source_span` / `span_state_conflict`; a wrong self-ID uses
+`canonical_digest_mismatch` at `handle_id`. Error field paths and fixed reasons
+are preserved without echoing source text. Only an admitted handle may produce
+`digest_mismatch` at `digest` for different supplied content. Digest-purpose
+substitution is a Rust type error. No additional error code is introduced.
