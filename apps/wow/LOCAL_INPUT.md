@@ -44,9 +44,9 @@ revision/tree. No compatibility digest, profile, reference record or source is
 invented by the CLI. Embedders may instead use `LocalProjectInput::new` with
 existing `ProjectInputBundle` and `ReferenceView` owners.
 
-Host file/manifest materialization is not implemented by this checkpoint. An
-operator/producer must supply this package explicitly; the application does not
-infer it from cwd, editor configuration, addon folders or a client installation.
+For disk files, use the [explicit file manifest](FILES_INPUT.md). This inline
+schema remains supported for embedders. Neither mode infers inputs from cwd,
+editor configuration, addon folders or a client installation.
 
 ## Execution
 

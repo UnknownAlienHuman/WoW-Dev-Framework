@@ -10,6 +10,7 @@
 
 mod analyzer;
 mod configuration;
+pub mod disk;
 mod error;
 mod generation;
 mod identity;

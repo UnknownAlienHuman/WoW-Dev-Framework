@@ -142,3 +142,11 @@ All eight jobs in CI run `35487232004` concluded success for
 strict Clippy, debug/release tests and rustdoc; updated dependencies; rolling
 parser; Linux/Windows semantic consumers; Linux/Windows Wasm swap/rollback.
 This is code-checkpoint evidence, not a full package or public launch certificate.
+
+## Explicit disk inputs
+
+The one-shot CLI also accepts `wow-service/local-project-files/1`: pinned metadata
+artifacts plus explicitly listed Main/Library files below the config directory.
+`wow-project::disk` owns bounded read-only acquisition; both input modes use the
+same owner composition. See [FILES_INPUT.md](../apps/wow/FILES_INPUT.md).
+No TOC/XML scan, live-rule expansion or full R0 acceptance is inferred.

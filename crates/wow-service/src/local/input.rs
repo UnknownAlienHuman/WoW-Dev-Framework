@@ -1,8 +1,6 @@
 use serde::Deserialize;
 use wow_core::{CanonicalResult, ContentDigest, ProfileIdentity, ProfileKind, SourceContent};
-use wow_emmy::{
-    LuaWorkspaceFileInput, LuaWorkspaceLimits, LuaWorkspaceSnapshot, LuaWorkspaceUniverse,
-};
+use wow_emmy::{LuaWorkspaceLimits, LuaWorkspaceSnapshot, LuaWorkspaceUniverse};
 use wow_project::{
     AnalyzerBindingDeclaration, ProjectBudgetPolicy, ProjectCapabilityPolicy,
     ProjectConfigurationBuilder, ProjectFileRole, ProjectId, ProjectInputBundle, ProjectInputFile,
@@ -13,7 +11,7 @@ use wow_reference::ReferenceView;
 use crate::{ServiceError, ServiceErrorCode, ServiceResult};
 
 /// Hard transport ceiling, checked before deserializing a materialized project.
-pub const LOCAL_INPUT_MAX_BYTES: usize = 32 * 1024 * 1024;
+pub const LOCAL_INPUT_MAX_BYTES: usize = wow_project::disk::DISK_CONFIGURATION_MAX_BYTES;
 pub const LOCAL_INPUT_SCHEMA: &str = "wow-service/local-project-input/1";
 
 /// Explicit materialized inputs, not precomputed findings or a trusted clean result.
@@ -40,14 +38,23 @@ struct WireInput {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct AnalyzerInput {
+pub(super) struct AnalyzerInput {
     /// Original compatibility-report JSON; the analyzer owns its verification.
-    compatibility_report_json: String,
-    accepted_pin_id: String,
-    configuration_digest: ContentDigest<CanonicalResult>,
-    contract_id: String,
-    fixture_contract_id: String,
-    library_contract_id: String,
+    pub(super) compatibility_report_json: String,
+    pub(super) accepted_pin_id: String,
+    pub(super) configuration_digest: ContentDigest<CanonicalResult>,
+    pub(super) contract_id: String,
+    pub(super) fixture_contract_id: String,
+    pub(super) library_contract_id: String,
+}
+
+pub(super) struct ProjectMetadata {
+    pub(super) project_id: ProjectId,
+    pub(super) workspace_id: ProjectWorkspaceId,
+    pub(super) source_origin_id: ProjectSourceOriginId,
+    pub(super) logical_root: String,
+    pub(super) profile: ProfileIdentity,
+    pub(super) analyzer: AnalyzerInput,
 }
 
 #[derive(Deserialize)]
@@ -69,25 +76,41 @@ impl LocalProjectInput {
                 "local input exceeds its byte limit",
             ));
         }
-        let input: WireInput = serde_json::from_slice(bytes).map_err(|_| {
-            ServiceError::new(
-                ServiceErrorCode::InvalidConfiguration,
-                "invalid local project input",
-            )
-        })?;
+        let input: WireInput =
+            serde_json::from_slice(bytes).map_err(|_| invalid("invalid local project input"))?;
         if input.schema != LOCAL_INPUT_SCHEMA {
             return Err(invalid("unsupported local project input schema"));
         }
+        Self::assemble(
+            ProjectMetadata {
+                project_id: input.project_id,
+                workspace_id: input.workspace_id,
+                source_origin_id: input.source_origin_id,
+                logical_root: input.logical_root,
+                profile: input.profile,
+                analyzer: input.analyzer,
+            },
+            input.reference_view,
+            admit_files(input.main_files, ProjectFileRole::FirstPartyMain)?,
+            admit_files(input.library_files, ProjectFileRole::Library)?,
+        )
+    }
+
+    /// Both inline and on-disk transports converge on the same owner composition.
+    pub(super) fn assemble(
+        input: ProjectMetadata,
+        reference: ReferenceView,
+        main: Vec<ProjectInputFile>,
+        libraries: Vec<ProjectInputFile>,
+    ) -> ServiceResult<Self> {
         input
             .profile
             .validate()
             .map_err(|_| invalid("invalid selected profile"))?;
-        input
-            .reference_view
+        reference
             .validate()
             .map_err(|_| invalid("invalid reference view"))?;
-        let reference_generation = input
-            .reference_view
+        let reference_generation = reference
             .generation_id()
             .parse()
             .map_err(|_| invalid("invalid reference generation"))?;
@@ -95,11 +118,10 @@ impl LocalProjectInput {
             input.analyzer.compatibility_report_json.as_bytes(),
         )
         .map_err(|_| invalid("analyzer compatibility report was rejected"))?;
-        let probe = backend.compatibility_report_sha256().to_owned();
         let declaration = AnalyzerBindingDeclaration::new(
             input.analyzer.contract_id,
             input.analyzer.accepted_pin_id,
-            probe,
+            backend.compatibility_report_sha256().to_owned(),
             input.analyzer.configuration_digest,
             input.analyzer.fixture_contract_id,
             input.analyzer.library_contract_id,
@@ -137,32 +159,12 @@ impl LocalProjectInput {
         .budget_policy(policy)
         .build()
         .map_err(|_| invalid("project configuration was rejected"))?;
-        let main = admit_files(input.main_files, ProjectFileRole::FirstPartyMain)?;
-        // Libraries use the same exact-byte admission, but never enter Main.
-        let library_inputs = input.library_files;
-        if library_inputs.is_empty() {
-            return Err(invalid(
-                "an explicit nonempty Library inventory is required",
-            ));
-        }
-        let _ = admit_files(
-            library_inputs
-                .iter()
-                .map(|file| SourceInput {
-                    path: file.path.clone(),
-                    text: file.text.clone(),
-                    content_digest: file.content_digest,
-                    byte_length: file.byte_length,
-                })
-                .collect(),
-            ProjectFileRole::FirstPartyMain,
-        )?;
         let libraries = LuaWorkspaceSnapshot::build(
             backend,
             universe,
-            library_inputs
+            libraries
                 .into_iter()
-                .map(|file| LuaWorkspaceFileInput::new(file.path, file.text))
+                .map(ProjectInputFile::into_workspace_input)
                 .collect(),
             LuaWorkspaceLimits::new(1024, 4096, 1024 * 1024, 16 * 1024 * 1024)
                 .map_err(|_| invalid("invalid Library limits"))?,
@@ -170,10 +172,7 @@ impl LocalProjectInput {
         .map_err(|_| invalid("Library input was rejected"))?;
         let bundle = ProjectInputBundle::closed(configuration, main, vec![libraries])
             .map_err(|_| invalid("Main input inventory was rejected"))?;
-        Ok(Self {
-            bundle,
-            reference: input.reference_view,
-        })
+        Self::new(bundle, reference)
     }
 
     /// Compose already validated lower-owner inputs without a transport decoder.
@@ -225,6 +224,6 @@ fn admit_files(
         .collect()
 }
 
-fn invalid(message: &'static str) -> ServiceError {
+pub(super) fn invalid(message: &'static str) -> ServiceError {
     ServiceError::new(ServiceErrorCode::InvalidConfiguration, message)
 }

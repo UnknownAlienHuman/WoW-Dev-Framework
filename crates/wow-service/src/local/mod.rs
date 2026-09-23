@@ -1,11 +1,13 @@
 //! One-shot composition of real project, analyzer, reference and rule owners.
-//! No source discovery, filesystem access, source execution or persistent current pointer.
+//! Explicit disk inputs use the project acquisition port; no discovery, source execution or persistent current pointer.
 mod backend;
+mod disk_input;
 mod input;
 mod projection;
 mod response;
 
 pub use backend::LocalProjectBackend;
+pub use disk_input::LOCAL_FILES_SCHEMA;
 pub use input::{LOCAL_INPUT_MAX_BYTES, LOCAL_INPUT_SCHEMA, LocalProjectInput};
 pub use projection::OwnerAnalysis;
 pub use response::{

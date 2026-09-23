@@ -231,6 +231,13 @@ impl ProjectInputFile {
         self.source_fixture_ref.as_deref()
     }
 
+    /// Transfer already admitted Lua bytes to the analyzer without reading the host again.
+    #[must_use]
+    pub fn into_workspace_input(self) -> LuaWorkspaceFileInput {
+        let path = self.relative_path().as_str().to_owned();
+        LuaWorkspaceFileInput::new(path, self.text.into_string())
+    }
+
     pub(crate) fn workspace_input(&self) -> LuaWorkspaceFileInput {
         LuaWorkspaceFileInput::new(self.relative_path().as_str(), self.text.as_ref())
     }

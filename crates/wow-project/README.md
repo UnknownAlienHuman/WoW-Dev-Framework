@@ -1,6 +1,6 @@
 # `wow-project` contract router
 
-**Status:** E0-D, E2-C, E3-A, the E4-B lineage-input seam, and the E6-B external-locator mapping seam are implementation-ready documentation. Rust implementation has not started.
+**Status:** E0-D has executable configuration, inventory, analyzer binding, immutable publication/update and explicit [disk acquisition](DISK_INPUTS.md). Full package acceptance and the later E2/E3/E4/E6 seams remain incomplete.
 
 `wow-project` owns exact materialized project/source universes, TOC/XML/load interpretation, analyzer/recognizer orchestration, incremental project generations, project publication semantics, Blizzard UI source indexing, project-owned lineage inputs, and exact mapping of bounded external locators into retained project generations. It does not own graph acceptance, search ranking, external-provider semantics, candidate selection, context orchestration, migration application, static-impact traversal, service orchestration, or storage internals.
 
@@ -77,10 +77,10 @@ A repository, owner, package, path, name, signature, body digest, fingerprint, p
 
 ```text
 documentation frontier: E6-B project mapping seam
-implementation frontier: not-started
-Cargo.toml: absent
-Rust source: absent
-CI/workflows: absent
+implementation frontier: partial executable E0-D, including explicit disk inputs
+Cargo.toml: active root workspace member
+Rust source: src/
+CI/workflows: root workspace CI; full package acceptance is separate
 ```
 
 Implementation still begins from E0 dependency order; the E6-B seam cannot activate before E2/E3 project publication, exact mapping profiles/fixtures, E6-A, and E6-B service gates are implemented and frozen.

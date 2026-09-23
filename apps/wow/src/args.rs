@@ -2,7 +2,7 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 use wow_service::LocalCommand;
 
-pub const HELP: &str = "wow status --config <materialized-project.json> [--project <ProjectId>] [--detail summary|capabilities] [--format json|text]\nwow check --config <materialized-project.json> --project <ProjectId> [--generation current|<ProjectGenerationId>] [--file <ProjectFileId> ...] [--rule <RuleId>@1 ...] [--format json|text]\n\nInput is an explicit materialized project, Library and reference view. No discovery, source execution, source writes or persistent current pointer.\n";
+pub const HELP: &str = "wow status --config <project.json> [--project <ProjectId>] [--detail summary|capabilities] [--format json|text]\nwow check --config <project.json> --project <ProjectId> [--generation current|<ProjectGenerationId>] [--file <ProjectFileId> ...] [--rule <RuleId>@1 ...] [--format json|text]\n\nInput is an explicit file manifest or materialized project, Library and reference view. No discovery, source execution, source writes or persistent current pointer.\n";
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Format {

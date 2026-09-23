@@ -2,12 +2,11 @@
 mod args;
 mod output;
 
-use std::fs::File;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::process::ExitCode;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use wow_service::{LOCAL_INPUT_MAX_BYTES, LocalOperationResult, LocalProjectInput, execute_local};
+use wow_service::{LocalOperationResult, LocalProjectInput, ServiceErrorCode, execute_local};
 
 fn main() -> ExitCode {
     ExitCode::from(run())
@@ -37,38 +36,15 @@ fn run() -> u8 {
     if ctrlc::set_handler(move || signal.store(true, Ordering::Release)).is_err() {
         return usage("could not initialize cancellation handling");
     }
-    // Reject ordinary special files before open; the opened handle is checked again.
-    if !std::fs::symlink_metadata(&arguments.config).is_ok_and(|metadata| metadata.is_file()) {
-        return usage("configuration must be a regular file, not a symlink");
-    }
-    let file = match File::open(&arguments.config) {
-        Ok(file) => file,
-        Err(_) => return usage("could not open explicit configuration"),
-    };
-    if !file.metadata().is_ok_and(|metadata| metadata.is_file()) {
-        return usage("configuration must be a regular file");
-    }
-    let mut bytes = Vec::new();
-    // Read at most limit+1, regardless of metadata or file growth during acquisition.
-    if file
-        .take((LOCAL_INPUT_MAX_BYTES as u64) + 1)
-        .read_to_end(&mut bytes)
-        .is_err()
-    {
-        return usage("configuration read failed");
-    }
-    if bytes.len() > LOCAL_INPUT_MAX_BYTES {
-        return usage("configuration byte limit exceeded");
-    }
-    let result = if stop.load(Ordering::Acquire) {
-        LocalOperationResult::cancelled(&arguments.command)
-    } else {
-        let input = match LocalProjectInput::from_json_slice(&bytes) {
-            Ok(input) => input,
-            Err(_) => return usage("configuration or exact input artifacts were rejected"),
-        };
-        drop(bytes);
-        execute_local(input, &arguments.command, &stop)
+    let result = match LocalProjectInput::from_config_path(&arguments.config, &stop) {
+        Ok(input) => execute_local(input, &arguments.command, &stop),
+        Err(error) if error.code() == ServiceErrorCode::Cancelled => {
+            LocalOperationResult::cancelled(&arguments.command)
+        }
+        Err(error) => {
+            diagnostic(error.message());
+            return 64;
+        }
     };
     // Cancellation may replace an unpublished result, never bytes already being written.
     let result = if stop.load(Ordering::Acquire) {
