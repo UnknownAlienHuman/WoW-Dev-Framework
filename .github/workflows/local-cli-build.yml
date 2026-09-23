@@ -1,0 +1,132 @@
+name: Local CLI build
+on:
+  push:
+    branches: [main]
+    paths: ['.ci/cli-code/**', '.github/workflows/local-cli-build.yml']
+permissions:
+  contents: read
+concurrency:
+  group: local-cli-build
+  cancel-in-progress: false
+env:
+  CARGO_TERM_COLOR: never
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Apply reviewed functional implementation
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          mkdir -p "$RUNNER_TEMP/cli-build"
+          git rev-parse HEAD > "$RUNNER_TEMP/cli-build/BASE_SHA"
+          cat .ci/cli-code/{00,01,02,03,04} | base64 -d > "$RUNNER_TEMP/cli.patch.gz"
+          echo "74642ace2d7bf75af99e8ceefeae22579b4a87c5bbadcffdacca663d466f34a4  $RUNNER_TEMP/cli.patch.gz" | sha256sum -c -
+          gzip -dc "$RUNNER_TEMP/cli.patch.gz" > "$RUNNER_TEMP/cli.patch"
+          echo "fa15bfaa8c561533de58077e1de77566f574606623bcc729033477ccd33b5eb4  $RUNNER_TEMP/cli.patch" | sha256sum -c -
+          git rm -r .ci/cli-code .github/workflows/local-cli-build.yml
+          test "$(git write-tree)" = c07a772c2558cbc4be4dc4c0a131bf961fb2def5
+          git apply --index "$RUNNER_TEMP/cli.patch"
+          test "$(git write-tree)" = 7876f62e447de570a1497513c24ba03a02f2cb53
+      - name: Compile application and service
+        run: |
+          set -euo pipefail
+          rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+          rustc +stable -Vv > "$RUNNER_TEMP/cli-build/RUST_VERSION"
+          cargo +stable fmt --all
+          cargo +stable build -p wow-cli --bin wow 2>&1 | tee "$RUNNER_TEMP/cli-build/build.txt"
+          cargo +stable clippy --locked -p wow-service -p wow-cli -- -D warnings 2>&1 | tee "$RUNNER_TEMP/cli-build/lint.txt"
+      - name: Retain compiled source and updated lockfile
+        run: |
+          set -euo pipefail
+          test -z "$(git diff HEAD --name-only -- '**/tests/**')"
+          git add -A
+          git diff --cached --check
+          git write-tree > "$RUNNER_TEMP/cli-build/TREE_SHA"
+          git diff --cached --binary --full-index HEAD > "$RUNNER_TEMP/cli-build/compiled.patch"
+          cp Cargo.lock "$RUNNER_TEMP/cli-build/Cargo.lock"
+          (cd "$RUNNER_TEMP/cli-build" && sha256sum compiled.patch > SHA256SUMS)
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: local-cli-linux-${{ github.run_id }}
+          path: ${{ runner.temp }}/cli-build/
+          retention-days: 3
+          if-no-files-found: error
+  windows:
+    needs: linux
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: local-cli-linux-${{ github.run_id }}
+          path: ${{ runner.temp }}/cli-linux
+      - name: Build identical source with the same lockfile
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(cat "$RUNNER_TEMP/cli-linux/BASE_SHA")" = "$GITHUB_SHA"
+          (cd "$RUNNER_TEMP/cli-linux" && sha256sum -c SHA256SUMS)
+          git apply --index "$RUNNER_TEMP/cli-linux/compiled.patch"
+          test "$(git write-tree)" = "$(cat "$RUNNER_TEMP/cli-linux/TREE_SHA")"
+          mkdir -p "$RUNNER_TEMP/cli-build"
+          rustup toolchain install stable --profile minimal
+          rustc +stable -Vv > "$RUNNER_TEMP/cli-build/RUST_VERSION"
+          cargo +stable build --locked -p wow-cli --bin wow 2>&1 | tee "$RUNNER_TEMP/cli-build/build.txt"
+          git diff --exit-code
+          git write-tree > "$RUNNER_TEMP/cli-build/TREE_SHA"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: local-cli-windows-${{ github.run_id }}
+          path: ${{ runner.temp }}/cli-build/
+          retention-days: 3
+          if-no-files-found: error
+  publish:
+    needs: [linux, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: local-cli-linux-${{ github.run_id }}
+          path: ${{ runner.temp }}/cli-linux
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: local-cli-windows-${{ github.run_id }}
+          path: ${{ runner.temp }}/cli-windows
+      - name: Publish compiled implementation to unchanged main
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(cat "$RUNNER_TEMP/cli-linux/BASE_SHA")" = "$GITHUB_SHA"
+          cmp "$RUNNER_TEMP/cli-linux/TREE_SHA" "$RUNNER_TEMP/cli-windows/TREE_SHA"
+          (cd "$RUNNER_TEMP/cli-linux" && sha256sum -c SHA256SUMS)
+          git apply --index "$RUNNER_TEMP/cli-linux/compiled.patch"
+          test "$(git write-tree)" = "$(cat "$RUNNER_TEMP/cli-linux/TREE_SHA")"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$GITHUB_SHA"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat(cli): implement local status and check through real owner composition' -m "Add wow-cli, explicit bounded Main/Library/reference inputs, actual ProjectPublisher and Emmy execution, E0 rule projection with retained owner evidence, file/rule selectors, exact generations, JSON/text and cooperative Ctrl-C. Unsupported profiles remain NotEvaluated, not clean. Build-only verification on Linux and Windows in run $GITHUB_RUN_ID; no new test suites and no full E0/R0 acceptance claim. Existing tests are unchanged. Temporary build inputs removed."
+          git push origin HEAD:main
