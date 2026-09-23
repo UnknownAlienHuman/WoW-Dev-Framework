@@ -1,0 +1,298 @@
+diff --git a/apps/wow/TOC_CONTEXT.md b/apps/wow/TOC_CONTEXT.md
+index de05e6a..8de2bc6 100644
+--- a/apps/wow/TOC_CONTEXT.md
++++ b/apps/wow/TOC_CONTEXT.md
+@@ -70,5 +70,5 @@ ## Receipts and limits
+ 
+-Package-wide `## AllowLoad...` gates, environment-changing `LoadIntoEnvironment`,
+-conditional XML attributes, client variant discovery, inline XML Lua and runtime
+-load success are not implemented by this extension. Their existing blockers stay
++Package-wide filters are admitted as described below. Environment-changing
++`LoadIntoEnvironment`, conditional XML attributes, client variant discovery,
++inline XML Lua and runtime load success remain unimplemented. Their existing blockers stay
+ visible. This is static file selection, not full E2-C or live-profile WoW rules.
+@@ -81 +81,34 @@ ## Receipts and limits
+ this implementation, and neither revision is a permanent client target.
++
++## Package filters before source acquisition
++
++The complete captured TOC is now checked for `## AllowLoad:`,
++`## AllowLoadGameType:`, `## ExcludeLoadGameType:`, `## AllowLoadTextLocale:` and
++`## AllowLoadEnvironment:` before resolving any referenced Lua/XML path. A filter
++applies to the whole selected package even when it appears after file entries.
++These use the same bounded predicates and explicit context as line conditions;
++`Both` is unrestricted and needs no location context. No Interface/filename/client
++alias inference is added. A missing filter imposes no restriction.
++
++Only included conditional metadata contributes a filter. Excluded metadata is
++inert; unresolved filter declarations, unknown filter names, empty/malformed values,
++unknown aliases and duplicate active declarations refuse acquisition. The loader
++does not guess first/last-wins behavior. Unresolved takes precedence over excluded.
++At most 64 active/unresolved package-filter declarations are admitted.
++
++A nonmatching package returns `project_target_excluded` (CLI exit 3); an ambiguous
++or insufficiently specified selection returns `project_target_unresolved` (exit 2).
++Both are structured local-operation failures in JSON/text, not clean checks, empty
++analyzer snapshots or syntax-error usage output. No Main/XML/Library files or
++analyzer calls are reached. Config and pinned metadata may already have been read.
++Correct the chosen TOC or explicit context; the loader never chooses another variant.
++
++For an admitted package, `package_gate` load records retain the source span,
++raw digest, suffix conditions and evaluated gate. Text output includes their count.
++No plan/generation is published for rejected acquisition. Load profile and digest
++domain advance to v3; file bodies, existing fixtures and other input modes are unchanged.
++
++Package-filter syntax review: the same Gethe revision cited above,
++`Interface/AddOns/Blizzard_UIPanels_Game/Blizzard_UIPanels_Game_Mainline.toc`,
++contains package-wide `AllowLoad` and `AllowLoadGameType`. Implemented behavior is
++a bounded static dialect, not proof of client execution or full TOC completeness.
+diff --git a/apps/wow/src/main.rs b/apps/wow/src/main.rs
+index 617e5e3..4aa3564 100644
+--- a/apps/wow/src/main.rs
++++ b/apps/wow/src/main.rs
+@@ -43,2 +43,7 @@ fn run() -> u8 {
+         }
++        Err(error)
++            if matches!(error.code(), ServiceErrorCode::ProjectTargetExcluded | ServiceErrorCode::ProjectTargetUnresolved) =>
++        {
++            LocalOperationResult::input_failure(&arguments.command, &error)
++        }
+         Err(error) => {
+diff --git a/apps/wow/src/output.rs b/apps/wow/src/output.rs
+index 7fe3aea..5058935 100644
+--- a/apps/wow/src/output.rs
++++ b/apps/wow/src/output.rs
+@@ -101,3 +101,4 @@ pub fn render(
+                     text,
+-                    "load selection: excluded={}, unresolved={}",
++                    "load selection: package_gates={}, excluded={}, unresolved={}",
++                    plan.package_gate_count(),
+                     plan.excluded_records(),
+diff --git a/crates/wow-project/src/error.rs b/crates/wow-project/src/error.rs
+index e4da68e..90620e4 100644
+--- a/crates/wow-project/src/error.rs
++++ b/crates/wow-project/src/error.rs
+@@ -29,2 +29,4 @@ pub enum ProjectErrorCode {
+     MissingDeclaredFile,
++    PackageTargetExcluded,
++    PackageTargetUnresolved,
+     SourceReadFailed,
+diff --git a/crates/wow-project/src/load/conditions.rs b/crates/wow-project/src/load/conditions.rs
+index 35fd083..8fd6c87 100644
+--- a/crates/wow-project/src/load/conditions.rs
++++ b/crates/wow-project/src/load/conditions.rs
+@@ -108,3 +108,3 @@ pub enum LoadSelection {
+ impl LoadSelection {
+-    fn and(self, other: Self) -> Self {
++    pub(super) fn and(self, other: Self) -> Self {
+         // Preserve unsupported syntax instead of claiming it is irrelevant because
+@@ -137,3 +137,3 @@ pub enum TocConditionKind {
+ impl TocConditionKind {
+-    fn parse(value: &str) -> Option<Self> {
++    pub(super) fn parse(value: &str) -> Option<Self> {
+         match value.to_ascii_lowercase().as_str() {
+@@ -161,5 +161,2 @@ fn evaluate(
+ ) -> LoadSelection {
+-    let Some(context) = context else {
+-        return LoadSelection::Unresolved;
+-    };
+     let mut matched = false;
+@@ -168,3 +165,3 @@ fn evaluate(
+             TocConditionKind::AllowLoadGameType | TocConditionKind::ExcludeLoadGameType => {
+-                context.game_types.get(&value.to_ascii_lowercase()).copied()
++                context.and_then(|context| context.game_types.get(&value.to_ascii_lowercase()).copied())
+             }
+@@ -175,4 +172,3 @@ fn evaluate(
+                     context
+-                        .text_locale
+-                        .as_ref()
++                        .and_then(|context| context.text_locale.as_ref())
+                         .map(|target| target.eq_ignore_ascii_case(value))
+@@ -183,6 +179,6 @@ fn evaluate(
+                 "game" => context
+-                    .location
++                    .and_then(|context| context.location)
+                     .map(|location| location == TocLoadLocation::Game),
+                 "glue" => context
+-                    .location
++                    .and_then(|context| context.location)
+                     .map(|location| location == TocLoadLocation::Glue),
+@@ -192,6 +188,6 @@ fn evaluate(
+                 "global" => context
+-                    .environment
++                    .and_then(|context| context.environment)
+                     .map(|env| env == TocLuaEnvironment::Global),
+                 "secure" => context
+-                    .environment
++                    .and_then(|context| context.environment)
+                     .map(|env| env == TocLuaEnvironment::Secure),
+@@ -212,2 +208,34 @@ fn evaluate(
+ 
++/// Shared bounded value admission for line predicates and package metadata.
++/// An unsupported or malformed value cannot be interpreted as an absent gate.
++pub(super) fn condition(
++    kind: TocConditionKind,
++    tail: &str,
++    context: Option<&TocLoadContext>,
++) -> ProjectResult<TocCondition> {
++    let mut values = Vec::new();
++    for value in tail.split(|ch: char| ch.is_ascii_whitespace() || ch == ',') {
++        if value.is_empty() {
++            continue;
++        }
++        if values.len() >= 64 {
++            return Err(budget());
++        }
++        values.push(value.to_owned());
++    }
++    let well_formed = !values.is_empty()
++        && values.iter().all(|value| atom(value))
++        && (!tail.contains(',') || tail.split(',').all(|part| !part.trim().is_empty()));
++    let selection = if well_formed {
++        evaluate(kind, &values, context)
++    } else {
++        LoadSelection::Unresolved
++    };
++    Ok(TocCondition {
++        kind,
++        values: if well_formed { values } else { Vec::new() },
++        selection,
++    })
++}
++
+ /// Strip recognized conditions and expand only the three supported variables.
+@@ -250,27 +278,6 @@ pub(super) fn project(
+             let tail = clause[head.len()..].trim();
+-            // Blizzard sources use whitespace lists; addon TOCs also use commas.
+-            let values: Vec<_> = tail
+-                .split(|ch: char| ch.is_ascii_whitespace() || ch == ',')
+-                .filter(|value| !value.is_empty())
+-                .map(str::to_owned)
+-                .collect();
+-            if values.len() > 64 {
+-                return Err(budget());
+-            }
+-            let well_formed = !values.is_empty()
+-                && values.iter().all(|value| atom(value))
+-                && (!tail.contains(',') || tail.split(',').all(|part| !part.trim().is_empty()));
+-            let selection = if well_formed {
+-                evaluate(kind, &values, context)
+-            } else {
+-                LoadSelection::Unresolved
+-            };
++            let condition = condition(kind, tail, context)?;
++            let selection = condition.selection;
+             record.selection = record.selection.and(selection);
+-            if well_formed {
+-                record.conditions.push(TocCondition {
+-                    kind,
+-                    values,
+-                    selection,
+-                });
+-            }
++            record.conditions.push(condition);
+             if selection == LoadSelection::Unresolved {
+diff --git a/crates/wow-project/src/load/mod.rs b/crates/wow-project/src/load/mod.rs
+index daaee52..a92a672 100644
+--- a/crates/wow-project/src/load/mod.rs
++++ b/crates/wow-project/src/load/mod.rs
+@@ -3,2 +3,3 @@
+ mod conditions;
++mod package;
+ mod toc;
+@@ -25,3 +26,3 @@
+ /// Versioned, deliberately restricted acquisition semantics; never a WoW build.
+-pub const LOAD_PROFILE: &str = "wow-project/toc-xml-files/2";
++pub const LOAD_PROFILE: &str = "wow-project/toc-xml-files/3";
+ const MAX_RECORDS: usize = 32_768;
+@@ -54,2 +55,3 @@ pub enum LoadRecordKind {
+     Metadata,
++    PackageGate,
+     LuaFile,
+@@ -146,2 +148,6 @@ pub fn external_files_complete(&self) -> bool {
+     #[must_use]
++    pub fn package_gate_count(&self) -> usize {
++        self.records.iter().filter(|record| record.kind == LoadRecordKind::PackageGate).count()
++    }
++    #[must_use]
+     pub fn excluded_records(&self) -> usize {
+@@ -268,3 +274,3 @@ pub fn read_toc_project_with_context(
+         let text = loader.capture(selected_toc)?;
+-        loader.charge_parse(text.len())?;
++        loader.charge_parse(text.len().saturating_mul(2))?;
+         let parsed = toc::parse(&text, profile.interface(), context, stop)?;
+@@ -303,3 +309,3 @@ struct Identity<'a> {
+         let digest = crate::identity::canonical_digest(
+-            "wow-project/load-plan/2",
++            "wow-project/load-plan/3",
+             &Identity {
+diff --git a/crates/wow-project/src/load/toc.rs b/crates/wow-service/ERROR_MODEL.md
+index a30bc07..f41e8cd 100644
+--- a/crates/wow-service/ERROR_MODEL.md
++++ b/crates/wow-service/ERROR_MODEL.md
+@@ -526 +526,9 @@ ## 17. Error testing
+ - assertion that no misleading status/check envelope/late result escaped.
++
++### Local TOC target admission
++
++`ProjectTargetExcluded` is an unavailable selected input (local CLI exit 3).
++`ProjectTargetUnresolved` is incomplete target selection (local CLI exit 2).
++They originate before analyzer publication, preserve the requested operation ID,
++and carry no fabricated check context or clean claim. Invalid config syntax still
++uses the separate usage path. See `apps/wow/TOC_CONTEXT.md` for the bounded dialect.
+diff --git a/crates/wow-service/src/error.rs b/crates/wow-service/src/error.rs
+index 9dd4807..ba8d0fb 100644
+--- a/crates/wow-service/src/error.rs
++++ b/crates/wow-service/src/error.rs
+@@ -15,2 +15,4 @@ pub enum ServiceErrorCode {
+     ComponentUnavailable,
++    ProjectTargetExcluded,
++    ProjectTargetUnresolved,
+     OperationConflict,
+diff --git a/crates/wow-service/src/local/disk_input.rs b/crates/wow-service/src/local/disk_input.rs
+index 2b6b28b..0d221e0 100644
+--- a/crates/wow-service/src/local/disk_input.rs
++++ b/crates/wow-service/src/local/disk_input.rs
+@@ -220,2 +220,4 @@ fn acquisition_error(error: ProjectError) -> ServiceError {
+         ProjectErrorCode::SourceBudgetExceeded => ServiceErrorCode::BudgetExceeded,
++        ProjectErrorCode::PackageTargetExcluded => ServiceErrorCode::ProjectTargetExcluded,
++        ProjectErrorCode::PackageTargetUnresolved => ServiceErrorCode::ProjectTargetUnresolved,
+         _ => ServiceErrorCode::InvalidConfiguration,
+diff --git a/crates/wow-service/src/local/projection.rs b/crates/wow-service/src/local/projection.rs
+index 90d6e95..58dff36 100644
+--- a/crates/wow-service/src/local/projection.rs
++++ b/crates/wow-service/src/local/projection.rs
+@@ -146,3 +146,3 @@ pub(super) fn components(
+                 "wow-project-load",
+-                "2",
++                "3",
+                 plan.digest().to_string(),
+diff --git a/crates/wow-service/src/local/response.rs b/crates/wow-service/src/local/response.rs
+index f4e1453..b7f9e84 100644
+--- a/crates/wow-service/src/local/response.rs
++++ b/crates/wow-service/src/local/response.rs
+@@ -160,2 +160,9 @@ pub fn cancelled(command: &LocalCommand) -> Self {
+ 
++    /// Project admission failed before an analyzer snapshot could exist. Preserve
++    /// the typed outcome and operation ID without fabricating a check context.
++    #[must_use]
++    pub fn input_failure(command: &LocalCommand, error: &ServiceError) -> Self {
++        Self::failure(command, error.code())
++    }
++
+     fn failure(command: &LocalCommand, code: ServiceErrorCode) -> Self {
+@@ -196,2 +203,3 @@ pub fn outcome_code(&self) -> LocalOutcome {
+                 ServiceErrorCode::Cancelled => LocalOutcome::Cancelled,
++                ServiceErrorCode::ProjectTargetUnresolved => LocalOutcome::Partial,
+                 _ => LocalOutcome::Unavailable,
+diff --git a/docs/IMPLEMENTATION_STATUS.md b/docs/IMPLEMENTATION_STATUS.md
+index b6e403f..aa02732 100644
+--- a/docs/IMPLEMENTATION_STATUS.md
++++ b/docs/IMPLEMENTATION_STATUS.md
+@@ -155 +155,6 @@ ## Explicit disk inputs
+ live-rule expansion, full E2-C or R0 acceptance is inferred.
++
++Selected-TOC acquisition now preflights package-wide target filters before any
++Lua/XML descendant read. Included declarations enter the v3 load receipt; excluded
++and unresolved packages return distinct typed local-operation outcomes without an
++analyzer snapshot. See [TOC_CONTEXT.md](../apps/wow/TOC_CONTEXT.md#package-filters-before-source-acquisition).

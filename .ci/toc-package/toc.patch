@@ -1,0 +1,25 @@
+diff --git a/crates/wow-project/src/load/toc.rs b/crates/wow-project/src/load/toc.rs
+index 2e1d691..66ca1e8 100644
+--- a/crates/wow-project/src/load/toc.rs
++++ b/crates/wow-project/src/load/toc.rs
+@@ -2,3 +2,3 @@
+     LoadIssueKind as Issue, LoadRecordKind as Kind, LoadSelection, MAX_RECORDS, Record,
+-    TocLoadContext, budget, conditions, invalid,
++    TocLoadContext, budget, conditions, invalid, package,
+ };
+@@ -14,2 +14,5 @@ pub(super) fn parse(
+ ) -> ProjectResult<Vec<Record>> {
++    // Scan the complete captured TOC before expansion. Filters after a file line
++    // still govern that file, and excluded targets must not open any descendants.
++    let package_filters = package::admit(text, context, stop)?;
+     let mut records = Vec::new();
+@@ -40,2 +43,9 @@ pub(super) fn parse(
+             }
++            if let Some(filter) = package_filters.get(&offset) {
++                record.kind = Kind::PackageGate;
++                record.conditions.push(filter.clone());
++                records.push(record);
++                offset = end;
++                continue;
++            }
+             if let Some((key, value)) = metadata.split_once(':') {
