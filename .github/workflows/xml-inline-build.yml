@@ -22,21 +22,27 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.sha }}
+          ref: main
           persist-credentials: false
       - name: Admit exact functional source on its reviewed base
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/xml-inline"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git rev-parse HEAD > "$RUNNER_TEMP/xml-inline/BASE_SHA"
           git config core.autocrlf false
           cat .ci/xml-inline/[0-9][0-9] | base64 --decode | gzip -d > "$RUNNER_TEMP/xml-inline/input.patch"
           echo 'df9a6dd457768b9fd3a73b81dae373845c81886de4ef801be913267fab85e5b4  input.patch' > "$RUNNER_TEMP/xml-inline/INPUT_SHA256"
           (cd "$RUNNER_TEMP/xml-inline" && sha256sum -c INPUT_SHA256)
+          cp .ci/xml-inline/correction.patch "$RUNNER_TEMP/xml-inline/correction.patch"
+          echo 'f695baf80bb542d187123e722f2f8179a708e0abc3e52660ed5efb4f0fd6c44f  correction.patch' > "$RUNNER_TEMP/xml-inline/CORRECTION_SHA256"
+          (cd "$RUNNER_TEMP/xml-inline" && sha256sum -c CORRECTION_SHA256)
           git rm -r -- .ci/xml-inline .github/workflows/xml-inline-build.yml
           test "$(git write-tree)" = b84a34f5892094e4742d122d4056c6f3551c8f17
           git apply --index "$RUNNER_TEMP/xml-inline/input.patch"
           test "$(git write-tree)" = c65b9c830489f1e7513b0bb3f012ddc0f8492ec1
+          git apply --index "$RUNNER_TEMP/xml-inline/correction.patch"
+          test "$(git write-tree)" = f078d386584a950bbe6167b79834e4b0e3b5d18b
       - name: Format the reviewed implementation
         run: |
           set -euo pipefail
