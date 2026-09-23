@@ -63,21 +63,31 @@ pub struct SymbolLookupReport {
 }
 impl SymbolLookupReport {
     #[must_use]
-    pub fn analysis_id(&self) -> &str { &self.analysis_id }
+    pub fn analysis_id(&self) -> &str {
+        &self.analysis_id
+    }
     #[must_use]
-    pub fn lookups(&self) -> &BTreeMap<String, SymbolLookup> { &self.lookups }
+    pub fn lookups(&self) -> &BTreeMap<String, SymbolLookup> {
+        &self.lookups
+    }
     #[must_use]
-    pub const fn source_health_complete(&self) -> bool { self.source_health_complete }
+    pub const fn source_health_complete(&self) -> bool {
+        self.source_health_complete
+    }
 }
 
 /// A closed ASCII dotted-name dialect, not an expression parser. Empty segments,
 /// calls, indexing, colon invocation and dynamic expressions are not evaluated.
 #[must_use]
 pub fn supported_path(path: &str) -> bool {
-    if path.is_empty() || path.len() > 4096 || path.split('.').count() > 16 { return false; }
+    if path.is_empty() || path.len() > 4096 || path.split('.').count() > 16 {
+        return false;
+    }
     path.split('.').all(|part| {
         let mut bytes = part.bytes();
-        bytes.next().is_some_and(|c| c.is_ascii_alphabetic() || c == b'_')
+        bytes
+            .next()
+            .is_some_and(|c| c.is_ascii_alphabetic() || c == b'_')
             && bytes.all(|c| c.is_ascii_alphanumeric() || c == b'_')
     })
 }
@@ -96,7 +106,11 @@ pub(crate) fn checkpoint(stop: &AtomicBool) -> EmmyMemberCallResult<()> {
     Ok(())
 }
 fn error(code: EmmyMemberCallErrorCode) -> EmmyMemberCallError {
-    EmmyMemberCallError::new(code, "symbol lookup could not retain a coherent bounded result", None)
+    EmmyMemberCallError::new(
+        code,
+        "symbol lookup could not retain a coherent bounded result",
+        None,
+    )
 }
 
 struct Source<'a> {
@@ -128,16 +142,31 @@ pub(crate) fn resolve(
         for file in workspace.files() {
             checkpoint(stop)?;
             let model = semantic_model(analysis, root, file)?;
-            let parsed = model.get_file_parse_error().is_none_or(|errors| errors.is_empty());
+            let parsed = model
+                .get_file_parse_error()
+                .is_none_or(|errors| errors.is_empty());
             healthy &= parsed;
-            if sources.insert(model.get_file_id(), Source {
-                workspace: workspace.snapshot_id(), role, file, healthy: parsed,
-            }).is_some() {
-                return Err(error(EmmyMemberCallErrorCode::AnalyzerFileRegistrationFailed));
+            if sources
+                .insert(
+                    model.get_file_id(),
+                    Source {
+                        workspace: workspace.snapshot_id(),
+                        role,
+                        file,
+                        healthy: parsed,
+                    },
+                )
+                .is_some()
+            {
+                return Err(error(
+                    EmmyMemberCallErrorCode::AnalyzerFileRegistrationFailed,
+                ));
             }
         }
     }
-    let main_file = main.files().first()
+    let main_file = main
+        .files()
+        .first()
         .ok_or_else(|| error(EmmyMemberCallErrorCode::InvalidMainWorkspace))?;
     let model = semantic_model(analysis, main_root, main_file)?;
     let mut lookups = BTreeMap::new();
@@ -148,27 +177,55 @@ pub(crate) fn resolve(
         let lookup = if supported_path(query) {
             resolve_one(analysis, model.get_db(), &sources, query, stop)?
         } else {
-            SymbolLookup { state: SymbolLookupState::UnsupportedPath, resolved_components: 0, targets: Vec::new() }
+            SymbolLookup {
+                state: SymbolLookupState::UnsupportedPath,
+                resolved_components: 0,
+                targets: Vec::new(),
+            }
         };
-        target_count = target_count.checked_add(lookup.targets.len())
+        target_count = target_count
+            .checked_add(lookup.targets.len())
             .ok_or_else(|| error(EmmyMemberCallErrorCode::FactBudgetExceeded))?;
-        if target_count > MAX_TOTAL_TARGETS { return Err(error(EmmyMemberCallErrorCode::FactBudgetExceeded)); }
-        let retained = query.len() + lookup.targets.iter().map(|t|
-            t.workspace_id.len() + t.path.len() + t.content_digest.len()).sum::<usize>();
-        text_bytes = text_bytes.checked_add(retained)
+        if target_count > MAX_TOTAL_TARGETS {
+            return Err(error(EmmyMemberCallErrorCode::FactBudgetExceeded));
+        }
+        let retained = query.len()
+            + lookup
+                .targets
+                .iter()
+                .map(|t| t.workspace_id.len() + t.path.len() + t.content_digest.len())
+                .sum::<usize>();
+        text_bytes = text_bytes
+            .checked_add(retained)
             .ok_or_else(|| error(EmmyMemberCallErrorCode::FactBudgetExceeded))?;
         if text_bytes > MAX_RETAINED_TEXT_BYTES {
             return Err(error(EmmyMemberCallErrorCode::FactBudgetExceeded));
         }
         lookups.insert(query.clone(), lookup);
     }
-    let library_snapshot_ids: Vec<_> = libraries.iter().map(|(w, _)| w.snapshot_id().to_owned()).collect();
-    let analysis_id = canonical_id("emmy-symbol-lookup:sha256:", &(
-        SYMBOL_LOOKUP_PROFILE, main.backend(), main.snapshot_id(), &library_snapshot_ids,
-        healthy, &lookups,
-    ))?;
-    Ok(SymbolLookupReport { profile: SYMBOL_LOOKUP_PROFILE, main_snapshot_id: main.snapshot_id().into(),
-        library_snapshot_ids, source_health_complete: healthy, lookups, analysis_id })
+    let library_snapshot_ids: Vec<_> = libraries
+        .iter()
+        .map(|(w, _)| w.snapshot_id().to_owned())
+        .collect();
+    let analysis_id = canonical_id(
+        "emmy-symbol-lookup:sha256:",
+        &(
+            SYMBOL_LOOKUP_PROFILE,
+            main.backend(),
+            main.snapshot_id(),
+            &library_snapshot_ids,
+            healthy,
+            &lookups,
+        ),
+    )?;
+    Ok(SymbolLookupReport {
+        profile: SYMBOL_LOOKUP_PROFILE,
+        main_snapshot_id: main.snapshot_id().into(),
+        library_snapshot_ids,
+        source_health_complete: healthy,
+        lookups,
+        analysis_id,
+    })
 }
 
 fn resolve_one(
@@ -180,71 +237,138 @@ fn resolve_one(
 ) -> EmmyMemberCallResult<SymbolLookup> {
     let parts: Vec<_> = query.split('.').collect();
     let Some(ids) = db.get_global_index().get_global_decl_ids(parts[0]) else {
-        return Ok(SymbolLookup { state: SymbolLookupState::NotObserved, resolved_components: 0, targets: Vec::new() });
+        return Ok(SymbolLookup {
+            state: SymbolLookupState::NotObserved,
+            resolved_components: 0,
+            targets: Vec::new(),
+        });
     };
-    if ids.len() > MAX_CANDIDATES { return Err(error(EmmyMemberCallErrorCode::FactBudgetExceeded)); }
+    if ids.len() > MAX_CANDIDATES {
+        return Err(error(EmmyMemberCallErrorCode::FactBudgetExceeded));
+    }
     let mut candidates = Vec::new();
     for id in ids {
         checkpoint(stop)?;
-        if candidates.iter().any(|c: &Candidate| c.owner == LuaSemanticDeclId::LuaDecl(*id)) {
+        if candidates
+            .iter()
+            .any(|c: &Candidate| c.owner == LuaSemanticDeclId::LuaDecl(*id))
+        {
             continue;
         }
-        let model = analysis.compilation.get_semantic_model(id.file_id)
+        let model = analysis
+            .compilation
+            .get_semantic_model(id.file_id)
             .ok_or_else(|| error(EmmyMemberCallErrorCode::SemanticModelUnavailable))?;
-        candidates.push(Candidate { owner: LuaSemanticDeclId::LuaDecl(*id), typ: model.get_type(LuaTypeOwner::Decl(*id)) });
+        candidates.push(Candidate {
+            owner: LuaSemanticDeclId::LuaDecl(*id),
+            typ: model.get_type(LuaTypeOwner::Decl(*id)),
+        });
     }
     let mut resolved_components = 1;
     let mut incomplete = false;
     for part in parts.iter().skip(1) {
         checkpoint(stop)?;
-        if candidates.len() != 1 { break; }
+        if candidates.len() != 1 {
+            break;
+        }
         let candidate = &candidates[0];
-        let Some(file_id) = candidate.owner.get_file_id() else { incomplete = true; break; };
-        if !sources.get(&file_id).is_some_and(|s| s.healthy) { incomplete = true; break; }
-        if matches!(candidate.typ, LuaType::Unknown | LuaType::Any) { incomplete = true; break; }
-        let model = analysis.compilation.get_semantic_model(file_id)
-            .ok_or_else(|| error(EmmyMemberCallErrorCode::SemanticModelUnavailable))?;
-        let Some(members) = model.get_member_info_with_key(&candidate.typ, LuaMemberKey::from(*part), true) else {
-            incomplete = true; break;
+        let Some(file_id) = candidate.owner.get_file_id() else {
+            incomplete = true;
+            break;
         };
-        if members.len() > MAX_CANDIDATES { return Err(error(EmmyMemberCallErrorCode::FactBudgetExceeded)); }
+        if !sources.get(&file_id).is_some_and(|s| s.healthy) {
+            incomplete = true;
+            break;
+        }
+        if matches!(candidate.typ, LuaType::Unknown | LuaType::Any) {
+            incomplete = true;
+            break;
+        }
+        let model = analysis
+            .compilation
+            .get_semantic_model(file_id)
+            .ok_or_else(|| error(EmmyMemberCallErrorCode::SemanticModelUnavailable))?;
+        let Some(members) =
+            model.get_member_info_with_key(&candidate.typ, LuaMemberKey::from(*part), true)
+        else {
+            incomplete = true;
+            break;
+        };
+        if members.len() > MAX_CANDIDATES {
+            return Err(error(EmmyMemberCallErrorCode::FactBudgetExceeded));
+        }
         let mut next: Vec<Candidate> = Vec::new();
         for member in members {
             checkpoint(stop)?;
-            let Some(owner) = member.property_owner_id else { incomplete = true; continue; };
+            let Some(owner) = member.property_owner_id else {
+                incomplete = true;
+                continue;
+            };
             if let Some(previous) = next.iter().find(|c| c.owner == owner) {
                 // Multiple overloads may share one declaration. A disagreement
                 // cannot be collapsed to an arbitrary type for a further lookup.
                 incomplete |= previous.typ != member.typ;
-            } else { next.push(Candidate { owner, typ: member.typ }); }
+            } else {
+                next.push(Candidate {
+                    owner,
+                    typ: member.typ,
+                });
+            }
         }
         candidates = next;
         resolved_components += 1;
-        if incomplete { break; }
+        if incomplete {
+            break;
+        }
     }
     let mut targets = BTreeSet::new();
     let mut failed_source = false;
     for candidate in &candidates {
         checkpoint(stop)?;
         let range = match &candidate.owner {
-            LuaSemanticDeclId::LuaDecl(id) => db.get_decl_index().get_decl(id).map(|d| (id.file_id, d.get_range())),
-            LuaSemanticDeclId::Member(id) => db.get_member_index().get_member(id).map(|m| (id.file_id, m.get_range())),
+            LuaSemanticDeclId::LuaDecl(id) => db
+                .get_decl_index()
+                .get_decl(id)
+                .map(|d| (id.file_id, d.get_range())),
+            LuaSemanticDeclId::Member(id) => db
+                .get_member_index()
+                .get_member(id)
+                .map(|m| (id.file_id, m.get_range())),
             _ => None,
         };
-        let Some((file_id, range)) = range else { incomplete = true; continue; };
-        let Some(source) = sources.get(&file_id) else { incomplete = true; continue; };
+        let Some((file_id, range)) = range else {
+            incomplete = true;
+            continue;
+        };
+        let Some(source) = sources.get(&file_id) else {
+            incomplete = true;
+            continue;
+        };
         failed_source |= !source.healthy;
         targets.insert(SymbolTarget {
-            workspace_id: source.workspace.into(), role: source.role,
-            path: source.file.path().into(), content_digest: source.file.content_sha256().into(),
+            workspace_id: source.workspace.into(),
+            role: source.role,
+            path: source.file.path().into(),
+            content_digest: source.file.content_sha256().into(),
             span: ast_span(source.file, range)?,
         });
     }
-    let state = if failed_source { SymbolLookupState::SourceParseFailed }
-        else if incomplete { SymbolLookupState::Indeterminate }
-        else if candidates.len() > 1 { SymbolLookupState::Ambiguous }
-        else if targets.len() == 1 && resolved_components == parts.len() { SymbolLookupState::UniqueAnalyzerDeclaration }
-        else if candidates.is_empty() { SymbolLookupState::NotObserved }
-        else { SymbolLookupState::Indeterminate };
-    Ok(SymbolLookup { state, resolved_components, targets: targets.into_iter().collect() })
+    let state = if failed_source {
+        SymbolLookupState::SourceParseFailed
+    } else if incomplete {
+        SymbolLookupState::Indeterminate
+    } else if candidates.len() > 1 {
+        SymbolLookupState::Ambiguous
+    } else if targets.len() == 1 && resolved_components == parts.len() {
+        SymbolLookupState::UniqueAnalyzerDeclaration
+    } else if candidates.is_empty() {
+        SymbolLookupState::NotObserved
+    } else {
+        SymbolLookupState::Indeterminate
+    };
+    Ok(SymbolLookup {
+        state,
+        resolved_components,
+        targets: targets.into_iter().collect(),
+    })
 }

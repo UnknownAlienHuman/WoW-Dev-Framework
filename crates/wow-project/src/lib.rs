@@ -21,6 +21,7 @@ mod publication;
 mod registry;
 mod snapshot;
 mod update;
+pub mod xml_bindings;
 pub mod xml_lua;
 
 pub use analyzer::{

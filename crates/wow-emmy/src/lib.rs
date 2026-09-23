@@ -6,6 +6,7 @@
 //! profile, or source generation implicitly. Lua semantic correctness is owned
 //! by the single EmmyLua adapter; this crate does not contain a second parser.
 
+pub mod bindings;
 pub mod compatibility;
 pub mod flow;
 pub mod references;

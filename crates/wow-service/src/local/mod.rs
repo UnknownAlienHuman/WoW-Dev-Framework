@@ -5,6 +5,7 @@ mod disk_input;
 mod input;
 mod projection;
 mod response;
+mod xml_bindings;
 mod xml_lua;
 mod xml_references;
 

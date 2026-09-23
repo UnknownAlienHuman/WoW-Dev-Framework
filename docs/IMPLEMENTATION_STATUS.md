@@ -154,8 +154,8 @@ file expansion, a generation-bound load receipt and explicit partial blockers;
 see [TOC_INPUT.md](../apps/wow/TOC_INPUT.md). There is no source scan, live-rule expansion, full E2-C or R0 acceptance.
 XML now has a source-backed syntax index and extracted inline units; check parses
 those units with the pinned EmmyLua grammar and returns mapped XML diagnostics.
-See [XML_ANALYSIS.md](../apps/wow/XML_ANALYSIS.md). Virtual-unit semantics and XML
-inheritance/reference resolution remain unimplemented.
+See [XML_ANALYSIS.md](../apps/wow/XML_ANALYSIS.md). Virtual-unit semantics remain partial. Local XML parent/inheritance references
+are linked as described below, without inherited receiver materialization.
 
 Selected-TOC acquisition now preflights package-wide target filters before any
 Lua/XML descendant read. Included declarations enter the v3 load receipt; excluded
@@ -169,3 +169,12 @@ retaining duplicate candidates, load order, source anchors and separate parent/
 inheritance cycle components. Link issues enter ordinary XML-scoped findings.
 See [XML_REFERENCES.md](../apps/wow/XML_REFERENCES.md). This is local source linking,
 not XSD object validation, Lua binding, inheritance flattening or runtime acceptance.
+
+## XML to Lua declarations
+
+Selected-TOC checks query `mixin`, `function` and direct-mixin `method` candidates
+through the existing Emmy member-call session. Exact Main/Library declaration
+locations and unresolved/ambiguous results enter owner receipts and ordinary
+XML-scoped findings. See [XML_BINDINGS.md](../apps/wow/XML_BINDINGS.md).
+No new compiler session, synthetic source or callable/runtime proof is introduced;
+receiver construction and inherited method precedence remain partial.

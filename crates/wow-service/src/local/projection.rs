@@ -39,9 +39,15 @@ pub struct OwnerAnalysis {
     load_plan: Option<wow_project::load::ProjectLoadPlan>,
     #[serde(skip_serializing_if = "Option::is_none")]
     xml_lua_report: Option<wow_project::xml_lua::ProjectXmlLuaAnalysis>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    xml_binding_report: Option<wow_project::xml_bindings::ProjectXmlLuaBindings>,
 }
 
 impl OwnerAnalysis {
+    #[must_use]
+    pub fn xml_binding_report(&self) -> Option<&wow_project::xml_bindings::ProjectXmlLuaBindings> {
+        self.xml_binding_report.as_ref()
+    }
     #[must_use]
     pub fn xml_lua_report(&self) -> Option<&wow_project::xml_lua::ProjectXmlLuaAnalysis> {
         self.xml_lua_report.as_ref()
@@ -205,6 +211,33 @@ pub(super) fn components(
                     .with_capability("project.xml.inline_lua.analyzed", CapabilityState::Partial)?;
             }
             components.push(xml);
+            if wow_project::xml_bindings::has_bindings(plan) {
+                let bindings =
+                    project.and_then(|view| view.snapshot().analyzer_binding().xml_bindings());
+                let mut component = ComponentSnapshot::new(
+                    "wow-project-xml-lua-bindings",
+                    "1",
+                    bindings
+                        .map(|r| r.analysis_id().to_owned())
+                        .unwrap_or_else(|| plan.digest().to_string()),
+                    health(bindings.is_none_or(|r| r.unresolved_count() > 0)),
+                )?
+                .with_capability(
+                    "project.xml.lua_bindings.queried",
+                    if bindings.is_some() {
+                        CapabilityState::Available
+                    } else {
+                        CapabilityState::Partial
+                    },
+                )?;
+                if wow_project::xml_bindings::has_method_bindings(plan) {
+                    component = component.with_capability(
+                        "project.xml.lua_bindings.receiver",
+                        CapabilityState::Partial,
+                    )?;
+                }
+                components.push(component);
+            }
         }
     }
     Ok(components)
@@ -225,6 +258,7 @@ pub(super) fn check_context(
     let resolved = super::xml_lua::resolve_scope(project, scope)?;
     let files = resolved.physical;
     let xml_report = project.snapshot().analyzer_binding().xml_lua_analysis();
+    let xml_bindings = project.snapshot().analyzer_binding().xml_bindings();
     let paths: BTreeSet<&str> = files
         .iter()
         .map(|file| file.relative_path().as_str())
@@ -262,6 +296,13 @@ pub(super) fn check_context(
     }
     super::xml_lua::append_findings(xml_report, &resolved.xml_documents, &mut generic, stop)?;
     super::xml_references::append_findings(load_plan, &resolved.xml_documents, &mut generic, stop)?;
+    super::xml_bindings::append_findings(
+        xml_bindings,
+        load_plan,
+        &resolved.xml_documents,
+        &mut generic,
+        stop,
+    )?;
     let rules: Vec<Box<str>> = if selected.is_empty() {
         registry
             .descriptors()
@@ -347,6 +388,7 @@ pub(super) fn check_context(
         runtime_status: "not_evaluated",
         load_plan: load_plan.cloned(),
         xml_lua_report: xml_report.cloned(),
+        xml_binding_report: xml_bindings.cloned(),
     };
     Ok(CheckContext::new(
         identity,

@@ -684,6 +684,8 @@ fn configuration_digest(
         load_plan_digest: Option<ContentDigest<CanonicalResult>>,
         #[serde(skip_serializing_if = "Option::is_none")]
         xml_lua_adapter: Option<&'static str>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        xml_binding_adapter: Option<&'static str>,
     }
     canonical_digest(
         "wow-project/configuration/e0-d/1",
@@ -701,6 +703,8 @@ fn configuration_digest(
             budget_policy,
             load_plan_digest,
             xml_lua_adapter: load_plan_digest.map(|_| crate::xml_lua::XML_LUA_ANALYSIS_PROFILE),
+            xml_binding_adapter: load_plan_digest
+                .map(|_| crate::xml_bindings::XML_LUA_BINDING_PROFILE),
         },
         ProjectPhase::Configuration,
     )

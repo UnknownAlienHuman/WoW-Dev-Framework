@@ -41,6 +41,7 @@ pub enum EmmyMemberCallErrorCode {
     CoordinateConversionFailed,
     FactBudgetExceeded,
     CanonicalizationFailed,
+    Cancelled,
 }
 
 /// One bounded direct-member analysis failure.
@@ -52,7 +53,7 @@ pub struct EmmyMemberCallError {
 }
 
 impl EmmyMemberCallError {
-    fn new(
+    pub(crate) fn new(
         code: EmmyMemberCallErrorCode,
         message: impl Into<Box<str>>,
         path: Option<&str>,
@@ -332,6 +333,28 @@ pub fn analyze_member_calls(
     main: &LuaWorkspaceSnapshot,
     libraries: &[&LuaWorkspaceSnapshot],
 ) -> EmmyMemberCallResult<EmmyMemberCallReport> {
+    analyze_member_calls_with_bindings(
+        main,
+        libraries,
+        &[],
+        &std::sync::atomic::AtomicBool::new(false),
+    )
+    .map(|(report, _)| report)
+}
+
+/// Execute XML-independent symbol queries in the same Main/Library semantic
+/// session as member-call facts. No additional parser or synthetic query file.
+pub fn analyze_member_calls_with_bindings(
+    main: &LuaWorkspaceSnapshot,
+    libraries: &[&LuaWorkspaceSnapshot],
+    queries: &[String],
+    stop: &std::sync::atomic::AtomicBool,
+) -> EmmyMemberCallResult<(
+    EmmyMemberCallReport,
+    Option<crate::bindings::SymbolLookupReport>,
+)> {
+    crate::bindings::checkpoint(stop)?;
+    crate::bindings::validate_queries(queries)?;
     validate_compiled_backend(main)?;
     if matches!(main.universe(), crate::LuaWorkspaceUniverse::BlizzardUi) {
         return Err(EmmyMemberCallError::new(
@@ -350,6 +373,7 @@ pub fn analyze_member_calls(
     let mut identities = BTreeSet::new();
     identities.insert(main.snapshot_id());
     for library in &ordered_libraries {
+        crate::bindings::checkpoint(stop)?;
         validate_compiled_backend(library)?;
         if library.backend() != main.backend() {
             return Err(EmmyMemberCallError::new(
@@ -414,6 +438,7 @@ pub fn analyze_member_calls(
 
     for (snapshot, root) in &library_roots {
         for file in snapshot.files() {
+            crate::bindings::checkpoint(stop)?;
             let model = semantic_model(&analysis, root, file)?;
             if model
                 .get_file_parse_error()
@@ -432,6 +457,7 @@ pub fn analyze_member_calls(
     let mut references = Vec::new();
     let mut calls = Vec::new();
     for file in main.files() {
+        crate::bindings::checkpoint(stop)?;
         let model = semantic_model(&analysis, &main_root, file)?;
         let parse_errors = model.get_file_parse_error().unwrap_or_default();
         if !parse_errors.is_empty() {
@@ -452,6 +478,7 @@ pub fn analyze_member_calls(
         let call_start = calls.len();
         let root = model.get_root().clone();
         for node in root.descendants::<LuaAst>() {
+            crate::bindings::checkpoint(stop)?;
             let LuaAst::LuaCallExpr(call) = node else {
                 continue;
             };
@@ -590,7 +617,7 @@ pub fn analyze_member_calls(
         calls: &calls,
     };
     let analysis_id = canonical_id("emmy-member-calls:sha256:", &identity)?;
-    Ok(EmmyMemberCallReport {
+    let report = EmmyMemberCallReport {
         schema: REPORT_SCHEMA,
         analysis_id: analysis_id.into_boxed_str(),
         upstream_revision: EMMYLUA_REVISION,
@@ -601,10 +628,23 @@ pub fn analyze_member_calls(
         files,
         references,
         calls,
-    })
+    };
+    let lookups = if queries.is_empty() {
+        None
+    } else {
+        Some(crate::bindings::resolve(
+            &analysis,
+            main,
+            &main_root,
+            &library_roots,
+            queries,
+            stop,
+        )?)
+    };
+    Ok((report, lookups))
 }
 
-fn semantic_model<'a>(
+pub(crate) fn semantic_model<'a>(
     analysis: &'a EmmyLuaAnalysis,
     root: &Path,
     file: &LuaWorkspaceFile,
@@ -746,7 +786,7 @@ fn call_fact_id(
     )
 }
 
-fn canonical_id(prefix: &str, value: &impl Serialize) -> EmmyMemberCallResult<String> {
+pub(crate) fn canonical_id(prefix: &str, value: &impl Serialize) -> EmmyMemberCallResult<String> {
     let bytes = canonical_json_bytes(value).map_err(|_| {
         EmmyMemberCallError::new(
             EmmyMemberCallErrorCode::CanonicalizationFailed,
@@ -757,7 +797,10 @@ fn canonical_id(prefix: &str, value: &impl Serialize) -> EmmyMemberCallResult<St
     Ok(format!("{prefix}{:x}", Sha256::digest(bytes)))
 }
 
-fn ast_span(file: &LuaWorkspaceFile, range: rowan::TextRange) -> EmmyMemberCallResult<SourceSpan> {
+pub(crate) fn ast_span(
+    file: &LuaWorkspaceFile,
+    range: rowan::TextRange,
+) -> EmmyMemberCallResult<SourceSpan> {
     let start = usize::from(range.start());
     let end = usize::from(range.end());
     if start > end

@@ -6,7 +6,7 @@ use wow_core::{CanonicalResult, CapabilityId, ContentDigest, ProjectGenerationId
 use wow_emmy::{
     EmmyFactFileStatus, EmmyLocalFlowFileStatus, EmmyLocalFlowReport, EmmyMemberCallReport,
     EmmySyntaxReport, LuaWorkspaceLimits, LuaWorkspaceSnapshot, LuaWorkspaceUniverse,
-    analyze_local_flow, analyze_member_calls, analyze_syntax,
+    analyze_local_flow, analyze_syntax,
 };
 
 use crate::identity::{canonical_id, parse_source_digest};
@@ -87,6 +87,7 @@ pub struct ProjectAnalyzerBinding {
     member_call_report: EmmyMemberCallReport,
     local_flow_report: EmmyLocalFlowReport,
     xml_lua_analysis: Option<crate::xml_lua::ProjectXmlLuaAnalysis>,
+    xml_bindings: Option<crate::xml_bindings::ProjectXmlLuaBindings>,
     capability_records: Vec<ProjectAnalyzerCapabilityRecord>,
 }
 
@@ -133,6 +134,11 @@ impl ProjectAnalyzerBinding {
     #[must_use]
     pub fn xml_lua_analysis(&self) -> Option<&crate::xml_lua::ProjectXmlLuaAnalysis> {
         self.xml_lua_analysis.as_ref()
+    }
+
+    #[must_use]
+    pub fn xml_bindings(&self) -> Option<&crate::xml_bindings::ProjectXmlLuaBindings> {
+        self.xml_bindings.as_ref()
     }
 
     #[must_use]
@@ -253,15 +259,46 @@ pub(crate) fn build_analyzer_binding(
     })?;
     checkpoint(stop)?;
     let library_refs = ordered_libraries.iter().collect::<Vec<_>>();
-    let member_call_report =
-        analyze_member_calls(&main_workspace, &library_refs).map_err(|source| {
+    let pending_bindings = configuration
+        .load_plan()
+        .map(|plan| crate::xml_bindings::prepare(plan, stop))
+        .transpose()?;
+    let queries = pending_bindings
+        .as_ref()
+        .map(|p| p.queries())
+        .unwrap_or_default();
+    let (member_call_report, symbol_lookup) =
+        wow_emmy::references::analyze_member_calls_with_bindings(
+            &main_workspace,
+            &library_refs,
+            queries,
+            stop,
+        )
+        .map_err(|source| {
+            let code = match source.code() {
+                wow_emmy::EmmyMemberCallErrorCode::Cancelled => ProjectErrorCode::AnalysisCancelled,
+                wow_emmy::EmmyMemberCallErrorCode::FactBudgetExceeded => {
+                    ProjectErrorCode::SourceBudgetExceeded
+                }
+                _ => ProjectErrorCode::AnalyzerFailed,
+            };
             ProjectError::new(
-                ProjectErrorCode::AnalyzerFailed,
+                code,
                 ProjectPhase::Analyzer,
-                format!("member-call analysis failed: {source}"),
+                "member and symbol lookup analysis failed",
             )
             .with_candidate_generation(generation.project_generation())
         })?;
+    let xml_bindings = match (pending_bindings, configuration.load_plan()) {
+        (Some(pending), Some(plan)) => Some(crate::xml_bindings::finish(
+            pending,
+            symbol_lookup,
+            generation.project_generation(),
+            plan,
+            stop,
+        )?),
+        _ => None,
+    };
     checkpoint(stop)?;
     let local_flow_report =
         analyze_local_flow(&main_workspace, &library_refs).map_err(|source| {
@@ -334,6 +371,8 @@ pub(crate) fn build_analyzer_binding(
         local_flow_analysis_id: &'a str,
         #[serde(skip_serializing_if = "Option::is_none")]
         xml_lua_analysis_id: Option<&'a str>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        xml_binding_analysis_id: Option<&'a str>,
         file_manifest_digest: ContentDigest<CanonicalResult>,
         capability_records: &'a [ProjectAnalyzerCapabilityRecord],
     }
@@ -356,6 +395,7 @@ pub(crate) fn build_analyzer_binding(
             member_call_analysis_id: member_call_report.analysis_id(),
             local_flow_analysis_id: local_flow_report.analysis_id(),
             xml_lua_analysis_id: xml_lua_analysis.as_ref().map(|report| report.analysis_id()),
+            xml_binding_analysis_id: xml_bindings.as_ref().map(|report| report.analysis_id()),
             file_manifest_digest: inventory.manifest_digest(),
             capability_records: &capability_records,
         },
@@ -373,6 +413,7 @@ pub(crate) fn build_analyzer_binding(
         member_call_report,
         local_flow_report,
         xml_lua_analysis,
+        xml_bindings,
         capability_records,
     })
 }
