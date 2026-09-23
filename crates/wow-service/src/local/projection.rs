@@ -144,7 +144,7 @@ pub(super) fn components(
         components.push(
             ComponentSnapshot::new(
                 "wow-project-load",
-                "3",
+                "4",
                 plan.digest().to_string(),
                 health(!plan.external_files_complete()),
             )?
@@ -157,6 +157,31 @@ pub(super) fn components(
                 },
             )?,
         );
+        if !plan.xml_documents().is_empty() {
+            let pending_inline = plan.xml_documents().values().any(|index| {
+                index.scripts().any(|element| {
+                    element.script.as_ref().is_some_and(|script| {
+                        matches!(
+                            script.source_kind,
+                            wow_project::load::XmlScriptSource::InlineBody
+                                | wow_project::load::XmlScriptSource::Unresolved
+                        )
+                    })
+                })
+            });
+            let mut xml = ComponentSnapshot::new(
+                "wow-project-xml",
+                "1",
+                plan.digest().to_string(),
+                health(pending_inline),
+            )?
+            .with_capability("project.xml.syntax.indexed", CapabilityState::Available)?;
+            if pending_inline {
+                xml = xml
+                    .with_capability("project.xml.inline_lua.analyzed", CapabilityState::Partial)?;
+            }
+            components.push(xml);
+        }
     }
     Ok(components)
 }

@@ -1,3 +1,4 @@
+use super::xml_index::{Builder, XmlDocumentIndex};
 use super::{LoadIssueKind as Issue, LoadRecordKind as Kind, MAX_RECORDS, Record, budget, invalid};
 use crate::{ProjectResult, disk::checkpoint};
 use quick_xml::{Reader, events::Event};
@@ -10,9 +11,14 @@ struct Frame {
     is_ui: bool,
 }
 
-/// A streaming projection of unprefixed Ui/Include/Script file forms. Other XML
-/// is retained by spans/digests and is explicitly not a complete semantic index.
-pub(super) fn parse(text: &str, stop: &AtomicBool) -> ProjectResult<Vec<Record>> {
+/// One tokenizer pass drives both external-file projection and the syntax index.
+/// Syntax records do not certify complete target-schema or runtime semantics.
+pub(super) fn parse(
+    document: &str,
+    text: &str,
+    stop: &AtomicBool,
+) -> ProjectResult<(Vec<Record>, XmlDocumentIndex)> {
+    let mut index = Builder::new(document, text);
     let mut reader = Reader::from_str(text);
     reader.config_mut().check_comments = true;
     reader.config_mut().check_end_names = true;
@@ -53,10 +59,18 @@ pub(super) fn parse(text: &str, stop: &AtomicBool) -> ProjectResult<Vec<Record>>
                 let mut ui_namespace = stack.last().is_none_or(|parent| parent.ui_namespace);
                 let name = element.name();
                 let name = name.as_ref();
+                // quick-xml may consume the initial UTF-8 BOM with the first tag.
+                let tag_start = start
+                    + text
+                        .get(start..end)
+                        .and_then(|raw| raw.find('<'))
+                        .ok_or_else(|| invalid("XML start tag has no source span"))?;
+                let mut cursor = tag_start + 1 + name.len();
+                let mut attributes = Vec::new();
                 let mut file = None;
                 let mut extra_attributes = false;
-                for (index, attribute) in element.attributes().enumerate() {
-                    if index >= 64 {
+                for (ordinal, attribute) in element.attributes().enumerate() {
+                    if ordinal >= 64 {
                         return Err(budget());
                     }
                     let attribute =
@@ -67,6 +81,14 @@ pub(super) fn parse(text: &str, stop: &AtomicBool) -> ProjectResult<Vec<Record>>
                     let value = attribute
                         .decode_and_unescape_value(reader.decoder())
                         .map_err(|_| invalid("XML attribute encoding or entity was rejected"))?;
+                    let attribute_name = std::str::from_utf8(attribute.key.as_ref())
+                        .map_err(|_| invalid("XML attribute name is not UTF-8"))?;
+                    attributes.push(index.attribute(
+                        &mut cursor,
+                        end,
+                        attribute_name,
+                        value.to_string(),
+                    )?);
                     match attribute.key.as_ref() {
                         b"xmlns" => ui_namespace = value == UI_NAMESPACE || value.is_empty(),
                         b"xmlns:xsi"
@@ -97,7 +119,7 @@ pub(super) fn parse(text: &str, stop: &AtomicBool) -> ProjectResult<Vec<Record>>
                             record.issues.push(Issue::UnsupportedFileKind);
                         }
                     } else if name == b"Script" {
-                        record.issues.push(Issue::InlineLuaNotMaterialized);
+                        record.issues.push(Issue::InlineLuaNotAnalyzed);
                     } else {
                         record.issues.push(Issue::UnsupportedXmlAttributes);
                     }
@@ -107,9 +129,19 @@ pub(super) fn parse(text: &str, stop: &AtomicBool) -> ProjectResult<Vec<Record>>
                         .push(if !ui_namespace || name.contains(&b':') {
                             Issue::UnsupportedXmlNamespace
                         } else {
-                            Issue::XmlStructureNotIndexed
+                            Issue::XmlSemanticsUnresolved
                         });
                 }
+                index.begin(
+                    tag_start,
+                    end,
+                    std::str::from_utf8(name)
+                        .map_err(|_| invalid("XML element name is not UTF-8"))?
+                        .to_owned(),
+                    attributes,
+                    ui_namespace,
+                    empty,
+                )?;
                 if !empty {
                     stack.push(Frame {
                         ui_namespace,
@@ -121,24 +153,33 @@ pub(super) fn parse(text: &str, stop: &AtomicBool) -> ProjectResult<Vec<Record>>
                 if stack.pop().is_none() {
                     return Err(invalid("unmatched XML closing element"));
                 }
+                index.end(start, end)?;
                 record.kind = Kind::XmlEnd;
             }
             Event::Text(text) => {
+                index.literal(start, end)?;
                 record.kind = Kind::XmlText;
                 let nonempty = text.iter().any(|b| !b.is_ascii_whitespace());
                 if nonempty {
                     if stack.is_empty() {
                         return Err(invalid("XML text outside its root"));
                     }
-                    record.issues.push(Issue::InlineLuaNotMaterialized);
+                    record.issues.push(Issue::InlineLuaNotAnalyzed);
                 }
             }
             Event::CData(_) => {
                 if stack.is_empty() {
                     return Err(invalid("XML CDATA outside its root"));
                 }
+                if text
+                    .get(start..end)
+                    .is_none_or(|raw| !raw.starts_with("<![CDATA[") || !raw.ends_with("]]>"))
+                {
+                    return Err(invalid("XML CDATA source span does not match its token"));
+                }
+                index.literal(start + 9, end - 3)?;
                 record.kind = Kind::XmlText;
-                record.issues.push(Issue::InlineLuaNotMaterialized);
+                record.issues.push(Issue::InlineLuaNotAnalyzed);
             }
             Event::GeneralRef(reference) => {
                 if stack.is_empty() {
@@ -146,10 +187,12 @@ pub(super) fn parse(text: &str, stop: &AtomicBool) -> ProjectResult<Vec<Record>>
                 }
                 let name = std::str::from_utf8(reference.as_ref())
                     .map_err(|_| invalid("invalid XML entity"))?;
-                quick_xml::escape::unescape(&format!("&{name};"))
+                let encoded = format!("&{name};");
+                let value = quick_xml::escape::unescape(&encoded)
                     .map_err(|_| invalid("custom XML entities are disabled"))?;
+                index.entity(&value, start, end)?;
                 record.kind = Kind::XmlText;
-                record.issues.push(Issue::InlineLuaNotMaterialized);
+                record.issues.push(Issue::InlineLuaNotAnalyzed);
             }
             Event::Comment(_) => record.kind = Kind::Comment,
             Event::Decl(declaration) => {
@@ -181,5 +224,5 @@ pub(super) fn parse(text: &str, stop: &AtomicBool) -> ProjectResult<Vec<Record>>
         }
         records.push(record);
     }
-    Ok(records)
+    Ok((records, index.finish()?))
 }

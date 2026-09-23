@@ -105,6 +105,22 @@ pub fn render(
                     plan.unresolved_records()
                 )
                 .map_err(|_| ())?;
+                for (document, index) in plan.xml_documents() {
+                    let inline_count = index
+                        .scripts()
+                        .filter(|element| {
+                            element
+                                .script
+                                .as_ref()
+                                .is_some_and(|script| script.inline_lua.is_some())
+                        })
+                        .count();
+                    writeln!(text,
+                        "xml: document={:?}, elements={}, declarations={}, scripts={}, extracted_inline={}, digest={}",
+                        document, index.elements().len(), index.declarations().count(),
+                        index.scripts().count(), inline_count, index.digest()
+                    ).map_err(|_| ())?;
+                }
                 for issue in plan.issues() {
                     writeln!(
                         text,

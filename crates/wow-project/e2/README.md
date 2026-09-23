@@ -1,6 +1,6 @@
 # `wow-project` E2-C project indexing contract
 
-**Status:** implementation-ready documentation; no Rust code yet.
+**Status:** partial executable TOC/XML acquisition and XML syntax/inline-body indexing in `../src/load`. Full E2-C candidate, virtual analyzer units, recognizer/graph handoff and acceptance remain incomplete.
 
 **Contract ID:** `wow-project/e2-c/toc-xml-load-incremental-index`
 

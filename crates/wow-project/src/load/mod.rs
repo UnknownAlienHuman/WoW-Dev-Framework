@@ -1,9 +1,16 @@
-//! Selected-TOC source acquisition. This is an external-file load projection,
-//! not a client emulator, complete XML object index, or persistent E2 candidate.
+//! Selected-TOC acquisition and source-backed XML syntax/inline-body indexing.
+//! Not a client emulator, complete semantic graph, or persistent E2 candidate.
 mod conditions;
 mod package;
 mod toc;
 mod xml;
+mod xml_index;
+
+pub use xml_index::{
+    XML_INDEX_PROFILE, XmlAttributeRecord, XmlDeclaration, XmlDocumentIndex, XmlElementRecord,
+    XmlElementRole, XmlInlineLua, XmlLuaMapKind, XmlLuaMapSegment, XmlScriptRecord,
+    XmlScriptSource, XmlSourceSpan, XmlStructureIssue,
+};
 
 pub use conditions::{
     LoadSelection, TocCondition, TocConditionKind, TocLoadContext, TocLoadLocation,
@@ -24,7 +31,7 @@ use crate::disk::{
 use crate::{ProjectError, ProjectErrorCode, ProjectInputFile, ProjectPhase, ProjectResult};
 
 /// Versioned, deliberately restricted acquisition semantics; never a WoW build.
-pub const LOAD_PROFILE: &str = "wow-project/toc-xml-files/3";
+pub const LOAD_PROFILE: &str = "wow-project/toc-xml-files/4";
 const MAX_RECORDS: usize = 32_768;
 const MAX_INCLUDE_DEPTH: usize = 32;
 
@@ -79,10 +86,10 @@ pub enum LoadIssueKind {
     LoadContextRequired,
     LoadConditionUnresolved,
     UnsupportedFileKind,
-    XmlStructureNotIndexed,
+    XmlSemanticsUnresolved,
     UnsupportedXmlNamespace,
     UnsupportedXmlAttributes,
-    InlineLuaNotMaterialized,
+    InlineLuaNotAnalyzed,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -115,6 +122,7 @@ pub struct ProjectLoadPlan {
     sources: Vec<LoadSource>,
     records: Vec<LoadRecord>,
     issues: Vec<LoadIssue>,
+    xml_documents: BTreeMap<String, XmlDocumentIndex>,
     digest: ContentDigest<CanonicalResult>,
     #[serde(skip)]
     documents: Arc<BTreeMap<String, String>>,
@@ -169,6 +177,11 @@ impl ProjectLoadPlan {
     #[must_use]
     pub fn load_context(&self) -> Option<&TocLoadContext> {
         self.load_context.as_ref()
+    }
+    /// Source-mapped XML syntax, one entry per unique captured document.
+    #[must_use]
+    pub fn xml_documents(&self) -> &BTreeMap<String, XmlDocumentIndex> {
+        &self.xml_documents
     }
     /// Verify that this exact retained plan belongs to the configured target.
     pub fn validate_profile(&self, profile: &ProfileIdentity) -> ProjectResult<()> {
@@ -272,6 +285,10 @@ impl ProjectInputDirectory {
             active: BTreeSet::new(),
             files: BTreeMap::new(),
             documents: BTreeMap::new(),
+            xml_documents: BTreeMap::new(),
+            xml_nodes: 0,
+            xml_attributes: 0,
+            xml_segments: 0,
         };
         let path = selected_toc.path();
         let text = loader.capture(selected_toc)?;
@@ -308,9 +325,10 @@ impl ProjectInputDirectory {
             sources: &'a [LoadSource],
             records: &'a [LoadRecord],
             issues: &'a [LoadIssue],
+            xml_documents: &'a BTreeMap<String, XmlDocumentIndex>,
         }
         let digest = crate::identity::canonical_digest(
-            "wow-project/load-plan/3",
+            "wow-project/load-plan/4",
             &Identity {
                 profile: LOAD_PROFILE,
                 selected_toc: path,
@@ -319,6 +337,7 @@ impl ProjectInputDirectory {
                 sources: &sources,
                 records: &loader.records,
                 issues: &loader.issues,
+                xml_documents: &loader.xml_documents,
             },
             ProjectPhase::Inventory,
         )?;
@@ -335,6 +354,7 @@ impl ProjectInputDirectory {
                 sources,
                 records: loader.records,
                 issues: loader.issues,
+                xml_documents: loader.xml_documents,
                 digest,
                 documents: Arc::new(loader.documents),
             },
@@ -354,6 +374,10 @@ struct Loader<'a> {
     active: BTreeSet<String>,
     files: BTreeMap<String, ProjectInputFile>,
     documents: BTreeMap<String, String>,
+    xml_documents: BTreeMap<String, XmlDocumentIndex>,
+    xml_nodes: usize,
+    xml_attributes: usize,
+    xml_segments: usize,
 }
 
 impl Loader<'_> {
@@ -489,7 +513,19 @@ impl Loader<'_> {
                 }
                 LoadRecordKind::XmlFile => {
                     self.charge_parse(content.len())?;
-                    let parsed = xml::parse(&content, self.stop)?;
+                    let (parsed, index) = xml::parse(&target, &content, self.stop)?;
+                    if !self.xml_documents.contains_key(&target) {
+                        self.xml_nodes += index.elements().len();
+                        self.xml_attributes += index.attribute_count();
+                        self.xml_segments += index.map_segment_count();
+                        if self.xml_nodes > MAX_RECORDS
+                            || self.xml_attributes > 65_536
+                            || self.xml_segments > 65_536
+                        {
+                            return Err(budget());
+                        }
+                        self.xml_documents.insert(target.clone(), index);
+                    }
                     self.documents
                         .entry(target.clone())
                         .or_insert_with(|| content.as_ref().to_owned());

@@ -88,3 +88,11 @@ Source-format review: Gethe `live` resolved on 2026-09-23 to
 `UI.xsd`. This identifies reviewed evidence, not a permanent client/build target.
 `quick-xml` 0.38 supplies the streaming tokenizer; Cargo.lock records the resolved
 version. No parser dependency or patch version is asserted to be permanent truth.
+
+## XML structure and extracted bodies
+
+The v4 plan adds a [source-backed XML index](XML_INDEX.md) and extracted inline
+character data. `XmlStructureNotIndexed` is replaced by
+`XmlSemanticsUnresolved`: the syntax is retained, but object/template resolution
+and virtual analyzer units are still incomplete. Existing inline and explicit-file
+input schemas are unchanged.

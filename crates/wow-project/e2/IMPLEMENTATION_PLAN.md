@@ -1,6 +1,6 @@
 # E2-C implementation plan
 
-**Status:** normative sequence; implementation not started.
+**Status:** normative sequence; selected TOC/file acquisition and XML syntax/inline-body indexing are executable. This is not full phase 3/5 or E2-C acceptance. Follow the root code-first execution priority.
 
 ## Phase 0 — prerequisite and fixture freeze
 
