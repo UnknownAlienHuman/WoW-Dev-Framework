@@ -1,0 +1,132 @@
+name: Selected TOC build
+on:
+  push:
+    branches: [main]
+    paths: ['.ci/toc-code/**', '.github/workflows/local-toc-build.yml']
+permissions:
+  contents: read
+concurrency:
+  group: local-toc-build
+  cancel-in-progress: true
+env:
+  CARGO_TERM_COLOR: never
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Apply reviewed selected TOC and XML implementation
+        run: |
+          set -euo pipefail
+          cat .ci/toc-code/{00,01,02,03} | base64 -d > "$RUNNER_TEMP/toc.patch.gz"
+          echo "31fb5038a694761073fd9cab358d0d9a37b66cc5751b6fc670b5b6578c607e14  $RUNNER_TEMP/toc.patch.gz" | sha256sum -c -
+          gzip -dc "$RUNNER_TEMP/toc.patch.gz" > "$RUNNER_TEMP/toc.patch"
+          echo "fa64cbc73e2215b8de281fa110093bed60fd4ca7c8d458d716b82713c2d4bdb8  $RUNNER_TEMP/toc.patch" | sha256sum -c -
+          git rm -r .ci/toc-code .github/workflows/local-toc-build.yml
+          test "$(git write-tree)" = 9fcb4d29483fa46f5854cdeb1a3005eed4bc944d
+          git apply --index --check "$RUNNER_TEMP/toc.patch"
+          git apply --index "$RUNNER_TEMP/toc.patch"
+          test "$(git write-tree)" = 1973a45576b97ada55cde4e111f562167e88e6ca
+      - name: Build application and source loader
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/toc-linux"
+          rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+          rustc +stable -Vv > "$RUNNER_TEMP/toc-linux/RUST_VERSION"
+          cargo +stable fmt --all
+          cargo +stable build -p wow-cli --bin wow 2>&1 | tee "$RUNNER_TEMP/toc-linux/build.txt"
+          cargo +stable clippy --locked -p wow-project -p wow-service -p wow-cli --lib --bins -- -D warnings 2>&1 | tee "$RUNNER_TEMP/toc-linux/clippy.txt"
+      - name: Retain compiled source and resolved dependencies
+        run: |
+          set -euo pipefail
+          git diff --exit-code -- . ':(exclude)apps/wow/src' ':(exclude)crates/wow-project/src' ':(exclude)crates/wow-service/src/local' ':(exclude)Cargo.lock'
+          git add apps/wow/src crates/wow-project/src crates/wow-service/src/local Cargo.lock
+          git diff --exit-code
+          git diff --cached --check
+          git rev-parse HEAD > "$RUNNER_TEMP/toc-linux/BASE_SHA"
+          git write-tree > "$RUNNER_TEMP/toc-linux/TREE_SHA"
+          git diff --cached --binary --full-index HEAD > "$RUNNER_TEMP/toc-linux/compiled.patch"
+          cp Cargo.lock "$RUNNER_TEMP/toc-linux/Cargo.lock"
+          (cd "$RUNNER_TEMP/toc-linux" && sha256sum compiled.patch Cargo.lock > SHA256SUMS)
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: local-toc-linux-${{ github.run_id }}
+          path: ${{ runner.temp }}/toc-linux/
+          retention-days: 3
+          if-no-files-found: error
+  windows:
+    needs: linux
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: local-toc-linux-${{ github.run_id }}
+          path: ${{ runner.temp }}/toc-linux
+      - name: Build identical source with the same lockfile
+        run: |
+          set -euo pipefail
+          (cd "$RUNNER_TEMP/toc-linux" && sha256sum -c SHA256SUMS)
+          test "$(cat "$RUNNER_TEMP/toc-linux/BASE_SHA")" = "$GITHUB_SHA"
+          git apply --index "$RUNNER_TEMP/toc-linux/compiled.patch"
+          test "$(git write-tree)" = "$(cat "$RUNNER_TEMP/toc-linux/TREE_SHA")"
+          mkdir -p "$RUNNER_TEMP/toc-windows"
+          rustup toolchain install stable --profile minimal
+          rustc +stable -Vv > "$RUNNER_TEMP/toc-windows/RUST_VERSION"
+          cargo +stable build --locked -p wow-cli --bin wow 2>&1 | tee "$RUNNER_TEMP/toc-windows/build.txt"
+          git diff --exit-code
+          git write-tree > "$RUNNER_TEMP/toc-windows/TREE_SHA"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: local-toc-windows-${{ github.run_id }}
+          path: ${{ runner.temp }}/toc-windows/
+          retention-days: 3
+          if-no-files-found: error
+  publish:
+    needs: [linux, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: local-toc-linux-${{ github.run_id }}
+          path: ${{ runner.temp }}/toc-linux
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: local-toc-windows-${{ github.run_id }}
+          path: ${{ runner.temp }}/toc-windows
+      - name: Publish compiled toc loader to unchanged main
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(cat "$RUNNER_TEMP/toc-linux/BASE_SHA")" = "$GITHUB_SHA"
+          cmp "$RUNNER_TEMP/toc-linux/TREE_SHA" "$RUNNER_TEMP/toc-windows/TREE_SHA"
+          (cd "$RUNNER_TEMP/toc-linux" && sha256sum -c SHA256SUMS)
+          git apply --index "$RUNNER_TEMP/toc-linux/compiled.patch"
+          test "$(git write-tree)" = "$(cat "$RUNNER_TEMP/toc-linux/TREE_SHA")"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$GITHUB_SHA"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat(project): load selected TOC and XML sources through the local CLI' -m "Add bounded selected-TOC traversal and streaming Ui Include/Script file acquisition to the project owner. Retain exact source receipts, encounter order, metadata/unknown spans and explicit blockers; bind the load plan into configuration and generation. Add local-project-toc/1 service routing and load summaries without changing inline or explicit-file input. Missing/cyclic/repeated/unsupported load forms remain partial, never clean. Linux and Windows application builds and Linux selected-owner Clippy passed on this exact tree in run $GITHUB_RUN_ID. No tests or fixture baselines changed. Full XML/inline Lua/dependency semantics, runtime behavior and E2/R0 acceptance remain separate. Temporary build inputs removed."
+          git push origin HEAD:main
