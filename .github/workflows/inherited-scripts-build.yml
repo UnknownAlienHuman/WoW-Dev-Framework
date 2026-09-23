@@ -52,11 +52,11 @@ jobs:
       - name: Build the real CLI
         run: |
           set -euo pipefail
-          cargo +stable build --locked -p wow 2>&1 | tee "$RUNNER_TEMP/inherited-scripts/build.log"
+          cargo +stable build --locked -p wow-cli 2>&1 | tee "$RUNNER_TEMP/inherited-scripts/build.log"
       - name: Clippy for changed components
         run: |
           set -euo pipefail
-          cargo +stable clippy --locked -p wow-project -p wow-service -p wow --lib --bins -- -D warnings 2>&1 | tee "$RUNNER_TEMP/inherited-scripts/clippy.log"
+          cargo +stable clippy --locked -p wow-project -p wow-service -p wow-cli --lib --bins -- -D warnings 2>&1 | tee "$RUNNER_TEMP/inherited-scripts/clippy.log"
           cargo +stable xtask check 2>&1 | tee "$RUNNER_TEMP/inherited-scripts/policy.log"
           cargo +stable fmt --all --check
       - name: Retain the compiled source
