@@ -1,0 +1,111 @@
+name: XML index build
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.ci/xml-index/**'
+      - '.github/workflows/xml-index-build.yml'
+permissions:
+  contents: read
+concurrency:
+  group: xml-index-build-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  CARGO_TERM_COLOR: never
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Admit exact XML implementation on its reviewed base
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/xml-results"
+          cat .ci/xml-index/00 .ci/xml-index/01 | base64 -d > "$RUNNER_TEMP/xml.patch.gz"
+          echo "6af60155a038e29838aff3245169fa56564cbc2b2825fe5eb9cc433fd777c175  $RUNNER_TEMP/xml.patch.gz" | sha256sum -c -
+          gzip -dc "$RUNNER_TEMP/xml.patch.gz" > "$RUNNER_TEMP/xml.patch"
+          echo "4e01d31c6753a78f55a83814bf9f792c6f9f7009f915d65060cffd37a20a95e7  $RUNNER_TEMP/xml.patch" | sha256sum -c -
+          git rm -r .ci/xml-index .github/workflows/xml-index-build.yml
+          test "$(git write-tree)" = a05ea152e594515e903150a46218aaa2b0dd481c
+          git apply --index "$RUNNER_TEMP/xml.patch"
+          test "$(git write-tree)" = 324652084639760c2d9df3baa0c6dd7caa53f9b2
+          git rev-parse HEAD > "$RUNNER_TEMP/xml-results/BASE_SHA"
+      - name: Format the reviewed implementation
+        run: |
+          set -euo pipefail
+          rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+          rustc +stable -Vv > "$RUNNER_TEMP/xml-results/RUST_VERSION"
+          cargo +stable fmt --all
+          git diff --exit-code -- . ':(exclude)apps/wow/src/output.rs' ':(exclude)crates/wow-project/src/load/mod.rs' ':(exclude)crates/wow-project/src/load/xml.rs' ':(exclude)crates/wow-project/src/load/xml_index/builder.rs' ':(exclude)crates/wow-project/src/load/xml_index/inline.rs' ':(exclude)crates/wow-project/src/load/xml_index/mod.rs' ':(exclude)crates/wow-service/src/local/projection.rs'
+          git add apps/wow/src/output.rs crates/wow-project/src/load/mod.rs crates/wow-project/src/load/xml.rs crates/wow-project/src/load/xml_index/builder.rs crates/wow-project/src/load/xml_index/inline.rs crates/wow-project/src/load/xml_index/mod.rs crates/wow-service/src/local/projection.rs
+          git diff --cached --check
+          git write-tree > "$RUNNER_TEMP/xml-results/TREE_SHA"
+      - name: Build the application with the unchanged lockfile
+        run: cargo +stable build --locked -p wow-cli --bin wow 2>&1 | tee "$RUNNER_TEMP/xml-results/build.txt"
+      - name: Check the implemented owners
+        run: |
+          set -euo pipefail
+          cargo +stable clippy --locked -p wow-project -p wow-service -p wow-cli --lib --bins -- -D warnings 2>&1 | tee "$RUNNER_TEMP/xml-results/clippy.txt"
+          cargo +stable xtask check 2>&1 | tee "$RUNNER_TEMP/xml-results/policy.txt"
+          cargo +stable fmt --all --check
+          git diff --exit-code
+      - name: Retain the exact compiled tree
+        run: |
+          set -euo pipefail
+          test "$(git write-tree)" = "$(cat "$RUNNER_TEMP/xml-results/TREE_SHA")"
+          git diff --cached --binary --full-index > "$RUNNER_TEMP/xml-results/compiled.patch"
+          (cd "$RUNNER_TEMP/xml-results" && sha256sum compiled.patch > SHA256SUMS)
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: xml-index-${{ matrix.os }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/xml-results/
+          retention-days: 3
+          if-no-files-found: error
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: xml-index-ubuntu-latest-${{ github.run_id }}
+          path: ${{ runner.temp }}/xml-linux
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: xml-index-windows-latest-${{ github.run_id }}
+          path: ${{ runner.temp }}/xml-windows
+      - name: Publish identical compiled sources to unchanged main
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(cat "$RUNNER_TEMP/xml-linux/BASE_SHA")" = "$GITHUB_SHA"
+          test "$(cat "$RUNNER_TEMP/xml-windows/BASE_SHA")" = "$GITHUB_SHA"
+          cmp "$RUNNER_TEMP/xml-linux/TREE_SHA" "$RUNNER_TEMP/xml-windows/TREE_SHA"
+          (cd "$RUNNER_TEMP/xml-linux" && sha256sum -c SHA256SUMS)
+          (cd "$RUNNER_TEMP/xml-windows" && sha256sum -c SHA256SUMS)
+          cmp "$RUNNER_TEMP/xml-linux/compiled.patch" "$RUNNER_TEMP/xml-windows/compiled.patch"
+          git apply --index "$RUNNER_TEMP/xml-linux/compiled.patch"
+          test "$(git write-tree)" = "$(cat "$RUNNER_TEMP/xml-linux/TREE_SHA")"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$GITHUB_SHA"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat(project): index XML declarations and map extracted inline Lua to source' -m "Retain source-backed XML hierarchy, attribute ranges, template and script declarations in load-plan v4. Extract inline Lua with explicit XML entity/newline mappings, no synthetic physical files, wrappers or execution. Expose index receipts through existing CLI JSON/text and syntax capability. Semantic resolution and analyzer admission of virtual Lua remain explicit gaps. Application builds, selected-owner Clippy, formatting and policy passed on Linux/Windows in run $GITHUB_RUN_ID. No dependency, lockfile, test or fixture changes. Temporary build inputs removed; full E2/R0 and real-addon runtime acceptance are not claimed."
+          git push origin HEAD:main
