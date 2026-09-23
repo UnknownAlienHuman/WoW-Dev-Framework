@@ -1,5 +1,11 @@
 //! XML-to-Lua source linking. XML owners form data queries; only wow-emmy
 //! resolves Lua declarations. No receiver construction or callback invocation.
+mod receivers;
+
+pub use receivers::{
+    XmlReceiverBlocker, XmlReceiverBlockerKind, XmlReceiverMixinSource, XmlReceiverSources,
+};
+
 use crate::load::{ProjectLoadPlan, XmlElementRecord, XmlScriptSource, XmlSourceSpan};
 use crate::{ProjectError, ProjectErrorCode, ProjectPhase, ProjectResult};
 use serde::Serialize;
@@ -8,7 +14,7 @@ use std::sync::atomic::AtomicBool;
 use wow_core::{CanonicalResult, ContentDigest, ProjectGenerationId, SourceContent};
 use wow_emmy::bindings::{SymbolLookupReport, SymbolLookupState, supported_path};
 
-pub const XML_LUA_BINDING_PROFILE: &str = "wow-project/xml-lua-bindings/1";
+pub const XML_LUA_BINDING_PROFILE: &str = "wow-project/xml-lua-bindings/2";
 const MAX_BINDINGS: usize = 4096;
 const MAX_QUERY_REFS: usize = 16_384;
 
@@ -60,6 +66,9 @@ pub struct XmlLuaBinding {
     pub attribute_span: XmlSourceSpan,
     /// Keys into the shared analyzer report, never executable expressions.
     pub queries: Vec<String>,
+    /// Key into the shared receiver-source graph; omitted for non-method records.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub receiver_source_id: Option<String>,
     pub state: XmlLuaBindingState,
 }
 
@@ -69,6 +78,7 @@ pub struct ProjectXmlLuaBindings {
     project_generation: ProjectGenerationId,
     load_plan_digest: ContentDigest<CanonicalResult>,
     bindings: Vec<XmlLuaBinding>,
+    receiver_sources: BTreeMap<String, XmlReceiverSources>,
     #[serde(skip_serializing_if = "Option::is_none")]
     symbol_lookup: Option<SymbolLookupReport>,
     receiver_semantics: &'static str,
@@ -82,6 +92,10 @@ impl ProjectXmlLuaBindings {
     #[must_use]
     pub fn bindings(&self) -> &[XmlLuaBinding] {
         &self.bindings
+    }
+    #[must_use]
+    pub fn receiver_sources(&self) -> &BTreeMap<String, XmlReceiverSources> {
+        &self.receiver_sources
     }
     #[must_use]
     pub fn symbol_lookup(&self) -> Option<&SymbolLookupReport> {
@@ -98,6 +112,7 @@ impl ProjectXmlLuaBindings {
 
 pub(crate) struct PreparedBindings {
     bindings: Vec<XmlLuaBinding>,
+    receiver_sources: BTreeMap<String, XmlReceiverSources>,
     queries: Vec<String>,
 }
 impl PreparedBindings {
@@ -125,6 +140,7 @@ type PendingBinding = (
     XmlSourceSpan,
     Vec<String>,
     XmlLuaBindingState,
+    Option<String>,
 );
 
 fn attribute_span(element: &XmlElementRecord, name: &str) -> ProjectResult<XmlSourceSpan> {
@@ -165,8 +181,10 @@ pub(crate) fn prepare(
     stop: &AtomicBool,
 ) -> ProjectResult<PreparedBindings> {
     let mut bindings = Vec::new();
+    let mut receivers = receivers::Resolver::new(plan, stop)?;
     let mut all_queries = BTreeSet::new();
     let mut query_refs = 0usize;
+    let mut query_visits = 0usize;
     let mut text_bytes = 0usize;
     for (path, index) in plan.xml_documents() {
         let owners: BTreeMap<_, _> = index
@@ -185,6 +203,7 @@ pub(crate) fn prepare(
                         attribute_span(element, "mixin")?,
                         vec![mixin.clone()],
                         XmlLuaBindingState::Indeterminate,
+                        None,
                     ));
                 }
             }
@@ -200,6 +219,7 @@ pub(crate) fn prepare(
                         } else {
                             XmlLuaBindingState::InvalidSource
                         },
+                        None,
                     ));
                 }
                 if let Some(method) = &script.method_reference {
@@ -207,28 +227,72 @@ pub(crate) fn prepare(
                         .owner_occurrence_id
                         .as_deref()
                         .and_then(|id| owners.get(id));
-                    let mixins = owner
-                        .and_then(|e| e.declaration.as_ref())
-                        .map(|d| d.mixins.as_slice())
-                        .unwrap_or_default();
-                    let queries = if supported_path(method) && !method.contains('.') {
-                        mixins
-                            .iter()
-                            .map(|mixin| format!("{mixin}.{method}"))
-                            .collect()
-                    } else {
-                        Vec::new()
-                    };
+                    let mut queries = Vec::new();
+                    let mut receiver_source_id = None;
                     let state = if script.source_kind != XmlScriptSource::ReferenceOnly
+                        || !element.issues.is_empty()
                         || owner.is_some_and(|e| !e.issues.is_empty())
                     {
                         XmlLuaBindingState::InvalidSource
                     } else if !supported_path(method) || method.contains('.') {
                         XmlLuaBindingState::UnsupportedPath
-                    } else if mixins.is_empty() {
-                        XmlLuaBindingState::ReceiverNotResolved
+                    } else if let Some(owner) = owner {
+                        let sources = receivers.resolve(&owner.occurrence_id, stop)?;
+                        let mut distinct = BTreeSet::new();
+                        let mut query_bytes = 0usize;
+                        let mut unsupported = false;
+                        for mixin in &sources.mixins {
+                            crate::analyzer::checkpoint(stop)?;
+                            query_visits = query_visits.checked_add(1).ok_or_else(exhausted)?;
+                            if query_visits > 262_144 {
+                                return Err(exhausted());
+                            }
+                            let length = mixin
+                                .name
+                                .len()
+                                .checked_add(method.len())
+                                .and_then(|n| n.checked_add(1))
+                                .ok_or_else(exhausted)?;
+                            if length > 4096 {
+                                unsupported = true;
+                                break;
+                            }
+                            let query = format!("{}.{method}", mixin.name);
+                            if !supported_path(&query) {
+                                unsupported = true;
+                                break;
+                            }
+                            // Bound expansion before retaining per-handler copies;
+                            // repeated names keep their distinct XML origins above.
+                            if distinct.insert(query) {
+                                query_bytes =
+                                    query_bytes.checked_add(length).ok_or_else(exhausted)?;
+                                let total_refs = query_refs
+                                    .checked_add(distinct.len())
+                                    .ok_or_else(exhausted)?;
+                                let total_bytes =
+                                    text_bytes.checked_add(query_bytes).ok_or_else(exhausted)?;
+                                if total_refs > MAX_QUERY_REFS
+                                    || distinct.len() > 4096
+                                    || total_bytes > 16 * 1024 * 1024
+                                {
+                                    return Err(exhausted());
+                                }
+                            }
+                        }
+                        receiver_source_id = Some(sources.owner_id.clone());
+                        if unsupported {
+                            XmlLuaBindingState::UnsupportedPath
+                        } else {
+                            queries = distinct.into_iter().collect();
+                            if !sources.complete || queries.is_empty() {
+                                XmlLuaBindingState::ReceiverNotResolved
+                            } else {
+                                XmlLuaBindingState::Indeterminate
+                            }
+                        }
                     } else {
-                        XmlLuaBindingState::Indeterminate
+                        XmlLuaBindingState::ReceiverNotResolved
                     };
                     pending.push((
                         XmlLuaBindingKind::Method,
@@ -236,10 +300,11 @@ pub(crate) fn prepare(
                         attribute_span(element, "method")?,
                         queries,
                         state,
+                        receiver_source_id,
                     ));
                 }
             }
-            for (kind, ordinal, span, mut queries, mut state) in pending {
+            for (kind, ordinal, span, mut queries, mut state, receiver_source_id) in pending {
                 crate::analyzer::checkpoint(stop)?;
                 if bindings.len() >= MAX_BINDINGS {
                     return Err(exhausted());
@@ -260,7 +325,11 @@ pub(crate) fn prepare(
                     .checked_add(queries.len())
                     .ok_or_else(exhausted)?;
                 text_bytes = text_bytes
-                    .checked_add(path.len() + queries.iter().map(String::len).sum::<usize>())
+                    .checked_add(
+                        path.len()
+                            + receiver_source_id.as_ref().map_or(0, String::len)
+                            + queries.iter().map(String::len).sum::<usize>(),
+                    )
                     .ok_or_else(exhausted)?;
                 if query_refs > MAX_QUERY_REFS || text_bytes > 16 * 1024 * 1024 {
                     return Err(exhausted());
@@ -277,6 +346,7 @@ pub(crate) fn prepare(
                     ordinal,
                     attribute_span: span,
                     queries,
+                    receiver_source_id,
                     state,
                 });
             }
@@ -284,6 +354,7 @@ pub(crate) fn prepare(
     }
     Ok(PreparedBindings {
         bindings,
+        receiver_sources: receivers.into_sources(),
         queries: all_queries.into_iter().collect(),
     })
 }
@@ -311,6 +382,17 @@ pub(crate) fn finish(
                 binding.state = XmlLuaBindingState::SourceParseFailed;
                 continue;
             }
+            if binding.kind == XmlLuaBindingKind::Method {
+                let sources = binding
+                    .receiver_source_id
+                    .as_ref()
+                    .and_then(|id| prepared.receiver_sources.get(id))
+                    .ok_or_else(invalid)?;
+                if !sources.complete {
+                    binding.state = XmlLuaBindingState::ReceiverNotResolved;
+                    continue;
+                }
+            }
             let results = binding
                 .queries
                 .iter()
@@ -337,8 +419,8 @@ pub(crate) fn finish(
             {
                 XmlLuaBindingState::UnsupportedPath
             } else if binding.kind == XmlLuaBindingKind::Method {
-                // Direct declared mixins provide candidates, not the constructed
-                // receiver or inherited runtime method precedence.
+                // Direct and inherited source mixins provide candidates, not
+                // a constructed receiver or runtime method precedence.
                 let targets: BTreeSet<_> = results
                     .iter()
                     .filter(|r| r.state == SymbolLookupState::UniqueAnalyzerDeclaration)
@@ -366,6 +448,7 @@ pub(crate) fn finish(
         generation: ProjectGenerationId,
         load_plan: ContentDigest<CanonicalResult>,
         bindings: &'a [XmlLuaBinding],
+        receiver_sources: &'a BTreeMap<String, XmlReceiverSources>,
         #[serde(skip_serializing_if = "Option::is_none")]
         symbol_analysis_id: Option<&'a str>,
     }
@@ -376,6 +459,7 @@ pub(crate) fn finish(
             generation,
             load_plan: plan.digest(),
             bindings: &prepared.bindings,
+            receiver_sources: &prepared.receiver_sources,
             symbol_analysis_id: lookup.as_ref().map(SymbolLookupReport::analysis_id),
         },
         ProjectPhase::Analyzer,
@@ -385,6 +469,7 @@ pub(crate) fn finish(
         project_generation: generation,
         load_plan_digest: plan.digest(),
         bindings: prepared.bindings,
+        receiver_sources: prepared.receiver_sources,
         symbol_lookup: lookup,
         receiver_semantics: "not_evaluated",
         analysis_id,

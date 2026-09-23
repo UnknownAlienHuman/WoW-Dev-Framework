@@ -148,9 +148,15 @@ pub fn render(
             if let Some(report) = check.owner_analysis().and_then(|a| a.xml_binding_report()) {
                 writeln!(
                     text,
-                    "xml Lua bindings: references={}, unresolved_or_candidates={}, identity={:?}",
+                    "xml Lua bindings: references={}, unresolved_or_candidates={}, receiver_sources={}, partial_receivers={}, identity={:?}",
                     report.bindings().len(),
                     report.unresolved_count(),
+                    report.receiver_sources().len(),
+                    report
+                        .receiver_sources()
+                        .values()
+                        .filter(|r| !r.complete)
+                        .count(),
                     report.analysis_id()
                 )
                 .map_err(|_| ())?;
