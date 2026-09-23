@@ -144,7 +144,7 @@ pub(super) fn components(
         components.push(
             ComponentSnapshot::new(
                 "wow-project-load",
-                "1",
+                "2",
                 plan.digest().to_string(),
                 health(!plan.external_files_complete()),
             )?

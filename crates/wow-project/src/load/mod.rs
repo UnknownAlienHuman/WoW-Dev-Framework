@@ -1,7 +1,13 @@
 //! Selected-TOC source acquisition. This is an external-file load projection,
 //! not a client emulator, complete XML object index, or persistent E2 candidate.
+mod conditions;
 mod toc;
 mod xml;
+
+pub use conditions::{
+    LoadSelection, TocCondition, TocConditionKind, TocLoadContext, TocLoadLocation,
+    TocLuaEnvironment,
+};
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
@@ -17,7 +23,7 @@ use crate::disk::{
 use crate::{ProjectError, ProjectErrorCode, ProjectInputFile, ProjectPhase, ProjectResult};
 
 /// Versioned, deliberately restricted acquisition semantics; never a WoW build.
-pub const LOAD_PROFILE: &str = "wow-project/toc-xml-files/1";
+pub const LOAD_PROFILE: &str = "wow-project/toc-xml-files/2";
 const MAX_RECORDS: usize = 32_768;
 const MAX_INCLUDE_DEPTH: usize = 32;
 
@@ -33,6 +39,11 @@ pub struct LoadRecord {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub target: Option<String>,
     pub bootstrap: bool,
+    pub selection: LoadSelection,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub declared_target: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub conditions: Vec<TocCondition>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -63,6 +74,8 @@ pub enum LoadIssueKind {
     OptionalDependencyUnresolved,
     UnknownDirective,
     UnknownTocSyntax,
+    LoadContextRequired,
+    LoadConditionUnresolved,
     UnsupportedFileKind,
     XmlStructureNotIndexed,
     UnsupportedXmlNamespace,
@@ -94,6 +107,9 @@ pub struct ProjectLoadPlan {
     selected_toc: String,
     target_flavor: String,
     target_interface: u64,
+    target_profile_digest: ContentDigest<CanonicalResult>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    load_context: Option<TocLoadContext>,
     sources: Vec<LoadSource>,
     records: Vec<LoadRecord>,
     issues: Vec<LoadIssue>,
@@ -127,9 +143,29 @@ impl ProjectLoadPlan {
     pub fn external_files_complete(&self) -> bool {
         !self.issues.iter().any(|issue| issue.blocks_complete)
     }
+    #[must_use]
+    pub fn excluded_records(&self) -> usize {
+        self.records
+            .iter()
+            .filter(|record| record.selection == LoadSelection::Excluded)
+            .count()
+    }
+    #[must_use]
+    pub fn unresolved_records(&self) -> usize {
+        self.records
+            .iter()
+            .filter(|record| record.selection == LoadSelection::Unresolved)
+            .count()
+    }
+    #[must_use]
+    pub fn load_context(&self) -> Option<&TocLoadContext> {
+        self.load_context.as_ref()
+    }
     /// Verify that this exact retained plan belongs to the configured target.
     pub fn validate_profile(&self, profile: &ProfileIdentity) -> ProjectResult<()> {
-        if self.target_interface != profile.interface() || self.target_flavor != profile.flavor_id()
+        if self.target_interface != profile.interface()
+            || self.target_flavor != profile.flavor_id()
+            || self.target_profile_digest != profile_digest(profile)?
         {
             return Err(invalid(
                 "load plan target differs from the selected profile",
@@ -190,7 +226,23 @@ impl ProjectInputDirectory {
         profile: &ProfileIdentity,
         stop: &AtomicBool,
     ) -> ProjectResult<ProjectLoadInput> {
+        self.read_toc_project_with_context(root, selected_toc, profile, None, stop)
+    }
+
+    /// Expand conditional TOC entries using only the explicitly supplied context.
+    /// The complete context and target profile are bound into the resulting plan.
+    pub fn read_toc_project_with_context(
+        &self,
+        root: &str,
+        selected_toc: &ProjectDiskFile,
+        profile: &ProfileIdentity,
+        context: Option<&TocLoadContext>,
+        stop: &AtomicBool,
+    ) -> ProjectResult<ProjectLoadInput> {
         checkpoint(stop)?;
+        if let Some(context) = context {
+            context.validate()?;
+        }
         profile
             .validate()
             .map_err(|_| invalid("selected TOC profile is invalid"))?;
@@ -215,7 +267,7 @@ impl ProjectInputDirectory {
         let path = selected_toc.path();
         let text = loader.capture(selected_toc)?;
         loader.charge_parse(text.len())?;
-        let parsed = toc::parse(&text, profile.interface(), stop)?;
+        let parsed = toc::parse(&text, profile.interface(), context, stop)?;
         loader
             .documents
             .insert(path.to_owned(), text.as_ref().to_owned());
@@ -236,17 +288,29 @@ impl ProjectInputDirectory {
             .collect::<Vec<_>>();
         // Source digests bind comments, order, directives and inline/unknown XML,
         // even when the unique Lua file inventory happens to remain unchanged.
+        let target_profile_digest = profile_digest(profile)?;
+        #[derive(Serialize)]
+        struct Identity<'a> {
+            profile: &'static str,
+            selected_toc: &'a str,
+            target_profile_digest: ContentDigest<CanonicalResult>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            load_context: Option<&'a TocLoadContext>,
+            sources: &'a [LoadSource],
+            records: &'a [LoadRecord],
+            issues: &'a [LoadIssue],
+        }
         let digest = crate::identity::canonical_digest(
-            "wow-project/load-plan/1",
-            &(
-                LOAD_PROFILE,
-                path,
-                profile.flavor_id(),
-                profile.interface(),
-                &sources,
-                &loader.records,
-                &loader.issues,
-            ),
+            "wow-project/load-plan/2",
+            &Identity {
+                profile: LOAD_PROFILE,
+                selected_toc: path,
+                target_profile_digest,
+                load_context: context,
+                sources: &sources,
+                records: &loader.records,
+                issues: &loader.issues,
+            },
             ProjectPhase::Inventory,
         )?;
         checkpoint(stop)?;
@@ -257,6 +321,8 @@ impl ProjectInputDirectory {
                 selected_toc: path.to_owned(),
                 target_flavor: profile.flavor_id().to_owned(),
                 target_interface: profile.interface(),
+                target_profile_digest,
+                load_context: context.cloned(),
                 sources,
                 records: loader.records,
                 issues: loader.issues,
@@ -359,6 +425,9 @@ impl Loader<'_> {
                 ),
                 target: target.clone(),
                 bootstrap: record.bootstrap,
+                selection: record.selection,
+                declared_target: record.declared_target,
+                conditions: record.conditions,
             });
             for kind in record.issues {
                 self.issue(kind, document, record.start, record.end);
@@ -441,6 +510,9 @@ struct Record {
     end: usize,
     target: Option<String>,
     bootstrap: bool,
+    selection: LoadSelection,
+    declared_target: Option<String>,
+    conditions: Vec<TocCondition>,
     issues: Vec<LoadIssueKind>,
 }
 impl Record {
@@ -451,6 +523,9 @@ impl Record {
             end,
             target: None,
             bootstrap: false,
+            selection: LoadSelection::Included,
+            declared_target: None,
+            conditions: Vec::new(),
             issues: Vec::new(),
         }
     }
@@ -490,6 +565,13 @@ fn resolve(document: &str, raw: &str) -> ProjectResult<String> {
     let path = parts.join("/");
     validate_path(&path)?;
     Ok(path)
+}
+fn profile_digest(profile: &ProfileIdentity) -> ProjectResult<ContentDigest<CanonicalResult>> {
+    crate::identity::canonical_digest(
+        "wow-project/load-target-profile/1",
+        profile,
+        ProjectPhase::Inventory,
+    )
 }
 fn invalid(message: &'static str) -> ProjectError {
     ProjectError::new(

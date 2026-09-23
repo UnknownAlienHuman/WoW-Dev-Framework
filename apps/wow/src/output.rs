@@ -97,6 +97,13 @@ pub fn render(
                     plan.digest()
                 )
                 .map_err(|_| ())?;
+                writeln!(
+                    text,
+                    "load selection: excluded={}, unresolved={}",
+                    plan.excluded_records(),
+                    plan.unresolved_records()
+                )
+                .map_err(|_| ())?;
                 for issue in plan.issues() {
                     writeln!(
                         text,

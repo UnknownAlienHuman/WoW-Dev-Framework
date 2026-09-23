@@ -1,9 +1,17 @@
-use super::{LoadIssueKind as Issue, LoadRecordKind as Kind, MAX_RECORDS, Record, budget, invalid};
+use super::{
+    LoadIssueKind as Issue, LoadRecordKind as Kind, LoadSelection, MAX_RECORDS, Record,
+    TocLoadContext, budget, conditions, invalid,
+};
 use crate::ProjectResult;
 use crate::disk::checkpoint;
 use std::sync::atomic::AtomicBool;
 
-pub(super) fn parse(text: &str, interface: u64, stop: &AtomicBool) -> ProjectResult<Vec<Record>> {
+pub(super) fn parse(
+    text: &str,
+    interface: u64,
+    context: Option<&TocLoadContext>,
+    stop: &AtomicBool,
+) -> ProjectResult<Vec<Record>> {
     let mut records = Vec::new();
     let mut offset = 0;
     let mut interfaces = 0;
@@ -24,6 +32,12 @@ pub(super) fn parse(text: &str, interface: u64, stop: &AtomicBool) -> ProjectRes
             record.kind = Kind::Blank;
         } else if let Some(metadata) = content.strip_prefix("##") {
             record.kind = Kind::Metadata;
+            let metadata = conditions::project(metadata.trim(), &mut record, context, true)?;
+            if record.selection != LoadSelection::Included {
+                records.push(record);
+                offset = end;
+                continue;
+            }
             if let Some((key, value)) = metadata.split_once(':') {
                 let key = key.trim().to_ascii_lowercase();
                 let value = value.trim();
@@ -87,22 +101,17 @@ pub(super) fn parse(text: &str, interface: u64, stop: &AtomicBool) -> ProjectRes
         } else if content.starts_with('#') {
             record.kind = Kind::Comment;
         } else {
-            let (path, bootstrap) = match content.strip_suffix(" [Bootstrap]") {
-                Some(path) => (path.trim_end(), true),
-                None => (content, false),
-            };
-            record.bootstrap = bootstrap;
-            if path.contains(['[', ']']) {
-                // Conditional tokens and source placeholders are not filenames.
-                record.issues.push(Issue::UnknownTocSyntax);
-            } else if path.ends_with(".lua") || path.ends_with(".xml") {
+            let path = conditions::project(content, &mut record, context, false)?;
+            if path.ends_with(".lua") || path.ends_with(".xml") {
                 record.kind = if path.ends_with(".lua") {
                     Kind::LuaFile
                 } else {
                     Kind::XmlFile
                 };
-                record.target = Some(path.to_owned());
-            } else {
+                if record.selection == LoadSelection::Included {
+                    record.target = Some(path);
+                }
+            } else if record.selection == LoadSelection::Included {
                 record.issues.push(Issue::UnsupportedFileKind);
             }
         }

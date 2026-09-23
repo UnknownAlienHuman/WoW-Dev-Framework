@@ -65,6 +65,8 @@ struct MainInventory {
     files: Option<Vec<ProjectDiskFile>>,
     #[serde(default)]
     toc: Option<ProjectDiskFile>,
+    #[serde(default)]
+    load_context: Option<wow_project::load::TocLoadContext>,
 }
 
 impl LocalProjectInput {
@@ -114,6 +116,12 @@ impl LocalProjectInput {
                 ));
             }
         }
+        if !toc_mode && input.main.load_context.is_some() {
+            return Err(invalid("load_context is only valid for selected TOC input"));
+        }
+        if let Some(context) = &input.main.load_context {
+            context.validate().map_err(acquisition_error)?;
+        }
         let profile: ProfileIdentity = serde_json::from_slice(
             &directory
                 .read_json_artifact(&input.profile, stop)
@@ -145,7 +153,13 @@ impl LocalProjectInput {
                 .as_ref()
                 .ok_or_else(|| invalid("missing selected TOC"))?;
             let (files, plan) = directory
-                .read_toc_project(&input.main.root, toc, &profile, stop)
+                .read_toc_project_with_context(
+                    &input.main.root,
+                    toc,
+                    &profile,
+                    input.main.load_context.as_ref(),
+                    stop,
+                )
                 .map_err(acquisition_error)?
                 .into_parts();
             (files, Some(plan))

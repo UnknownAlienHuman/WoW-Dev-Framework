@@ -27,9 +27,9 @@ TOC processing preserves line spans, comments, unknown directives and encounter
 order. UTF-8 BOM, LF/CRLF, slash/backslash source separators and `[Bootstrap]`
 are supported. A base `Interface` directive must contain the selected profile's
 Interface; mismatch rejects. Missing/duplicate directives remain partial.
-Conditional file suffixes, `[Family]`/`[Game]` and unknown directives are retained
-as blockers, not guessed or treated as unconditional files. Exactly the named
-variant is used; no highest-Interface or filename fallback.
+Conditional file and metadata records can use an explicit `main.load_context`;
+see [TOC_CONTEXT.md](TOC_CONTEXT.md). Unknown conditions/directives remain blockers.
+Exactly the named variant is used; no highest-Interface or filename fallback.
 
 Streaming XML processing expands unprefixed `Ui` → `Include file="...xml"` and
 `Ui` → `Script file="...lua"` in document order, including nested includes.
@@ -50,9 +50,10 @@ have been analyzed by registering a physical Lua file once.
 ## Identity and output
 
 The `ProjectLoadPlan` contains source digests/lengths, ordered source-mapped
-records, blockers and a versioned `wow-project/toc-xml-files/1` digest. Original
+records, blockers and a versioned `wow-project/toc-xml-files/2` digest. Original
 TOC/XML text is retained privately for exact span lookup, not serialized.
-Configuration and generation bind the plan digest. TOC/XML/order changes therefore
+Configuration and generation bind the plan digest, complete target profile and
+explicit load context. TOC/XML/order/selection changes therefore
 invalidate the project identity even if all Lua bytes remain unchanged. Project
 inventory construction and update generation derivation reject a stale plan whose
 Lua receipts no longer match; recapture a plan after editing its sources.
@@ -76,8 +77,8 @@ processing instructions and non-UTF-8 declarations reject. Namespace/schema URLs
 are inert data and are never fetched. No Lua/XML handler executes.
 
 This is the E2-C **external-file acquisition slice**, not full E2-C indexing:
-inline Lua source maps, object/template/inheritance modeling, conditional dialects,
-dependency-package resolution, recognizer/graph integration and durable E2-D
+inline Lua source maps, object/template/inheritance modeling, remaining conditional
+dialects and package-level load gates, dependency-package resolution, recognizer/graph integration and durable E2-D
 publication remain separate. Existing fixture-only rule policy is unchanged.
 Build verification does not certify real-addon behavior or client load success.
 
