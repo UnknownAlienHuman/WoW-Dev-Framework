@@ -29,11 +29,15 @@ jobs:
           echo "31fb5038a694761073fd9cab358d0d9a37b66cc5751b6fc670b5b6578c607e14  $RUNNER_TEMP/toc.patch.gz" | sha256sum -c -
           gzip -dc "$RUNNER_TEMP/toc.patch.gz" > "$RUNNER_TEMP/toc.patch"
           echo "fa64cbc73e2215b8de281fa110093bed60fd4ca7c8d458d716b82713c2d4bdb8  $RUNNER_TEMP/toc.patch" | sha256sum -c -
+          cp .ci/toc-code/fix.patch "$RUNNER_TEMP/toc-fix.patch"
           git rm -r .ci/toc-code .github/workflows/local-toc-build.yml
           test "$(git write-tree)" = 9fcb4d29483fa46f5854cdeb1a3005eed4bc944d
           git apply --index --check "$RUNNER_TEMP/toc.patch"
           git apply --index "$RUNNER_TEMP/toc.patch"
           test "$(git write-tree)" = 1973a45576b97ada55cde4e111f562167e88e6ca
+          echo "d337d3d8c68ebdcc932f0b27a386d40677c1aca5c872e98ee6856fdf71b53363  $RUNNER_TEMP/toc-fix.patch" | sha256sum -c -
+          git apply --index "$RUNNER_TEMP/toc-fix.patch"
+          test "$(git write-tree)" = 2f3f7009bb13724b840c271d705fa5b1f2c52e1d
       - name: Build application and source loader
         run: |
           set -euo pipefail

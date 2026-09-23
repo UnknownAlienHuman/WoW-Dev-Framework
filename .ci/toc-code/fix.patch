@@ -1,0 +1,13 @@
+diff --git a/crates/wow-project/src/load/xml.rs b/crates/wow-project/src/load/xml.rs
+index 53d8d1bd9ccbacf3b29cdffc0ca1f08bb3260724..1fb28910311e8abbc39d7be6854c8aab8f355afc 100644
+--- a/crates/wow-project/src/load/xml.rs
++++ b/crates/wow-project/src/load/xml.rs
+@@ -89,7 +89,7 @@ pub(super) fn parse(text: &str, stop: &AtomicBool) -> ProjectResult<Vec<Record>>
+             }
+             Event::Text(text) => {
+                 record.kind = Kind::XmlText;
+-                let nonempty = text.as_ref().iter().any(|b| !b.is_ascii_whitespace());
++                let nonempty = text.iter().any(|b| !b.is_ascii_whitespace());
+                 if nonempty {
+                     if stack.is_empty() { return Err(invalid("XML text outside its root")); }
+                     record.issues.push(Issue::InlineLuaNotMaterialized);
