@@ -35,11 +35,16 @@ jobs:
           echo "cd9187eb1a1d1d4f3da2652c6282a52bb804bbd9868a8a432c888af0e8236027  $RUNNER_TEMP/handle.patch.gz" | sha256sum -c -
           gzip -dc "$RUNNER_TEMP/handle.patch.gz" > "$RUNNER_TEMP/handle.patch"
           echo "c42e1bdf73e4c55e19f8529383de5679363a4662b7b548be98ed1d493bf8d56e  $RUNNER_TEMP/handle.patch" | sha256sum -c -
+          cp .ci/e0-handle/correction.patch "$RUNNER_TEMP/handle-correction.patch"
+          echo "a36ca6e6d01d54f9c760d77aab868cc2e1668f47bba16ae431e7263bac5e9e8a  $RUNNER_TEMP/handle-correction.patch" | sha256sum -c -
           git rm -r .ci/e0-handle .github/workflows/e0-handle-gate.yml
           test "$(git write-tree)" = 25ad134ece81bf6fae8ea34e5b0aeb974bebda27
           git apply --index --check "$RUNNER_TEMP/handle.patch"
           git apply --index "$RUNNER_TEMP/handle.patch"
           test "$(git write-tree)" = 93130d5a86d024b2d0ba941d6201336d8cb7fe46
+          git apply --index --check "$RUNNER_TEMP/handle-correction.patch"
+          git apply --index "$RUNNER_TEMP/handle-correction.patch"
+          test "$(git write-tree)" = b4611beb321a1f8afe930e0db19297ac6172ee95
       - name: Install stable Rust and retain exact inputs
         run: |
           rustup toolchain install stable --profile minimal --component rustfmt --component clippy
