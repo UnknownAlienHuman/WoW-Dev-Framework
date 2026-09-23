@@ -308,3 +308,13 @@ errors deliberately do not classify Serde's string messages as stable codes.
 Existing semantic validation errors propagate after decoding. No parser error
 prose, raw member name/value, snippet or host path is copied to CoreError.
 See [`JSON_ADMISSION.md`](JSON_ADMISSION.md#errors-and-scope).
+
+### Profile field admission
+
+`invalid_profile_identity` identifies `client_build` for zero, the missing
+`builder_id` or `builder_version` for an incomplete pair, and `source_revision`
+for empty, overlong, control-containing or padded revision text. Invalid fixture
+scope uses `profile_kind_violation` at `fixture_scope`. No offending text is
+echoed. Builder, decoded-profile validation, checked comparison/equality,
+generation and envelope admission share these failures. A release missing both
+builder fields still reports `builder_id`. Raw Serde decoding is structural.

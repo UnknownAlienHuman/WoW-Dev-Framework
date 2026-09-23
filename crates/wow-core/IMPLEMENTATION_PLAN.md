@@ -1,8 +1,10 @@
 # `wow-core` E0-A implementation plan
 
-**Status:** implementation-ready plan; no Rust code or Cargo workspace yet.
+**Status:** historical bootstrap sequence; partial executable E0-A implementation.
 
-This plan is the handoff for the first coding agent. It turns the contracts into the smallest coherent E0-A slice without activating unrelated crates.
+Do not repeat the activation steps below. Use `TEST_MATRIX.md` and the current
+[completion matrix](../../docs/PROJECT_COMPLETION_MATRIX.md) for remaining
+acceptance work; the operation ownership and completion gates still apply.
 
 ## 1. Work package boundary
 

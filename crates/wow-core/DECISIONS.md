@@ -283,3 +283,12 @@ iterative preflight preserves duplicate-key and numeric-token truth before
 Serde's structural decoder, followed by complete semantic validation. Existing
 raw `Deserialize` remains structural, not validated input admission. See
 `JSON_ADMISSION.md`; canonical valid bytes and identity projections are unchanged.
+
+### CORE-003 clarification — retained profile field admission
+
+Optional fixture build and builder fields retain the same meaning as release
+fields: a present build is positive, and producer ID/version form an exact pair.
+A fixture capability boundary must be nonblank bounded text; revision text is
+bounded independently of the raw JSON importer. Apply these checks to decoded
+profiles as well as builders. They do not attest source facts, change accepted
+identity material or allow fixture-to-release promotion.

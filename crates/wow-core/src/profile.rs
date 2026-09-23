@@ -4,6 +4,11 @@ use crate::digest::{ContentDigest, CorrectionSet, SourceLogicalSnapshot};
 use crate::error::{CoreErrorCode, CoreResult, validation_error};
 use crate::ids::{ProducerId, ProfileId, SchemaId, ToolVersion, validate_lower_segment};
 
+// Identity text is supplied by callers, including decoded profiles. Keep it
+// bounded here as well as at the optional raw-envelope boundary.
+const MAX_SOURCE_REVISION_BYTES: usize = 1_024;
+const MAX_FIXTURE_SCOPE_BYTES: usize = 4_096;
+
 /// Profile identity class.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -340,7 +345,28 @@ fn validate_profile_fields(profile: &ProfileIdentity) -> CoreResult<()> {
             "interface",
         ));
     }
+    if profile.client_build == Some(0) {
+        return Err(validation_error(
+            OPERATION,
+            CoreErrorCode::InvalidProfileIdentity,
+            "client_build",
+        ));
+    }
+    // Fixture producers are optional, but half a producer identity is not.
+    // Serde can construct this state even though the builder sets both fields.
+    if profile.builder_id.is_some() != profile.builder_version.is_some() {
+        return Err(validation_error(
+            OPERATION,
+            CoreErrorCode::InvalidProfileIdentity,
+            if profile.builder_id.is_none() {
+                "builder_id"
+            } else {
+                "builder_version"
+            },
+        ));
+    }
     if profile.source_revision.is_empty()
+        || profile.source_revision.len() > MAX_SOURCE_REVISION_BYTES
         || profile.source_revision.chars().any(char::is_control)
         || profile.source_revision.trim() != profile.source_revision
     {
@@ -390,7 +416,12 @@ fn validate_fixture_profile(profile: &ProfileIdentity) -> CoreResult<()> {
             "profile_id.namespace",
         ));
     }
-    if profile.fixture_scope.as_deref().is_none_or(str::is_empty) {
+    if profile.fixture_scope.as_deref().is_none_or(|scope| {
+        scope.is_empty()
+            || scope.len() > MAX_FIXTURE_SCOPE_BYTES
+            || scope.trim() != scope
+            || scope.chars().any(char::is_control)
+    }) {
         return Err(validation_error(
             OPERATION,
             CoreErrorCode::ProfileKindViolation,

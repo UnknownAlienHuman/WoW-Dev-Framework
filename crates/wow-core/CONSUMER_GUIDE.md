@@ -442,3 +442,13 @@ existing complete validator; direct Serde deserialization is structural only.
 Limits come from the caller, never from the input Budget. Bound host acquisition
 before producing the slice. Exact API, limits and error rules are in
 [`JSON_ADMISSION.md`](JSON_ADMISSION.md). No general-purpose JSON API is exported.
+
+## Profile admission before equality
+
+Use `ProfileIdentityBuilder::build` for new profiles. For a decoded profile use
+`validate_profile_identity`, `compare_profile_identity`, or
+`require_profile_identity_match`; both comparison operations validate both
+operands, including self-comparison. The nonfallible `ProfileIdentity::compare`
+method assumes admitted inputs and is not a replacement for these boundaries.
+Optional fixture builds must be positive and optional builder ID/version must
+be paired. Text bounds and rejection rules are in `DATA_MODEL.md#4-profile-identity`.

@@ -676,14 +676,29 @@
       "errors": [
         "invalid_profile_identity",
         "profile_kind_violation",
-        "duplicate_schema_id"
-      ]
+        "duplicate_schema_id",
+        "invalid_identifier",
+        "identifier_too_long",
+        "reserved_identifier_segment"
+      ],
+      "invariants": [
+        "present_client_build_positive_for_either_kind",
+        "optional_builder_id_and_version_paired",
+        "fixture_correction_requires_builder_pair",
+        "source_revision_1_to_1024_utf8_bytes",
+        "fixture_scope_1_to_4096_utf8_bytes",
+        "identity_text_no_controls_or_surrounding_whitespace"
+      ],
+      "executable_tests": "tests/e0_profile_conformance.rs"
     },
     {
       "id": "compare_profile_identity",
       "status": "required",
       "doc": "OPERATIONS.md#compare_profile_identity",
-      "errors": []
+      "errors": [],
+      "propagates": [
+        "validate_profile_identity"
+      ]
     },
     {
       "id": "require_profile_identity_match",
@@ -691,6 +706,9 @@
       "doc": "OPERATIONS.md#require_profile_identity_match",
       "errors": [
         "profile_mismatch"
+      ],
+      "propagates": [
+        "validate_profile_identity"
       ]
     },
     {

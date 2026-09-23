@@ -1,6 +1,6 @@
 # `wow-core` operations
 
-**Status:** normative E0-A operation inventory; no Rust code yet.
+**Status:** normative E0-A operation inventory; partial executable implementation.
 
 The notation below is language-neutral:
 
@@ -167,12 +167,14 @@ errors:
 Checks:
 
 - required fields by fixture/release kind;
-- positive Interface/build values when present;
+- positive Interface/build values when present, including optional fixture builds;
 - source kind and profile kind compatibility;
 - nonfloating release revision;
 - valid/sorted/unique schema versions;
 - builder/correction-set requirements for release;
-- fixture scope requirement for fixture;
+- fixture scope requirement for fixture: 1–4,096 UTF-8 bytes, no controls or surrounding whitespace;
+- source revision: 1–1,024 UTF-8 bytes, no controls or surrounding whitespace;
+- optional fixture builder ID/version are both absent or both present; a correction digest requires the pair;
 - E0 namespace/kind consistency: `profile:fixture:*` is fixture and `profile:wow:*` is release; other namespaces are unsupported.
 
 Non-checks:
@@ -184,7 +186,11 @@ Non-checks:
 
 Those belong to `wow-reference` and explicit content verification.
 
-Required tests: `PROFILE-001..020`.
+Required tests: `PROFILE-001..026`; executable entrypoint:
+`tests/e0_profile_conformance.rs`. Validation and both checked comparison wrappers
+propagate the same profile-field errors, even for an invalid profile compared
+with itself. `ProfileIdentity::compare` remains a comparison of already admitted
+values, not an input-validation entrypoint.
 
 ### `compare_profile_identity`
 

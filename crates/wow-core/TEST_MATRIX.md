@@ -175,6 +175,37 @@ Domain-separation vectors:
 | `PROFILE-019` | omitted optional fixture build | accepted |
 | `PROFILE-020` | release omitted client version | rejected |
 
+### Profile admission completion slice
+
+`tests/e0_profile_conformance.rs` exercises PROFILE-001–026 through builders,
+decoded validation and checked comparisons, including both operand directions
+and invalid self-comparison. The original golden profile is reconstructed and
+compared byte-for-byte; schema ordering uses all six three-entry permutations.
+Resealed context IDs cannot hide invalid nested profiles. Existing five envelope
+golden consumers remain unchanged. This is not full E0-A/source certification.
+
+| ID | Case | Expected |
+|---|---|---|
+| `PROFILE-021` | optional fixture build explicitly zero | `invalid_profile_identity` at `client_build` |
+| `PROFILE-022` | decoded half builder pair or orphan correction | missing-field error; absent pair remains valid |
+| `PROFILE-023` | empty/blank/padded/control/overlong scope | `profile_kind_violation`; exact 4,096-byte boundary accepted |
+| `PROFILE-024` | invalid or overlong revision text, either kind | `invalid_profile_identity`; exact 1,024-byte boundary accepted |
+| `PROFILE-025` | unknown wire field/enum, invalid typed identity/numeric field | structural decode rejection without repair |
+| `PROFILE-026` | bad profile inside resealed context and raw E0 input | nested field error before identity acceptance |
+
+The previously referenced comparison cases are made explicit:
+
+| ID | Case | Expected |
+|---|---|---|
+| `PROFILE-COMPARE-001` | identical valid values | Identical and exact-match success |
+| `PROFILE-COMPARE-002` | same label, each material field changed separately | SameLabelDifferentIdentity and exact differing field |
+| `PROFILE-COMPARE-003` | different label, same material | DifferentLabelSameMaterial; exact-match rejection |
+| `PROFILE-COMPARE-004` | different label and material | Different |
+| `PROFILE-COMPARE-005` | comparison operands reversed | symmetric category and differing fields |
+| `PROFILE-COMPARE-006` | invalid left or right operand | original profile-field error |
+| `PROFILE-COMPARE-007` | invalid profile compared with itself | original profile-field error, never Identical |
+| `PROFILE-COMPARE-008` | real-snapshot fixture vs structurally valid release | remains distinct; no historical build proof |
+
 ## 7. Path cases
 
 | ID | Input | Expected |

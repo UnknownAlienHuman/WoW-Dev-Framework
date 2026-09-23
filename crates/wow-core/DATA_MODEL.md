@@ -180,6 +180,15 @@ A Git commit SHA is stored as `source_revision`, not converted into a `ContentDi
 5. Duplicate schema IDs with different versions are invalid.
 6. The structured fields, not the profile ID text alone, establish identity.
 7. Core does not claim that `interface`, `client_version`, and `client_build` are historically correct for WoW; `wow-reference` proves that relationship.
+8. A supplied `client_build` is positive for both kinds; absence is distinct from zero.
+9. Optional fixture `builder_id` and `builder_version` form one pair; a correction digest requires that pair.
+10. `source_revision` is bounded to 1–1,024 UTF-8 bytes. Fixture scope is bounded to 1–4,096 UTF-8 bytes. Both reject controls and surrounding whitespace; they are never silently trimmed. These are input-validation limits, not a new identity projection.
+
+The builder and validation of deserialized profiles use the same field checks.
+Generation and envelope validation propagate them before comparing or deriving
+identity. Structural admission does not prove that an opaque revision exists or
+is immutable in the source owner; the release floating-alias check is not a Git
+ref resolver. Existing valid canonical fixture bytes and IDs remain unchanged.
 
 ## 5. Generation context
 
