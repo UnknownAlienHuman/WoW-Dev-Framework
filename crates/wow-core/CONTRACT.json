@@ -201,7 +201,8 @@
       "id": "ToolVersion",
       "canonical_form": "semantic-version",
       "kind": "parsed",
-      "doc": "DATA_MODEL.md#2-identifier-families"
+      "doc": "DATA_MODEL.md#2-identifier-families",
+      "consumer_validation": "canonical parser reused by Deserialize; build metadata forbidden"
     },
     {
       "id": "EntityKey",
@@ -544,7 +545,11 @@
     },
     {
       "id": "CoreError",
-      "doc": "ERROR_MODEL.md#1-error-record"
+      "doc": "ERROR_MODEL.md#1-error-record",
+      "consumer_validation": "bounded canonical operation/field metadata; closed subject kind and matching ID; canonical typed arguments; safe fixed failure projection",
+      "tests": [
+        "ERROR-001..019"
+      ]
     },
     {
       "id": "E0CheckResultEnvelope",

@@ -820,3 +820,24 @@ Executable cases: `tests/e0_decode_conformance.rs`; existing golden consumers:
 
 Full E0-A/R0, host acquisition limits, source provenance and producer completeness
 remain separate. No fixture is rewritten or derived from the actual typed output.
+
+## Structured error admission cases
+
+Executable target: `tests/e0_error_conformance.rs` (ERROR-001–019). Run with
+core-only and `serde_json/arbitrary_precision` profiles; preserve all five E0
+example consumers and exact hash vectors.
+
+| Cases | Required behavior |
+|---|---|
+| ERROR-001 | Existing error golden survives finalization, byte decoding and canonical round trip unchanged |
+| ERROR-002/003 | Operation labels and bounded schema coordinates reject host paths/prose without echo |
+| ERROR-004/005 | Closed subject kinds; kind-only allowed; orphan or wrong-family ID rejected |
+| ERROR-006–009 | Exact scalar kinds, canonical path admission and existing typed identifier grammars |
+| ERROR-010–012 | Argument size/count/name restrictions; decoded order/duplicates and closed cause codes |
+| ERROR-013 | Equivalent argument/cause construction order produces identical complete bytes |
+| ERROR-014/015/019 | Digest/SemVer failures expose fixed safe reasons or lengths, not caller/dependency prose |
+| ERROR-016/017 | Independently resealed error mutations, unknown fields and invalid enum variants reject |
+| ERROR-018 | ToolVersion parser and wire decoding agree, including nested schema rejection of build metadata |
+
+This checkpoint does not assert full error-category/retry-policy conformance,
+caller Text secrecy, source provenance, all remaining E0-A cases or R0 completion.

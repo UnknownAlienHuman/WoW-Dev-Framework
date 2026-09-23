@@ -7,8 +7,8 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::canonical::domain_separated_digest;
 use crate::error::{
-    CoreError, CoreErrorCode, CoreResult, ErrorCategory, RetryClass, mismatch_error,
-    unsupported_error, validation_error,
+    CoreError, CoreErrorCode, CoreResult, ErrorArgumentKind, ErrorCategory, RetryClass,
+    mismatch_error, unsupported_error, validation_error,
 };
 use crate::ids::{Parsed, validate_lower_segment};
 
@@ -72,7 +72,11 @@ impl<P: DigestPurpose> ContentDigest<P> {
                 CoreErrorCode::UnsupportedDigestAlgorithm,
                 "candidate.algorithm",
             )
-            .with_argument("algorithm", algorithm));
+            .with_typed_argument(
+                "algorithm_length",
+                ErrorArgumentKind::Integer,
+                algorithm.len().to_string(),
+            ));
         }
 
         if payload.len() != 64 || !payload.bytes().all(|byte| byte.is_ascii_hexdigit()) {
@@ -428,8 +432,17 @@ pub fn digest_purpose_mismatch(expected: &str, actual: &str) -> CoreError {
         "compare_content_digest",
         RetryClass::AfterInputChange,
     )
-    .with_argument("expected", expected)
-    .with_argument("actual", actual)
+    .with_argument("expected", safe_purpose(expected))
+    .with_argument("actual", safe_purpose(actual))
+}
+
+fn safe_purpose(value: &str) -> String {
+    match value {
+        "source_content" | "source_logical_snapshot" | "correction_set" | "canonical_result" => {
+            value.to_owned()
+        }
+        _ => format!("unrecognized_purpose_length_{}", value.len()),
+    }
 }
 
 pub(crate) fn encode_hex(bytes: &[u8]) -> String {

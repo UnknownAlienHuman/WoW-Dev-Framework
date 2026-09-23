@@ -697,13 +697,13 @@ fn usage_overflow(field: &'static str) -> CoreError {
 }
 
 fn record_value<T: Serialize>(record: &T, field: &'static str) -> CoreResult<Value> {
-    serde_json::to_value(record).map_err(|error| {
+    serde_json::to_value(record).map_err(|_| {
         validation_error(
             "validate_result_envelope",
             CoreErrorCode::ContractViolation,
             field,
         )
-        .with_argument("reason", error.to_string())
+        .with_argument("reason", "record_serialization_failed")
     })
 }
 

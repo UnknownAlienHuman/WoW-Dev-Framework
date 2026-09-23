@@ -462,3 +462,13 @@ Both sides are validated before a category is returned, including self-compariso
 The verifier validates handle fields/ID before digest equality. No IO, provenance
 attestation, content-span boundary check, context merge or lineage inference is
 performed. Raw Serde decoding and `PartialEq` are not substitutes for these APIs.
+
+### Error metadata
+
+Validate assembled `CoreError` values or finalize `E0OperationErrorEnvelope`
+before publishing them. Use canonical core IDs for Identifier arguments and
+subject IDs, canonical repository paths for Path arguments, and schema field
+coordinates rather than host paths. A subject kind can be retained without an ID
+when no trustworthy ID is available. Reject invalid metadata; do not repair it
+or retry finalization with the rejected value disguised as Text.
+`ToolVersion` wire decoding enforces the same no-build-metadata policy as parsing.

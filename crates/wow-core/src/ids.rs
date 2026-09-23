@@ -450,21 +450,33 @@ impl<'de> Deserialize<'de> for SchemaId {
 }
 
 /// Canonical Semantic Version without build metadata.
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(transparent)]
 pub struct ToolVersion(Version);
+
+// Wire admission must enforce the same canonical/version policy as parsing.
+// Deriving transparent Deserialize would bypass the ban on build metadata.
+impl<'de> Deserialize<'de> for ToolVersion {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::parse(&value).map_err(D::Error::custom)
+    }
+}
 
 impl ToolVersion {
     /// Parses a canonical Semantic Version. Build metadata is rejected because
     /// it is not part of E0 identity.
     pub fn parse(candidate: &str) -> CoreResult<Self> {
-        let version = Version::parse(candidate).map_err(|error| {
+        let version = Version::parse(candidate).map_err(|_| {
             validation_error(
                 "parse_tool_version",
                 CoreErrorCode::InvalidIdentifier,
                 "candidate",
             )
-            .with_argument("reason", error.to_string())
+            .with_argument("reason", "invalid_semantic_version")
         })?;
         if !version.build.is_empty() {
             return Err(validation_error(

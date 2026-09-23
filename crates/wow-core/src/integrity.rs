@@ -246,8 +246,8 @@ fn typed_domain_id(domain: &str, value: &Value, prefix: &str) -> CoreResult<Stri
 }
 
 fn object_value<T: Serialize>(record: &T, operation: &'static str) -> CoreResult<Value> {
-    let value = serde_json::to_value(record).map_err(|error| {
-        contract_error(operation, "record").with_argument("reason", error.to_string())
+    let value = serde_json::to_value(record).map_err(|_| {
+        contract_error(operation, "record").with_argument("reason", "record_serialization_failed")
     })?;
     if value.is_object() {
         Ok(value)

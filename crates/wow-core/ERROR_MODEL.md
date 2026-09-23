@@ -1,6 +1,6 @@
 # `wow-core` error model
 
-**Status:** normative E0-A boundary-error contract; no Rust code yet.
+**Status:** normative E0-A boundary-error contract; partial executable implementation.
 
 Errors report that an operation could not accept or preserve its contract. They are not code diagnostics and are not `NotEvaluated` records.
 
@@ -329,3 +329,39 @@ revision aliases use `invalid_source_handle`; malformed spans use
 are preserved without echoing source text. Only an admitted handle may produce
 `digest_mismatch` at `digest` for different supplied content. Digest-purpose
 substitution is a Rust type error. No additional error code is introduced.
+
+## Structured error admission
+
+`CoreError::validate` and both E0 error-envelope entrypaths use the same checks.
+Operations are canonical dotted or snake-case `MessageCode` labels; they are not
+restricted to a hardcoded operation inventory. Field paths are lowercase
+snake-case schema members separated by dots, optionally followed by `[]` or
+numeric array indices. Host paths and prose are not schema coordinates.
+
+Subject kinds use the closed set in section 1. Kind-only errors remain valid
+(the committed generation-mismatch fixture uses this form); an ID without a
+kind is rejected. Present IDs use the declared core family. The generic
+`identifier`, `budget` and `envelope` kinds may name any existing core ID; E0 has
+no separate budget/envelope ID family. Identifier arguments accept the existing
+parsed/digest ID families and dotted operation/rule/producer/capability labels,
+not arbitrary whitespace-free text. Path arguments use the existing canonical
+`NormalizedSourcePath` parser without normalizing invalid input on the caller's
+behalf. Existing bounds, sorted unique argument names and cause codes still apply.
+
+Malformed metadata retains `contract_violation` with a fixed `error.*` field;
+argument ordering/name collisions retain `invalid_message_argument`, and count
+limits retain `budget_exceeded`. These are the existing error-admission codes,
+not a new wire schema. Validation failures never copy the rejected value.
+
+Digest algorithm failures retain only a typed byte length, not the input prefix.
+The purpose-mismatch helper preserves the four built-in purpose labels; other
+labels are represented by their lengths. SemVer and internal record-serialization
+errors use fixed reasons, not dependency error prose. `ToolVersion` deserialization
+now calls its canonical parser, so build metadata cannot bypass its constructor.
+
+Assembly helpers and raw Serde decoding still require explicit validation before
+publication. Syntax/length checks cannot prove that caller-selected Text values
+or otherwise valid IDs contain no confidential data. Callers must supply safe
+structured metadata, not source excerpts, credentials or host information. The
+focused cases in `tests/e0_error_conformance.rs` do not certify generic secrecy,
+source-owner provenance, code/category policy or the entire E0-A/R0 gate.

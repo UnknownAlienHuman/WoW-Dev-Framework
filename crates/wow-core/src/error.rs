@@ -3,6 +3,8 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
+mod admission;
+
 /// Result type used by pure `wow-core` operations.
 pub type CoreResult<T> = Result<T, CoreError>;
 
@@ -112,12 +114,12 @@ pub struct ErrorArgument {
 }
 
 impl ErrorArgument {
-    /// Creates a bounded text argument.
+    /// Assembles a text argument; `CoreError::validate` checks its bounds and content.
     pub fn new(name: impl Into<String>, value: impl Into<String>) -> Self {
         Self::new_typed(name, ErrorArgumentKind::Text, value)
     }
 
-    /// Creates a bounded argument with an explicit scalar kind.
+    /// Assembles a typed argument for admission by `CoreError::validate`.
     pub fn new_typed(
         name: impl Into<String>,
         kind: ErrorArgumentKind,
@@ -214,13 +216,13 @@ impl CoreError {
         self
     }
 
-    /// Adds a bounded text reason argument.
+    /// Adds a text argument, checked when the complete error is validated.
     #[must_use]
     pub fn with_argument(self, name: impl Into<String>, value: impl Into<String>) -> Self {
         self.with_typed_argument(name, ErrorArgumentKind::Text, value)
     }
 
-    /// Adds a bounded explicitly typed reason argument.
+    /// Adds a typed argument, checked when the complete error is validated.
     #[must_use]
     pub fn with_typed_argument(
         mut self,
@@ -290,6 +292,8 @@ impl CoreError {
             validate_safe_error_text(subject_id, "error.subject_id", 4_096)?;
         }
 
+        admission::validate_metadata(self)?;
+
         if self.reason_arguments.len() > 64 {
             return Err(validation_error(
                 "validate_operation_error",
@@ -352,14 +356,9 @@ fn validate_error_argument_value(kind: ErrorArgumentKind, value: &str) -> CoreRe
                     && value.parse::<u64>().is_ok())
         }
         ErrorArgumentKind::Boolean => matches!(value, "true" | "false"),
-        ErrorArgumentKind::Identifier => !value.chars().any(char::is_whitespace),
+        ErrorArgumentKind::Identifier => admission::canonical_identifier(value),
         ErrorArgumentKind::Path => {
-            !value.starts_with('/')
-                && value.as_bytes().first().is_none_or(|byte| *byte != 92)
-                && !value.as_bytes().get(1).is_some_and(|byte| *byte == b':')
-                && !value
-                    .split(|character| character == '/' || character == char::from(92_u8))
-                    .any(|part| part == "..")
+            crate::NormalizedSourcePath::parse(value).is_ok_and(|path| path.was_canonical())
         }
         ErrorArgumentKind::Digest => {
             value.len() == 71
