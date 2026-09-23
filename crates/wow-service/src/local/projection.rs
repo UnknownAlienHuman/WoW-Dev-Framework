@@ -211,6 +211,30 @@ pub(super) fn components(
                     .with_capability("project.xml.inline_lua.analyzed", CapabilityState::Partial)?;
             }
             components.push(xml);
+            if wow_project::xml_bindings::has_script_inheritance(plan) {
+                let bindings =
+                    project.and_then(|view| view.snapshot().analyzer_binding().xml_bindings());
+                let complete = bindings.is_some_and(|report| report.inherited_sources_complete());
+                components.push(
+                    ComponentSnapshot::new(
+                        "wow-project-xml-inherited-scripts",
+                        "1",
+                        bindings
+                            .map(|report| report.analysis_id().to_owned())
+                            .unwrap_or_else(|| plan.digest().to_string()),
+                        health(!complete),
+                    )?
+                    .with_capability(
+                        "project.xml.scripts.inherited_sources",
+                        if complete {
+                            CapabilityState::Available
+                        } else {
+                            CapabilityState::Partial
+                        },
+                    )?
+                    .with_capability("project.xml.scripts.dispatch", CapabilityState::Partial)?,
+                );
+            }
             if wow_project::xml_bindings::has_bindings(plan) {
                 let bindings =
                     project.and_then(|view| view.snapshot().analyzer_binding().xml_bindings());

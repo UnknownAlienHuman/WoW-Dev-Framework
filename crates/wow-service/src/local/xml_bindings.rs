@@ -18,7 +18,19 @@ pub(super) fn append_findings(
     let plan = plan.ok_or_else(|| super::owner_error("XML Lua binding has no load plan"))?;
     for binding in report.bindings() {
         super::cancelled(stop)?;
-        if !selected.contains(&binding.document)
+        let consumer = binding
+            .consumer_id
+            .as_deref()
+            .map(|id| {
+                plan.xml_references()
+                    .declarations()
+                    .get(id)
+                    .ok_or_else(|| super::owner_error("inherited XML binding consumer is missing"))
+            })
+            .transpose()?;
+        let selected_document =
+            consumer.map_or(binding.document.as_str(), |site| site.document.as_str());
+        if !selected.contains(selected_document)
             || binding.state == XmlLuaBindingState::UniqueAnalyzerDeclaration
         {
             continue;
@@ -33,19 +45,40 @@ pub(super) fn append_findings(
         if original.get(start..end).is_none() {
             return Err(super::owner_error("XML Lua binding coordinate mismatch"));
         }
-        let location = ExactSourceLocation::new(
-            binding.document.as_str(),
-            binding.content_digest.to_string(),
-            binding.attribute_span.byte_start,
-            binding.attribute_span.byte_end,
-        )?;
+        // Report the inherited-context finding at the consuming declaration,
+        // not as an unrelated diagnostic when only the template file is selected.
+        // The original handler's precise attribute anchor stays in the report.
+        let (document, digest, span) = consumer.map_or(
+            (
+                binding.document.as_str(),
+                binding.content_digest,
+                &binding.attribute_span,
+            ),
+            |site| (site.document.as_str(), site.content_digest, &site.span),
+        );
+        let captured = plan
+            .document_text(document)
+            .ok_or_else(|| super::owner_error("XML binding anchor document is missing"))?;
+        let start = usize::try_from(span.byte_start)
+            .map_err(|_| super::owner_error("XML binding anchor overflow"))?;
+        let end = usize::try_from(span.byte_end)
+            .map_err(|_| super::owner_error("XML binding anchor overflow"))?;
+        if captured.get(start..end).is_none() {
+            return Err(super::owner_error("XML binding anchor is invalid"));
+        }
+        let location =
+            ExactSourceLocation::new(document, digest.to_string(), span.byte_start, span.byte_end)?;
         let id = crate::identity::canonical_digest(
             "service-xml-lua-binding:sha256:",
             &(report.analysis_id(), binding),
         )?;
         findings.push(GenericFinding::new(
             id,
-            "project.xml.lua_bindings",
+            if consumer.is_some() {
+                "project.xml.lua_bindings.inherited"
+            } else {
+                "project.xml.lua_bindings"
+            },
             binding.state.code(),
             "information",
             location,

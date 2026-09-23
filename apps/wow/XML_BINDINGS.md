@@ -65,8 +65,8 @@ Traversal is iterative. Each declaration is visited once per owner; all inspecte
 edges are retained, including shared and rejected edges. A diamond does not copy
 the common ancestor for every route, and a cycle does not loop. Inheritance order
 is retained per declaration, not advertised as a flattened runtime method order.
-This does not instantiate inherited Script elements or materialize inherited
-fields, callbacks, parameters, metatables or Lua runtime receivers.
+Inherited handler source occurrences are projected as described below; this does
+not construct runtime callback instances, fields, parameters or metatables.
 
 Function and mixin spellings use a closed ASCII dotted-identifier dialect; calls,
 index expressions and `$parent` substitution are not evaluated.
@@ -74,11 +74,51 @@ index expressions and `$parent` substitution are not evaluated.
 Unresolved/candidate records enter ordinary informational findings with fixed
 `xml.lua.*` codes and exact XML anchors. Successful declaration lookups remain in
 the detailed report. Text output includes reference/unresolved counts and shared
-receiver/partial-receiver counts. Status does
+receiver/partial-receiver and inherited-script/partial-source counts. Status does
 not run Emmy: it reports pending lookup only when XML actually contains these
 references. The `project.xml.lua_bindings.queried` capability denotes that queries
 ran; receiver capability remains partial for method references. File-only XML
 introduces no new pending binding component.
+
+
+## Inherited handler contexts
+
+`inherited_script_sources` enumerates direct `Scripts` children of source templates
+reachable through each consuming declaration's admitted `inherits` graph. Each
+record keeps `consumer_id`, `declaring_owner_id`, `script_id`, `source_kind` and
+`binding_indices`. The existing XML index retains the handler name, `inherit` and
+`intrinsicOrder` flags and exact source spans; no source bodies are copied.
+
+An inherited `method` is queried using the consuming declaration's direct and
+inherited mixins, not only the mixins of the template that declared the handler.
+An inherited `function` reuses the same global query. Both queries join the existing
+Emmy session and deduplicated lookup table. Inherited binding records additionally
+carry `consumer_id`; direct bindings omit it. The consumer's source graph is shared
+with its own handlers. Incomplete ancestry stays unresolved even when a query finds
+a declaration. Inline bodies reuse their original syntax report and source map,
+without another parse or invented callback parameters.
+
+For inherited bindings, ordinary findings use category
+`project.xml.lua_bindings.inherited` and anchor the consumer's start tag. File scope
+is based on that consumer, while the owner report retains the original template's
+attribute location. Selecting a base template therefore does not import diagnostics
+for every descendant. Whole-project checks retain all distinct consumer contexts.
+
+A common ancestor is visited once per consumer; diamonds retain all inheritance
+edges without multiplying the handler source. Same-named handlers, local overrides,
+and append/prepend declarations are preserved, not flattened into a guessed call
+sequence. Nested child-object handlers and top-level `Script` chunks are not inherited
+as direct callbacks. This is source-candidate enumeration, not proof of which handler
+executes; `project.xml.scripts.dispatch` stays partial. The separate
+`project.xml.scripts.inherited_sources` capability reflects enumeration completeness
+and stays partial before analysis or when any source graph/handler is unresolved.
+
+The projection is bounded to 4,096 inherited script records, 262,144 source visits
+and 16 MiB of retained IDs. Existing shared receiver, binding, query and output limits
+also apply. Limit exhaustion aborts rather than claiming a truncated complete graph.
+Source review: Gethe `live` at `09b9db7948abc9b9648dedaab51eb0cf3ee67b31`,
+`Interface/AddOns/Blizzard_EditMode/Shared/EditModeSystemTemplates.xml`, inspected
+2026-09-23. The selector was resolved for this operation, not embedded in the adapter.
 
 ## Identity and limits
 
@@ -86,7 +126,7 @@ The adapter profile enters TOC configuration identity before project-generation
 derivation. The final report binds the generation, load plan, Main/Library analyzer
 identities, source health, receiver-source graphs and lookup results; the analyzer
 snapshot binds that report. The XML binding profile advances to
-`wow-project/xml-lua-bindings/2`, including in TOC configuration identity before
+`wow-project/xml-lua-bindings/3`, including in TOC configuration identity before
 deriving the project generation. Inline-input/explicit-file E0 identity fields are unchanged when no TOC
 plan is present. Existing APIs remain available; the cancellable member-call
 entry point also accepts explicit symbol queries.

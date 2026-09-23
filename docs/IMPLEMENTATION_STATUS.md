@@ -172,8 +172,10 @@ not XSD object validation, Lua binding, inheritance flattening or runtime accept
 
 ## XML to Lua declarations
 
-Selected-TOC checks query `mixin`, `function` and direct-mixin `method` candidates
-through the existing Emmy member-call session. Exact Main/Library declaration
+Selected-TOC checks query `mixin`, `function` and direct/inherited-mixin `method`
+candidates through the existing Emmy member-call session. Inherited handler sources
+also have consuming-declaration contexts; method queries use that consumer's mixins.
+Source provenance and incomplete ancestry remain explicit. Exact Main/Library declaration
 locations and unresolved/ambiguous results enter owner receipts and ordinary
 XML-scoped findings. See [XML_BINDINGS.md](../apps/wow/XML_BINDINGS.md).
 No new compiler session, synthetic source or callable/runtime proof is introduced;
