@@ -158,6 +158,13 @@ impl LocalOperationResult {
         Self::failure(command, ServiceErrorCode::Cancelled)
     }
 
+    /// Project admission failed before an analyzer snapshot could exist. Preserve
+    /// the typed outcome and operation ID without fabricating a check context.
+    #[must_use]
+    pub fn input_failure(command: &LocalCommand, error: &ServiceError) -> Self {
+        Self::failure(command, error.code())
+    }
+
     fn failure(command: &LocalCommand, code: ServiceErrorCode) -> Self {
         let result = OperationFailure {
             schema: "wow-service/local-operation-failure/1",
@@ -194,6 +201,7 @@ impl LocalOperationResult {
                 ServiceErrorCode::CanonicalizationFailed
                 | ServiceErrorCode::InternalContractViolation => LocalOutcome::InternalFailure,
                 ServiceErrorCode::Cancelled => LocalOutcome::Cancelled,
+                ServiceErrorCode::ProjectTargetUnresolved => LocalOutcome::Partial,
                 _ => LocalOutcome::Unavailable,
             },
         }

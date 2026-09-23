@@ -106,7 +106,7 @@ pub enum LoadSelection {
 }
 
 impl LoadSelection {
-    fn and(self, other: Self) -> Self {
+    pub(super) fn and(self, other: Self) -> Self {
         // Preserve unsupported syntax instead of claiming it is irrelevant because
         // another predicate happens not to match. No unknown syntax grants access.
         match (self, other) {
@@ -135,7 +135,7 @@ pub enum TocConditionKind {
 }
 
 impl TocConditionKind {
-    fn parse(value: &str) -> Option<Self> {
+    pub(super) fn parse(value: &str) -> Option<Self> {
         match value.to_ascii_lowercase().as_str() {
             "allowloadgametype" => Some(Self::AllowLoadGameType),
             "excludeloadgametype" => Some(Self::ExcludeLoadGameType),
@@ -159,41 +159,36 @@ fn evaluate(
     values: &[String],
     context: Option<&TocLoadContext>,
 ) -> LoadSelection {
-    let Some(context) = context else {
-        return LoadSelection::Unresolved;
-    };
     let mut matched = false;
     for value in values {
         let known = match kind {
-            TocConditionKind::AllowLoadGameType | TocConditionKind::ExcludeLoadGameType => {
-                context.game_types.get(&value.to_ascii_lowercase()).copied()
-            }
+            TocConditionKind::AllowLoadGameType | TocConditionKind::ExcludeLoadGameType => context
+                .and_then(|context| context.game_types.get(&value.to_ascii_lowercase()).copied()),
             TocConditionKind::AllowLoadTextLocale => {
                 if !locale(value) {
                     None
                 } else {
                     context
-                        .text_locale
-                        .as_ref()
+                        .and_then(|context| context.text_locale.as_ref())
                         .map(|target| target.eq_ignore_ascii_case(value))
                 }
             }
             TocConditionKind::AllowLoad => match value.to_ascii_lowercase().as_str() {
                 "both" => Some(true),
                 "game" => context
-                    .location
+                    .and_then(|context| context.location)
                     .map(|location| location == TocLoadLocation::Game),
                 "glue" => context
-                    .location
+                    .and_then(|context| context.location)
                     .map(|location| location == TocLoadLocation::Glue),
                 _ => None,
             },
             TocConditionKind::AllowLoadEnvironment => match value.to_ascii_lowercase().as_str() {
                 "global" => context
-                    .environment
+                    .and_then(|context| context.environment)
                     .map(|env| env == TocLuaEnvironment::Global),
                 "secure" => context
-                    .environment
+                    .and_then(|context| context.environment)
                     .map(|env| env == TocLuaEnvironment::Secure),
                 _ => None,
             },
@@ -207,6 +202,38 @@ fn evaluate(
         !matched
     } else {
         matched
+    })
+}
+
+/// Shared bounded value admission for line predicates and package metadata.
+/// An unsupported or malformed value cannot be interpreted as an absent gate.
+pub(super) fn condition(
+    kind: TocConditionKind,
+    tail: &str,
+    context: Option<&TocLoadContext>,
+) -> ProjectResult<TocCondition> {
+    let mut values = Vec::new();
+    for value in tail.split(|ch: char| ch.is_ascii_whitespace() || ch == ',') {
+        if value.is_empty() {
+            continue;
+        }
+        if values.len() >= 64 {
+            return Err(budget());
+        }
+        values.push(value.to_owned());
+    }
+    let well_formed = !values.is_empty()
+        && values.iter().all(|value| atom(value))
+        && (!tail.contains(',') || tail.split(',').all(|part| !part.trim().is_empty()));
+    let selection = if well_formed {
+        evaluate(kind, &values, context)
+    } else {
+        LoadSelection::Unresolved
+    };
+    Ok(TocCondition {
+        kind,
+        values: if well_formed { values } else { Vec::new() },
+        selection,
     })
 }
 
@@ -248,31 +275,10 @@ pub(super) fn project(
             record.bootstrap = true;
         } else if let Some(kind) = TocConditionKind::parse(head) {
             let tail = clause[head.len()..].trim();
-            // Blizzard sources use whitespace lists; addon TOCs also use commas.
-            let values: Vec<_> = tail
-                .split(|ch: char| ch.is_ascii_whitespace() || ch == ',')
-                .filter(|value| !value.is_empty())
-                .map(str::to_owned)
-                .collect();
-            if values.len() > 64 {
-                return Err(budget());
-            }
-            let well_formed = !values.is_empty()
-                && values.iter().all(|value| atom(value))
-                && (!tail.contains(',') || tail.split(',').all(|part| !part.trim().is_empty()));
-            let selection = if well_formed {
-                evaluate(kind, &values, context)
-            } else {
-                LoadSelection::Unresolved
-            };
+            let condition = condition(kind, tail, context)?;
+            let selection = condition.selection;
             record.selection = record.selection.and(selection);
-            if well_formed {
-                record.conditions.push(TocCondition {
-                    kind,
-                    values,
-                    selection,
-                });
-            }
+            record.conditions.push(condition);
             if selection == LoadSelection::Unresolved {
                 record.issues.push(Issue::LoadConditionUnresolved);
             }

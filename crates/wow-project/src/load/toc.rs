@@ -1,6 +1,6 @@
 use super::{
     LoadIssueKind as Issue, LoadRecordKind as Kind, LoadSelection, MAX_RECORDS, Record,
-    TocLoadContext, budget, conditions, invalid,
+    TocLoadContext, budget, conditions, invalid, package,
 };
 use crate::ProjectResult;
 use crate::disk::checkpoint;
@@ -12,6 +12,9 @@ pub(super) fn parse(
     context: Option<&TocLoadContext>,
     stop: &AtomicBool,
 ) -> ProjectResult<Vec<Record>> {
+    // Scan the complete captured TOC before expansion. Filters after a file line
+    // still govern that file, and excluded targets must not open any descendants.
+    let package_filters = package::admit(text, context, stop)?;
     let mut records = Vec::new();
     let mut offset = 0;
     let mut interfaces = 0;
@@ -34,6 +37,13 @@ pub(super) fn parse(
             record.kind = Kind::Metadata;
             let metadata = conditions::project(metadata.trim(), &mut record, context, true)?;
             if record.selection != LoadSelection::Included {
+                records.push(record);
+                offset = end;
+                continue;
+            }
+            if let Some(filter) = package_filters.get(&offset) {
+                record.kind = Kind::PackageGate;
+                record.conditions.push(filter.clone());
                 records.push(record);
                 offset = end;
                 continue;

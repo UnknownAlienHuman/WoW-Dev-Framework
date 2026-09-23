@@ -13,6 +13,8 @@ pub enum ServiceErrorCode {
     ExactGenerationUnavailable,
     CurrentGenerationUnavailable,
     ComponentUnavailable,
+    ProjectTargetExcluded,
+    ProjectTargetUnresolved,
     OperationConflict,
     OperationBusy,
     OperationNotImplementedForMilestone,

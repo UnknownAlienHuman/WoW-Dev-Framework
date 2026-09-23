@@ -41,6 +41,14 @@ fn run() -> u8 {
         Err(error) if error.code() == ServiceErrorCode::Cancelled => {
             LocalOperationResult::cancelled(&arguments.command)
         }
+        Err(error)
+            if matches!(
+                error.code(),
+                ServiceErrorCode::ProjectTargetExcluded | ServiceErrorCode::ProjectTargetUnresolved
+            ) =>
+        {
+            LocalOperationResult::input_failure(&arguments.command, &error)
+        }
         Err(error) => {
             diagnostic(error.message());
             return 64;

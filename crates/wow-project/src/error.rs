@@ -27,6 +27,8 @@ pub enum ProjectErrorCode {
     InvalidBudgetPolicy,
     InvalidInputInventory,
     MissingDeclaredFile,
+    PackageTargetExcluded,
+    PackageTargetUnresolved,
     SourceReadFailed,
     SourceBudgetExceeded,
     SourceChangedDuringRead,

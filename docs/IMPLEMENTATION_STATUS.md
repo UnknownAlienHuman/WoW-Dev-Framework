@@ -153,3 +153,8 @@ The separate `wow-service/local-project-toc/1` mode adds selected TOC/XML extern
 file expansion, a generation-bound load receipt and explicit partial blockers;
 see [TOC_INPUT.md](../apps/wow/TOC_INPUT.md). No source scan, inline-Lua/object index,
 live-rule expansion, full E2-C or R0 acceptance is inferred.
+
+Selected-TOC acquisition now preflights package-wide target filters before any
+Lua/XML descendant read. Included declarations enter the v3 load receipt; excluded
+and unresolved packages return distinct typed local-operation outcomes without an
+analyzer snapshot. See [TOC_CONTEXT.md](../apps/wow/TOC_CONTEXT.md#package-filters-before-source-acquisition).

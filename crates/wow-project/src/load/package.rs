@@ -34,9 +34,13 @@ pub(super) fn admit(
         };
         if let Some(metadata) = content.trim().strip_prefix("##") {
             let mut record = Record::new(LoadRecordKind::Metadata, offset, end);
-            let raw_key = metadata.split_once(':').map(|(key, _)| key).unwrap_or(metadata);
+            let raw_key = metadata
+                .split_once(':')
+                .map(|(key, _)| key)
+                .unwrap_or(metadata);
             let raw_key = raw_key.trim().to_ascii_lowercase();
-            let raw_filter_like = raw_key.starts_with("allowload") || raw_key.starts_with("excludeload");
+            let raw_filter_like =
+                raw_key.starts_with("allowload") || raw_key.starts_with("excludeload");
             let metadata = conditions::project(metadata.trim(), &mut record, context, true)?;
             // A malformed trailing bracket must not erase a known filter key.
             if raw_filter_like && record.selection == LoadSelection::Unresolved {
@@ -47,9 +51,8 @@ pub(super) fn admit(
             let kind = TocConditionKind::parse(&key);
             // A misspelled/future package filter is not an ordinary descriptive
             // tag: opening its descendants would guess that it had no effect.
-            let filter_like = kind.is_some()
-                || key.starts_with("allowload")
-                || key.starts_with("excludeload");
+            let filter_like =
+                kind.is_some() || key.starts_with("allowload") || key.starts_with("excludeload");
             if filter_like && record.selection != LoadSelection::Excluded {
                 declarations += 1;
                 if declarations > 64 {

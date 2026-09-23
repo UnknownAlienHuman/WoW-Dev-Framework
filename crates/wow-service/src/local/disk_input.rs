@@ -218,6 +218,8 @@ fn acquisition_error(error: ProjectError) -> ServiceError {
     let code = match error.code() {
         ProjectErrorCode::SourceReadCancelled => ServiceErrorCode::Cancelled,
         ProjectErrorCode::SourceBudgetExceeded => ServiceErrorCode::BudgetExceeded,
+        ProjectErrorCode::PackageTargetExcluded => ServiceErrorCode::ProjectTargetExcluded,
+        ProjectErrorCode::PackageTargetUnresolved => ServiceErrorCode::ProjectTargetUnresolved,
         _ => ServiceErrorCode::InvalidConfiguration,
     };
     // The project reader emits only fixed messages; never forward OS error prose.

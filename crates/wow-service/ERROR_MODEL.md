@@ -524,3 +524,11 @@ Every E0-used code needs:
 - deterministic canonical failure serialization;
 - recovery class;
 - assertion that no misleading status/check envelope/late result escaped.
+
+### Local TOC target admission
+
+`ProjectTargetExcluded` is an unavailable selected input (local CLI exit 3).
+`ProjectTargetUnresolved` is incomplete target selection (local CLI exit 2).
+They originate before analyzer publication, preserve the requested operation ID,
+and carry no fabricated check context or clean claim. Invalid config syntax still
+uses the separate usage path. See `apps/wow/TOC_CONTEXT.md` for the bounded dialect.

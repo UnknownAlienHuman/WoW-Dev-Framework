@@ -1,6 +1,7 @@
 //! Selected-TOC source acquisition. This is an external-file load projection,
 //! not a client emulator, complete XML object index, or persistent E2 candidate.
 mod conditions;
+mod package;
 mod toc;
 mod xml;
 
@@ -23,7 +24,7 @@ use crate::disk::{
 use crate::{ProjectError, ProjectErrorCode, ProjectInputFile, ProjectPhase, ProjectResult};
 
 /// Versioned, deliberately restricted acquisition semantics; never a WoW build.
-pub const LOAD_PROFILE: &str = "wow-project/toc-xml-files/2";
+pub const LOAD_PROFILE: &str = "wow-project/toc-xml-files/3";
 const MAX_RECORDS: usize = 32_768;
 const MAX_INCLUDE_DEPTH: usize = 32;
 
@@ -52,6 +53,7 @@ pub enum LoadRecordKind {
     Blank,
     Comment,
     Metadata,
+    PackageGate,
     LuaFile,
     XmlFile,
     XmlElement,
@@ -142,6 +144,13 @@ impl ProjectLoadPlan {
     #[must_use]
     pub fn external_files_complete(&self) -> bool {
         !self.issues.iter().any(|issue| issue.blocks_complete)
+    }
+    #[must_use]
+    pub fn package_gate_count(&self) -> usize {
+        self.records
+            .iter()
+            .filter(|record| record.kind == LoadRecordKind::PackageGate)
+            .count()
     }
     #[must_use]
     pub fn excluded_records(&self) -> usize {
@@ -266,7 +275,7 @@ impl ProjectInputDirectory {
         };
         let path = selected_toc.path();
         let text = loader.capture(selected_toc)?;
-        loader.charge_parse(text.len())?;
+        loader.charge_parse(text.len().saturating_mul(2))?;
         let parsed = toc::parse(&text, profile.interface(), context, stop)?;
         loader
             .documents
@@ -301,7 +310,7 @@ impl ProjectInputDirectory {
             issues: &'a [LoadIssue],
         }
         let digest = crate::identity::canonical_digest(
-            "wow-project/load-plan/2",
+            "wow-project/load-plan/3",
             &Identity {
                 profile: LOAD_PROFILE,
                 selected_toc: path,

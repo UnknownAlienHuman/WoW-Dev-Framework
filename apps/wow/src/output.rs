@@ -99,7 +99,8 @@ pub fn render(
                 .map_err(|_| ())?;
                 writeln!(
                     text,
-                    "load selection: excluded={}, unresolved={}",
+                    "load selection: package_gates={}, excluded={}, unresolved={}",
+                    plan.package_gate_count(),
                     plan.excluded_records(),
                     plan.unresolved_records()
                 )
