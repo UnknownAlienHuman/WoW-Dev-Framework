@@ -36,6 +36,15 @@ pub struct OwnerAnalysis {
     #[serde(skip_serializing_if = "Option::is_none")]
     rule_report: Option<RuleExecutionReport>,
     runtime_status: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    load_plan: Option<wow_project::load::ProjectLoadPlan>,
+}
+
+impl OwnerAnalysis {
+    #[must_use]
+    pub fn load_plan(&self) -> Option<&wow_project::load::ProjectLoadPlan> {
+        self.load_plan.as_ref()
+    }
 }
 
 pub(super) fn components(
@@ -44,6 +53,7 @@ pub(super) fn components(
     project_identity: &str,
     project_health: ComponentHealth,
     project: Option<&ProjectView>,
+    load_plan: Option<&wow_project::load::ProjectLoadPlan>,
 ) -> ServiceResult<Vec<ComponentSnapshot>> {
     let reference_partial = reference.partitions().is_empty()
         || reference
@@ -66,7 +76,7 @@ pub(super) fn components(
             ComponentHealth::Ready
         }
     };
-    Ok(vec![
+    let mut components = vec![
         ComponentSnapshot::new(
             "wow-core",
             env!("CARGO_PKG_VERSION"),
@@ -129,7 +139,26 @@ pub(super) fn components(
                 CapabilityState::Partial
             },
         )?,
-    ])
+    ];
+    if let Some(plan) = load_plan {
+        components.push(
+            ComponentSnapshot::new(
+                "wow-project-load",
+                "1",
+                plan.digest().to_string(),
+                health(!plan.external_files_complete()),
+            )?
+            .with_capability(
+                "project.load_files.resolved",
+                if plan.external_files_complete() {
+                    CapabilityState::Available
+                } else {
+                    CapabilityState::Partial
+                },
+            )?,
+        );
+    }
+    Ok(components)
 }
 
 #[allow(clippy::too_many_arguments)] // Explicit owner inputs plus request scope and cancellation.
@@ -141,6 +170,7 @@ pub(super) fn check_context(
     identity: ContextIdentity,
     scope: &CheckScope,
     selected: &[Box<str>],
+    load_plan: Option<&wow_project::load::ProjectLoadPlan>,
     stop: &AtomicBool,
 ) -> ServiceResult<CheckContext> {
     let files = resolve_scope(project, scope)?;
@@ -240,10 +270,15 @@ pub(super) fn check_context(
         project.snapshot_id(),
         ComponentHealth::Ready,
         Some(project),
+        load_plan,
     )?;
     let analysis = OwnerAnalysis {
         schema: "wow-service/owner-analysis/1",
-        input_mode: "explicit_materialized_project",
+        input_mode: if load_plan.is_some() {
+            "selected_toc_project"
+        } else {
+            "explicit_materialized_project"
+        },
         profile_kind: project.configuration().selected_profile().profile_kind(),
         reference_view_digest: reference.self_digest().into(),
         project_files: project.file_manifest().to_vec(),
@@ -258,6 +293,7 @@ pub(super) fn check_context(
         selected_rules: rules,
         rule_report: report,
         runtime_status: "not_evaluated",
+        load_plan: load_plan.cloned(),
     };
     Ok(CheckContext::new(
         identity,

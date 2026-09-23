@@ -83,6 +83,29 @@ pub fn render(
                 .map_err(|_| ())?;
             }
             writeln!(text, "deferred: {:?}", check.deferred_operations()).map_err(|_| ())?;
+            if let Some(plan) = check
+                .owner_analysis()
+                .and_then(|analysis| analysis.load_plan())
+            {
+                writeln!(
+                    text,
+                    "load: toc={:?}, sources={}, records={}, external_files_complete={}, digest={}",
+                    plan.selected_toc(),
+                    plan.sources().len(),
+                    plan.records().len(),
+                    plan.external_files_complete(),
+                    plan.digest()
+                )
+                .map_err(|_| ())?;
+                for issue in plan.issues() {
+                    writeln!(
+                        text,
+                        "load issue: {}",
+                        serde_json::to_string(issue).map_err(|_| ())?
+                    )
+                    .map_err(|_| ())?;
+                }
+            }
             for finding in check.raw_findings() {
                 // Serialize the service finding unchanged; JSON string escaping also prevents terminal injection.
                 let data = serde_json::to_string(finding).map_err(|_| ())?;

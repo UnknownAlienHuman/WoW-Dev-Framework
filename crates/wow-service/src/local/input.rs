@@ -19,6 +19,7 @@ pub const LOCAL_INPUT_SCHEMA: &str = "wow-service/local-project-input/1";
 pub struct LocalProjectInput {
     pub(super) bundle: ProjectInputBundle,
     pub(super) reference: ReferenceView,
+    pub(super) load_plan: Option<wow_project::load::ProjectLoadPlan>,
 }
 
 #[derive(Deserialize)]
@@ -103,6 +104,20 @@ impl LocalProjectInput {
         main: Vec<ProjectInputFile>,
         libraries: Vec<ProjectInputFile>,
     ) -> ServiceResult<Self> {
+        Self::assemble_with_load_plan(input, reference, main, libraries, None)
+    }
+
+    pub(super) fn assemble_with_load_plan(
+        input: ProjectMetadata,
+        reference: ReferenceView,
+        main: Vec<ProjectInputFile>,
+        libraries: Vec<ProjectInputFile>,
+        load_plan: Option<wow_project::load::ProjectLoadPlan>,
+    ) -> ServiceResult<Self> {
+        if let Some(plan) = &load_plan {
+            plan.validate_main_files(&main)
+                .map_err(|_| invalid("TOC plan does not match Main input"))?;
+        }
         input
             .profile
             .validate()
@@ -156,9 +171,16 @@ impl LocalProjectInput {
             ProjectCapabilityPolicy::degraded_e0()
                 .map_err(|_| invalid("invalid capability policy"))?,
         )
-        .budget_policy(policy)
-        .build()
-        .map_err(|_| invalid("project configuration was rejected"))?;
+        .budget_policy(policy);
+        let configuration = match &load_plan {
+            Some(plan) => configuration
+                .load_plan(plan)
+                .map_err(|_| invalid("TOC plan target mismatch"))?,
+            None => configuration,
+        };
+        let configuration = configuration
+            .build()
+            .map_err(|_| invalid("project configuration was rejected"))?;
         let libraries = LuaWorkspaceSnapshot::build(
             backend,
             universe,
@@ -172,11 +194,29 @@ impl LocalProjectInput {
         .map_err(|_| invalid("Library input was rejected"))?;
         let bundle = ProjectInputBundle::closed(configuration, main, vec![libraries])
             .map_err(|_| invalid("Main input inventory was rejected"))?;
-        Self::new(bundle, reference)
+        Self::new_with_load_plan(bundle, reference, load_plan)
     }
 
     /// Compose already validated lower-owner inputs without a transport decoder.
     pub fn new(bundle: ProjectInputBundle, reference: ReferenceView) -> ServiceResult<Self> {
+        Self::new_with_load_plan(bundle, reference, None)
+    }
+
+    pub fn new_with_load_plan(
+        bundle: ProjectInputBundle,
+        reference: ReferenceView,
+        load_plan: Option<wow_project::load::ProjectLoadPlan>,
+    ) -> ServiceResult<Self> {
+        if bundle.configuration().load_plan_digest() != load_plan.as_ref().map(|plan| plan.digest())
+        {
+            return Err(invalid("project configuration and load receipt differ"));
+        }
+        if let Some(plan) = &load_plan {
+            plan.validate_profile(bundle.configuration().selected_profile())
+                .map_err(|_| invalid("TOC plan target mismatch"))?;
+            plan.validate_main_files(bundle.inventory().files())
+                .map_err(|_| invalid("TOC plan source mismatch"))?;
+        }
         bundle
             .configuration()
             .validate()
@@ -187,7 +227,11 @@ impl LocalProjectInput {
         if reference.generation_id() != bundle.configuration().reference_generation().to_string() {
             return Err(invalid("reference generation does not match the project"));
         }
-        Ok(Self { bundle, reference })
+        Ok(Self {
+            bundle,
+            reference,
+            load_plan,
+        })
     }
 }
 

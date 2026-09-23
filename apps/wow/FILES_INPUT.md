@@ -15,6 +15,9 @@ are relative to that retained directory, not cwd. Neither the CLI nor service
 opens individual source files. No directory scan, TOC/XML interpretation, glob,
 include expansion, environment substitution, URL fetch, source execution or write.
 
+For selected TOC/XML source expansion use the separate [TOC_INPUT.md](TOC_INPUT.md)
+schema; the explicit-file schema below does not change.
+
 ## File manifest schema
 
 | Field | Value |

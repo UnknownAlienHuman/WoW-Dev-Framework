@@ -149,4 +149,7 @@ The one-shot CLI also accepts `wow-service/local-project-files/1`: pinned metada
 artifacts plus explicitly listed Main/Library files below the config directory.
 `wow-project::disk` owns bounded read-only acquisition; both input modes use the
 same owner composition. See [FILES_INPUT.md](../apps/wow/FILES_INPUT.md).
-No TOC/XML scan, live-rule expansion or full R0 acceptance is inferred.
+The separate `wow-service/local-project-toc/1` mode adds selected TOC/XML external-
+file expansion, a generation-bound load receipt and explicit partial blockers;
+see [TOC_INPUT.md](../apps/wow/TOC_INPUT.md). No source scan, inline-Lua/object index,
+live-rule expansion, full E2-C or R0 acceptance is inferred.

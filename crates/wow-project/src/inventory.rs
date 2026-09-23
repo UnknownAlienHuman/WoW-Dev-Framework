@@ -282,6 +282,10 @@ impl ProjectInputInventory {
             ));
         }
 
+        if let Some(plan) = configuration.load_plan() {
+            plan.validate_main_files(&files)?;
+        }
+
         let mut declarations = BTreeMap::<ProjectFileId, NormalizedSourcePath>::new();
         let mut folded_declarations = BTreeMap::<String, String>::new();
         for candidate in declared_paths {

@@ -26,7 +26,7 @@ The root [Cargo.toml](../Cargo.toml) activates **15 members**, not two, four or 
 |---|---|---|
 | `wow-core` | Typed identities, canonical JSON, evidence, coverage, results and operation primitives | Reconcile the complete E0-A contract/test matrix; compilation is not the acceptance ledger |
 | `wow-emmy` | Real pinned analyzer adapter, explicit Main/Library workspaces, syntax/generic diagnostics, direct member calls and scoped local-flow facts | E0-C fixture/pin/checksum closure; additional semantic operations and update probes are not inferred from parser compatibility |
-| `wow-project` | Explicit input inventories and bounded disk acquisition, analyzer bindings, immutable generations, guarded updates and publication | E0-D fixture identity closure; full TOC/XML/load indexing, overlays and durable project publication |
+| `wow-project` | Explicit inventories, bounded disk/selected TOC-XML acquisition and load receipts, analyzer bindings, immutable generations, guarded updates and publication | E0-D fixture identity closure; full TOC/XML/load indexing, overlays and durable project publication |
 | `wow-rules` | `wow.api.exists@1` and `wow.secret.local_operation@1` | E0-E normative fixtures, exact prerequisite identities and complete capability/negative-authority cases |
 | `wow-service` | E0 status/check over immutable normalized contexts; separate ReferenceView administration/publication | E0-F end-to-end fixture/CLI closure; full E1 Reference Pack and later public operation families |
 | `wow-store` | Typed SQLite objects, catalogs/CAS, operation journal, leases, GC and integrity | Full E1-A migration/crash/backup acceptance; coherent E2-D ProjectStore is not the generic store |

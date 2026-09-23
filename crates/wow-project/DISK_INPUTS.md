@@ -2,6 +2,8 @@
 
 The E0-D source-acquisition adapter is `wow-project::disk`, separate from the
 immutable source registry. It does not extend E0 into scanning or TOC/XML parsing.
+The separate `wow-project::load` E2-C acquisition slice reuses this reader for a
+selected TOC/XML closure; see [TOC_INPUT.md](../../apps/wow/TOC_INPUT.md).
 
 `ProjectInputDirectory::open` registers the **explicitly selected** directory.
 The private directory capability only exposes bounded configuration/artifact reads

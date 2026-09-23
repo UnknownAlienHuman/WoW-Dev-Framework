@@ -16,6 +16,7 @@ mod generation;
 mod identity;
 mod ids;
 mod inventory;
+pub mod load;
 mod publication;
 mod registry;
 mod snapshot;

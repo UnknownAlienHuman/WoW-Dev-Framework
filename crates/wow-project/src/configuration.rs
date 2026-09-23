@@ -1,4 +1,5 @@
 use std::collections::BTreeSet;
+use std::sync::Arc;
 
 use serde::Serialize;
 use wow_core::{
@@ -381,6 +382,10 @@ pub struct ProjectConfiguration {
     capability_policy: ProjectCapabilityPolicy,
     budget_policy: ProjectBudgetPolicy,
     configuration_digest: ContentDigest<CanonicalResult>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    load_plan_digest: Option<ContentDigest<CanonicalResult>>,
+    #[serde(skip)]
+    retained_load_plan: Option<Arc<crate::load::ProjectLoadPlan>>,
 }
 
 impl ProjectConfiguration {
@@ -393,6 +398,16 @@ impl ProjectConfiguration {
             )
         })?;
         self.analyzer_binding.validate()?;
+        if self.load_plan_digest != self.retained_load_plan.as_ref().map(|plan| plan.digest()) {
+            return Err(ProjectError::new(
+                ProjectErrorCode::InvalidConfiguration,
+                ProjectPhase::Configuration,
+                "load provenance is not retained by its configuration",
+            ));
+        }
+        if let Some(plan) = &self.retained_load_plan {
+            plan.validate_profile(&self.selected_profile)?;
+        }
         if self.configuration_schema_version != PROJECT_CONFIGURATION_SCHEMA_VERSION {
             return Err(ProjectError::new(
                 ProjectErrorCode::InvalidConfiguration,
@@ -423,6 +438,7 @@ impl ProjectConfiguration {
             &self.analyzer_binding,
             &self.capability_policy,
             self.budget_policy,
+            self.load_plan_digest,
         )?;
         if expected != self.configuration_digest {
             return Err(ProjectError::new(
@@ -485,6 +501,16 @@ impl ProjectConfiguration {
     }
 
     #[must_use]
+    pub fn load_plan(&self) -> Option<&crate::load::ProjectLoadPlan> {
+        self.retained_load_plan.as_deref()
+    }
+
+    #[must_use]
+    pub const fn load_plan_digest(&self) -> Option<ContentDigest<CanonicalResult>> {
+        self.load_plan_digest
+    }
+
+    #[must_use]
     pub const fn configuration_digest(&self) -> ContentDigest<CanonicalResult> {
         self.configuration_digest
     }
@@ -503,6 +529,8 @@ pub struct ProjectConfigurationBuilder {
     logical_root: Option<String>,
     capability_policy: Option<ProjectCapabilityPolicy>,
     budget_policy: Option<ProjectBudgetPolicy>,
+    load_plan_digest: Option<ContentDigest<CanonicalResult>>,
+    retained_load_plan: Option<Arc<crate::load::ProjectLoadPlan>>,
 }
 
 impl ProjectConfigurationBuilder {
@@ -525,6 +553,8 @@ impl ProjectConfigurationBuilder {
             logical_root: None,
             capability_policy: None,
             budget_policy: None,
+            load_plan_digest: None,
+            retained_load_plan: None,
         }
     }
 
@@ -556,6 +586,14 @@ impl ProjectConfigurationBuilder {
     pub const fn budget_policy(mut self, budget_policy: ProjectBudgetPolicy) -> Self {
         self.budget_policy = Some(budget_policy);
         self
+    }
+
+    /// Bind the actual selected TOC/XML receipt without changing E0 identities.
+    pub fn load_plan(mut self, plan: &crate::load::ProjectLoadPlan) -> ProjectResult<Self> {
+        plan.validate_profile(&self.selected_profile)?;
+        self.load_plan_digest = Some(plan.digest());
+        self.retained_load_plan = Some(Arc::new(plan.clone()));
+        Ok(self)
     }
 
     pub fn build(self) -> ProjectResult<ProjectConfiguration> {
@@ -592,6 +630,7 @@ impl ProjectConfigurationBuilder {
             &self.analyzer_binding,
             &capability_policy,
             budget_policy,
+            self.load_plan_digest,
         )?;
         let configuration = ProjectConfiguration {
             project_id: self.project_id,
@@ -606,6 +645,8 @@ impl ProjectConfigurationBuilder {
             capability_policy,
             budget_policy,
             configuration_digest,
+            load_plan_digest: self.load_plan_digest,
+            retained_load_plan: self.retained_load_plan,
         };
         configuration.validate()?;
         Ok(configuration)
@@ -624,6 +665,7 @@ fn configuration_digest(
     analyzer_binding: &AnalyzerBindingDeclaration,
     capability_policy: &ProjectCapabilityPolicy,
     budget_policy: ProjectBudgetPolicy,
+    load_plan_digest: Option<ContentDigest<CanonicalResult>>,
 ) -> ProjectResult<ContentDigest<CanonicalResult>> {
     #[derive(Serialize)]
     struct Identity<'a> {
@@ -638,6 +680,8 @@ fn configuration_digest(
         analyzer_binding: &'a AnalyzerBindingDeclaration,
         capability_policy: &'a ProjectCapabilityPolicy,
         budget_policy: ProjectBudgetPolicy,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        load_plan_digest: Option<ContentDigest<CanonicalResult>>,
     }
     canonical_digest(
         "wow-project/configuration/e0-d/1",
@@ -653,6 +697,7 @@ fn configuration_digest(
             analyzer_binding,
             capability_policy,
             budget_policy,
+            load_plan_digest,
         },
         ProjectPhase::Configuration,
     )

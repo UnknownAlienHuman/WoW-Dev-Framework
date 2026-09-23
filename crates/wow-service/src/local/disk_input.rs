@@ -17,6 +17,7 @@ use super::input::{AnalyzerInput, LOCAL_INPUT_SCHEMA, ProjectMetadata, invalid};
 use crate::{ServiceError, ServiceErrorCode, ServiceResult};
 
 pub const LOCAL_FILES_SCHEMA: &str = "wow-service/local-project-files/1";
+pub const LOCAL_TOC_SCHEMA: &str = "wow-service/local-project-toc/1";
 
 #[derive(Deserialize)]
 struct SchemaSelector {
@@ -34,7 +35,7 @@ struct DiskInput {
     profile: ProjectDiskFile,
     reference_view: ProjectDiskFile,
     analyzer: DiskAnalyzer,
-    main: DiskInventory,
+    main: MainInventory,
     library: DiskInventory,
 }
 
@@ -54,6 +55,16 @@ struct DiskAnalyzer {
 struct DiskInventory {
     root: String,
     files: Vec<ProjectDiskFile>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MainInventory {
+    root: String,
+    #[serde(default)]
+    files: Option<Vec<ProjectDiskFile>>,
+    #[serde(default)]
+    toc: Option<ProjectDiskFile>,
 }
 
 impl LocalProjectInput {
@@ -78,7 +89,9 @@ impl LocalProjectInput {
             .map_err(|_| invalid("invalid local input schema selector"))?;
         let result = match selector.schema.as_str() {
             LOCAL_INPUT_SCHEMA => Self::from_json_slice(&bytes),
-            LOCAL_FILES_SCHEMA => Self::from_disk_manifest(&bytes, &directory, stop),
+            LOCAL_FILES_SCHEMA | LOCAL_TOC_SCHEMA => {
+                Self::from_disk_manifest(&bytes, &directory, stop)
+            }
             _ => Err(invalid("unsupported local input schema")),
         }?;
         super::cancelled(stop)?;
@@ -92,8 +105,14 @@ impl LocalProjectInput {
     ) -> ServiceResult<Self> {
         let input: DiskInput =
             serde_json::from_slice(bytes).map_err(|_| invalid("invalid local file manifest"))?;
-        if input.schema != LOCAL_FILES_SCHEMA {
-            return Err(invalid("unsupported local file manifest"));
+        let toc_mode = input.schema == LOCAL_TOC_SCHEMA;
+        match (input.schema.as_str(), &input.main.files, &input.main.toc) {
+            (LOCAL_FILES_SCHEMA, Some(_), None) | (LOCAL_TOC_SCHEMA, None, Some(_)) => {}
+            _ => {
+                return Err(invalid(
+                    "manifest must select either explicit files or one TOC, never both",
+                ));
+            }
         }
         let profile: ProfileIdentity = serde_json::from_slice(
             &directory
@@ -119,14 +138,35 @@ impl LocalProjectInput {
                 .map_err(acquisition_error)?,
         )
         .map_err(|_| invalid("analyzer report must contain UTF-8"))?;
-        let main = directory
-            .read_lua_inventory(
-                &input.main.root,
-                &input.main.files,
-                ProjectFileRole::FirstPartyMain,
-                stop,
+        let (main, load_plan) = if toc_mode {
+            let toc = input
+                .main
+                .toc
+                .as_ref()
+                .ok_or_else(|| invalid("missing selected TOC"))?;
+            let (files, plan) = directory
+                .read_toc_project(&input.main.root, toc, &profile, stop)
+                .map_err(acquisition_error)?
+                .into_parts();
+            (files, Some(plan))
+        } else {
+            let files = input
+                .main
+                .files
+                .as_ref()
+                .ok_or_else(|| invalid("missing explicit Main files"))?;
+            (
+                directory
+                    .read_lua_inventory(
+                        &input.main.root,
+                        files,
+                        ProjectFileRole::FirstPartyMain,
+                        stop,
+                    )
+                    .map_err(acquisition_error)?,
+                None,
             )
-            .map_err(acquisition_error)?;
+        };
         let library = directory
             .read_lua_inventory(
                 &input.library.root,
@@ -136,7 +176,7 @@ impl LocalProjectInput {
             )
             .map_err(acquisition_error)?;
         super::cancelled(stop)?;
-        Self::assemble(
+        Self::assemble_with_load_plan(
             ProjectMetadata {
                 project_id: input.project_id,
                 workspace_id: input.workspace_id,
@@ -155,6 +195,7 @@ impl LocalProjectInput {
             reference,
             main,
             library,
+            load_plan,
         )
     }
 }

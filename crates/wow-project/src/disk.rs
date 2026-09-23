@@ -43,6 +43,11 @@ impl ProjectDiskFile {
         }
     }
 
+    #[must_use]
+    pub fn path(&self) -> &str {
+        &self.path
+    }
+
     /// Require the read bytes to match a predeclared source-artifact identity.
     #[must_use]
     pub fn with_identity(mut self, digest: ContentDigest<SourceContent>, length: u64) -> Self {
@@ -51,7 +56,7 @@ impl ProjectDiskFile {
         self
     }
 
-    fn validate(&self) -> ProjectResult<()> {
+    pub(crate) fn validate(&self) -> ProjectResult<()> {
         validate_path(&self.path)?;
         if self.content_digest.is_some() != self.byte_length.is_some() {
             return Err(failure(
@@ -62,7 +67,7 @@ impl ProjectDiskFile {
         Ok(())
     }
 
-    fn verify(&self, bytes: &[u8]) -> ProjectResult<()> {
+    pub(crate) fn verify(&self, bytes: &[u8]) -> ProjectResult<()> {
         if self
             .byte_length
             .is_some_and(|length| length != bytes.len() as u64)
@@ -210,7 +215,13 @@ impl ProjectInputDirectory {
         Ok(output)
     }
 
-    fn read(
+    pub(crate) fn subdirectory(&self, root: &str) -> ProjectResult<Self> {
+        Ok(Self {
+            directory: descend(&self.directory, root)?,
+        })
+    }
+
+    pub(crate) fn read(
         &self,
         selected: &ProjectDiskFile,
         limit: usize,
@@ -343,7 +354,7 @@ fn descend(root: &Dir, path: &str) -> ProjectResult<Dir> {
     Ok(directory)
 }
 
-fn validate_path(path: &str) -> ProjectResult<()> {
+pub(crate) fn validate_path(path: &str) -> ProjectResult<()> {
     let admitted = path.len() <= 4096
         && path.parse::<NormalizedSourcePath>().is_ok()
         && path.split('/').all(|part| {
@@ -385,7 +396,7 @@ fn is_device_component(part: &str) -> bool {
         })
 }
 
-fn checkpoint(stop: &AtomicBool) -> ProjectResult<()> {
+pub(crate) fn checkpoint(stop: &AtomicBool) -> ProjectResult<()> {
     if stop.load(Ordering::Acquire) {
         Err(failure(
             ProjectErrorCode::SourceReadCancelled,

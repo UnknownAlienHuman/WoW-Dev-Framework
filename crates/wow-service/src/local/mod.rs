@@ -7,7 +7,7 @@ mod projection;
 mod response;
 
 pub use backend::LocalProjectBackend;
-pub use disk_input::LOCAL_FILES_SCHEMA;
+pub use disk_input::{LOCAL_FILES_SCHEMA, LOCAL_TOC_SCHEMA};
 pub use input::{LOCAL_INPUT_MAX_BYTES, LOCAL_INPUT_SCHEMA, LocalProjectInput};
 pub use projection::OwnerAnalysis;
 pub use response::{

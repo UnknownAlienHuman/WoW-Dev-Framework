@@ -17,6 +17,7 @@ use crate::{
 pub struct LocalProjectBackend {
     input: ProjectInputBundle,
     reference: ReferenceView,
+    load_plan: Option<wow_project::load::ProjectLoadPlan>,
     registry: RuleRegistry,
     configuration: ServiceConfiguration,
     target_generation: String,
@@ -40,6 +41,7 @@ impl LocalProjectBackend {
         Ok(Self {
             input: input.bundle,
             reference: input.reference,
+            load_plan: input.load_plan,
             registry,
             configuration,
             target_generation: target.project_generation().to_string(),
@@ -131,6 +133,7 @@ impl LocalProjectBackend {
             self.identity(&project)?,
             scope,
             rules,
+            self.load_plan.as_ref(),
             stop,
         )
     }
@@ -162,6 +165,7 @@ impl ServiceBackend for LocalProjectBackend {
                     .unwrap_or(&self.target_generation),
                 project_health,
                 retained.as_ref(),
+                self.load_plan.as_ref(),
             )?,
         )
     }
