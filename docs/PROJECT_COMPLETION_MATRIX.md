@@ -129,4 +129,6 @@ TOC/XML source capture, syntax indexing and inline extraction now feed a bounded
 generation-bound EmmyLua syntax pass. Mapped XML diagnostics participate in normal
 local-check findings and file selection. See [XML_ANALYSIS.md](../apps/wow/XML_ANALYSIS.md).
 This advances functional code, not the existing E2/R0 acceptance gates. Virtual
-Main/Library semantics, inheritance/reference resolution and runtime remain open.
+Main/Library semantics, XSD validation, inheritance materialization and runtime remain open.
+XML parent/inheritance references now link to captured source declarations with
+explicit conflicts, order and cycles; see [XML_REFERENCES.md](../apps/wow/XML_REFERENCES.md).

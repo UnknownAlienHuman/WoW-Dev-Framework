@@ -5,6 +5,7 @@ mod package;
 mod toc;
 mod xml;
 mod xml_index;
+pub mod xml_references;
 
 pub use xml_index::{
     XML_INDEX_PROFILE, XmlAttributeRecord, XmlDeclaration, XmlDocumentIndex, XmlElementRecord,
@@ -31,7 +32,7 @@ use crate::disk::{
 use crate::{ProjectError, ProjectErrorCode, ProjectInputFile, ProjectPhase, ProjectResult};
 
 /// Versioned, deliberately restricted acquisition semantics; never a WoW build.
-pub const LOAD_PROFILE: &str = "wow-project/toc-xml-files/4";
+pub const LOAD_PROFILE: &str = "wow-project/toc-xml-files/5";
 const MAX_RECORDS: usize = 32_768;
 const MAX_INCLUDE_DEPTH: usize = 32;
 
@@ -123,6 +124,7 @@ pub struct ProjectLoadPlan {
     records: Vec<LoadRecord>,
     issues: Vec<LoadIssue>,
     xml_documents: BTreeMap<String, XmlDocumentIndex>,
+    xml_references: xml_references::XmlReferenceReport,
     digest: ContentDigest<CanonicalResult>,
     #[serde(skip)]
     documents: Arc<BTreeMap<String, String>>,
@@ -182,6 +184,11 @@ impl ProjectLoadPlan {
     #[must_use]
     pub fn xml_documents(&self) -> &BTreeMap<String, XmlDocumentIndex> {
         &self.xml_documents
+    }
+    /// Local declaration links, ambiguities and cycles in the captured XML scope.
+    #[must_use]
+    pub fn xml_references(&self) -> &xml_references::XmlReferenceReport {
+        &self.xml_references
     }
     /// Verify that this exact retained plan belongs to the configured target.
     pub fn validate_profile(&self, profile: &ProfileIdentity) -> ProjectResult<()> {
@@ -314,6 +321,7 @@ impl ProjectInputDirectory {
             .collect::<Vec<_>>();
         // Source digests bind comments, order, directives and inline/unknown XML,
         // even when the unique Lua file inventory happens to remain unchanged.
+        let xml_references = xml_references::resolve(&loader.xml_documents, &loader.records, stop)?;
         let target_profile_digest = profile_digest(profile)?;
         #[derive(Serialize)]
         struct Identity<'a> {
@@ -326,9 +334,10 @@ impl ProjectInputDirectory {
             records: &'a [LoadRecord],
             issues: &'a [LoadIssue],
             xml_documents: &'a BTreeMap<String, XmlDocumentIndex>,
+            xml_references_digest: ContentDigest<CanonicalResult>,
         }
         let digest = crate::identity::canonical_digest(
-            "wow-project/load-plan/4",
+            "wow-project/load-plan/5",
             &Identity {
                 profile: LOAD_PROFILE,
                 selected_toc: path,
@@ -338,6 +347,7 @@ impl ProjectInputDirectory {
                 records: &loader.records,
                 issues: &loader.issues,
                 xml_documents: &loader.xml_documents,
+                xml_references_digest: xml_references.digest(),
             },
             ProjectPhase::Inventory,
         )?;
@@ -355,6 +365,7 @@ impl ProjectInputDirectory {
                 records: loader.records,
                 issues: loader.issues,
                 xml_documents: loader.xml_documents,
+                xml_references,
                 digest,
                 documents: Arc::new(loader.documents),
             },

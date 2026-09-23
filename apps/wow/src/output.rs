@@ -121,6 +121,14 @@ pub fn render(
                         index.scripts().count(), inline_count, index.digest()
                     ).map_err(|_| ())?;
                 }
+                if !plan.xml_documents().is_empty() {
+                    let links = plan.xml_references();
+                    writeln!(text,
+                        "xml references: declarations={}, references={}, unique_local={}, cycles={}, issues={}, local_links_resolved={}, digest={}",
+                        links.declarations().len(), links.references().len(), links.unique_link_count(),
+                        links.cycles().len(), links.issues().len(), links.local_links_resolved(), links.digest()
+                    ).map_err(|_| ())?;
+                }
                 for issue in plan.issues() {
                     writeln!(
                         text,

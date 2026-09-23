@@ -161,3 +161,11 @@ Selected-TOC acquisition now preflights package-wide target filters before any
 Lua/XML descendant read. Included declarations enter the v3 load receipt; excluded
 and unresolved packages return distinct typed local-operation outcomes without an
 analyzer snapshot. See [TOC_CONTEXT.md](../apps/wow/TOC_CONTEXT.md#package-filters-before-source-acquisition).
+
+## XML local references
+
+Selected-TOC input links XML parent/inheritance names across the captured closure,
+retaining duplicate candidates, load order, source anchors and separate parent/
+inheritance cycle components. Link issues enter ordinary XML-scoped findings.
+See [XML_REFERENCES.md](../apps/wow/XML_REFERENCES.md). This is local source linking,
+not XSD object validation, Lua binding, inheritance flattening or runtime acceptance.

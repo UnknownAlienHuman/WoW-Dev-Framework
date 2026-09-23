@@ -149,7 +149,7 @@ pub(super) fn components(
         components.push(
             ComponentSnapshot::new(
                 "wow-project-load",
-                "4",
+                "5",
                 plan.digest().to_string(),
                 health(!plan.external_files_complete()),
             )?
@@ -178,9 +178,18 @@ pub(super) fn components(
                 "wow-project-xml",
                 "1",
                 plan.digest().to_string(),
-                health(pending_inline),
+                health(pending_inline || !plan.xml_references().local_links_resolved()),
             )?
-            .with_capability("project.xml.syntax.indexed", CapabilityState::Available)?;
+            .with_capability("project.xml.syntax.indexed", CapabilityState::Available)?
+            .with_capability("project.xml.references.indexed", CapabilityState::Available)?
+            .with_capability(
+                "project.xml.references.local",
+                if plan.xml_references().local_links_resolved() {
+                    CapabilityState::Available
+                } else {
+                    CapabilityState::Partial
+                },
+            )?;
             if pending_inline {
                 let parsed =
                     project.and_then(|view| view.snapshot().analyzer_binding().xml_lua_analysis());
@@ -252,6 +261,7 @@ pub(super) fn check_context(
         )?);
     }
     super::xml_lua::append_findings(xml_report, &resolved.xml_documents, &mut generic, stop)?;
+    super::xml_references::append_findings(load_plan, &resolved.xml_documents, &mut generic, stop)?;
     let rules: Vec<Box<str>> = if selected.is_empty() {
         registry
             .descriptors()

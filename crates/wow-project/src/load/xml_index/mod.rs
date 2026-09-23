@@ -166,6 +166,10 @@ impl XmlDocumentIndex {
         &self.document
     }
     #[must_use]
+    pub const fn source_digest(&self) -> ContentDigest<SourceContent> {
+        self.source_digest
+    }
+    #[must_use]
     pub fn elements(&self) -> &[XmlElementRecord] {
         &self.elements
     }
