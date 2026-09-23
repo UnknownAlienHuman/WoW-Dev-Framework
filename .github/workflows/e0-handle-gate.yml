@@ -1,0 +1,159 @@
+name: E0 handle guarded acceptance
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.ci/e0-handle/**'
+      - '.github/workflows/e0-handle-gate.yml'
+permissions:
+  contents: read
+concurrency:
+  group: e0-handle-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    env:
+      CARGO_TERM_COLOR: never
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Admit exact reviewed patch and base tree
+        run: |
+          set -euo pipefail
+          cat .ci/e0-handle/{00,01,02,03,04,05} | base64 -d > "$RUNNER_TEMP/handle.patch.gz"
+          echo "cd9187eb1a1d1d4f3da2652c6282a52bb804bbd9868a8a432c888af0e8236027  $RUNNER_TEMP/handle.patch.gz" | sha256sum -c -
+          gzip -dc "$RUNNER_TEMP/handle.patch.gz" > "$RUNNER_TEMP/handle.patch"
+          echo "c42e1bdf73e4c55e19f8529383de5679363a4662b7b548be98ed1d493bf8d56e  $RUNNER_TEMP/handle.patch" | sha256sum -c -
+          git rm -r .ci/e0-handle .github/workflows/e0-handle-gate.yml
+          test "$(git write-tree)" = 25ad134ece81bf6fae8ea34e5b0aeb974bebda27
+          git apply --index --check "$RUNNER_TEMP/handle.patch"
+          git apply --index "$RUNNER_TEMP/handle.patch"
+          test "$(git write-tree)" = 93130d5a86d024b2d0ba941d6201336d8cb7fe46
+      - name: Install stable Rust and retain exact inputs
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+          mkdir -p "$RUNNER_TEMP/handle-results"
+          git rev-parse HEAD > "$RUNNER_TEMP/handle-results/BASE_SHA"
+          rustc +stable -Vv > "$RUNNER_TEMP/handle-results/RUST_VERSION"
+      - name: Format reviewed Rust and retain exact tree
+        run: |
+          set -euo pipefail
+          cargo +stable fmt --all
+          git diff --exit-code -- . ':(exclude)crates/wow-core/src/source.rs' ':(exclude)crates/wow-core/tests/e0_handle_conformance.rs' ':(exclude)crates/wow-core/tests/e0_handle_compare_conformance.rs' ':(exclude)crates/wow-core/tests/handle/support.rs'
+          git add crates/wow-core/src/source.rs crates/wow-core/tests/e0_handle_conformance.rs crates/wow-core/tests/e0_handle_compare_conformance.rs crates/wow-core/tests/handle/support.rs
+          git diff --exit-code
+          git diff --cached --check
+          git write-tree > "$RUNNER_TEMP/handle-results/TREE_SHA"
+      - name: Build core implementation and test targets
+        run: cargo +stable build --locked -p wow-core --all-targets
+      - name: Verify handles, comparisons and all golden consumers
+        run: |
+          set -euo pipefail
+          cargo +stable test --locked -p wow-core --test e0_handle_conformance --test e0_handle_compare_conformance --test e0_examples --test hash_vectors 2>&1 | tee "$RUNNER_TEMP/handle-results/core-tests.txt"
+          cargo +stable test --locked -p wow-core --features serde_json/arbitrary_precision --test e0_handle_conformance --test e0_handle_compare_conformance --test e0_examples --test hash_vectors 2>&1 | tee "$RUNNER_TEMP/handle-results/number-feature-tests.txt"
+          cargo +stable test --locked -p wow-core --doc 2>&1 | tee "$RUNNER_TEMP/handle-results/doctests.txt"
+      - name: Prove three verification defects against unchanged source
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          trap 'git checkout-index -a -f' EXIT
+          git show HEAD:crates/wow-core/src/source.rs > crates/wow-core/src/source.rs
+          cases=(
+            handle_verify_003_rejects_a_forged_id_even_with_matching_content
+            handle_verify_004_rejects_a_resealed_invalid_origin_generation_matrix
+            handle_verify_005_rejects_a_resealed_invalid_span_before_a_content_mismatch
+          )
+          for index in "${!cases[@]}"; do
+            case="${cases[$index]}"
+            log="$RUNNER_TEMP/handle-results/baseline-$index.txt"
+            set +e
+            cargo +stable test --locked -p wow-core --test e0_handle_conformance "$case" -- --exact > "$log" 2>&1
+            status=$?
+            set -e
+            test "$status" -eq 101
+            grep -F 'running 1 test' "$log"
+            grep -F "test $case ... FAILED" "$log"
+            grep -F 'test result: FAILED. 0 passed; 1 failed' "$log"
+          done
+      - name: Repository policy and formatting
+        run: |
+          cargo +stable xtask check
+          cargo +stable fmt --all --check
+      - name: Locked workspace check
+        run: cargo +stable check --locked --workspace --all-targets --all-features
+      - name: Strict workspace Clippy
+        run: cargo +stable clippy --locked --workspace --all-targets --all-features -- -D warnings
+      - name: Locked debug workspace tests
+        run: cargo +stable test --locked --workspace --all-targets --all-features
+      - name: Locked release workspace tests
+        run: cargo +stable test --locked --release --workspace --all-targets --all-features
+      - name: Rust documentation
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo +stable doc --locked --workspace --all-features --no-deps
+      - name: Retain exact tested change
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --check
+          test "$(git write-tree)" = "$(cat "$RUNNER_TEMP/handle-results/TREE_SHA")"
+          git diff --cached --binary --full-index > "$RUNNER_TEMP/handle-results/verified.patch"
+          (cd "$RUNNER_TEMP/handle-results" && sha256sum verified.patch > SHA256SUMS)
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: e0-handle-${{ matrix.os }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/handle-results/
+          retention-days: 3
+          if-no-files-found: error
+  publish:
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: e0-handle-ubuntu-latest-${{ github.run_id }}
+          path: ${{ runner.temp }}/linux
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: e0-handle-windows-latest-${{ github.run_id }}
+          path: ${{ runner.temp }}/windows
+      - name: Publish only identical verified trees on unchanged main
+        env:
+          EXPECTED_HEAD: ${{ github.sha }}
+          ACCEPTANCE_RUN: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          for platform in linux windows; do
+            (cd "$RUNNER_TEMP/$platform" && sha256sum -c SHA256SUMS)
+            test "$(cat "$RUNNER_TEMP/$platform/BASE_SHA")" = "$EXPECTED_HEAD"
+          done
+          cmp "$RUNNER_TEMP/linux/TREE_SHA" "$RUNNER_TEMP/windows/TREE_SHA"
+          cmp "$RUNNER_TEMP/linux/verified.patch" "$RUNNER_TEMP/windows/verified.patch"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$EXPECTED_HEAD"
+          git apply --index --check "$RUNNER_TEMP/linux/verified.patch"
+          git apply --index "$RUNNER_TEMP/linux/verified.patch"
+          test "$(git write-tree)" = "$(cat "$RUNNER_TEMP/linux/TREE_SHA")"
+          git diff --exit-code
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m "fix(core): validate source handles before verification and comparison" -m "Continue R0-01. Revalidate retained handle fields and self-ID before content-digest verification or either comparison entrypoint, including self-comparison. Comparisons now return CoreResult; valid categories and golden identities remain unchanged. Twenty-three grouped tests cover construction and all origin/generation combinations, exact vectors and 64 wire-key permutations, both comparison APIs, forged/resealed mutations and digest verification; a compile-fail doctest keeps digest purposes separate. Three Linux controls reproduced the original verifier defects. Core-only and arbitrary_precision tests, locked workspace check, strict Clippy, debug/release tests, rustdoc, fmt and repository policy passed on Linux/Windows in run $ACCEPTANCE_RUN. No dependencies or golden fixtures changed; temporary inputs removed. Source-owner provenance, content-span bounds, PATH-022 and full E0-A/R0 remain separate."
+          git push origin HEAD:refs/heads/main
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$(git rev-parse HEAD)"
+          git rev-parse HEAD
