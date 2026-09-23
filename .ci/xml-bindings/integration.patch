@@ -1,0 +1,456 @@
+diff --git a/apps/wow/XML_BINDINGS.md b/apps/wow/XML_BINDINGS.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..3146e0da022c22cce2e05e9d82bf1791eaeb9d4c
+--- /dev/null
++++ b/apps/wow/XML_BINDINGS.md
+@@ -0,0 +1,74 @@
++# XML to Lua declaration lookup
++
++`wow check` now resolves XML `mixin` and `function` spellings and queries direct
++mixin candidates for `method` references. Commands and input schemas are unchanged.
++`--file project-file:UI/Frames.xml` selects findings anchored in that XML file;
++lookup still uses the complete captured Main and explicit Library universes.
++
++The project owner emits bounded dotted-name queries. `wow-emmy` evaluates them
++against the same populated semantic session that emits member-call facts, without
++another compilation, generated query Lua, callback wrappers, physical files or
++source execution. Roots come from Emmy's global-declaration index; member steps
++use its inferred owner type and member lookup. Local variables are not promoted
++to global handler names. Parser errors and unknown types remain explicit.
++
++## Results
++
++JSON `owner_analysis.xml_binding_report` contains ordered XML binding records and
++one shared `symbol_lookup.lookups` table. Each target retains the exact workspace,
++Main/Library role, logical path, content digest and UTF-8 byte span. XML records
++retain their own document digest, element identity and original attribute span.
++Targets from Library remain Library evidence, never first-party Main declarations.
++
++A unique result is `unique_analyzer_declaration`: an observation of a declaration
++in this exact analyzer snapshot, **not** proof of callability, execution, load-time
++availability or a fully constructed receiver. Distinct definitions remain
++ambiguous. Dotted lookup stops at an ambiguous/unknown prefix and records the
++number of components processed; prefix candidates are not final-member matches.
++`not_observed` means absent from this query result, not absent from the WoW client.
++
++For `method`, only the owner's explicitly declared mixins form queries such as
++`ExampleMixin.OnLoad`. A single observed target is `declared_mixin_candidates`,
++not an accepted runtime binding. Different targets remain ambiguous; no mixin,
++unknown receiver or unsupported expression is unresolved. XML inheritance is not
++flattened, mixin precedence is not invented, and `CreateFromMixins` is never run.
++Function and mixin spellings use a closed ASCII dotted-identifier dialect; calls,
++index expressions and `$parent` substitution are not evaluated.
++
++Unresolved/candidate records enter ordinary informational findings with fixed
++`xml.lua.*` codes and exact XML anchors. Successful declaration lookups remain in
++the detailed report. Text output includes reference/unresolved counts. Status does
++not run Emmy: it reports pending lookup only when XML actually contains these
++references. The `project.xml.lua_bindings.queried` capability denotes that queries
++ran; receiver capability remains partial for method references. File-only XML
++introduces no new pending binding component.
++
++## Identity and limits
++
++The adapter profile enters TOC configuration identity before project-generation
++derivation. The final report binds the generation, load plan, Main/Library analyzer
++identities, source health and lookup results; the analyzer snapshot binds that
++report. Inline-input/explicit-file E0 identity fields are unchanged when no TOC
++plan is present. Existing APIs remain available; the cancellable member-call
++entry point also accepts explicit symbol queries.
++
++At most 4,096 binding records/unique queries, 16,384 binding-to-query references,
++16 components/4,096 bytes per query, 256 candidates per lookup stage and 65,536
++retained target references are admitted. Query/source spellings in each owner
++report have a 16 MiB aggregate bound. Budget exhaustion rejects, not truncates.
++Cancellation is polled between files, syntax visits and query stages; one upstream
++semantic operation is not forcibly interruptible. No dependency/lockfile/fixture
++changes accompany this checkpoint.
++
++Implementation: `crates/wow-emmy/src/bindings.rs`,
++`crates/wow-project/src/xml_bindings.rs`, and
++`crates/wow-service/src/local/xml_bindings.rs`.
++Contract: `crates/wow-project/e2/XML_MODEL.md` (Scripts, Inheritance, Coverage).
++The existing pinned Emmy revision `aaaca68425d9362876228649b0b8d92f07654daa`
++supplies the global/declaration/member/type and SemanticModel APIs. Source example
++reviewed on 2026-09-23: Gethe `live` resolved to
++`09b9db7948abc9b9648dedaab51eb0cf3ee67b31`,
++`Interface/AddOns/Blizzard_SharedXML/Shared/Frame/EventFrame.lua` and its XML
++bindings. These are evidence identities, not permanent client targets. Full
++callback type analysis, inheritance materialization and client behavior are not
++claimed by local declaration lookup.
+diff --git a/apps/wow/src/output.rs b/apps/wow/src/output.rs
+index d5d0dc3c398be0b26737c1a5441f3566d2d0cfff..704e1c7a3c16332f1db290bf0e682925b4c61928 100644
+--- a/apps/wow/src/output.rs
++++ b/apps/wow/src/output.rs
+@@ -145,6 +145,10 @@ pub fn render(
+                 writeln!(text, "xml inline syntax: units={}, diagnostics={}, unresolved_scripts={}, identity={:?}",
+                     report.units().len(), report.diagnostic_count(), report.unresolved_scripts().len(), report.analysis_id()).map_err(|_| ())?;
+             }
++            if let Some(report) = check.owner_analysis().and_then(|a| a.xml_binding_report()) {
++                writeln!(text, "xml Lua bindings: references={}, unresolved_or_candidates={}, identity={:?}",
++                    report.bindings().len(), report.unresolved_count(), report.analysis_id()).map_err(|_| ())?;
++            }
+             for finding in check.raw_findings() {
+                 // Serialize the service finding unchanged; JSON string escaping also prevents terminal injection.
+                 let data = serde_json::to_string(finding).map_err(|_| ())?;
+diff --git a/crates/wow-emmy/src/lib.rs b/crates/wow-emmy/src/lib.rs
+index 8ba6fcbbaf92fe7872750b7af8e99b523165d535..ab9d7001f31ccc01c44084e7448b0aec809eb787 100644
+--- a/crates/wow-emmy/src/lib.rs
++++ b/crates/wow-emmy/src/lib.rs
+@@ -6,6 +6,7 @@
+ //! profile, or source generation implicitly. Lua semantic correctness is owned
+ //! by the single EmmyLua adapter; this crate does not contain a second parser.
+ 
++pub mod bindings;
+ pub mod compatibility;
+ pub mod flow;
+ pub mod references;
+diff --git a/crates/wow-emmy/src/references.rs b/crates/wow-emmy/src/references.rs
+index aac08f726985c3c385e06ec6407236bd6ae4bec0..7e52f01d17066aa2b805596f577f1d9734cce2be 100644
+--- a/crates/wow-emmy/src/references.rs
++++ b/crates/wow-emmy/src/references.rs
+@@ -41,6 +41,7 @@ pub enum EmmyMemberCallErrorCode {
+     CoordinateConversionFailed,
+     FactBudgetExceeded,
+     CanonicalizationFailed,
++    Cancelled,
+ }
+ 
+ /// One bounded direct-member analysis failure.
+@@ -52,7 +53,7 @@ pub struct EmmyMemberCallError {
+ }
+ 
+ impl EmmyMemberCallError {
+-    fn new(
++    pub(crate) fn new(
+         code: EmmyMemberCallErrorCode,
+         message: impl Into<Box<str>>,
+         path: Option<&str>,
+@@ -332,6 +333,20 @@ pub fn analyze_member_calls(
+     main: &LuaWorkspaceSnapshot,
+     libraries: &[&LuaWorkspaceSnapshot],
+ ) -> EmmyMemberCallResult<EmmyMemberCallReport> {
++    analyze_member_calls_with_bindings(main, libraries, &[], &std::sync::atomic::AtomicBool::new(false))
++        .map(|(report, _)| report)
++}
++
++/// Execute XML-independent symbol queries in the same Main/Library semantic
++/// session as member-call facts. No additional parser or synthetic query file.
++pub fn analyze_member_calls_with_bindings(
++    main: &LuaWorkspaceSnapshot,
++    libraries: &[&LuaWorkspaceSnapshot],
++    queries: &[String],
++    stop: &std::sync::atomic::AtomicBool,
++) -> EmmyMemberCallResult<(EmmyMemberCallReport, Option<crate::bindings::SymbolLookupReport>)> {
++    crate::bindings::checkpoint(stop)?;
++    crate::bindings::validate_queries(queries)?;
+     validate_compiled_backend(main)?;
+     if matches!(main.universe(), crate::LuaWorkspaceUniverse::BlizzardUi) {
+         return Err(EmmyMemberCallError::new(
+@@ -350,6 +365,7 @@ pub fn analyze_member_calls(
+     let mut identities = BTreeSet::new();
+     identities.insert(main.snapshot_id());
+     for library in &ordered_libraries {
++        crate::bindings::checkpoint(stop)?;
+         validate_compiled_backend(library)?;
+         if library.backend() != main.backend() {
+             return Err(EmmyMemberCallError::new(
+@@ -414,6 +430,7 @@ pub fn analyze_member_calls(
+ 
+     for (snapshot, root) in &library_roots {
+         for file in snapshot.files() {
++            crate::bindings::checkpoint(stop)?;
+             let model = semantic_model(&analysis, root, file)?;
+             if model
+                 .get_file_parse_error()
+@@ -432,6 +449,7 @@ pub fn analyze_member_calls(
+     let mut references = Vec::new();
+     let mut calls = Vec::new();
+     for file in main.files() {
++        crate::bindings::checkpoint(stop)?;
+         let model = semantic_model(&analysis, &main_root, file)?;
+         let parse_errors = model.get_file_parse_error().unwrap_or_default();
+         if !parse_errors.is_empty() {
+@@ -452,6 +470,7 @@ pub fn analyze_member_calls(
+         let call_start = calls.len();
+         let root = model.get_root().clone();
+         for node in root.descendants::<LuaAst>() {
++            crate::bindings::checkpoint(stop)?;
+             let LuaAst::LuaCallExpr(call) = node else {
+                 continue;
+             };
+@@ -590,7 +609,7 @@ struct ReportIdentity<'a> {
+         calls: &calls,
+     };
+     let analysis_id = canonical_id("emmy-member-calls:sha256:", &identity)?;
+-    Ok(EmmyMemberCallReport {
++    let report = EmmyMemberCallReport {
+         schema: REPORT_SCHEMA,
+         analysis_id: analysis_id.into_boxed_str(),
+         upstream_revision: EMMYLUA_REVISION,
+@@ -601,10 +620,14 @@ struct ReportIdentity<'a> {
+         files,
+         references,
+         calls,
+-    })
++    };
++    let lookups = if queries.is_empty() { None } else {
++        Some(crate::bindings::resolve(&analysis, main, &main_root, &library_roots, queries, stop)?)
++    };
++    Ok((report, lookups))
+ }
+ 
+-fn semantic_model<'a>(
++pub(crate) fn semantic_model<'a>(
+     analysis: &'a EmmyLuaAnalysis,
+     root: &Path,
+     file: &LuaWorkspaceFile,
+@@ -746,7 +769,7 @@ struct Identity<'a> {
+     )
+ }
+ 
+-fn canonical_id(prefix: &str, value: &impl Serialize) -> EmmyMemberCallResult<String> {
++pub(crate) fn canonical_id(prefix: &str, value: &impl Serialize) -> EmmyMemberCallResult<String> {
+     let bytes = canonical_json_bytes(value).map_err(|_| {
+         EmmyMemberCallError::new(
+             EmmyMemberCallErrorCode::CanonicalizationFailed,
+@@ -757,7 +780,7 @@ fn canonical_id(prefix: &str, value: &impl Serialize) -> EmmyMemberCallResult<St
+     Ok(format!("{prefix}{:x}", Sha256::digest(bytes)))
+ }
+ 
+-fn ast_span(file: &LuaWorkspaceFile, range: rowan::TextRange) -> EmmyMemberCallResult<SourceSpan> {
++pub(crate) fn ast_span(file: &LuaWorkspaceFile, range: rowan::TextRange) -> EmmyMemberCallResult<SourceSpan> {
+     let start = usize::from(range.start());
+     let end = usize::from(range.end());
+     if start > end
+diff --git a/crates/wow-project/src/analyzer.rs b/crates/wow-project/src/analyzer.rs
+index fa310b221dc327f8a01ff008cc5c118890a0bbe7..aee16eb3fbaa0d97b130c24e9104e584fcb70a37 100644
+--- a/crates/wow-project/src/analyzer.rs
++++ b/crates/wow-project/src/analyzer.rs
+@@ -6,7 +6,7 @@
+ use wow_emmy::{
+     EmmyFactFileStatus, EmmyLocalFlowFileStatus, EmmyLocalFlowReport, EmmyMemberCallReport,
+     EmmySyntaxReport, LuaWorkspaceLimits, LuaWorkspaceSnapshot, LuaWorkspaceUniverse,
+-    analyze_local_flow, analyze_member_calls, analyze_syntax,
++    analyze_local_flow, analyze_syntax,
+ };
+ 
+ use crate::identity::{canonical_id, parse_source_digest};
+@@ -87,6 +87,7 @@ pub struct ProjectAnalyzerBinding {
+     member_call_report: EmmyMemberCallReport,
+     local_flow_report: EmmyLocalFlowReport,
+     xml_lua_analysis: Option<crate::xml_lua::ProjectXmlLuaAnalysis>,
++    xml_bindings: Option<crate::xml_bindings::ProjectXmlLuaBindings>,
+     capability_records: Vec<ProjectAnalyzerCapabilityRecord>,
+ }
+ 
+@@ -135,6 +136,11 @@ pub fn xml_lua_analysis(&self) -> Option<&crate::xml_lua::ProjectXmlLuaAnalysis>
+         self.xml_lua_analysis.as_ref()
+     }
+ 
++    #[must_use]
++    pub fn xml_bindings(&self) -> Option<&crate::xml_bindings::ProjectXmlLuaBindings> {
++        self.xml_bindings.as_ref()
++    }
++
+     #[must_use]
+     pub fn capability_records(&self) -> &[ProjectAnalyzerCapabilityRecord] {
+         &self.capability_records
+@@ -253,15 +259,26 @@ pub(crate) fn build_analyzer_binding(
+     })?;
+     checkpoint(stop)?;
+     let library_refs = ordered_libraries.iter().collect::<Vec<_>>();
+-    let member_call_report =
+-        analyze_member_calls(&main_workspace, &library_refs).map_err(|source| {
+-            ProjectError::new(
+-                ProjectErrorCode::AnalyzerFailed,
+-                ProjectPhase::Analyzer,
+-                format!("member-call analysis failed: {source}"),
+-            )
++    let pending_bindings = configuration.load_plan()
++        .map(|plan| crate::xml_bindings::prepare(plan, stop)).transpose()?;
++    let queries = pending_bindings.as_ref().map(|p| p.queries()).unwrap_or_default();
++    let (member_call_report, symbol_lookup) = wow_emmy::references::analyze_member_calls_with_bindings(
++        &main_workspace, &library_refs, queries, stop,
++    ).map_err(|source| {
++        let code = match source.code() {
++            wow_emmy::EmmyMemberCallErrorCode::Cancelled => ProjectErrorCode::AnalysisCancelled,
++            wow_emmy::EmmyMemberCallErrorCode::FactBudgetExceeded => ProjectErrorCode::SourceBudgetExceeded,
++            _ => ProjectErrorCode::AnalyzerFailed,
++        };
++        ProjectError::new(code, ProjectPhase::Analyzer, "member and symbol lookup analysis failed")
+             .with_candidate_generation(generation.project_generation())
+-        })?;
++    })?;
++    let xml_bindings = match (pending_bindings, configuration.load_plan()) {
++        (Some(pending), Some(plan)) => Some(crate::xml_bindings::finish(
++            pending, symbol_lookup, generation.project_generation(), plan, stop,
++        )?),
++        _ => None,
++    };
+     checkpoint(stop)?;
+     let local_flow_report =
+         analyze_local_flow(&main_workspace, &library_refs).map_err(|source| {
+@@ -334,6 +351,8 @@ struct Identity<'a> {
+         local_flow_analysis_id: &'a str,
+         #[serde(skip_serializing_if = "Option::is_none")]
+         xml_lua_analysis_id: Option<&'a str>,
++        #[serde(skip_serializing_if = "Option::is_none")]
++        xml_binding_analysis_id: Option<&'a str>,
+         file_manifest_digest: ContentDigest<CanonicalResult>,
+         capability_records: &'a [ProjectAnalyzerCapabilityRecord],
+     }
+@@ -356,6 +375,7 @@ struct Identity<'a> {
+             member_call_analysis_id: member_call_report.analysis_id(),
+             local_flow_analysis_id: local_flow_report.analysis_id(),
+             xml_lua_analysis_id: xml_lua_analysis.as_ref().map(|report| report.analysis_id()),
++            xml_binding_analysis_id: xml_bindings.as_ref().map(|report| report.analysis_id()),
+             file_manifest_digest: inventory.manifest_digest(),
+             capability_records: &capability_records,
+         },
+@@ -373,6 +393,7 @@ struct Identity<'a> {
+         member_call_report,
+         local_flow_report,
+         xml_lua_analysis,
++        xml_bindings,
+         capability_records,
+     })
+ }
+diff --git a/crates/wow-project/src/configuration.rs b/crates/wow-project/src/configuration.rs
+index c84de4c9e29633a8118ee7d589df8db8f5222fd0..97440c17928152e79351bdd177a5b9de20fd25f4 100644
+--- a/crates/wow-project/src/configuration.rs
++++ b/crates/wow-project/src/configuration.rs
+@@ -684,6 +684,8 @@ struct Identity<'a> {
+         load_plan_digest: Option<ContentDigest<CanonicalResult>>,
+         #[serde(skip_serializing_if = "Option::is_none")]
+         xml_lua_adapter: Option<&'static str>,
++        #[serde(skip_serializing_if = "Option::is_none")]
++        xml_binding_adapter: Option<&'static str>,
+     }
+     canonical_digest(
+         "wow-project/configuration/e0-d/1",
+@@ -701,6 +703,7 @@ struct Identity<'a> {
+             budget_policy,
+             load_plan_digest,
+             xml_lua_adapter: load_plan_digest.map(|_| crate::xml_lua::XML_LUA_ANALYSIS_PROFILE),
++            xml_binding_adapter: load_plan_digest.map(|_| crate::xml_bindings::XML_LUA_BINDING_PROFILE),
+         },
+         ProjectPhase::Configuration,
+     )
+diff --git a/crates/wow-project/src/lib.rs b/crates/wow-project/src/lib.rs
+index 442e9151112e9b362fba91ea270d573adadb95b7..fc682751def5ce352d794938f67f229e497131c3 100644
+--- a/crates/wow-project/src/lib.rs
++++ b/crates/wow-project/src/lib.rs
+@@ -22,6 +22,7 @@
+ mod snapshot;
+ mod update;
+ pub mod xml_lua;
++pub mod xml_bindings;
+ 
+ pub use analyzer::{
+     ProjectAnalyzerBinding, ProjectAnalyzerCapabilityRecord, ProjectAnalyzerCapabilityScope,
+diff --git a/crates/wow-service/src/local/mod.rs b/crates/wow-service/src/local/mod.rs
+index 32c5807ab959215fc059ed2b2267f59362db5757..af88a1b0af236d55a33f54a66188f1490531ffaf 100644
+--- a/crates/wow-service/src/local/mod.rs
++++ b/crates/wow-service/src/local/mod.rs
+@@ -6,6 +6,7 @@
+ mod projection;
+ mod response;
+ mod xml_lua;
++mod xml_bindings;
+ mod xml_references;
+ 
+ pub use backend::LocalProjectBackend;
+diff --git a/crates/wow-service/src/local/projection.rs b/crates/wow-service/src/local/projection.rs
+index 6d473e4b77fb2688a20c07449e76520e8f2081cc..b76332b23f6f4ac36db7e48fe40e8b07a643d4b6 100644
+--- a/crates/wow-service/src/local/projection.rs
++++ b/crates/wow-service/src/local/projection.rs
+@@ -39,9 +39,15 @@ pub struct OwnerAnalysis {
+     load_plan: Option<wow_project::load::ProjectLoadPlan>,
+     #[serde(skip_serializing_if = "Option::is_none")]
+     xml_lua_report: Option<wow_project::xml_lua::ProjectXmlLuaAnalysis>,
++    #[serde(skip_serializing_if = "Option::is_none")]
++    xml_binding_report: Option<wow_project::xml_bindings::ProjectXmlLuaBindings>,
+ }
+ 
+ impl OwnerAnalysis {
++    #[must_use]
++    pub fn xml_binding_report(&self) -> Option<&wow_project::xml_bindings::ProjectXmlLuaBindings> {
++        self.xml_binding_report.as_ref()
++    }
+     #[must_use]
+     pub fn xml_lua_report(&self) -> Option<&wow_project::xml_lua::ProjectXmlLuaAnalysis> {
+         self.xml_lua_report.as_ref()
+@@ -205,6 +211,20 @@ pub(super) fn components(
+                     .with_capability("project.xml.inline_lua.analyzed", CapabilityState::Partial)?;
+             }
+             components.push(xml);
++            if wow_project::xml_bindings::has_bindings(plan) {
++                let bindings = project.and_then(|view| view.snapshot().analyzer_binding().xml_bindings());
++                let mut component = ComponentSnapshot::new(
++                    "wow-project-xml-lua-bindings", "1", bindings.map(|r| r.analysis_id().to_owned())
++                        .unwrap_or_else(|| plan.digest().to_string()),
++                    health(bindings.is_none_or(|r| r.unresolved_count() > 0)),
++                )?.with_capability("project.xml.lua_bindings.queried", if bindings.is_some() {
++                    CapabilityState::Available
++                } else { CapabilityState::Partial })?;
++                if wow_project::xml_bindings::has_method_bindings(plan) {
++                    component = component.with_capability("project.xml.lua_bindings.receiver", CapabilityState::Partial)?;
++                }
++                components.push(component);
++            }
+         }
+     }
+     Ok(components)
+@@ -225,6 +245,7 @@ pub(super) fn check_context(
+     let resolved = super::xml_lua::resolve_scope(project, scope)?;
+     let files = resolved.physical;
+     let xml_report = project.snapshot().analyzer_binding().xml_lua_analysis();
++    let xml_bindings = project.snapshot().analyzer_binding().xml_bindings();
+     let paths: BTreeSet<&str> = files
+         .iter()
+         .map(|file| file.relative_path().as_str())
+@@ -262,6 +283,7 @@ pub(super) fn check_context(
+     }
+     super::xml_lua::append_findings(xml_report, &resolved.xml_documents, &mut generic, stop)?;
+     super::xml_references::append_findings(load_plan, &resolved.xml_documents, &mut generic, stop)?;
++    super::xml_bindings::append_findings(xml_bindings, load_plan, &resolved.xml_documents, &mut generic, stop)?;
+     let rules: Vec<Box<str>> = if selected.is_empty() {
+         registry
+             .descriptors()
+@@ -347,6 +369,7 @@ pub(super) fn check_context(
+         runtime_status: "not_evaluated",
+         load_plan: load_plan.cloned(),
+         xml_lua_report: xml_report.cloned(),
++        xml_binding_report: xml_bindings.cloned(),
+     };
+     Ok(CheckContext::new(
+         identity,
+diff --git a/docs/IMPLEMENTATION_STATUS.md b/docs/IMPLEMENTATION_STATUS.md
+index 07bd877d3184f010d221be57d02d0d865e79f488..df7dce247aa6183d2f43eb61ceaa26d1f194a6bf 100644
+--- a/docs/IMPLEMENTATION_STATUS.md
++++ b/docs/IMPLEMENTATION_STATUS.md
+@@ -154,8 +154,8 @@ ## Explicit disk inputs
+ see [TOC_INPUT.md](../apps/wow/TOC_INPUT.md). There is no source scan, live-rule expansion, full E2-C or R0 acceptance.
+ XML now has a source-backed syntax index and extracted inline units; check parses
+ those units with the pinned EmmyLua grammar and returns mapped XML diagnostics.
+-See [XML_ANALYSIS.md](../apps/wow/XML_ANALYSIS.md). Virtual-unit semantics and XML
+-inheritance/reference resolution remain unimplemented.
++See [XML_ANALYSIS.md](../apps/wow/XML_ANALYSIS.md). Virtual-unit semantics remain partial. Local XML parent/inheritance references
++are linked as described below, without inherited receiver materialization.
+ 
+ Selected-TOC acquisition now preflights package-wide target filters before any
+ Lua/XML descendant read. Included declarations enter the v3 load receipt; excluded
+@@ -169,3 +169,12 @@ ## XML local references
+ inheritance cycle components. Link issues enter ordinary XML-scoped findings.
+ See [XML_REFERENCES.md](../apps/wow/XML_REFERENCES.md). This is local source linking,
+ not XSD object validation, Lua binding, inheritance flattening or runtime acceptance.
++
++## XML to Lua declarations
++
++Selected-TOC checks query `mixin`, `function` and direct-mixin `method` candidates
++through the existing Emmy member-call session. Exact Main/Library declaration
++locations and unresolved/ambiguous results enter owner receipts and ordinary
++XML-scoped findings. See [XML_BINDINGS.md](../apps/wow/XML_BINDINGS.md).
++No new compiler session, synthetic source or callable/runtime proof is introduced;
++receiver construction and inherited method precedence remain partial.

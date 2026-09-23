@@ -1,0 +1,114 @@
+name: XML Lua bindings build
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.ci/xml-bindings/**'
+      - '.github/workflows/xml-bindings-build.yml'
+permissions:
+  contents: read
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Admit exact functional source on its reviewed base
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git config core.autocrlf false
+          mkdir -p "$RUNNER_TEMP/xml-bindings" "$RUNNER_TEMP/xml-bindings-input"
+          git rev-parse HEAD > "$RUNNER_TEMP/xml-bindings/BASE_SHA"
+          test "$(git hash-object .ci/xml-bindings/emmy.rs)" = e3a3bc80ab7171d7b89886e3808c35e764513960
+          test "$(git hash-object .ci/xml-bindings/project.rs)" = 731291336841f66f48845ea70f035a609d7c1eaa
+          test "$(git hash-object .ci/xml-bindings/service.rs)" = ca5dfebd11c4ea2c0945ef33b903a4eef348f64b
+          test "$(git hash-object .ci/xml-bindings/integration.patch)" = 1cd2da629cc132df853e754c368361cf3a7cc487
+          cp .ci/xml-bindings/* "$RUNNER_TEMP/xml-bindings-input/"
+          git rm -r -- .ci/xml-bindings .github/workflows/xml-bindings-build.yml
+          test "$(git write-tree)" = cae17aa8542024201f4514f7b7209e41a7c8a844
+          git apply --index "$RUNNER_TEMP/xml-bindings-input/integration.patch"
+          cp "$RUNNER_TEMP/xml-bindings-input/emmy.rs" crates/wow-emmy/src/bindings.rs
+          cp "$RUNNER_TEMP/xml-bindings-input/project.rs" crates/wow-project/src/xml_bindings.rs
+          cp "$RUNNER_TEMP/xml-bindings-input/service.rs" crates/wow-service/src/local/xml_bindings.rs
+          git add crates/wow-emmy/src/bindings.rs crates/wow-project/src/xml_bindings.rs crates/wow-service/src/local/xml_bindings.rs
+      - name: Format the reviewed implementation
+        run: |
+          set -euo pipefail
+          rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+          rustc +stable -Vv > "$RUNNER_TEMP/xml-bindings/RUST_VERSION"
+          cargo +stable fmt --all
+          git add -u
+          git diff --cached --check
+          git write-tree > "$RUNNER_TEMP/xml-bindings/TREE_SHA"
+      - name: Build the application with the unchanged lockfile
+        run: |
+          set -euo pipefail
+          cargo +stable build --locked -p wow-cli --bin wow 2>&1 | tee "$RUNNER_TEMP/xml-bindings/build.log"
+      - name: Check the implemented owners
+        run: |
+          set -euo pipefail
+          cargo +stable clippy --locked -p wow-emmy -p wow-project -p wow-service -p wow-cli --lib --bins -- -D warnings 2>&1 | tee "$RUNNER_TEMP/xml-bindings/clippy.log"
+          cargo +stable xtask check 2>&1 | tee "$RUNNER_TEMP/xml-bindings/policy.log"
+          cargo +stable fmt --all --check
+          git diff --exit-code
+          test "$(git write-tree)" = "$(cat "$RUNNER_TEMP/xml-bindings/TREE_SHA")"
+      - name: Retain the exact compiled tree and complete source
+        run: |
+          set -euo pipefail
+          git diff --cached --binary --full-index HEAD > "$RUNNER_TEMP/xml-bindings/compiled.patch"
+          git archive --format=tar "$(git write-tree)" > "$RUNNER_TEMP/xml-bindings/compiled-source.tar"
+          git ls-files -s > "$RUNNER_TEMP/xml-bindings/FILES_INDEX"
+          (cd "$RUNNER_TEMP/xml-bindings" && sha256sum compiled.patch compiled-source.tar > SHA256SUMS)
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: xml-bindings-${{ matrix.os }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/xml-bindings/
+          retention-days: 3
+          if-no-files-found: error
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: xml-bindings-ubuntu-latest-${{ github.run_id }}
+          path: ${{ runner.temp }}/xml-linux
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: xml-bindings-windows-latest-${{ github.run_id }}
+          path: ${{ runner.temp }}/xml-windows
+      - name: Publish identical compiled source to unchanged main
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(cat "$RUNNER_TEMP/xml-linux/BASE_SHA")" = "$GITHUB_SHA"
+          test "$(cat "$RUNNER_TEMP/xml-windows/BASE_SHA")" = "$GITHUB_SHA"
+          cmp "$RUNNER_TEMP/xml-linux/TREE_SHA" "$RUNNER_TEMP/xml-windows/TREE_SHA"
+          (cd "$RUNNER_TEMP/xml-linux" && sha256sum -c SHA256SUMS)
+          (cd "$RUNNER_TEMP/xml-windows" && sha256sum -c SHA256SUMS)
+          git apply --index "$RUNNER_TEMP/xml-linux/compiled.patch"
+          test "$(git write-tree)" = "$(cat "$RUNNER_TEMP/xml-linux/TREE_SHA")"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$GITHUB_SHA"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat(project): link XML Lua references through the existing Emmy session' -m "Query mixin and function declarations and direct-mixin method candidates in the existing Main/Library member-analysis session. Retain exact source targets, ambiguity and unknown scope, without synthetic Lua or runtime receiver claims. Integrate ordinary XML-scoped findings, owner reports and snapshot/configuration identities. Linux/Windows CLI builds, selected-owner Clippy, formatting and repository policy passed on this exact source tree in run $GITHUB_RUN_ID. No dependencies, lockfile, tests or fixtures changed. Full inherited callback semantics and real-addon/client behavior remain unverified. Temporary build inputs removed."
+          git push origin HEAD:main
