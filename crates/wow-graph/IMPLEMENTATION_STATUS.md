@@ -48,7 +48,7 @@ The partition acceptance tests cover atomic multi-partition publication, combine
 ## Remaining E2-A scope
 
 - Cross-replacement dependency scheduling and richer assertion/conflict/attribute policies.
-- Axis/subgraph/explanation queries and full normative fixture closure.
+- Axis queries, full conflict/derivation explanations and normative fixture closure.
 - Cross-store source/evidence/coverage resolution, beyond preserved and validated IDs.
 - Inactive durable generation, post-open golden validation and coherent ProjectPublicationSet activation through E2-D.
 - Multi-process reader leases, crash recovery and durable last-known-good policy for partition snapshots.
@@ -67,3 +67,15 @@ discovery witnesses, explicit coverage and node/edge/depth/scan/expansion/byte
 bounds. See [SUBGRAPH_USAGE.md](SUBGRAPH_USAGE.md). No graph mutation, new
 assertion, continuation cursor, axis or service/CLI route is introduced.
 Full producer/evidence explanation and package acceptance remain separate.
+
+
+## Retained-support explanations
+
+`GraphExplainQuery` explains an exact materialized entity or relation through its
+validated `GraphPartitionSnapshot`: original foundation and producer proposals,
+accepted records, registry definitions, confidence and evidence/source/coverage
+handles. Relation coverage retains every partition, including missing records.
+Canonical support/byte limits and cancellation are explicit. See
+[EXPLANATION_USAGE.md](EXPLANATION_USAGE.md). This is retained-support enumeration,
+not external evidence dereferencing, a complete conflict/derivation model, or a
+service/CLI route. Existing identities and package-acceptance gates are unchanged.

@@ -3,6 +3,7 @@
 //! Immutable exact-generation graph records and bounded evidence-aware queries.
 
 mod error;
+mod explain;
 mod identity;
 mod model;
 mod partition;
@@ -53,4 +54,11 @@ pub use registry::{
 pub use subgraph::{
     GRAPH_SUBGRAPH_QUERY_SCHEMA, GraphSubgraphConfidence, GraphSubgraphLimits, GraphSubgraphNode,
     GraphSubgraphQuery, GraphSubgraphResult, GraphSubgraphTruncation,
+};
+
+pub use explain::{
+    GRAPH_EXPLANATION_SCHEMA, GraphAssertionSupport, GraphCoverageObservation, GraphCoverageOrigin,
+    GraphExplainLimits, GraphExplainQuery, GraphExplainSubject, GraphExplainedRecord,
+    GraphExplanation, GraphExplanationBoundary, GraphExplanationCoverage, GraphExplanationRegistry,
+    GraphExplanationTruncation, GraphProducerSupportOrigin,
 };

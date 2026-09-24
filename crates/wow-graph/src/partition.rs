@@ -173,6 +173,17 @@ impl GraphPartitionSnapshot {
         &self.snapshot
     }
 
+    /// Registry used to admit the retained producer batches.
+    #[must_use]
+    pub fn registry(&self) -> &GraphRegistryBundle {
+        &self.registry
+    }
+
+    #[must_use]
+    pub const fn source_context_id(&self) -> GenerationContextId {
+        self.source_context_id
+    }
+
     #[must_use]
     pub fn foundation(&self) -> &GraphSnapshot {
         &self.foundation

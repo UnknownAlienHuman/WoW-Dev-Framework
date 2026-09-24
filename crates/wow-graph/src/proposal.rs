@@ -128,6 +128,11 @@ impl GraphEntityProposal {
     pub fn proposal_id(&self) -> &str {
         &self.proposal_id
     }
+
+    #[must_use]
+    pub fn entity_kind_id(&self) -> &str {
+        &self.entity_kind_id
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -241,6 +246,11 @@ impl GraphRelationProposal {
     #[must_use]
     pub fn proposal_id(&self) -> &str {
         &self.proposal_id
+    }
+
+    #[must_use]
+    pub fn relation_kind_id(&self) -> &str {
+        &self.relation_kind_id
     }
 }
 
@@ -394,6 +404,23 @@ impl GraphProposalBatch {
     #[must_use]
     pub fn producer_partition_id(&self) -> &str {
         &self.producer_partition_id
+    }
+
+    /// Exact raw proposal, including confidence and its original support handles.
+    #[must_use]
+    pub fn entity_proposal(&self, proposal_id: &str) -> Option<&GraphEntityProposal> {
+        self.entity_proposals
+            .binary_search_by(|item| item.proposal_id().cmp(proposal_id))
+            .ok()
+            .map(|index| &self.entity_proposals[index])
+    }
+
+    #[must_use]
+    pub fn relation_proposal(&self, proposal_id: &str) -> Option<&GraphRelationProposal> {
+        self.relation_proposals
+            .binary_search_by(|item| item.proposal_id().cmp(proposal_id))
+            .ok()
+            .map(|index| &self.relation_proposals[index])
     }
 }
 

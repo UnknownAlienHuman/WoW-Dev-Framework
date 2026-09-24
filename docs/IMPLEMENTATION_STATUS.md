@@ -187,4 +187,6 @@ The graph owner now exposes `GraphSubgraphQuery` for exact-snapshot, multi-root
 breadth-first neighborhoods with original evidence and explicit coverage and
 truncation. See [SUBGRAPH_USAGE.md](../crates/wow-graph/SUBGRAPH_USAGE.md).
 This completes the bounded subgraph code slice of E2-01, not its full acceptance.
-Axes, assertion explanations and service/CLI graph routing remain open.
+Exact retained-support explanations now use `GraphExplainQuery`; see
+[EXPLANATION_USAGE.md](../crates/wow-graph/EXPLANATION_USAGE.md). Axes, complete
+conflict/derivation/evidence resolution and service/CLI graph routing remain open.

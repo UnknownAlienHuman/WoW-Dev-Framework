@@ -558,6 +558,14 @@ impl GraphSnapshot {
     }
 
     #[must_use]
+    pub fn edge(&self, edge_id: &GraphEdgeId) -> Option<&GraphEdge> {
+        self.edges
+            .binary_search_by(|edge| edge.edge_id().cmp(edge_id))
+            .ok()
+            .map(|index| &self.edges[index])
+    }
+
+    #[must_use]
     pub(crate) fn coverage_for(&self, relation: GraphRelationKind) -> Option<&GraphCoverageRecord> {
         self.coverage
             .binary_search_by_key(&relation, GraphCoverageRecord::relation)
