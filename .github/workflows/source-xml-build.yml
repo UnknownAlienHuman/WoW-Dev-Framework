@@ -1,0 +1,107 @@
+name: XML source graph build
+on:
+  push:
+    branches: [main]
+    paths: ['.ci/source-xml/**', '.github/workflows/source-xml-build.yml']
+permissions:
+  contents: read
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Admit exact reviewed source
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git config core.autocrlf false
+          mkdir -p "$RUNNER_TEMP/source-xml"
+          git rev-parse HEAD > "$RUNNER_TEMP/source-xml/BASE_SHA"
+          test "$(git hash-object .ci/source-xml/input.b64)" = 4b6696439deec324db042cad537e49ff40768438
+          base64 --decode .ci/source-xml/input.b64 | gzip -d > "$RUNNER_TEMP/source-xml/input.patch"
+          echo '9a0a9b52bf1f4682cd0a059fbd3e738c6f407ea1223492474355a2d20d6d5def  input.patch' > "$RUNNER_TEMP/source-xml/INPUT_SHA256"
+          (cd "$RUNNER_TEMP/source-xml" && sha256sum -c INPUT_SHA256)
+          git rm -r -- .ci/source-xml .github/workflows/source-xml-build.yml
+          test "$(git write-tree)" = a7387d63dc4c4d73a284a72ed2c99dcfaba48841
+          git apply --index "$RUNNER_TEMP/source-xml/input.patch"
+          test "$(git write-tree)" = 6b846a73f9e22009ebd277143e66673d33736ff7
+      - name: Format reviewed source
+        run: |
+          set -euo pipefail
+          rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+          rustc +stable -Vv > "$RUNNER_TEMP/source-xml/RUST_VERSION"
+          cargo +stable fmt --all
+          git add -u
+          git diff --cached --check
+          git write-tree > "$RUNNER_TEMP/source-xml/TREE_SHA"
+      - name: Build CLI
+        run: |
+          set -euo pipefail
+          cargo +stable build --locked -p wow-cli --bin wow 2>&1 | tee "$RUNNER_TEMP/source-xml/build.log"
+      - name: Clippy changed owners
+        run: |
+          set -euo pipefail
+          cargo +stable clippy --locked -p wow-project -p wow-service -p wow-cli -- -D warnings 2>&1 | tee "$RUNNER_TEMP/source-xml/clippy.log"
+          cargo +stable xtask check 2>&1 | tee "$RUNNER_TEMP/source-xml/policy.log"
+      - name: Retain compiled source
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          test "$(git write-tree)" = "$(cat "$RUNNER_TEMP/source-xml/TREE_SHA")"
+          git diff --cached --binary > "$RUNNER_TEMP/source-xml/compiled.patch"
+          git archive "$(git write-tree)" > "$RUNNER_TEMP/source-xml/compiled-source.tar"
+          (cd "$RUNNER_TEMP/source-xml" && sha256sum compiled.patch compiled-source.tar > SHA256SUMS)
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: source-xml-${{ matrix.os }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/source-xml/
+          retention-days: 3
+          if-no-files-found: error
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: source-xml-ubuntu-latest-${{ github.run_id }}
+          path: ${{ runner.temp }}/linux
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: source-xml-windows-latest-${{ github.run_id }}
+          path: ${{ runner.temp }}/windows
+      - name: Publish identical compiled sources to unchanged main
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          for platform in linux windows; do
+            test "$(cat "$RUNNER_TEMP/$platform/BASE_SHA")" = "$GITHUB_SHA"
+            (cd "$RUNNER_TEMP/$platform" && sha256sum -c SHA256SUMS)
+          done
+          cmp "$RUNNER_TEMP/linux/TREE_SHA" "$RUNNER_TEMP/windows/TREE_SHA"
+          cmp "$RUNNER_TEMP/linux/compiled.patch" "$RUNNER_TEMP/windows/compiled.patch"
+          git apply --index "$RUNNER_TEMP/linux/compiled.patch"
+          test "$(git write-tree)" = "$(cat "$RUNNER_TEMP/linux/TREE_SHA")"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$GITHUB_SHA"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat(project): export XML declaration ownership and inheritance graphs' -m "Extend source graph build with exact XML source occurrence nodes, document ownership, and admitted local template inheritance. Reuse retained indexes; keep unresolved, invalid, cyclic and load-order-blocked reference receipts without invented edges or runtime authority. Retain original source handles and both ends of inheritance evidence. Export materialized XML node mappings; version source projection, registry and graph-build envelopes without changing existing graph-read or E0 identities. CLI build and changed-owner Clippy passed on Linux and Windows for this exact tree in run $GITHUB_RUN_ID. No tests, dependencies or lockfile changes. Temporary build inputs removed."
+          git push origin HEAD:main
