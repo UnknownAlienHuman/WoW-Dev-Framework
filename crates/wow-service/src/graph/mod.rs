@@ -14,7 +14,8 @@ use wow_graph::GraphPartitionSnapshot;
 // Applications depend on this seam, never directly on the graph implementation.
 pub use wow_graph::{
     GraphAxis, GraphAxisProfile, GraphAxisQuery, GraphAxisTraversal, GraphDirection, GraphEdgeId,
-    GraphErrorCode, GraphExplainLimits, GraphExplainQuery, GraphExplainSubject, GraphGenerationId,
+    GraphEntityQuery, GraphErrorCode, GraphExplainLimits, GraphExplainQuery, GraphExplainSubject,
+    GraphGenerationId, GraphNeighborQuery, GraphNeighborReadLimits, GraphNeighborReadQuery,
     GraphNodeId, GraphPathConfidence, GraphPathCursor, GraphPathLimits, GraphPathQuery,
     GraphQueryState, GraphRelationDirection, GraphRelationKind, GraphSnapshotId,
     GraphSubgraphLimits, GraphSubgraphQuery, GraphUniverseId,
@@ -34,6 +35,8 @@ pub enum GraphReadOperation {
     Axis,
     Explain,
     Path,
+    Entity,
+    Neighbors,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -48,6 +51,8 @@ pub enum GraphReadQuery {
     Axis(GraphAxisQuery),
     Explain(GraphExplainQuery),
     Path(GraphPathReadQuery),
+    Entity(GraphEntityQuery),
+    Neighbors(GraphNeighborReadQuery),
 }
 impl GraphReadQuery {
     #[must_use]
@@ -57,6 +62,8 @@ impl GraphReadQuery {
             Self::Axis(_) => GraphReadOperation::Axis,
             Self::Explain(_) => GraphReadOperation::Explain,
             Self::Path(_) => GraphReadOperation::Path,
+            Self::Entity(_) => GraphReadOperation::Entity,
+            Self::Neighbors(_) => GraphReadOperation::Neighbors,
         }
     }
     #[must_use]
@@ -66,6 +73,8 @@ impl GraphReadQuery {
             Self::Axis(query) => query.snapshot_id(),
             Self::Explain(query) => query.snapshot_id(),
             Self::Path(request) => request.query().snapshot_id(),
+            Self::Entity(query) => query.snapshot_id(),
+            Self::Neighbors(query) => query.snapshot_id(),
         }
     }
 }
@@ -368,18 +377,33 @@ fn run(
             ServiceErrorCode::IdentityMismatch,
         ));
     }
-    // Subgraph/path APIs validate only the materialized graph. Also validate
+    // Subgraph/path/direct APIs validate only the materialized graph. Also validate
     // its complete imported partition owner, including every producer report.
     // Axis/explain already perform that full validation in their execute.
     if matches!(
         &request.query,
-        GraphReadQuery::Subgraph(_) | GraphReadQuery::Path(_)
+        GraphReadQuery::Subgraph(_)
+            | GraphReadQuery::Path(_)
+            | GraphReadQuery::Entity(_)
+            | GraphReadQuery::Neighbors(_)
     ) {
         owner
             .validate(stop)
             .map_err(|e| GraphReadFailure::owner(GraphReadStage::Snapshot, e))?;
     }
     let (status, payload) = match &request.query {
+        GraphReadQuery::Entity(query) => {
+            let result = query
+                .execute(owner.snapshot(), stop)
+                .map_err(|e| GraphReadFailure::owner(GraphReadStage::Query, e))?;
+            (result.state().into(), value(&result)?)
+        }
+        GraphReadQuery::Neighbors(query) => {
+            let result = query
+                .execute(owner.snapshot(), stop)
+                .map_err(|e| GraphReadFailure::owner(GraphReadStage::Query, e))?;
+            (result.state().into(), value(&result)?)
+        }
         GraphReadQuery::Subgraph(query) => {
             let result = query
                 .execute(owner.snapshot(), stop)

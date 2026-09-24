@@ -194,7 +194,7 @@ resolution and coherent ProjectStore acquisition remain open.
 
 ## Retained graph CLI
 
-`wow graph subgraph|axis|explain` now routes explicit retained partition-snapshot
+`wow graph entity|neighbors|subgraph|axis|explain|path` routes explicit retained partition-snapshot
 and query artifacts through `wow-service` to the existing graph owner. It has
 bounded JSON/file admission, exact identity guards and faithful typed status.
 See [GRAPH_INPUT.md](../apps/wow/GRAPH_INPUT.md). It does not acquire ProjectStore,

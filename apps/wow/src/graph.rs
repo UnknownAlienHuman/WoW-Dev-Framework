@@ -12,7 +12,7 @@ use wow_service::graph::{
     GraphReadStatus, execute_graph_read,
 };
 
-pub const HELP: &str = "wow graph build --config <project.json> --project <ProjectId> [--format json|snapshot|text]\nwow graph subgraph|axis|explain|path --snapshot <partition-snapshot.json> --request <query.json> [--format json|text]\n\nBuild uses explicit local input; the read commands inspect one retained graph artifact. Read queries require exact snapshot and node/edge/profile identities. Reads do not run source analysis. No project discovery, current-pointer lookup, store writes or automatic continuation. See apps/wow/GRAPH_INPUT.md.\n";
+pub const HELP: &str = "wow graph build --config <project.json> --project <ProjectId> [--format json|snapshot|text]\nwow graph entity|neighbors|subgraph|axis|explain|path --snapshot <partition-snapshot.json> --request <query.json> [--format json|text]\n\nBuild uses explicit local input; the read commands inspect one retained graph artifact. Read queries require exact snapshot and node/edge/profile identities. Reads do not run source analysis. No project discovery, current-pointer lookup, store writes or automatic continuation. See apps/wow/GRAPH_INPUT.md.\n";
 
 struct Arguments {
     operation: GraphReadOperation,
@@ -97,7 +97,9 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
         Some("axis") => GraphReadOperation::Axis,
         Some("explain") => GraphReadOperation::Explain,
         Some("path") => GraphReadOperation::Path,
-        _ => return Err("expected graph subgraph, axis, explain or path"),
+        Some("entity") => GraphReadOperation::Entity,
+        Some("neighbors") => GraphReadOperation::Neighbors,
+        _ => return Err("expected graph entity, neighbors, subgraph, axis, explain or path"),
     };
     let (mut snapshot, mut request, mut format) = (None, None, None);
     while let Some(option) = values.next() {

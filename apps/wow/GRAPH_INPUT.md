@@ -1,6 +1,8 @@
 # Read-only retained graph commands
 
 ```text
+wow graph entity   --snapshot graph.json --request entity.json --format json
+wow graph neighbors --snapshot graph.json --request neighbors.json --format json
 wow graph subgraph --snapshot graph.json --request subgraph.json --format json
 wow graph axis     --snapshot graph.json --request axis.json --format text
 wow graph explain  --snapshot graph.json --request explain.json --format json
@@ -140,6 +142,87 @@ Native callers use `GraphPathReadQuery::new(query)` and optionally
 `GraphReadRequest::new`. Existing subgraph/axis/explain wire shapes, schemas,
 semantic bytes and graph identities are unchanged.
 
+## Exact entity and direct neighbors
+
+`entity` reads one exact **materialized node ID**, not a name or producer-local
+key. Its parameters are `GraphEntityQuery`:
+
+```json
+{
+  "schema": "wow-service/graph-read-request/1",
+  "query": {
+    "operation": "entity",
+    "parameters": {
+      "snapshot_id": "<exact graph-snapshot:sha256:...>",
+      "node_id": "<exact graph-node:sha256:...>",
+      "max_output_bytes": 1048576
+    }
+  }
+}
+```
+
+A retained node returns `lookup: "found"`, the full original node/evidence handles
+and Complete for that exact lookup. This does not certify its external evidence
+or conflict assessment. A missing ID returns
+`lookup: "not_found_with_partial_coverage"`, NotEvaluated (exit 2), no node field
+and `absence_authoritative: false`. The current graph has relation coverage, not
+entity-kind coverage; a missing row cannot prove source/client absence. A wrong
+snapshot remains an identity failure, not a missing-node result. Exact inspection
+never filters or promotes a record based on a confidence guess; use `explain`
+for its contributing assertions.
+
+`neighbors` wraps the existing `GraphNeighborQuery` in the graph-owned
+`GraphNeighborReadQuery`, adding exact snapshot, confidence and byte/scan bounds:
+
+```json
+{
+  "schema": "wow-service/graph-read-request/1",
+  "query": {
+    "operation": "neighbors",
+    "parameters": {
+      "snapshot_id": "<exact graph-snapshot:sha256:...>",
+      "query": {
+        "node_id": "<exact graph-node:sha256:...>",
+        "direction": "outgoing",
+        "relations": ["inherits", "mixes_in"],
+        "max_edges": 256
+      },
+      "confidence": "proven_and_derived",
+      "limits": {"max_scanned_edges": 500000, "max_output_bytes": 1048576}
+    }
+  }
+}
+```
+
+Only root-incident edges are read, in canonical edge-ID order. The result returns
+the root, original edges, deduplicated adjacent nodes, selected coverage and an
+explicit missing-coverage list. It does not expand neighbors or add links between
+them. Unlike a radius-one subgraph, a complete one-hop query does not acquire a
+Depth truncation because the neighbors have further connections.
+
+`matching_edges` and `omitted_edges` are exact counts for the selected
+relation/direction/confidence filter. Edge/byte limits retain a canonical prefix
+and explicit `edges` or `output_bytes` truncation. Omitted entries are counted,
+not cloned or serialized. Each admitted edge and its newly required endpoint fit
+together; evidence is not stripped. Both has one occurrence per original edge,
+including distinct opposite/parallel edges. The default ceiling admits Proven
+and Derived; Possible and Candidate require explicit opt-in.
+
+The edge limit is 1–100,000 and must fit the snapshot's query policy. The scan
+limit is 1–4,000,000; every snapshot edge, including nonmatches, counts. An
+insufficient complete-scan budget fails before scanning. Output is 16 KiB–8 MiB,
+including query, root, endpoints, coverage and metadata; metadata alone not fitting
+is a budget failure. Packing reserves 2 KiB for final counters/flags. Validation
+has its existing snapshot-bounded cost, separate from the query scan. Cancellation
+is checked per scanned edge and while measuring serialized records. Neither
+operation exposes a cursor, opens sources or modifies a graph.
+
+Native callers use the service reexports and `GraphReadQuery::Entity(query)` or
+`GraphReadQuery::Neighbors(query)`. The service validates the **whole partition
+owner**, including producer reports, before either materialized-graph read.
+Existing graph-read request/result schemas and earlier operation shapes stay
+unchanged. Owner details: [DIRECT_USAGE.md](../../crates/wow-graph/DIRECT_USAGE.md).
+
 ## Result and authority
 
 `wow-service/graph-read-result/1` contains the operation, status, exact validated
@@ -207,7 +290,7 @@ No durable lease or crash-recovery guarantee is claimed by this one-shot route.
 | 64 | CLI syntax, signal setup or artifact-file acquisition error |
 | 130 | Cancellation |
 
-Subgraph/axis/explain/path are the read operations in this version. Only the path
+Entity/neighbors/subgraph/axis/explain/path are the read operations in this version. Only the path
 owner supports an explicit continuation. No current selector, source mutation or
 generic service invocation is exposed. E2,
 E3-C, E7 and public product acceptance are not advanced by this transport slice.

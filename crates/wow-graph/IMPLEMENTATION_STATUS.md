@@ -91,3 +91,12 @@ profile/header bytes and both query scan passes count toward the axis limits.
 See [AXIS_USAGE.md](AXIS_USAGE.md). Complete traversal is not complete semantic or
 conflict coverage. Axis persistence, root discovery, unique-parent chain policy,
 service/CLI routing and full package acceptance remain separate.
+
+## Direct graph navigation
+
+Exact node lookup and bounded one-hop neighbors now have snapshot-bound owner
+APIs and service/CLI routing. The legacy neighbor selection is reused with
+execution-time request validation and bounded prefix retention. New reads keep
+original evidence, explicit missing coverage, exact omission counts and typed
+cancellation. See [DIRECT_USAGE.md](DIRECT_USAGE.md). Entity absence cannot gain
+negative authority from relation-only coverage; full E2 acceptance stays open.

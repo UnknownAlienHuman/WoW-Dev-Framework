@@ -3,6 +3,7 @@
 //! Immutable exact-generation graph records and bounded evidence-aware queries.
 
 mod axes;
+mod direct;
 mod error;
 mod explain;
 mod identity;
@@ -69,4 +70,10 @@ pub use axes::{
     GRAPH_AXIS_PROFILE_SCHEMA, GRAPH_AXIS_QUERY_SCHEMA, GraphAxis, GraphAxisBoundary,
     GraphAxisProfile, GraphAxisQuery, GraphAxisRelation, GraphAxisResult, GraphAxisShape,
     GraphAxisTraversal,
+};
+
+pub use direct::{
+    GRAPH_ENTITY_QUERY_SCHEMA, GRAPH_NEIGHBOR_READ_SCHEMA, GraphEntityLookup, GraphEntityQuery,
+    GraphEntityResult, GraphNeighborReadLimits, GraphNeighborReadQuery, GraphNeighborTruncation,
+    GraphNeighborView,
 };

@@ -40,25 +40,39 @@ impl GraphNeighborQuery {
         mut relations: Vec<GraphRelationKind>,
         max_edges: u32,
     ) -> GraphResult<Self> {
-        if relations.is_empty() || max_edges == 0 {
-            return Err(GraphError::new(
-                GraphErrorCode::QueryInvalid,
-                "graph neighbor query requires relations and a positive edge limit",
-            ));
-        }
         relations.sort();
-        if relations.windows(2).any(|pair| pair[0] == pair[1]) {
-            return Err(GraphError::new(
-                GraphErrorCode::QueryInvalid,
-                "graph neighbor query contains duplicate relations",
-            ));
-        }
-        Ok(Self {
+        let query = Self {
             node_id,
             direction,
             relations,
             max_edges,
-        })
+        };
+        query.validate()?;
+        Ok(query)
+    }
+
+    /// Validate deserialized requests as well as values made by the constructor.
+    pub fn validate(&self) -> GraphResult<()> {
+        GraphNodeId::new(self.node_id.as_str())?;
+        if self.relations.is_empty()
+            || self.max_edges == 0
+            || self.relations.windows(2).any(|pair| pair[0] >= pair[1])
+        {
+            return Err(GraphError::new(
+                GraphErrorCode::QueryInvalid,
+                "graph neighbors require canonical unique relations and a positive edge limit",
+            ));
+        }
+        Ok(())
+    }
+
+    pub(crate) fn matches_edge(&self, edge: &GraphEdge) -> bool {
+        self.relations.binary_search(&edge.relation()).is_ok()
+            && match self.direction {
+                GraphDirection::Outgoing => edge.from() == &self.node_id,
+                GraphDirection::Incoming => edge.to() == &self.node_id,
+                GraphDirection::Both => edge.from() == &self.node_id || edge.to() == &self.node_id,
+            }
     }
 
     #[must_use]
@@ -82,6 +96,7 @@ impl GraphNeighborQuery {
     }
 
     pub fn execute(&self, snapshot: &GraphSnapshot) -> GraphResult<GraphNeighborResult> {
+        self.validate()?;
         snapshot.validate()?;
         let root = snapshot.node(&self.node_id).ok_or_else(|| {
             GraphError::new(
@@ -95,23 +110,18 @@ impl GraphNeighborQuery {
                 "graph query exceeds the snapshot query budget",
             ));
         }
-        let relation_set = self.relations.iter().copied().collect::<BTreeSet<_>>();
-        let mut edges = snapshot
+        // Snapshot validation guarantees edge-ID order. Retain at most the
+        // requested prefix plus one lookahead, not a clone of every matching edge.
+        let mut selected = snapshot
             .edges()
             .iter()
-            .filter(|edge| relation_set.contains(&edge.relation()))
-            .filter(|edge| match self.direction {
-                GraphDirection::Outgoing => edge.from() == &self.node_id,
-                GraphDirection::Incoming => edge.to() == &self.node_id,
-                GraphDirection::Both => edge.from() == &self.node_id || edge.to() == &self.node_id,
-            })
+            .filter(|edge| self.matches_edge(edge));
+        let edges = selected
+            .by_ref()
+            .take(self.max_edges as usize)
             .cloned()
             .collect::<Vec<_>>();
-        edges.sort_by(|left, right| left.edge_id().cmp(right.edge_id()));
-        let truncated = edges.len() > self.max_edges as usize;
-        if truncated {
-            edges.truncate(self.max_edges as usize);
-        }
+        let truncated = selected.next().is_some();
         let adjacent_ids = edges
             .iter()
             .map(|edge| {
@@ -139,25 +149,7 @@ impl GraphNeighborQuery {
             .filter_map(|relation| snapshot.coverage_for(*relation).cloned())
             .collect::<Vec<_>>();
         let missing_coverage = coverage.len() != self.relations.len();
-        let partial_coverage = coverage.iter().any(|record| {
-            matches!(
-                record.state(),
-                GraphCoverageState::Partial | GraphCoverageState::Failed
-            )
-        });
-        let not_evaluated = missing_coverage
-            || coverage
-                .iter()
-                .any(|record| record.state() == GraphCoverageState::NotEvaluated);
-        let state = if truncated {
-            GraphQueryState::Truncated
-        } else if partial_coverage {
-            GraphQueryState::Partial
-        } else if not_evaluated {
-            GraphQueryState::NotEvaluated
-        } else {
-            GraphQueryState::Complete
-        };
+        let state = query_state(truncated, missing_coverage, coverage.iter());
         let absence_authoritative = edges.is_empty()
             && state == GraphQueryState::Complete
             && coverage.iter().all(GraphCoverageRecord::negative_authority);
@@ -223,5 +215,31 @@ impl GraphNeighborResult {
     #[must_use]
     pub fn coverage(&self) -> &[GraphCoverageRecord] {
         &self.coverage
+    }
+}
+
+/// Common state folding for legacy and exact-snapshot one-hop reads.
+pub(crate) fn query_state<'a>(
+    truncated: bool,
+    missing_coverage: bool,
+    coverage: impl Iterator<Item = &'a GraphCoverageRecord>,
+) -> GraphQueryState {
+    let mut partial = false;
+    let mut not_evaluated = missing_coverage;
+    for record in coverage {
+        partial |= matches!(
+            record.state(),
+            GraphCoverageState::Partial | GraphCoverageState::Failed
+        );
+        not_evaluated |= record.state() == GraphCoverageState::NotEvaluated;
+    }
+    if truncated {
+        GraphQueryState::Truncated
+    } else if partial {
+        GraphQueryState::Partial
+    } else if not_evaluated {
+        GraphQueryState::NotEvaluated
+    } else {
+        GraphQueryState::Complete
     }
 }
