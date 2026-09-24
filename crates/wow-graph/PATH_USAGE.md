@@ -92,8 +92,11 @@ about other graphs, other confidence tiers, or platform/runtime availability.
 
 ## Remaining scope
 
-Bounded neighborhood projection is available separately through
-[GraphSubgraphQuery](SUBGRAPH_USAGE.md). Neither operation implements axes, full
-assertion explanation, cross-generation impact, durable E2-D publication, or
-service/CLI routing. Existing graph snapshot schemas and producer partition semantics remain
+Bounded neighborhood projection, axes and retained-support explanation are
+separate graph operations. `wow graph path` routes this owner through
+`wow-service` over an explicit retained partition artifact; see
+[GRAPH_INPUT.md](../../apps/wow/GRAPH_INPUT.md) for fresh and continued requests.
+No source scan, another analyzer session, automatic pagination or publication is
+introduced. Cross-generation impact and durable E2-D publication remain separate.
+Existing path encodings, snapshot schemas and producer partition semantics are
 unchanged.

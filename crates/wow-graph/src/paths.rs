@@ -129,6 +129,12 @@ impl GraphPathQuery {
         Ok(())
     }
 
+    /// Exact snapshot selected by this request; no implicit current resolution.
+    #[must_use]
+    pub fn snapshot_id(&self) -> &GraphSnapshotId {
+        &self.snapshot_id
+    }
+
     /// Enumerates nonempty simple paths in lexicographic edge-ID order, not shortest-path order.
     /// A continuation replays the same bounded search; expansions include replay work.
     pub fn execute(

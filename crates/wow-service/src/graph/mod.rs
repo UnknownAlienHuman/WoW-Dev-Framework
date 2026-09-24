@@ -15,8 +15,9 @@ use wow_graph::GraphPartitionSnapshot;
 pub use wow_graph::{
     GraphAxis, GraphAxisProfile, GraphAxisQuery, GraphAxisTraversal, GraphDirection, GraphEdgeId,
     GraphErrorCode, GraphExplainLimits, GraphExplainQuery, GraphExplainSubject, GraphGenerationId,
-    GraphNodeId, GraphPathConfidence, GraphQueryState, GraphRelationDirection, GraphRelationKind,
-    GraphSnapshotId, GraphSubgraphLimits, GraphSubgraphQuery, GraphUniverseId,
+    GraphNodeId, GraphPathConfidence, GraphPathCursor, GraphPathLimits, GraphPathQuery,
+    GraphQueryState, GraphRelationDirection, GraphRelationKind, GraphSnapshotId,
+    GraphSubgraphLimits, GraphSubgraphQuery, GraphUniverseId,
 };
 
 pub const GRAPH_READ_REQUEST_SCHEMA: &str = "wow-service/graph-read-request/1";
@@ -32,6 +33,7 @@ pub enum GraphReadOperation {
     Subgraph,
     Axis,
     Explain,
+    Path,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -45,6 +47,7 @@ pub enum GraphReadQuery {
     Subgraph(GraphSubgraphQuery),
     Axis(GraphAxisQuery),
     Explain(GraphExplainQuery),
+    Path(GraphPathReadQuery),
 }
 impl GraphReadQuery {
     #[must_use]
@@ -53,6 +56,7 @@ impl GraphReadQuery {
             Self::Subgraph(_) => GraphReadOperation::Subgraph,
             Self::Axis(_) => GraphReadOperation::Axis,
             Self::Explain(_) => GraphReadOperation::Explain,
+            Self::Path(_) => GraphReadOperation::Path,
         }
     }
     #[must_use]
@@ -61,7 +65,46 @@ impl GraphReadQuery {
             Self::Subgraph(query) => query.snapshot_id(),
             Self::Axis(query) => query.snapshot_id(),
             Self::Explain(query) => query.snapshot_id(),
+            Self::Path(request) => request.query().snapshot_id(),
         }
+    }
+}
+
+/// One page of a graph-owned path query. The cursor is supplied explicitly and
+/// validated by the path owner against the entire unchanged query and snapshot.
+/// It is not a durable lease, an authorization token, or an instruction to retry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GraphPathReadQuery {
+    query: GraphPathQuery,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    continuation: Option<GraphPathCursor>,
+}
+impl GraphPathReadQuery {
+    #[must_use]
+    pub fn new(query: GraphPathQuery) -> Self {
+        Self {
+            query,
+            continuation: None,
+        }
+    }
+
+    /// Attach the exact cursor returned by the previous page. Does not change
+    /// any query limit or policy; execution rejects mismatched/invalid cursors.
+    #[must_use]
+    pub fn with_continuation(mut self, continuation: GraphPathCursor) -> Self {
+        self.continuation = Some(continuation);
+        self
+    }
+
+    #[must_use]
+    pub fn query(&self) -> &GraphPathQuery {
+        &self.query
+    }
+
+    #[must_use]
+    pub fn continuation(&self) -> Option<&GraphPathCursor> {
+        self.continuation.as_ref()
     }
 }
 
@@ -325,10 +368,13 @@ fn run(
             ServiceErrorCode::IdentityMismatch,
         ));
     }
-    // Subgraph's owner API validates only the materialized graph. The service
-    // validates the entire imported partition owner, not just that projection.
-    // Axis/explain already perform that same full validation in their execute.
-    if matches!(&request.query, GraphReadQuery::Subgraph(_)) {
+    // Subgraph/path APIs validate only the materialized graph. Also validate
+    // its complete imported partition owner, including every producer report.
+    // Axis/explain already perform that full validation in their execute.
+    if matches!(
+        &request.query,
+        GraphReadQuery::Subgraph(_) | GraphReadQuery::Path(_)
+    ) {
         owner
             .validate(stop)
             .map_err(|e| GraphReadFailure::owner(GraphReadStage::Snapshot, e))?;
@@ -337,6 +383,15 @@ fn run(
         GraphReadQuery::Subgraph(query) => {
             let result = query
                 .execute(owner.snapshot(), stop)
+                .map_err(|e| GraphReadFailure::owner(GraphReadStage::Query, e))?;
+            (result.state().into(), value(&result)?)
+        }
+        GraphReadQuery::Path(request) => {
+            // Exactly one page. The owner checks the cursor and charges replay
+            // work against the original expansion ceiling; never chase cursors.
+            let result = request
+                .query()
+                .execute(owner.snapshot(), request.continuation(), stop)
                 .map_err(|e| GraphReadFailure::owner(GraphReadStage::Query, e))?;
             (result.state().into(), value(&result)?)
         }

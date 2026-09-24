@@ -4,6 +4,7 @@
 wow graph subgraph --snapshot graph.json --request subgraph.json --format json
 wow graph axis     --snapshot graph.json --request axis.json --format text
 wow graph explain  --snapshot graph.json --request explain.json --format json
+wow graph path     --snapshot graph.json --request path.json --format json
 ```
 
 `graph.json` is the complete serialized `wow_graph::GraphPartitionSnapshot`
@@ -81,6 +82,64 @@ Use `kind: "entity"` and a node ID for entity explanations. See
 use the public service reexports and `GraphReadRequest::new(GraphReadQuery::...)`.
 The application itself imports no lower framework crate.
 
+## Paths and explicit continuation
+
+`path` wraps the existing `GraphPathQuery` in `GraphPathReadQuery`. The first
+request omits `continuation`; null is not accepted by the transport decoder.
+
+```json
+{
+  "schema": "wow-service/graph-read-request/1",
+  "query": {
+    "operation": "path",
+    "parameters": {
+      "query": {
+        "snapshot_id": "<exact graph-snapshot:sha256:...>",
+        "root": "<exact graph-node:sha256:...>",
+        "target": "<different exact graph-node:sha256:...>",
+        "direction": "outgoing",
+        "relations": ["inherits", "mixes_in"],
+        "confidence": "proven_and_derived",
+        "limits": {
+          "max_depth": 16,
+          "max_paths": 64,
+          "max_expansions": 100000,
+          "max_output_bytes": 1048576
+        }
+      }
+    }
+  }
+}
+```
+
+The payload contains the original paths, node/edge evidence, weakest-edge
+confidence, coverage, expansion count, truncation reasons, `prior_truncation`,
+and an optional `continuation`. Paths are nonempty and simple, in canonical
+edge-ID sequence order, **not shortest-path order**. The service first validates
+the entire retained partition snapshot, not just its materialized graph.
+
+For the next page, copy `payload.continuation` unchanged into
+`query.parameters.continuation` alongside the same `query` object. Supply the
+same snapshot file and invoke `wow graph path` again. Do not pass a previous
+result envelope as the request, alter any limit, or invent a cursor when one is
+absent. The owner validates its integrity, full query identity and connected path.
+The service performs exactly one owner call per invocation; it never follows
+continuations, changes budgets or starts a retry automatically.
+
+The owner's query digest stays constant across pages; the service request digest
+changes because it also includes the supplied cursor. Replay work counts against
+the original expansion ceiling. Continued pages retain `prior_truncation = true`
+even when the suffix is exhausted. A complete suffix or empty continued page is
+not a complete path set or authoritative absence. This is the owner's bounded,
+stateless replay model, not durable cross-process cumulative accounting or an
+authenticated session. Other owner limits and nonclaims are in
+[PATH_USAGE.md](../../crates/wow-graph/PATH_USAGE.md).
+
+Native callers use `GraphPathReadQuery::new(query)` and optionally
+`.with_continuation(cursor)`, wrapped in `GraphReadQuery::Path` and
+`GraphReadRequest::new`. Existing subgraph/axis/explain wire shapes, schemas,
+semantic bytes and graph identities are unchanged.
+
 ## Result and authority
 
 `wow-service/graph-read-result/1` contains the operation, status, exact validated
@@ -148,6 +207,7 @@ No durable lease or crash-recovery guarantee is claimed by this one-shot route.
 | 64 | CLI syntax, signal setup or artifact-file acquisition error |
 | 130 | Cancellation |
 
-Subgraph/axis/explain are the only operations in this version. No path cursor,
-current selector, source mutation or generic service invocation is exposed. E2,
+Subgraph/axis/explain/path are the read operations in this version. Only the path
+owner supports an explicit continuation. No current selector, source mutation or
+generic service invocation is exposed. E2,
 E3-C, E7 and public product acceptance are not advanced by this transport slice.

@@ -135,7 +135,7 @@ explicit conflicts, order and cycles; see [XML_REFERENCES.md](../apps/wow/XML_RE
 
 ## Retained graph application route
 
-The bounded subgraph, axis and explanation owners now have one-shot service/CLI
+The bounded subgraph, axis, explanation and path owners now have one-shot service/CLI
 routing over explicit retained partition artifacts; see
 [GRAPH_INPUT.md](../apps/wow/GRAPH_INPUT.md). Graph production/export from local
 checks, coherent ProjectStore acquisition and full package acceptance stay open.

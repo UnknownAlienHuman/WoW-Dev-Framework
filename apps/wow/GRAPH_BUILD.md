@@ -128,6 +128,7 @@ passed directly to the existing commands:
 wow graph subgraph --snapshot graph.json --request subgraph.json --format json
 wow graph axis --snapshot graph.json --request axis.json --format json
 wow graph explain --snapshot graph.json --request explain.json --format json
+wow graph path --snapshot graph.json --request path.json --format json
 ```
 
 Prepare requests using snapshot/node IDs from the receipt and the existing

@@ -6,7 +6,7 @@ use std::sync::atomic::Ordering;
 use wow_service::graph::{GraphBuildRequest, GraphReadStatus, execute_graph_build};
 use wow_service::{LocalProjectInput, ServiceErrorCode};
 
-const HELP: &str = "wow graph build --config <project.json> --project <ProjectId> [--generation current|<ProjectGenerationId>] [--format json|snapshot|text]\n\nBuild the bounded first-party source/file-load graph using the same materialization path as wow check. JSON includes provenance; snapshot emits the bare artifact for graph subgraph/axis/explain. Partial source graphs exit 2. No files or ProjectStore pointers are written.\n";
+const HELP: &str = "wow graph build --config <project.json> --project <ProjectId> [--generation current|<ProjectGenerationId>] [--format json|snapshot|text]\n\nBuild the bounded first-party source/file-load graph using the same materialization path as wow check. JSON includes provenance; snapshot emits the bare artifact for graph subgraph/axis/explain/path. Partial source graphs exit 2. No files or ProjectStore pointers are written.\n";
 
 #[derive(Clone, Copy)]
 enum Format {
