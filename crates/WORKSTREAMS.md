@@ -329,3 +329,12 @@ I0-A / crates/wow-core E0-A
 ```
 
 Finish, merge, and close that worktree before activating I0-B or I0-C.
+
+## Source graph artifact checkpoint
+
+The E2-C source owner emits direct first-party file/load proposals from its
+retained `ProjectView`; service uses E2-A materialization for `wow graph build`.
+This activates the already allowed `wow-project -> wow-graph` edge without
+recognizer execution or E2-D persistence. Existing status/check generation and
+receipt schemas are unchanged. Next: semantic producer partitions and coherent
+ProjectStore, not a second loader/analyzer. See [GRAPH_BUILD.md](../apps/wow/GRAPH_BUILD.md).

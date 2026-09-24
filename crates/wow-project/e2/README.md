@@ -1,6 +1,6 @@
 # `wow-project` E2-C project indexing contract
 
-**Status:** partial executable TOC/XML acquisition and XML syntax/inline-body indexing in `../src/load`. Full E2-C candidate, virtual analyzer units, recognizer/graph handoff and acceptance remain incomplete.
+**Status:** partial executable TOC/XML acquisition and XML syntax/inline-body indexing in `../src/load`. Direct source-file/load graph proposals additionally live in `../src/graph.rs`; service materializes their standalone artifact through the graph owner. Full E2-C candidate, virtual analyzer units, semantic recognizer handoff and acceptance remain incomplete.
 
 **Contract ID:** `wow-project/e2-c/toc-xml-load-incremental-index`
 

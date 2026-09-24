@@ -13,6 +13,7 @@ mod configuration;
 pub mod disk;
 mod error;
 mod generation;
+pub mod graph;
 mod identity;
 mod ids;
 mod inventory;

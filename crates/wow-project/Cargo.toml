@@ -15,6 +15,7 @@ serde_json = "1.0"
 sha2 = "0.10"
 wow-core = { path = "../wow-core" }
 wow-emmy = { path = "../wow-emmy" }
+wow-graph = { path = "../wow-graph" }
 
 [lints]
 workspace = true

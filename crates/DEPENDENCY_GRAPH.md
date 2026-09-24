@@ -373,3 +373,11 @@ and closed literal operations. The isolated literal host's source/annotation
 imports are dev dependencies for its shared driver and real-source probes, not
 production host edges. No stable owner imports the host/VM and no new crate or
 algorithm copy is introduced by source-to-Wasm routing.
+
+## Source graph artifact composition (E2-C slice)
+
+`wow-project -> wow-graph` is active only for exact source-file/load proposal DTOs
+and their reviewed registry. `wow-service` materializes a new in-memory partition
+snapshot through `wow-graph`; `apps/wow` still imports only `wow-service`.
+No project-to-store/recognizer edge, persistent publication or second analyzer
+session is introduced. See [GRAPH_BUILD.md](../apps/wow/GRAPH_BUILD.md).

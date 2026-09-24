@@ -198,4 +198,16 @@ resolution and coherent ProjectStore acquisition remain open.
 and query artifacts through `wow-service` to the existing graph owner. It has
 bounded JSON/file admission, exact identity guards and faithful typed status.
 See [GRAPH_INPUT.md](../apps/wow/GRAPH_INPUT.md). It does not acquire ProjectStore,
-produce a graph from `wow check`, or advance full E2/E3/E7 acceptance.
+produce a graph itself, or advance full E2/E3/E7 acceptance. Source construction
+is the separate `wow graph build` route below.
+
+## Source graph construction and export
+
+`wow graph build` now materializes the same explicit project input as `wow check`
+once, asks `wow-project` for exact source-file/direct-load proposals, and uses
+`wow-graph` to validate/materialize an exportable partition snapshot. JSON retains
+source handles, evidence, the source context/load receipt and path-to-node IDs;
+snapshot output feeds existing graph-read commands. See [GRAPH_BUILD.md](../apps/wow/GRAPH_BUILD.md).
+The source projection is Partial with no negative authority. Dependency packages,
+Lua calls/recognizers, XML objects and coherent ProjectStore remain unimplemented
+by this route. This is not full E2-C/E2-D or runtime acceptance.

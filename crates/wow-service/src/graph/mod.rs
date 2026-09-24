@@ -1,6 +1,8 @@
 //! Read-only application seam for one explicitly supplied retained graph artifact.
 //! No ProjectStore, implicit current selector, source read, or analyzer is opened.
+mod build;
 mod input;
+pub use build::{GraphBuildRequest, GraphBuildResult, execute_graph_build};
 
 use crate::{ServiceError, ServiceErrorCode, ServiceResult};
 use serde::{Deserialize, Serialize};

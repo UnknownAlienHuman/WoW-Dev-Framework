@@ -10,9 +10,10 @@ wow graph explain  --snapshot graph.json --request explain.json --format json
 (`wow-graph/partition-snapshot/e2-a/1`), including its foundation, registry,
 producer partitions and materialized snapshot. It is **not** a check result,
 subgraph, bare `GraphSnapshot`, source directory, or an editable list of edges.
-Use an artifact exported by an existing graph-owner consumer. This command does
-not create that graph from an addon; local-check graph production/export and
-coherent ProjectStore acquisition remain separate work.
+[Graph build](GRAPH_BUILD.md) exports a first-party file/direct-load snapshot from
+the existing project configuration. Native graph-owner consumers may also export
+complete partition snapshots. The three read commands below do not create a graph
+or acquire coherent ProjectStore; semantic producer construction remains separate.
 
 Every command invokes `wow_service::graph::execute_graph_read` once. The app
 reads explicit bounded artifact bytes and prints the returned result. The service

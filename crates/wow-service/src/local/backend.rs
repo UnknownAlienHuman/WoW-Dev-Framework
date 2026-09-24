@@ -73,13 +73,11 @@ impl LocalProjectBackend {
             .build()
     }
 
-    fn acquire(
+    pub(crate) fn acquire_project(
         &self,
         selector: &GenerationSelector,
-        scope: &CheckScope,
-        rules: &[Box<str>],
         stop: &AtomicBool,
-    ) -> ServiceResult<CheckContext> {
+    ) -> ServiceResult<ProjectView> {
         cancelled(stop)?;
         match selector {
             GenerationSelector::Exact(generation)
@@ -141,6 +139,17 @@ impl LocalProjectBackend {
         };
         drop(retained);
         cancelled(stop)?;
+        Ok(project)
+    }
+
+    fn acquire(
+        &self,
+        selector: &GenerationSelector,
+        scope: &CheckScope,
+        rules: &[Box<str>],
+        stop: &AtomicBool,
+    ) -> ServiceResult<CheckContext> {
+        let project = self.acquire_project(selector, stop)?;
         projection::check_context(
             &project,
             &self.reference,

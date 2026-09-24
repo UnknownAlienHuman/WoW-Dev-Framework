@@ -27,6 +27,16 @@ Read in order:
 
 For a real addon repository, read its local `AGENTS.md`, `CLAUDE.md`, TOC, bootstrap, and project documentation before extending beyond the closed E0 fixture.
 
+## Active E2 source-graph slice
+
+`src/graph.rs` additionally activates `wow-project -> wow-graph` for source-file
+and admitted direct TOC/XML-load proposals from an immutable `ProjectView`.
+It exports proposals and exact support records, not a published graph generation.
+The service composes them through the existing graph owner for the one-shot
+`wow graph build` artifact operation. E0-D contracts below are unchanged;
+recognizers, dependency discovery and coherent E2-D persistence remain inactive
+in this slice. See `../../apps/wow/GRAPH_BUILD.md` and `e2/README.md`.
+
 ## E0-D scope
 
 E0-D owns only:

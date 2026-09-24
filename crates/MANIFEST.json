@@ -442,6 +442,12 @@
       "brief": "crates/wow-project/README.md",
       "first_implementation_package": "I0-D",
       "implementation_state": "partial-executable",
+      "active_source_graph_slice": {
+        "owner": "crates/wow-project/src/graph.rs",
+        "framework_dependency": "wow-graph",
+        "application": "apps/wow/GRAPH_BUILD.md",
+        "scope": "first-party source files and admitted direct TOC/XML loads; no persistent publication or semantic recognizers"
+      },
       "allowed_dependencies": [
         "wow-core",
         "wow-store",

@@ -12,7 +12,7 @@ use wow_service::graph::{
     GraphReadStatus, execute_graph_read,
 };
 
-pub const HELP: &str = "wow graph subgraph|axis|explain --snapshot <partition-snapshot.json> --request <query.json> [--format json|text]\n\nRead one explicit retained graph artifact. Queries require exact snapshot and node/edge/profile identities. No project discovery, current-pointer lookup, source analysis, store writes or automatic continuation. See apps/wow/GRAPH_INPUT.md.\n";
+pub const HELP: &str = "wow graph build --config <project.json> --project <ProjectId> [--format json|snapshot|text]\nwow graph subgraph|axis|explain --snapshot <partition-snapshot.json> --request <query.json> [--format json|text]\n\nBuild uses explicit local input; the read commands inspect one retained graph artifact. Read queries require exact snapshot and node/edge/profile identities. Reads do not run source analysis. No project discovery, current-pointer lookup, store writes or automatic continuation. See apps/wow/GRAPH_INPUT.md.\n";
 
 struct Arguments {
     operation: GraphReadOperation,
@@ -22,6 +22,9 @@ struct Arguments {
 }
 
 pub fn run(values: Vec<OsString>) -> u8 {
+    if values.get(1).is_some_and(|value| value == "build") {
+        return super::graph_build::run(values);
+    }
     if values.len() == 2 && (values[1] == "--help" || values[1] == "-h") {
         return match std::io::stdout().lock().write_all(HELP.as_bytes()) {
             Ok(()) => 0,

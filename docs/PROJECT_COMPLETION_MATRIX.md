@@ -139,3 +139,12 @@ The bounded subgraph, axis and explanation owners now have one-shot service/CLI
 routing over explicit retained partition artifacts; see
 [GRAPH_INPUT.md](../apps/wow/GRAPH_INPUT.md). Graph production/export from local
 checks, coherent ProjectStore acquisition and full package acceptance stay open.
+
+## Source graph artifact path
+
+`wow graph build` produces the first-party file/direct-load partition artifact
+accepted by the graph-read CLI, from the existing local project materialization
+path. It retains exact source/evidence and consumer node IDs without a second
+Emmy session or persistent graph/project publication. The result remains Partial;
+semantic recognizers, dependency graph coverage and coherent ProjectStore remain
+open. See [GRAPH_BUILD.md](../apps/wow/GRAPH_BUILD.md).

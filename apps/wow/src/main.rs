@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 mod args;
 mod graph;
+mod graph_build;
 mod output;
 
 use std::io::Write;
