@@ -1,0 +1,13 @@
+diff --git a/crates/wow-service/src/graph/mod.rs b/crates/wow-service/src/graph/mod.rs
+index b2b92b4..a4123b9 100644
+--- a/crates/wow-service/src/graph/mod.rs
++++ b/crates/wow-service/src/graph/mod.rs
+@@ -267,7 +267,7 @@ fn run(
+     envelope.context = Some(GraphReadContext {
+         snapshot_id: owner.snapshot().snapshot_id().clone(), universe: owner.snapshot().universe().clone(),
+         generation: owner.snapshot().generation().clone(), source_context_id: owner.source_context_id(),
+-        registry_digest: owner.registry().digest().into(),
++        registry_digest: owner.registry().registry_digest().into(),
+     });
+     envelope.status = status;
+     envelope.payload = Some(payload);

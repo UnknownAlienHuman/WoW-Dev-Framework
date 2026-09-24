@@ -30,6 +30,8 @@ jobs:
           git rev-parse HEAD > "$RUNNER_TEMP/graph-read/BASE_SHA"
           test "$(git hash-object .ci/graph-read/00)" = d6f42a156311e9453a1cdc6ed445d6e57959769a
           test "$(git hash-object .ci/graph-read/01)" = da4430f946366d3d464dc8847ee24cd0fc45080a
+          test "$(git hash-object .ci/graph-read/registry-fix.patch)" = b459dc1ee1d87f62b14e9d3aa77c4a60d5bc50e0
+          cp .ci/graph-read/registry-fix.patch "$RUNNER_TEMP/graph-read/registry-fix.patch"
           cat .ci/graph-read/00 .ci/graph-read/01 | base64 --decode | gzip -d > "$RUNNER_TEMP/graph-read/input.patch"
           echo '00d6e2bd83e6c4d6fb9f42703382d7766252d57ec1d9995e293bca4363c61c50  input.patch' > "$RUNNER_TEMP/graph-read/INPUT_SHA256"
           (cd "$RUNNER_TEMP/graph-read" && sha256sum -c INPUT_SHA256)
@@ -37,6 +39,8 @@ jobs:
           test "$(git write-tree)" = f50dff7388286feefcce2d8307ada14a7071f24e
           git apply --index "$RUNNER_TEMP/graph-read/input.patch"
           test "$(git write-tree)" = 1ec536eb3445dfca0a5f7f9defbf7993de8a36c5
+          git apply --index "$RUNNER_TEMP/graph-read/registry-fix.patch"
+          test "$(git write-tree)" = a79f0e15ab2b01140292f654a77fc104659ef978
       - name: Format implementation
         run: |
           set -euo pipefail
