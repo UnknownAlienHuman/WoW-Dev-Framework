@@ -12,15 +12,22 @@ use wow_project::graph::{
     ProjectGraphProvenance, SOURCE_GRAPH_PROFILE, build_source_graph_proposals,
 };
 
+mod calls;
+use calls::{CallEdge, FunctionNode};
+use wow_recognizers::source_calls::SourceCallRecognition;
+
 const MAX_BUNDLE_BYTES: usize = 32 * 1024 * 1024;
 
 struct BuiltGraph {
     snapshot: GraphPartitionSnapshot,
     provenance: ProjectGraphProvenance,
+    call_recognition: SourceCallRecognition,
     digest: Box<str>,
     file_nodes: Vec<FileNode>,
     xml_nodes: Vec<XmlNode>,
     lua_nodes: Vec<LuaNode>,
+    function_nodes: Vec<FunctionNode>,
+    call_edges: Vec<CallEdge>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -43,7 +50,7 @@ impl GraphBuildRequest {
             GenerationSelector::exact(generation)?
         };
         Ok(Self {
-            schema: "wow-service/graph-build-request/3",
+            schema: "wow-service/graph-build-request/4",
             project_id,
             selector,
             projection: SOURCE_GRAPH_PROFILE,
@@ -81,12 +88,16 @@ pub struct GraphBuildResult {
     file_nodes: Vec<FileNode>,
     xml_nodes: Vec<XmlNode>,
     lua_nodes: Vec<LuaNode>,
+    function_nodes: Vec<FunctionNode>,
+    call_edges: Vec<CallEdge>,
     #[serde(skip_serializing_if = "Option::is_none")]
     snapshot: Option<GraphPartitionSnapshot>,
     #[serde(skip_serializing_if = "Option::is_none")]
     snapshot_input_digest: Option<Box<str>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     provenance: Option<ProjectGraphProvenance>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    call_recognition: Option<SourceCallRecognition>,
     boundaries: Vec<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     failure: Option<ServiceErrorCode>,
@@ -122,6 +133,9 @@ impl GraphBuildResult {
         self.file_nodes.clear();
         self.xml_nodes.clear();
         self.lua_nodes.clear();
+        self.function_nodes.clear();
+        self.call_edges.clear();
+        self.call_recognition = None;
         self.snapshot = None;
         self.snapshot_input_digest = None;
         self.provenance = None;
@@ -151,23 +165,26 @@ pub fn execute_graph_build(
 ) -> ServiceResult<GraphBuildResult> {
     let request_digest = super::hash(&bounded(request, super::GRAPH_REQUEST_MAX_BYTES)?);
     let mut result = GraphBuildResult {
-        schema: "wow-service/graph-build-result/3",
+        schema: "wow-service/graph-build-result/4",
         request: request.clone(),
         request_digest,
         status: GraphReadStatus::Partial,
         file_nodes: Vec::new(),
         xml_nodes: Vec::new(),
         lua_nodes: Vec::new(),
+        function_nodes: Vec::new(),
+        call_edges: Vec::new(),
+        call_recognition: None,
         snapshot: None,
         snapshot_input_digest: None,
         provenance: None,
         failure: None,
         result_digest: None,
         boundaries: vec![
-            "captured_files_loads_xml_and_main_mixin_source_topology_only",
+            "captured_source_topology_and_single_signature_main_function_calls",
             "not_coherent_project_store_publication",
             "package_dependencies_not_evaluated",
-            "lua_calls_and_recognizers_not_evaluated",
+            "dynamic_library_inline_xml_calls_and_non_call_recognizers_not_evaluated",
             "xml_runtime_objects_parentage_and_mixin_execution_not_evaluated",
             "library_mixin_targets_not_projected",
             "no_negative_authority",
@@ -181,10 +198,16 @@ pub fn execute_graph_build(
             file_nodes,
             xml_nodes,
             lua_nodes,
+            function_nodes,
+            call_edges,
+            call_recognition,
         }) => {
             result.file_nodes = file_nodes;
             result.xml_nodes = xml_nodes;
             result.lua_nodes = lua_nodes;
+            result.function_nodes = function_nodes;
+            result.call_edges = call_edges;
+            result.call_recognition = Some(call_recognition);
             result.snapshot = Some(snapshot);
             result.provenance = Some(provenance);
             result.snapshot_input_digest = Some(digest);
@@ -207,7 +230,7 @@ fn compose(
     stop: &AtomicBool,
 ) -> ServiceResult<BuiltGraph> {
     checkpoint(stop)?;
-    let backend = LocalProjectBackend::new(input)?;
+    let backend = LocalProjectBackend::for_graph(input)?;
     if backend.configuration().project_id() != request.project_id {
         return Err(error(ServiceErrorCode::IdentityMismatch));
     }
@@ -247,7 +270,9 @@ fn compose(
             stop,
         )
         .map_err(graph_error)?;
-    let snapshot = replacement.candidate().clone();
+    let (snapshot, call_recognition) = calls::publish(replacement.candidate(), &provenance, stop)?;
+    let (function_nodes, call_edges) =
+        calls::maps(&snapshot, &provenance, &call_recognition, stop)?;
     checkpoint(stop)?;
     let mut file_nodes = Vec::new();
     for file in provenance.files() {
@@ -298,6 +323,9 @@ fn compose(
         file_nodes,
         xml_nodes,
         lua_nodes,
+        function_nodes,
+        call_edges,
+        call_recognition,
     })
 }
 

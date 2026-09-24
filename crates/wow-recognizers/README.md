@@ -4,6 +4,17 @@
 
 `wow-recognizers` deterministically matches reviewed structural conventions over normalized facts and emits proposed universal graph assertions. It never reparses source, branches on repository/addon identity, executes code, decides platform truth, runs diagnostics, publishes graph generations, or authorizes pack promotion.
 
+## Source-call pipeline
+
+`source_calls::recognize_source_calls` admits the immutable Emmy function/call
+sidecar and exact source-proposal/evidence crosswalk. It feeds only single captured
+Main closure targets into the existing `wow.direct-call` rule and returns a
+`wow-recognizers.lua-direct-calls` proposal partition, original recognition report
+and explicit skipped-call receipts. Source producers continue to own function nodes;
+this crate never reparses Lua or publishes the graph. See the complete
+[source-to-CLI contract](../../apps/wow/GRAPH_BUILD.md#lua-functions-and-direct-calls).
+Non-call families, dynamic dispatch and full normative acceptance remain separate.
+
 ## Canonical routes
 
 ### E2-B — core structural recognizers
@@ -106,10 +117,10 @@ No recognizer result proves WoW API existence or absence, runtime availability, 
 Cargo.toml: active
 Rust source: active
 bounded registry/matcher/graph handoff: implemented and tested
-typed wow-emmy/project fact adapters: pending
+typed wow-emmy/project fact adapters: direct member-call and captured-function adapters implemented; full set pending
 declarative pack parser and operator DAG: pending
 active structural rule families: pending
-producer partition/replacement model: pending
+producer partition/replacement model: source direct-call route integrated; full set pending
 mutation/evaluation harness and checksum freeze: pending
 E5-A real corpus admission and calibration: not started
 ```

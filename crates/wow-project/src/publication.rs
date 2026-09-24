@@ -23,6 +23,7 @@ pub struct ProjectPublisher {
     current_inputs: Vec<ProjectInputFile>,
     libraries: Vec<LuaWorkspaceSnapshot>,
     last_failure: Option<ProjectError>,
+    function_calls: bool,
 }
 
 impl ProjectPublisher {
@@ -33,6 +34,18 @@ impl ProjectPublisher {
             current_inputs: Vec::new(),
             libraries: Vec::new(),
             last_failure: None,
+            function_calls: false,
+        }
+    }
+
+    /// Enable the bounded function/call fact sidecar in this publisher's existing
+    /// analyzer session. The option persists across updates and cannot switch on
+    /// a published view. Analyzer and graph identities bind the extra report.
+    #[must_use]
+    pub fn with_function_call_facts() -> Self {
+        Self {
+            function_calls: true,
+            ..Self::new()
         }
     }
 
@@ -59,7 +72,13 @@ impl ProjectPublisher {
             ));
         }
         let (configuration, inventory, libraries) = bundle.into_parts();
-        match build_snapshot(configuration, inventory.clone(), libraries.clone(), stop) {
+        match build_snapshot(
+            configuration,
+            inventory.clone(),
+            libraries.clone(),
+            self.function_calls,
+            stop,
+        ) {
             Ok(snapshot) => {
                 let snapshot = Arc::new(snapshot);
                 self.current_inputs = inventory.files().to_vec();
@@ -169,6 +188,7 @@ impl ProjectPublisher {
             target_configuration,
             inventory.clone(),
             libraries.clone(),
+            self.function_calls,
             &AtomicBool::new(false),
         ) {
             Ok(snapshot) => {
@@ -255,11 +275,18 @@ fn build_snapshot(
     configuration: ProjectConfiguration,
     inventory: ProjectInputInventory,
     libraries: Vec<LuaWorkspaceSnapshot>,
+    function_calls: bool,
     stop: &AtomicBool,
 ) -> ProjectResult<ProjectSnapshot> {
     let generation = ProjectGenerationCandidate::derive(&configuration, &inventory)?;
-    let analyzer =
-        build_analyzer_binding(&configuration, &inventory, &generation, &libraries, stop)?;
+    let analyzer = build_analyzer_binding(
+        &configuration,
+        &inventory,
+        &generation,
+        &libraries,
+        function_calls,
+        stop,
+    )?;
     let registry = ProjectSourceRegistry::build(
         &configuration,
         &inventory,

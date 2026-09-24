@@ -209,12 +209,24 @@ once, asks `wow-project` for exact source-file/direct-load proposals, and uses
 source handles, evidence, the source context/load receipt and path-to-node IDs;
 snapshot output feeds existing graph-read commands. See [GRAPH_BUILD.md](../apps/wow/GRAPH_BUILD.md).
 The source projection is Partial with no negative authority. Dependency packages,
-Lua calls/recognizers, XML objects and coherent ProjectStore remain unimplemented
-by this route. This is not full E2-C/E2-D or runtime acceptance.
+XML runtime objects, non-call recognizers and coherent ProjectStore remain
+unimplemented by this route. This is not full E2-C/E2-D or runtime acceptance.
 
 
 Source graph export also includes distinct XML declarations, document ownership,
 admitted local template inheritance and exact Main Lua mixin source links, with
 materialized XML/Lua node maps and retained unresolved lookup receipts. The
 Inheritance axis now accepts this registry. Library targets remain separate;
-table construction, callback dispatch, recognizers and runtime are not evaluated.
+table construction, callback dispatch and runtime are not evaluated.
+
+
+## Lua callable graph pipeline
+
+`wow graph build` now requests bounded callable/call facts from the existing Emmy
+session, projects source-owned chunk/closure nodes and real evidence, executes the
+existing `wow.direct-call` recognizer, and publishes its proposals into a separate
+in-memory producer partition. Final function/edge ID crosswalks and original fact,
+recognition and skipped-target receipts are exported together. Ordinary check/status
+keep the previous analyzer mode. See [GRAPH_BUILD.md](../apps/wow/GRAPH_BUILD.md).
+Dynamic/Library/inline-XML calls, direct self-edges, non-call recognizers, persistent
+ProjectStore and full E2 acceptance remain open. No acceptance/checksum gate moves.

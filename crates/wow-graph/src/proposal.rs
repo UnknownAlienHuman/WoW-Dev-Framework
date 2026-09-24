@@ -133,6 +133,22 @@ impl GraphEntityProposal {
     pub fn entity_kind_id(&self) -> &str {
         &self.entity_kind_id
     }
+    #[must_use]
+    pub fn semantic_key(&self) -> &BTreeMap<Box<str>, GraphProposalValue> {
+        &self.semantic_key
+    }
+    #[must_use]
+    pub fn confidence(&self) -> GraphConfidence {
+        self.confidence
+    }
+    #[must_use]
+    pub fn source_handle_ids(&self) -> &[StableHandleId] {
+        &self.source_handle_ids
+    }
+    #[must_use]
+    pub fn evidence_ids(&self) -> &[EvidenceId] {
+        &self.evidence_ids
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]

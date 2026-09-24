@@ -1,5 +1,7 @@
 //! Direct source/load/XML proposals. No recognizer inference or graph publication.
+mod functions;
 mod mixins;
+pub use functions::{ProjectGraphCallSite, ProjectGraphFunction};
 mod xml;
 pub use mixins::{
     ProjectGraphLuaDeclaration, ProjectGraphMixinOutcome, ProjectGraphMixinReference,
@@ -28,16 +30,19 @@ use crate::{
     ProjectError, ProjectErrorCode, ProjectKind, ProjectPhase, ProjectResult, ProjectView,
 };
 
-pub const SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/3";
+pub const SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/4";
 pub const SOURCE_GRAPH_PARTITION: &str = "wow-project.source-load";
 const MAX_FILES: usize = 4096;
 const MAX_LOADS: usize = 8192;
-const MAX_NODES: usize = MAX_FILES + xml::MAX_DECLARATIONS + mixins::MAX_DECLARATIONS;
+const MAX_NODES: usize =
+    MAX_FILES + xml::MAX_DECLARATIONS + mixins::MAX_DECLARATIONS + functions::MAX_FUNCTIONS;
 const MAX_EDGES: usize = MAX_LOADS
     + xml::MAX_DECLARATIONS
     + xml::MAX_INHERITANCE_REFERENCES
     + mixins::MAX_DECLARATIONS
-    + mixins::MAX_REFERENCES;
+    + mixins::MAX_REFERENCES
+    + functions::MAX_FUNCTIONS
+    + functions::MAX_CALLS;
 const MAX_TEXT_BYTES: usize = 4 * 1024 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -62,6 +67,10 @@ pub struct ProjectGraphProvenance {
     xml_inheritance: Vec<ProjectGraphXmlReference>,
     lua_declarations: Vec<ProjectGraphLuaDeclaration>,
     xml_mixins: Vec<ProjectGraphMixinReference>,
+    functions: Vec<ProjectGraphFunction>,
+    call_sites: Vec<ProjectGraphCallSite>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    function_call_report: Option<wow_emmy::function_calls::FunctionCallReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
     xml_binding_report: Option<crate::xml_bindings::ProjectXmlLuaBindings>,
     source_handles: BTreeMap<StableHandleId, SourceHandle>,
@@ -73,6 +82,25 @@ pub struct ProjectGraphProvenance {
 }
 
 impl ProjectGraphProvenance {
+    pub fn functions(&self) -> &[ProjectGraphFunction] {
+        &self.functions
+    }
+    pub fn call_sites(&self) -> &[ProjectGraphCallSite] {
+        &self.call_sites
+    }
+    pub fn function_call_report(&self) -> Option<&wow_emmy::function_calls::FunctionCallReport> {
+        self.function_call_report.as_ref()
+    }
+    pub fn source_handles(&self) -> &BTreeMap<StableHandleId, SourceHandle> {
+        &self.source_handles
+    }
+    pub fn evidence(&self) -> &BTreeMap<EvidenceId, EvidenceRecord> {
+        &self.evidence
+    }
+    pub fn context(&self) -> &GenerationContext {
+        &self.context
+    }
+
     #[must_use]
     pub fn files(&self) -> &[ProjectGraphFile] {
         &self.files
@@ -186,6 +214,7 @@ fn registry() -> ProjectResult<GraphRegistryBundle> {
             vec![
                 "xml_source_declaration".into(),
                 "lua_source_declaration".into(),
+                "lua_source_function".into(),
             ],
             vec![GraphConfidence::Proven, GraphConfidence::Derived],
         )
@@ -218,10 +247,27 @@ fn registry() -> ProjectResult<GraphRegistryBundle> {
         )
         .map_err(|_| invalid())?,
     );
+    let function = GraphEntityKindDefinition::new(
+        "lua_source_function",
+        vec!["project".into()],
+        vec!["document".into(), "function".into()],
+        vec![GraphConfidence::Derived],
+    )
+    .map_err(|_| invalid())?;
+    relations.push(
+        GraphRelationKindDefinition::new(
+            "lua_direct_calls",
+            GraphRelationKind::Calls,
+            vec!["lua_source_function".into()],
+            vec!["lua_source_function".into()],
+            vec![GraphConfidence::Derived],
+        )
+        .map_err(|_| invalid())?,
+    );
     GraphRegistryBundle::build(
         "wow-project.source-load",
-        "3",
-        vec![file, declaration, lua],
+        "4",
+        vec![file, declaration, lua, function],
         relations,
     )
     .map_err(|_| invalid())
@@ -276,8 +322,8 @@ fn support(
 }
 
 /// Export first-party files, selected direct references and source XML declarations.
-/// Library sources, dependency discovery, calls, XML runtime objects and recognizer roles
-/// are not inferred. One immutable ProjectView supplies every source identity.
+/// Library sources, dependency discovery, Calls edges, XML runtime objects and recognizer roles
+/// are not inferred. Callable source occurrences and call evidence are source-owned. One immutable ProjectView supplies every source identity.
 pub fn build_source_graph_proposals(
     project: &ProjectView,
     stop: &AtomicBool,
@@ -376,6 +422,9 @@ pub fn build_source_graph_proposals(
         xml_inheritance: Vec::new(),
         lua_declarations: Vec::new(),
         xml_mixins: Vec::new(),
+        functions: Vec::new(),
+        call_sites: Vec::new(),
+        function_call_report: None,
         xml_binding_report: None,
         source_handles: BTreeMap::new(),
         evidence: BTreeMap::new(),
@@ -486,6 +535,9 @@ pub fn build_source_graph_proposals(
     let mixins = mixins::project(project, &ids, &mut provenance, &mut text_bytes, stop)?;
     entities.extend(mixins.entities);
     relations.extend(mixins.relations);
+    let functions = functions::project(project, &ids, &mut provenance, &mut text_bytes, stop)?;
+    entities.extend(functions.entities);
+    relations.extend(functions.relations);
     if entities.len() > MAX_NODES || relations.len() > MAX_EDGES {
         return Err(exhausted());
     }
@@ -495,6 +547,14 @@ pub fn build_source_graph_proposals(
         GraphCoverageState::NotEvaluated
     };
     let coverage = vec![
+        GraphCoverageRecord::new(
+            GraphRelationKind::Calls,
+            GraphCoverageState::NotEvaluated,
+            false,
+            vec!["source_graph.calls_owned_by_recognizers".into()],
+            limits,
+        )
+        .map_err(|_| invalid())?,
         GraphCoverageRecord::new(
             GraphRelationKind::MixesIn,
             if provenance.xml_mixins.is_empty() {
@@ -509,7 +569,11 @@ pub fn build_source_graph_proposals(
         .map_err(|_| invalid())?,
         GraphCoverageRecord::new(
             GraphRelationKind::Owns,
-            xml_state,
+            if provenance.functions.is_empty() {
+                xml_state
+            } else {
+                GraphCoverageState::Partial
+            },
             false,
             vec!["source_graph.document_declaration_ownership_only".into()],
             limits,

@@ -22,10 +22,19 @@ pub struct LocalProjectBackend {
     configuration: ServiceConfiguration,
     target_generation: String,
     published: Mutex<Option<ProjectView>>,
+    function_calls: bool,
 }
 
 impl LocalProjectBackend {
     pub fn new(input: LocalProjectInput) -> ServiceResult<Self> {
+        Self::configured(input, false)
+    }
+
+    pub(crate) fn for_graph(input: LocalProjectInput) -> ServiceResult<Self> {
+        Self::configured(input, true)
+    }
+
+    fn configured(input: LocalProjectInput, function_calls: bool) -> ServiceResult<Self> {
         let project = input.bundle.configuration();
         let registry =
             RuleRegistry::e0().map_err(|_| owner_error("rule registry construction failed"))?;
@@ -46,6 +55,7 @@ impl LocalProjectBackend {
             configuration,
             target_generation: target.project_generation().to_string(),
             published: Mutex::new(None),
+            function_calls,
         })
     }
 
@@ -106,7 +116,11 @@ impl LocalProjectBackend {
             Some(project) => project.clone(),
             None => {
                 // Publication is in-memory only. No source or persistent current pointer is written.
-                let mut publisher = ProjectPublisher::new();
+                let mut publisher = if self.function_calls {
+                    ProjectPublisher::with_function_call_facts()
+                } else {
+                    ProjectPublisher::new()
+                };
                 let snapshot = publisher
                     .publish_initial_cancellable(self.input.clone(), stop)
                     .map_err(|error| {

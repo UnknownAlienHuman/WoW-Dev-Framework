@@ -9,6 +9,7 @@
 pub mod bindings;
 pub mod compatibility;
 pub mod flow;
+pub mod function_calls;
 pub mod references;
 pub mod syntax;
 pub mod virtual_syntax;

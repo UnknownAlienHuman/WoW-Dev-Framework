@@ -85,6 +85,9 @@ pub struct ProjectAnalyzerBinding {
     library_snapshot_ids: Vec<Box<str>>,
     syntax_report: EmmySyntaxReport,
     member_call_report: EmmyMemberCallReport,
+    // Optional graph facts captured in the existing session and independently hashed.
+    // E0 callers do not request this additional work; their identity stays unchanged.
+    function_call_report: Option<wow_emmy::function_calls::FunctionCallReport>,
     local_flow_report: EmmyLocalFlowReport,
     xml_lua_analysis: Option<crate::xml_lua::ProjectXmlLuaAnalysis>,
     xml_bindings: Option<crate::xml_bindings::ProjectXmlLuaBindings>,
@@ -124,6 +127,11 @@ impl ProjectAnalyzerBinding {
     #[must_use]
     pub const fn member_call_report(&self) -> &EmmyMemberCallReport {
         &self.member_call_report
+    }
+
+    #[must_use]
+    pub fn function_call_report(&self) -> Option<&wow_emmy::function_calls::FunctionCallReport> {
+        self.function_call_report.as_ref()
     }
 
     #[must_use]
@@ -174,6 +182,7 @@ pub(crate) fn build_analyzer_binding(
     inventory: &ProjectInputInventory,
     generation: &ProjectGenerationCandidate,
     libraries: &[LuaWorkspaceSnapshot],
+    function_calls: bool,
     stop: &AtomicBool,
 ) -> ProjectResult<ProjectAnalyzerBinding> {
     checkpoint(stop)?;
@@ -267,28 +276,31 @@ pub(crate) fn build_analyzer_binding(
         .as_ref()
         .map(|p| p.queries())
         .unwrap_or_default();
-    let (member_call_report, symbol_lookup) =
-        wow_emmy::references::analyze_member_calls_with_bindings(
-            &main_workspace,
-            &library_refs,
-            queries,
-            stop,
+    let session = wow_emmy::references::analyze_member_call_session(
+        &main_workspace,
+        &library_refs,
+        queries,
+        function_calls,
+        stop,
+    )
+    .map_err(|source| {
+        let code = match source.code() {
+            wow_emmy::EmmyMemberCallErrorCode::Cancelled => ProjectErrorCode::AnalysisCancelled,
+            wow_emmy::EmmyMemberCallErrorCode::FactBudgetExceeded => {
+                ProjectErrorCode::SourceBudgetExceeded
+            }
+            _ => ProjectErrorCode::AnalyzerFailed,
+        };
+        ProjectError::new(
+            code,
+            ProjectPhase::Analyzer,
+            "member and symbol lookup analysis failed",
         )
-        .map_err(|source| {
-            let code = match source.code() {
-                wow_emmy::EmmyMemberCallErrorCode::Cancelled => ProjectErrorCode::AnalysisCancelled,
-                wow_emmy::EmmyMemberCallErrorCode::FactBudgetExceeded => {
-                    ProjectErrorCode::SourceBudgetExceeded
-                }
-                _ => ProjectErrorCode::AnalyzerFailed,
-            };
-            ProjectError::new(
-                code,
-                ProjectPhase::Analyzer,
-                "member and symbol lookup analysis failed",
-            )
-            .with_candidate_generation(generation.project_generation())
-        })?;
+        .with_candidate_generation(generation.project_generation())
+    })?;
+    let member_call_report = session.member_calls;
+    let symbol_lookup = session.symbol_lookup;
+    let function_call_report = session.function_calls;
     let xml_bindings = match (pending_bindings, configuration.load_plan()) {
         (Some(pending), Some(plan)) => Some(crate::xml_bindings::finish(
             pending,
@@ -370,6 +382,8 @@ pub(crate) fn build_analyzer_binding(
         member_call_analysis_id: &'a str,
         local_flow_analysis_id: &'a str,
         #[serde(skip_serializing_if = "Option::is_none")]
+        function_call_analysis_id: Option<&'a str>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         xml_lua_analysis_id: Option<&'a str>,
         #[serde(skip_serializing_if = "Option::is_none")]
         xml_binding_analysis_id: Option<&'a str>,
@@ -394,6 +408,7 @@ pub(crate) fn build_analyzer_binding(
             syntax_analysis_id: syntax_report.analysis_id(),
             member_call_analysis_id: member_call_report.analysis_id(),
             local_flow_analysis_id: local_flow_report.analysis_id(),
+            function_call_analysis_id: function_call_report.as_ref().map(|r| r.analysis_id()),
             xml_lua_analysis_id: xml_lua_analysis.as_ref().map(|report| report.analysis_id()),
             xml_binding_analysis_id: xml_bindings.as_ref().map(|report| report.analysis_id()),
             file_manifest_digest: inventory.manifest_digest(),
@@ -411,6 +426,7 @@ pub(crate) fn build_analyzer_binding(
         library_snapshot_ids,
         syntax_report,
         member_call_report,
+        function_call_report,
         local_flow_report,
         xml_lua_analysis,
         xml_bindings,

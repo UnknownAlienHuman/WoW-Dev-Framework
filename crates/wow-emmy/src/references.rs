@@ -353,6 +353,25 @@ pub fn analyze_member_calls_with_bindings(
     EmmyMemberCallReport,
     Option<crate::bindings::SymbolLookupReport>,
 )> {
+    analyze_member_call_session(main, libraries, queries, false, stop)
+        .map(|session| (session.member_calls, session.symbol_lookup))
+}
+
+/// Optional graph facts are collected before the existing semantic session closes.
+/// Legacy APIs retain their exact member-call and symbol-lookup representations.
+pub struct MemberCallSession {
+    pub member_calls: EmmyMemberCallReport,
+    pub symbol_lookup: Option<crate::bindings::SymbolLookupReport>,
+    pub function_calls: Option<crate::function_calls::FunctionCallReport>,
+}
+
+pub fn analyze_member_call_session(
+    main: &LuaWorkspaceSnapshot,
+    libraries: &[&LuaWorkspaceSnapshot],
+    queries: &[String],
+    include_function_calls: bool,
+    stop: &std::sync::atomic::AtomicBool,
+) -> EmmyMemberCallResult<MemberCallSession> {
     crate::bindings::checkpoint(stop)?;
     crate::bindings::validate_queries(queries)?;
     validate_compiled_backend(main)?;
@@ -641,7 +660,22 @@ pub fn analyze_member_calls_with_bindings(
             stop,
         )?)
     };
-    Ok((report, lookups))
+    let function_calls = if include_function_calls {
+        Some(crate::function_calls::collect(
+            &analysis,
+            main,
+            &main_root,
+            &library_roots,
+            stop,
+        )?)
+    } else {
+        None
+    };
+    Ok(MemberCallSession {
+        member_calls: report,
+        symbol_lookup: lookups,
+        function_calls,
+    })
 }
 
 pub(crate) fn semantic_model<'a>(
