@@ -322,6 +322,13 @@ impl GraphRegistryBundle {
             .map(|index| &self.entity_kinds[index])
     }
 
+    /// Exact registered definitions, including distinct IDs sharing a stored
+    /// relation kind. Query profiles must not silently choose one such meaning.
+    #[must_use]
+    pub fn relation_kinds(&self) -> &[GraphRelationKindDefinition] {
+        &self.relation_kinds
+    }
+
     #[must_use]
     pub fn relation_kind(&self, relation_id: &str) -> Option<&GraphRelationKindDefinition> {
         self.relation_kinds

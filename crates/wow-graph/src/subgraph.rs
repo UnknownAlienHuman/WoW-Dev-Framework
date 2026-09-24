@@ -15,6 +15,16 @@ use crate::{
 };
 
 pub const GRAPH_SUBGRAPH_QUERY_SCHEMA: &str = "wow-graph/project-subgraph/e2-a/1";
+/// Per-relation traversal directions require a distinct query/result profile.
+/// Uniform-direction requests retain their original v1 bytes and identities.
+pub const GRAPH_DIRECTED_SUBGRAPH_QUERY_SCHEMA: &str = "wow-graph/project-subgraph/e2-a/2";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GraphRelationDirection {
+    pub relation: GraphRelationKind,
+    pub direction: GraphDirection,
+}
 
 /// Uses the same explicit confidence ceiling as bounded paths. Candidate edges
 /// remain opt-in and never grant negative authority.
@@ -69,6 +79,8 @@ pub struct GraphSubgraphQuery {
     snapshot_id: GraphSnapshotId,
     roots: Vec<GraphNodeId>,
     direction: GraphDirection,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    relation_directions: Vec<GraphRelationDirection>,
     relations: Vec<GraphRelationKind>,
     confidence: GraphSubgraphConfidence,
     limits: GraphSubgraphLimits,
@@ -88,12 +100,64 @@ impl GraphSubgraphQuery {
             snapshot_id,
             roots,
             direction,
+            relation_directions: Vec::new(),
             relations,
             confidence: GraphSubgraphConfidence::default(),
             limits,
         };
         query.validate()?;
         Ok(query)
+    }
+
+    /// Traverse each admitted relation in its own declared direction. Original
+    /// edge endpoints remain unchanged; inverse traversal creates no inverse edge.
+    pub fn new_directed(
+        snapshot_id: GraphSnapshotId,
+        mut roots: Vec<GraphNodeId>,
+        mut relation_directions: Vec<GraphRelationDirection>,
+        limits: GraphSubgraphLimits,
+    ) -> GraphResult<Self> {
+        roots.sort();
+        relation_directions.sort();
+        let query = Self {
+            snapshot_id,
+            roots,
+            direction: GraphDirection::Both,
+            relations: relation_directions
+                .iter()
+                .map(|step| step.relation)
+                .collect(),
+            relation_directions,
+            confidence: GraphSubgraphConfidence::default(),
+            limits,
+        };
+        query.validate()?;
+        Ok(query)
+    }
+
+    #[must_use]
+    pub const fn schema(&self) -> &'static str {
+        if self.relation_directions.is_empty() {
+            GRAPH_SUBGRAPH_QUERY_SCHEMA
+        } else {
+            GRAPH_DIRECTED_SUBGRAPH_QUERY_SCHEMA
+        }
+    }
+
+    #[must_use]
+    pub fn relation_directions(&self) -> &[GraphRelationDirection] {
+        &self.relation_directions
+    }
+
+    /// None means that the relation is not part of this query at all.
+    #[must_use]
+    pub fn direction_for(&self, relation: GraphRelationKind) -> Option<GraphDirection> {
+        let index = self.relations.binary_search(&relation).ok()?;
+        Some(
+            self.relation_directions
+                .get(index)
+                .map_or(self.direction, |step| step.direction),
+        )
     }
 
     #[must_use]
@@ -115,6 +179,19 @@ impl GraphSubgraphQuery {
         {
             return Err(invalid(
                 "subgraph requires bounded unique ordered roots and relations",
+            ));
+        }
+        if !self.relation_directions.is_empty()
+            && (self.direction != GraphDirection::Both
+                || self.relation_directions.len() != self.relations.len()
+                || self
+                    .relation_directions
+                    .iter()
+                    .zip(&self.relations)
+                    .any(|(step, relation)| step.relation != *relation))
+        {
+            return Err(invalid(
+                "per-relation directions must exactly cover the canonical whitelist",
             ));
         }
         for root in &self.roots {
@@ -183,7 +260,7 @@ impl GraphSubgraphQuery {
                 ));
             }
         }
-        let bytes = encoded(&(GRAPH_SUBGRAPH_QUERY_SCHEMA, self))?;
+        let bytes = encoded(&(self.schema(), self))?;
         let hash = Sha256::digest(bytes);
         let hex = hash
             .iter()

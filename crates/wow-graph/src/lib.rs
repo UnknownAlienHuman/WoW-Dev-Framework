@@ -2,6 +2,7 @@
 
 //! Immutable exact-generation graph records and bounded evidence-aware queries.
 
+mod axes;
 mod error;
 mod explain;
 mod identity;
@@ -52,8 +53,9 @@ pub use registry::{
 };
 
 pub use subgraph::{
-    GRAPH_SUBGRAPH_QUERY_SCHEMA, GraphSubgraphConfidence, GraphSubgraphLimits, GraphSubgraphNode,
-    GraphSubgraphQuery, GraphSubgraphResult, GraphSubgraphTruncation,
+    GRAPH_DIRECTED_SUBGRAPH_QUERY_SCHEMA, GRAPH_SUBGRAPH_QUERY_SCHEMA, GraphRelationDirection,
+    GraphSubgraphConfidence, GraphSubgraphLimits, GraphSubgraphNode, GraphSubgraphQuery,
+    GraphSubgraphResult, GraphSubgraphTruncation,
 };
 
 pub use explain::{
@@ -61,4 +63,10 @@ pub use explain::{
     GraphExplainLimits, GraphExplainQuery, GraphExplainSubject, GraphExplainedRecord,
     GraphExplanation, GraphExplanationBoundary, GraphExplanationCoverage, GraphExplanationRegistry,
     GraphExplanationTruncation, GraphProducerSupportOrigin,
+};
+
+pub use axes::{
+    GRAPH_AXIS_PROFILE_SCHEMA, GRAPH_AXIS_QUERY_SCHEMA, GraphAxis, GraphAxisBoundary,
+    GraphAxisProfile, GraphAxisQuery, GraphAxisRelation, GraphAxisResult, GraphAxisShape,
+    GraphAxisTraversal,
 };

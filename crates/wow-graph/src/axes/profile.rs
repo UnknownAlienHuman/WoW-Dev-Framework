@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
-use crate::{GraphDirection, GraphErrorCode, GraphRegistryBundle, GraphRelationKind, GraphResult};
 use super::{digest, error};
+use crate::{GraphDirection, GraphErrorCode, GraphRegistryBundle, GraphRelationKind, GraphResult};
+use serde::{Deserialize, Serialize};
 
 pub const GRAPH_AXIS_PROFILE_SCHEMA: &str = "wow-graph/axis-profile/e2-a/1";
 
@@ -37,11 +37,17 @@ pub struct GraphAxisRelation {
 }
 impl GraphAxisRelation {
     #[must_use]
-    pub fn relation_id(&self) -> &str { &self.relation_id }
+    pub fn relation_id(&self) -> &str {
+        &self.relation_id
+    }
     #[must_use]
-    pub const fn relation(&self) -> GraphRelationKind { self.relation }
+    pub const fn relation(&self) -> GraphRelationKind {
+        self.relation
+    }
     #[must_use]
-    pub const fn forward_direction(&self) -> GraphDirection { self.forward_direction }
+    pub const fn forward_direction(&self) -> GraphDirection {
+        self.forward_direction
+    }
 }
 
 /// Immutable sidecar query profile tied to one exact graph registry. It does not
@@ -68,9 +74,16 @@ impl GraphAxisProfile {
         let (shape, families) = families(axis)?;
         let mut relations = Vec::new();
         for (relation, direction) in families {
-            let mut matches = registry.relation_kinds().iter().filter(|d| d.relation() == relation);
-            let definition = matches.next().ok_or_else(|| error(GraphErrorCode::AxisUnsupported))?;
-            if matches.next().is_some() { return Err(error(GraphErrorCode::AxisProfileInvalid)); }
+            let mut matches = registry
+                .relation_kinds()
+                .iter()
+                .filter(|d| d.relation() == relation);
+            let definition = matches
+                .next()
+                .ok_or_else(|| error(GraphErrorCode::AxisUnsupported))?;
+            if matches.next().is_some() {
+                return Err(error(GraphErrorCode::AxisProfileInvalid));
+            }
             relations.push(GraphAxisRelation {
                 relation_id: definition.relation_id().into(),
                 relation,
@@ -80,14 +93,27 @@ impl GraphAxisProfile {
         relations.sort_by_key(|s| s.relation);
         let cycle_policy: Box<str> = "preserve_edges_with_visited_nodes".into();
         let ordering: Box<str> = "multi_root_bfs_node_then_edge_id/1".into();
-        let digest = digest("graph-axis-profile:sha256:", &(
-            GRAPH_AXIS_PROFILE_SCHEMA, axis, registry.registry_digest(), shape,
-            &cycle_policy, &ordering, &relations,
-        ))?;
+        let digest = digest(
+            "graph-axis-profile:sha256:",
+            &(
+                GRAPH_AXIS_PROFILE_SCHEMA,
+                axis,
+                registry.registry_digest(),
+                shape,
+                &cycle_policy,
+                &ordering,
+                &relations,
+            ),
+        )?;
         Ok(Self {
-            schema: GRAPH_AXIS_PROFILE_SCHEMA.into(), axis,
-            registry_digest: registry.registry_digest().into(), shape,
-            cycle_policy, ordering, relations, digest,
+            schema: GRAPH_AXIS_PROFILE_SCHEMA.into(),
+            axis,
+            registry_digest: registry.registry_digest().into(),
+            shape,
+            cycle_policy,
+            ordering,
+            relations,
+            digest,
         })
     }
 
@@ -103,21 +129,33 @@ impl GraphAxisProfile {
         Ok(())
     }
     #[must_use]
-    pub const fn axis(&self) -> GraphAxis { self.axis }
+    pub const fn axis(&self) -> GraphAxis {
+        self.axis
+    }
     #[must_use]
-    pub fn registry_digest(&self) -> &str { &self.registry_digest }
+    pub fn registry_digest(&self) -> &str {
+        &self.registry_digest
+    }
     #[must_use]
-    pub fn digest(&self) -> &str { &self.digest }
+    pub fn digest(&self) -> &str {
+        &self.digest
+    }
     #[must_use]
-    pub const fn shape(&self) -> GraphAxisShape { self.shape }
+    pub const fn shape(&self) -> GraphAxisShape {
+        self.shape
+    }
     #[must_use]
-    pub fn relations(&self) -> &[GraphAxisRelation] { &self.relations }
+    pub fn relations(&self) -> &[GraphAxisRelation] {
+        &self.relations
+    }
 }
 
 /// Forward hierarchies run from owner/base to owned/derived. Load forward runs
 /// from loader/prerequisite to consumer; it is not an executable load schedule.
 /// Network axes retain stored directions and never acquire "parent" semantics.
-fn families(axis: GraphAxis) -> GraphResult<(GraphAxisShape, Vec<(GraphRelationKind, GraphDirection)>)> {
+fn families(
+    axis: GraphAxis,
+) -> GraphResult<(GraphAxisShape, Vec<(GraphRelationKind, GraphDirection)>)> {
     use GraphDirection::{Incoming as Reverse, Outgoing as Forward};
     use GraphRelationKind::*;
     let shape = match axis {
@@ -128,15 +166,22 @@ fn families(axis: GraphAxis) -> GraphResult<(GraphAxisShape, Vec<(GraphRelationK
         // Neither lexical contains/declares nor object parent_of is representable
         // in the current closed GraphRelationKind schema. Do not alias owns or
         // factory_creates into those distinct semantics.
-        GraphAxis::Lexical | GraphAxis::Object => return Err(error(GraphErrorCode::AxisUnsupported)),
+        GraphAxis::Lexical | GraphAxis::Object => {
+            return Err(error(GraphErrorCode::AxisUnsupported));
+        }
         GraphAxis::Ownership => vec![(Owns, Forward)],
         GraphAxis::Load => vec![(Loads, Forward), (DependsOn, Reverse)],
         GraphAxis::Inheritance => vec![(Inherits, Reverse), (MixesIn, Reverse)],
         GraphAxis::Registration => vec![
-            (RegistersNativeEvent, Forward), (HandlesNativeEvent, Forward),
-            (BridgesNativeEvent, Forward), (EmitsCustomSignal, Forward),
-            (HandlesCustomSignal, Forward), (RegistersCvarCallback, Forward),
-            (SetsScript, Forward), (HooksScript, Forward), (SecureHooksFunction, Forward),
+            (RegistersNativeEvent, Forward),
+            (HandlesNativeEvent, Forward),
+            (BridgesNativeEvent, Forward),
+            (EmitsCustomSignal, Forward),
+            (HandlesCustomSignal, Forward),
+            (RegistersCvarCallback, Forward),
+            (SetsScript, Forward),
+            (HooksScript, Forward),
+            (SecureHooksFunction, Forward),
         ],
         GraphAxis::Lifecycle => vec![(FactoryCreates, Forward)],
         GraphAxis::State => vec![(ReadsState, Forward), (WritesState, Forward)],

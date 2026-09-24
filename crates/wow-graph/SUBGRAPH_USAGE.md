@@ -104,3 +104,11 @@ freeze, full E2-A acceptance or product-launch gate is advanced by this code.
 Implementation: `src/subgraph.rs` and `src/subgraph/walk.rs`.
 Contract: `e2/QUERY_MODEL.md` (`project_subgraph`, Confidence policy, Coverage and
 absence) and `e2/SECURITY_AND_BUDGETS.md` (Query budgets).
+
+## Per-relation traversal
+
+`new_directed` accepts canonical `GraphRelationDirection` entries and emits the
+v2 query/result profile. Every selected relation has one explicit direction;
+partial or duplicated direction tables reject. Named [axes](AXIS_USAGE.md) use
+this same BFS without reversing or copying stored edges. Uniform-direction
+queries still use the original v1 representation and identity.

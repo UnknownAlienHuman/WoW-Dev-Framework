@@ -6,15 +6,15 @@ pub use profile::{
     GRAPH_AXIS_PROFILE_SCHEMA, GraphAxis, GraphAxisProfile, GraphAxisRelation, GraphAxisShape,
 };
 
-use std::sync::atomic::{AtomicBool, Ordering};
-use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
-use wow_core::canonical_json_bytes;
 use crate::{
     GraphDirection, GraphError, GraphErrorCode, GraphNodeId, GraphPartitionSnapshot,
-    GraphPathConfidence, GraphQueryState, GraphRelationDirection, GraphResult,
-    GraphSnapshotId, GraphSubgraphLimits, GraphSubgraphQuery, GraphSubgraphResult,
+    GraphPathConfidence, GraphQueryState, GraphRelationDirection, GraphResult, GraphSnapshotId,
+    GraphSubgraphLimits, GraphSubgraphQuery, GraphSubgraphResult,
 };
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use std::sync::atomic::{AtomicBool, Ordering};
+use wow_core::canonical_json_bytes;
 
 pub const GRAPH_AXIS_QUERY_SCHEMA: &str = "wow-graph/axis-query/e2-a/1";
 
@@ -73,19 +73,33 @@ impl GraphAxisQuery {
     }
 
     #[must_use]
-    pub fn snapshot_id(&self) -> &GraphSnapshotId { &self.snapshot_id }
+    pub fn snapshot_id(&self) -> &GraphSnapshotId {
+        &self.snapshot_id
+    }
     #[must_use]
-    pub const fn axis(&self) -> GraphAxis { self.axis }
+    pub const fn axis(&self) -> GraphAxis {
+        self.axis
+    }
     #[must_use]
-    pub fn profile_digest(&self) -> &str { &self.profile_digest }
+    pub fn profile_digest(&self) -> &str {
+        &self.profile_digest
+    }
     #[must_use]
-    pub fn roots(&self) -> &[GraphNodeId] { &self.roots }
+    pub fn roots(&self) -> &[GraphNodeId] {
+        &self.roots
+    }
     #[must_use]
-    pub const fn traversal(&self) -> GraphAxisTraversal { self.traversal }
+    pub const fn traversal(&self) -> GraphAxisTraversal {
+        self.traversal
+    }
     #[must_use]
-    pub const fn confidence(&self) -> GraphPathConfidence { self.confidence }
+    pub const fn confidence(&self) -> GraphPathConfidence {
+        self.confidence
+    }
     #[must_use]
-    pub const fn limits(&self) -> GraphSubgraphLimits { self.limits }
+    pub const fn limits(&self) -> GraphSubgraphLimits {
+        self.limits
+    }
 
     fn validate(&self, profile: &GraphAxisProfile) -> GraphResult<()> {
         if self.axis != profile.axis() || self.profile_digest.as_ref() != profile.digest() {
@@ -93,15 +107,20 @@ impl GraphAxisQuery {
         }
         self.limits.validate()?;
         GraphSnapshotId::new(self.snapshot_id.as_str())?;
-        if self.roots.is_empty() || self.roots.len() > 64
+        if self.roots.is_empty()
+            || self.roots.len() > 64
             || self.roots.len() > self.limits.max_nodes as usize
             || self.roots.windows(2).any(|pair| pair[0] >= pair[1])
         {
             return Err(error(GraphErrorCode::QueryInvalid));
         }
-        for root in &self.roots { GraphNodeId::new(root.as_str())?; }
-        if matches!(self.traversal, GraphAxisTraversal::Parents | GraphAxisTraversal::Children)
-            && (profile.shape() != GraphAxisShape::MultiParent || self.limits.max_depth != 1)
+        for root in &self.roots {
+            GraphNodeId::new(root.as_str())?;
+        }
+        if matches!(
+            self.traversal,
+            GraphAxisTraversal::Parents | GraphAxisTraversal::Children
+        ) && (profile.shape() != GraphAxisShape::MultiParent || self.limits.max_depth != 1)
         {
             return Err(error(GraphErrorCode::QueryInvalid));
         }
@@ -131,7 +150,9 @@ impl GraphAxisQuery {
         let snapshot = owner.snapshot();
         for root in &self.roots {
             checkpoint(cancelled)?;
-            let node = snapshot.node(root).ok_or_else(|| error(GraphErrorCode::QueryInvalid))?;
+            let node = snapshot
+                .node(root)
+                .ok_or_else(|| error(GraphErrorCode::QueryInvalid))?;
             if owner.registry().entity_kind(node.kind()).is_none() {
                 return Err(error(GraphErrorCode::RegistryInvalid));
             }
@@ -141,11 +162,23 @@ impl GraphAxisQuery {
         // rather than trusting an enum match to certify their endpoint semantics.
         for edge in snapshot.edges() {
             checkpoint(cancelled)?;
-            let Some(step) = profile.relations().iter().find(|s| s.relation() == edge.relation()) else { continue; };
-            let definition = owner.registry().relation_kind(step.relation_id())
+            let Some(step) = profile
+                .relations()
+                .iter()
+                .find(|s| s.relation() == edge.relation())
+            else {
+                continue;
+            };
+            let definition = owner
+                .registry()
+                .relation_kind(step.relation_id())
                 .ok_or_else(|| error(GraphErrorCode::AxisProfileInvalid))?;
-            let source = snapshot.node(edge.from()).ok_or_else(|| error(GraphErrorCode::EndpointMissing))?;
-            let target = snapshot.node(edge.to()).ok_or_else(|| error(GraphErrorCode::EndpointMissing))?;
+            let source = snapshot
+                .node(edge.from())
+                .ok_or_else(|| error(GraphErrorCode::EndpointMissing))?;
+            let target = snapshot
+                .node(edge.to())
+                .ok_or_else(|| error(GraphErrorCode::EndpointMissing))?;
             if !definition.allows_source_kind(source.kind())
                 || !definition.allows_target_kind(target.kind())
                 || !definition.allows_confidence(edge.confidence())
@@ -153,14 +186,22 @@ impl GraphAxisQuery {
                 return Err(error(GraphErrorCode::RegistryInvalid));
             }
         }
-        let directions = profile.relations().iter().map(|step| GraphRelationDirection {
-            relation: step.relation(),
-            direction: match self.traversal {
-                GraphAxisTraversal::Forward | GraphAxisTraversal::Children => step.forward_direction(),
-                GraphAxisTraversal::Reverse | GraphAxisTraversal::Parents => reverse(step.forward_direction()),
-                GraphAxisTraversal::Both => GraphDirection::Both,
-            },
-        }).collect();
+        let directions = profile
+            .relations()
+            .iter()
+            .map(|step| GraphRelationDirection {
+                relation: step.relation(),
+                direction: match self.traversal {
+                    GraphAxisTraversal::Forward | GraphAxisTraversal::Children => {
+                        step.forward_direction()
+                    }
+                    GraphAxisTraversal::Reverse | GraphAxisTraversal::Parents => {
+                        reverse(step.forward_direction())
+                    }
+                    GraphAxisTraversal::Both => GraphDirection::Both,
+                },
+            })
+            .collect();
         let header = AxisHeader {
             schema: GRAPH_AXIS_QUERY_SCHEMA,
             query: self.clone(),
@@ -178,17 +219,26 @@ impl GraphAxisQuery {
         // Reserve the *entire* axis header as well; axes cannot escape byte limits
         // merely by wrapping a result that fit its original budget.
         let overhead = encoded(&header)?.len() + b",\"projection\":".len();
-        let remaining = (self.limits.max_output_bytes as usize).checked_sub(overhead)
+        let remaining = (self.limits.max_output_bytes as usize)
+            .checked_sub(overhead)
             .ok_or_else(|| error(GraphErrorCode::BudgetExceeded))?;
-        if remaining < 16_384 { return Err(error(GraphErrorCode::BudgetExceeded)); }
+        if remaining < 16_384 {
+            return Err(error(GraphErrorCode::BudgetExceeded));
+        }
         let limits = GraphSubgraphLimits {
             max_output_bytes: remaining as u32,
             max_scanned_edges: self.limits.max_scanned_edges - header.registry_scanned_edges,
             ..self.limits
         };
         checkpoint(cancelled)?;
-        let projection = GraphSubgraphQuery::new_directed(self.snapshot_id.clone(), self.roots.clone(), directions, limits)?
-            .with_confidence(self.confidence).execute(snapshot, cancelled)?;
+        let projection = GraphSubgraphQuery::new_directed(
+            self.snapshot_id.clone(),
+            self.roots.clone(),
+            directions,
+            limits,
+        )?
+        .with_confidence(self.confidence)
+        .execute(snapshot, cancelled)?;
         let result = GraphAxisResult { header, projection };
         if encoded(&result)?.len() > self.limits.max_output_bytes as usize {
             return Err(error(GraphErrorCode::BudgetExceeded));
@@ -227,13 +277,21 @@ pub struct GraphAxisResult {
 }
 impl GraphAxisResult {
     #[must_use]
-    pub fn query(&self) -> &GraphAxisQuery { &self.header.query }
+    pub fn query(&self) -> &GraphAxisQuery {
+        &self.header.query
+    }
     #[must_use]
-    pub fn query_digest(&self) -> &str { &self.header.query_digest }
+    pub fn query_digest(&self) -> &str {
+        &self.header.query_digest
+    }
     #[must_use]
-    pub fn profile(&self) -> &GraphAxisProfile { &self.header.profile }
+    pub fn profile(&self) -> &GraphAxisProfile {
+        &self.header.profile
+    }
     #[must_use]
-    pub const fn projection(&self) -> &GraphSubgraphResult { &self.projection }
+    pub const fn projection(&self) -> &GraphSubgraphResult {
+        &self.projection
+    }
     /// Counts the registry-admission and adjacency-indexing passes together.
     #[must_use]
     pub fn scanned_edges(&self) -> u32 {
@@ -241,15 +299,23 @@ impl GraphAxisResult {
     }
     /// State of the exact stored-relation traversal, not complete WoW semantics.
     #[must_use]
-    pub fn state(&self) -> GraphQueryState { self.projection.state() }
+    pub fn state(&self) -> GraphQueryState {
+        self.projection.state()
+    }
     #[must_use]
-    pub fn boundaries(&self) -> &[GraphAxisBoundary] { &self.header.boundaries }
+    pub fn boundaries(&self) -> &[GraphAxisBoundary] {
+        &self.header.boundaries
+    }
     #[must_use]
-    pub fn no_new_evidence(&self) -> bool { self.projection.no_new_evidence() }
+    pub fn no_new_evidence(&self) -> bool {
+        self.projection.no_new_evidence()
+    }
     /// The underlying exact-relation query may have scoped absence authority;
     /// the broader named axis cannot waive the explicit semantic boundaries.
     #[must_use]
-    pub const fn absence_authoritative(&self) -> bool { false }
+    pub const fn absence_authoritative(&self) -> bool {
+        false
+    }
 }
 
 fn reverse(direction: GraphDirection) -> GraphDirection {
@@ -260,17 +326,25 @@ fn reverse(direction: GraphDirection) -> GraphDirection {
     }
 }
 fn checkpoint(cancelled: &AtomicBool) -> GraphResult<()> {
-    if cancelled.load(Ordering::Acquire) { return Err(error(GraphErrorCode::Cancelled)); }
+    if cancelled.load(Ordering::Acquire) {
+        return Err(error(GraphErrorCode::Cancelled));
+    }
     Ok(())
 }
 fn error(code: GraphErrorCode) -> GraphError {
-    GraphError::new(code, "graph axis query or profile does not match its bounded owner contract")
+    GraphError::new(
+        code,
+        "graph axis query or profile does not match its bounded owner contract",
+    )
 }
 fn encoded<T: Serialize>(value: &T) -> GraphResult<Vec<u8>> {
     canonical_json_bytes(value).map_err(|_| error(GraphErrorCode::QueryInvalid))
 }
 fn digest<T: Serialize>(prefix: &str, value: &T) -> GraphResult<Box<str>> {
     let hash = Sha256::digest(encoded(value)?);
-    let hex = hash.iter().map(|byte| format!("{byte:02x}")).collect::<String>();
+    let hex = hash
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
     Ok(format!("{prefix}{hex}").into_boxed_str())
 }

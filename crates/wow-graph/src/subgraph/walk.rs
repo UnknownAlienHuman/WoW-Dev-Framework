@@ -2,8 +2,8 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::sync::atomic::AtomicBool;
 
 use super::{
-    GRAPH_SUBGRAPH_QUERY_SCHEMA, GraphSubgraphConfidence, GraphSubgraphNode, GraphSubgraphQuery,
-    GraphSubgraphResult, GraphSubgraphTruncation, budget, checkpoint, encoded, invalid,
+    GraphSubgraphConfidence, GraphSubgraphNode, GraphSubgraphQuery, GraphSubgraphResult,
+    GraphSubgraphTruncation, budget, checkpoint, encoded, invalid,
 };
 use crate::{
     GraphCoverageRecord, GraphCoverageState, GraphDirection, GraphEdge, GraphNodeId,
@@ -25,7 +25,7 @@ pub(super) fn execute(
         }
     }
     let mut result = GraphSubgraphResult {
-        schema: GRAPH_SUBGRAPH_QUERY_SCHEMA,
+        schema: query.schema(),
         query: query.clone(),
         query_digest,
         universe: snapshot.universe().clone(),
@@ -70,16 +70,17 @@ pub(super) fn execute(
     for edge in snapshot.edges() {
         checkpoint(cancelled)?;
         result.scanned_edges += 1;
-        if query.relations.binary_search(&edge.relation()).is_err()
-            || !query.confidence.admits(edge.confidence())
-        {
+        let Some(direction) = query.direction_for(edge.relation()) else {
+            continue;
+        };
+        if !query.confidence.admits(edge.confidence()) {
             continue;
         }
         // Edges are already in canonical ID order; direction never rewrites them.
-        if query.direction != GraphDirection::Incoming {
+        if direction != GraphDirection::Incoming {
             adjacency.entry(edge.from()).or_default().push(edge);
         }
-        if query.direction != GraphDirection::Outgoing {
+        if direction != GraphDirection::Outgoing {
             adjacency.entry(edge.to()).or_default().push(edge);
         }
     }

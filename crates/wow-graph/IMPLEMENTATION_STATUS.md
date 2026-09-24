@@ -48,7 +48,7 @@ The partition acceptance tests cover atomic multi-partition publication, combine
 ## Remaining E2-A scope
 
 - Cross-replacement dependency scheduling and richer assertion/conflict/attribute policies.
-- Axis queries, full conflict/derivation explanations and normative fixture closure.
+- Remaining axis families/forms, full conflict/derivation explanations and normative fixture closure.
 - Cross-store source/evidence/coverage resolution, beyond preserved and validated IDs.
 - Inactive durable generation, post-open golden validation and coherent ProjectPublicationSet activation through E2-D.
 - Multi-process reader leases, crash recovery and durable last-known-good policy for partition snapshots.
@@ -79,3 +79,15 @@ Canonical support/byte limits and cancellation are explicit. See
 [EXPLANATION_USAGE.md](EXPLANATION_USAGE.md). This is retained-support enumeration,
 not external evidence dereferencing, a complete conflict/derivation model, or a
 service/CLI route. Existing identities and package-acceptance gates are unchanged.
+
+## Registry-bound axes
+
+`GraphAxisProfile` and `GraphAxisQuery` add ownership/load/inheritance/registration/
+lifecycle/state/call views, with per-relation directions and exact registry/snapshot
+bindings. Multi-parent forms remain separate from general directed networks.
+Lexical/object families are explicitly unsupported in the current stored schema.
+The shared BFS preserves all original evidence, confidence, budgets and cancellation;
+profile/header bytes and both query scan passes count toward the axis limits.
+See [AXIS_USAGE.md](AXIS_USAGE.md). Complete traversal is not complete semantic or
+conflict coverage. Axis persistence, root discovery, unique-parent chain policy,
+service/CLI routing and full package acceptance remain separate.
