@@ -1,0 +1,118 @@
+name: Graph axes build
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.ci/graph-axes/**'
+      - '.github/workflows/graph-axes-build.yml'
+permissions:
+  contents: read
+concurrency:
+  group: graph-axes-build
+  cancel-in-progress: false
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Admit the exact reviewed implementation
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git config core.autocrlf false
+          mkdir -p "$RUNNER_TEMP/graph-axes/input"
+          git rev-parse HEAD > "$RUNNER_TEMP/graph-axes/BASE_SHA"
+          test "$(git hash-object .ci/graph-axes/axes.rs)" = bf37e9e5b3f0690625401b2db466b7fd709d7971
+          test "$(git hash-object .ci/graph-axes/profile.rs)" = f98fb2dfadf05066d33638485077cf620222c01a
+          test "$(git hash-object .ci/graph-axes/integration.patch)" = 5621884893907c0bafd8a58f17841f28c6559a49
+          cp .ci/graph-axes/* "$RUNNER_TEMP/graph-axes/input/"
+          git rm -r -- .ci/graph-axes .github/workflows/graph-axes-build.yml
+          test "$(git write-tree)" = f217ce7d92a640d4381ee6f53d438c3d527931cc
+          git apply --index "$RUNNER_TEMP/graph-axes/input/integration.patch"
+          mkdir -p crates/wow-graph/src/axes
+          cp "$RUNNER_TEMP/graph-axes/input/axes.rs" crates/wow-graph/src/axes.rs
+          cp "$RUNNER_TEMP/graph-axes/input/profile.rs" crates/wow-graph/src/axes/profile.rs
+          git add crates/wow-graph/src/axes.rs crates/wow-graph/src/axes/profile.rs
+          test "$(git write-tree)" = b7ca0ac56048e34ac70ca521f471caa225383afe
+      - name: Format the reviewed Rust source
+        run: |
+          set -euo pipefail
+          rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+          rustc +stable -Vv > "$RUNNER_TEMP/graph-axes/RUST_VERSION"
+          cargo +stable fmt --all
+          git add -u
+          git diff --cached --check
+          git write-tree > "$RUNNER_TEMP/graph-axes/TREE_SHA"
+      - name: Build graph owner
+        run: |
+          set -euo pipefail
+          cargo +stable build --locked -p wow-graph --lib 2>&1 | tee "$RUNNER_TEMP/graph-axes/build.log"
+      - name: Lint changed owner
+        run: |
+          set -euo pipefail
+          cargo +stable clippy --locked -p wow-graph --lib -- -D warnings 2>&1 | tee "$RUNNER_TEMP/graph-axes/clippy.log"
+          cargo +stable xtask check 2>&1 | tee "$RUNNER_TEMP/graph-axes/policy.log"
+          cargo +stable fmt --all --check
+          git diff --exit-code
+      - name: Retain compiled source
+        run: |
+          set -euo pipefail
+          test "$(git write-tree)" = "$(cat "$RUNNER_TEMP/graph-axes/TREE_SHA")"
+          git diff --cached --binary > "$RUNNER_TEMP/graph-axes/compiled.patch"
+          git archive --format=tar --output="$RUNNER_TEMP/graph-axes/compiled-source.tar" "$(git write-tree)"
+          (cd "$RUNNER_TEMP/graph-axes" && sha256sum compiled.patch compiled-source.tar > SHA256SUMS)
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: graph-axes-${{ matrix.os }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/graph-axes/
+          retention-days: 3
+          if-no-files-found: error
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: true
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: graph-axes-ubuntu-latest-${{ github.run_id }}
+          path: ${{ runner.temp }}/linux
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: graph-axes-windows-latest-${{ github.run_id }}
+          path: ${{ runner.temp }}/windows
+      - name: Publish identical compiled sources to unchanged main
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(cat "$RUNNER_TEMP/linux/BASE_SHA")" = "$GITHUB_SHA"
+          test "$(cat "$RUNNER_TEMP/windows/BASE_SHA")" = "$GITHUB_SHA"
+          (cd "$RUNNER_TEMP/linux" && sha256sum -c SHA256SUMS)
+          (cd "$RUNNER_TEMP/windows" && sha256sum -c SHA256SUMS)
+          cmp "$RUNNER_TEMP/linux/TREE_SHA" "$RUNNER_TEMP/windows/TREE_SHA"
+          cmp "$RUNNER_TEMP/linux/compiled.patch" "$RUNNER_TEMP/windows/compiled.patch"
+          git apply --index "$RUNNER_TEMP/linux/compiled.patch"
+          test "$(git write-tree)" = "$(cat "$RUNNER_TEMP/linux/TREE_SHA")"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$GITHUB_SHA"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat(graph): traverse registry-bound named axes with per-relation directions' -m "Add immutable reviewed axis profiles for existing ownership, load, inheritance, registration, lifecycle, state and call relation families. Bind requests to exact registry/profile/snapshot identities, reject ambiguous or unavailable definitions, and preserve multi-parent versus network semantics. Reuse the bounded subgraph BFS with explicit per-relation directions and v2 identity; retain existing v1 bytes. Account for both query scan passes and full wrapper output bytes. Linux/Windows graph builds, selected-owner Clippy, formatting and repository policy passed on this exact tree in run $GITHUB_RUN_ID. No tests, fixtures, dependencies or stored graph identities changed. Lexical/object kinds, conflict/evidence dereferencing, axis persistence, service/CLI routing and full E2 acceptance remain separate. Temporary build inputs removed."
+          git push origin HEAD:main
