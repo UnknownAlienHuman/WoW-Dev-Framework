@@ -1,0 +1,108 @@
+name: Graph read CLI build
+on:
+  push:
+    branches: [main]
+    paths: ['.ci/graph-read/**', '.github/workflows/graph-read-build.yml']
+permissions:
+  contents: read
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Admit exact implementation on reviewed main
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git config core.autocrlf false
+          mkdir -p "$RUNNER_TEMP/graph-read"
+          git rev-parse HEAD > "$RUNNER_TEMP/graph-read/BASE_SHA"
+          test "$(git hash-object .ci/graph-read/00)" = d6f42a156311e9453a1cdc6ed445d6e57959769a
+          test "$(git hash-object .ci/graph-read/01)" = da4430f946366d3d464dc8847ee24cd0fc45080a
+          cat .ci/graph-read/00 .ci/graph-read/01 | base64 --decode | gzip -d > "$RUNNER_TEMP/graph-read/input.patch"
+          echo '00d6e2bd83e6c4d6fb9f42703382d7766252d57ec1d9995e293bca4363c61c50  input.patch' > "$RUNNER_TEMP/graph-read/INPUT_SHA256"
+          (cd "$RUNNER_TEMP/graph-read" && sha256sum -c INPUT_SHA256)
+          git rm -r -- .ci/graph-read .github/workflows/graph-read-build.yml
+          test "$(git write-tree)" = f50dff7388286feefcce2d8307ada14a7071f24e
+          git apply --index "$RUNNER_TEMP/graph-read/input.patch"
+          test "$(git write-tree)" = 1ec536eb3445dfca0a5f7f9defbf7993de8a36c5
+      - name: Format implementation
+        run: |
+          set -euo pipefail
+          rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+          rustc +stable -Vv > "$RUNNER_TEMP/graph-read/RUST_VERSION"
+          cargo +stable fmt --all
+          git add -u
+          git diff --cached --check
+          git write-tree > "$RUNNER_TEMP/graph-read/TREE_SHA"
+      - name: Build CLI with unchanged external dependency versions
+        run: |
+          set -euo pipefail
+          cargo +stable build --locked -p wow-cli --bin wow 2>&1 | tee "$RUNNER_TEMP/graph-read/build.log"
+      - name: Clippy changed service and application
+        run: |
+          set -euo pipefail
+          cargo +stable clippy --locked -p wow-service -p wow-cli -- -D warnings 2>&1 | tee "$RUNNER_TEMP/graph-read/clippy.log"
+          cargo +stable xtask check 2>&1 | tee "$RUNNER_TEMP/graph-read/policy.log"
+      - name: Retain exact compiled source
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          test "$(git write-tree)" = "$(cat "$RUNNER_TEMP/graph-read/TREE_SHA")"
+          git diff --cached --binary > "$RUNNER_TEMP/graph-read/compiled.patch"
+          git archive "$(git write-tree)" > "$RUNNER_TEMP/graph-read/compiled-source.tar"
+          (cd "$RUNNER_TEMP/graph-read" && sha256sum compiled.patch compiled-source.tar > SHA256SUMS)
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: graph-read-${{ matrix.os }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/graph-read/
+          retention-days: 3
+          if-no-files-found: error
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: graph-read-ubuntu-latest-${{ github.run_id }}
+          path: ${{ runner.temp }}/linux
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: graph-read-windows-latest-${{ github.run_id }}
+          path: ${{ runner.temp }}/windows
+      - name: Publish identical compiled code to unchanged main
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          for platform in linux windows; do
+            test "$(cat "$RUNNER_TEMP/$platform/BASE_SHA")" = "$GITHUB_SHA"
+            (cd "$RUNNER_TEMP/$platform" && sha256sum -c SHA256SUMS)
+          done
+          cmp "$RUNNER_TEMP/linux/TREE_SHA" "$RUNNER_TEMP/windows/TREE_SHA"
+          cmp "$RUNNER_TEMP/linux/compiled.patch" "$RUNNER_TEMP/windows/compiled.patch"
+          git apply --index "$RUNNER_TEMP/linux/compiled.patch"
+          test "$(git write-tree)" = "$(cat "$RUNNER_TEMP/linux/TREE_SHA")"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$GITHUB_SHA"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat(cli): expose retained graph subgraph axis and explanation reads' -m "Route three explicit artifact commands through wow-service into the existing graph owners. Validate bounded duplicate-free transport JSON and the complete imported partition snapshot, retain exact context and canonical request/result identities, and preserve partial/truncated/failure/cancellation outcomes. No source scan, compiler session, store mutation or implicit current selection. Linux/Windows CLI builds, selected-service/application Clippy, formatting and repository policy passed on the identical published tree in run $GITHUB_RUN_ID. Add only the existing wow-graph workspace dependency to wow-service and lockfile. No external version, test or fixture changes. Coherent ProjectStore and addon graph generation/export remain separate. Temporary build inputs removed."
+          git push origin HEAD:main
