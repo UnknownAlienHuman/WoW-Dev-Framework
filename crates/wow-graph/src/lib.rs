@@ -12,6 +12,7 @@ mod persistent;
 mod proposal;
 mod query;
 mod registry;
+mod subgraph;
 
 pub use error::{GraphError, GraphErrorCode, GraphResult};
 pub use identity::{
@@ -47,4 +48,9 @@ pub use query::{GraphDirection, GraphNeighborQuery, GraphNeighborResult, GraphQu
 pub use registry::{
     GRAPH_REGISTRY_SCHEMA, GraphEntityKindDefinition, GraphRegistryBundle,
     GraphRelationKindDefinition,
+};
+
+pub use subgraph::{
+    GRAPH_SUBGRAPH_QUERY_SCHEMA, GraphSubgraphConfidence, GraphSubgraphLimits, GraphSubgraphNode,
+    GraphSubgraphQuery, GraphSubgraphResult, GraphSubgraphTruncation,
 };

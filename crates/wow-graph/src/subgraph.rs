@@ -9,10 +9,9 @@ use sha2::{Digest, Sha256};
 use wow_core::canonical_json_bytes;
 
 use crate::{
-    GraphCoverageRecord, GraphDirection, GraphEdge, GraphEdgeId, GraphError,
-    GraphErrorCode, GraphGenerationId, GraphNode, GraphNodeId, GraphPathConfidence,
-    GraphQueryState, GraphRelationKind, GraphResult, GraphSnapshot, GraphSnapshotId,
-    GraphUniverseId,
+    GraphCoverageRecord, GraphDirection, GraphEdge, GraphEdgeId, GraphError, GraphErrorCode,
+    GraphGenerationId, GraphNode, GraphNodeId, GraphPathConfidence, GraphQueryState,
+    GraphRelationKind, GraphResult, GraphSnapshot, GraphSnapshotId, GraphUniverseId,
 };
 
 pub const GRAPH_SUBGRAPH_QUERY_SCHEMA: &str = "wow-graph/project-subgraph/e2-a/1";
@@ -86,8 +85,12 @@ impl GraphSubgraphQuery {
         roots.sort();
         relations.sort();
         let query = Self {
-            snapshot_id, roots, direction, relations,
-            confidence: GraphSubgraphConfidence::default(), limits,
+            snapshot_id,
+            roots,
+            direction,
+            relations,
+            confidence: GraphSubgraphConfidence::default(),
+            limits,
         };
         query.validate()?;
         Ok(query)
@@ -110,24 +113,40 @@ impl GraphSubgraphQuery {
             || self.relations.len() > 19
             || self.relations.windows(2).any(|pair| pair[0] >= pair[1])
         {
-            return Err(invalid("subgraph requires bounded unique ordered roots and relations"));
+            return Err(invalid(
+                "subgraph requires bounded unique ordered roots and relations",
+            ));
         }
-        for root in &self.roots { GraphNodeId::new(root.as_str())?; }
+        for root in &self.roots {
+            GraphNodeId::new(root.as_str())?;
+        }
         Ok(())
     }
 
     #[must_use]
-    pub fn snapshot_id(&self) -> &GraphSnapshotId { &self.snapshot_id }
+    pub fn snapshot_id(&self) -> &GraphSnapshotId {
+        &self.snapshot_id
+    }
     #[must_use]
-    pub fn roots(&self) -> &[GraphNodeId] { &self.roots }
+    pub fn roots(&self) -> &[GraphNodeId] {
+        &self.roots
+    }
     #[must_use]
-    pub const fn direction(&self) -> GraphDirection { self.direction }
+    pub const fn direction(&self) -> GraphDirection {
+        self.direction
+    }
     #[must_use]
-    pub fn relations(&self) -> &[GraphRelationKind] { &self.relations }
+    pub fn relations(&self) -> &[GraphRelationKind] {
+        &self.relations
+    }
     #[must_use]
-    pub const fn confidence(&self) -> GraphSubgraphConfidence { self.confidence }
+    pub const fn confidence(&self) -> GraphSubgraphConfidence {
+        self.confidence
+    }
     #[must_use]
-    pub const fn limits(&self) -> GraphSubgraphLimits { self.limits }
+    pub const fn limits(&self) -> GraphSubgraphLimits {
+        self.limits
+    }
 
     /// Multi-source BFS; roots and incident edges use canonical identity order.
     /// Node/edge/expansion/byte/depth stops are explicit, not successful exhaustion.
@@ -140,12 +159,16 @@ impl GraphSubgraphQuery {
         checkpoint(cancelled)?;
         self.validate()?;
         if self.snapshot_id != *snapshot.snapshot_id() {
-            return Err(GraphError::new(GraphErrorCode::SnapshotIdentityMismatch,
-                "subgraph query names another snapshot"));
+            return Err(GraphError::new(
+                GraphErrorCode::SnapshotIdentityMismatch,
+                "subgraph query names another snapshot",
+            ));
         }
         // Reject impossible index work before cloning the snapshot for validation.
         if snapshot.edges().len() > self.limits.max_scanned_edges as usize {
-            return Err(budget("subgraph adjacency indexing exceeds its scan budget"));
+            return Err(budget(
+                "subgraph adjacency indexing exceeds its scan budget",
+            ));
         }
         if self.limits.max_edges > snapshot.limits().max_query_edges {
             return Err(budget("subgraph edge limit exceeds snapshot query policy"));
@@ -155,12 +178,17 @@ impl GraphSubgraphQuery {
         for root in &self.roots {
             checkpoint(cancelled)?;
             if snapshot.node(root).is_none() {
-                return Err(invalid("subgraph root is absent from the selected snapshot"));
+                return Err(invalid(
+                    "subgraph root is absent from the selected snapshot",
+                ));
             }
         }
         let bytes = encoded(&(GRAPH_SUBGRAPH_QUERY_SCHEMA, self))?;
         let hash = Sha256::digest(bytes);
-        let hex = hash.iter().map(|byte| format!("{byte:02x}")).collect::<String>();
+        let hex = hash
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>();
         let query_digest = format!("graph-subgraph-query:sha256:{hex}").into_boxed_str();
         checkpoint(cancelled)?;
         walk::execute(self, snapshot, query_digest, cancelled)
@@ -178,16 +206,28 @@ pub struct GraphSubgraphNode {
 }
 impl GraphSubgraphNode {
     #[must_use]
-    pub const fn node(&self) -> &GraphNode { &self.node }
+    pub const fn node(&self) -> &GraphNode {
+        &self.node
+    }
     #[must_use]
-    pub const fn depth(&self) -> u32 { self.depth }
+    pub const fn depth(&self) -> u32 {
+        self.depth
+    }
     #[must_use]
-    pub fn discovery_edge(&self) -> Option<&GraphEdgeId> { self.discovery_edge.as_ref() }
+    pub fn discovery_edge(&self) -> Option<&GraphEdgeId> {
+        self.discovery_edge.as_ref()
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum GraphSubgraphTruncation { Depth, Nodes, Edges, Expansions, OutputBytes }
+pub enum GraphSubgraphTruncation {
+    Depth,
+    Nodes,
+    Edges,
+    Expansions,
+    OutputBytes,
+}
 
 /// Read-only owner result, not a replacement/publishable GraphSnapshot. The exact
 /// request binds the snapshot (and its universe/generation), policy and budgets.
@@ -211,46 +251,83 @@ pub struct GraphSubgraphResult {
 }
 impl GraphSubgraphResult {
     #[must_use]
-    pub const fn query(&self) -> &GraphSubgraphQuery { &self.query }
+    pub const fn query(&self) -> &GraphSubgraphQuery {
+        &self.query
+    }
     #[must_use]
-    pub fn snapshot_id(&self) -> &GraphSnapshotId { &self.query.snapshot_id }
+    pub fn snapshot_id(&self) -> &GraphSnapshotId {
+        &self.query.snapshot_id
+    }
     #[must_use]
-    pub fn query_digest(&self) -> &str { &self.query_digest }
+    pub fn query_digest(&self) -> &str {
+        &self.query_digest
+    }
     #[must_use]
-    pub const fn universe(&self) -> &GraphUniverseId { &self.universe }
+    pub const fn universe(&self) -> &GraphUniverseId {
+        &self.universe
+    }
     #[must_use]
-    pub const fn generation(&self) -> &GraphGenerationId { &self.generation }
+    pub const fn generation(&self) -> &GraphGenerationId {
+        &self.generation
+    }
     #[must_use]
-    pub const fn state(&self) -> GraphQueryState { self.state }
+    pub const fn state(&self) -> GraphQueryState {
+        self.state
+    }
     #[must_use]
-    pub fn nodes(&self) -> &[GraphSubgraphNode] { &self.nodes }
+    pub fn nodes(&self) -> &[GraphSubgraphNode] {
+        &self.nodes
+    }
     #[must_use]
-    pub fn edges(&self) -> &[GraphEdge] { &self.edges }
+    pub fn edges(&self) -> &[GraphEdge] {
+        &self.edges
+    }
     #[must_use]
-    pub fn coverage(&self) -> &[GraphCoverageRecord] { &self.coverage }
+    pub fn coverage(&self) -> &[GraphCoverageRecord] {
+        &self.coverage
+    }
     #[must_use]
-    pub fn missing_coverage(&self) -> &[GraphRelationKind] { &self.missing_coverage }
+    pub fn missing_coverage(&self) -> &[GraphRelationKind] {
+        &self.missing_coverage
+    }
     #[must_use]
-    pub const fn scanned_edges(&self) -> u32 { self.scanned_edges }
+    pub const fn scanned_edges(&self) -> u32 {
+        self.scanned_edges
+    }
     #[must_use]
-    pub const fn expansions(&self) -> u32 { self.expansions }
+    pub const fn expansions(&self) -> u32 {
+        self.expansions
+    }
     #[must_use]
-    pub fn truncations(&self) -> &[GraphSubgraphTruncation] { &self.truncations }
+    pub fn truncations(&self) -> &[GraphSubgraphTruncation] {
+        &self.truncations
+    }
     /// No returned adjacency beyond the caller's roots. This is not absence.
     #[must_use]
-    pub const fn no_new_evidence(&self) -> bool { self.no_new_evidence }
+    pub const fn no_new_evidence(&self) -> bool {
+        self.no_new_evidence
+    }
     #[must_use]
-    pub const fn absence_authoritative(&self) -> bool { self.absence_authoritative }
+    pub const fn absence_authoritative(&self) -> bool {
+        self.absence_authoritative
+    }
 }
 
 fn checkpoint(cancelled: &AtomicBool) -> GraphResult<()> {
     if cancelled.load(Ordering::Acquire) {
-        return Err(GraphError::new(GraphErrorCode::Cancelled, "graph subgraph query cancelled"));
+        return Err(GraphError::new(
+            GraphErrorCode::Cancelled,
+            "graph subgraph query cancelled",
+        ));
     }
     Ok(())
 }
-fn invalid(message: &str) -> GraphError { GraphError::new(GraphErrorCode::QueryInvalid, message) }
-fn budget(message: &str) -> GraphError { GraphError::new(GraphErrorCode::BudgetExceeded, message) }
+fn invalid(message: &str) -> GraphError {
+    GraphError::new(GraphErrorCode::QueryInvalid, message)
+}
+fn budget(message: &str) -> GraphError {
+    GraphError::new(GraphErrorCode::BudgetExceeded, message)
+}
 fn encoded<T: Serialize>(value: &T) -> GraphResult<Vec<u8>> {
     canonical_json_bytes(value).map_err(|_| invalid("subgraph serialization failed"))
 }

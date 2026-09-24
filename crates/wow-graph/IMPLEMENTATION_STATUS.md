@@ -58,3 +58,12 @@ The partition session deliberately does not write the legacy graph.current catal
 ## Authority boundary
 
 Direct edges are not transitive paths. Static observations do not prove runtime delivery, execution, readiness, performance, taint, combat, protected or Secret Value behavior. Missing, partial, conflicted, failed or truncated input never proves absence. This owner does not parse source, run recognizers, index projects, rank search, orchestrate services, edit source or implement E4 lineage/migration/impact.
+
+## Bounded subgraph projection
+
+`GraphSubgraphQuery` projects a multi-root breadth-first neighborhood from one
+exact snapshot with direction/relation/confidence filters, original evidence,
+discovery witnesses, explicit coverage and node/edge/depth/scan/expansion/byte
+bounds. See [SUBGRAPH_USAGE.md](SUBGRAPH_USAGE.md). No graph mutation, new
+assertion, continuation cursor, axis or service/CLI route is introduced.
+Full producer/evidence explanation and package acceptance remain separate.

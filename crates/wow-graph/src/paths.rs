@@ -27,7 +27,7 @@ pub enum GraphPathConfidence {
 }
 
 impl GraphPathConfidence {
-    fn admits(self, confidence: GraphConfidence) -> bool {
+    pub(crate) fn admits(self, confidence: GraphConfidence) -> bool {
         confidence
             <= match self {
                 Self::Proven => GraphConfidence::Proven,

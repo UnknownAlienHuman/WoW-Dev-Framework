@@ -180,3 +180,11 @@ locations and unresolved/ambiguous results enter owner receipts and ordinary
 XML-scoped findings. See [XML_BINDINGS.md](../apps/wow/XML_BINDINGS.md).
 No new compiler session, synthetic source or callable/runtime proof is introduced;
 receiver construction and inherited method precedence remain partial.
+
+## Bounded graph projection
+
+The graph owner now exposes `GraphSubgraphQuery` for exact-snapshot, multi-root
+breadth-first neighborhoods with original evidence and explicit coverage and
+truncation. See [SUBGRAPH_USAGE.md](../crates/wow-graph/SUBGRAPH_USAGE.md).
+This completes the bounded subgraph code slice of E2-01, not its full acceptance.
+Axes, assertion explanations and service/CLI graph routing remain open.

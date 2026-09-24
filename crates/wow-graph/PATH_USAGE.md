@@ -92,7 +92,8 @@ about other graphs, other confidence tiers, or platform/runtime availability.
 
 ## Remaining scope
 
-This operation does not implement axes, subgraph projection, full assertion
-explanation, cross-generation impact, durable E2-D publication, or service/CLI
-routing. Existing graph snapshot schemas and producer partition semantics remain
+Bounded neighborhood projection is available separately through
+[GraphSubgraphQuery](SUBGRAPH_USAGE.md). Neither operation implements axes, full
+assertion explanation, cross-generation impact, durable E2-D publication, or
+service/CLI routing. Existing graph snapshot schemas and producer partition semantics remain
 unchanged.
