@@ -1,0 +1,15 @@
+diff --git a/crates/wow-graph/src/direct.rs b/crates/wow-graph/src/direct.rs
+index 66c20bc..054bf11 100644
+--- a/crates/wow-graph/src/direct.rs
++++ b/crates/wow-graph/src/direct.rs
+@@ -149,7 +149,9 @@ fn invalid(message: &'static str) -> GraphError { GraphError::new(GraphErrorCode
+ fn budget() -> GraphError { GraphError::new(GraphErrorCode::BudgetExceeded, "graph direct read exceeds its bounded profile") }
+ fn query_digest(schema: &str, query: &impl Serialize) -> GraphResult<Box<str>> {
+     let bytes = canonical_json_bytes(&(schema, query)).map_err(|_| invalid("direct query encoding failed"))?;
+-    Ok(format!("graph-direct-query:sha256:{:x}", Sha256::digest(bytes)).into_boxed_str())
++    let hash = Sha256::digest(bytes);
++    let hex = hash.iter().map(|byte| format!("{byte:02x}")).collect::<String>();
++    Ok(format!("graph-direct-query:sha256:{hex}").into_boxed_str())
+ }
+ 
+ /// Count ordinary compact JSON before allocating canonical bytes. Key ordering

@@ -32,6 +32,8 @@ jobs:
           test "$(git hash-object .ci/graph-direct/01)" = a99e210f9c9aa07c9802546665a906b2786551fb
           test "$(git hash-object .ci/graph-direct/02)" = 2ac4e7485428df377956bd30f10281c59ba3fbb2
           test "$(git hash-object .ci/graph-direct/03)" = 19f443d4da832d31b8350c067793761f38fe832b
+          test "$(git hash-object .ci/graph-direct/fix.patch)" = fbad1a01cdb8c2d135782ffd61d714c1a922bf4a
+          cp .ci/graph-direct/fix.patch "$RUNNER_TEMP/graph-direct/fix.patch"
           cat .ci/graph-direct/00 .ci/graph-direct/01 .ci/graph-direct/02 .ci/graph-direct/03 | base64 --decode | gzip -d > "$RUNNER_TEMP/graph-direct/input.patch"
           echo '612002c2cc83d43e4d48cbb7852d1f0bfaa0d6cdff2c9e73b257020f3c71521f  input.patch' > "$RUNNER_TEMP/graph-direct/INPUT_SHA256"
           (cd "$RUNNER_TEMP/graph-direct" && sha256sum -c INPUT_SHA256)
@@ -39,6 +41,8 @@ jobs:
           test "$(git write-tree)" = a34a83b07c59bd829d25196f8be3b651b222dcc8
           git apply --index "$RUNNER_TEMP/graph-direct/input.patch"
           test "$(git write-tree)" = 9649e28968adc21d486e6e280e3f07e958227c15
+          git apply --index "$RUNNER_TEMP/graph-direct/fix.patch"
+          test "$(git write-tree)" = 8728179d9f06f190081608a51bb521d3106333ca
       - name: Format changed packages
         run: |
           set -euo pipefail
