@@ -31,6 +31,8 @@ For a real addon repository, read its local `AGENTS.md`, `CLAUDE.md`, TOC, boots
 
 `src/graph.rs` additionally activates `wow-project -> wow-graph` for source-file
 and admitted direct TOC/XML-load proposals from an immutable `ProjectView`.
+The v2 source projection also emits source XML declarations, document ownership
+and admitted local inheritance; it does not infer runtime frames or parentage.
 It exports proposals and exact support records, not a published graph generation.
 The service composes them through the existing graph owner for the one-shot
 `wow graph build` artifact operation. E0-D contracts below are unchanged;

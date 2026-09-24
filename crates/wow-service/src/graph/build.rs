@@ -19,6 +19,7 @@ struct BuiltGraph {
     provenance: ProjectGraphProvenance,
     digest: Box<str>,
     file_nodes: Vec<FileNode>,
+    xml_nodes: Vec<XmlNode>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -41,7 +42,7 @@ impl GraphBuildRequest {
             GenerationSelector::exact(generation)?
         };
         Ok(Self {
-            schema: "wow-service/graph-build-request/1",
+            schema: "wow-service/graph-build-request/2",
             project_id,
             selector,
             projection: SOURCE_GRAPH_PROFILE,
@@ -56,12 +57,20 @@ struct FileNode {
 }
 
 #[derive(Debug, Serialize)]
+struct XmlNode {
+    occurrence_id: String,
+    path: String,
+    node_id: wow_graph::GraphNodeId,
+}
+
+#[derive(Debug, Serialize)]
 pub struct GraphBuildResult {
     schema: &'static str,
     request: GraphBuildRequest,
     request_digest: Box<str>,
     status: GraphReadStatus,
     file_nodes: Vec<FileNode>,
+    xml_nodes: Vec<XmlNode>,
     #[serde(skip_serializing_if = "Option::is_none")]
     snapshot: Option<GraphPartitionSnapshot>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -101,6 +110,7 @@ impl GraphBuildResult {
 
     fn fail(&mut self, code: ServiceErrorCode) {
         self.file_nodes.clear();
+        self.xml_nodes.clear();
         self.snapshot = None;
         self.snapshot_input_digest = None;
         self.provenance = None;
@@ -130,22 +140,23 @@ pub fn execute_graph_build(
 ) -> ServiceResult<GraphBuildResult> {
     let request_digest = super::hash(&bounded(request, super::GRAPH_REQUEST_MAX_BYTES)?);
     let mut result = GraphBuildResult {
-        schema: "wow-service/graph-build-result/1",
+        schema: "wow-service/graph-build-result/2",
         request: request.clone(),
         request_digest,
         status: GraphReadStatus::Partial,
         file_nodes: Vec::new(),
+        xml_nodes: Vec::new(),
         snapshot: None,
         snapshot_input_digest: None,
         provenance: None,
         failure: None,
         result_digest: None,
         boundaries: vec![
-            "direct_captured_file_loads_only",
+            "captured_files_loads_and_xml_source_topology_only",
             "not_coherent_project_store_publication",
             "package_dependencies_not_evaluated",
             "lua_calls_and_recognizers_not_evaluated",
-            "xml_objects_and_runtime_not_evaluated",
+            "xml_runtime_objects_parentage_and_mixin_semantics_not_evaluated",
             "no_negative_authority",
         ],
     };
@@ -155,8 +166,10 @@ pub fn execute_graph_build(
             provenance,
             digest,
             file_nodes,
+            xml_nodes,
         }) => {
             result.file_nodes = file_nodes;
+            result.xml_nodes = xml_nodes;
             result.snapshot = Some(snapshot);
             result.provenance = Some(provenance);
             result.snapshot_input_digest = Some(digest);
@@ -221,36 +234,21 @@ fn compose(
         .map_err(graph_error)?;
     let snapshot = replacement.candidate().clone();
     checkpoint(stop)?;
-    let partition = snapshot
-        .partition(wow_project::graph::SOURCE_GRAPH_PARTITION)
-        .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?;
     let mut file_nodes = Vec::new();
     for file in provenance.files() {
         checkpoint(stop)?;
-        let accepted = partition
-            .report()
-            .accepted_entities()
-            .binary_search_by(|entry| entry.proposal_id().cmp(&file.proposal_id))
-            .ok()
-            .and_then(|index| partition.report().accepted_entities().get(index))
-            .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?;
-        // Rebind the exact accepted semantic key through the graph constructor,
-        // not a display-name/path search against materialized entities.
-        let node = wow_graph::GraphNode::new(
-            snapshot.snapshot().universe().clone(),
-            snapshot.snapshot().generation().clone(),
-            accepted.node().kind(),
-            accepted.node().owner_key(),
-            accepted.node().evidence_ids().to_vec(),
-            limits,
-        )
-        .map_err(graph_error)?;
-        if snapshot.snapshot().node(node.node_id()).is_none() {
-            return Err(error(ServiceErrorCode::InternalContractViolation));
-        }
         file_nodes.push(FileNode {
             path: file.path.clone(),
-            node_id: node.node_id().clone(),
+            node_id: materialized_node_id(&snapshot, &file.proposal_id, limits)?,
+        });
+    }
+    let mut xml_nodes = Vec::new();
+    for declaration in provenance.xml_declarations() {
+        checkpoint(stop)?;
+        xml_nodes.push(XmlNode {
+            occurrence_id: declaration.occurrence_id.clone(),
+            path: declaration.path.clone(),
+            node_id: materialized_node_id(&snapshot, &declaration.proposal_id, limits)?,
         });
     }
     let bytes = bounded(&snapshot, GRAPH_INPUT_MAX_BYTES)?;
@@ -273,7 +271,37 @@ fn compose(
         provenance,
         digest: super::hash(&bytes),
         file_nodes,
+        xml_nodes,
     })
+}
+
+/// Rebind the accepted semantic key, never search materialized nodes by name.
+fn materialized_node_id(
+    snapshot: &GraphPartitionSnapshot,
+    proposal_id: &str,
+    limits: wow_graph::GraphLimits,
+) -> ServiceResult<wow_graph::GraphNodeId> {
+    let partition = snapshot
+        .partition(wow_project::graph::SOURCE_GRAPH_PARTITION)
+        .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?;
+    let accepted = partition.report().accepted_entities();
+    let index = accepted
+        .binary_search_by(|entry| entry.proposal_id().cmp(proposal_id))
+        .map_err(|_| error(ServiceErrorCode::InternalContractViolation))?;
+    let accepted = accepted[index].node();
+    let node = wow_graph::GraphNode::new(
+        snapshot.snapshot().universe().clone(),
+        snapshot.snapshot().generation().clone(),
+        accepted.kind(),
+        accepted.owner_key(),
+        accepted.evidence_ids().to_vec(),
+        limits,
+    )
+    .map_err(graph_error)?;
+    if snapshot.snapshot().node(node.node_id()).is_none() {
+        return Err(error(ServiceErrorCode::InternalContractViolation));
+    }
+    Ok(node.node_id().clone())
 }
 
 fn checkpoint(stop: &AtomicBool) -> ServiceResult<()> {

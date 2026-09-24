@@ -1,6 +1,10 @@
-//! Direct source/load proposals. No recognizer inference or graph publication.
+//! Direct source/load/XML proposals. No recognizer inference or graph publication.
+mod xml;
 use std::collections::BTreeMap;
 use std::sync::atomic::AtomicBool;
+pub use xml::{
+    ProjectGraphXmlDeclaration, ProjectGraphXmlReference, ProjectGraphXmlReferenceOutcome,
+};
 
 use serde::Serialize;
 use wow_core::{
@@ -20,10 +24,12 @@ use crate::{
     ProjectError, ProjectErrorCode, ProjectKind, ProjectPhase, ProjectResult, ProjectView,
 };
 
-pub const SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/1";
+pub const SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/2";
 pub const SOURCE_GRAPH_PARTITION: &str = "wow-project.source-load";
 const MAX_FILES: usize = 4096;
 const MAX_LOADS: usize = 8192;
+const MAX_NODES: usize = MAX_FILES + xml::MAX_DECLARATIONS;
+const MAX_EDGES: usize = MAX_LOADS + xml::MAX_DECLARATIONS + xml::MAX_INHERITANCE_REFERENCES;
 const MAX_TEXT_BYTES: usize = 4 * 1024 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -44,6 +50,8 @@ pub struct ProjectGraphProvenance {
     analyzer_snapshot_id: String,
     context: GenerationContext,
     files: Vec<ProjectGraphFile>,
+    xml_declarations: Vec<ProjectGraphXmlDeclaration>,
+    xml_inheritance: Vec<ProjectGraphXmlReference>,
     source_handles: BTreeMap<StableHandleId, SourceHandle>,
     evidence: BTreeMap<EvidenceId, EvidenceRecord>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -56,6 +64,14 @@ impl ProjectGraphProvenance {
     #[must_use]
     pub fn files(&self) -> &[ProjectGraphFile] {
         &self.files
+    }
+    #[must_use]
+    pub fn xml_declarations(&self) -> &[ProjectGraphXmlDeclaration] {
+        &self.xml_declarations
+    }
+    #[must_use]
+    pub fn xml_inheritance(&self) -> &[ProjectGraphXmlReference] {
+        &self.xml_inheritance
     }
 }
 
@@ -119,7 +135,7 @@ fn registry() -> ProjectResult<GraphRegistryBundle> {
     )
     .map_err(|_| invalid())?;
     // The load axis also requires DependsOn; it remains explicitly unevaluated.
-    let relations = [
+    let mut relations = [
         ("source_loads", GraphRelationKind::Loads),
         ("source_depends_on", GraphRelationKind::DependsOn),
     ]
@@ -135,8 +151,40 @@ fn registry() -> ProjectResult<GraphRegistryBundle> {
         .map_err(|_| invalid())
     })
     .collect::<ProjectResult<Vec<_>>>()?;
-    GraphRegistryBundle::build("wow-project.source-load", "1", vec![file], relations)
-        .map_err(|_| invalid())
+    let declaration = GraphEntityKindDefinition::new(
+        "xml_source_declaration",
+        vec!["project".into()],
+        vec!["document".into(), "occurrence".into()],
+        vec![GraphConfidence::Proven],
+    )
+    .map_err(|_| invalid())?;
+    relations.push(
+        GraphRelationKindDefinition::new(
+            "source_xml_owns",
+            GraphRelationKind::Owns,
+            vec!["source_file".into()],
+            vec!["xml_source_declaration".into()],
+            vec![GraphConfidence::Proven],
+        )
+        .map_err(|_| invalid())?,
+    );
+    relations.push(
+        GraphRelationKindDefinition::new(
+            "source_xml_inherits",
+            GraphRelationKind::Inherits,
+            vec!["xml_source_declaration".into()],
+            vec!["xml_source_declaration".into()],
+            vec![GraphConfidence::Derived],
+        )
+        .map_err(|_| invalid())?,
+    );
+    GraphRegistryBundle::build(
+        "wow-project.source-load",
+        "2",
+        vec![file, declaration],
+        relations,
+    )
+    .map_err(|_| invalid())
 }
 
 fn support(
@@ -187,8 +235,8 @@ fn support(
     Ok((handle_id, evidence_id))
 }
 
-/// Export only first-party files and selected direct source references. Library
-/// sources, dependency discovery, calls, XML runtime objects and recognizer roles
+/// Export first-party files, selected direct references and source XML declarations.
+/// Library sources, dependency discovery, calls, XML runtime objects and recognizer roles
 /// are not inferred. One immutable ProjectView supplies every source identity.
 pub fn build_source_graph_proposals(
     project: &ProjectView,
@@ -276,7 +324,7 @@ pub fn build_source_graph_proposals(
     )?;
     let generation =
         GraphGenerationId::new(format!("source-graph-input:{seed}")).map_err(|_| invalid())?;
-    let limits = GraphLimits::new(MAX_FILES as u32, MAX_LOADS as u32, 32, 64, MAX_LOADS as u32)
+    let limits = GraphLimits::new(MAX_NODES as u32, MAX_EDGES as u32, 32, 64, MAX_EDGES as u32)
         .map_err(|_| invalid())?;
     let mut provenance = ProjectGraphProvenance {
         profile: SOURCE_GRAPH_PROFILE,
@@ -284,6 +332,8 @@ pub fn build_source_graph_proposals(
         analyzer_snapshot_id: project.analyzer_snapshot_id().into(),
         context: project.snapshot().generation_context().clone(),
         files: Vec::new(),
+        xml_declarations: Vec::new(),
+        xml_inheritance: Vec::new(),
         source_handles: BTreeMap::new(),
         evidence: BTreeMap::new(),
         load_plan: plan.cloned(),
@@ -387,7 +437,34 @@ pub fn build_source_graph_proposals(
             );
         }
     }
+    let xml = xml::project(project, &ids, &mut provenance, &mut text_bytes, stop)?;
+    entities.extend(xml.entities);
+    relations.extend(xml.relations);
+    if entities.len() > MAX_NODES || relations.len() > MAX_EDGES {
+        return Err(exhausted());
+    }
+    let xml_state = if plan.is_some_and(|p| !p.xml_documents().is_empty()) {
+        GraphCoverageState::Partial
+    } else {
+        GraphCoverageState::NotEvaluated
+    };
     let coverage = vec![
+        GraphCoverageRecord::new(
+            GraphRelationKind::Owns,
+            xml_state,
+            false,
+            vec!["source_graph.xml_document_ownership_only".into()],
+            limits,
+        )
+        .map_err(|_| invalid())?,
+        GraphCoverageRecord::new(
+            GraphRelationKind::Inherits,
+            xml_state,
+            false,
+            vec!["source_graph.admitted_local_xml_inheritance_only".into()],
+            limits,
+        )
+        .map_err(|_| invalid())?,
         GraphCoverageRecord::new(
             GraphRelationKind::Loads,
             if plan.is_some() {

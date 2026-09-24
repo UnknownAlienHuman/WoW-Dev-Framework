@@ -44,13 +44,38 @@ For explicit-file/inline input without a TOC, captured Lua nodes are still expor
 but load coverage is NotEvaluated. With a TOC, Loads coverage is Partial. Package
 DependsOn coverage is always NotEvaluated; no dependency edges are fabricated.
 The registry supports the existing Load axis while unsupported axis families
-remain unsupported. Lua calls, recognizers, XML objects and runtime relationships
-are not generated. Negative authority is false throughout this route.
+remain unsupported. Lua calls, recognizers, XML runtime objects and runtime relationships
+are not generated. Source XML declarations and explicit inheritance are projected below. Negative authority is false throughout this route.
+
+## XML source topology
+
+Each indexed XML declaration becomes a distinct `xml_source_declaration` node,
+identified by document and exact occurrence ID, never by display name. This is a
+source record, not a claim that the client constructs a frame of that type. The
+containing file has a Proven `Owns` edge to the declaration; this is document
+source ownership, not XML containment, `parent`, or runtime frame parentage.
+
+A direct `Inherits` edge (Derived) is emitted only for a unique valid local target
+explicitly marked virtual/intrinsic, loaded before its source, with no retained
+inheritance cycle. It retains evidence for the original attribute and the target
+declaration. Duplicate source entries remain separate proposals. Unresolved names,
+invalid declarations, non-template targets, forward/repeated/unrecorded load order,
+cycles and self-references have explicit outcomes in `provenance.xml_inheritance`;
+the original reference ID resolves all details in the retained load plan. No
+candidate is selected from an ambiguous name group. XML `parent` never becomes
+`Owns` or `Inherits`.
+
+`xml_nodes` maps occurrence IDs and source paths to materialized node IDs. Full
+source locations and declaration properties stay in the existing XML index; bodies
+are not copied, parsed or executed again. Ownership and inheritance coverage stay
+Partial (NotEvaluated without captured XML), with no negative authority. The
+Ownership axis and ordinary `inherits` subgraphs can inspect these nodes; the full
+Inheritance axis remains unsupported until the registry also defines MixesIn.
 
 ## Artifact and provenance formats
 
-`json` (default) emits `wow-service/graph-build-result/1`: request, status,
-`snapshot`, `file_nodes`, `provenance`, boundaries and canonical digests.
+`json` (default) emits `wow-service/graph-build-result/2`: request, status,
+`snapshot`, `file_nodes`, `xml_nodes`, `provenance`, boundaries and canonical digests.
 `file_nodes` maps logical source paths to final materialized node IDs, rather than
 producer-input IDs. `provenance` retains the exact project/analyzer snapshot IDs,
 GenerationContext, file manifest, real SourceHandles/EvidenceRecords and optional
@@ -80,8 +105,10 @@ generation. Source/project/E0 check identities are not relabeled or changed.
 
 ## Bounds and failures
 
-At most 4,096 files and 8,192 admitted non-self load proposals; the source projection
-also caps charged path text at 4 MiB. Existing source/input/analyzer/load limits
+At most 4,096 files, 8,192 admitted non-self load proposals, 4,096 XML declarations
+and 8,192 inspected inheritance references. Document ownership adds at most one
+edge per declaration. The combined ceiling is 8,192 nodes and 20,480 edges;
+charged projection text stays below 4 MiB. Existing source/input/analyzer/load limits
 remain in force. The bare graph must fit the existing graph reader's 16 MiB,
 1,000,000 token/key, 64-level and 16 KiB decoded-string limits. Admission uses the
 same bounded decoder before export. The complete provenance receipt is capped
@@ -100,7 +127,12 @@ budget failure; 4 for encoding or output loss; 64 for CLI/config acquisition
 errors; 130 for cancellation. Tests, real-addon/client validation and full E2/R0
 acceptance remain separate from this functional implementation.
 
-Owners: `crates/wow-project/src/graph.rs`, `crates/wow-service/src/graph/build.rs`,
+The source projection and graph-build request/result advance to v2; the local
+registry advances to version 2. Existing retained v1 graph artifacts remain readable.
+Project/E0 identities and graph-read schemas are unchanged; the new graph profile
+and registry enter only newly built graph identities.
+
+Owners: `crates/wow-project/src/graph.rs`, `crates/wow-project/src/graph/xml.rs`, `crates/wow-service/src/graph/build.rs`,
 `apps/wow/src/graph_build.rs`. Contracts: project `e2/README.md`,
 `e2/DATA_MODEL.md`, graph `e2/KIND_AND_RELATION_REGISTRY.md` and
 `e2/CONFLICT_COVERAGE_AND_PROVENANCE.md`.
