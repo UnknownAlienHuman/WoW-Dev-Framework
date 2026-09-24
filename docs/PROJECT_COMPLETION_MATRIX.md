@@ -32,7 +32,7 @@ The root [Cargo.toml](../Cargo.toml) activates **15 members**, not two, four or 
 | `wow-store` | Typed SQLite objects, catalogs/CAS, operation journal, leases, GC and integrity | Full E1-A migration/crash/backup acceptance; coherent E2-D ProjectStore is not the generic store |
 | `wow-reference` | Native source/model/corrections/aliases, compatibility imports, persistent ReferenceView and publication | E0-B/E1-B normative fixture and full Reference Pack/coverage acceptance |
 | `wow-annotations` | Native Ketho-derived library projection, alias/type/catalog/inheritance/navigation slices and consumer tests | Full E1-C contract/corpus parity; scoped passing consumers are not universal semantic certification |
-| `wow-graph` | Immutable snapshots, proposals/registries, neighbors, producer partitions, bounded paths/subgraphs, retained-support explanations and scoped persistence | Axes, full conflict/derivation explanations, cross-owner evidence resolution, normative fixtures and coherent E2-D publication |
+| `wow-graph` | Immutable snapshots, proposals/registries, neighbors, producer partitions, bounded paths/subgraphs, retained-support explanations and scoped persistence | Full conflict/derivation explanations, cross-owner evidence resolution, normative fixtures and coherent E2-D publication |
 | `wow-recognizers` | Structured facts, pack parser/compiler, bounded matcher and Emmy direct-call adapter | Full E2-B producer/fixture/calibration prerequisites; E5 governance is separate |
 | `wow-render-contract`, `wow-ketho-literals`, `modules/ketho-literals` | Typed literal wire contract, native renderer and Wasm guest | Scoped algorithm implementation, not public application/release acceptance |
 | `tools/xtask` | Native policy/source/manifest/library checks; duplicate JSON member rejection added in this checkpoint | Full schema/contract-ID/dependency/fixture/link closure remains incomplete |
@@ -137,8 +137,7 @@ explicit conflicts, order and cycles; see [XML_REFERENCES.md](../apps/wow/XML_RE
 
 The exact-entity, direct-neighbor, bounded subgraph, axis, explanation and path owners have one-shot service/CLI
 routing over explicit retained partition artifacts; see
-[GRAPH_INPUT.md](../apps/wow/GRAPH_INPUT.md). Graph production/export from local
-checks, coherent ProjectStore acquisition and full package acceptance stay open.
+[GRAPH_INPUT.md](../apps/wow/GRAPH_INPUT.md). Coherent ProjectStore acquisition and full package acceptance stay open.
 
 ## Source graph artifact path
 
@@ -146,7 +145,7 @@ checks, coherent ProjectStore acquisition and full package acceptance stay open.
 accepted by the graph-read CLI, from the existing local project materialization
 path. It retains exact source/evidence and consumer node IDs without a second
 Emmy session or persistent graph/project publication. The result remains Partial;
-non-call recognizers, dependency graph coverage and coherent ProjectStore remain
+other recognizer families, dependency graph coverage and coherent ProjectStore remain
 open. See [GRAPH_BUILD.md](../apps/wow/GRAPH_BUILD.md).
 
 
@@ -160,3 +159,11 @@ recognizer's independently owned `Calls` partition. It reuses the semantic sessi
 and retains unresolved/Library/self-recursion outcomes, exact evidence and final
 function/edge maps. Call-axis and multi-hop reads operate on the exported snapshot;
 this does not close dynamic dispatch, non-call families, persistence or E2 acceptance.
+
+The XML handler pipeline adds source inline-handler nodes and independent
+`SetsScript` recognizer proposals. Exact Emmy signatures connect named handlers to
+the existing function/call graph; method and inherited associations retain Possible
+confidence. Direct/inherited site receipts preserve skipped queries and unresolved
+dispatch ordering. Existing inline syntax units are reused, not semantically
+recompiled. The v5 export rebinds all node/edge maps after both recognizer partitions.
+Other recognizer families, virtual-unit semantics and full E2 acceptance remain open.

@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use emmylua_code_analysis::{
-    EmmyLuaAnalysis, FileId, LuaMemberKey, LuaSemanticDeclId, LuaType, LuaTypeOwner,
+    EmmyLuaAnalysis, FileId, LuaMemberKey, LuaSemanticDeclId, LuaSignatureId, LuaType, LuaTypeOwner,
 };
 use serde::Serialize;
 use wow_core::SourceSpan;
@@ -130,6 +130,7 @@ pub(crate) fn resolve(
     main_root: &Path,
     libraries: &[(&LuaWorkspaceSnapshot, PathBuf)],
     queries: &[String],
+    mut callable_signatures: Option<&mut BTreeMap<String, LuaSignatureId>>,
     stop: &AtomicBool,
 ) -> EmmyMemberCallResult<SymbolLookupReport> {
     checkpoint(stop)?;
@@ -174,15 +175,23 @@ pub(crate) fn resolve(
     let mut text_bytes = 0usize;
     for query in queries.iter().collect::<BTreeSet<_>>() {
         checkpoint(stop)?;
-        let lookup = if supported_path(query) {
+        let (lookup, signature) = if supported_path(query) {
             resolve_one(analysis, model.get_db(), &sources, query, stop)?
         } else {
-            SymbolLookup {
-                state: SymbolLookupState::UnsupportedPath,
-                resolved_components: 0,
-                targets: Vec::new(),
-            }
+            (
+                SymbolLookup {
+                    state: SymbolLookupState::UnsupportedPath,
+                    resolved_components: 0,
+                    targets: Vec::new(),
+                },
+                None,
+            )
         };
+        // The optional graph sidecar retains a concrete callable identity from
+        // this very lookup. Do not rerun name resolution or infer it from text.
+        if let (Some(sink), Some(signature)) = (callable_signatures.as_deref_mut(), signature) {
+            sink.insert(query.clone(), signature);
+        }
         target_count = target_count
             .checked_add(lookup.targets.len())
             .ok_or_else(|| error(EmmyMemberCallErrorCode::FactBudgetExceeded))?;
@@ -234,14 +243,17 @@ fn resolve_one(
     sources: &HashMap<FileId, Source<'_>>,
     query: &str,
     stop: &AtomicBool,
-) -> EmmyMemberCallResult<SymbolLookup> {
+) -> EmmyMemberCallResult<(SymbolLookup, Option<LuaSignatureId>)> {
     let parts: Vec<_> = query.split('.').collect();
     let Some(ids) = db.get_global_index().get_global_decl_ids(parts[0]) else {
-        return Ok(SymbolLookup {
-            state: SymbolLookupState::NotObserved,
-            resolved_components: 0,
-            targets: Vec::new(),
-        });
+        return Ok((
+            SymbolLookup {
+                state: SymbolLookupState::NotObserved,
+                resolved_components: 0,
+                targets: Vec::new(),
+            },
+            None,
+        ));
     };
     if ids.len() > MAX_CANDIDATES {
         return Err(error(EmmyMemberCallErrorCode::FactBudgetExceeded));
@@ -366,9 +378,25 @@ fn resolve_one(
     } else {
         SymbolLookupState::Indeterminate
     };
-    Ok(SymbolLookup {
-        state,
-        resolved_components,
-        targets: targets.into_iter().collect(),
-    })
+    let signature = if state == SymbolLookupState::UniqueAnalyzerDeclaration {
+        match candidates.as_slice() {
+            [
+                Candidate {
+                    typ: LuaType::Signature(id),
+                    ..
+                },
+            ] => Some(*id),
+            _ => None,
+        }
+    } else {
+        None
+    };
+    Ok((
+        SymbolLookup {
+            state,
+            resolved_components,
+            targets: targets.into_iter().collect(),
+        },
+        signature,
+    ))
 }

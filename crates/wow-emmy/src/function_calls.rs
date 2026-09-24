@@ -16,7 +16,10 @@ use crate::references::{
 };
 use crate::{EmmyBackendIdentity, LuaWorkspaceFile, LuaWorkspaceSnapshot};
 
-pub const FUNCTION_CALL_PROFILE: &str = "wow-emmy/function-call-facts/1";
+pub const FUNCTION_CALL_PROFILE: &str = "wow-emmy/function-call-facts/2";
+// Existing callable/call occurrence keys keep their original recipe. The new
+// named-target sidecar changes report identity, not the meaning of an old key.
+const OCCURRENCE_PROFILE: &str = "wow-emmy/function-call-facts/1";
 const MAX_FUNCTIONS: usize = 65_536;
 const MAX_CALLS: usize = 65_536;
 const MAX_AST_VISITS: usize = 2_000_000;
@@ -132,6 +135,11 @@ pub struct FunctionCallReport {
     files: Vec<SourceFunctionFile>,
     functions: Vec<SourceFunctionFact>,
     calls: Vec<SourceCallFact>,
+    /// Only unique full-path lookups with a concrete signature enter this map.
+    /// Missing names are not proven non-callable; inspect the symbol report.
+    named_targets: BTreeMap<String, SourceCallTarget>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    symbol_lookup_analysis_id: Option<String>,
     analysis_id: String,
 }
 impl FunctionCallReport {
@@ -153,6 +161,12 @@ impl FunctionCallReport {
     pub fn calls(&self) -> &[SourceCallFact] {
         &self.calls
     }
+    pub fn named_targets(&self) -> &BTreeMap<String, SourceCallTarget> {
+        &self.named_targets
+    }
+    pub fn symbol_lookup_analysis_id(&self) -> Option<&str> {
+        self.symbol_lookup_analysis_id.as_deref()
+    }
     pub fn source_health_complete(&self) -> bool {
         self.files.iter().all(|file| file.parse_error_count == 0)
     }
@@ -167,6 +181,8 @@ impl FunctionCallReport {
                 &self.files,
                 &self.functions,
                 &self.calls,
+                &self.named_targets,
+                &self.symbol_lookup_analysis_id,
             ),
         )
     }
@@ -221,6 +237,35 @@ impl FunctionCallReport {
                 return Err(invalid());
             }
         }
+        if self.named_targets.len() > 4096
+            || (!self.named_targets.is_empty() && self.symbol_lookup_analysis_id.is_none())
+        {
+            return Err(invalid());
+        }
+        for (query, target) in &self.named_targets {
+            if !crate::bindings::supported_path(query) {
+                return Err(invalid());
+            }
+            match target {
+                SourceCallTarget::MainFunction { function_id } => {
+                    if functions
+                        .get(function_id.as_str())
+                        .is_none_or(|f| f.kind != SourceFunctionKind::Closure)
+                    {
+                        return Err(invalid());
+                    }
+                }
+                SourceCallTarget::LibraryFunction { target } => {
+                    if target.role != "library"
+                        || !self.library_snapshot_ids.contains(&target.workspace_id)
+                    {
+                        return Err(invalid());
+                    }
+                }
+                SourceCallTarget::SignatureNotCaptured => {}
+                _ => return Err(invalid()),
+            }
+        }
         Ok(())
     }
 }
@@ -255,7 +300,7 @@ fn function_id(
     canonical_id(
         "emmy-function:sha256:",
         &(
-            FUNCTION_CALL_PROFILE,
+            OCCURRENCE_PROFILE,
             workspace,
             file.path(),
             file.content_sha256(),
@@ -301,6 +346,8 @@ pub(crate) fn collect(
     main: &LuaWorkspaceSnapshot,
     main_root: &Path,
     libraries: &[(&LuaWorkspaceSnapshot, PathBuf)],
+    callable_signatures: &BTreeMap<String, LuaSignatureId>,
+    symbol_lookup_analysis_id: Option<&str>,
     stop: &AtomicBool,
 ) -> EmmyMemberCallResult<FunctionCallReport> {
     let mut signatures = HashMap::new();
@@ -447,7 +494,7 @@ pub(crate) fn collect(
             let fact_id = canonical_id(
                 "emmy-source-call:sha256:",
                 &(
-                    FUNCTION_CALL_PROFILE,
+                    OCCURRENCE_PROFILE,
                     main.snapshot_id(),
                     file.path(),
                     file.content_sha256(),
@@ -479,6 +526,20 @@ pub(crate) fn collect(
         .collect::<BTreeSet<_>>()
         .into_iter()
         .collect();
+    let mut named_targets = BTreeMap::new();
+    for (query, signature) in callable_signatures {
+        checkpoint(stop)?;
+        let target = match signatures.get(signature) {
+            Some(CapturedFunction::Main(id)) => SourceCallTarget::MainFunction {
+                function_id: id.clone(),
+            },
+            Some(CapturedFunction::Library(target)) => SourceCallTarget::LibraryFunction {
+                target: target.clone(),
+            },
+            None => SourceCallTarget::SignatureNotCaptured,
+        };
+        named_targets.insert(query.clone(), target);
+    }
     let mut report = FunctionCallReport {
         profile: FUNCTION_CALL_PROFILE,
         backend: main.backend().clone(),
@@ -487,6 +548,8 @@ pub(crate) fn collect(
         files: files.into_values().collect(),
         functions,
         calls,
+        named_targets,
+        symbol_lookup_analysis_id: symbol_lookup_analysis_id.map(str::to_owned),
         analysis_id: String::new(),
     };
     struct Count(usize);

@@ -33,6 +33,19 @@ Next: complete functional source/Library input materialization and supported-pro
 owner routing, then the dormant builder. Do not block missing code on new test
 matrices. Existing full acceptance and launch gates remain open.
 
+## Source graph and XML handler route
+
+`wow graph build` now composes file/load/XML/inheritance/mixin source proposals,
+Main callable/call facts, and independent direct-call and XML script-assignment
+recognizer partitions. The v5 receipt retains exact source/evidence, skipped-site
+outcomes and final node/edge crosswalks. Inline XML handlers reuse existing syntax
+units; named handlers use concrete Emmy signatures. Method and inherited handler
+associations are Possible, not effective dispatch. See
+[GRAPH_BUILD.md](../apps/wow/GRAPH_BUILD.md). Existing graph reads cover entities,
+neighbors, paths, subgraphs, axes and retained-support explanations. Remaining
+recognizer families, inline semantic analysis and coherent ProjectStore publication
+are not completed by this source slice. Full E2 acceptance remains open.
+
 ## Native source and annotation boundary
 
 Ketho/vscode-wow-api remains the annotation implementation donor; the

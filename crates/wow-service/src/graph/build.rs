@@ -13,8 +13,11 @@ use wow_project::graph::{
 };
 
 mod calls;
+mod scripts;
 use calls::{CallEdge, FunctionNode};
+use scripts::{HandlerNode, ScriptEdge};
 use wow_recognizers::source_calls::SourceCallRecognition;
+use wow_recognizers::source_scripts::SourceScriptRecognition;
 
 const MAX_BUNDLE_BYTES: usize = 32 * 1024 * 1024;
 
@@ -22,6 +25,9 @@ struct BuiltGraph {
     snapshot: GraphPartitionSnapshot,
     provenance: ProjectGraphProvenance,
     call_recognition: SourceCallRecognition,
+    script_recognition: SourceScriptRecognition,
+    handler_nodes: Vec<HandlerNode>,
+    script_edges: Vec<ScriptEdge>,
     digest: Box<str>,
     file_nodes: Vec<FileNode>,
     xml_nodes: Vec<XmlNode>,
@@ -50,7 +56,7 @@ impl GraphBuildRequest {
             GenerationSelector::exact(generation)?
         };
         Ok(Self {
-            schema: "wow-service/graph-build-request/4",
+            schema: "wow-service/graph-build-request/5",
             project_id,
             selector,
             projection: SOURCE_GRAPH_PROFILE,
@@ -90,6 +96,10 @@ pub struct GraphBuildResult {
     lua_nodes: Vec<LuaNode>,
     function_nodes: Vec<FunctionNode>,
     call_edges: Vec<CallEdge>,
+    handler_nodes: Vec<HandlerNode>,
+    script_edges: Vec<ScriptEdge>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    script_recognition: Option<SourceScriptRecognition>,
     #[serde(skip_serializing_if = "Option::is_none")]
     snapshot: Option<GraphPartitionSnapshot>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -136,6 +146,9 @@ impl GraphBuildResult {
         self.function_nodes.clear();
         self.call_edges.clear();
         self.call_recognition = None;
+        self.script_recognition = None;
+        self.handler_nodes.clear();
+        self.script_edges.clear();
         self.snapshot = None;
         self.snapshot_input_digest = None;
         self.provenance = None;
@@ -165,7 +178,7 @@ pub fn execute_graph_build(
 ) -> ServiceResult<GraphBuildResult> {
     let request_digest = super::hash(&bounded(request, super::GRAPH_REQUEST_MAX_BYTES)?);
     let mut result = GraphBuildResult {
-        schema: "wow-service/graph-build-result/4",
+        schema: "wow-service/graph-build-result/5",
         request: request.clone(),
         request_digest,
         status: GraphReadStatus::Partial,
@@ -175,18 +188,23 @@ pub fn execute_graph_build(
         function_nodes: Vec::new(),
         call_edges: Vec::new(),
         call_recognition: None,
+        script_recognition: None,
+        handler_nodes: Vec::new(),
+        script_edges: Vec::new(),
         snapshot: None,
         snapshot_input_digest: None,
         provenance: None,
         failure: None,
         result_digest: None,
         boundaries: vec![
-            "captured_source_topology_and_single_signature_main_function_calls",
+            "captured_source_topology_function_calls_and_xml_handler_associations",
             "not_coherent_project_store_publication",
             "package_dependencies_not_evaluated",
-            "dynamic_library_inline_xml_calls_and_non_call_recognizers_not_evaluated",
+            "dynamic_library_inline_xml_calls_and_other_recognizers_not_evaluated",
             "xml_runtime_objects_parentage_and_mixin_execution_not_evaluated",
-            "library_mixin_targets_not_projected",
+            "library_mixin_and_handler_targets_not_projected",
+            "xml_method_and_inherited_handler_associations_are_possible_not_dispatch",
+            "xml_handler_override_append_prepend_and_intrinsic_order_not_evaluated",
             "no_negative_authority",
         ],
     };
@@ -201,6 +219,9 @@ pub fn execute_graph_build(
             function_nodes,
             call_edges,
             call_recognition,
+            script_recognition,
+            handler_nodes,
+            script_edges,
         }) => {
             result.file_nodes = file_nodes;
             result.xml_nodes = xml_nodes;
@@ -208,6 +229,9 @@ pub fn execute_graph_build(
             result.function_nodes = function_nodes;
             result.call_edges = call_edges;
             result.call_recognition = Some(call_recognition);
+            result.script_recognition = Some(script_recognition);
+            result.handler_nodes = handler_nodes;
+            result.script_edges = script_edges;
             result.snapshot = Some(snapshot);
             result.provenance = Some(provenance);
             result.snapshot_input_digest = Some(digest);
@@ -270,7 +294,11 @@ fn compose(
             stop,
         )
         .map_err(graph_error)?;
-    let (snapshot, call_recognition) = calls::publish(replacement.candidate(), &provenance, stop)?;
+    let (calls_snapshot, call_recognition) =
+        calls::publish(replacement.candidate(), &provenance, stop)?;
+    let (snapshot, script_recognition) = scripts::publish(&calls_snapshot, &provenance, stop)?;
+    let (handler_nodes, script_edges) =
+        scripts::maps(&snapshot, &provenance, &script_recognition, stop)?;
     let (function_nodes, call_edges) =
         calls::maps(&snapshot, &provenance, &call_recognition, stop)?;
     checkpoint(stop)?;
@@ -326,6 +354,9 @@ fn compose(
         function_nodes,
         call_edges,
         call_recognition,
+        script_recognition,
+        handler_nodes,
+        script_edges,
     })
 }
 

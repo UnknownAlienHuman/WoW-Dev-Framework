@@ -31,12 +31,14 @@ For a real addon repository, read its local `AGENTS.md`, `CLAUDE.md`, TOC, boots
 
 `src/graph.rs` additionally activates `wow-project -> wow-graph` for source-file
 and admitted direct TOC/XML-load proposals from an immutable `ProjectView`.
-The v2 source projection also emits source XML declarations, document ownership
-and admitted local inheritance; it does not infer runtime frames or parentage.
+The v5 source projection emits source XML declarations, ownership, local
+inheritance, Main mixin/callable facts and captured XML handler associations.
+It does not infer runtime frames, parentage or effective method dispatch.
 It exports proposals and exact support records, not a published graph generation.
 The service composes them through the existing graph owner for the one-shot
 `wow graph build` artifact operation. E0-D contracts below are unchanged;
-recognizers, dependency discovery and coherent E2-D persistence remain inactive
+service routes source-owned callable and XML handler facts through the independent
+recognizer owner. Dependency discovery and coherent E2-D persistence remain inactive
 in this slice. See `../../apps/wow/GRAPH_BUILD.md` and `e2/README.md`.
 
 ## E0-D scope

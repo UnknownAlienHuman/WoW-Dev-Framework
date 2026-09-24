@@ -1,5 +1,10 @@
 //! Direct source/load/XML proposals. No recognizer inference or graph publication.
 mod functions;
+mod scripts;
+pub use scripts::{
+    ProjectGraphInlineHandler, ProjectGraphScriptBinding, ProjectGraphScriptQuery,
+    ProjectGraphScriptQueryOutcome, ProjectGraphScriptSite, ProjectGraphScriptSource,
+};
 mod mixins;
 pub use functions::{ProjectGraphCallSite, ProjectGraphFunction};
 mod xml;
@@ -30,19 +35,24 @@ use crate::{
     ProjectError, ProjectErrorCode, ProjectKind, ProjectPhase, ProjectResult, ProjectView,
 };
 
-pub const SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/4";
+pub const SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/5";
 pub const SOURCE_GRAPH_PARTITION: &str = "wow-project.source-load";
 const MAX_FILES: usize = 4096;
 const MAX_LOADS: usize = 8192;
-const MAX_NODES: usize =
-    MAX_FILES + xml::MAX_DECLARATIONS + mixins::MAX_DECLARATIONS + functions::MAX_FUNCTIONS;
+const MAX_NODES: usize = MAX_FILES
+    + xml::MAX_DECLARATIONS
+    + mixins::MAX_DECLARATIONS
+    + functions::MAX_FUNCTIONS
+    + scripts::MAX_HANDLERS;
 const MAX_EDGES: usize = MAX_LOADS
     + xml::MAX_DECLARATIONS
     + xml::MAX_INHERITANCE_REFERENCES
     + mixins::MAX_DECLARATIONS
     + mixins::MAX_REFERENCES
     + functions::MAX_FUNCTIONS
-    + functions::MAX_CALLS;
+    + functions::MAX_CALLS
+    + scripts::MAX_HANDLERS
+    + scripts::MAX_BINDINGS;
 const MAX_TEXT_BYTES: usize = 4 * 1024 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -69,6 +79,12 @@ pub struct ProjectGraphProvenance {
     xml_mixins: Vec<ProjectGraphMixinReference>,
     functions: Vec<ProjectGraphFunction>,
     call_sites: Vec<ProjectGraphCallSite>,
+    script_sources: Vec<ProjectGraphScriptSource>,
+    inline_handlers: Vec<ProjectGraphInlineHandler>,
+    script_sites: Vec<ProjectGraphScriptSite>,
+    script_bindings: Vec<ProjectGraphScriptBinding>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    xml_lua_analysis: Option<crate::xml_lua::ProjectXmlLuaAnalysis>,
     #[serde(skip_serializing_if = "Option::is_none")]
     function_call_report: Option<wow_emmy::function_calls::FunctionCallReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -82,6 +98,18 @@ pub struct ProjectGraphProvenance {
 }
 
 impl ProjectGraphProvenance {
+    pub fn script_sources(&self) -> &[ProjectGraphScriptSource] {
+        &self.script_sources
+    }
+    pub fn inline_handlers(&self) -> &[ProjectGraphInlineHandler] {
+        &self.inline_handlers
+    }
+    pub fn script_sites(&self) -> &[ProjectGraphScriptSite] {
+        &self.script_sites
+    }
+    pub fn script_bindings(&self) -> &[ProjectGraphScriptBinding] {
+        &self.script_bindings
+    }
     pub fn functions(&self) -> &[ProjectGraphFunction] {
         &self.functions
     }
@@ -215,6 +243,7 @@ fn registry() -> ProjectResult<GraphRegistryBundle> {
                 "xml_source_declaration".into(),
                 "lua_source_declaration".into(),
                 "lua_source_function".into(),
+                "xml_source_handler".into(),
             ],
             vec![GraphConfidence::Proven, GraphConfidence::Derived],
         )
@@ -264,10 +293,27 @@ fn registry() -> ProjectResult<GraphRegistryBundle> {
         )
         .map_err(|_| invalid())?,
     );
+    let handler = GraphEntityKindDefinition::new(
+        "xml_source_handler",
+        vec!["project".into()],
+        vec!["document".into(), "occurrence".into()],
+        vec![GraphConfidence::Derived],
+    )
+    .map_err(|_| invalid())?;
+    relations.push(
+        GraphRelationKindDefinition::new(
+            "source_xml_sets_script",
+            GraphRelationKind::SetsScript,
+            vec!["xml_source_declaration".into()],
+            vec!["lua_source_function".into(), "xml_source_handler".into()],
+            vec![GraphConfidence::Derived, GraphConfidence::Possible],
+        )
+        .map_err(|_| invalid())?,
+    );
     GraphRegistryBundle::build(
         "wow-project.source-load",
-        "4",
-        vec![file, declaration, lua, function],
+        "5",
+        vec![file, declaration, lua, function, handler],
         relations,
     )
     .map_err(|_| invalid())
@@ -424,6 +470,11 @@ pub fn build_source_graph_proposals(
         xml_mixins: Vec::new(),
         functions: Vec::new(),
         call_sites: Vec::new(),
+        script_sources: Vec::new(),
+        inline_handlers: Vec::new(),
+        script_sites: Vec::new(),
+        script_bindings: Vec::new(),
+        xml_lua_analysis: None,
         function_call_report: None,
         xml_binding_report: None,
         source_handles: BTreeMap::new(),
@@ -538,6 +589,9 @@ pub fn build_source_graph_proposals(
     let functions = functions::project(project, &ids, &mut provenance, &mut text_bytes, stop)?;
     entities.extend(functions.entities);
     relations.extend(functions.relations);
+    let scripts = scripts::project(project, &ids, &mut provenance, &mut text_bytes, stop)?;
+    entities.extend(scripts.entities);
+    relations.extend(scripts.relations);
     if entities.len() > MAX_NODES || relations.len() > MAX_EDGES {
         return Err(exhausted());
     }
@@ -547,6 +601,14 @@ pub fn build_source_graph_proposals(
         GraphCoverageState::NotEvaluated
     };
     let coverage = vec![
+        GraphCoverageRecord::new(
+            GraphRelationKind::SetsScript,
+            GraphCoverageState::NotEvaluated,
+            false,
+            vec!["source_graph.script_assignment_owned_by_recognizers".into()],
+            limits,
+        )
+        .map_err(|_| invalid())?,
         GraphCoverageRecord::new(
             GraphRelationKind::Calls,
             GraphCoverageState::NotEvaluated,

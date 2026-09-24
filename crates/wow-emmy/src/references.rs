@@ -648,6 +648,7 @@ pub fn analyze_member_call_session(
         references,
         calls,
     };
+    let mut callable_signatures = std::collections::BTreeMap::new();
     let lookups = if queries.is_empty() {
         None
     } else {
@@ -657,6 +658,7 @@ pub fn analyze_member_call_session(
             &main_root,
             &library_roots,
             queries,
+            include_function_calls.then_some(&mut callable_signatures),
             stop,
         )?)
     };
@@ -666,6 +668,8 @@ pub fn analyze_member_call_session(
             main,
             &main_root,
             &library_roots,
+            &callable_signatures,
+            lookups.as_ref().map(|report| report.analysis_id()),
             stop,
         )?)
     } else {

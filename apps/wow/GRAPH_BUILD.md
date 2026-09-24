@@ -19,8 +19,9 @@ not a disk current pointer. An exact generation must match that derivation.
 The shared project materialization runs once: file acquisition, project/analyzer
 snapshot and retained TOC/XML reports. `wow-project` then constructs source
 proposals without rereading files or running another Emmy session. `wow-service`
-asks `wow-graph` to validate the complete proposal batch and materialize the source partition and a separate
-`wow-recognizers.lua-direct-calls` partition. Rejected proposals fail the operation;
+asks `wow-graph` to validate the complete proposal batch and materialize the source partition plus independent
+`wow-recognizers.lua-direct-calls` and `wow-recognizers.xml-script-bindings`
+partitions. Rejected proposals fail the operation;
 they do not publish a partly accepted graph. Diagnostic rule execution is not
 required by this export route.
 
@@ -78,7 +79,7 @@ Explicit XML `mixin` entries now reuse the retained XML-to-Lua binding report.
 A Derived `MixesIn` edge connects the XML declaration to one uniquely resolved
 Main Lua declaration. Each target is a `lua_source_declaration`, identified by
 exact document and byte span, not by its name. A Derived `Owns` edge connects
-that declaration to its source file. Different spellings resolving to the same
+the source file to that declaration. Different spellings resolving to the same
 location share a node; ordered XML entries retain separate proposals/receipts.
 
 Only complete, full-path declaration lookups are admitted. Main snapshot, file
@@ -103,7 +104,7 @@ precedence. Inherited mixins are reached through explicit `Inherits` paths, not
 copied into fabricated transitive `MixesIn` edges. Coverage stays Partial with
 no negative authority; zero mixin entries yield NotEvaluated, not proven absence.
 
-The source projection/registry and graph-build request/result use version 4. Existing retained graphs and graph-read request formats are unchanged.
+The source projection/registry and graph-build request/result use version 5. Existing retained graphs and graph-read request formats are unchanged.
 Source review: Gethe `live` resolved to
 `09b9db7948abc9b9648dedaab51eb0cf3ee67b31` on 2026-09-24;
 `Interface/AddOns/Blizzard_SharedXML/Shared/FrameTemplate/RingedFrameTemplate.xml`.
@@ -112,7 +113,7 @@ This observation is not a fixed runtime dependency or client verification.
 ## Lua functions and direct calls
 
 The complete source-to-recognizer-to-graph route is now part of `wow graph build`.
-It requests `wow-emmy/function-call-facts/1` from the **same semantic session** that
+It requests `wow-emmy/function-call-facts/2` from the **same semantic session** that
 already collects member calls and XML lookup results. It does not reparse files,
 compile another workspace or infer calls from token spelling. Plain named calls,
 member/colon calls, aliases and immediate closure calls are eligible when Emmy
@@ -134,7 +135,7 @@ context, checksums, ranges, original proposals and accepted input-generation
 nodes, then feeds structured `DirectCall` observations to the existing closed
 `wow.direct-call` rule (version `1`). It emits Derived `Calls` proposals in the
 separate `wow-recognizers.lua-direct-calls` partition. Only `wow-graph` validates
-and materializes both partitions and rebinds their final generation. There is no
+and materializes the producer partitions and rebinds their final generation. There is no
 source-owned Calls inference or parallel graph engine.
 
 `provenance.function_call_report` retains per-file parse health, all captured
@@ -153,7 +154,8 @@ The current graph schema rejects self-edges: recursive call facts are retained
 with `self_recursion_unsupported`, never silently erased. Calls in syntactically
 failed Main files are not mined from recovery syntax; those files retain their
 parse-error count. XML inline function semantics, dynamic dispatch, `__call`,
-callback registration and non-call recognizer families remain unevaluated. No
+dynamic callback registration and the other non-call recognizer families remain
+unevaluated; the XML source-assignment slice is described below. No
 claim is made that a discovered function runs or a particular call happens in
 WoW. Every layer retains partial/unevaluated coverage and no negative authority.
 
@@ -165,11 +167,75 @@ graph seed binds that analyzer through the project snapshot. The publisher keeps
 the option across updates; no stale callable report is copied to a new snapshot.
 Default publishers may still export the source-only subset with no call report.
 
+## XML handlers and source assignments
+
+`wow graph build` also produces `SetsScript` associations through the existing
+`wow.script-assignment` recognizer. No new command or input configuration is
+required. The receiver is an exact `xml_source_declaration`, not a runtime frame.
+
+For `function="Addon.Initialize"`, Emmy retains the concrete callable signature
+from the **same** full-path lookup already used by the XML binding report. The
+new graph-only `named_targets` sidecar resolves that signature to a captured Main
+closure, not to a declaration's display name or a guessed source range. A direct
+unique association is Derived. Non-callable, ambiguous, Library, failed and
+uncaptured targets have explicit receipts and do not produce guessed edges.
+
+For `method="OnLoad"`, each independently resolved callable from the existing
+receiver/mixin query set remains a **Possible** association, even when only one
+candidate is found. All located candidates remain separate; no override winner
+is selected. Inherited handler sites reuse the previously retained source graph
+and resolve methods for the consuming XML declaration, not just the template.
+Every inherited association is Possible, including a fixed `function` or inline
+source. Incomplete ancestry and unresolved consumer/load order block projection.
+
+A valid inline handler gets an `xml_source_handler` node and a file-to-handler
+source `Owns` edge. It references the already extracted virtual unit and its
+existing syntax report. The graph stage does not copy the Lua body, generate a
+wrapper, parse it again, or pretend it is a Main callable. Direct inline source
+associations are Derived; parse-failed bodies retain a skipped-site receipt.
+Source evidence covers the exact XML element; piecewise body locations remain
+in the original load plan and `xml_lua_analysis`. Calls inside inline bodies
+remain outside the semantic call graph.
+
+The target Lua file must have one admitted load before the consumer's unique XML
+load. A `function` target must additionally precede the original declaring
+source's load. These conservative source-order guards do not prove statement
+execution or runtime table construction. Original `inherit` and `intrinsicOrder`
+values are preserved verbatim; append/prepend/override/intrinsic dispatch order,
+parameter types and effective installed handlers are not computed.
+
+`provenance.script_sources` retains every captured UI script source and support;
+`script_sites` retains direct/inherited consumers, original binding indices,
+per-query outcomes, admitted binding IDs and blockers. `script_bindings` supplies
+only normalized source facts to the recognizer owner. The adapter checks exact
+source partition endpoints, context, generation and each source/evidence record
+before invoking the closed matcher; it is not a second XML/Lua analyzer.
+`script_recognition` retains observation/assertion/proposal crosswalks and the
+original recognition report in the independent script partition.
+
+`handler_nodes` maps inline sources to final node IDs. `script_edges` maps each
+admitted site association to final receiver/handler/edge IDs and confidence.
+All file, declaration, function and call maps are rebound **after** both recognizer
+partitions are published, so no preceding generation's IDs escape. Named handlers
+share the existing `lua_source_function` nodes, allowing explicit
+`sets_script` + `calls` path/subgraph queries into downstream calls. Methods and
+inherited associations require `confidence: "include_possible"`; the default
+Proven/Derived policy intentionally excludes them. Querying these stored edges
+does not make a Possible path executable or a selected handler effective.
+The full Registration axis is still unsupported until its other families exist.
+
+Coverage is Partial for admitted script associations, NotEvaluated without them,
+and never authoritative absence. Existing graph-read encodings and function/call
+occurrence-key recipes are unchanged; the graph-only report identity advances
+with its new data. No source writes, extra semantic sessions or background work
+are introduced.
+
 ## Artifact and provenance formats
 
-`json` (default) emits `wow-service/graph-build-result/4`: request, status,
+`json` (default) emits `wow-service/graph-build-result/5`: request, status,
 `snapshot`, `file_nodes`, `xml_nodes`, `lua_nodes`, `function_nodes`, `call_edges`,
-`provenance`, `call_recognition`, boundaries and canonical digests.
+`handler_nodes`, `script_edges`, `provenance`, `call_recognition`,
+`script_recognition`, boundaries and canonical digests.
 `file_nodes` maps logical source paths to final materialized node IDs, rather than
 producer-input IDs. `provenance` retains the exact project/analyzer snapshot IDs,
 GenerationContext, file manifest, real SourceHandles/EvidenceRecords and optional
@@ -202,11 +268,13 @@ generation. Source/project/E0 check identities are not relabeled or changed.
 
 At most 4,096 files, 8,192 admitted non-self load proposals, 4,096 XML declarations,
 8,192 inspected inheritance references, 4,096 Main mixin targets/links, 8,192
-callable scopes and 8,192 call facts. Source ownership contributes at most one
-edge per source declaration/function. Combined owner ceilings are 20,480 nodes
-and 45,056 edges (including recognizer calls); charged projection text is capped
+callable scopes and 8,192 call facts; at most 4,096 script sources/inline nodes,
+8,192 direct/inherited sites, 8,192 handler associations and 16,384 script query
+visits. Source ownership contributes at most one edge per source occurrence.
+Combined owner ceilings are 24,576 nodes and 57,344 edges (including recognizer
+calls/assignments); charged projection text is capped
 at 4 MiB. The Emmy sidecar separately caps 65,536 callable records/signatures,
-65,536 calls, 2,000,000 AST visits, 256 ancestor steps per scope lookup and 32 MiB
+65,536 calls, 4,096 named callable targets, 2,000,000 AST visits, 256 ancestor steps per scope lookup and 32 MiB
 of serialized report. Source projection applies its smaller bounds before
 creating graph proposals. Over-limit input aborts rather than returning a
 truncated snapshot. Existing source/input/analyzer/load limits

@@ -117,12 +117,19 @@ No recognizer result proves WoW API existence or absence, runtime availability, 
 Cargo.toml: active
 Rust source: active
 bounded registry/matcher/graph handoff: implemented and tested
-typed wow-emmy/project fact adapters: direct member-call and captured-function adapters implemented; full set pending
+typed wow-emmy/project fact adapters: direct member-call, captured-function and XML source-assignment adapters implemented; full set pending
 declarative pack parser and operator DAG: pending
 active structural rule families: pending
-producer partition/replacement model: source direct-call route integrated; full set pending
+producer partition/replacement model: independent source direct-call and XML script-assignment routes integrated; full set pending
 mutation/evaluation harness and checksum freeze: pending
 E5-A real corpus admission and calibration: not started
 ```
 
 Optional operator context is advisory, disabled by default, and configured outside the repository; current Blizzard source remains authoritative.
+
+`source_scripts::recognize_source_scripts` accepts exact source-owner facts,
+validates their partition endpoints and source/evidence crosswalk, and invokes
+the existing ScriptAssignment matcher. It preserves Possible method/inherited
+associations without selecting effective dispatch. It does not depend on
+`wow-project`, parse XML, resolve Lua names, or execute source. Full source site
+receipts remain with the project; service composes the independent producer.
