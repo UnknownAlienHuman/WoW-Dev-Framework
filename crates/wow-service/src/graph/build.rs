@@ -20,6 +20,7 @@ struct BuiltGraph {
     digest: Box<str>,
     file_nodes: Vec<FileNode>,
     xml_nodes: Vec<XmlNode>,
+    lua_nodes: Vec<LuaNode>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -42,7 +43,7 @@ impl GraphBuildRequest {
             GenerationSelector::exact(generation)?
         };
         Ok(Self {
-            schema: "wow-service/graph-build-request/2",
+            schema: "wow-service/graph-build-request/3",
             project_id,
             selector,
             projection: SOURCE_GRAPH_PROFILE,
@@ -64,6 +65,14 @@ struct XmlNode {
 }
 
 #[derive(Debug, Serialize)]
+struct LuaNode {
+    declaration_id: String,
+    path: String,
+    span: wow_core::SourceSpan,
+    node_id: wow_graph::GraphNodeId,
+}
+
+#[derive(Debug, Serialize)]
 pub struct GraphBuildResult {
     schema: &'static str,
     request: GraphBuildRequest,
@@ -71,6 +80,7 @@ pub struct GraphBuildResult {
     status: GraphReadStatus,
     file_nodes: Vec<FileNode>,
     xml_nodes: Vec<XmlNode>,
+    lua_nodes: Vec<LuaNode>,
     #[serde(skip_serializing_if = "Option::is_none")]
     snapshot: Option<GraphPartitionSnapshot>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -111,6 +121,7 @@ impl GraphBuildResult {
     fn fail(&mut self, code: ServiceErrorCode) {
         self.file_nodes.clear();
         self.xml_nodes.clear();
+        self.lua_nodes.clear();
         self.snapshot = None;
         self.snapshot_input_digest = None;
         self.provenance = None;
@@ -140,23 +151,25 @@ pub fn execute_graph_build(
 ) -> ServiceResult<GraphBuildResult> {
     let request_digest = super::hash(&bounded(request, super::GRAPH_REQUEST_MAX_BYTES)?);
     let mut result = GraphBuildResult {
-        schema: "wow-service/graph-build-result/2",
+        schema: "wow-service/graph-build-result/3",
         request: request.clone(),
         request_digest,
         status: GraphReadStatus::Partial,
         file_nodes: Vec::new(),
         xml_nodes: Vec::new(),
+        lua_nodes: Vec::new(),
         snapshot: None,
         snapshot_input_digest: None,
         provenance: None,
         failure: None,
         result_digest: None,
         boundaries: vec![
-            "captured_files_loads_and_xml_source_topology_only",
+            "captured_files_loads_xml_and_main_mixin_source_topology_only",
             "not_coherent_project_store_publication",
             "package_dependencies_not_evaluated",
             "lua_calls_and_recognizers_not_evaluated",
-            "xml_runtime_objects_parentage_and_mixin_semantics_not_evaluated",
+            "xml_runtime_objects_parentage_and_mixin_execution_not_evaluated",
+            "library_mixin_targets_not_projected",
             "no_negative_authority",
         ],
     };
@@ -167,9 +180,11 @@ pub fn execute_graph_build(
             digest,
             file_nodes,
             xml_nodes,
+            lua_nodes,
         }) => {
             result.file_nodes = file_nodes;
             result.xml_nodes = xml_nodes;
+            result.lua_nodes = lua_nodes;
             result.snapshot = Some(snapshot);
             result.provenance = Some(provenance);
             result.snapshot_input_digest = Some(digest);
@@ -251,6 +266,16 @@ fn compose(
             node_id: materialized_node_id(&snapshot, &declaration.proposal_id, limits)?,
         });
     }
+    let mut lua_nodes = Vec::new();
+    for declaration in provenance.lua_declarations() {
+        checkpoint(stop)?;
+        lua_nodes.push(LuaNode {
+            declaration_id: declaration.declaration_id.clone(),
+            path: declaration.path.clone(),
+            span: declaration.span,
+            node_id: materialized_node_id(&snapshot, &declaration.proposal_id, limits)?,
+        });
+    }
     let bytes = bounded(&snapshot, GRAPH_INPUT_MAX_BYTES)?;
     // Ensure export and existing import share byte/token/depth/string limits.
     // This is runtime admission, not a test or a second project/analyzer pass.
@@ -272,6 +297,7 @@ fn compose(
         digest: super::hash(&bytes),
         file_nodes,
         xml_nodes,
+        lua_nodes,
     })
 }
 

@@ -148,3 +148,9 @@ path. It retains exact source/evidence and consumer node IDs without a second
 Emmy session or persistent graph/project publication. The result remains Partial;
 semantic recognizers, dependency graph coverage and coherent ProjectStore remain
 open. See [GRAPH_BUILD.md](../apps/wow/GRAPH_BUILD.md).
+
+
+The source graph also exports XML declarations, source ownership, admitted local
+inheritance and uniquely resolved Main mixin declaration links. The original XML
+binding report and skipped outcomes remain in provenance. Inheritance-axis queries
+are available for this source slice; runtime mixin behavior is not certified.

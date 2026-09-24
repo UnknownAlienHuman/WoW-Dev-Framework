@@ -44,7 +44,7 @@ pub(super) struct XmlProposals {
     pub relations: Vec<GraphRelationProposal>,
 }
 
-fn source_span(
+pub(super) fn source_span(
     plan: &ProjectLoadPlan,
     path: &str,
     span: &XmlSourceSpan,
@@ -175,7 +175,7 @@ pub(super) fn project(
         output.relations.push(
             GraphRelationProposal::new(
                 ownership_proposal_id.as_str(),
-                "source_xml_owns",
+                "source_declaration_owns",
                 GraphRelationProposalInput {
                     source: GraphProposalEndpoint::Proposed(file_id.clone().into()),
                     target: GraphProposalEndpoint::Proposed(proposal_id.clone().into()),

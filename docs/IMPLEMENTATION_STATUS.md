@@ -211,3 +211,10 @@ snapshot output feeds existing graph-read commands. See [GRAPH_BUILD.md](../apps
 The source projection is Partial with no negative authority. Dependency packages,
 Lua calls/recognizers, XML objects and coherent ProjectStore remain unimplemented
 by this route. This is not full E2-C/E2-D or runtime acceptance.
+
+
+Source graph export also includes distinct XML declarations, document ownership,
+admitted local template inheritance and exact Main Lua mixin source links, with
+materialized XML/Lua node maps and retained unresolved lookup receipts. The
+Inheritance axis now accepts this registry. Library targets remain separate;
+table construction, callback dispatch, recognizers and runtime are not evaluated.

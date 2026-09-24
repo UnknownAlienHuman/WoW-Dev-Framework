@@ -69,13 +69,51 @@ candidate is selected from an ambiguous name group. XML `parent` never becomes
 source locations and declaration properties stay in the existing XML index; bodies
 are not copied, parsed or executed again. Ownership and inheritance coverage stay
 Partial (NotEvaluated without captured XML), with no negative authority. The
-Ownership axis and ordinary `inherits` subgraphs can inspect these nodes; the full
-Inheritance axis remains unsupported until the registry also defines MixesIn.
+Ownership axis and ordinary `inherits` subgraphs can inspect these nodes. The
+Inheritance axis also includes the explicit Main mixin links described below.
+
+## XML mixin source links
+
+Explicit XML `mixin` entries now reuse the retained XML-to-Lua binding report.
+A Derived `MixesIn` edge connects the XML declaration to one uniquely resolved
+Main Lua declaration. Each target is a `lua_source_declaration`, identified by
+exact document and byte span, not by its name. A Derived `Owns` edge connects
+that declaration to its source file. Different spellings resolving to the same
+location share a node; ordered XML entries retain separate proposals/receipts.
+
+Only complete, full-path declaration lookups are admitted. Main snapshot, file
+digest and UTF-8 span must match the captured project. The target Lua file must
+have exactly one included load before the XML declaration's unique load record.
+Ambiguous/missing/failed lookup, invalid XML, unlocated targets and uncertain
+load order remain explicit outcomes rather than guessed edges. Library targets
+stay outside the addon graph even if their relative path matches a Main file.
+
+`provenance.xml_mixins` addresses each original binding by `binding_index` in
+`provenance.xml_binding_report`. The complete unmodified report preserves lookup
+candidates, source locations and analyzer identity, including for skipped links.
+`provenance.lua_declarations` holds exact target handles/evidence; `lua_nodes`
+maps those declarations to final materialized node IDs. Edge evidence retains
+both the XML attribute and Lua target bytes. No source is reread or reanalyzed.
+
+The existing Inheritance axis can now traverse both source template inheritance
+and these declared mixin links. Forward walks from a base/mixin to consumers;
+reverse walks from consumers to source ancestors. This does not assert that a
+Lua assignment runs, returns a table, copies fields, or selects runtime method
+precedence. Inherited mixins are reached through explicit `Inherits` paths, not
+copied into fabricated transitive `MixesIn` edges. Coverage stays Partial with
+no negative authority; zero mixin entries yield NotEvaluated, not proven absence.
+
+The source projection/registry and graph-build request/result advance to version
+3. Existing retained graphs and graph-read request formats are unchanged.
+Source review: Gethe `live` resolved to
+`09b9db7948abc9b9648dedaab51eb0cf3ee67b31` on 2026-09-24;
+`Interface/AddOns/Blizzard_SharedXML/Shared/FrameTemplate/RingedFrameTemplate.xml`.
+This observation is not a fixed runtime dependency or client verification.
 
 ## Artifact and provenance formats
 
-`json` (default) emits `wow-service/graph-build-result/2`: request, status,
-`snapshot`, `file_nodes`, `xml_nodes`, `provenance`, boundaries and canonical digests.
+`json` (default) emits `wow-service/graph-build-result/3`: request, status,
+`snapshot`, `file_nodes`, `xml_nodes`, `lua_nodes`, `provenance`, boundaries and canonical digests.
 `file_nodes` maps logical source paths to final materialized node IDs, rather than
 producer-input IDs. `provenance` retains the exact project/analyzer snapshot IDs,
 GenerationContext, file manifest, real SourceHandles/EvidenceRecords and optional
@@ -106,8 +144,9 @@ generation. Source/project/E0 check identities are not relabeled or changed.
 ## Bounds and failures
 
 At most 4,096 files, 8,192 admitted non-self load proposals, 4,096 XML declarations
-and 8,192 inspected inheritance references. Document ownership adds at most one
-edge per declaration. The combined ceiling is 8,192 nodes and 20,480 edges;
+and 8,192 inspected inheritance references, plus 4,096 mixin references and 4,096
+unique Lua target declarations. Document ownership adds at most one edge per
+declaration. The combined ceiling is 12,288 nodes and 28,672 edges;
 charged projection text stays below 4 MiB. Existing source/input/analyzer/load limits
 remain in force. The bare graph must fit the existing graph reader's 16 MiB,
 1,000,000 token/key, 64-level and 16 KiB decoded-string limits. Admission uses the

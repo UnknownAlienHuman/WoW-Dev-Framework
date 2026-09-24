@@ -1,5 +1,9 @@
 //! Direct source/load/XML proposals. No recognizer inference or graph publication.
+mod mixins;
 mod xml;
+pub use mixins::{
+    ProjectGraphLuaDeclaration, ProjectGraphMixinOutcome, ProjectGraphMixinReference,
+};
 use std::collections::BTreeMap;
 use std::sync::atomic::AtomicBool;
 pub use xml::{
@@ -24,12 +28,16 @@ use crate::{
     ProjectError, ProjectErrorCode, ProjectKind, ProjectPhase, ProjectResult, ProjectView,
 };
 
-pub const SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/2";
+pub const SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/3";
 pub const SOURCE_GRAPH_PARTITION: &str = "wow-project.source-load";
 const MAX_FILES: usize = 4096;
 const MAX_LOADS: usize = 8192;
-const MAX_NODES: usize = MAX_FILES + xml::MAX_DECLARATIONS;
-const MAX_EDGES: usize = MAX_LOADS + xml::MAX_DECLARATIONS + xml::MAX_INHERITANCE_REFERENCES;
+const MAX_NODES: usize = MAX_FILES + xml::MAX_DECLARATIONS + mixins::MAX_DECLARATIONS;
+const MAX_EDGES: usize = MAX_LOADS
+    + xml::MAX_DECLARATIONS
+    + xml::MAX_INHERITANCE_REFERENCES
+    + mixins::MAX_DECLARATIONS
+    + mixins::MAX_REFERENCES;
 const MAX_TEXT_BYTES: usize = 4 * 1024 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -52,6 +60,10 @@ pub struct ProjectGraphProvenance {
     files: Vec<ProjectGraphFile>,
     xml_declarations: Vec<ProjectGraphXmlDeclaration>,
     xml_inheritance: Vec<ProjectGraphXmlReference>,
+    lua_declarations: Vec<ProjectGraphLuaDeclaration>,
+    xml_mixins: Vec<ProjectGraphMixinReference>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    xml_binding_report: Option<crate::xml_bindings::ProjectXmlLuaBindings>,
     source_handles: BTreeMap<StableHandleId, SourceHandle>,
     evidence: BTreeMap<EvidenceId, EvidenceRecord>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -72,6 +84,14 @@ impl ProjectGraphProvenance {
     #[must_use]
     pub fn xml_inheritance(&self) -> &[ProjectGraphXmlReference] {
         &self.xml_inheritance
+    }
+    #[must_use]
+    pub fn lua_declarations(&self) -> &[ProjectGraphLuaDeclaration] {
+        &self.lua_declarations
+    }
+    #[must_use]
+    pub fn xml_mixins(&self) -> &[ProjectGraphMixinReference] {
+        &self.xml_mixins
     }
 }
 
@@ -160,11 +180,14 @@ fn registry() -> ProjectResult<GraphRegistryBundle> {
     .map_err(|_| invalid())?;
     relations.push(
         GraphRelationKindDefinition::new(
-            "source_xml_owns",
+            "source_declaration_owns",
             GraphRelationKind::Owns,
             vec!["source_file".into()],
-            vec!["xml_source_declaration".into()],
-            vec![GraphConfidence::Proven],
+            vec![
+                "xml_source_declaration".into(),
+                "lua_source_declaration".into(),
+            ],
+            vec![GraphConfidence::Proven, GraphConfidence::Derived],
         )
         .map_err(|_| invalid())?,
     );
@@ -178,10 +201,27 @@ fn registry() -> ProjectResult<GraphRegistryBundle> {
         )
         .map_err(|_| invalid())?,
     );
+    let lua = GraphEntityKindDefinition::new(
+        "lua_source_declaration",
+        vec!["project".into()],
+        vec!["document".into(), "span_start".into(), "span_end".into()],
+        vec![GraphConfidence::Derived],
+    )
+    .map_err(|_| invalid())?;
+    relations.push(
+        GraphRelationKindDefinition::new(
+            "source_xml_mixes_in",
+            GraphRelationKind::MixesIn,
+            vec!["xml_source_declaration".into()],
+            vec!["lua_source_declaration".into()],
+            vec![GraphConfidence::Derived],
+        )
+        .map_err(|_| invalid())?,
+    );
     GraphRegistryBundle::build(
         "wow-project.source-load",
-        "2",
-        vec![file, declaration],
+        "3",
+        vec![file, declaration, lua],
         relations,
     )
     .map_err(|_| invalid())
@@ -334,6 +374,9 @@ pub fn build_source_graph_proposals(
         files: Vec::new(),
         xml_declarations: Vec::new(),
         xml_inheritance: Vec::new(),
+        lua_declarations: Vec::new(),
+        xml_mixins: Vec::new(),
+        xml_binding_report: None,
         source_handles: BTreeMap::new(),
         evidence: BTreeMap::new(),
         load_plan: plan.cloned(),
@@ -440,6 +483,9 @@ pub fn build_source_graph_proposals(
     let xml = xml::project(project, &ids, &mut provenance, &mut text_bytes, stop)?;
     entities.extend(xml.entities);
     relations.extend(xml.relations);
+    let mixins = mixins::project(project, &ids, &mut provenance, &mut text_bytes, stop)?;
+    entities.extend(mixins.entities);
+    relations.extend(mixins.relations);
     if entities.len() > MAX_NODES || relations.len() > MAX_EDGES {
         return Err(exhausted());
     }
@@ -450,10 +496,22 @@ pub fn build_source_graph_proposals(
     };
     let coverage = vec![
         GraphCoverageRecord::new(
+            GraphRelationKind::MixesIn,
+            if provenance.xml_mixins.is_empty() {
+                GraphCoverageState::NotEvaluated
+            } else {
+                GraphCoverageState::Partial
+            },
+            false,
+            vec!["source_graph.explicit_xml_main_mixin_references_only".into()],
+            limits,
+        )
+        .map_err(|_| invalid())?,
+        GraphCoverageRecord::new(
             GraphRelationKind::Owns,
             xml_state,
             false,
-            vec!["source_graph.xml_document_ownership_only".into()],
+            vec!["source_graph.document_declaration_ownership_only".into()],
             limits,
         )
         .map_err(|_| invalid())?,
