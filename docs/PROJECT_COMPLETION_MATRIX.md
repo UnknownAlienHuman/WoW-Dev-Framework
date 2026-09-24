@@ -132,3 +132,10 @@ This advances functional code, not the existing E2/R0 acceptance gates. Virtual
 Main/Library semantics, XSD validation, inheritance materialization and runtime remain open.
 XML parent/inheritance references now link to captured source declarations with
 explicit conflicts, order and cycles; see [XML_REFERENCES.md](../apps/wow/XML_REFERENCES.md).
+
+## Retained graph application route
+
+The bounded subgraph, axis and explanation owners now have one-shot service/CLI
+routing over explicit retained partition artifacts; see
+[GRAPH_INPUT.md](../apps/wow/GRAPH_INPUT.md). Graph production/export from local
+checks, coherent ProjectStore acquisition and full package acceptance stay open.

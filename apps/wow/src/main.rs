@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 mod args;
+mod graph;
 mod output;
 
 use std::io::Write;
@@ -27,15 +28,16 @@ fn run() -> u8 {
             Err(_) => 4,
         };
     }
+    if arguments.first().is_some_and(|value| value == "graph") {
+        return graph::run(arguments);
+    }
     let arguments = match args::parse(arguments) {
         Ok(value) => value,
         Err(message) => return usage(message),
     };
-    let stop = Arc::new(AtomicBool::new(false));
-    let signal = Arc::clone(&stop);
-    if ctrlc::set_handler(move || signal.store(true, Ordering::Release)).is_err() {
-        return usage("could not initialize cancellation handling");
-    }
+    let Some(stop) = cancellation_flag() else {
+        return 64;
+    };
     let result = match LocalProjectInput::from_config_path(&arguments.config, &stop) {
         Ok(input) => execute_local(input, &arguments.command, &stop),
         Err(error) if error.code() == ServiceErrorCode::Cancelled => {
@@ -84,4 +86,15 @@ fn usage(message: &'static str) -> u8 {
 }
 fn diagnostic(message: &str) {
     let _ = writeln!(std::io::stderr().lock(), "wow: {message}");
+}
+
+fn cancellation_flag() -> Option<Arc<AtomicBool>> {
+    let stop = Arc::new(AtomicBool::new(false));
+    let signal = Arc::clone(&stop);
+    if ctrlc::set_handler(move || signal.store(true, Ordering::Release)).is_err() {
+        diagnostic("could not initialize cancellation handling");
+        None
+    } else {
+        Some(stop)
+    }
 }

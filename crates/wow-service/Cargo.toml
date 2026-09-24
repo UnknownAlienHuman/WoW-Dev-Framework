@@ -16,6 +16,7 @@ wow-emmy = { path = "../wow-emmy" }
 wow-project = { path = "../wow-project" }
 wow-rules = { path = "../wow-rules" }
 wow-store = { path = "../wow-store" }
+wow-graph = { path = "../wow-graph" }
 
 [lints]
 workspace = true

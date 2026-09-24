@@ -10,6 +10,7 @@
 mod backend;
 mod configuration;
 mod error;
+pub mod graph;
 mod identity;
 pub mod local;
 mod model;

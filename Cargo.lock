@@ -2661,6 +2661,7 @@ dependencies = [
  "sha2 0.10.9",
  "wow-core",
  "wow-emmy",
+ "wow-graph",
  "wow-project",
  "wow-reference",
  "wow-rules",

@@ -188,5 +188,14 @@ breadth-first neighborhoods with original evidence and explicit coverage and
 truncation. See [SUBGRAPH_USAGE.md](../crates/wow-graph/SUBGRAPH_USAGE.md).
 This completes the bounded subgraph code slice of E2-01, not its full acceptance.
 Exact retained-support explanations now use `GraphExplainQuery`; see
-[EXPLANATION_USAGE.md](../crates/wow-graph/EXPLANATION_USAGE.md). Axes, complete
-conflict/derivation/evidence resolution and service/CLI graph routing remain open.
+[EXPLANATION_USAGE.md](../crates/wow-graph/EXPLANATION_USAGE.md). Registry-bound axes are described in
+[AXIS_USAGE.md](../crates/wow-graph/AXIS_USAGE.md). Full conflict/derivation/evidence
+resolution and coherent ProjectStore acquisition remain open.
+
+## Retained graph CLI
+
+`wow graph subgraph|axis|explain` now routes explicit retained partition-snapshot
+and query artifacts through `wow-service` to the existing graph owner. It has
+bounded JSON/file admission, exact identity guards and faithful typed status.
+See [GRAPH_INPUT.md](../apps/wow/GRAPH_INPUT.md). It does not acquire ProjectStore,
+produce a graph from `wow check`, or advance full E2/E3/E7 acceptance.
