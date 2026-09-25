@@ -31,8 +31,10 @@ For a real addon repository, read its local `AGENTS.md`, `CLAUDE.md`, TOC, boots
 
 `src/graph.rs` additionally activates `wow-project -> wow-graph` for source-file
 and admitted direct TOC/XML-load proposals from an immutable `ProjectView`.
-The v5 source projection emits source XML declarations, ownership, local
-inheritance, Main mixin/callable facts and captured XML handler associations.
+The current source projection emits source XML declarations, ownership, local
+inheritance, Main mixin/callable facts, captured XML handler associations and
+selected-TOC SavedVariables accesses. Literal state keys retain their type;
+lexical alias edges are Possible and preserve each initializer's evidence.
 It does not infer runtime frames, parentage or effective method dispatch.
 It exports proposals and exact support records, not a published graph generation.
 The service composes them through the existing graph owner for the one-shot

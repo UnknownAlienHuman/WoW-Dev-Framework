@@ -22,7 +22,7 @@ use wow_emmy::function_calls::FunctionCallReport;
 use wow_emmy::global_access::{GlobalAccessKind, GlobalAccessResolution};
 
 pub const SOURCE_STATE_PARTITION: &str = "wow-recognizers.saved-variable-access";
-pub const SOURCE_STATE_PROFILE: &str = "wow-recognizers/source-saved-variable-access/1";
+pub const SOURCE_STATE_PROFILE: &str = "wow-recognizers/source-saved-variable-access/2";
 const MAX_BINDINGS: usize = 8192;
 
 /// Normalized source facts. The adapter checks the original global-access fact,
@@ -34,6 +34,7 @@ pub struct SourceStateFact<'a> {
     pub caller_proposal_id: &'a str,
     pub target_proposal_id: &'a str,
     pub kind: GlobalAccessKind,
+    pub confidence: GraphConfidence,
     pub source_handle_ids: &'a [StableHandleId],
     pub evidence_ids: &'a [EvidenceId],
 }
@@ -135,7 +136,14 @@ pub fn recognize_source_state(
         let access = accesses
             .get(fact.access_id)
             .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
+        let confidence = if access.is_alias() {
+            GraphConfidence::Possible
+        } else {
+            GraphConfidence::Derived
+        };
         if fact.kind != access.kind()
+            || fact.confidence != confidence
+            || access.alias_blocker().is_some()
             || !access.path_complete()
             || access.resolution() != GlobalAccessResolution::MainGlobal
         {
@@ -155,11 +163,12 @@ pub fn recognize_source_state(
             return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
         }
         let identity = wow_core::domain_separated_digest(
-            "wow-project/saved-access/1",
+            "wow-project/saved-access/2",
             &(
                 access.fact_id(),
                 fact.root_proposal_id,
                 access.kind(),
+                confidence,
                 fact.target_proposal_id,
                 fact.source_handle_ids,
                 fact.evidence_ids,
@@ -263,6 +272,16 @@ pub fn recognize_source_state(
             &declaration.content_digest,
             declaration.span,
         )?;
+        for hop in access.aliases() {
+            checkpoint(stop)?;
+            located_support(
+                &input,
+                fact,
+                access.path(),
+                access.content_digest(),
+                hop.statement_span,
+            )?;
+        }
         let observation = StructuredObservation::new(
             StructuredObservationInput {
                 source_snapshot_id: graph.snapshot_id().clone(),
@@ -270,7 +289,7 @@ pub fn recognize_source_state(
                 from: endpoint(fact.caller_proposal_id)?,
                 to: endpoint(fact.target_proposal_id)?,
                 origin: ObservationOrigin::ProjectFact,
-                confidence: GraphConfidence::Derived,
+                confidence,
                 evidence_ids: fact
                     .evidence_ids
                     .iter()
@@ -328,8 +347,7 @@ pub fn recognize_source_state(
         let fact = pending
             .remove(assertion.observation_id().as_str())
             .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingUnknown))?;
-        if assertion.relation() != relation(fact.kind)?
-            || assertion.confidence() != GraphConfidence::Derived
+        if assertion.relation() != relation(fact.kind)? || assertion.confidence() != fact.confidence
         {
             return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
         }

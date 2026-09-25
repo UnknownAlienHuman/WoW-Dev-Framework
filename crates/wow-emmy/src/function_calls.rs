@@ -16,7 +16,7 @@ use crate::references::{
 };
 use crate::{EmmyBackendIdentity, LuaWorkspaceFile, LuaWorkspaceSnapshot};
 
-pub const FUNCTION_CALL_PROFILE: &str = "wow-emmy/function-call-facts/3";
+pub const FUNCTION_CALL_PROFILE: &str = "wow-emmy/function-call-facts/4";
 // Existing callable/call occurrence keys keep their original recipe. The new
 // named-target sidecar changes report identity, not the meaning of an old key.
 const OCCURRENCE_PROFILE: &str = "wow-emmy/function-call-facts/1";
@@ -482,7 +482,7 @@ pub(crate) fn collect(
     }
     let mut calls = Vec::new();
     let mut global_accesses = Vec::new();
-    let mut access_text_bytes = 0;
+    let mut access_budget = crate::global_access::AccessBudget::default();
     for file in main.files() {
         checkpoint(stop)?;
         if files
@@ -494,6 +494,8 @@ pub(crate) fn collect(
             continue;
         }
         let model = semantic_model(analysis, main_root, file)?;
+        let aliases =
+            crate::global_access::AliasIndex::collect(&model, file, &mut access_budget, stop)?;
         for ast in model.get_root().descendants::<LuaAst>() {
             checkpoint(stop)?;
             visit(&mut visits)?;
@@ -507,7 +509,8 @@ pub(crate) fn collect(
                     file,
                     name,
                     &access_sources,
-                    &mut access_text_bytes,
+                    &aliases,
+                    &mut access_budget,
                 )? {
                     global_accesses.push(access);
                 }

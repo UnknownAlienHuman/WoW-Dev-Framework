@@ -5,6 +5,7 @@ pub use state::{
     ProjectGraphStateBinding, ProjectGraphStateDeclaration, ProjectGraphStateOutcome,
     ProjectGraphStatePath, ProjectGraphStateRoot, ProjectGraphStateSite,
 };
+pub use wow_emmy::global_access::GlobalAccessKey;
 mod scripts;
 pub use scripts::{
     ProjectGraphInlineHandler, ProjectGraphScriptBinding, ProjectGraphScriptQuery,
@@ -40,7 +41,7 @@ use crate::{
     ProjectError, ProjectErrorCode, ProjectKind, ProjectPhase, ProjectResult, ProjectView,
 };
 
-pub const SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/6";
+pub const SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/7";
 pub const SOURCE_GRAPH_PARTITION: &str = "wow-project.source-load";
 const MAX_FILES: usize = 4096;
 const MAX_LOADS: usize = 8192;
@@ -366,14 +367,14 @@ fn registry() -> ProjectResult<GraphRegistryBundle> {
                 relation,
                 vec!["lua_source_function".into()],
                 vec!["state_root".into(), "state_path".into()],
-                vec![GraphConfidence::Derived],
+                vec![GraphConfidence::Derived, GraphConfidence::Possible],
             )
             .map_err(|_| invalid())?,
         );
     }
     GraphRegistryBundle::build(
         "wow-project.source-load",
-        "6",
+        "7",
         vec![
             file,
             declaration,

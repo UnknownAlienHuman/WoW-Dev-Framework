@@ -486,3 +486,16 @@ A fact is current only when:
 - source span validates.
 
 An update invalidates all dependent fact IDs/digests. Reused unchanged facts retain semantic equality but belong to the newly validated snapshot/context only through explicit publication.
+
+## Optional source-state fact sidecar
+
+`global_access` v2, carried only by the graph-enabled `FunctionCallReport` v4,
+uses Emmy's existing AST/declaration IDs. It retains typed string/integer/boolean
+keys, transparent parentheses and bounded local rooted-path alias chains. Every
+alias hop keeps declaration/initializer/statement spans; any syntactic local
+rebinding is an explicit blocker. Parameters, implicit self, same-spelling
+shadowing locals and arbitrary call results are not global slots. These facts
+are source provenance only; consumers must not promote aliases above Possible.
+Ordinary E0 status/check collection and the separate local-flow report are unchanged.
+See [the source-state route](../../apps/wow/GRAPH_BUILD.md#typed-literal-keys-and-lexical-aliases)
+for admission limits, serialization versions and deferred cases.

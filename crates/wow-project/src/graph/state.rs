@@ -3,7 +3,7 @@
 use super::*;
 use crate::load::{TocSavedVariableScope, TocSavedVariableState};
 use std::collections::BTreeSet;
-use wow_emmy::global_access::{GlobalAccessKind, GlobalAccessResolution};
+use wow_emmy::global_access::{AliasAccessBlocker, GlobalAccessKind, GlobalAccessResolution};
 
 pub(super) const MAX_ROOTS: usize = 1024;
 pub(super) const MAX_PATHS: usize = 8192;
@@ -34,7 +34,7 @@ pub struct ProjectGraphStateRoot {
 pub struct ProjectGraphStatePath {
     pub path_id: String,
     pub root_id: String,
-    pub keys: Vec<String>,
+    pub keys: Vec<GlobalAccessKey>,
     pub proposal_id: String,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -47,6 +47,8 @@ pub enum ProjectGraphStateOutcome {
     LibraryGlobal,
     DeclarationSourceIncomplete,
     DynamicOrUnsupportedKey,
+    ReassignedAlias,
+    LocalAliasRebinding,
     UnsupportedAssignment,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -62,6 +64,7 @@ pub struct ProjectGraphStateBinding {
     pub caller_proposal_id: String,
     pub target_proposal_id: String,
     pub kind: GlobalAccessKind,
+    pub confidence: GraphConfidence,
     pub source_handle_ids: Vec<StableHandleId>,
     pub evidence_ids: Vec<EvidenceId>,
 }
@@ -220,12 +223,25 @@ pub(super) fn project(
         }
         charge(
             text_bytes,
-            access.root_name().len() + access.keys().iter().map(String::len).sum::<usize>() + 512,
+            access.root_name().len()
+                + access
+                    .keys()
+                    .iter()
+                    .map(GlobalAccessKey::text_bytes)
+                    .sum::<usize>()
+                + 512,
         )?;
         let outcome = if unresolved_selection {
             Some(ProjectGraphStateOutcome::UnresolvedTocSelection)
         } else if roots.len() != 1 || roots[0].ambiguous {
             Some(ProjectGraphStateOutcome::AmbiguousDeclaration)
+        } else if let Some(blocker) = access.alias_blocker() {
+            Some(match blocker {
+                AliasAccessBlocker::ReassignedBinding => ProjectGraphStateOutcome::ReassignedAlias,
+                AliasAccessBlocker::LocalBindingWrite => {
+                    ProjectGraphStateOutcome::LocalAliasRebinding
+                }
+            })
         } else if !access.path_complete() {
             Some(ProjectGraphStateOutcome::DynamicOrUnsupportedKey)
         } else if access.kind() == GlobalAccessKind::UnsupportedAssignment {
@@ -283,6 +299,20 @@ pub(super) fn project(
         handles.extend([handle, decl_handle, function.source_handle_id]);
         let mut evidences = root.evidence_ids.iter().copied().collect::<BTreeSet<_>>();
         evidences.extend([evidence, decl_evidence, function.evidence_id]);
+        // Every alias hop is supported by its actual initializer statement,
+        // not just a spelling or a digest-shaped reference in the report.
+        for hop in access.aliases() {
+            crate::analyzer::checkpoint(stop)?;
+            let (alias_handle, alias_evidence) = main_support(
+                project,
+                access.path(),
+                access.content_digest(),
+                hop.statement_span,
+                provenance,
+            )?;
+            handles.insert(alias_handle);
+            evidences.insert(alias_evidence);
+        }
         let handles = handles.into_iter().collect::<Vec<_>>();
         let evidences = evidences.into_iter().collect::<Vec<_>>();
         if handles.len() > 32 || evidences.len() > 32 {
@@ -338,17 +368,25 @@ pub(super) fn project(
             }
             path_id
         };
-        let binding_id = id(
-            "saved-access",
+        let confidence = if access.is_alias() {
+            GraphConfidence::Possible
+        } else {
+            GraphConfidence::Derived
+        };
+        let digest = crate::identity::canonical_digest(
+            "wow-project/saved-access/2",
             &(
                 access.fact_id(),
                 &root.root_id,
                 access.kind(),
+                confidence,
                 &target_proposal_id,
                 &handles,
                 &evidences,
             ),
+            ProjectPhase::View,
         )?;
+        let binding_id = format!("saved-access:{digest}");
         provenance.state_bindings.push(ProjectGraphStateBinding {
             binding_id,
             access_id: access.fact_id().into(),
@@ -356,6 +394,7 @@ pub(super) fn project(
             caller_proposal_id: function.proposal_id.clone(),
             target_proposal_id,
             kind: access.kind(),
+            confidence,
             source_handle_ids: handles,
             evidence_ids: evidences,
         });

@@ -255,21 +255,69 @@ For example, with `## SavedVariables: AddonDB`, direct accesses to
 represented. Dot and string-literal spellings share the same ordered symbolic key
 path; different paths never collapse by dotted display text. Plain assignment
 and function-definition targets are writes; other occurrences are reads. Each
-maximal contiguous index chain is one slot access associated with its containing
+maximal index/parenthesis chain is one slot access associated with its containing
 function/chunk. Assignment receiver evaluation does not synthesize extra reads
 of all path prefixes, and a call through a field does not imply a state mutation.
 
 State paths express *source references*, not proof that fields exist, hold a
-particular type/value, were executed, or persisted successfully. Numeric/dynamic
-keys, aliases, `_G`/environment indirection, parenthesized receiver chains and
-calls inside inline XML are outside this profile. A local alias may produce a
-read of the original root when initialized; later writes through that alias are
-not followed. No metatable effects, initialization/lifecycle order, migration or
-storage contents are evaluated.
+particular type/value, were executed, or persisted successfully. `_G`/environment
+indirection, computed keys, aliases returned by calls, and accesses inside inline
+XML remain outside this profile. No metatable effects, initialization/lifecycle
+order, migration or storage contents are evaluated.
+
+### Typed literal keys and lexical aliases
+
+Keys are tagged values: `{"kind":"string","value":"settings"}`,
+`{"kind":"integer","value":"1"}`, or `{"kind":"boolean","value":true}`.
+Integer values use canonical signed decimal strings because core semantic JSON
+forbids negative number tokens; the `kind` tag preserves the numeric domain.
+`AddonDB[1]`, `AddonDB["1"]` and `AddonDB[true]` are distinct paths. Decimal and
+hexadecimal integer tokens normalize to the same integer, including a single
+unary minus and zero. Only integers in `[-9007199254740991, 9007199254740991]`
+are admitted; fractional/exponent tokens, overflow, suffixes, computed indices
+and safe-navigation syntax remain explicit unsupported paths. The adapter does
+not use the upstream number accessor's fallback-to-zero behavior. Parentheses
+are transparent, so `(AddonDB.settings)[1]` and `AddonDB.settings[1]` join.
+
+The graph-only semantic pass now indexes exact local declaration IDs and their
+rooted-path initializers. For example:
+
+```lua
+local db = AddonDB
+local settings = (db.settings)
+function ChangeSetting()
+    settings[1] = true
+end
+```
+
+The write has a **Possible** association to `AddonDB.settings[1]`. Chains of
+aliases and captured lexical aliases are supported without treating a local's
+name as a global. Each hop retains its declaration, initializer and full
+statement spans. Exact evidence for every initializer is required at the
+project-to-recognizer boundary; the original access and global declaration
+anchors are also retained. A local `settings = other` never writes the saved
+slot. Any syntactic rebinding of an alias, including in a branch or nested
+closure, blocks that alias's entire chain with `reassigned_alias` or
+`local_alias_rebinding`; the initializer's own direct read is still recorded.
+
+This is deliberately not flow-sensitive runtime alias analysis. A stable local
+can retain an older table after a global or field is replaced. Consequently
+all alias-based edges stay Possible, never Derived from a unique name alone.
+`state_edges.confidence` exposes that ceiling. Include them explicitly with
+`confidence: "include_possible"` in State-axis, neighbor, path or subgraph
+queries. Direct accesses remain Derived; an exhausted or blocked alias path is
+not a clean negative. Initializers using calls, `and`/`or`, vararg expansion or
+other expressions do not fabricate a known alias origin.
+
+Bounds are cumulative across the optional report: 2,000,000 alias/path work
+steps and 8 MiB charged text, plus the existing source/fact/output limits. Each
+file has at most 16,384 alias definitions/write entries, each access at most
+16 alias hops and each path at most 64 syntactic levels/keys. A limit fails the
+operation without publishing a partial, unsupported alias as an exact slot.
 
 Source-owned roots and paths connect through namespace `Owns` edges. The existing
-`state-read` / `state-write` recognizers produce Derived `ReadsState` / `WritesState`
-relations in an independent `wow-recognizers.saved-variable-access` partition.
+`state-read` / `state-write` recognizers produce Derived direct or Possible alias
+`ReadsState` / `WritesState` relations in an independent `wow-recognizers.saved-variable-access` partition.
 Before matching, the adapter validates the immutable analyzer report, exact
 function/root/path proposals, binding digest, context and original source handles
 and evidence. Each observation retains its own access span, global declaration,
@@ -288,18 +336,20 @@ in `provenance.function_call_report.global_accesses`.
 The State axis and ordinary `reads_state` / `writes_state` queries now work on
 these exports. Combined `sets_script`, `calls` and state relation queries can
 trace source-level reachability from XML handlers to state-accessing functions;
-Possible handler associations still require explicit confidence opt-in.
+Possible handler and alias associations still require explicit confidence opt-in.
 All prior file/XML/function/call/handler maps are rebound after the state partition,
 not left pointing at a previous graph generation. Coverage remains Partial for
 observed modes and NotEvaluated otherwise; neither is authoritative absence.
 Ordinary `wow check` / `status` retain TOC declarations but do not enable the
 optional semantic graph-access collection.
 
-This addition advances the TOC load profile/digest, source graph projection,
-registry and graph-build request/result to v6, and the optional Emmy fact report
-to v3. Function/call occurrence recipes and graph-read request formats stay
-unchanged. A TOC plan's new identity naturally changes its derived project
-generation; existing stored graph artifacts are not rewritten.
+The source graph projection/registry and graph-build request/result are v7;
+the optional Emmy report is v4 and global-access/state-recognizer profiles are v2.
+Typed keys intentionally change state-path identities and the v7 build receipt
+shape. The selected TOC profile, ordinary check/status path, function/call
+occurrence recipes and graph-read request formats are unchanged by this update.
+Previously retained graph snapshots keep their original identities and remain
+readable; they are not relabeled or rewritten.
 
 Source review: Gethe `live` resolved to
 `09b9db7948abc9b9648dedaab51eb0cf3ee67b31` on 2026-09-24;
@@ -309,7 +359,7 @@ examples are not a runtime acceptance probe or a fixed dependency.
 
 ## Artifact and provenance formats
 
-`json` (default) emits `wow-service/graph-build-result/6`: request, status,
+`json` (default) emits `wow-service/graph-build-result/7`: request, status,
 `snapshot`, `file_nodes`, `xml_nodes`, `lua_nodes`, `function_nodes`, `call_edges`,
 `handler_nodes`, `script_edges`, `provenance`, `call_recognition`,
 `script_recognition`, `state_nodes`, `state_edges`, `state_recognition`, boundaries and canonical digests.

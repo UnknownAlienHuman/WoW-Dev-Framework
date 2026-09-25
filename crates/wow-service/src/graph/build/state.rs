@@ -19,7 +19,7 @@ pub(super) struct StateRootNode {
 pub(super) struct StatePathNode {
     path_id: String,
     root_id: String,
-    keys: Vec<String>,
+    keys: Vec<wow_project::graph::GlobalAccessKey>,
     node_id: wow_graph::GraphNodeId,
 }
 #[derive(Debug, Serialize)]
@@ -44,6 +44,7 @@ pub(super) struct StateEdge {
     state_node_id: wow_graph::GraphNodeId,
     edge_id: wow_graph::GraphEdgeId,
     relation: wow_graph::GraphRelationKind,
+    confidence: wow_graph::GraphConfidence,
 }
 
 pub(super) fn publish(
@@ -70,6 +71,7 @@ pub(super) fn publish(
                     caller_proposal_id: &b.caller_proposal_id,
                     target_proposal_id: &b.target_proposal_id,
                     kind: b.kind,
+                    confidence: b.confidence,
                     source_handle_ids: &b.source_handle_ids,
                     evidence_ids: &b.evidence_ids,
                 })
@@ -192,6 +194,7 @@ pub(super) fn maps(
             state_node_id: to.clone(),
             edge_id: edge.edge_id().clone(),
             relation: edge.relation(),
+            confidence: edge.confidence(),
         });
     }
     Ok((result, edges))
