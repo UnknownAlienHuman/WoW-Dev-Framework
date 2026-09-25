@@ -1,7 +1,13 @@
 //! Direct source/load/XML proposals. No recognizer inference or graph publication.
 mod functions;
 mod retained_evidence;
+mod source_read;
 pub use retained_evidence::RetainedProjectGraphEvidence;
+pub use source_read::{
+    ProjectSourceExcerpt, ProjectSourceExcerptStatus, ProjectSourceFileRead,
+    ProjectSourceFileStatus, ProjectSourceReadLimits, ProjectSourceReadReport,
+    ProjectSourceReadTruncation, RetainedProjectSourceManifest,
+};
 mod state;
 pub use state::{
     ProjectGraphStateBinding, ProjectGraphStateDeclaration, ProjectGraphStateOutcome,

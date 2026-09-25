@@ -52,6 +52,17 @@ neighbors, paths, subgraphs, axes and retained-support explanations. Remaining
 recognizer families, inline semantic analysis and coherent ProjectStore publication
 are not completed by this source slice. Full E2 acceptance remains open.
 
+## Explicit graph source read-back
+
+`wow graph explain --bundle ... --source-root <Main-root>` joins the existing
+resolved evidence to exact local bytes through `wow-project`'s confined reader.
+Whole-file hashes precede UTF-8 span/excerpt output; drift, missing/unsafe sources
+and all record/read/output limits remain explicit. The root never enters semantic
+output and no analyzer is opened. Metadata-only modes keep their prior encodings.
+See [GRAPH_EVIDENCE.md](../apps/wow/GRAPH_EVIDENCE.md). This is selected-source
+read-back, not authenticated provenance, an atomic filesystem snapshot, complete
+context generation or coherent ProjectStore publication. Full acceptance is open.
+
 ## Native source and annotation boundary
 
 Ketho/vscode-wow-api remains the annotation implementation donor; the

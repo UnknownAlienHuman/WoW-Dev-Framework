@@ -277,6 +277,17 @@ impl ProjectInputDirectory {
                 "opened input is not a regular file",
             ));
         }
+        // A pinned input can reject changed length before allocating or reading.
+        // The digest is still checked on the complete bytes after acquisition.
+        if selected
+            .byte_length
+            .is_some_and(|length| before.len() != length)
+        {
+            return Err(failure(
+                ProjectErrorCode::FileLengthMismatch,
+                "opened input differs from its declared byte length",
+            ));
+        }
         if before.len() > limit as u64 {
             return Err(failure(
                 ProjectErrorCode::SourceBudgetExceeded,

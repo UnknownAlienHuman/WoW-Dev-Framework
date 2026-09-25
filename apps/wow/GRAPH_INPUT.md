@@ -299,3 +299,8 @@ Entity/neighbors/subgraph/axis/explain/path are the read operations in this vers
 owner supports an explicit continuation. No current selector, source mutation or
 generic service invocation is exposed. E2,
 E3-C, E7 and public product acceptance are not advanced by this transport slice.
+
+For explicit whole-file source verification and exact excerpts, the separate
+`explain --bundle --source-root <Main-root>` route is documented in
+[GRAPH_EVIDENCE.md](GRAPH_EVIDENCE.md#explicit-source-verification-and-excerpts).
+Other operations do not accept a source root; defaults remain metadata-only.

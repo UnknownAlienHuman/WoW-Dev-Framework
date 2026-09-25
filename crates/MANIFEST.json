@@ -807,5 +807,13 @@
       "target": "wasm32-unknown-unknown",
       "abi": "wow-literals/1"
     }
-  ]
+  ],
+  "implemented_source_read_seam": {
+    "owner": "wow-project",
+    "service": "wow-service::graph::execute_graph_bundle_source_read",
+    "application": "wow graph explain --bundle --source-root",
+    "documentation": "apps/wow/GRAPH_EVIDENCE.md",
+    "state": "partial-executable; selected retained source handles only",
+    "acceptance": "not-certified; no filesystem snapshot or provenance authentication"
+  }
 }

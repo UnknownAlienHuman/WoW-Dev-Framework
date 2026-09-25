@@ -32,6 +32,17 @@ impl RetainedProjectGraphEvidence {
         owner: &GraphPartitionSnapshot,
         stop: &AtomicBool,
     ) -> ProjectResult<GraphEvidenceCatalog> {
+        self.admit_with_sources(owner, stop)
+            .map(|(catalog, _)| catalog)
+    }
+
+    /// Admit the same catalog and retain its validated, closed source manifest
+    /// for an explicitly authorized local read-back. Does not open a directory.
+    pub fn admit_with_sources(
+        self,
+        owner: &GraphPartitionSnapshot,
+        stop: &AtomicBool,
+    ) -> ProjectResult<(GraphEvidenceCatalog, super::RetainedProjectSourceManifest)> {
         crate::analyzer::checkpoint(stop)?;
         if self.profile != SOURCE_GRAPH_PROFILE
             || self.files.is_empty()
@@ -134,21 +145,30 @@ impl RetainedProjectGraphEvidence {
                 return Err(invalid());
             }
         }
-        GraphEvidenceCatalog::new(self.context, self.evidence, self.source_handles, stop).map_err(
-            |error| {
-                ProjectError::new(
-                    match error.code() {
-                        wow_graph::GraphErrorCode::Cancelled => ProjectErrorCode::AnalysisCancelled,
-                        wow_graph::GraphErrorCode::BudgetExceeded => {
-                            ProjectErrorCode::SourceBudgetExceeded
-                        }
-                        _ => ProjectErrorCode::SourceRegistryInvalid,
-                    },
-                    ProjectPhase::View,
-                    "retained graph evidence failed owner admission",
-                )
-            },
-        )
+        let context_id = self.context.context_id();
+        let catalog =
+            GraphEvidenceCatalog::new(self.context, self.evidence, self.source_handles, stop)
+                .map_err(|error| {
+                    ProjectError::new(
+                        match error.code() {
+                            wow_graph::GraphErrorCode::Cancelled => {
+                                ProjectErrorCode::AnalysisCancelled
+                            }
+                            wow_graph::GraphErrorCode::BudgetExceeded => {
+                                ProjectErrorCode::SourceBudgetExceeded
+                            }
+                            _ => ProjectErrorCode::SourceRegistryInvalid,
+                        },
+                        ProjectPhase::View,
+                        "retained graph evidence failed owner admission",
+                    )
+                })?;
+        let sources = super::RetainedProjectSourceManifest::from_admitted(
+            context_id,
+            catalog.digest().into(),
+            self.files,
+        );
+        Ok((catalog, sources))
     }
 }
 fn invalid() -> ProjectError {

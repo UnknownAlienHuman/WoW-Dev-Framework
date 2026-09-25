@@ -15,6 +15,7 @@ const BUILD_SCHEMA: &str = "wow-service/graph-build-result/7";
 pub(super) struct AdmittedBundle {
     pub owner: GraphPartitionSnapshot,
     pub evidence: GraphEvidenceCatalog,
+    pub sources: wow_project::graph::RetainedProjectSourceManifest,
     pub result_digest: Box<str>,
     pub snapshot_digest: Box<str>,
     pub boundaries: Vec<Box<str>>,
@@ -73,7 +74,7 @@ pub(super) fn admit(bytes: &[u8], stop: &AtomicBool) -> Result<AdmittedBundle, G
     let evidence: RetainedProjectGraphEvidence =
         serde_json::from_value(root.remove("provenance").ok_or_else(invalid)?)
             .map_err(|_| invalid())?;
-    let evidence = evidence.admit(&owner, stop).map_err(|error| {
+    let (evidence, sources) = evidence.admit_with_sources(&owner, stop).map_err(|error| {
         GraphReadFailure::service(
             GraphReadStage::Evidence,
             match error.code() {
@@ -104,6 +105,7 @@ pub(super) fn admit(bytes: &[u8], stop: &AtomicBool) -> Result<AdmittedBundle, G
     Ok(AdmittedBundle {
         owner,
         evidence,
+        sources,
         result_digest: expected_result,
         snapshot_digest: expected_snapshot,
         boundaries,

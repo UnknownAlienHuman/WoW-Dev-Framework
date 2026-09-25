@@ -2,10 +2,6 @@ name: CI
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - ".ci/source-read/**"
-      - ".github/workflows/source-read-build.yml"
-      - ".github/workflows/ci.yml"
   pull_request:
   workflow_dispatch:
 permissions:

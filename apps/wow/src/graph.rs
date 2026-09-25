@@ -9,16 +9,18 @@ use crate::args::Format;
 use wow_service::ServiceErrorCode;
 use wow_service::graph::{
     GRAPH_BUNDLE_MAX_BYTES, GRAPH_INPUT_MAX_BYTES, GRAPH_REQUEST_MAX_BYTES, GraphReadOperation,
-    GraphReadResult, GraphReadStatus, execute_graph_bundle_read, execute_graph_read,
+    GraphReadResult, GraphReadStatus, execute_graph_bundle_read, execute_graph_bundle_source_read,
+    execute_graph_read,
 };
 
-pub const HELP: &str = "wow graph build --config <project.json> --project <ProjectId> [--format json|snapshot|text]\nwow graph entity|neighbors|subgraph|axis|explain|path (--snapshot <partition-snapshot.json> | --bundle <graph-build.json>) --request <query.json> [--format json|text]\n\nBuild uses explicit local input; the read commands inspect one retained graph artifact. Read queries require exact snapshot and node/edge/profile identities. Bundle reads admit the graph and source evidence; explain resolves retained evidence records without reopening sources. Reads do not run source analysis. No project discovery, current-pointer lookup, store writes or automatic continuation. See apps/wow/GRAPH_INPUT.md.\n";
+pub const HELP: &str = "wow graph build --config <project.json> --project <ProjectId> [--format json|snapshot|text]\nwow graph entity|neighbors|subgraph|axis|explain|path (--snapshot <partition-snapshot.json> | --bundle <graph-build.json>) --request <query.json> [--format json|text] [--source-root <Main-root> (explain --bundle only)]\n\nBuild uses explicit local input; the read commands inspect one retained graph artifact. Read queries require exact snapshot and node/edge/profile identities. Bundle reads admit the graph and source evidence; explain resolves retained evidence records without reopening sources. Use explain --bundle ... --source-root <Main-root> to verify retained files and return bounded exact source excerpts. Without --source-root, no source file is opened. Reads do not run source analysis. No project discovery, current-pointer lookup, store writes or automatic continuation. See apps/wow/GRAPH_INPUT.md.\n";
 
 struct Arguments {
     operation: GraphReadOperation,
     artifact: Artifact,
     request: PathBuf,
     format: Format,
+    source_root: Option<PathBuf>,
 }
 
 enum Artifact {
@@ -57,9 +59,12 @@ pub fn run(values: Vec<OsString>) -> u8 {
     };
     let result = match args.artifact {
         Artifact::Snapshot(_) => execute_graph_read(args.operation, &artifact, &request, &stop),
-        Artifact::Bundle(_) => {
-            execute_graph_bundle_read(args.operation, &artifact, &request, &stop)
-        }
+        Artifact::Bundle(_) => match args.source_root.as_deref() {
+            Some(root) => {
+                execute_graph_bundle_source_read(args.operation, &artifact, &request, root, &stop)
+            }
+            None => execute_graph_bundle_read(args.operation, &artifact, &request, &stop),
+        },
     }
     .and_then(|result| {
         if stop.load(Ordering::Acquire) {
@@ -115,10 +120,13 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
         Some("neighbors") => GraphReadOperation::Neighbors,
         _ => return Err("expected graph entity, neighbors, subgraph, axis, explain or path"),
     };
-    let (mut artifact, mut request, mut format) = (None, None, None);
+    let (mut artifact, mut request, mut format, mut source_root) = (None, None, None, None);
     while let Some(option) = values.next() {
         let option = option.to_str().ok_or("invalid option encoding")?;
-        if !matches!(option, "--snapshot" | "--bundle" | "--request" | "--format") {
+        if !matches!(
+            option,
+            "--snapshot" | "--bundle" | "--request" | "--format" | "--source-root"
+        ) {
             return Err("unknown graph option");
         }
         let value = values.next().ok_or("missing graph option value")?;
@@ -126,6 +134,11 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
             return Err("invalid graph option length");
         }
         match option {
+            "--source-root" => {
+                if source_root.replace(PathBuf::from(value)).is_some() {
+                    return Err("duplicate --source-root");
+                }
+            }
             "--snapshot" | "--bundle" => {
                 let input = if option == "--bundle" {
                     Artifact::Bundle(PathBuf::from(value))
@@ -154,11 +167,18 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
             _ => return Err("unknown graph option"),
         }
     }
+    let artifact = artifact.ok_or("graph requires --snapshot or --bundle")?;
+    if source_root.is_some()
+        && (operation != GraphReadOperation::Explain || !matches!(&artifact, Artifact::Bundle(_)))
+    {
+        return Err("--source-root requires graph explain --bundle");
+    }
     Ok(Arguments {
         operation,
-        artifact: artifact.ok_or("graph requires --snapshot or --bundle")?,
+        artifact,
         request: request.ok_or("graph requires --request")?,
         format: format.unwrap_or(Format::Json),
+        source_root,
     })
 }
 

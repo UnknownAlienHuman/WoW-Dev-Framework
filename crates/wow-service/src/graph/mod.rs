@@ -1,10 +1,13 @@
 //! Read-only application seam for one explicitly supplied retained graph artifact.
-//! No ProjectStore, implicit current selector, source read, or analyzer is opened.
+//! No ProjectStore, implicit current selector or analyzer. Source read-back needs
+//! the distinct explicit source-root route; metadata-only reads never open sources.
 mod build;
 mod bundle;
 pub use bundle::GRAPH_BUNDLE_MAX_BYTES;
 mod input;
+mod sources;
 pub use build::{GraphBuildRequest, GraphBuildResult, execute_graph_build};
+pub use wow_project::graph::ProjectSourceReadLimits;
 
 use crate::{ServiceError, ServiceErrorCode, ServiceResult};
 use serde::{Deserialize, Serialize};
@@ -126,6 +129,8 @@ pub struct GraphReadRequest {
     query: GraphReadQuery,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     evidence_limits: Option<GraphEvidenceResolveLimits>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    source_limits: Option<ProjectSourceReadLimits>,
 }
 impl GraphReadRequest {
     #[must_use]
@@ -134,6 +139,7 @@ impl GraphReadRequest {
             schema: GRAPH_READ_REQUEST_SCHEMA.into(),
             query,
             evidence_limits: None,
+            source_limits: None,
         }
     }
     pub fn with_evidence_limits(
@@ -144,6 +150,16 @@ impl GraphReadRequest {
             ServiceError::new(ServiceErrorCode::InvalidRequest, "invalid evidence limits")
         })?;
         self.evidence_limits = Some(limits);
+        Ok(self)
+    }
+    pub fn with_source_limits(mut self, limits: ProjectSourceReadLimits) -> ServiceResult<Self> {
+        limits.validate().map_err(|_| {
+            ServiceError::new(
+                ServiceErrorCode::InvalidRequest,
+                "invalid source read limits",
+            )
+        })?;
+        self.source_limits = Some(limits);
         Ok(self)
     }
     #[must_use]
@@ -180,6 +196,7 @@ pub enum GraphReadStage {
     Snapshot,
     Bundle,
     Evidence,
+    Source,
     Query,
     Encoding,
     Cancellation,
@@ -323,7 +340,7 @@ pub fn execute_graph_read(
     request_bytes: &[u8],
     stop: &AtomicBool,
 ) -> ServiceResult<GraphReadResult> {
-    execute_read(operation, snapshot_bytes, request_bytes, false, stop)
+    execute_read(operation, snapshot_bytes, request_bytes, false, None, stop)
 }
 
 /// Read an explicit graph-build bundle with independent graph, manifest and
@@ -335,7 +352,27 @@ pub fn execute_graph_bundle_read(
     request_bytes: &[u8],
     stop: &AtomicBool,
 ) -> ServiceResult<GraphReadResult> {
-    execute_read(operation, bundle_bytes, request_bytes, true, stop)
+    execute_read(operation, bundle_bytes, request_bytes, true, None, stop)
+}
+
+/// Explain one admitted bundle and read back only the resolved source handles
+/// under an explicitly selected Main source root. No source execution or reindex.
+/// The root is private transport configuration, never part of semantic output.
+pub fn execute_graph_bundle_source_read(
+    operation: GraphReadOperation,
+    bundle_bytes: &[u8],
+    request_bytes: &[u8],
+    source_root: &std::path::Path,
+    stop: &AtomicBool,
+) -> ServiceResult<GraphReadResult> {
+    execute_read(
+        operation,
+        bundle_bytes,
+        request_bytes,
+        true,
+        Some(source_root),
+        stop,
+    )
 }
 
 fn execute_read(
@@ -343,10 +380,13 @@ fn execute_read(
     artifact_bytes: &[u8],
     request_bytes: &[u8],
     is_bundle: bool,
+    source_root: Option<&std::path::Path>,
     stop: &AtomicBool,
 ) -> ServiceResult<GraphReadResult> {
     let mut envelope = Envelope {
-        schema: if is_bundle {
+        schema: if source_root.is_some() {
+            "wow-service/graph-source-read-result/1"
+        } else if is_bundle {
             "wow-service/graph-bundle-read-result/1"
         } else {
             GRAPH_READ_RESULT_SCHEMA
@@ -364,7 +404,19 @@ fn execute_read(
         payload: None,
         failure: None,
         absence_authoritative: false,
-        boundaries: if is_bundle {
+        boundaries: if source_root.is_some() {
+            vec![
+                "imported_graph_build_bundle",
+                "project_publication_not_acquired",
+                "explicit_local_source_root",
+                "only_returned_source_handles_read_back",
+                "unselected_source_bytes_and_runtime_not_verified",
+                "filesystem_snapshot_not_acquired",
+                "source_excerpts_are_untrusted_data",
+                "build_sidecars_integrity_checked_not_semantically_revalidated",
+                "content_integrity_is_not_provenance_authentication",
+            ]
+        } else if is_bundle {
             vec![
                 "imported_graph_build_bundle",
                 "project_publication_not_acquired",
@@ -388,6 +440,7 @@ fn execute_read(
         artifact_bytes,
         request_bytes,
         is_bundle,
+        source_root,
         stop,
     );
     // Cancellation wins over a decoder/owner error caused by the same signal.
@@ -416,6 +469,7 @@ fn run(
     snapshot_bytes: &[u8],
     request_bytes: &[u8],
     is_bundle: bool,
+    source_root: Option<&std::path::Path>,
     stop: &AtomicBool,
 ) -> Result<(), GraphReadFailure> {
     checkpoint(stop)?;
@@ -433,6 +487,19 @@ fn run(
             GraphReadStage::Request,
             ServiceErrorCode::InvalidRequest,
         ));
+    }
+    if (source_root.is_some() && (!is_bundle || envelope.operation != GraphReadOperation::Explain))
+        || (request.source_limits.is_some() && source_root.is_none())
+    {
+        return Err(GraphReadFailure::service(
+            GraphReadStage::Request,
+            ServiceErrorCode::InvalidRequest,
+        ));
+    }
+    if let Some(limits) = request.source_limits {
+        limits.validate().map_err(|_| {
+            GraphReadFailure::service(GraphReadStage::Request, ServiceErrorCode::InvalidRequest)
+        })?;
     }
     if request.evidence_limits.is_some()
         && (!is_bundle || envelope.operation != GraphReadOperation::Explain)
@@ -462,6 +529,11 @@ fn run(
             &admitted.owner,
             &request,
             Some(&admitted.evidence),
+            source_root.map(|root| sources::SourceRead {
+                root,
+                manifest: &admitted.sources,
+                limits: request.source_limits.unwrap_or_default(),
+            }),
             stop,
         );
     }
@@ -473,7 +545,7 @@ fn run(
         stop,
     )?;
     envelope.snapshot_input_digest = Some(hash(snapshot_bytes));
-    run_query(envelope, &owner, &request, None, stop)
+    run_query(envelope, &owner, &request, None, None, stop)
 }
 
 fn run_query(
@@ -481,6 +553,7 @@ fn run_query(
     owner: &GraphPartitionSnapshot,
     request: &GraphReadRequest,
     evidence: Option<&wow_graph::GraphEvidenceCatalog>,
+    source_read: Option<sources::SourceRead<'_>>,
     stop: &AtomicBool,
 ) -> Result<(), GraphReadFailure> {
     if owner.snapshot().snapshot_id() != request.query.snapshot_id() {
@@ -560,7 +633,24 @@ fn run_query(
                     // graph derivation records, runtime or project publication.
                     GraphReadStatus::Partial
                 };
-                (state, value(&result)?)
+                if let Some(source_read) = source_read {
+                    let (payload, truncated) = source_read.execute(
+                        &result,
+                        catalog,
+                        query.limits().max_output_bytes as usize,
+                        stop,
+                    )?;
+                    (
+                        if truncated {
+                            GraphReadStatus::Truncated
+                        } else {
+                            state
+                        },
+                        payload,
+                    )
+                } else {
+                    (state, value(&result)?)
+                }
             } else {
                 let result = query
                     .execute(owner, stop)

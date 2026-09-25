@@ -14,8 +14,9 @@ There is no implicit schema migration, latest-generation selection or fallback.
 
 All six read commands (`entity`, `neighbors`, `subgraph`, `axis`, `explain`, `path`)
 accept exactly one of `--snapshot` and `--bundle`. They use the same exact query
-IDs and the same graph owners. No script, compiler, source read, store write or
-network access occurs. Paths inside a bundle are data, never files to open.
+IDs and the same graph owners. Without the separate `--source-root` route below, no script, compiler, source read,
+store write or network access occurs. Paths inside a bundle are data, never files
+to open implicitly.
 Path continuation still requires the same exact graph/query and an explicit
 cursor; bundle loading does not follow another page automatically.
 
@@ -119,3 +120,97 @@ Owners: `wow-project::graph::RetainedProjectGraphEvidence`,
 `wow-graph::GraphEvidenceCatalog`, `GraphExplainQuery::execute_with_evidence`,
 and `wow-service::graph::execute_graph_bundle_read`. No new dependencies or
 acceptance/fixture claims are introduced.
+
+
+## Explicit source verification and excerpts
+
+```text
+wow graph explain --bundle build.json --request explain.json --source-root <Main-root> --format json
+```
+
+This opt-in route reads only source handles returned by the bounded evidence
+resolution, below the explicitly selected **Main project source root**. For TOC
+input this is the addon's root, not necessarily the configuration directory.
+The bundle is still fully admitted first. No source selector in the JSON can
+open a host root; `--source-root` is private local configuration and is never
+serialized or included in an identity. Other graph operations and `--snapshot`
+reject this option. Omitting it preserves the previous no-source-I/O behavior
+and exact result encodings.
+
+The project owner binds the retained file manifest to the exact admitted evidence
+catalog. It preflights all selected handles and case collisions, then groups by
+canonical relative path and handle ID. It reads each selected file once through
+the existing directory-capability loader. Descendant directories and files never
+follow symlinks; device names, alternate streams, traversal, nonregular files and
+paths outside the Lua/XML/TOC profile cannot be used as source inputs. The ambient
+root itself is the caller's explicit capability; this is not an OS sandbox.
+
+Each file must match the **whole-file** recorded length and content digest before
+any excerpt is emitted. The reader checks metadata before/after acquisition and
+bounds growth while reading. Missing/unsafe files, changed-during-read data,
+content mismatch and unsupported encoding/path are separate file outcomes.
+Mismatching source text is never returned. No file is rewritten, refreshed,
+reindexed or replaced by a Library or other-generation fallback.
+
+`payload.source_read.files` contains per-file outcomes and exact source-handle
+excerpts. ByteRange uses the original end-exclusive UTF-8 range; WholeFile means
+the whole file. Unknown spans are not widened. Out-of-bounds or split-codepoint
+ranges have `invalid_span`; zero-length valid ranges return an empty string.
+An excerpt is either returned whole or explicitly omitted, not silently clipped
+or expanded to nearby source. XML snippets are original XML bytes, including
+CDATA/entities, rather than a synthetic Lua wrapper or decoded body.
+
+`all_requested_files_verified` and `all_requested_spans_verified` refer **only**
+to the source handles returned by the preceding evidence-resolution stage. Empty
+selection is not verification. Source, evidence and contributor truncation remain
+separate; these flags do not cover omitted/missing evidence or all addon files.
+The original graph `evidence_resolution.source_bytes_verified` remains false:
+that owner performed only metadata validation. The separate project read-back
+report carries the observed byte-verification result without rewriting history.
+
+Optional top-level `source_limits` belongs to the request and is rejected unless
+`--source-root` is supplied. Defaults (all fields required when specified):
+
+```json
+"source_limits": {
+  "max_files": 16,
+  "max_source_handles": 128,
+  "max_file_bytes": 1048576,
+  "max_read_bytes": 8388608,
+  "max_excerpt_bytes": 16384,
+  "max_total_excerpt_bytes": 262144
+}
+```
+
+Hard ceilings are 256 attempted files, 4,096 handles, 16 MiB per file, 64 MiB total
+reserved reads, 64 KiB per excerpt and 4 MiB total excerpt UTF-8 bytes. Each file
+reserves its expected size plus one overflow-detection byte before opening;
+`reserved_read_bytes` is this conservative upper bound, not measured disk traffic.
+Counts include failed attempts, so failures cannot bypass the read budget.
+
+The original explanation `limits.max_output_bytes` bounds the **entire combined
+payload**, including retained evidence and source excerpts. JSON-escaped text is
+charged separately from raw UTF-8 excerpt bytes. Metadata is budgeted before
+reading and text before copying. Insufficient fixed metadata space fails with
+BudgetExceeded; later output/record/I/O/excerpt limits give explicit truncation
+and exact counts of unrepresented selected handles. There is no hidden rerun
+with altered query limits. A large WholeFile excerpt may be omitted while its
+content is successfully verified.
+
+This route returns `wow-service/graph-source-read-result/1`; the prior bundle-read
+and snapshot schemas are unchanged. Source problems keep the result Partial;
+any graph/evidence/source budget truncation gives Truncated. Cancellation drops
+the whole payload. Directory/file resources close before CLI rendering, and
+broken pipe never repeats the service call.
+
+Read-back proves agreement with recorded bytes at the time of the read, not
+repository authenticity, correctness of analyzer/recognizer conclusions, runtime
+behavior, a historical checkout, or an atomic filesystem snapshot. Different
+files may be observed at different times; changes after a read are not detected.
+Excerpts are untrusted source data and may contain private text: explicitly
+select the local root and do not redistribute output without authorization.
+
+Owner seams: `RetainedProjectGraphEvidence::admit_with_sources`,
+`RetainedProjectSourceManifest::read_sources`,
+`wow-service::graph::execute_graph_bundle_source_read`. No new framework edge,
+parser, test fixture or complete E2/E3 acceptance claim is introduced.
