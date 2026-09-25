@@ -29,6 +29,8 @@ jobs:
           mkdir -p "$RUNNER_TEMP/project-store"
           git rev-parse HEAD > "$RUNNER_TEMP/project-store/BASE_SHA"
           test "$(git hash-object .ci/project-store/original-ci.yml)" = 5c9656de337157ac9c4bf6b65fa13896a129f326
+          test "$(git hash-object .ci/project-store/fix.patch)" = d8f61de77bf9c0cda2b0afbf28ce6bbe1492496b
+          cp .ci/project-store/fix.patch "$RUNNER_TEMP/project-store/fix.patch"
           cp .ci/project-store/original-ci.yml .github/workflows/ci.yml
           cat .ci/project-store/[0-9][0-9] | base64 --decode | gzip -d > "$RUNNER_TEMP/project-store/input.patch"
           echo '81d91088695028cda336282fea1bb6cb4e5102c9d893e95e2f7b144de1920185  input.patch' > "$RUNNER_TEMP/project-store/INPUT_SHA256"
@@ -38,19 +40,21 @@ jobs:
           test "$(git write-tree)" = a311f743ff3bec1a94219bc43b25488b28bbac94
           git apply --index "$RUNNER_TEMP/project-store/input.patch"
           test "$(git write-tree)" = 129bee5797ec3418ed78c2319f2e697ed59ceb0c
+          git apply --index "$RUNNER_TEMP/project-store/fix.patch"
+          test "$(git write-tree)" = 619d71d437a5d9526f317f6e57f02b1dda83cbfe
       - name: Format implemented packages
         run: |
           set -euo pipefail
           rustup toolchain install stable --profile minimal --component rustfmt --component clippy
           rustc +stable -Vv > "$RUNNER_TEMP/project-store/RUST_VERSION"
-          cargo +stable fmt -p wow-store -p wow-graph -p wow-project -p wow-service -p wow-cli
+          cargo +stable fmt -p wow-store -p wow-reference -p wow-graph -p wow-project -p wow-service -p wow-cli
           git add -u
           git diff --cached --check
           git write-tree > "$RUNNER_TEMP/project-store/TREE_SHA"
-      - name: Clippy storage graph project service and CLI
+      - name: Clippy storage and all affected consumers
         run: |
           set -euo pipefail
-          cargo +stable clippy --locked -p wow-store -p wow-graph -p wow-project -p wow-service -p wow-cli -- -D warnings 2>&1 | tee "$RUNNER_TEMP/project-store/clippy.log"
+          cargo +stable clippy --locked -p wow-store -p wow-reference -p wow-graph -p wow-project -p wow-service -p wow-cli -- -D warnings 2>&1 | tee "$RUNNER_TEMP/project-store/clippy.log"
           cargo +stable xtask check 2>&1 | tee "$RUNNER_TEMP/project-store/policy.log"
       - name: Retain identical checked code
         run: |
@@ -98,12 +102,11 @@ jobs:
           cmp "$RUNNER_TEMP/linux/checked.patch" "$RUNNER_TEMP/windows/checked.patch"
           git apply --index "$RUNNER_TEMP/linux/checked.patch"
           test "$(git write-tree)" = "$(cat "$RUNNER_TEMP/linux/TREE_SHA")"
-          # The authorized connector restores this one original workflow after
-          # publication. The runner token need not gain workflows permission.
+          # Restore the original CI through the authorized connector afterwards.
           git restore --source=HEAD --staged --worktree .github/workflows/ci.yml
           test "$(git hash-object .github/workflows/ci.yml)" = 17668c952c9b444accc86011feb447c03cb8ae71
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$GITHUB_SHA"
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'feat(store): persist manifested graph generations and reconcile publication' -m "Implement the 25-file WAL storage, graph/project adapters, publication/read/reconciliation service and CLI pipeline. Retain immutable partition versions and full membership, exact epoch/schema/catalog/runtime admission, a process writer lock and read leases, prepared/inactive/validated publication and transactional current CAS with idempotent operation records. Reuse graph/evidence bundle admission without reanalysis. Selected-package Clippy and repository policy passed on identical Linux/Windows source trees in run $GITHUB_RUN_ID. No tests or external dependency versions changed. Only activate the existing project-to-store dependency. This retains graph-build v7 bundles, not a full live E2 ProjectView; GC, migration, backup and runtime acceptance remain separate. Restore the original CI through the authorized connector to obtain the exact checked root tree. Temporary transfer files removed."
+          git commit -m 'feat(store): persist manifested graph generations and reconcile publication' -m "Implement the 26-file WAL storage, graph/project adapters, publication/read/reconciliation service and CLI pipeline, including the affected reference error conversion. Retain immutable partition versions and full membership, exact epoch/schema/catalog/runtime admission, a process writer lock and read leases, prepared/inactive/validated publication and transactional current CAS with idempotent operation records. Reuse graph/evidence bundle admission without reanalysis. Selected-package Clippy and repository policy passed on identical Linux/Windows source trees in run $GITHUB_RUN_ID. No tests or external dependency versions changed. Only activate the existing project-to-store dependency. This retains graph-build v7 bundles, not a full live E2 ProjectView; GC, migration, backup and runtime acceptance remain separate. Restore the original CI through the authorized connector to obtain the exact checked root tree. Temporary transfer files removed."
           git push origin HEAD:main
