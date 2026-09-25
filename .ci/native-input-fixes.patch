@@ -1,0 +1,28 @@
+diff --git a/crates/wow-annotations/src/persistent.rs b/crates/wow-annotations/src/persistent.rs
+index 6b1eb1e..59fc206 100644
+--- a/crates/wow-annotations/src/persistent.rs
++++ b/crates/wow-annotations/src/persistent.rs
+@@ -41,6 +41,11 @@ pub enum AnnotationStoreErrorCode {
+     StoreIntegrityViolation,
+     StoreBudgetExceeded,
+     StoreDatabaseUnavailable,
++    StoreCancelled,
++    StoreWriterBusy,
++    StoreCurrentConflict,
++    StoreGenerationMissing,
++    StoreOutcomeUnknown,
+     ArtifactIdentityInvalid,
+     ArtifactPayloadInvalid,
+     ArtifactKindMismatch,
+@@ -103,6 +108,11 @@ fn from(source: StoreError) -> Self {
+             StoreErrorCode::LeaseInvalid => AnnotationStoreErrorCode::StoreLeaseInvalid,
+             StoreErrorCode::IntegrityViolation => AnnotationStoreErrorCode::StoreIntegrityViolation,
+             StoreErrorCode::BudgetExceeded => AnnotationStoreErrorCode::StoreBudgetExceeded,
++            StoreErrorCode::Cancelled => AnnotationStoreErrorCode::StoreCancelled,
++            StoreErrorCode::WriterBusy => AnnotationStoreErrorCode::StoreWriterBusy,
++            StoreErrorCode::CurrentConflict => AnnotationStoreErrorCode::StoreCurrentConflict,
++            StoreErrorCode::GenerationMissing => AnnotationStoreErrorCode::StoreGenerationMissing,
++            StoreErrorCode::OutcomeUnknown => AnnotationStoreErrorCode::StoreOutcomeUnknown,
+             StoreErrorCode::DatabaseUnavailable => {
+                 AnnotationStoreErrorCode::StoreDatabaseUnavailable
+             }

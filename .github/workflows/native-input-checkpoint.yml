@@ -20,6 +20,7 @@ jobs:
     env:
       BASE_COMMIT: 02d893cd3b9c9dd116a3330824b9764c3d5ab919
       BASE_TREE: d8caed62c911410a1ce41cef8ab8de351f421479
+      FIXES_SHA256: de4d5d2b39523fb4200dfb8f7ce634afda13d31b816658ef5bfa2c9faf5444ea
       PATCH_SHA256: efc36c149ca6de6408e3c852bebf458da34e83f87f7475e56d9048bc62aa8939
     steps:
       - uses: actions/checkout@v7
@@ -33,16 +34,20 @@ jobs:
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           gzip -dc .ci/native-input.patch.gz > "$RUNNER_TEMP/native-input.patch"
           printf '%s  %s\n' "$PATCH_SHA256" "$RUNNER_TEMP/native-input.patch" | sha256sum -c -
+          cp .ci/native-input-fixes.patch "$RUNNER_TEMP/native-input-fixes.patch"
+          printf '%s  %s\n' "$FIXES_SHA256" "$RUNNER_TEMP/native-input-fixes.patch" | sha256sum -c -
           git restore --source="$BASE_COMMIT" --staged --worktree .github/workflows/ci.yml
-          git rm -- .ci/native-input.patch.gz .github/workflows/native-input-checkpoint.yml
+          git rm -- .ci/native-input-fixes.patch .ci/native-input.patch.gz .github/workflows/native-input-checkpoint.yml
           test "$(git write-tree)" = "$BASE_TREE"
           git apply --index "$RUNNER_TEMP/native-input.patch"
+          git apply --index "$RUNNER_TEMP/native-input-fixes.patch"
       - name: Install compiler and minimal lint tools
         run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
       - name: Format only changed Rust modules
         run: |
           set -euo pipefail
           rustfmt +stable --edition 2024 --config skip_children=true \
+            crates/wow-annotations/src/persistent.rs \
             crates/wow-project/src/disk.rs \
             crates/wow-project/src/disk/pinned.rs \
             crates/wow-reference/src/lib.rs \
@@ -57,7 +62,7 @@ jobs:
         run: |
           set -euo pipefail
           rustc +stable -Vv | tee "$RUNNER_TEMP/RUST_VERSION"
-          cargo +stable clippy --locked -p wow-reference -p wow-project -p wow-service -p wow-cli --all-targets --all-features -- -D warnings 2>&1 | tee "$RUNNER_TEMP/clippy.log"
+          cargo +stable clippy --locked -p wow-annotations -p wow-reference -p wow-project -p wow-service -p wow-cli --all-targets --all-features -- -D warnings 2>&1 | tee "$RUNNER_TEMP/clippy.log"
       - name: Native repository policy
         run: |
           set -euo pipefail
