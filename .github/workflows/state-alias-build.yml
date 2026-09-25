@@ -1,0 +1,108 @@
+name: State alias pipeline check
+on:
+  push:
+    branches: [main]
+    paths: ['.ci/state-alias/**', '.github/workflows/state-alias-build.yml']
+permissions:
+  contents: read
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Admit exact source state pipeline
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git config core.autocrlf false
+          mkdir -p "$RUNNER_TEMP/state-alias"
+          git rev-parse HEAD > "$RUNNER_TEMP/state-alias/BASE_SHA"
+          test "$(git hash-object .ci/state-alias/part0)" = ff863a4860cbc68926ac19aacec208c885dc2412
+          test "$(git hash-object .ci/state-alias/part1)" = 973f7ff46dda55a64fcd2a4ccd28354960dc5e79
+          test "$(git hash-object .ci/state-alias/part2)" = b28b6469a812cb4a5e9acfe243f1c5d19d7a9428
+          test "$(git hash-object .ci/state-alias/part3)" = f69e977fb811266a3f68e8706ec08c4ddef0f70e
+          test "$(git hash-object .ci/state-alias/part4)" = 129f1b8c66f1e622dde2681a6d430be267e0ceb8
+          test "$(git hash-object .ci/state-alias/part5)" = 45e943e063e8663ff6cad8a5b3c1d201069c6f32
+          cat .ci/state-alias/part{0,1,2,3,4,5} | base64 --decode | gzip -d > "$RUNNER_TEMP/state-alias/input.patch"
+          echo 'e418f9b2a199b2b8487a988124bc87fd7b5c0a14f4d14d01161ba463a0176803  input.patch' > "$RUNNER_TEMP/state-alias/INPUT_SHA256"
+          (cd "$RUNNER_TEMP/state-alias" && sha256sum -c INPUT_SHA256)
+          git rm -r -- .ci/state-alias .github/workflows/state-alias-build.yml
+          test "$(git write-tree)" = 01e6ca878cff44f84142765e5a3edd30f71d848f
+          git apply --index "$RUNNER_TEMP/state-alias/input.patch"
+          test "$(git write-tree)" = 5e2777dec230cc57f1f279381508af5647fcbb3f
+      - name: Format implemented Rust
+        run: |
+          set -euo pipefail
+          rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+          rustc +stable -Vv > "$RUNNER_TEMP/state-alias/RUST_VERSION"
+          cargo +stable fmt -p wow-emmy -p wow-project -p wow-recognizers -p wow-service -p wow-cli
+          git add -u
+          git diff --cached --check
+          git write-tree > "$RUNNER_TEMP/state-alias/TREE_SHA"
+      - name: Clippy implemented pipeline
+        run: |
+          set -euo pipefail
+          cargo +stable clippy --locked -p wow-emmy -p wow-project -p wow-recognizers -p wow-service -p wow-cli -- -D warnings 2>&1 | tee "$RUNNER_TEMP/state-alias/clippy.log"
+          cargo +stable xtask check 2>&1 | tee "$RUNNER_TEMP/state-alias/policy.log"
+      - name: Retain exact checked source
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          test "$(git write-tree)" = "$(cat "$RUNNER_TEMP/state-alias/TREE_SHA")"
+          git diff --cached --binary > "$RUNNER_TEMP/state-alias/checked.patch"
+          git archive "$(git write-tree)" > "$RUNNER_TEMP/state-alias/checked-source.tar"
+          (cd "$RUNNER_TEMP/state-alias" && sha256sum checked.patch checked-source.tar > SHA256SUMS)
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: state-alias-${{ matrix.os }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/state-alias/
+          retention-days: 3
+          if-no-files-found: error
+  publish:
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: state-alias-ubuntu-latest-${{ github.run_id }}
+          path: ${{ runner.temp }}/linux
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: state-alias-windows-latest-${{ github.run_id }}
+          path: ${{ runner.temp }}/windows
+      - name: Publish identical checked pipeline to unchanged main
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          for platform in linux windows; do
+            test "$(cat "$RUNNER_TEMP/$platform/BASE_SHA")" = "$GITHUB_SHA"
+            (cd "$RUNNER_TEMP/$platform" && sha256sum -c SHA256SUMS)
+          done
+          cmp "$RUNNER_TEMP/linux/TREE_SHA" "$RUNNER_TEMP/windows/TREE_SHA"
+          cmp "$RUNNER_TEMP/linux/checked.patch" "$RUNNER_TEMP/windows/checked.patch"
+          git apply --index "$RUNNER_TEMP/linux/checked.patch"
+          test "$(git write-tree)" = "$(cat "$RUNNER_TEMP/linux/TREE_SHA")"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$GITHUB_SHA"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat(graph): trace lexical state aliases and typed literal keys end to end' -m "Extend the existing optional Emmy fact pass with exact declaration-bound local alias chains, whole-file rebinding guards, parenthesized receiver paths and distinct string/integer/boolean keys. Preserve each alias statement as source evidence and carry Possible confidence through project state bindings, existing recognizers and final graph exports; direct accesses remain Derived. Use canonical decimal-string integer payloads without widening core JSON contracts. Update graph-build v7 and retain old graph-read formats. Selected-package Clippy, formatting and repository policy passed on identical Linux/Windows trees in run $GITHUB_RUN_ID. No tests, dependency or lockfile changes. Dynamic/fractional keys, control-flow/heap identity and client acceptance remain separate. Temporary check inputs removed."
+          git push origin HEAD:main
