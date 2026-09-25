@@ -26,3 +26,16 @@ index 6b1eb1e..59fc206 100644
              StoreErrorCode::DatabaseUnavailable => {
                  AnnotationStoreErrorCode::StoreDatabaseUnavailable
              }
+diff --git a/crates/wow-service/src/local/native_input.rs b/crates/wow-service/src/local/native_input.rs
+--- a/crates/wow-service/src/local/native_input.rs
++++ b/crates/wow-service/src/local/native_input.rs
+@@ -242,6 +242,9 @@
+ 
+ impl NativeProfile {
+     fn validate_selector(&self) -> ServiceResult<()> {
++        if self.profile_id.as_str() == wow_rules::FIXTURE_PROFILE_ID {
++            return Err(invalid("native production input cannot use the fixture rule profile"));
++        }
+         if !matches!(self.revision.len(), 40 | 64)
+             || !self.revision.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+             || self.environment.is_empty() || self.environment.len() > 128

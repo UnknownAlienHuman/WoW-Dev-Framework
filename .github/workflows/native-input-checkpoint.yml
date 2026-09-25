@@ -20,7 +20,7 @@ jobs:
     env:
       BASE_COMMIT: 02d893cd3b9c9dd116a3330824b9764c3d5ab919
       BASE_TREE: d8caed62c911410a1ce41cef8ab8de351f421479
-      FIXES_SHA256: de4d5d2b39523fb4200dfb8f7ce634afda13d31b816658ef5bfa2c9faf5444ea
+      FIXES_SHA256: 57d7c7551893a5fdf052241ad0b814e3bab2321c102b2b834c2fee6e0596c732
       PATCH_SHA256: efc36c149ca6de6408e3c852bebf458da34e83f87f7475e56d9048bc62aa8939
     steps:
       - uses: actions/checkout@v7
