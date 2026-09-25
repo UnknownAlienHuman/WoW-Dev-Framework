@@ -1,5 +1,7 @@
 //! Direct source/load/XML proposals. No recognizer inference or graph publication.
 mod functions;
+mod retained_evidence;
+pub use retained_evidence::RetainedProjectGraphEvidence;
 mod state;
 pub use state::{
     ProjectGraphStateBinding, ProjectGraphStateDeclaration, ProjectGraphStateOutcome,
@@ -23,7 +25,7 @@ pub use xml::{
     ProjectGraphXmlDeclaration, ProjectGraphXmlReference, ProjectGraphXmlReferenceOutcome,
 };
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use wow_core::{
     ClaimScope, EvidenceConfidence, EvidenceId, EvidenceRecord, GenerationContext, ProducerId,
     ProvenanceClass, SourceHandle, SourceHandleBuilder, SourceOriginKind, SourceSpan,
@@ -66,7 +68,8 @@ const MAX_EDGES: usize = MAX_LOADS
     + state::MAX_ACCESSES;
 const MAX_TEXT_BYTES: usize = 4 * 1024 * 1024;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ProjectGraphFile {
     pub path: String,
     pub content_digest: wow_core::ContentDigest<wow_core::SourceContent>,

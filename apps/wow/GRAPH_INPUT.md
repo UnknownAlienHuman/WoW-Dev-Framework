@@ -1,5 +1,10 @@
 # Read-only retained graph commands
 
+Graph-build v7 receipts can now be passed directly with `--bundle` instead of
+`--snapshot`. Explain then resolves retained source/evidence records. See
+[GRAPH_EVIDENCE.md](GRAPH_EVIDENCE.md) for admission, limits and compatibility.
+
+
 ```text
 wow graph entity   --snapshot graph.json --request entity.json --format json
 wow graph neighbors --snapshot graph.json --request neighbors.json --format json

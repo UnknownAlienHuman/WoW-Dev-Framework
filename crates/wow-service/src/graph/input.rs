@@ -18,6 +18,34 @@ pub(super) fn decode<T: DeserializeOwned>(
     stage: GraphReadStage,
     stop: &AtomicBool,
 ) -> Result<T, GraphReadFailure> {
+    decode_profile(bytes, max_bytes, max_tokens, MAX_STRING_BYTES, stage, stop)
+}
+
+pub(super) fn decode_bundle<T: DeserializeOwned>(
+    bytes: &[u8],
+    max_bytes: usize,
+    stop: &AtomicBool,
+) -> Result<T, GraphReadFailure> {
+    // Build receipts can retain inline Lua text larger than a graph identifier.
+    // Do not widen the independent bare-snapshot profile.
+    decode_profile(
+        bytes,
+        max_bytes,
+        2_000_000,
+        max_bytes,
+        GraphReadStage::Bundle,
+        stop,
+    )
+}
+
+fn decode_profile<T: DeserializeOwned>(
+    bytes: &[u8],
+    max_bytes: usize,
+    max_tokens: usize,
+    max_string_bytes: usize,
+    stage: GraphReadStage,
+    stop: &AtomicBool,
+) -> Result<T, GraphReadFailure> {
     checkpoint(stop)?;
     if bytes.len() > max_bytes {
         return Err(GraphReadFailure::service(
@@ -29,6 +57,7 @@ pub(super) fn decode<T: DeserializeOwned>(
     // Decoded keys catch equivalent escape spellings before maps can overwrite.
     let mut budget = ScanBudget {
         remaining: max_tokens,
+        max_string_bytes,
         failure: None,
     };
     let mut decoder = serde_json::Deserializer::from_slice(bytes);
@@ -54,6 +83,7 @@ pub(super) fn decode<T: DeserializeOwned>(
 
 struct ScanBudget {
     remaining: usize,
+    max_string_bytes: usize,
     failure: Option<ServiceErrorCode>,
 }
 
@@ -92,7 +122,7 @@ impl<'de> Visitor<'de> for Scan<'_> {
         Ok(())
     }
     fn visit_str<E: de::Error>(self, value: &str) -> Result<(), E> {
-        if value.len() > MAX_STRING_BYTES {
+        if value.len() > self.budget.max_string_bytes {
             self.budget.failure = Some(ServiceErrorCode::BudgetExceeded);
             Err(de::Error::custom("graph JSON string limit"))
         } else {

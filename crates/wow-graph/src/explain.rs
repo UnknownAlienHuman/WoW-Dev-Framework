@@ -244,6 +244,7 @@ pub struct GraphExplanationCoverage<'a> {
 #[serde(rename_all = "snake_case")]
 pub enum GraphExplanationBoundary {
     EvidenceRecordsNotResolved,
+    EvidenceResolutionIncomplete,
     DerivationRecordsNotRetained,
     ConflictAssessmentNotAvailable,
     FoundationProducerNotRetained,
@@ -280,6 +281,16 @@ pub struct GraphExplanation<'a> {
     absence_authoritative: bool,
 }
 impl<'a> GraphExplanation<'a> {
+    pub(crate) fn mark_evidence_resolution(&mut self, complete: bool) {
+        self.boundaries
+            .retain(|boundary| *boundary != GraphExplanationBoundary::EvidenceRecordsNotResolved);
+        if !complete {
+            self.boundaries
+                .push(GraphExplanationBoundary::EvidenceResolutionIncomplete);
+        }
+        self.boundaries.sort();
+    }
+
     #[must_use]
     pub fn query(&self) -> &GraphExplainQuery {
         &self.query

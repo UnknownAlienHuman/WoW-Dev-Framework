@@ -268,6 +268,13 @@ impl GraphRelationProposal {
     pub fn relation_kind_id(&self) -> &str {
         &self.relation_kind_id
     }
+
+    pub fn source_handle_ids(&self) -> &[StableHandleId] {
+        &self.source_handle_ids
+    }
+    pub fn evidence_ids(&self) -> &[EvidenceId] {
+        &self.evidence_ids
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -420,6 +427,10 @@ impl GraphProposalBatch {
     #[must_use]
     pub fn producer_partition_id(&self) -> &str {
         &self.producer_partition_id
+    }
+
+    pub fn entity_proposals(&self) -> &[GraphEntityProposal] {
+        &self.entity_proposals
     }
 
     /// Exact raw proposal, including confidence and its original support handles.

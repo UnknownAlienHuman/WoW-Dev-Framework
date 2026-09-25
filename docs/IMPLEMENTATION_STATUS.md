@@ -249,3 +249,13 @@ recognition and skipped-target receipts are exported together. Ordinary check/st
 keep the previous analyzer mode. See [GRAPH_BUILD.md](../apps/wow/GRAPH_BUILD.md).
 Dynamic/Library/inline-XML calls, direct self-edges, non-call recognizers, persistent
 ProjectStore and full E2 acceptance remain open. No acceptance/checksum gate moves.
+
+## Retained source evidence reads
+
+Graph-build v7 bundles now feed every graph read directly. Explain joins the
+validated partition owner to project-admitted file/handle metadata and a
+core-validated evidence catalog, with bounded shared derivation expansion.
+See [GRAPH_EVIDENCE.md](../apps/wow/GRAPH_EVIDENCE.md). Source bytes are not
+reopened; full graph conflicts/inference-rule records, sidecar replay, runtime
+and coherent ProjectStore remain open. Existing bare-snapshot encodings and
+build identities are unchanged. This advances code, not acceptance gates.

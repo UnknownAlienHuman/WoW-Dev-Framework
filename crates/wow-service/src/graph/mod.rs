@@ -1,6 +1,8 @@
 //! Read-only application seam for one explicitly supplied retained graph artifact.
 //! No ProjectStore, implicit current selector, source read, or analyzer is opened.
 mod build;
+mod bundle;
+pub use bundle::GRAPH_BUNDLE_MAX_BYTES;
 mod input;
 pub use build::{GraphBuildRequest, GraphBuildResult, execute_graph_build};
 
@@ -14,11 +16,11 @@ use wow_graph::GraphPartitionSnapshot;
 // Applications depend on this seam, never directly on the graph implementation.
 pub use wow_graph::{
     GraphAxis, GraphAxisProfile, GraphAxisQuery, GraphAxisTraversal, GraphDirection, GraphEdgeId,
-    GraphEntityQuery, GraphErrorCode, GraphExplainLimits, GraphExplainQuery, GraphExplainSubject,
-    GraphGenerationId, GraphNeighborQuery, GraphNeighborReadLimits, GraphNeighborReadQuery,
-    GraphNodeId, GraphPathConfidence, GraphPathCursor, GraphPathLimits, GraphPathQuery,
-    GraphQueryState, GraphRelationDirection, GraphRelationKind, GraphSnapshotId,
-    GraphSubgraphLimits, GraphSubgraphQuery, GraphUniverseId,
+    GraphEntityQuery, GraphErrorCode, GraphEvidenceResolveLimits, GraphExplainLimits,
+    GraphExplainQuery, GraphExplainSubject, GraphGenerationId, GraphNeighborQuery,
+    GraphNeighborReadLimits, GraphNeighborReadQuery, GraphNodeId, GraphPathConfidence,
+    GraphPathCursor, GraphPathLimits, GraphPathQuery, GraphQueryState, GraphRelationDirection,
+    GraphRelationKind, GraphSnapshotId, GraphSubgraphLimits, GraphSubgraphQuery, GraphUniverseId,
 };
 
 pub const GRAPH_READ_REQUEST_SCHEMA: &str = "wow-service/graph-read-request/1";
@@ -122,6 +124,8 @@ impl GraphPathReadQuery {
 pub struct GraphReadRequest {
     schema: Box<str>,
     query: GraphReadQuery,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    evidence_limits: Option<GraphEvidenceResolveLimits>,
 }
 impl GraphReadRequest {
     #[must_use]
@@ -129,7 +133,18 @@ impl GraphReadRequest {
         Self {
             schema: GRAPH_READ_REQUEST_SCHEMA.into(),
             query,
+            evidence_limits: None,
         }
+    }
+    pub fn with_evidence_limits(
+        mut self,
+        limits: GraphEvidenceResolveLimits,
+    ) -> ServiceResult<Self> {
+        limits.validate().map_err(|_| {
+            ServiceError::new(ServiceErrorCode::InvalidRequest, "invalid evidence limits")
+        })?;
+        self.evidence_limits = Some(limits);
+        Ok(self)
     }
     #[must_use]
     pub fn query(&self) -> &GraphReadQuery {
@@ -163,6 +178,8 @@ impl From<GraphQueryState> for GraphReadStatus {
 pub enum GraphReadStage {
     Request,
     Snapshot,
+    Bundle,
+    Evidence,
     Query,
     Encoding,
     Cancellation,
@@ -221,6 +238,14 @@ struct Envelope {
     #[serde(skip_serializing_if = "Option::is_none")]
     snapshot_input_digest: Option<Box<str>>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    bundle_input_digest: Option<Box<str>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    bundle_result_digest: Option<Box<str>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    evidence_catalog_digest: Option<Box<str>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    input_boundaries: Option<Vec<Box<str>>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     request_input_digest: Option<Box<str>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     request_digest: Option<Box<str>>,
@@ -232,7 +257,7 @@ struct Envelope {
     failure: Option<GraphReadFailure>,
     // Full project/evidence authority is not provided by an imported snapshot.
     absence_authoritative: bool,
-    boundaries: [&'static str; 3],
+    boundaries: Vec<&'static str>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -298,27 +323,73 @@ pub fn execute_graph_read(
     request_bytes: &[u8],
     stop: &AtomicBool,
 ) -> ServiceResult<GraphReadResult> {
+    execute_read(operation, snapshot_bytes, request_bytes, false, stop)
+}
+
+/// Read an explicit graph-build bundle with independent graph, manifest and
+/// evidence admission. `explain` resolves source records; other operations keep
+/// their original payload shape. No source analysis, store or current selection.
+pub fn execute_graph_bundle_read(
+    operation: GraphReadOperation,
+    bundle_bytes: &[u8],
+    request_bytes: &[u8],
+    stop: &AtomicBool,
+) -> ServiceResult<GraphReadResult> {
+    execute_read(operation, bundle_bytes, request_bytes, true, stop)
+}
+
+fn execute_read(
+    operation: GraphReadOperation,
+    artifact_bytes: &[u8],
+    request_bytes: &[u8],
+    is_bundle: bool,
+    stop: &AtomicBool,
+) -> ServiceResult<GraphReadResult> {
     let mut envelope = Envelope {
-        schema: GRAPH_READ_RESULT_SCHEMA,
+        schema: if is_bundle {
+            "wow-service/graph-bundle-read-result/1"
+        } else {
+            GRAPH_READ_RESULT_SCHEMA
+        },
         operation,
         status: GraphReadStatus::Failed,
         snapshot_input_digest: None,
+        bundle_input_digest: None,
+        bundle_result_digest: None,
+        evidence_catalog_digest: None,
+        input_boundaries: None,
         request_input_digest: None,
         request_digest: None,
         context: None,
         payload: None,
         failure: None,
         absence_authoritative: false,
-        boundaries: [
-            "standalone_retained_graph",
-            "project_publication_not_acquired",
-            "external_evidence_and_runtime_not_evaluated",
-        ],
+        boundaries: if is_bundle {
+            vec![
+                "imported_graph_build_bundle",
+                "project_publication_not_acquired",
+                "source_bytes_and_runtime_not_verified",
+                "build_sidecars_integrity_checked_not_semantically_revalidated",
+                "content_integrity_is_not_provenance_authentication",
+            ]
+        } else {
+            vec![
+                "standalone_retained_graph",
+                "project_publication_not_acquired",
+                "external_evidence_and_runtime_not_evaluated",
+            ]
+        },
     };
     if request_bytes.len() <= GRAPH_REQUEST_MAX_BYTES {
         envelope.request_input_digest = Some(hash(request_bytes));
     }
-    let outcome = run(&mut envelope, snapshot_bytes, request_bytes, stop);
+    let outcome = run(
+        &mut envelope,
+        artifact_bytes,
+        request_bytes,
+        is_bundle,
+        stop,
+    );
     // Cancellation wins over a decoder/owner error caused by the same signal.
     let outcome = checkpoint(stop).and(outcome);
     if let Err(error) = outcome {
@@ -344,6 +415,7 @@ fn run(
     envelope: &mut Envelope,
     snapshot_bytes: &[u8],
     request_bytes: &[u8],
+    is_bundle: bool,
     stop: &AtomicBool,
 ) -> Result<(), GraphReadFailure> {
     checkpoint(stop)?;
@@ -362,7 +434,37 @@ fn run(
             ServiceErrorCode::InvalidRequest,
         ));
     }
+    if request.evidence_limits.is_some()
+        && (!is_bundle || envelope.operation != GraphReadOperation::Explain)
+    {
+        return Err(GraphReadFailure::service(
+            GraphReadStage::Request,
+            ServiceErrorCode::InvalidRequest,
+        ));
+    }
+    if let Some(limits) = request.evidence_limits {
+        limits
+            .validate()
+            .map_err(|error| GraphReadFailure::owner(GraphReadStage::Request, error))?;
+    }
     envelope.request_digest = Some(hash(&encode(&request)?));
+    if is_bundle {
+        if snapshot_bytes.len() <= GRAPH_BUNDLE_MAX_BYTES {
+            envelope.bundle_input_digest = Some(hash(snapshot_bytes));
+        }
+        let admitted = bundle::admit(snapshot_bytes, stop)?;
+        envelope.snapshot_input_digest = Some(admitted.snapshot_digest);
+        envelope.bundle_result_digest = Some(admitted.result_digest);
+        envelope.evidence_catalog_digest = Some(admitted.evidence.digest().into());
+        envelope.input_boundaries = Some(admitted.boundaries);
+        return run_query(
+            envelope,
+            &admitted.owner,
+            &request,
+            Some(&admitted.evidence),
+            stop,
+        );
+    }
     let owner: GraphPartitionSnapshot = input::decode(
         snapshot_bytes,
         GRAPH_INPUT_MAX_BYTES,
@@ -371,6 +473,16 @@ fn run(
         stop,
     )?;
     envelope.snapshot_input_digest = Some(hash(snapshot_bytes));
+    run_query(envelope, &owner, &request, None, stop)
+}
+
+fn run_query(
+    envelope: &mut Envelope,
+    owner: &GraphPartitionSnapshot,
+    request: &GraphReadRequest,
+    evidence: Option<&wow_graph::GraphEvidenceCatalog>,
+    stop: &AtomicBool,
+) -> Result<(), GraphReadFailure> {
     if owner.snapshot().snapshot_id() != request.query.snapshot_id() {
         return Err(GraphReadFailure::service(
             GraphReadStage::Snapshot,
@@ -425,22 +537,43 @@ fn run(
             let profile = GraphAxisProfile::bind(owner.registry(), query.axis())
                 .map_err(|e| GraphReadFailure::owner(GraphReadStage::Query, e))?;
             let result = query
-                .execute(&owner, &profile, stop)
+                .execute(owner, &profile, stop)
                 .map_err(|e| GraphReadFailure::owner(GraphReadStage::Query, e))?;
             (result.state().into(), value(&result)?)
         }
         GraphReadQuery::Explain(query) => {
-            let result = query
-                .execute(&owner, stop)
-                .map_err(|e| GraphReadFailure::owner(GraphReadStage::Query, e))?;
-            let state = if !result.truncations().is_empty() {
-                GraphReadStatus::Truncated
-            } else if !result.support_complete() || !result.boundaries().is_empty() {
-                GraphReadStatus::Partial
+            if let Some(catalog) = evidence {
+                let result = query
+                    .execute_with_evidence(
+                        owner,
+                        catalog,
+                        request.evidence_limits.unwrap_or_default(),
+                        stop,
+                    )
+                    .map_err(|e| GraphReadFailure::owner(GraphReadStage::Evidence, e))?;
+                let state = if !result.explanation().truncations().is_empty()
+                    || !result.evidence_resolution().truncations().is_empty()
+                {
+                    GraphReadStatus::Truncated
+                } else {
+                    // Core source evidence closure alone does not close conflicts,
+                    // graph derivation records, runtime or project publication.
+                    GraphReadStatus::Partial
+                };
+                (state, value(&result)?)
             } else {
-                GraphReadStatus::Complete
-            };
-            (state, value(&result)?)
+                let result = query
+                    .execute(owner, stop)
+                    .map_err(|e| GraphReadFailure::owner(GraphReadStage::Query, e))?;
+                let state = if !result.truncations().is_empty() {
+                    GraphReadStatus::Truncated
+                } else if !result.support_complete() || !result.boundaries().is_empty() {
+                    GraphReadStatus::Partial
+                } else {
+                    GraphReadStatus::Complete
+                };
+                (state, value(&result)?)
+            }
         }
     };
     checkpoint(stop)?;
@@ -451,7 +584,11 @@ fn run(
         source_context_id: owner.source_context_id(),
         registry_digest: owner.registry().registry_digest().into(),
     });
-    envelope.status = status;
+    envelope.status = if evidence.is_some() && status == GraphReadStatus::Complete {
+        GraphReadStatus::Partial
+    } else {
+        status
+    };
     envelope.payload = Some(payload);
     Ok(())
 }
@@ -470,6 +607,25 @@ fn hash(bytes: &[u8]) -> Box<str> {
     format!("sha256:{:x}", Sha256::digest(bytes)).into()
 }
 fn encode(value: &impl Serialize) -> Result<Vec<u8>, GraphReadFailure> {
+    // Adding bundle metadata must not allocate an oversized canonical result
+    // before noticing the envelope cap. Count compact typed JSON first.
+    struct Counter(usize);
+    impl std::io::Write for Counter {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            self.0 = self
+                .0
+                .checked_add(bytes.len())
+                .filter(|n| *n <= GRAPH_RESULT_MAX_BYTES)
+                .ok_or_else(|| std::io::Error::other("graph envelope byte limit"))?;
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    serde_json::to_writer(&mut Counter(0), value).map_err(|_| {
+        GraphReadFailure::service(GraphReadStage::Encoding, ServiceErrorCode::BudgetExceeded)
+    })?;
     let bytes = canonical_json_bytes(value).map_err(|_| {
         GraphReadFailure::service(
             GraphReadStage::Encoding,

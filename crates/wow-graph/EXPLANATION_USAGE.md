@@ -99,3 +99,16 @@ Contract: `e2/QUERY_MODEL.md` (explain_entity / explain_relation),
 `e2/IDENTITY_AND_ASSERTIONS.md`, `e2/CONFLICT_COVERAGE_AND_PROVENANCE.md`.
 Full conflict/derivation/evidence dereferencing, axes, service/CLI routing and
 E2 acceptance remain separate. No dependencies, existing identities or tests change.
+
+## Retained evidence resolution
+
+`GraphExplainQuery::execute_with_evidence` consumes an immutable
+`GraphEvidenceCatalog` and explicit `GraphEvidenceResolveLimits`. The catalog
+validates core record identities, generations, producer versions and a closed
+source/derivation reference DAG. The query resolves original evidence, endpoint
+support and producer-only source references under the combined explanation byte
+cap; shared inputs are not expanded twice. Missing graph references and budget
+truncation remain explicit. This resolves retained core evidence, not full
+conflict/inference-rule records, source authenticity or runtime. Existing
+`execute` and its bytes are unchanged. Service/CLI usage and exact bounds:
+[GRAPH_EVIDENCE.md](../../apps/wow/GRAPH_EVIDENCE.md).

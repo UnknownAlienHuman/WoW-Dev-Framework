@@ -357,6 +357,14 @@ Source review: Gethe `live` resolved to
 `Interface/AddOns/Blizzard_RaidUI/Blizzard_RaidUI_Mainline.toc`. These declaration
 examples are not a runtime acceptance probe or a fixed dependency.
 
+## Reading a retained bundle
+
+All graph reads accept this v7 JSON receipt directly through `--bundle`.
+`wow graph explain --bundle build.json --request explain.json` resolves the
+retained source/evidence tables and derivation inputs without rerunning the
+build. The bare-snapshot route remains unchanged. See
+[GRAPH_EVIDENCE.md](GRAPH_EVIDENCE.md) for exact admission and proof boundaries.
+
 ## Artifact and provenance formats
 
 `json` (default) emits `wow-service/graph-build-result/7`: request, status,

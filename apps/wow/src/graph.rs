@@ -8,17 +8,22 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use crate::args::Format;
 use wow_service::ServiceErrorCode;
 use wow_service::graph::{
-    GRAPH_INPUT_MAX_BYTES, GRAPH_REQUEST_MAX_BYTES, GraphReadOperation, GraphReadResult,
-    GraphReadStatus, execute_graph_read,
+    GRAPH_BUNDLE_MAX_BYTES, GRAPH_INPUT_MAX_BYTES, GRAPH_REQUEST_MAX_BYTES, GraphReadOperation,
+    GraphReadResult, GraphReadStatus, execute_graph_bundle_read, execute_graph_read,
 };
 
-pub const HELP: &str = "wow graph build --config <project.json> --project <ProjectId> [--format json|snapshot|text]\nwow graph entity|neighbors|subgraph|axis|explain|path --snapshot <partition-snapshot.json> --request <query.json> [--format json|text]\n\nBuild uses explicit local input; the read commands inspect one retained graph artifact. Read queries require exact snapshot and node/edge/profile identities. Reads do not run source analysis. No project discovery, current-pointer lookup, store writes or automatic continuation. See apps/wow/GRAPH_INPUT.md.\n";
+pub const HELP: &str = "wow graph build --config <project.json> --project <ProjectId> [--format json|snapshot|text]\nwow graph entity|neighbors|subgraph|axis|explain|path (--snapshot <partition-snapshot.json> | --bundle <graph-build.json>) --request <query.json> [--format json|text]\n\nBuild uses explicit local input; the read commands inspect one retained graph artifact. Read queries require exact snapshot and node/edge/profile identities. Bundle reads admit the graph and source evidence; explain resolves retained evidence records without reopening sources. Reads do not run source analysis. No project discovery, current-pointer lookup, store writes or automatic continuation. See apps/wow/GRAPH_INPUT.md.\n";
 
 struct Arguments {
     operation: GraphReadOperation,
-    snapshot: PathBuf,
+    artifact: Artifact,
     request: PathBuf,
     format: Format,
+}
+
+enum Artifact {
+    Snapshot(PathBuf),
+    Bundle(PathBuf),
 }
 
 pub fn run(values: Vec<OsString>) -> u8 {
@@ -42,18 +47,27 @@ pub fn run(values: Vec<OsString>) -> u8 {
         Ok(bytes) => bytes,
         Err(message) => return read_failure(message, &stop),
     };
-    let snapshot = match read_file(&args.snapshot, GRAPH_INPUT_MAX_BYTES, &stop) {
+    let (path, limit) = match &args.artifact {
+        Artifact::Snapshot(path) => (path, GRAPH_INPUT_MAX_BYTES),
+        Artifact::Bundle(path) => (path, GRAPH_BUNDLE_MAX_BYTES),
+    };
+    let artifact = match read_file(path, limit, &stop) {
         Ok(bytes) => bytes,
         Err(message) => return read_failure(message, &stop),
     };
-    let result =
-        execute_graph_read(args.operation, &snapshot, &request, &stop).and_then(|result| {
-            if stop.load(Ordering::Acquire) {
-                result.into_cancelled()
-            } else {
-                Ok(result)
-            }
-        });
+    let result = match args.artifact {
+        Artifact::Snapshot(_) => execute_graph_read(args.operation, &artifact, &request, &stop),
+        Artifact::Bundle(_) => {
+            execute_graph_bundle_read(args.operation, &artifact, &request, &stop)
+        }
+    }
+    .and_then(|result| {
+        if stop.load(Ordering::Acquire) {
+            result.into_cancelled()
+        } else {
+            Ok(result)
+        }
+    });
     let result = match result {
         Ok(result) => result,
         Err(_) => {
@@ -101,10 +115,10 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
         Some("neighbors") => GraphReadOperation::Neighbors,
         _ => return Err("expected graph entity, neighbors, subgraph, axis, explain or path"),
     };
-    let (mut snapshot, mut request, mut format) = (None, None, None);
+    let (mut artifact, mut request, mut format) = (None, None, None);
     while let Some(option) = values.next() {
         let option = option.to_str().ok_or("invalid option encoding")?;
-        if !matches!(option, "--snapshot" | "--request" | "--format") {
+        if !matches!(option, "--snapshot" | "--bundle" | "--request" | "--format") {
             return Err("unknown graph option");
         }
         let value = values.next().ok_or("missing graph option value")?;
@@ -112,9 +126,14 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
             return Err("invalid graph option length");
         }
         match option {
-            "--snapshot" => {
-                if snapshot.replace(PathBuf::from(value)).is_some() {
-                    return Err("duplicate --snapshot");
+            "--snapshot" | "--bundle" => {
+                let input = if option == "--bundle" {
+                    Artifact::Bundle(PathBuf::from(value))
+                } else {
+                    Artifact::Snapshot(PathBuf::from(value))
+                };
+                if artifact.replace(input).is_some() {
+                    return Err("provide exactly one --snapshot or --bundle");
                 }
             }
             "--request" => {
@@ -137,7 +156,7 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
     }
     Ok(Arguments {
         operation,
-        snapshot: snapshot.ok_or("graph requires --snapshot")?,
+        artifact: artifact.ok_or("graph requires --snapshot or --bundle")?,
         request: request.ok_or("graph requires --request")?,
         format: format.unwrap_or(Format::Json),
     })
