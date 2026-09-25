@@ -37,10 +37,14 @@ matrices. Existing full acceptance and launch gates remain open.
 
 `wow graph build` now composes file/load/XML/inheritance/mixin source proposals,
 Main callable/call facts, and independent direct-call and XML script-assignment
-recognizer partitions. The v5 receipt retains exact source/evidence, skipped-site
+and SavedVariables read/write recognizer partitions. The v6 receipt retains exact source/evidence, skipped-site
 outcomes and final node/edge crosswalks. Inline XML handlers reuse existing syntax
 units; named handlers use concrete Emmy signatures. Method and inherited handler
-associations are Possible, not effective dispatch. See
+associations are Possible, not effective dispatch. The selected TOC seeds
+account/character state roots; exact unshadowed Main global-slot accesses feed
+the existing state recognizers and State axis. Literal paths remain symbolic,
+not runtime values; ambiguous declarations and unsupported access forms retain
+explicit outcomes. See
 [GRAPH_BUILD.md](../apps/wow/GRAPH_BUILD.md). Existing graph reads cover entities,
 neighbors, paths, subgraphs, axes and retained-support explanations. Remaining
 recognizer families, inline semantic analysis and coherent ProjectStore publication

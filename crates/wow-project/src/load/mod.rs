@@ -2,7 +2,9 @@
 //! Not a client emulator, complete semantic graph, or persistent E2 candidate.
 mod conditions;
 mod package;
+mod saved_variables;
 mod toc;
+pub use saved_variables::{TocSavedVariable, TocSavedVariableScope, TocSavedVariableState};
 mod xml;
 mod xml_index;
 pub mod xml_references;
@@ -32,7 +34,7 @@ use crate::disk::{
 use crate::{ProjectError, ProjectErrorCode, ProjectInputFile, ProjectPhase, ProjectResult};
 
 /// Versioned, deliberately restricted acquisition semantics; never a WoW build.
-pub const LOAD_PROFILE: &str = "wow-project/toc-xml-files/5";
+pub const LOAD_PROFILE: &str = "wow-project/toc-xml-files/6";
 const MAX_RECORDS: usize = 32_768;
 const MAX_INCLUDE_DEPTH: usize = 32;
 
@@ -53,6 +55,8 @@ pub struct LoadRecord {
     pub declared_target: Option<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub conditions: Vec<TocCondition>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub saved_variables: Vec<TocSavedVariable>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -337,7 +341,7 @@ impl ProjectInputDirectory {
             xml_references_digest: ContentDigest<CanonicalResult>,
         }
         let digest = crate::identity::canonical_digest(
-            "wow-project/load-plan/5",
+            "wow-project/load-plan/6",
             &Identity {
                 profile: LOAD_PROFILE,
                 selected_toc: path,
@@ -472,6 +476,7 @@ impl Loader<'_> {
                 selection: record.selection,
                 declared_target: record.declared_target,
                 conditions: record.conditions,
+                saved_variables: record.saved_variables,
             });
             for kind in record.issues {
                 self.issue(kind, document, record.start, record.end);
@@ -570,6 +575,7 @@ struct Record {
     declared_target: Option<String>,
     conditions: Vec<TocCondition>,
     issues: Vec<LoadIssueKind>,
+    saved_variables: Vec<TocSavedVariable>,
 }
 impl Record {
     fn new(kind: LoadRecordKind, start: usize, end: usize) -> Self {
@@ -583,6 +589,7 @@ impl Record {
             declared_target: None,
             conditions: Vec::new(),
             issues: Vec::new(),
+            saved_variables: Vec::new(),
         }
     }
     fn issue(mut self, issue: LoadIssueKind) -> Self {

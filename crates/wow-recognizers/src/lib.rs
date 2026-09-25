@@ -17,6 +17,7 @@ mod pack;
 mod plan;
 pub mod source_calls;
 pub mod source_scripts;
+pub mod source_state;
 
 pub use emmy::{
     EMMY_DIRECT_CALL_ADAPTER_SCHEMA, EmmyDirectCallAdaptation, EmmyDirectCallBinding,

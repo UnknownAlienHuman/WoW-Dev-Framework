@@ -230,12 +230,89 @@ occurrence-key recipes are unchanged; the graph-only report identity advances
 with its new data. No source writes, extra semantic sessions or background work
 are introduced.
 
+## SavedVariables declarations and source accesses
+
+The selected TOC now retains `SavedVariables` (account) and
+`SavedVariablesPerCharacter` (character) declarations with exact directive and
+entry ordinals, source spans, selection and validation state. No saved data file,
+account name, character identity or runtime value is opened or inferred. Only
+included metadata from that exact selected variant seeds `state_root` nodes.
+The supported name grammar is an ASCII Lua identifier other than reserved words,
+`_G` and `_ENV`. Invalid entries remain receipts; duplicate entries and cross-scope
+name conflicts mark their roots ambiguous and prevent access projection.
+
+The optional existing Emmy session collects generic global-slot accesses in
+Main files. Its declaration lookup distinguishes globals from local bindings,
+parameters and implicit `self`; a local variable with the same spelling never
+becomes a saved root. The project joins only names declared by the selected TOC.
+A target must resolve to a Main global declaration in a parse-valid captured file.
+Library, unresolved, parse-failed declaration sources, uncertain metadata selection,
+unsupported assignments and dynamic keys retain explicit skipped-site outcomes.
+Undeclared global names remain generic analyzer facts, not persistent state.
+
+For example, with `## SavedVariables: AddonDB`, direct accesses to
+`AddonDB`, `AddonDB.settings.enabled` and `AddonDB["settings"]["enabled"]` are
+represented. Dot and string-literal spellings share the same ordered symbolic key
+path; different paths never collapse by dotted display text. Plain assignment
+and function-definition targets are writes; other occurrences are reads. Each
+maximal contiguous index chain is one slot access associated with its containing
+function/chunk. Assignment receiver evaluation does not synthesize extra reads
+of all path prefixes, and a call through a field does not imply a state mutation.
+
+State paths express *source references*, not proof that fields exist, hold a
+particular type/value, were executed, or persisted successfully. Numeric/dynamic
+keys, aliases, `_G`/environment indirection, parenthesized receiver chains and
+calls inside inline XML are outside this profile. A local alias may produce a
+read of the original root when initialized; later writes through that alias are
+not followed. No metatable effects, initialization/lifecycle order, migration or
+storage contents are evaluated.
+
+Source-owned roots and paths connect through namespace `Owns` edges. The existing
+`state-read` / `state-write` recognizers produce Derived `ReadsState` / `WritesState`
+relations in an independent `wow-recognizers.saved-variable-access` partition.
+Before matching, the adapter validates the immutable analyzer report, exact
+function/root/path proposals, binding digest, context and original source handles
+and evidence. Each observation retains its own access span, global declaration,
+containing function and TOC declaration support. Reused paths retain their first
+canonical observation's node support without substituting it for later access
+locations. The graph stage does not reread or parse Lua/TOC.
+
+`state_nodes.roots` maps declared namespaces to final node IDs and preserves scope
+and ambiguity. `state_nodes.paths` maps exact key vectors to final IDs.
+`state_edges` maps each admitted access to its function, state node and final edge
+ID; `state_recognition` keeps the original matcher report and proposal crosswalk.
+`provenance.state_declarations`, `state_roots`, `state_paths`, `state_sites` and
+`state_bindings` retain the source join. The complete generic access report remains
+in `provenance.function_call_report.global_accesses`.
+
+The State axis and ordinary `reads_state` / `writes_state` queries now work on
+these exports. Combined `sets_script`, `calls` and state relation queries can
+trace source-level reachability from XML handlers to state-accessing functions;
+Possible handler associations still require explicit confidence opt-in.
+All prior file/XML/function/call/handler maps are rebound after the state partition,
+not left pointing at a previous graph generation. Coverage remains Partial for
+observed modes and NotEvaluated otherwise; neither is authoritative absence.
+Ordinary `wow check` / `status` retain TOC declarations but do not enable the
+optional semantic graph-access collection.
+
+This addition advances the TOC load profile/digest, source graph projection,
+registry and graph-build request/result to v6, and the optional Emmy fact report
+to v3. Function/call occurrence recipes and graph-read request formats stay
+unchanged. A TOC plan's new identity naturally changes its derived project
+generation; existing stored graph artifacts are not rewritten.
+
+Source review: Gethe `live` resolved to
+`09b9db7948abc9b9648dedaab51eb0cf3ee67b31` on 2026-09-24;
+`Interface/AddOns/Blizzard_SavedSets/Blizzard_SavedSets.toc` and
+`Interface/AddOns/Blizzard_RaidUI/Blizzard_RaidUI_Mainline.toc`. These declaration
+examples are not a runtime acceptance probe or a fixed dependency.
+
 ## Artifact and provenance formats
 
-`json` (default) emits `wow-service/graph-build-result/5`: request, status,
+`json` (default) emits `wow-service/graph-build-result/6`: request, status,
 `snapshot`, `file_nodes`, `xml_nodes`, `lua_nodes`, `function_nodes`, `call_edges`,
 `handler_nodes`, `script_edges`, `provenance`, `call_recognition`,
-`script_recognition`, boundaries and canonical digests.
+`script_recognition`, `state_nodes`, `state_edges`, `state_recognition`, boundaries and canonical digests.
 `file_nodes` maps logical source paths to final materialized node IDs, rather than
 producer-input IDs. `provenance` retains the exact project/analyzer snapshot IDs,
 GenerationContext, file manifest, real SourceHandles/EvidenceRecords and optional
@@ -271,10 +348,13 @@ At most 4,096 files, 8,192 admitted non-self load proposals, 4,096 XML declarati
 callable scopes and 8,192 call facts; at most 4,096 script sources/inline nodes,
 8,192 direct/inherited sites, 8,192 handler associations and 16,384 script query
 visits. Source ownership contributes at most one edge per source occurrence.
-Combined owner ceilings are 24,576 nodes and 57,344 edges (including recognizer
-calls/assignments); charged projection text is capped
+State projection admits at most 1,024 declaration entries, 8,192 paths and 8,192
+access sites; each observation carries at most 32 source/evidence references.
+Combined owner ceilings are 33,792 nodes and 74,752 edges (including recognizer
+calls/assignments/state accesses); charged projection text is capped
 at 4 MiB. The Emmy sidecar separately caps 65,536 callable records/signatures,
-65,536 calls, 4,096 named callable targets, 2,000,000 AST visits, 256 ancestor steps per scope lookup and 32 MiB
+65,536 calls, 65,536 generic global accesses (64 literal-key levels, 1 KiB per
+name/key and 8 MiB of charged access text), 4,096 named callable targets, 2,000,000 AST visits, 256 ancestor steps per scope lookup and 32 MiB
 of serialized report. Source projection applies its smaller bounds before
 creating graph proposals. Over-limit input aborts rather than returning a
 truncated snapshot. Existing source/input/analyzer/load limits
@@ -295,11 +375,6 @@ Exits: 2 for a produced Partial artifact; 3 for a structured construction/identi
 budget failure; 4 for encoding or output loss; 64 for CLI/config acquisition
 errors; 130 for cancellation. Tests, real-addon/client validation and full E2/R0
 acceptance remain separate from this functional implementation.
-
-The source projection and graph-build request/result advance to v2; the local
-registry advances to version 2. Existing retained v1 graph artifacts remain readable.
-Project/E0 identities and graph-read schemas are unchanged; the new graph profile
-and registry enter only newly built graph identities.
 
 Owners: `crates/wow-project/src/graph.rs`, `crates/wow-project/src/graph/xml.rs`, `crates/wow-service/src/graph/build.rs`,
 `apps/wow/src/graph_build.rs`. Contracts: project `e2/README.md`,

@@ -95,14 +95,11 @@ pub(super) fn parse(
                             record.issues.push(Issue::UnknownDirective);
                         }
                     }
-                    // These records are retained as exact source spans, not an
-                    // invented runtime/storage model. SavedVariables are not read.
-                    "title"
-                    | "notes"
-                    | "author"
-                    | "version"
-                    | "savedvariables"
-                    | "savedvariablespercharacter" => {}
+                    "savedvariables" | "savedvariablespercharacter" => {
+                        record.saved_variables = super::saved_variables::parse(&key, value)?;
+                    }
+                    // Other metadata remains source-backed. No SavedVariables contents are read.
+                    "title" | "notes" | "author" | "version" => {}
                     _ => record.issues.push(Issue::UnknownDirective),
                 }
             } else {

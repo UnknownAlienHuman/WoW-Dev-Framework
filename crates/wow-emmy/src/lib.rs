@@ -41,3 +41,6 @@ pub use workspace::{
     LuaWorkspaceFile, LuaWorkspaceFileInput, LuaWorkspaceLimits, LuaWorkspaceSnapshot,
     LuaWorkspaceUniverse,
 };
+
+/// Generic source-level global-slot facts for optional graph consumers.
+pub mod global_access;

@@ -16,7 +16,7 @@ use crate::references::{
 };
 use crate::{EmmyBackendIdentity, LuaWorkspaceFile, LuaWorkspaceSnapshot};
 
-pub const FUNCTION_CALL_PROFILE: &str = "wow-emmy/function-call-facts/2";
+pub const FUNCTION_CALL_PROFILE: &str = "wow-emmy/function-call-facts/3";
 // Existing callable/call occurrence keys keep their original recipe. The new
 // named-target sidecar changes report identity, not the meaning of an old key.
 const OCCURRENCE_PROFILE: &str = "wow-emmy/function-call-facts/1";
@@ -135,6 +135,7 @@ pub struct FunctionCallReport {
     files: Vec<SourceFunctionFile>,
     functions: Vec<SourceFunctionFact>,
     calls: Vec<SourceCallFact>,
+    global_accesses: Vec<crate::global_access::SourceGlobalAccess>,
     /// Only unique full-path lookups with a concrete signature enter this map.
     /// Missing names are not proven non-callable; inspect the symbol report.
     named_targets: BTreeMap<String, SourceCallTarget>,
@@ -157,6 +158,9 @@ impl FunctionCallReport {
     }
     pub fn functions(&self) -> &[SourceFunctionFact] {
         &self.functions
+    }
+    pub fn global_accesses(&self) -> &[crate::global_access::SourceGlobalAccess] {
+        &self.global_accesses
     }
     pub fn calls(&self) -> &[SourceCallFact] {
         &self.calls
@@ -181,8 +185,9 @@ impl FunctionCallReport {
                 &self.files,
                 &self.functions,
                 &self.calls,
+                &self.global_accesses,
                 &self.named_targets,
-                &self.symbol_lookup_analysis_id,
+                self.symbol_lookup_analysis_id.as_slice(),
             ),
         )
     }
@@ -191,6 +196,11 @@ impl FunctionCallReport {
             || self.identity()? != self.analysis_id
             || self.functions.len() > MAX_FUNCTIONS
             || self.calls.len() > MAX_CALLS
+            || self.global_accesses.len() > crate::global_access::MAX_ACCESSES
+            || self
+                .global_accesses
+                .windows(2)
+                .any(|w| w[0].fact_id() >= w[1].fact_id())
             || self
                 .functions
                 .windows(2)
@@ -233,6 +243,15 @@ impl FunctionCallReport {
                 && functions
                     .get(function_id.as_str())
                     .is_none_or(|f| f.kind != SourceFunctionKind::Closure)
+            {
+                return Err(invalid());
+            }
+        }
+        for access in &self.global_accesses {
+            access.validate(&self.main_snapshot_id)?;
+            let function = functions.get(access.function_id()).ok_or_else(invalid)?;
+            if function.path() != access.path()
+                || function.content_digest() != access.content_digest()
             {
                 return Err(invalid());
             }
@@ -309,7 +328,7 @@ fn function_id(
         ),
     )
 }
-fn caller(
+pub(crate) fn caller(
     workspace: &str,
     file: &LuaWorkspaceFile,
     syntax: &emmylua_parser::LuaSyntaxNode,
@@ -351,6 +370,7 @@ pub(crate) fn collect(
     stop: &AtomicBool,
 ) -> EmmyMemberCallResult<FunctionCallReport> {
     let mut signatures = HashMap::new();
+    let mut access_sources = HashMap::new();
     let mut functions = Vec::new();
     let mut files = BTreeMap::new();
     let mut visits = 0usize;
@@ -362,6 +382,14 @@ pub(crate) fn collect(
         for file in workspace.files() {
             checkpoint(stop)?;
             let model = semantic_model(analysis, root, file)?;
+            access_sources.insert(
+                model.get_file_id(),
+                crate::global_access::AccessSource {
+                    workspace_id: workspace.snapshot_id(),
+                    file,
+                    is_main,
+                },
+            );
             let errors = model
                 .get_file_parse_error()
                 .map_or(0, |errors| errors.len());
@@ -453,6 +481,8 @@ pub(crate) fn collect(
         }
     }
     let mut calls = Vec::new();
+    let mut global_accesses = Vec::new();
+    let mut access_text_bytes = 0;
     for file in main.files() {
         checkpoint(stop)?;
         if files
@@ -467,6 +497,21 @@ pub(crate) fn collect(
         for ast in model.get_root().descendants::<LuaAst>() {
             checkpoint(stop)?;
             visit(&mut visits)?;
+            if let LuaAst::LuaNameExpr(name) = &ast {
+                if global_accesses.len() >= crate::global_access::MAX_ACCESSES {
+                    return Err(budget());
+                }
+                if let Some(access) = crate::global_access::collect_one(
+                    &model,
+                    main.snapshot_id(),
+                    file,
+                    name,
+                    &access_sources,
+                    &mut access_text_bytes,
+                )? {
+                    global_accesses.push(access);
+                }
+            }
             let LuaAst::LuaCallExpr(call) = ast else {
                 continue;
             };
@@ -518,6 +563,7 @@ pub(crate) fn collect(
             files.get_mut(file.path()).ok_or_else(invalid)?.call_count += 1;
         }
     }
+    global_accesses.sort_by(|a, b| a.fact_id().cmp(b.fact_id()));
     functions.sort_by(|a, b| a.fact_id.cmp(&b.fact_id));
     calls.sort_by(|a, b| a.fact_id.cmp(&b.fact_id));
     let library_snapshot_ids = libraries
@@ -548,6 +594,7 @@ pub(crate) fn collect(
         files: files.into_values().collect(),
         functions,
         calls,
+        global_accesses,
         named_targets,
         symbol_lookup_analysis_id: symbol_lookup_analysis_id.map(str::to_owned),
         analysis_id: String::new(),
