@@ -41,6 +41,11 @@ pub enum AnnotationStoreErrorCode {
     StoreIntegrityViolation,
     StoreBudgetExceeded,
     StoreDatabaseUnavailable,
+    StoreCancelled,
+    StoreWriterBusy,
+    StoreCurrentConflict,
+    StoreGenerationMissing,
+    StoreOutcomeUnknown,
     ArtifactIdentityInvalid,
     ArtifactPayloadInvalid,
     ArtifactKindMismatch,
@@ -103,6 +108,11 @@ impl From<StoreError> for AnnotationStoreError {
             StoreErrorCode::LeaseInvalid => AnnotationStoreErrorCode::StoreLeaseInvalid,
             StoreErrorCode::IntegrityViolation => AnnotationStoreErrorCode::StoreIntegrityViolation,
             StoreErrorCode::BudgetExceeded => AnnotationStoreErrorCode::StoreBudgetExceeded,
+            StoreErrorCode::Cancelled => AnnotationStoreErrorCode::StoreCancelled,
+            StoreErrorCode::WriterBusy => AnnotationStoreErrorCode::StoreWriterBusy,
+            StoreErrorCode::CurrentConflict => AnnotationStoreErrorCode::StoreCurrentConflict,
+            StoreErrorCode::GenerationMissing => AnnotationStoreErrorCode::StoreGenerationMissing,
+            StoreErrorCode::OutcomeUnknown => AnnotationStoreErrorCode::StoreOutcomeUnknown,
             StoreErrorCode::DatabaseUnavailable => {
                 AnnotationStoreErrorCode::StoreDatabaseUnavailable
             }

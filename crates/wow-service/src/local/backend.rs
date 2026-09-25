@@ -18,6 +18,7 @@ pub struct LocalProjectBackend {
     input: ProjectInputBundle,
     reference: ReferenceView,
     load_plan: Option<wow_project::load::ProjectLoadPlan>,
+    native_input: Option<std::sync::Arc<super::native_input::NativeInputEvidence>>,
     registry: RuleRegistry,
     configuration: ServiceConfiguration,
     target_generation: String,
@@ -51,6 +52,7 @@ impl LocalProjectBackend {
             input: input.bundle,
             reference: input.reference,
             load_plan: input.load_plan,
+            native_input: input.native_input,
             registry,
             configuration,
             target_generation: target.project_generation().to_string(),
@@ -173,6 +175,7 @@ impl LocalProjectBackend {
             scope,
             rules,
             self.load_plan.as_ref(),
+            self.native_input.as_ref().map(|evidence| &evidence.receipt),
             stop,
         )
     }
@@ -205,6 +208,7 @@ impl ServiceBackend for LocalProjectBackend {
                 project_health,
                 retained.as_ref(),
                 self.load_plan.as_ref(),
+                self.native_input.as_ref().map(|evidence| &evidence.receipt),
             )?,
         )
     }

@@ -20,6 +20,7 @@ pub struct LocalProjectInput {
     pub(super) bundle: ProjectInputBundle,
     pub(super) reference: ReferenceView,
     pub(super) load_plan: Option<wow_project::load::ProjectLoadPlan>,
+    pub(super) native_input: Option<std::sync::Arc<super::native_input::NativeInputEvidence>>,
 }
 
 #[derive(Deserialize)]
@@ -231,6 +232,7 @@ impl LocalProjectInput {
             bundle,
             reference,
             load_plan,
+            native_input: None,
         })
     }
 }

@@ -41,7 +41,7 @@ struct DiskInput {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct DiskAnalyzer {
+pub(super) struct DiskAnalyzer {
     compatibility_report: ProjectDiskFile,
     accepted_pin_id: String,
     configuration_digest: ContentDigest<CanonicalResult>,
@@ -52,14 +52,14 @@ struct DiskAnalyzer {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct DiskInventory {
-    root: String,
-    files: Vec<ProjectDiskFile>,
+pub(super) struct DiskInventory {
+    pub(super) root: String,
+    pub(super) files: Vec<ProjectDiskFile>,
 }
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct MainInventory {
+pub(super) struct MainInventory {
     root: String,
     #[serde(default)]
     files: Option<Vec<ProjectDiskFile>>,
@@ -91,6 +91,9 @@ impl LocalProjectInput {
             .map_err(|_| invalid("invalid local input schema selector"))?;
         let result = match selector.schema.as_str() {
             LOCAL_INPUT_SCHEMA => Self::from_json_slice(&bytes),
+            super::native_input::LOCAL_NATIVE_SCHEMA => {
+                Self::from_native_manifest(&bytes, &directory, stop)
+            }
             LOCAL_FILES_SCHEMA | LOCAL_TOC_SCHEMA => {
                 Self::from_disk_manifest(&bytes, &directory, stop)
             }
@@ -140,47 +143,8 @@ impl LocalProjectInput {
         reference
             .validate()
             .map_err(|_| invalid("reference artifact was rejected"))?;
-        let report = String::from_utf8(
-            directory
-                .read_json_artifact(&input.analyzer.compatibility_report, stop)
-                .map_err(acquisition_error)?,
-        )
-        .map_err(|_| invalid("analyzer report must contain UTF-8"))?;
-        let (main, load_plan) = if toc_mode {
-            let toc = input
-                .main
-                .toc
-                .as_ref()
-                .ok_or_else(|| invalid("missing selected TOC"))?;
-            let (files, plan) = directory
-                .read_toc_project_with_context(
-                    &input.main.root,
-                    toc,
-                    &profile,
-                    input.main.load_context.as_ref(),
-                    stop,
-                )
-                .map_err(acquisition_error)?
-                .into_parts();
-            (files, Some(plan))
-        } else {
-            let files = input
-                .main
-                .files
-                .as_ref()
-                .ok_or_else(|| invalid("missing explicit Main files"))?;
-            (
-                directory
-                    .read_lua_inventory(
-                        &input.main.root,
-                        files,
-                        ProjectFileRole::FirstPartyMain,
-                        stop,
-                    )
-                    .map_err(acquisition_error)?,
-                None,
-            )
-        };
+        let analyzer = input.analyzer.read(directory, stop)?;
+        let (main, load_plan) = input.main.read(directory, &profile, stop)?;
         let library = directory
             .read_lua_inventory(
                 &input.library.root,
@@ -197,14 +161,7 @@ impl LocalProjectInput {
                 source_origin_id: input.source_origin_id,
                 logical_root: input.logical_root,
                 profile,
-                analyzer: AnalyzerInput {
-                    compatibility_report_json: report,
-                    accepted_pin_id: input.analyzer.accepted_pin_id,
-                    configuration_digest: input.analyzer.configuration_digest,
-                    contract_id: input.analyzer.contract_id,
-                    fixture_contract_id: input.analyzer.fixture_contract_id,
-                    library_contract_id: input.analyzer.library_contract_id,
-                },
+                analyzer,
             },
             reference,
             main,
@@ -214,7 +171,7 @@ impl LocalProjectInput {
     }
 }
 
-fn acquisition_error(error: ProjectError) -> ServiceError {
+pub(super) fn acquisition_error(error: ProjectError) -> ServiceError {
     let code = match error.code() {
         ProjectErrorCode::SourceReadCancelled => ServiceErrorCode::Cancelled,
         ProjectErrorCode::SourceBudgetExceeded => ServiceErrorCode::BudgetExceeded,
@@ -224,4 +181,67 @@ fn acquisition_error(error: ProjectError) -> ServiceError {
     };
     // The project reader emits only fixed messages; never forward OS error prose.
     ServiceError::new(code, error.message())
+}
+
+impl DiskAnalyzer {
+    pub(super) fn read(
+        self,
+        directory: &ProjectInputDirectory,
+        stop: &AtomicBool,
+    ) -> ServiceResult<AnalyzerInput> {
+        let report = String::from_utf8(
+            directory
+                .read_json_artifact(&self.compatibility_report, stop)
+                .map_err(acquisition_error)?,
+        )
+        .map_err(|_| invalid("analyzer report must contain UTF-8"))?;
+        Ok(AnalyzerInput {
+            compatibility_report_json: report,
+            accepted_pin_id: self.accepted_pin_id,
+            configuration_digest: self.configuration_digest,
+            contract_id: self.contract_id,
+            fixture_contract_id: self.fixture_contract_id,
+            library_contract_id: self.library_contract_id,
+        })
+    }
+}
+
+impl MainInventory {
+    pub(super) fn read(
+        &self,
+        directory: &ProjectInputDirectory,
+        profile: &ProfileIdentity,
+        stop: &AtomicBool,
+    ) -> ServiceResult<(
+        Vec<wow_project::ProjectInputFile>,
+        Option<wow_project::load::ProjectLoadPlan>,
+    )> {
+        match (&self.files, &self.toc) {
+            (Some(files), None) if self.load_context.is_none() => Ok((
+                directory
+                    .read_lua_inventory(&self.root, files, ProjectFileRole::FirstPartyMain, stop)
+                    .map_err(acquisition_error)?,
+                None,
+            )),
+            (None, Some(toc)) => {
+                if let Some(context) = &self.load_context {
+                    context.validate().map_err(acquisition_error)?;
+                }
+                let (files, plan) = directory
+                    .read_toc_project_with_context(
+                        &self.root,
+                        toc,
+                        profile,
+                        self.load_context.as_ref(),
+                        stop,
+                    )
+                    .map_err(acquisition_error)?
+                    .into_parts();
+                Ok((files, Some(plan)))
+            }
+            _ => Err(invalid(
+                "Main must select explicit Lua files or one TOC; load_context requires TOC",
+            )),
+        }
+    }
 }

@@ -1,4 +1,6 @@
 //! Read-only acquisition of explicitly listed local inputs. No directory scan.
+mod pinned;
+pub use pinned::PinnedLuaSource;
 use std::collections::BTreeSet;
 use std::io::{ErrorKind, Read};
 use std::path::Path;

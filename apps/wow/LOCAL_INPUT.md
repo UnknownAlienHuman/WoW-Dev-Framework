@@ -44,7 +44,9 @@ revision/tree. No compatibility digest, profile, reference record or source is
 invented by the CLI. Embedders may instead use `LocalProjectInput::new` with
 existing `ProjectInputBundle` and `ReferenceView` owners.
 
-For disk files, use the [explicit file manifest](FILES_INPUT.md). This inline
+For disk files, use the [explicit file manifest](FILES_INPUT.md). For a pinned
+generated-API corpus without a prebuilt ReferenceView or annotation Library, use
+the [native documentation input](NATIVE_INPUT.md). This inline
 schema remains supported for embedders. Neither mode infers inputs from cwd,
 editor configuration, addon folders or a client installation.
 

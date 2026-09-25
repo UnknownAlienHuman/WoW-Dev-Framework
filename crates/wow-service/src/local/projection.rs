@@ -34,6 +34,8 @@ pub struct OwnerAnalysis {
     selected_rules: Vec<Box<str>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     rule_report: Option<RuleExecutionReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    native_input: Option<super::NativeInputReceipt>,
     runtime_status: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     load_plan: Option<wow_project::load::ProjectLoadPlan>,
@@ -65,6 +67,7 @@ pub(super) fn components(
     project_health: ComponentHealth,
     project: Option<&ProjectView>,
     load_plan: Option<&wow_project::load::ProjectLoadPlan>,
+    native_input: Option<&super::NativeInputReceipt>,
 ) -> ServiceResult<Vec<ComponentSnapshot>> {
     let reference_partial = reference.partitions().is_empty()
         || reference
@@ -151,6 +154,17 @@ pub(super) fn components(
             },
         )?,
     ];
+    if let Some(receipt) = native_input {
+        components.push(
+            ComponentSnapshot::new(
+                "wow-annotations",
+                "1",
+                receipt.report_sha256.as_str(),
+                ComponentHealth::Degraded,
+            )?
+            .with_capability("annotations.native_projection", CapabilityState::Partial)?,
+        );
+    }
     if let Some(plan) = load_plan {
         components.push(
             ComponentSnapshot::new(
@@ -277,6 +291,7 @@ pub(super) fn check_context(
     scope: &CheckScope,
     selected: &[Box<str>],
     load_plan: Option<&wow_project::load::ProjectLoadPlan>,
+    native_input: Option<&super::NativeInputReceipt>,
     stop: &AtomicBool,
 ) -> ServiceResult<CheckContext> {
     let resolved = super::xml_lua::resolve_scope(project, scope)?;
@@ -388,10 +403,17 @@ pub(super) fn check_context(
         ComponentHealth::Ready,
         Some(project),
         load_plan,
+        native_input,
     )?;
     let analysis = OwnerAnalysis {
-        schema: "wow-service/owner-analysis/1",
-        input_mode: if load_plan.is_some() {
+        schema: if native_input.is_some() {
+            "wow-service/owner-analysis/2"
+        } else {
+            "wow-service/owner-analysis/1"
+        },
+        input_mode: if native_input.is_some() {
+            "native_source_project"
+        } else if load_plan.is_some() {
             "selected_toc_project"
         } else {
             "explicit_materialized_project"
@@ -409,6 +431,7 @@ pub(super) fn check_context(
         generic_report: project.syntax_report().clone(),
         selected_rules: rules,
         rule_report: report,
+        native_input: native_input.cloned(),
         runtime_status: "not_evaluated",
         load_plan: load_plan.cloned(),
         xml_lua_report: xml_report.cloned(),

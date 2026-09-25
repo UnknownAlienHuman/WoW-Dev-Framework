@@ -12,6 +12,7 @@ serde_json = "1.0"
 sha2 = "0.10"
 wow-core = { path = "../wow-core" }
 wow-reference = { path = "../wow-reference" }
+wow-annotations = { path = "../wow-annotations" }
 wow-emmy = { path = "../wow-emmy" }
 wow-project = { path = "../wow-project" }
 wow-rules = { path = "../wow-rules" }
