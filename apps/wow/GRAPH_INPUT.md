@@ -304,3 +304,10 @@ For explicit whole-file source verification and exact excerpts, the separate
 `explain --bundle --source-root <Main-root>` route is documented in
 [GRAPH_EVIDENCE.md](GRAPH_EVIDENCE.md#explicit-source-verification-and-excerpts).
 Other operations do not accept a source root; defaults remain metadata-only.
+
+## Persistent retained input
+
+The same six reads accept `--store-root <directory> --store-generation current|<id>`
+instead of `--snapshot`/`--bundle`. Query graph IDs remain exact and are never
+rewritten for the selected generation. Explicit publication, reconciliation, read
+leases and limitations are documented in [GRAPH_STORE.md](GRAPH_STORE.md).

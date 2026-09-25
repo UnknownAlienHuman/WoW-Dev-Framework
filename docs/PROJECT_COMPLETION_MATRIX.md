@@ -29,7 +29,7 @@ The root [Cargo.toml](../Cargo.toml) activates **15 members**, not two, four or 
 | `wow-project` | Explicit inventories, bounded disk/selected TOC-XML acquisition and load receipts, analyzer bindings, immutable generations, guarded updates and publication | E0-D fixture identity closure; full TOC/XML/load acceptance, overlays and durable project publication |
 | `wow-rules` | `wow.api.exists@1` and `wow.secret.local_operation@1` | E0-E normative fixtures, exact prerequisite identities and complete capability/negative-authority cases |
 | `wow-service` | E0 status/check over immutable normalized contexts; separate ReferenceView administration/publication | E0-F end-to-end fixture/CLI closure; full E1 Reference Pack and later public operation families |
-| `wow-store` | Typed SQLite objects, catalogs/CAS, operation journal, leases, GC and integrity | Full E1-A migration/crash/backup acceptance; coherent E2-D ProjectStore is not the generic store |
+| `wow-store` | Typed SQLite objects, catalogs/CAS, operation journal, leases, GC and integrity | Full E1-A migration/crash/backup acceptance; separate manifested retained ProjectStore exists, not full E2-D publication acceptance |
 | `wow-reference` | Native source/model/corrections/aliases, compatibility imports, persistent ReferenceView and publication | E0-B/E1-B normative fixture and full Reference Pack/coverage acceptance |
 | `wow-annotations` | Native Ketho-derived library projection, alias/type/catalog/inheritance/navigation slices and consumer tests | Full E1-C contract/corpus parity; scoped passing consumers are not universal semantic certification |
 | `wow-graph` | Immutable snapshots, proposals/registries, neighbors, producer partitions, bounded paths/subgraphs, retained-support explanations and scoped persistence | Full conflict/derivation explanations, cross-owner evidence resolution, normative fixtures and coherent E2-D publication |
@@ -59,7 +59,7 @@ no Rust implementation in the audited source. Their documentation is not a binar
 | E1-A–E1-C | Partial executable | Finish only verified missing contract/acceptance slices; do not recreate existing store/reference/annotation implementations |
 | E1-D | Partial ReferenceView service; inactive, inconsistent builder source | Repair the frontend/service contract and then include real package tests in CI |
 | E2-A–E2-B | Partial executable | Remaining graph queries, normative recognizer coverage and owner seams |
-| E2-C–E2-D | Full package implementation not started | TOC/XML/load/incremental project index and coherent ProjectStore protocol; generic snapshots are prerequisites, not substitutes |
+| E2-C–E2-D | Partial executable source index and retained manifested store | Live project publication, incremental invalidation, retention/GC/backup/epoch replacement and complete acceptance remain open; see [GRAPH_STORE.md](../apps/wow/GRAPH_STORE.md) |
 | E3-A–E3-C | Not started | Exact Blizzard source universe, context owners and service/CLI after E2 closure |
 | E4-A–E4-C | Not started | Search, lineage/migration/static impact and routing after A0 prerequisites |
 | E5-A–E5-C | Not started | Calibration, independent review/holdout and governed publication lifecycle |
@@ -176,3 +176,11 @@ work/output and drift/unsafe-source outcomes. It reuses existing graph and disk
 owners without source execution or reindexing; metadata-only modes are unchanged.
 See [GRAPH_EVIDENCE.md](../apps/wow/GRAPH_EVIDENCE.md). This advances the source
 read seam, not full E2/E3 acceptance, authentication or persistent publication.
+
+## Retained manifested publication checkpoint
+
+Explicit graph publish/reconcile and current/exact stored reads use immutable
+partition versions, complete generation membership, read-back owner validation
+and current-record CAS. See [GRAPH_STORE.md](../apps/wow/GRAPH_STORE.md). Retained
+graph/project evidence is not a rehydrated live ProjectView. No acceptance,
+crash/power-loss, GC, backup/restore, runtime or release gate is closed by this code.

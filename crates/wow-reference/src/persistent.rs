@@ -39,6 +39,11 @@ pub enum ReferenceStoreErrorCode {
     StoreIntegrityViolation,
     StoreBudgetExceeded,
     StoreDatabaseUnavailable,
+    StoreCancelled,
+    StoreWriterBusy,
+    StoreCurrentConflict,
+    StoreGenerationMissing,
+    StoreOutcomeUnknown,
     PublicationKeyInvalid,
     ArtifactKindMismatch,
     ArtifactSchemaMismatch,
@@ -84,6 +89,11 @@ impl From<StoreError> for ReferenceStoreError {
             StoreErrorCode::ConfigurationInvalid => {
                 ReferenceStoreErrorCode::StoreConfigurationInvalid
             }
+            StoreErrorCode::Cancelled => ReferenceStoreErrorCode::StoreCancelled,
+            StoreErrorCode::WriterBusy => ReferenceStoreErrorCode::StoreWriterBusy,
+            StoreErrorCode::CurrentConflict => ReferenceStoreErrorCode::StoreCurrentConflict,
+            StoreErrorCode::GenerationMissing => ReferenceStoreErrorCode::StoreGenerationMissing,
+            StoreErrorCode::OutcomeUnknown => ReferenceStoreErrorCode::StoreOutcomeUnknown,
             StoreErrorCode::IdentifierInvalid => ReferenceStoreErrorCode::StoreIdentifierInvalid,
             StoreErrorCode::JsonInvalid => ReferenceStoreErrorCode::StoreJsonInvalid,
             StoreErrorCode::ObjectTooLarge => ReferenceStoreErrorCode::StoreObjectTooLarge,

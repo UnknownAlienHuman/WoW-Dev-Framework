@@ -8,6 +8,7 @@
 mod error;
 mod identity;
 mod model;
+pub mod project;
 mod store;
 
 pub use error::{StoreError, StoreErrorCode, StoreResult};

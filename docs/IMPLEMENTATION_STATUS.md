@@ -270,3 +270,18 @@ See [GRAPH_EVIDENCE.md](../apps/wow/GRAPH_EVIDENCE.md). Source bytes are not
 reopened; full graph conflicts/inference-rule records, sidecar replay, runtime
 and coherent ProjectStore remain open. Existing bare-snapshot encodings and
 build identities are unchanged. This advances code, not acceptance gates.
+
+## Manifested retained ProjectStore code slice
+
+`wow-store::project` now supplies one registered WAL epoch, immutable partition
+versions, complete generation membership, pinned read transactions, durable
+operation phases and inactive/read-back/validation/current-CAS publication.
+`wow graph publish` and `reconcile` are explicit service operations; all six graph
+reads can select one current/exact stored generation. Graph and project adapters
+restore and validate retained v7 bundle data without another analyzer session.
+See [GRAPH_STORE.md](../apps/wow/GRAPH_STORE.md). This supersedes the earlier
+blanket “no persistent ProjectStore” descriptions for this narrow storage slice,
+not full E2-D acceptance: live project views, incremental invalidation, retention,
+GC, backup/restore, epoch replacement and crash/power-loss acceptance remain open.
+Only the existing internal project-to-store dependency is activated; no tests or
+external dependency versions are changed. Full launch gates stay unchanged.

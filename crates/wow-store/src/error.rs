@@ -20,6 +20,11 @@ pub enum StoreErrorCode {
     IntegrityViolation,
     BudgetExceeded,
     DatabaseUnavailable,
+    Cancelled,
+    WriterBusy,
+    CurrentConflict,
+    GenerationMissing,
+    OutcomeUnknown,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -1,5 +1,6 @@
 //! Direct source/load/XML proposals. No recognizer inference or graph publication.
 mod functions;
+pub mod persistence;
 mod retained_evidence;
 mod source_read;
 pub use retained_evidence::RetainedProjectGraphEvidence;

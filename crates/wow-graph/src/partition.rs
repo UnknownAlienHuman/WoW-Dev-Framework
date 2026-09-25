@@ -3,6 +3,7 @@
 //! Proposal endpoints use the exact input-generation view, not the materialized
 //! publication IDs. A new input generation requires a new foundation.
 mod materialize;
+mod storage;
 mod transaction;
 
 use std::sync::atomic::{AtomicBool, Ordering};

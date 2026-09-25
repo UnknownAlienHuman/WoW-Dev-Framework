@@ -132,3 +132,12 @@ The project-facing orchestration operation remains owned by `wow-project`, not b
 ## Completion gate
 
 E2-D code is complete only when the selected profile passes executable SQLite/binding/platform probes and benchmark gates; one-file, TOC, XML, recognizer, and graph-registry updates publish exact coherent generations; inactive generation validation precedes activation; same-operation retries and response-loss recovery are idempotent; stale base and concurrent writer attempts fail deterministically; old readers retain the old snapshot; every crash/cancel point yields old-current, new-current, or recoverable/quarantined inactive state; no cross-generation row/query leakage exists; checkpoints cannot invalidate readers; retention and GC preserve every leased/current/last-known-good/evidence/recovery/operation-referenced generation, partition, and object; logical output is deterministic; the architecture-consolidation mutation suite passes; and no raw SQL/domain semantics leak through the store seam.
+
+## Executable retained-bundle slice
+
+`../src/project/` implements the selected WAL manifested-partition model for
+registered retained graph bundles. Publication has immutable versions, complete
+membership, fresh read-back, owner validation, current CAS and durable operation
+reconciliation. [CLI and limits](../../../apps/wow/GRAPH_STORE.md) describe the
+implemented scope and remaining E2-D domain/retention/recovery acceptance.
+This does not replace the full package contracts or claim their tests passed.

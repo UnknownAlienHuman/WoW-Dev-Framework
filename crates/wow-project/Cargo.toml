@@ -14,6 +14,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sha2 = "0.10"
 wow-core = { path = "../wow-core" }
+wow-store = { path = "../wow-store" }
 wow-emmy = { path = "../wow-emmy" }
 wow-graph = { path = "../wow-graph" }
 

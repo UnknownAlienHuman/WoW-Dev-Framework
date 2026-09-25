@@ -2,6 +2,7 @@
 mod args;
 mod graph;
 mod graph_build;
+mod graph_store;
 mod output;
 
 use std::io::Write;

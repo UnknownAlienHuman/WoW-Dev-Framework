@@ -17,6 +17,8 @@ pub enum ServiceErrorCode {
     ProjectTargetUnresolved,
     OperationConflict,
     OperationBusy,
+    StoreCurrentConflict,
+    StoreOutcomeUnknown,
     OperationNotImplementedForMilestone,
     BudgetExceeded,
     Cancelled,

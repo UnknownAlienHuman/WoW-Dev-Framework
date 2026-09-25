@@ -10,10 +10,10 @@ use wow_service::ServiceErrorCode;
 use wow_service::graph::{
     GRAPH_BUNDLE_MAX_BYTES, GRAPH_INPUT_MAX_BYTES, GRAPH_REQUEST_MAX_BYTES, GraphReadOperation,
     GraphReadResult, GraphReadStatus, execute_graph_bundle_read, execute_graph_bundle_source_read,
-    execute_graph_read,
+    execute_graph_read, execute_graph_store_read,
 };
 
-pub const HELP: &str = "wow graph build --config <project.json> --project <ProjectId> [--format json|snapshot|text]\nwow graph entity|neighbors|subgraph|axis|explain|path (--snapshot <partition-snapshot.json> | --bundle <graph-build.json>) --request <query.json> [--format json|text] [--source-root <Main-root> (explain --bundle only)]\n\nBuild uses explicit local input; the read commands inspect one retained graph artifact. Read queries require exact snapshot and node/edge/profile identities. Bundle reads admit the graph and source evidence; explain resolves retained evidence records without reopening sources. Use explain --bundle ... --source-root <Main-root> to verify retained files and return bounded exact source excerpts. Without --source-root, no source file is opened. Reads do not run source analysis. No project discovery, current-pointer lookup, store writes or automatic continuation. See apps/wow/GRAPH_INPUT.md.\n";
+pub const HELP: &str = "wow graph build --config <project.json> --project <ProjectId> [--format json|snapshot|text]\nwow graph publish --bundle <build.json> --store-root <private-directory> --operation-id <id> --expected-current absent|<record-id> --allow-partial [--initialize] [--format json|text]\nwow graph reconcile --store-root <private-directory> --operation-id <id> [--format json|text]\nwow graph entity|neighbors|subgraph|axis|explain|path (--snapshot <snapshot.json> | --bundle <build.json> | --store-root <directory> --store-generation current|<generation-id>) --request <query.json> [--format json|text] [--source-root <Main-root> (explain only)]\n\nPublish explicitly saves a validated v7 graph-build bundle as immutable manifested partitions, verifies fresh read-back and switches current only by exact CAS. --initialize authorizes a new private directory, not adoption of an unrelated database. --allow-partial acknowledges retained metadata, not full E2 acceptance. Reconcile observes one operation without repeating it. Store reads pin one exact generation; other reads never select current. Reads do not run source analysis. Source files are opened only by explain with --source-root. See apps/wow/GRAPH_STORE.md.\n";
 
 struct Arguments {
     operation: GraphReadOperation,
@@ -26,9 +26,16 @@ struct Arguments {
 enum Artifact {
     Snapshot(PathBuf),
     Bundle(PathBuf),
+    Store { root: PathBuf, generation: String },
 }
 
 pub fn run(values: Vec<OsString>) -> u8 {
+    if values
+        .get(1)
+        .is_some_and(|value| value == "publish" || value == "reconcile")
+    {
+        return super::graph_store::run(values);
+    }
     if values.get(1).is_some_and(|value| value == "build") {
         return super::graph_build::run(values);
     }
@@ -49,11 +56,12 @@ pub fn run(values: Vec<OsString>) -> u8 {
         Ok(bytes) => bytes,
         Err(message) => return read_failure(message, &stop),
     };
-    let (path, limit) = match &args.artifact {
-        Artifact::Snapshot(path) => (path, GRAPH_INPUT_MAX_BYTES),
-        Artifact::Bundle(path) => (path, GRAPH_BUNDLE_MAX_BYTES),
+    let artifact = match &args.artifact {
+        Artifact::Snapshot(path) => read_file(path, GRAPH_INPUT_MAX_BYTES, &stop),
+        Artifact::Bundle(path) => read_file(path, GRAPH_BUNDLE_MAX_BYTES, &stop),
+        Artifact::Store { .. } => Ok(Vec::new()),
     };
-    let artifact = match read_file(path, limit, &stop) {
+    let artifact = match artifact {
         Ok(bytes) => bytes,
         Err(message) => return read_failure(message, &stop),
     };
@@ -65,6 +73,14 @@ pub fn run(values: Vec<OsString>) -> u8 {
             }
             None => execute_graph_bundle_read(args.operation, &artifact, &request, &stop),
         },
+        Artifact::Store { root, generation } => execute_graph_store_read(
+            args.operation,
+            &root,
+            &generation,
+            &request,
+            args.source_root.as_deref(),
+            &stop,
+        ),
     }
     .and_then(|result| {
         if stop.load(Ordering::Acquire) {
@@ -75,9 +91,13 @@ pub fn run(values: Vec<OsString>) -> u8 {
     });
     let result = match result {
         Ok(result) => result,
-        Err(_) => {
-            super::diagnostic("graph result encoding failed");
-            return 4;
+        Err(error) => {
+            super::diagnostic(error.message());
+            return if error.code() == ServiceErrorCode::Cancelled {
+                130
+            } else {
+                4
+            };
         }
     };
     let exit = exit_code(&result);
@@ -121,11 +141,18 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
         _ => return Err("expected graph entity, neighbors, subgraph, axis, explain or path"),
     };
     let (mut artifact, mut request, mut format, mut source_root) = (None, None, None, None);
+    let (mut store_root, mut store_generation) = (None, None);
     while let Some(option) = values.next() {
         let option = option.to_str().ok_or("invalid option encoding")?;
         if !matches!(
             option,
-            "--snapshot" | "--bundle" | "--request" | "--format" | "--source-root"
+            "--snapshot"
+                | "--bundle"
+                | "--request"
+                | "--format"
+                | "--source-root"
+                | "--store-root"
+                | "--store-generation"
         ) {
             return Err("unknown graph option");
         }
@@ -134,6 +161,19 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
             return Err("invalid graph option length");
         }
         match option {
+            "--store-root" => {
+                if store_root.replace(PathBuf::from(value)).is_some() {
+                    return Err("duplicate --store-root");
+                }
+            }
+            "--store-generation" => {
+                let value = value
+                    .into_string()
+                    .map_err(|_| "invalid generation encoding")?;
+                if store_generation.replace(value).is_some() {
+                    return Err("duplicate --store-generation");
+                }
+            }
             "--source-root" => {
                 if source_root.replace(PathBuf::from(value)).is_some() {
                     return Err("duplicate --source-root");
@@ -167,11 +207,21 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
             _ => return Err("unknown graph option"),
         }
     }
-    let artifact = artifact.ok_or("graph requires --snapshot or --bundle")?;
+    if store_root.is_some() || store_generation.is_some() {
+        if artifact.is_some() {
+            return Err("store input excludes --snapshot and --bundle");
+        }
+        artifact = Some(Artifact::Store {
+            root: store_root.ok_or("--store-generation requires --store-root")?,
+            generation: store_generation
+                .ok_or("--store-root requires explicit --store-generation")?,
+        });
+    }
+    let artifact = artifact.ok_or("graph requires --snapshot, --bundle or explicit store input")?;
     if source_root.is_some()
-        && (operation != GraphReadOperation::Explain || !matches!(&artifact, Artifact::Bundle(_)))
+        && (operation != GraphReadOperation::Explain || matches!(&artifact, Artifact::Snapshot(_)))
     {
-        return Err("--source-root requires graph explain --bundle");
+        return Err("--source-root requires graph explain with bundle or store input");
     }
     Ok(Arguments {
         operation,
@@ -182,7 +232,11 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
     })
 }
 
-fn read_file(path: &Path, limit: usize, stop: &AtomicBool) -> Result<Vec<u8>, &'static str> {
+pub(super) fn read_file(
+    path: &Path,
+    limit: usize,
+    stop: &AtomicBool,
+) -> Result<Vec<u8>, &'static str> {
     let checkpoint = || {
         if stop.load(Ordering::Acquire) {
             Err("graph input cancelled")

@@ -387,7 +387,12 @@
         "crates/wow-store/E6_B_EXTERNAL_CANDIDATE_STORAGE.md",
         "crates/wow-store/E7_A_SESSION_AND_RESPONSE_JOURNAL.md",
         "crates/wow-store/E7_B_RELEASE_STORAGE.md"
-      ]
+      ],
+      "active_project_store_slice": {
+        "owner": "crates/wow-store/src/project/mod.rs",
+        "application": "apps/wow/GRAPH_STORE.md",
+        "scope": "retained-graph-bundle-v7 manifested WAL publication; full E2-D acceptance remains open"
+      }
     },
     {
       "name": "wow-reference",
@@ -446,7 +451,7 @@
         "owner": "crates/wow-project/src/graph.rs",
         "framework_dependency": "wow-graph",
         "application": "apps/wow/GRAPH_BUILD.md",
-        "scope": "first-party source files and admitted direct TOC/XML loads; no persistent publication or semantic recognizers"
+        "scope": "source graphs, recognizer input evidence and registered retained-field storage; live ProjectView rehydration remains open"
       },
       "allowed_dependencies": [
         "wow-core",

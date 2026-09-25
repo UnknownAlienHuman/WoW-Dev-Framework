@@ -5,8 +5,13 @@ mod build;
 mod bundle;
 pub use bundle::GRAPH_BUNDLE_MAX_BYTES;
 mod input;
+mod persistence;
 mod sources;
 pub use build::{GraphBuildRequest, GraphBuildResult, execute_graph_build};
+pub use persistence::{
+    GraphStorePublishRequest, GraphStorePublishResult, execute_graph_store_read,
+    publish_graph_bundle, reconcile_graph_publication,
+};
 pub use wow_project::graph::ProjectSourceReadLimits;
 
 use crate::{ServiceError, ServiceErrorCode, ServiceResult};
@@ -272,6 +277,8 @@ struct Envelope {
     payload: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     failure: Option<GraphReadFailure>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    store_context: Option<persistence::StoredContext>,
     // Full project/evidence authority is not provided by an imported snapshot.
     absence_authoritative: bool,
     boundaries: Vec<&'static str>,
@@ -403,6 +410,7 @@ fn execute_read(
         context: None,
         payload: None,
         failure: None,
+        store_context: None,
         absence_authoritative: false,
         boundaries: if source_root.is_some() {
             vec![
