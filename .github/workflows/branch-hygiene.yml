@@ -1,13 +1,7 @@
 name: Branch hygiene
 
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
-    branches: [main]
   workflow_dispatch:
-  schedule:
-    - cron: '17 8 * * *'
 
 permissions:
   contents: write
@@ -17,7 +11,7 @@ permissions:
 concurrency:
   group: branch-hygiene
   cancel-in-progress: false
-
+X
 jobs:
   prune:
     if: >-
