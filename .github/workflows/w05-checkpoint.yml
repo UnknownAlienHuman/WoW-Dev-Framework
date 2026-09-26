@@ -1,0 +1,144 @@
+name: W05 annotation persistence boundary checkpoint
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+concurrency:
+  group: w05-annotation-persistence-boundary
+  cancel-in-progress: false
+env:
+  BASE_COMMIT: 37cee6632f44d358ee3682c843859e7c084db9d4
+  BASE_TREE: d01c9b173fac86fa564a20fc661ed30111105595
+  PATCH_SHA256: 2ae6440575902f1db23f3848a330f66f54b002f559813e283f624b36ed498c27
+jobs:
+  checkpoint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Admit exact product patch and remove checkpoint transport
+        id: admit
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse "${GITHUB_SHA}^")" = "$BASE_COMMIT"
+          xz -dc .ci/w05-annotation-boundary.patch.xz > "$RUNNER_TEMP/w05.patch"
+          printf '%s  %s\n' "$PATCH_SHA256" "$RUNNER_TEMP/w05.patch" | sha256sum -c -
+          git rm -- .ci/w05-annotation-boundary.patch.xz .github/workflows/w05-checkpoint.yml
+          test "$(git write-tree)" = "$BASE_TREE"
+          git apply --index "$RUNNER_TEMP/w05.patch"
+
+      - name: Install minimal compiler tools
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+
+      - name: Format workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo +stable fmt --all
+          git add --all
+
+      - name: Minimal owner and service Clippy; no tests executed
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustc +stable -Vv | tee "$RUNNER_TEMP/RUST_VERSION"
+          cargo +stable clippy --locked \
+            -p wow-annotations -p wow-store -p wow-service \
+            --all-targets --all-features -- -D warnings 2>&1 | tee "$RUNNER_TEMP/clippy.log"
+
+      - name: Repository policy, dependency boundary and exact file set
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo +stable xtask check 2>&1 | tee "$RUNNER_TEMP/policy.log"
+          git diff --check
+          git diff --cached --check
+          test -z "$(grep -R --line-number --fixed-strings 'wow-store' crates/wow-annotations/Cargo.toml crates/wow-annotations/src || true)"
+          actual="$(git diff --cached --name-only "$BASE_COMMIT" | LC_ALL=C sort)"
+          expected="$(cat <<'EOF'
+          Cargo.lock
+          crates/DEPENDENCY_GRAPH.md
+          crates/MANIFEST.json
+          crates/wow-annotations/Cargo.toml
+          crates/wow-annotations/README.md
+          crates/wow-annotations/e1/README.md
+          crates/wow-annotations/src/artifact.rs
+          crates/wow-annotations/src/lib.rs
+          crates/wow-annotations/src/persistent.rs
+          crates/wow-service/README.md
+          crates/wow-service/src/annotation_admin.rs
+          crates/wow-service/src/lib.rs
+          docs/IMPLEMENTATION_STATUS.md
+          EOF
+          )"
+          test "$actual" = "$expected"
+
+      - name: Retain exact checked source
+        id: retain
+        if: always() && steps.admit.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/checkpoint"
+          git add --all
+          git write-tree > "$RUNNER_TEMP/checkpoint/CHECKED_TREE"
+          git archive --format=tar -o "$RUNNER_TEMP/checkpoint/checked-source.tar" "$(cat "$RUNNER_TEMP/checkpoint/CHECKED_TREE")"
+          git diff --cached --binary "$BASE_COMMIT" > "$RUNNER_TEMP/checkpoint/formatted.patch"
+          printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/checkpoint/STAGING_SHA"
+          for file in RUST_VERSION clippy.log policy.log; do
+            if test -f "$RUNNER_TEMP/$file"; then
+              cp "$RUNNER_TEMP/$file" "$RUNNER_TEMP/checkpoint/$file"
+            fi
+          done
+          (cd "$RUNNER_TEMP/checkpoint" && sha256sum checked-source.tar formatted.patch > SHA256SUMS)
+
+      - name: Upload checked product blobs without moving a branch
+        if: success()
+        uses: actions/github-script@v8
+        env:
+          CHECKPOINT_DIR: ${{ runner.temp }}/checkpoint
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require('fs');
+            const cp = require('child_process');
+            const { owner, repo } = context.repo;
+            const raw = cp.execFileSync('git', [
+              'diff', '--cached', '--name-only', '-z', process.env.BASE_COMMIT,
+            ]);
+            const paths = raw.toString('utf8').split('\0').filter(Boolean);
+            if (paths.length !== 13) {
+              throw new Error(`expected 13 product paths, observed ${paths.length}`);
+            }
+            const tree = [];
+            for (const path of paths) {
+              const content = fs.readFileSync(path).toString('base64');
+              const blob = await github.rest.git.createBlob({
+                owner, repo, content, encoding: 'base64',
+              });
+              tree.push({ path, mode: '100644', type: 'blob', sha: blob.data.sha });
+            }
+            const created = await github.rest.git.createTree({
+              owner, repo, base_tree: process.env.BASE_TREE, tree,
+            });
+            fs.writeFileSync(
+              `${process.env.CHECKPOINT_DIR}/REMOTE_TREE`,
+              `${created.data.sha}\n`,
+            );
+
+      - name: Upload checkpoint evidence
+        if: always() && steps.admit.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          name: w05-annotation-boundary-${{ github.run_id }}
+          path: ${{ runner.temp }}/checkpoint
+          retention-days: 3
+          if-no-files-found: error
