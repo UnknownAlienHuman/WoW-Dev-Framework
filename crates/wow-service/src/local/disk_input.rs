@@ -94,6 +94,9 @@ impl LocalProjectInput {
             super::native_input::LOCAL_NATIVE_SCHEMA => {
                 Self::from_native_manifest(&bytes, &directory, stop)
             }
+            super::native_artifact::LOCAL_NATIVE_ARTIFACT_SCHEMA => {
+                Self::from_native_artifact(&bytes, &directory, stop)
+            }
             LOCAL_FILES_SCHEMA | LOCAL_TOC_SCHEMA => {
                 Self::from_disk_manifest(&bytes, &directory, stop)
             }

@@ -168,6 +168,25 @@ impl ProjectInputDirectory {
         self.read(selected, limit, stop)
     }
 
+    /// Read a self-contained native input artifact under its separate 64 MiB
+    /// transport ceiling. This does not widen the existing 8 MiB owner JSON port.
+    /// Only the service interprets this explicitly pinned artifact envelope.
+    pub fn read_native_artifact(
+        &self,
+        selected: &ProjectDiskFile,
+        stop: &AtomicBool,
+    ) -> ProjectResult<Vec<u8>> {
+        checkpoint(stop)?;
+        selected.validate()?;
+        if !selected.path.ends_with(".json") || selected.content_digest.is_none() {
+            return Err(failure(
+                ProjectErrorCode::InvalidInputInventory,
+                "native artifacts require an exact JSON path, digest and length",
+            ));
+        }
+        self.read(selected, 64 * 1024 * 1024, stop)
+    }
+
     /// Copy one explicitly listed Main or Library inventory into immutable owner
     /// inputs. Paths and case collisions are admitted before reading any source.
     /// Source digests are computed from retained UTF-8 bytes, never file metadata.

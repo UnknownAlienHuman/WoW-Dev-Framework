@@ -3,6 +3,7 @@
 mod backend;
 mod disk_input;
 mod input;
+pub mod native_artifact;
 mod native_input;
 mod native_resources;
 mod native_source;
@@ -15,6 +16,7 @@ mod xml_references;
 pub use backend::LocalProjectBackend;
 pub use disk_input::{LOCAL_FILES_SCHEMA, LOCAL_TOC_SCHEMA};
 pub use input::{LOCAL_INPUT_MAX_BYTES, LOCAL_INPUT_SCHEMA, LocalProjectInput};
+pub use native_artifact::NativeArtifactReceipt;
 pub use native_input::{
     LOCAL_NATIVE_SCHEMA, NativeFileIdentity, NativeInputReceipt, NativeManifestIdentity,
 };
@@ -40,4 +42,12 @@ fn cancelled(flag: &AtomicBool) -> ServiceResult<()> {
 
 fn owner_error(owner: &'static str) -> ServiceError {
     ServiceError::new(ServiceErrorCode::InternalContractViolation, owner)
+}
+
+/// The source-producing route and retained-artifact route never claim the same
+/// provenance. Keep one parameter at the owner composition boundary.
+#[derive(Clone, Copy)]
+pub(super) enum NativeEvidenceReceipt<'a> {
+    Source(&'a NativeInputReceipt),
+    Artifact(&'a NativeArtifactReceipt),
 }

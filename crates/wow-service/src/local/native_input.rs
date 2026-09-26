@@ -149,11 +149,18 @@ struct InputFailure {
 impl LocalProjectInput {
     /// Original native raw metadata, source maps and loss/conflict records.
     /// This is data, never agent instructions or a semantic-acceptance report.
+    /// Imported artifacts retain the original producer bytes; their historical
+    /// analyzer fields do not describe the current artifact admission receipt.
     #[must_use]
     pub fn native_source_report(&self) -> Option<&[u8]> {
         self.native_input
             .as_ref()
             .map(|evidence| evidence.report.as_ref())
+            .or_else(|| {
+                self.native_artifact
+                    .as_ref()
+                    .map(|evidence| evidence.report.as_ref())
+            })
     }
 
     #[must_use]
@@ -586,13 +593,27 @@ fn native_error(error: NativeError) -> ServiceError {
 }
 
 fn report_bytes(value: &impl Serialize, stop: &AtomicBool) -> ServiceResult<Vec<u8>> {
-    struct Bounded<'a>(Vec<u8>, &'a AtomicBool);
+    report_bytes_with_limit(value, NATIVE_REPORT_LIMIT, stop)
+}
+
+pub(super) fn report_bytes_with_limit(
+    value: &impl Serialize,
+    limit: usize,
+    stop: &AtomicBool,
+) -> ServiceResult<Vec<u8>> {
+    if limit == 0 || limit > NATIVE_REPORT_LIMIT {
+        return Err(ServiceError::new(
+            ServiceErrorCode::BudgetExceeded,
+            "native output limit is invalid",
+        ));
+    }
+    struct Bounded<'a>(Vec<u8>, &'a AtomicBool, usize);
     impl Write for Bounded<'_> {
         fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
             if self.1.load(std::sync::atomic::Ordering::Acquire) {
                 return Err(std::io::Error::other("native report cancelled"));
             }
-            if self.0.len().saturating_add(bytes.len()) > NATIVE_REPORT_LIMIT {
+            if self.0.len().saturating_add(bytes.len()) > self.2 {
                 return Err(std::io::Error::other("native report byte budget"));
             }
             self.0.extend_from_slice(bytes);
@@ -602,7 +623,7 @@ fn report_bytes(value: &impl Serialize, stop: &AtomicBool) -> ServiceResult<Vec<
             Ok(())
         }
     }
-    let mut buffer = Bounded(Vec::new(), stop);
+    let mut buffer = Bounded(Vec::new(), stop, limit);
     let encoded = serde_json::to_writer(&mut buffer, value);
     cancelled(stop)?;
     encoded.map_err(|_| {

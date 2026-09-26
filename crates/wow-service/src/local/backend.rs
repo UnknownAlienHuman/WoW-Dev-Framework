@@ -19,6 +19,7 @@ pub struct LocalProjectBackend {
     reference: ReferenceView,
     load_plan: Option<wow_project::load::ProjectLoadPlan>,
     native_input: Option<std::sync::Arc<super::native_input::NativeInputEvidence>>,
+    native_artifact: Option<std::sync::Arc<super::native_artifact::NativeArtifactEvidence>>,
     registry: RuleRegistry,
     configuration: ServiceConfiguration,
     target_generation: String,
@@ -53,12 +54,24 @@ impl LocalProjectBackend {
             reference: input.reference,
             load_plan: input.load_plan,
             native_input: input.native_input,
+            native_artifact: input.native_artifact,
             registry,
             configuration,
             target_generation: target.project_generation().to_string(),
             published: Mutex::new(None),
             function_calls,
         })
+    }
+
+    fn native_receipt(&self) -> Option<super::NativeEvidenceReceipt<'_>> {
+        self.native_input
+            .as_ref()
+            .map(|evidence| super::NativeEvidenceReceipt::Source(&evidence.receipt))
+            .or_else(|| {
+                self.native_artifact
+                    .as_ref()
+                    .map(|evidence| super::NativeEvidenceReceipt::Artifact(&evidence.receipt))
+            })
     }
 
     #[must_use]
@@ -175,7 +188,7 @@ impl LocalProjectBackend {
             scope,
             rules,
             self.load_plan.as_ref(),
-            self.native_input.as_ref().map(|evidence| &evidence.receipt),
+            self.native_receipt(),
             stop,
         )
     }
@@ -208,7 +221,7 @@ impl ServiceBackend for LocalProjectBackend {
                 project_health,
                 retained.as_ref(),
                 self.load_plan.as_ref(),
-                self.native_input.as_ref().map(|evidence| &evidence.receipt),
+                self.native_receipt(),
             )?,
         )
     }

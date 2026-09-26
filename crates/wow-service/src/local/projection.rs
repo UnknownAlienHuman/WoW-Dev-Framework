@@ -36,6 +36,8 @@ pub struct OwnerAnalysis {
     rule_report: Option<RuleExecutionReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
     native_input: Option<super::NativeInputReceipt>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    native_artifact: Option<super::NativeArtifactReceipt>,
     runtime_status: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     load_plan: Option<wow_project::load::ProjectLoadPlan>,
@@ -67,7 +69,7 @@ pub(super) fn components(
     project_health: ComponentHealth,
     project: Option<&ProjectView>,
     load_plan: Option<&wow_project::load::ProjectLoadPlan>,
-    native_input: Option<&super::NativeInputReceipt>,
+    native_input: Option<super::NativeEvidenceReceipt<'_>>,
 ) -> ServiceResult<Vec<ComponentSnapshot>> {
     let reference_partial = reference.partitions().is_empty()
         || reference
@@ -155,14 +157,19 @@ pub(super) fn components(
         )?,
     ];
     if let Some(receipt) = native_input {
-        components.push(
-            ComponentSnapshot::new(
-                "wow-annotations",
-                "1",
+        let (digest, capability) = match receipt {
+            super::NativeEvidenceReceipt::Source(receipt) => (
                 receipt.report_sha256.as_str(),
-                ComponentHealth::Degraded,
-            )?
-            .with_capability("annotations.native_projection", CapabilityState::Partial)?,
+                "annotations.native_projection",
+            ),
+            super::NativeEvidenceReceipt::Artifact(receipt) => (
+                receipt.artifact_sha256.as_str(),
+                "annotations.retained_native_artifact",
+            ),
+        };
+        components.push(
+            ComponentSnapshot::new("wow-annotations", "1", digest, ComponentHealth::Degraded)?
+                .with_capability(capability, CapabilityState::Partial)?,
         );
     }
     if let Some(plan) = load_plan {
@@ -291,7 +298,7 @@ pub(super) fn check_context(
     scope: &CheckScope,
     selected: &[Box<str>],
     load_plan: Option<&wow_project::load::ProjectLoadPlan>,
-    native_input: Option<&super::NativeInputReceipt>,
+    native_input: Option<super::NativeEvidenceReceipt<'_>>,
     stop: &AtomicBool,
 ) -> ServiceResult<CheckContext> {
     let resolved = super::xml_lua::resolve_scope(project, scope)?;
@@ -406,12 +413,16 @@ pub(super) fn check_context(
         native_input,
     )?;
     let analysis = OwnerAnalysis {
-        schema: if native_input.is_some() {
+        schema: if matches!(native_input, Some(super::NativeEvidenceReceipt::Artifact(_))) {
+            "wow-service/owner-analysis/3"
+        } else if native_input.is_some() {
             "wow-service/owner-analysis/2"
         } else {
             "wow-service/owner-analysis/1"
         },
-        input_mode: if native_input.is_some() {
+        input_mode: if matches!(native_input, Some(super::NativeEvidenceReceipt::Artifact(_))) {
+            "prebuilt_native_artifact_project"
+        } else if native_input.is_some() {
             "native_source_project"
         } else if load_plan.is_some() {
             "selected_toc_project"
@@ -431,7 +442,14 @@ pub(super) fn check_context(
         generic_report: project.syntax_report().clone(),
         selected_rules: rules,
         rule_report: report,
-        native_input: native_input.cloned(),
+        native_input: match native_input {
+            Some(super::NativeEvidenceReceipt::Source(receipt)) => Some(receipt.clone()),
+            _ => None,
+        },
+        native_artifact: match native_input {
+            Some(super::NativeEvidenceReceipt::Artifact(receipt)) => Some(receipt.clone()),
+            _ => None,
+        },
         runtime_status: "not_evaluated",
         load_plan: load_plan.cloned(),
         xml_lua_report: xml_report.cloned(),

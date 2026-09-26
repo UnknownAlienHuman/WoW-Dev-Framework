@@ -9,14 +9,15 @@ wow check --config workspace/native-project.json --project my-addon --format jso
 This is the W03 **selected-source functional slice**, not a full Reference Pack
 importer or complete WoW profile. `--config` accepts
 `wow-service/local-project-native/1` in addition to the existing inline, file and
-TOC schemas. The new input does not require a hand-built `ReferenceView`, a full
+TOC schemas. For explicit full-report export and the separate reusable cache
+input, see [NATIVE_ARTIFACT.md](NATIVE_ARTIFACT.md). The source input does not require a hand-built `ReferenceView`, a full
 internal `ProfileIdentity` JSON or a manually assembled annotation Library.
 
 ## Configuration
 
 The top-level fields are exactly `schema`, `project_id`, `workspace_id`,
-`source_origin_id`, `logical_root`, `profile`, `analyzer`, `main`, `native_source`.
-Unknown or duplicate known fields reject. Logical project/workspace/origin/root
+`source_origin_id`, `logical_root`, `profile`, `analyzer`, `main`, `native_source`,
+with optional `annotation_inputs` as described below. Unknown or duplicate known fields reject. Logical project/workspace/origin/root
 identities retain their [existing meanings](LOCAL_INPUT.md#input-wow-servicelocal-project-input1).
 Physical paths remain relative to the explicitly selected config directory.
 
@@ -270,9 +271,10 @@ Consumed TOC/version/Lua bytes still fit the narrower 1 MiB per-file and 16 MiB
 aggregate input limits; no large whole-source-tree acquisition is introduced.
 
 Explicit corrections and the existing supported multi-catalog profiles are wired
-into this native input. Additional custom-resource forms are not inferred. Prebuilt
-native artifact import, CLI report export and complete real-profile/consumer
-acceptance remain open W03 work.
+into this native input. Additional custom-resource forms are not inferred.
+[Native artifact import and CLI report export](NATIVE_ARTIFACT.md) use a closed
+service-native envelope, not arbitrary driver or Reference Pack output. Complete
+real-profile/consumer acceptance remains open W03 work.
 Manifest/selected-TOC admission is implemented, not independently executed semantic
 or Git provenance acceptance. Managed acquisition is W08;
 production rule policies are W04. No tests or fixtures are changed by this slice.

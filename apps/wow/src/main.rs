@@ -3,6 +3,7 @@ mod args;
 mod graph;
 mod graph_build;
 mod graph_store;
+mod native;
 mod output;
 
 use std::io::Write;
@@ -29,6 +30,9 @@ fn run() -> u8 {
             Ok(()) => 0,
             Err(_) => 4,
         };
+    }
+    if arguments.first().is_some_and(|value| value == "native") {
+        return native::run(arguments);
     }
     if arguments.first().is_some_and(|value| value == "graph") {
         return graph::run(arguments);

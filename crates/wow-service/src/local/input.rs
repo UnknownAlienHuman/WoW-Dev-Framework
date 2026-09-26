@@ -21,6 +21,7 @@ pub struct LocalProjectInput {
     pub(super) reference: ReferenceView,
     pub(super) load_plan: Option<wow_project::load::ProjectLoadPlan>,
     pub(super) native_input: Option<std::sync::Arc<super::native_input::NativeInputEvidence>>,
+    pub(super) native_artifact: Option<std::sync::Arc<super::native_artifact::NativeArtifactEvidence>>,
 }
 
 #[derive(Deserialize)]
@@ -233,6 +234,7 @@ impl LocalProjectInput {
             reference,
             load_plan,
             native_input: None,
+            native_artifact: None,
         })
     }
 }
