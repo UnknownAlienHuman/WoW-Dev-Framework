@@ -124,6 +124,94 @@ with manifest/TOC/version identities and counts, not the full TOC record list.
 The original explicit-files mode retains its v1 identity/report/receipt profiles.
 Neither mode gains authoritative absence, Secret facts or production rule dispatch.
 
+## Explicit annotation inputs
+
+Both native source modes accept an optional top-level `annotation_inputs`:
+
+```json
+{
+  "annotation_inputs": {
+    "corrections": {
+      "path": "reviewed-corrections.json",
+      "content_digest": "sha256:<exact-64-lowercase-hex-digest>",
+      "byte_length": 1234
+    },
+    "alias_catalogs": {
+      "root": "annotation-resources",
+      "revision": "<exact-external-resource-revision>",
+      "files": [
+        {
+          "path": "Annotations/Core/Type/BlizzardType.lua",
+          "content_digest": "sha256:<exact-64-lowercase-hex-digest>",
+          "byte_length": 2345
+        }
+      ]
+    }
+  }
+}
+```
+
+Replace all example identities and lengths with actual values. Either resource
+lane may be omitted; an empty `annotation_inputs`, explicit null at either lane
+or the top-level field, empty catalog list and unknown fields reject. Omit the
+whole field to keep the original no-resource behavior. No defaults, directory
+scan, Git/network lookup or automatic donor-pack selection are introduced.
+
+`corrections.path` is relative to the retained configuration directory. It uses
+[the existing guarded correction contract](../../docs/KETHO_NATIVE_CORRECTIONS.md#pack-data),
+including supported v1 field/receiver and v2 inheritance records. Its JSON bytes
+are pinned and capped at the owner's 2 MiB limit before allocation; canonical
+set validation, raw-value guards and application remain in `wow-reference`.
+Stale source/normalizer/value guards produce `expired`, a different environment
+produces `not_applicable`, and competing or unsupported changes retain the owner's
+conflict/rejection outcomes. No expectation is refreshed and no fallback pack is
+chosen. Review labels/evidence remain caller-declared, not authenticated review.
+
+`alias_catalogs.root` is relative to the configuration directory. All explicitly
+listed resources share one independently selected external revision; it need not
+match the Blizzard revision. Exact file digests/lengths, portable paths and case
+uniqueness are admitted through one retained root handle. The existing
+`ingest_alias_catalog` and `project_with_alias_catalogs` owners handle named and
+string aliases plus their supported structure, namespace, function-container and
+global-color data profiles. This is not permission to execute arbitrary custom
+Lua annotations or admit unsupported forms. Files are sorted canonically, and
+alias dependencies/collisions are resolved across the entire admitted set.
+Resources cannot replace source declarations or turn unresolved types into `any`.
+Original external text, revision, digest and source spans remain in the Library
+report, separately scoped from Blizzard source even when relative paths match.
+Only explicitly authorized redistributable annotation resources should be supplied.
+
+Catalog limits are 32 files, 256 KiB per resource, 2 MiB total and 4,096 aggregate
+admission units under the existing owner counting profile. Per-file/aggregate byte
+ceilings are enforced by the confined reader before parsing; declared counts are
+checked while admitting resources, before projection. Cancellation, malformed or
+unsafe input returns an error rather than silently disabling the selected lane.
+Declaration-level unsupported outcomes remain visible while independent entries
+can still be emitted. No caller source/resource files are modified.
+
+An enabled resource lane selects `wow-service/native-input-report/3` and
+`wow-service/native-input-receipt/3`. Their `annotation_inputs` field retains the
+exact resource selection and compact producer outcome counts by family, including
+unresolved structure fields, callback returns and global-color types. Full
+correction applications, external source text and maps stay in the bounded native
+report, not the compact command receipt. Source-only modes retain their v1/v2
+report shapes and identities when `annotation_inputs` is omitted.
+
+The canonical correction-set digest participates in ProfileIdentity and hence
+Reference generation selection. The ReferenceView still retains **raw source
+callable records**, not corrected signature or alias authority; changes apply to
+the private normalized annotation projection. The effective analyzer configuration
+uses `wow-service/native-analyzer-binding/2`, including exact correction input,
+canonical set ID, external revision, canonically ordered resource identities and
+actual emitted Library bytes. Changing resources cannot reuse an old analysis
+identity even when they happen to emit the same Library text. Moving an unchanged
+host root does not change logical input identity.
+
+Neither content pins, external revision labels nor correction review strings
+attest Git membership, freshness, consumer correctness or runtime safety. All
+Reference partitions remain Partial; negative authority is still false and
+production rule dispatch remains W04 work.
+
 ## Owner composition and identities
 
 `wow-project` captures the pinned source bytes through its confined read-only
@@ -136,7 +224,8 @@ assembly is reused; no second parser, interpreter or semantic session is added.
 
 The source logical digest includes the revision, environment and sorted exact
 source-file identities. The Release-class profile is built from that selection
-and explicit metadata with a versioned no-corrections identity. Reference generation
+and explicit metadata with the selected canonical correction identity, or the
+original versioned no-corrections identity when no set is selected. Reference generation
 also includes actual emitted partition/conflict content. The effective analyzer
 configuration binds the caller's original configuration, profile, ReferenceView
 digest, annotation schema/source-map profile and **actual generated Library file
@@ -180,8 +269,10 @@ The manifest document allows at most 64 MiB and 200,000 declared tracked files,
 Consumed TOC/version/Lua bytes still fit the narrower 1 MiB per-file and 16 MiB
 aggregate input limits; no large whole-source-tree acquisition is introduced.
 
-Corrections/alias/custom catalog selection, prebuilt native artifact import, CLI
-report export and complete real-profile/consumer acceptance remain open W03 work.
+Explicit corrections and the existing supported multi-catalog profiles are wired
+into this native input. Additional custom-resource forms are not inferred. Prebuilt
+native artifact import, CLI report export and complete real-profile/consumer
+acceptance remain open W03 work.
 Manifest/selected-TOC admission is implemented, not independently executed semantic
 or Git provenance acceptance. Managed acquisition is W08;
 production rule policies are W04. No tests or fixtures are changed by this slice.

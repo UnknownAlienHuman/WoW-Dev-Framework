@@ -140,6 +140,24 @@ impl ProjectInputDirectory {
         selected: &ProjectDiskFile,
         stop: &AtomicBool,
     ) -> ProjectResult<Vec<u8>> {
+        self.read_json_artifact_with_limit(selected, DISK_ARTIFACT_MAX_BYTES, stop)
+    }
+
+    /// Apply a semantic owner's smaller byte ceiling before allocating/reading.
+    /// This can only narrow the existing JSON-artifact port, never widen it.
+    pub fn read_json_artifact_with_limit(
+        &self,
+        selected: &ProjectDiskFile,
+        limit: usize,
+        stop: &AtomicBool,
+    ) -> ProjectResult<Vec<u8>> {
+        checkpoint(stop)?;
+        if limit == 0 || limit > DISK_ARTIFACT_MAX_BYTES {
+            return Err(failure(
+                ProjectErrorCode::SourceBudgetExceeded,
+                "JSON artifact limit exceeds the acquisition profile",
+            ));
+        }
         selected.validate()?;
         if !selected.path.ends_with(".json") || selected.content_digest.is_none() {
             return Err(failure(
@@ -147,7 +165,7 @@ impl ProjectInputDirectory {
                 "JSON artifacts require a path, exact digest and byte length",
             ));
         }
-        self.read(selected, DISK_ARTIFACT_MAX_BYTES, stop)
+        self.read(selected, limit, stop)
     }
 
     /// Copy one explicitly listed Main or Library inventory into immutable owner

@@ -29,7 +29,9 @@ pub use global_colors::GlobalColorFact;
 pub use namespaces::NamespaceFact;
 pub use structures::{StructureFact, StructureField, StructureFieldType};
 
-const MAX_BYTES: usize = 256 * 1024;
+/// Maximum bytes for one annotation resource, also enforced before host allocation.
+pub const MAX_ALIAS_RESOURCE_BYTES: usize = 256 * 1024;
+const MAX_BYTES: usize = MAX_ALIAS_RESOURCE_BYTES;
 const MAX_ALIASES: usize = 4096;
 const MAX_TERMS: usize = 16;
 

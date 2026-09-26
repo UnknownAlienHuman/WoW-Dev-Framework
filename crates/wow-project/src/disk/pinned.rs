@@ -43,7 +43,36 @@ impl ProjectInputDirectory {
         files: &[ProjectDiskFile],
         stop: &AtomicBool,
     ) -> ProjectResult<Vec<PinnedLuaSource>> {
+        self.read_pinned_lua_sources_with_limits(
+            root,
+            files,
+            DISK_SOURCE_MAX_BYTES,
+            DISK_INVENTORY_MAX_BYTES,
+            stop,
+        )
+    }
+
+    /// Apply smaller consumer limits to the same exact no-follow acquisition.
+    /// Both limits must remain within this port's existing source budgets.
+    pub fn read_pinned_lua_sources_with_limits(
+        &self,
+        root: &str,
+        files: &[ProjectDiskFile],
+        file_limit: usize,
+        total_limit: usize,
+        stop: &AtomicBool,
+    ) -> ProjectResult<Vec<PinnedLuaSource>> {
         checkpoint(stop)?;
+        if file_limit == 0
+            || file_limit > DISK_SOURCE_MAX_BYTES
+            || total_limit == 0
+            || total_limit > DISK_INVENTORY_MAX_BYTES
+        {
+            return Err(failure(
+                ProjectErrorCode::SourceBudgetExceeded,
+                "pinned Lua limits exceed the acquisition profile",
+            ));
+        }
         if files.is_empty() || files.len() > DISK_INVENTORY_MAX_FILES {
             return Err(failure(
                 ProjectErrorCode::InvalidInputInventory,
@@ -79,9 +108,7 @@ impl ProjectInputDirectory {
                     "native source byte count overflow",
                 )
             })?;
-            if length > DISK_SOURCE_MAX_BYTES as u64
-                || declared_total > DISK_INVENTORY_MAX_BYTES as u64
-            {
+            if length > file_limit as u64 || declared_total > total_limit as u64 {
                 return Err(failure(
                     ProjectErrorCode::SourceBudgetExceeded,
                     "native source exceeds acquisition budget",
@@ -93,11 +120,7 @@ impl ProjectInputDirectory {
         let mut total = 0usize;
         for file in files {
             checkpoint(stop)?;
-            let bytes = directory.read(
-                file,
-                DISK_SOURCE_MAX_BYTES.min(DISK_INVENTORY_MAX_BYTES - total),
-                stop,
-            )?;
+            let bytes = directory.read(file, file_limit.min(total_limit - total), stop)?;
             total += bytes.len();
             let digest = crate::identity::source_digest(&bytes);
             let text = String::from_utf8(bytes).map_err(|_| {

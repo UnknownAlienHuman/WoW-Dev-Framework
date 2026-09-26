@@ -20,6 +20,7 @@ use wow_reference::native::{NativeError, NativeErrorCode, ingest_document};
 
 use super::disk_input::{DiskAnalyzer, MainInventory};
 use super::input::{ProjectMetadata, invalid};
+use super::native_resources::{NativeAnnotationInputs, NativeAnnotationInputsReceipt, present};
 use super::native_source::NativeSourceInput;
 use super::{LocalProjectInput, cancelled};
 use crate::{ServiceError, ServiceErrorCode, ServiceResult};
@@ -40,6 +41,8 @@ struct NativeInput {
     analyzer: DiskAnalyzer,
     main: MainInventory,
     native_source: NativeSourceInput,
+    #[serde(default, deserialize_with = "present")]
+    annotation_inputs: Option<NativeAnnotationInputs>,
 }
 
 /// Labels describe an explicitly selected source corpus, not a currentness or
@@ -122,6 +125,8 @@ pub struct NativeInputReceipt {
     pub analyzer_input_configuration: ContentDigest<CanonicalResult>,
     pub analyzer_bound_configuration: ContentDigest<CanonicalResult>,
     pub annotation_projection: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub annotation_inputs: Option<NativeAnnotationInputsReceipt>,
     pub library_files: Vec<NativeFileIdentity>,
     pub report_sha256: String,
     pub report_bytes: usize,
@@ -214,9 +219,20 @@ impl LocalProjectInput {
             ))
         }
         .map_err(|_| invalid("native source selection cannot be canonicalized"))?;
-        let profile = input
-            .profile
-            .build(ContentDigest::from_bytes(Sha256::digest(&selection).into()))?;
+        let annotation_inputs = input
+            .annotation_inputs
+            .as_ref()
+            .map(|inputs| inputs.read(directory, stop))
+            .transpose()?;
+        let correction_digest = annotation_inputs
+            .as_ref()
+            .map(|inputs| inputs.correction_digest())
+            .transpose()?
+            .flatten();
+        let profile = input.profile.build(
+            ContentDigest::from_bytes(Sha256::digest(&selection).into()),
+            correction_digest,
+        )?;
         let generation = ReferenceGenerationId::derive(&(
             wow_reference::native_view::NATIVE_VIEW_PROFILE,
             &profile,
@@ -259,20 +275,32 @@ impl LocalProjectInput {
             stop,
         )
         .map_err(native_error)?;
-        let library =
-            wow_annotations::native::project(&documents, &input.profile.environment, stop)
-                .map_err(|error| match error {
-                    wow_annotations::ketho::RenderError::Cancelled => ServiceError::new(
-                        ServiceErrorCode::Cancelled,
-                        "native annotation projection cancelled",
-                    ),
-                    wow_annotations::ketho::RenderError::InputLimit
-                    | wow_annotations::ketho::RenderError::OutputLimit => ServiceError::new(
-                        ServiceErrorCode::BudgetExceeded,
-                        "native annotation projection exceeds budget",
-                    ),
-                    _ => invalid("native annotation projection rejected"),
-                })?;
+        let aliases = annotation_inputs
+            .as_ref()
+            .map(|inputs| inputs.aliases.iter().collect::<Vec<_>>())
+            .unwrap_or_default();
+        let corrections = annotation_inputs
+            .as_ref()
+            .and_then(|inputs| inputs.corrections.as_ref());
+        let library = wow_annotations::native::project_with_alias_catalogs(
+            &documents,
+            &input.profile.environment,
+            corrections,
+            &aliases,
+            stop,
+        )
+        .map_err(|error| match error {
+            wow_annotations::ketho::RenderError::Cancelled => ServiceError::new(
+                ServiceErrorCode::Cancelled,
+                "native annotation projection cancelled",
+            ),
+            wow_annotations::ketho::RenderError::InputLimit
+            | wow_annotations::ketho::RenderError::OutputLimit => ServiceError::new(
+                ServiceErrorCode::BudgetExceeded,
+                "native annotation projection exceeds budget",
+            ),
+            _ => invalid("native annotation projection rejected"),
+        })?;
         cancelled(stop)?;
         if library.files.is_empty() {
             return Err(invalid(
@@ -315,19 +343,35 @@ impl LocalProjectInput {
         // Project generation derivation includes the analyzer configuration, not
         // the Library bytes directly. Bind the actual generated output here so
         // a projection change cannot silently reuse an old analyzer generation.
-        let bound_configuration = wow_core::canonical_json_bytes(&(
-            "wow-service/native-analyzer-binding/1",
-            analyzer_input_configuration,
-            &profile,
-            reference.view.self_digest(),
-            library.schema,
-            library.source_map_profile,
-            &library_files,
-        ))
+        let bound_configuration = if let Some(resources) = &annotation_inputs {
+            wow_core::canonical_json_bytes(&(
+                "wow-service/native-analyzer-binding/2",
+                analyzer_input_configuration,
+                &profile,
+                reference.view.self_digest(),
+                library.schema,
+                library.source_map_profile,
+                &library_files,
+                &resources.selection,
+            ))
+        } else {
+            wow_core::canonical_json_bytes(&(
+                "wow-service/native-analyzer-binding/1",
+                analyzer_input_configuration,
+                &profile,
+                reference.view.self_digest(),
+                library.schema,
+                library.source_map_profile,
+                &library_files,
+            ))
+        }
         .map_err(|_| invalid("native analyzer binding cannot be canonicalized"))?;
         analyzer.configuration_digest =
             ContentDigest::from_bytes(Sha256::digest(&bound_configuration).into());
         let analyzer_bound_configuration = analyzer.configuration_digest;
+        let annotation_receipt = annotation_inputs
+            .as_ref()
+            .map(|inputs| inputs.receipt(&library));
         let reference_issues = reference.issues.len();
         let reference_conflicts = reference.view.conflicts().len();
         // Streaming serialization enforces the report bound before a large JSON
@@ -347,11 +391,15 @@ impl LocalProjectInput {
             input_failures: &'a [InputFailure],
             reference: &'a wow_reference::native_view::NativeViewProjection,
             library: &'a wow_annotations::native::NativeLibrary<'b>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            annotation_inputs: Option<&'a NativeAnnotationInputsReceipt>,
             negative_authority: bool,
         }
         let report = report_bytes(
             &Report {
-                schema: if manifested {
+                schema: if annotation_inputs.is_some() {
+                    "wow-service/native-input-report/3"
+                } else if manifested {
                     "wow-service/native-input-report/2"
                 } else {
                     "wow-service/native-input-report/1"
@@ -367,12 +415,15 @@ impl LocalProjectInput {
                 input_failures: &failures,
                 reference: &reference,
                 library: &library,
+                annotation_inputs: annotation_receipt.as_ref(),
                 negative_authority: false,
             },
             stop,
         )?;
         let receipt = NativeInputReceipt {
-            schema: if manifested {
+            schema: if annotation_inputs.is_some() {
+                "wow-service/native-input-receipt/3"
+            } else if manifested {
                 "wow-service/native-input-receipt/2"
             } else {
                 "wow-service/native-input-receipt/1"
@@ -393,6 +444,7 @@ impl LocalProjectInput {
             annotation_issues: library.issues.len(),
             metadata_sidecars: library.metadata_sidecars.len(),
             annotation_projection: library.projection,
+            annotation_inputs: annotation_receipt,
             library_files,
             report_sha256: wow_reference::native::source_digest(&report),
             report_bytes: report.len(),
@@ -473,9 +525,10 @@ impl NativeProfile {
     fn build(
         &self,
         source_digest: ContentDigest<SourceLogicalSnapshot>,
+        correction_digest: Option<ContentDigest<CorrectionSet>>,
     ) -> ServiceResult<ProfileIdentity> {
-        // A no-correction selection still has an exact identity. This never
-        // substitutes a fixture profile for a release-class caller selection.
+        // Bind the canonical explicitly selected correction set; omission retains
+        // the original no-corrections identity. Raw source observations stay intact.
         let corrections =
             wow_core::canonical_json_bytes(&("wow-service/native-corrections/1", "none"))
                 .map_err(|_| invalid("native correction selection rejected"))?;
@@ -506,9 +559,9 @@ impl NativeProfile {
                 .parse()
                 .map_err(|_| invalid("native schema version rejected"))?,
         )])
-        .correction_set_digest(ContentDigest::<CorrectionSet>::from_bytes(
-            Sha256::digest(&corrections).into(),
-        ));
+        .correction_set_digest(correction_digest.unwrap_or_else(|| {
+            ContentDigest::<CorrectionSet>::from_bytes(Sha256::digest(&corrections).into())
+        }));
         if let Some(edition) = &self.edition {
             builder = builder.edition_id(edition.clone());
         }

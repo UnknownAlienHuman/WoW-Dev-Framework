@@ -16,7 +16,9 @@ pub const SCHEMA: &str = "wow-native-corrections/1";
 /// Adds explicitly guarded widget inheritance; v1 packs retain their contract.
 pub const INHERITANCE_SCHEMA: &str = "wow-native-corrections/2";
 mod inheritance;
-const MAX_BYTES: usize = 2 * 1024 * 1024;
+/// Maximum encoded/canonical correction-set bytes, also enforced at host intake.
+pub const MAX_CORRECTION_SET_BYTES: usize = 2 * 1024 * 1024;
+const MAX_BYTES: usize = MAX_CORRECTION_SET_BYTES;
 const MAX_RECORDS: usize = 4096;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
