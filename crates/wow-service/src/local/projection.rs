@@ -77,6 +77,34 @@ pub(super) fn components(
             .iter()
             .any(|part| part.coverage() != CoverageStatus::Complete)
         || !reference.conflicts().is_empty();
+    let exact_lookup_available = !reference.partitions().is_empty();
+    let restriction_partition = reference.partitions().iter().find(|partition| {
+        partition.id() == wow_reference::native_view::NATIVE_RESTRICTION_PARTITION
+            || partition.id().starts_with("reference.fixture.restriction:")
+    });
+    let restriction_complete = restriction_partition.is_some_and(|partition| {
+        partition.coverage() == CoverageStatus::Complete
+            && reference
+                .conflicts()
+                .iter()
+                .all(|conflict| conflict.partition_id() != partition.id())
+    });
+    let native_secret_rules = restriction_partition.is_some_and(|partition| {
+        let predicate = partition.records().iter().any(|record| {
+            record.key() == wow_reference::native_view::NATIVE_ACCESS_PREDICATE_ENTITY
+                && record.restrictions().iter().any(|facet| {
+                    facet.id() == "secret.predicate"
+                        && facet.state() == wow_reference::RestrictionState::Allowed
+                })
+        });
+        let producer = partition.records().iter().any(|record| {
+            record
+                .restrictions()
+                .iter()
+                .any(|facet| facet.id() == "secret.return")
+        });
+        predicate && producer
+    });
     let analyzer_partial = project.is_some_and(|view| {
         view.snapshot()
             .analyzer_binding()
@@ -114,10 +142,18 @@ pub(super) fn components(
         )?
         .with_capability(
             "reference.symbol.exact_lookup",
-            if reference_partial {
-                CapabilityState::Partial
-            } else {
+            if exact_lookup_available {
                 CapabilityState::Available
+            } else {
+                CapabilityState::Partial
+            },
+        )?
+        .with_capability(
+            "reference.restriction.facets",
+            if restriction_complete {
+                CapabilityState::Available
+            } else {
+                CapabilityState::Partial
             },
         )?,
         ComponentSnapshot::new(
@@ -152,7 +188,7 @@ pub(super) fn components(
             "wow-rules",
             env!("CARGO_PKG_VERSION"),
             config.rule_registry_id(),
-            health(!fixture_rules),
+            health(!supported_rules || (!fixture_rules && !native_secret_rules)),
         )?
         .with_capability(
             "rules.profile.supported",
@@ -172,7 +208,7 @@ pub(super) fn components(
         )?
         .with_capability(
             "rules.secret.local_operation",
-            if fixture_rules {
+            if fixture_rules || native_secret_rules {
                 CapabilityState::Available
             } else {
                 CapabilityState::Partial
@@ -590,6 +626,7 @@ fn project_evaluation(
             let claim = match record.clean_claim_kind() {
                 wow_rules::RuleCleanClaimKind::ApiExistsForExactUse => "api_exists_for_exact_use",
                 wow_rules::RuleCleanClaimKind::SecretFixtureOperationGuardedForExactValueAndScope => "secret_fixture_operation_guarded_for_exact_value_and_scope",
+                wow_rules::RuleCleanClaimKind::SecretProductionOperationGuardedForExactValueAndScope => "secret_production_operation_guarded_for_exact_value_and_scope",
                 wow_rules::RuleCleanClaimKind::SecretProducerHasNoMatchingFacet => "secret_producer_has_no_matching_facet",
             };
             RuleEvaluation::clean(

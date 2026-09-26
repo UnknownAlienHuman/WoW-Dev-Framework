@@ -188,11 +188,16 @@ emmy.source_coordinates.exact
 
 Required facts:
 
-- resolved producer member/call `C_E0Fixture.SecretText`;
+- one resolved direct producer member/call tied to the selected restriction record;
 - exact return-position/local-binding relation;
 - exact local use and concatenation operation;
 - containing function/scope;
-- guard/control-flow facts sufficient to classify absent/dominating/after-use/different-value for E0.
+- guard/control-flow facts sufficient to classify absent/dominating/after-use/different-value.
+
+The fixture producer is `C_E0Fixture.SecretText`. The first production slice
+accepts only a manifested global/namespace callable with an exact positive
+`SecretReturns=true` first-return record. Missing production records under the
+Partial restriction partition are nonapplicable, never authoritative no-facet.
 
 ### Reference
 
@@ -253,16 +258,42 @@ accepted guard/control-flow relation proves dominance over exact operation
 operation belongs to supported scope/kind
 ```
 
-### Production native status
+### Production native policy
 
-The current production native policy has no authoritative restriction partition.
-It therefore emits one explicit `NotEvaluated(MissingRestrictionFacet)` outcome
-for this rule instead of scanning names, generated annotations, or source text.
+Manifested native source exposes a separate Partial
+`reference.native.apidoc.restriction` partition. The rule may run only when both
+exact positive records are present and conflict-free:
+
+```text
+producer record:
+    kind = restriction
+    key = exact function:<namespace>.<member>
+    facet = secret.return / Restricted
+    payload = return_position:1;applicability:unconditional_source
+
+guard record:
+    kind = restriction
+    key = function:canaccessvalue
+    facet = secret.predicate / Allowed
+    payload = predicate:access_single;argument_position:1;result:true;scope:immediate_caller
+```
+
+The project producer must resolve to the same entity. The recognized guard must
+be the non-shadowed global `canaccessvalue` call over the exact local value, and
+the analyzer must prove its accepted branch dominates the concatenation. No
+predicate record, conflicting record, unsupported payload, local shadow, dynamic
+callee, unsupported operation or incomplete flow yields a clean result.
+
+`SecretReturnsForAspect`, conditional/runtime Secret metadata, additional return
+positions, ScriptObject methods and all other predicates/sinks remain
+`NotEvaluated`. The Partial restriction partition supplies positive facts only;
+it never proves an unlisted producer ordinary. Explicit-file and artifact-v1
+inputs have no production restriction partition.
 
 ### Blockers -> NotEvaluated
 
 - facet lookup unavailable/partial/conflict/none-nonauthoritatively;
-- facet conditional/runtime semantics unsupported by E0 fixture;
+- facet conditional/aspect/runtime semantics unsupported by the selected policy;
 - producer/member/call unresolved/ambiguous/dynamic;
 - binding/value flow unknown;
 - operation kind unsupported;

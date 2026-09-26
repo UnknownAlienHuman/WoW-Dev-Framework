@@ -302,6 +302,11 @@ impl EmmyGuardFact {
     }
 
     #[must_use]
+    pub const fn callee(&self) -> &str {
+        self.callee
+    }
+
+    #[must_use]
     pub fn guarded_binding_fact_id(&self) -> &str {
         &self.guarded_binding_fact_id
     }
@@ -1085,6 +1090,24 @@ fn access_guard(
     };
     if callee.get_name_text().as_deref() != Some("canaccessvalue") {
         return Ok(None);
+    }
+    if let Some(LuaSemanticDeclId::LuaDecl(id)) =
+        model.find_decl(callee.syntax().clone().into(), SemanticDeclLevel::default())
+    {
+        let declaration = model
+            .get_db()
+            .get_decl_index()
+            .get_decl(&id)
+            .ok_or_else(|| {
+                EmmyLocalFlowError::new(
+                    EmmyLocalFlowErrorCode::SemanticModelUnavailable,
+                    "guard declaration is unavailable",
+                    Some(file.path()),
+                )
+            })?;
+        if declaration.is_local() {
+            return Ok(None);
+        }
     }
     let Some(args) = call.get_args_list() else {
         return Ok(None);

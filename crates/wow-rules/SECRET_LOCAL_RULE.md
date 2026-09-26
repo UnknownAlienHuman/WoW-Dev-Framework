@@ -1,6 +1,6 @@
 # `wow.secret.local_operation@1`
 
-**Status:** normative E0-E algorithm; production native execution is explicitly unavailable.
+**Status:** normative E0-E algorithm with a narrow manifested-source production policy.
 
 ## 1. Purpose
 
@@ -19,8 +19,10 @@ rollout_policy: advisory
 remediation_tiers: plan_only
 source_scope: one function-local producer -> binding -> direct operation
 supported operation: concatenation
-supported facet: secret.return, return_position 1, unconditional_fixture
-supported profile: fixture-retail-120100-e0-v1
+supported facet: secret.return, return_position 1
+supported profiles:
+    fixture-retail-120100-e0-v1 / unconditional_fixture
+    exact manifested native release profile / unconditional_source
 ```
 
 ## 3. Required producer facts
@@ -98,7 +100,35 @@ This is synthetic fixture semantics. It proves rule plumbing only.
 
 Production guard/predicate semantics must later come from selected reference/dialect contracts and current KB/runtime guidance. Do not generalize the fixture policy globally.
 
-The current native release policy registers the rule for capability reporting but returns `NotEvaluated(MissingRestrictionFacet)`. Generated API callables, annotations, names and source text do not create an authoritative `secret.return` facet. No production guard/value-flow conclusion is emitted until a separately admitted restriction partition and policy exist.
+The native release policy uses only the separately admitted Partial
+`reference.native.apidoc.restriction` partition. A manifested source function with
+raw `SecretReturns=true` and at least one declared return yields the supported
+positive first-return facet. The exact source-backed global
+`canaccessvalue(value)` declaration yields the supported `secret.predicate`
+contract. Generated annotations, names and arbitrary source text do not substitute
+for either record.
+
+The restriction partition remains Partial: missing records do not prove an
+ordinary return. `SecretReturnsForAspect`, conditional/runtime metadata,
+ScriptObject methods, additional return positions and other predicates remain
+unsupported. Explicit-file source and artifact-v1 input do not carry this policy.
+
+### Production guard policy
+
+```text
+policy schema: wow-rules/production-policy/native-api-secret/2
+recognized global callee: canaccessvalue
+required predicate entity: function:canaccessvalue
+accepted predicate shape: one LuaValueReference argument -> one bool return
+accepted guard kind: access_single
+required relation: accepted branch dominates the exact operation
+supported operation: concatenation
+scope: function_local
+```
+
+A local declaration shadowing `canaccessvalue` is not an accepted guard. The
+source contract proves the predicate's documented structural role for the
+selected pinned corpus; it does not certify arbitrary runtime behavior.
 
 ## 7. Guard applicability
 
@@ -118,7 +148,7 @@ Variable-name equality alone is insufficient.
 
 | Facet/input | Guard/control flow | Rule outcome |
 |---|---|---|
-| exact unconditional `secret.return`; direct concat | no guard | finding |
+| exact supported `secret.return`; direct concat | no guard | finding |
 | exact facet; direct concat | exact-value accepted guard dominates | `EvaluatedClean` |
 | exact facet; direct concat | guard after operation | finding |
 | exact facet; direct concat | guard on different value/binding | finding |
@@ -127,7 +157,7 @@ Variable-name equality alone is insufficient.
 | exact facet | operation kind unsupported | `NotEvaluated` or nonapplicable according to scope |
 | facet partial/conflict/unavailable | any | `NotEvaluated` |
 | producer/binding/flow/operation/control-flow fact unavailable | any | `NotEvaluated` |
-| conditional/runtime-dependent facet unsupported by E0 | any | `NotEvaluated` |
+| conditional/aspect/runtime-dependent facet unsupported by selected policy | any | `NotEvaluated` |
 | ordinary producer with authoritative no matching facet | supported scope fully evaluated | `EvaluatedClean` only for this rule condition |
 | source/profile/generation mismatch | any | context failure |
 
@@ -258,7 +288,7 @@ When facet absence itself lacks authority, return `NotEvaluated`.
 - dominance/control-flow capability partial/failed;
 - facet lookup partial/conflict/unavailable/profile mismatch;
 - facet conditional/runtime-dependent beyond fixture support;
-- rule fixture policy mismatch/missing;
+- selected fixture/production policy mismatch or missing predicate contract;
 - budget/truncation prevents complete selected-scope evaluation;
 - requested project generation not current/matching.
 
@@ -270,7 +300,7 @@ Guarded fixture clean record contains:
 - accepted guard fact/value key;
 - proven dominance relation;
 - all capability/coverage IDs;
-- fixture policy ID;
+- selected fixture/production policy ID;
 - budget usage;
 - narrow clean claim:
 

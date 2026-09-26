@@ -137,9 +137,10 @@ impl RuleFixturePolicy {
     }
 }
 
-/// Closed production policy for exact native API presence. Secret/restriction
-/// evaluation remains unavailable until an independently authoritative facet
-/// partition is supplied by a future policy version.
+/// Closed production policy for exact native API presence and the first
+/// source-backed Secret slice. Only exact `SecretReturns=true` first-return
+/// facets and the exact global `canaccessvalue(value)` predicate are admitted.
+/// Conditional/aspect/runtime semantics remain unsupported.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct RuleProductionPolicy {
@@ -150,6 +151,11 @@ pub struct RuleProductionPolicy {
     api_fact_scope: &'static str,
     api_presence_authority: &'static str,
     api_absence_authority: &'static str,
+    secret_partition_id: &'static str,
+    secret_return_payload: &'static str,
+    guard_entity: &'static str,
+    guard_payload: &'static str,
+    guard_callee: &'static str,
     secret_policy: &'static str,
     policy_digest: Box<str>,
 }
@@ -183,17 +189,27 @@ impl RuleProductionPolicy {
             api_fact_scope: &'static str,
             api_presence_authority: &'static str,
             api_absence_authority: &'static str,
+            secret_partition_id: &'static str,
+            secret_return_payload: &'static str,
+            guard_entity: &'static str,
+            guard_payload: &'static str,
+            guard_callee: &'static str,
             secret_policy: &'static str,
         }
         let material = Material {
-            schema: "wow-rules/production-policy/native-api/1",
+            schema: "wow-rules/production-policy/native-api-secret/2",
             profile_id,
             rule_versions: ["wow.api.exists@1", "wow.secret.local_operation@1"],
             api_partition_id: wow_reference::native_view::NATIVE_API_PARTITION,
             api_fact_scope: "direct_static_namespace_member",
             api_presence_authority: "exact_record",
             api_absence_authority: "partition_coverage_only",
-            secret_policy: "not_evaluated_without_authoritative_restriction_facets",
+            secret_partition_id: wow_reference::native_view::NATIVE_RESTRICTION_PARTITION,
+            secret_return_payload: wow_reference::native_view::NATIVE_SECRET_RETURN_PAYLOAD,
+            guard_entity: wow_reference::native_view::NATIVE_ACCESS_PREDICATE_ENTITY,
+            guard_payload: wow_reference::native_view::NATIVE_ACCESS_PREDICATE_PAYLOAD,
+            guard_callee: "canaccessvalue",
+            secret_policy: "exact_unconditional_first_return_local_concat_v1",
         };
         let policy_digest =
             canonical_id("rule-production-policy:sha256:", material.schema, &material)?;
@@ -205,6 +221,11 @@ impl RuleProductionPolicy {
             api_fact_scope: material.api_fact_scope,
             api_presence_authority: material.api_presence_authority,
             api_absence_authority: material.api_absence_authority,
+            secret_partition_id: material.secret_partition_id,
+            secret_return_payload: material.secret_return_payload,
+            guard_entity: material.guard_entity,
+            guard_payload: material.guard_payload,
+            guard_callee: material.guard_callee,
             secret_policy: material.secret_policy,
             policy_digest,
         })
@@ -240,6 +261,31 @@ impl RuleProductionPolicy {
     #[must_use]
     pub const fn api_partition_id(&self) -> &str {
         self.api_partition_id
+    }
+
+    #[must_use]
+    pub const fn secret_partition_id(&self) -> &str {
+        self.secret_partition_id
+    }
+
+    #[must_use]
+    pub const fn secret_return_payload(&self) -> &str {
+        self.secret_return_payload
+    }
+
+    #[must_use]
+    pub const fn guard_entity(&self) -> &str {
+        self.guard_entity
+    }
+
+    #[must_use]
+    pub const fn guard_payload(&self) -> &str {
+        self.guard_payload
+    }
+
+    #[must_use]
+    pub const fn guard_callee(&self) -> &str {
+        self.guard_callee
     }
 }
 
@@ -575,13 +621,53 @@ impl<'a> RuleExecutionContext<'a> {
     }
 
     #[must_use]
+    pub fn secret_partition_id(&self) -> &str {
+        match self.policy {
+            RulePolicyRef::Fixture(_) => "reference.fixture.restriction:C_E0Fixture.SecretText",
+            RulePolicyRef::Production(policy) => policy.secret_partition_id(),
+        }
+    }
+
+    #[must_use]
+    pub fn secret_return_payload(&self) -> &str {
+        match self.policy {
+            RulePolicyRef::Fixture(_) => "return_position:1;applicability:unconditional_fixture",
+            RulePolicyRef::Production(policy) => policy.secret_return_payload(),
+        }
+    }
+
+    #[must_use]
+    pub fn guard_entity(&self) -> &str {
+        match self.policy {
+            RulePolicyRef::Fixture(_) => "function:canaccessvalue",
+            RulePolicyRef::Production(policy) => policy.guard_entity(),
+        }
+    }
+
+    #[must_use]
+    pub fn guard_payload(&self) -> Option<&str> {
+        match self.policy {
+            RulePolicyRef::Fixture(_) => None,
+            RulePolicyRef::Production(policy) => Some(policy.guard_payload()),
+        }
+    }
+
+    #[must_use]
+    pub fn guard_callee(&self) -> &str {
+        match self.policy {
+            RulePolicyRef::Fixture(_) => "canaccessvalue",
+            RulePolicyRef::Production(policy) => policy.guard_callee(),
+        }
+    }
+
+    #[must_use]
     pub const fn is_fixture_policy(&self) -> bool {
         matches!(self.policy, RulePolicyRef::Fixture(_))
     }
 
     #[must_use]
     pub const fn supports_secret_policy(&self) -> bool {
-        matches!(self.policy, RulePolicyRef::Fixture(_))
+        true
     }
 
     #[must_use]

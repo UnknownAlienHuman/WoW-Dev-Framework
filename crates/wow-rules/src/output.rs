@@ -22,6 +22,7 @@ pub enum RuleEvaluationStatus {
 pub enum RuleCleanClaimKind {
     ApiExistsForExactUse,
     SecretFixtureOperationGuardedForExactValueAndScope,
+    SecretProductionOperationGuardedForExactValueAndScope,
     SecretProducerHasNoMatchingFacet,
 }
 

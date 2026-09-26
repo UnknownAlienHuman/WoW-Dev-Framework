@@ -32,9 +32,7 @@ use crate::{
     RuleReferenceLookupRecord, RuleReferenceOutcome, RuleResult, RuleScope,
 };
 
-const SECRET_PARTITION: &str = "reference.fixture.restriction:C_E0Fixture.SecretText";
-const SECRET_ENTITY: &str = "function:C_E0Fixture.SecretText";
-const SECRET_PAYLOAD: &str = "return_position:1;applicability:unconditional_fixture";
+const FIXTURE_SECRET_ENTITY: &str = "function:C_E0Fixture.SecretText";
 const PRODUCER_ID: &str = "wow.rules";
 const PRODUCER_VERSION: &str = "1.0.0";
 
@@ -348,6 +346,24 @@ fn evaluate_secret(
             None,
         )?]);
     }
+    if context
+        .reference()
+        .partitions()
+        .iter()
+        .all(|partition| partition.id() != context.secret_partition_id())
+    {
+        return Ok(vec![not_evaluated(
+            context,
+            descriptor,
+            "secret:restriction-partition-unavailable",
+            vec![RuleBlockerKind::ReferencePartitionMissing],
+            vec![capability("reference.restriction.facets")?],
+            Vec::new(),
+            Vec::new(),
+            None,
+        )?]);
+    }
+
     let mut output = Vec::new();
     let references = context
         .project()
@@ -372,11 +388,20 @@ fn evaluate_secret(
     let uses_by_operation = group_uses(flow.uses());
 
     for binding in flow.bindings() {
-        if binding.initializer_receiver() != Some("C_E0Fixture")
-            || binding.initializer_member() != Some("SecretText")
-        {
+        let (Some(receiver), Some(member)) =
+            (binding.initializer_receiver(), binding.initializer_member())
+        else {
+            continue;
+        };
+        let producer_entity = format!("function:{receiver}.{member}");
+        if context.is_fixture_policy() {
+            if producer_entity != FIXTURE_SECRET_ENTITY {
+                continue;
+            }
+        } else if !restriction_key_relevant(context, &producer_entity) {
             continue;
         }
+
         let file = context
             .project()
             .file_by_path(binding.path())
@@ -419,8 +444,8 @@ fn evaluate_secret(
             return Err(fact_graph_error("binding references an unknown call fact"));
         };
         if reference.resolution() != EmmyReferenceResolution::Resolved
-            || reference.receiver() != "C_E0Fixture"
-            || reference.member() != "SecretText"
+            || reference.receiver() != receiver
+            || reference.member() != member
             || call.reference_fact_id() != reference.fact_id()
             || call.path() != binding.path()
             || reference.path() != binding.path()
@@ -500,7 +525,8 @@ fn evaluate_secret(
                 )?);
                 continue;
             }
-            let (lookup, found) = exact_lookup(context, SECRET_PARTITION, SECRET_ENTITY)?;
+            let (lookup, found) =
+                exact_lookup(context, context.secret_partition_id(), &producer_entity)?;
             match lookup.outcome() {
                 RuleReferenceOutcome::Found => {
                     let record = found.ok_or_else(|| {
@@ -509,7 +535,7 @@ fn evaluate_secret(
                             "found Secret lookup omitted its record",
                         )
                     })?;
-                    match classify_secret_record(record)? {
+                    match classify_secret_record(context, record)? {
                         SecretFacetDecision::NoRestriction => {
                             output.push(clean(
                                 context,
@@ -540,7 +566,51 @@ fn evaluate_secret(
                         }
                         SecretFacetDecision::Restricted => {}
                     }
+
+                    if !context.is_fixture_policy() {
+                        let (guard_lookup, guard_record) = exact_lookup(
+                            context,
+                            context.secret_partition_id(),
+                            context.guard_entity(),
+                        )?;
+                        let guard_supported = guard_record
+                            .map(|record| classify_guard_record(context, record))
+                            .transpose()?
+                            .unwrap_or(false);
+                        if guard_lookup.outcome() != RuleReferenceOutcome::Found || !guard_supported
+                        {
+                            let blockers = match guard_lookup.outcome() {
+                                RuleReferenceOutcome::Conflict => {
+                                    vec![RuleBlockerKind::ReferenceConflict]
+                                }
+                                RuleReferenceOutcome::PartialCoverage
+                                | RuleReferenceOutcome::NotEvaluated
+                                | RuleReferenceOutcome::PartitionMissing
+                                | RuleReferenceOutcome::AuthoritativeAbsent => {
+                                    vec![RuleBlockerKind::MissingRestrictionFacet]
+                                }
+                                RuleReferenceOutcome::Found => {
+                                    vec![RuleBlockerKind::UnsupportedFactShape]
+                                }
+                            };
+                            fact_ids.push(guard_lookup.lookup_id().into());
+                            output.push(not_evaluated(
+                                context,
+                                descriptor,
+                                &scope_id,
+                                blockers,
+                                vec![capability("reference.restriction.facets")?],
+                                Vec::new(),
+                                fact_ids,
+                                Some(&guard_lookup),
+                            )?);
+                            continue;
+                        }
+                        fact_ids.push(guard_lookup.lookup_id().into());
+                    }
+
                     let guard = classify_guard(
+                        context.guard_callee(),
                         flow.guards(),
                         flow.control_flow(),
                         &all_bindings,
@@ -560,7 +630,11 @@ fn evaluate_secret(
                             descriptor,
                             CleanInput {
                                 scope_id: &scope_id,
-                                claim: RuleCleanClaimKind::SecretFixtureOperationGuardedForExactValueAndScope,
+                                claim: if context.is_fixture_policy() {
+                                    RuleCleanClaimKind::SecretFixtureOperationGuardedForExactValueAndScope
+                                } else {
+                                    RuleCleanClaimKind::SecretProductionOperationGuardedForExactValueAndScope
+                                },
                                 fact_ids,
                                 lookup: &lookup,
                                 coverage_ids: gate.coverage_ids,
@@ -576,6 +650,7 @@ fn evaluate_secret(
                             reference,
                             call,
                             operation,
+                            &producer_entity,
                             fact_ids,
                             &uses,
                             flow.guards(),
@@ -631,6 +706,15 @@ fn evaluate_secret(
     Ok(output)
 }
 
+fn restriction_key_relevant(context: &RuleExecutionContext<'_>, entity: &str) -> bool {
+    matches!(
+        context
+            .reference()
+            .lookup(context.secret_partition_id(), entity),
+        LookupResult::Found(_) | LookupResult::Conflict(_)
+    )
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SecretFacetDecision {
     Restricted,
@@ -638,7 +722,10 @@ enum SecretFacetDecision {
     Unsupported,
 }
 
-fn classify_secret_record(record: &ReferenceRecord) -> RuleResult<SecretFacetDecision> {
+fn classify_secret_record(
+    context: &RuleExecutionContext<'_>,
+    record: &ReferenceRecord,
+) -> RuleResult<SecretFacetDecision> {
     if record.kind() != ReferenceRecordKind::Restriction {
         return Err(RuleError::new(
             RuleErrorCode::RuleLookupOutcomeInvalid,
@@ -646,7 +733,10 @@ fn classify_secret_record(record: &ReferenceRecord) -> RuleResult<SecretFacetDec
         )
         .with_rule(SECRET_LOCAL_RULE));
     }
-    if record.payload() != SECRET_PAYLOAD {
+    if record.payload() != context.secret_return_payload() {
+        return Ok(SecretFacetDecision::Unsupported);
+    }
+    if record.restrictions().len() > 1 {
         return Ok(SecretFacetDecision::Unsupported);
     }
     let Some(facet) = record
@@ -665,7 +755,28 @@ fn classify_secret_record(record: &ReferenceRecord) -> RuleResult<SecretFacetDec
     })
 }
 
+fn classify_guard_record(
+    context: &RuleExecutionContext<'_>,
+    record: &ReferenceRecord,
+) -> RuleResult<bool> {
+    if record.kind() != ReferenceRecordKind::Restriction {
+        return Err(RuleError::new(
+            RuleErrorCode::RuleLookupOutcomeInvalid,
+            "Secret guard lookup returned a non-restriction record",
+        )
+        .with_rule(SECRET_LOCAL_RULE));
+    }
+    Ok(
+        record.payload() == context.guard_payload().unwrap_or_default()
+            && record.restrictions().len() == 1
+            && record.restrictions().iter().any(|facet| {
+                facet.id() == "secret.predicate" && facet.state() == RestrictionState::Allowed
+            }),
+    )
+}
+
 fn classify_guard(
+    accepted_callee: &str,
     guards: &[EmmyGuardFact],
     relations: &[wow_emmy::EmmyControlFlowFact],
     bindings: &BTreeMap<&str, &EmmyLocalBindingFact>,
@@ -679,6 +790,7 @@ fn classify_guard(
             && guards.iter().any(|guard| {
                 guard.fact_id() == relation.guard_fact_id()
                     && guard.kind() == EmmyGuardKind::AccessSingle
+                    && guard.callee() == accepted_callee
                     && guard.guarded_binding_fact_id() == binding.fact_id()
             })
         {
@@ -690,6 +802,7 @@ fn classify_guard(
         .iter()
         .filter(|guard| {
             guard.kind() == EmmyGuardKind::AccessSingle
+                && guard.callee() == accepted_callee
                 && guard.guarded_binding_fact_id() == binding.fact_id()
         })
         .collect::<Vec<_>>();
@@ -872,6 +985,7 @@ fn secret_finding(
     reference: &EmmyMemberReferenceFact,
     call: &EmmyMemberCallFact,
     operation: &EmmyOperationFact,
+    producer_entity: &str,
     input_fact_ids: Vec<Box<str>>,
     uses: &[&wow_emmy::EmmyLocalUseFact],
     guards: &[EmmyGuardFact],
@@ -879,8 +993,13 @@ fn secret_finding(
     lookup: RuleReferenceLookupRecord,
     coverage_ids: Vec<CoverageId>,
 ) -> RuleResult<RuleEvaluationRecord> {
-    let entity = wow_core::EntityKey::new("function", "C_E0Fixture.SecretText")
-        .map_err(core_construction)?;
+    let entity_name = producer_entity.strip_prefix("function:").ok_or_else(|| {
+        RuleError::new(
+            RuleErrorCode::RuleFindingInputInvalid,
+            "Secret producer entity is not a canonical function key",
+        )
+    })?;
+    let entity = wow_core::EntityKey::new("function", entity_name).map_err(core_construction)?;
     let primary = project_handle(
         context,
         file,
@@ -950,10 +1069,17 @@ fn secret_finding(
     .required_capability_ids(descriptor.required_capabilities().to_vec())
     .message_arguments(vec![
         identifier_argument("facet", "secret.return")?,
-        identifier_argument("fixture_policy", context.policy_id())?,
+        identifier_argument(
+            if context.is_fixture_policy() {
+                "fixture_policy"
+            } else {
+                "rule_policy"
+            },
+            context.policy_id(),
+        )?,
         argument("guard_state", guard_name(guard))?,
         identifier_argument("operation", "concatenation")?,
-        identifier_argument("producer", SECRET_ENTITY)?,
+        identifier_argument("producer", producer_entity)?,
         identifier_argument("remediation_plan", "restructure-secret-capable-value-use")?,
         MessageArgument::new("return_position", MessageArgumentKind::Integer, "1", true)
             .map_err(core_construction)?,

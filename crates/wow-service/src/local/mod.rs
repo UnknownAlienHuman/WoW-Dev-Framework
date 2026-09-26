@@ -19,6 +19,7 @@ pub use input::{LOCAL_INPUT_MAX_BYTES, LOCAL_INPUT_SCHEMA, LocalProjectInput};
 pub use native_artifact::NativeArtifactReceipt;
 pub use native_input::{
     LOCAL_NATIVE_SCHEMA, NativeFileIdentity, NativeInputReceipt, NativeManifestIdentity,
+    NativeRestrictionIdentity,
 };
 pub use native_resources::{NativeAnnotationInputsReceipt, NativeAnnotationSelection};
 pub use projection::OwnerAnalysis;

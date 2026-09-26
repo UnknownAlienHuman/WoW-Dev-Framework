@@ -121,15 +121,17 @@ schemas, malformed data or default JSON recursion-limit violations reject.
 Export escaping/envelope overhead counts toward the limit: not every 64 MiB
 report fits inside a 64 MiB cache. A too-large cache fails without truncation.
 
-Authority-bearing `wow-service/native-input-report/4` is intentionally **not**
-accepted by artifact v1. Its Complete callable partition depends on source-manifest
-and TOC closure plus successful in-domain projection. Because artifact v1 does not
-carry or reacquire those source documents, importing it cannot independently
-re-establish absence authority. `wow native report` can still export the exact v4
-report, while `wow native artifact` returns a service rejection instead of silently
-preserving or stripping authority. Use the source-backed manifested configuration
-for authoritative API absence. A future cache format must include sufficient
-revalidation material or an independently authenticated producer contract.
+Authority-bearing `wow-service/native-input-report/4` and current manifested
+`wow-service/native-input-report/5` are intentionally **not** accepted by artifact
+v1. Their Complete callable partition depends on source-manifest and TOC closure;
+v5 additionally carries positive source-backed restriction facts. Because artifact
+v1 does not carry or reacquire those source documents, importing it cannot
+independently re-establish API absence authority or the restriction/predicate
+contracts. `wow native report` can still export the exact v4/v5 report, while
+`wow native artifact` returns a service rejection instead of silently preserving
+or stripping those claims. Use the source-backed manifested configuration for
+these capabilities. A future cache format must include sufficient revalidation
+material or an independently authenticated producer contract.
 
 Detailed producer metadata, correction applications and source maps are retained
 as **unverified historical producer claims**, not semantically revalidated.
@@ -166,5 +168,6 @@ Reference admission permits only the existing single Partial native API callable
 partition, no restriction facets and no authoritative absence. The native
 production policy may evaluate exact API presence from the retained ReferenceView.
 Partial misses/conflicts and `wow.secret.local_operation@1` remain `NotEvaluated`.
-Authority-bearing source report v4 is never admitted through artifact v1.
+Authority/restriction-bearing source reports v4/v5 are never admitted through
+artifact v1.
 Export/import is not full W03, E0/E1, consumer, runtime or launch acceptance.

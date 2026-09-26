@@ -140,13 +140,29 @@ hotfix state, protected-state behavior or client acceptance.
 
 The source selection identity additionally binds the manifest/TOC/version bytes,
 ordered selection and explicit load context. Manifested input now uses
-`wow-project/source-manifest-admission/2`, `wow-reference/native-callable-view/2`,
-`wow-service/native-input-report/4` and
-`wow-service/native-input-receipt/4`; the report/receipt retain declared and
-selected generated-API counts, closure state, the final authority decision and
-`negative_authority_scope=reference.native.apidoc.api` when that decision is true.
-The original explicit-files mode retains its v1 identity/report/receipt profiles.
-Production Secret/restriction evaluation remains unavailable.
+`wow-project/source-manifest-admission/2`, `wow-reference/native-callable-view/3`,
+`wow-service/native-input-report/5` and
+`wow-service/native-input-receipt/5`; the report/receipt retain declared and
+selected generated-API counts, closure state, the final API authority decision,
+`negative_authority_scope=reference.native.apidoc.api` when that decision is true,
+and a compact restriction-fact receipt. The original explicit-files mode retains
+its v1 identity/report/receipt profiles.
+
+Manifested source also exposes a separate Partial
+`reference.native.apidoc.restriction` partition. It normalizes only positive exact
+source observations for the first reviewed production Secret slice:
+
+- `SecretReturns = true` on an admitted global/namespace function with a declared
+  return yields a `secret.return` facet for `return_position:1`;
+- the exact global `canaccessvalue(value)` declaration yields the reviewed
+  `secret.predicate` contract for one value and the immediate caller;
+- `SecretReturnsForAspect`, conditional/runtime metadata, malformed shapes,
+  ScriptObject methods and every other restriction family remain raw, explicitly
+  unsupported or outside this partition.
+
+This restriction partition never proves that an unlisted function has no Secret
+facet. It is Partial even when API callable closure is Complete. It supplies only
+exact positive contract facts for the local-flow rule below.
 
 ## Explicit annotation inputs
 
@@ -235,9 +251,10 @@ host root does not change logical input identity.
 
 Neither content pins, external revision labels nor correction review strings
 attest Git membership, freshness, consumer correctness or runtime safety. Resource
-selection does not create Secret/restriction authority. The native API partition
-is Complete only under the manifested closure and loss checks above; every other
-mode remains Partial. Production Secret/restriction evaluation remains unavailable.
+selection does not create additional Secret/restriction authority. The native API
+partition is Complete only under the manifested closure and loss checks above;
+every other mode remains Partial. The restriction partition is source-derived only
+from manifested raw metadata and remains Partial regardless of annotation inputs.
 
 ## Owner composition and identities
 
@@ -265,9 +282,15 @@ The callable Reference slice contains exact global/namespace function candidates
 only. Duplicate declarations retain their candidates and an explicit conflict,
 not a chosen winner. ScriptObject receiver contracts and environment exclusions
 remain explicit out-of-domain omissions. Explicit-file or lossy manifested input
-produces a **Partial** partition. Only the exact manifested closure described above
-can produce a Complete callable partition and API-documentation absence authority.
-The route never creates Secret facets or restriction facts.
+produces a **Partial** API partition. Only the exact manifested closure described
+above can produce a Complete callable partition and API-documentation absence
+authority.
+
+For manifested input, the separate restriction partition contains only exact
+positive `secret.return` and `secret.predicate` records described above. Conflicts
+remain per key; unsupported conditional/aspect metadata remains visible in issues.
+The restriction partition is never negative authority and is absent from the
+explicit-file input path.
 
 `LocalProjectInput::native_source_report()` exposes the bounded raw metadata,
 normalization/projection omissions, conflicts, annotation sidecars and source maps
@@ -282,8 +305,20 @@ The annotation receipt is not LuaLS/Emmy semantic acceptance. A non-fixture chec
 uses the real analyzer and the native production policy: exact API records may
 establish presence, a Complete manifested callable partition may establish exact
 member absence, and partial/conflicted/unsupported cases remain `NotEvaluated`.
-The Secret rule remains `NotEvaluated`. There is no runtime or release-gate
-promotion.
+
+For a manifested source producer with an exact `SecretReturns=true` first-return
+facet, `wow.secret.local_operation@1` evaluates only one function-local flow:
+direct resolved member call assigned to a local, then direct concatenation. The
+operation is clean only when the same local is guarded by the source-backed global
+`canaccessvalue(value)` contract and the analyzer proves that accepted branch
+dominates the operation. No guard, after-use, different-value or non-dominating
+guards produce the advisory finding. A local function shadowing
+`canaccessvalue` is not accepted. Missing/conflicting predicate or facet facts,
+unsupported operations and incomplete flow remain `NotEvaluated`.
+
+This is static source-contract evaluation, not a claim that a runtime value is
+secret in every context or that guarded code is generally safe. There is no
+runtime or release-gate promotion.
 
 ## Bounds and remaining work
 
@@ -307,5 +342,8 @@ real-profile/consumer acceptance remains open W03 work.
 Manifest/selected-TOC admission is implemented, not independently executed semantic
 or Git provenance acceptance. Managed acquisition is W08;
 the W04 native policy covers exact API presence and, only for a Complete manifested
-generated-API corpus, exact member absence. Production Secret policy remains
-unavailable. No tests or fixtures are changed by this slice.
+generated-API corpus, exact member absence. Its first production Secret slice is
+limited to manifested positive `SecretReturns=true`, exact global
+`canaccessvalue(value)` and direct local concatenation. Aspect/conditional facets,
+other guards/sinks, interprocedural flow and runtime proof remain unavailable.
+No tests or fixtures are changed by this slice.

@@ -107,9 +107,9 @@ pub(super) fn report(
         "wow-service/native-input-report/1" => 1,
         "wow-service/native-input-report/2" => 2,
         "wow-service/native-input-report/3" => 3,
-        "wow-service/native-input-report/4" => {
+        "wow-service/native-input-report/4" | "wow-service/native-input-report/5" => {
             return Err(invalid(
-                "authority-bearing native reports require source reacquisition and cannot be cached",
+                "authority or restriction-bearing native reports require source reacquisition and cannot be cached",
             ));
         }
         _ => return Err(invalid("unsupported retained native report schema")),
@@ -213,6 +213,8 @@ struct ReportBinding {
     negative_authority: bool,
     #[serde(default, deserialize_with = "present")]
     negative_authority_scope: Option<String>,
+    #[serde(default, deserialize_with = "present")]
+    _restriction_facts: Option<OpaqueObject>,
 }
 
 #[derive(Deserialize)]

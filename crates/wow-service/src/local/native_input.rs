@@ -87,6 +87,16 @@ pub struct NativeManifestIdentity {
     pub negative_authority: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct NativeRestrictionIdentity {
+    pub partition_id: &'static str,
+    pub coverage: &'static str,
+    pub record_count: usize,
+    pub conflict_count: usize,
+    pub secret_return_records: usize,
+    pub access_predicate_available: bool,
+}
+
 impl From<&SourceManifestReceipt> for NativeManifestIdentity {
     fn from(receipt: &SourceManifestReceipt) -> Self {
         let file = |value: &wow_project::load::LoadSource| NativeFileIdentity {
@@ -143,6 +153,8 @@ pub struct NativeInputReceipt {
     pub negative_authority: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub negative_authority_scope: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub restriction_facts: Option<NativeRestrictionIdentity>,
     pub semantic_consumer_acceptance: &'static str,
 }
 
@@ -401,6 +413,48 @@ impl LocalProjectInput {
             .map(|inputs| inputs.receipt(&library));
         let reference_issues = reference.issues.len();
         let reference_conflicts = reference.view.conflicts().len();
+        let restriction_facts = reference
+            .view
+            .partitions()
+            .iter()
+            .find(|partition| {
+                partition.id() == wow_reference::native_view::NATIVE_RESTRICTION_PARTITION
+            })
+            .map(|partition| NativeRestrictionIdentity {
+                partition_id: wow_reference::native_view::NATIVE_RESTRICTION_PARTITION,
+                coverage: match partition.coverage() {
+                    wow_reference::CoverageStatus::Complete => "complete",
+                    wow_reference::CoverageStatus::Partial => "partial",
+                    wow_reference::CoverageStatus::NotEvaluated => "not_evaluated",
+                },
+                record_count: partition.records().len(),
+                conflict_count: reference
+                    .view
+                    .conflicts()
+                    .iter()
+                    .filter(|conflict| {
+                        conflict.partition_id()
+                            == wow_reference::native_view::NATIVE_RESTRICTION_PARTITION
+                    })
+                    .count(),
+                secret_return_records: partition
+                    .records()
+                    .iter()
+                    .filter(|record| {
+                        record
+                            .restrictions()
+                            .iter()
+                            .any(|facet| facet.id() == "secret.return")
+                    })
+                    .count(),
+                access_predicate_available: matches!(
+                    reference.view.lookup(
+                        wow_reference::native_view::NATIVE_RESTRICTION_PARTITION,
+                        wow_reference::native_view::NATIVE_ACCESS_PREDICATE_ENTITY,
+                    ),
+                    wow_reference::LookupResult::Found(_)
+                ),
+            });
         // Streaming serialization enforces the report bound before a large JSON
         // Value or an unbounded output buffer could be allocated.
         #[derive(Serialize)]
@@ -423,11 +477,13 @@ impl LocalProjectInput {
             negative_authority: bool,
             #[serde(skip_serializing_if = "Option::is_none")]
             negative_authority_scope: Option<&'static str>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            restriction_facts: Option<&'a NativeRestrictionIdentity>,
         }
         let report = report_bytes(
             &Report {
                 schema: if manifested {
-                    "wow-service/native-input-report/4"
+                    "wow-service/native-input-report/5"
                 } else if annotation_inputs.is_some() {
                     "wow-service/native-input-report/3"
                 } else {
@@ -449,12 +505,13 @@ impl LocalProjectInput {
                 negative_authority_scope: reference
                     .negative_authority
                     .then_some(wow_reference::native_view::NATIVE_API_PARTITION),
+                restriction_facts: restriction_facts.as_ref(),
             },
             stop,
         )?;
         let receipt = NativeInputReceipt {
             schema: if manifested {
-                "wow-service/native-input-receipt/4"
+                "wow-service/native-input-receipt/5"
             } else if annotation_inputs.is_some() {
                 "wow-service/native-input-receipt/3"
             } else {
@@ -484,6 +541,7 @@ impl LocalProjectInput {
             negative_authority_scope: reference
                 .negative_authority
                 .then_some(wow_reference::native_view::NATIVE_API_PARTITION),
+            restriction_facts,
             semantic_consumer_acceptance: "not_evaluated",
         };
         let libraries = library
