@@ -10,10 +10,10 @@ concurrency:
   cancel-in-progress: false
 env:
   BASE_COMMIT: 4f59187449804ab75ac9d55b13fb9d502edf4f2b
-  SOURCE_ARTIFACT_ID: '10909699611'
-  SOURCE_ARTIFACT_ZIP_SHA256: be82ebf5d153e00b67a84cc6fa29ee2d841b2c35e83e23b4b9bfdb2714812063
-  SOURCE_TAR_SHA256: 173fe70916339ed418644ef50251e4673217f571cc67565fecdc2dd5c4aa1e61
-  SOURCE_TREE: f06a396bf37123e32c33332f845bab2503301e8a
+  SOURCE_ARTIFACT_ID: '10910206384'
+  SOURCE_ARTIFACT_ZIP_SHA256: 95da8dc611b54d7a4c8e55e89de199828fef85f9075123b5f4c17032d32adf77
+  SOURCE_TAR_SHA256: 48492ce31255b3e911e1da4086fd05b3da39fd1f590582dd62f4c105a58177da
+  SOURCE_TREE: a22a1b26296ae0a4b4bff071b75d61ec9ed0034b
 jobs:
   checkpoint:
     runs-on: ubuntu-latest
@@ -24,7 +24,7 @@ jobs:
           ref: main
           fetch-depth: 0
           persist-credentials: false
-      - name: Recover formatted source and apply the isolated borrow fix
+      - name: Recover formatted source and factor the materialization result
         id: admit
         shell: bash
         env:
@@ -51,20 +51,31 @@ jobs:
 
           path = Path('crates/wow-reference/src/native_view.rs')
           text = path.read_text()
-          duplicate = '''fn issue(code: &'static str, document: &DocumentationDocument, span: Span) -> NativeViewIssue {
-              NativeViewIssue {
-                  code,
-                  path: document.path().to_owned(),
-                  sha256: document.sha256().to_owned(),
-                  span,
-              }
-          }
+          marker = '''fn materialize(
+          '''
+          alias = '''type MaterializedRecords = (
+              Vec<ReferenceRecord>,
+              Vec<ReferenceRecord>,
+              Vec<ReferenceConflict>,
+          );
 
           '''
-          assert text.count('fn issue(') == 2
-          assert duplicate in text
-          text = text.replace(duplicate, '', 1)
-          assert text.count('fn issue(') == 1
+          old_result = ''') -> Result<
+              (
+                  Vec<ReferenceRecord>,
+                  Vec<ReferenceRecord>,
+                  Vec<ReferenceConflict>,
+              ),
+              NativeError,
+          > {
+          '''
+          new_result = ''') -> Result<MaterializedRecords, NativeError> {
+          '''
+          assert marker in text
+          assert old_result in text
+          assert 'type MaterializedRecords' not in text
+          text = text.replace(marker, alias + marker, 1)
+          text = text.replace(old_result, new_result, 1)
           path.write_text(text)
           PY
           git diff --check
