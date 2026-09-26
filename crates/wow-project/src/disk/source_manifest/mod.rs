@@ -50,6 +50,10 @@ pub struct SourceManifestReceipt {
     pub declared_tracked_files: u64,
     pub declared_included_files: u64,
     pub declared_included_bytes: u64,
+    pub declared_generated_api_files: u64,
+    pub selected_generated_api_files: usize,
+    pub generated_api_closure: &'static str,
+    pub generated_api_closure_complete: bool,
     pub verified_source_files: usize,
     pub version_file: LoadSource,
     pub toc: DocumentTocSelection,
@@ -128,6 +132,22 @@ impl ProjectInputDirectory {
             request.load_context,
             stop,
         )?;
+        let generated_api_paths = manifest
+            .files
+            .iter()
+            .filter(|member| member.kind == "generated_api")
+            .map(|member| member.path.as_str())
+            .collect::<BTreeSet<_>>();
+        let selected_api_paths = toc
+            .source_order
+            .iter()
+            .map(String::as_str)
+            .collect::<BTreeSet<_>>();
+        let generated_api_complete = !generated_api_paths.is_empty()
+            && generated_api_paths.len() == toc.source_order.len()
+            && generated_api_paths == selected_api_paths;
+        let declared_generated_api_files =
+            u64::try_from(generated_api_paths.len()).map_err(|_| budget())?;
         let mut selected = Vec::with_capacity(toc.source_order.len());
         let mut total = toc_bytes.len().saturating_add(version_bytes.len()) as u64;
         for path in &toc.source_order {
@@ -147,7 +167,7 @@ impl ProjectInputDirectory {
         let sources = directory.read_pinned_lua_sources(".", &selected, stop)?;
         checkpoint(stop)?;
         let receipt = SourceManifestReceipt {
-            schema: "wow-project/source-manifest-admission/1",
+            schema: "wow-project/source-manifest-admission/2",
             manifest: LoadSource {
                 path: request.manifest.path.clone(),
                 content_digest: crate::identity::source_digest(&bytes),
@@ -161,6 +181,14 @@ impl ProjectInputDirectory {
             declared_tracked_files: manifest.coverage.tracked_files,
             declared_included_files: manifest.coverage.included_files,
             declared_included_bytes: manifest.coverage.included_bytes,
+            declared_generated_api_files,
+            selected_generated_api_files: toc.source_order.len(),
+            generated_api_closure: if generated_api_complete {
+                "complete_manifest_toc_closure"
+            } else {
+                "partial_manifest_toc_selection"
+            },
+            generated_api_closure_complete: generated_api_complete,
             verified_source_files: sources.len() + 2,
             version_file: LoadSource {
                 path: "version.txt".to_owned(),
@@ -169,7 +197,7 @@ impl ProjectInputDirectory {
             },
             toc,
             git_membership: "not_attested",
-            unconsumed_source_bytes: "not_verified",
+            unconsumed_source_bytes: "non_api_source_bytes_not_verified",
             negative_authority: false,
         };
         Ok(ManifestedLuaSources { sources, receipt })

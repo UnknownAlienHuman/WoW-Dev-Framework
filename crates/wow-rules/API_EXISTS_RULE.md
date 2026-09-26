@@ -1,6 +1,6 @@
 # `wow.api.exists@1`
 
-**Status:** normative E0-E rule algorithm.
+**Status:** normative rule algorithm with closed E0 fixture and native release-profile policies.
 
 ## 1. Purpose
 
@@ -18,7 +18,7 @@ technical_severity: error
 rollout_policy: advisory
 remediation_tiers: plan_only
 source_scope: Main project direct member/reference use
-supported_profile: fixture-retail-120100-e0-v1 (E0 fixture only)
+supported_profile: closed E0 fixture or an exact profile-bound native release policy
 ```
 
 ## 3. Required project/analyzer input
@@ -30,8 +30,8 @@ Main ProjectFileRecord
 exact project SourceHandle
 ReferenceFact:
     reference_kind = member
-    receiver_spelling = C_E0Fixture
-    member_spelling = RemovedApi (fixture case)
+    receiver_spelling = exact static namespace expression
+    member_spelling = exact static member name
     resolution_status = unresolved
     exact member/full-reference span
 optional CallFact tied to the same ReferenceFact
@@ -39,13 +39,16 @@ source-coordinate capability Complete
 reference/call fact capabilities Complete for selected use
 ```
 
-The E0 rule applies only to an exact direct member reference. Ambiguous/dynamic/computed member uses are `NotEvaluated` or nonapplicable.
+The rule applies only to an exact direct static member reference. The E0 policy restricts the receiver to `C_E0Fixture`. The native release policy admits a receiver only when the exact callable partition already contains that namespace (or a conflict in it). Ambiguous/dynamic/computed member uses are `NotEvaluated` or nonapplicable.
 
 ## 4. Exact query construction
 
-Construct the canonical exact entity key from the normalized project fact and fixture namespace grammar:
+Construct the canonical exact entity key from the normalized project fact:
 
 ```text
+function:<receiver>.<member>
+
+# E0 example
 function:C_E0Fixture.RemovedApi
 ```
 
@@ -111,6 +114,28 @@ rule scope fully evaluated
 
 An empty reference result alone is insufficient.
 
+### Native release-profile authority
+
+The profile-bound native policy uses `reference.native.apidoc.api`. Exact presence
+is usable under Partial coverage. Absence becomes authoritative only when all of
+the following are retained in the same generation:
+
+```text
+complete exact source-manifest member inventory
+selected generated-API TOC set equals the complete generated_api member set
+all selected documents admitted
+no in-domain normalization, payload-limit, or record-construction loss
+callable partition coverage = Complete
+exact query has no key-scoped conflict
+```
+
+Environment-excluded systems and ScriptObject methods are outside this
+global/namespace callable partition and remain explicit omissions. The authority
+is relative to the exact pinned corpus/profile/environment. It does not attest
+remote Git membership, currentness, runtime availability, signatures, hotfixes,
+protected-state behavior, or client acceptance. Explicit file lists and imported
+prebuilt artifacts remain Partial and cannot produce absence findings.
+
 ## 8. Finding primary source
 
 Preferred primary span:
@@ -149,7 +174,7 @@ No source handle is fabricated for the absent entity.
 - `wow.api.exists@1` descriptor/provider version;
 - canonical entity key;
 - decisive fact/query/authority IDs;
-- rule execution context/fixture policy.
+- rule execution context and exact fixture or production policy identity.
 
 ## 10. Finding arguments
 
@@ -168,7 +193,7 @@ authority_status: authoritative_absent
 Rendered message example is non-normative:
 
 ```text
-`C_E0Fixture.RemovedApi` is not present in the selected reference profile.
+`C_Spell.RemovedApi` is not present in the selected exact reference profile.
 ```
 
 Message text is not identity.

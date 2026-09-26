@@ -113,17 +113,40 @@ SHA-256 and length. One source-root handle is retained throughout acquisition;
 all descendants use the existing no-follow, bounded, cancellation-aware reader.
 Unselected manifest members are validated as inventory records but **not read**.
 No whole-tree, Git blob-membership or network/currentness proof is inferred from
-the caller-supplied manifest. Receipt fields retain `git_membership=not_attested`
-and `unconsumed_source_bytes=not_verified`; use the independent Git-backed
-`cargo xtask verify-manifest` operation when that stronger verification is required.
+the caller-supplied manifest. Receipt fields retain `git_membership=not_attested` and
+`unconsumed_source_bytes=non_api_source_bytes_not_verified`; use the independent
+Git-backed `cargo xtask verify-manifest` operation when stronger repository
+verification is required. This does not weaken the narrower generated-API
+closure proof below.
+
+The manifest owner compares the complete declared `generated_api` member set with
+the exact TOC-selected set. `generated_api_closure=complete_manifest_toc_closure`
+is emitted only when both sets and their cardinalities match. The reference owner
+then independently requires every selected document to be admitted and rejects
+negative authority after any in-domain normalization, payload or record loss.
+Environment-excluded systems and ScriptObject methods are outside the selected
+global/namespace callable partition and remain explicit omissions. Conflicts stay
+key-scoped: the conflicted key is never clean or absent, while an unrelated exact
+miss may use complete partition authority.
+
+When all of those conditions hold, `reference.native.apidoc.api` uses
+`CoverageStatus::Complete` and the production `wow.api.exists@1` policy may report
+an unresolved member as authoritatively absent **within that exact pinned
+generated-API corpus and environment**. Explicit-file input, incomplete TOC
+closure, any failed document or any in-domain projection loss remains Partial, so
+missing records remain `NotEvaluated`. This is API-documentation authority only:
+it does not prove currentness, Git membership, runtime availability, signatures,
+hotfix state, protected-state behavior or client acceptance.
 
 The source selection identity additionally binds the manifest/TOC/version bytes,
-ordered selection and explicit load context. The full native report uses
-`wow-service/native-input-report/2` and retains the manifest admission receipt and
-all TOC records. Its compact public receipt uses `wow-service/native-input-receipt/2`
-with manifest/TOC/version identities and counts, not the full TOC record list.
+ordered selection and explicit load context. Manifested input now uses
+`wow-project/source-manifest-admission/2`, `wow-reference/native-callable-view/2`,
+`wow-service/native-input-report/4` and
+`wow-service/native-input-receipt/4`; the report/receipt retain declared and
+selected generated-API counts, closure state, the final authority decision and
+`negative_authority_scope=reference.native.apidoc.api` when that decision is true.
 The original explicit-files mode retains its v1 identity/report/receipt profiles.
-Neither mode gains authoritative absence or Secret facts. The native production policy can evaluate exact API presence; missing records under this Partial partition remain `NotEvaluated`.
+Production Secret/restriction evaluation remains unavailable.
 
 ## Explicit annotation inputs
 
@@ -190,13 +213,15 @@ unsafe input returns an error rather than silently disabling the selected lane.
 Declaration-level unsupported outcomes remain visible while independent entries
 can still be emitted. No caller source/resource files are modified.
 
-An enabled resource lane selects `wow-service/native-input-report/3` and
-`wow-service/native-input-receipt/3`. Their `annotation_inputs` field retains the
-exact resource selection and compact producer outcome counts by family, including
-unresolved structure fields, callback returns and global-color types. Full
-correction applications, external source text and maps stay in the bounded native
-report, not the compact command receipt. Source-only modes retain their v1/v2
-report shapes and identities when `annotation_inputs` is omitted.
+For explicit-file input, an enabled resource lane selects
+`wow-service/native-input-report/3` and
+`wow-service/native-input-receipt/3`. Manifested input uses the authority-aware v4
+report/receipt regardless of whether resources are present, so its source-closure
+contract does not change with annotation configuration. `annotation_inputs` retains
+the exact resource selection and compact producer outcome counts by family,
+including unresolved structure fields, callback returns and global-color types.
+Full correction applications, external source text and maps stay in the bounded
+native report, not the compact command receipt.
 
 The canonical correction-set digest participates in ProfileIdentity and hence
 Reference generation selection. The ReferenceView still retains **raw source
@@ -209,9 +234,10 @@ identity even when they happen to emit the same Library text. Moving an unchange
 host root does not change logical input identity.
 
 Neither content pins, external revision labels nor correction review strings
-attest Git membership, freshness, consumer correctness or runtime safety. All
-Reference partitions remain Partial; negative authority is still false and
-native API-presence dispatch is implemented by the W04 production policy; production Secret/restriction evaluation remains unavailable.
+attest Git membership, freshness, consumer correctness or runtime safety. Resource
+selection does not create Secret/restriction authority. The native API partition
+is Complete only under the manifested closure and loss checks above; every other
+mode remains Partial. Production Secret/restriction evaluation remains unavailable.
 
 ## Owner composition and identities
 
@@ -237,10 +263,11 @@ This prevents changed Library output from retaining an old project identity.
 
 The callable Reference slice contains exact global/namespace function candidates
 only. Duplicate declarations retain their candidates and an explicit conflict,
-not a chosen winner. ScriptObject receiver contracts, unsupported normalizations
-and environment exclusions remain explicit omissions. Every Reference partition
-is **Partial**, including a successfully parsed selected corpus. The route never
-creates Secret facets, restriction facts or authoritative absence from partial data.
+not a chosen winner. ScriptObject receiver contracts and environment exclusions
+remain explicit out-of-domain omissions. Explicit-file or lossy manifested input
+produces a **Partial** partition. Only the exact manifested closure described above
+can produce a Complete callable partition and API-documentation absence authority.
+The route never creates Secret facets or restriction facts.
 
 `LocalProjectInput::native_source_report()` exposes the bounded raw metadata,
 normalization/projection omissions, conflicts, annotation sidecars and source maps
@@ -251,7 +278,12 @@ and includes the receipt; ordinary status has a partial native annotation compon
 identified by the report digest. Existing non-native owner output remains version 1.
 The CLI does not write or automatically export the full report to disk.
 
-The annotation receipt is not LuaLS/Emmy semantic acceptance. A non-fixture check uses the real analyzer and the native production policy: exact API records may establish presence, while partial misses/conflicts and the Secret rule remain `NotEvaluated`. Partial is not a clean result, and there is no runtime or release-gate promotion.
+The annotation receipt is not LuaLS/Emmy semantic acceptance. A non-fixture check
+uses the real analyzer and the native production policy: exact API records may
+establish presence, a Complete manifested callable partition may establish exact
+member absence, and partial/conflicted/unsupported cases remain `NotEvaluated`.
+The Secret rule remains `NotEvaluated`. There is no runtime or release-gate
+promotion.
 
 ## Bounds and remaining work
 
@@ -274,4 +306,6 @@ service-native envelope, not arbitrary driver or Reference Pack output. Complete
 real-profile/consumer acceptance remains open W03 work.
 Manifest/selected-TOC admission is implemented, not independently executed semantic
 or Git provenance acceptance. Managed acquisition is W08;
-the W04 native policy covers exact API presence only; authoritative absence and production Secret policy remain unavailable. No tests or fixtures are changed by this slice.
+the W04 native policy covers exact API presence and, only for a Complete manifested
+generated-API corpus, exact member absence. Production Secret policy remains
+unavailable. No tests or fixtures are changed by this slice.

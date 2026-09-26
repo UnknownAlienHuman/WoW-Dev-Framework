@@ -1,6 +1,7 @@
 //! Conservative callable view of the existing native documentation model.
 //! Raw metadata and every candidate remain retained. No restriction inference,
-//! source execution, correction, alias substitution or absence authority.
+//! source execution, correction or alias substitution. Callable absence authority
+//! requires exact manifested TOC closure and loss-free in-domain projection.
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -16,6 +17,65 @@ use crate::{
 
 pub const NATIVE_API_PARTITION: &str = "reference.native.apidoc.api";
 pub const NATIVE_VIEW_PROFILE: &str = "wow-reference/native-callable-view/1";
+pub const NATIVE_VIEW_AUTHORITY_PROFILE: &str = "wow-reference/native-callable-view/2";
+
+/// Caller-supplied corpus closure evidence. The reference owner still downgrades
+/// to Partial when admitted documents or in-domain projection results are lost.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum NativeCallableCorpus {
+    ExplicitPartial,
+    ManifestToc {
+        declared_documents: u64,
+        selected_documents: usize,
+        source_closure_complete: bool,
+    },
+}
+
+impl NativeCallableCorpus {
+    #[must_use]
+    pub const fn explicit_partial() -> Self {
+        Self::ExplicitPartial
+    }
+
+    #[must_use]
+    pub const fn manifest_toc(
+        declared_documents: u64,
+        selected_documents: usize,
+        source_closure_complete: bool,
+    ) -> Self {
+        Self::ManifestToc {
+            declared_documents,
+            selected_documents,
+            source_closure_complete,
+        }
+    }
+
+    #[must_use]
+    pub const fn profile(self) -> &'static str {
+        match self {
+            Self::ExplicitPartial => NATIVE_VIEW_PROFILE,
+            Self::ManifestToc { .. } => NATIVE_VIEW_AUTHORITY_PROFILE,
+        }
+    }
+
+    fn complete_for(self, admitted_documents: usize) -> bool {
+        match self {
+            Self::ExplicitPartial => false,
+            Self::ManifestToc {
+                declared_documents,
+                selected_documents,
+                source_closure_complete,
+            } => {
+                source_closure_complete
+                    && declared_documents > 0
+                    && usize::try_from(declared_documents)
+                        .is_ok_and(|declared| declared == selected_documents)
+                    && selected_documents == admitted_documents
+            }
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct NativeViewSource {
@@ -56,14 +116,17 @@ fn checkpoint(stop: &AtomicBool) -> Result<(), NativeError> {
 }
 
 /// Project only exact global/namespace callable declarations. ScriptObject
-/// methods require their separate receiver contract and remain explicitly omitted.
-/// Every partition is Partial even when all selected registrations normalize.
+/// methods require their separate receiver contract and remain outside this
+/// partition's domain. A manifested corpus becomes Complete only when the exact
+/// TOC closes over every generated-API manifest member, every selected document
+/// is admitted, and no in-domain normalization/payload/record loss occurs.
 /// `selection` binds the caller's exact source/profile universe. The returned
 /// generation also binds emitted partition/conflict content, without a hash cycle.
 pub fn project_callables(
     documents: &[DocumentationDocument],
     environment: &str,
     selection: ReferenceGenerationId,
+    corpus: NativeCallableCorpus,
     stop: &AtomicBool,
 ) -> Result<NativeViewProjection, NativeError> {
     checkpoint(stop)?;
@@ -89,6 +152,7 @@ pub fn project_callables(
         return Err(error(NativeErrorCode::Limit));
     }
     let revision = documents[0].revision();
+    let projection_profile = corpus.profile();
     let mut ordered = documents.iter().collect::<Vec<_>>();
     ordered.sort_by_key(|doc| doc.path());
     if ordered
@@ -149,7 +213,7 @@ pub fn project_callables(
                     None => format!("function:{}", function.name),
                 };
                 let source_bytes = crate::wire_json::canonical_json_bytes(&(
-                    NATIVE_VIEW_PROFILE,
+                    projection_profile,
                     revision,
                     doc.path(),
                     doc.sha256(),
@@ -223,12 +287,25 @@ pub fn project_callables(
         }
         candidates.extend(group);
     }
-    let partition = ReferencePartition::new(NATIVE_API_PARTITION, CoverageStatus::Partial, records)
+    let has_in_domain_loss = issues.iter().any(|issue| {
+        !matches!(
+            issue.code,
+            "environment_not_selected" | "script_object_requires_receiver_contract"
+        )
+    });
+    let negative_authority = corpus.complete_for(documents.len()) && !has_in_domain_loss;
+    let coverage = if negative_authority {
+        CoverageStatus::Complete
+    } else {
+        CoverageStatus::Partial
+    };
+    let partition = ReferencePartition::new(NATIVE_API_PARTITION, coverage, records)
         .map_err(|_| error(NativeErrorCode::InvalidIdentity))?;
     let generation = ReferenceGenerationId::derive(&(
-        NATIVE_VIEW_PROFILE,
+        projection_profile,
         selection,
         environment,
+        corpus,
         &partition,
         &conflicts,
         &issues,
@@ -238,11 +315,11 @@ pub fn project_callables(
         .map_err(|_| error(NativeErrorCode::InvalidIdentity))?;
     checkpoint(stop)?;
     Ok(NativeViewProjection {
-        schema: NATIVE_VIEW_PROFILE,
+        schema: projection_profile,
         view,
         candidates,
         sources,
         issues,
-        negative_authority: false,
+        negative_authority,
     })
 }

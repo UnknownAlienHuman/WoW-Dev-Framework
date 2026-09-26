@@ -107,6 +107,11 @@ pub(super) fn report(
         "wow-service/native-input-report/1" => 1,
         "wow-service/native-input-report/2" => 2,
         "wow-service/native-input-report/3" => 3,
+        "wow-service/native-input-report/4" => {
+            return Err(invalid(
+                "authority-bearing native reports require source reacquisition and cannot be cached",
+            ));
+        }
         _ => return Err(invalid("unsupported retained native report schema")),
     };
     let profile = serde_json::to_value(selected_profile)
@@ -129,6 +134,7 @@ pub(super) fn report(
     if &report.profile != selected_profile
         || &report.reference.view != reference_view
         || report.negative_authority
+        || report.negative_authority_scope.is_some()
         || report.reference.negative_authority
         || report.library.negative_authority
         || report.reference.schema != wow_reference::native_view::NATIVE_VIEW_PROFILE
@@ -205,6 +211,8 @@ struct ReportBinding {
     #[serde(default, deserialize_with = "present")]
     annotation_inputs: Option<OpaqueObject>,
     negative_authority: bool,
+    #[serde(default, deserialize_with = "present")]
+    negative_authority_scope: Option<String>,
 }
 
 #[derive(Deserialize)]

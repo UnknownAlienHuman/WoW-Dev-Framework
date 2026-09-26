@@ -61,7 +61,7 @@ Partition selectors resolve to exact records before execution.
 
 ## 4. Universal context requirements
 
-Both E0 rules require:
+Every active fixture or production rule policy requires:
 
 ```text
 one valid ProfileIdentity
@@ -141,6 +141,30 @@ lookup capability usable
 - rule/profile scope unsupported.
 
 Profile/generation mismatch remains context error.
+
+### Native release-profile extension
+
+The native production policy is bound to one exact non-fixture `ProfileId` and
+uses `reference.native.apidoc.api`. A direct static namespace/member lookup may
+prove presence under Partial coverage. It may prove absence only when the
+partition is Complete because the exact manifested generated-API TOC closes over
+every declared `generated_api` member, every selected document was admitted, and
+no in-domain projection loss occurred. A key-scoped conflict still blocks that
+key.
+
+The following remain `NotEvaluated`, not absent:
+
+- explicit-file native corpora;
+- partial TOC/member closure or duplicate selection;
+- failed document admission;
+- normalization, payload-budget, or record-construction loss;
+- dynamic/computed receiver/member facts;
+- receivers not represented by the admitted callable namespace domain;
+- prebuilt native artifacts, which do not reacquire the source closure.
+
+Completeness is relative to the selected pinned corpus and environment. It is not
+remote-currentness, Git-membership, runtime, hotfix, signature, or protected-state
+authority.
 
 ## 6. `wow.secret.local_operation@1` requirements
 
@@ -228,6 +252,12 @@ accepted guard targets exact value
 accepted guard/control-flow relation proves dominance over exact operation
 operation belongs to supported scope/kind
 ```
+
+### Production native status
+
+The current production native policy has no authoritative restriction partition.
+It therefore emits one explicit `NotEvaluated(MissingRestrictionFacet)` outcome
+for this rule instead of scanning names, generated annotations, or source text.
 
 ### Blockers -> NotEvaluated
 

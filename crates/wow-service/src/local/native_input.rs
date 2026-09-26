@@ -76,10 +76,15 @@ pub struct NativeManifestIdentity {
     pub toc: NativeFileIdentity,
     pub version_file: NativeFileIdentity,
     pub declared_included_files: u64,
+    pub declared_generated_api_files: u64,
+    pub selected_generated_api_files: usize,
+    pub generated_api_closure: &'static str,
+    pub generated_api_closure_complete: bool,
     pub verified_source_files: usize,
     pub selected_document_files: usize,
     pub git_membership: &'static str,
     pub unconsumed_source_bytes: &'static str,
+    pub negative_authority: bool,
 }
 
 impl From<&SourceManifestReceipt> for NativeManifestIdentity {
@@ -95,10 +100,15 @@ impl From<&SourceManifestReceipt> for NativeManifestIdentity {
             toc: file(receipt.selected_toc()),
             version_file: file(&receipt.version_file),
             declared_included_files: receipt.declared_included_files,
+            declared_generated_api_files: receipt.declared_generated_api_files,
+            selected_generated_api_files: receipt.selected_generated_api_files,
+            generated_api_closure: receipt.generated_api_closure,
+            generated_api_closure_complete: receipt.generated_api_closure_complete,
             verified_source_files: receipt.verified_source_files,
             selected_document_files: receipt.selected_file_count(),
             git_membership: receipt.git_membership,
             unconsumed_source_bytes: receipt.unconsumed_source_bytes,
+            negative_authority: receipt.negative_authority,
         }
     }
 }
@@ -131,6 +141,8 @@ pub struct NativeInputReceipt {
     pub report_sha256: String,
     pub report_bytes: usize,
     pub negative_authority: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub negative_authority_scope: Option<&'static str>,
     pub semantic_consumer_acceptance: &'static str,
 }
 
@@ -240,11 +252,18 @@ impl LocalProjectInput {
             ContentDigest::from_bytes(Sha256::digest(&selection).into()),
             correction_digest,
         )?;
-        let generation = ReferenceGenerationId::derive(&(
-            wow_reference::native_view::NATIVE_VIEW_PROFILE,
-            &profile,
-        ))
-        .map_err(|_| invalid("native reference generation cannot be derived"))?;
+        let callable_corpus = source_manifest.as_ref().map_or_else(
+            wow_reference::native_view::NativeCallableCorpus::explicit_partial,
+            |receipt| {
+                wow_reference::native_view::NativeCallableCorpus::manifest_toc(
+                    receipt.declared_generated_api_files,
+                    receipt.selected_generated_api_files,
+                    receipt.generated_api_closure_complete,
+                )
+            },
+        );
+        let generation = ReferenceGenerationId::derive(&(callable_corpus.profile(), &profile))
+            .map_err(|_| invalid("native reference generation cannot be derived"))?;
         let mut documents = Vec::new();
         let mut failures = Vec::new();
         for file in &captured {
@@ -279,6 +298,7 @@ impl LocalProjectInput {
             &documents,
             &input.profile.environment,
             generation,
+            callable_corpus,
             stop,
         )
         .map_err(native_error)?;
@@ -401,13 +421,15 @@ impl LocalProjectInput {
             #[serde(skip_serializing_if = "Option::is_none")]
             annotation_inputs: Option<&'a NativeAnnotationInputsReceipt>,
             negative_authority: bool,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            negative_authority_scope: Option<&'static str>,
         }
         let report = report_bytes(
             &Report {
-                schema: if annotation_inputs.is_some() {
+                schema: if manifested {
+                    "wow-service/native-input-report/4"
+                } else if annotation_inputs.is_some() {
                     "wow-service/native-input-report/3"
-                } else if manifested {
-                    "wow-service/native-input-report/2"
                 } else {
                     "wow-service/native-input-report/1"
                 },
@@ -423,15 +445,18 @@ impl LocalProjectInput {
                 reference: &reference,
                 library: &library,
                 annotation_inputs: annotation_receipt.as_ref(),
-                negative_authority: false,
+                negative_authority: reference.negative_authority,
+                negative_authority_scope: reference
+                    .negative_authority
+                    .then_some(wow_reference::native_view::NATIVE_API_PARTITION),
             },
             stop,
         )?;
         let receipt = NativeInputReceipt {
-            schema: if annotation_inputs.is_some() {
+            schema: if manifested {
+                "wow-service/native-input-receipt/4"
+            } else if annotation_inputs.is_some() {
                 "wow-service/native-input-receipt/3"
-            } else if manifested {
-                "wow-service/native-input-receipt/2"
             } else {
                 "wow-service/native-input-receipt/1"
             },
@@ -455,7 +480,10 @@ impl LocalProjectInput {
             library_files,
             report_sha256: wow_reference::native::source_digest(&report),
             report_bytes: report.len(),
-            negative_authority: false,
+            negative_authority: reference.negative_authority,
+            negative_authority_scope: reference
+                .negative_authority
+                .then_some(wow_reference::native_view::NATIVE_API_PARTITION),
             semantic_consumer_acceptance: "not_evaluated",
         };
         let libraries = library

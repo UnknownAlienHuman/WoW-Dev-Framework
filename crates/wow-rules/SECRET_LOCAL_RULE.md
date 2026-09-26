@@ -1,6 +1,6 @@
 # `wow.secret.local_operation@1`
 
-**Status:** normative E0-E rule algorithm.
+**Status:** normative E0-E algorithm; production native execution is explicitly unavailable.
 
 ## 1. Purpose
 
@@ -97,6 +97,8 @@ required relation: guard/accepted branch dominates the operation
 This is synthetic fixture semantics. It proves rule plumbing only.
 
 Production guard/predicate semantics must later come from selected reference/dialect contracts and current KB/runtime guidance. Do not generalize the fixture policy globally.
+
+The current native release policy registers the rule for capability reporting but returns `NotEvaluated(MissingRestrictionFacet)`. Generated API callables, annotations, names and source text do not create an authoritative `secret.return` facet. No production guard/value-flow conclusion is emitted until a separately admitted restriction partition and policy exist.
 
 ## 7. Guard applicability
 
