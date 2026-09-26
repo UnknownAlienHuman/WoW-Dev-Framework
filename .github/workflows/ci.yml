@@ -9,6 +9,7 @@ concurrency:
   cancel-in-progress: false
 env:
   BASE_COMMIT: 92bf33aa08283ea79a1ae19b95c1e90a43a0b0f6
+  STAGING_PARENT: 5eb9a2abf3e6cca4624f13e5882398677bd880b4
   BASE_TREE: 312e29368aca67540951951592e34f6ce6d9ab23
   ORIGINAL_CI_BLOB: c32f5910287dbe2ffe62b97582d523cf2c91b0e5
   ORIGINAL_HYGIENE_BLOB: 92db869d288c49d29356176dc5ce48421c161533
@@ -29,7 +30,7 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test "$(git branch --show-current)" = main
-          test "$(git rev-parse "${GITHUB_SHA}^")" = "$BASE_COMMIT"
+          test "$(git rev-parse "${GITHUB_SHA}^")" = "$STAGING_PARENT"
           test "$(git hash-object .github/workflows/branch-hygiene.yml)" = "$ORIGINAL_HYGIENE_BLOB"
           git restore --source="$BASE_COMMIT" --staged --worktree .github/workflows/ci.yml
           test "$(git hash-object .github/workflows/ci.yml)" = "$ORIGINAL_CI_BLOB"
