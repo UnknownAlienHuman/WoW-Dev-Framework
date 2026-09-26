@@ -9,8 +9,9 @@ concurrency:
   cancel-in-progress: false
 env:
   BASE_COMMIT: 4f59187449804ab75ac9d55b13fb9d502edf4f2b
+  STAGING_PARENT: 1d299be2dffaa4179226c83b9b26605dd2d64e86
   BASE_TREE: 07ce941fc3cb7006c6b745293df1b82875e39be1
-  PATCH_SHA256: e902c4944f76622baca7f5f01000e4b2ef38aa6704e629eebc89d9c50ec02d17
+  PATCH_SHA256: 3c8a257af254cf0198fe91d1ee7ec46bff85506a04483000d6584a810cb07950
 jobs:
   checkpoint:
     runs-on: ubuntu-latest
@@ -27,7 +28,8 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git rev-parse "${GITHUB_SHA}^")" = "$BASE_COMMIT"
+          test "$(git rev-parse "${GITHUB_SHA}^")" = "$STAGING_PARENT"
+          test "$(git rev-parse "${STAGING_PARENT}^")" = "$BASE_COMMIT"
           xz -dc .ci/w04-secret-policy.patch.xz > "$RUNNER_TEMP/w04-secret-policy.patch"
           printf '%s  %s\n' "$PATCH_SHA256" "$RUNNER_TEMP/w04-secret-policy.patch" | sha256sum -c -
           git restore --source="$BASE_COMMIT" --staged --worktree .github/workflows/ci.yml
