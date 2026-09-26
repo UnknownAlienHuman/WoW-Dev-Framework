@@ -32,7 +32,6 @@ use crate::{
     RuleReferenceLookupRecord, RuleReferenceOutcome, RuleResult, RuleScope,
 };
 
-const API_PARTITION: &str = "reference.fixture.apidoc.system:C_E0Fixture";
 const SECRET_PARTITION: &str = "reference.fixture.restriction:C_E0Fixture.SecretText";
 const SECRET_ENTITY: &str = "function:C_E0Fixture.SecretText";
 const SECRET_PAYLOAD: &str = "return_position:1;applicability:unconditional_fixture";
@@ -57,8 +56,22 @@ struct CleanInput<'a> {
     guard: Option<RuleGuardClassification>,
 }
 
-/// Executes the closed E0-E registry synchronously over one immutable context.
+/// Executes the fixture registry and rejects a production policy.
 pub fn execute_e0(
+    context: &RuleExecutionContext<'_>,
+    scope: &RuleScope,
+) -> RuleResult<RuleExecutionReport> {
+    if !context.is_fixture_policy() {
+        return Err(RuleError::new(
+            RuleErrorCode::RuleProfileMismatch,
+            "execute_e0 requires the closed fixture policy",
+        ));
+    }
+    execute(context, scope)
+}
+
+/// Executes the two active providers under the selected fixture or production policy.
+pub fn execute(
     context: &RuleExecutionContext<'_>,
     scope: &RuleScope,
 ) -> RuleResult<RuleExecutionReport> {
@@ -90,7 +103,7 @@ pub fn execute_e0(
         context.project().analyzer_snapshot_id(),
         context.reference().generation_id(),
         context.reference().self_digest(),
-        context.fixture_policy().policy_id(),
+        context.policy_id(),
         evaluations,
         usage,
     )?;
@@ -134,7 +147,7 @@ fn cancelled_report(context: &RuleExecutionContext<'_>) -> RuleResult<RuleExecut
         context.project().analyzer_snapshot_id(),
         context.reference().generation_id(),
         context.reference().self_digest(),
-        context.fixture_policy().policy_id(),
+        context.policy_id(),
         evaluations,
         RuleBudgetUsage {
             evaluations: 2,
@@ -170,12 +183,13 @@ fn evaluate_api(
                 ));
                 return Ok(output);
             }
-            if fact.receiver() != "C_E0Fixture"
-                || fact.resolution() == EmmyReferenceResolution::Resolved
+            let Some(entity_lookup_key) = api_lookup_key(context, fact) else {
+                continue;
+            };
+            if context.is_fixture_policy() && fact.resolution() == EmmyReferenceResolution::Resolved
             {
                 continue;
             }
-            let entity_lookup_key = format!("function:{}.{}", fact.receiver(), fact.member());
             let scope_id = format!("api:{}:{}", file.file_id(), fact.fact_id());
             let call = calls.get(fact.fact_id()).copied();
             let fact_ids = api_fact_ids(fact, call);
@@ -206,7 +220,8 @@ fn evaluate_api(
                 )?);
                 continue;
             }
-            let (lookup, found) = exact_lookup(context, API_PARTITION, &entity_lookup_key)?;
+            let (lookup, found) =
+                exact_lookup(context, context.api_partition_id(), &entity_lookup_key)?;
             match lookup.outcome() {
                 RuleReferenceOutcome::Found => {
                     output.push(clean(
@@ -290,11 +305,49 @@ fn evaluate_api(
     Ok(output)
 }
 
+fn api_lookup_key(
+    context: &RuleExecutionContext<'_>,
+    fact: &EmmyMemberReferenceFact,
+) -> Option<String> {
+    if context.is_fixture_policy() {
+        return (fact.receiver() == "C_E0Fixture")
+            .then(|| format!("function:{}.{}", fact.receiver(), fact.member()));
+    }
+    let key = format!("function:{}.{}", fact.receiver(), fact.member());
+    let namespace_prefix = format!("function:{}.", fact.receiver());
+    let partition = context
+        .reference()
+        .partitions()
+        .iter()
+        .find(|partition| partition.id() == context.api_partition_id())?;
+    let known_namespace = partition
+        .records()
+        .iter()
+        .any(|record| record.key() == key || record.key().starts_with(&namespace_prefix))
+        || context.reference().conflicts().iter().any(|conflict| {
+            conflict.partition_id() == context.api_partition_id()
+                && (conflict.key() == key || conflict.key().starts_with(&namespace_prefix))
+        });
+    known_namespace.then_some(key)
+}
+
 fn evaluate_secret(
     context: &RuleExecutionContext<'_>,
     scope: &RuleScope,
     descriptor: &crate::RuleDescriptor,
 ) -> RuleResult<Vec<RuleEvaluationRecord>> {
+    if !context.supports_secret_policy() {
+        return Ok(vec![not_evaluated(
+            context,
+            descriptor,
+            "secret:production-policy:restriction-facets-unavailable",
+            vec![RuleBlockerKind::MissingRestrictionFacet],
+            vec![capability("reference.restriction.facets")?],
+            Vec::new(),
+            Vec::new(),
+            None,
+        )?]);
+    }
     let mut output = Vec::new();
     let references = context
         .project()
@@ -788,7 +841,7 @@ fn api_finding(
         evidence_records: usize_to_u64(evidence.len())?,
     };
     let result = RuleFindingSet::build(
-        context.fixture_policy().policy_id(),
+        context.policy_id(),
         RuleFindingSetInput {
             input_fact_ids,
             findings: vec![finding],
@@ -871,8 +924,8 @@ fn secret_finding(
         binding.fact_id(),
         operation.fact_id(),
         lookup.lookup_id(),
-        context.fixture_policy().policy_id(),
-        context.fixture_policy().policy_digest(),
+        context.policy_id(),
+        context.policy_digest(),
         guard,
         primary.handle_id(),
     ))
@@ -897,7 +950,7 @@ fn secret_finding(
     .required_capability_ids(descriptor.required_capabilities().to_vec())
     .message_arguments(vec![
         identifier_argument("facet", "secret.return")?,
-        identifier_argument("fixture_policy", context.fixture_policy().policy_id())?,
+        identifier_argument("fixture_policy", context.policy_id())?,
         argument("guard_state", guard_name(guard))?,
         identifier_argument("operation", "concatenation")?,
         identifier_argument("producer", SECRET_ENTITY)?,
@@ -929,7 +982,7 @@ fn secret_finding(
         evidence_records: usize_to_u64(evidence.len())?,
     };
     let result = RuleFindingSet::build(
-        context.fixture_policy().policy_id(),
+        context.policy_id(),
         RuleFindingSetInput {
             input_fact_ids,
             findings: vec![finding],
@@ -1015,7 +1068,7 @@ fn clean(
             .snapshot()
             .generation_context()
             .context_id(),
-        context.fixture_policy().policy_id(),
+        context.policy_id(),
         scope_id,
         claim,
         fact_ids,
@@ -1336,11 +1389,24 @@ fn project_handle(
 fn reference_view_handle(context: &RuleExecutionContext<'_>) -> RuleResult<SourceHandle> {
     let digest = ContentDigest::<SourceContent>::from_str(context.reference().self_digest())
         .map_err(core_construction)?;
+    let (origin_kind, origin_id, path) = if context.is_fixture_policy() {
+        (
+            SourceOriginKind::Fixture,
+            "reference-fixture:e0-e".to_owned(),
+            "reference/fixture-view.json",
+        )
+    } else {
+        (
+            SourceOriginKind::GeneratedArtifact,
+            format!("native-reference:{}", context.policy_profile_id()),
+            "reference/native-view.json",
+        )
+    };
     SourceHandleBuilder::new(
-        SourceOriginKind::Fixture,
-        "reference-fixture:e0-e",
+        origin_kind,
+        origin_id,
         context.reference().generation_id(),
-        "reference/fixture-view.json",
+        path,
         SourceSpan::whole_file(),
         digest,
     )

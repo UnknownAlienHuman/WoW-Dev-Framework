@@ -153,6 +153,4 @@ Source-producing inputs keep their existing report/receipt and analysis shapes.
 those bytes intentionally retain historical analyzer metadata, not current state.
 
 Reference admission permits only the existing single Partial native API callable
-partition, no restriction facets and no authoritative absence. Non-fixture WoW
-rules still remain NotEvaluated pending W04/#72. Export/import is not full W03,
-E0/E1, consumer, runtime or launch acceptance.
+partition, no restriction facets and no authoritative absence. The native production policy may evaluate exact API presence from the retained ReferenceView. Partial misses/conflicts and `wow.secret.local_operation@1` remain `NotEvaluated`. Export/import is not full W03, E0/E1, consumer, runtime or launch acceptance.

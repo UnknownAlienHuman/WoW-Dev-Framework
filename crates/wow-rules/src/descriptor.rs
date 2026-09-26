@@ -1,6 +1,7 @@
 use serde::Serialize;
 use wow_core::{
-    CapabilityId, MessageCode, RemediationClass, RolloutPolicy, RuleId, Severity, ToolVersion,
+    CapabilityId, MessageCode, ProfileId, RemediationClass, RolloutPolicy, RuleId, Severity,
+    ToolVersion,
 };
 
 use crate::identity::canonical_id;
@@ -12,7 +13,7 @@ pub const FIXTURE_PROFILE_ID: &str = "profile:fixture:retail-120100-e0-v1";
 pub const FIXTURE_POLICY_ID: &str = "wow-rules-e0-fixture-policy/1";
 pub const RULE_VERSION: &str = "1.0.0";
 
-const API_REQUIRED: &[&str] = &[
+const API_FIXTURE_REQUIRED: &[&str] = &[
     "project.generation.coherent",
     "project.source.registry.complete",
     "project.analyzer.snapshot.available",
@@ -25,7 +26,7 @@ const API_REQUIRED: &[&str] = &[
     "reference.symbol.exact_lookup",
 ];
 
-const SECRET_REQUIRED: &[&str] = &[
+const SECRET_FIXTURE_REQUIRED: &[&str] = &[
     "project.generation.coherent",
     "project.source.registry.complete",
     "project.analyzer.snapshot.available",
@@ -45,6 +46,44 @@ const SECRET_REQUIRED: &[&str] = &[
     "reference.source_handle.resolve",
 ];
 
+const API_PRODUCTION_REQUIRED: &[&str] = &[
+    "project.generation.coherent",
+    "project.source.registry.complete",
+    "project.analyzer.snapshot.available",
+    "emmy.library.loaded",
+    "emmy.file.parsed",
+    "emmy.fact.references",
+    "emmy.fact.calls",
+    "emmy.source_coordinates.exact",
+    "reference.native.profile.valid",
+    "reference.symbol.exact_lookup",
+];
+
+const SECRET_PRODUCTION_REQUIRED: &[&str] = &[
+    "project.generation.coherent",
+    "project.source.registry.complete",
+    "project.analyzer.snapshot.available",
+    "emmy.library.loaded",
+    "emmy.file.parsed",
+    "emmy.fact.references",
+    "emmy.fact.calls",
+    "emmy.fact.local_bindings",
+    "emmy.fact.local_flow",
+    "emmy.fact.operations",
+    "emmy.fact.guards",
+    "emmy.fact.control_flow",
+    "emmy.source_coordinates.exact",
+    "reference.native.profile.valid",
+    "reference.symbol.exact_lookup",
+    "reference.restriction.facets",
+    "reference.source_handle.resolve",
+];
+
+const API_FIXTURE_CASES: &str = "wow-rules-e0-api-exists-v1";
+const SECRET_FIXTURE_CASES: &str = "wow-rules-e0-secret-local-v1";
+const API_PRODUCTION_CASES: &str = "wow-rules-production-native-api-v1";
+const SECRET_PRODUCTION_CASES: &str = "wow-rules-production-secret-policy-v1";
+
 /// One immutable active rule contract.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -63,36 +102,53 @@ pub struct RuleDescriptor {
 }
 
 impl RuleDescriptor {
-    fn api_exists() -> RuleResult<Self> {
+    fn api_exists(profile_id: &str) -> RuleResult<Self> {
+        let production = profile_id != FIXTURE_PROFILE_ID;
         Self::build(
             API_EXISTS_RULE,
             "wow.api.missing",
-            API_REQUIRED,
-            "wow-rules-e0-api-exists-v1",
+            profile_id,
+            if production {
+                API_PRODUCTION_REQUIRED
+            } else {
+                API_FIXTURE_REQUIRED
+            },
+            if production {
+                API_PRODUCTION_CASES
+            } else {
+                API_FIXTURE_CASES
+            },
         )
     }
 
-    fn secret_local() -> RuleResult<Self> {
+    fn secret_local(profile_id: &str) -> RuleResult<Self> {
+        let production = profile_id != FIXTURE_PROFILE_ID;
         Self::build(
             SECRET_LOCAL_RULE,
             "wow.secret.unsafe_local_operation",
-            SECRET_REQUIRED,
-            "wow-rules-e0-secret-local-v1",
+            profile_id,
+            if production {
+                SECRET_PRODUCTION_REQUIRED
+            } else {
+                SECRET_FIXTURE_REQUIRED
+            },
+            if production {
+                SECRET_PRODUCTION_CASES
+            } else {
+                SECRET_FIXTURE_CASES
+            },
         )
     }
 
     fn build(
         rule_id: &str,
         category: &str,
+        profile_id: &str,
         capabilities: &[&str],
         fixture_case_set_id: &str,
     ) -> RuleResult<Self> {
-        let mut required_capabilities = capabilities
-            .iter()
-            .map(|value| value.parse::<CapabilityId>().map_err(core_error))
-            .collect::<RuleResult<Vec<_>>>()?;
-        required_capabilities.sort();
-        required_capabilities.dedup();
+        canonical_profile_id(profile_id)?;
+        let required_capabilities = capability_ids(capabilities)?;
         let value = Self {
             rule_id: rule_id.parse().map_err(core_error)?,
             rule_version: RULE_VERSION.parse().map_err(core_error)?,
@@ -100,7 +156,7 @@ impl RuleDescriptor {
             technical_severity: Severity::Error,
             rollout_policy: RolloutPolicy::Advisory,
             remediation_class: RemediationClass::PlanOnly,
-            supported_profile_id: FIXTURE_PROFILE_ID.into(),
+            supported_profile_id: profile_id.into(),
             required_capabilities,
             fixture_case_set_id: fixture_case_set_id.into(),
             max_evaluations: 1_024,
@@ -111,27 +167,56 @@ impl RuleDescriptor {
     }
 
     pub fn validate(&self) -> RuleResult<()> {
-        let supported = matches!(self.rule_id.as_str(), API_EXISTS_RULE | SECRET_LOCAL_RULE)
-            && self.rule_version == RULE_VERSION.parse().map_err(core_error)?
+        canonical_profile_id(&self.supported_profile_id)?;
+        let production = self.supported_profile_id.as_ref() != FIXTURE_PROFILE_ID;
+        let (expected_capabilities, expected_cases) = match self.rule_id.as_str() {
+            API_EXISTS_RULE => (
+                if production {
+                    API_PRODUCTION_REQUIRED
+                } else {
+                    API_FIXTURE_REQUIRED
+                },
+                if production {
+                    API_PRODUCTION_CASES
+                } else {
+                    API_FIXTURE_CASES
+                },
+            ),
+            SECRET_LOCAL_RULE => (
+                if production {
+                    SECRET_PRODUCTION_REQUIRED
+                } else {
+                    SECRET_FIXTURE_REQUIRED
+                },
+                if production {
+                    SECRET_PRODUCTION_CASES
+                } else {
+                    SECRET_FIXTURE_CASES
+                },
+            ),
+            _ => {
+                return Err(RuleError::new(
+                    RuleErrorCode::RuleDescriptorInvalid,
+                    "rule descriptor contains an unsupported rule",
+                )
+                .with_rule(self.rule_id.as_str()));
+            }
+        };
+        let expected_capabilities = capability_ids(expected_capabilities)?;
+        let supported = self.rule_version == RULE_VERSION.parse().map_err(core_error)?
             && self.technical_severity == Severity::Error
             && self.rollout_policy == RolloutPolicy::Advisory
             && self.remediation_class == RemediationClass::PlanOnly
-            && self.supported_profile_id.as_ref() == FIXTURE_PROFILE_ID
-            && !self.required_capabilities.is_empty()
-            && !self.fixture_case_set_id.is_empty()
+            && self.required_capabilities == expected_capabilities
+            && self.fixture_case_set_id.as_ref() == expected_cases
             && self.max_evaluations > 0
             && self.max_findings > 0;
-        if supported
-            && self
-                .required_capabilities
-                .windows(2)
-                .all(|pair| pair[0] < pair[1])
-        {
+        if supported {
             Ok(())
         } else {
             Err(RuleError::new(
                 RuleErrorCode::RuleDescriptorInvalid,
-                "rule descriptor violates the closed E0-E contract",
+                "rule descriptor violates the closed fixture/production contract",
             )
             .with_rule(self.rule_id.as_str()))
         }
@@ -193,7 +278,7 @@ impl RuleDescriptor {
     }
 }
 
-/// Canonical closed registry containing exactly the two E0-E providers.
+/// Canonical closed registry containing the two active providers for one profile.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct RuleRegistry {
@@ -204,9 +289,32 @@ pub struct RuleRegistry {
 
 impl RuleRegistry {
     pub fn e0() -> RuleResult<Self> {
+        Self::build(FIXTURE_PROFILE_ID)
+    }
+
+    pub fn production(profile_id: &str) -> RuleResult<Self> {
+        if profile_id == FIXTURE_PROFILE_ID {
+            return Err(RuleError::new(
+                RuleErrorCode::RuleRegistryInvalid,
+                "production registry cannot select the E0 fixture profile",
+            ));
+        }
+        Self::build(profile_id)
+    }
+
+    pub fn for_profile(profile_id: &str) -> RuleResult<Self> {
+        if profile_id == FIXTURE_PROFILE_ID {
+            Self::e0()
+        } else {
+            Self::production(profile_id)
+        }
+    }
+
+    fn build(profile_id: &str) -> RuleResult<Self> {
+        canonical_profile_id(profile_id)?;
         let mut descriptors = vec![
-            RuleDescriptor::api_exists()?,
-            RuleDescriptor::secret_local()?,
+            RuleDescriptor::api_exists(profile_id)?,
+            RuleDescriptor::secret_local(profile_id)?,
         ];
         descriptors.sort_by(|left, right| left.rule_id.cmp(&right.rule_id));
         #[derive(Serialize)]
@@ -216,7 +324,11 @@ impl RuleRegistry {
         }
         let registry_id = canonical_id(
             "rule-registry:sha256:",
-            "wow-rules/registry/e0-e/1",
+            if profile_id == FIXTURE_PROFILE_ID {
+                "wow-rules/registry/e0-e/1"
+            } else {
+                "wow-rules/registry/production/1"
+            },
             &Identity {
                 schema: "wow-rules/registry/1",
                 descriptors: &descriptors,
@@ -235,7 +347,7 @@ impl RuleRegistry {
         if self.schema != "wow-rules/registry/1" || self.descriptors.len() != 2 {
             return Err(RuleError::new(
                 RuleErrorCode::RuleRegistryInvalid,
-                "E0-E registry must contain exactly two descriptors",
+                "rule registry must contain exactly two descriptors",
             ));
         }
         for descriptor in &self.descriptors {
@@ -246,10 +358,21 @@ impl RuleRegistry {
         {
             return Err(RuleError::new(
                 RuleErrorCode::RuleRegistryInvalid,
-                "E0-E registry rule set/order is invalid",
+                "rule registry rule set/order is invalid",
             ));
         }
-        let rebuilt = Self::e0_without_validation()?;
+        let profile_id = self.descriptors[0].supported_profile_id();
+        if self
+            .descriptors
+            .iter()
+            .any(|descriptor| descriptor.supported_profile_id() != profile_id)
+        {
+            return Err(RuleError::new(
+                RuleErrorCode::RuleRegistryInvalid,
+                "rule registry mixes profile policies",
+            ));
+        }
+        let rebuilt = Self::build_without_validation(profile_id)?;
         if self.registry_id == rebuilt.registry_id {
             Ok(())
         } else {
@@ -260,10 +383,11 @@ impl RuleRegistry {
         }
     }
 
-    fn e0_without_validation() -> RuleResult<Self> {
+    fn build_without_validation(profile_id: &str) -> RuleResult<Self> {
+        canonical_profile_id(profile_id)?;
         let mut descriptors = vec![
-            RuleDescriptor::api_exists()?,
-            RuleDescriptor::secret_local()?,
+            RuleDescriptor::api_exists(profile_id)?,
+            RuleDescriptor::secret_local(profile_id)?,
         ];
         descriptors.sort_by(|left, right| left.rule_id.cmp(&right.rule_id));
         #[derive(Serialize)]
@@ -273,7 +397,11 @@ impl RuleRegistry {
         }
         let registry_id = canonical_id(
             "rule-registry:sha256:",
-            "wow-rules/registry/e0-e/1",
+            if profile_id == FIXTURE_PROFILE_ID {
+                "wow-rules/registry/e0-e/1"
+            } else {
+                "wow-rules/registry/production/1"
+            },
             &Identity {
                 schema: "wow-rules/registry/1",
                 descriptors: &descriptors,
@@ -301,6 +429,28 @@ impl RuleRegistry {
         self.descriptors
             .iter()
             .find(|descriptor| descriptor.rule_id.as_str() == rule_id)
+    }
+}
+
+fn capability_ids(values: &[&str]) -> RuleResult<Vec<CapabilityId>> {
+    let mut capabilities = values
+        .iter()
+        .map(|value| value.parse::<CapabilityId>().map_err(core_error))
+        .collect::<RuleResult<Vec<_>>>()?;
+    capabilities.sort();
+    capabilities.dedup();
+    Ok(capabilities)
+}
+
+fn canonical_profile_id(value: &str) -> RuleResult<()> {
+    let parsed = ProfileId::parse(value).map_err(core_error)?;
+    if parsed.value().as_str() == value {
+        Ok(())
+    } else {
+        Err(RuleError::new(
+            RuleErrorCode::RuleDescriptorInvalid,
+            "rule profile ID is not canonical",
+        ))
     }
 }
 

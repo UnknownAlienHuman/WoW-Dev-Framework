@@ -123,7 +123,7 @@ ordered selection and explicit load context. The full native report uses
 all TOC records. Its compact public receipt uses `wow-service/native-input-receipt/2`
 with manifest/TOC/version identities and counts, not the full TOC record list.
 The original explicit-files mode retains its v1 identity/report/receipt profiles.
-Neither mode gains authoritative absence, Secret facts or production rule dispatch.
+Neither mode gains authoritative absence or Secret facts. The native production policy can evaluate exact API presence; missing records under this Partial partition remain `NotEvaluated`.
 
 ## Explicit annotation inputs
 
@@ -211,7 +211,7 @@ host root does not change logical input identity.
 Neither content pins, external revision labels nor correction review strings
 attest Git membership, freshness, consumer correctness or runtime safety. All
 Reference partitions remain Partial; negative authority is still false and
-production rule dispatch remains W04 work.
+native API-presence dispatch is implemented by the W04 production policy; production Secret/restriction evaluation remains unavailable.
 
 ## Owner composition and identities
 
@@ -251,10 +251,7 @@ and includes the receipt; ordinary status has a partial native annotation compon
 identified by the report digest. Existing non-native owner output remains version 1.
 The CLI does not write or automatically export the full report to disk.
 
-The annotation receipt is not LuaLS/Emmy semantic acceptance. **WoW rule dispatch
-remains fixture-only pending W04 / PR #72.** A non-fixture check uses the real
-analyzer with its generated Library, but reports those WoW rules as NotEvaluated;
-partial is not a clean result. There is no runtime or release-gate promotion.
+The annotation receipt is not LuaLS/Emmy semantic acceptance. A non-fixture check uses the real analyzer and the native production policy: exact API records may establish presence, while partial misses/conflicts and the Secret rule remain `NotEvaluated`. Partial is not a clean result, and there is no runtime or release-gate promotion.
 
 ## Bounds and remaining work
 
@@ -277,4 +274,4 @@ service-native envelope, not arbitrary driver or Reference Pack output. Complete
 real-profile/consumer acceptance remains open W03 work.
 Manifest/selected-TOC admission is implemented, not independently executed semantic
 or Git provenance acceptance. Managed acquisition is W08;
-production rule policies are W04. No tests or fixtures are changed by this slice.
+the W04 native policy covers exact API presence only; authoritative absence and production Secret policy remain unavailable. No tests or fixtures are changed by this slice.

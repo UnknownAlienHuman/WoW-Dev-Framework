@@ -1,6 +1,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::Serialize;
+use wow_core::{ProfileId, ProfileKind};
 use wow_project::{ProjectFileId, ProjectView};
 use wow_reference::ReferenceView;
 
@@ -136,6 +137,112 @@ impl RuleFixturePolicy {
     }
 }
 
+/// Closed production policy for exact native API presence. Secret/restriction
+/// evaluation remains unavailable until an independently authoritative facet
+/// partition is supplied by a future policy version.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RuleProductionPolicy {
+    policy_id: Box<str>,
+    profile_id: Box<str>,
+    rule_versions: [&'static str; 2],
+    api_partition_id: &'static str,
+    api_fact_scope: &'static str,
+    api_presence_authority: &'static str,
+    api_absence_authority: &'static str,
+    secret_policy: &'static str,
+    policy_digest: Box<str>,
+}
+
+impl RuleProductionPolicy {
+    pub fn native_api(profile_id: &str) -> RuleResult<Self> {
+        let policy = Self::build(profile_id)?;
+        policy.validate()?;
+        Ok(policy)
+    }
+
+    fn build(profile_id: &str) -> RuleResult<Self> {
+        let parsed = ProfileId::parse(profile_id).map_err(|error| {
+            RuleError::new(
+                RuleErrorCode::RuleFixturePolicyInvalid,
+                format!("production policy profile is invalid: {error}"),
+            )
+        })?;
+        if parsed.value().as_str() != profile_id || profile_id == FIXTURE_PROFILE_ID {
+            return Err(RuleError::new(
+                RuleErrorCode::RuleFixturePolicyInvalid,
+                "production policy requires a canonical non-fixture profile",
+            ));
+        }
+        #[derive(Serialize)]
+        struct Material<'a> {
+            schema: &'static str,
+            profile_id: &'a str,
+            rule_versions: [&'static str; 2],
+            api_partition_id: &'static str,
+            api_fact_scope: &'static str,
+            api_presence_authority: &'static str,
+            api_absence_authority: &'static str,
+            secret_policy: &'static str,
+        }
+        let material = Material {
+            schema: "wow-rules/production-policy/native-api/1",
+            profile_id,
+            rule_versions: ["wow.api.exists@1", "wow.secret.local_operation@1"],
+            api_partition_id: wow_reference::native_view::NATIVE_API_PARTITION,
+            api_fact_scope: "direct_static_namespace_member",
+            api_presence_authority: "exact_record",
+            api_absence_authority: "partition_coverage_only",
+            secret_policy: "not_evaluated_without_authoritative_restriction_facets",
+        };
+        let policy_digest =
+            canonical_id("rule-production-policy:sha256:", material.schema, &material)?;
+        Ok(Self {
+            policy_id: policy_digest.clone(),
+            profile_id: profile_id.into(),
+            rule_versions: material.rule_versions,
+            api_partition_id: material.api_partition_id,
+            api_fact_scope: material.api_fact_scope,
+            api_presence_authority: material.api_presence_authority,
+            api_absence_authority: material.api_absence_authority,
+            secret_policy: material.secret_policy,
+            policy_digest,
+        })
+    }
+
+    pub fn validate(&self) -> RuleResult<()> {
+        let expected = Self::build(&self.profile_id)?;
+        if self == &expected {
+            Ok(())
+        } else {
+            Err(RuleError::new(
+                RuleErrorCode::RuleFixturePolicyInvalid,
+                "production rule policy differs from the closed native API policy",
+            ))
+        }
+    }
+
+    #[must_use]
+    pub fn policy_id(&self) -> &str {
+        &self.policy_id
+    }
+
+    #[must_use]
+    pub fn policy_digest(&self) -> &str {
+        &self.policy_digest
+    }
+
+    #[must_use]
+    pub fn profile_id(&self) -> &str {
+        &self.profile_id
+    }
+
+    #[must_use]
+    pub const fn api_partition_id(&self) -> &str {
+        self.api_partition_id
+    }
+}
+
 /// Bounded synchronous E0 provider budget.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -240,10 +347,17 @@ impl RuleScope {
     }
 }
 
+/// Policy selected for one immutable execution context.
+#[derive(Clone, Copy)]
+enum RulePolicyRef<'a> {
+    Fixture(&'a RuleFixturePolicy),
+    Production(&'a RuleProductionPolicy),
+}
+
 /// Immutable execution context assembled by a service or a fixture test.
 pub struct RuleExecutionContext<'a> {
     registry: &'a RuleRegistry,
-    fixture_policy: &'a RuleFixturePolicy,
+    policy: RulePolicyRef<'a>,
     project: &'a ProjectView,
     reference: &'a ReferenceView,
     budget: RuleExecutionBudget,
@@ -262,7 +376,26 @@ impl<'a> RuleExecutionContext<'a> {
     ) -> Self {
         Self {
             registry,
-            fixture_policy,
+            policy: RulePolicyRef::Fixture(fixture_policy),
+            project,
+            reference,
+            budget,
+            cancelled,
+        }
+    }
+
+    #[must_use]
+    pub const fn production(
+        registry: &'a RuleRegistry,
+        production_policy: &'a RuleProductionPolicy,
+        project: &'a ProjectView,
+        reference: &'a ReferenceView,
+        budget: RuleExecutionBudget,
+        cancelled: &'a AtomicBool,
+    ) -> Self {
+        Self {
+            registry,
+            policy: RulePolicyRef::Production(production_policy),
             project,
             reference,
             budget,
@@ -272,7 +405,10 @@ impl<'a> RuleExecutionContext<'a> {
 
     pub fn validate(&self, scope: &RuleScope) -> RuleResult<()> {
         self.registry.validate()?;
-        self.fixture_policy.validate()?;
+        match self.policy {
+            RulePolicyRef::Fixture(policy) => policy.validate()?,
+            RulePolicyRef::Production(policy) => policy.validate()?,
+        }
         self.project.snapshot().validate().map_err(|error| {
             RuleError::new(
                 RuleErrorCode::RuleExecutionContextInvalid,
@@ -286,16 +422,41 @@ impl<'a> RuleExecutionContext<'a> {
             )
         })?;
         let configuration = self.project.configuration();
-        if configuration.selected_profile().profile_id().as_str() != FIXTURE_PROFILE_ID {
+        let selected_profile = configuration.selected_profile();
+        if selected_profile.profile_id().as_str() != self.policy_profile_id() {
             return Err(RuleError::new(
                 RuleErrorCode::RuleProfileMismatch,
-                "selected profile is outside the closed E0-E fixture scope",
+                "rule policy profile differs from the selected project profile",
             ));
         }
-        if self.fixture_policy.profile_id != FIXTURE_PROFILE_ID {
+        match self.policy {
+            RulePolicyRef::Fixture(_)
+                if selected_profile.profile_kind() != ProfileKind::Fixture =>
+            {
+                return Err(RuleError::new(
+                    RuleErrorCode::RuleProfileMismatch,
+                    "fixture rule policy requires a fixture profile",
+                ));
+            }
+            RulePolicyRef::Production(_)
+                if selected_profile.profile_kind() != ProfileKind::Release =>
+            {
+                return Err(RuleError::new(
+                    RuleErrorCode::RuleProfileMismatch,
+                    "production rule policy requires a release profile",
+                ));
+            }
+            _ => {}
+        }
+        if self
+            .registry
+            .descriptors()
+            .iter()
+            .any(|descriptor| descriptor.supported_profile_id() != self.policy_profile_id())
+        {
             return Err(RuleError::new(
-                RuleErrorCode::RuleFixturePolicyInvalid,
-                "fixture policy profile differs from the project profile",
+                RuleErrorCode::RuleRegistryInvalid,
+                "rule registry profile differs from the execution policy",
             ));
         }
         let reference_generation = self
@@ -362,7 +523,7 @@ impl<'a> RuleExecutionContext<'a> {
         {
             return Err(RuleError::new(
                 RuleErrorCode::RuleRegistryInvalid,
-                "registry is missing a required E0-E rule version",
+                "registry is missing a required active rule version",
             ));
         }
         Ok(())
@@ -374,8 +535,53 @@ impl<'a> RuleExecutionContext<'a> {
     }
 
     #[must_use]
-    pub const fn fixture_policy(&self) -> &RuleFixturePolicy {
-        self.fixture_policy
+    pub const fn fixture_policy(&self) -> Option<&RuleFixturePolicy> {
+        match self.policy {
+            RulePolicyRef::Fixture(policy) => Some(policy),
+            RulePolicyRef::Production(_) => None,
+        }
+    }
+
+    #[must_use]
+    pub fn policy_id(&self) -> &str {
+        match self.policy {
+            RulePolicyRef::Fixture(policy) => policy.policy_id(),
+            RulePolicyRef::Production(policy) => policy.policy_id(),
+        }
+    }
+
+    #[must_use]
+    pub fn policy_digest(&self) -> &str {
+        match self.policy {
+            RulePolicyRef::Fixture(policy) => policy.policy_digest(),
+            RulePolicyRef::Production(policy) => policy.policy_digest(),
+        }
+    }
+
+    #[must_use]
+    pub fn policy_profile_id(&self) -> &str {
+        match self.policy {
+            RulePolicyRef::Fixture(_) => FIXTURE_PROFILE_ID,
+            RulePolicyRef::Production(policy) => policy.profile_id(),
+        }
+    }
+
+    #[must_use]
+    pub fn api_partition_id(&self) -> &str {
+        match self.policy {
+            RulePolicyRef::Fixture(_) => "reference.fixture.apidoc.system:C_E0Fixture",
+            RulePolicyRef::Production(policy) => policy.api_partition_id(),
+        }
+    }
+
+    #[must_use]
+    pub const fn is_fixture_policy(&self) -> bool {
+        matches!(self.policy, RulePolicyRef::Fixture(_))
+    }
+
+    #[must_use]
+    pub const fn supports_secret_policy(&self) -> bool {
+        matches!(self.policy, RulePolicyRef::Fixture(_))
     }
 
     #[must_use]

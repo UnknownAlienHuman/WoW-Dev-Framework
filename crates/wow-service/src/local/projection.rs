@@ -15,7 +15,7 @@ use wow_project::{
 use wow_reference::{CoverageStatus, ReferenceView};
 use wow_rules::{
     RuleEvaluationOutcome, RuleExecutionBudget, RuleExecutionContext, RuleExecutionReport,
-    RuleFixturePolicy, RuleRegistry, RuleScope,
+    RuleFixturePolicy, RuleProductionPolicy, RuleRegistry, RuleScope,
 };
 
 /// Exact owner receipts retained alongside service presentation. These contain
@@ -85,6 +85,13 @@ pub(super) fn components(
             .any(|record| record.state() != ProjectAnalyzerCapabilityState::Complete)
     });
     let fixture_rules = config.profile_id() == wow_rules::FIXTURE_PROFILE_ID;
+    let native_rules = !fixture_rules
+        && native_input.is_some()
+        && reference
+            .partitions()
+            .iter()
+            .any(|partition| partition.id() == wow_reference::native_view::NATIVE_API_PARTITION);
+    let supported_rules = fixture_rules || native_rules;
     let health = |partial| {
         if partial {
             ComponentHealth::Degraded
@@ -149,6 +156,22 @@ pub(super) fn components(
         )?
         .with_capability(
             "rules.profile.supported",
+            if supported_rules {
+                CapabilityState::Available
+            } else {
+                CapabilityState::Partial
+            },
+        )?
+        .with_capability(
+            "rules.api.exists",
+            if supported_rules {
+                CapabilityState::Available
+            } else {
+                CapabilityState::Partial
+            },
+        )?
+        .with_capability(
+            "rules.secret.local_operation",
             if fixture_rules {
                 CapabilityState::Available
             } else {
@@ -359,16 +382,33 @@ pub(super) fn check_context(
         selected.to_vec()
     };
     let mut evaluations = Vec::new();
-    let report = if identity.profile_id() == wow_rules::FIXTURE_PROFILE_ID && !files.is_empty() {
-        let policy =
-            RuleFixturePolicy::e0().map_err(|_| owner_error("fixture rule policy failed"))?;
+    let fixture_rules = identity.profile_id() == wow_rules::FIXTURE_PROFILE_ID;
+    let native_rules = !fixture_rules
+        && native_input.is_some()
+        && reference
+            .partitions()
+            .iter()
+            .any(|partition| partition.id() == wow_reference::native_view::NATIVE_API_PARTITION);
+    let report = if !files.is_empty() && (fixture_rules || native_rules) {
         let budget = RuleExecutionBudget::new(65_536, 65_536, 262_144, 262_144, 16 * 1024 * 1024)
             .map_err(|_| owner_error("rule budget failed"))?;
-        let context =
-            RuleExecutionContext::new(registry, &policy, project, reference, budget, stop);
         let scope = RuleScope::files(files.iter().map(|file| file.file_id().clone()).collect());
-        let report = wow_rules::execute_e0(&context, &scope)
-            .map_err(|_| owner_error("rule execution failed"))?;
+        let report = if fixture_rules {
+            let policy =
+                RuleFixturePolicy::e0().map_err(|_| owner_error("fixture rule policy failed"))?;
+            let context =
+                RuleExecutionContext::new(registry, &policy, project, reference, budget, stop);
+            wow_rules::execute_e0(&context, &scope)
+                .map_err(|_| owner_error("fixture rule execution failed"))?
+        } else {
+            let policy = RuleProductionPolicy::native_api(identity.profile_id())
+                .map_err(|_| owner_error("production rule policy failed"))?;
+            let context = RuleExecutionContext::production(
+                registry, &policy, project, reference, budget, stop,
+            );
+            wow_rules::execute(&context, &scope)
+                .map_err(|_| owner_error("production rule execution failed"))?
+        };
         cancelled(stop)?;
         for evaluation in report.evaluations() {
             if rules
@@ -380,7 +420,7 @@ pub(super) fn check_context(
         }
         Some(report)
     } else {
-        // Inline syntax does not create WoW semantic facts or fixture authority.
+        // Inline syntax has no semantic facts; non-native release profiles have no admitted rule policy.
         let (reason, capability) = if files.is_empty() {
             (
                 "xml_scope_has_no_rule_semantics",

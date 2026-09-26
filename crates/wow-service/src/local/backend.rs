@@ -38,8 +38,8 @@ impl LocalProjectBackend {
 
     fn configured(input: LocalProjectInput, function_calls: bool) -> ServiceResult<Self> {
         let project = input.bundle.configuration();
-        let registry =
-            RuleRegistry::e0().map_err(|_| owner_error("rule registry construction failed"))?;
+        let registry = RuleRegistry::for_profile(project.selected_profile().profile_id().as_str())
+            .map_err(|_| owner_error("rule registry construction failed"))?;
         let configuration = ServiceConfiguration::builder()
             .project_id(project.project_id().as_str())
             .profile_id(project.selected_profile().profile_id().as_str())
