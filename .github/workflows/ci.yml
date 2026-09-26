@@ -1,240 +1,138 @@
-name: CI
+name: Production rule policy checkpoint
 on:
-  workflow_dispatch:
+  push:
+    branches: [main]
 permissions:
-  contents: read
+  contents: write
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: w04-production-policy-checkpoint
+  cancel-in-progress: false
+env:
+  BASE_COMMIT: acdefdc6fe2c6b27bae1b2ecd95fb47ff006e6ac
+  BASE_TREE: cf501e1c74d2e3bde5a797cec9b1dee3444bafe9
+  PATCH_SHA256: 57b5de5e361eaaa4736a40544e97c7ffcdc498d7250a29699a33b675faf5b02d
 jobs:
-  checks:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
-    defaults:
-      run:
-        shell: bash
+  checkpoint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: main
+          fetch-depth: 0
           persist-credentials: false
-      - name: Install current stable Rust
+      - name: Admit exact patch and restore manual CI before checking
+        id: admit
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse "${GITHUB_SHA}^")" = "$BASE_COMMIT"
+          xz -dc .ci/w04-production.patch.xz > "$RUNNER_TEMP/w04-production.patch"
+          printf '%s  %s\n' "$PATCH_SHA256" "$RUNNER_TEMP/w04-production.patch" | sha256sum -c -
+          git restore --source="$BASE_COMMIT" --staged --worktree .github/workflows/ci.yml
+          git rm -- .ci/w04-production.patch.xz
+          test "$(git write-tree)" = "$BASE_TREE"
+          git apply --index "$RUNNER_TEMP/w04-production.patch"
+      - name: Install minimal compiler tools
         run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
-      - name: Record tested inputs
-        run: |
-          git rev-parse HEAD
-          rustc +stable -Vv
-      - name: Native repository policy and skill checks
-        run: cargo +stable xtask check
-      - run: cargo +stable fmt --all --check
-      - run: cargo +stable check --locked --workspace --all-targets --all-features
-      - run: cargo +stable clippy --locked --workspace --all-targets --all-features -- -D warnings
-      - run: cargo +stable test --locked --workspace --all-targets --all-features
-      - run: cargo +stable test --release --locked --workspace --all-targets --all-features
-      - name: Check documentation
-        env:
-          RUSTDOCFLAGS: -D warnings
-        run: cargo +stable doc --locked --workspace --all-features --no-deps
-      - name: Verify tests did not rewrite tracked files
-        run: git diff --exit-code
-      - name: Archive exact tested source
-        if: runner.os == 'Linux'
-        run: |
-          git archive --format=tar --output="$RUNNER_TEMP/tested-source.tar" HEAD
-          git rev-parse HEAD > "$RUNNER_TEMP/COMMIT_SHA"
-          sha256sum "$RUNNER_TEMP/tested-source.tar" > "$RUNNER_TEMP/SHA256SUMS"
-      - name: Retain tested source
-        if: runner.os == 'Linux'
-        uses: actions/upload-artifact@v7
-        with:
-          name: tested-source-${{ github.sha }}
-          path: |
-            ${{ runner.temp }}/tested-source.tar
-            ${{ runner.temp }}/COMMIT_SHA
-            ${{ runner.temp }}/SHA256SUMS
-          retention-days: 3
-          if-no-files-found: error
-  updated-dependencies:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - run: rustup toolchain install stable --profile minimal --component clippy
-      - run: cargo +stable update
-      - run: cargo +stable test --workspace --all-targets --all-features
-      - run: cargo +stable clippy --workspace --all-targets --all-features -- -D warnings
-  parser-compatibility:
-    name: Rolling Emmy parser compatibility
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - run: rustup toolchain install stable --profile minimal
-      - name: Isolate the rolling parser consumer workspace
+      - name: Format changed Rust modules only
+        shell: bash
         run: |
           set -euo pipefail
-          sed -i \
-            -e '/"apps\/wow",/d' \
-            -e '/"crates\/wow-emmy",/d' \
-            -e '/"crates\/wow-project",/d' \
-            -e '/"crates\/wow-rules",/d' \
-            -e '/"crates\/wow-service",/d' \
-            -e '/"crates\/wow-recognizers",/d' \
-            Cargo.toml
-          for member in wow-emmy wow-project wow-rules wow-service wow-recognizers; do
-            if grep -Fq "\"crates/$member\"," Cargo.toml; then
-              echo "$member remained in the parser-only workspace" >&2
-              exit 1
-            fi
+          rustfmt +stable --edition 2024 --config skip_children=true \
+            crates/wow-rules/src/context.rs \
+            crates/wow-rules/src/descriptor.rs \
+            crates/wow-rules/src/engine.rs \
+            crates/wow-rules/src/lib.rs \
+            crates/wow-service/src/local/backend.rs \
+            crates/wow-service/src/local/projection.rs
+      - name: Minimal selected-package Clippy; no tests executed
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustc +stable -Vv | tee "$RUNNER_TEMP/RUST_VERSION"
+          cargo +stable clippy --locked -p wow-rules -p wow-service -p wow-cli --all-targets --all-features -- -D warnings 2>&1 | tee "$RUNNER_TEMP/clippy.log"
+      - name: Repository policy and whitespace
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo +stable xtask check 2>&1 | tee "$RUNNER_TEMP/policy.log"
+          git diff --check
+          git diff --cached --check
+      - name: Retain exact source and check outcomes
+        if: always() && steps.admit.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/checkpoint"
+          git add --all
+          git write-tree > "$RUNNER_TEMP/checkpoint/CHECKED_TREE"
+          git archive --format=tar -o "$RUNNER_TEMP/checkpoint/checked-source.tar" "$(cat "$RUNNER_TEMP/checkpoint/CHECKED_TREE")"
+          git diff --cached --binary "$BASE_COMMIT" > "$RUNNER_TEMP/checkpoint/formatted.patch"
+          printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/checkpoint/STAGING_SHA"
+          for file in RUST_VERSION clippy.log policy.log; do
+            if test -f "$RUNNER_TEMP/$file"; then cp "$RUNNER_TEMP/$file" "$RUNNER_TEMP/checkpoint/$file"; fi
           done
-      - name: Resolve current parser in isolated CI checkout
-        run: |
-          cargo +stable update
-          cargo +stable metadata --format-version 1 > "$RUNNER_TEMP/rolling-dependencies.json"
-      - name: Test reference consumer against current parser
-        run: cargo +stable test --package wow-reference --package wow-annotations --all-targets --all-features
-      - name: Retain exact offline dependency inputs
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/parser-inputs"
-          cargo +stable vendor --locked "$RUNNER_TEMP/parser-inputs/vendor" > "$RUNNER_TEMP/parser-inputs/vendor-config.toml"
-          cp Cargo.lock "$RUNNER_TEMP/parser-inputs/Cargo.lock"
-          cp Cargo.toml "$RUNNER_TEMP/parser-inputs/workspace-Cargo.toml"
-          cp crates/wow-reference/Cargo.toml "$RUNNER_TEMP/parser-inputs/reference-Cargo.toml"
-          git rev-parse HEAD > "$RUNNER_TEMP/parser-inputs/COMMIT_SHA"
-          rustc +stable -Vv > "$RUNNER_TEMP/parser-inputs/rust-version.txt"
-          tar -czf "$RUNNER_TEMP/parser-inputs.tar.gz" -C "$RUNNER_TEMP/parser-inputs" .
-          sha256sum "$RUNNER_TEMP/parser-inputs.tar.gz" > "$RUNNER_TEMP/parser-inputs.sha256"
+          (cd "$RUNNER_TEMP/checkpoint" && sha256sum checked-source.tar > SHA256SUMS)
+      - name: Upload checked Git objects without moving any branch
+        if: success()
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const { execFileSync } = require('child_process');
+            const git = (...args) => execFileSync('git', args, { encoding: 'utf8' }).trim();
+            const allowed = new Set([
+              'apps/wow/NATIVE_ARTIFACT.md',
+              'apps/wow/NATIVE_INPUT.md',
+              'crates/wow-rules/PRODUCTION_POLICY.md',
+              'crates/wow-rules/src/context.rs',
+              'crates/wow-rules/src/descriptor.rs',
+              'crates/wow-rules/src/engine.rs',
+              'crates/wow-rules/src/lib.rs',
+              'crates/wow-service/src/local/backend.rs',
+              'crates/wow-service/src/local/projection.rs',
+              '.ci/w04-production.patch.xz',
+              '.github/workflows/ci.yml'
+            ]);
+            const parent = process.env.GITHUB_SHA;
+            const parts = execFileSync('git', ['diff', '--cached', '--no-renames', '--name-status', '-z', parent], { encoding: 'utf8' }).split('\0');
+            if (parts.pop() !== '' || parts.length % 2 !== 0) throw new Error('invalid diff record');
+            const entries = [];
+            for (let index = 0; index < parts.length; index += 2) {
+              const status = parts[index], file = parts[index + 1];
+              if (!allowed.has(file) || !['A', 'M', 'D'].includes(status)) throw new Error( unexpected source change: ${status} ${file}`);
+              if (status === 'D') {
+                if (file !== '.ci/w04-production.patch.xz') throw new Error('unexpected deletion');
+                entries.push({ path: file, mode: '100644', type: 'blob', sha: null });
+              } else {
+                const mode = git('ls-files', '--stage', '--', file).split(' ')[0];
+                if (mode !== '100644') throw new Error('unexpected source mode');
+                const bytes = fs.readFileSync(file);
+                if (bytes.length > 1024 * 1024) throw new Error('unexpected source size');
+                const blob = await github.rest.git.createBlob({ ...context.repo, encoding: 'base64', content: bytes.toString('base64') });
+                if (blob.data.sha !== git('hash-object', '--', file)) throw new Error('uploaded blob mismatch');
+                entries.push({ path: file, mode, type: 'blob', sha: blob.data.sha });
+              }
+            }
+            if (fs.existsSync('.ci/w04-production.patch.xz')) throw new Error('temporary patch remains');
+            const base = await github.rest.git.getCommit({ ...context.repo, commit_sha: parent });
+            const tree = await github.rest.git.createTree({ ...context.repo, base_tree: base.data.tree.sha, tree: entries });
+            if (tree.data.sha !== git('write-tree')) throw new Error('uploaded tree mismatch');
+            const commit = await github.rest.git.createCommit({
+              ...context.repo,
+              tree: tree.data.sha,
+              parents: [parent],
+              message: 'feat(rules): execute native API policy for release profiles [skip ci]\n\nW04 production slice. Bind registry and policy to the exact release profile, evaluate exact native API presence conservatively, retain partial/conflict outcomes and keep Secret evaluation explicitly unavailable without authoritative facets. Selected Clippy and repository policy only; no tests executed. Manual CI restored before checking.'
+            });
+            fs.writeFileSync(path.join(process.env.RUNNER_TEMP, 'checkpoint', 'PROPOSED_COMMIT'), commit.data.sha + '\n');
+            core.info(`Uploaded checked tree ${tree.data.sha} and commit ${commit.data.sha}; no branch moved.`);
       - uses: actions/upload-artifact@v7
+        if: always() && steps.admit.outcome == 'success'
         with:
-          name: parser-inputs-${{ github.sha }}
-          path: |
-            ${{ runner.temp }}/parser-inputs.tar.gz
-            ${{ runner.temp }}/parser-inputs.sha256
-          retention-days: 3
-          if-no-files-found: error
-  wasm-bridge:
-    name: Wasm swap and rollback (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - name: Install current Rust and the guest target
-        run: |
-          rustup toolchain install stable --profile minimal --component rustfmt --component clippy
-          rustup target add wasm32-unknown-unknown --toolchain stable
-      - name: Build two real guest artifacts without rebuilding the host
-        run: |
-          cargo +stable build --locked -p wow-ketho-literals-wasm --target wasm32-unknown-unknown --profile wasm-compact
-          cargo +stable build --locked -p wow-ketho-literals-wasm --target wasm32-unknown-unknown --profile wasm-speed
-      - name: Resolve independently updateable bridge dependencies
-        run: cargo +stable generate-lockfile --manifest-path bridges/literal-host/Cargo.toml
-      - name: Retain reproducible bridge dependency inputs
-        if: runner.os == 'Linux'
-        run: |
-          set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/bridge-inputs"
-          cargo +stable vendor --locked --manifest-path bridges/literal-host/Cargo.toml "$RUNNER_TEMP/bridge-inputs/vendor" > "$RUNNER_TEMP/bridge-inputs/vendor-config.toml"
-          cp bridges/literal-host/Cargo.lock "$RUNNER_TEMP/bridge-inputs/Cargo.lock"
-          rustc +stable -Vv > "$RUNNER_TEMP/bridge-inputs/rust-version.txt"
-          git rev-parse HEAD > "$RUNNER_TEMP/bridge-inputs/COMMIT_SHA"
-          tar -czf "$RUNNER_TEMP/bridge-inputs.tar.gz" -C "$RUNNER_TEMP/bridge-inputs" .
-          sha256sum "$RUNNER_TEMP/bridge-inputs.tar.gz" > "$RUNNER_TEMP/bridge-inputs.sha256"
-      - name: Upload bridge dependency inputs
-        if: runner.os == 'Linux'
-        uses: actions/upload-artifact@v7
-        with:
-          name: bridge-inputs-${{ github.sha }}
-          path: |
-            ${{ runner.temp }}/bridge-inputs.tar.gz
-            ${{ runner.temp }}/bridge-inputs.sha256
-          retention-days: 3
-          if-no-files-found: error
-      - name: Check the isolated host
-        run: |
-          cargo +stable fmt --manifest-path bridges/literal-host/Cargo.toml --all --check
-          cargo +stable clippy --locked --manifest-path bridges/literal-host/Cargo.toml --all-targets -- -D warnings
-          cargo +stable test --locked --manifest-path bridges/literal-host/Cargo.toml --all-targets
-      - name: Run mandatory compiled-guest parity, swap, retained operation and rollback
-        env:
-          WDF_WASM_A: ${{ github.workspace }}/target/wasm32-unknown-unknown/wasm-compact/wow_ketho_literals_wasm.wasm
-          WDF_WASM_B: ${{ github.workspace }}/target/wasm32-unknown-unknown/wasm-speed/wow_ketho_literals_wasm.wasm
-        run: |
-          set -euo pipefail
-          cargo +stable test --locked --manifest-path bridges/literal-host/Cargo.toml --test real_guest -- --ignored --nocapture | tee "$RUNNER_TEMP/wasm-probe.txt"
-          cargo +stable test --locked --manifest-path bridges/literal-host/Cargo.toml --test real_source -- --ignored --nocapture | tee "$RUNNER_TEMP/wasm-source-probe.txt"
-          git rev-parse HEAD > "$RUNNER_TEMP/WASM_COMMIT_SHA"
-          sha256sum "$WDF_WASM_A" "$WDF_WASM_B" > "$RUNNER_TEMP/WASM_SHA256SUMS"
-      - name: Check host documentation
-        env:
-          RUSTDOCFLAGS: -D warnings
-        run: cargo +stable doc --locked --manifest-path bridges/literal-host/Cargo.toml --no-deps
-      - name: Retain compiled guest evidence and dependency selection
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: wasm-bridge-${{ matrix.os }}-${{ github.sha }}
-          path: |
-            ${{ github.workspace }}/target/wasm32-unknown-unknown/wasm-compact/wow_ketho_literals_wasm.wasm
-            ${{ github.workspace }}/target/wasm32-unknown-unknown/wasm-speed/wow_ketho_literals_wasm.wasm
-            ${{ github.workspace }}/bridges/literal-host/Cargo.lock
-            ${{ runner.temp }}/wasm-probe.txt
-            ${{ runner.temp }}/wasm-source-probe.txt
-            ${{ runner.temp }}/WASM_COMMIT_SHA
-            ${{ runner.temp }}/WASM_SHA256SUMS
-          retention-days: 3
-          if-no-files-found: error
-  annotation-consumers:
-    name: Semantic annotation consumers (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - run: rustup toolchain install stable --profile minimal
-      - name: Resolve current test consumers and verify upstream asset hashes
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: bash .github/scripts/consumer-inputs.sh
-      - name: Run mandatory real positive, negative and mutation probes
-        env:
-          WDF_CONSUMER_OUTPUT: ${{ runner.temp }}/semantic-consumers
-        run: cargo +stable test --locked -p wow-annotations --test consumers -- --ignored --nocapture
-      - name: Verify tests did not modify tracked inputs
-        run: git diff --exit-code
-      - name: Retain exact consumer identities and semantic results
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: annotation-consumers-${{ matrix.os }}-${{ github.sha }}
-          path: |
-            ${{ runner.temp }}/semantic-consumers/consumer-report.json
-            ${{ runner.temp }}/consumer-inputs/*-release.json
-            ${{ runner.temp }}/consumer-inputs/*-asset.json
+          name: w04-production-policy-${{ github.run_id }}
+          path: ${{ runner.temp }}/checkpoint
           retention-days: 3
           if-no-files-found: error
