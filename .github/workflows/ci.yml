@@ -9,6 +9,7 @@ concurrency:
   cancel-in-progress: false
 env:
   BASE_COMMIT: acdefdc6fe2c6b27bae1b2ecd95fb47ff006e6ac
+  STAGING_PARENT: 4fbe89ee977eecbadaa9b2815238fbb188ce60d6
   BASE_TREE: cf501e1c74d2e3bde5a797cec9b1dee3444bafe9
   PATCH_SHA256: 57b5de5e361eaaa4736a40544e97c7ffcdc498d7250a29699a33b675faf5b02d
 jobs:
@@ -27,7 +28,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git rev-parse "${GITHUB_SHA}^")" = "$BASE_COMMIT"
+          test "$(git rev-parse "${GITHUB_SHA}^")" = "$STAGING_PARENT"
           xz -dc .ci/w04-production.patch.xz > "$RUNNER_TEMP/w04-production.patch"
           printf '%s  %s\n' "$PATCH_SHA256" "$RUNNER_TEMP/w04-production.patch" | sha256sum -c -
           git restore --source="$BASE_COMMIT" --staged --worktree .github/workflows/ci.yml
@@ -75,7 +76,7 @@ jobs:
             if test -f "$RUNNER_TEMP/$file"; then cp "$RUNNER_TEMP/$file" "$RUNNER_TEMP/checkpoint/$file"; fi
           done
           (cd "$RUNNER_TEMP/checkpoint" && sha256sum checked-source.tar > SHA256SUMS)
-      - name: Upload checked Git objects without moving any branch
+      - name: Upload checked blobs without moving any branch
         if: success()
         uses: actions/github-script@v8
         with:
@@ -87,7 +88,6 @@ jobs:
             const allowed = new Set([
               'apps/wow/NATIVE_ARTIFACT.md',
               'apps/wow/NATIVE_INPUT.md',
-              'crates/wow-rules/PRODUCTION_POLICY.md',
               'crates/wow-rules/src/context.rs',
               'crates/wow-rules/src/descriptor.rs',
               'crates/wow-rules/src/engine.rs',
@@ -103,7 +103,9 @@ jobs:
             const entries = [];
             for (let index = 0; index < parts.length; index += 2) {
               const status = parts[index], file = parts[index + 1];
-              if (!allowed.has(file) || !['A', 'M', 'D'].includes(status)) throw new Error( unexpected source change: ${status} ${file}`);
+              if (!allowed.has(file) || !['A', 'M', 'D'].includes(status)) {
+                throw new Error(`unexpected checked change: ${status} ${file}`);
+              }
               if (status === 'D') {
                 if (file !== '.ci/w04-production.patch.xz') throw new Error('unexpected deletion');
                 entries.push({ path: file, mode: '100644', type: 'blob', sha: null });
@@ -118,17 +120,16 @@ jobs:
               }
             }
             if (fs.existsSync('.ci/w04-production.patch.xz')) throw new Error('temporary patch remains');
-            const base = await github.rest.git.getCommit({ ...context.repo, commit_sha: parent });
-            const tree = await github.rest.git.createTree({ ...context.repo, base_tree: base.data.tree.sha, tree: entries });
-            if (tree.data.sha !== git('write-tree')) throw new Error('uploaded tree mismatch');
-            const commit = await github.rest.git.createCommit({
-              ...context.repo,
-              tree: tree.data.sha,
-              parents: [parent],
-              message: 'feat(rules): execute native API policy for release profiles [skip ci]\n\nW04 production slice. Bind registry and policy to the exact release profile, evaluate exact native API presence conservatively, retain partial/conflict outcomes and keep Secret evaluation explicitly unavailable without authoritative facets. Selected Clippy and repository policy only; no tests executed. Manual CI restored before checking.'
-            });
-            fs.writeFileSync(path.join(process.env.RUNNER_TEMP, 'checkpoint', 'PROPOSED_COMMIT'), commit.data.sha + '\n');
-            core.info(`Uploaded checked tree ${tree.data.sha} and commit ${commit.data.sha}; no branch moved.`);
+            const manifest = {
+              parent,
+              checked_tree: git('write-tree'),
+              entries,
+            };
+            fs.writeFileSync(
+              path.join(process.env.RUNNER_TEMP, 'checkpoint', 'BLOB_MANIFEST.json'),
+              JSON.stringify(manifest, null, 2) + '\n'
+            );
+            core.info(`Uploaded ${entries.filter(entry => entry.sha).length} checked blobs; no tree, commit or branch was changed.`);
       - uses: actions/upload-artifact@v7
         if: always() && steps.admit.outcome == 'success'
         with:
