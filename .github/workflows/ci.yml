@@ -1,17 +1,19 @@
-name: Production Secret policy checkpoint
+name: Production Secret policy artifact checkpoint
 on:
   push:
     branches: [main]
 permissions:
-  contents: read
+  actions: read
+  contents: write
 concurrency:
-  group: w04-production-secret-policy-checkpoint
+  group: w04-production-secret-artifact-checkpoint
   cancel-in-progress: false
 env:
   BASE_COMMIT: 4f59187449804ab75ac9d55b13fb9d502edf4f2b
-  STAGING_PARENT: 1d299be2dffaa4179226c83b9b26605dd2d64e86
-  BASE_TREE: 07ce941fc3cb7006c6b745293df1b82875e39be1
-  PATCH_SHA256: 3c8a257af254cf0198fe91d1ee7ec46bff85506a04483000d6584a810cb07950
+  SOURCE_ARTIFACT_ID: '10909672455'
+  SOURCE_ARTIFACT_ZIP_SHA256: eaa8e9e7b2ff28542b927a579fdd492dc5ef2b665b61fe68634d1327558e292b
+  SOURCE_TAR_SHA256: d9c505a75ba51e1fdf2a1296d6207972e743978685522c651bbacc06b3a29816
+  SOURCE_TREE: 4911f08f96e252cd969eff386fc87b47a3b777af
 jobs:
   checkpoint:
     runs-on: ubuntu-latest
@@ -22,20 +24,81 @@ jobs:
           ref: main
           fetch-depth: 0
           persist-credentials: false
-      - name: Admit exact patch and restore manual CI before checking
+      - name: Recover formatted source and apply the isolated borrow fix
         id: admit
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git rev-parse "${GITHUB_SHA}^")" = "$STAGING_PARENT"
-          test "$(git rev-parse "${STAGING_PARENT}^")" = "$BASE_COMMIT"
-          xz -dc .ci/w04-secret-policy.patch.xz > "$RUNNER_TEMP/w04-secret-policy.patch"
-          printf '%s  %s\n' "$PATCH_SHA256" "$RUNNER_TEMP/w04-secret-policy.patch" | sha256sum -c -
-          git restore --source="$BASE_COMMIT" --staged --worktree .github/workflows/ci.yml
-          git rm -- .ci/w04-secret-policy.patch.xz
-          test "$(git write-tree)" = "$BASE_TREE"
-          git apply --index "$RUNNER_TEMP/w04-secret-policy.patch"
+          mkdir -p "$RUNNER_TEMP/source-artifact"
+          gh api \
+            -H 'Accept: application/vnd.github+json' \
+            "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${SOURCE_ARTIFACT_ID}/zip" \
+            > "$RUNNER_TEMP/source-artifact.zip"
+          printf '%s  %s\n' "$SOURCE_ARTIFACT_ZIP_SHA256" "$RUNNER_TEMP/source-artifact.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/source-artifact.zip" -d "$RUNNER_TEMP/source-artifact"
+          test "$(cat "$RUNNER_TEMP/source-artifact/CHECKED_TREE")" = "$SOURCE_TREE"
+          printf '%s  %s\n' "$SOURCE_TAR_SHA256" "$RUNNER_TEMP/source-artifact/checked-source.tar" | sha256sum -c -
+
+          git reset --hard "$BASE_COMMIT"
+          git clean -fdx
+          tar -xf "$RUNNER_TEMP/source-artifact/checked-source.tar" -C .
+
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('crates/wow-reference/src/native_view.rs')
+          text = path.read_text()
+          checkpoint = '''fn checkpoint(stop: &AtomicBool) -> Result<(), NativeError> {
+              if stop.load(Ordering::Acquire) {
+                  Err(error(NativeErrorCode::Cancelled))
+              } else {
+                  Ok(())
+              }
+          }
+          '''
+          helper = checkpoint + '''
+          fn issue(code: &'static str, document: &DocumentationDocument, span: Span) -> NativeViewIssue {
+              NativeViewIssue {
+                  code,
+                  path: document.path().to_owned(),
+                  sha256: document.sha256().to_owned(),
+                  span,
+              }
+          }
+          '''
+          closure = '''            let mut omit = |code, span| {
+                          issues.push(NativeViewIssue {
+                              code,
+                              path: doc.path().to_owned(),
+                              sha256: doc.sha256().to_owned(),
+                              span,
+                          })
+                      };
+          '''
+          assert checkpoint in text
+          assert closure in text
+          text = text.replace(checkpoint, helper, 1).replace(closure, '', 1)
+          replacements = {
+              '                    omit("normalization_rejected", failure.span);':
+                  '                    issues.push(issue("normalization_rejected", doc, failure.span));',
+              '                omit("environment_not_selected", registration.value.span);':
+                  '                issues.push(issue("environment_not_selected", doc, registration.value.span));',
+              '                    omit("script_object_requires_receiver_contract", system.raw.span);':
+                  '                    issues.push(issue("script_object_requires_receiver_contract", doc, system.raw.span));',
+              '                    omit("callable_payload_limit", function.raw.span);':
+                  '                    issues.push(issue("callable_payload_limit", doc, function.raw.span));',
+              '                        omit("callable_record_rejected", function.raw.span);':
+                  '                        issues.push(issue("callable_record_rejected", doc, function.raw.span));',
+          }
+          for old, new in replacements.items():
+              assert old in text, old
+              text = text.replace(old, new, 1)
+          path.write_text(text)
+          PY
+          git diff --check
       - name: Install minimal compiler tools
         run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
       - name: Format changed Rust modules only
@@ -66,7 +129,24 @@ jobs:
           set -euo pipefail
           cargo +stable xtask check 2>&1 | tee "$RUNNER_TEMP/policy.log"
           git diff --check
-          git diff --cached --check
+          actual="$(git diff --name-only "$BASE_COMMIT" | LC_ALL=C sort)"
+          expected="$(cat <<'EOF'
+          apps/wow/NATIVE_ARTIFACT.md
+          apps/wow/NATIVE_INPUT.md
+          crates/wow-emmy/src/flow.rs
+          crates/wow-reference/src/native_view.rs
+          crates/wow-rules/CAPABILITY_AND_COVERAGE.md
+          crates/wow-rules/SECRET_LOCAL_RULE.md
+          crates/wow-rules/src/context.rs
+          crates/wow-rules/src/engine.rs
+          crates/wow-rules/src/output.rs
+          crates/wow-service/src/local/mod.rs
+          crates/wow-service/src/local/native_artifact/wire.rs
+          crates/wow-service/src/local/native_input.rs
+          crates/wow-service/src/local/projection.rs
+          EOF
+          )"
+          test "$actual" = "$expected"
       - name: Retain exact source and check outcomes
         if: always() && steps.admit.outcome == 'success'
         shell: bash
@@ -82,6 +162,45 @@ jobs:
             if test -f "$RUNNER_TEMP/$file"; then cp "$RUNNER_TEMP/$file" "$RUNNER_TEMP/checkpoint/$file"; fi
           done
           (cd "$RUNNER_TEMP/checkpoint" && sha256sum checked-source.tar > SHA256SUMS)
+      - name: Upload checked product blobs without moving a branch
+        if: success()
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const { execFileSync } = require('child_process');
+            const files = [
+              'apps/wow/NATIVE_ARTIFACT.md',
+              'apps/wow/NATIVE_INPUT.md',
+              'crates/wow-emmy/src/flow.rs',
+              'crates/wow-reference/src/native_view.rs',
+              'crates/wow-rules/CAPABILITY_AND_COVERAGE.md',
+              'crates/wow-rules/SECRET_LOCAL_RULE.md',
+              'crates/wow-rules/src/context.rs',
+              'crates/wow-rules/src/engine.rs',
+              'crates/wow-rules/src/output.rs',
+              'crates/wow-service/src/local/mod.rs',
+              'crates/wow-service/src/local/native_artifact/wire.rs',
+              'crates/wow-service/src/local/native_input.rs',
+              'crates/wow-service/src/local/projection.rs',
+            ];
+            const manifest = [];
+            for (const file of files) {
+              const bytes = fs.readFileSync(file);
+              const response = await github.rest.git.createBlob({
+                ...context.repo,
+                encoding: 'base64',
+                content: bytes.toString('base64'),
+              });
+              const localSha = execFileSync('git', ['hash-object', '--', file], { encoding: 'utf8' }).trim();
+              if (response.data.sha !== localSha) {
+                throw new Error(`blob mismatch for ${file}`);
+              }
+              manifest.push({ path: file, mode: '100644', type: 'blob', sha: response.data.sha });
+            }
+            const output = path.join(process.env.RUNNER_TEMP, 'checkpoint', 'blob-manifest.json');
+            fs.writeFileSync(output, JSON.stringify(manifest, null, 2) + '\n');
       - uses: actions/upload-artifact@v7
         if: always() && steps.admit.outcome == 'success'
         with:
