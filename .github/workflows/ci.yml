@@ -10,10 +10,10 @@ concurrency:
   cancel-in-progress: false
 env:
   BASE_COMMIT: 4f59187449804ab75ac9d55b13fb9d502edf4f2b
-  SOURCE_ARTIFACT_ID: '10909672455'
-  SOURCE_ARTIFACT_ZIP_SHA256: eaa8e9e7b2ff28542b927a579fdd492dc5ef2b665b61fe68634d1327558e292b
-  SOURCE_TAR_SHA256: d9c505a75ba51e1fdf2a1296d6207972e743978685522c651bbacc06b3a29816
-  SOURCE_TREE: 4911f08f96e252cd969eff386fc87b47a3b777af
+  SOURCE_ARTIFACT_ID: '10909699611'
+  SOURCE_ARTIFACT_ZIP_SHA256: be82ebf5d153e00b67a84cc6fa29ee2d841b2c35e83e23b4b9bfdb2714812063
+  SOURCE_TAR_SHA256: 173fe70916339ed418644ef50251e4673217f571cc67565fecdc2dd5c4aa1e61
+  SOURCE_TREE: f06a396bf37123e32c33332f845bab2503301e8a
 jobs:
   checkpoint:
     runs-on: ubuntu-latest
@@ -51,16 +51,7 @@ jobs:
 
           path = Path('crates/wow-reference/src/native_view.rs')
           text = path.read_text()
-          checkpoint = '''fn checkpoint(stop: &AtomicBool) -> Result<(), NativeError> {
-              if stop.load(Ordering::Acquire) {
-                  Err(error(NativeErrorCode::Cancelled))
-              } else {
-                  Ok(())
-              }
-          }
-          '''
-          helper = checkpoint + '''
-          fn issue(code: &'static str, document: &DocumentationDocument, span: Span) -> NativeViewIssue {
+          duplicate = '''fn issue(code: &'static str, document: &DocumentationDocument, span: Span) -> NativeViewIssue {
               NativeViewIssue {
                   code,
                   path: document.path().to_owned(),
@@ -68,34 +59,12 @@ jobs:
                   span,
               }
           }
+
           '''
-          closure = '''            let mut omit = |code, span| {
-                          issues.push(NativeViewIssue {
-                              code,
-                              path: doc.path().to_owned(),
-                              sha256: doc.sha256().to_owned(),
-                              span,
-                          })
-                      };
-          '''
-          assert checkpoint in text
-          assert closure in text
-          text = text.replace(checkpoint, helper, 1).replace(closure, '', 1)
-          replacements = {
-              '                    omit("normalization_rejected", failure.span);':
-                  '                    issues.push(issue("normalization_rejected", doc, failure.span));',
-              '                omit("environment_not_selected", registration.value.span);':
-                  '                issues.push(issue("environment_not_selected", doc, registration.value.span));',
-              '                    omit("script_object_requires_receiver_contract", system.raw.span);':
-                  '                    issues.push(issue("script_object_requires_receiver_contract", doc, system.raw.span));',
-              '                    omit("callable_payload_limit", function.raw.span);':
-                  '                    issues.push(issue("callable_payload_limit", doc, function.raw.span));',
-              '                        omit("callable_record_rejected", function.raw.span);':
-                  '                        issues.push(issue("callable_record_rejected", doc, function.raw.span));',
-          }
-          for old, new in replacements.items():
-              assert old in text, old
-              text = text.replace(old, new, 1)
+          assert text.count('fn issue(') == 2
+          assert duplicate in text
+          text = text.replace(duplicate, '', 1)
+          assert text.count('fn issue(') == 1
           path.write_text(text)
           PY
           git diff --check
