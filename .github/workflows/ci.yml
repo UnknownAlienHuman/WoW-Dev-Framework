@@ -10,10 +10,10 @@ concurrency:
   cancel-in-progress: false
 env:
   BASE_COMMIT: 4f59187449804ab75ac9d55b13fb9d502edf4f2b
-  SOURCE_ARTIFACT_ID: '10910206384'
-  SOURCE_ARTIFACT_ZIP_SHA256: 95da8dc611b54d7a4c8e55e89de199828fef85f9075123b5f4c17032d32adf77
-  SOURCE_TAR_SHA256: 48492ce31255b3e911e1da4086fd05b3da39fd1f590582dd62f4c105a58177da
-  SOURCE_TREE: a22a1b26296ae0a4b4bff071b75d61ec9ed0034b
+  SOURCE_ARTIFACT_ID: '10910083750'
+  SOURCE_ARTIFACT_ZIP_SHA256: 5aa5d8f698a5a613b767bee59c76735ec9c41ca161d5aa3ba91d8f40b6c3b300
+  SOURCE_TAR_SHA256: 137d24c8ee90ab3571979aab34aa9ed924a126bfcce6851590764cc276aad0ab
+  SOURCE_TREE: 4e505e8dea1d3fa9f24b20f0a537e271859158e9
 jobs:
   checkpoint:
     runs-on: ubuntu-latest
@@ -24,7 +24,7 @@ jobs:
           ref: main
           fetch-depth: 0
           persist-credentials: false
-      - name: Recover formatted source and factor the materialization result
+      - name: Recover formatted source and project the production clean claim
         id: admit
         shell: bash
         env:
@@ -49,33 +49,18 @@ jobs:
           python - <<'PY'
           from pathlib import Path
 
-          path = Path('crates/wow-reference/src/native_view.rs')
+          path = Path('crates/wow-service/src/local/projection.rs')
           text = path.read_text()
-          marker = '''fn materialize(
+          old = '''                wow_rules::RuleCleanClaimKind::SecretFixtureOperationGuardedForExactValueAndScope => "secret_fixture_operation_guarded_for_exact_value_and_scope",
+                          wow_rules::RuleCleanClaimKind::SecretProducerHasNoMatchingFacet => "secret_producer_has_no_matching_facet",
           '''
-          alias = '''type MaterializedRecords = (
-              Vec<ReferenceRecord>,
-              Vec<ReferenceRecord>,
-              Vec<ReferenceConflict>,
-          );
-
+          new = '''                wow_rules::RuleCleanClaimKind::SecretFixtureOperationGuardedForExactValueAndScope => "secret_fixture_operation_guarded_for_exact_value_and_scope",
+                          wow_rules::RuleCleanClaimKind::SecretProductionOperationGuardedForExactValueAndScope => "secret_production_operation_guarded_for_exact_value_and_scope",
+                          wow_rules::RuleCleanClaimKind::SecretProducerHasNoMatchingFacet => "secret_producer_has_no_matching_facet",
           '''
-          old_result = ''') -> Result<
-              (
-                  Vec<ReferenceRecord>,
-                  Vec<ReferenceRecord>,
-                  Vec<ReferenceConflict>,
-              ),
-              NativeError,
-          > {
-          '''
-          new_result = ''') -> Result<MaterializedRecords, NativeError> {
-          '''
-          assert marker in text
-          assert old_result in text
-          assert 'type MaterializedRecords' not in text
-          text = text.replace(marker, alias + marker, 1)
-          text = text.replace(old_result, new_result, 1)
+          assert old in text
+          assert 'secret_production_operation_guarded_for_exact_value_and_scope' not in text
+          text = text.replace(old, new, 1)
           path.write_text(text)
           PY
           git diff --check
