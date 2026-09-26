@@ -33,8 +33,8 @@ impl NativeExportRequest {
         max_bytes: usize,
         expected_sha256: Option<String>,
     ) -> ServiceResult<Self> {
-        let project_id = ProjectId::new(project_id)
-            .map_err(|_| invalid("invalid native export ProjectId"))?;
+        let project_id =
+            ProjectId::new(project_id).map_err(|_| invalid("invalid native export ProjectId"))?;
         if max_bytes == 0 || max_bytes > NATIVE_ARTIFACT_MAX_BYTES {
             return Err(budget());
         }
@@ -84,11 +84,7 @@ pub fn execute_native_export(
     stop: &AtomicBool,
 ) -> ServiceResult<NativeExportArtifact> {
     export(&input, request, stop).map_err(|error| {
-        ServiceError::for_operation(
-            error.code(),
-            error.message(),
-            request.operation_id.as_str(),
-        )
+        ServiceError::for_operation(error.code(), error.message(), request.operation_id.as_str())
     })
 }
 
@@ -172,11 +168,7 @@ fn export(
                 },
                 negative_authority: false,
             };
-            super::super::native_input::report_bytes_with_limit(
-                &output,
-                request.max_bytes,
-                stop,
-            )?
+            super::super::native_input::report_bytes_with_limit(&output, request.max_bytes, stop)?
         }
     };
     cancelled(stop)?;

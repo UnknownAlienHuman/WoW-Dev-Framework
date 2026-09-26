@@ -21,7 +21,9 @@ use super::input::{ProjectMetadata, invalid};
 use super::{LocalProjectInput, cancelled};
 use crate::{ServiceError, ServiceErrorCode, ServiceResult};
 
-pub use export::{NativeExportArtifact, NativeExportKind, NativeExportRequest, execute_native_export};
+pub use export::{
+    NativeExportArtifact, NativeExportKind, NativeExportRequest, execute_native_export,
+};
 pub use wire::ARTIFACT_SCHEMA as NATIVE_ARTIFACT_SCHEMA;
 pub const LOCAL_NATIVE_ARTIFACT_SCHEMA: &str = "wow-service/local-project-native-artifact/1";
 pub const NATIVE_ARTIFACT_MAX_BYTES: usize = 64 * 1024 * 1024;
@@ -69,7 +71,9 @@ pub(super) struct NativeArtifactEvidence {
 impl LocalProjectInput {
     #[must_use]
     pub fn native_artifact_receipt(&self) -> Option<&NativeArtifactReceipt> {
-        self.native_artifact.as_ref().map(|evidence| &evidence.receipt)
+        self.native_artifact
+            .as_ref()
+            .map(|evidence| &evidence.receipt)
     }
 
     pub(super) fn from_native_artifact(
@@ -102,7 +106,9 @@ impl LocalProjectInput {
             || artifact.profile.profile_id() != &input.expected_profile_id
             || input.expected_profile_id.as_str() == wow_rules::FIXTURE_PROFILE_ID
         {
-            return Err(invalid("native artifact schema, profile or authority mismatch"));
+            return Err(invalid(
+                "native artifact schema, profile or authority mismatch",
+            ));
         }
         wire::reference(&artifact.reference_view)?;
         if artifact.source_report.json.len() > NATIVE_ARTIFACT_MAX_BYTES
@@ -230,7 +236,9 @@ fn parse_digest(value: &str) -> ServiceResult<ContentDigest<SourceContent>> {
         .parse()
         .map_err(|_| invalid("invalid exact native artifact digest"))?;
     if digest.to_string() != value {
-        return Err(invalid("native artifact digest must use canonical spelling"));
+        return Err(invalid(
+            "native artifact digest must use canonical spelling",
+        ));
     }
     Ok(digest)
 }

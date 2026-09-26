@@ -20,7 +20,10 @@ struct Arguments {
 pub fn run(values: Vec<OsString>) -> u8 {
     if values.len() == 2 && (values[1] == "--help" || values[1] == "-h") {
         let mut stdout = std::io::stdout().lock();
-        return match stdout.write_all(HELP.as_bytes()).and_then(|()| stdout.flush()) {
+        return match stdout
+            .write_all(HELP.as_bytes())
+            .and_then(|()| stdout.flush())
+        {
             Ok(()) => 0,
             Err(_) => 4,
         };
@@ -72,11 +75,7 @@ pub fn run(values: Vec<OsString>) -> u8 {
         }
         return 4;
     }
-    if stop.load(Ordering::Acquire) {
-        130
-    } else {
-        0
-    }
+    if stop.load(Ordering::Acquire) { 130 } else { 0 }
 }
 
 fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {

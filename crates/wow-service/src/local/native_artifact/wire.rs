@@ -162,10 +162,7 @@ pub(super) fn report(
             "native artifact and producer report identities differ",
         ));
     }
-    let expected: BTreeMap<_, _> = library_files
-        .iter()
-        .map(|file| (file.path, file))
-        .collect();
+    let expected: BTreeMap<_, _> = library_files.iter().map(|file| (file.path, file)).collect();
     if expected.len() != library_files.len() || expected.len() != report.library.files.len() {
         return Err(invalid(
             "native artifact Library inventory differs from its report",

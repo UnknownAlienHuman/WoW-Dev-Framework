@@ -413,14 +413,20 @@ pub(super) fn check_context(
         native_input,
     )?;
     let analysis = OwnerAnalysis {
-        schema: if matches!(native_input, Some(super::NativeEvidenceReceipt::Artifact(_))) {
+        schema: if matches!(
+            native_input,
+            Some(super::NativeEvidenceReceipt::Artifact(_))
+        ) {
             "wow-service/owner-analysis/3"
         } else if native_input.is_some() {
             "wow-service/owner-analysis/2"
         } else {
             "wow-service/owner-analysis/1"
         },
-        input_mode: if matches!(native_input, Some(super::NativeEvidenceReceipt::Artifact(_))) {
+        input_mode: if matches!(
+            native_input,
+            Some(super::NativeEvidenceReceipt::Artifact(_))
+        ) {
             "prebuilt_native_artifact_project"
         } else if native_input.is_some() {
             "native_source_project"
