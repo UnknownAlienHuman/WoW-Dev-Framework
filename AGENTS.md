@@ -4,30 +4,46 @@ These rules apply to every human or automated contributor.
 
 ## Current execution priority
 
-Implement missing functional code first, then build it. Do not turn expanding
-unit-test matrices or fixture acceptance into a prerequisite for writing missing
-owners/apps. Preserve existing tests and report unexecuted acceptance separately.
+Implement missing functional code first, then build it and run focused checks.
+Do not turn expanding unit-test matrices or package fixture acceptance into a
+prerequisite for writing missing owners/apps. Preserve existing tests and report
+unexecuted acceptance separately.
+
+Read [docs/WORK_QUEUE.md](docs/WORK_QUEUE.md), then only the selected task PR and
+its owner contracts. The operator's 2026-09-25 request explicitly authorizes the
+named W01–W26 task branches and draft PR queue. For these tasks this route
+supersedes historical main-only/no-task-branch and bootstrap-first instructions,
+including older owner/status routers. Semantic, authority and security contracts
+are unchanged. Do not load every task into one agent context.
 
 ## Current implementation frontier
 
-- Read `docs/PROJECT_COMPLETION_MATRIX.md` for the audited code/acceptance census
-  and `docs/AUDIT_2026-09-19.md` for concrete remaining tasks.
-- `Cargo.toml` activates 15 members, including real `wow-emmy`, `wow-project`,
-  `wow-rules`, `wow-service`, `wow-store`, `wow-graph` and `wow-recognizers` slices.
-  Do not follow obsolete instructions to recreate these owners from scratch.
+- Read `docs/AUDIT_2026-09-25.md` for the verified baseline and concrete findings,
+  `docs/WORK_QUEUE.md` for work selection, and `docs/PROJECT_COMPLETION_MATRIX.md`
+  for the code/acceptance distinction. Older status snapshots that say no Rust
+  or no workspace exists are stale, not instructions to recreate implemented code.
+- At the audited baseline `Cargo.toml` activates 15 members, including real
+  `wow-emmy`, `wow-project`, `wow-rules`, `wow-service`, `wow-store`, `wow-graph`
+  and `wow-recognizers` slices. Re-read current Cargo membership before changing it.
 - Partial executable code and ordinary CI are not complete package acceptance.
-  Required E0 fixture/identity/checksum gates remain open; the public `apps/wow`
-  executable now has one-shot materialized-input status/check; see apps/wow/LOCAL_INPUT.md.
-  Full R0 remains unaccepted.
+  Required E0 fixture/identity/checksum gates remain open; `apps/wow` has real
+  materialized-input status/check and retained graph commands. See
+  `apps/wow/LOCAL_INPUT.md` and `apps/wow/GRAPH_STORE.md`. Full R0 remains unaccepted.
 - Native reference/annotation production remains source-driven and nonexecuting.
   Guarded fast-forward of existing standalone source checkouts is available;
   managed cloning and GitHub-only materialization remain incomplete.
 - `apps/wow-reference-builder` contains inactive source with service/contract
-  mismatches; it is not tested by the root workspace. Do not silently activate it.
-- Work sequentially in `main`; no new task branches or worktrees. Publish and
-  read back each coherent checkpoint without force-pushing.
+  mismatches; it is not tested by the root workspace. W06/W07 repair its service
+  and frontend boundaries before explicit activation.
+- Continue in the existing selected task branch. Re-read remote branch/main
+  heads; coordinate one writer per file/semantic seam; publish and read back
+  coherent checkpoints without force-pushing. Do not create duplicate task PRs.
+- W01 is code-written/unverified; other initial work PRs are specifications.
+  A task document or published commit is never evidence a feature is implemented.
 - Current commands, source-update policy and nonclaims:
-  `docs/IMPLEMENTATION_STATUS.md`. I0–I7 remains the normative implementation plan.
+  `docs/IMPLEMENTATION_STATUS.md`. I0–I7 remains the normative scope, while the
+  current queue selects missing work from the actual code. W26 reconciles stale
+  machine/human status snapshots without weakening their gate requirements.
 
 The public repository must remain useful without any operator-only context source.
 
@@ -39,8 +55,9 @@ service, not merely a comparison oracle. Read the actual donor modules and
 lowering, annotation output, or consumer integration. Port their behavior into
 Rust within the existing owner crates. Do not invent an unrelated extractor or
 add Python code, embedded interpreters, wrappers or interpreter-based tests.
-The repository and CI are Rust-native; `cargo xtask check` enforces this policy. Ketho output is also the parity baseline;
-current Gethe source remains the authority for current Blizzard facts.
+The repository and CI are Rust-native; `cargo xtask check` enforces this policy.
+Ketho output is also the parity baseline; current Gethe source remains the
+authority for current Blizzard facts.
 
 ## Mandatory route
 
@@ -77,9 +94,16 @@ Preserve conflicts. Partial, stale, conflicted, truncated, failed, or unsupporte
 
 ## Discipline
 
-Implement the smallest coherent owner responsibility in dependency order. No placeholder crates, fake adapters, fake success, broad speculative traits, or `todo!()` surfaces. Keep parsers bounded and non-executing. One operation uses one source revision. Tests verify fixtures and never silently rewrite them. Update status docs only after executable checks pass. Merge completed work into `main` and delete temporary branches immediately.
+Implement the smallest coherent owner responsibility in dependency order. No placeholder crates, fake adapters, fake success, broad speculative traits, or `todo!()` surfaces. Keep parsers bounded and non-executing. One operation uses one source revision. Tests verify fixtures and never silently rewrite them.
 
-Run applicable checks and report pass/fail/skipped/NotEvaluated:
+Record implementation and acceptance separately: `specified`, `coding`,
+`code-written-unverified`, `focused-checks-passed`, `reviewed/merged`,
+`package-accepted`. Update each state only from its actual evidence. Keep task-only
+or unverified PRs draft. Merge only completed, checked, reviewed and authorized
+work; never merge a specification as a completed feature. Delete task branches
+only after their work is safely merged or explicitly superseded, not while queued.
+
+Run applicable checks and report exact command, head, platform and outcome:
 
 ```text
 cargo xtask check
@@ -90,7 +114,10 @@ cargo test --workspace --all-targets --all-features
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --all-features --no-deps
 ```
 
-For source work, build and verify a source manifest with `cargo xtask`, then run the native Ketho annotation driver against the same current local revision. Missing tooling, credentials, network, or WoW runtime is a skip, never a pass.
+Use focused package checks during implementation, preserving required repository
+checks and CI. Missing tooling, credentials, network or WoW runtime is `NOT-RUN`
+or `NotEvaluated`, never a pass. For source work, build/verify a source manifest
+with `cargo xtask`, then run the native Ketho driver against the same exact source.
 
 ## Micromodular update boundary
 
@@ -102,16 +129,17 @@ add a generic plugin capability. Full driver/service routing remains explicit.
 
 ## Publication checkpoint
 
-Publish each coherent authorized checkpoint to `main` without force-pushing;
-never leave its only copy in a temporary VM. A local commit, detached GitHub
-object or downloadable patch is not remote branch publication.
+Publish each coherent checkpoint to its authorized task branch; never leave its
+only copy in a temporary VM. A local commit, detached GitHub object or downloadable
+patch is not remote branch publication. Opening this queue does not authorize
+force-pushes, automatic merges, CI disabling, provider activation or public release.
 
 When local Git transport is unavailable, use authorized GitHub API write actions.
-Do not infer read-only access from missing VM network or credentials. Re-read
-remote `main` and the changed blob identities after publication; report the
-verified remote commit SHA, not merely the locally created SHA. Reconcile a moved
-remote head without overwriting another contributor's work.
+Do not infer read-only access from missing VM network or credentials. Re-read the
+remote task head, main and changed blob identities after publication; report the
+verified remote commit SHA, not merely the locally created SHA. Reconcile moved
+heads without overwriting another contributor's work.
 
-Publication and validation are separate: record unexecuted checks as
-`NotEvaluated`, and never claim a checkpoint is tested or the task complete merely
-because its commit is published. A failed write must be reported as unpublished.
+Publication and validation are separate: record unexecuted checks explicitly,
+and never claim a checkpoint is tested or complete merely because its commit is
+published. A failed write must be reported as unpublished.
