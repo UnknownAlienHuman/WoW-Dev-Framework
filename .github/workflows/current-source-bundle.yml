@@ -1,32 +1,6 @@
 name: Native current-source annotations
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'crates/wow-reference/**'
-      - 'crates/wow-annotations/**'
-      - 'tools/xtask/**'
-      - 'bridges/literal-host/**'
-      - 'crates/wow-render-contract/**'
-      - 'crates/wow-ketho-literals/**'
-      - 'modules/ketho-literals/**'
-      - 'Cargo.*'
-      - '.cargo/config.toml'
-      - '.github/workflows/current-source-bundle.yml'
-  pull_request:
-    paths:
-      - 'crates/wow-reference/**'
-      - 'crates/wow-annotations/**'
-      - 'tools/xtask/**'
-      - 'bridges/literal-host/**'
-      - 'crates/wow-render-contract/**'
-      - 'crates/wow-ketho-literals/**'
-      - 'modules/ketho-literals/**'
-      - 'Cargo.*'
-      - '.cargo/config.toml'
-      - '.github/workflows/current-source-bundle.yml'
-  schedule:
-    - cron: '41 7 * * *'
+  
   workflow_dispatch:
     inputs:
       source_ref:
