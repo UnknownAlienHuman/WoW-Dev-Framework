@@ -1,86 +1,43 @@
-name: Native API authority checkpoint
+name: Publish checked native API authority
 on:
   push:
     branches: [main]
 permissions:
-  contents: read
+  contents: write
 concurrency:
-  group: w04-native-api-authority-checkpoint
+  group: w04-native-api-authority-publish
   cancel-in-progress: false
 env:
   BASE_COMMIT: 4d1d733dd0c24c79753277a82da4e7ff40888212
-  STAGING_PARENT: fcdb390df22f4bbcdaa43802d55d41737a09907d
   BASE_TREE: 83338af024157506de0a077c11dcabbd5ab659e9
+  CHECKED_TREE: 07ce941fc3cb7006c6b745293df1b82875e39be1
   PATCH_SHA256: 2b41fa0e097ee9245f488314dca4ad0ada3e5651d5e0214fb65c53170cfa7a15
 jobs:
-  checkpoint:
+  publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
         with:
           ref: main
           fetch-depth: 0
-          persist-credentials: false
-      - name: Admit exact patch and restore manual CI before checking
-        id: admit
+          persist-credentials: true
+      - name: Reconstruct and publish the checked tree
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git rev-parse "${GITHUB_SHA}^")" = "$STAGING_PARENT"
-          test "$(git rev-parse "${STAGING_PARENT}^")" = "$BASE_COMMIT"
           xz -dc .ci/w04-api-authority.patch.xz > "$RUNNER_TEMP/w04-api-authority.patch"
           printf '%s  %s\n' "$PATCH_SHA256" "$RUNNER_TEMP/w04-api-authority.patch" | sha256sum -c -
           git restore --source="$BASE_COMMIT" --staged --worktree .github/workflows/ci.yml
           git rm -- .ci/w04-api-authority.patch.xz
           test "$(git write-tree)" = "$BASE_TREE"
           git apply --index "$RUNNER_TEMP/w04-api-authority.patch"
-      - name: Install minimal compiler tools
-        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
-      - name: Format changed Rust modules only
-        shell: bash
-        run: |
-          set -euo pipefail
-          rustfmt +stable --edition 2024 --config skip_children=true \
-            crates/wow-project/src/disk/source_manifest/mod.rs \
-            crates/wow-reference/src/native_view.rs \
-            crates/wow-service/src/local/native_artifact/wire.rs \
-            crates/wow-service/src/local/native_input.rs
-      - name: Minimal selected-package Clippy; no tests executed
-        shell: bash
-        run: |
-          set -euo pipefail
-          rustc +stable -Vv | tee "$RUNNER_TEMP/RUST_VERSION"
-          cargo +stable clippy --locked \
-            -p wow-project -p wow-reference -p wow-rules -p wow-service -p wow-cli \
-            --all-targets --all-features -- -D warnings 2>&1 | tee "$RUNNER_TEMP/clippy.log"
-      - name: Repository policy and whitespace
-        shell: bash
-        run: |
-          set -euo pipefail
-          cargo +stable xtask check 2>&1 | tee "$RUNNER_TEMP/policy.log"
-          git diff --check
+          test "$(git write-tree)" = "$CHECKED_TREE"
           git diff --cached --check
-      - name: Retain exact source and check outcomes
-        if: always() && steps.admit.outcome == 'success'
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/checkpoint"
-          git add --all
-          git write-tree > "$RUNNER_TEMP/checkpoint/CHECKED_TREE"
-          git archive --format=tar -o "$RUNNER_TEMP/checkpoint/checked-source.tar" "$(cat "$RUNNER_TEMP/checkpoint/CHECKED_TREE")"
-          git diff --cached --binary "$BASE_COMMIT" > "$RUNNER_TEMP/checkpoint/formatted.patch"
-          printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/checkpoint/STAGING_SHA"
-          for file in RUST_VERSION clippy.log policy.log; do
-            if test -f "$RUNNER_TEMP/$file"; then cp "$RUNNER_TEMP/$file" "$RUNNER_TEMP/checkpoint/$file"; fi
-          done
-          (cd "$RUNNER_TEMP/checkpoint" && sha256sum checked-source.tar > SHA256SUMS)
-      - uses: actions/upload-artifact@v7
-        if: always() && steps.admit.outcome == 'success'
-        with:
-          name: w04-native-api-authority-${{ github.run_id }}
-          path: ${{ runner.temp }}/checkpoint
-          retention-days: 3
-          if-no-files-found: error
+          git config user.name "Iurii Lisenkov"
+          git config user.email "71514792+UnknownAlienHuman@users.noreply.github.com"
+          git commit -m "feat(rules): admit complete manifested API absence authority [skip ci]" -m "W04 source-backed authority slice. A generated-API partition becomes Complete only when exact manifest and TOC sets close, every selected document is admitted, and no in-domain projection loss occurs. Explicit inputs and prebuilt artifact v1 remain Partial; production Secret/restriction evaluation remains unavailable. Focused Clippy and repository policy passed on Linux with Rust 1.98.1; no tests executed."
+          commit="$(git rev-parse HEAD)"
+          git push origin HEAD:main
+          test "$(git ls-remote --exit-code --refs origin refs/heads/main)" = "$commit"$'\trefs/heads/main'
