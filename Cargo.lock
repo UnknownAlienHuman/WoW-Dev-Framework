@@ -2531,7 +2531,6 @@ dependencies = [
  "wow-ketho-literals",
  "wow-reference",
  "wow-render-contract",
- "wow-store",
 ]
 
 [[package]]

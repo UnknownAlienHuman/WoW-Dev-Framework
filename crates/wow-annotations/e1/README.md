@@ -1,6 +1,7 @@
 # `wow-annotations` E1-C annotation projection contract
 
-**Status:** implementation-ready E1-C contract package; no Rust code yet.
+**Status:** partial executable E1-C implementation; pure artifact identity is
+active, while full ReferenceView projection and package acceptance remain open.
 
 **Contract ID:** `wow-annotations/e1-projection-and-parity`
 
@@ -111,7 +112,10 @@ wow-core
 wow-reference
 ```
 
-No dependency on `wow-store`, `wow-emmy`, `wow-project`, `wow-service`, or application crates.
+No dependency on `wow-store`, `wow-emmy`, `wow-project`, `wow-service`, or
+application crates. Canonical artifact bytes, identity and publication selectors
+remain pure owner data; `wow-service::annotation_admin` maps those artifacts to
+generic store objects and catalogs with operation replay and read-back.
 
 Consumer probes and Ketho/LuaLS/Emmy comparisons run through external test/tool adapters, not hidden runtime dependencies of `wow-annotations`.
 

@@ -1,7 +1,8 @@
 # `wow-annotations` contract router
 
-**Status:** the Rust Ketho emitters and native source-to-library connection are active in Cargo.
-The full E1-C ReferenceView-to-artifact service is not complete.
+**Status:** the Rust Ketho emitters, native source-to-library connection and pure
+canonical artifact identity are active in Cargo. Durable publication is owned by
+`wow-service`; the full E1-C ReferenceView-to-artifact package is not complete.
 
 See [`src/ketho.rs`](src/ketho.rs), [`src/literals.rs`](src/literals.rs),
 [`tests/ketho.rs`](tests/ketho.rs), [`tests/literals.rs`](tests/literals.rs),
@@ -17,9 +18,12 @@ The literal lane also ports event/CVar aliases and enum/constant files from
 typed input, including scalar-preserving values and explicit order/format policy.
 The native connection in `src/native.rs` uses the reference-owned restricted
 EmmyLua evaluator and typed normalization. It retains raw metadata, unprojected
-fields, source hashes and declaration/ordered-member maps. The complete service
-still needs persistent ReferenceView integration, full correction/type closure,
-type/documentation-fragment maps, artifact publication and full-corpus semantic probes.
+fields, source hashes and declaration/ordered-member maps. The complete package
+still needs full persistent ReferenceView integration, correction/type closure,
+type/documentation-fragment maps and full-corpus semantic
+probes. `src/artifact.rs` now owns store-neutral canonical artifact bytes and
+publication selectors; `wow-service::annotation_admin` owns durable object,
+catalog, operation, read-back, lease and GC behavior.
 
 The native report is `wow-native-annotation-library/3`: scalar-resolution evidence
 is retained and reserved return labels have explicit collision-safe name maps.
@@ -60,7 +64,11 @@ wow-core
 wow-reference
 ```
 
-No dependency on `wow-store`, `wow-emmy`, `wow-project`, `wow-service`, applications, editors, analyzers, Ketho, or external processes is permitted in the library crate. External parity and consumer probes use reviewed test/tool adapters.
+No dependency on `wow-store`, `wow-emmy`, `wow-project`, `wow-service`,
+applications, editors, analyzers, Ketho, or external processes is permitted in
+the library crate. `AnnotationArtifact` and `AnnotationPublicationKey` are
+store-neutral; durable publication is a higher `wow-service` use case. External
+parity and consumer probes use reviewed test/tool adapters.
 
 ## Owned responsibilities
 

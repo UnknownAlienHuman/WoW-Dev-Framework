@@ -425,7 +425,12 @@
       ],
       "active_contracts": [
         "crates/wow-annotations/e1/CONTRACT.json"
-      ]
+      ],
+      "active_artifact_boundary": {
+        "owner": "crates/wow-annotations/src/artifact.rs",
+        "durable_orchestration": "crates/wow-service/src/annotation_admin.rs",
+        "scope": "store-neutral canonical artifact identity with service-owned object/catalog/operation/read-back/lease/GC; full E1-C acceptance remains open"
+      }
     },
     {
       "name": "wow-emmy",
@@ -586,6 +591,11 @@
         "wow-cbm",
         "wow-context"
       ],
+      "active_annotation_admin_slice": {
+        "owner": "crates/wow-service/src/annotation_admin.rs",
+        "artifact_owner": "crates/wow-annotations/src/artifact.rs",
+        "scope": "exact operation-bound publication and read-back of existing annotation artifact schema; full E1-D pack orchestration remains open"
+      },
       "active_contracts": [
         "crates/wow-service/CONTRACT.json",
         "crates/wow-service/e1/CONTRACT.json",

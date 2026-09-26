@@ -1,6 +1,6 @@
 # `wow-service` contract router
 
-**Status:** planned service documentation is complete through E7-B; no Rust code exists.
+**Status:** service documentation is complete through E7-B; executable E0, retained graph, Reference administration, annotation administration and local owner-composition slices exist. Full E1–E7 package acceptance remains open.
 
 `wow-service` is the only production crate allowed to coordinate multiple framework owners into one transport-independent public operation. It validates exact requests, resolves permitted symbolic selectors once, acquires retained owner views, sequences narrow ports, maintains durable effect and reconciliation state, and emits conservative canonical envelopes. It never reimplements owner algorithms or frontend wire protocols.
 
@@ -72,6 +72,20 @@ E7-B release slice
 ```
 
 E5 effecting operations remain under their own authorization profiles and are absent from default LSP and MCP exposure. E6 remains optional and disabled until a real adapter passes its gates. E7-B publication and installation administration is not exposed through default developer frontends.
+
+## Active annotation artifact administration
+
+`src/annotation_admin.rs` owns the E1-C durable effect boundary for already-built
+`wow-annotations::artifact::AnnotationArtifact` values. It preserves the existing
+`wow.annotation.artifact` object kind, schema version and `annotation.current`
+catalog path while adding exact `OperationId + RequestDigest` replay, expected-current
+CAS, mandatory object/current read-back, result receipts, leases, integrity status
+and bounded GC. It never constructs annotation semantics or exposes a mutable
+`wow-store::Store` handle.
+
+The annotation crate therefore has no regular `wow-store` edge. Missing full
+ReferenceView-to-artifact orchestration, materialization and E1-D pack acceptance
+remain separate work.
 
 ## E7-A service boundary
 

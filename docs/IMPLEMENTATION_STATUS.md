@@ -87,6 +87,21 @@ interpreter producers are not a fallback, and the annotation TOC loader is not a
 full E2 TOC/XML/load/project index. Do not restore Python, embedded interpreters,
 wrappers or interpreter-based project tests.
 
+## Annotation artifact persistence boundary
+
+`wow-annotations::artifact` now owns only canonical artifact bytes, identity and a
+store-neutral publication selector. The crate no longer has a regular dependency
+on `wow-store`. `wow-service::annotation_admin` preserves the existing
+`wow.annotation.artifact` object kind/schema and `annotation.current` catalog while
+owning exact operation/request identity, CAS publication, mandatory read-back,
+replay, retention, integrity status and bounded GC. No raw SQL or mutable Store
+handle enters the annotation or application contract.
+
+This is a boundary repair and durable publication slice, not full E1-C/E1-D
+Reference Pack assembly or package acceptance. Existing tests were split between
+pure artifact ownership and service orchestration; broad execution remains subject
+to the repository's later acceptance stage.
+
 ## Implemented maintenance commands
 
 See [xtask commands and limits](../tools/xtask/README.md):

@@ -6,6 +6,7 @@
 //! selected, already resolved declaration data. It does not claim ReferenceView
 //! coverage, acquire source, execute Lua, or configure a language server.
 
+pub mod artifact;
 pub mod ketho;
 
 pub mod literals;

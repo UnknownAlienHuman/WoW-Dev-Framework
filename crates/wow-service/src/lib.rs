@@ -7,6 +7,7 @@
 //! canonical result envelopes. It does not parse source, execute Lua, select a
 //! replacement generation, or reproduce lower-owner semantic algorithms.
 
+pub mod annotation_admin;
 mod backend;
 mod configuration;
 mod error;

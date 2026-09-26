@@ -115,7 +115,16 @@ wow-service -> wow-core + fixture reference, Emmy, project, and rule owners
 ```text
 apps/wow-reference-builder -> wow-service
 wow-service -> wow-core + wow-store + wow-reference + wow-annotations
+
+wow-annotations canonical AnnotationArtifact
+-> wow-service annotation administration
+-> wow-store generic object/catalog/operation/lease/GC ports
 ```
+
+`wow-annotations` owns artifact meaning and deterministic bytes only. Service owns
+publication request digests, expected-current CAS, read-back, retry/reconciliation,
+retention and status. Store owns generic physical effects and never interprets the
+annotation payload.
 
 ### E3 and E4
 
