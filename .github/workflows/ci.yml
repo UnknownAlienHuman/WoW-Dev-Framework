@@ -3,14 +3,14 @@ on:
   push:
     branches: [main]
 permissions:
-  contents: write
+  contents: read
 concurrency:
   group: w04-native-api-authority-checkpoint
   cancel-in-progress: false
 env:
   BASE_COMMIT: 4d1d733dd0c24c79753277a82da4e7ff40888212
+  STAGING_PARENT: fcdb390df22f4bbcdaa43802d55d41737a09907d
   BASE_TREE: 83338af024157506de0a077c11dcabbd5ab659e9
-  ORIGINAL_CI_BLOB: c32f5910287dbe2ffe62b97582d523cf2c91b0e5
   PATCH_SHA256: 2b41fa0e097ee9245f488314dca4ad0ada3e5651d5e0214fb65c53170cfa7a15
 jobs:
   checkpoint:
@@ -28,7 +28,8 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git rev-parse "${GITHUB_SHA}^")" = "$BASE_COMMIT"
+          test "$(git rev-parse "${GITHUB_SHA}^")" = "$STAGING_PARENT"
+          test "$(git rev-parse "${STAGING_PARENT}^")" = "$BASE_COMMIT"
           xz -dc .ci/w04-api-authority.patch.xz > "$RUNNER_TEMP/w04-api-authority.patch"
           printf '%s  %s\n' "$PATCH_SHA256" "$RUNNER_TEMP/w04-api-authority.patch" | sha256sum -c -
           git restore --source="$BASE_COMMIT" --staged --worktree .github/workflows/ci.yml
@@ -76,71 +77,10 @@ jobs:
             if test -f "$RUNNER_TEMP/$file"; then cp "$RUNNER_TEMP/$file" "$RUNNER_TEMP/checkpoint/$file"; fi
           done
           (cd "$RUNNER_TEMP/checkpoint" && sha256sum checked-source.tar > SHA256SUMS)
-      - name: Upload checked blobs without moving any branch
-        if: success()
-        uses: actions/github-script@v8
+      - uses: actions/upload-artifact@v7
+        if: always() && steps.admit.outcome == 'success'
         with:
-          script: |
-            const fs = require('fs');
-            const path = require('path');
-            const { execFileSync } = require('child_process');
-            const git = (...args) => execFileSync('git', args, { encoding: 'utf8' }).trim();
-            const allowed = new Set([
-              '.ci/w04-api-authority.patch.xz',
-              '.github/workflows/ci.yml',
-              'apps/wow/NATIVE_ARTIFACT.md',
-              'apps/wow/NATIVE_INPUT.md',
-              'crates/wow-project/src/disk/source_manifest/mod.rs',
-              'crates/wow-reference/src/native_view.rs',
-              'crates/wow-rules/API_EXISTS_RULE.md',
-              'crates/wow-rules/CAPABILITY_AND_COVERAGE.md',
-              'crates/wow-rules/SECRET_LOCAL_RULE.md',
-              'crates/wow-service/src/local/native_artifact/wire.rs',
-              'crates/wow-service/src/local/native_input.rs',
-            ]);
-            const parent = process.env.GITHUB_SHA;
-            if (git('rev-parse', 'HEAD') !== parent) throw new Error('checkout moved');
-            const raw = execFileSync(
-              'git',
-              ['diff', '--cached', '--no-renames', '--name-status', '-z', parent],
-              { encoding: 'utf8' },
-            );
-            const parts = raw.split('\0');
-            if (parts.pop() !== '' || parts.length % 2 !== 0) {
-              throw new Error('invalid staged diff record');
-            }
-            const entries = [];
-            for (let index = 0; index < parts.length; index += 2) {
-              const status = parts[index];
-              const file = parts[index + 1];
-              if (!allowed.has(file) || !['M', 'D'].includes(status)) {
-                throw new Error(`unexpected checked change: ${status} ${file}`);
-              }
-              if (status === 'D') {
-                if (file !== '.ci/w04-api-authority.patch.xz') {
-                  throw new Error(`unexpected deletion: ${file}`);
-                }
-                entries.push({ path: file, mode: '100644', type: 'blob', sha: null });
-                continue;
-              }
-              const stage = git('ls-files', '--stage', '--', file);
-              const mode = stage.split(' ')[0];
-              if (mode !== '100644') throw new Error(`unexpected mode for ${file}`);
-             ÛÛœÝž]\ÈHœËœ™XYš[TÞ[˜Êš[JNÂˆYˆ
-ž]\Ë›[™ÝˆL
-ˆL
-H›ÝÈ™]È\œ›ÜŠ[™^XÝYÚ^™H›Üˆ	Ùš[_X
-NÂˆÛÛœÝ›ØˆH]ØZ]Ú]X‹œ™\Ý™Ú]˜Ü™X]P›ØŠÂˆ‹‹˜ÛÛ^œ™\Ëˆ[˜ÛÙ[™Îˆ	Ø˜\ÙM	ËˆÛÛ[ˆž]\ËÔÝš[™Ê	Ø˜\ÙM	ÊKˆJNÂˆÛÛœÝØØ[HÚ]
-	Ú\Ú[Øš™XÝ	Ë	ËKIËš[JNÂˆYˆ
-›Ø‹™]KœÚHOOHØØ[
-H›ÝÈ™]È\œ›ÜŠ\ØYY›ØˆZ\ÛX]Ú›Üˆ	Ùš[_X
-NÂˆ[šY\Ëœ\Ú
-È]ˆš[K[ÙK\Nˆ	Ø›Ø‰ËÚNˆ›Ø‹™]KœÚHJNÂˆBˆYˆ
-œË™^\ÝÔÞ[˜Ê	Ë˜ÚKÝÌX\KX]]Üš]Kœ]Úž‰ÊJHÂˆ›ÝÈ™]È\œ›ÜŠ	Ý[\Ü˜\žH]Ú™[XZ[œÉÊNÂˆBˆYˆ
-Ú]
-	Ú\Ú[Øš™XÝ	Ë	Ë™Ú]X‹ÝÛÜšÙ›ÝÜËØÚKž[[	ÊHOOH›ØÙ\ÜË™[‹“Ô’QÒSSÐÒWÐ“ÐŠHÂˆ›ÝÈ™]È\œ›ÜŠ	ÛX[X[ÒHØ\È›Ý™\ÝÜ™Y^XÝIÊNÂˆBˆÛÛœÝÚXÚÙY™YHHÚ]
-	ÝÜš]K]™YIÊNÂˆÛÛœÝÝ]]HÂˆØÚ[XNˆ	ÝÛÝËY]‹Yœ˜[Y]ÛÜšËØÚXÚÙYX›Ø‹[X[šY™\ÝÌIËˆÝYÚ[™×ÜÚNˆ\™[ˆ˜\ÙWØÛÛ[Z]ˆ›ØÙ\ÜË™[‹TÑWÐÓÓSRUˆÚXÚÙYÝ™YNˆÚXÚÙY™YKˆ[šY\ËˆNÂˆÛÛœÝ\Ý[˜][ÛˆH]š›Ú[Š›ØÙ\ÜË™[‹”•S“‘T—ÕST	ØÚXÚÜÚ[	Ë	Ð“Ð”ËšœÛÛ‰ÊNÂˆœËÜš]Qš[TÞ[˜Ê\Ý[˜][Û‹”ÓÓ‹œÝš[™ÚYžJÝ]][ŠH
-È	×‰ÊNÂˆÛÜ™Kš[™›Ê\ØYY	Ù[šY\Ë™š[\Š
-[žJHOˆ[žKœÚJK›[™ÝHÚXÚÙY›ØœÈ›Üˆ™YH	ØÚXÚÙY™Y_X
-NÂˆH\Ù\ÎˆXÝ[ÛœËÝ\ØYX\Y˜XÝÂˆYŽˆ[Ø^\Ê
-H	‰ˆÝ\Ë˜YZ]›Ý]ÛÛYHOH	ÜÝXØÙ\ÜÉÂˆÚ]‚ˆ˜[YNˆÌ[˜]]™KX\KX]]Üš]KIÞÈÚ]X‹œ[—ÚY_Bˆ]ˆ	ÞÈ[›™\‹[\_KØÚXÚÜÚ[ˆ™][[Û‹Y^\ÎˆÂˆY‹[›ËYš[\ËY›Ý[™ˆ\œ›Ü‚
+          name: w04-native-api-authority-${{ github.run_id }}
+          path: ${{ runner.temp }}/checkpoint
+          retention-days: 3
+          if-no-files-found: error
