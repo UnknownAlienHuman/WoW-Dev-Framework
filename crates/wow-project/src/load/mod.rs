@@ -1,9 +1,11 @@
 //! Selected-TOC acquisition and source-backed XML syntax/inline-body indexing.
 //! Not a client emulator, complete semantic graph, or persistent E2 candidate.
 mod conditions;
+pub(crate) mod document_toc;
 mod package;
 mod saved_variables;
 mod toc;
+pub use document_toc::DocumentTocSelection;
 pub use saved_variables::{TocSavedVariable, TocSavedVariableScope, TocSavedVariableState};
 mod xml;
 mod xml_index;

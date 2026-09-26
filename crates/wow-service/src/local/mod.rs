@@ -4,6 +4,7 @@ mod backend;
 mod disk_input;
 mod input;
 mod native_input;
+mod native_source;
 mod projection;
 mod response;
 mod xml_bindings;
@@ -13,7 +14,9 @@ mod xml_references;
 pub use backend::LocalProjectBackend;
 pub use disk_input::{LOCAL_FILES_SCHEMA, LOCAL_TOC_SCHEMA};
 pub use input::{LOCAL_INPUT_MAX_BYTES, LOCAL_INPUT_SCHEMA, LocalProjectInput};
-pub use native_input::{LOCAL_NATIVE_SCHEMA, NativeFileIdentity, NativeInputReceipt};
+pub use native_input::{
+    LOCAL_NATIVE_SCHEMA, NativeFileIdentity, NativeInputReceipt, NativeManifestIdentity,
+};
 pub use projection::OwnerAnalysis;
 pub use response::{
     LocalCommand, LocalOperationResult, LocalOutcome, OperationFailure, execute_local,

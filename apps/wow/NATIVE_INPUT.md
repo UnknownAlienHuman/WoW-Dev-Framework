@@ -36,14 +36,16 @@ Physical paths remain relative to the explicitly selected config directory.
 The caller supplies these labels from its source manifest. They are **not** proof
 that a Git server authenticated the supplied files, that the metadata matches a
 client installation, or that the selection is current. Receipt freshness remains
-`unverified-current`; source binding is `explicit_digest_pinned_manifest`.
+`unverified-current`. The explicit-file mode uses source binding
+`explicit_digest_pinned_manifest`; the manifested mode below verifies the source
+manifest and selected TOC closure without claiming remote Git attestation.
 
-`native_source` is `{ "root": "source", "files": [...] }`. Every entry must have
+The original `native_source` form is `{ "root": "source", "files": [...] }`. Every entry must have
 `path`, `content_digest` (`sha256:` and 64 lowercase hex digits) and `byte_length`.
 Select generated API-documentation `.lua` files from the same resolved revision.
 Hash and length cover exact raw bytes, including line endings. The reader opens
-only these explicitly named files, checks both identities and does not run Lua,
-walk directories, clone/update repositories or expand a TOC for the native corpus.
+only these explicitly named files and checks both identities. This mode does not
+expand a native TOC; neither mode runs Lua, scans directories or mutates repositories.
 Case-fold collisions, unsafe paths, nonregular files and changed bytes reject.
 
 `analyzer` is the existing [disk analyzer declaration](FILES_INPUT.md#file-manifest-schema):
@@ -57,6 +59,70 @@ This route neither generates an acceptance pin nor bypasses owner validation.
 [selected TOC form](TOC_INPUT.md) with `toc` and optional `load_context` instead of
 `files`. Exactly one form is allowed. No caller-provided `library` or
 `reference_view` field is accepted in the native schema.
+
+## Manifested TOC input
+
+Instead of a hand-selected `files` array, `native_source` accepts:
+
+```json
+{
+  "root": "source",
+  "manifest": {
+    "path": "source-manifest.json",
+    "content_digest": "sha256:<exact-64-lowercase-hex-digest>",
+    "byte_length": 12345
+  },
+  "toc": "Interface/AddOns/Blizzard_APIDocumentationGenerated/Blizzard_APIDocumentationGenerated.toc"
+}
+```
+
+The digest/length are placeholders to replace with the actual file identity.
+`manifest.path` is relative to the configuration directory; `root` identifies the
+materialized source directory; `toc` is an exact path inside that source manifest.
+Optional `load_context` uses the existing [TOC context](TOC_INPUT.md). It is never
+inferred from a build, flavor name or installed game. Exactly one of `files` or
+`manifest` + `toc` is allowed; `load_context` is forbidden in the files-only mode.
+
+Use the existing [xtask source manifest](../../tools/xtask/README.md) v1, produced
+by `cargo xtask manifest <checkout> <resolved-ref> <selector> <new-manifest.json>`.
+The owner admits the entire manifest document and checks its exact selected
+extensions, source kind/acquisition policy, schema, self-digest, ordered unique
+member index, Git-ID shape, file kinds and all coverage counts/byte totals.
+Unknown fields, duplicate decoded field names, nulls, malformed digests and
+case-colliding/nonportable paths reject before the source root is opened.
+
+The manifest revision must equal `profile.revision`. Its source version and the
+pinned `version.txt` bytes must equal `<profile.client_version>.<profile.client_build>`.
+The current Gethe version file uses that explicit dotted form; an unsupported
+version format rejects instead of guessing a build. Flavor/edition/environment
+remain caller-selected labels, not independently attested client properties.
+
+The existing project TOC parser selects direct Lua entries and retains original
+order, source byte spans, metadata issues and explicit condition exclusions.
+Every included entry must exist as a `generated_api` member of this exact manifest.
+Unknown or unresolved entries, duplicate/case-colliding loads and included XML
+reject; they do not become an incomplete corpus reported as complete. The
+manifested TOC itself must be inside `Blizzard_APIDocumentationGenerated`.
+Required addon dependencies are retained as unresolved load metadata, not opened
+or executed. Missing Interface metadata remains an issue; an explicitly present
+incompatible Interface rejects through the existing parser.
+
+The manifest, TOC, version file and included Lua bytes are pinned by exact raw
+SHA-256 and length. One source-root handle is retained throughout acquisition;
+all descendants use the existing no-follow, bounded, cancellation-aware reader.
+Unselected manifest members are validated as inventory records but **not read**.
+No whole-tree, Git blob-membership or network/currentness proof is inferred from
+the caller-supplied manifest. Receipt fields retain `git_membership=not_attested`
+and `unconsumed_source_bytes=not_verified`; use the independent Git-backed
+`cargo xtask verify-manifest` operation when that stronger verification is required.
+
+The source selection identity additionally binds the manifest/TOC/version bytes,
+ordered selection and explicit load context. The full native report uses
+`wow-service/native-input-report/2` and retains the manifest admission receipt and
+all TOC records. Its compact public receipt uses `wow-service/native-input-receipt/2`
+with manifest/TOC/version identities and counts, not the full TOC record list.
+The original explicit-files mode retains its v1 identity/report/receipt profiles.
+Neither mode gains authoritative absence, Secret facts or production rule dispatch.
 
 ## Owner composition and identities
 
@@ -109,7 +175,13 @@ payload bytes to 32 MiB. The retained native report is streamed under a 64 MiB
 ceiling with cooperative cancellation. Existing config/analyzer artifact, Main
 inventory and command-output bounds remain unchanged. No sources are modified.
 
-Full generated-TOC/source-manifest provenance admission, corrections/alias/custom
-catalog selection, prebuilt native artifact import, CLI report export and complete
-real-profile/consumer acceptance remain open W03 work. Managed acquisition is W08;
+The manifest document allows at most 64 MiB and 200,000 declared tracked files,
+32 MiB per inventoried member and 256 MiB inventoried bytes, matching xtask v1.
+Consumed TOC/version/Lua bytes still fit the narrower 1 MiB per-file and 16 MiB
+aggregate input limits; no large whole-source-tree acquisition is introduced.
+
+Corrections/alias/custom catalog selection, prebuilt native artifact import, CLI
+report export and complete real-profile/consumer acceptance remain open W03 work.
+Manifest/selected-TOC admission is implemented, not independently executed semantic
+or Git provenance acceptance. Managed acquisition is W08;
 production rule policies are W04. No tests or fixtures are changed by this slice.

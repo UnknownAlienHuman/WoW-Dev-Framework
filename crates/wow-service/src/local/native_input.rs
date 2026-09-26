@@ -11,15 +11,16 @@ use wow_core::{
     ProfileIdentityBuilder, ProfileKind, ReferenceGenerationId, SchemaVersionEntry, SourceKind,
     SourceLogicalSnapshot, ToolVersion,
 };
-use wow_project::disk::ProjectInputDirectory;
+use wow_project::disk::{ProjectInputDirectory, SourceManifestReceipt};
 use wow_project::{
     ProjectFileRole, ProjectId, ProjectInputFile, ProjectLanguageKind, ProjectSourceOriginId,
     ProjectWorkspaceId,
 };
 use wow_reference::native::{NativeError, NativeErrorCode, ingest_document};
 
-use super::disk_input::{DiskAnalyzer, DiskInventory, MainInventory, acquisition_error};
+use super::disk_input::{DiskAnalyzer, MainInventory};
 use super::input::{ProjectMetadata, invalid};
+use super::native_source::NativeSourceInput;
 use super::{LocalProjectInput, cancelled};
 use crate::{ServiceError, ServiceErrorCode, ServiceResult};
 
@@ -38,7 +39,7 @@ struct NativeInput {
     profile: NativeProfile,
     analyzer: DiskAnalyzer,
     main: MainInventory,
-    native_source: DiskInventory,
+    native_source: NativeSourceInput,
 }
 
 /// Labels describe an explicitly selected source corpus, not a currentness or
@@ -64,6 +65,41 @@ pub struct NativeFileIdentity {
     pub byte_length: u64,
 }
 
+/// Compact public identity; the complete TOC selection record stays in the report.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct NativeManifestIdentity {
+    pub manifest: NativeFileIdentity,
+    pub manifest_sha256: String,
+    pub toc: NativeFileIdentity,
+    pub version_file: NativeFileIdentity,
+    pub declared_included_files: u64,
+    pub verified_source_files: usize,
+    pub selected_document_files: usize,
+    pub git_membership: &'static str,
+    pub unconsumed_source_bytes: &'static str,
+}
+
+impl From<&SourceManifestReceipt> for NativeManifestIdentity {
+    fn from(receipt: &SourceManifestReceipt) -> Self {
+        let file = |value: &wow_project::load::LoadSource| NativeFileIdentity {
+            path: value.path.clone(),
+            sha256: value.content_digest.to_string(),
+            byte_length: value.byte_length,
+        };
+        Self {
+            manifest: file(&receipt.manifest),
+            manifest_sha256: receipt.manifest_sha256.clone(),
+            toc: file(receipt.selected_toc()),
+            version_file: file(&receipt.version_file),
+            declared_included_files: receipt.declared_included_files,
+            verified_source_files: receipt.verified_source_files,
+            selected_document_files: receipt.selected_file_count(),
+            git_membership: receipt.git_membership,
+            unconsumed_source_bytes: receipt.unconsumed_source_bytes,
+        }
+    }
+}
+
 /// Small public receipt. The complete raw/projection/source-map sidecar is kept
 /// separately, identified by its exact digest, not copied into ordinary findings.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -73,6 +109,8 @@ pub struct NativeInputReceipt {
     pub revision: String,
     pub environment: String,
     pub source_binding: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_manifest: Option<NativeManifestIdentity>,
     pub freshness: &'static str,
     pub candidate_files: usize,
     pub admitted_files: usize,
@@ -132,9 +170,23 @@ impl LocalProjectInput {
         input.profile.validate_selector()?;
         // Paths, counts and all expected byte identities are checked by the
         // existing confined reader before any native owner sees these sources.
-        let captured = directory
-            .read_pinned_lua_sources(&input.native_source.root, &input.native_source.files, stop)
-            .map_err(acquisition_error)?;
+        let expected_version = format!(
+            "{}.{}",
+            input.profile.client_version, input.profile.client_build
+        );
+        let (captured, source_manifest) = input.native_source.read(
+            directory,
+            &input.profile.revision,
+            &expected_version,
+            input.profile.interface,
+            stop,
+        )?;
+        let manifested = source_manifest.is_some();
+        let source_binding = if manifested {
+            "source_manifest_selected_toc"
+        } else {
+            "explicit_digest_pinned_manifest"
+        };
         let source_files = captured
             .iter()
             .map(|file| NativeFileIdentity {
@@ -143,12 +195,24 @@ impl LocalProjectInput {
                 byte_length: file.text().len() as u64,
             })
             .collect::<Vec<_>>();
-        let selection = wow_core::canonical_json_bytes(&(
-            "wow-service/native-source-selection/1",
-            &input.profile.revision,
-            &input.profile.environment,
-            &source_files,
-        ))
+        // Preserve the existing explicit-file identity profile. Manifested input
+        // also binds exact TOC/version/manifest bytes, source order and load context.
+        let selection = if let Some(receipt) = &source_manifest {
+            wow_core::canonical_json_bytes(&(
+                "wow-service/native-source-selection/2",
+                &input.profile.revision,
+                &input.profile.environment,
+                &source_files,
+                receipt,
+            ))
+        } else {
+            wow_core::canonical_json_bytes(&(
+                "wow-service/native-source-selection/1",
+                &input.profile.revision,
+                &input.profile.environment,
+                &source_files,
+            ))
+        }
         .map_err(|_| invalid("native source selection cannot be canonicalized"))?;
         let profile = input
             .profile
@@ -276,6 +340,8 @@ impl LocalProjectInput {
             analyzer_bound_configuration: ContentDigest<CanonicalResult>,
             environment: &'a str,
             source_binding: &'static str,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            source_manifest: Option<&'a SourceManifestReceipt>,
             freshness: &'static str,
             source_files: &'a [NativeFileIdentity],
             input_failures: &'a [InputFailure],
@@ -285,12 +351,17 @@ impl LocalProjectInput {
         }
         let report = report_bytes(
             &Report {
-                schema: "wow-service/native-input-report/1",
+                schema: if manifested {
+                    "wow-service/native-input-report/2"
+                } else {
+                    "wow-service/native-input-report/1"
+                },
                 profile: &profile,
                 analyzer_input_configuration,
                 analyzer_bound_configuration,
                 environment: &input.profile.environment,
-                source_binding: "explicit_digest_pinned_manifest",
+                source_binding,
+                source_manifest: source_manifest.as_ref(),
                 freshness: "unverified-current",
                 source_files: &source_files,
                 input_failures: &failures,
@@ -301,11 +372,16 @@ impl LocalProjectInput {
             stop,
         )?;
         let receipt = NativeInputReceipt {
-            schema: "wow-service/native-input-receipt/1",
+            schema: if manifested {
+                "wow-service/native-input-receipt/2"
+            } else {
+                "wow-service/native-input-receipt/1"
+            },
             profile: profile.clone(),
             revision: input.profile.revision.clone(),
             environment: input.profile.environment.clone(),
-            source_binding: "explicit_digest_pinned_manifest",
+            source_binding,
+            source_manifest: source_manifest.as_ref().map(NativeManifestIdentity::from),
             freshness: "unverified-current",
             candidate_files: source_files.len(),
             admitted_files: documents.len(),

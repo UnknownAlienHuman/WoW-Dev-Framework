@@ -1,6 +1,8 @@
 //! Read-only acquisition of explicitly listed local inputs. No directory scan.
 mod pinned;
+mod source_manifest;
 pub use pinned::PinnedLuaSource;
+pub use source_manifest::{ManifestedLuaRequest, ManifestedLuaSources, SourceManifestReceipt};
 use std::collections::BTreeSet;
 use std::io::{ErrorKind, Read};
 use std::path::Path;
