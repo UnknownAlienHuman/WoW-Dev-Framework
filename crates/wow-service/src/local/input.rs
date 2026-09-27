@@ -71,6 +71,11 @@ struct SourceInput {
 }
 
 impl LocalProjectInput {
+    #[must_use]
+    pub fn reference_view(&self) -> &ReferenceView {
+        &self.reference
+    }
+
     /// Loads explicit input bytes without filesystem discovery or Lua execution.
     /// No analyzer or rule execution occurs until the service receives `check`.
     pub fn from_json_slice(bytes: &[u8]) -> ServiceResult<Self> {

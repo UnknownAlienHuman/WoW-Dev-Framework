@@ -18,6 +18,7 @@ mod model;
 mod operation;
 mod presentation;
 pub mod reference_admin;
+pub mod reference_pack;
 mod service;
 
 pub use backend::{OwnedServiceBackend, ServiceBackend, ServiceBackendStatus};

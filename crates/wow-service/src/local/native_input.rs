@@ -6,6 +6,7 @@ use std::sync::atomic::AtomicBool;
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use wow_annotations::artifact::AnnotationArtifact;
 use wow_core::{
     CanonicalResult, ContentDigest, CorrectionSet, ProfileId, ProfileIdentity,
     ProfileIdentityBuilder, ProfileKind, ReferenceGenerationId, SchemaVersionEntry, SourceKind,
@@ -66,6 +67,30 @@ pub struct NativeFileIdentity {
     pub path: String,
     pub sha256: String,
     pub byte_length: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NativeAnnotationFile {
+    path: Box<str>,
+    sha256: Box<str>,
+    bytes: Box<[u8]>,
+}
+
+impl NativeAnnotationFile {
+    #[must_use]
+    pub fn path(&self) -> &str {
+        &self.path
+    }
+
+    #[must_use]
+    pub fn sha256(&self) -> &str {
+        &self.sha256
+    }
+
+    #[must_use]
+    pub fn bytes(&self) -> &[u8] {
+        &self.bytes
+    }
 }
 
 /// Compact public identity; the complete TOC selection record stays in the report.
@@ -161,6 +186,8 @@ pub struct NativeInputReceipt {
 pub(super) struct NativeInputEvidence {
     pub(super) receipt: NativeInputReceipt,
     report: Box<[u8]>,
+    annotation_artifact: AnnotationArtifact,
+    annotation_files: Box<[NativeAnnotationFile]>,
 }
 
 #[derive(Serialize)]
@@ -190,6 +217,20 @@ impl LocalProjectInput {
     #[must_use]
     pub fn native_input_receipt(&self) -> Option<&NativeInputReceipt> {
         self.native_input.as_ref().map(|evidence| &evidence.receipt)
+    }
+
+    #[must_use]
+    pub fn native_annotation_artifact(&self) -> Option<&AnnotationArtifact> {
+        self.native_input
+            .as_ref()
+            .map(|evidence| &evidence.annotation_artifact)
+    }
+
+    #[must_use]
+    pub fn native_annotation_files(&self) -> Option<&[NativeAnnotationFile]> {
+        self.native_input
+            .as_ref()
+            .map(|evidence| evidence.annotation_files.as_ref())
     }
 
     pub(super) fn from_native_manifest(
@@ -377,6 +418,23 @@ impl LocalProjectInput {
                 byte_length: file.text.len() as u64,
             })
             .collect::<Vec<_>>();
+        let annotation_artifact = AnnotationArtifact::from_native_library(
+            "1.0.0",
+            profile.profile_id().as_str(),
+            reference.view.generation_id(),
+            &library,
+        )
+        .map_err(|_| invalid("native annotation artifact identity rejected"))?;
+        let annotation_files = library
+            .files
+            .iter()
+            .map(|file| NativeAnnotationFile {
+                path: file.path.clone().into_boxed_str(),
+                sha256: file.sha256.clone().into_boxed_str(),
+                bytes: file.text.as_bytes().to_vec().into_boxed_slice(),
+            })
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
         let mut analyzer = input.analyzer.read(directory, stop)?;
         let analyzer_input_configuration = analyzer.configuration_digest;
         // Project generation derivation includes the analyzer configuration, not
@@ -583,6 +641,8 @@ impl LocalProjectInput {
         assembled.native_input = Some(Arc::new(NativeInputEvidence {
             receipt,
             report: report.into_boxed_slice(),
+            annotation_artifact,
+            annotation_files,
         }));
         cancelled(stop)?;
         Ok(assembled)
