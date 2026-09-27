@@ -1,0 +1,87 @@
+name: W06 reference pack candidate checkpoint
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: w06-reference-pack-candidate-checkpoint
+  cancel-in-progress: false
+env:
+  BASE_COMMIT: 75ec8ec9f8ff2c62bfd0fd79ed2fc34395eab3a7
+  BASE_TREE: d0e1dcb1909365d23879840156f1560060b8641c
+  PATCH_SHA256: 201e22518ef20f2e248e39740918d75fc15ade04f3ea40170310094f94804482
+jobs:
+  checkpoint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Admit exact product patch and remove checkpoint transport
+        id: admit
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse "${GITHUB_SHA}^")" = "$BASE_COMMIT"
+          xz -dc .ci/w06-reference-pack.patch.xz > "$RUNNER_TEMP/w06-reference-pack.patch"
+          printf '%s  %s\n' "$PATCH_SHA256" "$RUNNER_TEMP/w06-reference-pack.patch" | sha256sum -c -
+          git rm -- .ci/w06-reference-pack.patch.xz .github/workflows/w06-checkpoint.yml
+          test "$(git write-tree)" = "$BASE_TREE"
+          git apply --index "$RUNNER_TEMP/w06-reference-pack.patch"
+      - name: Install minimal compiler tools
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+      - name: Format workspace
+        run: cargo +stable fmt --all
+      - name: Minimal owner and service Clippy; no tests executed
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustc +stable -Vv | tee "$RUNNER_TEMP/RUST_VERSION"
+          cargo +stable clippy --locked \
+            -p wow-reference -p wow-annotations -p wow-service \
+            --all-targets --all-features -- -D warnings 2>&1 | tee "$RUNNER_TEMP/clippy.log"
+      - name: Repository policy and exact file set
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo +stable xtask check 2>&1 | tee "$RUNNER_TEMP/policy.log"
+          git add --all
+          git diff --cached --check
+          actual="$(git diff --cached --name-only "$BASE_COMMIT" | LC_ALL=C sort)"
+          expected="$(cat <<'EOF'
+          crates/wow-service/src/lib.rs
+          crates/wow-service/src/local/input.rs
+          crates/wow-service/src/local/mod.rs
+          crates/wow-service/src/local/native_input.rs
+          crates/wow-service/src/reference_pack.rs
+          EOF
+          )"
+          test "$actual" = "$expected"
+      - name: Retain exact checked source
+        if: always() && steps.admit.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/checkpoint"
+          git add --all
+          git write-tree > "$RUNNER_TEMP/checkpoint/CHECKED_TREE"
+          git archive --format=tar -o "$RUNNER_TEMP/checkpoint/checked-source.tar" "$(cat "$RUNNER_TEMP/checkpoint/CHECKED_TREE")"
+          git diff --cached --binary "$BASE_COMMIT" > "$RUNNER_TEMP/checkpoint/formatted.patch"
+          printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/checkpoint/STAGING_SHA"
+          for file in RUST_VERSION clippy.log policy.log; do
+            if test -f "$RUNNER_TEMP/$file"; then cp "$RUNNER_TEMP/$file" "$RUNNER_TEMP/checkpoint/$file"; fi
+          done
+          (cd "$RUNNER_TEMP/checkpoint" && sha256sum checked-source.tar formatted.patch > SHA256SUMS)
+      - name: Upload checkpoint evidence
+        if: always() && steps.admit.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          name: w06-reference-pack-${{ github.run_id }}
+          path: ${{ runner.temp }}/checkpoint
+          retention-days: 3
+          if-no-files-found: error
