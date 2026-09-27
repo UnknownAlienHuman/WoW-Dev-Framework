@@ -10,7 +10,8 @@ concurrency:
 env:
   BASE_COMMIT: 75ec8ec9f8ff2c62bfd0fd79ed2fc34395eab3a7
   BASE_TREE: d0e1dcb1909365d23879840156f1560060b8641c
-  PATCH_SHA256: 201e22518ef20f2e248e39740918d75fc15ade04f3ea40170310094f94804482
+  STAGING_PARENT: 76deb7df8ae40b9734dbeb5f4d41556eb63a54b4
+  PATCH_SHA256: 752fedbd5be3960117b8a239d731db86e17e7afc554feac0c171dae5773a006a
 jobs:
   checkpoint:
     runs-on: ubuntu-latest
@@ -27,7 +28,8 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git rev-parse "${GITHUB_SHA}^")" = "$BASE_COMMIT"
+          test "$(git rev-parse "${GITHUB_SHA}^")" = "$STAGING_PARENT"
+          test "$(git rev-parse "${STAGING_PARENT}^")" = "$BASE_COMMIT"
           xz -dc .ci/w06-reference-pack.patch.xz > "$RUNNER_TEMP/w06-reference-pack.patch"
           printf '%s  %s\n' "$PATCH_SHA256" "$RUNNER_TEMP/w06-reference-pack.patch" | sha256sum -c -
           git rm -- .ci/w06-reference-pack.patch.xz .github/workflows/w06-checkpoint.yml
