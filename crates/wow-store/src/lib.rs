@@ -21,4 +21,4 @@ pub use model::{
     OperationBegin, OperationRecord, OperationState, PendingObject, StoreConfiguration,
     StoreLimits, WriteBatch,
 };
-pub use store::Store;
+pub use store::{SealedStore, Store};

@@ -11,7 +11,8 @@ use serde::de::DeserializeOwned;
 use wow_store::{
     CatalogExpectation, CatalogMutation, CatalogName, CatalogPath, CommitReceipt,
     GarbageCollectionReceipt, IntegrityReport, LeaseId, LeaseRecord, LogicalEpoch, LogicalManifest,
-    ObjectId, ObjectRecord, PendingObject, Store, StoreError, StoreErrorCode, WriteBatch,
+    ObjectId, ObjectRecord, PendingObject, SealedStore, Store, StoreError, StoreErrorCode,
+    WriteBatch,
 };
 
 use crate::ReferenceView;
@@ -212,6 +213,58 @@ impl PublishedReferenceView {
     #[must_use]
     pub fn into_view(self) -> ReferenceView {
         self.view
+    }
+}
+
+/// Typed read-only façade over one independently reopened sealed store image.
+pub struct SealedReferenceStore<'store> {
+    store: &'store SealedStore,
+}
+
+impl<'store> SealedReferenceStore<'store> {
+    #[must_use]
+    pub fn new(store: &'store SealedStore) -> Self {
+        Self { store }
+    }
+
+    pub fn read_exact(&self, object_id: &ObjectId) -> ReferenceStoreResult<Option<ReferenceView>> {
+        let Some(record) = self.store.object(object_id)? else {
+            return Ok(None);
+        };
+        Ok(Some(decode_reference_view(&record)?))
+    }
+
+    pub fn read_current(
+        &self,
+        publication_key: &ReferencePublicationKey,
+    ) -> ReferenceStoreResult<Option<PublishedReferenceView>> {
+        let Some(entry) = self
+            .store
+            .catalog_entry(&current_catalog()?, publication_key.catalog_path())?
+        else {
+            return Ok(None);
+        };
+        let object_id = entry.object_id().clone();
+        let view = self.read_exact(&object_id)?.ok_or_else(|| {
+            ReferenceStoreError::new(
+                ReferenceStoreErrorCode::StoreIntegrityViolation,
+                "sealed reference object is missing",
+            )
+        })?;
+        Ok(Some(PublishedReferenceView {
+            schema: REFERENCE_STORE_SCHEMA,
+            publication_key: publication_key.clone(),
+            object_id,
+            view,
+        }))
+    }
+
+    pub fn validate_integrity(&self, max_objects: u32) -> ReferenceStoreResult<IntegrityReport> {
+        Ok(self.store.validate_integrity(max_objects)?)
+    }
+
+    pub fn logical_manifest(&self) -> ReferenceStoreResult<LogicalManifest> {
+        Ok(self.store.logical_manifest()?)
     }
 }
 

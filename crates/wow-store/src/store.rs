@@ -1,6 +1,6 @@
-use std::{path::Path, time::Duration};
+use std::{io::Cursor, path::Path, time::Duration};
 
-use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
+use rusqlite::{Connection, MAIN_DB, OptionalExtension, Transaction, TransactionBehavior, params};
 
 use crate::{
     CatalogChange, CatalogEntry, CatalogExpectation, CatalogMutation, CatalogName, CatalogPath,
@@ -35,110 +35,41 @@ impl Store {
         configuration: StoreConfiguration,
     ) -> StoreResult<Self> {
         configuration.limits().validate()?;
-        connection
-            .busy_timeout(Duration::from_secs(5))
-            .map_err(StoreError::database)?;
-        connection
-            .execute_batch(
-                "PRAGMA foreign_keys = ON;
-                 PRAGMA trusted_schema = OFF;
-                 PRAGMA synchronous = FULL;
-                 CREATE TABLE IF NOT EXISTS store_meta (
-                     key TEXT PRIMARY KEY NOT NULL,
-                     value TEXT NOT NULL
-                 ) STRICT;
-                 CREATE TABLE IF NOT EXISTS store_objects (
-                     object_id TEXT PRIMARY KEY NOT NULL,
-                     kind TEXT NOT NULL,
-                     schema_version INTEGER NOT NULL CHECK(schema_version > 0),
-                     content_sha256 TEXT NOT NULL,
-                     canonical_json BLOB NOT NULL
-                 ) STRICT;
-                 CREATE TABLE IF NOT EXISTS store_catalog (
-                     catalog TEXT NOT NULL,
-                     path TEXT NOT NULL,
-                     object_id TEXT NOT NULL REFERENCES store_objects(object_id) ON DELETE RESTRICT,
-                     PRIMARY KEY (catalog, path)
-                 ) STRICT;
-                 CREATE TABLE IF NOT EXISTS store_operations (
-                     operation_id TEXT PRIMARY KEY NOT NULL,
-                     request_digest TEXT NOT NULL,
-                     state TEXT NOT NULL,
-                     result_object_id TEXT REFERENCES store_objects(object_id) ON DELETE RESTRICT,
-                     CHECK ((state = 'completed' AND result_object_id IS NOT NULL)
-                         OR (state <> 'completed' AND result_object_id IS NULL))
-                 ) STRICT;
-                 CREATE TABLE IF NOT EXISTS store_leases (
-                     lease_id TEXT PRIMARY KEY NOT NULL,
-                     object_id TEXT NOT NULL REFERENCES store_objects(object_id) ON DELETE RESTRICT,
-                     holder TEXT NOT NULL,
-                     expires_after INTEGER NOT NULL CHECK(expires_after >= 0)
-                 ) STRICT;
-                 CREATE INDEX IF NOT EXISTS store_catalog_object_idx
-                     ON store_catalog(object_id);
-                 CREATE INDEX IF NOT EXISTS store_operation_result_idx
-                     ON store_operations(result_object_id);
-                 CREATE INDEX IF NOT EXISTS store_lease_object_idx
-                     ON store_leases(object_id);
-                 CREATE INDEX IF NOT EXISTS store_lease_expiry_idx
-                     ON store_leases(expires_after);",
-            )
-            .map_err(StoreError::database)?;
-        let application_id: i64 = connection
-            .query_row("PRAGMA application_id", [], |row| row.get(0))
-            .map_err(StoreError::database)?;
-        if application_id == 0 {
-            connection
-                .pragma_update(None, "application_id", APPLICATION_ID)
-                .map_err(StoreError::database)?;
-        } else if application_id != APPLICATION_ID {
-            return Err(StoreError::new(
-                StoreErrorCode::IntegrityViolation,
-                "database application identity is incompatible",
-            ));
-        }
-        let user_version: i64 = connection
-            .query_row("PRAGMA user_version", [], |row| row.get(0))
-            .map_err(StoreError::database)?;
-        if user_version == 0 {
-            connection
-                .pragma_update(None, "user_version", USER_VERSION)
-                .map_err(StoreError::database)?;
-        } else if user_version != USER_VERSION {
-            return Err(StoreError::new(
-                StoreErrorCode::IntegrityViolation,
-                "database schema version is incompatible",
-            ));
-        }
-        let existing: Option<String> = connection
-            .query_row(
-                "SELECT value FROM store_meta WHERE key = 'configuration_id'",
-                [],
-                |row| row.get(0),
-            )
-            .optional()
-            .map_err(StoreError::database)?;
-        match existing {
-            Some(value) if value != configuration.configuration_id() => {
-                return Err(StoreError::new(
-                    StoreErrorCode::ConfigurationInvalid,
-                    "store configuration does not match the durable database",
-                ));
-            }
-            Some(_) => {}
-            None => {
-                connection
-                    .execute(
-                        "INSERT INTO store_meta(key, value) VALUES ('configuration_id', ?1)",
-                        [configuration.configuration_id()],
-                    )
-                    .map_err(StoreError::database)?;
-            }
-        }
+        configure_connection(&connection, false)?;
+        initialize_schema(&connection)?;
+        validate_connection_identity(&connection, &configuration, true)?;
         Ok(Self {
             connection,
             configuration,
         })
+    }
+
+    /// Serializes one complete, integrity-checked SQLite database image.
+    ///
+    /// The returned bytes are detached from this mutable handle. Callers must drop
+    /// or otherwise stop using the writer before treating the image as sealed.
+    pub fn serialize_database(&self, max_bytes: u64) -> StoreResult<Box<[u8]>> {
+        validate_serialized_limit(max_bytes)?;
+        let integrity =
+            self.validate_integrity(self.configuration.limits().max_manifest_records)?;
+        if !integrity.complete() {
+            return Err(StoreError::new(
+                StoreErrorCode::IntegrityViolation,
+                "store integrity validation was truncated before serialization",
+            ));
+        }
+        let serialized = self
+            .connection
+            .serialize(MAIN_DB)
+            .map_err(StoreError::database)?;
+        let bytes: &[u8] = &serialized;
+        if bytes.is_empty() || bytes.len() as u64 > max_bytes {
+            return Err(StoreError::new(
+                StoreErrorCode::ObjectTooLarge,
+                "serialized store exceeds the configured byte budget",
+            ));
+        }
+        Ok(bytes.to_vec().into_boxed_slice())
     }
 
     #[must_use]
@@ -155,24 +86,7 @@ impl Store {
         catalog: &CatalogName,
         path: &CatalogPath,
     ) -> StoreResult<Option<CatalogEntry>> {
-        let object_id: Option<String> = self
-            .connection
-            .query_row(
-                "SELECT object_id FROM store_catalog WHERE catalog = ?1 AND path = ?2",
-                params![catalog.as_str(), path.as_str()],
-                |row| row.get(0),
-            )
-            .optional()
-            .map_err(StoreError::database)?;
-        object_id
-            .map(|value| {
-                Ok(CatalogEntry::new(
-                    catalog.clone(),
-                    path.clone(),
-                    ObjectId::new(value)?,
-                ))
-            })
-            .transpose()
+        read_catalog_entry(&self.connection, catalog, path)
     }
 
     pub fn commit(&mut self, batch: WriteBatch) -> StoreResult<CommitReceipt> {
@@ -563,105 +477,349 @@ impl Store {
     }
 
     pub fn validate_integrity(&self, max_objects: u32) -> StoreResult<IntegrityReport> {
-        if max_objects == 0 || max_objects > self.configuration.limits().max_manifest_records {
-            return Err(StoreError::new(
-                StoreErrorCode::BudgetExceeded,
-                "integrity object budget is invalid",
-            ));
-        }
-        let sqlite: String = self
-            .connection
-            .query_row("PRAGMA integrity_check(1)", [], |row| row.get(0))
-            .map_err(StoreError::database)?;
-        if sqlite != "ok" {
-            return Err(StoreError::new(
-                StoreErrorCode::IntegrityViolation,
-                "SQLite integrity validation failed",
-            ));
-        }
-        let mut statement = self
-            .connection
-            .prepare(
-                "SELECT object_id, kind, schema_version, content_sha256, canonical_json
-                 FROM store_objects ORDER BY object_id LIMIT ?1",
-            )
-            .map_err(StoreError::database)?;
-        let rows = statement
-            .query_map([i64::from(max_objects) + 1], |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, i64>(2)?,
-                    row.get::<_, String>(3)?,
-                    row.get::<_, Vec<u8>>(4)?,
-                ))
-            })
-            .map_err(StoreError::database)?;
-        let mut checked_objects = 0_u64;
-        let mut complete = true;
-        for row in rows {
-            if checked_objects == u64::from(max_objects) {
-                complete = false;
-                break;
-            }
-            let (object_id, kind, schema_version, content_sha256, canonical_json) =
-                row.map_err(StoreError::database)?;
-            ObjectRecord::from_parts(
-                ObjectId::new(object_id)?,
-                kind.into(),
-                u32::try_from(schema_version).map_err(|_| {
-                    StoreError::new(
-                        StoreErrorCode::IntegrityViolation,
-                        "stored object schema version is invalid",
-                    )
-                })?,
-                content_sha256.into(),
-                canonical_json.into_boxed_slice(),
-            )?;
-            checked_objects += 1;
-        }
-        let catalog = table_count(&self.connection, "store_catalog")?;
-        let operations = table_count(&self.connection, "store_operations")?;
-        let leases = table_count(&self.connection, "store_leases")?;
-        let foreign_keys: i64 = self
-            .connection
-            .query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |row| {
-                row.get(0)
-            })
-            .map_err(StoreError::database)?;
-        if foreign_keys != 0 {
-            return Err(StoreError::new(
-                StoreErrorCode::IntegrityViolation,
-                "stored references violate object ownership",
-            ));
-        }
-        Ok(IntegrityReport::new(
-            checked_objects,
-            catalog,
-            operations,
-            leases,
-            complete,
-        ))
+        validate_connection_integrity(&self.connection, &self.configuration, max_objects)
     }
 
     pub fn logical_manifest(&self) -> StoreResult<LogicalManifest> {
-        let limit = self.configuration.limits().max_manifest_records;
-        let objects = query_ids(
-            &self.connection,
-            "SELECT object_id FROM store_objects ORDER BY object_id",
-            limit,
-        )?;
-        let catalog_entries = query_catalog(&self.connection, limit)?;
-        let operations = query_operations(&self.connection, limit)?;
-        let leases = query_leases(&self.connection, limit)?;
-        LogicalManifest::build(
-            self.configuration.configuration_id().into(),
-            objects,
-            catalog_entries,
-            operations,
-            leases,
-        )
+        build_logical_manifest(&self.connection, &self.configuration)
     }
+}
+
+/// Read-only handle over a detached serialized store image.
+///
+/// The SQLite image is deserialized with SQLite's read-only flag and the public
+/// type exposes no mutation methods. Configuration, schema and integrity are
+/// revalidated independently during open.
+pub struct SealedStore {
+    connection: Connection,
+    configuration: StoreConfiguration,
+}
+
+impl SealedStore {
+    pub fn open_serialized(
+        bytes: &[u8],
+        configuration: StoreConfiguration,
+        max_bytes: u64,
+    ) -> StoreResult<Self> {
+        configuration.limits().validate()?;
+        validate_serialized_limit(max_bytes)?;
+        if bytes.is_empty() || bytes.len() as u64 > max_bytes {
+            return Err(StoreError::new(
+                StoreErrorCode::ObjectTooLarge,
+                "serialized store is empty or exceeds the configured byte budget",
+            ));
+        }
+        let mut connection = Connection::open_in_memory().map_err(StoreError::database)?;
+        connection
+            .deserialize_read_exact(MAIN_DB, Cursor::new(bytes), bytes.len(), true)
+            .map_err(StoreError::database)?;
+        configure_connection(&connection, true)?;
+        validate_connection_identity(&connection, &configuration, false)?;
+        let sealed = Self {
+            connection,
+            configuration,
+        };
+        let integrity =
+            sealed.validate_integrity(sealed.configuration.limits().max_manifest_records)?;
+        if !integrity.complete() {
+            return Err(StoreError::new(
+                StoreErrorCode::IntegrityViolation,
+                "sealed store integrity validation was truncated",
+            ));
+        }
+        Ok(sealed)
+    }
+
+    #[must_use]
+    pub fn configuration(&self) -> &StoreConfiguration {
+        &self.configuration
+    }
+
+    pub fn object(&self, object_id: &ObjectId) -> StoreResult<Option<ObjectRecord>> {
+        read_object(&self.connection, object_id)
+    }
+
+    pub fn catalog_entry(
+        &self,
+        catalog: &CatalogName,
+        path: &CatalogPath,
+    ) -> StoreResult<Option<CatalogEntry>> {
+        read_catalog_entry(&self.connection, catalog, path)
+    }
+
+    pub fn validate_integrity(&self, max_objects: u32) -> StoreResult<IntegrityReport> {
+        validate_connection_integrity(&self.connection, &self.configuration, max_objects)
+    }
+
+    pub fn logical_manifest(&self) -> StoreResult<LogicalManifest> {
+        build_logical_manifest(&self.connection, &self.configuration)
+    }
+}
+
+fn configure_connection(connection: &Connection, read_only: bool) -> StoreResult<()> {
+    connection
+        .busy_timeout(Duration::from_secs(5))
+        .map_err(StoreError::database)?;
+    connection
+        .execute_batch("PRAGMA foreign_keys = ON; PRAGMA trusted_schema = OFF;")
+        .map_err(StoreError::database)?;
+    if read_only {
+        connection
+            .pragma_update(None, "query_only", true)
+            .map_err(StoreError::database)?;
+    } else {
+        connection
+            .pragma_update(None, "synchronous", "FULL")
+            .map_err(StoreError::database)?;
+    }
+    Ok(())
+}
+
+fn initialize_schema(connection: &Connection) -> StoreResult<()> {
+    connection
+        .execute_batch(
+            "CREATE TABLE IF NOT EXISTS store_meta (
+                 key TEXT PRIMARY KEY NOT NULL,
+                 value TEXT NOT NULL
+             ) STRICT;
+             CREATE TABLE IF NOT EXISTS store_objects (
+                 object_id TEXT PRIMARY KEY NOT NULL,
+                 kind TEXT NOT NULL,
+                 schema_version INTEGER NOT NULL CHECK(schema_version > 0),
+                 content_sha256 TEXT NOT NULL,
+                 canonical_json BLOB NOT NULL
+             ) STRICT;
+             CREATE TABLE IF NOT EXISTS store_catalog (
+                 catalog TEXT NOT NULL,
+                 path TEXT NOT NULL,
+                 object_id TEXT NOT NULL REFERENCES store_objects(object_id) ON DELETE RESTRICT,
+                 PRIMARY KEY (catalog, path)
+             ) STRICT;
+             CREATE TABLE IF NOT EXISTS store_operations (
+                 operation_id TEXT PRIMARY KEY NOT NULL,
+                 request_digest TEXT NOT NULL,
+                 state TEXT NOT NULL,
+                 result_object_id TEXT REFERENCES store_objects(object_id) ON DELETE RESTRICT,
+                 CHECK ((state = 'completed' AND result_object_id IS NOT NULL)
+                     OR (state <> 'completed' AND result_object_id IS NULL))
+             ) STRICT;
+             CREATE TABLE IF NOT EXISTS store_leases (
+                 lease_id TEXT PRIMARY KEY NOT NULL,
+                 object_id TEXT NOT NULL REFERENCES store_objects(object_id) ON DELETE RESTRICT,
+                 holder TEXT NOT NULL,
+                 expires_after INTEGER NOT NULL CHECK(expires_after >= 0)
+             ) STRICT;
+             CREATE INDEX IF NOT EXISTS store_catalog_object_idx
+                 ON store_catalog(object_id);
+             CREATE INDEX IF NOT EXISTS store_operation_result_idx
+                 ON store_operations(result_object_id);
+             CREATE INDEX IF NOT EXISTS store_lease_object_idx
+                 ON store_leases(object_id);
+             CREATE INDEX IF NOT EXISTS store_lease_expiry_idx
+                 ON store_leases(expires_after);",
+        )
+        .map_err(StoreError::database)?;
+    Ok(())
+}
+
+fn validate_connection_identity(
+    connection: &Connection,
+    configuration: &StoreConfiguration,
+    initialize: bool,
+) -> StoreResult<()> {
+    let application_id: i64 = connection
+        .query_row("PRAGMA application_id", [], |row| row.get(0))
+        .map_err(StoreError::database)?;
+    if application_id == 0 && initialize {
+        connection
+            .pragma_update(None, "application_id", APPLICATION_ID)
+            .map_err(StoreError::database)?;
+    } else if application_id != APPLICATION_ID {
+        return Err(StoreError::new(
+            StoreErrorCode::IntegrityViolation,
+            "database application identity is incompatible",
+        ));
+    }
+    let user_version: i64 = connection
+        .query_row("PRAGMA user_version", [], |row| row.get(0))
+        .map_err(StoreError::database)?;
+    if user_version == 0 && initialize {
+        connection
+            .pragma_update(None, "user_version", USER_VERSION)
+            .map_err(StoreError::database)?;
+    } else if user_version != USER_VERSION {
+        return Err(StoreError::new(
+            StoreErrorCode::IntegrityViolation,
+            "database schema version is incompatible",
+        ));
+    }
+    let existing: Option<String> = connection
+        .query_row(
+            "SELECT value FROM store_meta WHERE key = 'configuration_id'",
+            [],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(StoreError::database)?;
+    match existing {
+        Some(value) if value != configuration.configuration_id() => Err(StoreError::new(
+            StoreErrorCode::ConfigurationInvalid,
+            "store configuration does not match the durable database",
+        )),
+        Some(_) => Ok(()),
+        None if initialize => {
+            connection
+                .execute(
+                    "INSERT INTO store_meta(key, value) VALUES ('configuration_id', ?1)",
+                    [configuration.configuration_id()],
+                )
+                .map_err(StoreError::database)?;
+            Ok(())
+        }
+        None => Err(StoreError::new(
+            StoreErrorCode::IntegrityViolation,
+            "sealed store lacks its exact configuration identity",
+        )),
+    }
+}
+
+fn validate_serialized_limit(max_bytes: u64) -> StoreResult<()> {
+    if max_bytes == 0 || max_bytes > 512 * 1024 * 1024 {
+        return Err(StoreError::new(
+            StoreErrorCode::ConfigurationInvalid,
+            "serialized store byte limit is outside the reviewed profile",
+        ));
+    }
+    Ok(())
+}
+
+fn read_catalog_entry(
+    connection: &Connection,
+    catalog: &CatalogName,
+    path: &CatalogPath,
+) -> StoreResult<Option<CatalogEntry>> {
+    let object_id: Option<String> = connection
+        .query_row(
+            "SELECT object_id FROM store_catalog WHERE catalog = ?1 AND path = ?2",
+            params![catalog.as_str(), path.as_str()],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(StoreError::database)?;
+    object_id
+        .map(|value| {
+            Ok(CatalogEntry::new(
+                catalog.clone(),
+                path.clone(),
+                ObjectId::new(value)?,
+            ))
+        })
+        .transpose()
+}
+
+fn validate_connection_integrity(
+    connection: &Connection,
+    configuration: &StoreConfiguration,
+    max_objects: u32,
+) -> StoreResult<IntegrityReport> {
+    if max_objects == 0 || max_objects > configuration.limits().max_manifest_records {
+        return Err(StoreError::new(
+            StoreErrorCode::BudgetExceeded,
+            "integrity object budget is invalid",
+        ));
+    }
+    let sqlite: String = connection
+        .query_row("PRAGMA integrity_check(1)", [], |row| row.get(0))
+        .map_err(StoreError::database)?;
+    if sqlite != "ok" {
+        return Err(StoreError::new(
+            StoreErrorCode::IntegrityViolation,
+            "SQLite integrity validation failed",
+        ));
+    }
+    let mut statement = connection
+        .prepare(
+            "SELECT object_id, kind, schema_version, content_sha256, canonical_json
+             FROM store_objects ORDER BY object_id LIMIT ?1",
+        )
+        .map_err(StoreError::database)?;
+    let rows = statement
+        .query_map([i64::from(max_objects) + 1], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, i64>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, Vec<u8>>(4)?,
+            ))
+        })
+        .map_err(StoreError::database)?;
+    let mut checked_objects = 0_u64;
+    let mut complete = true;
+    for row in rows {
+        if checked_objects == u64::from(max_objects) {
+            complete = false;
+            break;
+        }
+        let (object_id, kind, schema_version, content_sha256, canonical_json) =
+            row.map_err(StoreError::database)?;
+        ObjectRecord::from_parts(
+            ObjectId::new(object_id)?,
+            kind.into(),
+            u32::try_from(schema_version).map_err(|_| {
+                StoreError::new(
+                    StoreErrorCode::IntegrityViolation,
+                    "stored object schema version is invalid",
+                )
+            })?,
+            content_sha256.into(),
+            canonical_json.into_boxed_slice(),
+        )?;
+        checked_objects += 1;
+    }
+    let catalog = table_count(connection, "store_catalog")?;
+    let operations = table_count(connection, "store_operations")?;
+    let leases = table_count(connection, "store_leases")?;
+    let foreign_keys: i64 = connection
+        .query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |row| {
+            row.get(0)
+        })
+        .map_err(StoreError::database)?;
+    if foreign_keys != 0 {
+        return Err(StoreError::new(
+            StoreErrorCode::IntegrityViolation,
+            "stored references violate object ownership",
+        ));
+    }
+    Ok(IntegrityReport::new(
+        checked_objects,
+        catalog,
+        operations,
+        leases,
+        complete,
+    ))
+}
+
+fn build_logical_manifest(
+    connection: &Connection,
+    configuration: &StoreConfiguration,
+) -> StoreResult<LogicalManifest> {
+    let limit = configuration.limits().max_manifest_records;
+    let objects = query_ids(
+        connection,
+        "SELECT object_id FROM store_objects ORDER BY object_id",
+        limit,
+    )?;
+    let catalog_entries = query_catalog(connection, limit)?;
+    let operations = query_operations(connection, limit)?;
+    let leases = query_leases(connection, limit)?;
+    LogicalManifest::build(
+        configuration.configuration_id().into(),
+        objects,
+        catalog_entries,
+        operations,
+        leases,
+    )
 }
 
 fn validate_batch(batch: &WriteBatch, max_object_bytes: u64) -> StoreResult<()> {

@@ -1,8 +1,9 @@
 //! Transport-neutral E1-D Reference Pack candidate assembly, validation and rebuild comparison.
 //!
-//! The first executable layout is deliberately a local native candidate profile. It
-//! packages exact owner outputs without claiming the still-missing sealed ReferenceStore,
-//! parity/consumer, license or filesystem-finalization gates required by `validated-local`.
+//! The executable layout is deliberately a local native candidate profile. It packages
+//! exact owner outputs plus a detached SQLite ReferenceStore that is independently reopened
+//! read-only. Parity/consumer, license and filesystem-finalization gates still block
+//! `validated-local`.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -12,18 +13,25 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use wow_annotations::artifact::AnnotationArtifact;
 use wow_core::{ProfileIdentity, canonical_json_bytes};
-use wow_reference::ReferenceView;
+use wow_reference::{
+    ReferenceView,
+    persistent::{PersistentReferenceStore, ReferencePublicationKey, SealedReferenceStore},
+};
+use wow_store::{CatalogExpectation, SealedStore, Store, StoreConfiguration, StoreLimits};
 
 use crate::local::{LocalProjectInput, NativeAnnotationFile, NativeInputReceipt};
 
-pub const REFERENCE_PACK_SCHEMA: &str = "wow-service/reference-pack/e1-d/1";
-pub const LOCAL_NATIVE_PACK_LAYOUT: &str = "wow-reference-pack/layout/local-native-candidate/1";
+pub const REFERENCE_PACK_SCHEMA: &str = "wow-service/reference-pack/e1-d/2";
+pub const LOCAL_NATIVE_PACK_LAYOUT: &str = "wow-reference-pack/layout/local-native-candidate/2";
 pub const LOCAL_NATIVE_VALIDATION_PROFILE: &str =
-    "wow-reference-pack/validation/local-native-candidate/1";
+    "wow-reference-pack/validation/local-native-candidate/2";
 
 const MANIFEST_PATH: &str = "manifest.json";
 const CHECKSUMS_PATH: &str = "checksums.json";
 const REFERENCE_VIEW_PATH: &str = "reference/reference-view.json";
+const REFERENCE_STORE_PATH: &str = "reference/reference-store.sqlite3";
+const REFERENCE_STORE_PROFILE: &str = "wow-reference-pack-store-local-native-v1";
+const REFERENCE_STORE_CHANNEL: &str = "pack";
 const ANNOTATION_MANIFEST_PATH: &str = "annotations/artifact-manifest.json";
 const PROVENANCE_PATH: &str = "provenance/native-input.json";
 const MAX_REVIEWED_TOTAL_BYTES: u64 = 128 * 1024 * 1024;
@@ -294,6 +302,7 @@ impl PackGateRecord {
 #[serde(rename_all = "snake_case")]
 pub enum ReferencePackMemberKind {
     ReferenceView,
+    ReferenceStore,
     AnnotationArtifactManifest,
     AnnotationFile,
     ProvenanceManifest,
@@ -500,6 +509,11 @@ pub struct ReferencePackManifest {
     profile: ProfileIdentity,
     reference_generation_id: Box<str>,
     reference_view_digest: Box<str>,
+    reference_store_profile_id: Box<str>,
+    reference_store_configuration_id: Box<str>,
+    reference_store_manifest_id: Box<str>,
+    reference_store_object_id: Box<str>,
+    reference_store_publication_channel: Box<str>,
     annotation_artifact_id: Box<str>,
     annotation_payload_sha256: Box<str>,
     source_manifest_sha256: Box<str>,
@@ -920,6 +934,20 @@ impl ReferencePackService {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ReferenceStoreIdentity {
+    profile_id: Box<str>,
+    configuration_id: Box<str>,
+    manifest_id: Box<str>,
+    object_id: Box<str>,
+    publication_channel: Box<str>,
+}
+
+struct BuiltPackPayload {
+    entries: Vec<PackMaterializationEntry>,
+    reference_store: ReferenceStoreIdentity,
+}
+
 struct NativePackParts<'a> {
     receipt: &'a NativeInputReceipt,
     profile: &'a ProfileIdentity,
@@ -995,7 +1023,7 @@ fn build_payload_entries(
     request: &ReferencePackBuildRequest,
     parts: &NativePackParts<'_>,
     stop: &AtomicBool,
-) -> ReferencePackResult<Vec<PackMaterializationEntry>> {
+) -> ReferencePackResult<BuiltPackPayload> {
     let mut entries = Vec::new();
     let reference_bytes = parts.reference.canonical_bytes().map_err(|_| {
         error(
@@ -1009,6 +1037,8 @@ fn build_payload_entries(
         parts.reference.self_digest(),
         reference_bytes,
     )?);
+    let (reference_store_entry, reference_store) = build_reference_store_member(request, parts)?;
+    entries.push(reference_store_entry);
 
     let mut annotation_descriptors = Vec::new();
     let mut seen_paths = BTreeSet::new();
@@ -1088,7 +1118,146 @@ fn build_payload_entries(
     )?);
     enforce_entry_budgets(&entries, request.budgets())?;
     entries.sort_by(|left, right| left.member.path.cmp(&right.member.path));
-    Ok(entries)
+    Ok(BuiltPackPayload {
+        entries,
+        reference_store,
+    })
+}
+
+fn build_reference_store_member(
+    request: &ReferencePackBuildRequest,
+    parts: &NativePackParts<'_>,
+) -> ReferencePackResult<(PackMaterializationEntry, ReferenceStoreIdentity)> {
+    let configuration = reference_store_configuration()?;
+    let publication_key =
+        ReferencePublicationKey::new(parts.profile.profile_id().as_str(), REFERENCE_STORE_CHANNEL)
+            .map_err(|_| {
+                error(
+                    ReferencePackErrorCode::IdentityMismatch,
+                    "reference store publication key is invalid",
+                )
+            })?;
+    let mut store = Store::open_in_memory(configuration.clone()).map_err(|_| {
+        error(
+            ReferencePackErrorCode::ValidationFailed,
+            "reference store staging database could not be opened",
+        )
+    })?;
+    let stored = PersistentReferenceStore::new(&mut store)
+        .publish_current(
+            publication_key.clone(),
+            parts.reference,
+            CatalogExpectation::Absent,
+        )
+        .map_err(|_| {
+            error(
+                ReferencePackErrorCode::ValidationFailed,
+                "reference store staging publication failed",
+            )
+        })?;
+    let integrity = PersistentReferenceStore::new(&mut store)
+        .validate_integrity(configuration.limits().max_manifest_records)
+        .map_err(|_| {
+            error(
+                ReferencePackErrorCode::ValidationFailed,
+                "reference store staging integrity validation failed",
+            )
+        })?;
+    if !integrity.complete() {
+        return Err(error(
+            ReferencePackErrorCode::ValidationFailed,
+            "reference store staging integrity validation was incomplete",
+        ));
+    }
+    let logical_manifest = PersistentReferenceStore::new(&mut store)
+        .logical_manifest()
+        .map_err(|_| {
+            error(
+                ReferencePackErrorCode::ValidationFailed,
+                "reference store logical manifest could not be produced",
+            )
+        })?;
+    let bytes = store
+        .serialize_database(request.budgets().max_member_bytes())
+        .map_err(|_| {
+            error(
+                ReferencePackErrorCode::BudgetExceeded,
+                "reference store serialized image exceeds the member budget",
+            )
+        })?;
+    drop(store);
+
+    let reopened = SealedStore::open_serialized(
+        &bytes,
+        configuration.clone(),
+        request.budgets().max_member_bytes(),
+    )
+    .map_err(|_| {
+        error(
+            ReferencePackErrorCode::ValidationFailed,
+            "serialized reference store did not reopen read-only",
+        )
+    })?;
+    let reader = SealedReferenceStore::new(&reopened);
+    let reopened_manifest = reader.logical_manifest().map_err(|_| {
+        error(
+            ReferencePackErrorCode::ValidationFailed,
+            "reopened reference store logical manifest is unavailable",
+        )
+    })?;
+    let published = reader
+        .read_current(&publication_key)
+        .map_err(|_| {
+            error(
+                ReferencePackErrorCode::ValidationFailed,
+                "reopened reference store current view failed validation",
+            )
+        })?
+        .ok_or_else(|| {
+            error(
+                ReferencePackErrorCode::ValidationFailed,
+                "reopened reference store current view is missing",
+            )
+        })?;
+    if reopened_manifest.manifest_id() != logical_manifest.manifest_id()
+        || published.object_id() != stored.object_id()
+        || published.view() != parts.reference
+    {
+        return Err(error(
+            ReferencePackErrorCode::IdentityMismatch,
+            "reopened reference store does not match the staged owner output",
+        ));
+    }
+
+    let identity = ReferenceStoreIdentity {
+        profile_id: configuration.profile_id().into(),
+        configuration_id: configuration.configuration_id().into(),
+        manifest_id: logical_manifest.manifest_id().into(),
+        object_id: stored.object_id().as_str().into(),
+        publication_channel: REFERENCE_STORE_CHANNEL.into(),
+    };
+    let member = entry(
+        REFERENCE_STORE_PATH,
+        ReferencePackMemberKind::ReferenceStore,
+        identity.manifest_id.clone(),
+        bytes.into_vec(),
+    )?;
+    Ok((member, identity))
+}
+
+fn reference_store_configuration() -> ReferencePackResult<StoreConfiguration> {
+    let limits = StoreLimits::new(64 * 1024 * 1024, 16, 16, 128, 16).map_err(|_| {
+        error(
+            ReferencePackErrorCode::InvalidRequest,
+            "reference store limits are outside the reviewed profile",
+        )
+    })?;
+    StoreConfiguration::new(REFERENCE_STORE_PROFILE, limits).map_err(|_| {
+        error(
+            ReferencePackErrorCode::InvalidRequest,
+            "reference store configuration is invalid",
+        )
+    })
 }
 
 fn build_gate_records(receipt: &NativeInputReceipt) -> Vec<PackGateRecord> {
@@ -1157,8 +1326,8 @@ fn build_gate_records(receipt: &NativeInputReceipt) -> Vec<PackGateRecord> {
             "pack.reference_store",
             false,
             true,
-            PackGateStatus::NotEvaluated,
-            "sealed_reference_store_not_materialized_by_local_native_layout",
+            PackGateStatus::Passed,
+            "sealed_reference_store_reopened_read_only",
         ),
         PackGateRecord::new(
             "pack.source_map_loss",
@@ -1202,11 +1371,15 @@ fn build_gate_records(receipt: &NativeInputReceipt) -> Vec<PackGateRecord> {
 fn finalize_plan(
     request: &ReferencePackBuildRequest,
     parts: &NativePackParts<'_>,
-    payload_entries: Vec<PackMaterializationEntry>,
+    payload: BuiltPackPayload,
     gates: Vec<PackGateRecord>,
     stop: &AtomicBool,
 ) -> ReferencePackResult<PackMaterializationPlan> {
     checkpoint(stop)?;
+    let BuiltPackPayload {
+        entries: payload_entries,
+        reference_store,
+    } = payload;
     let payload_members = payload_entries
         .iter()
         .map(|entry| entry.member.clone())
@@ -1239,7 +1412,6 @@ fn finalize_plan(
         ReferencePackEligibilityState::Blocked
     };
     let deferred_capabilities = vec![
-        "sealed_reference_store".into(),
         "standalone_source_map_and_loss".into(),
         "parity_and_consumer_evidence".into(),
         "license_and_redistribution_closure".into(),
@@ -1252,6 +1424,11 @@ fn finalize_plan(
         profile: parts.profile,
         reference_generation_id: parts.reference.generation_id(),
         reference_view_digest: parts.reference.self_digest(),
+        reference_store_profile_id: &reference_store.profile_id,
+        reference_store_configuration_id: &reference_store.configuration_id,
+        reference_store_manifest_id: &reference_store.manifest_id,
+        reference_store_object_id: &reference_store.object_id,
+        reference_store_publication_channel: &reference_store.publication_channel,
         annotation_artifact_id: parts.artifact.artifact_id(),
         annotation_payload_sha256: parts.artifact.payload_sha256(),
         source_manifest_sha256: parts.source_manifest_sha256,
@@ -1273,6 +1450,11 @@ fn finalize_plan(
         profile: parts.profile.clone(),
         reference_generation_id: parts.reference.generation_id().into(),
         reference_view_digest: parts.reference.self_digest().into(),
+        reference_store_profile_id: reference_store.profile_id,
+        reference_store_configuration_id: reference_store.configuration_id,
+        reference_store_manifest_id: reference_store.manifest_id,
+        reference_store_object_id: reference_store.object_id,
+        reference_store_publication_channel: reference_store.publication_channel,
         annotation_artifact_id: parts.artifact.artifact_id().into(),
         annotation_payload_sha256: parts.artifact.payload_sha256().into(),
         source_manifest_sha256: parts.source_manifest_sha256.into(),
@@ -1318,6 +1500,11 @@ struct UnsignedPackManifest<'a> {
     profile: &'a ProfileIdentity,
     reference_generation_id: &'a str,
     reference_view_digest: &'a str,
+    reference_store_profile_id: &'a str,
+    reference_store_configuration_id: &'a str,
+    reference_store_manifest_id: &'a str,
+    reference_store_object_id: &'a str,
+    reference_store_publication_channel: &'a str,
     annotation_artifact_id: &'a str,
     annotation_payload_sha256: &'a str,
     source_manifest_sha256: &'a str,
@@ -1343,12 +1530,30 @@ fn validate_manifest_identity(manifest: &ReferencePackManifest) -> ReferencePack
             "reference pack profile is invalid",
         )
     })?;
+    let expected_store_configuration = reference_store_configuration()?;
+    if manifest.reference_store_profile_id.as_ref() != REFERENCE_STORE_PROFILE
+        || manifest.reference_store_configuration_id.as_ref()
+            != expected_store_configuration.configuration_id()
+        || manifest.reference_store_publication_channel.as_ref() != REFERENCE_STORE_CHANNEL
+        || !valid_identity(&manifest.reference_store_manifest_id)
+        || !valid_identity(&manifest.reference_store_object_id)
+    {
+        return Err(error(
+            ReferencePackErrorCode::ManifestInvalid,
+            "reference pack store identity is unsupported or invalid",
+        ));
+    }
     let unsigned = UnsignedPackManifest {
         schema: REFERENCE_PACK_SCHEMA,
         layout_profile_id: LOCAL_NATIVE_PACK_LAYOUT,
         profile: &manifest.profile,
         reference_generation_id: &manifest.reference_generation_id,
         reference_view_digest: &manifest.reference_view_digest,
+        reference_store_profile_id: &manifest.reference_store_profile_id,
+        reference_store_configuration_id: &manifest.reference_store_configuration_id,
+        reference_store_manifest_id: &manifest.reference_store_manifest_id,
+        reference_store_object_id: &manifest.reference_store_object_id,
+        reference_store_publication_channel: &manifest.reference_store_publication_channel,
         annotation_artifact_id: &manifest.annotation_artifact_id,
         annotation_payload_sha256: &manifest.annotation_payload_sha256,
         source_manifest_sha256: &manifest.source_manifest_sha256,
@@ -1448,6 +1653,7 @@ fn validate_materialized_members(
             "reference pack ReferenceView identity does not close",
         ));
     }
+    validate_reference_store_member(files, manifest, &reference)?;
     let annotation_manifest: PackAnnotationArtifactManifest = strict_json(
         required_member_bytes(
             files,
@@ -1474,6 +1680,89 @@ fn validate_materialized_members(
         ));
     }
     Ok(recomputed_gates(manifest, &provenance))
+}
+
+fn validate_reference_store_member(
+    files: &BTreeMap<Box<str>, Box<[u8]>>,
+    manifest: &ReferencePackManifest,
+    reference: &ReferenceView,
+) -> ReferencePackResult<()> {
+    let bytes = required_member_bytes(files, manifest, ReferencePackMemberKind::ReferenceStore)?;
+    let configuration = reference_store_configuration()?;
+    if manifest.reference_store_profile_id.as_ref() != configuration.profile_id()
+        || manifest.reference_store_configuration_id.as_ref() != configuration.configuration_id()
+    {
+        return Err(error(
+            ReferencePackErrorCode::IdentityMismatch,
+            "reference store configuration identity does not close",
+        ));
+    }
+    let sealed = SealedStore::open_serialized(bytes, configuration.clone(), bytes.len() as u64)
+        .map_err(|_| {
+            error(
+                ReferencePackErrorCode::ValidationFailed,
+                "reference store member failed independent read-only reopen",
+            )
+        })?;
+    let reader = SealedReferenceStore::new(&sealed);
+    let integrity = reader
+        .validate_integrity(configuration.limits().max_manifest_records)
+        .map_err(|_| {
+            error(
+                ReferencePackErrorCode::ValidationFailed,
+                "reopened reference store failed integrity validation",
+            )
+        })?;
+    if !integrity.complete() {
+        return Err(error(
+            ReferencePackErrorCode::ValidationFailed,
+            "reopened reference store integrity validation was incomplete",
+        ));
+    }
+    let logical_manifest = reader.logical_manifest().map_err(|_| {
+        error(
+            ReferencePackErrorCode::ValidationFailed,
+            "reopened reference store logical manifest is unavailable",
+        )
+    })?;
+    let publication_key = ReferencePublicationKey::new(
+        manifest.profile.profile_id().as_str(),
+        manifest.reference_store_publication_channel.clone(),
+    )
+    .map_err(|_| {
+        error(
+            ReferencePackErrorCode::ManifestInvalid,
+            "reference store publication key is invalid",
+        )
+    })?;
+    let published = reader
+        .read_current(&publication_key)
+        .map_err(|_| {
+            error(
+                ReferencePackErrorCode::ValidationFailed,
+                "reopened reference store current view failed owner validation",
+            )
+        })?
+        .ok_or_else(|| {
+            error(
+                ReferencePackErrorCode::ValidationFailed,
+                "reopened reference store current view is missing",
+            )
+        })?;
+    if logical_manifest.manifest_id() != manifest.reference_store_manifest_id.as_ref()
+        || published.object_id().as_str() != manifest.reference_store_object_id.as_ref()
+        || published.view() != reference
+        || logical_manifest.objects().len() != 1
+        || logical_manifest.catalog_entries().len() != 1
+        || !logical_manifest.operations().is_empty()
+        || !logical_manifest.leases().is_empty()
+    {
+        return Err(error(
+            ReferencePackErrorCode::IdentityMismatch,
+            "reopened reference store does not close over the declared exact view",
+        ));
+    }
+    Ok(())
 }
 
 fn validate_annotation_members(
@@ -1585,8 +1874,8 @@ fn recomputed_gates(
             "pack.reference_store",
             false,
             true,
-            PackGateStatus::NotEvaluated,
-            "sealed_reference_store_not_materialized_by_local_native_layout",
+            PackGateStatus::Passed,
+            "sealed_reference_store_reopened_read_only",
         ),
         PackGateRecord::new(
             "pack.source_map_loss",
@@ -1627,11 +1916,93 @@ fn recomputed_gates(
     ]
 }
 
+fn semantic_pack_identity(plan: &PackMaterializationPlan) -> ReferencePackResult<Box<str>> {
+    let manifest_entry = plan
+        .entries
+        .iter()
+        .find(|entry| entry.member.kind == ReferencePackMemberKind::PackManifest)
+        .ok_or_else(|| {
+            error(
+                ReferencePackErrorCode::ManifestInvalid,
+                "rebuild input is missing its pack manifest",
+            )
+        })?;
+    let manifest: ReferencePackManifest = strict_json(&manifest_entry.bytes, "pack manifest")?;
+    validate_manifest_identity(&manifest)?;
+
+    #[derive(Serialize)]
+    struct SemanticMember<'a> {
+        path: &'a str,
+        kind: ReferencePackMemberKind,
+        logical_id: &'a str,
+    }
+
+    #[derive(Serialize)]
+    struct SemanticIdentity<'a> {
+        schema: &'static str,
+        layout_profile_id: &'a str,
+        profile: &'a ProfileIdentity,
+        reference_generation_id: &'a str,
+        reference_view_digest: &'a str,
+        reference_store_profile_id: &'a str,
+        reference_store_configuration_id: &'a str,
+        reference_store_manifest_id: &'a str,
+        reference_store_object_id: &'a str,
+        reference_store_publication_channel: &'a str,
+        annotation_artifact_id: &'a str,
+        annotation_payload_sha256: &'a str,
+        source_manifest_sha256: &'a str,
+        payload_members: Vec<SemanticMember<'a>>,
+        gate_records: &'a [PackGateRecord],
+        eligibility_state: ReferencePackEligibilityState,
+        deferred_capabilities: &'a [Box<str>],
+    }
+
+    let payload_members = manifest
+        .payload_members
+        .iter()
+        .map(|member| SemanticMember {
+            path: &member.path,
+            kind: member.kind,
+            logical_id: &member.logical_id,
+        })
+        .collect::<Vec<_>>();
+    let projection = SemanticIdentity {
+        schema: REFERENCE_PACK_SCHEMA,
+        layout_profile_id: &manifest.layout_profile_id,
+        profile: &manifest.profile,
+        reference_generation_id: &manifest.reference_generation_id,
+        reference_view_digest: &manifest.reference_view_digest,
+        reference_store_profile_id: &manifest.reference_store_profile_id,
+        reference_store_configuration_id: &manifest.reference_store_configuration_id,
+        reference_store_manifest_id: &manifest.reference_store_manifest_id,
+        reference_store_object_id: &manifest.reference_store_object_id,
+        reference_store_publication_channel: &manifest.reference_store_publication_channel,
+        annotation_artifact_id: &manifest.annotation_artifact_id,
+        annotation_payload_sha256: &manifest.annotation_payload_sha256,
+        source_manifest_sha256: &manifest.source_manifest_sha256,
+        payload_members,
+        gate_records: &manifest.gate_records,
+        eligibility_state: manifest.eligibility_state,
+        deferred_capabilities: &manifest.deferred_capabilities,
+    };
+    Ok(format!(
+        "reference-pack-semantic:sha256:{}",
+        hex(&Sha256::digest(canonical(
+            &projection,
+            "semantic pack identity"
+        )?))
+    )
+    .into_boxed_str())
+}
+
 fn compare_plans(
     left: &PackMaterializationPlan,
     right: &PackMaterializationPlan,
 ) -> ReferencePackResult<ReferencePackRebuildComparisonReport> {
-    let semantic_identity_equal = left.pack_id == right.pack_id;
+    let left_semantic_id = semantic_pack_identity(left)?;
+    let right_semantic_id = semantic_pack_identity(right)?;
+    let semantic_identity_equal = left_semantic_id == right_semantic_id;
     let left_files = left
         .entries
         .iter()
@@ -1651,6 +2022,19 @@ fn compare_plans(
     for path in all_paths {
         match (left_files.get(path), right_files.get(path)) {
             (Some(left_entry), Some(right_entry)) if left_entry.bytes == right_entry.bytes => {}
+            (Some(left_entry), Some(right_entry))
+                if left_entry.member.kind == ReferencePackMemberKind::ReferenceStore
+                    && right_entry.member.kind == ReferencePackMemberKind::ReferenceStore
+                    && left_entry.member.logical_id == right_entry.member.logical_id =>
+            {
+                differences.push(RebuildDifference {
+                    comparison_class: "sqlite_physical_bytes".into(),
+                    subject: path.into(),
+                    left_identity: left_entry.member.sha256.clone(),
+                    right_identity: right_entry.member.sha256.clone(),
+                    allowed: true,
+                });
+            }
             (Some(left_entry), Some(right_entry)) => differences.push(RebuildDifference {
                 comparison_class: "canonical_bytes".into(),
                 subject: path.into(),
@@ -1678,25 +2062,52 @@ fn compare_plans(
     if !semantic_identity_equal {
         differences.push(RebuildDifference {
             comparison_class: "semantic_identity".into(),
-            subject: "pack_id".into(),
-            left_identity: left.pack_id.clone(),
-            right_identity: right.pack_id.clone(),
+            subject: "logical_pack".into(),
+            left_identity: left_semantic_id,
+            right_identity: right_semantic_id,
             allowed: false,
         });
     }
-    let canonical_member_bytes_equal = differences
-        .iter()
-        .all(|difference| difference.comparison_class.as_ref() == "semantic_identity");
-    let status = if semantic_identity_equal && differences.is_empty() {
+    let canonical_member_bytes_equal = differences.iter().all(|difference| {
+        !matches!(
+            difference.comparison_class.as_ref(),
+            "canonical_bytes" | "member_set"
+        )
+    });
+    let status = if semantic_identity_equal
+        && canonical_member_bytes_equal
+        && differences.iter().all(|difference| difference.allowed)
+    {
         RebuildComparisonStatus::Passed
     } else {
         RebuildComparisonStatus::Failed
+    };
+    let left_store = left
+        .entries
+        .iter()
+        .find(|entry| entry.member.kind == ReferencePackMemberKind::ReferenceStore);
+    let right_store = right
+        .entries
+        .iter()
+        .find(|entry| entry.member.kind == ReferencePackMemberKind::ReferenceStore);
+    let sqlite_physical_classification = match (left_store, right_store) {
+        (Some(left_store), Some(right_store)) if left_store.bytes == right_store.bytes => {
+            "observed_equal_not_contractual"
+        }
+        (Some(left_store), Some(right_store))
+            if left_store.member.logical_id == right_store.member.logical_id =>
+        {
+            "different_but_logically_equivalent"
+        }
+        (Some(_), Some(_)) => "different_and_logically_incompatible",
+        _ => "missing_reference_store_member",
     };
     let report_id = rebuild_report_id(
         &left.pack_id,
         &right.pack_id,
         semantic_identity_equal,
         canonical_member_bytes_equal,
+        sqlite_physical_classification,
         &differences,
     )?;
     Ok(ReferencePackRebuildComparisonReport {
@@ -1706,7 +2117,7 @@ fn compare_plans(
         right_pack_id: right.pack_id.clone(),
         semantic_identity_equal,
         canonical_member_bytes_equal,
-        sqlite_physical_classification: "not_compared_no_sqlite_member".into(),
+        sqlite_physical_classification: sqlite_physical_classification.into(),
         differences: differences.into_boxed_slice(),
         status,
     })
@@ -1913,6 +2324,7 @@ fn rebuild_report_id(
     right_pack_id: &str,
     semantic_identity_equal: bool,
     canonical_member_bytes_equal: bool,
+    sqlite_physical_classification: &str,
     differences: &[RebuildDifference],
 ) -> ReferencePackResult<Box<str>> {
     Ok(format!(
@@ -1923,7 +2335,7 @@ fn rebuild_report_id(
                 right_pack_id,
                 semantic_identity_equal,
                 canonical_member_bytes_equal,
-                "not_compared_no_sqlite_member",
+                sqlite_physical_classification,
                 differences,
             ),
             "rebuild report",

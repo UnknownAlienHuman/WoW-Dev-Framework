@@ -817,6 +817,21 @@ impl LogicalManifest {
     pub fn objects(&self) -> &[ObjectId] {
         &self.objects
     }
+
+    #[must_use]
+    pub fn catalog_entries(&self) -> &[CatalogEntry] {
+        &self.catalog_entries
+    }
+
+    #[must_use]
+    pub fn operations(&self) -> &[OperationRecord] {
+        &self.operations
+    }
+
+    #[must_use]
+    pub fn leases(&self) -> &[LeaseRecord] {
+        &self.leases
+    }
 }
 
 pub(crate) fn derive_object_id(
