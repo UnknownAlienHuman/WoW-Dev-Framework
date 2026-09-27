@@ -1,59 +1,54 @@
-name: W06 reference pack candidate checkpoint
+name: W06 publish checked Reference Pack candidate
 on:
   push:
     branches: [main]
 permissions:
-  contents: read
+  actions: read
+  contents: write
 concurrency:
-  group: w06-reference-pack-candidate-checkpoint
+  group: w06-reference-pack-candidate-publisher
   cancel-in-progress: false
 env:
   BASE_COMMIT: 75ec8ec9f8ff2c62bfd0fd79ed2fc34395eab3a7
   BASE_TREE: d0e1dcb1909365d23879840156f1560060b8641c
-  STAGING_PARENT: 76deb7df8ae40b9734dbeb5f4d41556eb63a54b4
-  PATCH_SHA256: 752fedbd5be3960117b8a239d731db86e17e7afc554feac0c171dae5773a006a
+  ARTIFACT_ID: '10934746207'
+  ARTIFACT_ZIP_SHA256: 8c710948bce90217e998312bd65adb22f022cf9b213f87be0fa827a20326b893
+  SOURCE_TAR_SHA256: c793841573bfe5cee249962aec1ce4c429bb5b7517a038222384add93708653b
+  FORMATTED_PATCH_SHA256: 752fedbd5be3960117b8a239d731db86e17e7afc554feac0c171dae5773a006a
+  CHECKED_TREE: ff6d2c6b89b6325b1e43edd388e5c71ef67eecab
 jobs:
-  checkpoint:
+  publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
         with:
           ref: main
           fetch-depth: 0
           persist-credentials: false
-      - name: Admit exact product patch and remove checkpoint transport
-        id: admit
+      - name: Recover and verify the exact checked source
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git rev-parse "${GITHUB_SHA}^")" = "$STAGING_PARENT"
-          test "$(git rev-parse "${STAGING_PARENT}^")" = "$BASE_COMMIT"
-          xz -dc .ci/w06-reference-pack.patch.xz > "$RUNNER_TEMP/w06-reference-pack.patch"
-          printf '%s  %s\n' "$PATCH_SHA256" "$RUNNER_TEMP/w06-reference-pack.patch" | sha256sum -c -
-          git rm -- .ci/w06-reference-pack.patch.xz .github/workflows/w06-checkpoint.yml
-          test "$(git write-tree)" = "$BASE_TREE"
-          git apply --index "$RUNNER_TEMP/w06-reference-pack.patch"
-      - name: Install minimal compiler tools
-        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
-      - name: Format workspace
-        run: cargo +stable fmt --all
-      - name: Minimal owner and service Clippy; no tests executed
-        shell: bash
-        run: |
-          set -euo pipefail
-          rustc +stable -Vv | tee "$RUNNER_TEMP/RUST_VERSION"
-          cargo +stable clippy --locked \
-            -p wow-reference -p wow-annotations -p wow-service \
-            --all-targets --all-features -- -D warnings 2>&1 | tee "$RUNNER_TEMP/clippy.log"
-      - name: Repository policy and exact file set
-        shell: bash
-        run: |
-          set -euo pipefail
-          cargo +stable xtask check 2>&1 | tee "$RUNNER_TEMP/policy.log"
+          mkdir -p "$RUNNER_TEMP/w06-artifact"
+          gh api \
+            -H 'Accept: application/vnd.github+json' \
+            "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip" \
+            > "$RUNNER_TEMP/w06-artifact.zip"
+          printf '%s  %s\n' "$ARTIFACT_ZIP_SHA256" "$RUNNER_TEMP/w06-artifact.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/w06-artifact.zip" -d "$RUNNER_TEMP/w06-artifact"
+          test "$(cat "$RUNNER_TEMP/w06-artifact/CHECKED_TREE")" = "$CHECKED_TREE"
+          printf '%s  %s\n' "$SOURCE_TAR_SHA256" "$RUNNER_TEMP/w06-artifact/checked-source.tar" | sha256sum -c -
+          printf '%s  %s\n' "$FORMATTED_PATCH_SHA256" "$RUNNER_TEMP/w06-artifact/formatted.patch" | sha256sum -c -
+
+          git reset --hard "$BASE_COMMIT"
+          git clean -fdx
+          tar -xf "$RUNNER_TEMP/w06-artifact/checked-source.tar" -C .
           git add --all
-          git diff --cached --check
+          test "$(git write-tree)" = "$CHECKED_TREE"
           actual="$(git diff --cached --name-only "$BASE_COMMIT" | LC_ALL=C sort)"
           expected="$(cat <<'EOF'
           crates/wow-service/src/lib.rs
@@ -64,26 +59,77 @@ jobs:
           EOF
           )"
           test "$actual" = "$expected"
-      - name: Retain exact checked source
-        if: always() && steps.admit.outcome == 'success'
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/checkpoint"
-          git add --all
-          git write-tree > "$RUNNER_TEMP/checkpoint/CHECKED_TREE"
-          git archive --format=tar -o "$RUNNER_TEMP/checkpoint/checked-source.tar" "$(cat "$RUNNER_TEMP/checkpoint/CHECKED_TREE")"
-          git diff --cached --binary "$BASE_COMMIT" > "$RUNNER_TEMP/checkpoint/formatted.patch"
-          printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/checkpoint/STAGING_SHA"
-          for file in RUST_VERSION clippy.log policy.log; do
-            if test -f "$RUNNER_TEMP/$file"; then cp "$RUNNER_TEMP/$file" "$RUNNER_TEMP/checkpoint/$file"; fi
-          done
-          (cd "$RUNNER_TEMP/checkpoint" && sha256sum checked-source.tar formatted.patch > SHA256SUMS)
-      - name: Upload checkpoint evidence
-        if: always() && steps.admit.outcome == 'success'
+      - name: Publish the exact checked tree to main
+        id: publish
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const current = await github.rest.git.getRef({ owner, repo, ref: 'heads/main' });
+            if (current.data.object.sha !== process.env.GITHUB_SHA) {
+              core.setFailed(`main moved from ${process.env.GITHUB_SHA} to ${current.data.object.sha}`);
+              return;
+            }
+            const paths = [
+              'crates/wow-service/src/lib.rs',
+              'crates/wow-service/src/local/input.rs',
+              'crates/wow-service/src/local/mod.rs',
+              'crates/wow-service/src/local/native_input.rs',
+              'crates/wow-service/src/reference_pack.rs',
+            ];
+            const tree = [];
+            const blobs = {};
+            for (const filePath of paths) {
+              const content = fs.readFileSync(filePath).toString('base64');
+              const blob = await github.rest.git.createBlob({
+                owner,
+                repo,
+                content,
+                encoding: 'base64',
+              });
+              blobs[filePath] = blob.data.sha;
+              tree.push({ path: filePath, mode: '100644', type: 'blob', sha: blob.data.sha });
+            }
+            const createdTree = await github.rest.git.createTree({
+              owner,
+              repo,
+              base_tree: process.env.BASE_TREE,
+              tree,
+            });
+            if (createdTree.data.sha !== process.env.CHECKED_TREE) {
+              core.setFailed(`created tree ${createdTree.data.sha} differs from checked tree ${process.env.CHECKED_TREE}`);
+              return;
+            }
+            const commit = await github.rest.git.createCommit({
+              owner,
+              repo,
+              message: 'feat(service): assemble local native Reference Pack candidate [skip ci]\n\nW06 first executable vertical slice. Build, independent validation and rebuild comparison now package exact W03 native ReferenceView plus W05 annotation artifacts into a bounded deterministic local candidate layout. Missing sealed ReferenceStore, parity, license and filesystem-finalization gates remain explicit NotEvaluated blockers for validated-local. Selected all-target/all-feature Clippy and repository policy passed on Linux with Rust 1.98.1; no tests executed.',
+              tree: createdTree.data.sha,
+              parents: [process.env.GITHUB_SHA],
+            });
+            await github.rest.git.updateRef({
+              owner,
+              repo,
+              ref: 'heads/main',
+              sha: commit.data.sha,
+              force: false,
+            });
+            const receiptDir = path.join(process.env.RUNNER_TEMP, 'publication');
+            fs.mkdirSync(receiptDir, { recursive: true });
+            fs.writeFileSync(path.join(receiptDir, 'FINAL_COMMIT'), `${commit.data.sha}\n`);
+            fs.writeFileSync(path.join(receiptDir, 'FINAL_TREE'), `${createdTree.data.sha}\n`);
+            fs.writeFileSync(path.join(receiptDir, 'BLOBS.json'), `${JSON.stringify(blobs, null, 2)}\n`);
+            core.setOutput('commit', commit.data.sha);
+            core.setOutput('tree', createdTree.data.sha);
+            core.info(`published ${commit.data.sha} tree ${createdTree.data.sha}`);
+      - name: Retain publication receipt
         uses: actions/upload-artifact@v7
         with:
-          name: w06-reference-pack-${{ github.run_id }}
-          path: ${{ runner.temp }}/checkpoint
+          name: w06-publication-${{ github.run_id }}
+          path: ${{ runner.temp }}/publication
           retention-days: 3
           if-no-files-found: error
