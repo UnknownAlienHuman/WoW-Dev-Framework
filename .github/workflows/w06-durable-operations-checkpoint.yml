@@ -10,6 +10,7 @@ concurrency:
 env:
   BASE_COMMIT: 241c2aa2d687da2bfbaa8566077e83689d5f3bdb
   BASE_TREE: da9e402dd0d1b5002b07e682006a953d663c53fc
+  STAGING_PARENT: 321d856829cb2a220a76e5d49c3652f01d1f48ac
   PATCH_SHA256: 337ff3e9005d0b2109887a5916c2ce9e61aeb5337260afe7be796297a9e4859a
 jobs:
   checkpoint:
@@ -26,7 +27,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git rev-parse "${GITHUB_SHA}^")" = "$BASE_COMMIT"
+          test "$(git rev-parse "${GITHUB_SHA}^")" = "$STAGING_PARENT"
           xz -dc .ci/w06-durable-operations.patch.xz > "$RUNNER_TEMP/w06-durable-operations.patch"
           printf '%s  %s\n' "$PATCH_SHA256" "$RUNNER_TEMP/w06-durable-operations.patch" | sha256sum -c -
           git rm -- .ci/w06-durable-operations.patch.xz .github/workflows/w06-durable-operations-checkpoint.yml
