@@ -1,0 +1,95 @@
+name: W06 license and redistribution checkpoint
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: w06-license-redistribution-checkpoint
+  cancel-in-progress: false
+env:
+  BASE_COMMIT: 2e3a6d8bb457972451f6c5cec01186eecb66774f
+  BASE_TREE: 01e83143d5734514b4853e7bf1edf4cda8f88e7d
+  PATCH_SHA256: c8b4b94d5f8c4ca8441ba39a5feab29874a29f105117fb38dccda215086d1b55
+jobs:
+  checkpoint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Admit exact product patch and remove checkpoint transport
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse "${GITHUB_SHA}^")" = "$BASE_COMMIT"
+          xz -dc .ci/w06-license.patch.xz > "$RUNNER_TEMP/w06-license.patch"
+          printf '%s  %s\n' "$PATCH_SHA256" "$RUNNER_TEMP/w06-license.patch" | sha256sum -c -
+          git rm -- .ci/w06-license.patch.xz .github/workflows/w06-license-checkpoint.yml
+          test "$(git write-tree)" = "$BASE_TREE"
+          git apply --index "$RUNNER_TEMP/w06-license.patch"
+      - name: Install minimal compiler tools
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+      - name: Format workspace
+        run: cargo +stable fmt --all
+      - name: Minimal service Clippy; no tests executed
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustc +stable -Vv | tee "$RUNNER_TEMP/RUST_VERSION"
+          cargo +stable clippy --locked \
+            -p wow-service \
+            --all-targets --all-features -- -D warnings 2>&1 | tee "$RUNNER_TEMP/clippy.log"
+      - name: Repository policy and exact file set
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo +stable xtask check 2>&1 | tee "$RUNNER_TEMP/policy.log"
+          git add --all
+          git diff --cached --check
+          actual="$(git diff --cached --name-only "$BASE_COMMIT" | LC_ALL=C sort)"
+          expected="$(cat <<'FILES'
+          crates/wow-service/src/lib.rs
+          crates/wow-service/src/local/mod.rs
+          crates/wow-service/src/local/native_distribution.rs
+          crates/wow-service/src/local/native_input.rs
+          crates/wow-service/src/reference_pack.rs
+          crates/wow-service/src/reference_pack_license.rs
+          FILES
+          )"
+          test "$actual" = "$expected"
+          ! grep -R "todo!()\|unimplemented!()" \
+            crates/wow-service/src/local/native_distribution.rs \
+            crates/wow-service/src/local/native_input.rs \
+            crates/wow-service/src/reference_pack.rs \
+            crates/wow-service/src/reference_pack_license.rs
+          grep -Fq 'wow-service/reference-pack-distribution/1' crates/wow-service/src/reference_pack_license.rs
+          grep -Fq 'pack.license_provenance' crates/wow-service/src/reference_pack.rs
+          grep -Fq 'external_explicit_review_not_authenticated_by_library' crates/wow-service/src/local/native_distribution.rs
+      - name: Retain exact checked source
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/checkpoint"
+          git add --all
+          git write-tree > "$RUNNER_TEMP/checkpoint/CHECKED_TREE"
+          git archive --format=tar -o "$RUNNER_TEMP/checkpoint/checked-source.tar" "$(cat "$RUNNER_TEMP/checkpoint/CHECKED_TREE")"
+          git diff --cached --binary "$BASE_COMMIT" > "$RUNNER_TEMP/checkpoint/formatted.patch"
+          printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/checkpoint/STAGING_SHA"
+          for file in RUST_VERSION clippy.log policy.log; do
+            if test -f "$RUNNER_TEMP/$file"; then cp "$RUNNER_TEMP/$file" "$RUNNER_TEMP/checkpoint/$file"; fi
+          done
+          (cd "$RUNNER_TEMP/checkpoint" && sha256sum checked-source.tar formatted.patch > SHA256SUMS)
+      - name: Upload checkpoint evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: w06-license-redistribution-${{ github.run_id }}
+          path: ${{ runner.temp }}/checkpoint
+          retention-days: 3
+          if-no-files-found: error
