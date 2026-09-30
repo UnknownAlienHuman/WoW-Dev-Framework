@@ -1,0 +1,83 @@
+name: W06 deterministic rebuild report checkpoint
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: w06-deterministic-rebuild-checkpoint
+  cancel-in-progress: false
+env:
+  BASE_COMMIT: 5cb31da4bccd48586619e5d873a1b8d536895bfc
+  BASE_TREE: c471d930cf613c15f429febde69d340df357b959
+  PATCH_SHA256: a3980c7745b14897f2167ec553884678e986eb692028bf20562180f7e5c0f72b
+jobs:
+  checkpoint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Admit exact product patch and remove checkpoint transport
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse "${GITHUB_SHA}^")" = "$BASE_COMMIT"
+          xz -dc .ci/w06-rebuild.patch.xz > "$RUNNER_TEMP/w06-rebuild.patch"
+          printf '%s  %s\n' "$PATCH_SHA256" "$RUNNER_TEMP/w06-rebuild.patch" | sha256sum -c -
+          git rm -- .ci/w06-rebuild.patch.xz .github/workflows/w06-rebuild-checkpoint.yml
+          test "$(git write-tree)" = "$BASE_TREE"
+          git apply --index "$RUNNER_TEMP/w06-rebuild.patch"
+      - name: Install minimal compiler tools
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+      - name: Format workspace
+        run: cargo +stable fmt --all
+      - name: Minimal service Clippy; no tests executed
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustc +stable -Vv | tee "$RUNNER_TEMP/RUST_VERSION"
+          cargo +stable clippy --locked \
+            -p wow-service \
+            --all-targets --all-features -- -D warnings 2>&1 | tee "$RUNNER_TEMP/clippy.log"
+      - name: Repository policy and exact file set
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo +stable xtask check 2>&1 | tee "$RUNNER_TEMP/policy.log"
+          git add --all
+          git diff --cached --check
+          actual="$(git diff --cached --name-only "$BASE_COMMIT" | LC_ALL=C sort)"
+          expected='crates/wow-service/src/reference_pack.rs'
+          test "$actual" = "$expected"
+          ! grep -n "todo!()\|unimplemented!()" crates/wow-service/src/reference_pack.rs
+          grep -Fq 'wow-service/reference-pack-rebuild-comparison/1' crates/wow-service/src/reference_pack.rs
+          grep -Fq 'reports/rebuild-comparison.json' crates/wow-service/src/reference_pack.rs
+          grep -Fq 'bound_rebuild_comparison_passed' crates/wow-service/src/reference_pack.rs
+      - name: Retain exact checked source
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/checkpoint"
+          git add --all
+          git write-tree > "$RUNNER_TEMP/checkpoint/CHECKED_TREE"
+          git archive --format=tar -o "$RUNNER_TEMP/checkpoint/checked-source.tar" "$(cat "$RUNNER_TEMP/checkpoint/CHECKED_TREE")"
+          git diff --cached --binary "$BASE_COMMIT" > "$RUNNER_TEMP/checkpoint/formatted.patch"
+          printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/checkpoint/STAGING_SHA"
+          for file in RUST_VERSION clippy.log policy.log; do
+            if test -f "$RUNNER_TEMP/$file"; then cp "$RUNNER_TEMP/$file" "$RUNNER_TEMP/checkpoint/$file"; fi
+          done
+          (cd "$RUNNER_TEMP/checkpoint" && sha256sum checked-source.tar formatted.patch > SHA256SUMS)
+      - name: Upload checkpoint evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: w06-deterministic-rebuild-${{ github.run_id }}
+          path: ${{ runner.temp }}/checkpoint
+          retention-days: 3
+          if-no-files-found: error
