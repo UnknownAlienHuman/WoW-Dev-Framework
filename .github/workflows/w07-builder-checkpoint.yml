@@ -1,0 +1,107 @@
+name: W07 Reference Pack builder checkpoint
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: w07-reference-pack-builder-checkpoint
+  cancel-in-progress: false
+env:
+  BASE_COMMIT: fe077fc76c38f8d5b19ff9da5fe1c8bfe92c4336
+  BASE_TREE: 9e80b2ee28f340776d108224fa30bf0f35d6a996
+  PATCH_SHA256: a06e38962634105026621c7d0d722ea684d33ede00c8ab431f9dc5410902e513
+jobs:
+  checkpoint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Admit exact product patch and remove checkpoint transport
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse "${GITHUB_SHA}^")" = "$BASE_COMMIT"
+          cat .ci/w07-builder.patch.xz.b64.* > "$RUNNER_TEMP/w07-builder.patch.xz.b64"
+          base64 -d "$RUNNER_TEMP/w07-builder.patch.xz.b64" > "$RUNNER_TEMP/w07-builder.patch.xz"
+          xz -dc "$RUNNER_TEMP/w07-builder.patch.xz" > "$RUNNER_TEMP/w07-builder.patch"
+          printf '%s  %s\n' "$PATCH_SHA256" "$RUNNER_TEMP/w07-builder.patch" | sha256sum -c -
+          git rm -- .ci/w07-builder.patch.xz.b64.* .github/workflows/w07-builder-checkpoint.yml
+          test "$(git write-tree)" = "$BASE_TREE"
+          git apply --index "$RUNNER_TEMP/w07-builder.patch"
+      - name: Install minimal compiler tools
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+      - name: Refresh workspace lock and format
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo +stable metadata --format-version 1 > /dev/null
+          cargo +stable fmt --all
+      - name: Minimal builder and service Clippy; no tests executed
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustc +stable -Vv | tee "$RUNNER_TEMP/RUST_VERSION"
+          cargo +stable clippy --locked \
+            -p wow-reference-builder -p wow-service \
+            --all-targets --all-features -- -D warnings 2>&1 | tee "$RUNNER_TEMP/clippy.log"
+      - name: Repository policy and exact file set
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo +stable xtask check 2>&1 | tee "$RUNNER_TEMP/policy.log"
+          git add --all
+          git diff --cached --check
+          actual="$(git diff --cached --name-only "$BASE_COMMIT" | LC_ALL=C sort)"
+          expected="$(cat <<'FILES'
+          .github/workflows/ci.yml
+          Cargo.lock
+          Cargo.toml
+          apps/wow-reference-builder/CONTRACT.json
+          apps/wow-reference-builder/Cargo.toml
+          apps/wow-reference-builder/README.md
+          apps/wow-reference-builder/examples/CHECKSUMS.json
+          apps/wow-reference-builder/examples/cli-cases.json
+          apps/wow-reference-builder/src/lib.rs
+          apps/wow-reference-builder/src/main.rs
+          apps/wow-reference-builder/tests/e1_cli.rs
+          crates/MANIFEST.json
+          crates/wow-service/src/reference_pack.rs
+          FILES
+          )"
+          test "$actual" = "$expected"
+          grep -Fq 'name = "wow-reference-builder"' Cargo.lock
+          ! grep -R "todo!()\|unimplemented!()" apps/wow-reference-builder/src
+          test "$(grep -Ec '^wow-[A-Za-z0-9_-]+ = ' apps/wow-reference-builder/Cargo.toml)" = 1
+          grep -Fq 'wow-service = ' apps/wow-reference-builder/Cargo.toml
+          grep -Fq 'wow-reference-builder/build-request/1' apps/wow-reference-builder/src/lib.rs
+          grep -Fq 'rollback_finalization' apps/wow-reference-builder/src/lib.rs
+          grep -Fq 'apps/wow-reference-builder' Cargo.toml
+      - name: Retain exact checked source
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/checkpoint"
+          git add --all
+          git write-tree > "$RUNNER_TEMP/checkpoint/CHECKED_TREE"
+          git archive --format=tar -o "$RUNNER_TEMP/checkpoint/checked-source.tar" "$(cat "$RUNNER_TEMP/checkpoint/CHECKED_TREE")"
+          git diff --cached --binary "$BASE_COMMIT" > "$RUNNER_TEMP/checkpoint/formatted.patch"
+          printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/checkpoint/STAGING_SHA"
+          for file in RUST_VERSION clippy.log policy.log; do
+            if test -f "$RUNNER_TEMP/$file"; then cp "$RUNNER_TEMP/$file" "$RUNNER_TEMP/checkpoint/$file"; fi
+          done
+          (cd "$RUNNER_TEMP/checkpoint" && sha256sum checked-source.tar formatted.patch > SHA256SUMS)
+      - name: Upload checkpoint evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: w07-reference-pack-builder-${{ github.run_id }}
+          path: ${{ runner.temp }}/checkpoint
+          retention-days: 3
+          if-no-files-found: error
