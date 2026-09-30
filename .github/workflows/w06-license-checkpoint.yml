@@ -10,7 +10,8 @@ concurrency:
 env:
   BASE_COMMIT: 2e3a6d8bb457972451f6c5cec01186eecb66774f
   BASE_TREE: 01e83143d5734514b4853e7bf1edf4cda8f88e7d
-  PATCH_SHA256: c8b4b94d5f8c4ca8441ba39a5feab29874a29f105117fb38dccda215086d1b55
+  STAGING_PARENT: fe585791836a57c07f47aea16054e215128af371
+  PATCH_SHA256: 2f9bfcc8f51e5cd6e275bba6c7292197917a4860d0bb4a48c6350e810757683e
 jobs:
   checkpoint:
     runs-on: ubuntu-latest
@@ -26,7 +27,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git rev-parse "${GITHUB_SHA}^")" = "$BASE_COMMIT"
+          test "$(git rev-parse "${GITHUB_SHA}^")" = "$STAGING_PARENT"
           xz -dc .ci/w06-license.patch.xz > "$RUNNER_TEMP/w06-license.patch"
           printf '%s  %s\n' "$PATCH_SHA256" "$RUNNER_TEMP/w06-license.patch" | sha256sum -c -
           git rm -- .ci/w06-license.patch.xz .github/workflows/w06-license-checkpoint.yml
