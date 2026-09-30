@@ -35,14 +35,18 @@ use crate::reference_pack_license::{
     NativeDistributionSubject,
 };
 
-pub const REFERENCE_PACK_SCHEMA: &str = "wow-service/reference-pack/e1-d/6";
-pub const LOCAL_NATIVE_PACK_LAYOUT: &str = "wow-reference-pack/layout/local-native-candidate/6";
+pub const REFERENCE_PACK_SCHEMA: &str = "wow-service/reference-pack/e1-d/7";
+pub const LOCAL_NATIVE_PACK_LAYOUT: &str = "wow-reference-pack/layout/local-native-candidate/7";
 pub const LOCAL_NATIVE_VALIDATION_PROFILE: &str =
-    "wow-reference-pack/validation/local-native-candidate/6";
+    "wow-reference-pack/validation/local-native-candidate/7";
 pub const REFERENCE_PACK_REBUILD_REPORT_SCHEMA: &str =
-    "wow-service/reference-pack-rebuild-comparison/1";
+    "wow-service/reference-pack-rebuild-comparison/2";
 pub const LOCAL_NATIVE_REBUILD_COMPARISON_PROFILE: &str =
-    "wow-reference-pack/rebuild-comparison/local-native/1";
+    "wow-reference-pack/rebuild-comparison/local-native-input-order/1";
+pub const LOCAL_NATIVE_CANONICAL_EXECUTION_PROFILE: &str =
+    "wow-reference-pack/execution/canonical-input-order/1";
+pub const LOCAL_NATIVE_REVERSED_EXECUTION_PROFILE: &str =
+    "wow-reference-pack/execution/reversed-independent-input-order/1";
 
 const MANIFEST_PATH: &str = "manifest.json";
 const CHECKSUMS_PATH: &str = "checksums.json";
@@ -58,6 +62,7 @@ const ANNOTATION_CONSUMER_PROBE_ROOT: &str = "annotations/consumer-probes";
 const DISTRIBUTION_MANIFEST_PATH: &str = "licenses/redistribution.json";
 const REBUILD_REPORT_PATH: &str = "reports/rebuild-comparison.json";
 const DETERMINISTIC_REBUILD_DEFERRED_CAPABILITY: &str = "deterministic_rebuild_gate";
+const MULTI_WORKER_REBUILD_DEFERRED_CAPABILITY: &str = "multi_worker_rebuild_comparison";
 const PROVENANCE_PATH: &str = "provenance/native-input.json";
 const MAX_REVIEWED_TOTAL_BYTES: u64 = 128 * 1024 * 1024;
 const MAX_REVIEWED_MEMBER_BYTES: u64 = 64 * 1024 * 1024;
@@ -240,6 +245,7 @@ impl ReferencePackBuildRequest {
             self.budgets.max_member_bytes,
             self.budgets.max_total_bytes,
         )?;
+        execution_input_order(&self.execution_profile_id)?;
         if let Some(report) = &self.deterministic_rebuild_report {
             report.validate()?;
         }
@@ -851,13 +857,13 @@ impl ReferencePackRebuildComparisonRequest {
                 "rebuild comparison requires an unbound build request",
             ));
         }
-        if !valid_identity(&self.left_execution_profile_id)
-            || !valid_identity(&self.right_execution_profile_id)
-            || self.left_execution_profile_id == self.right_execution_profile_id
-        {
+        if !input_order_comparison_pair(
+            &self.left_execution_profile_id,
+            &self.right_execution_profile_id,
+        ) {
             return Err(error(
                 ReferencePackErrorCode::InvalidRequest,
-                "rebuild comparison requires two distinct execution profile identities",
+                "rebuild comparison requires the exact canonical and reversed input-order profiles",
             ));
         }
         Ok(())
@@ -953,9 +959,10 @@ impl ReferencePackRebuildComparisonReport {
     pub fn validate(&self) -> ReferencePackResult<()> {
         if self.schema.as_ref() != REFERENCE_PACK_REBUILD_REPORT_SCHEMA
             || self.comparison_profile_id.as_ref() != LOCAL_NATIVE_REBUILD_COMPARISON_PROFILE
-            || !valid_identity(&self.left_execution_profile_id)
-            || !valid_identity(&self.right_execution_profile_id)
-            || self.left_execution_profile_id == self.right_execution_profile_id
+            || !input_order_comparison_pair(
+                &self.left_execution_profile_id,
+                &self.right_execution_profile_id,
+            )
             || !valid_identity(&self.left_pack_id)
             || !valid_identity(&self.right_pack_id)
             || !valid_identity(&self.left_plan_id)
@@ -1475,6 +1482,7 @@ fn build_payload_entries(
     parts: &NativePackParts<'_>,
     stop: &AtomicBool,
 ) -> ReferencePackResult<BuiltPackPayload> {
+    let input_order = execution_input_order(request.execution_profile_id())?;
     let mut entries = Vec::new();
     let reference_bytes = parts.reference.canonical_bytes().map_err(|_| {
         error(
@@ -1493,7 +1501,9 @@ fn build_payload_entries(
 
     let mut annotation_descriptors = Vec::new();
     let mut seen_paths = BTreeSet::new();
-    for file in parts.annotation_files {
+    let mut annotation_files = parts.annotation_files.iter().collect::<Vec<_>>();
+    input_order.apply(&mut annotation_files);
+    for file in annotation_files {
         checkpoint(stop)?;
         let pack_path = format!("annotations/files/{}", file.path());
         validate_member_path(&pack_path)?;
@@ -1541,7 +1551,9 @@ fn build_payload_entries(
                 evidence.parity_report().report_id(),
                 evidence.parity_bytes().to_vec(),
             )?);
-            for artifact in evidence.consumers() {
+            let mut consumers = evidence.consumers().iter().collect::<Vec<_>>();
+            input_order.apply(&mut consumers);
+            for artifact in consumers {
                 let path = format!(
                     "{ANNOTATION_CONSUMER_PROBE_ROOT}/{}",
                     artifact.result().consumer_kind().member_name()
@@ -1606,7 +1618,9 @@ fn build_payload_entries(
             distribution.manifest_id(),
             manifest_bytes.into_vec(),
         )?);
-        for notice in distribution.notices() {
+        let mut notices = distribution.notices().iter().collect::<Vec<_>>();
+        input_order.apply(&mut notices);
+        for notice in notices {
             entries.push(entry(
                 notice.path(),
                 ReferencePackMemberKind::LicenseNotice,
@@ -1885,6 +1899,16 @@ fn determinism_gate(report: Option<&ReferencePackRebuildComparisonReport>) -> Pa
     PackGateRecord::new("pack.deterministic_rebuild", false, true, status, reason)
 }
 
+fn multi_worker_determinism_gate() -> PackGateRecord {
+    PackGateRecord::new(
+        "pack.multi_worker_rebuild",
+        false,
+        true,
+        PackGateStatus::NotEvaluated,
+        "multi_worker_execution_profile_not_implemented",
+    )
+}
+
 fn build_gate_records(
     receipt: &NativeInputReceipt,
     sidecars: &NativeProjectionSidecars,
@@ -1963,6 +1987,7 @@ fn build_gate_records(
         compatibility_gate(compatibility),
         distribution_gate(distribution),
         determinism_gate(rebuild_report),
+        multi_worker_determinism_gate(),
     ]
 }
 
@@ -2029,6 +2054,7 @@ fn finalize_plan(
     if rebuild_report.is_none_or(|report| report.status() != RebuildComparisonStatus::Passed) {
         deferred_capabilities.push(DETERMINISTIC_REBUILD_DEFERRED_CAPABILITY.into());
     }
+    deferred_capabilities.push(MULTI_WORKER_REBUILD_DEFERRED_CAPABILITY.into());
     deferred_capabilities.sort();
     let deferred_capabilities = deferred_capabilities.into_boxed_slice();
     let unsigned = UnsignedPackManifest {
@@ -3017,6 +3043,7 @@ fn recomputed_gates(
         compatibility_gate(compatibility),
         distribution_gate(distribution),
         determinism_gate(rebuild_report),
+        multi_worker_determinism_gate(),
     ]
 }
 
@@ -3107,14 +3134,22 @@ fn semantic_identity_from_manifest(
     let gate_records = manifest
         .gate_records
         .iter()
-        .filter(|gate| !deterministic_subject || gate.gate_id() != "pack.deterministic_rebuild")
+        .filter(|gate| {
+            !deterministic_subject
+                || !matches!(
+                    gate.gate_id(),
+                    "pack.deterministic_rebuild" | "pack.multi_worker_rebuild"
+                )
+        })
         .collect::<Vec<_>>();
     let deferred_capabilities = manifest
         .deferred_capabilities
         .iter()
         .map(|capability| capability.as_ref())
         .filter(|capability| {
-            !deterministic_subject || *capability != DETERMINISTIC_REBUILD_DEFERRED_CAPABILITY
+            !deterministic_subject
+                || (*capability != DETERMINISTIC_REBUILD_DEFERRED_CAPABILITY
+                    && *capability != MULTI_WORKER_REBUILD_DEFERRED_CAPABILITY)
         })
         .collect::<Vec<_>>();
     let projection = SemanticIdentity {
@@ -3448,6 +3483,40 @@ fn valid_rebuild_text(value: &str) -> bool {
         && !value
             .bytes()
             .any(|byte| byte == 0 || byte.is_ascii_control())
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BuildInputOrder {
+    Canonical,
+    Reversed,
+}
+
+impl BuildInputOrder {
+    fn apply<T>(self, values: &mut [T]) {
+        if self == Self::Reversed {
+            values.reverse();
+        }
+    }
+}
+
+fn execution_input_order(execution_profile_id: &str) -> ReferencePackResult<BuildInputOrder> {
+    if execution_profile_id == LOCAL_NATIVE_CANONICAL_EXECUTION_PROFILE {
+        Ok(BuildInputOrder::Canonical)
+    } else if execution_profile_id == LOCAL_NATIVE_REVERSED_EXECUTION_PROFILE {
+        Ok(BuildInputOrder::Reversed)
+    } else {
+        Err(error(
+            ReferencePackErrorCode::InvalidRequest,
+            "reference pack execution profile is unsupported",
+        ))
+    }
+}
+
+fn input_order_comparison_pair(left: &str, right: &str) -> bool {
+    (left == LOCAL_NATIVE_CANONICAL_EXECUTION_PROFILE
+        && right == LOCAL_NATIVE_REVERSED_EXECUTION_PROFILE)
+        || (left == LOCAL_NATIVE_REVERSED_EXECUTION_PROFILE
+            && right == LOCAL_NATIVE_CANONICAL_EXECUTION_PROFILE)
 }
 
 fn admit_image(
