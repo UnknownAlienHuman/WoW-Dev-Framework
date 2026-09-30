@@ -10,7 +10,8 @@ concurrency:
 env:
   BASE_COMMIT: 8070771d504cec89e118c956037404a3687357c7
   BASE_TREE: 6c79abc3ae15471fe6f5056dfb6506d59b5bd0ac
-  PATCH_SHA256: 50d7da2c54d3d58264a6916b49dbef46d9808a093f994e8956afccbb2804d959
+  STAGING_PARENT: 989d88d70e3ecbd48e5ba0f8c6da53bb097ea720
+  PATCH_SHA256: 47c90e1b16360f591a0cde78e0dc56943a346948fb6e334690522499cded4645
 jobs:
   checkpoint:
     runs-on: ubuntu-latest
@@ -26,10 +27,17 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git rev-parse "${GITHUB_SHA}^")" = "$BASE_COMMIT"
-          xz -dc .ci/w06-annotation-sidecars.patch.xz > "$RUNNER_TEMP/w06-annotation-sidecars.patch"
+          test "$(git rev-parse "${GITHUB_SHA}^")" = "$STAGING_PARENT"
+          cat .ci/w06-sidecars.b64.1 .ci/w06-sidecars.b64.2 .ci/w06-sidecars.b64.3 .ci/w06-sidecars.b64.4 \
+            | base64 -d | xz -dc > "$RUNNER_TEMP/w06-annotation-sidecars.patch"
           printf '%s  %s\n' "$PATCH_SHA256" "$RUNNER_TEMP/w06-annotation-sidecars.patch" | sha256sum -c -
-          git rm -- .ci/w06-annotation-sidecars.patch.xz .github/workflows/w06-sidecars-checkpoint.yml
+          git rm -- \
+            .ci/w06-annotation-sidecars.patch.xz \
+            .ci/w06-sidecars.b64.1 \
+            .ci/w06-sidecars.b64.2 \
+            .ci/w06-sidecars.b64.3 \
+            .ci/w06-sidecars.b64.4 \
+            .github/workflows/w06-sidecars-checkpoint.yml
           test "$(git write-tree)" = "$BASE_TREE"
           git apply --index "$RUNNER_TEMP/w06-annotation-sidecars.patch"
       - name: Install minimal compiler tools
@@ -52,12 +60,12 @@ jobs:
           git add --all
           git diff --cached --check
           actual="$(git diff --cached --name-only "$BASE_COMMIT" | LC_ALL=C sort)"
-          expected="$(cat <<'EOF'
+          expected="$(cat <<'FILES'
           crates/wow-annotations/src/lib.rs
           crates/wow-annotations/src/sidecars.rs
           crates/wow-service/src/local/native_input.rs
           crates/wow-service/src/reference_pack.rs
-          EOF
+          FILES
           )"
           test "$actual" = "$expected"
           ! grep -R "todo!()\|unimplemented!()" \
