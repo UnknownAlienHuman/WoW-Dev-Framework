@@ -26,9 +26,11 @@ use wow_reference::native::{NativeError, NativeErrorCode, ingest_document};
 use super::disk_input::{DiskAnalyzer, MainInventory};
 use super::input::{ProjectMetadata, invalid};
 use super::native_compatibility::{NativeCompatibilityInputs, NativeCompatibilitySelection};
+use super::native_distribution::{NativeDistributionInputs, NativeDistributionSelection};
 use super::native_resources::{NativeAnnotationInputs, NativeAnnotationInputsReceipt, present};
 use super::native_source::NativeSourceInput;
 use super::{LocalProjectInput, cancelled};
+use crate::reference_pack_license::{NativeDistributionBinding, NativeDistributionManifest};
 use crate::{ServiceError, ServiceErrorCode, ServiceResult};
 
 pub const LOCAL_NATIVE_SCHEMA: &str = "wow-service/local-project-native/1";
@@ -51,6 +53,8 @@ struct NativeInput {
     annotation_inputs: Option<NativeAnnotationInputs>,
     #[serde(default, deserialize_with = "present")]
     compatibility_evidence: Option<NativeCompatibilityInputs>,
+    #[serde(default, deserialize_with = "present")]
+    distribution_evidence: Option<NativeDistributionInputs>,
 }
 
 /// Labels describe an explicitly selected source corpus, not a currentness or
@@ -189,6 +193,8 @@ pub struct NativeInputReceipt {
     pub restriction_facts: Option<NativeRestrictionIdentity>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub compatibility_evidence: Option<NativeCompatibilitySelection>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub distribution_evidence: Option<NativeDistributionSelection>,
     pub semantic_consumer_acceptance: &'static str,
 }
 
@@ -199,6 +205,7 @@ pub(super) struct NativeInputEvidence {
     annotation_files: Box<[NativeAnnotationFile]>,
     annotation_sidecars: NativeProjectionSidecars,
     annotation_compatibility: Option<NativeCompatibilityEvidence>,
+    distribution_evidence: Option<NativeDistributionManifest>,
 }
 
 #[derive(Serialize)]
@@ -256,6 +263,13 @@ impl LocalProjectInput {
         self.native_input
             .as_ref()
             .and_then(|evidence| evidence.annotation_compatibility.as_ref())
+    }
+
+    #[must_use]
+    pub(crate) fn native_distribution_evidence(&self) -> Option<&NativeDistributionManifest> {
+        self.native_input
+            .as_ref()
+            .and_then(|evidence| evidence.distribution_evidence.as_ref())
     }
 
     pub(super) fn from_native_manifest(
@@ -474,6 +488,32 @@ impl LocalProjectInput {
         let semantic_consumer_acceptance = annotation_compatibility
             .as_ref()
             .map_or("not_evaluated", |loaded| loaded.evidence.status().as_str());
+        let distribution_evidence = input
+            .distribution_evidence
+            .as_ref()
+            .map(|selected| {
+                let source_manifest = source_manifest.as_ref().ok_or_else(|| {
+                    invalid("native distribution evidence requires manifested source input")
+                })?;
+                let binding = NativeDistributionBinding::new(
+                    profile.profile_id().as_str(),
+                    reference.view.generation_id(),
+                    source_manifest.manifest_sha256.as_str(),
+                    reference.view.self_digest(),
+                    annotation_artifact.artifact_id(),
+                    annotation_sidecars.source_map().source_map_id(),
+                    annotation_sidecars.loss_report().report_id(),
+                    annotation_compatibility
+                        .as_ref()
+                        .map(|loaded| loaded.evidence.evidence_id()),
+                )
+                .map_err(|_| invalid("native distribution binding rejected"))?;
+                selected.read(directory, binding, stop)
+            })
+            .transpose()?;
+        let distribution_selection = distribution_evidence
+            .as_ref()
+            .map(|loaded| loaded.selection.clone());
         let annotation_files = library
             .files
             .iter()
@@ -588,11 +628,15 @@ impl LocalProjectInput {
             restriction_facts: Option<&'a NativeRestrictionIdentity>,
             #[serde(skip_serializing_if = "Option::is_none")]
             compatibility_evidence: Option<&'a NativeCompatibilitySelection>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            distribution_evidence: Option<&'a NativeDistributionSelection>,
             semantic_consumer_acceptance: &'static str,
         }
         let report = report_bytes(
             &Report {
-                schema: if compatibility_selection.is_some() {
+                schema: if distribution_selection.is_some() {
+                    "wow-service/native-input-report/7"
+                } else if compatibility_selection.is_some() {
                     "wow-service/native-input-report/6"
                 } else if manifested {
                     "wow-service/native-input-report/5"
@@ -619,12 +663,15 @@ impl LocalProjectInput {
                     .then_some(wow_reference::native_view::NATIVE_API_PARTITION),
                 restriction_facts: restriction_facts.as_ref(),
                 compatibility_evidence: compatibility_selection.as_ref(),
+                distribution_evidence: distribution_selection.as_ref(),
                 semantic_consumer_acceptance,
             },
             stop,
         )?;
         let receipt = NativeInputReceipt {
-            schema: if compatibility_selection.is_some() {
+            schema: if distribution_selection.is_some() {
+                "wow-service/native-input-receipt/7"
+            } else if compatibility_selection.is_some() {
                 "wow-service/native-input-receipt/6"
             } else if manifested {
                 "wow-service/native-input-receipt/5"
@@ -659,6 +706,7 @@ impl LocalProjectInput {
                 .then_some(wow_reference::native_view::NATIVE_API_PARTITION),
             restriction_facts,
             compatibility_evidence: compatibility_selection,
+            distribution_evidence: distribution_selection,
             semantic_consumer_acceptance,
         };
         let libraries = library
@@ -704,6 +752,7 @@ impl LocalProjectInput {
             annotation_files,
             annotation_sidecars,
             annotation_compatibility: annotation_compatibility.map(|loaded| loaded.evidence),
+            distribution_evidence: distribution_evidence.map(|loaded| loaded.evidence),
         }));
         cancelled(stop)?;
         Ok(assembled)

@@ -30,11 +30,15 @@ use wow_reference::{
 use wow_store::{CatalogExpectation, SealedStore, Store, StoreConfiguration, StoreLimits};
 
 use crate::local::{LocalProjectInput, NativeAnnotationFile, NativeInputReceipt};
+use crate::reference_pack_license::{
+    NativeDistributionBinding, NativeDistributionManifest, NativeDistributionStatus,
+    NativeDistributionSubject,
+};
 
-pub const REFERENCE_PACK_SCHEMA: &str = "wow-service/reference-pack/e1-d/4";
-pub const LOCAL_NATIVE_PACK_LAYOUT: &str = "wow-reference-pack/layout/local-native-candidate/4";
+pub const REFERENCE_PACK_SCHEMA: &str = "wow-service/reference-pack/e1-d/5";
+pub const LOCAL_NATIVE_PACK_LAYOUT: &str = "wow-reference-pack/layout/local-native-candidate/5";
 pub const LOCAL_NATIVE_VALIDATION_PROFILE: &str =
-    "wow-reference-pack/validation/local-native-candidate/4";
+    "wow-reference-pack/validation/local-native-candidate/5";
 
 const MANIFEST_PATH: &str = "manifest.json";
 const CHECKSUMS_PATH: &str = "checksums.json";
@@ -47,6 +51,7 @@ const ANNOTATION_SOURCE_MAP_PATH: &str = "annotations/source-map.json";
 const ANNOTATION_LOSS_REPORT_PATH: &str = "annotations/projection-loss.json";
 const ANNOTATION_PARITY_REPORT_PATH: &str = "annotations/parity-report.json";
 const ANNOTATION_CONSUMER_PROBE_ROOT: &str = "annotations/consumer-probes";
+const DISTRIBUTION_MANIFEST_PATH: &str = "licenses/redistribution.json";
 const PROVENANCE_PATH: &str = "provenance/native-input.json";
 const MAX_REVIEWED_TOTAL_BYTES: u64 = 128 * 1024 * 1024;
 const MAX_REVIEWED_MEMBER_BYTES: u64 = 64 * 1024 * 1024;
@@ -323,6 +328,8 @@ pub enum ReferencePackMemberKind {
     AnnotationParityReport,
     AnnotationConsumerProbe,
     AnnotationFile,
+    LicenseManifest,
+    LicenseNotice,
     ProvenanceManifest,
     ChecksumManifest,
     PackManifest,
@@ -538,6 +545,8 @@ pub struct ReferencePackManifest {
     annotation_loss_report_id: Box<str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     annotation_compatibility_evidence_id: Option<Box<str>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    license_redistribution_manifest_id: Option<Box<str>>,
     source_manifest_sha256: Box<str>,
     payload_members: Box<[ReferencePackMember]>,
     checksum_member: ReferencePackMember,
@@ -649,6 +658,8 @@ struct PackNativeProvenance {
     annotation_issues: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     compatibility_evidence_id: Option<Box<str>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    license_redistribution_manifest_id: Option<Box<str>>,
     semantic_consumer_acceptance: Box<str>,
 }
 
@@ -873,6 +884,7 @@ impl ReferencePackService {
             parts.receipt,
             parts.annotation_sidecars,
             parts.annotation_compatibility,
+            parts.distribution_evidence,
         );
         let plan = finalize_plan(request, &parts, payload, gates, stop)?;
         checkpoint(stop)?;
@@ -1003,6 +1015,7 @@ struct NativePackParts<'a> {
     annotation_files: &'a [NativeAnnotationFile],
     annotation_sidecars: &'a NativeProjectionSidecars,
     annotation_compatibility: Option<&'a NativeCompatibilityEvidence>,
+    distribution_evidence: Option<&'a NativeDistributionManifest>,
     source_manifest_sha256: &'a str,
 }
 
@@ -1054,6 +1067,7 @@ fn admitted_native_parts<'a>(
         )
     })?;
     let annotation_compatibility = input.native_annotation_compatibility();
+    let distribution_evidence = input.native_distribution_evidence();
     annotation_sidecars.source_map().validate().map_err(|_| {
         error(
             ReferencePackErrorCode::IdentityMismatch,
@@ -1066,6 +1080,14 @@ fn admitted_native_parts<'a>(
             "reference pack annotation loss report is invalid",
         )
     })?;
+    if let Some(distribution) = distribution_evidence {
+        distribution.validate().map_err(|_| {
+            error(
+                ReferencePackErrorCode::IdentityMismatch,
+                "reference pack distribution evidence is invalid",
+            )
+        })?;
+    }
     if receipt.profile.profile_id().as_str() != request.expected_profile_id()
         || reference.generation_id() != request.expected_reference_generation_id()
         || artifact.profile_id() != request.expected_profile_id()
@@ -1089,6 +1111,31 @@ fn admitted_native_parts<'a>(
                         || selection.gate_status != evidence.status().as_str()
                 })
             })
+        || receipt.distribution_evidence.is_some() != distribution_evidence.is_some()
+        || receipt
+            .distribution_evidence
+            .as_ref()
+            .is_some_and(|selection| {
+                distribution_evidence.is_none_or(|evidence| {
+                    selection.manifest_id != evidence.manifest_id()
+                        || selection.gate_status != evidence.status().as_str()
+                })
+            })
+        || distribution_evidence.is_some_and(|evidence| {
+            evidence.binding().profile_id() != request.expected_profile_id()
+                || evidence.binding().source_generation_id()
+                    != request.expected_reference_generation_id()
+                || evidence.binding().source_manifest_sha256()
+                    != source_manifest.manifest_sha256.as_str()
+                || evidence.binding().reference_view_digest() != reference.self_digest()
+                || evidence.binding().annotation_artifact_id() != artifact.artifact_id()
+                || evidence.binding().source_map_id()
+                    != annotation_sidecars.source_map().source_map_id()
+                || evidence.binding().loss_report_id()
+                    != annotation_sidecars.loss_report().report_id()
+                || evidence.binding().compatibility_evidence_id()
+                    != annotation_compatibility.map(NativeCompatibilityEvidence::evidence_id)
+        })
     {
         return Err(error(
             ReferencePackErrorCode::IdentityMismatch,
@@ -1103,6 +1150,7 @@ fn admitted_native_parts<'a>(
         annotation_files,
         annotation_sidecars,
         annotation_compatibility,
+        distribution_evidence,
         source_manifest_sha256: &source_manifest.manifest_sha256,
     })
 }
@@ -1230,6 +1278,29 @@ fn build_payload_entries(
         annotation_manifest_bytes,
     )?);
 
+    if let Some(distribution) = parts.distribution_evidence {
+        let manifest_bytes = distribution.canonical_bytes().map_err(|_| {
+            error(
+                ReferencePackErrorCode::SerializationFailed,
+                "distribution manifest cannot be encoded canonically",
+            )
+        })?;
+        entries.push(entry(
+            DISTRIBUTION_MANIFEST_PATH,
+            ReferencePackMemberKind::LicenseManifest,
+            distribution.manifest_id(),
+            manifest_bytes.into_vec(),
+        )?);
+        for notice in distribution.notices() {
+            entries.push(entry(
+                notice.path(),
+                ReferencePackMemberKind::LicenseNotice,
+                notice.notice_id(),
+                notice.text_bytes().to_vec(),
+            )?);
+        }
+    }
+
     let source_manifest = parts.receipt.source_manifest.as_ref().ok_or_else(|| {
         error(
             ReferencePackErrorCode::SourceInputUnavailable,
@@ -1237,7 +1308,7 @@ fn build_payload_entries(
         )
     })?;
     let provenance = PackNativeProvenance {
-        schema: "wow-service/reference-pack/native-provenance/2".into(),
+        schema: "wow-service/reference-pack/native-provenance/3".into(),
         profile: parts.profile.clone(),
         revision: parts.receipt.revision.clone().into_boxed_str(),
         environment: parts.receipt.environment.clone().into_boxed_str(),
@@ -1255,6 +1326,9 @@ fn build_payload_entries(
         compatibility_evidence_id: parts
             .annotation_compatibility
             .map(|evidence| evidence.evidence_id().into()),
+        license_redistribution_manifest_id: parts
+            .distribution_evidence
+            .map(|evidence| evidence.manifest_id().into()),
         semantic_consumer_acceptance: parts.receipt.semantic_consumer_acceptance.into(),
     };
     let provenance_bytes = canonical(&provenance, "native provenance")?;
@@ -1458,10 +1532,33 @@ fn compatibility_gate(compatibility: Option<&NativeCompatibilityEvidence>) -> Pa
     PackGateRecord::new("pack.parity_consumer", false, true, status, reason)
 }
 
+fn distribution_gate(distribution: Option<&NativeDistributionManifest>) -> PackGateRecord {
+    let (status, reason) = match distribution.map(NativeDistributionManifest::status) {
+        Some(NativeDistributionStatus::Passed) => (
+            PackGateStatus::Passed,
+            "exact_license_notice_and_redistribution_closure_passed",
+        ),
+        Some(NativeDistributionStatus::Failed) => (
+            PackGateStatus::Failed,
+            "license_notice_or_redistribution_review_failed",
+        ),
+        Some(NativeDistributionStatus::NotEvaluated) => (
+            PackGateStatus::NotEvaluated,
+            "license_notice_or_redistribution_review_incomplete",
+        ),
+        None => (
+            PackGateStatus::NotEvaluated,
+            "license_notice_and_redistribution_evidence_not_supplied",
+        ),
+    };
+    PackGateRecord::new("pack.license_provenance", false, true, status, reason)
+}
+
 fn build_gate_records(
     receipt: &NativeInputReceipt,
     sidecars: &NativeProjectionSidecars,
     compatibility: Option<&NativeCompatibilityEvidence>,
+    distribution: Option<&NativeDistributionManifest>,
 ) -> Vec<PackGateRecord> {
     let source_complete = receipt
         .source_manifest
@@ -1532,13 +1629,7 @@ fn build_gate_records(
         ),
         source_map_loss_gate(sidecars.source_map(), sidecars.loss_report()),
         compatibility_gate(compatibility),
-        PackGateRecord::new(
-            "pack.license_provenance",
-            false,
-            true,
-            PackGateStatus::NotEvaluated,
-            "redistribution_and_notice_closure_not_evaluated",
-        ),
+        distribution_gate(distribution),
         PackGateRecord::new(
             "pack.deterministic_rebuild",
             false,
@@ -1594,9 +1685,14 @@ fn finalize_plan(
     };
     let mut deferred_capabilities = vec![
         "full_source_map_and_loss_release_closure".into(),
-        "license_and_redistribution_closure".into(),
         "filesystem_atomic_finalization".into(),
     ];
+    if parts
+        .distribution_evidence
+        .is_none_or(|evidence| evidence.status() != NativeDistributionStatus::Passed)
+    {
+        deferred_capabilities.push("license_and_redistribution_closure".into());
+    }
     if parts
         .annotation_compatibility
         .is_none_or(|evidence| evidence.status() != NativeCompatibilityStatus::Passed)
@@ -1623,6 +1719,9 @@ fn finalize_plan(
         annotation_compatibility_evidence_id: parts
             .annotation_compatibility
             .map(NativeCompatibilityEvidence::evidence_id),
+        license_redistribution_manifest_id: parts
+            .distribution_evidence
+            .map(NativeDistributionManifest::manifest_id),
         source_manifest_sha256: parts.source_manifest_sha256,
         payload_members: &payload_members,
         checksum_member: &checksum_member,
@@ -1658,6 +1757,9 @@ fn finalize_plan(
         annotation_compatibility_evidence_id: parts
             .annotation_compatibility
             .map(|evidence| evidence.evidence_id().into()),
+        license_redistribution_manifest_id: parts
+            .distribution_evidence
+            .map(|evidence| evidence.manifest_id().into()),
         source_manifest_sha256: parts.source_manifest_sha256.into(),
         payload_members: payload_members.into_boxed_slice(),
         checksum_member: checksum_member.clone(),
@@ -1712,6 +1814,8 @@ struct UnsignedPackManifest<'a> {
     annotation_loss_report_id: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
     annotation_compatibility_evidence_id: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    license_redistribution_manifest_id: Option<&'a str>,
     source_manifest_sha256: &'a str,
     payload_members: &'a [ReferencePackMember],
     checksum_member: &'a ReferencePackMember,
@@ -1748,6 +1852,10 @@ fn validate_manifest_identity(manifest: &ReferencePackManifest) -> ReferencePack
             .annotation_compatibility_evidence_id
             .as_deref()
             .is_some_and(|identity| !valid_identity(identity))
+        || manifest
+            .license_redistribution_manifest_id
+            .as_deref()
+            .is_some_and(|identity| !valid_identity(identity))
     {
         return Err(error(
             ReferencePackErrorCode::ManifestInvalid,
@@ -1772,6 +1880,7 @@ fn validate_manifest_identity(manifest: &ReferencePackManifest) -> ReferencePack
         annotation_compatibility_evidence_id: manifest
             .annotation_compatibility_evidence_id
             .as_deref(),
+        license_redistribution_manifest_id: manifest.license_redistribution_manifest_id.as_deref(),
         source_manifest_sha256: &manifest.source_manifest_sha256,
         payload_members: &manifest.payload_members,
         checksum_member: &manifest.checksum_member,
@@ -1907,11 +2016,13 @@ fn validate_materialized_members(
         &source_map,
         &loss_report,
     )?;
+    let distribution = validate_distribution_members(files, manifest, compatibility.as_ref())?;
     let provenance: PackNativeProvenance = strict_json(
         required_member_bytes(files, manifest, ReferencePackMemberKind::ProvenanceManifest)?,
         "native provenance",
     )?;
-    if provenance.profile != manifest.profile
+    if provenance.schema.as_ref() != "wow-service/reference-pack/native-provenance/3"
+        || provenance.profile != manifest.profile
         || provenance.source_manifest_sha256 != manifest.source_manifest_sha256
         || annotation_manifest.profile_id.as_ref() != manifest.profile.profile_id().as_str()
         || annotation_manifest.source_generation_id != manifest.reference_generation_id
@@ -1922,6 +2033,12 @@ fn validate_materialized_members(
         || annotation_manifest.compatibility_evidence_id
             != manifest.annotation_compatibility_evidence_id
         || provenance.compatibility_evidence_id != manifest.annotation_compatibility_evidence_id
+        || provenance.license_redistribution_manifest_id
+            != manifest.license_redistribution_manifest_id
+        || manifest.license_redistribution_manifest_id.as_deref()
+            != distribution
+                .as_ref()
+                .map(NativeDistributionManifest::manifest_id)
         || provenance.semantic_consumer_acceptance.as_ref()
             != compatibility
                 .as_ref()
@@ -1940,6 +2057,7 @@ fn validate_materialized_members(
         &source_map,
         &loss_report,
         compatibility.as_ref(),
+        distribution.as_ref(),
     ))
 }
 
@@ -2264,12 +2382,155 @@ fn validate_annotation_members(
     Ok(Some(evidence))
 }
 
+fn validate_distribution_members(
+    files: &BTreeMap<Box<str>, Box<[u8]>>,
+    manifest: &ReferencePackManifest,
+    compatibility: Option<&NativeCompatibilityEvidence>,
+) -> ReferencePackResult<Option<NativeDistributionManifest>> {
+    let distribution_members = manifest
+        .payload_members
+        .iter()
+        .filter(|member| member.kind == ReferencePackMemberKind::LicenseManifest)
+        .collect::<Vec<_>>();
+    let notice_members = manifest
+        .payload_members
+        .iter()
+        .filter(|member| member.kind == ReferencePackMemberKind::LicenseNotice)
+        .collect::<Vec<_>>();
+    let Some(expected_manifest_id) = manifest.license_redistribution_manifest_id.as_deref() else {
+        if !distribution_members.is_empty() || !notice_members.is_empty() {
+            return Err(error(
+                ReferencePackErrorCode::ValidationFailed,
+                "undeclared license or notice members are present",
+            ));
+        }
+        return Ok(None);
+    };
+    if distribution_members.len() != 1 {
+        return Err(error(
+            ReferencePackErrorCode::ValidationFailed,
+            "reference pack requires exactly one declared distribution manifest",
+        ));
+    }
+    let distribution_member = distribution_members[0];
+    if distribution_member.path() != DISTRIBUTION_MANIFEST_PATH
+        || distribution_member.logical_id() != expected_manifest_id
+    {
+        return Err(error(
+            ReferencePackErrorCode::IdentityMismatch,
+            "distribution manifest member identity does not close",
+        ));
+    }
+    let binding = NativeDistributionBinding::new(
+        manifest.profile.profile_id().as_str(),
+        manifest.reference_generation_id.as_ref(),
+        manifest.source_manifest_sha256.as_ref(),
+        manifest.reference_view_digest.as_ref(),
+        manifest.annotation_artifact_id.as_ref(),
+        manifest.annotation_source_map_id.as_ref(),
+        manifest.annotation_loss_report_id.as_ref(),
+        compatibility.map(NativeCompatibilityEvidence::evidence_id),
+    )
+    .map_err(|_| {
+        error(
+            ReferencePackErrorCode::IdentityMismatch,
+            "distribution manifest binding is invalid",
+        )
+    })?;
+    let evidence = NativeDistributionManifest::from_canonical_slice(
+        binding,
+        required_bytes(files, DISTRIBUTION_MANIFEST_PATH)?,
+    )
+    .map_err(|_| {
+        error(
+            ReferencePackErrorCode::ValidationFailed,
+            "distribution manifest failed owner validation",
+        )
+    })?;
+    if evidence.manifest_id() != expected_manifest_id
+        || evidence.notices().len() != notice_members.len()
+    {
+        return Err(error(
+            ReferencePackErrorCode::IdentityMismatch,
+            "distribution manifest identity or notice count does not close",
+        ));
+    }
+    let notice_by_path = notice_members
+        .iter()
+        .map(|member| (member.path(), *member))
+        .collect::<BTreeMap<_, _>>();
+    for notice in evidence.notices() {
+        let member = notice_by_path.get(notice.path()).ok_or_else(|| {
+            error(
+                ReferencePackErrorCode::ValidationFailed,
+                "distribution notice references a missing pack member",
+            )
+        })?;
+        if member.logical_id() != notice.notice_id()
+            || required_bytes(files, notice.path())? != notice.text_bytes()
+        {
+            return Err(error(
+                ReferencePackErrorCode::IdentityMismatch,
+                "distribution notice member identity does not close",
+            ));
+        }
+    }
+    for kind in manifest
+        .payload_members
+        .iter()
+        .map(ReferencePackMember::kind)
+        .chain([
+            ReferencePackMemberKind::ChecksumManifest,
+            ReferencePackMemberKind::PackManifest,
+        ])
+    {
+        let subject = distribution_subject_for_member(kind);
+        let decision = evidence.decision(subject).ok_or_else(|| {
+            error(
+                ReferencePackErrorCode::ValidationFailed,
+                "distribution manifest does not cover every pack member class",
+            )
+        })?;
+        if !decision.embedded() {
+            return Err(error(
+                ReferencePackErrorCode::ValidationFailed,
+                "embedded pack member is covered by a nonembedded distribution decision",
+            ));
+        }
+    }
+    Ok(Some(evidence))
+}
+
+const fn distribution_subject_for_member(
+    kind: ReferencePackMemberKind,
+) -> NativeDistributionSubject {
+    match kind {
+        ReferencePackMemberKind::ReferenceView | ReferencePackMemberKind::ReferenceStore => {
+            NativeDistributionSubject::ReferenceData
+        }
+        ReferencePackMemberKind::AnnotationArtifactManifest
+        | ReferencePackMemberKind::AnnotationSourceMap
+        | ReferencePackMemberKind::AnnotationProjectionLoss
+        | ReferencePackMemberKind::AnnotationFile => NativeDistributionSubject::AnnotationArtifact,
+        ReferencePackMemberKind::AnnotationParityReport
+        | ReferencePackMemberKind::AnnotationConsumerProbe => {
+            NativeDistributionSubject::CompatibilityEvidence
+        }
+        ReferencePackMemberKind::LicenseManifest
+        | ReferencePackMemberKind::LicenseNotice
+        | ReferencePackMemberKind::ProvenanceManifest
+        | ReferencePackMemberKind::ChecksumManifest
+        | ReferencePackMemberKind::PackManifest => NativeDistributionSubject::PackMetadata,
+    }
+}
+
 fn recomputed_gates(
     _manifest: &ReferencePackManifest,
     provenance: &PackNativeProvenance,
     source_map: &NativeSourceMap,
     loss_report: &NativeProjectionLossReport,
     compatibility: Option<&NativeCompatibilityEvidence>,
+    distribution: Option<&NativeDistributionManifest>,
 ) -> Vec<PackGateRecord> {
     let projection_clean = provenance.input_failures == 0
         && provenance.reference_issues == 0
@@ -2338,13 +2599,7 @@ fn recomputed_gates(
         ),
         source_map_loss_gate(source_map, loss_report),
         compatibility_gate(compatibility),
-        PackGateRecord::new(
-            "pack.license_provenance",
-            false,
-            true,
-            PackGateStatus::NotEvaluated,
-            "redistribution_and_notice_closure_not_evaluated",
-        ),
+        distribution_gate(distribution),
         PackGateRecord::new(
             "pack.deterministic_rebuild",
             false,
@@ -2393,6 +2648,7 @@ fn semantic_pack_identity(plan: &PackMaterializationPlan) -> ReferencePackResult
         annotation_source_map_id: &'a str,
         annotation_loss_report_id: &'a str,
         annotation_compatibility_evidence_id: Option<&'a str>,
+        license_redistribution_manifest_id: Option<&'a str>,
         source_manifest_sha256: &'a str,
         payload_members: Vec<SemanticMember<'a>>,
         gate_records: &'a [PackGateRecord],
@@ -2427,6 +2683,7 @@ fn semantic_pack_identity(plan: &PackMaterializationPlan) -> ReferencePackResult
         annotation_compatibility_evidence_id: manifest
             .annotation_compatibility_evidence_id
             .as_deref(),
+        license_redistribution_manifest_id: manifest.license_redistribution_manifest_id.as_deref(),
         source_manifest_sha256: &manifest.source_manifest_sha256,
         payload_members,
         gate_records: &manifest.gate_records,
