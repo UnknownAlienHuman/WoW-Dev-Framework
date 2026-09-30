@@ -1,0 +1,90 @@
+name: W06 durable Reference Pack operations checkpoint
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: w06-durable-reference-pack-operations-checkpoint
+  cancel-in-progress: false
+env:
+  BASE_COMMIT: 241c2aa2d687da2bfbaa8566077e83689d5f3bdb
+  BASE_TREE: da9e402dd0d1b5002b07e682006a953d663c53fc
+  PATCH_SHA256: 337ff3e9005d0b2109887a5916c2ce9e61aeb5337260afe7be796297a9e4859a
+jobs:
+  checkpoint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Admit exact product patch and remove checkpoint transport
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse "${GITHUB_SHA}^")" = "$BASE_COMMIT"
+          xz -dc .ci/w06-durable-operations.patch.xz > "$RUNNER_TEMP/w06-durable-operations.patch"
+          printf '%s  %s\n' "$PATCH_SHA256" "$RUNNER_TEMP/w06-durable-operations.patch" | sha256sum -c -
+          git rm -- .ci/w06-durable-operations.patch.xz .github/workflows/w06-durable-operations-checkpoint.yml
+          test "$(git write-tree)" = "$BASE_TREE"
+          git apply --index "$RUNNER_TEMP/w06-durable-operations.patch"
+      - name: Install minimal compiler tools
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+      - name: Format workspace
+        run: cargo +stable fmt --all
+      - name: Minimal store and service Clippy; no tests executed
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustc +stable -Vv | tee "$RUNNER_TEMP/RUST_VERSION"
+          cargo +stable clippy --locked \
+            -p wow-store -p wow-service \
+            --all-targets --all-features -- -D warnings 2>&1 | tee "$RUNNER_TEMP/clippy.log"
+      - name: Repository policy and exact file set
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo +stable xtask check 2>&1 | tee "$RUNNER_TEMP/policy.log"
+          git add --all
+          git diff --cached --check
+          actual="$(git diff --cached --name-only "$BASE_COMMIT" | LC_ALL=C sort)"
+          expected="$(cat <<'FILES'
+          crates/wow-service/src/lib.rs
+          crates/wow-service/src/reference_pack_admin.rs
+          crates/wow-store/src/store.rs
+          FILES
+          )"
+          test "$actual" = "$expected"
+          ! grep -R "todo!()\|unimplemented!()" \
+            crates/wow-service/src/reference_pack_admin.rs \
+            crates/wow-store/src/store.rs
+          grep -Fq 'wow-service/reference-pack-admin/e1-d/1' crates/wow-service/src/reference_pack_admin.rs
+          grep -Fq 'reference-pack-operation-results' crates/wow-service/src/reference_pack_admin.rs
+          grep -Fq 'return_observed_receipt_without_reexecution' crates/wow-service/src/reference_pack_admin.rs
+      - name: Retain exact checked source
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/checkpoint"
+          git add --all
+          git write-tree > "$RUNNER_TEMP/checkpoint/CHECKED_TREE"
+          git archive --format=tar -o "$RUNNER_TEMP/checkpoint/checked-source.tar" "$(cat "$RUNNER_TEMP/checkpoint/CHECKED_TREE")"
+          git diff --cached --binary "$BASE_COMMIT" > "$RUNNER_TEMP/checkpoint/formatted.patch"
+          printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/checkpoint/STAGING_SHA"
+          for file in RUST_VERSION clippy.log policy.log; do
+            if test -f "$RUNNER_TEMP/$file"; then cp "$RUNNER_TEMP/$file" "$RUNNER_TEMP/checkpoint/$file"; fi
+          done
+          (cd "$RUNNER_TEMP/checkpoint" && sha256sum checked-source.tar formatted.patch > SHA256SUMS)
+      - name: Upload checkpoint evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: w06-durable-reference-pack-operations-${{ github.run_id }}
+          path: ${{ runner.temp }}/checkpoint
+          retention-days: 3
+          if-no-files-found: error
