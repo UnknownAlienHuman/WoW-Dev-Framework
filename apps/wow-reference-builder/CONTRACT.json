@@ -1,9 +1,19 @@
 {
   "schema_version": 1,
   "contract_id": "apps/wow-reference-builder/e1",
-  "state": "implementation-ready-documentation-no-rust-code",
+  "state": "partial-executable-internal-frontend",
   "framework_dependencies": [
     "wow-service"
+  ],
+  "request_schemas": [
+    "wow-reference-builder/build-request/1",
+    "wow-reference-builder/validation-expectation/1",
+    "wow-reference-builder/rebuild-request/1"
+  ],
+  "result_schemas": [
+    "wow-reference-builder/build-result/1",
+    "wow-reference-builder/validate-result/1",
+    "wow-reference-builder/rebuild-result/1"
   ],
   "commands": {
     "build": {
@@ -12,6 +22,9 @@
         "source-root",
         "output"
       ],
+      "optional_args": [
+        "json"
+      ],
       "service_operation": "reference_pack_build"
     },
     "validate": {
@@ -19,7 +32,8 @@
         "pack"
       ],
       "optional_args": [
-        "expect"
+        "expect",
+        "json"
       ],
       "service_operation": "reference_pack_validate"
     },
@@ -29,6 +43,9 @@
         "source-root",
         "scratch-root"
       ],
+      "optional_args": [
+        "json"
+      ],
       "service_operation": "reference_pack_rebuild_compare"
     }
   },
@@ -37,11 +54,25 @@
     "2": "usage-or-request-invalid",
     "3": "blocked-or-partial",
     "4": "validation-failed",
-    "5": "build-or-component-failed",
+    "5": "build-component-or-output-failed",
     "6": "cancelled",
     "7": "security-path-integrity",
     "8": "unavailable"
   },
+  "implemented_filesystem_profile": {
+    "staging": "same-parent-private-create-new",
+    "write_verification": "length-sha256-and-independent-service-validation",
+    "replacement": "backup-rename-install-read-back-rollback",
+    "pack_read": "bounded-no-link-no-special-file-exact-inventory",
+    "rebuild_scratch": "isolated-write-read-back-cleanup"
+  },
+  "unclosed_acceptance": [
+    "durable-filesystem-effect-journal",
+    "process-kill-and-response-loss-during-finalization",
+    "windows-reparse-and-sharing-behavior",
+    "real-builder-command-fixtures",
+    "validated-local-and-release-eligibility"
+  ],
   "forbidden": [
     "direct-lower-crate-domain-dependency",
     "implicit-current-or-default-source-output",
@@ -50,7 +81,7 @@
     "editor-mutation",
     "source-or-generated-code-execution",
     "in-place-destination-mutation",
-    "signing-release-publication-ci"
+    "signing-release-publication"
   ],
   "normative_files": [
     "apps/wow-reference-builder/README.md",

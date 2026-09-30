@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
     "apps/wow",
+    "apps/wow-reference-builder",
     "crates/wow-core",
     "crates/wow-store",
     "crates/wow-reference",

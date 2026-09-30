@@ -741,6 +741,26 @@ impl ReferencePackValidationRequest {
         )?;
         Ok(request)
     }
+
+    #[must_use]
+    pub fn expected_pack_id(&self) -> &str {
+        &self.expected_pack_id
+    }
+
+    #[must_use]
+    pub fn expected_profile_id(&self) -> &str {
+        &self.expected_profile_id
+    }
+
+    #[must_use]
+    pub fn expected_reference_generation_id(&self) -> &str {
+        &self.expected_reference_generation_id
+    }
+
+    #[must_use]
+    pub const fn budgets(&self) -> ReferencePackBudgets {
+        self.budgets
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

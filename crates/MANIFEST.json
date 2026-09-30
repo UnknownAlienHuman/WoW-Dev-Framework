@@ -37,9 +37,7 @@
       "bridges/literal-host"
     ],
     "active_member_manifest": "Cargo.toml",
-    "unintegrated_cargo_packages": [
-      "apps/wow-reference-builder"
-    ]
+    "unintegrated_cargo_packages": []
   },
   "protocol_profiles": {
     "local_daemon": "wow-local-jsonrpc/1",
@@ -657,7 +655,7 @@
       "name": "wow-reference-builder",
       "path": "apps/wow-reference-builder",
       "first_implementation_package": "I1-D",
-      "implementation_state": "inactive-source-not-accepted",
+      "implementation_state": "partial-executable-internal-frontend",
       "framework_dependencies": [
         "wow-service"
       ],
@@ -665,7 +663,7 @@
       "active_contracts": [
         "apps/wow-reference-builder/CONTRACT.json"
       ],
-      "workspace_member": false,
+      "workspace_member": true,
       "blocker_document": "docs/AUDIT_2026-09-19.md"
     }
   ],
@@ -768,7 +766,7 @@
   ],
   "implementation_evidence_state": {
     "implemented_work_packages": 0,
-    "active_cargo_workspace_members": 15,
+    "active_cargo_workspace_members": 16,
     "real_reference_packs": 0,
     "real_project_generations": 0,
     "real_analyzer_diagnostic_search_context_runs": 0,

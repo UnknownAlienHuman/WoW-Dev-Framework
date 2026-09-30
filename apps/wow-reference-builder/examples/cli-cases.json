@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "fixture_id": "wow-reference-builder-e1-cli-v1",
-  "state": "documentation-only-pending-service-and-byte-freeze",
+  "state": "partial-executable-fixtures-not-yet-frozen",
   "cases": [
     {
       "case_id": "PACK-APP-001",

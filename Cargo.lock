@@ -2634,6 +2634,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "wow-reference-builder"
+version = "0.1.0"
+dependencies = [
+ "ctrlc",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "wow-service",
+]
+
+[[package]]
 name = "wow-render-contract"
 version = "0.1.0"
 dependencies = [
