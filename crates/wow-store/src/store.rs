@@ -89,6 +89,11 @@ impl Store {
         read_catalog_entry(&self.connection, catalog, path)
     }
 
+    /// Reads one exact durable operation record without mutating the journal.
+    pub fn operation(&self, operation_id: &OperationId) -> StoreResult<Option<OperationRecord>> {
+        read_operation(&self.connection, operation_id)
+    }
+
     pub fn commit(&mut self, batch: WriteBatch) -> StoreResult<CommitReceipt> {
         let limits = self.configuration.limits();
         if batch.objects().len() > limits.max_batch_objects as usize
@@ -545,6 +550,11 @@ impl SealedStore {
         path: &CatalogPath,
     ) -> StoreResult<Option<CatalogEntry>> {
         read_catalog_entry(&self.connection, catalog, path)
+    }
+
+    /// Reads one exact durable operation record without mutating the journal.
+    pub fn operation(&self, operation_id: &OperationId) -> StoreResult<Option<OperationRecord>> {
+        read_operation(&self.connection, operation_id)
     }
 
     pub fn validate_integrity(&self, max_objects: u32) -> StoreResult<IntegrityReport> {

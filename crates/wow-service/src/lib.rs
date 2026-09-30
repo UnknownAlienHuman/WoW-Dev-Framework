@@ -19,6 +19,7 @@ mod operation;
 mod presentation;
 pub mod reference_admin;
 pub mod reference_pack;
+pub mod reference_pack_admin;
 mod reference_pack_license;
 mod service;
 
