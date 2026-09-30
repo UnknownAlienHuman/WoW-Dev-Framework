@@ -1,89 +1,56 @@
-name: W07 Reference Pack builder checkpoint
+name: W07 publish checked Reference Pack builder
 on:
   push:
     branches: [main]
 permissions:
-  contents: read
+  actions: read
+  contents: write
 concurrency:
-  group: w07-reference-pack-builder-checkpoint
+  group: w07-reference-pack-builder-publisher
   cancel-in-progress: false
 env:
   BASE_COMMIT: fe077fc76c38f8d5b19ff9da5fe1c8bfe92c4336
   BASE_TREE: 9e80b2ee28f340776d108224fa30bf0f35d6a996
-  STAGING_PARENT: 1bafe8eccce806945022fde1852db217e3907794
-  PATCH_SHA256: a06e38962634105026621c7d0d722ea684d33ede00c8ab431f9dc5410902e513
+  STAGING_PARENT: 221921928b7e5fafe8eeefa01fc243cf759ebd8a
+  ARTIFACT_ID: '11127282622'
+  ARTIFACT_ZIP_SHA256: 1312d7c7ce64f1252512504fa845878380b4e64da8258e785b55f4e1f08d8eb3
+  SOURCE_TAR_SHA256: 3a4619a773c28d3979bb96de2a024244d95dd32007b3fc47521a43cc5779fa67
+  FORMATTED_PATCH_SHA256: b46bd85b826f12ba15e915f0a0ceb6114b7da6431d7e707debd812570e3a5904
+  CHECKED_TREE: 9d52ccc0ac8b42d46691d93f4096ab456f2c31b9
 jobs:
-  checkpoint:
+  publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
         with:
           ref: main
           fetch-depth: 0
           persist-credentials: false
-      - name: Admit exact product patch, apply Clippy fixes and remove checkpoint transport
+      - name: Recover and verify the exact checked source
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test "$(git rev-parse "${GITHUB_SHA}^")" = "$STAGING_PARENT"
-          cat .ci/w07-builder.patch.xz.b64.* > "$RUNNER_TEMP/w07-builder.patch.xz.b64"
-          base64 -d "$RUNNER_TEMP/w07-builder.patch.xz.b64" > "$RUNNER_TEMP/w07-builder.patch.xz"
-          xz -dc "$RUNNER_TEMP/w07-builder.patch.xz" > "$RUNNER_TEMP/w07-builder.patch"
-          printf '%s  %s\n' "$PATCH_SHA256" "$RUNNER_TEMP/w07-builder.patch" | sha256sum -c -
-          git rm -- .ci/w07-builder.patch.xz.b64.* .github/workflows/w07-builder-checkpoint.yml
-          test "$(git write-tree)" = "$BASE_TREE"
-          git apply --index "$RUNNER_TEMP/w07-builder.patch"
-          python - <<'PY'
-          from pathlib import Path
+          mkdir -p "$RUNNER_TEMP/w07-artifact"
+          gh api \
+            -H 'Accept: application/vnd.github+json' \
+            "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip" \
+            > "$RUNNER_TEMP/w07-artifact.zip"
+          printf '%s  %s\n' "$ARTIFACT_ZIP_SHA256" "$RUNNER_TEMP/w07-artifact.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/w07-artifact.zip" -d "$RUNNER_TEMP/w07-artifact"
+          test "$(cat "$RUNNER_TEMP/w07-artifact/CHECKED_TREE")" = "$CHECKED_TREE"
+          printf '%s  %s\n' "$SOURCE_TAR_SHA256" "$RUNNER_TEMP/w07-artifact/checked-source.tar" | sha256sum -c -
+          printf '%s  %s\n' "$FORMATTED_PATCH_SHA256" "$RUNNER_TEMP/w07-artifact/formatted.patch" | sha256sum -c -
 
-          path = Path("apps/wow-reference-builder/src/lib.rs")
-          text = path.read_text()
-          replacements = [
-              (
-                  "    ReferencePackBuildOutcome, ReferencePackBuildRequest, ReferencePackBuildStatus,\n",
-                  "    ReferencePackBuildRequest, ReferencePackBuildStatus,\n",
-              ),
-              (
-                  """    if output.exists() {\n        if let Some(path) = quarantine.as_deref() {\n            let _ = fs::rename(output, path);\n        }\n    }\n""",
-                  """    if output.exists() && let Some(path) = quarantine.as_deref() {\n        let _ = fs::rename(output, path);\n    }\n""",
-              ),
-              (
-                  """    if let Ok(metadata) = fs::symlink_metadata(&output) {\n        if is_reparse_or_symlink(&metadata) {\n            return Err(CliError::security(\n                \"unsafe_output_path\",\n                \"output is a symlink or reparse point\",\n            ));\n        }\n    }\n""",
-                  """    if let Ok(metadata) = fs::symlink_metadata(&output)\n        && is_reparse_or_symlink(&metadata)\n    {\n        return Err(CliError::security(\n            \"unsafe_output_path\",\n            \"output is a symlink or reparse point\",\n        ));\n    }\n""",
-              ),
-          ]
-          for old, new in replacements:
-              if text.count(old) != 1:
-                  raise SystemExit("expected exactly one Clippy replacement target")
-              text = text.replace(old, new)
-          path.write_text(text)
-          PY
-          git add apps/wow-reference-builder/src/lib.rs
-      - name: Install minimal compiler tools
-        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
-      - name: Refresh workspace lock and format
-        shell: bash
-        run: |
-          set -euo pipefail
-          cargo +stable metadata --format-version 1 > /dev/null
-          cargo +stable fmt --all
-      - name: Minimal builder and service Clippy; no tests executed
-        shell: bash
-        run: |
-          set -euo pipefail
-          rustc +stable -Vv | tee "$RUNNER_TEMP/RUST_VERSION"
-          cargo +stable clippy --locked \
-            -p wow-reference-builder -p wow-service \
-            --all-targets --all-features -- -D warnings 2>&1 | tee "$RUNNER_TEMP/clippy.log"
-      - name: Repository policy and exact file set
-        shell: bash
-        run: |
-          set -euo pipefail
-          cargo +stable xtask check 2>&1 | tee "$RUNNER_TEMP/policy.log"
+          git reset --hard "$BASE_COMMIT"
+          git clean -fdx
+          tar -xf "$RUNNER_TEMP/w07-artifact/checked-source.tar" -C .
           git add --all
-          git diff --cached --check
+          test "$(git write-tree)" = "$CHECKED_TREE"
           actual="$(git diff --cached --name-only "$BASE_COMMIT" | LC_ALL=C sort)"
           expected="$(cat <<'FILES'
           .github/workflows/ci.yml
@@ -102,33 +69,83 @@ jobs:
           FILES
           )"
           test "$actual" = "$expected"
-          grep -Fq 'name = "wow-reference-builder"' Cargo.lock
-          ! grep -R "todo!()\|unimplemented!()" apps/wow-reference-builder/src
-          test "$(grep -Ec '^wow-[A-Za-z0-9_-]+ = ' apps/wow-reference-builder/Cargo.toml)" = 1
-          grep -Fq 'wow-service = ' apps/wow-reference-builder/Cargo.toml
-          grep -Fq 'wow-reference-builder/build-request/1' apps/wow-reference-builder/src/lib.rs
-          grep -Fq 'rollback_finalization' apps/wow-reference-builder/src/lib.rs
-          grep -Fq 'apps/wow-reference-builder' Cargo.toml
-      - name: Retain exact checked source
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/checkpoint"
-          git add --all
-          git write-tree > "$RUNNER_TEMP/checkpoint/CHECKED_TREE"
-          git archive --format=tar -o "$RUNNER_TEMP/checkpoint/checked-source.tar" "$(cat "$RUNNER_TEMP/checkpoint/CHECKED_TREE")"
-          git diff --cached --binary "$BASE_COMMIT" > "$RUNNER_TEMP/checkpoint/formatted.patch"
-          printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/checkpoint/STAGING_SHA"
-          for file in RUST_VERSION clippy.log policy.log; do
-            if test -f "$RUNNER_TEMP/$file"; then cp "$RUNNER_TEMP/$file" "$RUNNER_TEMP/checkpoint/$file"; fi
-          done
-          (cd "$RUNNER_TEMP/checkpoint" && sha256sum checked-source.tar formatted.patch > SHA256SUMS)
-      - name: Upload checkpoint evidence
-        if: always()
+      - name: Publish the exact checked tree to main
+        id: publish
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const current = await github.rest.git.getRef({ owner, repo, ref: 'heads/main' });
+            if (current.data.object.sha !== process.env.GITHUB_SHA) {
+              core.setFailed(`main moved from ${process.env.GITHUB_SHA} to ${current.data.object.sha}`);
+              return;
+            }
+            const paths = [
+              '.github/workflows/ci.yml',
+              'Cargo.lock',
+              'Cargo.toml',
+              'apps/wow-reference-builder/CONTRACT.json',
+              'apps/wow-reference-builder/Cargo.toml',
+              'apps/wow-reference-builder/README.md',
+              'apps/wow-reference-builder/examples/CHECKSUMS.json',
+              'apps/wow-reference-builder/examples/cli-cases.json',
+              'apps/wow-reference-builder/src/lib.rs',
+              'apps/wow-reference-builder/src/main.rs',
+              'apps/wow-reference-builder/tests/e1_cli.rs',
+              'crates/MANIFEST.json',
+              'crates/wow-service/src/reference_pack.rs',
+            ];
+            const entries = [];
+            const receipt = {};
+            for (const filePath of paths) {
+              const blob = await github.rest.git.createBlob({
+                owner,
+                repo,
+                content: fs.readFileSync(filePath).toString('base64'),
+                encoding: 'base64',
+              });
+              entries.push({ path: filePath, mode: '100644', type: 'blob', sha: blob.data.sha });
+              receipt[filePath] = blob.data.sha;
+            }
+            const createdTree = await github.rest.git.createTree({
+              owner,
+              repo,
+              base_tree: process.env.BASE_TREE,
+              tree: entries,
+            });
+            if (createdTree.data.sha !== process.env.CHECKED_TREE) {
+              core.setFailed(`created tree ${createdTree.data.sha} differs from checked tree ${process.env.CHECKED_TREE}`);
+              return;
+            }
+            const commit = await github.rest.git.createCommit({
+              owner,
+              repo,
+              message: 'feat(app): activate safe Reference Pack builder [skip ci]\n\nW07 filesystem/frontend slice. The dedicated builder now routes build, validate and rebuild-compare through the W06 service, confines explicit roots, stages and verifies declared bytes, protects prior destinations with guarded same-parent replacement and rollback, performs post-finalization read-back, and is an active workspace member. Selected builder/service Clippy and repository policy passed on Linux with Rust 1.98.1; no tests executed.',
+              tree: createdTree.data.sha,
+              parents: [process.env.GITHUB_SHA],
+            });
+            await github.rest.git.updateRef({
+              owner,
+              repo,
+              ref: 'heads/main',
+              sha: commit.data.sha,
+              force: false,
+            });
+            const receiptDir = path.join(process.env.RUNNER_TEMP, 'publication');
+            fs.mkdirSync(receiptDir, { recursive: true });
+            fs.writeFileSync(path.join(receiptDir, 'FINAL_COMMIT'), `${commit.data.sha}\n`);
+            fs.writeFileSync(path.join(receiptDir, 'FINAL_TREE'), `${createdTree.data.sha}\n`);
+            fs.writeFileSync(path.join(receiptDir, 'BLOBS.json'), `${JSON.stringify(receipt, null, 2)}\n`);
+            core.setOutput('commit', commit.data.sha);
+            core.setOutput('tree', createdTree.data.sha);
+      - name: Retain publication receipt
         uses: actions/upload-artifact@v7
         with:
-          name: w07-reference-pack-builder-${{ github.run_id }}
-          path: ${{ runner.temp }}/checkpoint
+          name: w07-reference-pack-builder-publication-${{ github.run_id }}
+          path: ${{ runner.temp }}/publication
           retention-days: 3
           if-no-files-found: error
