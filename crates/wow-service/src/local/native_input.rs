@@ -6,7 +6,11 @@ use std::sync::atomic::AtomicBool;
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use wow_annotations::{artifact::AnnotationArtifact, sidecars::NativeProjectionSidecars};
+use wow_annotations::{
+    artifact::AnnotationArtifact,
+    compatibility::{NativeCompatibilityBinding, NativeCompatibilityEvidence},
+    sidecars::NativeProjectionSidecars,
+};
 use wow_core::{
     CanonicalResult, ContentDigest, CorrectionSet, ProfileId, ProfileIdentity,
     ProfileIdentityBuilder, ProfileKind, ReferenceGenerationId, SchemaVersionEntry, SourceKind,
@@ -21,6 +25,7 @@ use wow_reference::native::{NativeError, NativeErrorCode, ingest_document};
 
 use super::disk_input::{DiskAnalyzer, MainInventory};
 use super::input::{ProjectMetadata, invalid};
+use super::native_compatibility::{NativeCompatibilityInputs, NativeCompatibilitySelection};
 use super::native_resources::{NativeAnnotationInputs, NativeAnnotationInputsReceipt, present};
 use super::native_source::NativeSourceInput;
 use super::{LocalProjectInput, cancelled};
@@ -44,6 +49,8 @@ struct NativeInput {
     native_source: NativeSourceInput,
     #[serde(default, deserialize_with = "present")]
     annotation_inputs: Option<NativeAnnotationInputs>,
+    #[serde(default, deserialize_with = "present")]
+    compatibility_evidence: Option<NativeCompatibilityInputs>,
 }
 
 /// Labels describe an explicitly selected source corpus, not a currentness or
@@ -180,6 +187,8 @@ pub struct NativeInputReceipt {
     pub negative_authority_scope: Option<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub restriction_facts: Option<NativeRestrictionIdentity>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub compatibility_evidence: Option<NativeCompatibilitySelection>,
     pub semantic_consumer_acceptance: &'static str,
 }
 
@@ -189,6 +198,7 @@ pub(super) struct NativeInputEvidence {
     annotation_artifact: AnnotationArtifact,
     annotation_files: Box<[NativeAnnotationFile]>,
     annotation_sidecars: NativeProjectionSidecars,
+    annotation_compatibility: Option<NativeCompatibilityEvidence>,
 }
 
 #[derive(Serialize)]
@@ -239,6 +249,13 @@ impl LocalProjectInput {
         self.native_input
             .as_ref()
             .map(|evidence| &evidence.annotation_sidecars)
+    }
+
+    #[must_use]
+    pub fn native_annotation_compatibility(&self) -> Option<&NativeCompatibilityEvidence> {
+        self.native_input
+            .as_ref()
+            .and_then(|evidence| evidence.annotation_compatibility.as_ref())
     }
 
     pub(super) fn from_native_manifest(
@@ -436,6 +453,27 @@ impl LocalProjectInput {
         let annotation_sidecars =
             NativeProjectionSidecars::from_library(&annotation_artifact, &library)
                 .map_err(|_| invalid("native annotation sidecar projection rejected"))?;
+        let annotation_compatibility = input
+            .compatibility_evidence
+            .as_ref()
+            .map(|selected| {
+                let binding = NativeCompatibilityBinding::new(
+                    annotation_artifact.artifact_id(),
+                    annotation_sidecars.source_map().source_map_id(),
+                    annotation_sidecars.loss_report().report_id(),
+                    profile.profile_id().as_str(),
+                    reference.view.generation_id(),
+                )
+                .map_err(|_| invalid("native compatibility binding rejected"))?;
+                selected.read(directory, binding, stop)
+            })
+            .transpose()?;
+        let compatibility_selection = annotation_compatibility
+            .as_ref()
+            .map(|loaded| loaded.selection.clone());
+        let semantic_consumer_acceptance = annotation_compatibility
+            .as_ref()
+            .map_or("not_evaluated", |loaded| loaded.evidence.status().as_str());
         let annotation_files = library
             .files
             .iter()
@@ -548,10 +586,15 @@ impl LocalProjectInput {
             negative_authority_scope: Option<&'static str>,
             #[serde(skip_serializing_if = "Option::is_none")]
             restriction_facts: Option<&'a NativeRestrictionIdentity>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            compatibility_evidence: Option<&'a NativeCompatibilitySelection>,
+            semantic_consumer_acceptance: &'static str,
         }
         let report = report_bytes(
             &Report {
-                schema: if manifested {
+                schema: if compatibility_selection.is_some() {
+                    "wow-service/native-input-report/6"
+                } else if manifested {
                     "wow-service/native-input-report/5"
                 } else if annotation_inputs.is_some() {
                     "wow-service/native-input-report/3"
@@ -575,11 +618,15 @@ impl LocalProjectInput {
                     .negative_authority
                     .then_some(wow_reference::native_view::NATIVE_API_PARTITION),
                 restriction_facts: restriction_facts.as_ref(),
+                compatibility_evidence: compatibility_selection.as_ref(),
+                semantic_consumer_acceptance,
             },
             stop,
         )?;
         let receipt = NativeInputReceipt {
-            schema: if manifested {
+            schema: if compatibility_selection.is_some() {
+                "wow-service/native-input-receipt/6"
+            } else if manifested {
                 "wow-service/native-input-receipt/5"
             } else if annotation_inputs.is_some() {
                 "wow-service/native-input-receipt/3"
@@ -611,7 +658,8 @@ impl LocalProjectInput {
                 .negative_authority
                 .then_some(wow_reference::native_view::NATIVE_API_PARTITION),
             restriction_facts,
-            semantic_consumer_acceptance: "not_evaluated",
+            compatibility_evidence: compatibility_selection,
+            semantic_consumer_acceptance,
         };
         let libraries = library
             .files
@@ -655,6 +703,7 @@ impl LocalProjectInput {
             annotation_artifact,
             annotation_files,
             annotation_sidecars,
+            annotation_compatibility: annotation_compatibility.map(|loaded| loaded.evidence),
         }));
         cancelled(stop)?;
         Ok(assembled)

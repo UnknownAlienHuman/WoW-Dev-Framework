@@ -4,6 +4,7 @@ mod backend;
 mod disk_input;
 mod input;
 pub mod native_artifact;
+mod native_compatibility;
 mod native_input;
 mod native_resources;
 mod native_source;
@@ -17,6 +18,7 @@ pub use backend::LocalProjectBackend;
 pub use disk_input::{LOCAL_FILES_SCHEMA, LOCAL_TOC_SCHEMA};
 pub use input::{LOCAL_INPUT_MAX_BYTES, LOCAL_INPUT_SCHEMA, LocalProjectInput};
 pub use native_artifact::NativeArtifactReceipt;
+pub use native_compatibility::{NativeCompatibilitySelection, NativeConsumerProbeIdentity};
 pub use native_input::{
     LOCAL_NATIVE_SCHEMA, NativeAnnotationFile, NativeFileIdentity, NativeInputReceipt,
     NativeManifestIdentity, NativeRestrictionIdentity,
