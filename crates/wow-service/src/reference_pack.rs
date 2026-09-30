@@ -11,7 +11,13 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use wow_annotations::artifact::AnnotationArtifact;
+use wow_annotations::{
+    artifact::AnnotationArtifact,
+    sidecars::{
+        NativeProjectionClosure, NativeProjectionLossReport, NativeProjectionSidecars,
+        NativeSourceMap,
+    },
+};
 use wow_core::{ProfileIdentity, canonical_json_bytes};
 use wow_reference::{
     ReferenceView,
@@ -21,10 +27,10 @@ use wow_store::{CatalogExpectation, SealedStore, Store, StoreConfiguration, Stor
 
 use crate::local::{LocalProjectInput, NativeAnnotationFile, NativeInputReceipt};
 
-pub const REFERENCE_PACK_SCHEMA: &str = "wow-service/reference-pack/e1-d/2";
-pub const LOCAL_NATIVE_PACK_LAYOUT: &str = "wow-reference-pack/layout/local-native-candidate/2";
+pub const REFERENCE_PACK_SCHEMA: &str = "wow-service/reference-pack/e1-d/3";
+pub const LOCAL_NATIVE_PACK_LAYOUT: &str = "wow-reference-pack/layout/local-native-candidate/3";
 pub const LOCAL_NATIVE_VALIDATION_PROFILE: &str =
-    "wow-reference-pack/validation/local-native-candidate/2";
+    "wow-reference-pack/validation/local-native-candidate/3";
 
 const MANIFEST_PATH: &str = "manifest.json";
 const CHECKSUMS_PATH: &str = "checksums.json";
@@ -33,6 +39,8 @@ const REFERENCE_STORE_PATH: &str = "reference/reference-store.sqlite3";
 const REFERENCE_STORE_PROFILE: &str = "wow-reference-pack-store-local-native-v1";
 const REFERENCE_STORE_CHANNEL: &str = "pack";
 const ANNOTATION_MANIFEST_PATH: &str = "annotations/artifact-manifest.json";
+const ANNOTATION_SOURCE_MAP_PATH: &str = "annotations/source-map.json";
+const ANNOTATION_LOSS_REPORT_PATH: &str = "annotations/projection-loss.json";
 const PROVENANCE_PATH: &str = "provenance/native-input.json";
 const MAX_REVIEWED_TOTAL_BYTES: u64 = 128 * 1024 * 1024;
 const MAX_REVIEWED_MEMBER_BYTES: u64 = 64 * 1024 * 1024;
@@ -304,6 +312,8 @@ pub enum ReferencePackMemberKind {
     ReferenceView,
     ReferenceStore,
     AnnotationArtifactManifest,
+    AnnotationSourceMap,
+    AnnotationProjectionLoss,
     AnnotationFile,
     ProvenanceManifest,
     ChecksumManifest,
@@ -516,6 +526,8 @@ pub struct ReferencePackManifest {
     reference_store_publication_channel: Box<str>,
     annotation_artifact_id: Box<str>,
     annotation_payload_sha256: Box<str>,
+    annotation_source_map_id: Box<str>,
+    annotation_loss_report_id: Box<str>,
     source_manifest_sha256: Box<str>,
     payload_members: Box<[ReferencePackMember]>,
     checksum_member: ReferencePackMember,
@@ -585,6 +597,10 @@ struct PackAnnotationArtifactManifest {
     profile_id: Box<str>,
     source_generation_id: Box<str>,
     payload_sha256: Box<str>,
+    source_map_id: Box<str>,
+    source_map_path: Box<str>,
+    loss_report_id: Box<str>,
+    loss_report_path: Box<str>,
     files: Box<[PackAnnotationFileDescriptor]>,
 }
 
@@ -826,7 +842,7 @@ impl ReferencePackService {
         checkpoint(stop)?;
         let parts = admitted_native_parts(request, input)?;
         let payload = build_payload_entries(request, &parts, stop)?;
-        let gates = build_gate_records(parts.receipt);
+        let gates = build_gate_records(parts.receipt, parts.annotation_sidecars);
         let plan = finalize_plan(request, &parts, payload, gates, stop)?;
         checkpoint(stop)?;
         let validation_request = ReferencePackValidationRequest::new(
@@ -954,6 +970,7 @@ struct NativePackParts<'a> {
     reference: &'a ReferenceView,
     artifact: &'a AnnotationArtifact,
     annotation_files: &'a [NativeAnnotationFile],
+    annotation_sidecars: &'a NativeProjectionSidecars,
     source_manifest_sha256: &'a str,
 }
 
@@ -998,10 +1015,36 @@ fn admitted_native_parts<'a>(
             "reference pack input lacks generated annotation files",
         )
     })?;
+    let annotation_sidecars = input.native_annotation_sidecars().ok_or_else(|| {
+        error(
+            ReferencePackErrorCode::SourceInputUnavailable,
+            "reference pack input lacks canonical annotation sidecars",
+        )
+    })?;
+    annotation_sidecars.source_map().validate().map_err(|_| {
+        error(
+            ReferencePackErrorCode::IdentityMismatch,
+            "reference pack annotation source map is invalid",
+        )
+    })?;
+    annotation_sidecars.loss_report().validate().map_err(|_| {
+        error(
+            ReferencePackErrorCode::IdentityMismatch,
+            "reference pack annotation loss report is invalid",
+        )
+    })?;
     if receipt.profile.profile_id().as_str() != request.expected_profile_id()
         || reference.generation_id() != request.expected_reference_generation_id()
         || artifact.profile_id() != request.expected_profile_id()
         || artifact.source_generation_id() != request.expected_reference_generation_id()
+        || annotation_sidecars.source_map().annotation_artifact_id() != artifact.artifact_id()
+        || annotation_sidecars.loss_report().annotation_artifact_id() != artifact.artifact_id()
+        || annotation_sidecars.source_map().profile_id() != request.expected_profile_id()
+        || annotation_sidecars.loss_report().profile_id() != request.expected_profile_id()
+        || annotation_sidecars.source_map().source_generation_id()
+            != request.expected_reference_generation_id()
+        || annotation_sidecars.loss_report().source_generation_id()
+            != request.expected_reference_generation_id()
         || annotation_files.is_empty()
     {
         return Err(error(
@@ -1015,6 +1058,7 @@ fn admitted_native_parts<'a>(
         reference,
         artifact,
         annotation_files,
+        annotation_sidecars,
         source_manifest_sha256: &source_manifest.manifest_sha256,
     })
 }
@@ -1067,14 +1111,32 @@ fn build_payload_entries(
         )?);
     }
     annotation_descriptors.sort_by(|left, right| left.pack_path.cmp(&right.pack_path));
+    let source_map = parts.annotation_sidecars.source_map();
+    let loss_report = parts.annotation_sidecars.loss_report();
+    entries.push(entry(
+        ANNOTATION_SOURCE_MAP_PATH,
+        ReferencePackMemberKind::AnnotationSourceMap,
+        source_map.source_map_id(),
+        parts.annotation_sidecars.source_map_bytes().to_vec(),
+    )?);
+    entries.push(entry(
+        ANNOTATION_LOSS_REPORT_PATH,
+        ReferencePackMemberKind::AnnotationProjectionLoss,
+        loss_report.report_id(),
+        parts.annotation_sidecars.loss_report_bytes().to_vec(),
+    )?);
     let annotation_manifest = PackAnnotationArtifactManifest {
-        schema: "wow-service/reference-pack/annotation-artifact-manifest/1".into(),
+        schema: "wow-service/reference-pack/annotation-artifact-manifest/2".into(),
         artifact_id: parts.artifact.artifact_id().into(),
         producer_id: parts.artifact.producer_id().into(),
         producer_version: parts.artifact.producer_version().into(),
         profile_id: parts.artifact.profile_id().into(),
         source_generation_id: parts.artifact.source_generation_id().into(),
         payload_sha256: parts.artifact.payload_sha256().into(),
+        source_map_id: source_map.source_map_id().into(),
+        source_map_path: ANNOTATION_SOURCE_MAP_PATH.into(),
+        loss_report_id: loss_report.report_id().into(),
+        loss_report_path: ANNOTATION_LOSS_REPORT_PATH.into(),
         files: annotation_descriptors.into_boxed_slice(),
     };
     let annotation_manifest_bytes = canonical(&annotation_manifest, "annotation manifest")?;
@@ -1260,7 +1322,39 @@ fn reference_store_configuration() -> ReferencePackResult<StoreConfiguration> {
     })
 }
 
-fn build_gate_records(receipt: &NativeInputReceipt) -> Vec<PackGateRecord> {
+fn source_map_loss_gate(
+    source_map: &NativeSourceMap,
+    loss_report: &NativeProjectionLossReport,
+) -> PackGateRecord {
+    let passed = source_map.coverage() == NativeProjectionClosure::Complete
+        && loss_report.disclosure() == NativeProjectionClosure::Complete
+        && loss_report.blocking_for_release_ready() == 0;
+    let reason = if source_map.coverage() != NativeProjectionClosure::Complete {
+        "source_map_profile_is_partial"
+    } else if loss_report.disclosure() != NativeProjectionClosure::Complete {
+        "projection_loss_disclosure_is_partial"
+    } else if loss_report.blocking_for_release_ready() != 0 {
+        "projection_loss_report_contains_release_blockers"
+    } else {
+        "source_map_and_projection_loss_closure_valid"
+    };
+    PackGateRecord::new(
+        "pack.source_map_loss",
+        false,
+        true,
+        if passed {
+            PackGateStatus::Passed
+        } else {
+            PackGateStatus::Failed
+        },
+        reason,
+    )
+}
+
+fn build_gate_records(
+    receipt: &NativeInputReceipt,
+    sidecars: &NativeProjectionSidecars,
+) -> Vec<PackGateRecord> {
     let source_complete = receipt
         .source_manifest
         .as_ref()
@@ -1329,13 +1423,7 @@ fn build_gate_records(receipt: &NativeInputReceipt) -> Vec<PackGateRecord> {
             PackGateStatus::Passed,
             "sealed_reference_store_reopened_read_only",
         ),
-        PackGateRecord::new(
-            "pack.source_map_loss",
-            false,
-            true,
-            PackGateStatus::NotEvaluated,
-            "standalone_source_map_and_loss_members_not_materialized",
-        ),
+        source_map_loss_gate(sidecars.source_map(), sidecars.loss_report()),
         PackGateRecord::new(
             "pack.parity_consumer",
             false,
@@ -1412,7 +1500,7 @@ fn finalize_plan(
         ReferencePackEligibilityState::Blocked
     };
     let deferred_capabilities = vec![
-        "standalone_source_map_and_loss".into(),
+        "full_source_map_and_loss_release_closure".into(),
         "parity_and_consumer_evidence".into(),
         "license_and_redistribution_closure".into(),
         "filesystem_atomic_finalization".into(),
@@ -1431,6 +1519,8 @@ fn finalize_plan(
         reference_store_publication_channel: &reference_store.publication_channel,
         annotation_artifact_id: parts.artifact.artifact_id(),
         annotation_payload_sha256: parts.artifact.payload_sha256(),
+        annotation_source_map_id: parts.annotation_sidecars.source_map().source_map_id(),
+        annotation_loss_report_id: parts.annotation_sidecars.loss_report().report_id(),
         source_manifest_sha256: parts.source_manifest_sha256,
         payload_members: &payload_members,
         checksum_member: &checksum_member,
@@ -1457,6 +1547,12 @@ fn finalize_plan(
         reference_store_publication_channel: reference_store.publication_channel,
         annotation_artifact_id: parts.artifact.artifact_id().into(),
         annotation_payload_sha256: parts.artifact.payload_sha256().into(),
+        annotation_source_map_id: parts
+            .annotation_sidecars
+            .source_map()
+            .source_map_id()
+            .into(),
+        annotation_loss_report_id: parts.annotation_sidecars.loss_report().report_id().into(),
         source_manifest_sha256: parts.source_manifest_sha256.into(),
         payload_members: payload_members.into_boxed_slice(),
         checksum_member: checksum_member.clone(),
@@ -1507,6 +1603,8 @@ struct UnsignedPackManifest<'a> {
     reference_store_publication_channel: &'a str,
     annotation_artifact_id: &'a str,
     annotation_payload_sha256: &'a str,
+    annotation_source_map_id: &'a str,
+    annotation_loss_report_id: &'a str,
     source_manifest_sha256: &'a str,
     payload_members: &'a [ReferencePackMember],
     checksum_member: &'a ReferencePackMember,
@@ -1537,6 +1635,8 @@ fn validate_manifest_identity(manifest: &ReferencePackManifest) -> ReferencePack
         || manifest.reference_store_publication_channel.as_ref() != REFERENCE_STORE_CHANNEL
         || !valid_identity(&manifest.reference_store_manifest_id)
         || !valid_identity(&manifest.reference_store_object_id)
+        || !valid_identity(&manifest.annotation_source_map_id)
+        || !valid_identity(&manifest.annotation_loss_report_id)
     {
         return Err(error(
             ReferencePackErrorCode::ManifestInvalid,
@@ -1556,6 +1656,8 @@ fn validate_manifest_identity(manifest: &ReferencePackManifest) -> ReferencePack
         reference_store_publication_channel: &manifest.reference_store_publication_channel,
         annotation_artifact_id: &manifest.annotation_artifact_id,
         annotation_payload_sha256: &manifest.annotation_payload_sha256,
+        annotation_source_map_id: &manifest.annotation_source_map_id,
+        annotation_loss_report_id: &manifest.annotation_loss_report_id,
         source_manifest_sha256: &manifest.source_manifest_sha256,
         payload_members: &manifest.payload_members,
         checksum_member: &manifest.checksum_member,
@@ -1662,7 +1764,35 @@ fn validate_materialized_members(
         )?,
         "annotation artifact manifest",
     )?;
-    validate_annotation_members(files, manifest, &annotation_manifest)?;
+    let source_map = NativeSourceMap::from_canonical_slice(required_member_bytes(
+        files,
+        manifest,
+        ReferencePackMemberKind::AnnotationSourceMap,
+    )?)
+    .map_err(|_| {
+        error(
+            ReferencePackErrorCode::ValidationFailed,
+            "annotation source-map member failed owner validation",
+        )
+    })?;
+    let loss_report = NativeProjectionLossReport::from_canonical_slice(required_member_bytes(
+        files,
+        manifest,
+        ReferencePackMemberKind::AnnotationProjectionLoss,
+    )?)
+    .map_err(|_| {
+        error(
+            ReferencePackErrorCode::ValidationFailed,
+            "annotation projection-loss member failed owner validation",
+        )
+    })?;
+    validate_annotation_members(
+        files,
+        manifest,
+        &annotation_manifest,
+        &source_map,
+        &loss_report,
+    )?;
     let provenance: PackNativeProvenance = strict_json(
         required_member_bytes(files, manifest, ReferencePackMemberKind::ProvenanceManifest)?,
         "native provenance",
@@ -1673,13 +1803,22 @@ fn validate_materialized_members(
         || annotation_manifest.source_generation_id != manifest.reference_generation_id
         || annotation_manifest.artifact_id != manifest.annotation_artifact_id
         || annotation_manifest.payload_sha256 != manifest.annotation_payload_sha256
+        || annotation_manifest.source_map_id != manifest.annotation_source_map_id
+        || annotation_manifest.loss_report_id != manifest.annotation_loss_report_id
+        || source_map.source_map_id() != manifest.annotation_source_map_id.as_ref()
+        || loss_report.report_id() != manifest.annotation_loss_report_id.as_ref()
     {
         return Err(error(
             ReferencePackErrorCode::IdentityMismatch,
             "reference pack component identities do not close during validation",
         ));
     }
-    Ok(recomputed_gates(manifest, &provenance))
+    Ok(recomputed_gates(
+        manifest,
+        &provenance,
+        &source_map,
+        &loss_report,
+    ))
 }
 
 fn validate_reference_store_member(
@@ -1769,14 +1908,18 @@ fn validate_annotation_members(
     files: &BTreeMap<Box<str>, Box<[u8]>>,
     manifest: &ReferencePackManifest,
     annotation_manifest: &PackAnnotationArtifactManifest,
+    source_map: &NativeSourceMap,
+    loss_report: &NativeProjectionLossReport,
 ) -> ReferencePackResult<()> {
     if annotation_manifest.schema.as_ref()
-        != "wow-service/reference-pack/annotation-artifact-manifest/1"
+        != "wow-service/reference-pack/annotation-artifact-manifest/2"
         || annotation_manifest.files.is_empty()
+        || annotation_manifest.source_map_path.as_ref() != ANNOTATION_SOURCE_MAP_PATH
+        || annotation_manifest.loss_report_path.as_ref() != ANNOTATION_LOSS_REPORT_PATH
     {
         return Err(error(
             ReferencePackErrorCode::ManifestInvalid,
-            "annotation artifact manifest is unsupported or empty",
+            "annotation artifact manifest is unsupported or incomplete",
         ));
     }
     let declared = annotation_manifest
@@ -1796,14 +1939,63 @@ fn validate_annotation_members(
             "annotation file manifest does not close over materialized files",
         ));
     }
+    let mut descriptors = BTreeMap::new();
     for file in &annotation_manifest.files {
         let bytes = required_bytes(files, &file.pack_path)?;
-        if bytes.len() as u64 != file.byte_length || sha256(bytes) != file.sha256.as_ref() {
+        if bytes.len() as u64 != file.byte_length
+            || sha256(bytes) != file.sha256.as_ref()
+            || descriptors
+                .insert(file.source_path.as_ref(), file)
+                .is_some()
+        {
             return Err(error(
                 ReferencePackErrorCode::ValidationFailed,
-                "annotation file digest does not match its owner manifest",
+                "annotation file digest or source identity does not match its owner manifest",
             ));
         }
+    }
+    if descriptors.len() != source_map.files().len() {
+        return Err(error(
+            ReferencePackErrorCode::ValidationFailed,
+            "annotation source map does not cover the generated file inventory",
+        ));
+    }
+    for mapped in source_map.files() {
+        let descriptor = descriptors.get(mapped.path()).ok_or_else(|| {
+            error(
+                ReferencePackErrorCode::ValidationFailed,
+                "annotation source map references an undeclared generated file",
+            )
+        })?;
+        if descriptor.sha256.as_ref() != mapped.sha256()
+            || descriptor.byte_length != mapped.byte_length()
+        {
+            return Err(error(
+                ReferencePackErrorCode::ValidationFailed,
+                "annotation source map file identity differs from generated bytes",
+            ));
+        }
+    }
+    let source_map_member =
+        required_member(manifest, ReferencePackMemberKind::AnnotationSourceMap)?;
+    let loss_member = required_member(manifest, ReferencePackMemberKind::AnnotationProjectionLoss)?;
+    if source_map_member.path() != ANNOTATION_SOURCE_MAP_PATH
+        || source_map_member.logical_id() != source_map.source_map_id()
+        || loss_member.path() != ANNOTATION_LOSS_REPORT_PATH
+        || loss_member.logical_id() != loss_report.report_id()
+        || annotation_manifest.source_map_id.as_ref() != source_map.source_map_id()
+        || annotation_manifest.loss_report_id.as_ref() != loss_report.report_id()
+        || source_map.annotation_artifact_id() != annotation_manifest.artifact_id.as_ref()
+        || loss_report.annotation_artifact_id() != annotation_manifest.artifact_id.as_ref()
+        || source_map.profile_id() != annotation_manifest.profile_id.as_ref()
+        || loss_report.profile_id() != annotation_manifest.profile_id.as_ref()
+        || source_map.source_generation_id() != annotation_manifest.source_generation_id.as_ref()
+        || loss_report.source_generation_id() != annotation_manifest.source_generation_id.as_ref()
+    {
+        return Err(error(
+            ReferencePackErrorCode::IdentityMismatch,
+            "annotation sidecar identities do not close over the artifact manifest",
+        ));
     }
     Ok(())
 }
@@ -1811,6 +2003,8 @@ fn validate_annotation_members(
 fn recomputed_gates(
     _manifest: &ReferencePackManifest,
     provenance: &PackNativeProvenance,
+    source_map: &NativeSourceMap,
+    loss_report: &NativeProjectionLossReport,
 ) -> Vec<PackGateRecord> {
     let projection_clean = provenance.input_failures == 0
         && provenance.reference_issues == 0
@@ -1877,13 +2071,7 @@ fn recomputed_gates(
             PackGateStatus::Passed,
             "sealed_reference_store_reopened_read_only",
         ),
-        PackGateRecord::new(
-            "pack.source_map_loss",
-            false,
-            true,
-            PackGateStatus::NotEvaluated,
-            "standalone_source_map_and_loss_members_not_materialized",
-        ),
+        source_map_loss_gate(source_map, loss_report),
         PackGateRecord::new(
             "pack.parity_consumer",
             false,
@@ -1951,6 +2139,8 @@ fn semantic_pack_identity(plan: &PackMaterializationPlan) -> ReferencePackResult
         reference_store_publication_channel: &'a str,
         annotation_artifact_id: &'a str,
         annotation_payload_sha256: &'a str,
+        annotation_source_map_id: &'a str,
+        annotation_loss_report_id: &'a str,
         source_manifest_sha256: &'a str,
         payload_members: Vec<SemanticMember<'a>>,
         gate_records: &'a [PackGateRecord],
@@ -1980,6 +2170,8 @@ fn semantic_pack_identity(plan: &PackMaterializationPlan) -> ReferencePackResult
         reference_store_publication_channel: &manifest.reference_store_publication_channel,
         annotation_artifact_id: &manifest.annotation_artifact_id,
         annotation_payload_sha256: &manifest.annotation_payload_sha256,
+        annotation_source_map_id: &manifest.annotation_source_map_id,
+        annotation_loss_report_id: &manifest.annotation_loss_report_id,
         source_manifest_sha256: &manifest.source_manifest_sha256,
         payload_members,
         gate_records: &manifest.gate_records,
@@ -2163,23 +2355,35 @@ fn admit_image(
     Ok(files)
 }
 
-fn required_member_bytes<'a>(
-    files: &'a BTreeMap<Box<str>, Box<[u8]>>,
+fn required_member(
     manifest: &ReferencePackManifest,
     kind: ReferencePackMemberKind,
-) -> ReferencePackResult<&'a [u8]> {
-    let matches = manifest
+) -> ReferencePackResult<&ReferencePackMember> {
+    let mut matches = manifest
         .payload_members
         .iter()
-        .filter(|member| member.kind == kind)
-        .collect::<Vec<_>>();
-    if matches.len() != 1 {
+        .filter(|member| member.kind == kind);
+    let member = matches.next().ok_or_else(|| {
+        error(
+            ReferencePackErrorCode::ValidationFailed,
+            "reference pack requires exactly one member of this kind",
+        )
+    })?;
+    if matches.next().is_some() {
         return Err(error(
             ReferencePackErrorCode::ValidationFailed,
             "reference pack requires exactly one member of this kind",
         ));
     }
-    required_bytes(files, matches[0].path())
+    Ok(member)
+}
+
+fn required_member_bytes<'a>(
+    files: &'a BTreeMap<Box<str>, Box<[u8]>>,
+    manifest: &ReferencePackManifest,
+    kind: ReferencePackMemberKind,
+) -> ReferencePackResult<&'a [u8]> {
+    required_bytes(files, required_member(manifest, kind)?.path())
 }
 
 fn required_bytes<'a>(

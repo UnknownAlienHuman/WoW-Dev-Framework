@@ -6,7 +6,7 @@ use std::sync::atomic::AtomicBool;
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use wow_annotations::artifact::AnnotationArtifact;
+use wow_annotations::{artifact::AnnotationArtifact, sidecars::NativeProjectionSidecars};
 use wow_core::{
     CanonicalResult, ContentDigest, CorrectionSet, ProfileId, ProfileIdentity,
     ProfileIdentityBuilder, ProfileKind, ReferenceGenerationId, SchemaVersionEntry, SourceKind,
@@ -188,6 +188,7 @@ pub(super) struct NativeInputEvidence {
     report: Box<[u8]>,
     annotation_artifact: AnnotationArtifact,
     annotation_files: Box<[NativeAnnotationFile]>,
+    annotation_sidecars: NativeProjectionSidecars,
 }
 
 #[derive(Serialize)]
@@ -231,6 +232,13 @@ impl LocalProjectInput {
         self.native_input
             .as_ref()
             .map(|evidence| evidence.annotation_files.as_ref())
+    }
+
+    #[must_use]
+    pub fn native_annotation_sidecars(&self) -> Option<&NativeProjectionSidecars> {
+        self.native_input
+            .as_ref()
+            .map(|evidence| &evidence.annotation_sidecars)
     }
 
     pub(super) fn from_native_manifest(
@@ -425,6 +433,9 @@ impl LocalProjectInput {
             &library,
         )
         .map_err(|_| invalid("native annotation artifact identity rejected"))?;
+        let annotation_sidecars =
+            NativeProjectionSidecars::from_library(&annotation_artifact, &library)
+                .map_err(|_| invalid("native annotation sidecar projection rejected"))?;
         let annotation_files = library
             .files
             .iter()
@@ -643,6 +654,7 @@ impl LocalProjectInput {
             report: report.into_boxed_slice(),
             annotation_artifact,
             annotation_files,
+            annotation_sidecars,
         }));
         cancelled(stop)?;
         Ok(assembled)
