@@ -35,10 +35,14 @@ use crate::reference_pack_license::{
     NativeDistributionSubject,
 };
 
-pub const REFERENCE_PACK_SCHEMA: &str = "wow-service/reference-pack/e1-d/5";
-pub const LOCAL_NATIVE_PACK_LAYOUT: &str = "wow-reference-pack/layout/local-native-candidate/5";
+pub const REFERENCE_PACK_SCHEMA: &str = "wow-service/reference-pack/e1-d/6";
+pub const LOCAL_NATIVE_PACK_LAYOUT: &str = "wow-reference-pack/layout/local-native-candidate/6";
 pub const LOCAL_NATIVE_VALIDATION_PROFILE: &str =
-    "wow-reference-pack/validation/local-native-candidate/5";
+    "wow-reference-pack/validation/local-native-candidate/6";
+pub const REFERENCE_PACK_REBUILD_REPORT_SCHEMA: &str =
+    "wow-service/reference-pack-rebuild-comparison/1";
+pub const LOCAL_NATIVE_REBUILD_COMPARISON_PROFILE: &str =
+    "wow-reference-pack/rebuild-comparison/local-native/1";
 
 const MANIFEST_PATH: &str = "manifest.json";
 const CHECKSUMS_PATH: &str = "checksums.json";
@@ -52,10 +56,13 @@ const ANNOTATION_LOSS_REPORT_PATH: &str = "annotations/projection-loss.json";
 const ANNOTATION_PARITY_REPORT_PATH: &str = "annotations/parity-report.json";
 const ANNOTATION_CONSUMER_PROBE_ROOT: &str = "annotations/consumer-probes";
 const DISTRIBUTION_MANIFEST_PATH: &str = "licenses/redistribution.json";
+const REBUILD_REPORT_PATH: &str = "reports/rebuild-comparison.json";
+const DETERMINISTIC_REBUILD_DEFERRED_CAPABILITY: &str = "deterministic_rebuild_gate";
 const PROVENANCE_PATH: &str = "provenance/native-input.json";
 const MAX_REVIEWED_TOTAL_BYTES: u64 = 128 * 1024 * 1024;
 const MAX_REVIEWED_MEMBER_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_REVIEWED_MEMBERS: u32 = 4096;
+const MAX_REBUILD_REPORT_BYTES: usize = 8 * 1024 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -184,6 +191,8 @@ pub struct ReferencePackBuildRequest {
     eligibility_target: ReferencePackEligibilityTarget,
     execution_profile_id: Box<str>,
     budgets: ReferencePackBudgets,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    deterministic_rebuild_report: Option<Box<ReferencePackRebuildComparisonReport>>,
 }
 
 impl ReferencePackBuildRequest {
@@ -203,6 +212,7 @@ impl ReferencePackBuildRequest {
             eligibility_target,
             execution_profile_id: execution_profile_id.into(),
             budgets,
+            deterministic_rebuild_report: None,
         };
         request.validate()?;
         Ok(request)
@@ -230,6 +240,9 @@ impl ReferencePackBuildRequest {
             self.budgets.max_member_bytes,
             self.budgets.max_total_bytes,
         )?;
+        if let Some(report) = &self.deterministic_rebuild_report {
+            report.validate()?;
+        }
         Ok(())
     }
 
@@ -263,9 +276,25 @@ impl ReferencePackBuildRequest {
         self.budgets
     }
 
+    #[must_use]
+    pub fn deterministic_rebuild_report(&self) -> Option<&ReferencePackRebuildComparisonReport> {
+        self.deterministic_rebuild_report.as_deref()
+    }
+
+    pub fn with_rebuild_report(
+        mut self,
+        report: ReferencePackRebuildComparisonReport,
+    ) -> ReferencePackResult<Self> {
+        report.validate()?;
+        self.deterministic_rebuild_report = Some(Box::new(report));
+        self.validate()?;
+        Ok(self)
+    }
+
     fn with_execution_profile(&self, execution_profile_id: Box<str>) -> Self {
         let mut cloned = self.clone();
         cloned.execution_profile_id = execution_profile_id;
+        cloned.deterministic_rebuild_report = None;
         cloned
     }
 }
@@ -330,6 +359,7 @@ pub enum ReferencePackMemberKind {
     AnnotationFile,
     LicenseManifest,
     LicenseNotice,
+    RebuildComparisonReport,
     ProvenanceManifest,
     ChecksumManifest,
     PackManifest,
@@ -547,6 +577,8 @@ pub struct ReferencePackManifest {
     annotation_compatibility_evidence_id: Option<Box<str>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     license_redistribution_manifest_id: Option<Box<str>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    deterministic_rebuild_report_id: Option<Box<str>>,
     source_manifest_sha256: Box<str>,
     payload_members: Box<[ReferencePackMember]>,
     checksum_member: ReferencePackMember,
@@ -807,16 +839,28 @@ impl ReferencePackRebuildComparisonRequest {
             left_execution_profile_id: left_execution_profile_id.into(),
             right_execution_profile_id: right_execution_profile_id.into(),
         };
-        if !valid_identity(&request.left_execution_profile_id)
-            || !valid_identity(&request.right_execution_profile_id)
-            || request.left_execution_profile_id == request.right_execution_profile_id
+        request.validate()?;
+        Ok(request)
+    }
+
+    fn validate(&self) -> ReferencePackResult<()> {
+        self.build_request.validate()?;
+        if self.build_request.deterministic_rebuild_report().is_some() {
+            return Err(error(
+                ReferencePackErrorCode::InvalidRequest,
+                "rebuild comparison requires an unbound build request",
+            ));
+        }
+        if !valid_identity(&self.left_execution_profile_id)
+            || !valid_identity(&self.right_execution_profile_id)
+            || self.left_execution_profile_id == self.right_execution_profile_id
         {
             return Err(error(
                 ReferencePackErrorCode::InvalidRequest,
                 "rebuild comparison requires two distinct execution profile identities",
             ));
         }
-        Ok(request)
+        Ok(())
     }
 }
 
@@ -837,13 +881,49 @@ pub struct RebuildDifference {
     allowed: bool,
 }
 
+impl RebuildDifference {
+    fn validate(&self) -> ReferencePackResult<()> {
+        if !matches!(
+            self.comparison_class.as_ref(),
+            "sqlite_physical_bytes"
+                | "canonical_bytes"
+                | "member_set"
+                | "semantic_identity"
+                | "deterministic_subject_identity"
+        ) || !valid_rebuild_text(&self.subject)
+            || !valid_rebuild_text(&self.left_identity)
+            || !valid_rebuild_text(&self.right_identity)
+            || self.allowed != (self.comparison_class.as_ref() == "sqlite_physical_bytes")
+        {
+            return Err(error(
+                ReferencePackErrorCode::ManifestInvalid,
+                "rebuild difference contains an unsupported class or invalid identity",
+            ));
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ReferencePackRebuildComparisonReport {
     schema: Box<str>,
+    comparison_profile_id: Box<str>,
     report_id: Box<str>,
+    left_execution_profile_id: Box<str>,
+    right_execution_profile_id: Box<str>,
     left_pack_id: Box<str>,
     right_pack_id: Box<str>,
+    left_plan_id: Box<str>,
+    right_plan_id: Box<str>,
+    left_validation_report_id: Box<str>,
+    right_validation_report_id: Box<str>,
+    left_semantic_identity: Box<str>,
+    right_semantic_identity: Box<str>,
+    left_subject_identity: Box<str>,
+    right_subject_identity: Box<str>,
+    left_materialization_identity: Box<str>,
+    right_materialization_identity: Box<str>,
     semantic_identity_equal: bool,
     canonical_member_bytes_equal: bool,
     sqlite_physical_classification: Box<str>,
@@ -852,6 +932,147 @@ pub struct ReferencePackRebuildComparisonReport {
 }
 
 impl ReferencePackRebuildComparisonReport {
+    pub fn from_canonical_slice(bytes: &[u8]) -> ReferencePackResult<Self> {
+        if bytes.is_empty() || bytes.len() > MAX_REBUILD_REPORT_BYTES {
+            return Err(error(
+                ReferencePackErrorCode::BudgetExceeded,
+                "rebuild comparison report is empty or exceeds its byte budget",
+            ));
+        }
+        let report: Self = strict_json(bytes, "rebuild comparison report")?;
+        report.validate()?;
+        if report.canonical_bytes()?.as_ref() != bytes {
+            return Err(error(
+                ReferencePackErrorCode::ManifestInvalid,
+                "rebuild comparison report bytes are not canonical",
+            ));
+        }
+        Ok(report)
+    }
+
+    pub fn validate(&self) -> ReferencePackResult<()> {
+        if self.schema.as_ref() != REFERENCE_PACK_REBUILD_REPORT_SCHEMA
+            || self.comparison_profile_id.as_ref() != LOCAL_NATIVE_REBUILD_COMPARISON_PROFILE
+            || !valid_identity(&self.left_execution_profile_id)
+            || !valid_identity(&self.right_execution_profile_id)
+            || self.left_execution_profile_id == self.right_execution_profile_id
+            || !valid_identity(&self.left_pack_id)
+            || !valid_identity(&self.right_pack_id)
+            || !valid_identity(&self.left_plan_id)
+            || !valid_identity(&self.right_plan_id)
+            || !valid_identity(&self.left_validation_report_id)
+            || !valid_identity(&self.right_validation_report_id)
+            || !valid_identity(&self.left_semantic_identity)
+            || !valid_identity(&self.right_semantic_identity)
+            || !valid_identity(&self.left_subject_identity)
+            || !valid_identity(&self.right_subject_identity)
+            || !valid_identity(&self.left_materialization_identity)
+            || !valid_identity(&self.right_materialization_identity)
+            || self.differences.len() > MAX_REVIEWED_MEMBERS as usize + 2
+            || !matches!(
+                self.sqlite_physical_classification.as_ref(),
+                "observed_equal_not_contractual"
+                    | "different_but_logically_equivalent"
+                    | "different_and_logically_incompatible"
+                    | "missing_reference_store_member"
+            )
+        {
+            return Err(error(
+                ReferencePackErrorCode::ManifestInvalid,
+                "rebuild comparison report header or bounds are invalid",
+            ));
+        }
+        for difference in &self.differences {
+            difference.validate()?;
+        }
+        if self
+            .differences
+            .windows(2)
+            .any(|pair| rebuild_difference_key(&pair[0]) >= rebuild_difference_key(&pair[1]))
+        {
+            return Err(error(
+                ReferencePackErrorCode::ManifestInvalid,
+                "rebuild comparison differences are not in canonical order",
+            ));
+        }
+        let semantic_identity_equal = self.left_semantic_identity == self.right_semantic_identity;
+        let subject_identity_equal = self.left_subject_identity == self.right_subject_identity;
+        let semantic_differences = self
+            .differences
+            .iter()
+            .filter(|difference| difference.comparison_class.as_ref() == "semantic_identity")
+            .count();
+        let subject_differences = self
+            .differences
+            .iter()
+            .filter(|difference| {
+                difference.comparison_class.as_ref() == "deterministic_subject_identity"
+            })
+            .count();
+        let canonical_member_bytes_equal = !self.differences.iter().any(|difference| {
+            matches!(
+                difference.comparison_class.as_ref(),
+                "canonical_bytes" | "member_set"
+            )
+        });
+        let sqlite_differences = self
+            .differences
+            .iter()
+            .filter(|difference| difference.comparison_class.as_ref() == "sqlite_physical_bytes")
+            .count();
+        let sqlite_records_match = match self.sqlite_physical_classification.as_ref() {
+            "observed_equal_not_contractual" => sqlite_differences == 0,
+            "different_but_logically_equivalent" => {
+                sqlite_differences == 1
+                    && self.differences.iter().any(|difference| {
+                        difference.comparison_class.as_ref() == "sqlite_physical_bytes"
+                            && difference.subject.as_ref() == REFERENCE_STORE_PATH
+                            && difference.allowed
+                    })
+            }
+            "different_and_logically_incompatible" | "missing_reference_store_member" => {
+                sqlite_differences == 0
+            }
+            _ => false,
+        };
+        if self.semantic_identity_equal != semantic_identity_equal
+            || self.canonical_member_bytes_equal != canonical_member_bytes_equal
+            || semantic_differences != if semantic_identity_equal { 0 } else { 1 }
+            || subject_differences != if subject_identity_equal { 0 } else { 1 }
+            || !sqlite_records_match
+        {
+            return Err(error(
+                ReferencePackErrorCode::ManifestInvalid,
+                "rebuild comparison equality or difference closure is inconsistent",
+            ));
+        }
+        let expected_status = rebuild_status(
+            semantic_identity_equal,
+            subject_identity_equal,
+            self.canonical_member_bytes_equal,
+            &self.sqlite_physical_classification,
+            &self.differences,
+        );
+        if self.status != expected_status || self.report_id != rebuild_report_id(self)? {
+            return Err(error(
+                ReferencePackErrorCode::ManifestInvalid,
+                "rebuild comparison status or identity does not match its evidence",
+            ));
+        }
+        Ok(())
+    }
+
+    pub fn canonical_bytes(&self) -> ReferencePackResult<Box<[u8]>> {
+        let bytes = canonical(self, "rebuild comparison report")?;
+        if bytes.len() > MAX_REBUILD_REPORT_BYTES {
+            return Err(error(
+                ReferencePackErrorCode::BudgetExceeded,
+                "rebuild comparison report exceeds its byte budget",
+            ));
+        }
+        Ok(bytes.into_boxed_slice())
+    }
+
     #[must_use]
     pub fn report_id(&self) -> &str {
         &self.report_id
@@ -865,6 +1086,16 @@ impl ReferencePackRebuildComparisonReport {
     #[must_use]
     pub fn differences(&self) -> &[RebuildDifference] {
         &self.differences
+    }
+
+    #[must_use]
+    pub fn left_execution_profile_id(&self) -> &str {
+        &self.left_execution_profile_id
+    }
+
+    #[must_use]
+    pub fn right_execution_profile_id(&self) -> &str {
+        &self.right_execution_profile_id
     }
 }
 
@@ -880,22 +1111,45 @@ impl ReferencePackService {
         checkpoint(stop)?;
         let parts = admitted_native_parts(request, input)?;
         let payload = build_payload_entries(request, &parts, stop)?;
-        let gates = build_gate_records(
+        let base_gates = build_gate_records(
             parts.receipt,
             parts.annotation_sidecars,
             parts.annotation_compatibility,
             parts.distribution_evidence,
+            None,
         );
-        let plan = finalize_plan(request, &parts, payload, gates, stop)?;
+        let base_plan = finalize_plan(request, &parts, payload.clone(), base_gates, None, stop)?;
+        let plan = if let Some(report) = request.deterministic_rebuild_report() {
+            let base_validation = validate_plan(request, &base_plan, stop)?;
+            validate_bound_rebuild_report(report, request, &base_plan, &base_validation)?;
+            let report_bytes = report.canonical_bytes()?;
+            let mut bound_payload = payload;
+            bound_payload.entries.push(entry(
+                REBUILD_REPORT_PATH,
+                ReferencePackMemberKind::RebuildComparisonReport,
+                report.report_id(),
+                report_bytes.into_vec(),
+            )?);
+            let bound_gates = build_gate_records(
+                parts.receipt,
+                parts.annotation_sidecars,
+                parts.annotation_compatibility,
+                parts.distribution_evidence,
+                Some(report),
+            );
+            finalize_plan(
+                request,
+                &parts,
+                bound_payload,
+                bound_gates,
+                Some(report),
+                stop,
+            )?
+        } else {
+            base_plan
+        };
         checkpoint(stop)?;
-        let validation_request = ReferencePackValidationRequest::new(
-            plan.pack_id(),
-            request.expected_profile_id(),
-            request.expected_reference_generation_id(),
-            request.budgets(),
-        )?;
-        let validation_report =
-            Self::reference_pack_validate(&validation_request, &plan.image(), stop)?;
+        let validation_report = validate_plan(request, &plan, stop)?;
         let status = match request.eligibility_target() {
             ReferencePackEligibilityTarget::Candidate if validation_report.candidate_eligible() => {
                 ReferencePackBuildStatus::CandidateReady
@@ -979,6 +1233,7 @@ impl ReferencePackService {
         input: &LocalProjectInput,
         stop: &AtomicBool,
     ) -> ReferencePackResult<ReferencePackRebuildComparisonReport> {
+        request.validate()?;
         checkpoint(stop)?;
         let left_request = request
             .build_request
@@ -989,8 +1244,67 @@ impl ReferencePackService {
         let left = Self::reference_pack_build(&left_request, input, stop)?;
         checkpoint(stop)?;
         let right = Self::reference_pack_build(&right_request, input, stop)?;
-        compare_plans(left.plan(), right.plan())
+        compare_builds(&left, &right)
     }
+}
+
+fn validate_plan(
+    request: &ReferencePackBuildRequest,
+    plan: &PackMaterializationPlan,
+    stop: &AtomicBool,
+) -> ReferencePackResult<ReferencePackValidationReport> {
+    let validation_request = ReferencePackValidationRequest::new(
+        plan.pack_id(),
+        request.expected_profile_id(),
+        request.expected_reference_generation_id(),
+        request.budgets(),
+    )?;
+    ReferencePackService::reference_pack_validate(&validation_request, &plan.image(), stop)
+}
+
+fn validate_bound_rebuild_report(
+    report: &ReferencePackRebuildComparisonReport,
+    request: &ReferencePackBuildRequest,
+    base_plan: &PackMaterializationPlan,
+    base_validation: &ReferencePackValidationReport,
+) -> ReferencePackResult<()> {
+    report.validate()?;
+    let subject_identity = deterministic_subject_identity(base_plan)?;
+    let materialization_identity = materialized_payload_identity(base_plan)?;
+    let observed = if request.execution_profile_id() == report.left_execution_profile_id.as_ref() {
+        (
+            report.left_pack_id.as_ref(),
+            report.left_plan_id.as_ref(),
+            report.left_validation_report_id.as_ref(),
+            report.left_subject_identity.as_ref(),
+            report.left_materialization_identity.as_ref(),
+        )
+    } else if request.execution_profile_id() == report.right_execution_profile_id.as_ref() {
+        (
+            report.right_pack_id.as_ref(),
+            report.right_plan_id.as_ref(),
+            report.right_validation_report_id.as_ref(),
+            report.right_subject_identity.as_ref(),
+            report.right_materialization_identity.as_ref(),
+        )
+    } else {
+        return Err(error(
+            ReferencePackErrorCode::IdentityMismatch,
+            "bound rebuild report does not contain the selected execution profile",
+        ));
+    };
+    if observed.0 != base_plan.pack_id()
+        || observed.1 != base_plan.plan_id()
+        || observed.2 != base_validation.report_id()
+        || observed.3 != subject_identity.as_ref()
+        || observed.4 != materialization_identity.as_ref()
+    {
+        return Err(error(
+            ReferencePackErrorCode::IdentityMismatch,
+            "bound rebuild report does not describe the selected exact build output",
+        ));
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1002,6 +1316,7 @@ struct ReferenceStoreIdentity {
     publication_channel: Box<str>,
 }
 
+#[derive(Clone)]
 struct BuiltPackPayload {
     entries: Vec<PackMaterializationEntry>,
     reference_store: ReferenceStoreIdentity,
@@ -1554,11 +1869,28 @@ fn distribution_gate(distribution: Option<&NativeDistributionManifest>) -> PackG
     PackGateRecord::new("pack.license_provenance", false, true, status, reason)
 }
 
+fn determinism_gate(report: Option<&ReferencePackRebuildComparisonReport>) -> PackGateRecord {
+    let (status, reason) = match report.map(ReferencePackRebuildComparisonReport::status) {
+        Some(RebuildComparisonStatus::Passed) => {
+            (PackGateStatus::Passed, "bound_rebuild_comparison_passed")
+        }
+        Some(RebuildComparisonStatus::Failed) => {
+            (PackGateStatus::Failed, "bound_rebuild_comparison_failed")
+        }
+        None => (
+            PackGateStatus::NotEvaluated,
+            "rebuild_comparison_not_bound_into_candidate",
+        ),
+    };
+    PackGateRecord::new("pack.deterministic_rebuild", false, true, status, reason)
+}
+
 fn build_gate_records(
     receipt: &NativeInputReceipt,
     sidecars: &NativeProjectionSidecars,
     compatibility: Option<&NativeCompatibilityEvidence>,
     distribution: Option<&NativeDistributionManifest>,
+    rebuild_report: Option<&ReferencePackRebuildComparisonReport>,
 ) -> Vec<PackGateRecord> {
     let source_complete = receipt
         .source_manifest
@@ -1630,13 +1962,7 @@ fn build_gate_records(
         source_map_loss_gate(sidecars.source_map(), sidecars.loss_report()),
         compatibility_gate(compatibility),
         distribution_gate(distribution),
-        PackGateRecord::new(
-            "pack.deterministic_rebuild",
-            false,
-            true,
-            PackGateStatus::NotEvaluated,
-            "rebuild_comparison_not_bound_into_candidate",
-        ),
+        determinism_gate(rebuild_report),
     ]
 }
 
@@ -1645,6 +1971,7 @@ fn finalize_plan(
     parts: &NativePackParts<'_>,
     payload: BuiltPackPayload,
     gates: Vec<PackGateRecord>,
+    rebuild_report: Option<&ReferencePackRebuildComparisonReport>,
     stop: &AtomicBool,
 ) -> ReferencePackResult<PackMaterializationPlan> {
     checkpoint(stop)?;
@@ -1699,6 +2026,9 @@ fn finalize_plan(
     {
         deferred_capabilities.push("parity_and_consumer_evidence".into());
     }
+    if rebuild_report.is_none_or(|report| report.status() != RebuildComparisonStatus::Passed) {
+        deferred_capabilities.push(DETERMINISTIC_REBUILD_DEFERRED_CAPABILITY.into());
+    }
     deferred_capabilities.sort();
     let deferred_capabilities = deferred_capabilities.into_boxed_slice();
     let unsigned = UnsignedPackManifest {
@@ -1722,6 +2052,8 @@ fn finalize_plan(
         license_redistribution_manifest_id: parts
             .distribution_evidence
             .map(NativeDistributionManifest::manifest_id),
+        deterministic_rebuild_report_id: rebuild_report
+            .map(ReferencePackRebuildComparisonReport::report_id),
         source_manifest_sha256: parts.source_manifest_sha256,
         payload_members: &payload_members,
         checksum_member: &checksum_member,
@@ -1760,6 +2092,7 @@ fn finalize_plan(
         license_redistribution_manifest_id: parts
             .distribution_evidence
             .map(|evidence| evidence.manifest_id().into()),
+        deterministic_rebuild_report_id: rebuild_report.map(|report| report.report_id().into()),
         source_manifest_sha256: parts.source_manifest_sha256.into(),
         payload_members: payload_members.into_boxed_slice(),
         checksum_member: checksum_member.clone(),
@@ -1816,6 +2149,8 @@ struct UnsignedPackManifest<'a> {
     annotation_compatibility_evidence_id: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     license_redistribution_manifest_id: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    deterministic_rebuild_report_id: Option<&'a str>,
     source_manifest_sha256: &'a str,
     payload_members: &'a [ReferencePackMember],
     checksum_member: &'a ReferencePackMember,
@@ -1856,6 +2191,10 @@ fn validate_manifest_identity(manifest: &ReferencePackManifest) -> ReferencePack
             .license_redistribution_manifest_id
             .as_deref()
             .is_some_and(|identity| !valid_identity(identity))
+        || manifest
+            .deterministic_rebuild_report_id
+            .as_deref()
+            .is_some_and(|identity| !valid_identity(identity))
     {
         return Err(error(
             ReferencePackErrorCode::ManifestInvalid,
@@ -1881,6 +2220,7 @@ fn validate_manifest_identity(manifest: &ReferencePackManifest) -> ReferencePack
             .annotation_compatibility_evidence_id
             .as_deref(),
         license_redistribution_manifest_id: manifest.license_redistribution_manifest_id.as_deref(),
+        deterministic_rebuild_report_id: manifest.deterministic_rebuild_report_id.as_deref(),
         source_manifest_sha256: &manifest.source_manifest_sha256,
         payload_members: &manifest.payload_members,
         checksum_member: &manifest.checksum_member,
@@ -2016,6 +2356,7 @@ fn validate_materialized_members(
         &source_map,
         &loss_report,
     )?;
+    let rebuild_report = validate_rebuild_report_member(files, manifest)?;
     let distribution = validate_distribution_members(files, manifest, compatibility.as_ref())?;
     let provenance: PackNativeProvenance = strict_json(
         required_member_bytes(files, manifest, ReferencePackMemberKind::ProvenanceManifest)?,
@@ -2058,6 +2399,7 @@ fn validate_materialized_members(
         &loss_report,
         compatibility.as_ref(),
         distribution.as_ref(),
+        rebuild_report.as_ref(),
     ))
 }
 
@@ -2382,6 +2724,78 @@ fn validate_annotation_members(
     Ok(Some(evidence))
 }
 
+fn validate_rebuild_report_member(
+    files: &BTreeMap<Box<str>, Box<[u8]>>,
+    manifest: &ReferencePackManifest,
+) -> ReferencePackResult<Option<ReferencePackRebuildComparisonReport>> {
+    let members = manifest
+        .payload_members
+        .iter()
+        .filter(|member| member.kind == ReferencePackMemberKind::RebuildComparisonReport)
+        .collect::<Vec<_>>();
+    let report = match (
+        manifest.deterministic_rebuild_report_id.as_deref(),
+        members.as_slice(),
+    ) {
+        (None, []) => None,
+        (Some(expected_id), [member]) => {
+            if member.path.as_ref() != REBUILD_REPORT_PATH
+                || member.logical_id.as_ref() != expected_id
+            {
+                return Err(error(
+                    ReferencePackErrorCode::IdentityMismatch,
+                    "rebuild report member path or identity does not close",
+                ));
+            }
+            let report = ReferencePackRebuildComparisonReport::from_canonical_slice(
+                required_bytes(files, REBUILD_REPORT_PATH)?,
+            )?;
+            if report.report_id() != expected_id {
+                return Err(error(
+                    ReferencePackErrorCode::IdentityMismatch,
+                    "rebuild report member belongs to another comparison",
+                ));
+            }
+            let subject_identity = deterministic_subject_identity_from_manifest(manifest)?;
+            let materialization_identity =
+                materialized_payload_identity_from_members(&manifest.payload_members)?;
+            let matches_left = report.left_subject_identity.as_ref() == subject_identity.as_ref()
+                && report.left_materialization_identity.as_ref()
+                    == materialization_identity.as_ref();
+            let matches_right = report.right_subject_identity.as_ref() == subject_identity.as_ref()
+                && report.right_materialization_identity.as_ref()
+                    == materialization_identity.as_ref();
+            if !matches_left && !matches_right {
+                return Err(error(
+                    ReferencePackErrorCode::IdentityMismatch,
+                    "rebuild report does not describe the materialized candidate payload",
+                ));
+            }
+            Some(report)
+        }
+        _ => {
+            return Err(error(
+                ReferencePackErrorCode::ValidationFailed,
+                "rebuild report declaration and member inventory are inconsistent",
+            ));
+        }
+    };
+    let deferred = manifest
+        .deferred_capabilities
+        .iter()
+        .any(|capability| capability.as_ref() == DETERMINISTIC_REBUILD_DEFERRED_CAPABILITY);
+    let expected_deferred = report
+        .as_ref()
+        .is_none_or(|value| value.status() != RebuildComparisonStatus::Passed);
+    if deferred != expected_deferred {
+        return Err(error(
+            ReferencePackErrorCode::ValidationFailed,
+            "rebuild gate and deferred-capability declaration disagree",
+        ));
+    }
+    Ok(report)
+}
+
 fn validate_distribution_members(
     files: &BTreeMap<Box<str>, Box<[u8]>>,
     manifest: &ReferencePackManifest,
@@ -2518,6 +2932,7 @@ const fn distribution_subject_for_member(
         }
         ReferencePackMemberKind::LicenseManifest
         | ReferencePackMemberKind::LicenseNotice
+        | ReferencePackMemberKind::RebuildComparisonReport
         | ReferencePackMemberKind::ProvenanceManifest
         | ReferencePackMemberKind::ChecksumManifest
         | ReferencePackMemberKind::PackManifest => NativeDistributionSubject::PackMetadata,
@@ -2531,6 +2946,7 @@ fn recomputed_gates(
     loss_report: &NativeProjectionLossReport,
     compatibility: Option<&NativeCompatibilityEvidence>,
     distribution: Option<&NativeDistributionManifest>,
+    rebuild_report: Option<&ReferencePackRebuildComparisonReport>,
 ) -> Vec<PackGateRecord> {
     let projection_clean = provenance.input_failures == 0
         && provenance.reference_issues == 0
@@ -2600,17 +3016,13 @@ fn recomputed_gates(
         source_map_loss_gate(source_map, loss_report),
         compatibility_gate(compatibility),
         distribution_gate(distribution),
-        PackGateRecord::new(
-            "pack.deterministic_rebuild",
-            false,
-            true,
-            PackGateStatus::NotEvaluated,
-            "rebuild_comparison_not_bound_into_candidate",
-        ),
+        determinism_gate(rebuild_report),
     ]
 }
 
-fn semantic_pack_identity(plan: &PackMaterializationPlan) -> ReferencePackResult<Box<str>> {
+fn manifest_from_plan(
+    plan: &PackMaterializationPlan,
+) -> ReferencePackResult<ReferencePackManifest> {
     let manifest_entry = plan
         .entries
         .iter()
@@ -2623,7 +3035,29 @@ fn semantic_pack_identity(plan: &PackMaterializationPlan) -> ReferencePackResult
         })?;
     let manifest: ReferencePackManifest = strict_json(&manifest_entry.bytes, "pack manifest")?;
     validate_manifest_identity(&manifest)?;
+    Ok(manifest)
+}
 
+fn semantic_pack_identity(plan: &PackMaterializationPlan) -> ReferencePackResult<Box<str>> {
+    let manifest = manifest_from_plan(plan)?;
+    semantic_identity_from_manifest(&manifest, false)
+}
+
+fn deterministic_subject_identity(plan: &PackMaterializationPlan) -> ReferencePackResult<Box<str>> {
+    let manifest = manifest_from_plan(plan)?;
+    deterministic_subject_identity_from_manifest(&manifest)
+}
+
+fn deterministic_subject_identity_from_manifest(
+    manifest: &ReferencePackManifest,
+) -> ReferencePackResult<Box<str>> {
+    semantic_identity_from_manifest(manifest, true)
+}
+
+fn semantic_identity_from_manifest(
+    manifest: &ReferencePackManifest,
+    deterministic_subject: bool,
+) -> ReferencePackResult<Box<str>> {
     #[derive(Serialize)]
     struct SemanticMember<'a> {
         path: &'a str,
@@ -2649,20 +3083,38 @@ fn semantic_pack_identity(plan: &PackMaterializationPlan) -> ReferencePackResult
         annotation_loss_report_id: &'a str,
         annotation_compatibility_evidence_id: Option<&'a str>,
         license_redistribution_manifest_id: Option<&'a str>,
+        deterministic_rebuild_report_id: Option<&'a str>,
         source_manifest_sha256: &'a str,
         payload_members: Vec<SemanticMember<'a>>,
-        gate_records: &'a [PackGateRecord],
+        gate_records: Vec<&'a PackGateRecord>,
         eligibility_state: ReferencePackEligibilityState,
-        deferred_capabilities: &'a [Box<str>],
+        deferred_capabilities: Vec<&'a str>,
     }
 
     let payload_members = manifest
         .payload_members
         .iter()
+        .filter(|member| {
+            !deterministic_subject
+                || member.kind != ReferencePackMemberKind::RebuildComparisonReport
+        })
         .map(|member| SemanticMember {
             path: &member.path,
             kind: member.kind,
             logical_id: &member.logical_id,
+        })
+        .collect::<Vec<_>>();
+    let gate_records = manifest
+        .gate_records
+        .iter()
+        .filter(|gate| !deterministic_subject || gate.gate_id() != "pack.deterministic_rebuild")
+        .collect::<Vec<_>>();
+    let deferred_capabilities = manifest
+        .deferred_capabilities
+        .iter()
+        .map(|capability| capability.as_ref())
+        .filter(|capability| {
+            !deterministic_subject || *capability != DETERMINISTIC_REBUILD_DEFERRED_CAPABILITY
         })
         .collect::<Vec<_>>();
     let projection = SemanticIdentity {
@@ -2684,35 +3136,91 @@ fn semantic_pack_identity(plan: &PackMaterializationPlan) -> ReferencePackResult
             .annotation_compatibility_evidence_id
             .as_deref(),
         license_redistribution_manifest_id: manifest.license_redistribution_manifest_id.as_deref(),
+        deterministic_rebuild_report_id: if deterministic_subject {
+            None
+        } else {
+            manifest.deterministic_rebuild_report_id.as_deref()
+        },
         source_manifest_sha256: &manifest.source_manifest_sha256,
         payload_members,
-        gate_records: &manifest.gate_records,
+        gate_records,
         eligibility_state: manifest.eligibility_state,
-        deferred_capabilities: &manifest.deferred_capabilities,
+        deferred_capabilities,
+    };
+    let (prefix, label) = if deterministic_subject {
+        (
+            "reference-pack-deterministic-subject",
+            "deterministic rebuild subject identity",
+        )
+    } else {
+        ("reference-pack-semantic", "semantic pack identity")
     };
     Ok(format!(
-        "reference-pack-semantic:sha256:{}",
+        "{prefix}:sha256:{}",
+        hex(&Sha256::digest(canonical(&projection, label)?))
+    )
+    .into_boxed_str())
+}
+
+fn materialized_payload_identity(plan: &PackMaterializationPlan) -> ReferencePackResult<Box<str>> {
+    let manifest = manifest_from_plan(plan)?;
+    materialized_payload_identity_from_members(&manifest.payload_members)
+}
+
+fn materialized_payload_identity_from_members(
+    members: &[ReferencePackMember],
+) -> ReferencePackResult<Box<str>> {
+    #[derive(Serialize)]
+    struct MaterializedMember<'a> {
+        path: &'a str,
+        kind: ReferencePackMemberKind,
+        logical_id: &'a str,
+        byte_length: u64,
+        sha256: &'a str,
+    }
+    let members = members
+        .iter()
+        .filter(|member| member.kind != ReferencePackMemberKind::RebuildComparisonReport)
+        .map(|member| MaterializedMember {
+            path: &member.path,
+            kind: member.kind,
+            logical_id: &member.logical_id,
+            byte_length: member.byte_length,
+            sha256: &member.sha256,
+        })
+        .collect::<Vec<_>>();
+    Ok(format!(
+        "reference-pack-materialization:sha256:{}",
         hex(&Sha256::digest(canonical(
-            &projection,
-            "semantic pack identity"
+            &(
+                "wow-service/reference-pack-materialization-observation/1",
+                members,
+            ),
+            "materialized payload identity",
         )?))
     )
     .into_boxed_str())
 }
 
-fn compare_plans(
-    left: &PackMaterializationPlan,
-    right: &PackMaterializationPlan,
+fn compare_builds(
+    left: &ReferencePackBuildOutcome,
+    right: &ReferencePackBuildOutcome,
 ) -> ReferencePackResult<ReferencePackRebuildComparisonReport> {
-    let left_semantic_id = semantic_pack_identity(left)?;
-    let right_semantic_id = semantic_pack_identity(right)?;
+    let left_plan = left.plan();
+    let right_plan = right.plan();
+    let left_semantic_id = semantic_pack_identity(left_plan)?;
+    let right_semantic_id = semantic_pack_identity(right_plan)?;
+    let left_subject_id = deterministic_subject_identity(left_plan)?;
+    let right_subject_id = deterministic_subject_identity(right_plan)?;
+    let left_materialization_id = materialized_payload_identity(left_plan)?;
+    let right_materialization_id = materialized_payload_identity(right_plan)?;
     let semantic_identity_equal = left_semantic_id == right_semantic_id;
-    let left_files = left
+    let left_files = left_plan
         .entries
         .iter()
         .map(|entry| (entry.member.path.as_ref(), entry))
         .collect::<BTreeMap<_, _>>();
-    let right_files = right
+    let right_files = right_plan
         .entries
         .iter()
         .map(|entry| (entry.member.path.as_ref(), entry))
@@ -2767,30 +3275,33 @@ fn compare_plans(
         differences.push(RebuildDifference {
             comparison_class: "semantic_identity".into(),
             subject: "logical_pack".into(),
-            left_identity: left_semantic_id,
-            right_identity: right_semantic_id,
+            left_identity: left_semantic_id.clone(),
+            right_identity: right_semantic_id.clone(),
             allowed: false,
         });
     }
+    if left_subject_id != right_subject_id {
+        differences.push(RebuildDifference {
+            comparison_class: "deterministic_subject_identity".into(),
+            subject: "logical_pack".into(),
+            left_identity: left_subject_id.clone(),
+            right_identity: right_subject_id.clone(),
+            allowed: false,
+        });
+    }
+    differences
+        .sort_by(|left, right| rebuild_difference_key(left).cmp(&rebuild_difference_key(right)));
     let canonical_member_bytes_equal = differences.iter().all(|difference| {
         !matches!(
             difference.comparison_class.as_ref(),
             "canonical_bytes" | "member_set"
         )
     });
-    let status = if semantic_identity_equal
-        && canonical_member_bytes_equal
-        && differences.iter().all(|difference| difference.allowed)
-    {
-        RebuildComparisonStatus::Passed
-    } else {
-        RebuildComparisonStatus::Failed
-    };
-    let left_store = left
+    let left_store = left_plan
         .entries
         .iter()
         .find(|entry| entry.member.kind == ReferencePackMemberKind::ReferenceStore);
-    let right_store = right
+    let right_store = right_plan
         .entries
         .iter()
         .find(|entry| entry.member.kind == ReferencePackMemberKind::ReferenceStore);
@@ -2806,25 +3317,137 @@ fn compare_plans(
         (Some(_), Some(_)) => "different_and_logically_incompatible",
         _ => "missing_reference_store_member",
     };
-    let report_id = rebuild_report_id(
-        &left.pack_id,
-        &right.pack_id,
+    let status = rebuild_status(
         semantic_identity_equal,
+        left_subject_id == right_subject_id,
         canonical_member_bytes_equal,
         sqlite_physical_classification,
         &differences,
-    )?;
-    Ok(ReferencePackRebuildComparisonReport {
-        schema: REFERENCE_PACK_SCHEMA.into(),
-        report_id,
-        left_pack_id: left.pack_id.clone(),
-        right_pack_id: right.pack_id.clone(),
+    );
+    let mut report = ReferencePackRebuildComparisonReport {
+        schema: REFERENCE_PACK_REBUILD_REPORT_SCHEMA.into(),
+        comparison_profile_id: LOCAL_NATIVE_REBUILD_COMPARISON_PROFILE.into(),
+        report_id: "pending".into(),
+        left_execution_profile_id: left.execution_profile_id.clone(),
+        right_execution_profile_id: right.execution_profile_id.clone(),
+        left_pack_id: left_plan.pack_id.clone(),
+        right_pack_id: right_plan.pack_id.clone(),
+        left_plan_id: left_plan.plan_id.clone(),
+        right_plan_id: right_plan.plan_id.clone(),
+        left_validation_report_id: left.validation_report.report_id.clone(),
+        right_validation_report_id: right.validation_report.report_id.clone(),
+        left_semantic_identity: left_semantic_id,
+        right_semantic_identity: right_semantic_id,
+        left_subject_identity: left_subject_id,
+        right_subject_identity: right_subject_id,
+        left_materialization_identity: left_materialization_id,
+        right_materialization_identity: right_materialization_id,
         semantic_identity_equal,
         canonical_member_bytes_equal,
         sqlite_physical_classification: sqlite_physical_classification.into(),
         differences: differences.into_boxed_slice(),
         status,
-    })
+    };
+    report.report_id = rebuild_report_id(&report)?;
+    report.validate()?;
+    Ok(report)
+}
+
+fn rebuild_difference_key(difference: &RebuildDifference) -> (&str, &str, &str, &str, bool) {
+    (
+        difference.comparison_class.as_ref(),
+        difference.subject.as_ref(),
+        difference.left_identity.as_ref(),
+        difference.right_identity.as_ref(),
+        difference.allowed,
+    )
+}
+
+fn rebuild_status(
+    semantic_identity_equal: bool,
+    subject_identity_equal: bool,
+    canonical_member_bytes_equal: bool,
+    sqlite_physical_classification: &str,
+    differences: &[RebuildDifference],
+) -> RebuildComparisonStatus {
+    if semantic_identity_equal
+        && subject_identity_equal
+        && canonical_member_bytes_equal
+        && matches!(
+            sqlite_physical_classification,
+            "observed_equal_not_contractual" | "different_but_logically_equivalent"
+        )
+        && differences.iter().all(|difference| difference.allowed)
+    {
+        RebuildComparisonStatus::Passed
+    } else {
+        RebuildComparisonStatus::Failed
+    }
+}
+
+fn rebuild_report_id(
+    report: &ReferencePackRebuildComparisonReport,
+) -> ReferencePackResult<Box<str>> {
+    #[derive(Serialize)]
+    struct Identity<'a> {
+        schema: &'static str,
+        comparison_profile_id: &'a str,
+        left_execution_profile_id: &'a str,
+        right_execution_profile_id: &'a str,
+        left_pack_id: &'a str,
+        right_pack_id: &'a str,
+        left_plan_id: &'a str,
+        right_plan_id: &'a str,
+        left_validation_report_id: &'a str,
+        right_validation_report_id: &'a str,
+        left_semantic_identity: &'a str,
+        right_semantic_identity: &'a str,
+        left_subject_identity: &'a str,
+        right_subject_identity: &'a str,
+        left_materialization_identity: &'a str,
+        right_materialization_identity: &'a str,
+        semantic_identity_equal: bool,
+        canonical_member_bytes_equal: bool,
+        sqlite_physical_classification: &'a str,
+        differences: &'a [RebuildDifference],
+        status: RebuildComparisonStatus,
+    }
+    let identity = Identity {
+        schema: REFERENCE_PACK_REBUILD_REPORT_SCHEMA,
+        comparison_profile_id: &report.comparison_profile_id,
+        left_execution_profile_id: &report.left_execution_profile_id,
+        right_execution_profile_id: &report.right_execution_profile_id,
+        left_pack_id: &report.left_pack_id,
+        right_pack_id: &report.right_pack_id,
+        left_plan_id: &report.left_plan_id,
+        right_plan_id: &report.right_plan_id,
+        left_validation_report_id: &report.left_validation_report_id,
+        right_validation_report_id: &report.right_validation_report_id,
+        left_semantic_identity: &report.left_semantic_identity,
+        right_semantic_identity: &report.right_semantic_identity,
+        left_subject_identity: &report.left_subject_identity,
+        right_subject_identity: &report.right_subject_identity,
+        left_materialization_identity: &report.left_materialization_identity,
+        right_materialization_identity: &report.right_materialization_identity,
+        semantic_identity_equal: report.semantic_identity_equal,
+        canonical_member_bytes_equal: report.canonical_member_bytes_equal,
+        sqlite_physical_classification: &report.sqlite_physical_classification,
+        differences: &report.differences,
+        status: report.status,
+    };
+    Ok(format!(
+        "pack-rebuild:sha256:{}",
+        hex(&Sha256::digest(canonical(&identity, "rebuild report")?))
+    )
+    .into_boxed_str())
+}
+
+fn valid_rebuild_text(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 512
+        && !value
+            .bytes()
+            .any(|byte| byte == 0 || byte.is_ascii_control())
 }
 
 fn admit_image(
@@ -3030,31 +3653,6 @@ fn validation_report_id(
                 validated_local_eligible,
             ),
             "validation report",
-        )?))
-    )
-    .into())
-}
-
-fn rebuild_report_id(
-    left_pack_id: &str,
-    right_pack_id: &str,
-    semantic_identity_equal: bool,
-    canonical_member_bytes_equal: bool,
-    sqlite_physical_classification: &str,
-    differences: &[RebuildDifference],
-) -> ReferencePackResult<Box<str>> {
-    Ok(format!(
-        "pack-rebuild:sha256:{}",
-        hex(&Sha256::digest(canonical(
-            &(
-                left_pack_id,
-                right_pack_id,
-                semantic_identity_equal,
-                canonical_member_bytes_equal,
-                sqlite_physical_classification,
-                differences,
-            ),
-            "rebuild report",
         )?))
     )
     .into())
