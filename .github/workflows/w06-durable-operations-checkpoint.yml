@@ -10,8 +10,8 @@ concurrency:
 env:
   BASE_COMMIT: 241c2aa2d687da2bfbaa8566077e83689d5f3bdb
   BASE_TREE: da9e402dd0d1b5002b07e682006a953d663c53fc
-  STAGING_PARENT: d4a3448b169f65c11158df0c6eb61f7a3f577ce4
-  PATCH_SHA256: 017265ddfe43db49b75ff813ecf8f0071e561e6dbc4c1e2aaac868d079ae091a
+  STAGING_PARENT: 063ca9a2bdc202e243b5eef30e3cab8f334a80dd
+  PATCH_SHA256: c556851b0bcf90c3f7880be9a08432b3da0d3df777e4696e9aadc67d7ccaf665
 jobs:
   checkpoint:
     runs-on: ubuntu-latest
@@ -28,9 +28,11 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test "$(git rev-parse "${GITHUB_SHA}^")" = "$STAGING_PARENT"
-          xz -dc .ci/w06-durable-operations.patch.xz > "$RUNNER_TEMP/w06-durable-operations.patch"
+          cat .ci/w06-durable-operations.patch.xz.b64.* > "$RUNNER_TEMP/w06-durable-operations.patch.xz.b64"
+          base64 -d "$RUNNER_TEMP/w06-durable-operations.patch.xz.b64" > "$RUNNER_TEMP/w06-durable-operations.patch.xz"
+          xz -dc "$RUNNER_TEMP/w06-durable-operations.patch.xz" > "$RUNNER_TEMP/w06-durable-operations.patch"
           printf '%s  %s\n' "$PATCH_SHA256" "$RUNNER_TEMP/w06-durable-operations.patch" | sha256sum -c -
-          git rm -- .ci/w06-durable-operations.patch.xz .github/workflows/w06-durable-operations-checkpoint.yml
+          git rm -- .ci/w06-durable-operations.patch.xz.b64.* .github/workflows/w06-durable-operations-checkpoint.yml
           test "$(git write-tree)" = "$BASE_TREE"
           git apply --index "$RUNNER_TEMP/w06-durable-operations.patch"
       - name: Install minimal compiler tools
