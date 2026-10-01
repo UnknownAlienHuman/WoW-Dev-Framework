@@ -17,7 +17,7 @@ use crate::{
 pub struct LocalProjectBackend {
     input: ProjectInputBundle,
     reference: ReferenceView,
-    load_plan: Option<wow_project::load::ProjectLoadPlan>,
+    load: super::input::LocalProjectLoad,
     native_input: Option<std::sync::Arc<super::native_input::NativeInputEvidence>>,
     native_artifact: Option<std::sync::Arc<super::native_artifact::NativeArtifactEvidence>>,
     registry: RuleRegistry,
@@ -52,7 +52,7 @@ impl LocalProjectBackend {
         Ok(Self {
             input: input.bundle,
             reference: input.reference,
-            load_plan: input.load_plan,
+            load: input.load,
             native_input: input.native_input,
             native_artifact: input.native_artifact,
             registry,
@@ -187,7 +187,7 @@ impl LocalProjectBackend {
             self.identity(&project)?,
             scope,
             rules,
-            self.load_plan.as_ref(),
+            self.load.evidence(),
             self.native_receipt(),
             stop,
         )
@@ -220,7 +220,7 @@ impl ServiceBackend for LocalProjectBackend {
                     .unwrap_or(&self.target_generation),
                 project_health,
                 retained.as_ref(),
-                self.load_plan.as_ref(),
+                self.load.evidence(),
                 self.native_receipt(),
             )?,
         )

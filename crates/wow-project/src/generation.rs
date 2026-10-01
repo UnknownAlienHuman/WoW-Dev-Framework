@@ -33,6 +33,9 @@ impl ProjectGenerationCandidate {
         if let Some(plan) = configuration.load_plan() {
             plan.validate_main_files(inventory.files())?;
         }
+        if let Some(plan) = configuration.package_main_plan() {
+            plan.validate_main_files(inventory.files())?;
+        }
         let manifest = inventory.manifest_entries();
         #[derive(Serialize)]
         struct DerivationInput<'a> {

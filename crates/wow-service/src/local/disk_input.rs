@@ -18,6 +18,7 @@ use crate::{ServiceError, ServiceErrorCode, ServiceResult};
 
 pub const LOCAL_FILES_SCHEMA: &str = "wow-service/local-project-files/1";
 pub const LOCAL_TOC_SCHEMA: &str = "wow-service/local-project-toc/1";
+pub const LOCAL_PACKAGES_SCHEMA: &str = "wow-service/local-project-packages/1";
 
 #[derive(Deserialize)]
 struct SchemaSelector {
@@ -36,6 +37,23 @@ struct DiskInput {
     reference_view: ProjectDiskFile,
     analyzer: DiskAnalyzer,
     main: MainInventory,
+    library: DiskInventory,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PackageDiskInput {
+    schema: String,
+    project_id: ProjectId,
+    workspace_id: ProjectWorkspaceId,
+    source_origin_id: ProjectSourceOriginId,
+    logical_root: String,
+    profile: ProjectDiskFile,
+    reference_view: ProjectDiskFile,
+    analyzer: DiskAnalyzer,
+    packages: Vec<wow_project::load::ProjectPackageInput>,
+    #[serde(default)]
+    load_context: Option<wow_project::load::TocLoadContext>,
     library: DiskInventory,
 }
 
@@ -100,6 +118,7 @@ impl LocalProjectInput {
             LOCAL_FILES_SCHEMA | LOCAL_TOC_SCHEMA => {
                 Self::from_disk_manifest(&bytes, &directory, stop)
             }
+            LOCAL_PACKAGES_SCHEMA => Self::from_package_manifest(&bytes, &directory, stop),
             _ => Err(invalid("unsupported local input schema")),
         }?;
         super::cancelled(stop)?;
@@ -170,6 +189,75 @@ impl LocalProjectInput {
             main,
             library,
             load_plan,
+        )
+    }
+
+    fn from_package_manifest(
+        bytes: &[u8],
+        directory: &ProjectInputDirectory,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Self> {
+        let input: PackageDiskInput =
+            serde_json::from_slice(bytes).map_err(|_| invalid("invalid local package manifest"))?;
+        if input.schema != LOCAL_PACKAGES_SCHEMA {
+            return Err(invalid("unsupported local package manifest schema"));
+        }
+        if let Some(context) = &input.load_context {
+            context.validate().map_err(acquisition_error)?;
+        }
+        let profile: ProfileIdentity = serde_json::from_slice(
+            &directory
+                .read_json_artifact(&input.profile, stop)
+                .map_err(acquisition_error)?,
+        )
+        .map_err(|_| invalid("profile artifact was rejected"))?;
+        profile
+            .validate()
+            .map_err(|_| invalid("profile artifact was rejected"))?;
+        let reference: ReferenceView = serde_json::from_slice(
+            &directory
+                .read_json_artifact(&input.reference_view, stop)
+                .map_err(acquisition_error)?,
+        )
+        .map_err(|_| invalid("reference artifact was rejected"))?;
+        reference
+            .validate()
+            .map_err(|_| invalid("reference artifact was rejected"))?;
+        let analyzer = input.analyzer.read(directory, stop)?;
+        let package_input = directory
+            .read_package_project_with_context(
+                &input.packages,
+                &profile,
+                input.load_context.as_ref(),
+                stop,
+            )
+            .map_err(acquisition_error)?
+            .into_namespaced_main()
+            .map_err(acquisition_error)?;
+        let (main, load_plan, main_plan) = package_input.into_parts();
+        let library = directory
+            .read_lua_inventory(
+                &input.library.root,
+                &input.library.files,
+                ProjectFileRole::Library,
+                stop,
+            )
+            .map_err(acquisition_error)?;
+        super::cancelled(stop)?;
+        Self::assemble_with_package_load(
+            ProjectMetadata {
+                project_id: input.project_id,
+                workspace_id: input.workspace_id,
+                source_origin_id: input.source_origin_id,
+                logical_root: input.logical_root,
+                profile,
+                analyzer,
+            },
+            reference,
+            main,
+            library,
+            load_plan,
+            main_plan,
         )
     }
 }

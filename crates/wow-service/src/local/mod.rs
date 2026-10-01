@@ -16,7 +16,7 @@ mod xml_lua;
 mod xml_references;
 
 pub use backend::LocalProjectBackend;
-pub use disk_input::{LOCAL_FILES_SCHEMA, LOCAL_TOC_SCHEMA};
+pub use disk_input::{LOCAL_FILES_SCHEMA, LOCAL_PACKAGES_SCHEMA, LOCAL_TOC_SCHEMA};
 pub use input::{LOCAL_INPUT_MAX_BYTES, LOCAL_INPUT_SCHEMA, LocalProjectInput};
 pub use native_artifact::NativeArtifactReceipt;
 pub use native_compatibility::{NativeCompatibilitySelection, NativeConsumerProbeIdentity};

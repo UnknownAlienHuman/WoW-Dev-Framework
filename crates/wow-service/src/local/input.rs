@@ -19,10 +19,56 @@ pub const LOCAL_INPUT_SCHEMA: &str = "wow-service/local-project-input/1";
 pub struct LocalProjectInput {
     pub(super) bundle: ProjectInputBundle,
     pub(super) reference: ReferenceView,
-    pub(super) load_plan: Option<wow_project::load::ProjectLoadPlan>,
+    pub(super) load: LocalProjectLoad,
     pub(super) native_input: Option<std::sync::Arc<super::native_input::NativeInputEvidence>>,
     pub(super) native_artifact:
         Option<std::sync::Arc<super::native_artifact::NativeArtifactEvidence>>,
+}
+
+pub(super) enum LocalProjectLoad {
+    Explicit,
+    SelectedToc(wow_project::load::ProjectLoadPlan),
+    PackageUniverse {
+        load_plan: wow_project::load::ProjectPackageLoadPlan,
+        main_plan: wow_project::load::ProjectPackageMainPlan,
+    },
+}
+
+#[derive(Clone, Copy)]
+pub(super) enum LocalProjectLoadEvidence<'a> {
+    Explicit,
+    SelectedToc(&'a wow_project::load::ProjectLoadPlan),
+    PackageUniverse {
+        load_plan: &'a wow_project::load::ProjectPackageLoadPlan,
+        main_plan: &'a wow_project::load::ProjectPackageMainPlan,
+    },
+}
+
+impl LocalProjectLoad {
+    #[must_use]
+    pub(super) const fn evidence(&self) -> LocalProjectLoadEvidence<'_> {
+        match self {
+            Self::Explicit => LocalProjectLoadEvidence::Explicit,
+            Self::SelectedToc(plan) => LocalProjectLoadEvidence::SelectedToc(plan),
+            Self::PackageUniverse {
+                load_plan,
+                main_plan,
+            } => LocalProjectLoadEvidence::PackageUniverse {
+                load_plan,
+                main_plan,
+            },
+        }
+    }
+}
+
+impl<'a> LocalProjectLoadEvidence<'a> {
+    #[must_use]
+    pub(super) const fn selected_toc(self) -> Option<&'a wow_project::load::ProjectLoadPlan> {
+        match self {
+            Self::SelectedToc(plan) => Some(plan),
+            Self::Explicit | Self::PackageUniverse { .. } => None,
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -112,7 +158,13 @@ impl LocalProjectInput {
         main: Vec<ProjectInputFile>,
         libraries: Vec<ProjectInputFile>,
     ) -> ServiceResult<Self> {
-        Self::assemble_with_load_plan(input, reference, main, libraries, None)
+        Self::assemble_with_load(
+            input,
+            reference,
+            main,
+            libraries,
+            LocalProjectLoad::Explicit,
+        )
     }
 
     pub(super) fn assemble_with_load_plan(
@@ -122,9 +174,57 @@ impl LocalProjectInput {
         libraries: Vec<ProjectInputFile>,
         load_plan: Option<wow_project::load::ProjectLoadPlan>,
     ) -> ServiceResult<Self> {
-        if let Some(plan) = &load_plan {
-            plan.validate_main_files(&main)
-                .map_err(|_| invalid("TOC plan does not match Main input"))?;
+        let load = load_plan.map_or(LocalProjectLoad::Explicit, LocalProjectLoad::SelectedToc);
+        Self::assemble_with_load(input, reference, main, libraries, load)
+    }
+
+    pub(super) fn assemble_with_package_load(
+        input: ProjectMetadata,
+        reference: ReferenceView,
+        main: Vec<ProjectInputFile>,
+        libraries: Vec<ProjectInputFile>,
+        load_plan: wow_project::load::ProjectPackageLoadPlan,
+        main_plan: wow_project::load::ProjectPackageMainPlan,
+    ) -> ServiceResult<Self> {
+        Self::assemble_with_load(
+            input,
+            reference,
+            main,
+            libraries,
+            LocalProjectLoad::PackageUniverse {
+                load_plan,
+                main_plan,
+            },
+        )
+    }
+
+    fn assemble_with_load(
+        input: ProjectMetadata,
+        reference: ReferenceView,
+        main: Vec<ProjectInputFile>,
+        libraries: Vec<ProjectInputFile>,
+        load: LocalProjectLoad,
+    ) -> ServiceResult<Self> {
+        match &load {
+            LocalProjectLoad::Explicit => {}
+            LocalProjectLoad::SelectedToc(plan) => {
+                plan.validate_main_files(&main)
+                    .map_err(|_| invalid("TOC plan does not match Main input"))?;
+            }
+            LocalProjectLoad::PackageUniverse {
+                load_plan,
+                main_plan,
+            } => {
+                load_plan
+                    .validate_profile(&input.profile)
+                    .map_err(|_| invalid("package load plan target mismatch"))?;
+                main_plan
+                    .validate_load_plan(load_plan)
+                    .map_err(|_| invalid("package Main namespace plan mismatch"))?;
+                main_plan
+                    .validate_main_files(&main)
+                    .map_err(|_| invalid("package Main namespace does not match Main input"))?;
+            }
         }
         input
             .profile
@@ -155,11 +255,17 @@ impl LocalProjectInput {
             ProfileKind::Fixture => (ProjectKind::Fixture, LuaWorkspaceUniverse::Fixture),
             ProfileKind::Release => (ProjectKind::Repository, LuaWorkspaceUniverse::Project),
         };
+        let (max_files, max_total_source_bytes) = match &load {
+            LocalProjectLoad::PackageUniverse { .. } => (4096, 64 * 1024 * 1024),
+            LocalProjectLoad::Explicit | LocalProjectLoad::SelectedToc(_) => {
+                (1024, 16 * 1024 * 1024)
+            }
+        };
         let policy = ProjectBudgetPolicy::new(
-            1024,
-            16 * 1024 * 1024,
+            max_files,
+            max_total_source_bytes,
             1024 * 1024,
-            1024,
+            max_files,
             262_144,
             65_536,
             16 * 1024 * 1024,
@@ -180,11 +286,17 @@ impl LocalProjectInput {
                 .map_err(|_| invalid("invalid capability policy"))?,
         )
         .budget_policy(policy);
-        let configuration = match &load_plan {
-            Some(plan) => configuration
+        let configuration = match &load {
+            LocalProjectLoad::Explicit => configuration,
+            LocalProjectLoad::SelectedToc(plan) => configuration
                 .load_plan(plan)
                 .map_err(|_| invalid("TOC plan target mismatch"))?,
-            None => configuration,
+            LocalProjectLoad::PackageUniverse {
+                load_plan,
+                main_plan,
+            } => configuration
+                .package_load_plan(load_plan, main_plan)
+                .map_err(|_| invalid("package load plan target mismatch"))?,
         };
         let configuration = configuration
             .build()
@@ -202,12 +314,12 @@ impl LocalProjectInput {
         .map_err(|_| invalid("Library input was rejected"))?;
         let bundle = ProjectInputBundle::closed(configuration, main, vec![libraries])
             .map_err(|_| invalid("Main input inventory was rejected"))?;
-        Self::new_with_load_plan(bundle, reference, load_plan)
+        Self::new_with_load(bundle, reference, load)
     }
 
     /// Compose already validated lower-owner inputs without a transport decoder.
     pub fn new(bundle: ProjectInputBundle, reference: ReferenceView) -> ServiceResult<Self> {
-        Self::new_with_load_plan(bundle, reference, None)
+        Self::new_with_load(bundle, reference, LocalProjectLoad::Explicit)
     }
 
     pub fn new_with_load_plan(
@@ -215,30 +327,75 @@ impl LocalProjectInput {
         reference: ReferenceView,
         load_plan: Option<wow_project::load::ProjectLoadPlan>,
     ) -> ServiceResult<Self> {
-        if bundle.configuration().load_plan_digest() != load_plan.as_ref().map(|plan| plan.digest())
-        {
-            return Err(invalid("project configuration and load receipt differ"));
+        let load = load_plan.map_or(LocalProjectLoad::Explicit, LocalProjectLoad::SelectedToc);
+        Self::new_with_load(bundle, reference, load)
+    }
+
+    fn new_with_load(
+        bundle: ProjectInputBundle,
+        reference: ReferenceView,
+        load: LocalProjectLoad,
+    ) -> ServiceResult<Self> {
+        let configuration = bundle.configuration();
+        match &load {
+            LocalProjectLoad::Explicit => {
+                if configuration.load_plan_digest().is_some()
+                    || configuration.package_load_plan_digest().is_some()
+                    || configuration.package_main_plan_digest().is_some()
+                {
+                    return Err(invalid(
+                        "project configuration unexpectedly retains load provenance",
+                    ));
+                }
+            }
+            LocalProjectLoad::SelectedToc(plan) => {
+                if configuration.load_plan_digest() != Some(plan.digest())
+                    || configuration.package_load_plan_digest().is_some()
+                    || configuration.package_main_plan_digest().is_some()
+                {
+                    return Err(invalid("project configuration and TOC receipt differ"));
+                }
+                plan.validate_profile(configuration.selected_profile())
+                    .map_err(|_| invalid("TOC plan target mismatch"))?;
+                plan.validate_main_files(bundle.inventory().files())
+                    .map_err(|_| invalid("TOC plan source mismatch"))?;
+            }
+            LocalProjectLoad::PackageUniverse {
+                load_plan,
+                main_plan,
+            } => {
+                if configuration.load_plan_digest().is_some()
+                    || configuration.package_load_plan_digest() != Some(load_plan.digest())
+                    || configuration.package_main_plan_digest() != Some(main_plan.digest())
+                {
+                    return Err(invalid(
+                        "project configuration and package load receipts differ",
+                    ));
+                }
+                load_plan
+                    .validate_profile(configuration.selected_profile())
+                    .map_err(|_| invalid("package load plan target mismatch"))?;
+                main_plan
+                    .validate_load_plan(load_plan)
+                    .map_err(|_| invalid("package Main namespace plan mismatch"))?;
+                main_plan
+                    .validate_main_files(bundle.inventory().files())
+                    .map_err(|_| invalid("package Main namespace source mismatch"))?;
+            }
         }
-        if let Some(plan) = &load_plan {
-            plan.validate_profile(bundle.configuration().selected_profile())
-                .map_err(|_| invalid("TOC plan target mismatch"))?;
-            plan.validate_main_files(bundle.inventory().files())
-                .map_err(|_| invalid("TOC plan source mismatch"))?;
-        }
-        bundle
-            .configuration()
+        configuration
             .validate()
             .map_err(|_| invalid("project configuration was rejected"))?;
         reference
             .validate()
             .map_err(|_| invalid("reference view was rejected"))?;
-        if reference.generation_id() != bundle.configuration().reference_generation().to_string() {
+        if reference.generation_id() != configuration.reference_generation().to_string() {
             return Err(invalid("reference generation does not match the project"));
         }
         Ok(Self {
             bundle,
             reference,
-            load_plan,
+            load,
             native_input: None,
             native_artifact: None,
         })

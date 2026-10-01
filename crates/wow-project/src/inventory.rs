@@ -231,6 +231,26 @@ impl ProjectInputFile {
         self.source_fixture_ref.as_deref()
     }
 
+    /// Rebind already admitted immutable bytes to a different canonical project
+    /// path. The content identity, role and optional fixture provenance are
+    /// preserved; only the path-derived file identity changes.
+    pub(crate) fn with_project_path(self, path: impl Into<String>) -> ProjectResult<Self> {
+        let expected_digest = self.content_digest();
+        let expected_byte_length = self.byte_length();
+        let language_kind = self.language_kind();
+        let role = self.role();
+        let source_fixture_ref = self.source_fixture_ref.map(|value| value.into_string());
+        Self::declared_with_identity(
+            path,
+            self.text.into_string().into_bytes(),
+            language_kind,
+            role,
+            expected_digest,
+            expected_byte_length,
+            source_fixture_ref,
+        )
+    }
+
     /// Transfer already admitted Lua bytes to the analyzer without reading the host again.
     #[must_use]
     pub fn into_workspace_input(self) -> LuaWorkspaceFileInput {
@@ -283,6 +303,9 @@ impl ProjectInputInventory {
         }
 
         if let Some(plan) = configuration.load_plan() {
+            plan.validate_main_files(&files)?;
+        }
+        if let Some(plan) = configuration.package_main_plan() {
             plan.validate_main_files(&files)?;
         }
 

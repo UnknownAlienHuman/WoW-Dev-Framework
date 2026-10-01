@@ -386,6 +386,14 @@ pub struct ProjectConfiguration {
     load_plan_digest: Option<ContentDigest<CanonicalResult>>,
     #[serde(skip)]
     retained_load_plan: Option<Arc<crate::load::ProjectLoadPlan>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    package_load_plan_digest: Option<ContentDigest<CanonicalResult>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    package_main_plan_digest: Option<ContentDigest<CanonicalResult>>,
+    #[serde(skip)]
+    retained_package_load_plan: Option<Arc<crate::load::ProjectPackageLoadPlan>>,
+    #[serde(skip)]
+    retained_package_main_plan: Option<Arc<crate::load::ProjectPackageMainPlan>>,
 }
 
 impl ProjectConfiguration {
@@ -407,6 +415,47 @@ impl ProjectConfiguration {
         }
         if let Some(plan) = &self.retained_load_plan {
             plan.validate_profile(&self.selected_profile)?;
+        }
+        if self.package_load_plan_digest
+            != self
+                .retained_package_load_plan
+                .as_ref()
+                .map(|plan| plan.digest())
+            || self.package_main_plan_digest
+                != self
+                    .retained_package_main_plan
+                    .as_ref()
+                    .map(|plan| plan.digest())
+        {
+            return Err(ProjectError::new(
+                ProjectErrorCode::InvalidConfiguration,
+                ProjectPhase::Configuration,
+                "package load provenance is not retained by its configuration",
+            ));
+        }
+        if self.load_plan_digest.is_some() && self.package_load_plan_digest.is_some() {
+            return Err(ProjectError::new(
+                ProjectErrorCode::InvalidConfiguration,
+                ProjectPhase::Configuration,
+                "single-package and package-universe load plans are mutually exclusive",
+            ));
+        }
+        match (
+            &self.retained_package_load_plan,
+            &self.retained_package_main_plan,
+        ) {
+            (Some(load), Some(main)) => {
+                load.validate_profile(&self.selected_profile)?;
+                main.validate_load_plan(load)?;
+            }
+            (None, None) => {}
+            _ => {
+                return Err(ProjectError::new(
+                    ProjectErrorCode::InvalidConfiguration,
+                    ProjectPhase::Configuration,
+                    "package load and Main namespace plans must be retained together",
+                ));
+            }
         }
         if self.configuration_schema_version != PROJECT_CONFIGURATION_SCHEMA_VERSION {
             return Err(ProjectError::new(
@@ -439,6 +488,8 @@ impl ProjectConfiguration {
             &self.capability_policy,
             self.budget_policy,
             self.load_plan_digest,
+            self.package_load_plan_digest,
+            self.package_main_plan_digest,
         )?;
         if expected != self.configuration_digest {
             return Err(ProjectError::new(
@@ -511,6 +562,26 @@ impl ProjectConfiguration {
     }
 
     #[must_use]
+    pub fn package_load_plan(&self) -> Option<&crate::load::ProjectPackageLoadPlan> {
+        self.retained_package_load_plan.as_deref()
+    }
+
+    #[must_use]
+    pub fn package_main_plan(&self) -> Option<&crate::load::ProjectPackageMainPlan> {
+        self.retained_package_main_plan.as_deref()
+    }
+
+    #[must_use]
+    pub const fn package_load_plan_digest(&self) -> Option<ContentDigest<CanonicalResult>> {
+        self.package_load_plan_digest
+    }
+
+    #[must_use]
+    pub const fn package_main_plan_digest(&self) -> Option<ContentDigest<CanonicalResult>> {
+        self.package_main_plan_digest
+    }
+
+    #[must_use]
     pub const fn configuration_digest(&self) -> ContentDigest<CanonicalResult> {
         self.configuration_digest
     }
@@ -531,6 +602,10 @@ pub struct ProjectConfigurationBuilder {
     budget_policy: Option<ProjectBudgetPolicy>,
     load_plan_digest: Option<ContentDigest<CanonicalResult>>,
     retained_load_plan: Option<Arc<crate::load::ProjectLoadPlan>>,
+    package_load_plan_digest: Option<ContentDigest<CanonicalResult>>,
+    package_main_plan_digest: Option<ContentDigest<CanonicalResult>>,
+    retained_package_load_plan: Option<Arc<crate::load::ProjectPackageLoadPlan>>,
+    retained_package_main_plan: Option<Arc<crate::load::ProjectPackageMainPlan>>,
 }
 
 impl ProjectConfigurationBuilder {
@@ -555,6 +630,10 @@ impl ProjectConfigurationBuilder {
             budget_policy: None,
             load_plan_digest: None,
             retained_load_plan: None,
+            package_load_plan_digest: None,
+            package_main_plan_digest: None,
+            retained_package_load_plan: None,
+            retained_package_main_plan: None,
         }
     }
 
@@ -590,9 +669,39 @@ impl ProjectConfigurationBuilder {
 
     /// Bind the actual selected TOC/XML receipt without changing E0 identities.
     pub fn load_plan(mut self, plan: &crate::load::ProjectLoadPlan) -> ProjectResult<Self> {
+        if self.package_load_plan_digest.is_some() || self.package_main_plan_digest.is_some() {
+            return Err(ProjectError::new(
+                ProjectErrorCode::InvalidConfiguration,
+                ProjectPhase::Configuration,
+                "single-package and package-universe load plans are mutually exclusive",
+            ));
+        }
         plan.validate_profile(&self.selected_profile)?;
         self.load_plan_digest = Some(plan.digest());
         self.retained_load_plan = Some(Arc::new(plan.clone()));
+        Ok(self)
+    }
+
+    /// Bind an explicit multi-package dependency/load closure and its exact
+    /// collision-free analyzer Main namespace.
+    pub fn package_load_plan(
+        mut self,
+        load_plan: &crate::load::ProjectPackageLoadPlan,
+        main_plan: &crate::load::ProjectPackageMainPlan,
+    ) -> ProjectResult<Self> {
+        if self.load_plan_digest.is_some() {
+            return Err(ProjectError::new(
+                ProjectErrorCode::InvalidConfiguration,
+                ProjectPhase::Configuration,
+                "single-package and package-universe load plans are mutually exclusive",
+            ));
+        }
+        load_plan.validate_profile(&self.selected_profile)?;
+        main_plan.validate_load_plan(load_plan)?;
+        self.package_load_plan_digest = Some(load_plan.digest());
+        self.package_main_plan_digest = Some(main_plan.digest());
+        self.retained_package_load_plan = Some(Arc::new(load_plan.clone()));
+        self.retained_package_main_plan = Some(Arc::new(main_plan.clone()));
         Ok(self)
     }
 
@@ -631,6 +740,8 @@ impl ProjectConfigurationBuilder {
             &capability_policy,
             budget_policy,
             self.load_plan_digest,
+            self.package_load_plan_digest,
+            self.package_main_plan_digest,
         )?;
         let configuration = ProjectConfiguration {
             project_id: self.project_id,
@@ -647,6 +758,10 @@ impl ProjectConfigurationBuilder {
             configuration_digest,
             load_plan_digest: self.load_plan_digest,
             retained_load_plan: self.retained_load_plan,
+            package_load_plan_digest: self.package_load_plan_digest,
+            package_main_plan_digest: self.package_main_plan_digest,
+            retained_package_load_plan: self.retained_package_load_plan,
+            retained_package_main_plan: self.retained_package_main_plan,
         };
         configuration.validate()?;
         Ok(configuration)
@@ -666,6 +781,8 @@ fn configuration_digest(
     capability_policy: &ProjectCapabilityPolicy,
     budget_policy: ProjectBudgetPolicy,
     load_plan_digest: Option<ContentDigest<CanonicalResult>>,
+    package_load_plan_digest: Option<ContentDigest<CanonicalResult>>,
+    package_main_plan_digest: Option<ContentDigest<CanonicalResult>>,
 ) -> ProjectResult<ContentDigest<CanonicalResult>> {
     #[derive(Serialize)]
     struct Identity<'a> {
@@ -682,6 +799,10 @@ fn configuration_digest(
         budget_policy: ProjectBudgetPolicy,
         #[serde(skip_serializing_if = "Option::is_none")]
         load_plan_digest: Option<ContentDigest<CanonicalResult>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        package_load_plan_digest: Option<ContentDigest<CanonicalResult>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        package_main_plan_digest: Option<ContentDigest<CanonicalResult>>,
         #[serde(skip_serializing_if = "Option::is_none")]
         xml_lua_adapter: Option<&'static str>,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -702,6 +823,8 @@ fn configuration_digest(
             capability_policy,
             budget_policy,
             load_plan_digest,
+            package_load_plan_digest,
+            package_main_plan_digest,
             xml_lua_adapter: load_plan_digest.map(|_| crate::xml_lua::XML_LUA_ANALYSIS_PROFILE),
             xml_binding_adapter: load_plan_digest
                 .map(|_| crate::xml_bindings::XML_LUA_BINDING_PROFILE),

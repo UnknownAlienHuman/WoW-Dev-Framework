@@ -8,12 +8,14 @@ mod saved_variables;
 mod toc;
 pub use document_toc::DocumentTocSelection;
 pub use package_closure::{
-    PACKAGE_LOAD_PROFILE, ProjectLoadedPackage, ProjectPackageCycleKind, ProjectPackageInput,
-    ProjectPackageLoadCoverage, ProjectPackageLoadInput, ProjectPackageLoadIssue,
-    ProjectPackageLoadIssueKind, ProjectPackageLoadPhase, ProjectPackageLoadPlan,
-    ProjectPackageLoadUnit, ProjectPackageNode, ProjectPackageOrderGroup,
-    ProjectPackageReachability, ProjectPackageVariantInput, ProjectPackageVariantReceipt,
-    TocDependencyDeclaration, TocDependencyKind, TocDependencyResolution, TocLoadOnDemandState,
+    PACKAGE_LOAD_PROFILE, PACKAGE_MAIN_NAMESPACE_PROFILE, PACKAGE_MAIN_NAMESPACE_ROOT,
+    ProjectLoadedPackage, ProjectPackageCycleKind, ProjectPackageInput, ProjectPackageLoadCoverage,
+    ProjectPackageLoadInput, ProjectPackageLoadIssue, ProjectPackageLoadIssueKind,
+    ProjectPackageLoadPhase, ProjectPackageLoadPlan, ProjectPackageLoadUnit,
+    ProjectPackageMainFile, ProjectPackageMainInput, ProjectPackageMainPlan, ProjectPackageNode,
+    ProjectPackageOrderGroup, ProjectPackageReachability, ProjectPackageVariantInput,
+    ProjectPackageVariantReceipt, TocDependencyDeclaration, TocDependencyKind,
+    TocDependencyResolution, TocLoadOnDemandState,
 };
 pub use saved_variables::{TocSavedVariable, TocSavedVariableScope, TocSavedVariableState};
 mod xml;

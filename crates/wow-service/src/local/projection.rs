@@ -42,6 +42,10 @@ pub struct OwnerAnalysis {
     #[serde(skip_serializing_if = "Option::is_none")]
     load_plan: Option<wow_project::load::ProjectLoadPlan>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    package_load_plan: Option<wow_project::load::ProjectPackageLoadPlan>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    package_main_plan: Option<wow_project::load::ProjectPackageMainPlan>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     xml_lua_report: Option<wow_project::xml_lua::ProjectXmlLuaAnalysis>,
     #[serde(skip_serializing_if = "Option::is_none")]
     xml_binding_report: Option<wow_project::xml_bindings::ProjectXmlLuaBindings>,
@@ -60,6 +64,16 @@ impl OwnerAnalysis {
     pub fn load_plan(&self) -> Option<&wow_project::load::ProjectLoadPlan> {
         self.load_plan.as_ref()
     }
+
+    #[must_use]
+    pub fn package_load_plan(&self) -> Option<&wow_project::load::ProjectPackageLoadPlan> {
+        self.package_load_plan.as_ref()
+    }
+
+    #[must_use]
+    pub fn package_main_plan(&self) -> Option<&wow_project::load::ProjectPackageMainPlan> {
+        self.package_main_plan.as_ref()
+    }
 }
 
 pub(super) fn components(
@@ -68,7 +82,7 @@ pub(super) fn components(
     project_identity: &str,
     project_health: ComponentHealth,
     project: Option<&ProjectView>,
-    load_plan: Option<&wow_project::load::ProjectLoadPlan>,
+    load: super::input::LocalProjectLoadEvidence<'_>,
     native_input: Option<super::NativeEvidenceReceipt<'_>>,
 ) -> ServiceResult<Vec<ComponentSnapshot>> {
     let reference_partial = reference.partitions().is_empty()
@@ -231,7 +245,7 @@ pub(super) fn components(
                 .with_capability(capability, CapabilityState::Partial)?,
         );
     }
-    if let Some(plan) = load_plan {
+    if let super::input::LocalProjectLoadEvidence::SelectedToc(plan) = load {
         components.push(
             ComponentSnapshot::new(
                 "wow-project-load",
@@ -344,6 +358,69 @@ pub(super) fn components(
             }
         }
     }
+    if let super::input::LocalProjectLoadEvidence::PackageUniverse {
+        load_plan,
+        main_plan,
+    } = load
+    {
+        let coverage = load_plan.coverage();
+        components.push(
+            ComponentSnapshot::new(
+                "wow-project-package-load",
+                "1",
+                load_plan.digest().to_string(),
+                health(!coverage.complete()),
+            )?
+            .with_capability(
+                "project.package.variants.selected",
+                if coverage.variants_complete {
+                    CapabilityState::Available
+                } else {
+                    CapabilityState::Partial
+                },
+            )?
+            .with_capability(
+                "project.package.dependencies.resolved",
+                if coverage.dependencies_complete {
+                    CapabilityState::Available
+                } else {
+                    CapabilityState::Partial
+                },
+            )?
+            .with_capability(
+                "project.package.order.canonical",
+                if coverage.canonical_order_complete {
+                    CapabilityState::Available
+                } else {
+                    CapabilityState::Partial
+                },
+            )?
+            .with_capability(
+                "project.package.file_closure.resolved",
+                if coverage.file_closure_complete {
+                    CapabilityState::Available
+                } else {
+                    CapabilityState::Partial
+                },
+            )?,
+        );
+        components.push(
+            ComponentSnapshot::new(
+                "wow-project-package-main",
+                "1",
+                main_plan.digest().to_string(),
+                ComponentHealth::Ready,
+            )?
+            .with_capability(
+                "project.package.main.namespaced",
+                CapabilityState::Available,
+            )?
+            .with_capability(
+                "project.package.xml.virtual_units",
+                CapabilityState::Partial,
+            )?,
+        );
+    }
     Ok(components)
 }
 
@@ -356,10 +433,11 @@ pub(super) fn check_context(
     identity: ContextIdentity,
     scope: &CheckScope,
     selected: &[Box<str>],
-    load_plan: Option<&wow_project::load::ProjectLoadPlan>,
+    load: super::input::LocalProjectLoadEvidence<'_>,
     native_input: Option<super::NativeEvidenceReceipt<'_>>,
     stop: &AtomicBool,
 ) -> ServiceResult<CheckContext> {
+    let load_plan = load.selected_toc();
     let resolved = super::xml_lua::resolve_scope(project, scope)?;
     let files = resolved.physical;
     let xml_report = project.snapshot().analyzer_binding().xml_lua_analysis();
@@ -485,7 +563,7 @@ pub(super) fn check_context(
         project.snapshot_id(),
         ComponentHealth::Ready,
         Some(project),
-        load_plan,
+        load,
         native_input,
     )?;
     let analysis = OwnerAnalysis {
@@ -496,6 +574,11 @@ pub(super) fn check_context(
             "wow-service/owner-analysis/3"
         } else if native_input.is_some() {
             "wow-service/owner-analysis/2"
+        } else if matches!(
+            load,
+            super::input::LocalProjectLoadEvidence::PackageUniverse { .. }
+        ) {
+            "wow-service/owner-analysis/4"
         } else {
             "wow-service/owner-analysis/1"
         },
@@ -506,10 +589,14 @@ pub(super) fn check_context(
             "prebuilt_native_artifact_project"
         } else if native_input.is_some() {
             "native_source_project"
-        } else if load_plan.is_some() {
-            "selected_toc_project"
         } else {
-            "explicit_materialized_project"
+            match load {
+                super::input::LocalProjectLoadEvidence::Explicit => "explicit_materialized_project",
+                super::input::LocalProjectLoadEvidence::SelectedToc(_) => "selected_toc_project",
+                super::input::LocalProjectLoadEvidence::PackageUniverse { .. } => {
+                    "package_universe_project"
+                }
+            }
         },
         profile_kind: project.configuration().selected_profile().profile_kind(),
         reference_view_digest: reference.self_digest().into(),
@@ -534,6 +621,18 @@ pub(super) fn check_context(
         },
         runtime_status: "not_evaluated",
         load_plan: load_plan.cloned(),
+        package_load_plan: match load {
+            super::input::LocalProjectLoadEvidence::PackageUniverse { load_plan, .. } => {
+                Some(load_plan.clone())
+            }
+            _ => None,
+        },
+        package_main_plan: match load {
+            super::input::LocalProjectLoadEvidence::PackageUniverse { main_plan, .. } => {
+                Some(main_plan.clone())
+            }
+            _ => None,
+        },
         xml_lua_report: xml_report.cloned(),
         xml_binding_report: xml_bindings.cloned(),
     };

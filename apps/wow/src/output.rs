@@ -138,6 +138,44 @@ pub fn render(
                     .map_err(|_| ())?;
                 }
             }
+            if let Some(plan) = check
+                .owner_analysis()
+                .and_then(|analysis| analysis.package_load_plan())
+            {
+                writeln!(
+                    text,
+                    "package load: packages={}, dependencies={}, order_groups={}, units={}, coverage={:?}, digest={}",
+                    plan.packages().len(),
+                    plan.dependencies().len(),
+                    plan.order_groups().len(),
+                    plan.units().len(),
+                    plan.coverage(),
+                    plan.digest()
+                )
+                .map_err(|_| ())?;
+                for issue in plan.issues() {
+                    writeln!(
+                        text,
+                        "package load issue: {}",
+                        serde_json::to_string(issue).map_err(|_| ())?
+                    )
+                    .map_err(|_| ())?;
+                }
+            }
+            if let Some(plan) = check
+                .owner_analysis()
+                .and_then(|analysis| analysis.package_main_plan())
+            {
+                writeln!(
+                    text,
+                    "package Main: namespace={:?}, files={}, load_digest={}, digest={}",
+                    plan.namespace_root(),
+                    plan.files().len(),
+                    plan.package_load_plan_digest(),
+                    plan.digest()
+                )
+                .map_err(|_| ())?;
+            }
             if let Some(report) = check
                 .owner_analysis()
                 .and_then(|analysis| analysis.xml_lua_report())
