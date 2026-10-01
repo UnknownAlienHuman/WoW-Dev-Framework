@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::fmt;
 
 use serde_json::{Map, Value};
@@ -76,6 +77,7 @@ pub fn backend_identity_from_report(bytes: &[u8]) -> EmmyCompatibilityResult<Emm
             format!("EmmyLua compatibility report is not valid JSON: {source}"),
         )
     })?;
+    reject_duplicate_report_keys(bytes)?;
     let root = object(&value, "compatibility report")?;
     allowed_keys(
         root,
@@ -140,7 +142,7 @@ pub fn backend_identity_from_report(bytes: &[u8]) -> EmmyCompatibilityResult<Emm
         "required symbols",
     )?;
     let missing_symbols = string_array(
-        required(compatibility, "missing_symbols", "missing symbols")?,
+        required(compatibility, "missing_symbols", "required missing symbols")?,
         "missing symbols",
     )?;
     if !strictly_sorted_unique(&required_symbols) || !strictly_sorted_unique(&missing_symbols) {
@@ -435,6 +437,64 @@ fn sha256(bytes: &[u8]) -> String {
     format!("sha256:{digest:x}")
 }
 
+// Syntax, UTF-8, numeric validity and nesting limits have already been checked by
+// serde_json. Inspect the original bytes before using its last-key-wins Value or
+// computing the semantic digest; escaped spellings of a key share one identity.
+fn reject_duplicate_report_keys(bytes: &[u8]) -> EmmyCompatibilityResult<()> {
+    let invalid = || {
+        report_error(
+            EmmyCompatibilityErrorCode::InvalidJson,
+            "EmmyLua compatibility report contains ambiguous object members",
+        )
+    };
+    let mut objects: Vec<BTreeSet<String>> = Vec::new();
+    let mut cursor = 0;
+    while cursor < bytes.len() {
+        match bytes[cursor] {
+            b'{' => {
+                objects.push(BTreeSet::new());
+                cursor += 1;
+            }
+            b'}' => {
+                objects.pop().ok_or_else(invalid)?;
+                cursor += 1;
+            }
+            b'"' => {
+                let start = cursor;
+                cursor += 1;
+                loop {
+                    match bytes.get(cursor) {
+                        Some(b'\\') => cursor += 2,
+                        Some(b'"') => {
+                            cursor += 1;
+                            break;
+                        }
+                        Some(_) => cursor += 1,
+                        None => return Err(invalid()),
+                    }
+                }
+                let mut next = cursor;
+                while bytes.get(next).is_some_and(u8::is_ascii_whitespace) {
+                    next += 1;
+                }
+                if bytes.get(next) == Some(&b':') {
+                    let key: String =
+                        serde_json::from_slice(&bytes[start..cursor]).map_err(|_| invalid())?;
+                    let object = objects.last_mut().ok_or_else(invalid)?;
+                    if !object.insert(key) {
+                        return Err(invalid());
+                    }
+                }
+            }
+            _ => cursor += 1,
+        }
+    }
+    if !objects.is_empty() {
+        return Err(invalid());
+    }
+    Ok(())
+}
+
 fn report_error(
     code: EmmyCompatibilityErrorCode,
     message: impl Into<Box<str>>,
@@ -609,6 +669,76 @@ mod tests {
                 )
             })?;
         assert_eq!(error.code(), EmmyCompatibilityErrorCode::InvalidDigest);
+        Ok(())
+    }
+
+    #[test]
+    fn duplicate_members_with_valid_digest_are_rejected() -> EmmyCompatibilityResult<()> {
+        let sealed = seal(report("current"))?;
+        let original = serde_json::from_slice::<Value>(&sealed).map_err(|_| {
+            report_error(EmmyCompatibilityErrorCode::InvalidJson, "invalid test report")
+        })?;
+        let text = String::from_utf8(sealed).map_err(|_| {
+            report_error(EmmyCompatibilityErrorCode::InvalidJson, "invalid test UTF-8")
+        })?;
+        let cases = [
+            (
+                r#""schema_version":1"#,
+                r#""schema_version":1,"schema_version":1"#,
+            ),
+            (
+                r#""schema_version":1"#,
+                r#""schema_version":999,"schema_version":1"#,
+            ),
+            (
+                r#""status":"compatible""#,
+                r#""status":"incompatible","status":"compatible""#,
+            ),
+            (
+                r#""status":"compatible""#,
+                r#""st\u0061tus":"incompatible","status":"compatible""#,
+            ),
+            (
+                r#""relation":"current""#,
+                r#""relation":"behind","relation":"current""#,
+            ),
+            (r#""files":[]"#, r#""files":[],"files":[]"#),
+            (
+                r#""report_sha256":"#,
+                r#""report_sha256":"invalid","report_sha256":"#,
+            ),
+        ];
+        for (needle, replacement) in cases {
+            assert!(text.contains(needle));
+            let mutated = text.replacen(needle, replacement, 1);
+            let collapsed = serde_json::from_str::<Value>(&mutated).map_err(|_| {
+                report_error(EmmyCompatibilityErrorCode::InvalidJson, "invalid test mutation")
+            })?;
+            // The previous importer discarded the conflict and verified exactly
+            // these original semantic bytes. This is not a digest-forgery test.
+            assert_eq!(collapsed, original);
+            let error = backend_identity_from_report(mutated.as_bytes())
+                .err()
+                .ok_or_else(|| {
+                    report_error(
+                        EmmyCompatibilityErrorCode::InvalidJson,
+                        "duplicate-key report unexpectedly imported",
+                    )
+                })?;
+            assert_eq!(error.code(), EmmyCompatibilityErrorCode::InvalidJson);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn member_admission_respects_object_and_string_boundaries() -> EmmyCompatibilityResult<()> {
+        let bytes = br#"{"items":[{"key":1},{"key":2}],"text":"{\"key\":0}","\u0061":1,"nested":{"a":2}}"#;
+        serde_json::from_slice::<Value>(bytes).map_err(|_| {
+            report_error(EmmyCompatibilityErrorCode::InvalidJson, "invalid test JSON")
+        })?;
+        reject_duplicate_report_keys(bytes)?;
+        // An ordinary report also repeats license/edition keys in distinct objects.
+        backend_identity_from_report(&seal(report("current"))?)?;
         Ok(())
     }
 }
