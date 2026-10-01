@@ -1,5 +1,5 @@
 name: W07 durable Reference Pack filesystem effects checkpoint
-run-name: W07 materialization effects v3 ${{ github.sha }}
+run-name: W07 materialization effects v4 ${{ github.sha }}
 on:
   push:
     branches: [main]
@@ -11,7 +11,7 @@ concurrency:
 env:
   BASE_COMMIT: ec4345039c55c25da78289908942d700609df09a
   BASE_TREE: 9d52ccc0ac8b42d46691d93f4096ab456f2c31b9
-  STAGING_PARENT: 9091b8649e56dd7c0e79daccb5b189bfb08c13fb
+  STAGING_PARENT: bd08f3719cf4ea8433d4515c92f2f7cfcd4856f8
   PATCH_SHA256: ab7112d2673e3ef59a44156ce1ca55f5072141169cb9e7a660be88011f072eb8
 jobs:
   checkpoint:
@@ -23,7 +23,7 @@ jobs:
           ref: main
           fetch-depth: 0
           persist-credentials: false
-      - name: Admit exhaustively corrected product patch and remove checkpoint transport
+      - name: Admit product patch, apply final lint correction and remove checkpoint transport
         shell: bash
         run: |
           set -euo pipefail
@@ -36,6 +36,27 @@ jobs:
           git rm -- .ci/w07-materialization-effects.patch.xz.b64.* .github/workflows/w07-materialization-effects-checkpoint.yml
           test "$(git write-tree)" = "$BASE_TREE"
           git apply --index "$RUNNER_TEMP/w07-materialization-effects.patch"
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('crates/wow-service/src/reference_pack_materialization.rs')
+          source = path.read_text()
+          old = '''            } else if destination_absent && backup_expected {
+                          Action::PerformRollback
+                      } else if destination_expected || observation.destination.invalid_state() {
+                          Action::PerformRollback
+                      } else {
+          '''
+          new = '''            } else if (destination_absent && backup_expected)
+                          || destination_expected
+                          || observation.destination.invalid_state()
+                      {
+                          Action::PerformRollback
+                      } else {
+          '''
+          if old not in source:
+              raise SystemExit('rollback decision source changed')
+          path.write_text(source.replace(old, new, 1))
+          PY
       - name: Install minimal compiler tools
         run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
       - name: Format workspace
