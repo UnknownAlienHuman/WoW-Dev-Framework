@@ -71,11 +71,13 @@ Without `--expect`, validation reads exact identities from `manifest.json` and r
 
 ## Filesystem behavior
 
-Build writes only into a newly created private staging directory beside the requested output. Every service-declared member is created with create-new semantics, synchronized, reread, hashed, and independently validated. Existing destinations must already be valid candidate packs. Replacement uses a same-parent backup and rename sequence; final output is reopened and independently validated before the previous destination is removed. Failed final read-back attempts rollback to the prior destination and quarantine the failed candidate when possible.
+Build writes only into a deterministic private staging directory beside the requested output. Every service-declared member is created with create-new semantics, synchronized, reread, hashed, and independently validated. Existing destinations must already be valid candidate packs. Replacement uses a same-parent backup and rename sequence; final output is reopened and independently validated before the previous destination is removed. Failed final read-back attempts rollback to the prior destination and quarantine the failed candidate when possible.
+
+Before any staging or rename effect, the app opens a private sibling SQLite journal and registers an exact materialization operation through `wow_service::reference_pack_materialization`. The request binds the output, deterministic staging/backup/quarantine paths, pack/plan/validation identities, and the original destination pack. Durable checkpoints are written before and after backup, install, final read-back, cleanup, and rollback. Re-running the same command observes the exact filesystem state and either resumes a proven-safe step, returns the completed receipt without repeating effects, restores the prior destination, or stops with `OutcomeUnknown`; blind retry is prohibited for ambiguous observations.
 
 Pack validation rejects traversal, non-UTF-8 member paths, case-insensitive collisions, symlinks/reparse points, special files, member-count overflow, and byte-budget overflow. Rebuild comparison writes its canonical report to an isolated scratch session, reopens it, and removes the session.
 
-Current limitation: the filesystem effect itself is not yet recorded in the durable W06 operation journal. Process-kill recovery during rename/finalization and Windows-specific replacement evidence remain open.
+Current limitation: the durable state machine is implemented but process-kill/response-loss fault injection and Windows-specific sharing/reparse/rename evidence have not yet been executed.
 
 ## Exit codes
 

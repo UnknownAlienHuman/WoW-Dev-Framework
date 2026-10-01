@@ -11,7 +11,7 @@
     "wow-reference-builder/rebuild-request/1"
   ],
   "result_schemas": [
-    "wow-reference-builder/build-result/1",
+    "wow-reference-builder/build-result/2",
     "wow-reference-builder/validate-result/1",
     "wow-reference-builder/rebuild-result/1"
   ],
@@ -64,10 +64,11 @@
     "write_verification": "length-sha256-and-independent-service-validation",
     "replacement": "backup-rename-install-read-back-rollback",
     "pack_read": "bounded-no-link-no-special-file-exact-inventory",
-    "rebuild_scratch": "isolated-write-read-back-cleanup"
+    "rebuild_scratch": "isolated-write-read-back-cleanup",
+    "durable_effect_journal": "exact-path-and-pack-bound-checkpoints-with-reconciliation",
+    "recovery_policy": "resume-only-proven-safe-effects-otherwise-outcome-unknown"
   },
   "unclosed_acceptance": [
-    "durable-filesystem-effect-journal",
     "process-kill-and-response-loss-during-finalization",
     "windows-reparse-and-sharing-behavior",
     "real-builder-command-fixtures",

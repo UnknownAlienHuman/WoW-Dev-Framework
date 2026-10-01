@@ -17,12 +17,20 @@ use wow_service::reference_pack::{
     ReferencePackRebuildComparisonReport, ReferencePackRebuildComparisonRequest,
     ReferencePackService, ReferencePackValidationReport, ReferencePackValidationRequest,
 };
+use wow_service::reference_pack_materialization::{
+    ReferencePackMaterializationAction, ReferencePackMaterializationConfiguration,
+    ReferencePackMaterializationDestinationState, ReferencePackMaterializationError,
+    ReferencePackMaterializationErrorCode, ReferencePackMaterializationObservation,
+    ReferencePackMaterializationOperationId, ReferencePackMaterializationRequest,
+    ReferencePackMaterializationService, ReferencePackMaterializationStage,
+    ReferencePackMaterializationStoreLimits, ReferencePackPathObservation,
+};
 use wow_service::{LocalProjectInput, ServiceError, ServiceErrorCode};
 
 const BUILD_REQUEST_SCHEMA: &str = "wow-reference-builder/build-request/1";
 const VALIDATION_EXPECTATION_SCHEMA: &str = "wow-reference-builder/validation-expectation/1";
 const REBUILD_REQUEST_SCHEMA: &str = "wow-reference-builder/rebuild-request/1";
-const BUILD_RESULT_SCHEMA: &str = "wow-reference-builder/build-result/1";
+const BUILD_RESULT_SCHEMA: &str = "wow-reference-builder/build-result/2";
 const VALIDATE_RESULT_SCHEMA: &str = "wow-reference-builder/validate-result/1";
 const REBUILD_RESULT_SCHEMA: &str = "wow-reference-builder/rebuild-result/1";
 const MAX_REQUEST_BYTES: u64 = 16 * 1024 * 1024;
@@ -128,6 +136,22 @@ impl From<ServiceError> for CliError {
             | ServiceErrorCode::StoreOutcomeUnknown => ExitClass::Build,
         };
         Self::new(class, "service_error", source.message())
+    }
+}
+
+impl From<ReferencePackMaterializationError> for CliError {
+    fn from(source: ReferencePackMaterializationError) -> Self {
+        let class = match source.code() {
+            ReferencePackMaterializationErrorCode::ConfigurationInvalid
+            | ReferencePackMaterializationErrorCode::InvalidRequest => ExitClass::Usage,
+            ReferencePackMaterializationErrorCode::StateInvalid
+            | ReferencePackMaterializationErrorCode::ReceiptInvalid => ExitClass::Security,
+            ReferencePackMaterializationErrorCode::OperationConflict
+            | ReferencePackMaterializationErrorCode::OperationIncomplete
+            | ReferencePackMaterializationErrorCode::OutcomeUnknown
+            | ReferencePackMaterializationErrorCode::StoreFailure => ExitClass::Build,
+        };
+        Self::new(class, "materialization_error", source.message())
     }
 }
 
@@ -246,7 +270,6 @@ enum DestinationState {
 enum CleanupState {
     NotRequired,
     Completed,
-    Pending,
 }
 
 #[derive(Debug, Serialize)]
@@ -268,6 +291,11 @@ struct BuildCommandResult<'a> {
     backup_cleanup: CleanupState,
     #[serde(skip_serializing_if = "Option::is_none")]
     backup_cleanup_path: Option<Box<str>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    materialization_operation_id: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    materialization_receipt_id: Option<&'a str>,
+    materialization_replayed: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -391,6 +419,9 @@ fn build(
         prior_destination_pack_id: materialized.prior_destination_pack_id,
         backup_cleanup: materialized.backup_cleanup,
         backup_cleanup_path: materialized.backup_cleanup_path,
+        materialization_operation_id: materialized.materialization_operation_id.as_deref(),
+        materialization_receipt_id: materialized.materialization_receipt_id.as_deref(),
+        materialization_replayed: materialized.materialization_replayed,
     };
     emit_build(stdout, &result, options.flag("--json"))?;
     Ok(eligibility_exit(
@@ -557,6 +588,9 @@ struct MaterializationOutcome {
     prior_destination_pack_id: Option<Box<str>>,
     backup_cleanup: CleanupState,
     backup_cleanup_path: Option<Box<str>>,
+    materialization_operation_id: Option<Box<str>>,
+    materialization_receipt_id: Option<Box<str>>,
+    materialization_replayed: bool,
 }
 
 fn materialize_and_finalize(
@@ -566,138 +600,613 @@ fn materialize_and_finalize(
     output: &Path,
     stop: &AtomicBool,
 ) -> Result<MaterializationOutcome, CliError> {
-    checkpoint(stop)?;
-    let parent = output
-        .parent()
-        .ok_or_else(|| CliError::security("invalid_output_parent", "output has no parent"))?;
-    let mut staging = create_isolated_directory(parent, "staging", plan.pack_id())?;
-    if let Err(error) = write_materialization_plan(&staging.path, plan, stop) {
-        let _ = staging.cleanup();
-        return Err(error);
-    }
-    sync_directory(&staging.path)?;
-    let staged = load_pack_image(&staging.path, request.budgets(), stop)?;
-    let validation_request = ReferencePackValidationRequest::new(
-        plan.pack_id(),
-        request.expected_profile_id(),
-        request.expected_reference_generation_id(),
-        request.budgets(),
-    )?;
-    let staging_report =
-        ReferencePackService::reference_pack_validate(&validation_request, &staged.image, stop)?;
-    if staging_report.report_id() != original_report.report_id() {
-        let _ = staging.cleanup();
-        return Err(CliError::security(
-            "staging_validation_mismatch",
-            "staging validation differs from the service build result",
-        ));
-    }
-    if !staging_report.candidate_eligible() {
-        let member_count = staged.member_count;
-        let total_bytes = staged.total_bytes;
-        staging.cleanup()?;
+    if !original_report.candidate_eligible() {
+        let member_count = plan.entries().len();
+        let total_bytes = plan.entries().iter().try_fold(0_u64, |total, entry| {
+            total
+                .checked_add(entry.bytes().len() as u64)
+                .ok_or_else(|| {
+                    CliError::security("pack_total_size_overflow", "pack byte count overflowed")
+                })
+        })?;
         return Ok(MaterializationOutcome {
-            final_report: staging_report.clone(),
-            staging_report,
+            staging_report: original_report.clone(),
+            final_report: original_report.clone(),
             member_count,
             total_bytes,
             destination_state: DestinationState::NotFinalized,
             prior_destination_pack_id: None,
             backup_cleanup: CleanupState::NotRequired,
             backup_cleanup_path: None,
+            materialization_operation_id: None,
+            materialization_receipt_id: None,
+            materialization_replayed: false,
         });
     }
+
     checkpoint(stop)?;
+    let parent = output
+        .parent()
+        .ok_or_else(|| CliError::security("invalid_output_parent", "output has no parent"))?;
+    let paths = materialization_paths(output, plan.plan_id())?;
+    ensure_private_state_file(&paths.state_file)?;
+    let configuration = ReferencePackMaterializationConfiguration::new(
+        "wow-reference-builder-materialization/1",
+        ReferencePackMaterializationStoreLimits::default(),
+    )?;
+    let mut journal = ReferencePackMaterializationService::open(&paths.state_file, configuration)?;
+    let (materialization_request, prior_destination) =
+        match journal.stored_request(&paths.operation_id)? {
+            Some(stored) => {
+                validate_stored_materialization_request(
+                    &stored,
+                    &paths,
+                    output,
+                    plan,
+                    original_report,
+                )?;
+                let prior = stored
+                    .prior_destination_pack_id()
+                    .map(|pack_id| PriorDestination {
+                        pack_id: pack_id.to_owned().into_boxed_str(),
+                    });
+                (stored, prior)
+            }
+            None => {
+                let prior = observe_prior_destination(output, request.budgets(), stop)?;
+                let materialization_request = ReferencePackMaterializationRequest::new(
+                    paths.operation_id.clone(),
+                    path_text(output)?,
+                    path_text(&paths.staging)?,
+                    path_text(&paths.backup)?,
+                    path_text(&paths.quarantine)?,
+                    plan.pack_id(),
+                    plan.plan_id(),
+                    original_report.report_id(),
+                    prior.as_ref().map(|value| value.pack_id.as_ref()),
+                )?;
+                (materialization_request, prior)
+            }
+        };
+    let validation_request = ReferencePackValidationRequest::new(
+        plan.pack_id(),
+        request.expected_profile_id(),
+        request.expected_reference_generation_id(),
+        request.budgets(),
+    )?;
+    let mut materialization_replayed = None;
 
-    let prior_destination = observe_prior_destination(output, request.budgets(), stop)?;
-    let destination_state = if prior_destination.is_some() {
-        DestinationState::Replaced
-    } else {
-        DestinationState::Created
-    };
-    let prior_destination_pack_id = prior_destination
-        .as_ref()
-        .map(|value| value.pack_id.clone());
-    let backup = if prior_destination.is_some() {
-        Some(unique_sibling_path(parent, "backup", plan.pack_id())?)
-    } else {
-        None
-    };
+    loop {
+        checkpoint(stop)?;
+        let observation = observe_materialization(&paths, request.budgets(), stop)?;
+        let reconciliation = journal.reconcile(&materialization_request, observation.clone())?;
+        materialization_replayed.get_or_insert(!reconciliation.started());
 
-    if let Some(path) = &backup {
-        fs::rename(output, path).map_err(|_| {
+        match reconciliation.action() {
+            ReferencePackMaterializationAction::CreateStaging => {
+                create_private_directory(&paths.staging)?;
+                write_materialization_plan(&paths.staging, plan, stop)?;
+                sync_directory(&paths.staging)?;
+                let (loaded, _) = validate_expected_pack(
+                    &paths.staging,
+                    &validation_request,
+                    plan.pack_id(),
+                    original_report.report_id(),
+                    request.budgets(),
+                    stop,
+                )?;
+                if loaded.member_count == 0 || loaded.total_bytes == 0 {
+                    return Err(CliError::security(
+                        "staging_empty_after_write",
+                        "staged pack is empty after materialization",
+                    ));
+                }
+                let next = observe_materialization(&paths, request.budgets(), stop)?;
+                journal.checkpoint(
+                    &materialization_request,
+                    ReferencePackMaterializationStage::StagingValidated,
+                    next,
+                )?;
+            }
+            ReferencePackMaterializationAction::ResetStaging => {
+                remove_tree(&paths.staging)?;
+                sync_directory(parent)?;
+                let next = observe_materialization(&paths, request.budgets(), stop)?;
+                journal.checkpoint(
+                    &materialization_request,
+                    ReferencePackMaterializationStage::RolledBack,
+                    next,
+                )?;
+            }
+            ReferencePackMaterializationAction::AdoptStaging => {
+                journal.checkpoint(
+                    &materialization_request,
+                    ReferencePackMaterializationStage::StagingValidated,
+                    observation,
+                )?;
+            }
+            ReferencePackMaterializationAction::MovePriorToBackup => {
+                if reconciliation.stage() != Some(ReferencePackMaterializationStage::BackupIntent) {
+                    journal.checkpoint(
+                        &materialization_request,
+                        ReferencePackMaterializationStage::BackupIntent,
+                        observation.clone(),
+                    )?;
+                }
+                fs::rename(output, &paths.backup).map_err(|_| {
+                    CliError::new(
+                        ExitClass::Build,
+                        "destination_backup_failed",
+                        "existing destination could not be moved to the durable backup path; rerun the same command to reconcile",
+                    )
+                })?;
+                sync_directory(parent)?;
+                let next = observe_materialization(&paths, request.budgets(), stop)?;
+                journal.checkpoint(
+                    &materialization_request,
+                    ReferencePackMaterializationStage::BackupMoved,
+                    next,
+                )?;
+            }
+            ReferencePackMaterializationAction::AdoptMovedBackup => {
+                journal.checkpoint(
+                    &materialization_request,
+                    ReferencePackMaterializationStage::BackupMoved,
+                    observation,
+                )?;
+            }
+            ReferencePackMaterializationAction::InstallStaging => {
+                if reconciliation.stage() != Some(ReferencePackMaterializationStage::InstallIntent)
+                {
+                    journal.checkpoint(
+                        &materialization_request,
+                        ReferencePackMaterializationStage::InstallIntent,
+                        observation.clone(),
+                    )?;
+                }
+                fs::rename(&paths.staging, output).map_err(|_| {
+                    CliError::new(
+                        ExitClass::Build,
+                        "destination_finalization_failed",
+                        "staged pack could not be installed; rerun the same command to reconcile",
+                    )
+                })?;
+                sync_directory(parent)?;
+                let next = observe_materialization(&paths, request.budgets(), stop)?;
+                journal.checkpoint(
+                    &materialization_request,
+                    ReferencePackMaterializationStage::Installed,
+                    next,
+                )?;
+            }
+            ReferencePackMaterializationAction::AdoptInstalledDestination => {
+                journal.checkpoint(
+                    &materialization_request,
+                    ReferencePackMaterializationStage::Installed,
+                    observation,
+                )?;
+            }
+            ReferencePackMaterializationAction::ValidateDestination => {
+                let validation = validate_expected_pack(
+                    output,
+                    &validation_request,
+                    plan.pack_id(),
+                    original_report.report_id(),
+                    request.budgets(),
+                    stop,
+                );
+                match validation {
+                    Ok(_) => {
+                        let next = observe_materialization(&paths, request.budgets(), stop)?;
+                        journal.checkpoint(
+                            &materialization_request,
+                            ReferencePackMaterializationStage::FinalValidated,
+                            next,
+                        )?;
+                    }
+                    Err(error) => {
+                        journal.checkpoint(
+                            &materialization_request,
+                            ReferencePackMaterializationStage::RollbackIntent,
+                            observation,
+                        )?;
+                        perform_rollback(&paths, output, prior_destination.as_ref(), parent)?;
+                        let next = observe_materialization(&paths, request.budgets(), stop)?;
+                        journal.checkpoint(
+                            &materialization_request,
+                            ReferencePackMaterializationStage::RolledBack,
+                            next,
+                        )?;
+                        return Err(error);
+                    }
+                }
+            }
+            ReferencePackMaterializationAction::RemoveBackup => {
+                if reconciliation.stage() != Some(ReferencePackMaterializationStage::CleanupIntent)
+                {
+                    journal.checkpoint(
+                        &materialization_request,
+                        ReferencePackMaterializationStage::CleanupIntent,
+                        observation,
+                    )?;
+                }
+                remove_tree(&paths.backup)?;
+                sync_directory(parent)?;
+            }
+            ReferencePackMaterializationAction::Complete => {
+                if paths.quarantine.exists() {
+                    remove_tree(&paths.quarantine)?;
+                    sync_directory(parent)?;
+                }
+                let (final_image, final_report) = validate_expected_pack(
+                    output,
+                    &validation_request,
+                    plan.pack_id(),
+                    original_report.report_id(),
+                    request.budgets(),
+                    stop,
+                )?;
+                let final_observation = observe_materialization(&paths, request.budgets(), stop)?;
+                let member_count = u32::try_from(final_image.member_count).map_err(|_| {
+                    CliError::security(
+                        "pack_member_count_overflow",
+                        "final pack member count exceeds receipt range",
+                    )
+                })?;
+                let receipt = journal.complete(
+                    &materialization_request,
+                    &final_observation,
+                    member_count,
+                    final_image.total_bytes,
+                )?;
+                return Ok(materialization_outcome_from_receipt(
+                    original_report,
+                    final_report,
+                    final_image,
+                    &receipt,
+                    materialization_replayed.unwrap_or(false),
+                ));
+            }
+            ReferencePackMaterializationAction::PerformRollback => {
+                if reconciliation.stage() != Some(ReferencePackMaterializationStage::RollbackIntent)
+                {
+                    journal.checkpoint(
+                        &materialization_request,
+                        ReferencePackMaterializationStage::RollbackIntent,
+                        observation,
+                    )?;
+                }
+                perform_rollback(&paths, output, prior_destination.as_ref(), parent)?;
+                let next = observe_materialization(&paths, request.budgets(), stop)?;
+                journal.checkpoint(
+                    &materialization_request,
+                    ReferencePackMaterializationStage::RolledBack,
+                    next,
+                )?;
+            }
+            ReferencePackMaterializationAction::AdoptRollback => {
+                journal.checkpoint(
+                    &materialization_request,
+                    ReferencePackMaterializationStage::RolledBack,
+                    observation,
+                )?;
+            }
+            ReferencePackMaterializationAction::ReturnCompleted => {
+                let receipt = reconciliation.receipt().ok_or_else(|| {
+                    CliError::security(
+                        "materialization_receipt_missing",
+                        "completed materialization is missing its durable receipt",
+                    )
+                })?;
+                let (final_image, final_report) = validate_expected_pack(
+                    output,
+                    &validation_request,
+                    plan.pack_id(),
+                    original_report.report_id(),
+                    request.budgets(),
+                    stop,
+                )?;
+                return Ok(materialization_outcome_from_receipt(
+                    original_report,
+                    final_report,
+                    final_image,
+                    receipt,
+                    true,
+                ));
+            }
+            ReferencePackMaterializationAction::TerminalNoEffect => {
+                return Err(CliError::new(
+                    ExitClass::Build,
+                    "materialization_no_effect_terminal",
+                    "materialization operation is terminal without installation; use a new build request identity",
+                ));
+            }
+            ReferencePackMaterializationAction::TerminalFailed => {
+                return Err(CliError::new(
+                    ExitClass::Build,
+                    "materialization_failed_terminal",
+                    "materialization operation is terminal after failure; inspect durable state before starting a new operation",
+                ));
+            }
+            ReferencePackMaterializationAction::OperatorReview => {
+                return Err(CliError::new(
+                    ExitClass::Build,
+                    "materialization_outcome_unknown",
+                    "materialization filesystem state is ambiguous; blind retry is prohibited and operator reconciliation is required",
+                ));
+            }
+        }
+    }
+}
+
+struct MaterializationPaths {
+    operation_id: ReferencePackMaterializationOperationId,
+    output: PathBuf,
+    state_file: PathBuf,
+    staging: PathBuf,
+    backup: PathBuf,
+    quarantine: PathBuf,
+}
+
+fn materialization_paths(output: &Path, plan_id: &str) -> Result<MaterializationPaths, CliError> {
+    let parent = output
+        .parent()
+        .ok_or_else(|| CliError::security("invalid_output_parent", "output has no parent"))?;
+    let output_text = path_text(output)?;
+    let token = hex(&Sha256::digest(
+        format!("{output_text}\n{plan_id}").as_bytes(),
+    ));
+    let state_token = hex(&Sha256::digest(output_text.as_bytes()));
+    let operation_id =
+        ReferencePackMaterializationOperationId::new(format!("reference-pack-materialize:{token}"))
+            .map_err(|_| {
+                CliError::security(
+                    "materialization_operation_id_invalid",
+                    "materialization operation identity is invalid",
+                )
+            })?;
+    Ok(MaterializationPaths {
+        operation_id,
+        output: output.to_path_buf(),
+        state_file: parent.join(format!(
+            ".wow-reference-builder-state-{state_token}.sqlite3"
+        )),
+        staging: parent.join(format!(".wow-reference-builder-staging-{token}")),
+        backup: parent.join(format!(".wow-reference-builder-backup-{token}")),
+        quarantine: parent.join(format!(".wow-reference-builder-quarantine-{token}")),
+    })
+}
+
+fn validate_stored_materialization_request(
+    stored: &ReferencePackMaterializationRequest,
+    paths: &MaterializationPaths,
+    output: &Path,
+    plan: &PackMaterializationPlan,
+    report: &ReferencePackValidationReport,
+) -> Result<(), CliError> {
+    if stored.operation_id() != &paths.operation_id
+        || stored.output_path() != path_text(output)?.as_ref()
+        || stored.staging_path() != path_text(&paths.staging)?.as_ref()
+        || stored.backup_path() != path_text(&paths.backup)?.as_ref()
+        || stored.quarantine_path() != path_text(&paths.quarantine)?.as_ref()
+        || stored.pack_id() != plan.pack_id()
+        || stored.plan_id() != plan.plan_id()
+        || stored.validation_report_id() != report.report_id()
+    {
+        return Err(CliError::new(
+            ExitClass::Build,
+            "materialization_operation_conflict",
+            "durable materialization operation is bound to another output or pack plan",
+        ));
+    }
+    Ok(())
+}
+
+fn path_text(path: &Path) -> Result<Box<str>, CliError> {
+    path.to_str()
+        .map(|value| value.to_owned().into_boxed_str())
+        .ok_or_else(|| {
             CliError::security(
-                "destination_backup_failed",
-                "existing destination could not be moved to an isolated backup",
+                "non_utf8_materialization_path",
+                "materialization paths must be valid UTF-8",
+            )
+        })
+}
+
+fn ensure_private_state_file(path: &Path) -> Result<(), CliError> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) => {
+            if is_reparse_or_symlink(&metadata) || !metadata.is_file() {
+                return Err(CliError::security(
+                    "unsafe_materialization_state_file",
+                    "materialization state path is not a safe regular file",
+                ));
+            }
+            Ok(())
+        }
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            let mut options = OpenOptions::new();
+            options.create_new(true).read(true).write(true);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                options.mode(0o600);
+            }
+            options
+                .open(path)
+                .and_then(|file| file.sync_all())
+                .map_err(|_| {
+                    CliError::security(
+                        "materialization_state_create_failed",
+                        "materialization state file could not be created safely",
+                    )
+                })
+        }
+        Err(_) => Err(CliError::security(
+            "materialization_state_metadata_failed",
+            "materialization state metadata is unavailable",
+        )),
+    }
+}
+
+fn observe_materialization(
+    paths: &MaterializationPaths,
+    budgets: ReferencePackBudgets,
+    stop: &AtomicBool,
+) -> Result<ReferencePackMaterializationObservation, CliError> {
+    Ok(ReferencePackMaterializationObservation::new(
+        observe_pack_path(&paths.staging, budgets, stop)?,
+        observe_pack_path_from_output(paths, budgets, stop)?,
+        observe_pack_path(&paths.backup, budgets, stop)?,
+    )?)
+}
+
+fn observe_pack_path_from_output(
+    paths: &MaterializationPaths,
+    budgets: ReferencePackBudgets,
+    stop: &AtomicBool,
+) -> Result<ReferencePackPathObservation, CliError> {
+    observe_pack_path(&paths.output, budgets, stop)
+}
+
+fn observe_pack_path(
+    path: &Path,
+    budgets: ReferencePackBudgets,
+    stop: &AtomicBool,
+) -> Result<ReferencePackPathObservation, CliError> {
+    let metadata = match fs::symlink_metadata(path) {
+        Ok(value) => value,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            return Ok(ReferencePackPathObservation::absent());
+        }
+        Err(_) => {
+            return Ok(ReferencePackPathObservation::invalid(
+                "metadata_unavailable",
+            )?);
+        }
+    };
+    if is_reparse_or_symlink(&metadata) || !metadata.is_dir() {
+        return Ok(ReferencePackPathObservation::invalid(
+            "not_a_safe_directory",
+        )?);
+    }
+    let observed = (|| {
+        let loaded = load_pack_image(path, budgets, stop)?;
+        let manifest = manifest_from_image(&loaded.image)?;
+        let request = ReferencePackValidationRequest::new(
+            manifest.pack_id(),
+            manifest.profile().profile_id().to_string(),
+            manifest.reference_generation_id(),
+            budgets,
+        )?;
+        let report = ReferencePackService::reference_pack_validate(&request, &loaded.image, stop)?;
+        if !report.candidate_eligible() {
+            return Err(CliError::new(
+                ExitClass::Validation,
+                "observed_pack_not_candidate",
+                "observed pack is not candidate eligible",
+            ));
+        }
+        Ok(ReferencePackPathObservation::pack(
+            report.pack_id(),
+            report.report_id(),
+        )?)
+    })();
+    match observed {
+        Ok(value) => Ok(value),
+        Err(error) if error.class == ExitClass::Cancelled => Err(error),
+        Err(_) => Ok(ReferencePackPathObservation::invalid(
+            "pack_validation_failed",
+        )?),
+    }
+}
+
+fn validate_expected_pack(
+    path: &Path,
+    validation_request: &ReferencePackValidationRequest,
+    expected_pack_id: &str,
+    expected_report_id: &str,
+    budgets: ReferencePackBudgets,
+    stop: &AtomicBool,
+) -> Result<(LoadedPack, ReferencePackValidationReport), CliError> {
+    let loaded = load_pack_image(path, budgets, stop)?;
+    let report =
+        ReferencePackService::reference_pack_validate(validation_request, &loaded.image, stop)?;
+    if report.pack_id() != expected_pack_id || report.report_id() != expected_report_id {
+        return Err(CliError::security(
+            "materialization_read_back_mismatch",
+            "materialized pack differs from the exact service result",
+        ));
+    }
+    Ok((loaded, report))
+}
+
+fn perform_rollback(
+    paths: &MaterializationPaths,
+    output: &Path,
+    prior_destination: Option<&PriorDestination>,
+    parent: &Path,
+) -> Result<(), CliError> {
+    if output.exists() {
+        if paths.quarantine.exists() {
+            return Err(CliError::security(
+                "quarantine_path_occupied",
+                "failed destination cannot be quarantined because the durable quarantine path is occupied",
+            ));
+        }
+        fs::rename(output, &paths.quarantine).map_err(|_| {
+            CliError::new(
+                ExitClass::Build,
+                "destination_quarantine_failed",
+                "failed destination could not be moved to quarantine",
             )
         })?;
         sync_directory(parent)?;
     }
-
-    if fs::rename(&staging.path, output).is_err() {
-        if let Some(path) = &backup {
-            let _ = fs::rename(path, output);
-            let _ = sync_directory(parent);
-        }
-        return Err(CliError::security(
-            "destination_finalization_failed",
-            "staged pack could not be atomically installed",
-        ));
+    if prior_destination.is_some() && paths.backup.exists() {
+        fs::rename(&paths.backup, output).map_err(|_| {
+            CliError::new(
+                ExitClass::Build,
+                "destination_restore_failed",
+                "prior destination could not be restored from durable backup",
+            )
+        })?;
+        sync_directory(parent)?;
     }
-    staging.disarm();
-    sync_directory(parent)?;
+    Ok(())
+}
 
-    let final_result = (|| {
-        checkpoint(stop)?;
-        let final_image = load_pack_image(output, request.budgets(), stop)?;
-        let final_report = ReferencePackService::reference_pack_validate(
-            &validation_request,
-            &final_image.image,
-            stop,
-        )?;
-        if final_report.report_id() != staging_report.report_id()
-            || final_report.pack_id() != plan.pack_id()
-        {
-            return Err(CliError::security(
-                "final_read_back_mismatch",
-                "final pack read-back differs from validated staging",
-            ));
-        }
-        Ok((final_image, final_report))
-    })();
-
-    let (final_image, final_report) = match final_result {
-        Ok(value) => value,
-        Err(error) => {
-            rollback_finalization(output, backup.as_deref(), parent, plan.pack_id());
-            return Err(error);
-        }
-    };
-
-    let (backup_cleanup, backup_cleanup_path) = match backup {
-        Some(path) => match remove_tree(&path) {
-            Ok(()) => {
-                sync_directory(parent)?;
-                (CleanupState::Completed, None)
-            }
-            Err(_) => (
-                CleanupState::Pending,
-                Some(path.to_string_lossy().into_owned().into_boxed_str()),
-            ),
-        },
-        None => (CleanupState::NotRequired, None),
-    };
-
-    Ok(MaterializationOutcome {
-        staging_report,
+fn materialization_outcome_from_receipt(
+    staging_report: &ReferencePackValidationReport,
+    final_report: ReferencePackValidationReport,
+    final_image: LoadedPack,
+    receipt: &wow_service::reference_pack_materialization::ReferencePackMaterializationReceipt,
+    replayed: bool,
+) -> MaterializationOutcome {
+    MaterializationOutcome {
+        staging_report: staging_report.clone(),
         final_report,
         member_count: final_image.member_count,
         total_bytes: final_image.total_bytes,
-        destination_state,
-        prior_destination_pack_id,
-        backup_cleanup,
-        backup_cleanup_path,
-    })
+        destination_state: match receipt.destination_state() {
+            ReferencePackMaterializationDestinationState::Created => DestinationState::Created,
+            ReferencePackMaterializationDestinationState::Replaced => DestinationState::Replaced,
+        },
+        prior_destination_pack_id: receipt
+            .prior_destination_pack_id()
+            .map(|value| value.to_owned().into_boxed_str()),
+        backup_cleanup: if receipt.prior_destination_pack_id().is_some() {
+            CleanupState::Completed
+        } else {
+            CleanupState::NotRequired
+        },
+        backup_cleanup_path: None,
+        materialization_operation_id: Some(
+            receipt.operation_id().as_str().to_owned().into_boxed_str(),
+        ),
+        materialization_receipt_id: Some(receipt.receipt_id().to_owned().into_boxed_str()),
+        materialization_replayed: replayed,
+    }
 }
 
 struct PriorDestination {
@@ -744,19 +1253,6 @@ fn observe_prior_destination(
     Ok(Some(PriorDestination {
         pack_id: manifest.pack_id().into(),
     }))
-}
-
-fn rollback_finalization(output: &Path, backup: Option<&Path>, parent: &Path, token: &str) {
-    let quarantine = unique_sibling_path(parent, "quarantine", token).ok();
-    if output.exists()
-        && let Some(path) = quarantine.as_deref()
-    {
-        let _ = fs::rename(output, path);
-    }
-    if let Some(path) = backup {
-        let _ = fs::rename(path, output);
-    }
-    let _ = sync_directory(parent);
 }
 
 fn write_materialization_plan(
@@ -1222,10 +1718,6 @@ struct IsolatedDirectory {
 }
 
 impl IsolatedDirectory {
-    fn disarm(&mut self) {
-        self.armed = false;
-    }
-
     fn cleanup(mut self) -> Result<(), CliError> {
         self.armed = false;
         remove_tree(&self.path)
@@ -1263,24 +1755,6 @@ fn create_isolated_directory(
     Err(CliError::security(
         "isolated_directory_exhausted",
         "could not allocate an isolated directory name",
-    ))
-}
-
-fn unique_sibling_path(parent: &Path, purpose: &str, token: &str) -> Result<PathBuf, CliError> {
-    for attempt in 0..MAX_STAGING_ATTEMPTS {
-        let name = format!(
-            ".wow-reference-builder-{purpose}-{}-{}-{attempt}",
-            std::process::id(),
-            short_token(token)
-        );
-        let path = parent.join(name);
-        if !path.exists() {
-            return Ok(path);
-        }
-    }
-    Err(CliError::security(
-        "sibling_path_exhausted",
-        "could not allocate an isolated sibling path",
     ))
 }
 
@@ -1376,7 +1850,7 @@ fn emit_build(
         return emit_json(writer, value);
     }
     let text = format!(
-        "build {}\npack_id={}\nplan_id={}\nfinal_validation_report_id={}\ncandidate_eligible={}\nvalidated_local_eligible={}\ndestination_state={:?}\nbackup_cleanup={:?}\n",
+        "build {}\npack_id={}\nplan_id={}\nfinal_validation_report_id={}\ncandidate_eligible={}\nvalidated_local_eligible={}\ndestination_state={:?}\nbackup_cleanup={:?}\nmaterialization_operation_id={}\nmaterialization_receipt_id={}\nmaterialization_replayed={}\n",
         match value.status {
             ReferencePackBuildStatus::CandidateReady => "candidate_ready",
             ReferencePackBuildStatus::Blocked => "blocked",
@@ -1388,6 +1862,11 @@ fn emit_build(
         value.validated_local_eligible,
         value.destination_state,
         value.backup_cleanup,
+        value
+            .materialization_operation_id
+            .unwrap_or("not_applicable"),
+        value.materialization_receipt_id.unwrap_or("not_applicable"),
+        value.materialization_replayed,
     );
     write_output(writer, text.as_bytes())
 }
