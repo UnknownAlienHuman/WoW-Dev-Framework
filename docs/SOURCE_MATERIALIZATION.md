@@ -34,7 +34,7 @@ Policy behavior is distinct:
 - `auto` executes one exact observed clone/update/publication plan.
 - `prompt` reports a content-addressed plan without mutation. To authorize it,
   repeat the same request with `authorization` containing the returned `plan_id`,
-  `before_revision` and `selected_remote_revision`. The exact selected revision is
+  `before_revision` and `selected_revision`. The exact selected revision is
   fetched directly; the moving branch is not observed again.
 - `never` observes and reports only. It creates no checkout, manifest, journal or
   receipt.
