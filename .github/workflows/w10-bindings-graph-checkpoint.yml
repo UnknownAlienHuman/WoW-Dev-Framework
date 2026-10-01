@@ -1,4 +1,4 @@
-name: W10 XML binding graph checkpoint v4
+name: W10 XML binding graph checkpoint v5
 on:
   push:
     branches: [main]
@@ -16,8 +16,8 @@ jobs:
     env:
       BASE_COMMIT: f1fb0788f8a4bb3a3ee88e50b58298ed8dd52c1a
       BASE_TREE: bc265d85ce3c57227ce3c5404beafb21d28294e3
-      TRIGGER_PARENT: 27fa14e7926320c6f0c4b598cb639a27b19a1765
-      RECOVERY_COMMIT: 0eeaa6885221b17f660773da2e4753b0162f2d07
+      TRIGGER_PARENT: 4537b623b261ec121cb3bd27779325975371220f
+      RECOVERY_BLOB: 3f85d773eb4c0c658fbe6a03627a9bbc783bd54b
       PATCH_SHA256: 8405303e09af3a9379dffa1d88cea4b160c7bf532a4446c1058df1b773923694
     steps:
       - uses: actions/checkout@v7
@@ -26,57 +26,117 @@ jobs:
           fetch-depth: 0
       - name: Recover exact W10 binding graph patch and remove transport
         shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test "$(git rev-parse "${GITHUB_SHA}^")" = "$TRIGGER_PARENT"
-          git show "$RECOVERY_COMMIT:.ci/w10-bindings-graph.patch.xz.b64.00" > "$RUNNER_TEMP/recovery-utf8"
-          python - "$RUNNER_TEMP/recovery-utf8" "$RUNNER_TEMP/w10.patch" "$PATCH_SHA256" <<'PY'
+          curl -fsSL --proto '=https' --tlsv1.2 \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/git/blobs/$RECOVERY_BLOB" \
+            > "$RUNNER_TEMP/recovery-blob.json"
+          python - "$RUNNER_TEMP/recovery-blob.json" "$RUNNER_TEMP/w10.patch" "$PATCH_SHA256" <<'PY'
           import base64
           import hashlib
+          import json
           import lzma
           import pathlib
           import sys
 
-          text = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8")
+          payload = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+          raw = base64.b64decode(payload["content"], validate=False)
           output = pathlib.Path(sys.argv[2])
           expected = sys.argv[3]
-          paired = b"".join(ord(character).to_bytes(2, "big") for character in text)
           whitespace = set(b" \t\r\n")
+          alphabet = set(b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=")
+          print(
+              f"blob_bytes={len(raw)} head={raw[:32].hex()} tail={raw[-32:].hex()} "
+              f"patch_sha256_if_raw={hashlib.sha256(raw).hexdigest()}"
+          )
 
-          candidates = [
-              ("paired_exact", paired),
-              ("drop_leading_nul", paired[1:] if paired.startswith(b"\0") else paired),
-              ("drop_trailing_nul", paired[:-1] if paired.endswith(b"\0") else paired),
-              ("drop_last_byte", paired[:-1]),
-          ]
+          def admit_patch(patch: bytes, label: str) -> bool:
+              digest = hashlib.sha256(patch).hexdigest()
+              print(f"candidate={label} patch_bytes={len(patch)} patch_sha256={digest}")
+              if digest != expected:
+                  return False
+              output.write_bytes(patch)
+              print(f"accepted_transport={label}")
+              return True
+
+          def try_xz(data: bytes, label: str) -> bool:
+              try:
+                  patch = lzma.decompress(data, format=lzma.FORMAT_XZ)
+              except Exception as error:
+                  print(f"candidate={label} xz_error={error!r}")
+                  return False
+              return admit_patch(patch, label)
+
+          if admit_patch(raw, "raw_patch"):
+              raise SystemExit(0)
+          if try_xz(raw, "raw_xz"):
+              raise SystemExit(0)
+
+          derived = [("raw", raw)]
+          if raw.startswith(b"\xef\xbb\xbf"):
+              derived.append(("utf8_bom_stripped", raw[3:]))
+          for encoding in ("utf-16-be", "utf-16-le"):
+              try:
+                  text = raw.decode(encoding)
+              except UnicodeError:
+                  continue
+              try:
+                  derived.append((encoding + "_to_ascii", text.encode("ascii")))
+              except UnicodeEncodeError:
+                  pass
+              # Some failed transports stored each pair as one Unicode scalar.
+              try:
+                  derived.append(
+                      (
+                          encoding + "_scalar_pairs",
+                          b"".join(ord(character).to_bytes(2, "big") for character in text),
+                      )
+                  )
+              except OverflowError:
+                  pass
+
           seen = set()
-          for label, raw in candidates:
-              compact = bytes(byte for byte in raw if byte not in whitespace)
+          for label, candidate in derived:
+              compact = bytes(byte for byte in candidate if byte not in whitespace)
               if compact in seen:
                   continue
               seen.add(compact)
+              invalid = sum(byte not in alphabet for byte in compact)
               print(
-                  f"candidate={label} utf8_chars={len(text)} paired_bytes={len(raw)} "
-                  f"compact_bytes={len(compact)} residue={len(compact) % 4} "
-                  f"head={compact[:12]!r} tail={compact[-12:]!r}"
+                  f"candidate={label}_base64 compact_bytes={len(compact)} "
+                  f"residue={len(compact) % 4} invalid={invalid}"
               )
+              if invalid:
+                  compact = bytes(byte for byte in compact if byte in alphabet)
               try:
                   compressed = base64.b64decode(compact, validate=True)
-                  patch = lzma.decompress(compressed, format=lzma.FORMAT_XZ)
               except Exception as error:
-                  print(f"candidate={label} decode_error={error!r}")
+                  print(f"candidate={label}_base64 decode_error={error!r}")
                   continue
-              digest = hashlib.sha256(patch).hexdigest()
-              print(
-                  f"candidate={label} compressed_bytes={len(compressed)} "
-                  f"patch_bytes={len(patch)} patch_sha256={digest}"
-              )
-              if digest == expected:
-                  output.write_bytes(patch)
-                  print(f"accepted_transport={label}")
+              if try_xz(compressed, label + "_base64_xz"):
                   raise SystemExit(0)
-          raise SystemExit("immutable prior blob did not reconstruct the expected patch")
+
+          # Bounded mixed representation recovery: a short literal base64 prefix
+          # followed by raw XZ bytes. Every candidate must pass both XZ integrity
+          # and the exact uncompressed patch digest.
+          for split in range(4, min(len(raw), 512) + 1, 4):
+              prefix = bytes(byte for byte in raw[:split] if byte not in whitespace)
+              if any(byte not in alphabet for byte in prefix):
+                  continue
+              try:
+                  decoded_prefix = base64.b64decode(prefix, validate=True)
+              except Exception:
+                  continue
+              if try_xz(decoded_prefix + raw[split:], f"mixed_prefix_{split}"):
+                  raise SystemExit(0)
+
+          raise SystemExit("Git Data blob did not reconstruct the exact expected patch")
           PY
           printf '%s  %s\n' "$PATCH_SHA256" "$RUNNER_TEMP/w10.patch" | sha256sum -c -
           git rm -- .ci/w10-bindings-graph.patch.xz.b64.* .github/workflows/w10-bindings-graph-checkpoint.yml
