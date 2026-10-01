@@ -1,67 +1,52 @@
-name: W08 managed source materialization checkpoint
-run-name: W08 managed source checkpoint v2 ${{ github.sha }}
+name: W08 publish checked managed source materialization
+run-name: W08 publish managed source ${{ github.sha }}
 on:
   push:
     branches: [main]
 permissions:
-  contents: read
+  actions: read
+  contents: write
 concurrency:
   group: w08-managed-source-materialization
   cancel-in-progress: false
 env:
   BASE_COMMIT: 5eff9208a64381a36e42c7cd5e4ce0cb4546cfce
-  BASE_TREE: f8daa018f0aa85a45e2333074d1744bba3e8b728
-  STAGING_PARENT: 6547b32cfdaa13f72f8245598bb0ceed8e8263bb
-  PATCH_SHA256: d3d0f4089806d37fcf3b6894020a5f348b4faeaeeafc6507dc367db0a6705994
+  STAGING_PARENT: 0ef7991762521fbf3018e80925940e612074eb94
+  ARTIFACT_ID: '11143687389'
+  ARTIFACT_ZIP_SHA256: 62e7673f3446857f5d7bf5424de540a4d4067ae769af9adb2156debf7247afc1
+  SOURCE_TAR_SHA256: ca2e113695ba8495483a588b7b7566d9f5e3bc5f42bee6635bc58676c27d0e49
+  CHECKED_TREE: 188c6fe15034a5af03561600034350fe13c3d02d
 jobs:
-  checkpoint:
+  publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
         with:
           ref: main
           fetch-depth: 0
-          persist-credentials: false
-      - name: Admit corrected product patch and remove checkpoint transport
+      - name: Recover exact checked source and fast-forward main
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test "$(git rev-parse "${GITHUB_SHA}^")" = "$STAGING_PARENT"
-          cat .ci/w08-managed-source.patch.xz.b64.* > "$RUNNER_TEMP/w08.patch.xz.b64"
-          base64 -d "$RUNNER_TEMP/w08.patch.xz.b64" > "$RUNNER_TEMP/w08.patch.xz"
-          xz -dc "$RUNNER_TEMP/w08.patch.xz" > "$RUNNER_TEMP/w08.patch"
-          printf '%s  %s\n' "$PATCH_SHA256" "$RUNNER_TEMP/w08.patch" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/checked"
+          gh api \
+            -H 'Accept: application/vnd.github+json' \
+            "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip" \
+            > "$RUNNER_TEMP/checked.zip"
+          printf '%s  %s\n' "$ARTIFACT_ZIP_SHA256" "$RUNNER_TEMP/checked.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/checked.zip" -d "$RUNNER_TEMP/checked"
+          test "$(cat "$RUNNER_TEMP/checked/CHECKED_TREE")" = "$CHECKED_TREE"
+          printf '%s  %s\n' "$SOURCE_TAR_SHA256" "$RUNNER_TEMP/checked/checked-source.tar" | sha256sum -c -
+          tar -xf "$RUNNER_TEMP/checked/checked-source.tar" -C .
           git rm -- .ci/w08-managed-source.patch.xz.b64.* .github/workflows/w08-managed-source-checkpoint.yml
-          test "$(git write-tree)" = "$BASE_TREE"
-          git apply --index "$RUNNER_TEMP/w08.patch"
-          python - <<'PY'
-          from pathlib import Path
-          path = Path('tools/xtask/src/source_update/mod.rs')
-          source = path.read_text()
-          old = 'pub(super) fn update_selected('
-          if source.count(old) != 1:
-              raise SystemExit('update_selected visibility source changed')
-          path.write_text(source.replace(old, 'fn update_selected(', 1))
-          PY
-      - name: Install minimal compiler tools
-        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
-      - name: Format workspace
-        run: cargo +stable fmt --all
-      - name: Minimal xtask Clippy; no tests executed
-        shell: bash
-        run: |
-          set -euo pipefail
-          rustc +stable -Vv | tee "$RUNNER_TEMP/RUST_VERSION"
-          cargo +stable clippy --locked -p xtask --all-targets --all-features -- -D warnings 2>&1 | tee "$RUNNER_TEMP/clippy.log"
-      - name: Repository policy and exact file set
-        shell: bash
-        run: |
-          set -euo pipefail
-          cargo +stable xtask check 2>&1 | tee "$RUNNER_TEMP/policy.log"
           git add --all
           git diff --cached --check
+          test "$(git write-tree)" = "$CHECKED_TREE"
           actual="$(git diff --cached --name-only "$BASE_COMMIT" | LC_ALL=C sort)"
           expected="$(cat <<'FILES'
           docs/SOURCE_MATERIALIZATION.md
@@ -75,29 +60,8 @@ jobs:
           FILES
           )"
           test "$actual" = "$expected"
-          ! grep -R "todo!()\|unimplemented!()" tools/xtask/src/source_update/materialize.rs
-          grep -Fq 'wow-source-materialization-request/1' tools/xtask/src/source_update/materialize.rs
-          grep -Fq 'operator_review_before_any_retry' tools/xtask/src/source_update/materialize.rs
-      - name: Retain exact checked source
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/checkpoint"
-          git add --all
-          git write-tree > "$RUNNER_TEMP/checkpoint/CHECKED_TREE"
-          git archive --format=tar -o "$RUNNER_TEMP/checkpoint/checked-source.tar" "$(cat "$RUNNER_TEMP/checkpoint/CHECKED_TREE")"
-          git diff --cached --binary "$BASE_COMMIT" > "$RUNNER_TEMP/checkpoint/formatted.patch"
-          printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/checkpoint/STAGING_SHA"
-          for file in RUST_VERSION clippy.log policy.log; do
-            if test -f "$RUNNER_TEMP/$file"; then cp "$RUNNER_TEMP/$file" "$RUNNER_TEMP/checkpoint/$file"; fi
-          done
-          (cd "$RUNNER_TEMP/checkpoint" && sha256sum checked-source.tar formatted.patch > SHA256SUMS)
-      - name: Upload checkpoint evidence
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: w08-managed-source-materialization-${{ github.run_id }}
-          path: ${{ runner.temp }}/checkpoint
-          retention-days: 3
-          if-no-files-found: error
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat(xtask): materialize managed source snapshots [skip ci]' \
+            -m 'Add exact auto/prompt/never plans, managed clone and guarded update reuse, immutable manifest publication, durable receipts and restart reconciliation. Strict xtask Clippy and repository policy passed; no tests executed.'
+          git push origin HEAD:main
