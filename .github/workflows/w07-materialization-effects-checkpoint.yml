@@ -1,32 +1,30 @@
-name: W07 durable Reference Pack filesystem effects checkpoint
-run-name: W07 materialization effects final ${{ github.sha }}
+name: W07 publish checked durable filesystem effects
+run-name: W07 publish materialization effects ${{ github.sha }}
 on:
   push:
     branches: [main]
 permissions:
   actions: read
-  contents: read
+  contents: write
 concurrency:
   group: w07-durable-reference-pack-filesystem-effects
   cancel-in-progress: false
 env:
-  BASE_COMMIT: ec4345039c55c25da78289908942d700609df09a
-  STAGING_PARENT: 6692c47beda4aed4216764c0248319bac100e9dd
-  ARTIFACT_ID: 11142480267
-  ARTIFACT_ZIP_SHA256: abe8269c4cb5a8d18cdc874c3d93adc9e5ea8d2679eee80f3c7ad3f125073b47
-  SOURCE_TAR_SHA256: bcb60f7d98cfef4a803c8f25ff7d12ec411e36c198b36ff8e1ade7e01f1c210c
-  RETAINED_TREE: 55de85ee6154c6168e6fbd1886161bf2807aa10a
+  STAGING_PARENT: 342cf3a59a87d256fb22f7c9bce7a934a206e23d
+  ARTIFACT_ID: 11142430818
+  ARTIFACT_ZIP_SHA256: 7cdb818acc53b27b2915db4c4749ebf3ff0c5a2a0db9e931345010cee2765c9e
+  SOURCE_TAR_SHA256: 99ddd1ea530fcb20d6106bbefff6973b93cb50e816d7b253f560132982fdd872
+  CHECKED_TREE: f8daa018f0aa85a45e2333074d1744bba3e8b728
 jobs:
-  checkpoint:
+  publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
         with:
           ref: main
           fetch-depth: 0
-          persist-credentials: false
-      - name: Recover retained source, apply final lint corrections and remove checkpoint transport
+      - name: Recover checked product files and fast-forward main
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -34,106 +32,35 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test "$(git rev-parse "${GITHUB_SHA}^")" = "$STAGING_PARENT"
-          mkdir -p "$RUNNER_TEMP/retained"
+          mkdir -p "$RUNNER_TEMP/artifact" "$RUNNER_TEMP/source"
           gh api \
             -H 'Accept: application/vnd.github+json' \
             "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip" \
-            > "$RUNNER_TEMP/retained.zip"
-          printf '%s  %s\n' "$ARTIFACT_ZIP_SHA256" "$RUNNER_TEMP/retained.zip" | sha256sum -c -
-          unzip -q "$RUNNER_TEMP/retained.zip" -d "$RUNNER_TEMP/retained"
-          test "$(cat "$RUNNER_TEMP/retained/CHECKED_TREE")" = "$RETAINED_TREE"
-          printf '%s  %s\n' "$SOURCE_TAR_SHA256" "$RUNNER_TEMP/retained/checked-source.tar" | sha256sum -c -
+            > "$RUNNER_TEMP/artifact.zip"
+          printf '%s  %s\n' "$ARTIFACT_ZIP_SHA256" "$RUNNER_TEMP/artifact.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/artifact.zip" -d "$RUNNER_TEMP/artifact"
+          test "$(cat "$RUNNER_TEMP/artifact/CHECKED_TREE")" = "$CHECKED_TREE"
+          printf '%s  %s\n' "$SOURCE_TAR_SHA256" "$RUNNER_TEMP/artifact/checked-source.tar" | sha256sum -c -
+          tar -xf "$RUNNER_TEMP/artifact/checked-source.tar" -C "$RUNNER_TEMP/source"
 
-          git reset --hard "$BASE_COMMIT"
-          git clean -fdx
-          tar -xf "$RUNNER_TEMP/retained/checked-source.tar" -C .
-          git add --all
-          test "$(git write-tree)" = "$RETAINED_TREE"
-
-          python - <<'PY'
-          from pathlib import Path
-          path = Path('apps/wow-reference-builder/src/lib.rs')
-          source = path.read_text()
-          replacements = [
-              (
-                  "enum CleanupState {\n    NotRequired,\n    Completed,\n    Pending,\n}\n",
-                  "enum CleanupState {\n    NotRequired,\n    Completed,\n}\n",
-              ),
-              (
-                  "                if let Err(error) = write_materialization_plan(&paths.staging, plan, stop) {\n                    return Err(error);\n                }\n",
-                  "                write_materialization_plan(&paths.staging, plan, stop)?;\n",
-              ),
-              (
-                  "observe_pack_path_from_output(&paths, budgets, stop)?",
-                  "observe_pack_path_from_output(paths, budgets, stop)?",
-              ),
-              (
-                  "impl IsolatedDirectory {\n    fn disarm(&mut self) {\n        self.armed = false;\n    }\n\n    fn cleanup",
-                  "impl IsolatedDirectory {\n    fn cleanup",
-              ),
-          ]
-          for old, new in replacements:
-              count = source.count(old)
-              if count != 1:
-                  raise SystemExit(f'expected one lint target, found {count}: {old[:48]!r}')
-              source = source.replace(old, new, 1)
-          path.write_text(source)
-          PY
-      - name: Install minimal compiler tools
-        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
-      - name: Format workspace
-        run: cargo +stable fmt --all
-      - name: Minimal builder and service Clippy; no tests executed
-        shell: bash
-        run: |
-          set -euo pipefail
-          rustc +stable -Vv | tee "$RUNNER_TEMP/RUST_VERSION"
-          cargo +stable clippy --locked \
-            -p wow-service -p wow-reference-builder \
-            --all-targets --all-features -- -D warnings 2>&1 | tee "$RUNNER_TEMP/clippy.log"
-      - name: Repository policy and exact file set
-        shell: bash
-        run: |
-          set -euo pipefail
-          cargo +stable xtask check 2>&1 | tee "$RUNNER_TEMP/policy.log"
-          git add --all
-          git diff --cached --check
-          actual="$(git diff --cached --name-only "$BASE_COMMIT" | LC_ALL=C sort)"
-          expected="$(cat <<'FILES'
-          apps/wow-reference-builder/CONTRACT.json
-          apps/wow-reference-builder/README.md
-          apps/wow-reference-builder/src/lib.rs
-          crates/wow-service/src/lib.rs
-          crates/wow-service/src/reference_pack_materialization.rs
-          FILES
-          )"
-          test "$actual" = "$expected"
-          ! grep -R "todo!()\|unimplemented!()" \
-            apps/wow-reference-builder/src/lib.rs \
+          files=(
+            apps/wow-reference-builder/CONTRACT.json
+            apps/wow-reference-builder/README.md
+            apps/wow-reference-builder/src/lib.rs
+            crates/wow-service/src/lib.rs
             crates/wow-service/src/reference_pack_materialization.rs
-          grep -Fq 'wow-service/reference-pack-materialization/e1-d/1' crates/wow-service/src/reference_pack_materialization.rs
-          grep -Fq 'operator_review_before_any_retry' crates/wow-service/src/reference_pack_materialization.rs
-          grep -Fq 'materialization_operation_id' apps/wow-reference-builder/src/lib.rs
-      - name: Retain exact checked source
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/checkpoint"
-          git add --all
-          git write-tree > "$RUNNER_TEMP/checkpoint/CHECKED_TREE"
-          git archive --format=tar -o "$RUNNER_TEMP/checkpoint/checked-source.tar" "$(cat "$RUNNER_TEMP/checkpoint/CHECKED_TREE")"
-          git diff --cached --binary "$BASE_COMMIT" > "$RUNNER_TEMP/checkpoint/formatted.patch"
-          printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/checkpoint/STAGING_SHA"
-          for file in RUST_VERSION clippy.log policy.log; do
-            if test -f "$RUNNER_TEMP/$file"; then cp "$RUNNER_TEMP/$file" "$RUNNER_TEMP/checkpoint/$file"; fi
+          )
+          for path in "${files[@]}"; do
+            mkdir -p "$(dirname "$path")"
+            cp "$RUNNER_TEMP/source/$path" "$path"
           done
-          (cd "$RUNNER_TEMP/checkpoint" && sha256sum checked-source.tar formatted.patch > SHA256SUMS)
-      - name: Upload checkpoint evidence
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: w07-durable-reference-pack-filesystem-effects-${{ github.run_id }}
-          path: ${{ runner.temp }}/checkpoint
-          retention-days: 3
-          if-no-files-found: error
+          git add -- "${files[@]}"
+          actual="$(git diff --cached --name-only | LC_ALL=C sort)"
+          expected="$(printf '%s\n' "${files[@]}" | LC_ALL=C sort)"
+          test "$actual" = "$expected"
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat(app): journal Reference Pack filesystem effects [skip ci]' \
+            -m 'W07 durable-effect slice. Materialization now records exact staging, backup, install, validation, cleanup and rollback checkpoints; restart reconciliation observes output/staging/backup before any retry and preserves ambiguous states for operator review. Selected wow-service/wow-reference-builder Clippy and repository policy passed on Linux with Rust 1.98.1; no tests executed.'
+          git push origin HEAD:main
