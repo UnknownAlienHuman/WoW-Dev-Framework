@@ -1,4 +1,5 @@
 name: W07 durable Reference Pack filesystem effects checkpoint
+run-name: W07 materialization effects ${{ github.sha }}
 on:
   push:
     branches: [main]
@@ -10,7 +11,7 @@ concurrency:
 env:
   BASE_COMMIT: ec4345039c55c25da78289908942d700609df09a
   BASE_TREE: 9d52ccc0ac8b42d46691d93f4096ab456f2c31b9
-  STAGING_PARENT: 2e950f6ff67d3fb615e172a029824f9710906208
+  STAGING_PARENT: 7b20ee9db0f9083e230226ef84be8499ac744a02
   PATCH_SHA256: 02a36dc4b3d6e2076420cbf0382300b507bf69437d7e917d4470fc462ce527ae
 jobs:
   checkpoint:
