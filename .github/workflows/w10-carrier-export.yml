@@ -1,0 +1,41 @@
+name: W10 carrier byte audit
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/w10-carrier-export.yml
+permissions:
+  contents: read
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      RECOVERY_BLOB: 3f85d773eb4c0c658fbe6a03627a9bbc783bd54b
+    steps:
+      - name: Fetch exact Git blob bytes
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/carrier"
+          curl -fsSL --proto '=https' --tlsv1.2 \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/git/blobs/$RECOVERY_BLOB" \
+            > "$RUNNER_TEMP/carrier/blob.json"
+          python - "$RUNNER_TEMP/carrier/blob.json" "$RUNNER_TEMP/carrier/carrier.raw" <<'PY'
+          import base64, json, pathlib, sys
+          payload = json.loads(pathlib.Path(sys.argv[1]).read_text())
+          pathlib.Path(sys.argv[2]).write_bytes(base64.b64decode(payload['content']))
+          PY
+          sha256sum "$RUNNER_TEMP/carrier/carrier.raw" > "$RUNNER_TEMP/carrier/SHA256SUMS"
+          wc -c "$RUNNER_TEMP/carrier/carrier.raw"
+          xxd -l 256 "$RUNNER_TEMP/carrier/carrier.raw"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: w10-malformed-carrier-${{ github.run_id }}
+          path: ${{ runner.temp }}/carrier
+          retention-days: 3
+          if-no-files-found: error
