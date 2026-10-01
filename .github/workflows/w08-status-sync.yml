@@ -1,4 +1,4 @@
-name: W08 status ledger synchronization
+name: W08 status ledger synchronization v2
 on:
   push:
     branches: [main]
@@ -16,6 +16,7 @@ jobs:
     env:
       BASE_COMMIT: b6ea5981b2372468e332b30c0bdd697ce3b52301
       BASE_TREE: 312caed69e65a5b907dfa219e2fb3aa739837ece
+      STAGING_PARENT: 4c0766477cf8d5b81f1fa4499702a925dcc376d8
       PATCH_SHA256: 02b8b01435848645c9dcfb398d20ec7c39a437266c4e3abfcfbf7ba4c9f8ec2d
       PRODUCT_TREE: 9d67403801a92992105ba5f92e8b9580bcab973c
     steps:
@@ -28,7 +29,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git rev-parse "${GITHUB_SHA}^")" = "$BASE_COMMIT"
+          test "$(git rev-parse "${GITHUB_SHA}^")" = "$STAGING_PARENT"
           cat .ci/w08-status-sync.patch.xz.b64.* > "$RUNNER_TEMP/status.patch.xz.b64"
           base64 -d "$RUNNER_TEMP/status.patch.xz.b64" > "$RUNNER_TEMP/status.patch.xz"
           xz -dc "$RUNNER_TEMP/status.patch.xz" > "$RUNNER_TEMP/status.patch"
