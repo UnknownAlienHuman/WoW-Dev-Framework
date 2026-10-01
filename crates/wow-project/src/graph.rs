@@ -1,5 +1,6 @@
 //! Direct source/load/XML proposals. No recognizer inference or graph publication.
 mod functions;
+mod packages;
 pub mod persistence;
 mod retained_evidence;
 mod source_read;
@@ -22,6 +23,10 @@ pub use scripts::{
 };
 mod mixins;
 pub use functions::{ProjectGraphCallSite, ProjectGraphFunction};
+pub use packages::{
+    ProjectGraphPackage, ProjectGraphPackageDependency, ProjectGraphPackageDependencyOutcome,
+    ProjectGraphPackageFile, ProjectGraphPackageLoad, ProjectGraphPackageLoadOutcome,
+};
 mod xml;
 pub use mixins::{
     ProjectGraphLuaDeclaration, ProjectGraphMixinOutcome, ProjectGraphMixinReference,
@@ -50,11 +55,12 @@ use crate::{
     ProjectError, ProjectErrorCode, ProjectKind, ProjectPhase, ProjectResult, ProjectView,
 };
 
-pub const SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/7";
+pub const SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/8";
 pub const SOURCE_GRAPH_PARTITION: &str = "wow-project.source-load";
 const MAX_FILES: usize = 4096;
 const MAX_LOADS: usize = 8192;
 const MAX_NODES: usize = MAX_FILES
+    + packages::MAX_PACKAGE_NODES
     + xml::MAX_DECLARATIONS
     + mixins::MAX_DECLARATIONS
     + functions::MAX_FUNCTIONS
@@ -62,6 +68,7 @@ const MAX_NODES: usize = MAX_FILES
     + state::MAX_ROOTS
     + state::MAX_PATHS;
 const MAX_EDGES: usize = MAX_LOADS
+    + packages::MAX_PACKAGE_RELATIONS
     + xml::MAX_DECLARATIONS
     + xml::MAX_INHERITANCE_REFERENCES
     + mixins::MAX_DECLARATIONS
@@ -94,6 +101,10 @@ pub struct ProjectGraphProvenance {
     analyzer_snapshot_id: String,
     context: GenerationContext,
     files: Vec<ProjectGraphFile>,
+    packages: Vec<ProjectGraphPackage>,
+    package_files: Vec<ProjectGraphPackageFile>,
+    package_dependencies: Vec<ProjectGraphPackageDependency>,
+    package_loads: Vec<ProjectGraphPackageLoad>,
     xml_declarations: Vec<ProjectGraphXmlDeclaration>,
     xml_inheritance: Vec<ProjectGraphXmlReference>,
     lua_declarations: Vec<ProjectGraphLuaDeclaration>,
@@ -119,11 +130,31 @@ pub struct ProjectGraphProvenance {
     evidence: BTreeMap<EvidenceId, EvidenceRecord>,
     #[serde(skip_serializing_if = "Option::is_none")]
     load_plan: Option<crate::load::ProjectLoadPlan>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    package_load_plan: Option<crate::load::ProjectPackageLoadPlan>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    package_main_plan: Option<crate::load::ProjectPackageMainPlan>,
     skipped_missing_targets: usize,
     skipped_self_loads: usize,
 }
 
 impl ProjectGraphProvenance {
+    #[must_use]
+    pub fn packages(&self) -> &[ProjectGraphPackage] {
+        &self.packages
+    }
+    #[must_use]
+    pub fn package_files(&self) -> &[ProjectGraphPackageFile] {
+        &self.package_files
+    }
+    #[must_use]
+    pub fn package_dependencies(&self) -> &[ProjectGraphPackageDependency] {
+        &self.package_dependencies
+    }
+    #[must_use]
+    pub fn package_loads(&self) -> &[ProjectGraphPackageLoad] {
+        &self.package_loads
+    }
     pub fn state_declarations(&self) -> &[ProjectGraphStateDeclaration] {
         &self.state_declarations
     }
@@ -251,6 +282,13 @@ fn registry() -> ProjectResult<GraphRegistryBundle> {
         vec![GraphConfidence::Proven],
     )
     .map_err(|_| invalid())?;
+    let package = GraphEntityKindDefinition::new(
+        "source_package",
+        vec!["project".into()],
+        vec!["package".into()],
+        vec![GraphConfidence::Proven],
+    )
+    .map_err(|_| invalid())?;
     // The load axis also requires DependsOn; it remains explicitly unevaluated.
     let mut relations = [
         ("source_loads", GraphRelationKind::Loads),
@@ -268,6 +306,36 @@ fn registry() -> ProjectResult<GraphRegistryBundle> {
         .map_err(|_| invalid())
     })
     .collect::<ProjectResult<Vec<_>>>()?;
+    relations.push(
+        GraphRelationKindDefinition::new(
+            "source_package_owns",
+            GraphRelationKind::Owns,
+            vec!["source_package".into()],
+            vec!["source_file".into()],
+            vec![GraphConfidence::Proven],
+        )
+        .map_err(|_| invalid())?,
+    );
+    relations.push(
+        GraphRelationKindDefinition::new(
+            "source_package_loads",
+            GraphRelationKind::Loads,
+            vec!["source_package".into()],
+            vec!["source_file".into()],
+            vec![GraphConfidence::Proven, GraphConfidence::Possible],
+        )
+        .map_err(|_| invalid())?,
+    );
+    relations.push(
+        GraphRelationKindDefinition::new(
+            "source_package_depends_on",
+            GraphRelationKind::DependsOn,
+            vec!["source_package".into()],
+            vec!["source_package".into()],
+            vec![GraphConfidence::Proven, GraphConfidence::Possible],
+        )
+        .map_err(|_| invalid())?,
+    );
     let declaration = GraphEntityKindDefinition::new(
         "xml_source_declaration",
         vec!["project".into()],
@@ -384,9 +452,10 @@ fn registry() -> ProjectResult<GraphRegistryBundle> {
     }
     GraphRegistryBundle::build(
         "wow-project.source-load",
-        "7",
+        "8",
         vec![
             file,
+            package,
             declaration,
             lua,
             function,
@@ -459,20 +528,88 @@ pub fn build_source_graph_proposals(
     crate::analyzer::checkpoint(stop)?;
     let config = project.configuration();
     let plan = config.load_plan();
-    let sources = if let Some(plan) = plan {
+    let package_plan = config.package_load_plan();
+    let package_main_plan = config.package_main_plan();
+    if package_plan.is_some() != package_main_plan.is_some()
+        || (plan.is_some() && package_plan.is_some())
+    {
+        return Err(invalid());
+    }
+    let mut projected_sources = BTreeMap::<String, LoadSource>::new();
+    let mut retained_documents = BTreeMap::<String, &str>::new();
+    if let Some(plan) = plan {
         plan.validate_profile(config.selected_profile())?;
-        plan.sources().to_vec()
+        for source in plan.sources() {
+            projected_sources.insert(source.path.clone(), source.clone());
+            if let Some(text) = plan.document_text(&source.path) {
+                retained_documents.insert(source.path.clone(), text);
+            }
+        }
+    } else if let (Some(package_plan), Some(main_plan)) = (package_plan, package_main_plan) {
+        package_plan.validate_profile(config.selected_profile())?;
+        main_plan.validate_load_plan(package_plan)?;
+        for receipt in main_plan.files() {
+            let selected = package_plan
+                .package_plan(&receipt.package)
+                .ok_or_else(invalid)?;
+            let source = selected
+                .sources()
+                .iter()
+                .find(|source| source.path == receipt.source_path)
+                .ok_or_else(invalid)?;
+            if source.content_digest != receipt.content_digest
+                || source.byte_length != receipt.byte_length
+            {
+                return Err(invalid());
+            }
+            projected_sources.insert(
+                receipt.project_path.clone(),
+                LoadSource {
+                    path: receipt.project_path.clone(),
+                    content_digest: receipt.content_digest,
+                    byte_length: receipt.byte_length,
+                },
+            );
+        }
+        for package in package_plan.packages() {
+            let selected = package_plan
+                .package_plan(&package.package)
+                .ok_or_else(invalid)?;
+            for source in selected.sources() {
+                let Some(text) = selected.document_text(&source.path) else {
+                    continue;
+                };
+                let path = format!(
+                    "{}/{}/{}",
+                    crate::load::PACKAGE_MAIN_NAMESPACE_ROOT,
+                    package.package,
+                    source.path
+                );
+                let projected = LoadSource {
+                    path: path.clone(),
+                    content_digest: source.content_digest,
+                    byte_length: source.byte_length,
+                };
+                if projected_sources
+                    .insert(path.clone(), projected.clone())
+                    .is_some_and(|prior| prior != projected)
+                {
+                    return Err(invalid());
+                }
+                retained_documents.insert(path, text);
+            }
+        }
     } else {
-        project
-            .file_manifest()
-            .iter()
-            .map(|f| LoadSource {
-                path: f.relative_path().as_str().to_owned(),
-                content_digest: f.content_digest(),
-                byte_length: f.byte_length(),
-            })
-            .collect()
-    };
+        for file in project.file_manifest() {
+            let source = LoadSource {
+                path: file.relative_path().as_str().to_owned(),
+                content_digest: file.content_digest(),
+                byte_length: file.byte_length(),
+            };
+            projected_sources.insert(source.path.clone(), source);
+        }
+    }
+    let sources = projected_sources.into_values().collect::<Vec<_>>();
     if sources.is_empty() || sources.len() > MAX_FILES {
         return Err(exhausted());
     }
@@ -494,8 +631,9 @@ pub fn build_source_graph_proposals(
                 return Err(invalid());
             }
         } else {
-            let text = plan
-                .and_then(|p| p.document_text(&source.path))
+            let text = retained_documents
+                .get(&source.path)
+                .copied()
                 .ok_or_else(invalid)?;
             if text.len() as u64 != source.byte_length
                 || crate::identity::source_digest(text.as_bytes()) != source.content_digest
@@ -544,6 +682,10 @@ pub fn build_source_graph_proposals(
         analyzer_snapshot_id: project.analyzer_snapshot_id().into(),
         context: project.snapshot().generation_context().clone(),
         files: Vec::new(),
+        packages: Vec::new(),
+        package_files: Vec::new(),
+        package_dependencies: Vec::new(),
+        package_loads: Vec::new(),
         xml_declarations: Vec::new(),
         xml_inheritance: Vec::new(),
         lua_declarations: Vec::new(),
@@ -565,6 +707,8 @@ pub fn build_source_graph_proposals(
         source_handles: BTreeMap::new(),
         evidence: BTreeMap::new(),
         load_plan: plan.cloned(),
+        package_load_plan: package_plan.cloned(),
+        package_main_plan: package_main_plan.cloned(),
         skipped_missing_targets: 0,
         skipped_self_loads: 0,
     };
@@ -665,6 +809,16 @@ pub fn build_source_graph_proposals(
             );
         }
     }
+    let packages = packages::project(
+        project,
+        &ids,
+        &source_by_path,
+        &mut provenance,
+        &mut text_bytes,
+        stop,
+    )?;
+    entities.extend(packages.entities);
+    relations.extend(packages.relations);
     let xml = xml::project(project, &ids, &mut provenance, &mut text_bytes, stop)?;
     entities.extend(xml.entities);
     relations.extend(xml.relations);
@@ -735,13 +889,19 @@ pub fn build_source_graph_proposals(
         .map_err(|_| invalid())?,
         GraphCoverageRecord::new(
             GraphRelationKind::Owns,
-            if provenance.functions.is_empty() && provenance.state_roots.is_empty() {
+            if provenance.functions.is_empty()
+                && provenance.state_roots.is_empty()
+                && provenance.packages.is_empty()
+            {
                 xml_state
             } else {
                 GraphCoverageState::Partial
             },
             false,
-            vec!["source_graph.document_declaration_and_state_namespace_ownership_only".into()],
+            vec![
+                "source_graph.package_file_document_declaration_and_state_namespace_ownership_only"
+                    .into(),
+            ],
             limits,
         )
         .map_err(|_| invalid())?,
@@ -755,21 +915,32 @@ pub fn build_source_graph_proposals(
         .map_err(|_| invalid())?,
         GraphCoverageRecord::new(
             GraphRelationKind::Loads,
-            if plan.is_some() {
+            if plan.is_some() || package_plan.is_some() {
                 GraphCoverageState::Partial
             } else {
                 GraphCoverageState::NotEvaluated
             },
             false,
-            vec!["source_graph.direct_file_references_only".into()],
+            vec![
+                "source_graph.direct_file_and_static_package_load_references_only".into(),
+                "source_graph.package_loads_are_not_runtime_load_success".into(),
+            ],
             limits,
         )
         .map_err(|_| invalid())?,
         GraphCoverageRecord::new(
             GraphRelationKind::DependsOn,
-            GraphCoverageState::NotEvaluated,
+            if package_plan.is_some() {
+                GraphCoverageState::Partial
+            } else {
+                GraphCoverageState::NotEvaluated
+            },
             false,
-            vec!["source_graph.package_dependencies_not_evaluated".into()],
+            vec![
+                "source_graph.explicit_selected_toc_package_dependencies_only".into(),
+                "source_graph.optional_dependencies_are_possible_not_runtime_presence".into(),
+                "source_graph.no_dependency_negative_authority".into(),
+            ],
             limits,
         )
         .map_err(|_| invalid())?,

@@ -411,6 +411,8 @@ pub struct ProjectPackageLoadPlan {
     issues: Vec<ProjectPackageLoadIssue>,
     coverage: ProjectPackageLoadCoverage,
     digest: ContentDigest<CanonicalResult>,
+    #[serde(skip)]
+    retained_plans: BTreeMap<String, ProjectLoadPlan>,
 }
 
 impl ProjectPackageLoadPlan {
@@ -449,6 +451,35 @@ impl ProjectPackageLoadPlan {
         self.coverage
     }
 
+    /// Reopen the exact selected-TOC receipt for one admitted package. These
+    /// source-backed plans are deliberately excluded from serialized output,
+    /// but their digests are already committed by every package node.
+    #[must_use]
+    pub fn package_plan(&self, package: &str) -> Option<&ProjectLoadPlan> {
+        self.retained_plans.get(package)
+    }
+
+    fn validate_retained_plans(&self) -> ProjectResult<()> {
+        if self.retained_plans.len() != self.packages.len() {
+            return Err(invalid(
+                "package load plan does not retain every selected TOC receipt",
+            ));
+        }
+        for package in &self.packages {
+            let Some(plan) = self.retained_plans.get(&package.package) else {
+                return Err(invalid("package selected TOC receipt is missing"));
+            };
+            if plan.digest() != package.selected_plan_digest
+                || plan.selected_toc() != package.selected_toc
+            {
+                return Err(invalid(
+                    "package selected TOC receipt differs from its canonical node",
+                ));
+            }
+        }
+        Ok(())
+    }
+
     pub fn validate_profile(&self, profile: &ProfileIdentity) -> ProjectResult<()> {
         if self.target_interface != profile.interface()
             || self.target_flavor != profile.flavor_id()
@@ -458,6 +489,7 @@ impl ProjectPackageLoadPlan {
                 "package load plan target differs from the selected profile",
             ));
         }
+        self.validate_retained_plans()?;
         Ok(())
     }
 }
@@ -558,8 +590,18 @@ impl ProjectPackageLoadInput {
         let mut files = Vec::new();
         let mut receipts = Vec::new();
         let mut folded_paths = BTreeSet::new();
+        let reachability = self
+            .plan
+            .packages()
+            .iter()
+            .map(|package| (package.package.as_str(), package.reachability))
+            .collect::<BTreeMap<_, _>>();
         for loaded in self.packages {
             let package = loaded.package;
+            if reachability.get(package.as_str()) == Some(&ProjectPackageReachability::Unreachable)
+            {
+                continue;
+            }
             for file in loaded.files {
                 let source_path = file.relative_path().as_str().to_owned();
                 let project_path = format!("{PACKAGE_MAIN_NAMESPACE_ROOT}/{package}/{source_path}");
@@ -1130,8 +1172,12 @@ fn build_plan(
         },
         ProjectPhase::Inventory,
     )?;
+    let retained_plans = loaded
+        .iter()
+        .map(|package| (package.package.clone(), package.plan.clone()))
+        .collect::<BTreeMap<_, _>>();
     checkpoint(stop)?;
-    Ok(ProjectPackageLoadPlan {
+    let plan = ProjectPackageLoadPlan {
         profile: PACKAGE_LOAD_PROFILE,
         target_flavor: profile.flavor_id().to_owned(),
         target_interface: profile.interface(),
@@ -1143,7 +1189,10 @@ fn build_plan(
         issues,
         coverage,
         digest,
-    })
+        retained_plans,
+    };
+    plan.validate_retained_plans()?;
+    Ok(plan)
 }
 
 fn local_file_closure_complete(plan: &ProjectLoadPlan) -> bool {

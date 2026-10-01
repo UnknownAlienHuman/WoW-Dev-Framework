@@ -9,7 +9,8 @@ use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use wow_graph::{GraphPartitionReplacement, GraphPartitionSnapshot, GraphSnapshot};
 use wow_project::graph::{
-    ProjectGraphProvenance, SOURCE_GRAPH_PROFILE, build_source_graph_proposals,
+    ProjectGraphPackageDependencyOutcome, ProjectGraphPackageLoadOutcome, ProjectGraphProvenance,
+    SOURCE_GRAPH_PROFILE, build_source_graph_proposals,
 };
 
 mod calls;
@@ -36,6 +37,10 @@ struct BuiltGraph {
     script_edges: Vec<ScriptEdge>,
     digest: Box<str>,
     file_nodes: Vec<FileNode>,
+    package_nodes: Vec<PackageNode>,
+    package_file_edges: Vec<PackageFileEdge>,
+    package_dependency_edges: Vec<PackageDependencyEdge>,
+    package_load_edges: Vec<PackageLoadEdge>,
     xml_nodes: Vec<XmlNode>,
     lua_nodes: Vec<LuaNode>,
     function_nodes: Vec<FunctionNode>,
@@ -62,7 +67,7 @@ impl GraphBuildRequest {
             GenerationSelector::exact(generation)?
         };
         Ok(Self {
-            schema: "wow-service/graph-build-request/7",
+            schema: "wow-service/graph-build-request/8",
             project_id,
             selector,
             projection: SOURCE_GRAPH_PROFILE,
@@ -74,6 +79,41 @@ impl GraphBuildRequest {
 struct FileNode {
     path: String,
     node_id: wow_graph::GraphNodeId,
+}
+
+#[derive(Debug, Serialize)]
+struct PackageNode {
+    package: String,
+    order_group: u64,
+    reachability: wow_project::load::ProjectPackageReachability,
+    phase: wow_project::load::ProjectPackageLoadPhase,
+    node_id: wow_graph::GraphNodeId,
+}
+
+#[derive(Debug, Serialize)]
+struct PackageFileEdge {
+    package: String,
+    path: String,
+    edge_id: wow_graph::GraphEdgeId,
+}
+
+#[derive(Debug, Serialize)]
+struct PackageDependencyEdge {
+    ordinal: u64,
+    package: String,
+    dependency: String,
+    kind: wow_project::load::TocDependencyKind,
+    confidence: wow_graph::GraphConfidence,
+    edge_id: wow_graph::GraphEdgeId,
+}
+
+#[derive(Debug, Serialize)]
+struct PackageLoadEdge {
+    unit_digest: wow_core::ContentDigest<wow_core::CanonicalResult>,
+    package: String,
+    target: String,
+    confidence: wow_graph::GraphConfidence,
+    edge_id: wow_graph::GraphEdgeId,
 }
 
 #[derive(Debug, Serialize)]
@@ -98,6 +138,10 @@ pub struct GraphBuildResult {
     request_digest: Box<str>,
     status: GraphReadStatus,
     file_nodes: Vec<FileNode>,
+    package_nodes: Vec<PackageNode>,
+    package_file_edges: Vec<PackageFileEdge>,
+    package_dependency_edges: Vec<PackageDependencyEdge>,
+    package_load_edges: Vec<PackageLoadEdge>,
     xml_nodes: Vec<XmlNode>,
     lua_nodes: Vec<LuaNode>,
     function_nodes: Vec<FunctionNode>,
@@ -151,6 +195,10 @@ impl GraphBuildResult {
 
     fn fail(&mut self, code: ServiceErrorCode) {
         self.file_nodes.clear();
+        self.package_nodes.clear();
+        self.package_file_edges.clear();
+        self.package_dependency_edges.clear();
+        self.package_load_edges.clear();
         self.xml_nodes.clear();
         self.lua_nodes.clear();
         self.function_nodes.clear();
@@ -191,11 +239,15 @@ pub fn execute_graph_build(
 ) -> ServiceResult<GraphBuildResult> {
     let request_digest = super::hash(&bounded(request, super::GRAPH_REQUEST_MAX_BYTES)?);
     let mut result = GraphBuildResult {
-        schema: "wow-service/graph-build-result/7",
+        schema: "wow-service/graph-build-result/8",
         request: request.clone(),
         request_digest,
         status: GraphReadStatus::Partial,
         file_nodes: Vec::new(),
+        package_nodes: Vec::new(),
+        package_file_edges: Vec::new(),
+        package_dependency_edges: Vec::new(),
+        package_load_edges: Vec::new(),
         xml_nodes: Vec::new(),
         lua_nodes: Vec::new(),
         function_nodes: Vec::new(),
@@ -218,7 +270,8 @@ pub fn execute_graph_build(
             "state_alias_links_are_possible_and_reassigned_local_bindings_are_not_followed",
             "state_fractional_dynamic_keys_environment_changes_and_inline_xml_not_evaluated",
             "not_coherent_project_store_publication",
-            "package_dependencies_not_evaluated",
+            "package_dependencies_and_order_are_static_selected_toc_evidence_not_runtime_load_success",
+            "package_order_groups_remain_exact_provenance_not_synthetic_transitive_edges",
             "dynamic_library_inline_xml_calls_and_other_recognizers_not_evaluated",
             "xml_runtime_objects_parentage_and_mixin_execution_not_evaluated",
             "library_mixin_and_handler_targets_not_projected",
@@ -233,6 +286,10 @@ pub fn execute_graph_build(
             provenance,
             digest,
             file_nodes,
+            package_nodes,
+            package_file_edges,
+            package_dependency_edges,
+            package_load_edges,
             xml_nodes,
             lua_nodes,
             function_nodes,
@@ -246,6 +303,10 @@ pub fn execute_graph_build(
             script_edges,
         }) => {
             result.file_nodes = file_nodes;
+            result.package_nodes = package_nodes;
+            result.package_file_edges = package_file_edges;
+            result.package_dependency_edges = package_dependency_edges;
+            result.package_load_edges = package_load_edges;
             result.xml_nodes = xml_nodes;
             result.lua_nodes = lua_nodes;
             result.function_nodes = function_nodes;
@@ -338,6 +399,63 @@ fn compose(
             node_id: materialized_node_id(&snapshot, &file.proposal_id, limits)?,
         });
     }
+    let mut package_nodes = Vec::new();
+    for package in provenance.packages() {
+        checkpoint(stop)?;
+        package_nodes.push(PackageNode {
+            package: package.package.clone(),
+            order_group: package.order_group,
+            reachability: package.reachability,
+            phase: package.phase,
+            node_id: materialized_node_id(&snapshot, &package.proposal_id, limits)?,
+        });
+    }
+    let mut package_file_edges = Vec::new();
+    for receipt in provenance.package_files() {
+        checkpoint(stop)?;
+        package_file_edges.push(PackageFileEdge {
+            package: receipt.package.clone(),
+            path: receipt.path.clone(),
+            edge_id: materialized_edge_id(&snapshot, &receipt.proposal_id)?,
+        });
+    }
+    let mut package_dependency_edges = Vec::new();
+    for dependency in provenance.package_dependencies() {
+        checkpoint(stop)?;
+        let ProjectGraphPackageDependencyOutcome::Projected {
+            proposal_id,
+            confidence,
+        } = &dependency.outcome
+        else {
+            continue;
+        };
+        package_dependency_edges.push(PackageDependencyEdge {
+            ordinal: dependency.ordinal,
+            package: dependency.package.clone(),
+            dependency: dependency.dependency.clone(),
+            kind: dependency.kind,
+            confidence: *confidence,
+            edge_id: materialized_edge_id(&snapshot, proposal_id)?,
+        });
+    }
+    let mut package_load_edges = Vec::new();
+    for load in provenance.package_loads() {
+        checkpoint(stop)?;
+        let ProjectGraphPackageLoadOutcome::Projected {
+            proposal_id,
+            confidence,
+        } = &load.outcome
+        else {
+            continue;
+        };
+        package_load_edges.push(PackageLoadEdge {
+            unit_digest: load.unit_digest,
+            package: load.package.clone(),
+            target: load.target.clone(),
+            confidence: *confidence,
+            edge_id: materialized_edge_id(&snapshot, proposal_id)?,
+        });
+    }
     let mut xml_nodes = Vec::new();
     for declaration in provenance.xml_declarations() {
         checkpoint(stop)?;
@@ -377,6 +495,10 @@ fn compose(
         provenance,
         digest: super::hash(&bytes),
         file_nodes,
+        package_nodes,
+        package_file_edges,
+        package_dependency_edges,
+        package_load_edges,
         xml_nodes,
         lua_nodes,
         function_nodes,
@@ -418,6 +540,25 @@ fn materialized_node_id(
         return Err(error(ServiceErrorCode::InternalContractViolation));
     }
     Ok(node.node_id().clone())
+}
+
+/// Rebind an accepted source-partition proposal to its exact materialized edge.
+fn materialized_edge_id(
+    snapshot: &GraphPartitionSnapshot,
+    proposal_id: &str,
+) -> ServiceResult<wow_graph::GraphEdgeId> {
+    let partition = snapshot
+        .partition(wow_project::graph::SOURCE_GRAPH_PARTITION)
+        .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?;
+    let accepted = partition.report().accepted_relations();
+    let index = accepted
+        .binary_search_by(|entry| entry.proposal_id().cmp(proposal_id))
+        .map_err(|_| error(ServiceErrorCode::InternalContractViolation))?;
+    let edge = accepted[index].edge();
+    if snapshot.snapshot().edge(edge.edge_id()).is_none() {
+        return Err(error(ServiceErrorCode::InternalContractViolation));
+    }
+    Ok(edge.edge_id().clone())
 }
 
 fn checkpoint(stop: &AtomicBool) -> ServiceResult<()> {
