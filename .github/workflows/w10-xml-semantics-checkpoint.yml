@@ -1,4 +1,4 @@
-name: W10 XML semantic checkpoint
+name: W10 XML semantic checkpoint v2
 on:
   push:
     branches: [main]
@@ -16,18 +16,19 @@ jobs:
     env:
       BASE_COMMIT: 00146db7404fd8755d3251574b156963919ac251
       BASE_TREE: d8b01df5ad4ebf5b0391b747a4bf254b97d99784
-      PATCH_SHA256: 7925e69f3cba12a8afcc40d4413d6e400dfc1d9e6f19e97fbac349d6b81d8f15
+      TRIGGER_PARENT: 6cd6d8fc361d282142a8c447ffd713f2f28e1530
+      PATCH_SHA256: 1dd088bafd79824de08523305a69d70f38969ab8a180dd1ebc3103777826b3da
     steps:
       - uses: actions/checkout@v7
         with:
           ref: main
           fetch-depth: 0
-      - name: Admit exact W10 patch and remove checkpoint transport
+      - name: Admit corrected W10 patch and remove checkpoint transport
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git rev-parse "${GITHUB_SHA}^")" = "$BASE_COMMIT"
+          test "$(git rev-parse "${GITHUB_SHA}^")" = "$TRIGGER_PARENT"
           cat .ci/w10-xml-semantics.patch.xz.b64.* > "$RUNNER_TEMP/w10.patch.xz.b64"
           base64 -d "$RUNNER_TEMP/w10.patch.xz.b64" > "$RUNNER_TEMP/w10.patch.xz"
           xz -dc "$RUNNER_TEMP/w10.patch.xz" > "$RUNNER_TEMP/w10.patch"
