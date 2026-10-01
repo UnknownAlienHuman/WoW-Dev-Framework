@@ -1,4 +1,4 @@
-name: W08 API snapshot checkpoint
+name: W08 API snapshot checkpoint v2
 on:
   push:
     branches: [main]
@@ -16,6 +16,7 @@ jobs:
     env:
       BASE_COMMIT: 39451ba53dcc43bbc8fda5407c9b8bd233a50fa6
       BASE_TREE: cd90e1e5c028a94073e34beb447c53af8d3dd28f
+      STAGING_PARENT: f05a4147abde41d6aaf4b325a657a4d6f1dcbf87
       PATCH_SHA256: 1e082070b644ac93d91e8ec729569396fce59b0220d65311bfd1fb28260c4d8d
     steps:
       - uses: actions/checkout@v7
@@ -28,7 +29,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git rev-parse "${GITHUB_SHA}^")" = "$BASE_COMMIT"
+          test "$(git rev-parse "${GITHUB_SHA}^")" = "$STAGING_PARENT"
           cat .ci/w08-api-snapshot.patch.xz.b64.* > "$RUNNER_TEMP/w08-api.patch.xz.b64"
           base64 -d "$RUNNER_TEMP/w08-api.patch.xz.b64" > "$RUNNER_TEMP/w08-api.patch.xz"
           xz -dc "$RUNNER_TEMP/w08-api.patch.xz" > "$RUNNER_TEMP/w08-api.patch"
