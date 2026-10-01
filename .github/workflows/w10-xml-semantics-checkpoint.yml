@@ -1,4 +1,4 @@
-name: W10 XML semantic checkpoint v3
+name: W10 XML semantic checkpoint v4
 on:
   push:
     branches: [main]
@@ -16,14 +16,14 @@ jobs:
     env:
       BASE_COMMIT: 00146db7404fd8755d3251574b156963919ac251
       BASE_TREE: d8b01df5ad4ebf5b0391b747a4bf254b97d99784
-      TRIGGER_PARENT: 2b3004182d1ce470a629ef3a0d2f5a1a877f590b
-      PATCH_SHA256: ccdaee111695cba7ae46b1fb83585d243b1f81b3917e6da6525d696d252680b1
+      TRIGGER_PARENT: 86f1eb0d53f3af10c92989a7623a6639c8ae91b6
+      PATCH_SHA256: 488c85988ddbf30dc25e3f7e87d94a00848136be2b5e08c8b48947d6db7c68d8
     steps:
       - uses: actions/checkout@v7
         with:
           ref: main
           fetch-depth: 0
-      - name: Admit compiler-corrected W10 patch and remove checkpoint transport
+      - name: Admit borrow-corrected W10 patch and remove checkpoint transport
         shell: bash
         run: |
           set -euo pipefail
