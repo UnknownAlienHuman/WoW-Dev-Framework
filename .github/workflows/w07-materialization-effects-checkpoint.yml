@@ -10,7 +10,8 @@ concurrency:
 env:
   BASE_COMMIT: ec4345039c55c25da78289908942d700609df09a
   BASE_TREE: 9d52ccc0ac8b42d46691d93f4096ab456f2c31b9
-  PATCH_SHA256: 7f2f6eee999cae076464904a187063433e4e512819b84b71dbe1050e20af5b27
+  STAGING_PARENT: 2e950f6ff67d3fb615e172a029824f9710906208
+  PATCH_SHA256: 02a36dc4b3d6e2076420cbf0382300b507bf69437d7e917d4470fc462ce527ae
 jobs:
   checkpoint:
     runs-on: ubuntu-latest
@@ -21,12 +22,12 @@ jobs:
           ref: main
           fetch-depth: 0
           persist-credentials: false
-      - name: Admit exact product patch and remove checkpoint transport
+      - name: Admit corrected product patch and remove checkpoint transport
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git rev-parse "${GITHUB_SHA}^")" = "$BASE_COMMIT"
+          test "$(git rev-parse "${GITHUB_SHA}^")" = "$STAGING_PARENT"
           xz -dc .ci/w07-materialization-effects.patch.xz > "$RUNNER_TEMP/w07-materialization-effects.patch"
           printf '%s  %s\n' "$PATCH_SHA256" "$RUNNER_TEMP/w07-materialization-effects.patch" | sha256sum -c -
           git rm -- .ci/w07-materialization-effects.patch.xz .github/workflows/w07-materialization-effects-checkpoint.yml
