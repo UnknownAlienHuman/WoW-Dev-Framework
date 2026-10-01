@@ -148,19 +148,67 @@ pub fn build(root: &Path, selector: &str, label: &str) -> Result<Value> {
     value["manifest_sha256"] = json!(digest(&serde_json::to_vec(&value)?));
     Ok(value)
 }
-/// New-only publication. Failed writes remove only the file this call created;
-/// an existing destination is never overwritten. Not a crash-durable store port.
-pub fn write_new(path: &Path, value: &Value) -> Result<()> {
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PublishState {
+    Created,
+    Existing,
+}
+
+/// Publish a manifest without overwriting unrelated bytes. An existing exact
+/// manifest is adopted; any other existing object is a conflict.
+pub fn publish_exact(path: &Path, value: &Value) -> Result<PublishState> {
+    let bytes = serialized(value)?;
+    match fs::symlink_metadata(path) {
+        Ok(metadata) => {
+            if !metadata.is_file()
+                || metadata.file_type().is_symlink()
+                || metadata.len() > MAX_MANIFEST as u64
+            {
+                return Err("manifest destination is not a safe bounded regular file".into());
+            }
+            let mut existing = Vec::new();
+            fs::File::open(path)?
+                .take(MAX_MANIFEST as u64 + 1)
+                .read_to_end(&mut existing)?;
+            if existing.len() as u64 != metadata.len() || existing.len() > MAX_MANIFEST {
+                return Err("manifest destination changed while being read".into());
+            }
+            if existing != bytes {
+                return Err("manifest destination already contains different content".into());
+            }
+            Ok(PublishState::Existing)
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            write_new_bytes(path, &bytes)?;
+            Ok(PublishState::Created)
+        }
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn serialized(value: &Value) -> Result<Vec<u8>> {
     let mut bytes = serde_json::to_vec_pretty(value)?;
     bytes.push(b'\n');
+    Ok(bytes)
+}
+
+fn write_new_bytes(path: &Path, bytes: &[u8]) -> Result<()> {
     let mut file = OpenOptions::new().create_new(true).write(true).open(path)?;
-    let result = file.write_all(&bytes).and_then(|_| file.sync_all());
+    let result = file.write_all(bytes).and_then(|_| file.sync_all());
     drop(file);
     if result.is_err() {
         let _ = fs::remove_file(path);
     }
     result?;
     Ok(())
+}
+
+/// New-only publication. Failed writes remove only the file this call created;
+/// an existing destination is never overwritten. Not a crash-durable store port.
+pub fn write_new(path: &Path, value: &Value) -> Result<()> {
+    let bytes = serialized(value)?;
+    write_new_bytes(path, &bytes)
 }
 pub fn verify(file: &Path, root: &Path, current_ref: Option<&str>) -> Result<u8> {
     let mut bytes = Vec::new();

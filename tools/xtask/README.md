@@ -13,6 +13,7 @@ cargo xtask sync-skill --check
 cargo xtask sync-skill --write
 cargo xtask check-source /path/to/checkout live
 cargo xtask update-source /path/to/checkout live --expected-head <observed-local-SHA>
+cargo xtask materialize-source /path/to/request.json
 cargo xtask manifest /path/to/wow-ui-source HEAD live /path/to/new-manifest.json
 cargo xtask verify-manifest /path/to/manifest.json /path/to/wow-ui-source HEAD
 cargo xtask verify-library /path/to/native-output --require-input-complete
@@ -46,8 +47,29 @@ a matching expected HEAD and branch in an exclusively owned standalone checkout,
 fetches one observed commit and verifies state again before applying. Dirty or
 concealed edits, ignored-file overwrites and divergence never trigger a reset,
 stash, branch switch or retry. A failed apply retains its reconciliation lock.
-Private/SSH authentication, managed cloning and update scheduling remain separate work.
+Private/SSH authentication and update scheduling remain separate work.
 The same command can inspect a local EmmyLua checkout by passing its branch.
+
+`materialize-source` is the explicit managed-checkout lane. It accepts one strict
+`wow-source-materialization-request/1` JSON request containing an operation ID,
+`auto`/`prompt`/`never` policy, absolute managed root and manifest output, exact
+GitHub HTTPS origin, branch and selector label. A missing managed checkout is
+staged beside its destination from one observed commit, inventory-verified, then
+installed by same-parent rename. Existing checkouts are updated only when they
+carry the matching `.git/wow-source-managed.json` marker; ordinary operator-owned
+checkouts are never fast-forwarded by this command.
+
+`never` performs observation only. `prompt` returns an exact content-addressed
+plan and requires the caller to repeat the same request with its plan ID, before
+revision and selected revision; the moving branch is not resolved again. `auto`
+executes the exact observed plan. Durable operation/checkpoint/receipt files are
+kept in a private same-parent operation directory. An exact completed receipt is
+replayed without Git or filesystem effects. Interrupted clone/install/update
+states are inspected before any retry; a foreign staging root, conflicting output
+or applying update lock becomes exit 5 and `operator_review_before_any_retry`.
+The operation never resets, cleans, stashes, switches an operator branch, deletes
+an uncertain lock, follows redirects, runs hooks/submodules/scripts, or prints the
+origin or host paths. See [managed source materialization](../../docs/SOURCE_MATERIALIZATION.md).
 
 `manifest` inventories one exact Git snapshot using raw blobs, per-repository
 Git object hashing and independent SHA-256. Export attributes and dirty files do
@@ -64,9 +86,10 @@ issues still return partial. Source hashes in sidecars identify recorded evidenc
 this validator alone does not independently prove their upstream provenance or
 language-server semantics. The current-source workflow runs the actual loader.
 
-Exit status: 0 verified; 2 invalid/failed; 3 drift, differing/stale revision or
-partial projection; 4 network observation/acquisition unavailable (`check-source`
-or `update-source`); 5 interrupted/uncertain source apply requiring reconciliation.
+Exit status: 0 verified/materialized; 2 invalid/failed; 3 authorization required,
+drift, differing/stale revision or partial projection; 4 network observation or
+exact acquisition unavailable; 5 interrupted/uncertain source effect requiring
+reconciliation.
 Verification is read-only. Manifest publication is new-only, not crash-durable
 store publication. Git subprocesses have output bounds and deadlines; no shell
 runner, repository hooks or lazy fetching is used for local object reads.

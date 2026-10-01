@@ -1,5 +1,6 @@
 //! Explicit source-data update. No source library or Wasm guest gains host IO.
 mod lock;
+mod materialize;
 mod remote;
 mod state;
 #[cfg(test)]
@@ -15,6 +16,11 @@ pub fn run(root: &Path, branch: &str, expected: &str) -> Result<u8> {
     println!("{report}");
     Ok(code)
 }
+
+pub fn run_materialize(request: &Path) -> Result<u8> {
+    materialize::run(request)
+}
+
 fn report(status: &str, before: &str, selected: Option<&str>, after: Option<&str>) -> Value {
     json!({"schema":"wow-source-update/1", "status":status,
         "before_revision":before, "selected_remote_revision":selected, "after_revision":after,
@@ -46,43 +52,81 @@ fn update(root: &Path, branch: &str, expected: &str, remote: &impl Remote) -> Re
     if state::inspect(&root)? != before {
         return Err("source state changed during remote observation; update refused".into());
     }
+    apply_selected(&root, branch, expected, &selected, before, lock, remote)
+}
+
+fn update_selected(
+    root: &Path,
+    branch: &str,
+    expected: &str,
+    selected: &str,
+    remote: &impl Remote,
+) -> Result<(u8, Value)> {
+    if !git::oid(expected) || !git::oid(selected) || expected.len() != selected.len() {
+        return Err("source update requires exact matching-format revisions".into());
+    }
+    let root = state::root(root)?;
+    git::isolated_text(
+        &root,
+        &["check-ref-format", &format!("refs/heads/{branch}")],
+    )?;
+    let lock = lock::Lock::acquire(&root, expected)?;
+    let before = state::inspect(&root)?;
+    if before.head != expected || before.branch != branch {
+        return Err("source HEAD or branch differs from the explicit update guard".into());
+    }
+    apply_selected(&root, branch, expected, selected, before, lock, remote)
+}
+
+fn apply_selected(
+    root: &Path,
+    branch: &str,
+    expected: &str,
+    selected: &str,
+    before: state::State,
+    mut lock: lock::Lock,
+    remote: &impl Remote,
+) -> Result<(u8, Value)> {
+    if before.branch != branch || before.head != expected {
+        return Err("source state differs from the selected update plan".into());
+    }
     if selected == expected {
         lock.release()?;
         return Ok((
             0,
-            report("current", expected, Some(&selected), Some(expected)),
+            report("current", expected, Some(selected), Some(expected)),
         ));
     }
-    if remote.fetch(&root, &before.origin, &selected).is_err() {
+    if remote.fetch(root, &before.origin, selected).is_err() {
         lock.release()?;
-        let mut result = report("fetch_failed", expected, Some(&selected), None);
+        let mut result = report("fetch_failed", expected, Some(selected), None);
         result["object_database_may_have_changed"] = json!(true);
         return Ok((4, result));
     }
     // Revalidate after network IO, before any checkout/ref mutation.
-    if state::inspect(&root)? != before {
+    if state::inspect(root)? != before {
         return Err("source state changed during fetch; checkout update refused".into());
     }
-    if state::resolve(&root, &selected)? != selected {
+    if state::resolve(root, selected)? != selected {
         return Err("fetched source identity mismatch".into());
     }
-    if git::isolated_text(&root, &["merge-base", "--is-ancestor", expected, &selected]).is_err() {
+    if git::isolated_text(root, &["merge-base", "--is-ancestor", expected, selected]).is_err() {
         lock.release()?;
         return Ok((
             3,
             report(
                 "not_fast_forward_or_incomplete_history",
                 expected,
-                Some(&selected),
+                Some(selected),
                 Some(expected),
             ),
         ));
     }
-    lock.prepare(&selected)?;
+    lock.prepare(selected)?;
     // Never reset/rebase/stash/create a merge commit. Refuse ignored overwrites.
     // Git hooks, inherited config and lazy fetching are disabled by the adapter.
     let applied = git::isolated_text(
-        &root,
+        root,
         &[
             "-c",
             "submodule.recurse=false",
@@ -102,10 +146,10 @@ fn update(root: &Path, branch: &str, expected: &str, remote: &impl Remote) -> Re
             "--no-verify-signatures",
             "--no-overwrite-ignore",
             "--",
-            &selected,
+            selected,
         ],
     );
-    let observed = state::inspect(&root);
+    let observed = state::inspect(root);
     if let (Ok(_), Ok(after)) = (&applied, &observed)
         && after.head == selected
         && after.branch == before.branch
@@ -115,7 +159,7 @@ fn update(root: &Path, branch: &str, expected: &str, remote: &impl Remote) -> Re
     {
         return Ok((
             0,
-            report("updated", expected, Some(&selected), Some(&selected)),
+            report("updated", expected, Some(selected), Some(selected)),
         ));
     }
     // A failed Git command may have touched index/worktree/ORIG_HEAD. Even when
@@ -123,8 +167,8 @@ fn update(root: &Path, branch: &str, expected: &str, remote: &impl Remote) -> Re
     let mut result = report(
         "reconciliation_required",
         expected,
-        Some(&selected),
-        observed.as_ref().ok().map(|s| s.head.as_str()),
+        Some(selected),
+        observed.as_ref().ok().map(|value| value.head.as_str()),
     );
     result["lock_retained"] = json!(true);
     Ok((5, result))

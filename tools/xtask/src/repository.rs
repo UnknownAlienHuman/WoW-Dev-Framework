@@ -85,7 +85,7 @@ pub fn forbidden_content(path: &str, text: &str) -> bool {
 /// does not interpret values or narrow the existing arbitrary-precision numbers.
 /// The caller's file-size bound also bounds retained names. Error messages do
 /// not echo member names or values, only their source byte offset.
-fn validate_json(text: &str) -> Result<()> {
+pub(crate) fn validate_json(text: &str) -> Result<()> {
     let _: serde_json::Value = serde_json::from_str(text)?;
     let bytes = text.as_bytes();
     let mut objects: Vec<BTreeSet<String>> = Vec::new();
