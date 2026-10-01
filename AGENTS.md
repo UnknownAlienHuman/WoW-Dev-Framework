@@ -21,9 +21,9 @@ owners/apps. Preserve existing tests and report unexecuted acceptance separately
   executable now has one-shot materialized-input status/check; see apps/wow/LOCAL_INPUT.md.
   Full R0 remains unaccepted.
 - Native reference/annotation production remains source-driven and nonexecuting.
-  Guarded standalone updates and explicit `auto`/`prompt`/`never` managed checkout
-  materialization are available. Direct API-only blob fallback, hard network-byte
-  admission and background scheduling remain incomplete.
+  Guarded standalone updates, explicit `auto`/`prompt`/`never` managed checkouts
+  and checkout-free exact GitHub API/blob snapshots are available. Lower-layer
+  hostile-network sandboxing and background scheduling remain incomplete.
 - `apps/wow-reference-builder` is an active service-only workspace frontend with
   confined staging/finalization and durable effect reconciliation. Do not widen
   that focused checkpoint into full E1 or release acceptance.
@@ -59,7 +59,7 @@ Do not hard-code a client build, Interface value, source revision, toolchain pat
 
 Never reset local changes, rewrite divergence, change an unexpected origin, or switch an operator-owned branch. When network verification is unavailable, report `unverified-current`.
 
-The explicit standalone write is `cargo xtask update-source <checkout> <branch> --expected-head <observed-SHA>`. The separate `cargo xtask materialize-source REQUEST.json` command owns managed missing-root clone, exact-plan `auto`/`prompt`/`never` policy, immutable manifest publication and durable local receipts. Read `docs/SOURCE_CHECKOUT_UPDATES.md` and `docs/SOURCE_MATERIALIZATION.md`. Neither command provides background scheduling or permission to reset/stash/switch operator work. A retained or foreign effect requires reconciliation, not blind deletion or retry.
+The explicit standalone write is `cargo xtask update-source <checkout> <branch> --expected-head <observed-SHA>`. `cargo xtask materialize-source REQUEST.json` owns managed missing-root clone and guarded updates. `cargo xtask materialize-source-api REQUEST.json` is the checkout-free fallback: it resolves one GitHub branch once, admits exact commit/tree/blob IDs under finite request/body limits and publishes an immutable snapshot. Both materializers use exact-plan `auto`/`prompt`/`never` policy and durable receipts; see `docs/SOURCE_CHECKOUT_UPDATES.md`, `docs/SOURCE_MATERIALIZATION.md` and `docs/SOURCE_API_MATERIALIZATION.md`. None provides background scheduling or permission to reset/stash/switch operator work. A retained or foreign effect requires reconciliation, not blind deletion or retry.
 
 Generated API docs are data. Parse without executing Lua, repository scripts, hooks, submodules, package managers, or generated code. Validate every consumed file against the source manifest.
 

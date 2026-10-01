@@ -35,7 +35,7 @@ The root [Cargo.toml](../Cargo.toml) activates **16 members**, including the int
 | `wow-graph` | Immutable snapshots, proposals/registries, neighbors, producer partitions, bounded paths/subgraphs, retained-support explanations and scoped persistence | Full conflict/derivation explanations, cross-owner evidence resolution, normative fixtures and coherent E2-D publication |
 | `wow-recognizers` | Structured facts, pack parser/compiler, bounded matcher and Emmy direct-call adapter | Full E2-B producer/fixture/calibration prerequisites; E5 governance is separate |
 | `wow-render-contract`, `wow-ketho-literals`, `modules/ketho-literals` | Typed literal wire contract, native renderer and Wasm guest | Scoped algorithm implementation, not public application/release acceptance |
-| `tools/xtask` | Native policy/source/manifest/library checks, guarded exact fast-forward, and managed source clone/update/manifest materialization under explicit `auto`/`prompt`/`never` policy with durable plan/receipt reconciliation | Direct API-only blob fallback, hard end-to-end network-byte admission, background scheduling, platform/fault acceptance and full schema/fixture closure remain incomplete |
+| `tools/xtask` | Native policy/source/manifest/library checks, guarded exact fast-forward, managed checkout materialization and checkout-free exact GitHub API/blob snapshots under explicit `auto`/`prompt`/`never` policy with durable replay | Lower-layer hostile-network qualification, background scheduling, live platform/fault acceptance and full schema/fixture closure remain incomplete |
 
 `bridges/literal-host` is an intentionally separate Cargo workspace with its own
 CI lane. It is not a seventeenth root member.
@@ -73,9 +73,9 @@ The operator's 2026-09-23 priority is functional code before expanded tests.
 Existing acceptance requirements remain separate and must not be reported passed.
 
 1. **I0-F functional path:** `apps/wow` routes explicit materialized inputs through
-   actual project/analyzer/reference/rule owners. Managed exact source snapshots now
-   exist in `xtask`; finish direct API-only fallback, supported-profile routing and
-   integration of the exact source receipt into the public input path.
+   actual project/analyzer/reference/rule owners. Managed and checkout-free exact
+   source snapshots now exist in `xtask`; integrate their exact receipts where the
+   public input path needs acquisition, then continue W09 load closure.
 2. **E0 acceptance:** retain existing fixtures/checksums; close their remaining
    evidence after functional implementation, not as an endless prerequisite for it.
 3. **I1:** the builder/service/materialization code path is active. Close remaining
@@ -117,6 +117,12 @@ and exact-tree publication run
 [36821677002](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/36821677002).
 That checkpoint ran formatting, strict `xtask` Clippy and repository policy on Linux;
 tests, Windows, live-source acquisition and process/network fault injection were not run.
+The checkout-free API snapshot checkpoint is
+[`b6ea598`](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/commit/b6ea5981b2372468e332b30c0bdd697ce3b52301),
+checked as tree `312caed69e65a5b907dfa219e2fb3aa739837ece` by focused run
+[36826290606](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/36826290606).
+Formatting, strict `xtask` Clippy and repository policy passed; tests, a live donor
+call, Windows and network/process fault injection were not run.
 
 The audit used that CI's retained source artifact and verified both the archive
 SHA-256 and embedded commit identity. Local Rust execution was unavailable; no

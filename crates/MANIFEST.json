@@ -680,10 +680,11 @@
         "skill-copy-synchronization",
         "guarded-source-fast-forward",
         "managed-source-materialization",
+        "exact-github-api-source-materialization",
         "exact-source-manifest-build-and-verification",
         "native-library-verification"
       ],
-      "remaining_boundary": "direct API-only blob fallback, hard network-byte admission, background scheduling and full platform/fault acceptance"
+      "remaining_boundary": "lower-layer hostile-network qualification, background scheduling and full live platform/fault acceptance"
     },
     {
       "name": "wow-release",
@@ -789,8 +790,9 @@
     "ordinary_ci_run": 35487232004,
     "count_scope": "Admitted full-package/launch evidence, not mere code presence. This census advances no full acceptance gate.",
     "required_E0_fixture_freeze_state": "blocked; required pending/null fields remain in E0-B through E0-F checksum manifests",
-    "focused_checkpoint_run": 36821527175,
-    "focused_checkpoint_scope": "W08 managed source materialization: formatting, xtask strict Clippy and repository policy on Linux; no tests or runtime acquisition"
+    "focused_checkpoint_run": 36826290606,
+    "focused_checkpoint_scope": "W08 exact GitHub API source snapshots: formatting, xtask strict Clippy and repository policy on Linux; no tests, live donor call, Windows or fault injection",
+    "focused_checkpoint_tree": "312caed69e65a5b907dfa219e2fb3aa739837ece"
   },
   "next_action": {
     "work_package": "I0-F",
@@ -798,7 +800,7 @@
     "steps": [
       "Read docs/PROJECT_COMPLETION_MATRIX.md and docs/AUDIT_2026-09-19.md, then the exact owner contract.",
       "Finish functional owners and public commands first; reconcile E0 acceptance evidence after the executable product is assembled.",
-      "Complete the remaining W08 direct API-only fallback and network-admission boundary, then continue W09 load closure and supported-profile owner routing.",
+      "Use the implemented managed/API source acquisition lanes where explicit inputs need them, then continue W09 load closure; keep lower-layer network and platform/fault acceptance separate.",
       "Preserve native source/annotation and isolated parser/bridge CI; keep the active Reference Pack builder service-only and do not overclaim E1 acceptance.",
       "Publish each coherent checkpoint with actual check outcomes, then verify exact remote main and blob identities."
     ]

@@ -13,6 +13,7 @@ materialize outside the source library, then supply an exact revision/manifest.
 cargo xtask check-source /path/to/checkout live
 cargo xtask update-source /path/to/checkout live --expected-head <observed-local-SHA>
 cargo xtask materialize-source /path/to/request.json
+cargo xtask materialize-source-api /path/to/request.json
 ```
 
 `check-source` stays read-only. `update-source` is a separately authorized write:
@@ -26,11 +27,11 @@ resources. No provider name, WoW build or donor revision selects hidden behavior
 For `update-source`, the root must already exist and be its repository's top-level
 directory, with a regular `.git` directory. Bare repositories, linked worktrees,
 sparse checkouts, detached HEAD, an unexpected branch or stale expected HEAD are
-rejected. Missing managed roots may instead use `materialize-source`, whose strict
-request and recovery contract is documented in
-[SOURCE_MATERIALIZATION.md](SOURCE_MATERIALIZATION.md). Private/SSH authentication,
-provider discovery, direct API-only blob fallback and whole-source scheduling are
-not implemented.
+rejected. Missing managed roots may use `materialize-source`; a checkout-free
+public GitHub fallback is available as `materialize-source-api`. Their strict
+contracts are documented in [SOURCE_MATERIALIZATION.md](SOURCE_MATERIALIZATION.md)
+and [SOURCE_API_MATERIALIZATION.md](SOURCE_API_MATERIALIZATION.md). Private/SSH
+authentication, provider discovery and whole-source scheduling are not implemented.
 
 ## Managed materialization lane
 
@@ -49,6 +50,19 @@ Git or filesystem effect; partial/foreign staging, manifest conflicts and unknow
 update locks require operator review. The command still relies on trusted operator
 configuration and bounded Git subprocesses; it is not a hostile-host network-byte
 sandbox or background freshness service.
+
+## Checkout-free API/blob lane
+
+`materialize-source-api` accepts the same explicit policy model but does not create
+or update Git refs. It observes one GitHub branch once, resolves the exact commit
+and recursive tree, then downloads every selected regular blob by its exact Git
+object ID. The adapter enforces finite request, recursive-tree, per-body, total-body
+and manifest-selection budgets, independently re-hashes each Git blob, stages an
+immutable snapshot and reopens every member before installation. Existing snapshot
+roots are never updated in place. Durable replay adopts only an exact staged or
+installed snapshot; foreign/partial state requires operator review. This path is a
+trusted-public-GitHub adapter, not authorship/license proof or a lower-layer hostile
+network sandbox.
 
 ## One observation, one guarded transition
 

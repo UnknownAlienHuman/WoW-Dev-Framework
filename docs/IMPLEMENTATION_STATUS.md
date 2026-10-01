@@ -32,12 +32,13 @@ and durable filesystem-effect reconciliation. Neither focused implementation is
 full package acceptance. Search, context, optional external bridge and supported
 release owners remain planned.
 
-The managed source lane now implements exact `auto`/`prompt`/`never` plans, missing
-managed-root clone, guarded managed fast-forward reuse, immutable manifest
-publication and local durable receipts. Remaining W08 work is direct API-only blob
-fallback, finite end-to-end network-byte admission and real fault/platform
-acceptance; then continue W09 load closure. Do not block missing product code on
-expanded test matrices. Existing full acceptance and launch gates remain open.
+The managed-checkout and checkout-free GitHub API lanes now implement exact
+`auto`/`prompt`/`never` plans, immutable manifests/snapshots and durable replay.
+The API lane resolves one branch once and reads the exact commit, recursive tree and
+selected blobs under finite request and admitted-body limits. Remaining W08 work is
+live fault/platform acceptance and lower-layer hostile-network qualification;
+functional development proceeds to W09 load closure. Existing full acceptance and
+launch gates remain open.
 
 ## Source graph and XML handler route
 
@@ -119,6 +120,7 @@ cargo xtask sync-skill --write
 cargo xtask check-source /path/to/checkout live
 cargo xtask update-source /path/to/checkout live --expected-head <observed-SHA>
 cargo xtask materialize-source /path/to/request.json
+cargo xtask materialize-source-api /path/to/request.json
 cargo xtask manifest /path/to/checkout HEAD live /path/to/new-manifest.json
 cargo xtask verify-manifest /path/to/manifest.json /path/to/checkout HEAD
 cargo xtask verify-library /path/to/native-output --require-input-complete
@@ -141,18 +143,31 @@ current truth. Offline or unavailable remote observation is `unverified-current`
 `check-source` is read-only. `update-source` is an explicitly authorized guarded
 fast-forward for an existing exclusively owned standalone checkout; see
 [SOURCE_CHECKOUT_UPDATES.md](SOURCE_CHECKOUT_UPDATES.md). The separate
-`materialize-source` command implements exact `auto`/`prompt`/`never` plans for an
-explicit GitHub HTTPS source, managed missing-root staging/install, guarded managed
-updates, immutable manifests and durable replay/reconciliation; see
-[SOURCE_MATERIALIZATION.md](SOURCE_MATERIALIZATION.md). Expected HEAD/branch,
-origin, dirty/ignored state, divergence and races remain checked. Neither path may
-reset/stash operator changes, switch an unexpected branch or blindly retry an
+`materialize-source` implements exact `auto`/`prompt`/`never` plans for a managed
+Git checkout, guarded updates, immutable manifests and durable recovery; see
+[SOURCE_MATERIALIZATION.md](SOURCE_MATERIALIZATION.md). The separate
+`materialize-source-api` fallback resolves one public GitHub branch once, then reads
+the exact commit, recursive tree and selected blobs by object ID under finite
+request/admitted-body limits; see
+[SOURCE_API_MATERIALIZATION.md](SOURCE_API_MATERIALIZATION.md). Neither path may
+reset/stash operator changes, mutate an unexpected root or blindly retry an
 uncertain effect.
 
-Direct API-only fallback blob acquisition, hard total network-byte admission and
-background update scheduling remain unimplemented. Optional operator-only context
-is advisory, disabled by default and configured outside the repository. No private
-endpoint, token, provider or corpus is a public build/runtime prerequisite.
+Both lanes still trust an operator-approved GitHub HTTPS origin. Their body limits
+do not prove a hard bound on all lower-layer network traffic, authorship, license
+or semantic compatibility. Background update scheduling remains unimplemented.
+Optional operator-only context stays advisory and disabled by default.
+
+## Checkout-free API snapshot checkpoint
+
+W08 also provides `materialize-source-api`: an explicit GitHub REST fallback that
+binds one observed branch to an exact commit/tree, independently admits each
+selected blob, re-hashes Git object identity and publishes an immutable snapshot
+plus the ordinary source manifest. Commit `b6ea5981b2372468e332b30c0bdd697ce3b52301`
+has checked tree `312caed69e65a5b907dfa219e2fb3aa739837ece`; focused run
+`36826290606` passed formatting, strict `xtask` Clippy and repository policy on
+Linux/Rust 1.98.1. Tests, a live donor invocation, Windows and network/process
+fault injection were not run.
 
 ## CI and exact evidence
 
