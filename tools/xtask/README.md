@@ -2,7 +2,7 @@
 
 `xtask` is an internal development utility, not the public `wow` application or
 an alternate analysis/service owner. It has no framework crate dependencies and
-uses the existing dependency closure (`serde_json`, `sha2`) plus Git. It is not
+uses the existing dependency closure (`serde_json`, `sha2`) plus fixed Git and curl adapters. It is not
 included in a supported product bundle. No external interpreter is invoked.
 
 ## Commands
@@ -14,6 +14,7 @@ cargo xtask sync-skill --write
 cargo xtask check-source /path/to/checkout live
 cargo xtask update-source /path/to/checkout live --expected-head <observed-local-SHA>
 cargo xtask materialize-source /path/to/request.json
+cargo xtask materialize-source-api /path/to/request.json
 cargo xtask manifest /path/to/wow-ui-source HEAD live /path/to/new-manifest.json
 cargo xtask verify-manifest /path/to/manifest.json /path/to/wow-ui-source HEAD
 cargo xtask verify-library /path/to/native-output --require-input-complete
@@ -70,6 +71,16 @@ or applying update lock becomes exit 5 and `operator_review_before_any_retry`.
 The operation never resets, cleans, stashes, switches an operator branch, deletes
 an uncertain lock, follows redirects, runs hooks/submodules/scripts, or prints the
 origin or host paths. See [managed source materialization](../../docs/SOURCE_MATERIALIZATION.md).
+
+`materialize-source-api` is the explicit checkout-free GitHub fallback. It uses
+the same `auto`/`prompt`/`never` authorization semantics but materializes one
+immutable data-only snapshot from an exact public GitHub commit/tree and its
+selected blobs. Recursive-tree, per-response, request-count and aggregate-body
+budgets are fixed; each blob is length-checked, Git-object rehashed and SHA-256
+bound before same-parent installation. Existing snapshot roots are immutable.
+Optional `WOW_SOURCE_GITHUB_TOKEN` is read only from the environment and is never
+placed in request JSON, process arguments, output or durable records. See
+[API/blob source snapshots](../../docs/SOURCE_API_MATERIALIZATION.md).
 
 `manifest` inventories one exact Git snapshot using raw blobs, per-repository
 Git object hashing and independent SHA-256. Export attributes and dirty files do

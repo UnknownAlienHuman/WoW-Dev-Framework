@@ -1,4 +1,5 @@
 //! Explicit source-data update. No source library or Wasm guest gains host IO.
+mod api_materialize;
 mod lock;
 mod materialize;
 mod remote;
@@ -19,6 +20,10 @@ pub fn run(root: &Path, branch: &str, expected: &str) -> Result<u8> {
 
 pub fn run_materialize(request: &Path) -> Result<u8> {
     materialize::run(request)
+}
+
+pub fn run_api_materialize(request: &Path) -> Result<u8> {
+    api_materialize::run(request)
 }
 
 fn report(status: &str, before: &str, selected: Option<&str>, after: Option<&str>) -> Value {

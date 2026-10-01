@@ -96,6 +96,15 @@ lock or ambiguous effect returns exit 5, retains evidence and reports
 `operator_review_before_any_retry`. No uncertain lock or staging tree is deleted,
 and no unknown apply is blindly retried.
 
+## Checkout-free API fallback
+
+When a Git checkout or pack fetch is not desired, use the separate
+`cargo xtask materialize-source-api REQUEST.json` lane. It preserves the exact
+`auto`/`prompt`/`never` authorization model while materializing a read-only source
+snapshot from one GitHub commit/tree and exact per-blob reads under fixed request
+and response-body budgets. It never converts the snapshot into a managed checkout
+or silently switches transport. See [API/blob source snapshots](SOURCE_API_MATERIALIZATION.md).
+
 ## Identity, bounds and nonclaims
 
 The resulting manifest remains `schema_version: 1` and uses the existing fixed
