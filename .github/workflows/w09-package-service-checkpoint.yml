@@ -1,4 +1,4 @@
-name: W09 package service checkpoint
+name: W09 package service checkpoint v2
 on:
   push:
     branches: [main]
@@ -16,7 +16,7 @@ jobs:
     env:
       BASE_COMMIT: c045bf9b7d98dba4311b4632f8fa06a538540d1a
       BASE_TREE: 91013f630879213923eb344abfe7beb72d9feb42
-      STAGING_PARENT: c045bf9b7d98dba4311b4632f8fa06a538540d1a
+      STAGING_PARENT: 717f7466aee98d54b379d69acc462cb1a291217f
       PATCH_SHA256: 4569d250b039090abab1c10c3e40a52c2d05a7c8226618831c228932ecd6dc98
     steps:
       - uses: actions/checkout@v7
@@ -53,25 +53,22 @@ jobs:
           cargo +stable xtask check 2>&1 | tee "$RUNNER_TEMP/policy.log"
           git add --all
           git diff --cached --check
-          mapfile -t changed < <(git diff --cached --name-only "$BASE_COMMIT" | sort)
-          mapfile -t expected <<'EOF'
-          apps/wow/src/output.rs
-          crates/wow-project/src/configuration.rs
-          crates/wow-project/src/generation.rs
-          crates/wow-project/src/inventory.rs
-          crates/wow-project/src/load/mod.rs
-          crates/wow-project/src/load/package_closure.rs
-          crates/wow-service/src/local/backend.rs
-          crates/wow-service/src/local/disk_input.rs
-          crates/wow-service/src/local/input.rs
-          crates/wow-service/src/local/mod.rs
-          crates/wow-service/src/local/projection.rs
-          EOF
-          printf 'changed files:\n%s\n' "${changed[*]}"
-          test "${#changed[@]}" -eq "${#expected[@]}"
-          for index in "${!expected[@]}"; do
-            test "${changed[$index]}" = "${expected[$index]}"
-          done
+          git diff --cached --name-only "$BASE_COMMIT" | sort > "$RUNNER_TEMP/changed-files"
+          printf '%s\n' \
+            apps/wow/src/output.rs \
+            crates/wow-project/src/configuration.rs \
+            crates/wow-project/src/generation.rs \
+            crates/wow-project/src/inventory.rs \
+            crates/wow-project/src/load/mod.rs \
+            crates/wow-project/src/load/package_closure.rs \
+            crates/wow-service/src/local/backend.rs \
+            crates/wow-service/src/local/disk_input.rs \
+            crates/wow-service/src/local/input.rs \
+            crates/wow-service/src/local/mod.rs \
+            crates/wow-service/src/local/projection.rs \
+            > "$RUNNER_TEMP/expected-files"
+          cat "$RUNNER_TEMP/changed-files"
+          diff -u "$RUNNER_TEMP/expected-files" "$RUNNER_TEMP/changed-files"
       - name: Retain exact checked source
         if: always()
         shell: bash
