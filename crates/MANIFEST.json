@@ -674,7 +674,16 @@
       "implementation_state": "implemented-scoped-maintenance",
       "framework_dependencies": [],
       "public_bundle_default": false,
-      "brief": "tools/xtask/README.md"
+      "brief": "tools/xtask/README.md",
+      "implemented_capabilities": [
+        "repository-policy-check",
+        "skill-copy-synchronization",
+        "guarded-source-fast-forward",
+        "managed-source-materialization",
+        "exact-source-manifest-build-and-verification",
+        "native-library-verification"
+      ],
+      "remaining_boundary": "direct API-only blob fallback, hard network-byte admission, background scheduling and full platform/fault acceptance"
     },
     {
       "name": "wow-release",
@@ -776,10 +785,12 @@
     "reproducible_unsigned_release_builds": 0,
     "signed_public_release_bundles": 0,
     "supported_targets": 0,
-    "observed_code_commit": "c10579d359b5f0044fc6fcdfef3b353c5caa65dc",
+    "observed_code_commit": "a69c685315e32d8afde28d758ecf2b495f02a80b",
     "ordinary_ci_run": 35487232004,
     "count_scope": "Admitted full-package/launch evidence, not mere code presence. This census advances no full acceptance gate.",
-    "required_E0_fixture_freeze_state": "blocked; required pending/null fields remain in E0-B through E0-F checksum manifests"
+    "required_E0_fixture_freeze_state": "blocked; required pending/null fields remain in E0-B through E0-F checksum manifests",
+    "focused_checkpoint_run": 36821527175,
+    "focused_checkpoint_scope": "W08 managed source materialization: formatting, xtask strict Clippy and repository policy on Linux; no tests or runtime acquisition"
   },
   "next_action": {
     "work_package": "I0-F",
@@ -787,8 +798,8 @@
     "steps": [
       "Read docs/PROJECT_COMPLETION_MATRIX.md and docs/AUDIT_2026-09-19.md, then the exact owner contract.",
       "Finish functional owners and public commands first; reconcile E0 acceptance evidence after the executable product is assembled.",
-      "Extend the implemented materialized-input CLI with explicit host source/Library materialization and non-fixture WoW profiles.",
-      "Preserve native source/annotation and isolated parser/bridge CI; do not silently activate the dormant builder.",
+      "Complete the remaining W08 direct API-only fallback and network-admission boundary, then continue W09 load closure and supported-profile owner routing.",
+      "Preserve native source/annotation and isolated parser/bridge CI; keep the active Reference Pack builder service-only and do not overclaim E1 acceptance.",
       "Publish each coherent checkpoint with actual check outcomes, then verify exact remote main and blob identities."
     ]
   },

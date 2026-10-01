@@ -1,6 +1,6 @@
 # Project completion matrix
 
-**Audited:** 2026-09-19 America/New_York. Code inventory: `c10579d359b5f0044fc6fcdfef3b353c5caa65dc`.
+**Audited:** 2026-09-19 America/New_York. Execution inventory refreshed 2026-10-01 at `a69c685315e32d8afde28d758ecf2b495f02a80b`.
 
 This is the current execution ledger. [IMPLEMENTATION_HANDOFF.md](IMPLEMENTATION_HANDOFF.md)
 remains the normative I0–I7 plan; do not restart its historical bootstrap steps.
@@ -20,7 +20,7 @@ recording that code honestly does not waive those gates or populate missing evid
 
 ## Executable inventory
 
-The root [Cargo.toml](../Cargo.toml) activates **15 members**, not two, four or seven.
+The root [Cargo.toml](../Cargo.toml) activates **16 members**, including the internal Reference Pack builder.
 
 | Component | Observed executable slice | Remaining acceptance boundary |
 |---|---|---|
@@ -35,15 +35,16 @@ The root [Cargo.toml](../Cargo.toml) activates **15 members**, not two, four or 
 | `wow-graph` | Immutable snapshots, proposals/registries, neighbors, producer partitions, bounded paths/subgraphs, retained-support explanations and scoped persistence | Full conflict/derivation explanations, cross-owner evidence resolution, normative fixtures and coherent E2-D publication |
 | `wow-recognizers` | Structured facts, pack parser/compiler, bounded matcher and Emmy direct-call adapter | Full E2-B producer/fixture/calibration prerequisites; E5 governance is separate |
 | `wow-render-contract`, `wow-ketho-literals`, `modules/ketho-literals` | Typed literal wire contract, native renderer and Wasm guest | Scoped algorithm implementation, not public application/release acceptance |
-| `tools/xtask` | Native policy/source/manifest/library checks; duplicate JSON member rejection added in this checkpoint | Full schema/contract-ID/dependency/fixture/link closure remains incomplete |
+| `tools/xtask` | Native policy/source/manifest/library checks, guarded exact fast-forward, and managed source clone/update/manifest materialization under explicit `auto`/`prompt`/`never` policy with durable plan/receipt reconciliation | Direct API-only blob fallback, hard end-to-end network-byte admission, background scheduling, platform/fault acceptance and full schema/fixture closure remain incomplete |
 
 `bridges/literal-host` is an intentionally separate Cargo workspace with its own
-CI lane. It is not a fifteenth root member.
+CI lane. It is not a seventeenth root member.
 
-`apps/wow-reference-builder` is different: Cargo/source/tests exist, but it is
-neither a root member nor an independently declared workspace. Its source also
-calls absent service symbols and diverges from its documented command contract.
-Do not count it as tested or simply activate it to make the table look complete.
+`apps/wow-reference-builder` is now an active root member and a service-only internal
+frontend for build, validate and rebuild-compare. It performs confined staging,
+independent read-back, durable filesystem-effect reconciliation and guarded atomic
+finalization. This executable slice is not full E1-D acceptance: real external
+evidence, Windows/process-loss acceptance and the remaining Reference Pack gates stay open.
 
 `apps/wow` now provides a one-shot CLI over inline inputs or an explicit
 [disk file manifest](../apps/wow/FILES_INPUT.md); see
@@ -57,7 +58,7 @@ no Rust implementation in the audited source. Their documentation is not a binar
 | E0-A–E0-E | Partial executable | Close exact normative fixtures and prerequisite identity/checksum chains, one owner at a time |
 | E0-F | Partial service and inline/disk-input public CLI | Thin `wow status`/`wow check`, owner-composed fixture, output/exit/cancellation/resource gates |
 | E1-A–E1-C | Partial executable | Finish only verified missing contract/acceptance slices; do not recreate existing store/reference/annotation implementations |
-| E1-D | Partial ReferenceView service; inactive, inconsistent builder source | Repair the frontend/service contract and then include real package tests in CI |
+| E1-D | Partial executable Reference Pack service and active internal builder with durable materialization/finalization | Close external parity/license/rebuild evidence, Windows/process-loss acceptance and complete package gates; code presence is not `ValidatedLocal` |
 | E2-A–E2-B | Partial executable | Remaining graph queries, normative recognizer coverage and owner seams |
 | E2-C–E2-D | Partial executable source index and retained manifested store | Live project publication, incremental invalidation, retention/GC/backup/epoch replacement and complete acceptance remain open; see [GRAPH_STORE.md](../apps/wow/GRAPH_STORE.md) |
 | E3-A–E3-C | Not started | Exact Blizzard source universe, context owners and service/CLI after E2 closure |
@@ -71,15 +72,15 @@ no Rust implementation in the audited source. Their documentation is not a binar
 The operator's 2026-09-23 priority is functional code before expanded tests.
 Existing acceptance requirements remain separate and must not be reported passed.
 
-1. **I0-F functional path:** `apps/wow` now routes explicit materialized inputs
-   through actual project/analyzer/reference/rule owners. Finish explicit host
-   source/Library materialization and supported-profile rule routing next.
+1. **I0-F functional path:** `apps/wow` routes explicit materialized inputs through
+   actual project/analyzer/reference/rule owners. Managed exact source snapshots now
+   exist in `xtask`; finish direct API-only fallback, supported-profile routing and
+   integration of the exact source receipt into the public input path.
 2. **E0 acceptance:** retain existing fixtures/checksums; close their remaining
    evidence after functional implementation, not as an endless prerequisite for it.
-3. **I1:** close remaining store/reference/annotation acceptance, then repair the
-   dormant builder against its E1 contract. Workspace inclusion and isolated parser
-   CI membership must be updated together; adding an app introduces a transitive
-   `wow-service` dependency into that lane.
+3. **I1:** the builder/service/materialization code path is active. Close remaining
+   store/reference/annotation and Reference Pack evidence gates, then execute the
+   deferred process-loss, Windows and real-input acceptance without recreating owners.
 4. **I2 then I3:** finish graph/recognizers, full project indexing and coherent
    persistence before context. Run one exact real-addon/profile evaluation for A0.
 5. **I4–I7:** follow the existing handoff; do not front-load optional providers,
@@ -108,6 +109,14 @@ The duplicate-key implementation is
 with exact checks in
 [CI 35487232004](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/35487232004).
 A subsequent documentation commit has a different SHA and its own CI record.
+The W08 managed-source code checkpoint is
+[`a69c685`](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/commit/a69c685315e32d8afde28d758ecf2b495f02a80b),
+validated by focused run
+[36821527175](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/36821527175)
+and exact-tree publication run
+[36821677002](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/36821677002).
+That checkpoint ran formatting, strict `xtask` Clippy and repository policy on Linux;
+tests, Windows, live-source acquisition and process/network fault injection were not run.
 
 The audit used that CI's retained source artifact and verified both the archive
 SHA-256 and embedded commit identity. Local Rust execution was unavailable; no

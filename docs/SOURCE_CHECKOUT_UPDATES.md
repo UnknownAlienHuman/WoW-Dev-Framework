@@ -1,8 +1,9 @@
 # Explicit source checkout updates
 
-Implemented scope: a native, guarded fast-forward of an existing, trusted,
-standalone checkout. This is internal acquisition tooling in `tools/xtask`, not
-an analyzer, updater daemon, package installer or durable source-store service.
+Implemented scope: a native, guarded fast-forward of an existing trusted
+standalone checkout plus a separate explicit managed-checkout materializer. These
+are internal acquisition tools in `tools/xtask`, not an analyzer, updater daemon,
+package installer or durable source-store service.
 It follows the [reference acquisition boundary](../crates/wow-reference/e1/SOURCE_SNAPSHOT_AND_PROFILES.md):
 materialize outside the source library, then supply an exact revision/manifest.
 
@@ -11,6 +12,7 @@ materialize outside the source library, then supply an exact revision/manifest.
 ```sh
 cargo xtask check-source /path/to/checkout live
 cargo xtask update-source /path/to/checkout live --expected-head <observed-local-SHA>
+cargo xtask materialize-source /path/to/request.json
 ```
 
 `check-source` stays read-only. `update-source` is a separately authorized write:
@@ -21,11 +23,32 @@ The same command supports any explicitly selected branch of a compatible public
 HTTPS source checkout, including separately maintained Blizzard and annotation
 resources. No provider name, WoW build or donor revision selects hidden behavior.
 
-The root must already exist and be its repository's top-level directory, with a
-regular `.git` directory. Bare repositories, linked worktrees, sparse checkouts,
-detached HEAD, an unexpected branch or stale expected HEAD are rejected. Missing
-checkout creation, private/SSH authentication, provider discovery and whole-source
-scheduling are not implemented. Use an ordinary materialized clone first.
+For `update-source`, the root must already exist and be its repository's top-level
+directory, with a regular `.git` directory. Bare repositories, linked worktrees,
+sparse checkouts, detached HEAD, an unexpected branch or stale expected HEAD are
+rejected. Missing managed roots may instead use `materialize-source`, whose strict
+request and recovery contract is documented in
+[SOURCE_MATERIALIZATION.md](SOURCE_MATERIALIZATION.md). Private/SSH authentication,
+provider discovery, direct API-only blob fallback and whole-source scheduling are
+not implemented.
+
+## Managed materialization lane
+
+`materialize-source` accepts one explicit credential-free GitHub HTTPS origin,
+branch, selector, managed root and manifest output. `never` observes without
+mutation; `prompt` returns a content-addressed exact plan and requires a repeat
+with that plan's revisions; `auto` executes the exact observed plan. A missing
+managed root is built in private same-parent staging from one selected commit,
+inventory-verified, then installed without overwriting an existing path.
+
+Only checkouts carrying the exact managed marker are automatically fast-forwarded.
+An ordinary local checkout remains preferred for reads and exact manifest
+publication but is not mutated by this lane. Durable operation/checkpoint/receipt
+records are loaded before any new remote observation. Completed replay performs no
+Git or filesystem effect; partial/foreign staging, manifest conflicts and unknown
+update locks require operator review. The command still relies on trusted operator
+configuration and bounded Git subprocesses; it is not a hostile-host network-byte
+sandbox or background freshness service.
 
 ## One observation, one guarded transition
 
@@ -88,12 +111,12 @@ revisions. Missing observations are null. Fetch failure may have added objects;
 it is not an assertion that the whole Git directory is unchanged. A successful
 update concerns the selected remote observation only, not eternal freshness.
 
-`.git/wow-source-update.lock` is a minimal journal, not a crash-durable catalog.
-It records the expected HEAD, selected revision and applying phase before the
-checkout effect. An interrupted/uncertain apply retains it. Inspect Git HEAD,
-branch, index, worktree and these recorded identities before explicitly removing
-the lock and deciding whether another update is appropriate. There is no automatic
-stale-lock deletion, blind retry, guessed rollback or successful recovery claim.
+`.git/wow-source-update.lock` is a minimal journal, not a general durable
+catalog. A direct `update-source` interruption still requires explicit inspection.
+A matching managed materialization operation may close an applying lock only when
+its recorded expected/selected revisions match and a clean read-back already shows
+the exact selected revision. Every mismatch remains operator review; there is no
+stale-lock deletion, blind retry, guessed rollback or fabricated success.
 
 ## Update cost and boundary
 

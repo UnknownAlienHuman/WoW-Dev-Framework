@@ -10,10 +10,11 @@ Rust implementations must be written again.
 
 ## Active workspace and unaccepted scope
 
-The root Cargo workspace has **15 members**: `wow-core`, `wow-store`,
-`wow-reference`, `wow-annotations`, `wow-emmy`, `wow-project`, `wow-rules`,
-`wow-service`, `wow-graph`, `wow-recognizers`, `xtask`, `wow-render-contract`,
-`wow-ketho-literals`, `wow-cli` and the guest in `modules/ketho-literals`.
+The root Cargo workspace has **16 members**: `apps/wow`,
+`apps/wow-reference-builder`, `wow-core`, `wow-store`, `wow-reference`,
+`wow-annotations`, `wow-emmy`, `wow-project`, `wow-rules`, `wow-service`,
+`wow-graph`, `wow-recognizers`, `xtask`, `wow-render-contract`,
+`wow-ketho-literals` and the guest in `modules/ketho-literals`.
 The separate `bridges/literal-host` workspace has dedicated CI and is deliberately
 excluded from the root workspace.
 
@@ -23,15 +24,20 @@ retain required pending/null fields. Partial executable state is not complete
 package acceptance. This correction does not manufacture missing evidence or
 waive the earlier fixture-freeze policy.
 
-`apps/wow` now implements one-shot `status/check` over explicit materialized input
-through real project/analyzer/rule owners; see [local input](../apps/wow/LOCAL_INPUT.md). `apps/wow-reference-builder` has inactive
-source/tests with missing service symbols, command-contract differences and
-input-boundary issues; root workspace CI does not test it. Search, context,
-optional external bridge and supported release owners remain planned.
+`apps/wow` implements one-shot `status/check` over explicit materialized input
+through real project/analyzer/rule owners; see
+[local input](../apps/wow/LOCAL_INPUT.md). `apps/wow-reference-builder` is now an
+active service-only workspace frontend with confined staging, independent read-back
+and durable filesystem-effect reconciliation. Neither focused implementation is
+full package acceptance. Search, context, optional external bridge and supported
+release owners remain planned.
 
-Next: complete functional source/Library input materialization and supported-profile
-owner routing, then the dormant builder. Do not block missing code on new test
-matrices. Existing full acceptance and launch gates remain open.
+The managed source lane now implements exact `auto`/`prompt`/`never` plans, missing
+managed-root clone, guarded managed fast-forward reuse, immutable manifest
+publication and local durable receipts. Remaining W08 work is direct API-only blob
+fallback, finite end-to-end network-byte admission and real fault/platform
+acceptance; then continue W09 load closure. Do not block missing product code on
+expanded test matrices. Existing full acceptance and launch gates remain open.
 
 ## Source graph and XML handler route
 
@@ -112,6 +118,7 @@ cargo xtask sync-skill --check
 cargo xtask sync-skill --write
 cargo xtask check-source /path/to/checkout live
 cargo xtask update-source /path/to/checkout live --expected-head <observed-SHA>
+cargo xtask materialize-source /path/to/request.json
 cargo xtask manifest /path/to/checkout HEAD live /path/to/new-manifest.json
 cargo xtask verify-manifest /path/to/manifest.json /path/to/checkout HEAD
 cargo xtask verify-library /path/to/native-output --require-input-complete
@@ -132,17 +139,20 @@ A recorded commit/build/toolchain is evidence for a run, not permanently embedde
 current truth. Offline or unavailable remote observation is `unverified-current`.
 
 `check-source` is read-only. `update-source` is an explicitly authorized guarded
-fast-forward for an existing, exclusively owned standalone checkout; see
-[SOURCE_CHECKOUT_UPDATES.md](SOURCE_CHECKOUT_UPDATES.md). Expected HEAD/branch,
-origin, dirty/ignored state, divergence and races are checked. Never reset/stash
-operator changes, switch unexpected branches, force-push or retry an uncertain
-apply. Managed cloning, GitHub-only materialization and update scheduling are
-not implemented by this command.
+fast-forward for an existing exclusively owned standalone checkout; see
+[SOURCE_CHECKOUT_UPDATES.md](SOURCE_CHECKOUT_UPDATES.md). The separate
+`materialize-source` command implements exact `auto`/`prompt`/`never` plans for an
+explicit GitHub HTTPS source, managed missing-root staging/install, guarded managed
+updates, immutable manifests and durable replay/reconciliation; see
+[SOURCE_MATERIALIZATION.md](SOURCE_MATERIALIZATION.md). Expected HEAD/branch,
+origin, dirty/ignored state, divergence and races remain checked. Neither path may
+reset/stash operator changes, switch an unexpected branch or blindly retry an
+uncertain effect.
 
-The planned `auto`/`prompt`/`never` policy does not imply those missing acquisition
-paths already exist. Optional operator-only context is advisory, disabled by
-default and configured outside the repository. No private endpoint, token,
-provider or corpus is a public build/runtime prerequisite.
+Direct API-only fallback blob acquisition, hard total network-byte admission and
+background update scheduling remain unimplemented. Optional operator-only context
+is advisory, disabled by default and configured outside the repository. No private
+endpoint, token, provider or corpus is a public build/runtime prerequisite.
 
 ## CI and exact evidence
 
@@ -162,6 +172,12 @@ Baseline source `e2c74314bb7ccde4a9b48c049dfeacc157259960` passed
 [CI 34735568141](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/34735568141).
 The duplicate-key implementation is associated with
 [CI 35487232004](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/35487232004).
+The focused managed-source checkpoint passed formatting, strict xtask Clippy and
+repository policy in
+[CI 36821527175](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/36821527175)
+and was published from its exact retained tree by
+[CI 36821677002](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/36821677002).
+No tests, Windows runtime or live source acquisition were executed in that checkpoint.
 Use each run's exact head and actual conclusions; later documentation commits have
 their own CI. A source archive and successful CI are not a release signature,
 full fixture-freeze acceptance, real-addon runtime test or supported installation.

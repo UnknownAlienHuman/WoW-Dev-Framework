@@ -12,18 +12,21 @@ owners/apps. Preserve existing tests and report unexecuted acceptance separately
 
 - Read `docs/PROJECT_COMPLETION_MATRIX.md` for the audited code/acceptance census
   and `docs/AUDIT_2026-09-19.md` for concrete remaining tasks.
-- `Cargo.toml` activates 15 members, including real `wow-emmy`, `wow-project`,
-  `wow-rules`, `wow-service`, `wow-store`, `wow-graph` and `wow-recognizers` slices.
+- `Cargo.toml` activates 16 members, including real `wow-emmy`, `wow-project`,
+  `wow-rules`, `wow-service`, `wow-store`, `wow-graph`, `wow-recognizers`,
+  `apps/wow` and `apps/wow-reference-builder` slices.
   Do not follow obsolete instructions to recreate these owners from scratch.
 - Partial executable code and ordinary CI are not complete package acceptance.
   Required E0 fixture/identity/checksum gates remain open; the public `apps/wow`
   executable now has one-shot materialized-input status/check; see apps/wow/LOCAL_INPUT.md.
   Full R0 remains unaccepted.
 - Native reference/annotation production remains source-driven and nonexecuting.
-  Guarded fast-forward of existing standalone source checkouts is available;
-  managed cloning and GitHub-only materialization remain incomplete.
-- `apps/wow-reference-builder` contains inactive source with service/contract
-  mismatches; it is not tested by the root workspace. Do not silently activate it.
+  Guarded standalone updates and explicit `auto`/`prompt`/`never` managed checkout
+  materialization are available. Direct API-only blob fallback, hard network-byte
+  admission and background scheduling remain incomplete.
+- `apps/wow-reference-builder` is an active service-only workspace frontend with
+  confined staging/finalization and durable effect reconciliation. Do not widen
+  that focused checkpoint into full E1 or release acceptance.
 - Work sequentially in `main`; no new task branches or worktrees. Publish and
   read back each coherent checkpoint without force-pushing.
 - Current commands, source-update policy and nonclaims:
@@ -56,7 +59,7 @@ Do not hard-code a client build, Interface value, source revision, toolchain pat
 
 Never reset local changes, rewrite divergence, change an unexpected origin, or switch an operator-owned branch. When network verification is unavailable, report `unverified-current`.
 
-The implemented write is `cargo xtask update-source <checkout> <branch> --expected-head <observed-SHA>` under explicit operator authorization. Read `docs/SOURCE_CHECKOUT_UPDATES.md`; use an exclusively owned standalone checkout. Check-only remains `check-source`. Automatic clone/scheduling and durable recovery are not implemented by this command. A retained update lock requires reconciliation, not blind deletion or retry.
+The explicit standalone write is `cargo xtask update-source <checkout> <branch> --expected-head <observed-SHA>`. The separate `cargo xtask materialize-source REQUEST.json` command owns managed missing-root clone, exact-plan `auto`/`prompt`/`never` policy, immutable manifest publication and durable local receipts. Read `docs/SOURCE_CHECKOUT_UPDATES.md` and `docs/SOURCE_MATERIALIZATION.md`. Neither command provides background scheduling or permission to reset/stash/switch operator work. A retained or foreign effect requires reconciliation, not blind deletion or retry.
 
 Generated API docs are data. Parse without executing Lua, repository scripts, hooks, submodules, package managers, or generated code. Validate every consumed file against the source manifest.
 

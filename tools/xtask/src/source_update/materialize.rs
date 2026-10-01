@@ -254,12 +254,12 @@ impl Context {
         let token = &operation_token[..TOKEN_HEX_BYTES * 2];
         let operation_dir = root_parent.join(format!(".wow-source-materialization-{token}"));
         let staging = root_parent.join(format!(".wow-source-materialization-{token}.staging"));
-        if staging == root
-            || operation_dir == root
-            || output == staging
-            || output.starts_with(&operation_dir)
-            || output.starts_with(&staging)
-        {
+        let paths = [&root, &output, &operation_dir, &staging];
+        if paths.iter().enumerate().any(|(index, left)| {
+            paths[index + 1..]
+                .iter()
+                .any(|right| paths_overlap(left, right))
+        }) {
             return Err("source materialization paths overlap".into());
         }
         Ok(Self {
@@ -1364,6 +1364,10 @@ fn valid_github_component(value: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
         && value != "."
         && value != ".."
+}
+
+fn paths_overlap(left: &Path, right: &Path) -> bool {
+    left == right || left.starts_with(right) || right.starts_with(left)
 }
 
 fn canonical_target(path: &Path, label: &str) -> Result<PathBuf> {
