@@ -1,0 +1,89 @@
+name: W09 package graph checkpoint
+
+on:
+  push:
+    paths:
+      - .github/workflows/w09-package-graph-checkpoint.yml
+
+permissions:
+  contents: write
+
+jobs:
+  checkpoint:
+    runs-on: ubuntu-24.04
+    env:
+      BASE_COMMIT: f9662bebe513b877476ff193b33ab17576d23290
+      BASE_TREE: 94c2a5821bb6e2c70acc8a72ad29fd0adb81c474
+      PATCH_SHA256: 1828288c743345059440a534d5b782f4f5a9c548a26f476067b481097786d5a1
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Admit exact W09 patch and remove checkpoint transport
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse "${GITHUB_SHA}^")" = "$BASE_COMMIT"
+          cat .ci/w09-package-graph.patch.xz.b64.* > "$RUNNER_TEMP/w09.patch.xz.b64"
+          base64 -d "$RUNNER_TEMP/w09.patch.xz.b64" > "$RUNNER_TEMP/w09.patch.xz"
+          xz -dc "$RUNNER_TEMP/w09.patch.xz" > "$RUNNER_TEMP/w09.patch"
+          printf '%s  %s\n' "$PATCH_SHA256" "$RUNNER_TEMP/w09.patch" | sha256sum -c -
+          git rm -- .ci/w09-package-graph.patch.xz.b64.* .github/workflows/w09-package-graph-checkpoint.yml
+          test "$(git write-tree)" = "$BASE_TREE"
+          git apply --index "$RUNNER_TEMP/w09.patch"
+      - name: Install minimal compiler tools
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+      - name: Format workspace
+        run: cargo +stable fmt --all
+      - name: Minimal focused Clippy; no tests executed
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustc +stable -Vv | tee "$RUNNER_TEMP/RUST_VERSION"
+          cargo +stable clippy --locked \
+            -p wow-project -p wow-service -p wow-cli \
+            --all-targets --all-features -- -D warnings 2>&1 | tee "$RUNNER_TEMP/clippy.log"
+      - name: Repository policy and exact file set
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo +stable xtask check 2>&1 | tee "$RUNNER_TEMP/policy.log"
+          git add --all
+          git diff --cached --check
+          git diff --cached --name-only "$BASE_COMMIT" > "$RUNNER_TEMP/files"
+          cat > "$RUNNER_TEMP/expected" <<'EOF'
+          crates/wow-project/src/graph.rs
+          crates/wow-project/src/graph/packages.rs
+          crates/wow-project/src/load/package_closure.rs
+          crates/wow-service/src/graph/build.rs
+          crates/wow-service/src/graph/bundle.rs
+          EOF
+          diff -u "$RUNNER_TEMP/expected" "$RUNNER_TEMP/files"
+      - name: Retain exact checked source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/checkpoint"
+          git write-tree > "$RUNNER_TEMP/checkpoint/CHECKED_TREE"
+          git archive --format=tar -o "$RUNNER_TEMP/checkpoint/checked-source.tar" "$(cat "$RUNNER_TEMP/checkpoint/CHECKED_TREE")"
+          git diff --cached --binary "$BASE_COMMIT" > "$RUNNER_TEMP/checkpoint/formatted.patch"
+          printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/checkpoint/STAGING_SHA"
+          cp "$RUNNER_TEMP/RUST_VERSION" "$RUNNER_TEMP/clippy.log" "$RUNNER_TEMP/policy.log" "$RUNNER_TEMP/checkpoint/"
+          (cd "$RUNNER_TEMP/checkpoint" && sha256sum checked-source.tar formatted.patch > SHA256SUMS)
+      - uses: actions/upload-artifact@v7
+        with:
+          name: w09-package-graph-${{ github.run_id }}
+          path: ${{ runner.temp }}/checkpoint
+          retention-days: 3
+          if-no-files-found: error
+      - name: Fast-forward exact checked tree to main
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$GITHUB_SHA"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat(wow-graph): project package load closure [skip ci]'
+          git push origin HEAD:main
