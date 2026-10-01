@@ -1,5 +1,5 @@
 name: W07 durable Reference Pack filesystem effects checkpoint
-run-name: W07 materialization effects v4 ${{ github.sha }}
+run-name: W07 materialization effects v5 ${{ github.sha }}
 on:
   push:
     branches: [main]
@@ -11,7 +11,7 @@ concurrency:
 env:
   BASE_COMMIT: ec4345039c55c25da78289908942d700609df09a
   BASE_TREE: 9d52ccc0ac8b42d46691d93f4096ab456f2c31b9
-  STAGING_PARENT: bd08f3719cf4ea8433d4515c92f2f7cfcd4856f8
+  STAGING_PARENT: 6b810f60ac545521b3f505abeaaba95037f85be6
   PATCH_SHA256: ab7112d2673e3ef59a44156ce1ca55f5072141169cb9e7a660be88011f072eb8
 jobs:
   checkpoint:
@@ -23,7 +23,7 @@ jobs:
           ref: main
           fetch-depth: 0
           persist-credentials: false
-      - name: Admit product patch, apply final lint correction and remove checkpoint transport
+      - name: Admit product patch, apply final lint corrections and remove checkpoint transport
         shell: bash
         run: |
           set -euo pipefail
@@ -38,8 +38,9 @@ jobs:
           git apply --index "$RUNNER_TEMP/w07-materialization-effects.patch"
           python - <<'PY'
           from pathlib import Path
-          path = Path('crates/wow-service/src/reference_pack_materialization.rs')
-          source = path.read_text()
+
+          service_path = Path('crates/wow-service/src/reference_pack_materialization.rs')
+          service = service_path.read_text()
           old = '''            } else if destination_absent && backup_expected {
                           Action::PerformRollback
                       } else if destination_expected || observation.destination.invalid_state() {
@@ -53,9 +54,54 @@ jobs:
                           Action::PerformRollback
                       } else {
           '''
-          if old not in source:
+          if service.count(old) != 1:
               raise SystemExit('rollback decision source changed')
-          path.write_text(source.replace(old, new, 1))
+          service_path.write_text(service.replace(old, new, 1))
+
+          app_path = Path('apps/wow-reference-builder/src/lib.rs')
+          app = app_path.read_text()
+          replacements = [
+              (
+                  '''enum CleanupState {
+              NotRequired,
+              Completed,
+              Pending,
+          }
+          ''',
+                  '''enum CleanupState {
+              NotRequired,
+              Completed,
+          }
+          ''',
+              ),
+              (
+                  '''                if let Err(error) = write_materialization_plan(&paths.staging, plan, stop) {
+                      return Err(error);
+                  }
+          ''',
+                  '''                write_materialization_plan(&paths.staging, plan, stop)?;
+          ''',
+              ),
+              (
+                  'observe_pack_path_from_output(&paths, budgets, stop)?',
+                  'observe_pack_path_from_output(paths, budgets, stop)?',
+              ),
+              (
+                  '''impl IsolatedDirectory {
+              fn disarm(&mut self) {
+                  self.armed = false;
+              }
+
+              fn cleanup''',
+                  '''impl IsolatedDirectory {
+              fn cleanup''',
+              ),
+          ]
+          for old_text, new_text in replacements:
+              if app.count(old_text) != 1:
+                  raise SystemExit(f'builder lint source changed: {old_text[:40]!r}')
+              app = app.replace(old_text, new_text, 1)
+          app_path.write_text(app)
           PY
       - name: Install minimal compiler tools
         run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
