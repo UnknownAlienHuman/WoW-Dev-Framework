@@ -1,5 +1,5 @@
 name: W07 durable Reference Pack filesystem effects checkpoint
-run-name: W07 materialization effects ${{ github.sha }}
+run-name: W07 materialization effects v3 ${{ github.sha }}
 on:
   push:
     branches: [main]
@@ -11,8 +11,8 @@ concurrency:
 env:
   BASE_COMMIT: ec4345039c55c25da78289908942d700609df09a
   BASE_TREE: 9d52ccc0ac8b42d46691d93f4096ab456f2c31b9
-  STAGING_PARENT: 7b20ee9db0f9083e230226ef84be8499ac744a02
-  PATCH_SHA256: 02a36dc4b3d6e2076420cbf0382300b507bf69437d7e917d4470fc462ce527ae
+  STAGING_PARENT: 9091b8649e56dd7c0e79daccb5b189bfb08c13fb
+  PATCH_SHA256: ab7112d2673e3ef59a44156ce1ca55f5072141169cb9e7a660be88011f072eb8
 jobs:
   checkpoint:
     runs-on: ubuntu-latest
@@ -23,15 +23,17 @@ jobs:
           ref: main
           fetch-depth: 0
           persist-credentials: false
-      - name: Admit corrected product patch and remove checkpoint transport
+      - name: Admit exhaustively corrected product patch and remove checkpoint transport
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test "$(git rev-parse "${GITHUB_SHA}^")" = "$STAGING_PARENT"
-          xz -dc .ci/w07-materialization-effects.patch.xz > "$RUNNER_TEMP/w07-materialization-effects.patch"
+          cat .ci/w07-materialization-effects.patch.xz.b64.* > "$RUNNER_TEMP/w07-materialization-effects.patch.xz.b64"
+          base64 -d "$RUNNER_TEMP/w07-materialization-effects.patch.xz.b64" > "$RUNNER_TEMP/w07-materialization-effects.patch.xz"
+          xz -dc "$RUNNER_TEMP/w07-materialization-effects.patch.xz" > "$RUNNER_TEMP/w07-materialization-effects.patch"
           printf '%s  %s\n' "$PATCH_SHA256" "$RUNNER_TEMP/w07-materialization-effects.patch" | sha256sum -c -
-          git rm -- .ci/w07-materialization-effects.patch.xz .github/workflows/w07-materialization-effects-checkpoint.yml
+          git rm -- .ci/w07-materialization-effects.patch.xz.b64.* .github/workflows/w07-materialization-effects-checkpoint.yml
           test "$(git write-tree)" = "$BASE_TREE"
           git apply --index "$RUNNER_TEMP/w07-materialization-effects.patch"
       - name: Install minimal compiler tools
