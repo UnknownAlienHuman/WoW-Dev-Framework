@@ -12,6 +12,7 @@ pub mod flow;
 pub mod function_calls;
 pub mod references;
 pub mod syntax;
+pub mod virtual_semantics;
 pub mod virtual_syntax;
 pub mod workspace;
 
@@ -36,6 +37,7 @@ pub use syntax::{
     EmmySyntaxError, EmmySyntaxErrorCode, EmmySyntaxFileReport, EmmySyntaxReport, EmmySyntaxResult,
     analyze_syntax,
 };
+pub use virtual_semantics::{VIRTUAL_SEMANTIC_PROFILE, VirtualSemanticReport};
 pub use workspace::{
     EmmyBackendIdentity, EmmyWorkspaceError, EmmyWorkspaceErrorCode, EmmyWorkspaceResult,
     LuaWorkspaceFile, LuaWorkspaceFileInput, LuaWorkspaceLimits, LuaWorkspaceSnapshot,

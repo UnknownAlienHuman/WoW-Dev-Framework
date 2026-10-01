@@ -3,7 +3,7 @@
 //! Upstream database, URI, LSP range, and diagnostic types remain private.
 //! Public spans are exact, end-exclusive UTF-8 byte ranges over snapshot text.
 
-mod analyzer;
+pub(crate) mod analyzer;
 mod coordinates;
 
 use std::fmt;
@@ -180,6 +180,10 @@ impl EmmySyntaxFileReport {
     #[must_use]
     pub const fn diagnostic_count(&self) -> u64 {
         self.diagnostic_count
+    }
+    #[must_use]
+    pub fn content_sha256(&self) -> &str {
+        &self.content_sha256
     }
     #[must_use]
     pub const fn status(&self) -> &str {

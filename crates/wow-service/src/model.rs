@@ -546,6 +546,48 @@ impl GenericFinding {
         Ok(self)
     }
 
+    /// Preserve exact XML pieces for one diagnostic retained from the shared
+    /// virtual Main/Library semantic session.
+    pub(crate) fn with_xml_semantic_source_mapping(
+        mut self,
+        unit: &wow_project::xml_lua::XmlLuaUnitAnalysis,
+        diagnostic: &wow_project::xml_lua::XmlLuaSemanticDiagnostic,
+    ) -> ServiceResult<Self> {
+        let locations = diagnostic
+            .source
+            .xml_spans
+            .iter()
+            .map(|span| {
+                ExactSourceLocation::new(
+                    unit.document.as_str(),
+                    unit.document_digest.to_string(),
+                    span.byte_start,
+                    span.byte_end,
+                )
+            })
+            .collect::<ServiceResult<Vec<_>>>()?;
+        if locations.first() != Some(&self.location) {
+            return Err(ServiceError::new(
+                ServiceErrorCode::InvalidContext,
+                "XML semantic diagnostic display anchor differs from its mapping",
+            ));
+        }
+        self.source_mapping = Some(GenericSourceMapping {
+            profile: wow_project::xml_lua::XML_LUA_ANALYSIS_PROFILE,
+            virtual_unit_id: unit.unit_id.clone(),
+            virtual_byte_start: diagnostic.source.virtual_byte_start,
+            virtual_byte_end: diagnostic.source.virtual_byte_end,
+            kind: match diagnostic.source.mapping {
+                wow_project::xml_lua::XmlLuaDiagnosticMapping::ExactPieces => "exact_pieces",
+                wow_project::xml_lua::XmlLuaDiagnosticMapping::CaretBoundaries => {
+                    "caret_boundaries"
+                }
+            },
+            locations,
+        });
+        Ok(self)
+    }
+
     #[must_use]
     pub fn finding_id(&self) -> &str {
         &self.finding_id

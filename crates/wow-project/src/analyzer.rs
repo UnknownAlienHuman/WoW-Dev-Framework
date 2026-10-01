@@ -245,7 +245,7 @@ pub(crate) fn build_analyzer_binding(
         .with_candidate_generation(generation.project_generation())
     })?;
     validate_workspace_manifest(&main_workspace, inventory)?;
-    let xml_lua_analysis = crate::xml_lua::analyze(
+    let pending_xml_lua = crate::xml_lua::prepare(
         configuration,
         generation.project_generation(),
         inventory.files().len(),
@@ -276,13 +276,27 @@ pub(crate) fn build_analyzer_binding(
         .as_ref()
         .map(|p| p.queries())
         .unwrap_or_default();
-    let session = wow_emmy::references::analyze_member_call_session(
-        &main_workspace,
-        &library_refs,
-        queries,
-        function_calls,
-        stop,
-    )
+    let session = match pending_xml_lua
+        .as_ref()
+        .and_then(crate::xml_lua::PreparedProjectXmlLuaAnalysis::virtual_workspace)
+    {
+        Some(virtual_workspace) => wow_emmy::references::analyze_member_call_session_with_virtual(
+            &main_workspace,
+            &library_refs,
+            virtual_workspace,
+            generation.project_generation(),
+            queries,
+            function_calls,
+            stop,
+        ),
+        None => wow_emmy::references::analyze_member_call_session(
+            &main_workspace,
+            &library_refs,
+            queries,
+            function_calls,
+            stop,
+        ),
+    }
     .map_err(|source| {
         let code = match source.code() {
             wow_emmy::EmmyMemberCallErrorCode::Cancelled => ProjectErrorCode::AnalysisCancelled,
@@ -298,9 +312,31 @@ pub(crate) fn build_analyzer_binding(
         )
         .with_candidate_generation(generation.project_generation())
     })?;
-    let member_call_report = session.member_calls;
-    let symbol_lookup = session.symbol_lookup;
-    let function_call_report = session.function_calls;
+    let wow_emmy::references::MemberCallSession {
+        member_calls: member_call_report,
+        symbol_lookup,
+        function_calls: function_call_report,
+        virtual_semantics,
+    } = session;
+    if let Some(report) = &virtual_semantics {
+        let expected_libraries = ordered_libraries
+            .iter()
+            .map(LuaWorkspaceSnapshot::snapshot_id)
+            .collect::<Vec<_>>();
+        if report.main_snapshot_id() != main_workspace.snapshot_id()
+            || report.library_snapshot_ids().ne(expected_libraries)
+        {
+            return Err(ProjectError::new(
+                ProjectErrorCode::AnalyzerSnapshotMismatch,
+                ProjectPhase::Analyzer,
+                "virtual XML semantics do not bind the exact Main and Library snapshots",
+            )
+            .with_candidate_generation(generation.project_generation()));
+        }
+    }
+    let xml_lua_analysis = pending_xml_lua
+        .map(|pending| crate::xml_lua::finish(pending, virtual_semantics, stop))
+        .transpose()?;
     let xml_bindings = match (pending_bindings, configuration.load_plan()) {
         (Some(pending), Some(plan)) => Some(crate::xml_bindings::finish(
             pending,
@@ -350,6 +386,7 @@ pub(crate) fn build_analyzer_binding(
         &syntax_report,
         &member_call_report,
         &local_flow_report,
+        xml_lua_analysis.as_ref(),
         generation.project_generation(),
     )?;
     let capability_records = build_capability_records(
@@ -536,6 +573,7 @@ fn enforce_analyzer_budgets(
     syntax: &EmmySyntaxReport,
     member: &EmmyMemberCallReport,
     flow: &EmmyLocalFlowReport,
+    xml_lua: Option<&crate::xml_lua::ProjectXmlLuaAnalysis>,
     generation: ProjectGenerationId,
 ) -> ProjectResult<()> {
     let facts = member
@@ -546,8 +584,12 @@ fn enforce_analyzer_budgets(
         .saturating_add(flow.uses().len())
         .saturating_add(flow.operations().len())
         .saturating_add(flow.guards().len())
-        .saturating_add(flow.control_flow().len());
-    let diagnostics = syntax.diagnostics().len();
+        .saturating_add(flow.control_flow().len())
+        .saturating_add(xml_lua.map_or(0, |report| report.semantic_fact_count()));
+    let diagnostics = syntax
+        .diagnostics()
+        .len()
+        .saturating_add(xml_lua.map_or(0, |report| report.diagnostic_count()));
     let budget = configuration.budget_policy();
     if u64::try_from(facts).unwrap_or(u64::MAX) > budget.max_analyzer_facts()
         || u64::try_from(diagnostics).unwrap_or(u64::MAX) > budget.max_generic_findings()
@@ -559,7 +601,7 @@ fn enforce_analyzer_budgets(
         )
         .with_candidate_generation(generation));
     }
-    let output_bytes = serde_json::to_vec(&(syntax, member, flow))
+    let output_bytes = serde_json::to_vec(&(syntax, member, flow, xml_lua))
         .map_err(|source| {
             ProjectError::new(
                 ProjectErrorCode::AnalyzerFailed,

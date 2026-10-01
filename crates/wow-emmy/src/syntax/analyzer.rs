@@ -1,4 +1,7 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use emmylua_code_analysis::{
     EmmyLuaAnalysis, Emmyrc, EmmyrcLuaVersion, WorkspaceFolder, file_path_to_uri,
@@ -48,7 +51,18 @@ pub(super) fn analyze(snapshot: &LuaWorkspaceSnapshot) -> EmmySyntaxResult<EmmyS
             None,
         ));
     }
+    collect_registered(&analysis, snapshot, &root)
+}
 
+/// Collect accepted diagnostics from an already populated exact analyzer
+/// session. The caller owns workspace registration; this function never opens a
+/// URI or creates a second parser/session.
+pub(crate) fn collect_registered(
+    analysis: &EmmyLuaAnalysis,
+    snapshot: &LuaWorkspaceSnapshot,
+    root: &Path,
+) -> EmmySyntaxResult<EmmySyntaxReport> {
+    validate_backend(snapshot)?;
     let mut diagnostics = Vec::new();
     let mut files = Vec::with_capacity(snapshot.files().len());
     for file in snapshot.files() {
@@ -169,7 +183,6 @@ pub(super) fn analyze(snapshot: &LuaWorkspaceSnapshot) -> EmmySyntaxResult<EmmyS
         diagnostics,
     })
 }
-
 fn validate_backend(snapshot: &LuaWorkspaceSnapshot) -> EmmySyntaxResult<()> {
     let backend = snapshot.backend();
     if backend.crate_name() != "emmylua_code_analysis"

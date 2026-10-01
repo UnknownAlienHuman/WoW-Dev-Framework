@@ -16,7 +16,7 @@ use emmylua_code_analysis::{
 use emmylua_parser::{LuaAst, LuaAstNode, LuaExpr, LuaIndexExpr, LuaIndexKey};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
-use wow_core::{SourceSpan, canonical_json_bytes};
+use wow_core::{ProjectGenerationId, SourceSpan, canonical_json_bytes};
 
 use crate::syntax::{EMMYLUA_CODE_ANALYSIS_VERSION, EMMYLUA_REVISION, EMMYLUA_TREE};
 use crate::{LuaWorkspaceFile, LuaWorkspaceSnapshot};
@@ -276,6 +276,11 @@ impl EmmyMemberCallFileReport {
     pub const fn call_count(&self) -> u64 {
         self.call_count
     }
+
+    #[must_use]
+    pub fn content_sha256(&self) -> &str {
+        &self.content_sha256
+    }
 }
 
 /// Deterministic direct-member fact report for one Main snapshot and zero or
@@ -363,11 +368,56 @@ pub struct MemberCallSession {
     pub member_calls: EmmyMemberCallReport,
     pub symbol_lookup: Option<crate::bindings::SymbolLookupReport>,
     pub function_calls: Option<crate::function_calls::FunctionCallReport>,
+    pub virtual_semantics: Option<crate::virtual_semantics::VirtualSemanticReport>,
 }
 
 pub fn analyze_member_call_session(
     main: &LuaWorkspaceSnapshot,
     libraries: &[&LuaWorkspaceSnapshot],
+    queries: &[String],
+    include_function_calls: bool,
+    stop: &std::sync::atomic::AtomicBool,
+) -> EmmyMemberCallResult<MemberCallSession> {
+    analyze_member_call_session_impl(
+        main,
+        libraries,
+        None,
+        None,
+        queries,
+        include_function_calls,
+        stop,
+    )
+}
+
+/// Analyze owner-supplied virtual Main units in the same exact EmmyLua session
+/// as the physical project Main and Library inputs. The virtual snapshot remains
+/// a separate identity/report and never enters the physical project inventory.
+pub fn analyze_member_call_session_with_virtual(
+    main: &LuaWorkspaceSnapshot,
+    libraries: &[&LuaWorkspaceSnapshot],
+    virtual_units: &LuaWorkspaceSnapshot,
+    project_generation: ProjectGenerationId,
+    queries: &[String],
+    include_function_calls: bool,
+    stop: &std::sync::atomic::AtomicBool,
+) -> EmmyMemberCallResult<MemberCallSession> {
+    analyze_member_call_session_impl(
+        main,
+        libraries,
+        Some(virtual_units),
+        Some(project_generation),
+        queries,
+        include_function_calls,
+        stop,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn analyze_member_call_session_impl(
+    main: &LuaWorkspaceSnapshot,
+    libraries: &[&LuaWorkspaceSnapshot],
+    virtual_units: Option<&LuaWorkspaceSnapshot>,
+    project_generation: Option<ProjectGenerationId>,
     queries: &[String],
     include_function_calls: bool,
     stop: &std::sync::atomic::AtomicBool,
@@ -382,6 +432,13 @@ pub fn analyze_member_call_session(
             None,
         ));
     }
+    if virtual_units.is_some() != project_generation.is_some() {
+        return Err(EmmyMemberCallError::new(
+            EmmyMemberCallErrorCode::InvalidMainWorkspace,
+            "virtual semantic analysis requires one exact project generation",
+            None,
+        ));
+    }
 
     let mut ordered_libraries = libraries.to_vec();
     ordered_libraries.sort_by(|left, right| {
@@ -391,6 +448,29 @@ pub fn analyze_member_call_session(
     });
     let mut identities = BTreeSet::new();
     identities.insert(main.snapshot_id());
+    if let Some(virtual_units) = virtual_units {
+        crate::bindings::checkpoint(stop)?;
+        validate_compiled_backend(virtual_units)?;
+        if virtual_units.backend() != main.backend()
+            || matches!(
+                virtual_units.universe(),
+                crate::LuaWorkspaceUniverse::BlizzardUi
+            )
+        {
+            return Err(EmmyMemberCallError::new(
+                EmmyMemberCallErrorCode::IncompatibleBackend,
+                "virtual Main units do not share the physical Main analyzer identity",
+                None,
+            ));
+        }
+        if !identities.insert(virtual_units.snapshot_id()) {
+            return Err(EmmyMemberCallError::new(
+                EmmyMemberCallErrorCode::DuplicateWorkspaceSnapshot,
+                "virtual Main and physical Main snapshots must be distinct",
+                None,
+            ));
+        }
+    }
     for library in &ordered_libraries {
         crate::bindings::checkpoint(stop)?;
         validate_compiled_backend(library)?;
@@ -411,6 +491,8 @@ pub fn analyze_member_call_session(
     }
 
     let main_root = virtual_root("main", main.snapshot_id());
+    let virtual_main_root =
+        virtual_units.map(|snapshot| virtual_root("xml-virtual", snapshot.snapshot_id()));
     let library_roots = ordered_libraries
         .iter()
         .enumerate()
@@ -425,9 +507,12 @@ pub fn analyze_member_call_session(
     let mut analysis = EmmyLuaAnalysis::new();
     let mut configuration = Emmyrc::default();
     configuration.runtime.version = EmmyrcLuaVersion::Lua51;
-    configuration.diagnostics.enable = false;
+    configuration.diagnostics.enable = virtual_units.is_some();
     analysis.update_config(Arc::new(configuration));
     analysis.add_main_workspace(main_root.clone());
+    if let Some(root) = &virtual_main_root {
+        analysis.add_main_workspace(root.clone());
+    }
     for (_, root) in &library_roots {
         analysis.add_library_workspace(&WorkspaceFolder::new(root.clone(), true));
     }
@@ -446,11 +531,19 @@ pub fn analyze_member_call_session(
             .iter()
             .map(|file| (main_root.join(file.path()), Some(file.text().to_owned()))),
     );
+    if let (Some(snapshot), Some(root)) = (virtual_units, virtual_main_root.as_ref()) {
+        exact_files.extend(
+            snapshot
+                .files()
+                .iter()
+                .map(|file| (root.join(file.path()), Some(file.text().to_owned()))),
+        );
+    }
     let expected_files = exact_files.len();
     if analysis.update_files_by_path(exact_files).len() != expected_files {
         return Err(EmmyMemberCallError::new(
             EmmyMemberCallErrorCode::AnalyzerFileRegistrationFailed,
-            "upstream did not register every supplied Main and Library file",
+            "upstream did not register every supplied Main, virtual and Library file",
             None,
         ));
     }
@@ -472,12 +565,108 @@ pub fn analyze_member_call_session(
         }
     }
 
-    let mut files = Vec::with_capacity(main.files().len());
+    let library_snapshot_ids = ordered_libraries
+        .iter()
+        .map(|snapshot| snapshot.snapshot_id().into())
+        .collect::<Vec<Box<str>>>();
+    let report =
+        collect_member_call_report(&analysis, main, &main_root, &library_snapshot_ids, stop)?;
+    let virtual_semantics = match (
+        virtual_units,
+        virtual_main_root.as_ref(),
+        project_generation,
+    ) {
+        (Some(snapshot), Some(root), Some(project_generation)) => {
+            crate::bindings::checkpoint(stop)?;
+            let syntax_report =
+                crate::syntax::analyzer::collect_registered(&analysis, snapshot, root)
+                    .map_err(map_virtual_syntax_error)?;
+            let virtual_member_calls =
+                collect_member_call_report(&analysis, snapshot, root, &library_snapshot_ids, stop)?;
+            if report
+                .references
+                .len()
+                .saturating_add(virtual_member_calls.references.len())
+                > MAX_FACTS
+                || report
+                    .calls
+                    .len()
+                    .saturating_add(virtual_member_calls.calls.len())
+                    > MAX_FACTS
+            {
+                return Err(EmmyMemberCallError::new(
+                    EmmyMemberCallErrorCode::FactBudgetExceeded,
+                    "physical and virtual direct-member facts exceed the session budget",
+                    None,
+                ));
+            }
+            Some(crate::virtual_semantics::VirtualSemanticReport::new(
+                project_generation,
+                main,
+                snapshot,
+                library_snapshot_ids.clone(),
+                syntax_report,
+                virtual_member_calls,
+            )?)
+        }
+        (None, None, None) => None,
+        _ => {
+            return Err(EmmyMemberCallError::new(
+                EmmyMemberCallErrorCode::InvalidMainWorkspace,
+                "virtual semantic session inputs are incomplete",
+                None,
+            ));
+        }
+    };
+
+    let mut callable_signatures = std::collections::BTreeMap::new();
+    let lookups = if queries.is_empty() {
+        None
+    } else {
+        Some(crate::bindings::resolve(
+            &analysis,
+            main,
+            &main_root,
+            &library_roots,
+            queries,
+            include_function_calls.then_some(&mut callable_signatures),
+            stop,
+        )?)
+    };
+    let function_calls = if include_function_calls {
+        Some(crate::function_calls::collect(
+            &analysis,
+            main,
+            &main_root,
+            &library_roots,
+            &callable_signatures,
+            lookups.as_ref().map(|report| report.analysis_id()),
+            stop,
+        )?)
+    } else {
+        None
+    };
+    Ok(MemberCallSession {
+        member_calls: report,
+        symbol_lookup: lookups,
+        function_calls,
+        virtual_semantics,
+    })
+}
+
+fn collect_member_call_report(
+    analysis: &EmmyLuaAnalysis,
+    snapshot: &LuaWorkspaceSnapshot,
+    root_path: &Path,
+    library_snapshot_ids: &[Box<str>],
+    stop: &std::sync::atomic::AtomicBool,
+) -> EmmyMemberCallResult<EmmyMemberCallReport> {
+    let mut files = Vec::with_capacity(snapshot.files().len());
     let mut references = Vec::new();
     let mut calls = Vec::new();
-    for file in main.files() {
+    for file in snapshot.files() {
         crate::bindings::checkpoint(stop)?;
-        let model = semantic_model(&analysis, &main_root, file)?;
+        let model = semantic_model(analysis, root_path, file)?;
         let parse_errors = model.get_file_parse_error().unwrap_or_default();
         if !parse_errors.is_empty() {
             files.push(EmmyMemberCallFileReport {
@@ -547,7 +736,7 @@ pub fn analyze_member_call_session(
             let call_span = ast_span(file, call.syntax().text_range())?;
             let resolution = reference_resolution(&model, &index, receiver_expr);
             let reference_fact_id = reference_fact_id(
-                main.snapshot_id(),
+                snapshot.snapshot_id(),
                 file,
                 &receiver,
                 &member,
@@ -574,7 +763,7 @@ pub fn analyze_member_call_session(
                 .transpose()?;
             let colon_call = call.is_colon_call();
             let call_fact_id = call_fact_id(
-                main.snapshot_id(),
+                snapshot.snapshot_id(),
                 file,
                 &reference_fact_id,
                 reference_span,
@@ -608,10 +797,6 @@ pub fn analyze_member_call_session(
     references.sort();
     calls.sort();
 
-    let library_snapshot_ids = ordered_libraries
-        .iter()
-        .map(|snapshot| snapshot.snapshot_id().into())
-        .collect::<Vec<Box<str>>>();
     #[derive(Serialize)]
     struct ReportIdentity<'a> {
         schema: &'static str,
@@ -629,59 +814,52 @@ pub fn analyze_member_call_session(
         upstream_revision: EMMYLUA_REVISION,
         upstream_tree: EMMYLUA_TREE,
         upstream_crate_version: EMMYLUA_CODE_ANALYSIS_VERSION,
-        main_snapshot_id: main.snapshot_id(),
-        library_snapshot_ids: &library_snapshot_ids,
+        main_snapshot_id: snapshot.snapshot_id(),
+        library_snapshot_ids,
         files: &files,
         references: &references,
         calls: &calls,
     };
     let analysis_id = canonical_id("emmy-member-calls:sha256:", &identity)?;
-    let report = EmmyMemberCallReport {
+    Ok(EmmyMemberCallReport {
         schema: REPORT_SCHEMA,
         analysis_id: analysis_id.into_boxed_str(),
         upstream_revision: EMMYLUA_REVISION,
         upstream_tree: EMMYLUA_TREE,
         upstream_crate_version: EMMYLUA_CODE_ANALYSIS_VERSION,
-        main_snapshot_id: main.snapshot_id().into(),
-        library_snapshot_ids,
+        main_snapshot_id: snapshot.snapshot_id().into(),
+        library_snapshot_ids: library_snapshot_ids.to_vec(),
         files,
         references,
         calls,
-    };
-    let mut callable_signatures = std::collections::BTreeMap::new();
-    let lookups = if queries.is_empty() {
-        None
-    } else {
-        Some(crate::bindings::resolve(
-            &analysis,
-            main,
-            &main_root,
-            &library_roots,
-            queries,
-            include_function_calls.then_some(&mut callable_signatures),
-            stop,
-        )?)
-    };
-    let function_calls = if include_function_calls {
-        Some(crate::function_calls::collect(
-            &analysis,
-            main,
-            &main_root,
-            &library_roots,
-            &callable_signatures,
-            lookups.as_ref().map(|report| report.analysis_id()),
-            stop,
-        )?)
-    } else {
-        None
-    };
-    Ok(MemberCallSession {
-        member_calls: report,
-        symbol_lookup: lookups,
-        function_calls,
     })
 }
 
+fn map_virtual_syntax_error(error: crate::syntax::EmmySyntaxError) -> EmmyMemberCallError {
+    let code = match error.code() {
+        crate::syntax::EmmySyntaxErrorCode::AnalyzerFileRegistrationFailed => {
+            EmmyMemberCallErrorCode::AnalyzerFileRegistrationFailed
+        }
+        crate::syntax::EmmySyntaxErrorCode::DiagnosticBudgetExceeded => {
+            EmmyMemberCallErrorCode::FactBudgetExceeded
+        }
+        crate::syntax::EmmySyntaxErrorCode::CoordinateConversionFailed => {
+            EmmyMemberCallErrorCode::CoordinateConversionFailed
+        }
+        crate::syntax::EmmySyntaxErrorCode::IncompatibleBackend => {
+            EmmyMemberCallErrorCode::IncompatibleBackend
+        }
+        crate::syntax::EmmySyntaxErrorCode::DiagnosticsUnavailable
+        | crate::syntax::EmmySyntaxErrorCode::CanonicalizationFailed => {
+            EmmyMemberCallErrorCode::SemanticModelUnavailable
+        }
+    };
+    EmmyMemberCallError::new(
+        code,
+        "virtual diagnostics could not be retained from the exact semantic session",
+        error.path(),
+    )
+}
 pub(crate) fn semantic_model<'a>(
     analysis: &'a EmmyLuaAnalysis,
     root: &Path,

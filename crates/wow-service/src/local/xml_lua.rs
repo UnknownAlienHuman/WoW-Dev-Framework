@@ -13,17 +13,16 @@ pub(super) struct ResolvedScope<'a> {
     pub physical: Vec<&'a ProjectFileRecord>,
     pub xml_documents: BTreeSet<String>,
 }
+
 pub(super) fn resolve_scope<'a>(
     project: &'a ProjectView,
     scope: &CheckScope,
 ) -> ServiceResult<ResolvedScope<'a>> {
-    let plan = project.configuration().load_plan();
+    let xml_candidates = xml_documents(project)?;
     if matches!(scope, CheckScope::WholeProject) {
         return Ok(ResolvedScope {
             physical: project.file_manifest().iter().collect(),
-            xml_documents: plan
-                .map(|plan| plan.xml_documents().keys().cloned().collect())
-                .unwrap_or_default(),
+            xml_documents: xml_candidates,
         });
     }
     let paths = match scope {
@@ -48,7 +47,7 @@ pub(super) fn resolve_scope<'a>(
     for path in paths {
         if let Some(file) = project.file_by_path(&path).map_err(|_| invalid_scope())? {
             physical.push(file);
-        } else if plan.is_some_and(|plan| plan.xml_documents().contains_key(&path)) {
+        } else if xml_candidates.contains(&path) {
             xml_documents.insert(path);
         } else {
             return Err(invalid_scope());
@@ -58,6 +57,33 @@ pub(super) fn resolve_scope<'a>(
         physical,
         xml_documents,
     })
+}
+
+fn xml_documents(project: &ProjectView) -> ServiceResult<BTreeSet<String>> {
+    let configuration = project.configuration();
+    if let Some(plan) = configuration.load_plan() {
+        return Ok(plan.xml_documents().keys().cloned().collect());
+    }
+    let Some(packages) = configuration.package_load_plan() else {
+        return Ok(BTreeSet::new());
+    };
+    let mut documents = BTreeSet::new();
+    for package in packages.packages() {
+        let plan = packages
+            .package_plan(&package.package)
+            .ok_or_else(|| super::owner_error("package XML load receipt is missing"))?;
+        for path in plan.xml_documents().keys() {
+            let qualified = packages
+                .source_path(&package.package, path)
+                .ok_or_else(|| super::owner_error("package XML source identity is missing"))?;
+            if !documents.insert(qualified) {
+                return Err(super::owner_error(
+                    "package XML document identities collide",
+                ));
+            }
+        }
+    }
+    Ok(documents)
 }
 
 pub(super) fn append_findings(
@@ -96,9 +122,58 @@ pub(super) fn append_findings(
                     .with_xml_source_mapping(unit, diagnostic)?,
             );
         }
+        for diagnostic in &unit.semantic_diagnostics {
+            super::cancelled(stop)?;
+            if matches!(
+                diagnostic.kind,
+                wow_emmy::EmmySyntaxDiagnosticKind::LuaSyntax
+                    | wow_emmy::EmmySyntaxDiagnosticKind::DocumentationSyntax
+            ) {
+                // The existing syntax-only owner already presents these exact
+                // classes. Retain the same-session copy in owner evidence without
+                // duplicating the user-facing finding.
+                continue;
+            }
+            let primary = diagnostic
+                .source
+                .xml_spans
+                .first()
+                .ok_or_else(|| super::owner_error("XML semantic diagnostic has no mapping"))?;
+            let location = ExactSourceLocation::new(
+                unit.document.as_str(),
+                unit.document_digest.to_string(),
+                primary.byte_start,
+                primary.byte_end,
+            )?;
+            let id = crate::identity::canonical_digest(
+                "service-xml-semantic:sha256:",
+                &(report.analysis_id(), diagnostic),
+            )?;
+            findings.push(
+                GenericFinding::new(
+                    id,
+                    "emmy.xml.inline.semantic",
+                    diagnostic.upstream_code.as_str(),
+                    semantic_severity(diagnostic.severity),
+                    location,
+                )?
+                .with_xml_semantic_source_mapping(unit, diagnostic)?,
+            );
+        }
     }
     Ok(())
 }
+
+const fn semantic_severity(severity: wow_emmy::EmmyDiagnosticSeverity) -> &'static str {
+    match severity {
+        wow_emmy::EmmyDiagnosticSeverity::Error => "error",
+        wow_emmy::EmmyDiagnosticSeverity::Warning => "warning",
+        wow_emmy::EmmyDiagnosticSeverity::Information => "information",
+        wow_emmy::EmmyDiagnosticSeverity::Hint => "hint",
+        wow_emmy::EmmyDiagnosticSeverity::Unknown => "unknown",
+    }
+}
+
 fn invalid_scope() -> ServiceError {
     ServiceError::new(
         ServiceErrorCode::InvalidRequest,

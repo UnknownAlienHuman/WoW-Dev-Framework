@@ -344,6 +344,16 @@ impl ProjectPackageMainPlan {
         &self.files
     }
 
+    /// Resolve one exact package-local Lua source to the project path that was
+    /// actually registered in Main. Callers must not reconstruct this namespace.
+    #[must_use]
+    pub fn resolve_source(&self, package: &str, source_path: &str) -> Option<&str> {
+        self.files
+            .iter()
+            .find(|file| file.package == package && file.source_path == source_path)
+            .map(|file| file.project_path.as_str())
+    }
+
     pub fn validate_load_plan(&self, load_plan: &ProjectPackageLoadPlan) -> ProjectResult<()> {
         if self.profile != PACKAGE_MAIN_NAMESPACE_PROFILE
             || self.namespace_root != PACKAGE_MAIN_NAMESPACE_ROOT
@@ -457,6 +467,17 @@ impl ProjectPackageLoadPlan {
     #[must_use]
     pub fn package_plan(&self, package: &str) -> Option<&ProjectLoadPlan> {
         self.retained_plans.get(package)
+    }
+
+    /// Resolve one retained TOC/XML/Lua source to its package-qualified logical
+    /// project path. The source must belong to the exact selected package plan.
+    #[must_use]
+    pub fn source_path(&self, package: &str, source_path: &str) -> Option<String> {
+        let plan = self.retained_plans.get(package)?;
+        plan.sources()
+            .iter()
+            .any(|source| source.path == source_path)
+            .then(|| format!("{PACKAGE_MAIN_NAMESPACE_ROOT}/{package}/{source_path}"))
     }
 
     fn validate_retained_plans(&self) -> ProjectResult<()> {
