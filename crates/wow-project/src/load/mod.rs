@@ -3,9 +3,18 @@
 mod conditions;
 pub(crate) mod document_toc;
 mod package;
+mod package_closure;
 mod saved_variables;
 mod toc;
 pub use document_toc::DocumentTocSelection;
+pub use package_closure::{
+    PACKAGE_LOAD_PROFILE, ProjectLoadedPackage, ProjectPackageCycleKind, ProjectPackageInput,
+    ProjectPackageLoadCoverage, ProjectPackageLoadInput, ProjectPackageLoadIssue,
+    ProjectPackageLoadIssueKind, ProjectPackageLoadPhase, ProjectPackageLoadPlan,
+    ProjectPackageLoadUnit, ProjectPackageNode, ProjectPackageOrderGroup,
+    ProjectPackageReachability, ProjectPackageVariantInput, ProjectPackageVariantReceipt,
+    TocDependencyDeclaration, TocDependencyKind, TocDependencyResolution, TocLoadOnDemandState,
+};
 pub use saved_variables::{TocSavedVariable, TocSavedVariableScope, TocSavedVariableState};
 mod xml;
 mod xml_index;
