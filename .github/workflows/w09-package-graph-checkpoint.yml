@@ -1,4 +1,4 @@
-name: W09 package graph checkpoint v2
+name: W09 package graph checkpoint v3
 
 on:
   push:
@@ -14,14 +14,14 @@ jobs:
     env:
       BASE_COMMIT: f9662bebe513b877476ff193b33ab17576d23290
       BASE_TREE: 94c2a5821bb6e2c70acc8a72ad29fd0adb81c474
-      TRIGGER_PARENT: 9d0852169b68ba51f1d95ed52cd3ed1f0e794d4b
+      TRIGGER_PARENT: 0a92543776248c7b13a7377e32227a6a601da752
       PATCH_SHA256: 75c337c386b60eddd6f564af75ba51d770509c46134bf5f28a8b4fdf32bb67f3
     steps:
       - uses: actions/checkout@v7
         with:
           ref: main
           fetch-depth: 0
-      - name: Admit corrected W09 patch and remove checkpoint transport
+      - name: Admit W09 patch, apply audited correction, remove transport
         shell: bash
         run: |
           set -euo pipefail
@@ -34,6 +34,17 @@ jobs:
           git rm -- .ci/w09-package-graph.patch.xz.b64.* .github/workflows/w09-package-graph-checkpoint.yml
           test "$(git write-tree)" = "$BASE_TREE"
           git apply --index "$RUNNER_TEMP/w09.patch"
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('crates/wow-project/src/graph/packages.rs')
+          text = path.read_text()
+          anchor = '//! observations or addon lifecycle claims.\nuse super::*;\n'
+          replacement = '//! observations or addon lifecycle claims.\nuse std::collections::BTreeSet;\n\nuse super::*;\n'
+          if text.count(anchor) != 1:
+              raise SystemExit('audited import correction anchor mismatch')
+          path.write_text(text.replace(anchor, replacement, 1))
+          PY
+          git add crates/wow-project/src/graph/packages.rs
       - name: Install minimal compiler tools
         run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
       - name: Format workspace
