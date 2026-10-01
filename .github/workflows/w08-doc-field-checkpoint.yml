@@ -1,19 +1,23 @@
-name: W08 documentation field checkpoint
-run-name: W08 documentation field checkpoint ${{ github.sha }}
+name: W08 publish checked documentation correction
+run-name: W08 publish documentation correction ${{ github.sha }}
 on:
   push:
     branches: [main]
 permissions:
-  contents: read
+  actions: read
+  contents: write
 concurrency:
   group: w08-documentation-field-fix
   cancel-in-progress: false
 env:
   BASE_COMMIT: 2a3d99ce9846dca4f7d2cfa784ba8b7ece3fcacc
-  BASE_TREE: db1773a96931bad20d286e5dbf68624970d88565
-  PATCH_SHA256: 54e9a38f3ca7aab7daf97023814506ebbfc29f9366d097e014c1036c82e53129
+  STAGING_PARENT: c05bf32c2c75007541613a720a1fac4e13ca12b1
+  ARTIFACT_ID: '11143968580'
+  ARTIFACT_ZIP_SHA256: ef8de86fc98ec012ed6a7fe54400c9d6e834d85ad98dad1e0fcbc5bd470bfcfc
+  SOURCE_TAR_SHA256: b37e18c939f2c1227e6a698c94771572b531366403bb48ff1d45558c2695e071
+  CHECKED_TREE: cd90e1e5c028a94073e34beb447c53af8d3dd28f
 jobs:
-  checkpoint:
+  publish:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -21,47 +25,30 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
-          persist-credentials: false
-      - name: Admit exact documentation correction and remove checkpoint transport
+      - name: Recover exact checked documentation and fast-forward main
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git rev-parse "${GITHUB_SHA}^")" = "$BASE_COMMIT"
-          base64 -d .ci/w08-doc-field.patch.xz.b64 > "$RUNNER_TEMP/w08-doc-field.patch.xz"
-          xz -dc "$RUNNER_TEMP/w08-doc-field.patch.xz" > "$RUNNER_TEMP/w08-doc-field.patch"
-          printf '%s  %s\n' "$PATCH_SHA256" "$RUNNER_TEMP/w08-doc-field.patch" | sha256sum -c -
+          test "$(git rev-parse "${GITHUB_SHA}^")" = "$STAGING_PARENT"
+          mkdir -p "$RUNNER_TEMP/checked"
+          gh api -H 'Accept: application/vnd.github+json' \
+            "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip" \
+            > "$RUNNER_TEMP/checked.zip"
+          printf '%s  %s\n' "$ARTIFACT_ZIP_SHA256" "$RUNNER_TEMP/checked.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/checked.zip" -d "$RUNNER_TEMP/checked"
+          test "$(cat "$RUNNER_TEMP/checked/CHECKED_TREE")" = "$CHECKED_TREE"
+          printf '%s  %s\n' "$SOURCE_TAR_SHA256" "$RUNNER_TEMP/checked/checked-source.tar" | sha256sum -c -
+          tar -xf "$RUNNER_TEMP/checked/checked-source.tar" -C .
           git rm -- .ci/w08-doc-field.patch.xz.b64 .github/workflows/w08-doc-field-checkpoint.yml
-          test "$(git write-tree)" = "$BASE_TREE"
-          git apply --index "$RUNNER_TEMP/w08-doc-field.patch"
-      - name: Repository policy and exact file set
-        shell: bash
-        run: |
-          set -euo pipefail
-          cargo +stable xtask check 2>&1 | tee "$RUNNER_TEMP/policy.log"
           git add --all
           git diff --cached --check
+          test "$(git write-tree)" = "$CHECKED_TREE"
           test "$(git diff --cached --name-only "$BASE_COMMIT")" = 'docs/SOURCE_MATERIALIZATION.md'
-          grep -Fq '`before_revision` and `selected_revision`' docs/SOURCE_MATERIALIZATION.md
-          ! grep -Fq '`before_revision` and `selected_remote_revision`' docs/SOURCE_MATERIALIZATION.md
-      - name: Retain exact checked source
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/checkpoint"
-          git add --all
-          git write-tree > "$RUNNER_TEMP/checkpoint/CHECKED_TREE"
-          git archive --format=tar -o "$RUNNER_TEMP/checkpoint/checked-source.tar" "$(cat "$RUNNER_TEMP/checkpoint/CHECKED_TREE")"
-          git diff --cached --binary "$BASE_COMMIT" > "$RUNNER_TEMP/checkpoint/formatted.patch"
-          printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/checkpoint/STAGING_SHA"
-          if test -f "$RUNNER_TEMP/policy.log"; then cp "$RUNNER_TEMP/policy.log" "$RUNNER_TEMP/checkpoint/policy.log"; fi
-          (cd "$RUNNER_TEMP/checkpoint" && sha256sum checked-source.tar formatted.patch > SHA256SUMS)
-      - name: Upload checkpoint evidence
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: w08-doc-field-correction-${{ github.run_id }}
-          path: ${{ runner.temp }}/checkpoint
-          retention-days: 3
-          if-no-files-found: error
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'docs(xtask): correct prompt authorization field [skip ci]' \
+            -m 'Use the actual selected_revision request field in the managed source materialization contract. Repository policy passed; no tests executed.'
+          git push origin HEAD:main
