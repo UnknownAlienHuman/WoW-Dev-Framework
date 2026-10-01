@@ -1,11 +1,11 @@
-name: W09 package closure checkpoint
+name: W09 package closure checkpoint v2
 on:
   push:
     branches: [main]
     paths:
       - .github/workflows/w09-package-closure-checkpoint.yml
 permissions:
-  contents: read
+  contents: write
 concurrency:
   group: w09-package-closure-checkpoint
   cancel-in-progress: false
@@ -16,19 +16,19 @@ jobs:
     env:
       BASE_COMMIT: 686dde0b0ec2cd1f52e9d9a942acf5b82219f92e
       BASE_TREE: 9d67403801a92992105ba5f92e8b9580bcab973c
-      PATCH_SHA256: d5d3a1f724ff630a63d66814439d47e32fbdeb1616fcf4e4130d9de43d7fab1d
+      STAGING_PARENT: f8964dae1b0301a0411cbcef6f730fbd9729ea7e
+      PATCH_SHA256: 5acc3735ce640cfb5e5ec2f654df19d7f56a2abd2eada7e519ecf7b7065cb6cc
     steps:
       - uses: actions/checkout@v7
         with:
           ref: main
           fetch-depth: 0
-          persist-credentials: false
-      - name: Admit exact W09 patch and remove checkpoint transport
+      - name: Admit corrected W09 patch and remove checkpoint transport
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git rev-parse "${GITHUB_SHA}^")" = "$BASE_COMMIT"
+          test "$(git rev-parse "${GITHUB_SHA}^")" = "$STAGING_PARENT"
           cat .ci/w09-package-closure.patch.xz.b64.* > "$RUNNER_TEMP/w09.patch.xz.b64"
           base64 -d "$RUNNER_TEMP/w09.patch.xz.b64" > "$RUNNER_TEMP/w09.patch.xz"
           xz -dc "$RUNNER_TEMP/w09.patch.xz" > "$RUNNER_TEMP/w09.patch"
@@ -59,7 +59,6 @@ jobs:
           test "${changed[0]}" = "crates/wow-project/src/load/mod.rs"
           test "${changed[1]}" = "crates/wow-project/src/load/package_closure.rs"
       - name: Retain exact checked source
-        if: always()
         shell: bash
         run: |
           set -euo pipefail
@@ -69,15 +68,23 @@ jobs:
           git archive --format=tar -o "$RUNNER_TEMP/checkpoint/checked-source.tar" "$(cat "$RUNNER_TEMP/checkpoint/CHECKED_TREE")"
           git diff --cached --binary "$BASE_COMMIT" > "$RUNNER_TEMP/checkpoint/formatted.patch"
           printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/checkpoint/STAGING_SHA"
-          for file in RUST_VERSION clippy.log policy.log; do
-            if test -f "$RUNNER_TEMP/$file"; then cp "$RUNNER_TEMP/$file" "$RUNNER_TEMP/checkpoint/$file"; fi
-          done
+          cp "$RUNNER_TEMP/RUST_VERSION" "$RUNNER_TEMP/clippy.log" "$RUNNER_TEMP/policy.log" "$RUNNER_TEMP/checkpoint/"
           (cd "$RUNNER_TEMP/checkpoint" && sha256sum checked-source.tar formatted.patch > SHA256SUMS)
       - name: Upload checkpoint evidence
-        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: w09-package-closure-${{ github.run_id }}
           path: ${{ runner.temp }}/checkpoint
           retention-days: 3
           if-no-files-found: error
+      - name: Fast-forward exact checked tree to main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          test "$(git write-tree)" = "$(cat "$RUNNER_TEMP/checkpoint/CHECKED_TREE")"
+          git commit -m 'feat(wow-project): resolve explicit package load closure [skip ci]'
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = "$GITHUB_SHA"
+          git push origin HEAD:main
