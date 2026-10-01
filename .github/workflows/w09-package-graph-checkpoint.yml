@@ -1,4 +1,4 @@
-name: W09 package graph checkpoint
+name: W09 package graph checkpoint v2
 
 on:
   push:
@@ -14,18 +14,19 @@ jobs:
     env:
       BASE_COMMIT: f9662bebe513b877476ff193b33ab17576d23290
       BASE_TREE: 94c2a5821bb6e2c70acc8a72ad29fd0adb81c474
-      PATCH_SHA256: 1828288c743345059440a534d5b782f4f5a9c548a26f476067b481097786d5a1
+      TRIGGER_PARENT: 9d0852169b68ba51f1d95ed52cd3ed1f0e794d4b
+      PATCH_SHA256: 75c337c386b60eddd6f564af75ba51d770509c46134bf5f28a8b4fdf32bb67f3
     steps:
       - uses: actions/checkout@v7
         with:
           ref: main
           fetch-depth: 0
-      - name: Admit exact W09 patch and remove checkpoint transport
+      - name: Admit corrected W09 patch and remove checkpoint transport
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git rev-parse "${GITHUB_SHA}^")" = "$BASE_COMMIT"
+          test "$(git rev-parse "${GITHUB_SHA}^")" = "$TRIGGER_PARENT"
           cat .ci/w09-package-graph.patch.xz.b64.* > "$RUNNER_TEMP/w09.patch.xz.b64"
           base64 -d "$RUNNER_TEMP/w09.patch.xz.b64" > "$RUNNER_TEMP/w09.patch.xz"
           xz -dc "$RUNNER_TEMP/w09.patch.xz" > "$RUNNER_TEMP/w09.patch"
