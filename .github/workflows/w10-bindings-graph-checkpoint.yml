@@ -1,4 +1,4 @@
-name: W10 XML binding graph checkpoint v2
+name: W10 XML binding graph checkpoint v3
 on:
   push:
     branches: [main]
@@ -16,7 +16,7 @@ jobs:
     env:
       BASE_COMMIT: f1fb0788f8a4bb3a3ee88e50b58298ed8dd52c1a
       BASE_TREE: bc265d85ce3c57227ce3c5404beafb21d28294e3
-      TRIGGER_PARENT: 0eeaa6885221b17f660773da2e4753b0162f2d07
+      TRIGGER_PARENT: a282e1248c1976e53ea5f06869d3ffa879653a44
       PATCH_SHA256: 8405303e09af3a9379dffa1d88cea4b160c7bf532a4446c1058df1b773923694
     steps:
       - uses: actions/checkout@v7
@@ -30,8 +30,70 @@ jobs:
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test "$(git rev-parse "${GITHUB_SHA}^")" = "$TRIGGER_PARENT"
           cat .ci/w10-bindings-graph.patch.xz.b64.* > "$RUNNER_TEMP/w10.patch.xz.b64"
-          base64 -d "$RUNNER_TEMP/w10.patch.xz.b64" > "$RUNNER_TEMP/w10.patch.xz"
-          xz -dc "$RUNNER_TEMP/w10.patch.xz" > "$RUNNER_TEMP/w10.patch"
+          python - "$RUNNER_TEMP/w10.patch.xz.b64" "$RUNNER_TEMP/w10.patch" "$PATCH_SHA256" <<'PY'
+          import base64
+          import hashlib
+          import itertools
+          import lzma
+          import pathlib
+          import sys
+
+          source = pathlib.Path(sys.argv[1]).read_bytes()
+          output = pathlib.Path(sys.argv[2])
+          expected = sys.argv[3]
+          whitespace = set(b" \t\r\n")
+          alphabet = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+          allowed = set(alphabet + b"=")
+          compact = bytes(byte for byte in source if byte not in whitespace)
+          invalid = [(index, byte) for index, byte in enumerate(compact) if byte not in allowed]
+          print(f"transport_bytes={len(source)} compact_bytes={len(compact)} residue={len(compact) % 4}")
+          print(f"invalid_count={len(invalid)} invalid_preview={invalid[:32]}")
+
+          def accept(candidate: bytes, label: str) -> bool:
+              try:
+                  compressed = base64.b64decode(candidate, validate=True)
+                  patch = lzma.decompress(compressed, format=lzma.FORMAT_XZ)
+              except Exception:
+                  return False
+              digest = hashlib.sha256(patch).hexdigest()
+              if digest != expected:
+                  return False
+              output.write_bytes(patch)
+              print(f"accepted_transport={label} compressed_bytes={len(compressed)} patch_bytes={len(patch)}")
+              return True
+
+          if not invalid and accept(compact, "exact_compact"):
+              raise SystemExit(0)
+
+          stripped = bytes(byte for byte in compact if byte in allowed)
+          if stripped != compact and accept(stripped, "drop_invalid_bytes"):
+              raise SystemExit(0)
+
+          # Recover at most two visibly invalid characters without guessing any
+          # semantic content: the exact XZ checksum and expected patch SHA-256
+          # must both pass before the candidate is admitted.
+          if 0 < len(invalid) <= 2:
+              positions = [position for position, _ in invalid]
+              template = bytearray(compact)
+              for replacements in itertools.product(alphabet, repeat=len(positions)):
+                  for position, replacement in zip(positions, replacements):
+                      template[position] = replacement
+                  if accept(bytes(template), f"replace_invalid_{positions}"):
+                      raise SystemExit(0)
+
+          # Recover one or two characters lost immediately before terminal
+          # base64 padding. This is bounded to 4,160 candidates and still
+          # requires both XZ integrity and the exact uncompressed SHA-256.
+          body = stripped.rstrip(b"=")
+          for missing in (1, 2):
+              for suffix in itertools.product(alphabet, repeat=missing):
+                  trial_body = body + bytes(suffix)
+                  padding = b"=" * ((4 - len(trial_body) % 4) % 4)
+                  if accept(trial_body + padding, f"append_before_padding_{missing}"):
+                      raise SystemExit(0)
+
+          raise SystemExit("unable to reconstruct transport under bounded exact-hash recovery")
+          PY
           printf '%s  %s\n' "$PATCH_SHA256" "$RUNNER_TEMP/w10.patch" | sha256sum -c -
           git rm -- .ci/w10-bindings-graph.patch.xz.b64.* .github/workflows/w10-bindings-graph-checkpoint.yml
           test "$(git write-tree)" = "$BASE_TREE"
