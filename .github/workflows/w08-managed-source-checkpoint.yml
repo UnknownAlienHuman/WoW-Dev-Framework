@@ -1,5 +1,5 @@
 name: W08 managed source materialization checkpoint
-run-name: W08 managed source checkpoint ${{ github.sha }}
+run-name: W08 managed source checkpoint v2 ${{ github.sha }}
 on:
   push:
     branches: [main]
@@ -11,6 +11,7 @@ concurrency:
 env:
   BASE_COMMIT: 5eff9208a64381a36e42c7cd5e4ce0cb4546cfce
   BASE_TREE: f8daa018f0aa85a45e2333074d1744bba3e8b728
+  STAGING_PARENT: 6547b32cfdaa13f72f8245598bb0ceed8e8263bb
   PATCH_SHA256: d3d0f4089806d37fcf3b6894020a5f348b4faeaeeafc6507dc367db0a6705994
 jobs:
   checkpoint:
@@ -22,12 +23,12 @@ jobs:
           ref: main
           fetch-depth: 0
           persist-credentials: false
-      - name: Admit exact product patch and remove checkpoint transport
+      - name: Admit corrected product patch and remove checkpoint transport
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git rev-parse "${GITHUB_SHA}^")" = "$BASE_COMMIT"
+          test "$(git rev-parse "${GITHUB_SHA}^")" = "$STAGING_PARENT"
           cat .ci/w08-managed-source.patch.xz.b64.* > "$RUNNER_TEMP/w08.patch.xz.b64"
           base64 -d "$RUNNER_TEMP/w08.patch.xz.b64" > "$RUNNER_TEMP/w08.patch.xz"
           xz -dc "$RUNNER_TEMP/w08.patch.xz" > "$RUNNER_TEMP/w08.patch"
@@ -35,6 +36,15 @@ jobs:
           git rm -- .ci/w08-managed-source.patch.xz.b64.* .github/workflows/w08-managed-source-checkpoint.yml
           test "$(git write-tree)" = "$BASE_TREE"
           git apply --index "$RUNNER_TEMP/w08.patch"
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('tools/xtask/src/source_update/mod.rs')
+          source = path.read_text()
+          old = 'pub(super) fn update_selected('
+          if source.count(old) != 1:
+              raise SystemExit('update_selected visibility source changed')
+          path.write_text(source.replace(old, 'fn update_selected(', 1))
+          PY
       - name: Install minimal compiler tools
         run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
       - name: Format workspace
