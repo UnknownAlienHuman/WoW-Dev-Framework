@@ -1,9 +1,11 @@
-name: W09 package service checkpoint v2
+name: W09 package service checkpoint v3
 on:
   push:
     branches: [main]
     paths:
       - .github/workflows/w09-package-service-checkpoint.yml
+  issues:
+    types: [opened]
 permissions:
   contents: write
 concurrency:
@@ -11,12 +13,13 @@ concurrency:
   cancel-in-progress: false
 jobs:
   checkpoint:
+    if: github.event_name == 'push' || github.event.issue.title == 'W09 package service checkpoint trigger'
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     env:
       BASE_COMMIT: c045bf9b7d98dba4311b4632f8fa06a538540d1a
       BASE_TREE: 91013f630879213923eb344abfe7beb72d9feb42
-      STAGING_PARENT: 717f7466aee98d54b379d69acc462cb1a291217f
+      STAGING_PARENT: 95ddfab7bc1f9a65dfa3a2e24d7c0c692a488a53
       PATCH_SHA256: 4569d250b039090abab1c10c3e40a52c2d05a7c8226618831c228932ecd6dc98
     steps:
       - uses: actions/checkout@v7
