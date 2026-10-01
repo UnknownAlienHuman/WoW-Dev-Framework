@@ -1,4 +1,4 @@
-name: W10 XML binding graph checkpoint
+name: W10 XML binding graph checkpoint v2
 on:
   push:
     branches: [main]
@@ -16,6 +16,7 @@ jobs:
     env:
       BASE_COMMIT: f1fb0788f8a4bb3a3ee88e50b58298ed8dd52c1a
       BASE_TREE: bc265d85ce3c57227ce3c5404beafb21d28294e3
+      TRIGGER_PARENT: 0eeaa6885221b17f660773da2e4753b0162f2d07
       PATCH_SHA256: 8405303e09af3a9379dffa1d88cea4b160c7bf532a4446c1058df1b773923694
     steps:
       - uses: actions/checkout@v7
@@ -27,7 +28,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git rev-parse "${GITHUB_SHA}^")" = "$BASE_COMMIT"
+          test "$(git rev-parse "${GITHUB_SHA}^")" = "$TRIGGER_PARENT"
           cat .ci/w10-bindings-graph.patch.xz.b64.* > "$RUNNER_TEMP/w10.patch.xz.b64"
           base64 -d "$RUNNER_TEMP/w10.patch.xz.b64" > "$RUNNER_TEMP/w10.patch.xz"
           xz -dc "$RUNNER_TEMP/w10.patch.xz" > "$RUNNER_TEMP/w10.patch"
