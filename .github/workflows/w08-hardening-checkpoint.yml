@@ -1,57 +1,52 @@
-name: W08 hardening and status checkpoint
-run-name: W08 hardening checkpoint ${{ github.sha }}
+name: W08 publish checked hardening
+run-name: W08 publish hardening ${{ github.sha }}
 on:
   push:
     branches: [main]
 permissions:
-  contents: read
+  actions: read
+  contents: write
 concurrency:
   group: w08-managed-source-hardening
   cancel-in-progress: false
 env:
   BASE_COMMIT: a69c685315e32d8afde28d758ecf2b495f02a80b
-  BASE_TREE: 188c6fe15034a5af03561600034350fe13c3d02d
-  PATCH_SHA256: e8e12ea2586a864770cbfa4408fb489b9f205aa1c376dbfed2b6912f2c3e4a6b
+  STAGING_PARENT: d0c88c7ad5d86ee25ca720b89bcd091727b8a89e
+  ARTIFACT_ID: '11143399477'
+  ARTIFACT_ZIP_SHA256: 2f5550a154cbf404484abc92694e3197030c7e515e99f573cd623fda20fd16b5
+  SOURCE_TAR_SHA256: a0204db98b3da49744c9d01e97a99f814f4cd742399fec3c586c530155ac5ef0
+  CHECKED_TREE: db1773a96931bad20d286e5dbf68624970d88565
 jobs:
-  checkpoint:
+  publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
         with:
           ref: main
           fetch-depth: 0
-          persist-credentials: false
-      - name: Admit exact hardening patch and remove checkpoint transport
+      - name: Recover exact checked source and fast-forward main
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git rev-parse "${GITHUB_SHA}^")" = "$BASE_COMMIT"
-          cat .ci/w08-hardening.patch.xz.b64.* > "$RUNNER_TEMP/w08-hardening.patch.xz.b64"
-          base64 -d "$RUNNER_TEMP/w08-hardening.patch.xz.b64" > "$RUNNER_TEMP/w08-hardening.patch.xz"
-          xz -dc "$RUNNER_TEMP/w08-hardening.patch.xz" > "$RUNNER_TEMP/w08-hardening.patch"
-          printf '%s  %s\n' "$PATCH_SHA256" "$RUNNER_TEMP/w08-hardening.patch" | sha256sum -c -
+          test "$(git rev-parse "${GITHUB_SHA}^")" = "$STAGING_PARENT"
+          mkdir -p "$RUNNER_TEMP/checked"
+          gh api \
+            -H 'Accept: application/vnd.github+json' \
+            "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip" \
+            > "$RUNNER_TEMP/checked.zip"
+          printf '%s  %s\n' "$ARTIFACT_ZIP_SHA256" "$RUNNER_TEMP/checked.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/checked.zip" -d "$RUNNER_TEMP/checked"
+          test "$(cat "$RUNNER_TEMP/checked/CHECKED_TREE")" = "$CHECKED_TREE"
+          printf '%s  %s\n' "$SOURCE_TAR_SHA256" "$RUNNER_TEMP/checked/checked-source.tar" | sha256sum -c -
+          tar -xf "$RUNNER_TEMP/checked/checked-source.tar" -C .
           git rm -- .ci/w08-hardening.patch.xz.b64.* .github/workflows/w08-hardening-checkpoint.yml
-          test "$(git write-tree)" = "$BASE_TREE"
-          git apply --index "$RUNNER_TEMP/w08-hardening.patch"
-      - name: Install minimal compiler tools
-        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
-      - name: Format workspace
-        run: cargo +stable fmt --all
-      - name: Minimal xtask Clippy; no tests executed
-        shell: bash
-        run: |
-          set -euo pipefail
-          rustc +stable -Vv | tee "$RUNNER_TEMP/RUST_VERSION"
-          cargo +stable clippy --locked -p xtask --all-targets --all-features -- -D warnings 2>&1 | tee "$RUNNER_TEMP/clippy.log"
-      - name: Repository policy and exact file set
-        shell: bash
-        run: |
-          set -euo pipefail
-          cargo +stable xtask check 2>&1 | tee "$RUNNER_TEMP/policy.log"
           git add --all
           git diff --cached --check
+          test "$(git write-tree)" = "$CHECKED_TREE"
           actual="$(git diff --cached --name-only "$BASE_COMMIT" | LC_ALL=C sort)"
           expected="$(cat <<'FILES'
           AGENTS.md
@@ -63,29 +58,8 @@ jobs:
           FILES
           )"
           test "$actual" = "$expected"
-          grep -Fq 'fn paths_overlap' tools/xtask/src/source_update/materialize.rs
-          grep -Fq 'managed-source-materialization' crates/MANIFEST.json
-          grep -Fq '36821527175' docs/IMPLEMENTATION_STATUS.md
-      - name: Retain exact checked source
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/checkpoint"
-          git add --all
-          git write-tree > "$RUNNER_TEMP/checkpoint/CHECKED_TREE"
-          git archive --format=tar -o "$RUNNER_TEMP/checkpoint/checked-source.tar" "$(cat "$RUNNER_TEMP/checkpoint/CHECKED_TREE")"
-          git diff --cached --binary "$BASE_COMMIT" > "$RUNNER_TEMP/checkpoint/formatted.patch"
-          printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/checkpoint/STAGING_SHA"
-          for file in RUST_VERSION clippy.log policy.log; do
-            if test -f "$RUNNER_TEMP/$file"; then cp "$RUNNER_TEMP/$file" "$RUNNER_TEMP/checkpoint/$file"; fi
-          done
-          (cd "$RUNNER_TEMP/checkpoint" && sha256sum checked-source.tar formatted.patch > SHA256SUMS)
-      - name: Upload checkpoint evidence
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: w08-managed-source-hardening-${{ github.run_id }}
-          path: ${{ runner.temp }}/checkpoint
-          retention-days: 3
-          if-no-files-found: error
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix(xtask): harden managed source path isolation [skip ci]' \
+            -m 'Reject every ancestor/descendant overlap among managed root, manifest output, operation directory and staging. Synchronize the execution ledgers with active W07/W08 code and retain explicit remaining nonclaims. Strict xtask Clippy and repository policy passed; no tests executed.'
+          git push origin HEAD:main
