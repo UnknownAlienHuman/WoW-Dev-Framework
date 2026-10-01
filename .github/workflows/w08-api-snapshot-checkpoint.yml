@@ -1,112 +1,60 @@
-name: W08 API snapshot checkpoint v3
+name: W08 publish exact API snapshot tree
 on:
   push:
     branches: [main]
     paths:
       - .github/workflows/w08-api-snapshot-checkpoint.yml
 permissions:
-  contents: read
+  actions: read
+  contents: write
 concurrency:
-  group: w08-api-snapshot-checkpoint
+  group: w08-api-snapshot-publish
   cancel-in-progress: false
 jobs:
-  checkpoint:
+  publish:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 15
     env:
-      BASE_COMMIT: 39451ba53dcc43bbc8fda5407c9b8bd233a50fa6
-      BASE_TREE: cd90e1e5c028a94073e34beb447c53af8d3dd28f
-      STAGING_PARENT: 97015ea236bb2e14957ac8c970283bb6de84a9e1
-      PATCH_SHA256: 1e082070b644ac93d91e8ec729569396fce59b0220d65311bfd1fb28260c4d8d
+      STAGING_PARENT: 75ac76ef324d3e14d5a16dadbe281fdf4870e729
+      ARTIFACT_ID: 11145625846
+      ARTIFACT_ZIP_SHA256: 22f1c969aa569e5e92ac7406cd18b1ce1f13329301947b1f9739510fe8f1705d
+      SOURCE_TAR_SHA256: 1678cd83e56731a1cc422fd358984a09c4acdb9885dbdb43b782d429e60d2cc9
+      CHECKED_TREE: 312caed69e65a5b907dfa219e2fb3aa739837ece
+      CHECKED_STAGING_SHA: 75ac76ef324d3e14d5a16dadbe281fdf4870e729
     steps:
       - uses: actions/checkout@v7
         with:
           ref: main
           fetch-depth: 0
-          persist-credentials: false
-      - name: Admit corrected exact API snapshot patch and remove checkpoint transport
+      - name: Recover exact checked source and fast-forward main
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test "$(git rev-parse "${GITHUB_SHA}^")" = "$STAGING_PARENT"
-          cat .ci/w08-api-snapshot.patch.xz.b64.* > "$RUNNER_TEMP/w08-api.patch.xz.b64"
-          base64 -d "$RUNNER_TEMP/w08-api.patch.xz.b64" > "$RUNNER_TEMP/w08-api.patch.xz"
-          xz -dc "$RUNNER_TEMP/w08-api.patch.xz" > "$RUNNER_TEMP/w08-api.patch"
-          printf '%s  %s\n' "$PATCH_SHA256" "$RUNNER_TEMP/w08-api.patch" | sha256sum -c -
-          git rm -- .ci/w08-api-snapshot.patch.xz.b64.* .github/workflows/w08-api-snapshot-checkpoint.yml
-          test "$(git write-tree)" = "$BASE_TREE"
-          git apply --index "$RUNNER_TEMP/w08-api.patch"
-          python - <<'PY'
-          from pathlib import Path
-          path = Path('tools/xtask/src/source_update/api_materialize.rs')
-          source = path.read_text()
-          replacements = [
-              ('    origin: String,\n    repository: RepositoryIdentity,\n',
-               '    repository: RepositoryIdentity,\n'),
-              ('            origin,\n            repository,\n',
-               '            repository,\n'),
-          ]
-          for old, new in replacements:
-              count = source.count(old)
-              if count != 1:
-                  raise SystemExit(f'expected one origin-field lint target, found {count}')
-              source = source.replace(old, new, 1)
-          path.write_text(source)
-          PY
-      - name: Install minimal compiler tools
-        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
-      - name: Format workspace
-        run: cargo +stable fmt --all
-      - name: Minimal xtask Clippy; no tests executed
-        shell: bash
-        run: |
-          set -euo pipefail
-          rustc +stable -Vv | tee "$RUNNER_TEMP/RUST_VERSION"
-          cargo +stable clippy --locked -p xtask --all-targets --all-features -- -D warnings 2>&1 | tee "$RUNNER_TEMP/clippy.log"
-      - name: Repository policy and exact file set
-        shell: bash
-        run: |
-          set -euo pipefail
-          cargo +stable xtask check 2>&1 | tee "$RUNNER_TEMP/policy.log"
+
+          mkdir -p "$RUNNER_TEMP/checked"
+          gh api \
+            -H 'Accept: application/vnd.github+json' \
+            "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip" \
+            > "$RUNNER_TEMP/checked.zip"
+          printf '%s  %s\n' "$ARTIFACT_ZIP_SHA256" "$RUNNER_TEMP/checked.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/checked.zip" -d "$RUNNER_TEMP/checked"
+          test "$(cat "$RUNNER_TEMP/checked/CHECKED_TREE")" = "$CHECKED_TREE"
+          test "$(cat "$RUNNER_TEMP/checked/STAGING_SHA")" = "$CHECKED_STAGING_SHA"
+          printf '%s  %s\n' "$SOURCE_TAR_SHA256" "$RUNNER_TEMP/checked/checked-source.tar" | sha256sum -c -
+          (cd "$RUNNER_TEMP/checked" && sha256sum -c SHA256SUMS)
+
+          git rm -r --ignore-unmatch .
+          git clean -fdx
+          tar -xf "$RUNNER_TEMP/checked/checked-source.tar" -C .
           git add --all
-          git diff --cached --check
-          actual="$(git diff --cached --name-only "$BASE_COMMIT" | LC_ALL=C sort)"
-          expected="$(cat <<'FILES'
-          docs/SOURCE_API_MATERIALIZATION.md
-          docs/SOURCE_MATERIALIZATION.md
-          tools/xtask/README.md
-          tools/xtask/src/main.rs
-          tools/xtask/src/manifest.rs
-          tools/xtask/src/source_update/api_materialize.rs
-          tools/xtask/src/source_update/mod.rs
-          FILES
-          )"
-          test "$actual" = "$expected"
-          ! grep -R "todo!()\|unimplemented!()" tools/xtask/src/source_update/api_materialize.rs tools/xtask/src/manifest.rs
-          grep -Fq 'github_api_exact_blob_snapshot' tools/xtask/src/source_update/api_materialize.rs
-          grep -Fq 'MAX_API_BODY_BYTES' tools/xtask/src/source_update/api_materialize.rs
-          grep -Fq 'materialize-source-api' tools/xtask/src/main.rs
-      - name: Retain exact checked source
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/checkpoint"
-          git add --all
-          git write-tree > "$RUNNER_TEMP/checkpoint/CHECKED_TREE"
-          git archive --format=tar -o "$RUNNER_TEMP/checkpoint/checked-source.tar" "$(cat "$RUNNER_TEMP/checkpoint/CHECKED_TREE")"
-          git diff --cached --binary "$BASE_COMMIT" > "$RUNNER_TEMP/checkpoint/formatted.patch"
-          printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/checkpoint/STAGING_SHA"
-          for file in RUST_VERSION clippy.log policy.log; do
-            if test -f "$RUNNER_TEMP/$file"; then cp "$RUNNER_TEMP/$file" "$RUNNER_TEMP/checkpoint/$file"; fi
-          done
-          (cd "$RUNNER_TEMP/checkpoint" && sha256sum checked-source.tar formatted.patch > SHA256SUMS)
-      - name: Upload checkpoint evidence
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: w08-api-snapshot-${{ github.run_id }}
-          path: ${{ runner.temp }}/checkpoint
-          retention-days: 3
-          if-no-files-found: error
+          test "$(git write-tree)" = "$CHECKED_TREE"
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat(xtask): materialize exact GitHub API source snapshots [skip ci]' \
+            -m 'Add an explicit exact-revision GitHub API fallback that resolves one commit/tree, reads each selected blob independently under finite response budgets, publishes an immutable verified snapshot and source manifest, and supports durable prompt/auto/never replay. Strict xtask Clippy and repository policy passed on Linux with Rust 1.98.1; no tests executed.'
+          git push origin HEAD:main
