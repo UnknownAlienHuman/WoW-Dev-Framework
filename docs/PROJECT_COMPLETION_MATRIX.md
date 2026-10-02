@@ -1,6 +1,7 @@
 # Project completion matrix
 
-**Audited:** 2026-09-19 America/New_York. Execution inventory refreshed 2026-10-01 at `a69c685315e32d8afde28d758ecf2b495f02a80b`.
+**Audited:** 2026-09-19 America/New_York. Execution inventory refreshed 2026-10-02
+through product checkpoint `260cf430a22fdc3f86da33a9c363946cc31aca00`.
 
 This is the current execution ledger. [IMPLEMENTATION_HANDOFF.md](IMPLEMENTATION_HANDOFF.md)
 remains the normative I0–I7 plan; do not restart its historical bootstrap steps.
@@ -25,10 +26,10 @@ The root [Cargo.toml](../Cargo.toml) activates **16 members**, including the int
 | Component | Observed executable slice | Remaining acceptance boundary |
 |---|---|---|
 | `wow-core` | Typed identities, canonical JSON, evidence, coverage, results and operation primitives | Reconcile the complete E0-A contract/test matrix; compilation is not the acceptance ledger |
-| `wow-emmy` | Real pinned analyzer adapter, explicit Main/Library workspaces, syntax/generic diagnostics, direct member calls and scoped local-flow facts | E0-C fixture/pin/checksum closure; additional semantic operations and update probes are not inferred from parser compatibility |
-| `wow-project` | Explicit inventories, bounded disk/selected TOC-XML acquisition and load receipts, analyzer bindings, immutable generations, guarded updates and publication | E0-D fixture identity closure; full TOC/XML/load acceptance, overlays and durable project publication |
-| `wow-rules` | `wow.api.exists@1` and `wow.secret.local_operation@1` | E0-E normative fixtures, exact prerequisite identities and complete capability/negative-authority cases |
-| `wow-service` | E0 status/check over immutable normalized contexts; separate ReferenceView administration/publication | E0-F end-to-end fixture/CLI closure; full E1 Reference Pack and later public operation families |
+| `wow-emmy` | Real pinned analyzer adapter, explicit Main/Library workspaces, same-session XML virtual units, syntax/semantic diagnostics, direct member calls and scoped local-flow facts | E0-C fixture/pin/checksum closure; additional semantic operations and update probes are not inferred from parser compatibility |
+| `wow-project` | Explicit inventories, bounded disk/selected TOC-XML acquisition and load receipts, analyzer bindings, XML virtual-semantic reports, immutable generations, exact source artifacts/handles, guarded updates and publication | E0-D fixture identity closure; effective XML receiver/load semantics, full TOC/XML/load acceptance, overlays and durable project publication |
+| `wow-rules` | `wow.api.exists@1` over physical Main and exact-static XML inline facts; `wow.secret.local_operation@1` over its bounded physical flow slice | E0-E normative fixtures, exact prerequisite identities and complete capability/negative-authority cases; no inferred XML receiver/runtime authority |
+| `wow-service` | E0 status/check over immutable normalized contexts, mixed physical/XML rule scopes and exact XML finding projection; separate ReferenceView administration/publication | E0-F end-to-end fixture/CLI closure; full E1 Reference Pack and later public operation families |
 | `wow-store` | Typed SQLite objects, catalogs/CAS, operation journal, leases, GC and integrity | Full E1-A migration/crash/backup acceptance; separate manifested retained ProjectStore exists, not full E2-D publication acceptance |
 | `wow-reference` | Native source/model/corrections/aliases, compatibility imports, persistent ReferenceView and publication | E0-B/E1-B normative fixture and full Reference Pack/coverage acceptance |
 | `wow-annotations` | Native Ketho-derived library projection, alias/type/catalog/inheritance/navigation slices and consumer tests | Full E1-C contract/corpus parity; scoped passing consumers are not universal semantic certification |
@@ -72,10 +73,10 @@ no Rust implementation in the audited source. Their documentation is not a binar
 The operator's 2026-09-23 priority is functional code before expanded tests.
 Existing acceptance requirements remain separate and must not be reported passed.
 
-1. **I0-F functional path:** `apps/wow` routes explicit materialized inputs through
-   actual project/analyzer/reference/rule owners. Managed and checkout-free exact
-   source snapshots now exist in `xtask`; integrate their exact receipts where the
-   public input path needs acquisition, then continue W09 load closure.
+1. **I0-F/W10 functional path:** `apps/wow` routes explicit materialized inputs through
+   actual project/analyzer/reference/rule owners. Managed source snapshots and W09 load
+   closure feed the W10 XML virtual-semantic path. Continue bounded consumers without
+   inventing effective receiver, inheritance or runtime-dispatch authority.
 2. **E0 acceptance:** retain existing fixtures/checksums; close their remaining
    evidence after functional implementation, not as an endless prerequisite for it.
 3. **I1:** the builder/service/materialization code path is active. Close remaining
@@ -124,6 +125,15 @@ checked as tree `312caed69e65a5b907dfa219e2fb3aa739837ece` by focused run
 Formatting, strict `xtask` Clippy and repository policy passed; tests, a live donor
 call, Windows and network/process fault injection were not run.
 
+The W10 XML rule-consumer checkpoint is
+[`260cf430`](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/commit/260cf430a22fdc3f86da33a9c363946cc31aca00),
+checked as tree `df3db6e01a804f44f57cbfe11f1a15cec1face60` by focused run
+[36966297105](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/36966297105).
+Formatting, strict affected-crate Clippy, existing affected-crate tests, `xtask check` and exact
+file-set/tree publication passed on Linux/Rust 1.99.0. The retained artifact tree and SHA-256 files
+were read back. Windows, WoW runtime, real-addon command acceptance and full workspace/package
+gates were not run and remain open.
+
 The audit used that CI's retained source artifact and verified both the archive
 SHA-256 and embedded commit identity. Local Rust execution was unavailable; no
 local cargo, Windows runtime, installation or product acceptance run is claimed.
@@ -138,15 +148,17 @@ strict Clippy, debug/release tests and rustdoc; updated dependencies; rolling
 parser; Linux/Windows semantic consumers; Linux/Windows Wasm swap/rollback.
 This is code-checkpoint evidence, not a full package or public launch certificate.
 
-## XML inline syntax implementation
+## XML inline semantic implementation
 
 TOC/XML source capture, syntax indexing and inline extraction now feed a bounded,
-generation-bound EmmyLua syntax pass. Mapped XML diagnostics participate in normal
-local-check findings and file selection. See [XML_ANALYSIS.md](../apps/wow/XML_ANALYSIS.md).
-This advances functional code, not the existing E2/R0 acceptance gates. Virtual
-Main/Library semantics, XSD validation, inheritance materialization and runtime remain open.
-XML parent/inheritance references now link to captured source declarations with
-explicit conflicts, order and cycles; see [XML_REFERENCES.md](../apps/wow/XML_REFERENCES.md).
+generation-bound EmmyLua semantic pass in the same physical Main/Library session. Mapped
+syntax/semantic diagnostics and direct member/call facts participate in normal local-check
+selection. `wow.api.exists@1` consumes only exact-static facts backed by captured XML source,
+exact mappings and complete unit coverage. See [XML_ANALYSIS.md](../apps/wow/XML_ANALYSIS.md).
+This advances functional code, not the existing E2/R0 acceptance gates. Effective callback
+receiver/inheritance/dispatch semantics, richer value flow, XSD validation and runtime remain
+open. XML parent/inheritance references still retain explicit conflicts, order and cycles; see
+[XML_REFERENCES.md](../apps/wow/XML_REFERENCES.md).
 
 ## Retained graph application route
 

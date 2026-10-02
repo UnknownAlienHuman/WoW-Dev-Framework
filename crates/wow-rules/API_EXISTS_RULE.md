@@ -1,12 +1,17 @@
 # `wow.api.exists@1`
 
-**Status:** normative rule algorithm with closed E0 fixture and native release-profile policies.
+**Status:** normative and executable rule algorithm with closed E0 fixture, native
+release-profile policies and an exact XML-inline source lane.
 
 ## 1. Purpose
 
-Report a direct Main-project API member/call use that is proven absent from the selected exact reference profile.
+Report a direct Main-project API member/call use that is proven absent from the
+selected exact reference profile. The source may be a physical Main Lua file or an
+admitted inline Lua unit whose static member/call facts map exactly back to a captured
+XML document.
 
-The rule does not search for replacements, validate signatures, classify deprecation, infer runtime safety, or report unresolved ordinary Lua symbols.
+The rule does not search for replacements, validate signatures, classify deprecation,
+infer runtime safety, or report unresolved ordinary Lua symbols.
 
 ## 2. Descriptor
 
@@ -17,7 +22,7 @@ semantic_category: wow.api.missing
 technical_severity: error
 rollout_policy: advisory
 remediation_tiers: plan_only
-source_scope: Main project direct member/reference use
+source_scope: physical Main or exact-static XML inline direct member/reference use
 supported_profile: closed E0 fixture or an exact profile-bound native release policy
 ```
 
@@ -26,20 +31,27 @@ supported_profile: closed E0 fixture or an exact profile-bound native release po
 ```text
 ProjectSnapshot / ProjectView identity
 ProjectGenerationId
-Main ProjectFileRecord
-exact project SourceHandle
-ReferenceFact:
+one admitted source lane:
+    physical Main ProjectFileRecord and exact SourceHandle
+    or captured XML document + XmlLuaUnitAnalysis with exact_xml_script_site authority
+ReferenceFact / XmlLuaMemberReference:
     reference_kind = member
     receiver_spelling = exact static namespace expression
     member_spelling = exact static member name
-    resolution_status = unresolved
-    exact member/full-reference span
-optional CallFact tied to the same ReferenceFact
+    resolution_status = resolved | unresolved | possible
+    exact member/full-reference source mapping
+optional CallFact tied uniquely to the same ReferenceFact
 source-coordinate capability Complete
-reference/call fact capabilities Complete for selected use
+reference/call fact capabilities Complete for the selected physical file or XML unit
+project.analyzer.facts.available Complete for the exact selected partition
 ```
 
-The rule applies only to an exact direct static member reference. The E0 policy restricts the receiver to `C_E0Fixture`. The native release policy admits a receiver only when the exact callable partition already contains that namespace (or a conflict in it). Ambiguous/dynamic/computed member uses are `NotEvaluated` or nonapplicable.
+The rule applies only to an exact direct static member reference. The E0 policy restricts the
+receiver to `C_E0Fixture`. The native release policy admits a receiver only when the exact callable
+partition already contains that namespace (or a conflict in it). XML units additionally require the
+versioned semantic context to admit `exact_xml_script_site`; this does **not** admit an implicit
+callback receiver, inherited template receiver, lifecycle state or runtime dispatch. Ambiguous,
+dynamic or computed member uses are `NotEvaluated` or nonapplicable.
 
 ## 4. Exact query construction
 
@@ -86,8 +98,8 @@ capability_unavailable
 
 | Project fact | Exact reference outcome | Rule outcome |
 |---|---|---|
-| unresolved direct member/call | `authoritative_absent` | one finding |
-| unresolved direct member/call | `found` | `EvaluatedClean` for API existence only |
+| unresolved direct member/call in an admitted physical/XML lane | `authoritative_absent` | one finding |
+| direct member/call in an admitted physical/XML lane | `found` | `EvaluatedClean` for API existence only |
 | unresolved direct member/call | `absent_without_authority` | `NotEvaluated` |
 | unresolved direct member/call | `conflict` | `NotEvaluated` |
 | unresolved direct member/call | `capability_unavailable` | `NotEvaluated` |
@@ -140,11 +152,13 @@ prebuilt artifacts remain Partial and cannot produce absence findings.
 
 Preferred primary span:
 
-1. exact unresolved member-name span (`RemovedApi`);
-2. otherwise exact full member-reference span (`C_E0Fixture.RemovedApi`);
-3. never a whole file/line when exact span exists.
+1. exact unresolved physical member-name span (`RemovedApi`); or
+2. first exact XML member-name source piece for an admitted inline unit;
+3. otherwise exact full physical member-reference span (`C_E0Fixture.RemovedApi`);
+4. never a whole file/line when exact mapped evidence exists.
 
-The call span may be related source evidence.
+Additional discontinuous XML pieces, the full reference and the optional call span are related
+project evidence. Every XML span is validated against the captured document digest and byte length.
 
 Primary source is project evidence/location, not platform evidence.
 
@@ -152,11 +166,13 @@ Primary source is project evidence/location, not platform evidence.
 
 ### Project evidence
 
-- Main project SourceHandle/content/project generation;
-- unresolved member ReferenceFact;
-- optional direct CallFact;
+- physical Main SourceHandle or generation-bound captured XML SourceHandle(s);
+- captured source content digest, byte length and project generation;
+- member ReferenceFact or XML member-reference fact;
+- optional uniquely linked direct CallFact;
+- XML unit/context/mapping identity when the source is inline XML Lua;
 - analyzer producer/version/snapshot;
-- project/analyzer coverage IDs.
+- project/analyzer coverage IDs for the exact file or XML unit.
 
 ### Reference authority inputs
 
@@ -274,12 +290,16 @@ Required blockers include:
 - profile/reference/project/analyzer generation mismatch (context error where appropriate);
 - annotation library failure/no exact project reference fact;
 - ambiguous/dynamic/computed member;
-- invalid source span/digest;
+- incomplete/failed XML semantic-unit capabilities or syntax/documentation errors;
 - unsupported entity kind/query grammar;
 - budget/truncation preventing complete scope evaluation;
 - retained stale project snapshot substituted for requested target.
 
 No API finding or clean record accompanies that scope.
+
+Invalid source spans/digests, non-exact XML mappings, a semantic context without
+`exact_xml_script_site`, or a duplicate/open call-reference graph are context/input
+failures. They reject rule execution rather than being downgraded to missing evidence.
 
 ## 16. Remediation
 
@@ -342,5 +362,6 @@ api.budget-truncation
 - no generic symptom suppression;
 - no clean under partial/conflicted reference coverage;
 - no source mutation/edit;
+- no implicit XML callback receiver, inherited receiver, lifecycle or runtime-dispatch claim;
 - no runtime claim;
-- no whole-file span when exact member span exists.
+- no whole-file span when exact member span or exact XML pieces exist.

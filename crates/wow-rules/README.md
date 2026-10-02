@@ -1,6 +1,8 @@
 # `wow-rules` implementation contract
 
-**Status:** E0-E implementation-ready contract; no Rust code yet. Only two closed fixture rules activate in E0.
+**Status:** partial executable E0-E implementation. The two bounded rules are active,
+and `wow.api.exists@1` consumes exact static XML-inline member/call facts under explicit
+source authority.
 
 ## Mission
 
@@ -10,7 +12,7 @@ The crate does not parse, index, persist, search, mutate source, or decide which
 
 ## E0-E outcome
 
-A future implementation agent must prove two vertical rules:
+The executable E0-E slice implements two vertical rules:
 
 ```text
 wow.api.exists@1
@@ -168,15 +170,18 @@ RuleEvaluationOutcome
 severity: error
 rollout: advisory during E0 evaluation
 remediation: plan_only
-scope: direct unresolved member/call references in Main project source
+scope: direct unresolved member/call references in physical Main source or admitted exact XML inline Lua
 reference lane: exact lookup only
 ```
 
 Required high-level behavior:
 
-- project unresolved member/call fact identifies `C_E0Fixture.RemovedApi` and exact project span;
+- physical Main or exact XML-inline unresolved member/call fact identifies
+  `C_E0Fixture.RemovedApi` and an exact project span;
+- XML facts require `exact_xml_script_site`, a generation-bound captured XML artifact,
+  exact mapped pieces and complete unit fact coverage;
 - exact reference lookup returns `authoritative_absent` under complete unconflicted coverage;
-- emit one finding at project member/reference span;
+- emit one finding at the physical member span or first exact XML member piece;
 - include project evidence plus exact reference coverage/authority decision;
 - no replacement, alias, fuzzy search, or edit;
 - partial/conflict/profile mismatch/library failure -> `NotEvaluated`, not finding/clean.

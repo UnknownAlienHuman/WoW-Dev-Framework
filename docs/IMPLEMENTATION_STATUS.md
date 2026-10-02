@@ -37,7 +37,8 @@ The managed-checkout and checkout-free GitHub API lanes now implement exact
 The API lane resolves one branch once and reads the exact commit, recursive tree and
 selected blobs under finite request and admitted-body limits. Remaining W08 work is
 live fault/platform acceptance and lower-layer hostile-network qualification;
-functional development proceeds to W09 load closure. Existing full acceptance and
+W09 load closure is now an input to the W10 virtual-semantic path. Functional
+development continues through bounded W10 consumers; existing full acceptance and
 launch gates remain open.
 
 ## Source graph and XML handler route
@@ -56,8 +57,8 @@ blocks the chain. Paths remain symbolic, not runtime values; ambiguous declarati
 and unsupported access forms retain explicit outcomes. See
 [GRAPH_BUILD.md](../apps/wow/GRAPH_BUILD.md). Existing graph reads cover entities,
 neighbors, paths, subgraphs, axes and retained-support explanations. Remaining
-recognizer families, inline semantic analysis and coherent ProjectStore publication
-are not completed by this source slice. Full E2 acceptance remains open.
+recognizer families, effective XML receiver/runtime dispatch semantics and coherent ProjectStore
+publication are not completed by this source slice. Full E2 acceptance remains open.
 
 ## Explicit graph source read-back
 
@@ -228,10 +229,12 @@ same owner composition. See [FILES_INPUT.md](../apps/wow/FILES_INPUT.md).
 The separate `wow-service/local-project-toc/1` mode adds selected TOC/XML external-
 file expansion, a generation-bound load receipt and explicit partial blockers;
 see [TOC_INPUT.md](../apps/wow/TOC_INPUT.md). There is no source scan, live-rule expansion, full E2-C or R0 acceptance.
-XML now has a source-backed syntax index and extracted inline units; check parses
-those units with the pinned EmmyLua grammar and returns mapped XML diagnostics.
-See [XML_ANALYSIS.md](../apps/wow/XML_ANALYSIS.md). Virtual-unit semantics remain partial. Local XML parent/inheritance references
-are linked as described below, without inherited receiver materialization.
+XML now has a source-backed syntax index and exact inline units analyzed in the same pinned
+EmmyLua Main/Library session. Check returns mapped syntax/semantic diagnostics and direct
+member/call facts. `wow.api.exists@1` consumes only exact-static XML facts with complete unit
+coverage; implicit receivers, inheritance materialization and runtime dispatch remain partial.
+See [XML_ANALYSIS.md](../apps/wow/XML_ANALYSIS.md). Local XML parent/inheritance references are
+linked as described below, without inherited receiver materialization.
 
 Selected-TOC acquisition now preflights package-wide target filters before any
 Lua/XML descendant read. Included declarations enter the v3 load receipt; excluded
@@ -256,6 +259,28 @@ locations and unresolved/ambiguous results enter owner receipts and ordinary
 XML-scoped findings. See [XML_BINDINGS.md](../apps/wow/XML_BINDINGS.md).
 No new compiler session, synthetic source or callable/runtime proof is introduced;
 receiver construction and inherited method precedence remain partial.
+
+## W10 XML rule consumer checkpoint
+
+Commit [`260cf430`](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/commit/260cf430a22fdc3f86da33a9c363946cc31aca00)
+(tree `df3db6e01a804f44f57cbfe11f1a15cec1face60`) extends the existing W10 semantic
+facts into `wow.api.exists@1`. A mixed `RuleScope` now selects physical file IDs and
+normalized captured XML documents. The rule validates exact script-site authority,
+document digest, mapped nonempty XML pieces, unique closed reference/call links and
+unit-specific complete fact coverage before exact reference lookup. Authoritative
+absence produces an XML-located finding; partial/conflicting/ambiguous evidence remains
+`NotEvaluated`. `ProjectView` supplies generation-bound handles for retained XML sources,
+and the service projects those handles without treating virtual URIs as physical files.
+
+Focused Linux run
+[`36966297105`](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/36966297105)
+used Rust 1.99.0 and passed formatting, strict Clippy (`wow-project`, `wow-rules`,
+`wow-service`, `wow-cli`, all targets/features, `-D warnings`), existing tests for
+`wow-project`/`wow-rules`/`wow-service`, `cargo +stable xtask check`, exact file-set validation
+and exact-tree fast-forward. Evidence artifact `11209657936` has ZIP digest
+`fa3286abf5e39d03124ab7223d7bf4d5bc6857e987a739576378af79eb3631b1`; its embedded
+checked tree and both retained SHA-256 checks were read back successfully. No Windows,
+WoW runtime, real-addon command fixture or full workspace acceptance is claimed.
 
 ## Bounded graph projection
 

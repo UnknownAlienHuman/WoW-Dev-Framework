@@ -1,8 +1,10 @@
 # `wow-rules` E0-E data model
 
-**Status:** normative semantic model for the two-rule E0 slice.
+**Status:** normative semantic model with a partial executable two-rule E0 slice and
+exact physical/XML API source scopes.
 
-Concrete Rust layout may differ. Type ownership, evidence separation, capability behavior, and identity invariants may not.
+Concrete Rust layout may differ. Type ownership, evidence separation, capability
+behavior, and identity invariants may not.
 
 ## 1. Object graph
 
@@ -122,15 +124,18 @@ The context references immutable views/records. It contains no mutable actor/ses
 
 ```text
 RuleScope
+    all_sources: bool
     file_ids[]
-    source_span_filter: optional
-    fact_ids[]: optional
-    entity_keys[]: optional
+    xml_documents[]: normalized captured project paths
 ```
 
-E0 default scopes are selected direct fixture facts/use sites, not an unbounded repository scan.
+`RuleScope::all()` selects every admitted physical and XML source. `RuleScope::files([])` retains the
+legacy all-source behavior. `RuleScope::sources(file_ids, xml_documents)` is an explicit mixed scope;
+an empty mixed scope is invalid. Every physical ID and XML path must resolve inside the immutable
+project generation before provider execution.
 
-The rule reports the exact examined scope in every outcome.
+E0 default scopes are selected direct facts/use sites, not an unbounded repository scan. The rule
+reports the exact examined physical files and XML documents in every outcome.
 
 ## 6. Rule fixture policy
 
@@ -323,16 +328,22 @@ This report is consumed by service orchestration. It does not constitute the fin
 
 ```text
 ApiExistsInput
-    project_file_id
-    project_source_handle
-    unresolved_member_reference_fact_id
-    call_fact_id: optional
+    source_kind: physical_main | xml_inline_exact_static
+    project_file_id: optional for physical Main
+    xml_unit_id / xml_document: optional for XML inline source
+    project_source_handle(s)
+    member_reference_fact_id
+    call_fact_id: optional and uniquely linked
     exact_entity_key
     exact_reference_lookup_result
-    reference_coverage_ids[]
+    project/reference coverage IDs[]
     reference_conflict_ids[]
     same-source generic finding IDs[]
 ```
+
+The XML variant is admitted only when its versioned context says `exact_xml_script_site`, its
+document digest resolves in `ProjectView`, every mapped piece is exact and in bounds, and the unit's
+fact partition is Complete. Receiver or runtime-dispatch authority is intentionally absent.
 
 ### Valid decisive states
 
@@ -446,9 +457,12 @@ Input fact/coverage/conflict order is canonicalized before identity/output.
 
 ## 23. Source/provenance limits
 
-`wow-rules` may construct derived evidence/finding records only from validated inputs. It cannot introduce new platform/project source observations.
+`wow-rules` may construct derived evidence/finding records only from validated inputs.
+It cannot introduce new platform/project source observations.
 
-Project and reference source handles remain separately typed/originated.
+Project and reference source handles remain separately typed/originated. A project
+handle may identify a physical Main file or an immutable retained XML artifact, but
+only after exact generation, digest and span validation.
 
 ## 24. Fixture IDs
 
