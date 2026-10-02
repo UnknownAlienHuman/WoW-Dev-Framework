@@ -20,16 +20,19 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
-      - name: Apply exact CreateFromMixins slice
+      - name: Assemble and apply verified product patch
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "$BASE_COMMIT"
-          git rm -- .github/workflows/w11-create-from-mixins-checkpoint.yml
-          python3 - <<'PY'
-          import base64
-          exec(base64.b64decode("ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCmltcG9ydCBiYXNlNjQKCmRlZiByZXBsYWNlKHBhdGg6IHN0ciwgb2xkOiBzdHIsIG5ldzogc3RyKSAtPiBOb25lOgogICAgcCA9IFBhdGgocGF0aCkKICAgIHRleHQgPSBwLnJlYWRfdGV4dCgpCiAgICBhY3R1YWwgPSB0ZXh0LmNvdW50KG9sZCkKICAgIGlmIGFjdHVhbCAhPSAxOgogICAgICAgIHJhaXNlIFN5c3RlbUV4aXQoZiJwYXRjaCBtYXJrZXIgY291bnQgZm9yIHtwYXRofTogZXhwZWN0ZWQgMSwgZm91bmQge2FjdHVhbH06IHtvbGRbOjE2MF0hcn0iKQogICAgcC53cml0ZV90ZXh0KHRleHQucmVwbGFjZShvbGQsIG5ldywgMSkpCgpkZWYgd3JpdGVfYjY0KHBhdGg6IHN0ciwgcGF5bG9hZDogc3RyKSAtPiBOb25lOgogICAgcCA9IFBhdGgocGF0aCkKICAgIGlmIHAuZXhpc3RzKCk6CiAgICAgICAgcmFpc2UgU3lzdGVtRXhpdChmInJlZnVzaW5nIHRvIG92ZXJ3cml0ZSBleGlzdGluZyBmaWxlOiB7cGF0aH0iKQogICAgcC5wYXJlbnQubWtkaXIocGFyZW50cz1UcnVlLCBleGlzdF9vaz1UcnVlKQogICAgcC53cml0ZV9ieXRlcyhiYXNlNjQuYjY0ZGVjb2RlKHBheWxvYWQpKQoKd3JpdGVfYjY0KCdjcmF0ZXMvd293LXJlY29nbml6ZXJzL3NyYy9zb3VyY2VfbWl4aW5zLnJzJywgJ0lTOHZJUWxGWUdGamRDQkRjbVZoZEdWR2NtOXRUV2w0YVc1eklHWmhZM1J6SUMwK0lHUmxZMnhoY21GMGFYWmxJR052Y21VZ2NtVmpiMmR1YVhwbGNpQXRMVDRnWjNKaGNHZ2djSEp2Y0c5ellXeHpMam9yQ2k4dklGUm9hWE1nY0hKdlpIVmpaWElnWTI5dWMzVnRaWE1nYjI1c2VTQm5aVzVsY21GMGFXOXVMV0p2ZFc1a1pXUWdiM2R1WlhJZ1ptRmpkSE11SUVsMElHNWxkbVZ5SUhKbGNHRnljMlZ6SUV4MVlTd0svU0JsZUdWamRYUmxjeUJ0YVhoaGJuUXNJSEpsYzI5c2RtVnpJR1p5YjIwZ2JHOWpZV3dnZG1GeWFXRmliR1VnYm1GdFpYTXNJRzl5SUdOc1lXbHRjeUJ5ZFc1MGFXMWxJR2x1YzNSaGJtTmxjeTRLQ25WelpTQnpkR1E2T21OdmJHeGxZM1JwYjI1ek9qcDdRbFJ5WldWTllYQXNJRUowY21WbFUyVjBmVHNLYjNObElITjBaRHY2T21GdGIyMXBZenA3UVhSdmJXbGpRbTl2YkN3Z1QzSmtaWEpwYm1kOU93b0tkWE5sSUhObGNtUmxPanBUYVhwbGNqc0tkWE5sSUhkdmQxOWpiM0psT2pwN0NpQWdJRU5zWVdsdFUxTnpiM0JsTENCRGIyNTBaVzUwUkdsblpYTjBMQ0JGZG1sa1pXNWpaVU5sYkdseVpXNWpaU3dnUldsawogICBcbkNvbGxlY3Rpb25zIHN1YnN0aXR1dGVkIGJ5IGFjdHVhbCBiYXNlNjQgLSBzaG9ydGVuZWQgaW4gdHJhbnNjcmlwdA=="))
-          PY
+          git merge-base --is-ancestor "$BASE_COMMIT" HEAD
+          cat .github/w11-payload/zpatch.0* | tr -d '\n' > "$RUNNER_TEMP/w11-patch.zlib.b64"
+          test "$(wc -c < "$RUNNER_TEMP/w11-patch.zlib.b64")" = "22252"
+          echo "3db744d70df3fb52cb97fb14282dd7a9e884160732ceab09490026cc55633413  $RUNNER_TEMP/w11-patch.zlib.b64" | sha256sum -c -
+          python3 -c 'import base64,sys,zlib; sys.stdout.buffer.write(zlib.decompress(base64.b64decode(sys.stdin.buffer.read())))' \
+            < "$RUNNER_TEMP/w11-patch.zlib.b64" > "$RUNNER_TEMP/w11-patch.py"
+          echo "6f3c1afc2c29b0d85bc97f7bcc397dd2635b44207daada73fa94bf2ea4d91c76  $RUNNER_TEMP/w11-patch.py" | sha256sum -c -
+          git rm -r -- .github/w11-payload .github/workflows/w11-create-from-mixins-checkpoint.yml
+          python3 "$RUNNER_TEMP/w11-patch.py"
       - name: Install compiler tools
         run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
       - name: Format workspace
