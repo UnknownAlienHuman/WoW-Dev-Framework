@@ -55,7 +55,7 @@ use crate::{
     ProjectError, ProjectErrorCode, ProjectKind, ProjectPhase, ProjectResult, ProjectView,
 };
 
-pub const SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/9";
+pub const SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/10";
 pub const SOURCE_GRAPH_PARTITION: &str = "wow-project.source-load";
 const MAX_FILES: usize = 4096;
 const MAX_LOADS: usize = 8192;
@@ -404,6 +404,23 @@ fn registry() -> ProjectResult<GraphRegistryBundle> {
         )
         .map_err(|_| invalid())?,
     );
+    let frame = GraphEntityKindDefinition::new(
+        "frame",
+        vec!["project".into()],
+        vec!["call".into()],
+        vec![GraphConfidence::Derived, GraphConfidence::Possible],
+    )
+    .map_err(|_| invalid())?;
+    relations.push(
+        GraphRelationKindDefinition::new(
+            "lua_factory_creates",
+            GraphRelationKind::FactoryCreates,
+            vec!["lua_source_function".into()],
+            vec!["frame".into()],
+            vec![GraphConfidence::Derived, GraphConfidence::Possible],
+        )
+        .map_err(|_| invalid())?,
+    );
     let handler = GraphEntityKindDefinition::new(
         "xml_source_handler",
         vec!["project".into()],
@@ -452,13 +469,14 @@ fn registry() -> ProjectResult<GraphRegistryBundle> {
     }
     GraphRegistryBundle::build(
         "wow-project.source-load",
-        "8",
+        "9",
         vec![
             file,
             package,
             declaration,
             lua,
             function,
+            frame,
             handler,
             state_root,
             state_path,
