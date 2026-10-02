@@ -102,6 +102,7 @@ pub enum GraphRelationKind {
     Loads,
     Inherits,
     MixesIn,
+    Instantiates,
     FactoryCreates,
     UsesApi,
 }

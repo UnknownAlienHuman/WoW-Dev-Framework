@@ -55,10 +55,12 @@ use crate::{
     ProjectError, ProjectErrorCode, ProjectKind, ProjectPhase, ProjectResult, ProjectView,
 };
 
-pub const SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/11";
+pub const SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/12";
 pub const SOURCE_GRAPH_PARTITION: &str = "wow-project.source-load";
 const MAX_FILES: usize = 4096;
 const MAX_LOADS: usize = 8192;
+const MAX_RECOGNIZER_NODES: usize = functions::MAX_CALLS * 2;
+const MAX_RECOGNIZER_EDGES: usize = functions::MAX_CALLS * 19;
 const MAX_NODES: usize = MAX_FILES
     + packages::MAX_PACKAGE_NODES
     + xml::MAX_DECLARATIONS
@@ -66,7 +68,8 @@ const MAX_NODES: usize = MAX_FILES
     + functions::MAX_FUNCTIONS
     + scripts::MAX_HANDLERS
     + state::MAX_ROOTS
-    + state::MAX_PATHS;
+    + state::MAX_PATHS
+    + MAX_RECOGNIZER_NODES;
 const MAX_EDGES: usize = MAX_LOADS
     + packages::MAX_PACKAGE_RELATIONS
     + xml::MAX_DECLARATIONS
@@ -74,7 +77,7 @@ const MAX_EDGES: usize = MAX_LOADS
     + mixins::MAX_DECLARATIONS
     + mixins::MAX_REFERENCES
     + functions::MAX_FUNCTIONS
-    + functions::MAX_CALLS
+    + MAX_RECOGNIZER_EDGES
     + scripts::MAX_HANDLERS
     + scripts::MAX_BINDINGS
     + state::MAX_ROOTS
@@ -379,11 +382,11 @@ fn registry() -> ProjectResult<GraphRegistryBundle> {
     .map_err(|_| invalid())?;
     relations.push(
         GraphRelationKindDefinition::new(
-            "source_xml_mixes_in",
+            "source_mixes_in",
             GraphRelationKind::MixesIn,
-            vec!["xml_source_declaration".into()],
+            vec!["mixin_instance".into(), "xml_source_declaration".into()],
             vec!["lua_source_declaration".into()],
-            vec![GraphConfidence::Derived],
+            vec![GraphConfidence::Derived, GraphConfidence::Possible],
         )
         .map_err(|_| invalid())?,
     );
@@ -417,6 +420,23 @@ fn registry() -> ProjectResult<GraphRegistryBundle> {
             GraphRelationKind::FactoryCreates,
             vec!["lua_source_function".into()],
             vec!["frame".into()],
+            vec![GraphConfidence::Derived, GraphConfidence::Possible],
+        )
+        .map_err(|_| invalid())?,
+    );
+    let mixin_instance = GraphEntityKindDefinition::new(
+        "mixin_instance",
+        vec!["project".into()],
+        vec!["call".into()],
+        vec![GraphConfidence::Derived, GraphConfidence::Possible],
+    )
+    .map_err(|_| invalid())?;
+    relations.push(
+        GraphRelationKindDefinition::new(
+            "lua_instantiates",
+            GraphRelationKind::Instantiates,
+            vec!["lua_source_function".into()],
+            vec!["mixin_instance".into()],
             vec![GraphConfidence::Derived, GraphConfidence::Possible],
         )
         .map_err(|_| invalid())?,
@@ -469,7 +489,7 @@ fn registry() -> ProjectResult<GraphRegistryBundle> {
     }
     GraphRegistryBundle::build(
         "wow-project.source-load",
-        "9",
+        "10",
         vec![
             file,
             package,
@@ -477,6 +497,7 @@ fn registry() -> ProjectResult<GraphRegistryBundle> {
             lua,
             function,
             frame,
+            mixin_instance,
             handler,
             state_root,
             state_path,

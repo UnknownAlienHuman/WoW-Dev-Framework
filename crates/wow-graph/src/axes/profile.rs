@@ -183,7 +183,7 @@ fn families(
             (HooksScript, Forward),
             (SecureHooksFunction, Forward),
         ],
-        GraphAxis::Lifecycle => vec![(FactoryCreates, Forward)],
+        GraphAxis::Lifecycle => vec![(FactoryCreates, Forward), (Instantiates, Forward)],
         GraphAxis::State => vec![(ReadsState, Forward), (WritesState, Forward)],
         // UsesApi is not necessarily a call. Possible calls keep the original
         // Calls edge's confidence; no Candidate/possible-to-Proven conversion.

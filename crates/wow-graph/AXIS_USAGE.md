@@ -29,7 +29,7 @@ all listed directions; Both admits either direction independently per family.
 | Load | `Loads` outgoing, `DependsOn` incoming: loader/prerequisite to consumer | Network |
 | Inheritance | `Inherits`, `MixesIn` incoming: base/mixin to derived | Multi-parent |
 | Registration | Nine existing native-event, custom-signal, CVar, script and hook families, outgoing | Network |
-| Lifecycle | `FactoryCreates` outgoing | Network; creation slice only |
+| Lifecycle | `FactoryCreates`, `Instantiates` outgoing | Network; static creation/instantiation slice only |
 | State | `ReadsState`, `WritesState` outgoing | Network |
 | Call | `Calls` outgoing; `UsesApi` is not assumed to be a call | Network |
 | Lexical / Object | Unsupported: `contains`/`declares`/`parent_of` have no current stored kind | No substituted semantics |

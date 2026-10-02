@@ -346,7 +346,7 @@ pub(super) fn project(
                 output.relations.push(
                     GraphRelationProposal::new(
                         proposal_id.as_str(),
-                        "source_xml_mixes_in",
+                        "source_mixes_in",
                         GraphRelationProposalInput {
                             source: GraphProposalEndpoint::Proposed(source_id.clone().into()),
                             target: GraphProposalEndpoint::Proposed(lua.proposal_id.clone().into()),

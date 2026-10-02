@@ -40,6 +40,7 @@ xml_template
 frame
 region
 mixin
+mixin_instance
 factory
 registry
 state_root
