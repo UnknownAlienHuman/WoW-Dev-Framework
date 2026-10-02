@@ -532,6 +532,8 @@ fn compose(
         lua_nodes,
         function_nodes,
         call_edges,
+        frame_nodes,
+        creation_edges,
         call_recognition,
         construction_recognition,
         script_recognition,
@@ -549,8 +551,22 @@ fn materialized_node_id(
     proposal_id: &str,
     limits: wow_graph::GraphLimits,
 ) -> ServiceResult<wow_graph::GraphNodeId> {
+    materialized_partition_node_id(
+        snapshot,
+        wow_project::graph::SOURCE_GRAPH_PARTITION,
+        proposal_id,
+        limits,
+    )
+}
+
+pub(super) fn materialized_partition_node_id(
+    snapshot: &GraphPartitionSnapshot,
+    partition_id: &str,
+    proposal_id: &str,
+    limits: wow_graph::GraphLimits,
+) -> ServiceResult<wow_graph::GraphNodeId> {
     let partition = snapshot
-        .partition(wow_project::graph::SOURCE_GRAPH_PARTITION)
+        .partition(partition_id)
         .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?;
     let accepted = partition.report().accepted_entities();
     let index = accepted
