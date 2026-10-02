@@ -24,7 +24,8 @@ use wow_emmy::{
     LuaWorkspaceUniverse, VIRTUAL_SEMANTIC_PROFILE, VirtualSemanticReport,
 };
 
-pub const XML_LUA_ANALYSIS_PROFILE: &str = "wow-project/xml-lua-semantics/2";
+pub const XML_LUA_ANALYSIS_PROFILE: &str = "wow-project/xml-lua-semantics/3";
+pub const XML_LUA_CONTEXT_POLICY_PROFILE: &str = "wow-project/xml-lua-context-policy/1";
 const MAX_MAPPED_PIECES: usize = 262_144;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -40,6 +41,59 @@ pub enum XmlLuaSemanticState {
     Complete,
     PartialFailedParse,
     NotEvaluatedNoInlineUnits,
+}
+
+/// Authority carried by one admitted XML virtual Lua unit. The exact script
+/// site is source-backed; implicit receiver construction and runtime dispatch
+/// remain explicitly unevaluated for unwrapped static source.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct XmlLuaSemanticContext {
+    profile: &'static str,
+    context_id: Box<str>,
+    script_site: &'static str,
+    implicit_receiver: &'static str,
+    runtime_dispatch: &'static str,
+}
+
+impl XmlLuaSemanticContext {
+    fn new(unit_id: &str) -> ProjectResult<Self> {
+        let script_site = "exact_xml_script_site";
+        let implicit_receiver = "not_evaluated_unwrapped_source";
+        let runtime_dispatch = "not_evaluated_static_load_evidence_only";
+        let context_id = crate::identity::canonical_id(
+            "project-xml-lua-context:sha256:",
+            XML_LUA_CONTEXT_POLICY_PROFILE,
+            &(unit_id, script_site, implicit_receiver, runtime_dispatch),
+            ProjectPhase::Analyzer,
+        )?;
+        Ok(Self {
+            profile: XML_LUA_CONTEXT_POLICY_PROFILE,
+            context_id,
+            script_site,
+            implicit_receiver,
+            runtime_dispatch,
+        })
+    }
+
+    #[must_use]
+    pub fn context_id(&self) -> &str {
+        &self.context_id
+    }
+
+    #[must_use]
+    pub const fn script_site(&self) -> &'static str {
+        self.script_site
+    }
+
+    #[must_use]
+    pub const fn implicit_receiver(&self) -> &'static str {
+        self.implicit_receiver
+    }
+
+    #[must_use]
+    pub const fn runtime_dispatch(&self) -> &'static str {
+        self.runtime_dispatch
+    }
 }
 
 /// One virtual UTF-8 byte span and every exact XML source piece that supports it.
@@ -114,6 +168,7 @@ pub struct XmlLuaUnitAnalysis {
     pub content_digest: ContentDigest<SourceContent>,
     pub byte_length: u64,
     pub semantic_state: XmlLuaSemanticState,
+    pub context: XmlLuaSemanticContext,
     pub diagnostics: Vec<XmlLuaDiagnostic>,
     pub semantic_diagnostics: Vec<XmlLuaSemanticDiagnostic>,
     pub member_references: Vec<XmlLuaMemberReference>,
@@ -791,6 +846,7 @@ pub(crate) fn finish(
             .unit_id
             .strip_prefix("project-lua-unit:sha256:")
             .ok_or_else(invalid)?;
+        let context = XmlLuaSemanticContext::new(source.unit_id.as_ref())?;
         units.push(XmlLuaUnitAnalysis {
             unit_id: source.unit_id.clone(),
             virtual_uri: format!("wow-xml-lua:///{suffix}.lua"),
@@ -804,6 +860,7 @@ pub(crate) fn finish(
             content_digest: parsed.content_digest,
             byte_length: parsed.byte_length,
             semantic_state: unit_semantic_state,
+            context,
             diagnostics,
             semantic_diagnostics,
             member_references,
