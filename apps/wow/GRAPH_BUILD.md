@@ -20,8 +20,8 @@ The shared project materialization runs once: file acquisition, project/analyzer
 snapshot and retained TOC/XML reports. `wow-project` then constructs source
 proposals without rereading files or running another Emmy session. `wow-service`
 asks `wow-graph` to validate the complete proposal batch and materialize the source partition plus independent
-`wow-recognizers.lua-direct-calls` and `wow-recognizers.xml-script-bindings`
-partitions. Rejected proposals fail the operation;
+`wow-recognizers.lua-direct-calls`, `wow-recognizers.lua-construction` and
+`wow-recognizers.xml-script-bindings` partitions. Rejected proposals fail the operation;
 they do not publish a partly accepted graph. Diagnostic rule execution is not
 required by this export route.
 
@@ -104,16 +104,38 @@ precedence. Inherited mixins are reached through explicit `Inherits` paths, not
 copied into fabricated transitive `MixesIn` edges. Coverage stays Partial with
 no negative authority; zero mixin entries yield NotEvaluated, not proven absence.
 
-The source projection/registry and graph-build request/result use version 5. Existing retained graphs and graph-read request formats are unchanged.
+The source projection/registry is now profile 10 and the graph-build result is v10. Existing retained graphs and graph-read request formats are unchanged.
 Source review: Gethe `live` resolved to
 `09b9db7948abc9b9648dedaab51eb0cf3ee67b31` on 2026-09-24;
 `Interface/AddOns/Blizzard_SharedXML/Shared/FrameTemplate/RingedFrameTemplate.xml`.
 This observation is not a fixed runtime dependency or client verification.
 
+## Lua frame construction
+
+W11 adds the first normative construction-family consumer,
+`core.lua.create_frame@1`. The same generation-bound Emmy call report now retains
+ordered argument spans, bounded nil/boolean/string literals, exact source-backed
+reference keys and an optional exact callable key. The recognizer consumes these
+normalized facts through the existing declarative pack parser/compiler/matcher;
+it does not reread Lua or match source spelling.
+
+An exact non-colon `CreateFrame` call with the required static first string
+argument can produce a `frame` node keyed by that exact call occurrence and a
+`FactoryCreates` edge from the containing captured Lua function. The receipt
+exports these as `frame_nodes`, `creation_edges` and
+`construction_recognition`. Dynamic/unresolved arguments retain reduced
+confidence or no match; zero matches are not negative authority.
+
+These records are static source-construction evidence only. They do not prove that
+the client executed the call, that a frame exists at runtime, that parent/template
+arguments were applied, or any protected/taint/lifecycle property.
+`CreateFromMixins`, mixin assignment and the remaining W11 families are not
+implemented by this slice.
+
 ## Lua functions and direct calls
 
 The complete source-to-recognizer-to-graph route is now part of `wow graph build`.
-It requests `wow-emmy/function-call-facts/2` from the **same semantic session** that
+It requests `wow-emmy/function-call-facts/5` from the **same semantic session** that
 already collects member calls and XML lookup results. It does not reparse files,
 compile another workspace or infer calls from token spelling. Plain named calls,
 member/colon calls, aliases and immediate closure calls are eligible when Emmy
@@ -343,8 +365,10 @@ observed modes and NotEvaluated otherwise; neither is authoritative absence.
 Ordinary `wow check` / `status` retain TOC declarations but do not enable the
 optional semantic graph-access collection.
 
-The source graph projection/registry and graph-build request/result are v7;
-the optional Emmy report is v4 and global-access/state-recognizer profiles are v2.
+The source graph projection is `wow-project/source-load-proposals/10`; the graph-build
+result is `wow-service/graph-build-result/10` while the unchanged request shape remains
+`wow-service/graph-build-request/9`. The optional Emmy call report is v5; existing
+global-access/state-recognizer profiles keep their own versions.
 Typed keys intentionally change state-path identities and the v7 build receipt
 shape. The selected TOC profile, ordinary check/status path, function/call
 occurrence recipes and graph-read request formats are unchanged by this update.
@@ -359,7 +383,7 @@ examples are not a runtime acceptance probe or a fixed dependency.
 
 ## Reading a retained bundle
 
-All graph reads accept this v7 JSON receipt directly through `--bundle`.
+All graph reads accept this v10 JSON receipt directly through `--bundle`.
 `wow graph explain --bundle build.json --request explain.json` resolves the
 retained source/evidence tables and derivation inputs without rerunning the
 build. The bare-snapshot route remains unchanged. See
@@ -367,10 +391,11 @@ build. The bare-snapshot route remains unchanged. See
 
 ## Artifact and provenance formats
 
-`json` (default) emits `wow-service/graph-build-result/7`: request, status,
+`json` (default) emits `wow-service/graph-build-result/10`: request, status,
 `snapshot`, `file_nodes`, `xml_nodes`, `lua_nodes`, `function_nodes`, `call_edges`,
-`handler_nodes`, `script_edges`, `provenance`, `call_recognition`,
-`script_recognition`, `state_nodes`, `state_edges`, `state_recognition`, boundaries and canonical digests.
+`frame_nodes`, `creation_edges`, `handler_nodes`, `script_edges`, `provenance`,
+`call_recognition`, `construction_recognition`, `script_recognition`, `state_nodes`,
+`state_edges`, `state_recognition`, boundaries and canonical digests.
 `file_nodes` maps logical source paths to final materialized node IDs, rather than
 producer-input IDs. `provenance` retains the exact project/analyzer snapshot IDs,
 GenerationContext, file manifest, real SourceHandles/EvidenceRecords and optional
