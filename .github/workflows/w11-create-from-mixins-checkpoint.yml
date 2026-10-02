@@ -25,7 +25,12 @@ jobs:
         run: |
           set -euo pipefail
           git merge-base --is-ancestor "$BASE_COMMIT" HEAD
-          cat .github/w11-payload/zpatch.0* | tr -d '\n' > "$RUNNER_TEMP/w11-patch.zlib.b64"
+          cat \
+            .github/w11-payload/zpatch.00 \
+            .github/w11-payload/zpatch.01 \
+            .github/w11-payload/zpatch.02a \
+            .github/w11-payload/zpatch.02b \
+            | tr -d '\n' > "$RUNNER_TEMP/w11-patch.zlib.b64"
           test "$(wc -c < "$RUNNER_TEMP/w11-patch.zlib.b64")" = "22252"
           echo "3db744d70df3fb52cb97fb14282dd7a9e884160732ceab09490026cc55633413  $RUNNER_TEMP/w11-patch.zlib.b64" | sha256sum -c -
           python3 -c 'import base64,sys,zlib; sys.stdout.buffer.write(zlib.decompress(base64.b64decode(sys.stdin.buffer.read())))' \
