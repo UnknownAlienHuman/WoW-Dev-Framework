@@ -1,5 +1,5 @@
 name: W11 CreateFrame compile gate
-# retry after rustfmt normalization
+# retry after strict Clippy cleanup
 on:
   push:
     branches: [main]
