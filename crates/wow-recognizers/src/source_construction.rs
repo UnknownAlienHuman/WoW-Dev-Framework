@@ -12,9 +12,9 @@ use wow_core::{
 };
 use wow_emmy::function_calls::{FunctionCallReport, SourceCallLiteral};
 use wow_graph::{
-    GraphConfidence, GraphCoverageRecord, GraphCoverageState, GraphNodeId, GraphPartitionSnapshot,
-    GraphProposalBatch, GraphProposalEndpoint, GraphProposalValue, GraphRelationKind,
-    GraphRelationProposal, GraphRelationProposalInput, GraphEntityProposal,
+    GraphConfidence, GraphCoverageRecord, GraphCoverageState, GraphEntityProposal, GraphNodeId,
+    GraphPartitionSnapshot, GraphProposalBatch, GraphProposalEndpoint, GraphProposalValue,
+    GraphRelationKind, GraphRelationProposal, GraphRelationProposalInput,
 };
 
 use crate::{
@@ -106,8 +106,12 @@ pub fn recognize_source_construction(
             .map_err(|_| failure(RecognizerErrorCode::AdapterBindingMissing))?;
         let node = accepted[index].node().node_id().clone();
         if graph.node(&node).is_none()
-            || proposal_to_node.insert(proposal_id.to_owned(), node.clone()).is_some()
-            || caller_nodes.insert(function.fact_id().to_owned(), node).is_some()
+            || proposal_to_node
+                .insert(proposal_id.to_owned(), node.clone())
+                .is_some()
+            || caller_nodes
+                .insert(function.fact_id().to_owned(), node)
+                .is_some()
         {
             return Err(failure(RecognizerErrorCode::AdapterBindingDuplicate));
         }
@@ -155,9 +159,15 @@ pub fn recognize_source_construction(
         }
 
         let mut exact_arguments = call.arguments().len() <= MAX_ARGUMENTS_RETAINED;
-        for (index, argument) in call.arguments().iter().take(MAX_ARGUMENTS_RETAINED).enumerate() {
+        for (index, argument) in call
+            .arguments()
+            .iter()
+            .take(MAX_ARGUMENTS_RETAINED)
+            .enumerate()
+        {
             let prefix = format!("argument_{index}");
-            let (Some(start), Some(end)) = (argument.span().byte_start(), argument.span().byte_end())
+            let (Some(start), Some(end)) =
+                (argument.span().byte_start(), argument.span().byte_end())
             else {
                 return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
             };
@@ -258,14 +268,7 @@ pub fn recognize_source_construction(
     )?;
     let pack = create_frame_pack(input.owner.registry().bundle_id())?;
     let plan = compile_recognizer_plan(&pack)?;
-    let output = execute_recognizer_plan(
-        input.context,
-        &pack,
-        &plan,
-        &bundle,
-        fact_limits,
-        stop,
-    )?;
+    let output = execute_recognizer_plan(input.context, &pack, &plan, &bundle, fact_limits, stop)?;
 
     let mut frame_by_call = BTreeMap::<String, String>::new();
     let mut entities = Vec::new();
