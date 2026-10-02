@@ -96,6 +96,8 @@ pub struct SourceCallArgument {
     span: SourceSpan,
     #[serde(skip_serializing_if = "Option::is_none")]
     literal: Option<SourceCallLiteral>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reference_key: Option<String>,
 }
 impl SourceCallArgument {
     pub const fn span(&self) -> SourceSpan {
@@ -103,6 +105,9 @@ impl SourceCallArgument {
     }
     pub fn literal(&self) -> Option<&SourceCallLiteral> {
         self.literal.as_ref()
+    }
+    pub fn reference_key(&self) -> Option<&str> {
+        self.reference_key.as_deref()
     }
 }
 
@@ -300,6 +305,14 @@ impl FunctionCallReport {
                 }
                 if let Some(SourceCallLiteral::String(value)) = &argument.literal
                     && value.len() > MAX_CALL_LITERAL_BYTES
+                {
+                    return Err(invalid());
+                }
+                if argument
+                    .reference_key
+                    .as_ref()
+                    .is_some_and(|key| !crate::bindings::supported_path(key))
+                    || argument.literal.is_some() && argument.reference_key.is_some()
                 {
                     return Err(invalid());
                 }
@@ -683,6 +696,7 @@ pub(crate) fn collect(
                             Ok(SourceCallArgument {
                                 span,
                                 literal: call_literal(argument),
+                                reference_key: None,
                             })
                         })
                         .collect::<EmmyMemberCallResult<Vec<_>>>()
@@ -740,6 +754,23 @@ pub(crate) fn collect(
             (Some(existing), Some(access)) if existing != &access => return Err(invalid()),
             (None, Some(access)) => call.resolved_callable_key = Some(access),
             _ => {}
+        }
+        for argument in &mut call.arguments {
+            if argument.literal.is_some() {
+                continue;
+            }
+            let mut references = global_accesses
+                .iter()
+                .filter(|access| {
+                    access.path() == call.path
+                        && access.function_id() == call.caller_function_id
+                        && access.span() == argument.span
+                })
+                .filter_map(exact_callable_access_key);
+            argument.reference_key = references.next();
+            if references.next().is_some() {
+                return Err(invalid());
+            }
         }
     }
     functions.sort_by(|a, b| a.fact_id.cmp(&b.fact_id));
