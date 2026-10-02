@@ -571,7 +571,7 @@ pub(crate) fn collect(
     }
     let mut callable_keys = HashMap::<LuaSignatureId, Option<String>>::new();
     for (key, signature) in callable_signatures {
-        match callable_keys.entry(signature.clone()) {
+        match callable_keys.entry(*signature) {
             std::collections::hash_map::Entry::Vacant(entry) => {
                 entry.insert(Some(key.clone()));
             }
