@@ -2,7 +2,7 @@
 //! Source text is never reparsed here. All keys, arguments, spans and support come
 //! from the generation-bound Emmy owner report.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::Serialize;
@@ -48,6 +48,13 @@ pub struct SourceConstructionInput<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SourceCreateFrameMatch {
+    pub call_id: String,
+    pub entity_proposal_id: String,
+    pub relation_proposal_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SourceConstructionRecognition {
     profile: &'static str,
     analyzer_report_id: String,
@@ -55,12 +62,12 @@ pub struct SourceConstructionRecognition {
     pack_digest: String,
     plan_id: String,
     output_partition_id: String,
-    matched_create_frame_calls: Vec<String>,
+    create_frame_matches: Vec<SourceCreateFrameMatch>,
 }
 
 impl SourceConstructionRecognition {
-    pub fn matched_create_frame_calls(&self) -> &[String] {
-        &self.matched_create_frame_calls
+    pub fn create_frame_matches(&self) -> &[SourceCreateFrameMatch] {
+        &self.create_frame_matches
     }
 }
 
@@ -279,7 +286,6 @@ pub fn recognize_source_construction(
     let mut frame_by_call = BTreeMap::<String, String>::new();
     let mut entities = Vec::new();
     let mut relations_pending = Vec::new();
-    let mut matched = BTreeSet::new();
     for outcome in output.outcomes() {
         if outcome.rule_id() != CREATE_FRAME_RULE || outcome.rule_version() != 1 {
             return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
@@ -310,7 +316,6 @@ pub fn recognize_source_construction(
                     {
                         return Err(failure(RecognizerErrorCode::AdapterBindingDuplicate));
                     }
-                    matched.insert(call_id.to_string());
                     entities.push(
                         GraphEntityProposal::new(
                             graph_id,
@@ -353,6 +358,7 @@ pub fn recognize_source_construction(
         }
     }
     let mut relations = Vec::new();
+    let mut relation_by_call = BTreeMap::<String, String>::new();
     for (id, kind, source, target, confidence, handles, evidence, coverage) in relations_pending {
         let RecognizerFactValue::Reference(source_proposal) = source else {
             return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
@@ -369,6 +375,12 @@ pub fn recognize_source_construction(
         let target_proposal = frame_by_call
             .get(call_id.as_ref())
             .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
+        if relation_by_call
+            .insert(call_id.to_string(), id.clone())
+            .is_some()
+        {
+            return Err(failure(RecognizerErrorCode::AdapterBindingDuplicate));
+        }
         relations.push(
             GraphRelationProposal::new(
                 id,
@@ -385,6 +397,20 @@ pub fn recognize_source_construction(
             .map_err(graph_error)?,
         );
     }
+
+    if frame_by_call.len() != relation_by_call.len()
+        || frame_by_call.keys().any(|call| !relation_by_call.contains_key(call))
+    {
+        return Err(failure(RecognizerErrorCode::AdapterBindingMissing));
+    }
+    let create_frame_matches = frame_by_call
+        .into_iter()
+        .map(|(call_id, entity_proposal_id)| SourceCreateFrameMatch {
+            relation_proposal_id: relation_by_call[&call_id].clone(),
+            call_id,
+            entity_proposal_id,
+        })
+        .collect();
 
     let graph_coverage = input
         .owner
@@ -434,7 +460,7 @@ pub fn recognize_source_construction(
             pack_digest: pack.pack_digest().into(),
             plan_id: plan.plan_id().to_string(),
             output_partition_id: output.partition_id().to_string(),
-            matched_create_frame_calls: matched.into_iter().collect(),
+            create_frame_matches,
         },
     })
 }
