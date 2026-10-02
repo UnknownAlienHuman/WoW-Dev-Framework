@@ -29,7 +29,9 @@ pub use flow::{
 pub use references::{
     EmmyFactFileStatus, EmmyMemberCallError, EmmyMemberCallErrorCode, EmmyMemberCallFact,
     EmmyMemberCallFileReport, EmmyMemberCallReport, EmmyMemberCallResult, EmmyMemberReferenceFact,
-    EmmyReferenceResolution, analyze_member_calls,
+    EmmyReferenceResolution, MemberCallSessionQueryProfile,
+    analyze_member_call_session_with_callable_queries,
+    analyze_member_call_session_with_virtual_and_callable_queries, analyze_member_calls,
 };
 pub use syntax::{
     EMMYLUA_CODE_ANALYSIS_VERSION, EMMYLUA_REVISION, EMMYLUA_TREE, EmmyDiagnosticClassification,

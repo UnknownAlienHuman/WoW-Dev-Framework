@@ -384,6 +384,46 @@ pub fn analyze_member_call_session(
         None,
         None,
         queries,
+        &[],
+        include_function_calls,
+        stop,
+    )
+}
+
+/// Exact query lanes for one already-populated member-call session.
+#[derive(Debug, Clone, Copy)]
+pub struct MemberCallSessionQueryProfile<'a> {
+    symbol_queries: &'a [String],
+    callable_queries: &'a [String],
+}
+
+impl<'a> MemberCallSessionQueryProfile<'a> {
+    #[must_use]
+    pub const fn new(symbol_queries: &'a [String], callable_queries: &'a [String]) -> Self {
+        Self {
+            symbol_queries,
+            callable_queries,
+        }
+    }
+}
+
+/// Resolve an additional reviewed callable-query profile in the same exact
+/// semantic session. The returned symbol lookup remains scoped to the symbol
+/// lane; callable-only lookup identity is retained by the function-call sidecar.
+pub fn analyze_member_call_session_with_callable_queries(
+    main: &LuaWorkspaceSnapshot,
+    libraries: &[&LuaWorkspaceSnapshot],
+    query_profile: MemberCallSessionQueryProfile<'_>,
+    include_function_calls: bool,
+    stop: &std::sync::atomic::AtomicBool,
+) -> EmmyMemberCallResult<MemberCallSession> {
+    analyze_member_call_session_impl(
+        main,
+        libraries,
+        None,
+        None,
+        query_profile.symbol_queries,
+        query_profile.callable_queries,
         include_function_calls,
         stop,
     )
@@ -407,6 +447,30 @@ pub fn analyze_member_call_session_with_virtual(
         Some(virtual_units),
         Some(project_generation),
         queries,
+        &[],
+        include_function_calls,
+        stop,
+    )
+}
+
+/// Virtual-Main variant of [`analyze_member_call_session_with_callable_queries`].
+/// Physical, virtual and Library files still share one registered Emmy session.
+pub fn analyze_member_call_session_with_virtual_and_callable_queries(
+    main: &LuaWorkspaceSnapshot,
+    libraries: &[&LuaWorkspaceSnapshot],
+    virtual_units: &LuaWorkspaceSnapshot,
+    project_generation: ProjectGenerationId,
+    query_profile: MemberCallSessionQueryProfile<'_>,
+    include_function_calls: bool,
+    stop: &std::sync::atomic::AtomicBool,
+) -> EmmyMemberCallResult<MemberCallSession> {
+    analyze_member_call_session_impl(
+        main,
+        libraries,
+        Some(virtual_units),
+        Some(project_generation),
+        query_profile.symbol_queries,
+        query_profile.callable_queries,
         include_function_calls,
         stop,
     )
@@ -419,11 +483,20 @@ fn analyze_member_call_session_impl(
     virtual_units: Option<&LuaWorkspaceSnapshot>,
     project_generation: Option<ProjectGenerationId>,
     queries: &[String],
+    callable_queries: &[String],
     include_function_calls: bool,
     stop: &std::sync::atomic::AtomicBool,
 ) -> EmmyMemberCallResult<MemberCallSession> {
     crate::bindings::checkpoint(stop)?;
     crate::bindings::validate_queries(queries)?;
+    crate::bindings::validate_queries(callable_queries)?;
+    if !include_function_calls && !callable_queries.is_empty() {
+        return Err(EmmyMemberCallError::new(
+            EmmyMemberCallErrorCode::InvalidMainWorkspace,
+            "callable-only queries require the function-call sidecar",
+            None,
+        ));
+    }
     validate_compiled_backend(main)?;
     if matches!(main.universe(), crate::LuaWorkspaceUniverse::BlizzardUi) {
         return Err(EmmyMemberCallError::new(
@@ -633,6 +706,34 @@ fn analyze_member_call_session_impl(
             stop,
         )?)
     };
+    let callable_lookups = if include_function_calls && !callable_queries.is_empty() {
+        Some(crate::bindings::resolve(
+            &analysis,
+            main,
+            &main_root,
+            &library_roots,
+            callable_queries,
+            Some(&mut callable_signatures),
+            stop,
+        )?)
+    } else {
+        None
+    };
+    let mut lookup_analysis_ids = lookups
+        .iter()
+        .chain(callable_lookups.iter())
+        .map(|report| report.analysis_id())
+        .collect::<Vec<_>>();
+    lookup_analysis_ids.sort_unstable();
+    lookup_analysis_ids.dedup();
+    let lookup_analysis_id = if lookup_analysis_ids.is_empty() {
+        None
+    } else {
+        Some(canonical_id(
+            "emmy-function-call-lookups:sha256:",
+            &(main.snapshot_id(), &lookup_analysis_ids),
+        )?)
+    };
     let function_calls = if include_function_calls {
         Some(crate::function_calls::collect(
             &analysis,
@@ -640,7 +741,7 @@ fn analyze_member_call_session_impl(
             &main_root,
             &library_roots,
             &callable_signatures,
-            lookups.as_ref().map(|report| report.analysis_id()),
+            lookup_analysis_id.as_deref(),
             stop,
         )?)
     } else {

@@ -15,6 +15,11 @@ use crate::{
     ProjectGenerationCandidate, ProjectInputInventory, ProjectPhase, ProjectResult,
 };
 
+/// Reviewed universal callables needed by active E2 core recognizers. These are
+/// exact analyzer queries, not source-text names or platform-availability claims.
+const CORE_RECOGNIZER_CALLABLE_QUERIES: &[&str] =
+    &["Frame.RegisterEvent", "Frame.RegisterUnitEvent"];
+
 /// Analyzer capability observation scope.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -276,23 +281,34 @@ pub(crate) fn build_analyzer_binding(
         .as_ref()
         .map(|p| p.queries())
         .unwrap_or_default();
+    let callable_queries = if function_calls {
+        CORE_RECOGNIZER_CALLABLE_QUERIES
+            .iter()
+            .map(|query| (*query).to_owned())
+            .collect::<Vec<_>>()
+    } else {
+        Vec::new()
+    };
+    let query_profile = wow_emmy::MemberCallSessionQueryProfile::new(queries, &callable_queries);
     let session = match pending_xml_lua
         .as_ref()
         .and_then(crate::xml_lua::PreparedProjectXmlLuaAnalysis::virtual_workspace)
     {
-        Some(virtual_workspace) => wow_emmy::references::analyze_member_call_session_with_virtual(
+        Some(virtual_workspace) => {
+            wow_emmy::references::analyze_member_call_session_with_virtual_and_callable_queries(
+                &main_workspace,
+                &library_refs,
+                virtual_workspace,
+                generation.project_generation(),
+                query_profile,
+                function_calls,
+                stop,
+            )
+        }
+        None => wow_emmy::references::analyze_member_call_session_with_callable_queries(
             &main_workspace,
             &library_refs,
-            virtual_workspace,
-            generation.project_generation(),
-            queries,
-            function_calls,
-            stop,
-        ),
-        None => wow_emmy::references::analyze_member_call_session(
-            &main_workspace,
-            &library_refs,
-            queries,
+            query_profile,
             function_calls,
             stop,
         ),
