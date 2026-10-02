@@ -14,12 +14,15 @@ use wow_project::graph::{
 };
 
 mod calls;
+mod construction;
 mod scripts;
 mod state;
 use calls::{CallEdge, FunctionNode};
+use construction::{CreationEdge, FrameNode};
 use scripts::{HandlerNode, ScriptEdge};
 use state::{StateEdge, StateNodes};
 use wow_recognizers::source_calls::SourceCallRecognition;
+use wow_recognizers::source_construction::SourceConstructionRecognition;
 use wow_recognizers::source_scripts::SourceScriptRecognition;
 use wow_recognizers::source_state::SourceStateRecognition;
 
@@ -29,6 +32,7 @@ struct BuiltGraph {
     snapshot: GraphPartitionSnapshot,
     provenance: ProjectGraphProvenance,
     call_recognition: SourceCallRecognition,
+    construction_recognition: SourceConstructionRecognition,
     script_recognition: SourceScriptRecognition,
     state_recognition: SourceStateRecognition,
     state_nodes: StateNodes,
@@ -45,6 +49,8 @@ struct BuiltGraph {
     lua_nodes: Vec<LuaNode>,
     function_nodes: Vec<FunctionNode>,
     call_edges: Vec<CallEdge>,
+    frame_nodes: Vec<FrameNode>,
+    creation_edges: Vec<CreationEdge>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -146,6 +152,8 @@ pub struct GraphBuildResult {
     lua_nodes: Vec<LuaNode>,
     function_nodes: Vec<FunctionNode>,
     call_edges: Vec<CallEdge>,
+    frame_nodes: Vec<FrameNode>,
+    creation_edges: Vec<CreationEdge>,
     handler_nodes: Vec<HandlerNode>,
     script_edges: Vec<ScriptEdge>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -162,6 +170,8 @@ pub struct GraphBuildResult {
     provenance: Option<ProjectGraphProvenance>,
     #[serde(skip_serializing_if = "Option::is_none")]
     call_recognition: Option<SourceCallRecognition>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    construction_recognition: Option<SourceConstructionRecognition>,
     boundaries: Vec<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     failure: Option<ServiceErrorCode>,
@@ -203,7 +213,10 @@ impl GraphBuildResult {
         self.lua_nodes.clear();
         self.function_nodes.clear();
         self.call_edges.clear();
+        self.frame_nodes.clear();
+        self.creation_edges.clear();
         self.call_recognition = None;
+        self.construction_recognition = None;
         self.script_recognition = None;
         self.state_recognition = None;
         self.state_nodes = StateNodes::empty();
@@ -239,7 +252,7 @@ pub fn execute_graph_build(
 ) -> ServiceResult<GraphBuildResult> {
     let request_digest = super::hash(&bounded(request, super::GRAPH_REQUEST_MAX_BYTES)?);
     let mut result = GraphBuildResult {
-        schema: "wow-service/graph-build-result/9",
+        schema: "wow-service/graph-build-result/10",
         request: request.clone(),
         request_digest,
         status: GraphReadStatus::Partial,
@@ -252,7 +265,10 @@ pub fn execute_graph_build(
         lua_nodes: Vec::new(),
         function_nodes: Vec::new(),
         call_edges: Vec::new(),
+        frame_nodes: Vec::new(),
+        creation_edges: Vec::new(),
         call_recognition: None,
+        construction_recognition: None,
         script_recognition: None,
         state_recognition: None,
         state_nodes: StateNodes::empty(),
@@ -272,7 +288,9 @@ pub fn execute_graph_build(
             "not_coherent_project_store_publication",
             "package_dependencies_and_order_are_static_selected_toc_evidence_not_runtime_load_success",
             "package_order_groups_remain_exact_provenance_not_synthetic_transitive_edges",
-            "dynamic_library_inline_xml_calls_and_other_recognizers_not_evaluated",
+            "dynamic_library_inline_xml_calls_and_remaining_recognizers_not_evaluated",
+            "create_frame_is_static_construction_evidence_not_runtime_frame_existence",
+            "create_from_mixins_and_mixin_assignment_not_evaluated",
             "xml_runtime_objects_parentage_and_mixin_execution_not_evaluated",
             "library_mixin_and_handler_targets_not_projected",
             "xml_method_and_inherited_handler_associations_are_possible_not_dispatch",
@@ -295,7 +313,10 @@ pub fn execute_graph_build(
             lua_nodes,
             function_nodes,
             call_edges,
+            frame_nodes,
+            creation_edges,
             call_recognition,
+            construction_recognition,
             script_recognition,
             state_recognition,
             state_nodes,
@@ -312,7 +333,10 @@ pub fn execute_graph_build(
             result.lua_nodes = lua_nodes;
             result.function_nodes = function_nodes;
             result.call_edges = call_edges;
+            result.frame_nodes = frame_nodes;
+            result.creation_edges = creation_edges;
             result.call_recognition = Some(call_recognition);
+            result.construction_recognition = Some(construction_recognition);
             result.script_recognition = Some(script_recognition);
             result.state_recognition = Some(state_recognition);
             result.state_nodes = state_nodes;
@@ -383,14 +407,18 @@ fn compose(
         .map_err(graph_error)?;
     let (calls_snapshot, call_recognition) =
         calls::publish(replacement.candidate(), &provenance, stop)?;
+    let (construction_snapshot, construction_recognition) =
+        construction::publish(&calls_snapshot, &provenance, stop)?;
     let (scripts_snapshot, script_recognition) =
-        scripts::publish(&calls_snapshot, &provenance, stop)?;
+        scripts::publish(&construction_snapshot, &provenance, stop)?;
     let (snapshot, state_recognition) = state::publish(&scripts_snapshot, &provenance, stop)?;
     let (state_nodes, state_edges) = state::maps(&snapshot, &provenance, &state_recognition, stop)?;
     let (handler_nodes, script_edges) =
         scripts::maps(&snapshot, &provenance, &script_recognition, stop)?;
     let (function_nodes, call_edges) =
         calls::maps(&snapshot, &provenance, &call_recognition, stop)?;
+    let (frame_nodes, creation_edges) =
+        construction::maps(&snapshot, &provenance, &construction_recognition, stop)?;
     checkpoint(stop)?;
     let mut file_nodes = Vec::new();
     for file in provenance.files() {
@@ -505,6 +533,7 @@ fn compose(
         function_nodes,
         call_edges,
         call_recognition,
+        construction_recognition,
         script_recognition,
         state_recognition,
         state_nodes,
