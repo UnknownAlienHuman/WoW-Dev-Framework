@@ -33,6 +33,38 @@ jobs:
           echo "518ecd7d033d4d20267edfff4fb658b3fe3a8fc60423f1c7824a8132c35ee7ca  $RUNNER_TEMP/w11-patch.py" | sha256sum -c -
           git rm -r -- .github/w11-mixin-assignment .github/workflows/w11-mixin-assignment-checkpoint.yml
           python3 "$RUNNER_TEMP/w11-patch.py"
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path("crates/wow-service/src/graph/build/lua_mixins.rs")
+          text = path.read_text()
+          publish = "\npub(super) fn publish("
+          alias = """
+type MixinMaps = (
+    Vec<MixinInstanceNode>,
+    Vec<InstantiationEdge>,
+    Vec<ConstructionMixinEdge>,
+    Vec<AssignmentMixinEdge>,
+);
+
+pub(super) fn publish("""
+          if text.count(publish) != 1:
+              raise SystemExit("unexpected lua_mixins publish marker")
+          text = text.replace(publish, alias, 1)
+          pattern = re.compile(
+              r"\) -> ServiceResult<\(\s*"
+              r"Vec<MixinInstanceNode>,\s*"
+              r"Vec<InstantiationEdge>,\s*"
+              r"Vec<ConstructionMixinEdge>,\s*"
+              r"Vec<AssignmentMixinEdge>,\s*"
+              r"\)> \{"
+          )
+          text, count = pattern.subn(") -> ServiceResult<MixinMaps> {", text, count=1)
+          if count != 1:
+              raise SystemExit("unexpected lua_mixins maps return shape")
+          path.write_text(text)
+          PY
       - name: Install compiler tools
         run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
       - name: Format workspace
