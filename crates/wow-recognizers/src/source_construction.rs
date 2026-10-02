@@ -58,6 +58,12 @@ pub struct SourceConstructionRecognition {
     matched_create_frame_calls: Vec<String>,
 }
 
+impl SourceConstructionRecognition {
+    pub fn matched_create_frame_calls(&self) -> &[String] {
+        &self.matched_create_frame_calls
+    }
+}
+
 pub struct SourceConstructionProposals {
     pub batch: GraphProposalBatch,
     pub coverage: Vec<GraphCoverageRecord>,
