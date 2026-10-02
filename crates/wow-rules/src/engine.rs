@@ -3,20 +3,24 @@ use std::str::FromStr;
 
 use wow_core::{
     BlockingPartitionRef, CapabilityId, ClaimScope, ContentDigest, CoverageId, CoverageStatus,
-    EvidenceConfidence, EvidenceRecord, FindingDraft, MessageArgument, MessageArgumentKind,
-    MessageCode, NotEvaluatedRecord, ProducerId, ProvenanceClass, Remediation, RemediationClass,
-    RolloutPolicy, Severity, SourceContent, SourceHandle, SourceHandleBuilder, SourceOriginKind,
-    SourceSpan, ToolVersion, canonical_json_bytes, derive_evidence, derive_root_cause_key,
-    validate_evidence_derivation_graph,
+    EntityKey, EvidenceConfidence, EvidenceRecord, FindingDraft, MessageArgument,
+    MessageArgumentKind, MessageCode, NotEvaluatedRecord, ProducerId, ProvenanceClass, Remediation,
+    RemediationClass, RolloutPolicy, Severity, SourceContent, SourceHandle, SourceHandleBuilder,
+    SourceOriginKind, SourceSpan, ToolVersion, canonical_json_bytes, derive_evidence,
+    derive_root_cause_key, validate_evidence_derivation_graph,
 };
 use wow_emmy::{
     EmmyControlFlowRelationKind, EmmyGuardFact, EmmyGuardKind, EmmyLocalBindingFact,
     EmmyMemberCallFact, EmmyMemberReferenceFact, EmmyOperationFact, EmmyOperationKind,
-    EmmyReferenceResolution,
+    EmmyReferenceResolution, EmmySyntaxDiagnosticKind,
 };
 use wow_project::{
     ProjectAnalyzerCapabilityScope, ProjectAnalyzerCapabilityState, ProjectFileId,
     ProjectFileRecord,
+    xml_lua::{
+        XmlLuaDiagnosticMapping, XmlLuaMappedSpan, XmlLuaMemberCall, XmlLuaMemberReference,
+        XmlLuaSemanticState, XmlLuaUnitAnalysis,
+    },
 };
 use wow_reference::{
     LookupResult, LookupUnknownReason, ReferenceRecord, ReferenceRecordKind, RestrictionState,
@@ -40,6 +44,15 @@ struct ApiFindingInput<'a> {
     file: &'a ProjectFileRecord,
     fact: &'a EmmyMemberReferenceFact,
     call: Option<&'a EmmyMemberCallFact>,
+    entity_lookup_key: &'a str,
+    lookup: RuleReferenceLookupRecord,
+    coverage_ids: Vec<CoverageId>,
+}
+
+struct XmlApiFindingInput<'a> {
+    unit: &'a XmlLuaUnitAnalysis,
+    fact: &'a XmlLuaMemberReference,
+    call: Option<&'a XmlLuaMemberCall>,
     entity_lookup_key: &'a str,
     lookup: RuleReferenceLookupRecord,
     coverage_ids: Vec<CoverageId>,
@@ -300,19 +313,304 @@ fn evaluate_api(
             }
         }
     }
+    evaluate_xml_api(context, scope, descriptor, &mut output)?;
     Ok(output)
+}
+
+fn evaluate_xml_api(
+    context: &RuleExecutionContext<'_>,
+    scope: &RuleScope,
+    descriptor: &crate::RuleDescriptor,
+    output: &mut Vec<RuleEvaluationRecord>,
+) -> RuleResult<()> {
+    let Some(report) = context
+        .project()
+        .snapshot()
+        .analyzer_binding()
+        .xml_lua_analysis()
+    else {
+        return Ok(());
+    };
+    for unit in report.units() {
+        if !scope.contains_xml_document(&unit.document) {
+            continue;
+        }
+        validate_xml_api_unit(context, unit)?;
+        let calls = unit
+            .member_calls
+            .iter()
+            .map(|call| (call.reference_fact_id.as_ref(), call))
+            .collect::<BTreeMap<_, _>>();
+        for fact in &unit.member_references {
+            if context.is_cancelled() {
+                output.push(RuleEvaluationRecord::new(
+                    descriptor.rule_id().clone(),
+                    descriptor.rule_version().clone(),
+                    &format!("api:xml:{}:cancelled", unit.unit_id),
+                    RuleEvaluationOutcome::Cancelled,
+                ));
+                return Ok(());
+            }
+            let Some(entity_lookup_key) =
+                api_lookup_key_parts(context, &fact.receiver, &fact.member)
+            else {
+                continue;
+            };
+            if context.is_fixture_policy() && fact.resolution == EmmyReferenceResolution::Resolved {
+                continue;
+            }
+            let scope_id = format!("api:xml:{}:{}", unit.unit_id, fact.fact_id);
+            let call = calls.get(fact.fact_id.as_ref()).copied();
+            let fact_ids = xml_api_fact_ids(fact, call);
+            if fact.resolution == EmmyReferenceResolution::Possible {
+                output.push(not_evaluated(
+                    context,
+                    descriptor,
+                    &scope_id,
+                    vec![RuleBlockerKind::AmbiguousReference],
+                    descriptor.required_capabilities().to_vec(),
+                    Vec::new(),
+                    fact_ids,
+                    None,
+                )?);
+                continue;
+            }
+            let gate = xml_api_capability_gate(context, unit, descriptor.required_capabilities())?;
+            if !gate.blockers.is_empty() {
+                output.push(not_evaluated(
+                    context,
+                    descriptor,
+                    &scope_id,
+                    gate.blockers,
+                    gate.blocking_capabilities,
+                    gate.blocking_partitions,
+                    fact_ids,
+                    None,
+                )?);
+                continue;
+            }
+            let (lookup, found) =
+                exact_lookup(context, context.api_partition_id(), &entity_lookup_key)?;
+            match lookup.outcome() {
+                RuleReferenceOutcome::Found => {
+                    output.push(clean(
+                        context,
+                        descriptor,
+                        CleanInput {
+                            scope_id: &scope_id,
+                            claim: RuleCleanClaimKind::ApiExistsForExactUse,
+                            fact_ids,
+                            lookup: &lookup,
+                            coverage_ids: gate.coverage_ids,
+                            guard: None,
+                        },
+                    )?);
+                }
+                RuleReferenceOutcome::AuthoritativeAbsent
+                    if fact.resolution == EmmyReferenceResolution::Unresolved =>
+                {
+                    output.push(xml_api_finding(
+                        context,
+                        descriptor,
+                        XmlApiFindingInput {
+                            unit,
+                            fact,
+                            call,
+                            entity_lookup_key: &entity_lookup_key,
+                            lookup,
+                            coverage_ids: gate.coverage_ids,
+                        },
+                    )?);
+                }
+                RuleReferenceOutcome::AuthoritativeAbsent => {
+                    output.push(not_evaluated(
+                        context,
+                        descriptor,
+                        &scope_id,
+                        vec![RuleBlockerKind::UnsupportedFactShape],
+                        vec![capability("reference.symbol.exact_lookup")?],
+                        Vec::new(),
+                        fact_ids,
+                        Some(&lookup),
+                    )?);
+                }
+                RuleReferenceOutcome::Conflict => {
+                    output.push(not_evaluated(
+                        context,
+                        descriptor,
+                        &scope_id,
+                        vec![RuleBlockerKind::ReferenceConflict],
+                        vec![capability("reference.symbol.exact_lookup")?],
+                        Vec::new(),
+                        fact_ids,
+                        Some(&lookup),
+                    )?);
+                }
+                RuleReferenceOutcome::PartialCoverage
+                | RuleReferenceOutcome::NotEvaluated
+                | RuleReferenceOutcome::PartitionMissing => {
+                    output.push(not_evaluated(
+                        context,
+                        descriptor,
+                        &scope_id,
+                        reference_blockers(lookup.outcome()),
+                        vec![capability("reference.symbol.exact_lookup")?],
+                        Vec::new(),
+                        fact_ids,
+                        Some(&lookup),
+                    )?);
+                }
+            }
+            if found.is_some_and(|record| record.kind() != ReferenceRecordKind::Api) {
+                return Err(RuleError::new(
+                    RuleErrorCode::RuleLookupOutcomeInvalid,
+                    "API exact lookup returned a non-API record",
+                )
+                .with_rule(API_EXISTS_RULE)
+                .with_scope(&scope_id));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_xml_api_unit(
+    context: &RuleExecutionContext<'_>,
+    unit: &XmlLuaUnitAnalysis,
+) -> RuleResult<()> {
+    if !unit.context.admits_static_source_association() {
+        return Err(RuleError::new(
+            RuleErrorCode::ApiExistsScopeInvalid,
+            "XML Lua unit does not carry exact static script-site authority",
+        )
+        .with_rule(API_EXISTS_RULE)
+        .with_scope(unit.unit_id.as_ref()));
+    }
+    let source = context
+        .project()
+        .xml_document_source(&unit.document)
+        .map_err(|error| {
+            RuleError::new(
+                RuleErrorCode::ApiExistsScopeInvalid,
+                format!("XML source artifact cannot be resolved: {error}"),
+            )
+            .with_rule(API_EXISTS_RULE)
+            .with_scope(unit.unit_id.as_ref())
+        })?
+        .ok_or_else(|| {
+            RuleError::new(
+                RuleErrorCode::ApiExistsScopeInvalid,
+                "XML Lua unit references a document outside the captured project generation",
+            )
+            .with_rule(API_EXISTS_RULE)
+            .with_scope(unit.unit_id.as_ref())
+        })?;
+    if source.content_digest() != unit.document_digest {
+        return Err(RuleError::new(
+            RuleErrorCode::ApiExistsScopeInvalid,
+            "XML Lua unit document digest differs from the captured source artifact",
+        )
+        .with_rule(API_EXISTS_RULE)
+        .with_scope(unit.unit_id.as_ref()));
+    }
+
+    let mut references = BTreeMap::new();
+    for fact in &unit.member_references {
+        if references.insert(fact.fact_id.as_ref(), fact).is_some() {
+            return Err(RuleError::new(
+                RuleErrorCode::RuleFactReferenceGraphInvalid,
+                "XML Lua unit contains duplicate member-reference fact identities",
+            )
+            .with_rule(API_EXISTS_RULE)
+            .with_scope(unit.unit_id.as_ref()));
+        }
+        validate_xml_mapping(unit, &fact.receiver_source, source.byte_length(), true)?;
+        validate_xml_mapping(unit, &fact.member_source, source.byte_length(), true)?;
+        validate_xml_mapping(unit, &fact.reference_source, source.byte_length(), true)?;
+    }
+    let mut calls = BTreeMap::new();
+    let mut call_references = BTreeMap::new();
+    for call in &unit.member_calls {
+        if calls.insert(call.fact_id.as_ref(), call).is_some()
+            || call_references
+                .insert(call.reference_fact_id.as_ref(), call.fact_id.as_ref())
+                .is_some()
+            || !references.contains_key(call.reference_fact_id.as_ref())
+            || references
+                .get(call.reference_fact_id.as_ref())
+                .is_some_and(|reference| {
+                    reference.emmy_fact_id.as_str() != call.emmy_reference_fact_id.as_str()
+                })
+        {
+            return Err(RuleError::new(
+                RuleErrorCode::RuleFactReferenceGraphInvalid,
+                "XML Lua call facts do not form a unique closed reference graph",
+            )
+            .with_rule(API_EXISTS_RULE)
+            .with_scope(unit.unit_id.as_ref()));
+        }
+        validate_xml_mapping(unit, &call.callee_source, source.byte_length(), true)?;
+        validate_xml_mapping(unit, &call.call_source, source.byte_length(), true)?;
+    }
+    if unit.semantic_state == XmlLuaSemanticState::NotEvaluatedNoInlineUnits
+        && (!unit.member_references.is_empty() || !unit.member_calls.is_empty())
+    {
+        return Err(RuleError::new(
+            RuleErrorCode::RuleFactReferenceGraphInvalid,
+            "unevaluated XML Lua unit contains semantic facts",
+        )
+        .with_rule(API_EXISTS_RULE)
+        .with_scope(unit.unit_id.as_ref()));
+    }
+    Ok(())
+}
+
+fn validate_xml_mapping(
+    unit: &XmlLuaUnitAnalysis,
+    mapping: &XmlLuaMappedSpan,
+    document_bytes: u64,
+    exact_nonempty: bool,
+) -> RuleResult<()> {
+    let valid_virtual = mapping.virtual_byte_start <= mapping.virtual_byte_end
+        && mapping.virtual_byte_end <= unit.byte_length;
+    let exact = !exact_nonempty
+        || (mapping.mapping == XmlLuaDiagnosticMapping::ExactPieces
+            && mapping.virtual_byte_start < mapping.virtual_byte_end);
+    let valid_xml = !mapping.xml_spans.is_empty()
+        && mapping.xml_spans.iter().all(|span| {
+            span.byte_start <= span.byte_end
+                && span.byte_end <= document_bytes
+                && (!exact_nonempty || span.byte_start < span.byte_end)
+        });
+    if valid_virtual && exact && valid_xml {
+        Ok(())
+    } else {
+        Err(RuleError::new(
+            RuleErrorCode::RuleSourceHandleInvalid,
+            "XML Lua fact does not retain an exact bounded source mapping",
+        )
+        .with_rule(API_EXISTS_RULE)
+        .with_scope(unit.unit_id.as_ref()))
+    }
 }
 
 fn api_lookup_key(
     context: &RuleExecutionContext<'_>,
     fact: &EmmyMemberReferenceFact,
 ) -> Option<String> {
+    api_lookup_key_parts(context, fact.receiver(), fact.member())
+}
+
+fn api_lookup_key_parts(
+    context: &RuleExecutionContext<'_>,
+    receiver: &str,
+    member: &str,
+) -> Option<String> {
     if context.is_fixture_policy() {
-        return (fact.receiver() == "C_E0Fixture")
-            .then(|| format!("function:{}.{}", fact.receiver(), fact.member()));
+        return (receiver == "C_E0Fixture").then(|| format!("function:{receiver}.{member}"));
     }
-    let key = format!("function:{}.{}", fact.receiver(), fact.member());
-    let namespace_prefix = format!("function:{}.", fact.receiver());
+    let key = format!("function:{receiver}.{member}");
+    let namespace_prefix = format!("function:{receiver}.");
     let partition = context
         .reference()
         .partitions()
@@ -976,6 +1274,144 @@ fn api_finding(
     ))
 }
 
+fn xml_api_finding(
+    context: &RuleExecutionContext<'_>,
+    descriptor: &crate::RuleDescriptor,
+    input: XmlApiFindingInput<'_>,
+) -> RuleResult<RuleEvaluationRecord> {
+    let XmlApiFindingInput {
+        unit,
+        fact,
+        call,
+        entity_lookup_key,
+        lookup,
+        coverage_ids,
+    } = input;
+    let input_fact_ids = xml_api_fact_ids(fact, call);
+    let entity = EntityKey::new("function", &format!("{}.{}", fact.receiver, fact.member))
+        .map_err(core_construction)?;
+    let mut member_handles =
+        xml_project_handles(context, unit, &fact.member_source, Some(entity.clone()))?;
+    let primary = member_handles.remove(0);
+    let mut related = member_handles;
+    if let Some(call) = call {
+        related.extend(xml_project_handles(context, unit, &call.call_source, None)?);
+    }
+    let reference_handle = reference_view_handle(context)?;
+    related.push(reference_handle.clone());
+    canonicalize_sources(&mut related);
+    let mut source_handles = vec![primary.clone()];
+    source_handles.extend(related.iter().cloned());
+    canonicalize_sources(&mut source_handles);
+    let evidence = evidence_bundle(context, &source_handles, reference_handle.handle_id())?;
+    let evidence_ids = evidence
+        .iter()
+        .map(EvidenceRecord::evidence_id)
+        .collect::<Vec<_>>();
+    let root = derive_root_cause_key(&(
+        descriptor.rule_id(),
+        descriptor.rule_version(),
+        context
+            .project()
+            .snapshot()
+            .generation_context()
+            .context_id(),
+        unit.context.context_id(),
+        unit.unit_id.as_ref(),
+        fact.fact_id.as_ref(),
+        lookup.lookup_id(),
+        primary.handle_id(),
+        entity_lookup_key,
+    ))
+    .map_err(core_construction)?;
+    let draft = FindingDraft::new(
+        context
+            .project()
+            .snapshot()
+            .generation_context()
+            .context_id(),
+        descriptor.rule_id().clone(),
+        descriptor.rule_version().clone(),
+        descriptor.semantic_category().clone(),
+        descriptor.technical_severity(),
+        descriptor.rollout_policy(),
+        primary.handle_id(),
+        CoverageStatus::Complete,
+    )
+    .subject_entity_key(entity)
+    .related_source_handle_ids(related.iter().map(SourceHandle::handle_id).collect())
+    .evidence_ids(evidence_ids)
+    .required_capability_ids(descriptor.required_capabilities().to_vec())
+    .message_arguments(vec![
+        argument("authority", "authoritative_absent")?,
+        identifier_argument("entity", entity_lookup_key)?,
+        identifier_argument("member", &fact.member)?,
+        identifier_argument(
+            "profile",
+            context
+                .project()
+                .configuration()
+                .selected_profile()
+                .profile_id()
+                .as_str(),
+        )?,
+        identifier_argument("receiver", &fact.receiver)?,
+        identifier_argument("remediation_plan", "verify-current-api-contract")?,
+        argument(
+            "use_kind",
+            if call.is_some() {
+                "direct_member_call"
+            } else {
+                "member_reference"
+            },
+        )?,
+    ])
+    .map_err(core_construction)?
+    .root_causes(Some(root), None)
+    .remediation(
+        Remediation::new(RemediationClass::PlanOnly, None, None).map_err(core_construction)?,
+    );
+    let finding = draft
+        .bind(
+            context
+                .project()
+                .snapshot()
+                .generation_context()
+                .context_id(),
+            &source_handles,
+            &evidence,
+        )
+        .map_err(core_construction)?;
+    let scope_id = format!("api:xml:{}:{}", unit.unit_id, fact.fact_id);
+    let usage = RuleBudgetUsage {
+        evaluations: 1,
+        findings: 1,
+        source_handles: usize_to_u64(source_handles.len())?,
+        evidence_records: usize_to_u64(evidence.len())?,
+    };
+    let result = RuleFindingSet::build(
+        context.policy_id(),
+        RuleFindingSetInput {
+            input_fact_ids,
+            findings: vec![finding],
+            source_handles,
+            evidence_records: evidence,
+            coverage_ids,
+            reference_lookup: lookup,
+            guard_classification: None,
+            budget_usage: usage,
+        },
+    )?;
+    Ok(RuleEvaluationRecord::new(
+        descriptor.rule_id().clone(),
+        descriptor.rule_version().clone(),
+        &scope_id,
+        RuleEvaluationOutcome::Findings {
+            result: Box::new(result),
+        },
+    ))
+}
+
 #[allow(clippy::too_many_arguments)]
 fn secret_finding(
     context: &RuleExecutionContext<'_>,
@@ -1392,6 +1828,130 @@ fn capability_gate(
         gate.blocking_capabilities
             .push(capability("project.analyzer.facts.available")?);
     }
+    finalize_capability_gate(&mut gate);
+    Ok(gate)
+}
+
+fn xml_api_capability_gate(
+    context: &RuleExecutionContext<'_>,
+    unit: &XmlLuaUnitAnalysis,
+    required: &[CapabilityId],
+) -> RuleResult<CapabilityGate> {
+    let mut gate = CapabilityGate::default();
+    let facts_complete = xml_unit_facts_complete(unit);
+    for capability in required {
+        let name = capability.as_str();
+        if name.starts_with("reference.") {
+            continue;
+        }
+        if name.starts_with("project.") {
+            let records = context
+                .project()
+                .project_coverage_records()
+                .iter()
+                .filter(|record| record.capability_id() == capability)
+                .collect::<Vec<_>>();
+            if records.is_empty() {
+                gate.blockers.push(RuleBlockerKind::MissingCapability);
+                gate.blocking_capabilities.push(capability.clone());
+            } else {
+                for record in records {
+                    gate.coverage_ids.push(record.coverage_id());
+                    if record.status() != CoverageStatus::Complete
+                        || !record.conflict_ids().is_empty()
+                        || !record.truncation_refs().is_empty()
+                    {
+                        gate.blockers.push(RuleBlockerKind::FailedCapability);
+                        gate.blocking_capabilities.push(capability.clone());
+                        gate.blocking_partitions
+                            .push(BlockingPartitionRef::from_record(record));
+                    }
+                }
+            }
+            continue;
+        }
+        if !name.starts_with("emmy.") {
+            continue;
+        }
+        let complete = match name {
+            "emmy.file.parsed" | "emmy.fact.references" | "emmy.fact.calls" => facts_complete,
+            "emmy.source_coordinates.exact" => {
+                unit.member_references.iter().all(|fact| {
+                    fact.receiver_source.mapping == XmlLuaDiagnosticMapping::ExactPieces
+                        && fact.member_source.mapping == XmlLuaDiagnosticMapping::ExactPieces
+                        && fact.reference_source.mapping == XmlLuaDiagnosticMapping::ExactPieces
+                }) && unit.member_calls.iter().all(|call| {
+                    call.callee_source.mapping == XmlLuaDiagnosticMapping::ExactPieces
+                        && call.call_source.mapping == XmlLuaDiagnosticMapping::ExactPieces
+                })
+            }
+            _ => {
+                let records = context
+                    .project()
+                    .snapshot()
+                    .analyzer_binding()
+                    .capability_records()
+                    .iter()
+                    .filter(|record| {
+                        record.capability_id() == capability
+                            && record.scope() == ProjectAnalyzerCapabilityScope::Workspace
+                    })
+                    .collect::<Vec<_>>();
+                if records.is_empty() {
+                    gate.blockers.push(RuleBlockerKind::MissingCapability);
+                    gate.blocking_capabilities.push(capability.clone());
+                    continue;
+                }
+                records.iter().all(|record| {
+                    record.state() == ProjectAnalyzerCapabilityState::Complete
+                        && record.parse_error_count() == 0
+                })
+            }
+        };
+        if !complete {
+            gate.blockers.push(RuleBlockerKind::FailedCapability);
+            gate.blocking_capabilities.push(capability.clone());
+        }
+    }
+    if let Some(record) = context
+        .project()
+        .project_coverage_records()
+        .iter()
+        .find(|record| {
+            record.capability_id().as_str() == "project.analyzer.facts.available"
+                && record.partition_id().scope() == "project.xml_lua_unit"
+                && record.partition_id().key() == Some(unit.unit_id.as_ref())
+        })
+    {
+        gate.coverage_ids.push(record.coverage_id());
+        if record.status() != CoverageStatus::Complete {
+            gate.blockers.push(RuleBlockerKind::FailedCapability);
+            gate.blocking_capabilities
+                .push(capability("project.analyzer.facts.available")?);
+            gate.blocking_partitions
+                .push(BlockingPartitionRef::from_record(record));
+        }
+    } else {
+        gate.blockers.push(RuleBlockerKind::MissingCapability);
+        gate.blocking_capabilities
+            .push(capability("project.analyzer.facts.available")?);
+    }
+    finalize_capability_gate(&mut gate);
+    Ok(gate)
+}
+
+fn xml_unit_facts_complete(unit: &XmlLuaUnitAnalysis) -> bool {
+    unit.semantic_state == XmlLuaSemanticState::Complete
+        && unit.diagnostics.is_empty()
+        && unit.semantic_diagnostics.iter().all(|diagnostic| {
+            !matches!(
+                diagnostic.kind,
+                EmmySyntaxDiagnosticKind::LuaSyntax | EmmySyntaxDiagnosticKind::DocumentationSyntax
+            )
+        })
+}
+
+fn finalize_capability_gate(gate: &mut CapabilityGate) {
     gate.blockers.sort();
     gate.blockers.dedup();
     gate.blocking_capabilities.sort();
@@ -1400,7 +1960,6 @@ fn capability_gate(
     gate.blocking_partitions.dedup();
     gate.coverage_ids.sort_unstable();
     gate.coverage_ids.dedup();
-    Ok(gate)
 }
 
 fn exact_lookup<'a>(
@@ -1489,27 +2048,73 @@ fn project_handle(
     context: &RuleExecutionContext<'_>,
     file: &ProjectFileRecord,
     span: SourceSpan,
-    entity: Option<wow_core::EntityKey>,
+    entity: Option<EntityKey>,
 ) -> RuleResult<SourceHandle> {
-    let base = file.source_handle_base();
-    let mut builder = SourceHandleBuilder::new(
-        base.origin_kind(),
-        base.origin_id(),
-        base.revision(),
-        base.path().as_str(),
-        span,
-        *base.content_digest(),
-    )
-    .project_generation(context.project().project_generation());
-    if let Some(entity) = entity {
-        builder = builder.entity_key(entity);
+    context
+        .project()
+        .source_handle(file.relative_path().as_str(), span, entity)
+        .map_err(|error| {
+            RuleError::new(
+                RuleErrorCode::RuleSourceHandleInvalid,
+                format!("project source handle construction failed: {error}"),
+            )
+        })
+}
+
+fn xml_project_handles(
+    context: &RuleExecutionContext<'_>,
+    unit: &XmlLuaUnitAnalysis,
+    mapping: &XmlLuaMappedSpan,
+    entity: Option<EntityKey>,
+) -> RuleResult<Vec<SourceHandle>> {
+    let source = context
+        .project()
+        .xml_document_source(&unit.document)
+        .map_err(|error| {
+            RuleError::new(
+                RuleErrorCode::RuleSourceHandleInvalid,
+                format!("XML source artifact cannot be resolved: {error}"),
+            )
+            .with_rule(API_EXISTS_RULE)
+            .with_scope(unit.unit_id.as_ref())
+        })?
+        .ok_or_else(|| {
+            RuleError::new(
+                RuleErrorCode::RuleSourceHandleInvalid,
+                "XML source artifact is not present in the project generation",
+            )
+            .with_rule(API_EXISTS_RULE)
+            .with_scope(unit.unit_id.as_ref())
+        })?;
+    validate_xml_mapping(unit, mapping, source.byte_length(), true)?;
+    let mut handles = Vec::with_capacity(mapping.xml_spans.len());
+    for (index, piece) in mapping.xml_spans.iter().enumerate() {
+        let span =
+            SourceSpan::byte_range(piece.byte_start, piece.byte_end).map_err(core_construction)?;
+        let handle_entity = if index == 0 { entity.clone() } else { None };
+        handles.push(
+            context
+                .project()
+                .source_handle(&unit.document, span, handle_entity)
+                .map_err(|error| {
+                    RuleError::new(
+                        RuleErrorCode::RuleSourceHandleInvalid,
+                        format!("XML project source handle construction failed: {error}"),
+                    )
+                    .with_rule(API_EXISTS_RULE)
+                    .with_scope(unit.unit_id.as_ref())
+                })?,
+        );
     }
-    builder.build().map_err(|error| {
-        RuleError::new(
+    if handles.is_empty() {
+        return Err(RuleError::new(
             RuleErrorCode::RuleSourceHandleInvalid,
-            format!("project source handle construction failed: {error}"),
+            "XML source mapping did not produce a primary source handle",
         )
-    })
+        .with_rule(API_EXISTS_RULE)
+        .with_scope(unit.unit_id.as_ref()));
+    }
+    Ok(handles)
 }
 
 fn reference_view_handle(context: &RuleExecutionContext<'_>) -> RuleResult<SourceHandle> {
@@ -1628,6 +2233,17 @@ fn api_fact_ids(
     let mut ids = vec![fact.fact_id().into()];
     if let Some(call) = call {
         ids.push(call.fact_id().into());
+    }
+    ids
+}
+
+fn xml_api_fact_ids(
+    fact: &XmlLuaMemberReference,
+    call: Option<&XmlLuaMemberCall>,
+) -> Vec<Box<str>> {
+    let mut ids = vec![fact.fact_id.clone()];
+    if let Some(call) = call {
+        ids.push(call.fact_id.clone());
     }
     ids
 }

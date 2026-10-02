@@ -46,6 +46,7 @@ pub use registry::{
     ProjectFileRecord, ProjectSourceOrigin, ProjectSourceOriginKind, ProjectSourceRegistry,
 };
 pub use snapshot::{
-    ProjectDeferredCapability, ProjectPublicationStatus, ProjectSnapshot, ProjectView,
+    ProjectDeferredCapability, ProjectPublicationStatus, ProjectSnapshot, ProjectSourceArtifact,
+    ProjectView,
 };
 pub use update::{ProjectFileOperation, ProjectUpdateOutcome, ProjectUpdateRequest};

@@ -3,19 +3,21 @@ use std::sync::Arc;
 use serde::Serialize;
 use wow_core::{
     CanonicalResult, CapabilityId, ContentDigest, CoverageId, CoveragePartitionId, CoverageRecord,
-    CoverageStatus, GenerationContext, GenerationContextBuilder, MessageCode, NotEvaluatedId,
-    NotEvaluatedRecord, ProducerId, ProducerVersionEntry, ProjectGenerationId, ToolVersion,
+    CoverageStatus, EntityKey, GenerationContext, GenerationContextBuilder, MessageCode,
+    NormalizedSourcePath, NotEvaluatedId, NotEvaluatedRecord, ProducerId, ProducerVersionEntry,
+    ProjectGenerationId, SourceContent, SourceHandle, SourceHandleBuilder, SourceOriginKind,
+    SourceSpan, SourceSpanKind, ToolVersion,
 };
 use wow_emmy::{
     EmmyLocalBindingFact, EmmyLocalFlowReport, EmmyMemberCallReport, EmmyMemberReferenceFact,
-    EmmySyntaxDiagnostic, EmmySyntaxReport,
+    EmmySyntaxDiagnostic, EmmySyntaxDiagnosticKind, EmmySyntaxReport,
 };
 
 use crate::configuration::PROJECT_SNAPSHOT_SCHEMA_VERSION;
 use crate::identity::{canonical_digest, canonical_id};
 use crate::{
     ProjectAnalyzerBinding, ProjectConfiguration, ProjectError, ProjectErrorCode, ProjectFileId,
-    ProjectFileRecord, ProjectGenerationCandidate, ProjectPhase, ProjectResult,
+    ProjectFileRecord, ProjectGenerationCandidate, ProjectKind, ProjectPhase, ProjectResult,
     ProjectSourceRegistry,
 };
 
@@ -312,6 +314,32 @@ pub struct ProjectView {
     snapshot: Arc<ProjectSnapshot>,
 }
 
+/// Exact captured source identity available to project consumers. This includes
+/// physical Main files and retained TOC/XML sources, but never exposes source text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectSourceArtifact {
+    path: NormalizedSourcePath,
+    content_digest: ContentDigest<SourceContent>,
+    byte_length: u64,
+}
+
+impl ProjectSourceArtifact {
+    #[must_use]
+    pub const fn path(&self) -> &NormalizedSourcePath {
+        &self.path
+    }
+
+    #[must_use]
+    pub const fn content_digest(&self) -> ContentDigest<SourceContent> {
+        self.content_digest
+    }
+
+    #[must_use]
+    pub const fn byte_length(&self) -> u64 {
+        self.byte_length
+    }
+}
+
 impl ProjectView {
     #[must_use]
     pub fn snapshot(&self) -> &Arc<ProjectSnapshot> {
@@ -345,6 +373,161 @@ impl ProjectView {
 
     pub fn file_by_path(&self, path: &str) -> ProjectResult<Option<&ProjectFileRecord>> {
         self.snapshot.source_registry().file_by_path(path)
+    }
+
+    /// Resolves one exact source artifact from the immutable project generation.
+    /// Package sources use their package-qualified project paths.
+    pub fn source_artifact(&self, path: &str) -> ProjectResult<Option<ProjectSourceArtifact>> {
+        let path = path.parse::<NormalizedSourcePath>().map_err(|source| {
+            ProjectError::new(
+                ProjectErrorCode::InvalidFilePath,
+                ProjectPhase::View,
+                format!("captured project source path is invalid: {source}"),
+            )
+            .with_relative_path(path)
+        })?;
+        let mut artifact = self
+            .file_by_path(path.as_str())?
+            .map(|file| ProjectSourceArtifact {
+                path: path.clone(),
+                content_digest: file.content_digest(),
+                byte_length: file.byte_length(),
+            });
+        let mut admit = |content_digest, byte_length| -> ProjectResult<()> {
+            let candidate = ProjectSourceArtifact {
+                path: path.clone(),
+                content_digest,
+                byte_length,
+            };
+            if artifact
+                .as_ref()
+                .is_some_and(|current| current != &candidate)
+            {
+                return Err(ProjectError::new(
+                    ProjectErrorCode::SourceRegistryInvalid,
+                    ProjectPhase::View,
+                    "captured source path resolves to conflicting immutable artifacts",
+                )
+                .with_relative_path(path.as_str()));
+            }
+            artifact = Some(candidate);
+            Ok(())
+        };
+        if let Some(plan) = self.configuration().load_plan()
+            && let Some(source) = plan
+                .sources()
+                .iter()
+                .find(|source| source.path == path.as_str())
+        {
+            admit(source.content_digest, source.byte_length)?;
+        }
+        if let Some(packages) = self.configuration().package_load_plan() {
+            for package in packages.packages() {
+                let plan = packages.package_plan(&package.package).ok_or_else(|| {
+                    source_view_error(path.as_str(), "package receipt is missing")
+                })?;
+                for source in plan.sources() {
+                    let qualified = packages
+                        .source_path(&package.package, &source.path)
+                        .ok_or_else(|| {
+                            source_view_error(path.as_str(), "package source identity is missing")
+                        })?;
+                    if qualified == path.as_str() {
+                        admit(source.content_digest, source.byte_length)?;
+                    }
+                }
+            }
+        }
+        Ok(artifact)
+    }
+
+    /// Resolves a captured XML document, excluding arbitrary retained TOC/Lua sources.
+    pub fn xml_document_source(&self, path: &str) -> ProjectResult<Option<ProjectSourceArtifact>> {
+        let local = self
+            .configuration()
+            .load_plan()
+            .is_some_and(|plan| plan.xml_documents().contains_key(path));
+        let mut package = false;
+        if let Some(packages) = self.configuration().package_load_plan() {
+            for node in packages.packages() {
+                let plan = packages
+                    .package_plan(&node.package)
+                    .ok_or_else(|| source_view_error(path, "package receipt is missing"))?;
+                for local_path in plan.xml_documents().keys() {
+                    if packages
+                        .source_path(&node.package, local_path)
+                        .is_some_and(|qualified| qualified == path)
+                    {
+                        package = true;
+                    }
+                }
+            }
+        }
+        if !local && !package {
+            return Ok(None);
+        }
+        self.source_artifact(path)
+    }
+
+    /// Constructs a generation-bound source handle for a physical or retained
+    /// source artifact after validating the exact span against its byte length.
+    pub fn source_handle(
+        &self,
+        path: &str,
+        span: SourceSpan,
+        entity: Option<EntityKey>,
+    ) -> ProjectResult<SourceHandle> {
+        span.validate().map_err(|source| {
+            ProjectError::new(
+                ProjectErrorCode::SourceHandleInvalid,
+                ProjectPhase::View,
+                format!("captured project source span is invalid: {source}"),
+            )
+            .with_relative_path(path)
+        })?;
+        let source = self.source_artifact(path)?.ok_or_else(|| {
+            ProjectError::new(
+                ProjectErrorCode::FileNotPresent,
+                ProjectPhase::View,
+                "captured project source is not present in this generation",
+            )
+            .with_relative_path(path)
+        })?;
+        if span.kind() == SourceSpanKind::ByteRange
+            && span.byte_end().is_none_or(|end| end > source.byte_length())
+        {
+            return Err(ProjectError::new(
+                ProjectErrorCode::SourceHandleInvalid,
+                ProjectPhase::View,
+                "captured project source span exceeds the immutable artifact",
+            )
+            .with_relative_path(path));
+        }
+        let origin = match self.configuration().project_kind() {
+            ProjectKind::Fixture => SourceOriginKind::Fixture,
+            ProjectKind::Repository => SourceOriginKind::GeneratedArtifact,
+        };
+        let mut builder = SourceHandleBuilder::new(
+            origin,
+            self.configuration().source_origin_id().as_str(),
+            self.project_generation().canonical(),
+            source.path().as_str(),
+            span,
+            source.content_digest(),
+        )
+        .reference_generation(self.configuration().reference_generation())
+        .project_generation(self.project_generation());
+        if let Some(entity) = entity {
+            builder = builder.entity_key(entity);
+        }
+        builder.build().map_err(|source| {
+            ProjectError::new(
+                ProjectErrorCode::SourceHandleInvalid,
+                ProjectPhase::View,
+                format!("captured project source handle construction failed: {source}"),
+            )
+            .with_relative_path(path)
+        })
     }
 
     #[must_use]
@@ -418,6 +601,15 @@ impl ProjectView {
     pub fn deferred_capabilities(&self) -> &[ProjectDeferredCapability] {
         self.snapshot.deferred_capabilities()
     }
+}
+
+fn source_view_error(path: &str, message: &str) -> ProjectError {
+    ProjectError::new(
+        ProjectErrorCode::SourceRegistryInvalid,
+        ProjectPhase::View,
+        message,
+    )
+    .with_relative_path(path)
 }
 
 fn build_project_coverage(
@@ -514,6 +706,20 @@ fn build_project_coverage(
             producer_version,
         )?);
     }
+    if let Some(report) = analyzer.xml_lua_analysis() {
+        for unit in report.units() {
+            if xml_unit_facts_complete(unit) {
+                records.push(complete_coverage(
+                    context,
+                    "project.analyzer.facts.available",
+                    CoveragePartitionId::new("project.xml_lua_unit", Some(unit.unit_id.as_ref()))
+                        .map_err(core_snapshot_error)?,
+                    producer_id,
+                    producer_version,
+                )?);
+            }
+        }
+    }
     records.sort_by(|left, right| {
         left.capability_id()
             .cmp(right.capability_id())
@@ -598,6 +804,17 @@ fn coverage_for_state(
         Vec::new(),
     )
     .map_err(core_snapshot_error)
+}
+
+fn xml_unit_facts_complete(unit: &crate::xml_lua::XmlLuaUnitAnalysis) -> bool {
+    unit.semantic_state == crate::xml_lua::XmlLuaSemanticState::Complete
+        && unit.diagnostics.is_empty()
+        && unit.semantic_diagnostics.iter().all(|diagnostic| {
+            !matches!(
+                diagnostic.kind,
+                EmmySyntaxDiagnosticKind::LuaSyntax | EmmySyntaxDiagnosticKind::DocumentationSyntax
+            )
+        })
 }
 
 fn build_deferred_capabilities(

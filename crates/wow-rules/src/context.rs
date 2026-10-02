@@ -1,7 +1,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::Serialize;
-use wow_core::{ProfileId, ProfileKind};
+use wow_core::{NormalizedSourcePath, ProfileId, ProfileKind};
 use wow_project::{ProjectFileId, ProjectView};
 use wow_reference::ReferenceView;
 
@@ -365,14 +365,18 @@ impl RuleExecutionBudget {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct RuleScope {
+    all_sources: bool,
     file_ids: Vec<ProjectFileId>,
+    xml_documents: Vec<NormalizedSourcePath>,
 }
 
 impl RuleScope {
     #[must_use]
     pub const fn all() -> Self {
         Self {
+            all_sources: true,
             file_ids: Vec::new(),
+            xml_documents: Vec::new(),
         }
     }
 
@@ -380,7 +384,28 @@ impl RuleScope {
     pub fn files(mut file_ids: Vec<ProjectFileId>) -> Self {
         file_ids.sort();
         file_ids.dedup();
-        Self { file_ids }
+        let all_sources = file_ids.is_empty();
+        Self {
+            all_sources,
+            file_ids,
+            xml_documents: Vec::new(),
+        }
+    }
+
+    #[must_use]
+    pub fn sources(
+        mut file_ids: Vec<ProjectFileId>,
+        mut xml_documents: Vec<NormalizedSourcePath>,
+    ) -> Self {
+        file_ids.sort();
+        file_ids.dedup();
+        xml_documents.sort();
+        xml_documents.dedup();
+        Self {
+            all_sources: false,
+            file_ids,
+            xml_documents,
+        }
     }
 
     #[must_use]
@@ -388,8 +413,25 @@ impl RuleScope {
         &self.file_ids
     }
 
+    #[must_use]
+    pub fn xml_documents(&self) -> &[NormalizedSourcePath] {
+        &self.xml_documents
+    }
+
     pub(crate) fn contains(&self, file_id: &ProjectFileId) -> bool {
-        self.file_ids.is_empty() || self.file_ids.binary_search(file_id).is_ok()
+        self.all_sources || self.file_ids.binary_search(file_id).is_ok()
+    }
+
+    pub(crate) fn contains_xml_document(&self, path: &str) -> bool {
+        self.all_sources
+            || self
+                .xml_documents
+                .binary_search_by(|candidate| candidate.as_str().cmp(path))
+                .is_ok()
+    }
+
+    pub(crate) const fn selects_all(&self) -> bool {
+        self.all_sources
     }
 }
 
@@ -542,6 +584,12 @@ impl<'a> RuleExecutionContext<'a> {
                 "project analyzer report identities are incoherent",
             ));
         }
+        if !scope.selects_all() && scope.file_ids().is_empty() && scope.xml_documents().is_empty() {
+            return Err(RuleError::new(
+                RuleErrorCode::RuleExecutionContextInvalid,
+                "rule scope must select at least one physical or XML source",
+            ));
+        }
         for file_id in scope.file_ids() {
             if self.project.file_by_id(file_id).is_none() {
                 return Err(RuleError::new(
@@ -549,6 +597,26 @@ impl<'a> RuleExecutionContext<'a> {
                     "rule scope contains a file outside the project snapshot",
                 )
                 .with_scope(file_id.as_str()));
+            }
+        }
+        for document in scope.xml_documents() {
+            let present = self
+                .project
+                .xml_document_source(document.as_str())
+                .map_err(|error| {
+                    RuleError::new(
+                        RuleErrorCode::RuleExecutionContextInvalid,
+                        format!("rule XML scope cannot be resolved: {error}"),
+                    )
+                    .with_scope(document.as_str())
+                })?
+                .is_some();
+            if !present {
+                return Err(RuleError::new(
+                    RuleErrorCode::RuleExecutionContextInvalid,
+                    "rule scope contains an XML document outside the project snapshot",
+                )
+                .with_scope(document.as_str()));
             }
         }
         let expected_version = RULE_VERSION

@@ -503,10 +503,24 @@ pub(super) fn check_context(
             .partitions()
             .iter()
             .any(|partition| partition.id() == wow_reference::native_view::NATIVE_API_PARTITION);
-    let report = if !files.is_empty() && (fixture_rules || native_rules) {
+    let xml_rule_semantics = xml_report.is_some_and(|report| {
+        report
+            .units()
+            .iter()
+            .any(|unit| resolved.xml_documents.contains(&unit.document))
+    });
+    let report = if (!files.is_empty() || xml_rule_semantics) && (fixture_rules || native_rules) {
         let budget = RuleExecutionBudget::new(65_536, 65_536, 262_144, 262_144, 16 * 1024 * 1024)
             .map_err(|_| owner_error("rule budget failed"))?;
-        let scope = RuleScope::files(files.iter().map(|file| file.file_id().clone()).collect());
+        let xml_documents = resolved
+            .xml_documents
+            .iter()
+            .map(|path| path.parse().map_err(|_| invalid_scope()))
+            .collect::<ServiceResult<Vec<wow_core::NormalizedSourcePath>>>()?;
+        let scope = RuleScope::sources(
+            files.iter().map(|file| file.file_id().clone()).collect(),
+            xml_documents,
+        );
         let report = if fixture_rules {
             let policy =
                 RuleFixturePolicy::e0().map_err(|_| owner_error("fixture rule policy failed"))?;
@@ -534,8 +548,9 @@ pub(super) fn check_context(
         }
         Some(report)
     } else {
-        // Inline syntax has no semantic facts; non-native release profiles have no admitted rule policy.
-        let (reason, capability) = if files.is_empty() {
+        // XML without an admitted virtual semantic unit and non-native release
+        // profiles remain explicit rather than manufacturing a rule result.
+        let (reason, capability) = if files.is_empty() && !xml_rule_semantics {
             (
                 "xml_scope_has_no_rule_semantics",
                 "project.xml.inline_lua.semantic",
@@ -660,8 +675,8 @@ fn exact_location(
     digest: &str,
     span: wow_core::SourceSpan,
 ) -> ServiceResult<ExactSourceLocation> {
-    let file = project
-        .file_by_path(path)
+    let source = project
+        .source_artifact(path)
         .map_err(|_| invalid_scope())?
         .ok_or_else(invalid_scope)?;
     let start = span
@@ -670,7 +685,7 @@ fn exact_location(
     let end = span
         .byte_end()
         .ok_or_else(|| owner_error("owner finding has no exact byte range"))?;
-    if file.content_digest().to_string() != digest || end > file.byte_length() {
+    if source.content_digest().to_string() != digest || end > source.byte_length() {
         return Err(owner_error(
             "finding coordinates do not match the exact source artifact",
         ));
