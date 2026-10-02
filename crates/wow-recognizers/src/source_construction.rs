@@ -2,7 +2,7 @@
 //! Source text is never reparsed here. All keys, arguments, spans and support come
 //! from the generation-bound Emmy owner report.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::Serialize;
@@ -219,7 +219,7 @@ pub fn recognize_source_construction(
             };
             fields.insert(
                 format!("{prefix}_kind").into_boxed_str(),
-                RecognizerFactValue::Tag(kind.into()),
+                RecognizerFactValue::String(kind.into()),
             );
             if let Some(value) = value {
                 fields.insert(format!("{prefix}_value").into_boxed_str(), value);
@@ -412,13 +412,16 @@ pub fn recognize_source_construction(
         })
         .collect();
 
-    let graph_coverage = input
+    let relation_families = input
         .owner
         .registry()
         .relation_kinds()
         .iter()
-        .map(|definition| {
-            let relation = definition.relation();
+        .map(|definition| definition.relation())
+        .collect::<BTreeSet<_>>();
+    let graph_coverage = relation_families
+        .into_iter()
+        .map(|relation| {
             let state = if relation == GraphRelationKind::FactoryCreates {
                 GraphCoverageState::Partial
             } else {
