@@ -1,0 +1,103 @@
+name: W10 XML rule documentation checkpoint
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/w10-rule-docs-checkpoint.yml
+permissions:
+  contents: write
+concurrency:
+  group: w10-rule-docs-checkpoint
+  cancel-in-progress: false
+jobs:
+  checkpoint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      BASE_COMMIT: 260cf430a22fdc3f86da33a9c363946cc31aca00
+      BASE_TREE: df3db6e01a804f44f57cbfe11f1a15cec1face60
+      TRIGGER_PARENT: 260cf430a22fdc3f86da33a9c363946cc31aca00
+      PATCH_SHA256: 7830efc228485049dd6d26c7be754c072340410b80e4db2f56db7166eb0c9297
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Admit exact documentation patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse "${GITHUB_SHA}^")" = "$TRIGGER_PARENT"
+          xz -t .ci/w10-rule-docs.patch.xz
+          xz -dc .ci/w10-rule-docs.patch.xz > "$RUNNER_TEMP/w10-docs.patch"
+          printf '%s  %s\n' "$PATCH_SHA256" "$RUNNER_TEMP/w10-docs.patch" | sha256sum -c -
+          git rm -- \
+            .ci/w10-rule-docs.patch.xz \
+            .github/workflows/w10-rule-docs-checkpoint.yml
+          test "$(git write-tree)" = "$BASE_TREE"
+          git apply --index "$RUNNER_TEMP/w10-docs.patch"
+      - name: Install stable Rust
+        run: rustup toolchain install stable --profile minimal --component rustfmt
+      - name: Preserve source formatting
+        run: cargo +stable fmt --all -- --check
+      - name: Repository documentation policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo +stable xtask check 2>&1 | tee "$RUNNER_TEMP/policy.log"
+      - name: Exact documentation boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add --all
+          git diff --cached --check
+          git diff --cached --name-only "$BASE_COMMIT" | sort > "$RUNNER_TEMP/changed-files"
+          cat > "$RUNNER_TEMP/expected-files" <<'FILES'
+          apps/wow/XML_ANALYSIS.md
+          crates/wow-rules/API_EXISTS_RULE.md
+          crates/wow-rules/DATA_MODEL.md
+          crates/wow-rules/README.md
+          docs/IMPLEMENTATION_STATUS.md
+          docs/PROJECT_COMPLETION_MATRIX.md
+          FILES
+          sed -i 's/^          //' "$RUNNER_TEMP/expected-files"
+          sort -o "$RUNNER_TEMP/expected-files" "$RUNNER_TEMP/expected-files"
+          diff -u "$RUNNER_TEMP/expected-files" "$RUNNER_TEMP/changed-files"
+          grep -Fq '260cf430a22fdc3f86da33a9c363946cc31aca00' docs/IMPLEMENTATION_STATUS.md
+          grep -Fq '36966297105' docs/IMPLEMENTATION_STATUS.md
+          grep -Fq 'exact_xml_script_site' apps/wow/XML_ANALYSIS.md
+      - name: Retain exact checked documentation tree
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/checkpoint"
+          git add --all
+          git write-tree > "$RUNNER_TEMP/checkpoint/CHECKED_TREE"
+          git archive --format=tar -o "$RUNNER_TEMP/checkpoint/checked-source.tar" "$(cat "$RUNNER_TEMP/checkpoint/CHECKED_TREE")"
+          git diff --cached --binary "$BASE_COMMIT" > "$RUNNER_TEMP/checkpoint/checked.patch"
+          printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/checkpoint/STAGING_SHA"
+          for file in policy.log changed-files expected-files; do
+            if test -f "$RUNNER_TEMP/$file"; then
+              cp "$RUNNER_TEMP/$file" "$RUNNER_TEMP/checkpoint/$file"
+            fi
+          done
+          (cd "$RUNNER_TEMP/checkpoint" && sha256sum checked-source.tar checked.patch > SHA256SUMS)
+      - name: Upload documentation evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: w10-rule-docs-${{ github.run_id }}
+          path: ${{ runner.temp }}/checkpoint
+          retention-days: 3
+          if-no-files-found: error
+      - name: Fast-forward exact checked documentation to main
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$GITHUB_SHA"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'docs(w10): record exact XML rule authority [skip ci]'
+          git push origin HEAD:main
