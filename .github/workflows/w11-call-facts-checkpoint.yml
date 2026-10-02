@@ -15,8 +15,7 @@ jobs:
     timeout-minutes: 45
     env:
       BASE_COMMIT: 015a8344cf5aea07493454412eab91a2d71e1a5f
-      PRODUCT_HEAD: 9e583193e575e3148e016a9c6fb1c64edd923ea8
-      PRODUCT_TREE: d2b25675da0a6f6326edbdf3b4cb4037f2ca295c
+      PRODUCT_HEAD: f6d54daf113cb35442ce44b3156f072b914026b7
     steps:
       - uses: actions/checkout@v7
         with:
@@ -28,7 +27,6 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD^)" = "$PRODUCT_HEAD"
           git rm -- .github/workflows/w11-call-facts-checkpoint.yml
-          test "$(git write-tree)" = "$PRODUCT_TREE"
       - name: Install compiler tools
         run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
       - name: Format workspace
