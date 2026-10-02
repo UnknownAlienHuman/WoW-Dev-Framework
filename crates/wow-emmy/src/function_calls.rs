@@ -16,7 +16,7 @@ use crate::references::{
 };
 use crate::{EmmyBackendIdentity, LuaWorkspaceFile, LuaWorkspaceSnapshot};
 
-pub const FUNCTION_CALL_PROFILE: &str = "wow-emmy/function-call-facts/5";
+pub const FUNCTION_CALL_PROFILE: &str = "wow-emmy/function-call-facts/6";
 // Existing callable/call occurrence keys keep their original recipe. Added
 // normalized call arguments/callable keys change report identity, not old occurrence keys.
 const OCCURRENCE_PROFILE: &str = "wow-emmy/function-call-facts/1";
@@ -98,6 +98,8 @@ pub struct SourceCallArgument {
     literal: Option<SourceCallLiteral>,
     #[serde(skip_serializing_if = "Option::is_none")]
     reference_key: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reference_target: Option<SymbolTarget>,
 }
 impl SourceCallArgument {
     pub const fn span(&self) -> SourceSpan {
@@ -108,6 +110,9 @@ impl SourceCallArgument {
     }
     pub fn reference_key(&self) -> Option<&str> {
         self.reference_key.as_deref()
+    }
+    pub fn reference_target(&self) -> Option<&SymbolTarget> {
+        self.reference_target.as_ref()
     }
 }
 
@@ -312,9 +317,25 @@ impl FunctionCallReport {
                     .reference_key
                     .as_ref()
                     .is_some_and(|key| !crate::bindings::supported_path(key))
-                    || argument.literal.is_some() && argument.reference_key.is_some()
+                    || argument.reference_key.is_some() != argument.reference_target.is_some()
+                    || argument.literal.is_some()
+                        && (argument.reference_key.is_some() || argument.reference_target.is_some())
                 {
                     return Err(invalid());
+                }
+                if let Some(target) = &argument.reference_target {
+                    target.span.validate().map_err(|_| invalid())?;
+                    let role_valid = target.role == "main"
+                        && target.workspace_id == self.main_snapshot_id
+                        || target.role == "library"
+                            && self.library_snapshot_ids.contains(&target.workspace_id);
+                    if !role_valid
+                        || target.path.is_empty()
+                        || target.content_digest.is_empty()
+                        || target.span.byte_start() == target.span.byte_end()
+                    {
+                        return Err(invalid());
+                    }
                 }
             }
             if let SourceCallTarget::MainFunction { function_id } = &call.target
@@ -332,6 +353,30 @@ impl FunctionCallReport {
                 || function.content_digest() != access.content_digest()
             {
                 return Err(invalid());
+            }
+        }
+        for call in &self.calls {
+            for argument in &call.arguments {
+                let Some(expected) = argument
+                    .reference_key
+                    .as_ref()
+                    .zip(argument.reference_target.as_ref())
+                else {
+                    continue;
+                };
+                let mut observed = self
+                    .global_accesses
+                    .iter()
+                    .filter(|access| {
+                        access.path() == call.path
+                            && access.function_id() == call.caller_function_id
+                            && access.span() == argument.span
+                    })
+                    .filter_map(exact_access_reference)
+                    .filter(|actual| actual.0 == *expected.0 && actual.1 == *expected.1);
+                if observed.next().is_none() || observed.next().is_some() {
+                    return Err(invalid());
+                }
             }
         }
         if self.named_targets.len() > 4096
@@ -391,6 +436,15 @@ fn exact_callable_access_key(access: &crate::global_access::SourceGlobalAccess) 
         key.push_str(component);
     }
     crate::bindings::supported_path(&key).then_some(key)
+}
+
+fn exact_access_reference(
+    access: &crate::global_access::SourceGlobalAccess,
+) -> Option<(String, SymbolTarget)> {
+    Some((
+        exact_callable_access_key(access)?,
+        access.declaration()?.clone(),
+    ))
 }
 
 fn call_literal(mut expr: LuaExpr) -> Option<SourceCallLiteral> {
@@ -697,6 +751,7 @@ pub(crate) fn collect(
                                 span,
                                 literal: call_literal(argument),
                                 reference_key: None,
+                                reference_target: None,
                             })
                         })
                         .collect::<EmmyMemberCallResult<Vec<_>>>()
@@ -766,8 +821,11 @@ pub(crate) fn collect(
                         && access.function_id() == call.caller_function_id
                         && access.span() == argument.span
                 })
-                .filter_map(exact_callable_access_key);
-            argument.reference_key = references.next();
+                .filter_map(exact_access_reference);
+            if let Some((key, target)) = references.next() {
+                argument.reference_key = Some(key);
+                argument.reference_target = Some(target);
+            }
             if references.next().is_some() {
                 return Err(invalid());
             }

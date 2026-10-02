@@ -140,14 +140,45 @@ fn target<'a>(
     }
 }
 
-fn add_declaration(
+pub(super) fn add_declaration(
     project: &ProjectView,
     target: &SymbolTarget,
     file_ids: &BTreeMap<&str, String>,
     provenance: &mut ProjectGraphProvenance,
     text_bytes: &mut usize,
-    output: &mut MixinProposals,
+    entities: &mut Vec<GraphEntityProposal>,
+    relations: &mut Vec<GraphRelationProposal>,
 ) -> ProjectResult<usize> {
+    let analyzer = project.snapshot().analyzer_binding();
+    if target.role != "main" || target.workspace_id != analyzer.main_workspace().snapshot_id() {
+        return Err(invalid());
+    }
+    target.span.validate().map_err(|_| invalid())?;
+    let analyzer_file = analyzer
+        .main_workspace()
+        .file(&target.path)
+        .ok_or_else(invalid)?;
+    if analyzer_file.content_sha256() != target.content_digest {
+        return Err(invalid());
+    }
+    let (Some(start), Some(end)) = (target.span.byte_start(), target.span.byte_end()) else {
+        return Err(invalid());
+    };
+    let (start_usize, end_usize) = (
+        usize::try_from(start).map_err(|_| invalid())?,
+        usize::try_from(end).map_err(|_| invalid())?,
+    );
+    if start_usize == end_usize || analyzer_file.text().get(start_usize..end_usize).is_none() {
+        return Err(invalid());
+    }
+    if let Some((index, _)) = provenance
+        .lua_declarations
+        .iter()
+        .enumerate()
+        .find(|(_, declaration)| declaration.path == target.path && declaration.span == target.span)
+    {
+        return Ok(index);
+    }
     if provenance.lua_declarations.len() >= MAX_DECLARATIONS {
         return Err(exhausted());
     }
@@ -171,7 +202,7 @@ fn add_declaration(
     let start =
         i64::try_from(target.span.byte_start().ok_or_else(invalid)?).map_err(|_| invalid())?;
     let end = i64::try_from(target.span.byte_end().ok_or_else(invalid)?).map_err(|_| invalid())?;
-    output.entities.push(
+    entities.push(
         GraphEntityProposal::new(
             proposal_id.as_str(),
             "lua_source_declaration",
@@ -190,7 +221,7 @@ fn add_declaration(
         )
         .map_err(|_| invalid())?,
     );
-    output.relations.push(
+    relations.push(
         GraphRelationProposal::new(
             ownership_proposal_id.as_str(),
             "source_declaration_owns",
@@ -296,7 +327,8 @@ pub(super) fn project(
                             file_ids,
                             provenance,
                             text_bytes,
-                            &mut output,
+                            &mut output.entities,
+                            &mut output.relations,
                         )?;
                         lua_ids.insert(key, index);
                         index

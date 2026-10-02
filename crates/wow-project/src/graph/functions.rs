@@ -171,6 +171,29 @@ pub(super) fn project(
             source_handle_id: handle,
             evidence_id: evidence,
         });
+        for argument in call.arguments() {
+            let Some(target) = argument.reference_target() else {
+                continue;
+            };
+            match target.role {
+                "main" => {
+                    mixins::add_declaration(
+                        project,
+                        target,
+                        file_ids,
+                        provenance,
+                        text_bytes,
+                        &mut result.entities,
+                        &mut result.relations,
+                    )?;
+                }
+                "library"
+                    if analyzer
+                        .library_snapshot_ids()
+                        .any(|snapshot| snapshot == target.workspace_id) => {}
+                _ => return Err(invalid()),
+            }
+        }
     }
     provenance.function_call_report = Some(report.clone());
     Ok(result)
