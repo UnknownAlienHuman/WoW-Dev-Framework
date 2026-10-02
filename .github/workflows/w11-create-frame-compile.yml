@@ -1,4 +1,5 @@
 name: W11 CreateFrame compile gate
+# retry after rustfmt normalization
 on:
   push:
     branches: [main]
