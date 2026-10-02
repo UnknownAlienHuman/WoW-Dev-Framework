@@ -1,0 +1,348 @@
+name: W11 mixin argument facts checkpoint
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/w11-mixin-facts-checkpoint.yml
+permissions:
+  contents: write
+concurrency:
+  group: w11-mixin-facts-checkpoint
+  cancel-in-progress: false
+jobs:
+  checkpoint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      BASE_COMMIT: 4c98271686a34d7c8de5e0a5814d1f8a85a0bcb2
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Apply exact argument-target seam
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$BASE_COMMIT"
+          git rm -- .github/workflows/w11-mixin-facts-checkpoint.yml
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace(path: str, old: str, new: str) -> None:
+              p = Path(path)
+              text = p.read_text()
+              if old not in text:
+                  raise SystemExit(f"missing patch marker in {path}: {old[:120]!r}")
+              p.write_text(text.replace(old, new, 1))
+
+          path = "crates/wow-emmy/src/function_calls.rs"
+          replace(path,
+              'pub const FUNCTION_CALL_PROFILE: &str = "wow-emmy/function-call-facts/5";',
+              'pub const FUNCTION_CALL_PROFILE: &str = "wow-emmy/function-call-facts/6";')
+          replace(path,
+              '''    #[serde(skip_serializing_if = "Option::is_none")]
+    reference_key: Option<String>,
+}''',
+              '''    #[serde(skip_serializing_if = "Option::is_none")]
+    reference_key: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reference_target: Option<SymbolTarget>,
+}''')
+          replace(path,
+              '''    pub fn reference_key(&self) -> Option<&str> {
+        self.reference_key.as_deref()
+    }
+}''',
+              '''    pub fn reference_key(&self) -> Option<&str> {
+        self.reference_key.as_deref()
+    }
+    pub fn reference_target(&self) -> Option<&SymbolTarget> {
+        self.reference_target.as_ref()
+    }
+}''')
+          replace(path,
+              '''                                literal: call_literal(argument),
+                                reference_key: None,
+                            })''',
+              '''                                literal: call_literal(argument),
+                                reference_key: None,
+                                reference_target: None,
+                            })''')
+          replace(path,
+              '''                if argument
+                    .reference_key
+                    .as_ref()
+                    .is_some_and(|key| !crate::bindings::supported_path(key))
+                    || argument.literal.is_some() && argument.reference_key.is_some()
+                {
+                    return Err(invalid());
+                }''',
+              '''                if argument
+                    .reference_key
+                    .as_ref()
+                    .is_some_and(|key| !crate::bindings::supported_path(key))
+                    || argument.reference_key.is_some() != argument.reference_target.is_some()
+                    || argument.literal.is_some()
+                        && (argument.reference_key.is_some() || argument.reference_target.is_some())
+                {
+                    return Err(invalid());
+                }
+                if let Some(target) = &argument.reference_target {
+                    target.span.validate().map_err(|_| invalid())?;
+                    let role_valid = target.role == "main"
+                        && target.workspace_id == self.main_snapshot_id
+                        || target.role == "library"
+                            && self.library_snapshot_ids.contains(&target.workspace_id);
+                    if !role_valid
+                        || target.path.is_empty()
+                        || target.content_digest.is_empty()
+                        || target.span.byte_start() == target.span.byte_end()
+                    {
+                        return Err(invalid());
+                    }
+                }''')
+          replace(path,
+              '''fn call_literal(mut expr: LuaExpr) -> Option<SourceCallLiteral> {''',
+              '''fn exact_access_reference(
+    access: &crate::global_access::SourceGlobalAccess,
+) -> Option<(String, SymbolTarget)> {
+    Some((
+        exact_callable_access_key(access)?,
+        access.declaration()?.clone(),
+    ))
+}
+
+fn call_literal(mut expr: LuaExpr) -> Option<SourceCallLiteral> {''')
+          replace(path,
+              '''                .filter_map(exact_callable_access_key);
+            argument.reference_key = references.next();
+            if references.next().is_some() {
+                return Err(invalid());
+            }''',
+              '''                .filter_map(exact_access_reference);
+            if let Some((key, target)) = references.next() {
+                argument.reference_key = Some(key);
+                argument.reference_target = Some(target);
+            }
+            if references.next().is_some() {
+                return Err(invalid());
+            }''')
+          replace(path,
+              '''        for access in &self.global_accesses {
+            access.validate(&self.main_snapshot_id)?;
+            let function = functions.get(access.function_id()).ok_or_else(invalid)?;
+            if function.path() != access.path()
+                || function.content_digest() != access.content_digest()
+            {
+                return Err(invalid());
+            }
+        }
+        if self.named_targets.len() > 4096''',
+              '''        for access in &self.global_accesses {
+            access.validate(&self.main_snapshot_id)?;
+            let function = functions.get(access.function_id()).ok_or_else(invalid)?;
+            if function.path() != access.path()
+                || function.content_digest() != access.content_digest()
+            {
+                return Err(invalid());
+            }
+        }
+        for call in &self.calls {
+            for argument in &call.arguments {
+                let Some(expected) = argument
+                    .reference_key
+                    .as_ref()
+                    .zip(argument.reference_target.as_ref())
+                else {
+                    continue;
+                };
+                let mut observed = self
+                    .global_accesses
+                    .iter()
+                    .filter(|access| {
+                        access.path() == call.path
+                            && access.function_id() == call.caller_function_id
+                            && access.span() == argument.span
+                    })
+                    .filter_map(exact_access_reference)
+                    .filter(|actual| actual.0 == *expected.0 && actual.1 == *expected.1);
+                if observed.next().is_none() || observed.next().is_some() {
+                    return Err(invalid());
+                }
+            }
+        }
+        if self.named_targets.len() > 4096''')
+
+          path = "crates/wow-project/src/graph/mixins.rs"
+          replace(path,
+              '''fn add_declaration(
+    project: &ProjectView,
+    target: &SymbolTarget,
+    file_ids: &BTreeMap<&str, String>,
+    provenance: &mut ProjectGraphProvenance,
+    text_bytes: &mut usize,
+    output: &mut MixinProposals,
+) -> ProjectResult<usize> {
+    if provenance.lua_declarations.len() >= MAX_DECLARATIONS {
+        return Err(exhausted());
+    }
+    let file = project.file_by_path(&target.path)?.ok_or_else(invalid)?;''',
+              '''pub(super) fn add_declaration(
+    project: &ProjectView,
+    target: &SymbolTarget,
+    file_ids: &BTreeMap<&str, String>,
+    provenance: &mut ProjectGraphProvenance,
+    text_bytes: &mut usize,
+    entities: &mut Vec<GraphEntityProposal>,
+    relations: &mut Vec<GraphRelationProposal>,
+) -> ProjectResult<usize> {
+    let analyzer = project.snapshot().analyzer_binding();
+    if target.role != "main" || target.workspace_id != analyzer.main_workspace().snapshot_id() {
+        return Err(invalid());
+    }
+    target.span.validate().map_err(|_| invalid())?;
+    let analyzer_file = analyzer
+        .main_workspace()
+        .file(&target.path)
+        .ok_or_else(invalid)?;
+    if analyzer_file.content_sha256() != target.content_digest {
+        return Err(invalid());
+    }
+    let (Some(start), Some(end)) = (target.span.byte_start(), target.span.byte_end()) else {
+        return Err(invalid());
+    };
+    let (start_usize, end_usize) = (
+        usize::try_from(start).map_err(|_| invalid())?,
+        usize::try_from(end).map_err(|_| invalid())?,
+    );
+    if start_usize == end_usize || analyzer_file.text().get(start_usize..end_usize).is_none() {
+        return Err(invalid());
+    }
+    if let Some((index, _)) = provenance
+        .lua_declarations
+        .iter()
+        .enumerate()
+        .find(|(_, declaration)| declaration.path == target.path && declaration.span == target.span)
+    {
+        return Ok(index);
+    }
+    if provenance.lua_declarations.len() >= MAX_DECLARATIONS {
+        return Err(exhausted());
+    }
+    let file = project.file_by_path(&target.path)?.ok_or_else(invalid)?;''')
+          replace(path, '    output.entities.push(\n', '    entities.push(\n')
+          replace(path, '    output.relations.push(\n', '    relations.push(\n')
+          replace(path,
+              '''                            text_bytes,
+                            &mut output,
+                        )?;''',
+              '''                            text_bytes,
+                            &mut output.entities,
+                            &mut output.relations,
+                        )?;''')
+
+          path = "crates/wow-project/src/graph/functions.rs"
+          replace(path,
+              '''        provenance.call_sites.push(ProjectGraphCallSite {
+            call_id: call.fact_id().into(),
+            source_handle_id: handle,
+            evidence_id: evidence,
+        });
+    }''',
+              '''        provenance.call_sites.push(ProjectGraphCallSite {
+            call_id: call.fact_id().into(),
+            source_handle_id: handle,
+            evidence_id: evidence,
+        });
+        for argument in call.arguments() {
+            let Some(target) = argument.reference_target() else {
+                continue;
+            };
+            match target.role {
+                "main" => {
+                    mixins::add_declaration(
+                        project,
+                        target,
+                        file_ids,
+                        provenance,
+                        text_bytes,
+                        &mut result.entities,
+                        &mut result.relations,
+                    )?;
+                }
+                "library"
+                    if analyzer
+                        .library_snapshot_ids()
+                        .any(|snapshot| snapshot == target.workspace_id) => {}
+                _ => return Err(invalid()),
+            }
+        }
+    }''')
+
+          path = "crates/wow-project/src/graph.rs"
+          replace(path,
+              'pub const SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/10";',
+              'pub const SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/11";')
+          PY
+      - name: Install compiler tools
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+      - name: Format workspace
+        run: cargo +stable fmt --all
+      - name: Strict affected-chain Clippy
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustc +stable -Vv | tee "$RUNNER_TEMP/RUST_VERSION"
+          cargo +stable clippy --locked \
+            -p wow-emmy -p wow-project -p wow-recognizers -p wow-service -p wow-cli \
+            --all-targets --all-features -- -D warnings 2>&1 | tee "$RUNNER_TEMP/clippy.log"
+      - name: Repository policy and product boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo +stable xtask check 2>&1 | tee "$RUNNER_TEMP/policy.log"
+          git add --all
+          git diff --cached --check
+          git diff --cached --name-only "$BASE_COMMIT" | sort > "$RUNNER_TEMP/changed-files"
+          cat > "$RUNNER_TEMP/expected-files" <<'FILES'
+          crates/wow-emmy/src/function_calls.rs
+          crates/wow-project/src/graph.rs
+          crates/wow-project/src/graph/functions.rs
+          crates/wow-project/src/graph/mixins.rs
+          FILES
+          sed -i 's/^          //' "$RUNNER_TEMP/expected-files"
+          sort -o "$RUNNER_TEMP/expected-files" "$RUNNER_TEMP/expected-files"
+          diff -u "$RUNNER_TEMP/expected-files" "$RUNNER_TEMP/changed-files"
+      - name: Retain checkpoint evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/checkpoint"
+          git add --all
+          git write-tree > "$RUNNER_TEMP/checkpoint/CHECKED_TREE"
+          git archive --format=tar -o "$RUNNER_TEMP/checkpoint/checked-source.tar" "$(cat "$RUNNER_TEMP/checkpoint/CHECKED_TREE")"
+          git diff --cached --binary "$BASE_COMMIT" > "$RUNNER_TEMP/checkpoint/formatted.patch"
+          printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/checkpoint/STAGING_SHA"
+          for file in RUST_VERSION clippy.log policy.log changed-files expected-files; do
+            if test -f "$RUNNER_TEMP/$file"; then cp "$RUNNER_TEMP/$file" "$RUNNER_TEMP/checkpoint/$file"; fi
+          done
+          (cd "$RUNNER_TEMP/checkpoint" && sha256sum checked-source.tar formatted.patch > SHA256SUMS)
+      - name: Upload checkpoint evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: w11-mixin-facts-${{ github.run_id }}
+          path: ${{ runner.temp }}/checkpoint
+          retention-days: 3
+          if-no-files-found: error
+      - name: Publish exact checked tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$GITHUB_SHA"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat(wow-emmy): retain exact mixin argument targets [skip ci]'
+          git push origin HEAD:main
