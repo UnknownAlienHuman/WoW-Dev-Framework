@@ -16,8 +16,8 @@ jobs:
     env:
       BASE_COMMIT: e518570e70d40d6e33da7308f37c81783972ee3f
       BASE_TREE: a46e3bc806bd8901e525c8a12cc3b9ebd15f0865
-      TRIGGER_PARENT: e518570e70d40d6e33da7308f37c81783972ee3f
-      PATCH_SHA256: 1df6ae7b6be0a789d27de28eddba277c905ebf73d51470a5ea3f24454d9015e6
+      TRIGGER_PARENT: a3e765d23eaa2be5500addf16b3d367b6e5b2488
+      PATCH_SHA256: e300862d476584a9252e6f525662e0f8fdf967283e016da101afca9514fec00c
     steps:
       - uses: actions/checkout@v7
         with:
@@ -32,9 +32,7 @@ jobs:
           xz -t .ci/w10-rule-consumers.patch.xz
           xz -dc .ci/w10-rule-consumers.patch.xz > "$RUNNER_TEMP/w10.patch"
           printf '%s  %s\n' "$PATCH_SHA256" "$RUNNER_TEMP/w10.patch" | sha256sum -c -
-          git rm -- \
-            .ci/w10-rule-consumers.patch.xz \
-            .github/workflows/w10-rule-consumers-checkpoint.yml
+          git rm --             .ci/w10-rule-consumers.patch.xz             .github/workflows/w10-rule-consumers-checkpoint.yml
           test "$(git write-tree)" = "$BASE_TREE"
           git apply --index "$RUNNER_TEMP/w10.patch"
       - name: Install compiler tools
@@ -46,16 +44,12 @@ jobs:
         run: |
           set -euo pipefail
           rustc +stable -Vv | tee "$RUNNER_TEMP/RUST_VERSION"
-          cargo +stable clippy --locked \
-            -p wow-project -p wow-rules -p wow-service -p wow-cli \
-            --all-targets --all-features -- -D warnings 2>&1 | tee "$RUNNER_TEMP/clippy.log"
+          cargo +stable clippy --locked             -p wow-project -p wow-rules -p wow-service -p wow-cli             --all-targets --all-features -- -D warnings 2>&1 | tee "$RUNNER_TEMP/clippy.log"
       - name: Existing affected-crate tests
         shell: bash
         run: |
           set -euo pipefail
-          cargo +stable test --locked \
-            -p wow-project -p wow-rules -p wow-service \
-            --all-targets --all-features 2>&1 | tee "$RUNNER_TEMP/tests.log"
+          cargo +stable test --locked             -p wow-project -p wow-rules -p wow-service             --all-targets --all-features 2>&1 | tee "$RUNNER_TEMP/tests.log"
       - name: Repository policy and exact file set
         shell: bash
         run: |
