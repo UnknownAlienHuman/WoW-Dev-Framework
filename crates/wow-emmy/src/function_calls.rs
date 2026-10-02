@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 
 use emmylua_code_analysis::{EmmyLuaAnalysis, LuaSignatureId, LuaType};
-use emmylua_parser::{LuaAst, LuaAstNode, LuaClosureExpr};
+use emmylua_parser::{LuaAst, LuaAstNode, LuaClosureExpr, LuaExpr, LuaLiteralToken};
 use serde::Serialize;
 use wow_core::SourceSpan;
 
@@ -16,12 +16,14 @@ use crate::references::{
 };
 use crate::{EmmyBackendIdentity, LuaWorkspaceFile, LuaWorkspaceSnapshot};
 
-pub const FUNCTION_CALL_PROFILE: &str = "wow-emmy/function-call-facts/4";
+pub const FUNCTION_CALL_PROFILE: &str = "wow-emmy/function-call-facts/5";
 // Existing callable/call occurrence keys keep their original recipe. The new
 // named-target sidecar changes report identity, not the meaning of an old key.
 const OCCURRENCE_PROFILE: &str = "wow-emmy/function-call-facts/1";
 const MAX_FUNCTIONS: usize = 65_536;
 const MAX_CALLS: usize = 65_536;
+const MAX_CALL_ARGUMENTS: usize = 256;
+const MAX_CALL_LITERAL_BYTES: usize = 4096;
 const MAX_AST_VISITS: usize = 2_000_000;
 const MAX_SCOPE_DEPTH: usize = 256;
 const MAX_REPORT_BYTES: usize = 32 * 1024 * 1024;
@@ -82,6 +84,29 @@ pub enum SourceCallTarget {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", content = "value", rename_all = "snake_case")]
+pub enum SourceCallLiteral {
+    Nil,
+    Boolean(bool),
+    String(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SourceCallArgument {
+    span: SourceSpan,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    literal: Option<SourceCallLiteral>,
+}
+impl SourceCallArgument {
+    pub const fn span(&self) -> SourceSpan {
+        self.span
+    }
+    pub fn literal(&self) -> Option<&SourceCallLiteral> {
+        self.literal.as_ref()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SourceCallFact {
     fact_id: String,
     path: String,
@@ -89,6 +114,7 @@ pub struct SourceCallFact {
     caller_function_id: String,
     call_span: SourceSpan,
     callee_span: SourceSpan,
+    arguments: Vec<SourceCallArgument>,
     colon_call: bool,
     target: SourceCallTarget,
 }
@@ -110,6 +136,12 @@ impl SourceCallFact {
     }
     pub const fn callee_span(&self) -> SourceSpan {
         self.callee_span
+    }
+    pub fn arguments(&self) -> &[SourceCallArgument] {
+        &self.arguments
+    }
+    pub const fn is_colon_call(&self) -> bool {
+        self.colon_call
     }
     pub fn target(&self) -> &SourceCallTarget {
         &self.target
@@ -239,6 +271,29 @@ impl FunctionCallReport {
             if caller.path != call.path || caller.content_digest != call.content_digest {
                 return Err(invalid());
             }
+            let (Some(call_start), Some(call_end)) =
+                (call.call_span.byte_start(), call.call_span.byte_end())
+            else {
+                return Err(invalid());
+            };
+            if call.arguments.len() > MAX_CALL_ARGUMENTS {
+                return Err(invalid());
+            }
+            for argument in &call.arguments {
+                let (Some(start), Some(end)) =
+                    (argument.span.byte_start(), argument.span.byte_end())
+                else {
+                    return Err(invalid());
+                };
+                if start < call_start || end > call_end || start > end {
+                    return Err(invalid());
+                }
+                if let Some(SourceCallLiteral::String(value)) = &argument.literal
+                    && value.len() > MAX_CALL_LITERAL_BYTES
+                {
+                    return Err(invalid());
+                }
+            }
             if let SourceCallTarget::MainFunction { function_id } = &call.target
                 && functions
                     .get(function_id.as_str())
@@ -287,6 +342,30 @@ impl FunctionCallReport {
         }
         Ok(())
     }
+}
+
+fn call_literal(mut expr: LuaExpr) -> Option<SourceCallLiteral> {
+    for _ in 0..MAX_SCOPE_DEPTH {
+        match expr {
+            LuaExpr::ParenExpr(paren) => expr = paren.get_expr()?,
+            LuaExpr::LiteralExpr(value) => {
+                return match value.get_literal()? {
+                    LuaLiteralToken::Nil(_) => Some(SourceCallLiteral::Nil),
+                    LuaLiteralToken::Bool(value) => {
+                        Some(SourceCallLiteral::Boolean(value.is_true()))
+                    }
+                    LuaLiteralToken::String(value) => {
+                        let value = value.get_value();
+                        (value.len() <= MAX_CALL_LITERAL_BYTES)
+                            .then_some(SourceCallLiteral::String(value))
+                    }
+                    _ => None,
+                };
+            }
+            _ => return None,
+        }
+    }
+    None
 }
 
 fn invalid() -> EmmyMemberCallError {
@@ -538,6 +617,24 @@ pub(crate) fn collect(
                 _ => SourceCallTarget::Indeterminate,
             };
             let caller_function_id = caller(main.snapshot_id(), file, call.syntax())?;
+            let arguments = call
+                .get_args_list()
+                .map(|list| {
+                    list.get_args()
+                        .map(|argument| {
+                            let span = ast_span(file, argument.syntax().text_range())?;
+                            Ok(SourceCallArgument {
+                                span,
+                                literal: call_literal(argument),
+                            })
+                        })
+                        .collect::<EmmyMemberCallResult<Vec<_>>>()
+                })
+                .transpose()?
+                .unwrap_or_default();
+            if arguments.len() > MAX_CALL_ARGUMENTS {
+                return Err(budget());
+            }
             let colon_call = call.is_colon_call();
             let fact_id = canonical_id(
                 "emmy-source-call:sha256:",
@@ -560,6 +657,7 @@ pub(crate) fn collect(
                 caller_function_id,
                 call_span,
                 callee_span,
+                arguments,
                 colon_call,
                 target,
             });
