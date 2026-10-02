@@ -332,6 +332,32 @@ keep the previous analyzer mode. See [GRAPH_BUILD.md](../apps/wow/GRAPH_BUILD.md
 Dynamic/Library/inline-XML calls, direct self-edges, non-call recognizers, persistent
 ProjectStore and full E2 acceptance remain open. No acceptance/checksum gate moves.
 
+## W11 first core construction recognizer slice
+
+The first W11 family slice is executable on `main`. The Emmy function-call sidecar
+profile is now `wow-emmy/function-call-facts/5`: each physical Main call retains
+ordered exact argument spans, bounded literal values, exact source-backed reference
+keys where available, and an optional exact callable key derived from the existing
+global-access owner facts. The recognizer does not reread or reparse Lua.
+
+`core.lua.create_frame@1` is routed through the existing declarative
+pack/parser/compiler/matcher into the independent
+`wow-recognizers.lua-construction` producer partition. It emits static `frame`
+entities keyed by the exact call occurrence and `FactoryCreates` relations from the
+captured caller function. Dynamic/unresolved arguments retain Possible or
+NotEvaluated authority; no runtime frame existence, lifecycle, parent/template
+application, protection, taint or execution claim is made. `CreateFromMixins`,
+mixin assignment and the remaining W11 event/callback/hook/library families remain
+unimplemented by this slice.
+
+`wow graph build` result schema is now `wow-service/graph-build-result/10` and
+the source graph profile is `wow-project/source-load-proposals/10`; the request
+shape remains unchanged. Focused Linux/Rust 1.99.0 checkpoint
+`36969801633` passed formatting, strict Clippy for the complete affected chain,
+repository policy and the exact seven-product-file boundary, then published
+commit `4479cf333de8d747e3f53549ea3732598d42df84`. No tests, Windows run,
+real-addon acceptance or package gate is claimed.
+
 ## Retained source evidence reads
 
 Graph-build v7 bundles now feed every graph read directly. Explain joins the
