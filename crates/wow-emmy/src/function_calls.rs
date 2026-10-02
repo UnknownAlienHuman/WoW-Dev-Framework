@@ -354,6 +354,32 @@ impl FunctionCallReport {
     }
 }
 
+fn exact_callable_access_key(access: &crate::global_access::SourceGlobalAccess) -> Option<String> {
+    use crate::global_access::{GlobalAccessKey, GlobalAccessKind, GlobalAccessResolution};
+
+    if !access.path_complete()
+        || access.kind() != GlobalAccessKind::Read
+        || access.resolution() == GlobalAccessResolution::Unresolved
+        || access.is_alias()
+        || access.alias_blocker().is_some()
+        || !crate::bindings::supported_path(access.root_name())
+    {
+        return None;
+    }
+    let mut key = access.root_name().to_owned();
+    for component in access.keys() {
+        let GlobalAccessKey::String(component) = component else {
+            return None;
+        };
+        if !crate::bindings::supported_path(component) || component.contains('.') {
+            return None;
+        }
+        key.push('.');
+        key.push_str(component);
+    }
+    crate::bindings::supported_path(&key).then_some(key)
+}
+
 fn call_literal(mut expr: LuaExpr) -> Option<SourceCallLiteral> {
     for _ in 0..MAX_SCOPE_DEPTH {
         match expr {
@@ -697,6 +723,25 @@ pub(crate) fn collect(
         }
     }
     global_accesses.sort_by(|a, b| a.fact_id().cmp(b.fact_id()));
+    for call in &mut calls {
+        let mut observed = global_accesses
+            .iter()
+            .filter(|access| {
+                access.path() == call.path
+                    && access.function_id() == call.caller_function_id
+                    && access.span() == call.callee_span
+            })
+            .filter_map(exact_callable_access_key);
+        let access_key = observed.next();
+        if observed.next().is_some() {
+            return Err(invalid());
+        }
+        match (&call.resolved_callable_key, access_key) {
+            (Some(existing), Some(access)) if existing != &access => return Err(invalid()),
+            (None, Some(access)) => call.resolved_callable_key = Some(access),
+            _ => {}
+        }
+    }
     functions.sort_by(|a, b| a.fact_id.cmp(&b.fact_id));
     calls.sort_by(|a, b| a.fact_id.cmp(&b.fact_id));
     let library_snapshot_ids = libraries
