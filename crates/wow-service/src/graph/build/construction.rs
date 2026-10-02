@@ -113,11 +113,7 @@ pub(super) fn maps(
         let caller_proposal = function_proposals
             .get(call.caller_function_id())
             .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?;
-        let caller = materialized_node_id(
-            snapshot,
-            caller_proposal,
-            snapshot.snapshot().limits(),
-        )?;
+        let caller = materialized_node_id(snapshot, caller_proposal, snapshot.snapshot().limits())?;
         let frame = materialized_partition_node_id(
             snapshot,
             SOURCE_CONSTRUCTION_PARTITION,

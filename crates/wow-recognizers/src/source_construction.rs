@@ -18,13 +18,13 @@ use wow_graph::{
 };
 
 use crate::{
-    RecognizerClause, RecognizerError, RecognizerErrorCode,
-    RecognizerFact, RecognizerFactBundle, RecognizerFactCoverage, RecognizerFactCoverageInput,
-    RecognizerFactCoverageState, RecognizerFactInput, RecognizerFactLimits, RecognizerFactScope,
-    RecognizerFactScopeKind, RecognizerFactValue, RecognizerOutput, RecognizerOutputConfidence,
-    RecognizerPack, RecognizerPackBudgets, RecognizerPackDocument, RecognizerPackRollout,
-    RecognizerPackTrustClass, RecognizerResult, RecognizerRule, compile_recognizer_plan,
-    execute_recognizer_plan, parse_recognizer_pack,
+    RecognizerClause, RecognizerError, RecognizerErrorCode, RecognizerFact, RecognizerFactBundle,
+    RecognizerFactCoverage, RecognizerFactCoverageInput, RecognizerFactCoverageState,
+    RecognizerFactInput, RecognizerFactLimits, RecognizerFactScope, RecognizerFactScopeKind,
+    RecognizerFactValue, RecognizerOutput, RecognizerOutputConfidence, RecognizerPack,
+    RecognizerPackBudgets, RecognizerPackDocument, RecognizerPackRollout, RecognizerPackTrustClass,
+    RecognizerResult, RecognizerRule, compile_recognizer_plan, execute_recognizer_plan,
+    parse_recognizer_pack,
 };
 
 pub const SOURCE_CONSTRUCTION_PARTITION: &str = "wow-recognizers.lua-construction";
@@ -399,7 +399,9 @@ pub fn recognize_source_construction(
     }
 
     if frame_by_call.len() != relation_by_call.len()
-        || frame_by_call.keys().any(|call| !relation_by_call.contains_key(call))
+        || frame_by_call
+            .keys()
+            .any(|call| !relation_by_call.contains_key(call))
     {
         return Err(failure(RecognizerErrorCode::AdapterBindingMissing));
     }
