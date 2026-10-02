@@ -1,4 +1,4 @@
-name: W10 carrier byte audit
+name: W10 current carrier byte audit
 on:
   push:
     branches: [main]
@@ -10,32 +10,55 @@ jobs:
   export:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    env:
-      RECOVERY_BLOB: 3f85d773eb4c0c658fbe6a03627a9bbc783bd54b
     steps:
-      - name: Fetch exact Git blob bytes
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 1
+      - name: Export exact checked-out carrier bytes
         shell: bash
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/carrier"
-          curl -fsSL --proto '=https' --tlsv1.2 \
-            -H "Authorization: Bearer $GITHUB_TOKEN" \
-            -H 'Accept: application/vnd.github+json' \
-            "https://api.github.com/repos/$GITHUB_REPOSITORY/git/blobs/$RECOVERY_BLOB" \
-            > "$RUNNER_TEMP/carrier/blob.json"
-          python - "$RUNNER_TEMP/carrier/blob.json" "$RUNNER_TEMP/carrier/carrier.raw" <<'PY'
-          import base64, json, pathlib, sys
-          payload = json.loads(pathlib.Path(sys.argv[1]).read_text())
-          pathlib.Path(sys.argv[2]).write_bytes(base64.b64decode(payload['content']))
+          cp -- .ci/w10-bindings-graph.patch.xz.b64.00 \
+            "$RUNNER_TEMP/carrier/carrier.current.raw"
+          python - "$RUNNER_TEMP/carrier/carrier.current.raw" <<'PY'
+          import base64
+          import hashlib
+          import json
+          import pathlib
+          import sys
+
+          path = pathlib.Path(sys.argv[1])
+          raw = path.read_bytes()
+          path.with_suffix('.outer.b64').write_bytes(base64.b64encode(raw) + b'\n')
+          try:
+              raw.decode('utf-8')
+              utf8 = True
+          except UnicodeDecodeError:
+              utf8 = False
+          compact = bytes(byte for byte in raw if byte not in b' \t\r\n')
+          alphabet = set(b'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=')
+          stats = {
+              'byte_length': len(raw),
+              'sha256': hashlib.sha256(raw).hexdigest(),
+              'utf8': utf8,
+              'compact_byte_length': len(compact),
+              'compact_mod4': len(compact) % 4,
+              'invalid_base64_byte_count': sum(byte not in alphabet for byte in compact),
+              'head_hex': raw[:128].hex(),
+              'tail_hex': raw[-128:].hex(),
+          }
+          path.with_name('carrier.stats.json').write_text(
+              json.dumps(stats, indent=2) + '\n', encoding='utf-8'
+          )
+          print(json.dumps(stats, indent=2))
           PY
-          sha256sum "$RUNNER_TEMP/carrier/carrier.raw" > "$RUNNER_TEMP/carrier/SHA256SUMS"
-          wc -c "$RUNNER_TEMP/carrier/carrier.raw"
-          xxd -l 256 "$RUNNER_TEMP/carrier/carrier.raw"
+          sha256sum "$RUNNER_TEMP/carrier/carrier.current.raw" \
+            > "$RUNNER_TEMP/carrier/SHA256SUMS"
       - uses: actions/upload-artifact@v7
         with:
-          name: w10-malformed-carrier-${{ github.run_id }}
+          name: w10-current-carrier-${{ github.run_id }}
           path: ${{ runner.temp }}/carrier
           retention-days: 3
           if-no-files-found: error
