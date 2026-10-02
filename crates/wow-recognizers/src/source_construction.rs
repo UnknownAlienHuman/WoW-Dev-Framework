@@ -18,7 +18,7 @@ use wow_graph::{
 };
 
 use crate::{
-    RecognizerCaptureCardinality, RecognizerClause, RecognizerError, RecognizerErrorCode,
+    RecognizerClause, RecognizerError, RecognizerErrorCode,
     RecognizerFact, RecognizerFactBundle, RecognizerFactCoverage, RecognizerFactCoverageInput,
     RecognizerFactCoverageState, RecognizerFactInput, RecognizerFactLimits, RecognizerFactScope,
     RecognizerFactScopeKind, RecognizerFactValue, RecognizerOutput, RecognizerOutputConfidence,
