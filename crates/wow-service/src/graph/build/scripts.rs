@@ -3,7 +3,7 @@ use super::*;
 use std::collections::BTreeMap;
 use wow_recognizers::source_scripts::{
     SOURCE_SCRIPT_PARTITION, SourceScriptFact, SourceScriptInput, SourceScriptRecognition,
-    recognize_source_scripts,
+    SourceScriptSemanticContext, recognize_source_scripts,
 };
 
 #[derive(Debug, Serialize)]
@@ -11,12 +11,18 @@ pub(super) struct HandlerNode {
     script_id: String,
     unit_id: String,
     document: String,
+    semantic_context_id: String,
+    script_site: String,
+    implicit_receiver: String,
+    runtime_dispatch: String,
     node_id: wow_graph::GraphNodeId,
 }
 #[derive(Debug, Serialize)]
 pub(super) struct ScriptEdge {
     binding_id: String,
     site_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    semantic_context_id: Option<String>,
     receiver_node_id: wow_graph::GraphNodeId,
     handler_node_id: wow_graph::GraphNodeId,
     edge_id: wow_graph::GraphEdgeId,
@@ -40,6 +46,14 @@ pub(super) fn publish(
                     fact_id: &b.binding_id,
                     receiver_proposal_id: &b.receiver_proposal_id,
                     handler_proposal_id: &b.handler_proposal_id,
+                    semantic_context: b.semantic_context.as_ref().map(|context| {
+                        SourceScriptSemanticContext {
+                            context_id: context.context_id(),
+                            script_site: context.script_site(),
+                            implicit_receiver: context.implicit_receiver(),
+                            runtime_dispatch: context.runtime_dispatch(),
+                        }
+                    }),
                     confidence: b.confidence,
                     source_handle_ids: &b.source_handle_ids,
                     evidence_ids: &b.evidence_ids,
@@ -89,6 +103,10 @@ pub(super) fn maps(
             script_id: handler.script_id.clone(),
             unit_id: handler.unit_id.clone(),
             document: handler.document.clone(),
+            semantic_context_id: handler.semantic_context.context_id().to_owned(),
+            script_site: handler.semantic_context.script_site().to_owned(),
+            implicit_receiver: handler.semantic_context.implicit_receiver().to_owned(),
+            runtime_dispatch: handler.semantic_context.runtime_dispatch().to_owned(),
             node_id: materialized_node_id(snapshot, &handler.proposal_id, limits)?,
         });
     }
@@ -142,6 +160,10 @@ pub(super) fn maps(
         edges.push(ScriptEdge {
             binding_id: binding.binding_id.clone(),
             site_id: binding.site_id.clone(),
+            semantic_context_id: binding
+                .semantic_context
+                .as_ref()
+                .map(|context| context.context_id().to_owned()),
             receiver_node_id: from.clone(),
             handler_node_id: to.clone(),
             edge_id: edge.edge_id().clone(),

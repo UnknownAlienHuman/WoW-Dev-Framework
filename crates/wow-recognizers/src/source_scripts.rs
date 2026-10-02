@@ -14,13 +14,25 @@ use wow_core::{
 };
 use wow_graph::{
     GraphConfidence, GraphCoverageRecord, GraphCoverageState, GraphNodeId, GraphPartitionSnapshot,
-    GraphProposalBatch, GraphProposalEndpoint, GraphRelationKind, GraphRelationProposal,
-    GraphRelationProposalInput,
+    GraphProposalBatch, GraphProposalEndpoint, GraphProposalValue, GraphRelationKind,
+    GraphRelationProposal, GraphRelationProposalInput,
 };
 
 pub const SOURCE_SCRIPT_PARTITION: &str = "wow-recognizers.xml-script-bindings";
-pub const SOURCE_SCRIPT_PROFILE: &str = "wow-recognizers/source-xml-scripts/1";
+pub const SOURCE_SCRIPT_PROFILE: &str = "wow-recognizers/source-xml-scripts/2";
 const MAX_BINDINGS: usize = 8192;
+const XML_CONTEXT_ID_PREFIX: &str = "project-xml-lua-context:sha256:";
+const EXACT_XML_SCRIPT_SITE: &str = "exact_xml_script_site";
+const IMPLICIT_RECEIVER_NOT_EVALUATED: &str = "not_evaluated_unwrapped_source";
+const RUNTIME_DISPATCH_NOT_EVALUATED: &str = "not_evaluated_static_load_evidence_only";
+
+#[derive(Clone, Copy)]
+pub struct SourceScriptSemanticContext<'a> {
+    pub context_id: &'a str,
+    pub script_site: &'a str,
+    pub implicit_receiver: &'a str,
+    pub runtime_dispatch: &'a str,
+}
 
 /// An immutable normalized crosswalk supplied by the source owner via service.
 /// The project retains all lookup, inheritance, inline and skipped-site receipts.
@@ -28,6 +40,7 @@ pub struct SourceScriptFact<'a> {
     pub fact_id: &'a str,
     pub receiver_proposal_id: &'a str,
     pub handler_proposal_id: &'a str,
+    pub semantic_context: Option<SourceScriptSemanticContext<'a>>,
     pub confidence: GraphConfidence,
     pub source_handle_ids: &'a [StableHandleId],
     pub evidence_ids: &'a [EvidenceId],
@@ -120,14 +133,7 @@ pub fn recognize_source_scripts(
     let mut fact_ids = BTreeSet::new();
     for fact in &input.facts {
         checkpoint(stop)?;
-        let suffix = fact
-            .fact_id
-            .strip_prefix("xml-script-binding:sha256:")
-            .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingInvalid))?;
-        if suffix.len() != 64
-            || !suffix
-                .bytes()
-                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+        if !valid_content_id(fact.fact_id, "xml-script-binding:sha256:")
             || !matches!(
                 fact.confidence,
                 GraphConfidence::Derived | GraphConfidence::Possible
@@ -136,6 +142,15 @@ pub fn recognize_source_scripts(
         {
             return Err(failure(RecognizerErrorCode::AdapterBindingInvalid));
         }
+        let handler = partition
+            .batch()
+            .entity_proposal(fact.handler_proposal_id)
+            .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
+        validate_semantic_context(
+            fact,
+            handler.entity_kind_id(),
+            handler.semantic_key().get("semantic_context_id"),
+        )?;
         validate_support(&input, fact)?;
         // Every endpoint's original source support must be carried by the
         // observation. An ID alone is not evidence for the XML/Lua binding.
@@ -191,7 +206,7 @@ pub fn recognize_source_scripts(
                     RecognitionCoverageState::NotEvaluated
                 },
                 vec![if family == ObservationFamily::ScriptAssignment {
-                    "source_scripts.source_associations_not_effective_dispatch".into()
+                    "source_scripts.exact_sites_only_receiver_and_dispatch_not_evaluated".into()
                 } else {
                     "source_scripts.family_not_requested".into()
                 }],
@@ -264,7 +279,8 @@ pub fn recognize_source_scripts(
                 },
                 false,
                 vec![if relation == GraphRelationKind::SetsScript {
-                    "source_scripts.partial_no_runtime_dispatch_authority".into()
+                    "source_scripts.partial_exact_site_without_receiver_or_dispatch_authority"
+                        .into()
                 } else {
                     "source_scripts.relation_owned_by_other_producer".into()
                 }],
@@ -295,6 +311,50 @@ pub fn recognize_source_scripts(
             receipts,
         },
     })
+}
+
+fn valid_content_id(value: &str, prefix: &str) -> bool {
+    let Some(suffix) = value.strip_prefix(prefix) else {
+        return false;
+    };
+    suffix.len() == 64
+        && suffix
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+fn validate_semantic_context(
+    fact: &SourceScriptFact<'_>,
+    handler_kind: &str,
+    handler_context: Option<&GraphProposalValue>,
+) -> RecognizerResult<()> {
+    match handler_kind {
+        "xml_source_handler" => {
+            let context = fact
+                .semantic_context
+                .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingInvalid))?;
+            let context_matches = matches!(
+                handler_context,
+                Some(GraphProposalValue::String(value)) if value.as_ref() == context.context_id
+            );
+            if fact.confidence != GraphConfidence::Possible
+                || !valid_content_id(context.context_id, XML_CONTEXT_ID_PREFIX)
+                || context.script_site != EXACT_XML_SCRIPT_SITE
+                || context.implicit_receiver != IMPLICIT_RECEIVER_NOT_EVALUATED
+                || context.runtime_dispatch != RUNTIME_DISPATCH_NOT_EVALUATED
+                || !context_matches
+            {
+                return Err(failure(RecognizerErrorCode::AdapterBindingInvalid));
+            }
+        }
+        "lua_source_function" => {
+            if fact.semantic_context.is_some() || handler_context.is_some() {
+                return Err(failure(RecognizerErrorCode::AdapterBindingInvalid));
+            }
+        }
+        _ => return Err(failure(RecognizerErrorCode::AdapterFactMismatch)),
+    }
+    Ok(())
 }
 
 fn validate_support(

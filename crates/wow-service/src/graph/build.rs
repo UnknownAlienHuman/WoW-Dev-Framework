@@ -67,7 +67,7 @@ impl GraphBuildRequest {
             GenerationSelector::exact(generation)?
         };
         Ok(Self {
-            schema: "wow-service/graph-build-request/8",
+            schema: "wow-service/graph-build-request/9",
             project_id,
             selector,
             projection: SOURCE_GRAPH_PROFILE,
@@ -239,7 +239,7 @@ pub fn execute_graph_build(
 ) -> ServiceResult<GraphBuildResult> {
     let request_digest = super::hash(&bounded(request, super::GRAPH_REQUEST_MAX_BYTES)?);
     let mut result = GraphBuildResult {
-        schema: "wow-service/graph-build-result/8",
+        schema: "wow-service/graph-build-result/9",
         request: request.clone(),
         request_digest,
         status: GraphReadStatus::Partial,
@@ -276,6 +276,7 @@ pub fn execute_graph_build(
             "xml_runtime_objects_parentage_and_mixin_execution_not_evaluated",
             "library_mixin_and_handler_targets_not_projected",
             "xml_method_and_inherited_handler_associations_are_possible_not_dispatch",
+            "xml_inline_script_sites_are_exact_but_receiver_and_runtime_dispatch_are_not_evaluated",
             "xml_handler_override_append_prepend_and_intrinsic_order_not_evaluated",
             "no_negative_authority",
         ],

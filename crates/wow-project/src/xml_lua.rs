@@ -26,6 +26,9 @@ use wow_emmy::{
 
 pub const XML_LUA_ANALYSIS_PROFILE: &str = "wow-project/xml-lua-semantics/3";
 pub const XML_LUA_CONTEXT_POLICY_PROFILE: &str = "wow-project/xml-lua-context-policy/1";
+pub const XML_LUA_EXACT_SCRIPT_SITE: &str = "exact_xml_script_site";
+pub const XML_LUA_IMPLICIT_RECEIVER_NOT_EVALUATED: &str = "not_evaluated_unwrapped_source";
+pub const XML_LUA_RUNTIME_DISPATCH_NOT_EVALUATED: &str = "not_evaluated_static_load_evidence_only";
 const MAX_MAPPED_PIECES: usize = 262_144;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -57,9 +60,9 @@ pub struct XmlLuaSemanticContext {
 
 impl XmlLuaSemanticContext {
     fn new(unit_id: &str) -> ProjectResult<Self> {
-        let script_site = "exact_xml_script_site";
-        let implicit_receiver = "not_evaluated_unwrapped_source";
-        let runtime_dispatch = "not_evaluated_static_load_evidence_only";
+        let script_site = XML_LUA_EXACT_SCRIPT_SITE;
+        let implicit_receiver = XML_LUA_IMPLICIT_RECEIVER_NOT_EVALUATED;
+        let runtime_dispatch = XML_LUA_RUNTIME_DISPATCH_NOT_EVALUATED;
         let context_id = crate::identity::canonical_id(
             "project-xml-lua-context:sha256:",
             XML_LUA_CONTEXT_POLICY_PROFILE,
@@ -73,6 +76,11 @@ impl XmlLuaSemanticContext {
             implicit_receiver,
             runtime_dispatch,
         })
+    }
+
+    #[must_use]
+    pub const fn profile(&self) -> &'static str {
+        self.profile
     }
 
     #[must_use]
@@ -93,6 +101,16 @@ impl XmlLuaSemanticContext {
     #[must_use]
     pub const fn runtime_dispatch(&self) -> &'static str {
         self.runtime_dispatch
+    }
+
+    /// Exact static source-site authority is admitted only with the matching
+    /// explicit non-authority records for receiver construction and dispatch.
+    #[must_use]
+    pub fn admits_static_source_association(&self) -> bool {
+        self.profile == XML_LUA_CONTEXT_POLICY_PROFILE
+            && self.script_site == XML_LUA_EXACT_SCRIPT_SITE
+            && self.implicit_receiver == XML_LUA_IMPLICIT_RECEIVER_NOT_EVALUATED
+            && self.runtime_dispatch == XML_LUA_RUNTIME_DISPATCH_NOT_EVALUATED
     }
 }
 

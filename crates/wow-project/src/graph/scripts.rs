@@ -35,6 +35,7 @@ pub struct ProjectGraphInlineHandler {
     pub script_id: String,
     pub unit_id: String,
     pub document: String,
+    pub semantic_context: crate::xml_lua::XmlLuaSemanticContext,
     pub proposal_id: String,
     pub source_handle_id: StableHandleId,
     pub evidence_id: EvidenceId,
@@ -65,6 +66,8 @@ pub struct ProjectGraphScriptSite {
     pub consumer_id: Option<String>,
     pub inherited: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub semantic_context_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub binding_index: Option<usize>,
     pub queries: Vec<ProjectGraphScriptQuery>,
     pub binding_ids: Vec<String>,
@@ -79,6 +82,8 @@ pub struct ProjectGraphScriptBinding {
     pub receiver_proposal_id: String,
     pub handler_proposal_id: String,
     pub handler_kind: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub semantic_context: Option<crate::xml_lua::XmlLuaSemanticContext>,
     pub confidence: GraphConfidence,
     pub source_handle_ids: Vec<StableHandleId>,
     pub evidence_ids: Vec<EvidenceId>,
@@ -91,6 +96,7 @@ pub(super) struct ScriptProposals {
 struct Endpoint {
     proposal: String,
     kind: &'static str,
+    semantic_context: Option<crate::xml_lua::XmlLuaSemanticContext>,
     handle: StableHandleId,
     evidence: EvidenceId,
 }
@@ -189,6 +195,7 @@ pub(super) fn project(
                 Endpoint {
                     proposal: d.proposal_id.clone(),
                     kind: "xml_source_declaration",
+                    semantic_context: None,
                     handle: d.source_handle_id,
                     evidence: d.evidence_id,
                 },
@@ -204,6 +211,7 @@ pub(super) fn project(
                 Endpoint {
                     proposal: f.proposal_id.clone(),
                     kind: "lua_source_function",
+                    semantic_context: None,
                     handle: f.source_handle_id,
                     evidence: f.evidence_id,
                 },
@@ -285,6 +293,7 @@ pub(super) fn project(
                     || unit.extracted_unit_id != body.unit_id
                     || unit.content_digest != body.content_digest
                     || unit.byte_length != body.byte_length
+                    || !unit.context.admits_static_source_association()
                 {
                     return Err(invalid());
                 }
@@ -305,6 +314,12 @@ pub(super) fn project(
                                 "occurrence".into(),
                                 GraphProposalValue::Identifier(
                                     element.occurrence_id.clone().into(),
+                                ),
+                            ),
+                            (
+                                "semantic_context_id".into(),
+                                GraphProposalValue::String(
+                                    unit.context.context_id().to_owned().into(),
                                 ),
                             ),
                         ]),
@@ -341,6 +356,7 @@ pub(super) fn project(
                     Endpoint {
                         proposal: proposal_id.clone(),
                         kind: "xml_source_handler",
+                        semantic_context: Some(unit.context.clone()),
                         handle,
                         evidence,
                     },
@@ -349,6 +365,7 @@ pub(super) fn project(
                     script_id: element.occurrence_id.clone(),
                     unit_id: unit.unit_id.to_string(),
                     document: document.clone(),
+                    semantic_context: unit.context.clone(),
                     proposal_id,
                     source_handle_id: handle,
                     evidence_id: evidence,
@@ -446,6 +463,7 @@ fn collect_site(
         script_id: site.source.script_id.clone(),
         consumer_id: site.consumer.map(str::to_owned),
         inherited: site.inherited,
+        semantic_context_id: None,
         binding_index: None,
         queries: Vec::new(),
         binding_ids: Vec::new(),
@@ -486,19 +504,22 @@ fn collect_site(
     match site.source.source_kind {
         XmlScriptSource::InlineBody => {
             if let Some(handler) = inputs.inline.get(&site.source.script_id) {
+                let context = handler.semantic_context.as_ref().ok_or_else(invalid)?;
+                if !context.admits_static_source_association() {
+                    return Err(invalid());
+                }
+                receipt.semantic_context_id = Some(context.context_id().to_owned());
                 add_binding(
                     &site,
                     receiver,
                     handler,
-                    if site.inherited {
-                        GraphConfidence::Possible
-                    } else {
-                        GraphConfidence::Derived
-                    },
+                    GraphConfidence::Possible,
                     &mut receipt,
                     provenance,
                     text_bytes,
                 )?;
+                receipt.blockers.push("implicit_receiver_not_evaluated");
+                receipt.blockers.push("runtime_dispatch_not_evaluated");
             } else {
                 receipt.blockers.push("inline_parse_failed");
             }
@@ -640,16 +661,35 @@ fn add_binding(
     if provenance.script_bindings.len() >= MAX_BINDINGS {
         return Err(exhausted());
     }
+    let semantic_context = handler.semantic_context.clone();
+    if handler.kind == "xml_source_handler" {
+        let context = semantic_context.as_ref().ok_or_else(invalid)?;
+        if !context.admits_static_source_association() || confidence != GraphConfidence::Possible {
+            return Err(invalid());
+        }
+    } else if semantic_context.is_some() {
+        return Err(invalid());
+    }
     charge(
         text_bytes,
-        receiver.proposal.len() + handler.proposal.len() + 768,
+        receiver.proposal.len()
+            + handler.proposal.len()
+            + semantic_context.as_ref().map_or(0, |context| {
+                context.profile().len()
+                    + context.context_id().len()
+                    + context.script_site().len()
+                    + context.implicit_receiver().len()
+                    + context.runtime_dispatch().len()
+            })
+            + 768,
     )?;
     let digest = crate::identity::canonical_digest(
-        "wow-project/xml-script-binding/1",
+        "wow-project/xml-script-binding/2",
         &(
             &receipt.site_id,
             &receiver.proposal,
             &handler.proposal,
+            &semantic_context,
             confidence,
         ),
         ProjectPhase::View,
@@ -661,6 +701,7 @@ fn add_binding(
         receiver_proposal_id: receiver.proposal.clone(),
         handler_proposal_id: handler.proposal.clone(),
         handler_kind: handler.kind,
+        semantic_context,
         confidence,
         source_handle_ids: BTreeSet::from([
             site.source.source_handle_id,
