@@ -16,6 +16,7 @@ mod model;
 mod pack;
 mod plan;
 pub mod source_calls;
+pub mod source_construction;
 pub mod source_scripts;
 pub mod source_state;
 
