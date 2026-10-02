@@ -38,6 +38,16 @@ jobs:
           echo "6f3c1afc2c29b0d85bc97f7bcc397dd2635b44207daada73fa94bf2ea4d91c76  $RUNNER_TEMP/w11-patch.py" | sha256sum -c -
           git rm -r -- .github/w11-payload .github/workflows/w11-create-from-mixins-checkpoint.yml
           python3 "$RUNNER_TEMP/w11-patch.py"
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("crates/wow-recognizers/src/source_mixins.rs")
+          text = path.read_text()
+          old = "use wow_emmy::function_calls::{FunctionCallReport, SourceCallFact};"
+          new = "use wow_emmy::function_calls::FunctionCallReport;"
+          if text.count(old) != 1:
+              raise SystemExit("unexpected SourceCallFact import shape")
+          path.write_text(text.replace(old, new, 1))
+          PY
       - name: Install compiler tools
         run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
       - name: Format workspace
