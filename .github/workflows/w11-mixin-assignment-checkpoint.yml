@@ -40,15 +40,15 @@ jobs:
           path = Path("crates/wow-service/src/graph/build/lua_mixins.rs")
           text = path.read_text()
           publish = "\npub(super) fn publish("
-          alias = """
-type MixinMaps = (
-    Vec<MixinInstanceNode>,
-    Vec<InstantiationEdge>,
-    Vec<ConstructionMixinEdge>,
-    Vec<AssignmentMixinEdge>,
-);
-
-pub(super) fn publish("""
+          alias = (
+              "\ntype MixinMaps = (\n"
+              "    Vec<MixinInstanceNode>,\n"
+              "    Vec<InstantiationEdge>,\n"
+              "    Vec<ConstructionMixinEdge>,\n"
+              "    Vec<AssignmentMixinEdge>,\n"
+              ");\n\n"
+              "pub(super) fn publish("
+          )
           if text.count(publish) != 1:
               raise SystemExit("unexpected lua_mixins publish marker")
           text = text.replace(publish, alias, 1)
