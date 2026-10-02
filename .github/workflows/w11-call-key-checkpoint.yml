@@ -1,0 +1,55 @@
+name: W11 exact callable key checkpoint
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/w11-call-key-checkpoint.yml
+permissions:
+  contents: write
+concurrency:
+  group: w11-call-key-checkpoint
+  cancel-in-progress: false
+jobs:
+  checkpoint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      BASE_COMMIT: 5ff7608dd1ad5a2a9acb88dedd0708a9e810419c
+      PRODUCT_HEAD: 2347feec4532d486321bdd8401038770e0766663
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Admit exact product tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$PRODUCT_HEAD"
+          git rm -- .github/workflows/w11-call-key-checkpoint.yml
+      - name: Install compiler tools
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+      - name: Format
+        run: cargo +stable fmt --all
+      - name: Strict Clippy
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo +stable clippy --locked -p wow-emmy -p wow-project -p wow-recognizers -p wow-service --all-targets --all-features -- -D warnings
+      - name: Policy and boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo +stable xtask check
+          git add --all
+          git diff --cached --check
+          test "$(git diff --cached --name-only "$BASE_COMMIT")" = "crates/wow-emmy/src/function_calls.rs"
+      - name: Publish checked product
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$GITHUB_SHA"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat(wow-emmy): freeze exact W11 callable keys [skip ci]'
+          git push origin HEAD:main
