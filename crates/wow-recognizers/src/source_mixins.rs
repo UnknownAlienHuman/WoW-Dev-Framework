@@ -34,8 +34,15 @@ const FACT_PARTITION: &str = "wow-recognizers.lua-mixin-facts";
 const FACT_PROFILE: &str = "wow-recognizers-lua-mixin-facts-1";
 const CREATE_FROM_MIXINS_RULE: &str = "core.lua.create_from_mixins";
 const CREATE_FROM_MIXINS_CALLABLE: &str = "CreateFromMixins";
+pub const SOURCE_MIXIN_ASSIGNMENT_PARTITION: &str = "wow-recognizers.lua-mixin-assignments";
+pub const SOURCE_MIXIN_ASSIGNMENT_PROFILE: &str = "wow-recognizers/lua-mixin-assignments/1";
+const MIXIN_ASSIGNMENT_FACT_PARTITION: &str = "wow-recognizers.lua-mixin-assignment-facts";
+const MIXIN_ASSIGNMENT_FACT_PROFILE: &str = "wow-recognizers-lua-mixin-assignment-facts-1";
+const MIXIN_ASSIGNMENT_RULE: &str = "core.lua.mixin_assignment";
+const MIXIN_CALLABLE: &str = "Mixin";
 const MAX_CALLS: usize = 8192;
 const MAX_MIXIN_ARGUMENTS: usize = 16;
+const MAX_MIXIN_PAIRS: usize = 65_536;
 
 pub struct SourceMixinInput<'a> {
     pub owner: &'a GraphPartitionSnapshot,
@@ -84,6 +91,47 @@ pub struct SourceMixinProposals {
     pub batch: GraphProposalBatch,
     pub coverage: Vec<GraphCoverageRecord>,
     pub recognition: SourceMixinRecognition,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SourceMixinAssignmentMatch {
+    pub call_id: String,
+    pub target_declaration_proposal_id: String,
+    pub mixins: Vec<SourceMixinRelationMatch>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SourceSelfMixinSkip {
+    pub call_id: String,
+    pub declaration_proposal_id: String,
+    pub argument_ordinals: Vec<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SourceMixinAssignmentRecognition {
+    profile: &'static str,
+    analyzer_report_id: String,
+    fact_bundle_id: String,
+    pack_digest: String,
+    plan_id: String,
+    output_partition_id: String,
+    matches: Vec<SourceMixinAssignmentMatch>,
+    self_mixins_skipped: Vec<SourceSelfMixinSkip>,
+}
+impl SourceMixinAssignmentRecognition {
+    pub fn matches(&self) -> &[SourceMixinAssignmentMatch] {
+        &self.matches
+    }
+
+    pub fn self_mixins_skipped(&self) -> &[SourceSelfMixinSkip] {
+        &self.self_mixins_skipped
+    }
+}
+
+pub struct SourceMixinAssignmentProposals {
+    pub batch: GraphProposalBatch,
+    pub coverage: Vec<GraphCoverageRecord>,
+    pub recognition: SourceMixinAssignmentRecognition,
 }
 
 struct SourceBinding {
@@ -741,6 +789,550 @@ pub fn recognize_source_mixins(
     })
 }
 
+pub fn recognize_source_mixin_assignments(
+    input: SourceMixinInput<'_>,
+    stop: &AtomicBool,
+) -> RecognizerResult<SourceMixinAssignmentProposals> {
+    checkpoint(stop)?;
+    if input.report.calls().len() > MAX_CALLS
+        || input.call_support.len() != input.report.calls().len()
+    {
+        return Err(failure(RecognizerErrorCode::BudgetExceeded));
+    }
+    input
+        .report
+        .validate()
+        .map_err(|_| failure(RecognizerErrorCode::AdapterFactMismatch))?;
+    input
+        .context
+        .validate()
+        .map_err(|_| failure(RecognizerErrorCode::AdapterIdentityMismatch))?;
+    if input.owner.source_context_id() != input.context.context_id() {
+        return Err(failure(RecognizerErrorCode::AdapterBindingInvalid));
+    }
+
+    let graph = input.owner.input_view(stop).map_err(graph_error)?;
+    let source_partition = input
+        .owner
+        .partition(input.source_partition)
+        .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
+    let accepted = source_partition.report().accepted_entities();
+
+    let mut declarations = BTreeMap::<String, SourceBinding>::new();
+    let mut declaration_keys = BTreeMap::<(String, SourceSpan), String>::new();
+    for ((path, span), proposal_id) in &input.declaration_proposals {
+        checkpoint(stop)?;
+        let proposal = source_partition
+            .batch()
+            .entity_proposal(proposal_id)
+            .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
+        let (Some(start), Some(end)) = (span.byte_start(), span.byte_end()) else {
+            return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
+        };
+        let expected = BTreeMap::from([
+            (
+                "document".into(),
+                GraphProposalValue::String((*path).into()),
+            ),
+            (
+                "span_start".into(),
+                GraphProposalValue::Integer(
+                    i64::try_from(start)
+                        .map_err(|_| failure(RecognizerErrorCode::AdapterFactMismatch))?,
+                ),
+            ),
+            (
+                "span_end".into(),
+                GraphProposalValue::Integer(
+                    i64::try_from(end)
+                        .map_err(|_| failure(RecognizerErrorCode::AdapterFactMismatch))?,
+                ),
+            ),
+        ]);
+        if proposal.entity_kind_id() != "lua_source_declaration"
+            || proposal.semantic_key() != &expected
+            || proposal.confidence() != GraphConfidence::Derived
+        {
+            return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
+        }
+        let ([handle], [evidence]) = (proposal.source_handle_ids(), proposal.evidence_ids()) else {
+            return Err(failure(RecognizerErrorCode::AdapterBindingInvalid));
+        };
+        validate_support_without_digest(&input, *handle, *evidence, path, *span)?;
+        let index = accepted
+            .binary_search_by(|item| item.proposal_id().cmp(proposal_id))
+            .map_err(|_| failure(RecognizerErrorCode::AdapterBindingMissing))?;
+        let node = accepted[index].node().node_id().clone();
+        if graph.node(&node).is_none()
+            || declarations
+                .insert(
+                    (*proposal_id).to_owned(),
+                    SourceBinding {
+                        node,
+                        handle: *handle,
+                        evidence: *evidence,
+                    },
+                )
+                .is_some()
+            || declaration_keys
+                .insert(((*path).to_owned(), *span), (*proposal_id).to_owned())
+                .is_some()
+        {
+            return Err(failure(RecognizerErrorCode::AdapterBindingDuplicate));
+        }
+    }
+
+    let fact_limits = RecognizerFactLimits::default();
+    let mut facts = Vec::new();
+    let mut pair_ordinals = BTreeMap::<(String, String, String), Vec<u32>>::new();
+    let mut self_mixins = BTreeMap::<(String, String), Vec<u32>>::new();
+    let mut pair_count = 0usize;
+
+    for call in input.report.calls() {
+        checkpoint(stop)?;
+        if call.resolved_callable_key() != Some(MIXIN_CALLABLE) || call.is_colon_call() {
+            continue;
+        }
+        let arguments = call.arguments();
+        if arguments.len() < 2 {
+            continue;
+        }
+        let (handle, evidence) = *input
+            .call_support
+            .get(call.fact_id())
+            .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
+        validate_support(
+            &input,
+            handle,
+            evidence,
+            call.path(),
+            call.content_digest(),
+            call.call_span(),
+        )?;
+
+        let Some(target_key) = arguments[0].reference_key() else {
+            continue;
+        };
+        let Some(target) = arguments[0].reference_target() else {
+            continue;
+        };
+        if target.role != "main" {
+            continue;
+        }
+        if target.workspace_id != input.report.main_snapshot_id() {
+            return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
+        }
+        let target_declaration = declaration_keys
+            .get(&(target.path.clone(), target.span))
+            .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?
+            .clone();
+        let target_binding = declarations
+            .get(&target_declaration)
+            .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
+        validate_target_binding(&input, target, target_binding)?;
+
+        let all_exact_main = arguments.len() <= MAX_MIXIN_ARGUMENTS
+            && arguments.iter().all(|argument| {
+                argument.literal().is_none()
+                    && argument.reference_key().is_some()
+                    && argument.reference_target().is_some_and(|target| {
+                        target.role == "main"
+                            && target.workspace_id == input.report.main_snapshot_id()
+                            && declaration_keys.contains_key(&(target.path.clone(), target.span))
+                    })
+            });
+        let confidence = if all_exact_main {
+            GraphConfidence::Derived
+        } else {
+            GraphConfidence::Possible
+        };
+
+        let mut grouped = BTreeMap::<String, Vec<u32>>::new();
+        for (ordinal, argument) in arguments
+            .iter()
+            .take(MAX_MIXIN_ARGUMENTS)
+            .enumerate()
+            .skip(1)
+        {
+            let Some(reference_key) = argument.reference_key() else {
+                continue;
+            };
+            let Some(mixin) = argument.reference_target() else {
+                continue;
+            };
+            if mixin.role != "main" {
+                continue;
+            }
+            if mixin.workspace_id != input.report.main_snapshot_id() {
+                return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
+            }
+            let mixin_declaration = declaration_keys
+                .get(&(mixin.path.clone(), mixin.span))
+                .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?
+                .clone();
+            let mixin_binding = declarations
+                .get(&mixin_declaration)
+                .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
+            validate_target_binding(&input, mixin, mixin_binding)?;
+            if reference_key.is_empty() || target_key.is_empty() {
+                return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
+            }
+            let ordinal =
+                u32::try_from(ordinal).map_err(|_| failure(RecognizerErrorCode::BudgetExceeded))?;
+            if mixin_declaration == target_declaration {
+                self_mixins
+                    .entry((call.fact_id().to_owned(), target_declaration.clone()))
+                    .or_default()
+                    .push(ordinal);
+                continue;
+            }
+            grouped.entry(mixin_declaration).or_default().push(ordinal);
+        }
+
+        for (mixin_declaration, ordinals) in grouped {
+            pair_count = pair_count
+                .checked_add(1)
+                .ok_or_else(|| failure(RecognizerErrorCode::BudgetExceeded))?;
+            if pair_count > MAX_MIXIN_PAIRS {
+                return Err(failure(RecognizerErrorCode::BudgetExceeded));
+            }
+            let fields = BTreeMap::from([
+                (
+                    "call_id".into(),
+                    RecognizerFactValue::Reference(call.fact_id().into()),
+                ),
+                (
+                    "callable_key".into(),
+                    RecognizerFactValue::String(MIXIN_CALLABLE.into()),
+                ),
+                ("colon_call".into(), RecognizerFactValue::Boolean(false)),
+                (
+                    "target".into(),
+                    RecognizerFactValue::Reference(target_declaration.clone().into_boxed_str()),
+                ),
+                (
+                    "mixin".into(),
+                    RecognizerFactValue::Reference(mixin_declaration.clone().into_boxed_str()),
+                ),
+                (
+                    "first_ordinal".into(),
+                    RecognizerFactValue::Integer(i64::from(ordinals[0])),
+                ),
+            ]);
+            facts.push(RecognizerFact::new(
+                input.context.context_id(),
+                RecognizerFactInput {
+                    kind: "lua_mixin_pair".into(),
+                    partition_id: MIXIN_ASSIGNMENT_FACT_PARTITION.into(),
+                    scope: RecognizerFactScope::new(
+                        RecognizerFactScopeKind::Function,
+                        call.caller_function_id(),
+                    )?,
+                    producer_id: "wow.emmy".into(),
+                    producer_version: MIXIN_ASSIGNMENT_FACT_PROFILE.into(),
+                    confidence,
+                    fields,
+                    source_handle_ids: vec![handle],
+                    evidence_ids: vec![evidence],
+                },
+                fact_limits,
+            )?);
+            if pair_ordinals
+                .insert(
+                    (
+                        call.fact_id().to_owned(),
+                        target_declaration.clone(),
+                        mixin_declaration,
+                    ),
+                    ordinals,
+                )
+                .is_some()
+            {
+                return Err(failure(RecognizerErrorCode::AdapterBindingDuplicate));
+            }
+        }
+    }
+
+    let coverage_state = if input.report.source_health_complete() {
+        RecognizerFactCoverageState::Complete
+    } else {
+        RecognizerFactCoverageState::NotEvaluated
+    };
+    let coverage = vec![RecognizerFactCoverage::new(
+        RecognizerFactCoverageInput {
+            context_id: input.context.context_id(),
+            partition_id: MIXIN_ASSIGNMENT_FACT_PARTITION.into(),
+            capability_id: "emmy.fact.calls".into(),
+            producer_id: "wow.emmy".into(),
+            producer_version: MIXIN_ASSIGNMENT_FACT_PROFILE.into(),
+            state: coverage_state,
+            blocker_ids: if coverage_state == RecognizerFactCoverageState::Complete {
+                Vec::new()
+            } else {
+                vec!["emmy.call_source_parse_failed".into()]
+            },
+        },
+        fact_limits,
+    )?];
+    let bundle = RecognizerFactBundle::build(
+        input.context,
+        MIXIN_ASSIGNMENT_FACT_PARTITION,
+        Vec::new(),
+        facts,
+        coverage,
+        fact_limits,
+    )?;
+    let pack = mixin_assignment_pack(input.owner.registry().bundle_id())?;
+    let plan = compile_recognizer_plan(&pack)?;
+    let output = execute_recognizer_plan(input.context, &pack, &plan, &bundle, fact_limits, stop)?;
+
+    let mut relations = Vec::new();
+    let mut matches = BTreeMap::<(String, String), Vec<SourceMixinRelationMatch>>::new();
+    for outcome in output.outcomes() {
+        if outcome.rule_id() != MIXIN_ASSIGNMENT_RULE || outcome.rule_version() != 1 {
+            return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
+        }
+        for proposal in outcome.proposals() {
+            let crate::RecognizerProposedAssertion::Relation {
+                proposal_id,
+                relation_kind_id,
+                source,
+                target,
+                confidence,
+                decisive_fact_ids,
+                source_handle_ids,
+                evidence_ids,
+                coverage_ids,
+                ..
+            } = proposal
+            else {
+                return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
+            };
+            if relation_kind_id.as_ref() != "source_mixes_in" {
+                return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
+            }
+            let [fact_id] = decisive_fact_ids.as_slice() else {
+                return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
+            };
+            let fact = bundle
+                .fact_by_id(fact_id)
+                .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
+            let Some(RecognizerFactValue::Reference(call_id)) = fact.field("call_id") else {
+                return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
+            };
+            let Some(RecognizerFactValue::Reference(target_declaration)) = fact.field("target")
+            else {
+                return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
+            };
+            let Some(RecognizerFactValue::Reference(mixin_declaration)) = fact.field("mixin")
+            else {
+                return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
+            };
+            let expected_source = RecognizerFactValue::Reference(target_declaration.clone());
+            let expected_target = RecognizerFactValue::Reference(mixin_declaration.clone());
+            if source != &expected_source || target != &expected_target {
+                return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
+            }
+            let target_binding = declarations
+                .get(target_declaration.as_ref())
+                .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
+            let mixin_binding = declarations
+                .get(mixin_declaration.as_ref())
+                .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
+            if target_binding.node == mixin_binding.node {
+                return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
+            }
+            let ordinals = pair_ordinals
+                .remove(&(
+                    call_id.to_string(),
+                    target_declaration.to_string(),
+                    mixin_declaration.to_string(),
+                ))
+                .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
+
+            let handles = source_handle_ids
+                .iter()
+                .copied()
+                .chain([target_binding.handle, mixin_binding.handle])
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect();
+            let evidence = evidence_ids
+                .iter()
+                .copied()
+                .chain([target_binding.evidence, mixin_binding.evidence])
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect();
+            let graph_id = proposal_id.to_string();
+            relations.push(
+                GraphRelationProposal::new(
+                    graph_id.as_str(),
+                    "source_mixes_in",
+                    GraphRelationProposalInput {
+                        source: GraphProposalEndpoint::Existing(target_binding.node.clone()),
+                        target: GraphProposalEndpoint::Existing(mixin_binding.node.clone()),
+                        confidence: graph_confidence(*confidence),
+                        source_handle_ids: handles,
+                        evidence_ids: evidence,
+                        coverage_ids: coverage_ids.clone(),
+                    },
+                )
+                .map_err(graph_error)?,
+            );
+            matches
+                .entry((call_id.to_string(), target_declaration.to_string()))
+                .or_default()
+                .push(SourceMixinRelationMatch {
+                    declaration_proposal_id: mixin_declaration.to_string(),
+                    relation_proposal_id: graph_id,
+                    argument_ordinals: ordinals,
+                });
+        }
+    }
+    if !pair_ordinals.is_empty() {
+        return Err(failure(RecognizerErrorCode::AdapterBindingMissing));
+    }
+
+    let matches = matches
+        .into_iter()
+        .map(|((call_id, target_declaration_proposal_id), mut mixins)| {
+            mixins.sort_by(|left, right| {
+                left.declaration_proposal_id
+                    .cmp(&right.declaration_proposal_id)
+            });
+            SourceMixinAssignmentMatch {
+                call_id,
+                target_declaration_proposal_id,
+                mixins,
+            }
+        })
+        .collect();
+    let self_mixins_skipped = self_mixins
+        .into_iter()
+        .map(
+            |((call_id, declaration_proposal_id), argument_ordinals)| SourceSelfMixinSkip {
+                call_id,
+                declaration_proposal_id,
+                argument_ordinals,
+            },
+        )
+        .collect();
+
+    let relation_families = input
+        .owner
+        .registry()
+        .relation_kinds()
+        .iter()
+        .map(|definition| definition.relation())
+        .collect::<BTreeSet<_>>();
+    let graph_coverage = relation_families
+        .into_iter()
+        .map(|relation| {
+            let (state, blocker) = if relation == GraphRelationKind::MixesIn {
+                (
+                    GraphCoverageState::Partial,
+                    "lua_mixin_assignments.exact_main_target_and_mixins_only",
+                )
+            } else {
+                (
+                    GraphCoverageState::NotEvaluated,
+                    "lua_mixin_assignments.relation_owned_by_other_producer",
+                )
+            };
+            GraphCoverageRecord::new(relation, state, false, vec![blocker.into()], graph.limits())
+                .map_err(graph_error)
+        })
+        .collect::<RecognizerResult<Vec<_>>>()?;
+    let batch = GraphProposalBatch::build(
+        input.owner.registry().bundle_id(),
+        input.owner.registry().registry_digest(),
+        graph.universe().clone(),
+        graph.generation().clone(),
+        input.context.context_id(),
+        SOURCE_MIXIN_ASSIGNMENT_PARTITION,
+        Vec::new(),
+        relations,
+    )
+    .map_err(graph_error)?;
+
+    Ok(SourceMixinAssignmentProposals {
+        batch,
+        coverage: graph_coverage,
+        recognition: SourceMixinAssignmentRecognition {
+            profile: SOURCE_MIXIN_ASSIGNMENT_PROFILE,
+            analyzer_report_id: input.report.analysis_id().into(),
+            fact_bundle_id: bundle.bundle_id().to_string(),
+            pack_digest: pack.pack_digest().into(),
+            plan_id: plan.plan_id().to_string(),
+            output_partition_id: output.partition_id().to_string(),
+            matches,
+            self_mixins_skipped,
+        },
+    })
+}
+
+fn mixin_assignment_pack(
+    registry_bundle_id: &str,
+) -> RecognizerResult<crate::CompiledRecognizerPack> {
+    let document = RecognizerPackDocument {
+        schema_version: crate::RECOGNIZER_PACK_SCHEMA_VERSION,
+        pack: RecognizerPack {
+            pack_id: "wow-core-lua-mixin-assignments".into(),
+            version: "1".into(),
+            trust_class: RecognizerPackTrustClass::Core,
+            fact_schema_profile_id: MIXIN_ASSIGNMENT_FACT_PROFILE.into(),
+            graph_registry_bundle_id: registry_bundle_id.into(),
+            evaluation_profile_id: "wow-recognizers-w11-mixin-assignment-1".into(),
+            rollout: RecognizerPackRollout::Shadow,
+            budgets: RecognizerPackBudgets {
+                max_rules: 4,
+                max_clauses_per_rule: 16,
+                max_clause_depth: 4,
+                max_join_expansions_per_rule: 100_000,
+                max_matches_per_rule_partition: 65_536,
+                max_proposals_per_rule_partition: 65_536,
+                max_explanation_bytes: 1_048_576,
+            },
+            rules: vec![RecognizerRule {
+                rule_id: MIXIN_ASSIGNMENT_RULE.into(),
+                version: 1,
+                required_capabilities: vec!["emmy.fact.calls".into()],
+                scope: "function".into(),
+                clauses: vec![
+                    RecognizerClause::Fact {
+                        alias: "pair".into(),
+                        kind: "lua_mixin_pair".into(),
+                    },
+                    RecognizerClause::FieldEq {
+                        field: "pair.callable_key".into(),
+                        value: crate::RecognizerPackLiteral::String(MIXIN_CALLABLE.into()),
+                    },
+                    RecognizerClause::FieldEq {
+                        field: "pair.colon_call".into(),
+                        value: crate::RecognizerPackLiteral::Boolean(false),
+                    },
+                ],
+                captures: Vec::new(),
+                outputs: vec![RecognizerOutput::RelationAssertion {
+                    output_id: "mixin_assignment_mixes_in".into(),
+                    relation_kind_id: "source_mixes_in".into(),
+                    source: "pair.target".into(),
+                    target: "pair.mixin".into(),
+                    confidence: RecognizerOutputConfidence::Derived,
+                }],
+                positive_fixture_ids: vec!["RECOG-FRAME-007".into()],
+                near_negative_fixture_ids: vec!["RECOG-FRAME-004".into()],
+                partial_fixture_ids: vec!["RECOG-FRAME-006".into()],
+                mutation_fixture_ids: vec!["RECOG-FRAME-008".into()],
+            }],
+        },
+    };
+    let bytes = canonical_json_bytes(&document)
+        .map_err(|_| failure(RecognizerErrorCode::PackIdentityMismatch))?;
+    parse_recognizer_pack(&bytes)
+}
+
 fn create_from_mixins_pack(
     registry_bundle_id: &str,
 ) -> RecognizerResult<crate::CompiledRecognizerPack> {
@@ -953,7 +1545,7 @@ fn checkpoint(stop: &AtomicBool) -> RecognizerResult<()> {
 fn failure(code: RecognizerErrorCode) -> RecognizerError {
     RecognizerError::new(
         code,
-        "exact CreateFromMixins facts could not produce a coherent W11 partition",
+        "exact Lua mixin facts could not produce a coherent W11 partition",
     )
 }
 

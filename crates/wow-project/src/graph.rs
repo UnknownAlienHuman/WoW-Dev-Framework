@@ -55,12 +55,13 @@ use crate::{
     ProjectError, ProjectErrorCode, ProjectKind, ProjectPhase, ProjectResult, ProjectView,
 };
 
-pub const SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/12";
+pub const SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/13";
 pub const SOURCE_GRAPH_PARTITION: &str = "wow-project.source-load";
 const MAX_FILES: usize = 4096;
 const MAX_LOADS: usize = 8192;
 const MAX_RECOGNIZER_NODES: usize = functions::MAX_CALLS * 2;
 const MAX_RECOGNIZER_EDGES: usize = functions::MAX_CALLS * 19;
+const MAX_MIXIN_ASSIGNMENT_EDGES: usize = 65_536;
 const MAX_NODES: usize = MAX_FILES
     + packages::MAX_PACKAGE_NODES
     + xml::MAX_DECLARATIONS
@@ -78,6 +79,7 @@ const MAX_EDGES: usize = MAX_LOADS
     + mixins::MAX_REFERENCES
     + functions::MAX_FUNCTIONS
     + MAX_RECOGNIZER_EDGES
+    + MAX_MIXIN_ASSIGNMENT_EDGES
     + scripts::MAX_HANDLERS
     + scripts::MAX_BINDINGS
     + state::MAX_ROOTS
@@ -384,7 +386,11 @@ fn registry() -> ProjectResult<GraphRegistryBundle> {
         GraphRelationKindDefinition::new(
             "source_mixes_in",
             GraphRelationKind::MixesIn,
-            vec!["mixin_instance".into(), "xml_source_declaration".into()],
+            vec![
+                "lua_source_declaration".into(),
+                "mixin_instance".into(),
+                "xml_source_declaration".into(),
+            ],
             vec!["lua_source_declaration".into()],
             vec![GraphConfidence::Derived, GraphConfidence::Possible],
         )
@@ -489,7 +495,7 @@ fn registry() -> ProjectResult<GraphRegistryBundle> {
     }
     GraphRegistryBundle::build(
         "wow-project.source-load",
-        "10",
+        "11",
         vec![
             file,
             package,

@@ -20,12 +20,14 @@ mod scripts;
 mod state;
 use calls::{CallEdge, FunctionNode};
 use construction::{CreationEdge, FrameNode};
-use lua_mixins::{ConstructionMixinEdge, InstantiationEdge, MixinInstanceNode};
+use lua_mixins::{
+    AssignmentMixinEdge, ConstructionMixinEdge, InstantiationEdge, MixinInstanceNode,
+};
 use scripts::{HandlerNode, ScriptEdge};
 use state::{StateEdge, StateNodes};
 use wow_recognizers::source_calls::SourceCallRecognition;
 use wow_recognizers::source_construction::SourceConstructionRecognition;
-use wow_recognizers::source_mixins::SourceMixinRecognition;
+use wow_recognizers::source_mixins::{SourceMixinAssignmentRecognition, SourceMixinRecognition};
 use wow_recognizers::source_scripts::SourceScriptRecognition;
 use wow_recognizers::source_state::SourceStateRecognition;
 
@@ -37,6 +39,7 @@ struct BuiltGraph {
     call_recognition: SourceCallRecognition,
     construction_recognition: SourceConstructionRecognition,
     mixin_recognition: SourceMixinRecognition,
+    mixin_assignment_recognition: SourceMixinAssignmentRecognition,
     script_recognition: SourceScriptRecognition,
     state_recognition: SourceStateRecognition,
     state_nodes: StateNodes,
@@ -58,6 +61,7 @@ struct BuiltGraph {
     mixin_instance_nodes: Vec<MixinInstanceNode>,
     instantiation_edges: Vec<InstantiationEdge>,
     construction_mixin_edges: Vec<ConstructionMixinEdge>,
+    assignment_mixin_edges: Vec<AssignmentMixinEdge>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -164,6 +168,7 @@ pub struct GraphBuildResult {
     mixin_instance_nodes: Vec<MixinInstanceNode>,
     instantiation_edges: Vec<InstantiationEdge>,
     construction_mixin_edges: Vec<ConstructionMixinEdge>,
+    assignment_mixin_edges: Vec<AssignmentMixinEdge>,
     handler_nodes: Vec<HandlerNode>,
     script_edges: Vec<ScriptEdge>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -184,6 +189,8 @@ pub struct GraphBuildResult {
     construction_recognition: Option<SourceConstructionRecognition>,
     #[serde(skip_serializing_if = "Option::is_none")]
     mixin_recognition: Option<SourceMixinRecognition>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mixin_assignment_recognition: Option<SourceMixinAssignmentRecognition>,
     boundaries: Vec<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     failure: Option<ServiceErrorCode>,
@@ -230,9 +237,11 @@ impl GraphBuildResult {
         self.mixin_instance_nodes.clear();
         self.instantiation_edges.clear();
         self.construction_mixin_edges.clear();
+        self.assignment_mixin_edges.clear();
         self.call_recognition = None;
         self.construction_recognition = None;
         self.mixin_recognition = None;
+        self.mixin_assignment_recognition = None;
         self.script_recognition = None;
         self.state_recognition = None;
         self.state_nodes = StateNodes::empty();
@@ -268,7 +277,7 @@ pub fn execute_graph_build(
 ) -> ServiceResult<GraphBuildResult> {
     let request_digest = super::hash(&bounded(request, super::GRAPH_REQUEST_MAX_BYTES)?);
     let mut result = GraphBuildResult {
-        schema: "wow-service/graph-build-result/11",
+        schema: "wow-service/graph-build-result/12",
         request: request.clone(),
         request_digest,
         status: GraphReadStatus::Partial,
@@ -286,9 +295,11 @@ pub fn execute_graph_build(
         mixin_instance_nodes: Vec::new(),
         instantiation_edges: Vec::new(),
         construction_mixin_edges: Vec::new(),
+        assignment_mixin_edges: Vec::new(),
         call_recognition: None,
         construction_recognition: None,
         mixin_recognition: None,
+        mixin_assignment_recognition: None,
         script_recognition: None,
         state_recognition: None,
         state_nodes: StateNodes::empty(),
@@ -312,7 +323,7 @@ pub fn execute_graph_build(
             "create_frame_is_static_construction_evidence_not_runtime_frame_existence",
             "create_from_mixins_is_static_main_declaration_evidence_not_runtime_instantiation",
             "dynamic_and_library_mixin_arguments_remain_possible_or_unlinked",
-            "mixin_assignment_not_evaluated",
+            "mixin_assignment_is_exact_static_structure_not_inheritance_or_runtime_behavior",
             "xml_runtime_objects_parentage_and_mixin_execution_not_evaluated",
             "library_mixin_and_handler_targets_not_projected",
             "xml_method_and_inherited_handler_associations_are_possible_not_dispatch",
@@ -340,9 +351,11 @@ pub fn execute_graph_build(
             mixin_instance_nodes,
             instantiation_edges,
             construction_mixin_edges,
+            assignment_mixin_edges,
             call_recognition,
             construction_recognition,
             mixin_recognition,
+            mixin_assignment_recognition,
             script_recognition,
             state_recognition,
             state_nodes,
@@ -364,9 +377,11 @@ pub fn execute_graph_build(
             result.mixin_instance_nodes = mixin_instance_nodes;
             result.instantiation_edges = instantiation_edges;
             result.construction_mixin_edges = construction_mixin_edges;
+            result.assignment_mixin_edges = assignment_mixin_edges;
             result.call_recognition = Some(call_recognition);
             result.construction_recognition = Some(construction_recognition);
             result.mixin_recognition = Some(mixin_recognition);
+            result.mixin_assignment_recognition = Some(mixin_assignment_recognition);
             result.script_recognition = Some(script_recognition);
             result.state_recognition = Some(state_recognition);
             result.state_nodes = state_nodes;
@@ -439,7 +454,7 @@ fn compose(
         calls::publish(replacement.candidate(), &provenance, stop)?;
     let (construction_snapshot, construction_recognition) =
         construction::publish(&calls_snapshot, &provenance, stop)?;
-    let (mixin_snapshot, mixin_recognition) =
+    let (mixin_snapshot, mixin_recognition, mixin_assignment_recognition) =
         lua_mixins::publish(&construction_snapshot, &provenance, stop)?;
     let (scripts_snapshot, script_recognition) =
         scripts::publish(&mixin_snapshot, &provenance, stop)?;
@@ -451,8 +466,18 @@ fn compose(
         calls::maps(&snapshot, &provenance, &call_recognition, stop)?;
     let (frame_nodes, creation_edges) =
         construction::maps(&snapshot, &provenance, &construction_recognition, stop)?;
-    let (mixin_instance_nodes, instantiation_edges, construction_mixin_edges) =
-        lua_mixins::maps(&snapshot, &provenance, &mixin_recognition, stop)?;
+    let (
+        mixin_instance_nodes,
+        instantiation_edges,
+        construction_mixin_edges,
+        assignment_mixin_edges,
+    ) = lua_mixins::maps(
+        &snapshot,
+        &provenance,
+        &mixin_recognition,
+        &mixin_assignment_recognition,
+        stop,
+    )?;
     checkpoint(stop)?;
     let mut file_nodes = Vec::new();
     for file in provenance.files() {
@@ -571,9 +596,11 @@ fn compose(
         mixin_instance_nodes,
         instantiation_edges,
         construction_mixin_edges,
+        assignment_mixin_edges,
         call_recognition,
         construction_recognition,
         mixin_recognition,
+        mixin_assignment_recognition,
         script_recognition,
         state_recognition,
         state_nodes,
