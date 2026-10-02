@@ -15,6 +15,23 @@ this crate never reparses Lua or publishes the graph. See the complete
 [source-to-CLI contract](../../apps/wow/GRAPH_BUILD.md#lua-functions-and-direct-calls).
 Non-call families, dynamic dispatch and full normative acceptance remain separate.
 
+
+## W11 Lua construction pipeline
+
+`source_construction::recognize_source_construction` consumes only the normalized
+generation-bound Emmy call sidecar. It converts exact call/argument facts into the
+generic `RecognizerFactBundle`, then runs `core.lua.create_frame@1` through the
+existing declarative pack parser, compiler and matcher. Accepted proposals enter
+the independent `wow-recognizers.lua-construction` partition.
+
+The adapter does not inspect source text and does not special-case addons. Static
+`CreateFrame` observations produce a call-identity `frame` entity plus a
+`FactoryCreates` relation from the captured caller. Dynamic or unsupported
+arguments cannot be upgraded to proof. This is source construction evidence only:
+runtime frame creation/existence, parent/template application, protection, taint,
+lifecycle and dispatch are outside this slice. `CreateFromMixins`, mixin
+assignment and W11 §4–§7 remain pending.
+
 ## Canonical routes
 
 ### E2-B — core structural recognizers
@@ -117,10 +134,10 @@ No recognizer result proves WoW API existence or absence, runtime availability, 
 Cargo.toml: active
 Rust source: active
 bounded registry/matcher/graph handoff: implemented and tested
-typed wow-emmy/project fact adapters: direct member-call, captured-function and XML source-assignment adapters implemented; full set pending
-declarative pack parser and operator DAG: pending
-active structural rule families: pending
-producer partition/replacement model: independent source direct-call and XML script-assignment routes integrated; full set pending
+typed wow-emmy/project fact adapters: direct member-call, captured-function, ordered call-argument/callable-key and XML source-assignment adapters implemented; full set pending
+declarative pack parser/compiler/matcher: executable for current closed packs; broader operator coverage pending
+active structural rule families: direct-call, XML script assignment, SavedVariables access and W11 CreateFrame slices active; full set pending
+producer partition/replacement model: independent direct-call, Lua construction, XML script-assignment and state routes integrated; full set pending
 mutation/evaluation harness and checksum freeze: pending
 E5-A real corpus admission and calibration: not started
 ```
