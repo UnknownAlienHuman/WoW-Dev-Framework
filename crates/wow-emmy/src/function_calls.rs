@@ -17,8 +17,8 @@ use crate::references::{
 use crate::{EmmyBackendIdentity, LuaWorkspaceFile, LuaWorkspaceSnapshot};
 
 pub const FUNCTION_CALL_PROFILE: &str = "wow-emmy/function-call-facts/5";
-// Existing callable/call occurrence keys keep their original recipe. The new
-// named-target sidecar changes report identity, not the meaning of an old key.
+// Existing callable/call occurrence keys keep their original recipe. Added
+// normalized call arguments/callable keys change report identity, not old occurrence keys.
 const OCCURRENCE_PROFILE: &str = "wow-emmy/function-call-facts/1";
 const MAX_FUNCTIONS: usize = 65_536;
 const MAX_CALLS: usize = 65_536;
@@ -115,6 +115,8 @@ pub struct SourceCallFact {
     call_span: SourceSpan,
     callee_span: SourceSpan,
     arguments: Vec<SourceCallArgument>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    resolved_callable_key: Option<String>,
     colon_call: bool,
     target: SourceCallTarget,
 }
@@ -139,6 +141,9 @@ impl SourceCallFact {
     }
     pub fn arguments(&self) -> &[SourceCallArgument] {
         &self.arguments
+    }
+    pub fn resolved_callable_key(&self) -> Option<&str> {
+        self.resolved_callable_key.as_deref()
     }
     pub const fn is_colon_call(&self) -> bool {
         self.colon_call
@@ -276,7 +281,12 @@ impl FunctionCallReport {
             else {
                 return Err(invalid());
             };
-            if call.arguments.len() > MAX_CALL_ARGUMENTS {
+            if call.arguments.len() > MAX_CALL_ARGUMENTS
+                || call
+                    .resolved_callable_key
+                    .as_ref()
+                    .is_some_and(|key| !crate::bindings::supported_path(key))
+            {
                 return Err(invalid());
             }
             for argument in &call.arguments {
@@ -559,6 +569,19 @@ pub(crate) fn collect(
             }
         }
     }
+    let mut callable_keys = HashMap::<LuaSignatureId, Option<String>>::new();
+    for (key, signature) in callable_signatures {
+        match callable_keys.entry(signature.clone()) {
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                entry.insert(Some(key.clone()));
+            }
+            std::collections::hash_map::Entry::Occupied(mut entry) => {
+                if entry.get().as_deref() != Some(key.as_str()) {
+                    entry.insert(None);
+                }
+            }
+        }
+    }
     let mut calls = Vec::new();
     let mut global_accesses = Vec::new();
     let mut access_budget = crate::global_access::AccessBudget::default();
@@ -603,18 +626,26 @@ pub(crate) fn collect(
             let prefix = call.get_prefix_expr().ok_or_else(invalid)?;
             let call_span = ast_span(file, call.get_range())?;
             let callee_span = ast_span(file, prefix.syntax().text_range())?;
-            let target = match model.infer_expr(prefix) {
-                Ok(LuaType::Signature(id)) => match signatures.get(&id) {
-                    Some(CapturedFunction::Main(id)) => SourceCallTarget::MainFunction {
-                        function_id: id.clone(),
-                    },
-                    Some(CapturedFunction::Library(target)) => SourceCallTarget::LibraryFunction {
-                        target: target.clone(),
-                    },
-                    None => SourceCallTarget::SignatureNotCaptured,
-                },
-                Ok(LuaType::Unknown | LuaType::Any) | Err(_) => SourceCallTarget::Unresolved,
-                _ => SourceCallTarget::Indeterminate,
+            let (target, resolved_callable_key) = match model.infer_expr(prefix) {
+                Ok(LuaType::Signature(id)) => {
+                    let key = callable_keys.get(&id).and_then(Clone::clone);
+                    let target = match signatures.get(&id) {
+                        Some(CapturedFunction::Main(id)) => SourceCallTarget::MainFunction {
+                            function_id: id.clone(),
+                        },
+                        Some(CapturedFunction::Library(target)) => {
+                            SourceCallTarget::LibraryFunction {
+                                target: target.clone(),
+                            }
+                        }
+                        None => SourceCallTarget::SignatureNotCaptured,
+                    };
+                    (target, key)
+                }
+                Ok(LuaType::Unknown | LuaType::Any) | Err(_) => {
+                    (SourceCallTarget::Unresolved, None)
+                }
+                _ => (SourceCallTarget::Indeterminate, None),
             };
             let caller_function_id = caller(main.snapshot_id(), file, call.syntax())?;
             let arguments = call
@@ -658,6 +689,7 @@ pub(crate) fn collect(
                 call_span,
                 callee_span,
                 arguments,
+                resolved_callable_key,
                 colon_call,
                 target,
             });
