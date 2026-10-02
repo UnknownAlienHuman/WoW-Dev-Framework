@@ -1,0 +1,100 @@
+name: W11 CreateFromMixins checkpoint
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/w11-create-from-mixins-checkpoint.yml
+permissions:
+  contents: write
+concurrency:
+  group: w11-create-from-mixins-checkpoint
+  cancel-in-progress: false
+jobs:
+  checkpoint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      BASE_COMMIT: 9c78682a945cac0dd21ec0a28529eadda7ecf441
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Apply exact CreateFromMixins slice
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$BASE_COMMIT"
+          git rm -- .github/workflows/w11-create-from-mixins-checkpoint.yml
+          python3 - <<'PY'
+          import base64
+          exec(base64.b64decode("ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCmltcG9ydCBiYXNlNjQKCmRlZiByZXBsYWNlKHBhdGg6IHN0ciwgb2xkOiBzdHIsIG5ldzogc3RyKSAtPiBOb25lOgogICAgcCA9IFBhdGgocGF0aCkKICAgIHRleHQgPSBwLnJlYWRfdGV4dCgpCiAgICBhY3R1YWwgPSB0ZXh0LmNvdW50KG9sZCkKICAgIGlmIGFjdHVhbCAhPSAxOgogICAgICAgIHJhaXNlIFN5c3RlbUV4aXQoZiJwYXRjaCBtYXJrZXIgY291bnQgZm9yIHtwYXRofTogZXhwZWN0ZWQgMSwgZm91bmQge2FjdHVhbH06IHtvbGRbOjE2MF0hcn0iKQogICAgcC53cml0ZV90ZXh0KHRleHQucmVwbGFjZShvbGQsIG5ldywgMSkpCgpkZWYgd3JpdGVfYjY0KHBhdGg6IHN0ciwgcGF5bG9hZDogc3RyKSAtPiBOb25lOgogICAgcCA9IFBhdGgocGF0aCkKICAgIGlmIHAuZXhpc3RzKCk6CiAgICAgICAgcmFpc2UgU3lzdGVtRXhpdChmInJlZnVzaW5nIHRvIG92ZXJ3cml0ZSBleGlzdGluZyBmaWxlOiB7cGF0aH0iKQogICAgcC5wYXJlbnQubWtkaXIocGFyZW50cz1UcnVlLCBleGlzdF9vaz1UcnVlKQogICAgcC53cml0ZV9ieXRlcyhiYXNlNjQuYjY0ZGVjb2RlKHBheWxvYWQpKQoKd3JpdGVfYjY0KCdjcmF0ZXMvd293LXJlY29nbml6ZXJzL3NyYy9zb3VyY2VfbWl4aW5zLnJzJywgJ0lTOHZJUWxGWUdGamRDQkRjbVZoZEdWR2NtOXRUV2w0YVc1eklHWmhZM1J6SUMwK0lHUmxZMnhoY21GMGFYWmxJR052Y21VZ2NtVmpiMmR1YVhwbGNpQXRMVDRnWjNKaGNHZ2djSEp2Y0c5ellXeHpMam9yQ2k4dklGUm9hWE1nY0hKdlpIVmpaWElnWTI5dWMzVnRaWE1nYjI1c2VTQm5aVzVsY21GMGFXOXVMV0p2ZFc1a1pXUWdiM2R1WlhJZ1ptRmpkSE11SUVsMElHNWxkbVZ5SUhKbGNHRnljMlZ6SUV4MVlTd0svU0JsZUdWamRYUmxjeUJ0YVhoaGJuUXNJSEpsYzI5c2RtVnpJR1p5YjIwZ2JHOWpZV3dnZG1GeWFXRmliR1VnYm1GdFpYTXNJRzl5SUdOc1lXbHRjeUJ5ZFc1MGFXMWxJR2x1YzNSaGJtTmxjeTRLQ25WelpTQnpkR1E2T21OdmJHeGxZM1JwYjI1ek9qcDdRbFJ5WldWTllYQXNJRUowY21WbFUyVjBmVHNLYjNObElITjBaRHY2T21GdGIyMXBZenA3UVhSdmJXbGpRbTl2YkN3Z1QzSmtaWEpwYm1kOU93b0tkWE5sSUhObGNtUmxPanBUYVhwbGNqc0tkWE5sSUhkdmQxOWpiM0psT2pwN0NpQWdJRU5zWVdsdFUxTnpiM0JsTENCRGIyNTBaVzUwUkdsblpYTjBMQ0JGZG1sa1pXNWpaVU5sYkdseVpXNWpaU3dnUldsawogICBcbkNvbGxlY3Rpb25zIHN1YnN0aXR1dGVkIGJ5IGFjdHVhbCBiYXNlNjQgLSBzaG9ydGVuZWQgaW4gdHJhbnNjcmlwdA=="))
+          PY
+      - name: Install compiler tools
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+      - name: Format workspace
+        run: cargo +stable fmt --all
+      - name: Strict affected-chain Clippy
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustc +stable -Vv | tee "$RUNNER_TEMP/RUST_VERSION"
+          cargo +stable clippy --locked \
+            -p wow-graph -p wow-project -p wow-recognizers -p wow-service -p wow-cli \
+            --all-targets --all-features -- -D warnings 2>&1 | tee "$RUNNER_TEMP/clippy.log"
+      - name: Repository policy and exact product boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo +stable xtask check 2>&1 | tee "$RUNNER_TEMP/policy.log"
+          git add --all
+          git diff --cached --check
+          git diff --cached --name-only "$BASE_COMMIT" | sort > "$RUNNER_TEMP/changed-files"
+          cat > "$RUNNER_TEMP/expected-files" <<'FILES'
+          crates/wow-graph/AXIS_USAGE.md
+          crates/wow-graph/e2/KIND_AND_RELATION_REGISTRY.md
+          crates/wow-graph/src/axes/profile.rs
+          crates/wow-graph/src/model.rs
+          crates/wow-project/src/graph.rs
+          crates/wow-project/src/graph/mixins.rs
+          crates/wow-recognizers/src/lib.rs
+          crates/wow-recognizers/src/source_mixins.rs
+          crates/wow-service/src/graph/build.rs
+          crates/wow-service/src/graph/build/lua_mixins.rs
+          crates/wow-service/src/graph/bundle.rs
+          FILES
+          sed -i 's/^          //' "$RUNNER_TEMP/expected-files"
+          sort -o "$RUNNER_TEMP/expected-files" "$RUNNER_TEMP/expected-files"
+          diff -u "$RUNNER_TEMP/expected-files" "$RUNNER_TEMP/changed-files"
+      - name: Retain exact checked source
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/checkpoint"
+          git add --all
+          git write-tree > "$RUNNER_TEMP/checkpoint/CHECKED_TREE"
+          git archive --format=tar -o "$RUNNER_TEMP/checkpoint/checked-source.tar" "$(cat "$RUNNER_TEMP/checkpoint/CHECKED_TREE")"
+          git diff --cached --binary "$BASE_COMMIT" > "$RUNNER_TEMP/checkpoint/formatted.patch"
+          printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/checkpoint/STAGING_SHA"
+          for file in RUST_VERSION clippy.log policy.log changed-files expected-files; do
+            if test -f "$RUNNER_TEMP/$file"; then cp "$RUNNER_TEMP/$file" "$RUNNER_TEMP/checkpoint/$file"; fi
+          done
+          (cd "$RUNNER_TEMP/checkpoint" && sha256sum checked-source.tar formatted.patch > SHA256SUMS)
+      - name: Upload checkpoint evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: w11-create-from-mixins-${{ github.run_id }}
+          path: ${{ runner.temp }}/checkpoint
+          retention-days: 3
+          if-no-files-found: error
+      - name: Publish exact checked tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$GITHUB_SHA"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat(wow-recognizers): publish CreateFromMixins slice [skip ci]'
+          git push origin HEAD:main
