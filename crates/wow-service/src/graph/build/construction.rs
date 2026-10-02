@@ -118,8 +118,9 @@ pub(super) fn maps(
             caller_proposal,
             snapshot.snapshot().limits(),
         )?;
-        let frame = materialized_node_id(
+        let frame = materialized_partition_node_id(
             snapshot,
+            SOURCE_CONSTRUCTION_PARTITION,
             &receipt.entity_proposal_id,
             snapshot.snapshot().limits(),
         )?;
