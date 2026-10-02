@@ -1,0 +1,105 @@
+name: W10 XML context consumer checkpoint
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/w10-context-consumers-checkpoint.yml
+permissions:
+  contents: write
+concurrency:
+  group: w10-context-consumers-checkpoint
+  cancel-in-progress: false
+jobs:
+  checkpoint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      BASE_COMMIT: 0b50018748e7b1fe2595b4d821c72cb0dcf4223d
+      BASE_TREE: bce09aa4cf9c1a395d463c861a9aab84a6b56407
+      TRIGGER_PARENT: f3ded483bf80eb7d03e52147fb814f45a8421045
+      PATCH_SHA256: f891272e1b21b0462ce1c2645528bf684dd2dccde1950c6d483c88f70c65d303
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Admit exact patch and remove transport
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse "${GITHUB_SHA}^")" = "$TRIGGER_PARENT"
+          tr -d ' \t\r\n' < .ci/w10-context-consumers.patch.xz.b64 \
+            | base64 -d > "$RUNNER_TEMP/w10.patch.xz"
+          xz -t "$RUNNER_TEMP/w10.patch.xz"
+          xz -dc "$RUNNER_TEMP/w10.patch.xz" > "$RUNNER_TEMP/w10.patch"
+          printf '%s  %s\n' "$PATCH_SHA256" "$RUNNER_TEMP/w10.patch" | sha256sum -c -
+          git rm -- \
+            .ci/w10-context-consumers.patch.xz.b64 \
+            .github/workflows/w10-context-consumers-checkpoint.yml
+          test "$(git write-tree)" = "$BASE_TREE"
+          git apply --index "$RUNNER_TEMP/w10.patch"
+      - name: Install minimal compiler tools
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+      - name: Format workspace
+        run: cargo +stable fmt --all
+      - name: Minimal affected-crate Clippy; no tests executed
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustc +stable -Vv | tee "$RUNNER_TEMP/RUST_VERSION"
+          cargo +stable clippy --locked \
+            -p wow-project -p wow-recognizers -p wow-service -p wow-cli \
+            --all-targets --all-features -- -D warnings 2>&1 | tee "$RUNNER_TEMP/clippy.log"
+      - name: Repository policy and exact file set
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo +stable xtask check 2>&1 | tee "$RUNNER_TEMP/policy.log"
+          git add --all
+          git diff --cached --check
+          git diff --cached --name-only "$BASE_COMMIT" | sort > "$RUNNER_TEMP/changed-files"
+          cat > "$RUNNER_TEMP/expected-files" <<'EOF'
+          crates/wow-project/src/graph.rs
+          crates/wow-project/src/graph/scripts.rs
+          crates/wow-project/src/xml_lua.rs
+          crates/wow-recognizers/src/source_scripts.rs
+          crates/wow-service/src/graph/build.rs
+          crates/wow-service/src/graph/build/scripts.rs
+          crates/wow-service/src/graph/bundle.rs
+          EOF
+          sed -i 's/^          //' "$RUNNER_TEMP/expected-files"
+          sort -o "$RUNNER_TEMP/expected-files" "$RUNNER_TEMP/expected-files"
+          diff -u "$RUNNER_TEMP/expected-files" "$RUNNER_TEMP/changed-files"
+      - name: Retain exact checked source
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/checkpoint"
+          git add --all
+          git write-tree > "$RUNNER_TEMP/checkpoint/CHECKED_TREE"
+          git archive --format=tar -o "$RUNNER_TEMP/checkpoint/checked-source.tar" "$(cat "$RUNNER_TEMP/checkpoint/CHECKED_TREE")"
+          git diff --cached --binary "$BASE_COMMIT" > "$RUNNER_TEMP/checkpoint/formatted.patch"
+          printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/checkpoint/STAGING_SHA"
+          for file in RUST_VERSION clippy.log policy.log changed-files expected-files; do
+            if test -f "$RUNNER_TEMP/$file"; then cp "$RUNNER_TEMP/$file" "$RUNNER_TEMP/checkpoint/$file"; fi
+          done
+          (cd "$RUNNER_TEMP/checkpoint" && sha256sum checked-source.tar formatted.patch > SHA256SUMS)
+      - name: Upload checkpoint evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: w10-context-consumers-${{ github.run_id }}
+          path: ${{ runner.temp }}/checkpoint
+          retention-days: 3
+          if-no-files-found: error
+      - name: Fast-forward exact checked tree to main
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$GITHUB_SHA"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat(wow-project): enforce XML context in graph consumers [skip ci]'
+          git push origin HEAD:main
