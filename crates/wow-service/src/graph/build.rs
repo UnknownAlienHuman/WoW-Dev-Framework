@@ -528,6 +528,32 @@ fn compose(
 ) -> ServiceResult<BuiltGraph> {
     checkpoint(stop)?;
     let backend = LocalProjectBackend::for_graph(input)?;
+    compose_backend(&backend, request, stop)
+}
+
+/// Uses the same materialization and producer chain as the artifact command,
+/// retaining the original native publisher for the project owner handoff.
+pub(crate) fn live_publication(
+    input: LocalProjectInput,
+    request: &GraphBuildRequest,
+    stop: &AtomicBool,
+) -> ServiceResult<(
+    wow_project::replay::publication::ProjectPublicationBundle,
+    String,
+)> {
+    checkpoint(stop)?;
+    let backend = LocalProjectBackend::for_graph(input)?;
+    let built = compose_backend(&backend, request, stop)?;
+    let bundle = backend.capture_project_bundle(&built.snapshot, stop)?;
+    Ok((bundle, built.snapshot.snapshot().universe().as_str().into()))
+}
+
+fn compose_backend(
+    backend: &LocalProjectBackend,
+    request: &GraphBuildRequest,
+    stop: &AtomicBool,
+) -> ServiceResult<BuiltGraph> {
+    checkpoint(stop)?;
     if backend.configuration().project_id() != request.project_id {
         return Err(error(ServiceErrorCode::IdentityMismatch));
     }
@@ -568,14 +594,19 @@ fn compose(
         )
         .map_err(graph_error)?;
     let (calls_snapshot, call_recognition) =
-        calls::publish(replacement.candidate(), &provenance, stop)?;
+        calls::publish(replacement.candidate(), &provenance, stop)
+            .map_err(|e| stage_error("calls", e))?;
     let (construction_snapshot, construction_recognition) =
-        construction::publish(&calls_snapshot, &provenance, stop)?;
+        construction::publish(&calls_snapshot, &provenance, stop)
+            .map_err(|e| stage_error("construction", e))?;
     let (mixin_snapshot, mixin_recognition, mixin_assignment_recognition) =
-        lua_mixins::publish(&construction_snapshot, &provenance, stop)?;
+        lua_mixins::publish(&construction_snapshot, &provenance, stop)
+            .map_err(|e| stage_error("mixins", e))?;
     let (scripts_snapshot, script_recognition) =
-        scripts::publish(&mixin_snapshot, &provenance, stop)?;
-    let (snapshot, state_recognition) = state::publish(&scripts_snapshot, &provenance, stop)?;
+        scripts::publish(&mixin_snapshot, &provenance, stop)
+            .map_err(|e| stage_error("scripts", e))?;
+    let (snapshot, state_recognition) = state::publish(&scripts_snapshot, &provenance, stop)
+        .map_err(|e| stage_error("state", e))?;
     // W11 signal and hook families publish after every earlier owner, so each
     // adapter crosswalks against the accepted source graph that precedes it.
     let (
@@ -586,7 +617,8 @@ fn compose(
         cvar_recognition,
         hook_recognition,
         library_recognition,
-    ) = signals::publish_signals(&snapshot, &provenance, stop)?;
+    ) = signals::publish_signals(&snapshot, &provenance, stop)
+        .map_err(|e| stage_error("signals", e))?;
     let (snapshot, toc_recognition) = toc::publish(&snapshot, &provenance, stop)?;
     let (snapshot, xml_recognition) = xml::publish(&snapshot, &provenance, stop)?;
     let (snapshot, state_root_recognition) = toc::publish_state_root(&snapshot, &provenance, stop)?;
@@ -851,6 +883,15 @@ fn error(code: ServiceErrorCode) -> ServiceError {
     ServiceError::new(
         code,
         "source graph construction could not produce a coherent bounded artifact",
+    )
+}
+fn stage_error(stage: &'static str, error: ServiceError) -> ServiceError {
+    ServiceError::new(
+        error.code(),
+        format!(
+            "source graph {stage} publication failed: {}",
+            error.message()
+        ),
     )
 }
 fn graph_error(e: wow_graph::GraphError) -> ServiceError {

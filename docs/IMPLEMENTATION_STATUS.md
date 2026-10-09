@@ -554,6 +554,26 @@ Fresh whole-workspace policy, fmt, check, strict Clippy, tests (844 passed,
 1 ignored, 103 targets), rustdoc and build passed on 2026-10-09. Full W13/E2,
 incremental, crash, backup/GC, source-parity and runtime acceptance remain open.
 
+## W13 CLI / W14 controls checkpoint (2026-10-09)
+
+`wow project publish/read/reconcile` now exposes the physical Lua live-pair service
+through one service operation per command. The original native publisher is
+retained through the full existing graph chain. Public reads project exact IDs
+and counts after leased native replay; reconciliation never repeats effects.
+See [LIVE_PROJECT.md](../apps/wow/LIVE_PROJECT.md). The service smoke repaired
+noncanonical constructors in bridge4/hooks5/library3 without loosening validators.
+
+`apply_update_cancellable` threads caller cancellation through file operations,
+analysis and publication, including NoChange. Explicit Keep/Replace/Clear preserves
+legacy empty-as-Keep conversion. Current E0 policy rejects Clear/empty replacement
+because an explicit Library remains mandatory. Full rebuild, generation Library
+binding, real incremental reuse and durable update/removal closure remain open.
+
+Fresh workspace check, strict Clippy, tests (847 passed, 1 ignored, 103 targets),
+rustdoc and build passed; final transport lint/build passed separately. Loader-plan
+replay, fixture freeze, genuine backend probes, Ketho/source and runtime acceptance
+remain open. See [PROJECT_WORK_MAP.md](PROJECT_WORK_MAP.md) for the dependency order.
+
 ## W11 semantic-repair checkpoint
 
 A read-through after the first W11 publication found positive-path defects that

@@ -50,4 +50,6 @@ pub use snapshot::{
     ProjectDeferredCapability, ProjectPublicationStatus, ProjectSnapshot, ProjectSourceArtifact,
     ProjectView,
 };
-pub use update::{ProjectFileOperation, ProjectUpdateOutcome, ProjectUpdateRequest};
+pub use update::{
+    ProjectFileOperation, ProjectLibraryOperation, ProjectUpdateOutcome, ProjectUpdateRequest,
+};

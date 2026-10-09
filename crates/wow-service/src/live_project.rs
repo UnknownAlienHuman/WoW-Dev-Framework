@@ -1,8 +1,13 @@
 //! Coherent native project/graph publication through the existing manifested
 //! store. Current resolves once; actual replay and all owner checks hold its lease.
+mod operations;
 #[cfg(test)]
 mod tests;
 use crate::{ServiceError, ServiceErrorCode, ServiceResult};
+pub use operations::{
+    LiveProjectPublishRequest, LiveProjectResult, publish_local_project, read_live_project,
+    reconcile_live_project,
+};
 use std::{path::Path, sync::atomic::AtomicBool};
 use wow_graph::GraphPartitionSnapshot;
 use wow_project::replay::publication::{self, AcquiredProjectPair, ProjectPublicationBundle};
@@ -69,6 +74,15 @@ impl LiveProjectStore {
         }
         let bundle =
             ProjectPublicationBundle::build(publisher, graph, stop).map_err(project_error)?;
+        self.publish_bundle(bundle, operation_id, expected_current, stop)
+    }
+    fn publish_bundle(
+        &mut self,
+        bundle: ProjectPublicationBundle,
+        operation_id: &str,
+        expected_current: Option<CurrentRecordId>,
+        stop: &AtomicBool,
+    ) -> ServiceResult<PublicationOperation> {
         let (records, bindings) = bundle.into_parts();
         let id = OperationId::new(operation_id).map_err(store_error)?;
         let request = PublicationRequest::new(
@@ -147,7 +161,7 @@ fn catalog() -> ServiceResult<RecordCatalog> {
     )
     .map_err(store_error)
 }
-fn project_error(error: wow_project::ProjectError) -> ServiceError {
+pub(crate) fn project_error(error: wow_project::ProjectError) -> ServiceError {
     fail(match error.code() {
         wow_project::ProjectErrorCode::AnalysisCancelled => ServiceErrorCode::Cancelled,
         wow_project::ProjectErrorCode::SourceBudgetExceeded => ServiceErrorCode::BudgetExceeded,
@@ -177,4 +191,11 @@ fn fail(code: ServiceErrorCode) -> ServiceError {
         code,
         "native live project pair is unavailable; inspect its typed outcome",
     )
+}
+fn publication_checkpoint(stop: &AtomicBool) -> ServiceResult<()> {
+    if stop.load(std::sync::atomic::Ordering::Acquire) {
+        Err(fail(ServiceErrorCode::Cancelled))
+    } else {
+        Ok(())
+    }
 }

@@ -2,6 +2,25 @@
 
 **Status:** normative explicit-update contract. E0-D has no filesystem watcher or background scan.
 
+The executable W14 controls now expose `ProjectLibraryOperation::Keep`,
+`Replace(Vec<LuaWorkspaceSnapshot>)` and `Clear`, plus
+`ProjectPublisher::apply_update_cancellable(request, stop)`. The legacy
+`with_target_libraries(Vec)` conversion preserves empty-as-Keep; use
+`with_library_operation` for explicit empty intent. The legacy slice getter
+cannot distinguish Keep/Clear; `library_operation()` can.
+
+The current E0 analyzer policy still requires at least one explicit Library
+snapshot. Clear or an empty replacement reaches that validator and rejects with
+`AnalyzerFailed`, retaining the old publication. It cannot silently become
+NoChange. Nonempty replacement is checked against an independent final-state
+native publication. Cancellation reaches file-operation and analyzer boundaries
+and the final publication boundary; it also applies to NoChange.
+
+This remains a full candidate rebuild. Exact Library binding in the project
+generation recipe, analyzer update batches, reuse proofs, transitive graph removal
+and W13 update publication remain open. These controls alone are not full W14
+incremental acceptance.
+
 ## 1. Update request
 
 ```text

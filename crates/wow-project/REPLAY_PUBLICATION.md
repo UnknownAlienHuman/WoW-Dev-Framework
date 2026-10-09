@@ -1,8 +1,9 @@
 # Native live project pair publication
 
 The first W13 owner/service path accepts an already published physical Lua
-project and its exact graph. It is a native service API, not a new CLI command
-or full E2-D acceptance. TOC/XML and package loader plans currently reject with
+project and its exact graph. Native service operations and the
+[`wow project` CLI](../../apps/wow/LIVE_PROJECT.md) expose this profile; full E2-D
+acceptance remains open. TOC/XML and package loader plans currently reject with
 `DeferredCapability` / `OperationNotImplementedForMilestone`.
 
 `ProjectReplay::capture` archives the original Main files, fixture references,
@@ -52,5 +53,7 @@ Checked on 2026-10-09: full workspace policy, fmt, check, strict Clippy, tests
 (844 passed, 1 ignored, 103 targets), rustdoc and build. Focused tests cover actual
 close/reopen, Current/Exact acquisition, old leased readers, CAS rejection,
 Library/Main separation, prepublication cancellation, missing/mutated replay and
-mixed project/graph rejection. CLI, loader-plan replay, incremental reuse, crash,
+mixed project/graph rejection. The later CLI/service checkpoint additionally
+passes the complete producer chain and public read/reconciliation projections
+(847 tests passed, 1 ignored, 103 targets). Loader-plan replay, incremental reuse, crash,
 backup/GC, real-addon, source-parity and full W13/E2 acceptance remain open.

@@ -36,9 +36,9 @@ use crate::{
 };
 
 pub const W2_PARTITION: &str = "wow-recognizers.lua-native-event-bridges";
-pub const W2_PROFILE: &str = "wow-recognizers/lua-native-event-bridges/3";
+pub const W2_PROFILE: &str = "wow-recognizers/lua-native-event-bridges/4";
 const W2_FACT_PARTITION: &str = "wow-recognizers.lua-native-event-bridge-facts";
-const W2_FACT_PROFILE: &str = "wow-recognizers-lua-native-event-bridge-facts-3";
+const W2_FACT_PROFILE: &str = "wow-recognizers-lua-native-event-bridge-facts-4";
 const W2_BRIDGE_RULE: &str = "core.signal.native_event_registry_bridge";
 const W2_FACT_KIND: &str = "lua_native_event_bridge";
 const W2_NATIVE_EVENT_ENTITY: &str = "native_event";
@@ -63,10 +63,10 @@ const W2_UNREGISTER_CALLABLES: [&str; 0] = [];
 /// Exact resolved EventRegistry-receiver constructions. A bridge originates from
 /// a resolved registry owner, never from a bare `EventRegistry` name expression,
 /// a library target, or an unresolved global.
-const W2_POSITIVE_FIXTURE_IDS: [&str; 2] = ["RECOG-EVENT-004", "RECOG-EVENT-001"];
+const W2_POSITIVE_FIXTURE_IDS: [&str; 2] = ["RECOG-EVENT-001", "RECOG-EVENT-004"];
 const W2_NEAR_NEGATIVE_FIXTURE_IDS: [&str; 2] = ["RECOG-EVENT-007", "RECOG-EVENT-009"];
 const W2_PARTIAL_FIXTURE_IDS: [&str; 2] = ["RECOG-EVENT-004", "RECOG-EVENT-005"];
-const W2_MUTATION_FIXTURE_IDS: [&str; 2] = ["RECOG-EVENT-009", "RECOG-EVENT-001"];
+const W2_MUTATION_FIXTURE_IDS: [&str; 2] = ["RECOG-EVENT-001", "RECOG-EVENT-009"];
 
 /// Caller-side crosswalks are checked against the real source proposals, support
 /// records and the exact analyzer report. No name, path or repository text is
@@ -1099,11 +1099,11 @@ fn w2_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRecogniz
         schema_version: crate::RECOGNIZER_PACK_SCHEMA_VERSION,
         pack: RecognizerPack {
             pack_id: "wow-core-lua-native-event-bridges".into(),
-            version: "3".into(),
+            version: "4".into(),
             trust_class: RecognizerPackTrustClass::Core,
             fact_schema_profile_id: W2_FACT_PROFILE.into(),
             graph_registry_bundle_id: registry_bundle_id.into(),
-            evaluation_profile_id: "wow-recognizers-w11-native-event-bridge-3".into(),
+            evaluation_profile_id: "wow-recognizers-w11-native-event-bridge-4".into(),
             rollout: RecognizerPackRollout::Shadow,
             budgets: RecognizerPackBudgets {
                 max_rules: 8,

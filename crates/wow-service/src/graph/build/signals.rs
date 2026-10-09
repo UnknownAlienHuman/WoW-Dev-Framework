@@ -17,12 +17,16 @@ pub use wow_recognizers::source_signals::{
 pub use wow_recognizers::source_state::{
     SourceLibraryInput, SourceLibraryRecognition, recognize_source_library,
 };
-fn recognizer_error(error: wow_recognizers::RecognizerError) -> ServiceError {
-    super::error(match error.code() {
+fn recognizer_error(family: &'static str, error: wow_recognizers::RecognizerError) -> ServiceError {
+    let code = match error.code() {
         wow_recognizers::RecognizerErrorCode::Cancelled => ServiceErrorCode::Cancelled,
         wow_recognizers::RecognizerErrorCode::BudgetExceeded => ServiceErrorCode::BudgetExceeded,
         _ => ServiceErrorCode::InternalContractViolation,
-    })
+    };
+    ServiceError::new(
+        code,
+        format!("{family} recognition rejected ({:?})", error.code()),
+    )
 }
 
 #[derive(Debug, Serialize)]
@@ -136,7 +140,7 @@ pub(super) fn publish_signals(
         },
         stop,
     )
-    .map_err(recognizer_error)?;
+    .map_err(|e| recognizer_error("native_frame_event", e))?;
     checkpoint(stop)?;
     let frame_snapshot = replacement(source, frame.batch, frame.coverage, stop)?;
     let owner_view = &frame_snapshot;
@@ -168,7 +172,7 @@ pub(super) fn publish_signals(
         },
         stop,
     )
-    .map_err(recognizer_error)?;
+    .map_err(|e| recognizer_error("native_event_bridge", e))?;
     checkpoint(stop)?;
     let bridge_snapshot = replacement(owner_view, bridge.batch, bridge.coverage, stop)?;
     let owner_view = &bridge_snapshot;
@@ -188,7 +192,7 @@ pub(super) fn publish_signals(
         },
         stop,
     )
-    .map_err(recognizer_error)?;
+    .map_err(|e| recognizer_error("custom_registry", e))?;
     checkpoint(stop)?;
     let custom_snapshot = replacement(owner_view, custom.batch, custom.coverage, stop)?;
     let owner_view = &custom_snapshot;
@@ -208,7 +212,7 @@ pub(super) fn publish_signals(
         },
         stop,
     )
-    .map_err(recognizer_error)?;
+    .map_err(|e| recognizer_error("cvar_callback", e))?;
     checkpoint(stop)?;
     let cvar_snapshot = replacement(owner_view, cvar.batch, cvar.coverage, stop)?;
 
@@ -224,7 +228,8 @@ pub(super) fn publish_signals(
         source_handles: provenance.source_handles(),
         evidence: provenance.evidence(),
     };
-    let hooks = recognize_source_hooks(hooks_input, stop).map_err(recognizer_error)?;
+    let hooks =
+        recognize_source_hooks(hooks_input, stop).map_err(|e| recognizer_error("hooks", e))?;
     checkpoint(stop)?;
     let hooks_snapshot = replacement(&cvar_snapshot, hooks.batch, hooks.coverage, stop)?;
 
@@ -239,7 +244,8 @@ pub(super) fn publish_signals(
         source_handles: provenance.source_handles(),
         evidence: provenance.evidence(),
     };
-    let library = recognize_source_library(library_input, stop).map_err(recognizer_error)?;
+    let library = recognize_source_library(library_input, stop)
+        .map_err(|e| recognizer_error("library", e))?;
     checkpoint(stop)?;
     let library_snapshot = replacement(&hooks_snapshot, library.batch, library.coverage, stop)?;
 

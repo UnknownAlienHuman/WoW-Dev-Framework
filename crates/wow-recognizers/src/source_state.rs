@@ -665,9 +665,9 @@ use crate::{
 };
 
 pub const SOURCE_STATE_LIBRARY_PARTITION: &str = "wow-recognizers.lua-library";
-pub const SOURCE_STATE_LIBRARY_PROFILE: &str = "wow-recognizers/source-library/2";
+pub const SOURCE_STATE_LIBRARY_PROFILE: &str = "wow-recognizers/source-library/3";
 const W6_FACT_PARTITION: &str = "wow-recognizers.lua-library-facts";
-const W6_FACT_PROFILE: &str = "wow-recognizers-lua-library-facts-2";
+const W6_FACT_PROFILE: &str = "wow-recognizers-lua-library-facts-3";
 const W6_MAX_CALLS: usize = 8192;
 const W6_MAX_FUNCTIONS: usize = 8192;
 const W6_MAX_ARGUMENTS_RETAINED: usize = 3;
@@ -1440,15 +1440,15 @@ fn validate_call_support(
 }
 
 fn library_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRecognizerPack> {
-    let document = RecognizerPackDocument {
+    let mut document = RecognizerPackDocument {
         schema_version: crate::RECOGNIZER_PACK_SCHEMA_VERSION,
         pack: RecognizerPack {
             pack_id: "wow-core-lua-library".into(),
-            version: "2".into(),
+            version: "3".into(),
             trust_class: RecognizerPackTrustClass::Core,
             fact_schema_profile_id: W6_FACT_PROFILE.into(),
             graph_registry_bundle_id: registry_bundle_id.into(),
-            evaluation_profile_id: "wow-recognizers-w11-library-2".into(),
+            evaluation_profile_id: "wow-recognizers-w11-library-3".into(),
             rollout: RecognizerPackRollout::Shadow,
             budgets: RecognizerPackBudgets {
                 max_rules: 4,
@@ -1615,6 +1615,10 @@ fn library_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRec
             ],
         },
     };
+    document
+        .pack
+        .rules
+        .sort_by(|a, b| (&a.rule_id, a.version).cmp(&(&b.rule_id, b.version)));
     let bytes = canonical_json_bytes(&document)
         .map_err(|_| failure(RecognizerErrorCode::PackIdentityMismatch))?;
     parse_recognizer_pack(&bytes)

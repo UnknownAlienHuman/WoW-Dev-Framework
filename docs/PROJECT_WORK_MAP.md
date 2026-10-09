@@ -77,7 +77,7 @@ full graph acceptance and the checkpoint's CI conclusions remain open.
 | [W11 / PR 102](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/102) | Public CLI and per-rule acceptance closure | All 26 functional rule IDs publish; full E2-B acceptance remains open |
 | [Issue 103](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/103) | Executable structural mutations and admitted per-rule fixtures | After functional implementation; frozen fixtures are not rewritten by tests |
 | [W12 / PR 80](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/80) | Extend real producer chains and conflict assessment | Exact retained records, publication validation and bounded explanations are executable; full acceptance remains open |
-| [W13 / PR 81](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/81) | CLI and loader-plan live publication | Physical Lua native replay and coherent leased pair acquisition are executable; full acceptance remains open |
+| [W13 / PR 81](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/81) | Loader-plan live publication | Physical Lua native replay, CLI publication/read/reconcile and coherent leased pair acquisition are executable; full acceptance remains open |
 | [W14 / PR 82](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/82), [W15 / PR 83](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/83), [W16 / PR 84](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/84) | Incremental invalidation, retained roots/GC, backup/recovery | Exact generation and durable reconciliation gates |
 | [W17 / PR 85](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/85), [W18 / PR 86](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/86), [W19 / PR 87](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/87) | Blizzard source universe, Project Map/skeletons, context packs | Real prerequisite views before context |
 | [W20 / PR 88](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/88), [W21 / PR 89](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/89) | Search, lineage and static impact | Exact immutable generation inputs |
@@ -180,7 +180,7 @@ against that live view before activation. A returned pair holds one store read
 transaction/lease; Current/Exact reads cannot mix generations.
 
 The admitted profile is physical Lua configuration. Loader plans reject explicitly;
-CLI wiring, TOC/XML/package replay and remaining W13 acceptance are next work.
+this predecessor left CLI wiring, TOC/XML/package replay and W13 acceptance open.
 This path does not relabel a retained graph receipt as a live project or certify
 all recognizer sidecars. See
 [REPLAY_PUBLICATION.md](../crates/wow-project/REPLAY_PUBLICATION.md).
@@ -201,3 +201,33 @@ alone does not verify a shared source revision or a complete comparative corpus.
 Use [KETHO_RUST_PORT.md](KETHO_RUST_PORT.md) for annotation behavior and
 [WASM_BRIDGES.md](WASM_BRIDGES.md) for narrow algorithm boundaries. Report complete,
 partial, conflict, skipped and NotEvaluated outcomes at their actual scope.
+
+## W13 CLI and W14 update controls checkpoint
+
+The physical-input predecessor `7c9f66ef068558974da441c29d0bd014069c8550`
+was published and read back with all 13 changed blob identities. The public
+`wow project publish/read/reconcile` transport now calls one service operation
+per command. Publication retains the original native publisher through the same
+complete graph producer chain, then validates inactive read-back and exact CAS.
+Read restores and projects one actual pair under a held lease; reconciliation
+observes the original journal without repeating effects. See
+[LIVE_PROJECT.md](../apps/wow/LIVE_PROJECT.md).
+
+The full service regression found noncanonical bridge fixture lists and
+hook/library rule ordering in earlier constructors. The strict validators remain
+unchanged; fixed constructors use bridge4, hooks5 and library3 profiles. All three
+partitions are retained, with no negative authority.
+
+W14 adds explicit Keep/Replace/Clear intent and caller cancellation through
+file-operation/analyzer/publication boundaries. Empty legacy vectors retain
+Library; explicit Clear/empty replacement reaches the current E0 mandatory-Library
+validator and rejects, preserving current. Nonempty replacement matches an
+independently built final-state snapshot. Full incremental reuse, exact Library
+binding in project generation, graph removal closure and durable update routing
+remain open; see [UPDATE_MODEL.md](../crates/wow-project/UPDATE_MODEL.md).
+
+Fresh workspace check, strict Clippy, tests (847 passed, 1 ignored, 103 targets),
+rustdoc and build passed on 2026-10-09. CLI transport lint/build also passed after
+the final help guard. Remaining W13 loader-plan replay, fixture freeze, genuine
+backend probes, source/Ketho parity, real-addon/runtime and full E2 acceptance
+stay open. Gethe materialization follows the product implementation/build stage.

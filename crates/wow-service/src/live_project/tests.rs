@@ -15,7 +15,7 @@ use wow_project::{
 };
 type TestResult<T = ()> = Result<T, Box<dyn Error>>;
 
-fn owners(source: &str) -> TestResult<(ProjectPublisher, GraphPartitionSnapshot)> {
+fn input_bundle(source: &str) -> TestResult<ProjectInputBundle> {
     // Synthetic test identities authorize no product compatibility/acceptance.
     let backend = EmmyBackendIdentity::new(
         "emmylua_code_analysis",
@@ -75,13 +75,17 @@ fn owners(source: &str) -> TestResult<(ProjectPublisher, GraphPartitionSnapshot)
         )],
         LuaWorkspaceLimits::new(8, 4096, 16384, 65536)?,
     )?;
-    let bundle = ProjectInputBundle::closed(
+    Ok(ProjectInputBundle::closed(
         config,
         vec![ProjectInputFile::new("main.lua", source)?],
         vec![library],
-    )?;
+    )?)
+}
+fn owners(source: &str) -> TestResult<(ProjectPublisher, GraphPartitionSnapshot)> {
     let mut publisher = ProjectPublisher::with_function_call_facts();
-    let view = publisher.publish_initial(bundle)?.open_view();
+    let view = publisher
+        .publish_initial(input_bundle(source)?)?
+        .open_view();
     let stop = AtomicBool::new(false);
     let (registry, batch, coverage, _, limits) =
         wow_project::graph::build_source_graph_proposals(&view, &stop)?.into_parts();
@@ -118,6 +122,65 @@ fn root(name: &str) -> TestResult<std::path::PathBuf> {
             .duration_since(std::time::UNIX_EPOCH)?
             .as_nanos()
     )))
+}
+
+#[test]
+fn native_service_composition_publishes_once_and_rejects_stale_parent() -> TestResult {
+    let stop = AtomicBool::new(false);
+    let root = root("composition")?;
+    let input = || -> TestResult<crate::LocalProjectInput> {
+        let bundle = input_bundle("local value = External()\nreturn value\n")?;
+        let reference = wow_reference::ReferenceView::new(
+            bundle.configuration().reference_generation().to_string(),
+            Vec::new(),
+            Vec::new(),
+        )?;
+        Ok(crate::LocalProjectInput::new(bundle, reference)?)
+    };
+    let graph_request =
+        crate::graph::GraphBuildRequest::new("fixture-live-pair".into(), "current".into())?;
+    let request = LiveProjectPublishRequest::new("fixture:composed-pair", "absent", true, true)?;
+    let receipt = operations::publish_input(input()?, &graph_request, &root, &request, &stop)?;
+    assert_eq!(receipt.exit_code(), 2);
+    let projected: serde_json::Value = serde_json::from_slice(&receipt.canonical_bytes()?)?;
+    assert_eq!(projected["status"], "activated");
+    assert_eq!(projected["operation"]["state"], "activated");
+    let read = LiveProjectStore::open(&root)?;
+    let acquired = read.read(&ReadSelector::Current, &stop)?;
+    assert!(
+        acquired.graph().partitions().len() > 1,
+        "actual recognizer chain must be retained"
+    );
+    for producer in [
+        wow_recognizers::source_bridge::W2_PARTITION,
+        wow_recognizers::source_scripts::W5_HOOK_PARTITION,
+        wow_recognizers::source_state::SOURCE_STATE_LIBRARY_PARTITION,
+    ] {
+        let partition = acquired
+            .graph()
+            .partition(producer)
+            .ok_or("missing producer")?;
+        assert!(
+            partition
+                .coverage()
+                .iter()
+                .all(|coverage| !coverage.negative_authority())
+        );
+    }
+    let current = read.current()?;
+    drop(acquired);
+    drop(read);
+    let stale = LiveProjectPublishRequest::new("fixture:composed-stale", "absent", false, true)?;
+    assert_eq!(
+        operations::publish_input(input()?, &graph_request, &root, &stale, &stop)
+            .err()
+            .ok_or("stale expected-current accepted")?
+            .code(),
+        ServiceErrorCode::StoreCurrentConflict
+    );
+    assert_eq!(LiveProjectStore::open(&root)?.current()?, current);
+    std::fs::remove_dir_all(root)?;
+    Ok(())
 }
 
 #[test]
@@ -198,6 +261,27 @@ fn live_pair_reopens_and_advancing_current_preserves_leased_readers() -> TestRes
     drop(old);
     drop(new);
     drop(reopened);
+    let projected: serde_json::Value =
+        serde_json::from_slice(&read_live_project(&root, "current", &stop)?.canonical_bytes()?)?;
+    assert_eq!(projected["pair"]["project_snapshot_id"], new_id);
+    assert_eq!(projected["pair"]["publication_set_id"], set_id);
+    assert_eq!(projected["pair"]["main_file_count"], 1);
+    assert_eq!(projected["pair"]["library_count"], 1);
+    let reconciled: serde_json::Value = serde_json::from_slice(
+        &reconcile_live_project(&root, "fixture:live-pair-two", &stop)?.canonical_bytes()?,
+    )?;
+    assert_eq!(reconciled["status"], "observed");
+    assert_eq!(
+        LiveProjectStore::open(&root)?.current()?,
+        Some(active.clone())
+    );
+    assert_eq!(
+        read_live_project(&root, "not-a-generation", &stop)
+            .err()
+            .ok_or("invalid selector accepted")?
+            .code(),
+        ServiceErrorCode::InvalidRequest
+    );
     std::fs::remove_dir_all(root)?;
     Ok(())
 }

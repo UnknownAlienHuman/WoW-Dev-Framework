@@ -302,6 +302,108 @@ fn no_change_preserves_the_exact_arc_and_analyzer_snapshot() -> TestResult {
 }
 
 #[test]
+fn explicit_library_intent_preserves_legacy_keep_and_matches_final_rebuild() -> TestResult {
+    use wow_project::ProjectLibraryOperation;
+    let (mut publisher, current) = publish_strict()?;
+    let keep = ProjectUpdateRequest::new(current.configuration().clone(), Vec::new())
+        .with_target_libraries(Vec::new());
+    assert!(Arc::ptr_eq(
+        publisher.apply_update(keep)?.snapshot(),
+        &current
+    ));
+    // Empty replacement and Clear reach analyzer validation; they cannot be
+    // silently interpreted as Keep. The current E0 profile requires a Library.
+    for intent in [
+        ProjectLibraryOperation::Clear,
+        ProjectLibraryOperation::Replace(Vec::new()),
+    ] {
+        let error = publisher
+            .apply_update(
+                ProjectUpdateRequest::new(current.configuration().clone(), Vec::new())
+                    .with_library_operation(intent),
+            )
+            .err()
+            .ok_or_else(|| test_error("empty Library request became a no-op"))?;
+        assert_eq!(error.code(), ProjectErrorCode::AnalyzerFailed);
+        assert!(Arc::ptr_eq(
+            publisher
+                .current_snapshot()
+                .ok_or_else(|| test_error("missing current"))?,
+            &current
+        ));
+    }
+    let replacement = LuaWorkspaceSnapshot::build(
+        current.configuration().analyzer_binding().backend().clone(),
+        LuaWorkspaceUniverse::Fixture,
+        vec![LuaWorkspaceFileInput::new(
+            "library/C_E0Fixture.lua",
+            format!("{LIBRARY_SOURCE}\n---@return number\nfunction ExtraLibraryApi() end\n"),
+        )],
+        LuaWorkspaceLimits::new(8, 16_384, 256 * 1024, 512 * 1024)?,
+    )?;
+    let mut independent = ProjectPublisher::new();
+    let expected = independent.publish_initial(ProjectInputBundle::closed(
+        current.configuration().clone(),
+        baseline_files()?,
+        vec![replacement.clone()],
+    )?)?;
+    let outcome = publisher.apply_update(
+        ProjectUpdateRequest::new(current.configuration().clone(), Vec::new())
+            .expected_generation(current.project_generation())
+            .expected_snapshot_digest(current.canonical_snapshot_digest())
+            .with_library_operation(ProjectLibraryOperation::Replace(vec![replacement])),
+    )?;
+    assert!(outcome.changed());
+    assert_eq!(outcome.snapshot().snapshot_id(), expected.snapshot_id());
+    assert_ne!(
+        outcome.snapshot().analyzer_binding().analyzer_snapshot_id(),
+        current.analyzer_binding().analyzer_snapshot_id()
+    );
+    assert_eq!(current.file_manifest(), outcome.snapshot().file_manifest());
+    Ok(())
+}
+
+#[test]
+fn cancelled_update_keeps_current_and_records_the_last_good_identity() -> TestResult {
+    let (mut publisher, current) = publish_strict()?;
+    let file = record_by_path(&current, "main/clean.lua")?;
+    let request = ProjectUpdateRequest::new(
+        current.configuration().clone(),
+        vec![ProjectFileOperation::update(
+            file.file_id().clone(),
+            file.content_digest(),
+            "return 17\n",
+        )],
+    );
+    let error = publisher
+        .apply_update_cancellable(request, &std::sync::atomic::AtomicBool::new(true))
+        .err()
+        .ok_or_else(|| test_error("cancelled update published"))?;
+    assert_eq!(error.code(), ProjectErrorCode::AnalysisCancelled);
+    assert_eq!(publisher.last_failure(), Some(&error));
+    assert!(Arc::ptr_eq(
+        publisher
+            .current_snapshot()
+            .ok_or_else(|| test_error("missing current"))?,
+        &current
+    ));
+    // Even NoChange is cancellation-aware; an already raised stop flag must
+    // not become an apparently successful update response.
+    assert_eq!(
+        publisher
+            .apply_update_cancellable(
+                ProjectUpdateRequest::new(current.configuration().clone(), Vec::new()),
+                &std::sync::atomic::AtomicBool::new(true)
+            )
+            .err()
+            .ok_or_else(|| test_error("cancelled NoChange accepted"))?
+            .code(),
+        ProjectErrorCode::AnalysisCancelled
+    );
+    Ok(())
+}
+
+#[test]
 fn successful_update_publishes_atomically_and_keeps_old_view_immutable() -> TestResult {
     let (mut publisher, old_snapshot) = publish_strict()?;
     let old_view = old_snapshot.open_view();

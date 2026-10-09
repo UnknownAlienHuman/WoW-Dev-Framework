@@ -1,5 +1,6 @@
 use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;
+use wow_project::replay::publication::ProjectPublicationBundle;
 use wow_project::{ProjectGenerationCandidate, ProjectInputBundle, ProjectPublisher, ProjectView};
 use wow_reference::ReferenceView;
 use wow_rules::RuleRegistry;
@@ -23,8 +24,15 @@ pub struct LocalProjectBackend {
     registry: RuleRegistry,
     configuration: ServiceConfiguration,
     target_generation: String,
-    published: Mutex<Option<ProjectView>>,
+    published: Mutex<Option<PublishedLocalProject>>,
     function_calls: bool,
+}
+
+/// One published native project retained with its original publisher, so a
+/// same-session capture reuses the admitted analysis instead of re-deriving it.
+struct PublishedLocalProject {
+    view: ProjectView,
+    publisher: ProjectPublisher,
 }
 
 impl LocalProjectBackend {
@@ -128,7 +136,7 @@ impl LocalProjectBackend {
             .lock()
             .map_err(|_| owner_error("project publication lock poisoned"))?;
         let project = match retained.as_ref() {
-            Some(project) => project.clone(),
+            Some(retained) => retained.view.clone(),
             None => {
                 // Publication is in-memory only. No source or persistent current pointer is written.
                 let mut publisher = if self.function_calls {
@@ -162,13 +170,33 @@ impl LocalProjectBackend {
                         "published project differs from its admitted generation",
                     ));
                 }
-                *retained = Some(view.clone());
+                *retained = Some(PublishedLocalProject {
+                    view: view.clone(),
+                    publisher,
+                });
                 view
             }
         };
         drop(retained);
         cancelled(stop)?;
         Ok(project)
+    }
+
+    pub(crate) fn capture_project_bundle(
+        &self,
+        graph: &wow_graph::GraphPartitionSnapshot,
+        stop: &AtomicBool,
+    ) -> ServiceResult<ProjectPublicationBundle> {
+        cancelled(stop)?;
+        let retained = self
+            .published
+            .lock()
+            .map_err(|_| owner_error("project publication lock poisoned"))?;
+        let project = retained
+            .as_ref()
+            .ok_or_else(|| owner_error("project must be materialized before native publication"))?;
+        ProjectPublicationBundle::build(&project.publisher, graph, stop)
+            .map_err(crate::live_project::project_error)
     }
 
     fn acquire(
@@ -202,7 +230,7 @@ impl ServiceBackend for LocalProjectBackend {
             .map_err(|_| owner_error("project publication lock poisoned"))?;
         let identity = retained
             .as_ref()
-            .map(|view| self.identity(view))
+            .map(|project| self.identity(&project.view))
             .transpose()?;
         let project_health = if retained.is_some() {
             ComponentHealth::Ready
@@ -216,10 +244,10 @@ impl ServiceBackend for LocalProjectBackend {
                 &self.reference,
                 retained
                     .as_ref()
-                    .map(ProjectView::snapshot_id)
+                    .map(|project| project.view.snapshot_id())
                     .unwrap_or(&self.target_generation),
                 project_health,
-                retained.as_ref(),
+                retained.as_ref().map(|project| &project.view),
                 self.load.evidence(),
                 self.native_receipt(),
             )?,

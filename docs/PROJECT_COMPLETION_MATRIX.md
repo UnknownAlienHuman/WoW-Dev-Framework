@@ -61,7 +61,7 @@ no Rust implementation in the audited source. Their documentation is not a binar
 | E1-A–E1-C | Partial executable | Finish only verified missing contract/acceptance slices; do not recreate existing store/reference/annotation implementations |
 | E1-D | Partial executable Reference Pack service and active internal builder with durable materialization/finalization | Close external parity/license/rebuild evidence, Windows/process-loss acceptance and complete package gates; code presence is not `ValidatedLocal` |
 | E2-A–E2-B | Partial executable | All 26 active E2-B rule IDs are service-published after the W11 semantic repair, TOC, XML and state slices; close public CLI/full-pipeline fixtures and package acceptance |
-| E2-C–E2-D | Partial source index, retained manifested store and native physical-input live pair service | CLI and loader-plan live publication, incremental invalidation, retention/GC/backup/epoch replacement and complete acceptance remain open; see [REPLAY_PUBLICATION.md](../crates/wow-project/REPLAY_PUBLICATION.md) |
+| E2-C–E2-D | Partial source index, retained manifested store, native physical-input live pair service/CLI and cancellable update controls | Loader-plan live publication, generation Library binding, incremental reuse/invalidation, retention/GC/backup/epoch replacement and complete acceptance remain open; see [REPLAY_PUBLICATION.md](../crates/wow-project/REPLAY_PUBLICATION.md) |
 | E3-A–E3-C | Not started | Exact Blizzard source universe, context owners and service/CLI after E2 closure |
 | E4-A–E4-C | Not started | Search, lineage/migration/static impact and routing after A0 prerequisites |
 | E5-A–E5-C | Not started | Calibration, independent review/holdout and governed publication lifecycle |
@@ -240,3 +240,11 @@ Fresh workspace policy, fmt, check, strict Clippy, tests (844 passed, 1 ignored,
 public CLI wiring remain open, as do full W13/E2, crash, incremental, retention,
 backup and runtime acceptance. See
 [REPLAY_PUBLICATION.md](../crates/wow-project/REPLAY_PUBLICATION.md).
+
+The later physical-input CLI/service checkpoint passes the complete producer
+chain, publication/read-back, public read/reconciliation projections and stale
+CAS rejection. Canonical pack repairs version bridge4/hooks5/library3. W14 caller
+cancellation and typed Library intent are executable; current E0 policy rejects
+Clear/empty replacement. Full Library generation binding and incremental reuse
+are not implemented. Fresh workspace gates passed on 2026-10-09 (847 tests,
+1 ignored, 103 targets). See [LIVE_PROJECT.md](../apps/wow/LIVE_PROJECT.md).

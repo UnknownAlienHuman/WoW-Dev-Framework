@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 use wow_core::{CanonicalResult, ContentDigest, ProjectGenerationId, SourceContent};
 use wow_emmy::LuaWorkspaceSnapshot;
@@ -14,8 +15,31 @@ type ProjectUpdateParts = (
     Option<ContentDigest<CanonicalResult>>,
     ProjectConfiguration,
     Vec<ProjectFileOperation>,
-    Vec<LuaWorkspaceSnapshot>,
+    ProjectLibraryOperation,
 );
+
+/// Exact intent for the analyzer Library inputs of one update transaction.
+///
+/// `Keep` retains the publisher's current libraries, `Replace` installs the
+/// listed snapshots, and `Clear` drops every library. A bare `Vec` request cannot
+/// distinguish retaining from dropping, which is why this type exists.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProjectLibraryOperation {
+    Keep,
+    Replace(Vec<LuaWorkspaceSnapshot>),
+    Clear,
+}
+
+impl ProjectLibraryOperation {
+    /// Library snapshots this operation installs, if any.
+    #[must_use]
+    pub fn snapshots(&self) -> &[LuaWorkspaceSnapshot] {
+        match self {
+            Self::Replace(snapshots) => snapshots,
+            Self::Keep | Self::Clear => &[],
+        }
+    }
+}
 
 /// Explicit E0 project-file operation.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -86,7 +110,7 @@ pub struct ProjectUpdateRequest {
     expected_current_snapshot_digest: Option<ContentDigest<CanonicalResult>>,
     target_configuration: ProjectConfiguration,
     file_operations: Vec<ProjectFileOperation>,
-    target_libraries: Vec<LuaWorkspaceSnapshot>,
+    library_operation: ProjectLibraryOperation,
 }
 
 impl ProjectUpdateRequest {
@@ -100,7 +124,7 @@ impl ProjectUpdateRequest {
             expected_current_snapshot_digest: None,
             target_configuration,
             file_operations,
-            target_libraries: Vec::new(),
+            library_operation: ProjectLibraryOperation::Keep,
         }
     }
 
@@ -119,9 +143,25 @@ impl ProjectUpdateRequest {
         self
     }
 
+    /// Legacy conversion: an empty vector retains current libraries. Use
+    /// `with_library_operation` to request an explicit empty replacement/clear.
     #[must_use]
     pub fn with_target_libraries(mut self, libraries: Vec<LuaWorkspaceSnapshot>) -> Self {
-        self.target_libraries = libraries;
+        // Legacy compatibility: an empty vector historically meant "unchanged",
+        // so it must not silently become a request to clear every library.
+        self.library_operation = if libraries.is_empty() {
+            ProjectLibraryOperation::Keep
+        } else {
+            ProjectLibraryOperation::Replace(libraries)
+        };
+        self
+    }
+
+    /// Explicit typed intent. Prefer this over `with_target_libraries`, which
+    /// cannot express the difference between keeping and clearing libraries.
+    #[must_use]
+    pub fn with_library_operation(mut self, operation: ProjectLibraryOperation) -> Self {
+        self.library_operation = operation;
         self
     }
 
@@ -145,9 +185,18 @@ impl ProjectUpdateRequest {
         &self.file_operations
     }
 
+    /// Legacy projection. Keep and Clear both have an empty slice; callers that
+    /// need exact intent must use `library_operation`.
     #[must_use]
     pub fn target_libraries(&self) -> &[LuaWorkspaceSnapshot] {
-        &self.target_libraries
+        self.library_operation.snapshots()
+    }
+
+    /// Exact library intent, including the retain-versus-drop distinction that
+    /// the legacy slice cannot carry.
+    #[must_use]
+    pub const fn library_operation(&self) -> &ProjectLibraryOperation {
+        &self.library_operation
     }
 
     pub(crate) fn into_parts(self) -> ProjectUpdateParts {
@@ -156,7 +205,7 @@ impl ProjectUpdateRequest {
             self.expected_current_snapshot_digest,
             self.target_configuration,
             self.file_operations,
-            self.target_libraries,
+            self.library_operation,
         )
     }
 }
@@ -186,7 +235,9 @@ pub(crate) fn apply_file_operations(
     current_files: &[ProjectInputFile],
     target_configuration: &ProjectConfiguration,
     mut operations: Vec<ProjectFileOperation>,
+    stop: &AtomicBool,
 ) -> ProjectResult<Vec<ProjectInputFile>> {
+    crate::analyzer::checkpoint(stop)?;
     target_configuration.validate()?;
     let operation_count = u64::try_from(operations.len()).map_err(|_| {
         ProjectError::new(
@@ -204,6 +255,7 @@ pub(crate) fn apply_file_operations(
     }
     let mut targets = BTreeSet::new();
     for operation in &operations {
+        crate::analyzer::checkpoint(stop)?;
         if !targets.insert(operation.file_id().clone()) {
             return Err(ProjectError::new(
                 ProjectErrorCode::ConflictingOperations,
@@ -218,12 +270,15 @@ pub(crate) fn apply_file_operations(
             .cmp(right.file_id())
             .then(left.rank().cmp(&right.rank()))
     });
+    crate::analyzer::checkpoint(stop)?;
     let mut files = current_files
         .iter()
         .cloned()
         .map(|file| (file.file_id().clone(), file))
         .collect::<BTreeMap<_, _>>();
+    crate::analyzer::checkpoint(stop)?;
     for operation in operations {
+        crate::analyzer::checkpoint(stop)?;
         match operation {
             ProjectFileOperation::Add(file) => {
                 if files.contains_key(file.file_id()) {

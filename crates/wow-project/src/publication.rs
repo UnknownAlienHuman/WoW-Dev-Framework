@@ -8,9 +8,9 @@ use crate::analyzer::build_analyzer_binding;
 use crate::update::apply_file_operations;
 use crate::{
     ProjectConfiguration, ProjectError, ProjectErrorCode, ProjectGenerationCandidate,
-    ProjectInputBundle, ProjectInputFile, ProjectInputInventory, ProjectPhase, ProjectResult,
-    ProjectSnapshot, ProjectSourceRegistry, ProjectUpdateOutcome, ProjectUpdateRequest,
-    ProjectView,
+    ProjectInputBundle, ProjectInputFile, ProjectInputInventory, ProjectLibraryOperation,
+    ProjectPhase, ProjectResult, ProjectSnapshot, ProjectSourceRegistry, ProjectUpdateOutcome,
+    ProjectUpdateRequest, ProjectView,
 };
 
 /// Synchronous atomic publisher for one explicit project identity.
@@ -98,6 +98,16 @@ impl ProjectPublisher {
         &mut self,
         request: ProjectUpdateRequest,
     ) -> ProjectResult<ProjectUpdateOutcome> {
+        self.apply_update_cancellable(request, &AtomicBool::new(false))
+    }
+
+    /// Builds a private candidate using the caller's cancellation flag. A failed
+    /// or cancelled update retains the exact previous immutable publication.
+    pub fn apply_update_cancellable(
+        &mut self,
+        request: ProjectUpdateRequest,
+        stop: &AtomicBool,
+    ) -> ProjectResult<ProjectUpdateOutcome> {
         let current = self.current.clone().ok_or_else(|| {
             ProjectError::new(
                 ProjectErrorCode::NoPublishedSnapshot,
@@ -105,6 +115,9 @@ impl ProjectPublisher {
                 "project update requires an existing published snapshot",
             )
         })?;
+        if let Err(error) = crate::analyzer::checkpoint(stop) {
+            return self.reject_with_current(error, &current);
+        }
         let (
             expected_generation,
             expected_snapshot_digest,
@@ -144,11 +157,15 @@ impl ProjectPublisher {
                 &current,
             );
         }
-        let final_files =
-            match apply_file_operations(&self.current_inputs, &target_configuration, operations) {
-                Ok(files) => files,
-                Err(error) => return self.reject_with_current(error, &current),
-            };
+        let final_files = match apply_file_operations(
+            &self.current_inputs,
+            &target_configuration,
+            operations,
+            stop,
+        ) {
+            Ok(files) => files,
+            Err(error) => return self.reject_with_current(error, &current),
+        };
         let declared_paths = final_files
             .iter()
             .map(|file| file.relative_path().as_str().to_owned())
@@ -161,10 +178,13 @@ impl ProjectPublisher {
             Ok(inventory) => inventory,
             Err(error) => return self.reject_with_current(error, &current),
         };
-        let libraries = if requested_libraries.is_empty() {
-            self.libraries.clone()
-        } else {
-            requested_libraries
+        if let Err(error) = crate::analyzer::checkpoint(stop) {
+            return self.reject_with_current(error, &current);
+        }
+        let libraries = match requested_libraries {
+            ProjectLibraryOperation::Keep => self.libraries.clone(),
+            ProjectLibraryOperation::Replace(libraries) => libraries,
+            ProjectLibraryOperation::Clear => Vec::new(),
         };
         let current_library_ids = current
             .analyzer_binding()
@@ -175,6 +195,9 @@ impl ProjectPublisher {
             .map(LuaWorkspaceSnapshot::snapshot_id)
             .collect::<Vec<_>>();
         target_library_ids.sort_unstable();
+        if let Err(error) = crate::analyzer::checkpoint(stop) {
+            return self.reject_with_current(error, &current);
+        }
         if target_configuration.configuration_digest()
             == current.configuration().configuration_digest()
             && inventory.manifest_digest()
@@ -189,9 +212,12 @@ impl ProjectPublisher {
             inventory.clone(),
             libraries.clone(),
             self.function_calls,
-            &AtomicBool::new(false),
+            stop,
         ) {
             Ok(snapshot) => {
+                if let Err(error) = crate::analyzer::checkpoint(stop) {
+                    return self.reject_with_current(error, &current);
+                }
                 let snapshot = Arc::new(snapshot);
                 self.current_inputs = inventory.files().to_vec();
                 self.libraries = libraries;

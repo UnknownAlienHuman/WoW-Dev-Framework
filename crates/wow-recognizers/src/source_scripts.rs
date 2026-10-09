@@ -462,9 +462,9 @@ use wow_emmy::function_calls::{FunctionCallReport, SourceCallLiteral};
 // managed-object or Secret legality: these are universal structural roles only.
 
 pub const W5_HOOK_PARTITION: &str = "wow-recognizers.lua-hooks";
-pub const W5_HOOK_PROFILE: &str = "wow-recognizers/lua-hooks/4";
+pub const W5_HOOK_PROFILE: &str = "wow-recognizers/lua-hooks/5";
 const W5_FACT_PARTITION: &str = "wow-recognizers.lua-hook-facts";
-const W5_FACT_PROFILE: &str = "wow-recognizers-lua-hook-call-facts-4";
+const W5_FACT_PROFILE: &str = "wow-recognizers-lua-hook-call-facts-5";
 const W5_FACT_KIND: &str = "lua_call";
 const W5_SET_SCRIPT_RULE: &str = "core.hook.set_script";
 const W5_HOOK_SCRIPT_RULE: &str = "core.hook.hook_script";
@@ -1572,15 +1572,15 @@ fn w5_validate_support_without_digest(
 /// clauses match exact resolved callable keys only, so a rename of a decisive literal
 /// removes exactly one rule and nothing else.
 fn w5_hook_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRecognizerPack> {
-    let document = RecognizerPackDocument {
+    let mut document = RecognizerPackDocument {
         schema_version: crate::RECOGNIZER_PACK_SCHEMA_VERSION,
         pack: RecognizerPack {
             pack_id: "wow-core-lua-hooks".into(),
-            version: "4".into(),
+            version: "5".into(),
             trust_class: RecognizerPackTrustClass::Core,
             fact_schema_profile_id: W5_FACT_PROFILE.into(),
             graph_registry_bundle_id: registry_bundle_id.into(),
-            evaluation_profile_id: "wow-recognizers-w11-hooks-4".into(),
+            evaluation_profile_id: "wow-recognizers-w11-hooks-5".into(),
             rollout: RecognizerPackRollout::Shadow,
             budgets: RecognizerPackBudgets {
                 max_rules: 8,
@@ -1753,6 +1753,10 @@ fn w5_hook_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRec
             ],
         },
     };
+    document
+        .pack
+        .rules
+        .sort_by(|a, b| (&a.rule_id, a.version).cmp(&(&b.rule_id, b.version)));
     let bytes = canonical_json_bytes(&document)
         .map_err(|_| failure(RecognizerErrorCode::PackIdentityMismatch))?;
     parse_recognizer_pack(&bytes)
