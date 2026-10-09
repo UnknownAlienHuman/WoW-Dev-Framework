@@ -15,6 +15,7 @@ use wow_project::{
 };
 type TestResult<T = ()> = Result<T, Box<dyn Error>>;
 mod durable;
+mod gc;
 mod library_modes;
 mod retention;
 

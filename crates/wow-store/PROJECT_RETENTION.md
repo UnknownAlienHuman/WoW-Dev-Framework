@@ -2,6 +2,8 @@
 
 Updated 2026-10-09. This W15 slice supplies persistent exact generation pins;
 generation/partition GC and backup/recovery acceptance remain open.
+The subsequent executable v3 release/GC slice is in
+[`PROJECT_GC.md`](PROJECT_GC.md); this document records the preceding v2 boundary.
 
 `ProjectStore::create_with_retention` selects
 `project-store-wal-manifested-partitions-v2`. Its static SQLite schema extends

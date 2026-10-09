@@ -2,7 +2,7 @@ use super::{LiveProjectStore, fail, store_error};
 use crate::{ServiceErrorCode, ServiceResult};
 use std::sync::atomic::AtomicBool;
 use wow_store::project::{
-    EpochManifest, RETAINED_PHYSICAL_PROFILE, RetentionRoot, RetentionRootId,
+    EpochManifest, GC_PHYSICAL_PROFILE, RETAINED_PHYSICAL_PROFILE, RetentionRoot, RetentionRootId,
 };
 
 impl LiveProjectStore {
@@ -39,7 +39,10 @@ impl LiveProjectStore {
     }
 
     fn require_retention(&self) -> ServiceResult<()> {
-        if self.store.epoch().physical_profile() != RETAINED_PHYSICAL_PROFILE {
+        if !matches!(
+            self.store.epoch().physical_profile(),
+            RETAINED_PHYSICAL_PROFILE | GC_PHYSICAL_PROFILE
+        ) {
             return Err(fail(ServiceErrorCode::OperationNotImplementedForMilestone));
         }
         Ok(())

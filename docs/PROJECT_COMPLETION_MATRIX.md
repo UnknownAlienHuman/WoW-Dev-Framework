@@ -316,3 +316,13 @@ Clippy, tests (864 passed, 1 ignored, 105 targets), rustdoc and build passed on
 complete root/shared-data closure, stale-plan rejection, GC/recovery and full W15
 acceptance remain open; see
 [PROJECT_RETENTION.md](../crates/wow-store/PROJECT_RETENTION.md).
+
+The subsequent W15 v3 slice implements explicit operation release, persisted
+policy CAS, bounded complete inline root inventory, stale-plan rejection and
+transactional generation/partition collection with durable receipts. Released IDs
+stay reserved and original activation evidence survives. Store and native service
+lifecycles verify actual reclamation plus shared/current/pin/lease preservation and
+reopen. Final workspace policy, fmt, check, strict Clippy, tests (866 passed,
+1 ignored, 106 targets), rustdoc and build passed on 2026-10-09. Object/epoch collection, recovery and
+platform faults remain open, so full W15/E2 remains unaccepted. See
+[PROJECT_GC.md](../crates/wow-store/PROJECT_GC.md).

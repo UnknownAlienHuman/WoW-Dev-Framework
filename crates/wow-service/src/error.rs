@@ -16,6 +16,7 @@ pub enum ServiceErrorCode {
     ProjectTargetExcluded,
     ProjectTargetUnresolved,
     OperationConflict,
+    OperationReleased,
     OperationBusy,
     StoreCurrentConflict,
     StoreOutcomeUnknown,

@@ -710,3 +710,18 @@ policy, fmt, check, strict Clippy, tests (864 passed, 1 ignored, 105 targets),
 rustdoc and build passed. This slice provides
 no deletion. Operation-root release/tombstones, complete GC closure and plans,
 backup/recovery, Windows/crash and full W15/E2 acceptance remain open.
+
+## W15 explicit release and inline SQL GC (2026-10-09)
+
+Physical v3 extends the frozen v1/v2 profiles with authoritative GC policy and
+durable batch receipts. Explicit operation release preserves original request,
+manifest and activation identities while stopping resumability. Planning validates
+complete bounded inline closure, protects current/policy/pins/leases/operations
+and their bases, then selects only unreachable generations/versions. Policy CAS,
+lease revisions, writer changes and exact recheck reject stale/ABA plans. Deletions
+and receipt share one immediate transaction; response loss reconciles honestly.
+Store and native Project/Graph service lifecycle regressions pass. Final workspace
+policy, fmt, check, strict Clippy, tests (866 passed, 1 ignored, 106 targets),
+rustdoc and build passed. Object/epoch deletion, backup/recovery, process/power-loss and
+Windows fault acceptance remain open; see
+[PROJECT_GC.md](../crates/wow-store/PROJECT_GC.md).

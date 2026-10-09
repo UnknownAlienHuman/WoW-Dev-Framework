@@ -131,6 +131,7 @@ impl From<ServiceError> for CliError {
             | ServiceErrorCode::ProjectTargetExcluded
             | ServiceErrorCode::ProjectTargetUnresolved
             | ServiceErrorCode::OperationConflict
+            | ServiceErrorCode::OperationReleased
             | ServiceErrorCode::OperationBusy
             | ServiceErrorCode::StoreCurrentConflict
             | ServiceErrorCode::StoreOutcomeUnknown => ExitClass::Build,

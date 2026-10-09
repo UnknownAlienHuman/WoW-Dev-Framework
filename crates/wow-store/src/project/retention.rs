@@ -136,7 +136,10 @@ impl ProjectStore {
 }
 
 fn require_retention(epoch: &EpochManifest) -> StoreResult<()> {
-    if epoch.physical_profile() != RETAINED_PHYSICAL_PROFILE {
+    if !matches!(
+        epoch.physical_profile(),
+        RETAINED_PHYSICAL_PROFILE | GC_PHYSICAL_PROFILE
+    ) {
         return Err(failure(StoreErrorCode::ConfigurationInvalid));
     }
     Ok(())

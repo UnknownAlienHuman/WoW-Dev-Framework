@@ -1,5 +1,6 @@
 //! Coherent native project/graph publication through the existing manifested
 //! store. Current resolves once; actual replay and all owner checks hold its lease.
+mod gc;
 mod operations;
 mod retention;
 #[cfg(test)]
@@ -53,8 +54,7 @@ impl LiveProjectRead {
 impl LiveProjectStore {
     pub fn create(root: &Path, owner: &str) -> ServiceResult<Self> {
         Ok(Self {
-            store: ProjectStore::create_with_retention(root, owner, catalog()?)
-                .map_err(store_error)?,
+            store: ProjectStore::create_with_gc(root, owner, catalog()?).map_err(store_error)?,
         })
     }
     pub fn open(root: &Path) -> ServiceResult<Self> {
@@ -111,6 +111,17 @@ impl LiveProjectStore {
             records,
         )
         .map_err(store_error)?;
+        if let Some(operation) = self.store.operation(&id).map_err(store_error)?
+            && operation.release.is_some()
+        {
+            return Err(fail(
+                if operation.request_digest == request.request_digest() {
+                    ServiceErrorCode::OperationReleased
+                } else {
+                    ServiceErrorCode::OperationConflict
+                },
+            ));
+        }
         let outcome = (|| {
             let operation = self.store.prepare(&request, stop).map_err(store_error)?;
             let read = self
@@ -146,6 +157,7 @@ impl LiveProjectStore {
                 if let Ok(Some(operation)) = self.store.reconcile(&id)
                     && operation.request_digest == request.request_digest()
                     && operation.state == PublicationState::Activated
+                    && operation.release.is_none()
                 {
                     return Ok(operation);
                 }

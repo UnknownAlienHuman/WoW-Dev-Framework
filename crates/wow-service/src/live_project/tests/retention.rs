@@ -1,7 +1,5 @@
 use super::*;
-use wow_store::project::{
-    RETAINED_PHYSICAL_PROFILE, RetentionRoot, RetentionRootId, RetentionRootKind,
-};
+use wow_store::project::{GC_PHYSICAL_PROFILE, RetentionRoot, RetentionRootId, RetentionRootKind};
 
 #[test]
 fn service_pins_survive_reopen_and_legacy_physical_epochs_remain_readable() -> TestResult {
@@ -15,7 +13,7 @@ fn service_pins_survive_reopen_and_legacy_physical_epochs_remain_readable() -> T
     let mut store = LiveProjectStore::create(&retained, owner)?;
     assert_eq!(
         store.storage_epoch().physical_profile(),
-        RETAINED_PHYSICAL_PROFILE
+        GC_PHYSICAL_PROFILE
     );
     let operation = store.publish(&publisher, &graph, "fixture:retained", None, &stop)?;
     let current = store.current()?.ok_or("missing retained current")?;

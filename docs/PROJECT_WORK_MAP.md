@@ -20,14 +20,23 @@ inactive validation and current CAS preserve older leased readers. Exact Library
 and configuration replacement retain cold analysis paths. Standalone/package
 durable updates and dependency-specific fact reuse remain open. W15 has executable
 persistent exact generation pins in a separately selected physical v2 profile,
-with frozen v1 reopening unchanged. Operation-root release, complete retained
-closure and guarded GC remain next, followed by W16 recovery; full W14/E2 and
+with frozen v1 reopening unchanged. A separately selected v3 slice now supplies
+operation release, complete bounded inline root closure, exact policy CAS and
+guarded transactional GC through store/service APIs. Shared/current/leased/pinned
+data survives; released operation evidence and GC receipts survive collection and
+reopen. W16 recovery and object/epoch/platform gates remain next; full W14/E2 and
 W15 acceptance remain open. See
-[PROJECT_RETENTION.md](../crates/wow-store/PROJECT_RETENTION.md).
+[PROJECT_GC.md](../crates/wow-store/PROJECT_GC.md).
 
 The roots checkpoint passed workspace policy, fmt, check, strict Clippy, tests
 (864 passed, 1 ignored, 105 targets), rustdoc and build on 2026-10-09. The ignored
 consumer check and Gethe/Ketho/runtime gates remain open.
+
+The subsequent release/inline-GC checkpoint passed workspace policy, fmt, check,
+strict Clippy, tests (866 passed, 1 ignored, 106 targets), rustdoc and build on
+2026-10-09. Gates use an isolated build target outside the workspace; another
+project's shared Cargo target remains independent. Platform faults and full W15
+acceptance stay open.
 
 W11 has all 26 declared core rule IDs in its functional service publication path.
 The five TOC, four XML and three state families publish alongside the earlier W11

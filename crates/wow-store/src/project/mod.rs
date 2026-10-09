@@ -2,19 +2,23 @@
 //! own their records and validation; this owner supplies WAL, exact membership,
 //! read leases, durable operation state and a single coherent current CAS.
 mod database;
+mod gc;
 mod model;
 mod publication;
 mod read;
+mod release;
 mod retention;
 use crate::{OperationId, StoreError, StoreResult};
 use database::Database;
+pub use gc::{ProjectGcPlan, ProjectGcPolicy, ProjectGcReceipt, ProjectGcReport};
 pub use model::{
-    CurrentPublication, CurrentRecordId, EpochId, EpochManifest, GenerationManifest,
-    PHYSICAL_PROFILE, PartitionMember, PartitionRecord, PartitionVersionId, PublicationOperation,
-    PublicationRequest, PublicationState, RECORD_PROFILE, RETAINED_PHYSICAL_PROFILE, RecordCatalog,
-    StoreGenerationId, ValidationId,
+    CurrentPublication, CurrentRecordId, EpochId, EpochManifest, GC_PHYSICAL_PROFILE,
+    GenerationManifest, PHYSICAL_PROFILE, PartitionMember, PartitionRecord, PartitionVersionId,
+    PublicationOperation, PublicationRequest, PublicationState, RECORD_PROFILE,
+    RETAINED_PHYSICAL_PROFILE, RecordCatalog, StoreGenerationId, ValidationId,
 };
 pub use read::{ReadSelector, ReadSnapshot, ValidatedRead};
+pub use release::PublicationRelease;
 pub use retention::{RetentionRoot, RetentionRootId, RetentionRootKind};
 use std::{path::Path, sync::atomic::AtomicBool};
 
@@ -39,6 +43,14 @@ impl ProjectStore {
         catalog: RecordCatalog,
     ) -> StoreResult<Self> {
         Database::create_with_retention(root.as_ref(), owner, catalog).map(|db| Self { db })
+    }
+    /// Create a separately selected release/GC epoch; no existing epoch migrates.
+    pub fn create_with_gc(
+        root: impl AsRef<Path>,
+        owner: &str,
+        catalog: RecordCatalog,
+    ) -> StoreResult<Self> {
+        Database::create_with_gc(root.as_ref(), owner, catalog).map(|db| Self { db })
     }
     pub fn open(root: impl AsRef<Path>, catalog: &RecordCatalog) -> StoreResult<Self> {
         Database::open(root.as_ref(), catalog).map(|db| Self { db })

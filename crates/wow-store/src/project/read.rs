@@ -54,30 +54,20 @@ impl ReadSnapshot {
         };
         let id = &selected;
         let manifest = read_manifest(&connection, id, &db.epoch)?;
-        let mut statement = connection.prepare("SELECT CASE WHEN length(logical_key)<=256 THEN logical_key END,CASE WHEN length(version)<=128 THEN version END FROM membership WHERE generation_id=?1 ORDER BY logical_key LIMIT 257")
-            .map_err(StoreError::database)?;
-        let members = statement
-            .query_map([id.as_str()], |r| {
-                Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
-            })
-            .map_err(StoreError::database)?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(StoreError::database)?;
-        drop(statement);
-        if members.len() != manifest.members.len()
-            || members
-                .iter()
-                .zip(&manifest.members)
-                .any(|((key, version), m)| key != &m.key || version != m.version.as_str())
-        {
-            return Err(invalid());
-        }
+        validate_membership(&connection, &manifest)?;
         // Every member is validated, not just the record eventually requested.
         for member in &manifest.members {
             checkpoint(stop)?;
             read_partition(&connection, member)?;
         }
         checkpoint(stop)?;
+        let next_revision = db
+            .life
+            .lease_revision
+            .get()
+            .checked_add(1)
+            .ok_or_else(|| failure(StoreErrorCode::BudgetExceeded))?;
+        db.life.lease_revision.set(next_revision);
         *db.life
             .leases
             .borrow_mut()
@@ -129,6 +119,9 @@ impl ReadSnapshot {
 }
 impl Drop for ReadSnapshot {
     fn drop(&mut self) {
+        self.life
+            .lease_revision
+            .set(self.life.lease_revision.get().saturating_add(1));
         let _ = self.connection.execute_batch("ROLLBACK");
         let mut leases = self.life.leases.borrow_mut();
         if let Some(n) = leases.get_mut(&self.manifest.generation_id) {
@@ -143,6 +136,30 @@ impl Drop for ReadSnapshot {
 pub struct ValidatedRead {
     pub(super) epoch: EpochId,
     pub(super) validation: ValidationRecord,
+}
+
+pub(super) fn validate_membership(
+    c: &Connection,
+    manifest: &GenerationManifest,
+) -> StoreResult<()> {
+    let mut statement = c.prepare("SELECT CASE WHEN length(logical_key)<=256 THEN logical_key END,CASE WHEN length(version)<=128 THEN version END FROM membership WHERE generation_id=?1 ORDER BY logical_key LIMIT 257")
+        .map_err(StoreError::database)?;
+    let members = statement
+        .query_map([manifest.generation_id.as_str()], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+        })
+        .map_err(StoreError::database)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(StoreError::database)?;
+    if members.len() != manifest.members.len()
+        || members
+            .iter()
+            .zip(&manifest.members)
+            .any(|((key, version), m)| key != &m.key || version != m.version.as_str())
+    {
+        return Err(invalid());
+    }
+    Ok(())
 }
 
 pub(super) fn read_partition(
@@ -208,7 +225,7 @@ pub(super) fn read_current(
     id.map(|id| read_history(c, &CurrentRecordId::parse(id)?, epoch))
         .transpose()
 }
-fn read_history(
+pub(super) fn read_history(
     c: &Connection,
     id: &CurrentRecordId,
     epoch: &EpochManifest,
@@ -258,6 +275,10 @@ pub(super) fn read_operation(
         || encode(&op, 65536)? != bytes
     {
         return Err(invalid());
+    }
+    if op.release.is_some() {
+        super::release::validate_released(&op, &manifest, epoch)?;
+        return Ok(Some(op));
     }
     match op.state {
         PublicationState::Prepared if op.validation_id.is_none() && op.activation.is_none() => {}

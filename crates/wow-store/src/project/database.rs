@@ -2,7 +2,7 @@ use super::model::*;
 use crate::{StoreError, StoreErrorCode, StoreResult};
 use rusqlite::{Connection, OpenFlags, OptionalExtension, config::DbConfig};
 use std::{
-    cell::RefCell,
+    cell::{Cell, RefCell},
     collections::BTreeMap,
     fs::{self, File, OpenOptions},
     io::{Read, Write},
@@ -49,10 +49,24 @@ CREATE TABLE retention_roots (
 CREATE INDEX retention_generation ON retention_roots(generation_id);
 "#;
 
+const GC_SCHEMA: &str = r#"
+CREATE TABLE gc_policy (
+    id INTEGER PRIMARY KEY CHECK(id=1),
+    policy_digest TEXT NOT NULL,
+    record BLOB NOT NULL CHECK(length(record)<=262144)
+) STRICT;
+CREATE TABLE gc_operations (
+    operation_id TEXT PRIMARY KEY,
+    request_digest TEXT NOT NULL,
+    record BLOB NOT NULL CHECK(length(record)<=2097152)
+) STRICT;
+"#;
+
 pub(super) struct Lifetime {
     // The OS-held writer lease survives the writer while any read snapshot lives.
     pub _lock: File,
     pub leases: RefCell<BTreeMap<StoreGenerationId, usize>>,
+    pub lease_revision: Cell<u64>,
 }
 pub(super) struct Database {
     pub connection: Connection,
@@ -71,6 +85,9 @@ impl Database {
         catalog: RecordCatalog,
     ) -> StoreResult<Self> {
         Self::create_profile(root, owner, catalog, RETAINED_PHYSICAL_PROFILE)
+    }
+    pub fn create_with_gc(root: &Path, owner: &str, catalog: RecordCatalog) -> StoreResult<Self> {
+        Self::create_profile(root, owner, catalog, GC_PHYSICAL_PROFILE)
     }
     fn create_profile(
         root: &Path,
@@ -121,9 +138,14 @@ impl Database {
         connection
             .execute_batch(SCHEMA)
             .map_err(StoreError::database)?;
-        if profile == RETAINED_PHYSICAL_PROFILE {
+        if matches!(profile, RETAINED_PHYSICAL_PROFILE | GC_PHYSICAL_PROFILE) {
             connection
                 .execute_batch(RETENTION_SCHEMA)
+                .map_err(StoreError::database)?;
+        }
+        if profile == GC_PHYSICAL_PROFILE {
+            connection
+                .execute_batch(GC_SCHEMA)
                 .map_err(StoreError::database)?;
         }
         let bytes = encode(&epoch, 65536)?;
@@ -156,6 +178,7 @@ impl Database {
             life: Rc::new(Lifetime {
                 _lock: lock,
                 leases: RefCell::new(BTreeMap::new()),
+                lease_revision: Cell::new(0),
             }),
         })
     }
@@ -234,6 +257,7 @@ impl Database {
             life: Rc::new(Lifetime {
                 _lock: lock,
                 leases: RefCell::new(BTreeMap::new()),
+                lease_revision: Cell::new(0),
             }),
         })
     }
@@ -388,6 +412,7 @@ fn physical_version(profile: &str) -> StoreResult<i64> {
     match profile {
         PHYSICAL_PROFILE => Ok(1),
         RETAINED_PHYSICAL_PROFILE => Ok(2),
+        GC_PHYSICAL_PROFILE => Ok(3),
         _ => Err(failure(StoreErrorCode::ConfigurationInvalid)),
     }
 }
@@ -395,9 +420,12 @@ fn expected_schema(profile: &str) -> StoreResult<String> {
     physical_version(profile)?;
     let c = Connection::open_in_memory().map_err(StoreError::database)?;
     c.execute_batch(SCHEMA).map_err(StoreError::database)?;
-    if profile == RETAINED_PHYSICAL_PROFILE {
+    if matches!(profile, RETAINED_PHYSICAL_PROFILE | GC_PHYSICAL_PROFILE) {
         c.execute_batch(RETENTION_SCHEMA)
             .map_err(StoreError::database)?;
+    }
+    if profile == GC_PHYSICAL_PROFILE {
+        c.execute_batch(GC_SCHEMA).map_err(StoreError::database)?;
     }
     schema_digest(&c)
 }

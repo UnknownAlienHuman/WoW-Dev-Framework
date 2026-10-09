@@ -8,6 +8,7 @@ use std::{
 
 pub const PHYSICAL_PROFILE: &str = "project-store-wal-manifested-partitions-v1";
 pub const RETAINED_PHYSICAL_PROFILE: &str = "project-store-wal-manifested-partitions-v2";
+pub const GC_PHYSICAL_PROFILE: &str = "project-store-wal-manifested-partitions-v3";
 pub const RECORD_PROFILE: &str = "wow-store/retained-partition-records/1";
 pub const MAX_RECORD_BYTES: usize = 32 * 1024 * 1024;
 pub const MAX_GENERATION_BYTES: usize = 64 * 1024 * 1024;
@@ -187,7 +188,7 @@ impl EpochManifest {
     ) -> StoreResult<Self> {
         if !matches!(
             physical_profile,
-            PHYSICAL_PROFILE | RETAINED_PHYSICAL_PROFILE
+            PHYSICAL_PROFILE | RETAINED_PHYSICAL_PROFILE | GC_PHYSICAL_PROFILE
         ) {
             return Err(failure(StoreErrorCode::ConfigurationInvalid));
         }
@@ -452,6 +453,8 @@ pub struct PublicationOperation {
     pub validation_id: Option<ValidationId>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub activation: Option<CurrentPublication>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub release: Option<super::release::PublicationRelease>,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

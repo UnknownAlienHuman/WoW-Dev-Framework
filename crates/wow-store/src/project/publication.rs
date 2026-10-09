@@ -13,6 +13,11 @@ impl ProjectStore {
     ) -> StoreResult<PublicationOperation> {
         request.manifest.validate(&self.db.epoch)?;
         checkpoint(stop)?;
+        if self.db.epoch.physical_profile() == GC_PHYSICAL_PROFILE
+            && self.reconcile_gc(&request.operation_id)?.is_some()
+        {
+            return Err(failure(StoreErrorCode::OperationConflict));
+        }
         if let Some(op) = self.operation(&request.operation_id)? {
             ensure_request(&op, request)?;
             if op.state != PublicationState::Prepared {
@@ -41,6 +46,7 @@ impl ProjectStore {
                 state: PublicationState::Prepared,
                 validation_id: None,
                 activation: None,
+                release: None,
             };
             tx.execute("INSERT INTO operations(operation_id,request_digest,manifest,record) VALUES(?1,?2,?3,?4)",
                 params![request.operation_id.as_str(),request.digest,encode(&request.manifest,256 * 1024)?,encode(&op,65536)?])
@@ -172,6 +178,9 @@ impl ProjectStore {
         {
             return Err(failure(StoreErrorCode::OperationConflict));
         }
+        if old.release.is_some() {
+            return Err(failure(StoreErrorCode::OperationStateInvalid));
+        }
         if matches!(
             old.state,
             PublicationState::Activated | PublicationState::ValidatedInactive
@@ -212,6 +221,9 @@ impl ProjectStore {
         if let Some(op) = self.operation(id)? {
             if op.request_digest != request_digest {
                 return Err(failure(StoreErrorCode::OperationConflict));
+            }
+            if op.release.is_some() {
+                return Err(failure(StoreErrorCode::OperationStateInvalid));
             }
             if op.state == PublicationState::Activated {
                 return Ok(op);
@@ -284,6 +296,8 @@ impl ProjectStore {
 fn ensure_request(op: &PublicationOperation, request: &PublicationRequest) -> StoreResult<()> {
     if op.request_digest != request.digest || op.generation_id != request.manifest.generation_id {
         Err(failure(StoreErrorCode::OperationConflict))
+    } else if op.release.is_some() {
+        Err(failure(StoreErrorCode::OperationStateInvalid))
     } else {
         Ok(())
     }

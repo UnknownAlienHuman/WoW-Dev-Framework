@@ -4,6 +4,8 @@
 and retention. Full E2-D acceptance remains open. The frozen v1 design below is
 extended by the separately selected v2 persistent-root profile in
 [`PROJECT_RETENTION.md`](PROJECT_RETENTION.md); existing v1 epochs are not migrated.
+The subsequent v3 release/inline-GC profile is in
+[`PROJECT_GC.md`](PROJECT_GC.md) and preserves both frozen predecessors.
 
 The pre-E2 document intentionally left the physical model open. E2-D now selects the smallest design that satisfies incremental publication, immutable historical readers, graph partition replacement, and bounded storage growth:
 

@@ -155,7 +155,7 @@ impl LiveProjectResult {
     pub fn exit_code(&self) -> u8 {
         match self.status {
             "activated" | "acquired" | "no_change" => 2,
-            "observed" => 0,
+            "observed" | "released" => 0,
             _ => 3,
         }
     }
@@ -256,6 +256,12 @@ impl LiveProjectStore {
         }
         let store = self;
         let retained_operation = store.reconcile(request.operation_id.as_str())?;
+        if retained_operation
+            .as_ref()
+            .is_some_and(|operation| operation.release.is_some())
+        {
+            return Err(fail(ServiceErrorCode::OperationReleased));
+        }
         // A fresh operation cannot acquire an old base and silently rebase it.
         if retained_operation.is_none()
             && store.current()?.as_ref().map(|current| &current.record_id)
@@ -346,11 +352,18 @@ pub fn reconcile_live_project(
     super::publication_checkpoint(stop)?;
     let store = LiveProjectStore::open(root)?;
     let operation = store.reconcile(operation_id)?;
-    let mut result = LiveProjectResult::new(if operation.is_some() {
-        "observed"
-    } else {
-        "operation_not_retained"
-    });
+    let mut result = LiveProjectResult::new(
+        if operation
+            .as_ref()
+            .is_some_and(|operation| operation.release.is_some())
+        {
+            "released"
+        } else if operation.is_some() {
+            "observed"
+        } else {
+            "operation_not_retained"
+        },
+    );
     result.operation = operation;
     result.current = store.current()?;
     Ok(result)
