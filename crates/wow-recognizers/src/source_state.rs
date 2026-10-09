@@ -624,9 +624,10 @@ const W6_EMBED_LIBRARY_CALLABLE: &str = "LibStub.EmbedLibrary";
 // relation is emitted; otherwise the outcome stays Possible or produces no match.
 
 // Normative relation ids from RULE_FAMILIES.md section 6.
-const W6_REQUIRE_RELATION: &str = "requires_library";
-const W6_NEW_RELATION: &str = "declares_library";
-const W6_EMBED_RELATION: &str = "embeds_library";
+const W6_REQUIRE_RELATION: &str = "lua_requires_library";
+const W6_NEW_RELATION: &str = "lua_declares_library";
+const W6_EMBED_RELATION: &str = "lua_embeds_library";
+const W6_LIBRARY_ENTITY: &str = "library";
 const W6_LIBRARY_RELATIONS: [&str; 3] = [W6_REQUIRE_RELATION, W6_NEW_RELATION, W6_EMBED_RELATION];
 
 // Caller supplied crosswalks, checked against the owner source partition and the
@@ -646,7 +647,7 @@ pub struct SourceLibraryInput<'a> {
 pub struct SourceLibraryMatch {
     pub call_id: String,
     pub library_name: String,
-    // The exact version string from the reviewed key, when one is present.
+    pub caller_proposal_id: String,
     pub version: Option<String>,
     pub relation_proposal_id: String,
     pub rule_id: &'static str,
@@ -983,9 +984,6 @@ pub fn recognize_source_library(
     }
 
     // The normative library family is recorded exactly as this pack declared it.
-    // The pinned source-load registry does not yet declare a library entity kind
-    // or these relation ids, so no graph proposal is invented for them here; the
-    // gap is reported as explicit NotEvaluated coverage instead.
     let mut matches = Vec::<SourceLibraryMatch>::new();
     for relation in &pending {
         checkpoint(stop)?;
@@ -998,6 +996,7 @@ pub fn recognize_source_library(
         matches.push(SourceLibraryMatch {
             call_id: call.call_id.clone(),
             library_name: key.name,
+            caller_proposal_id: call.caller_proposal_id.clone(),
             version: key.version,
             relation_proposal_id: relation.proposal_id.clone(),
             rule_id: relation_for_rule(relation.rule_id.as_str())
@@ -1013,6 +1012,51 @@ pub fn recognize_source_library(
         .iter()
         .map(|definition| definition.relation())
         .collect::<BTreeSet<_>>();
+    // Every retained match projects one library entity and one relation from the
+    // exact resolving caller. The version is retained as literal evidence on the
+    // match and is never promoted to a loaded revision or ownership claim.
+    let mut entity_proposals = Vec::<GraphEntityProposal>::new();
+    let mut relation_proposals = Vec::<GraphRelationProposal>::new();
+    let mut seen_names = BTreeSet::<String>::new();
+    for m in &matches {
+        checkpoint(stop)?;
+        if !seen_names.insert(m.library_name.clone()) {
+            continue;
+        }
+        let caller = caller_nodes
+            .get(&m.caller_proposal_id)
+            .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
+        let entity_id = format!("w6-library-{}-{}", m.library_name, m.relation_proposal_id);
+        let entity = GraphEntityProposal::new(
+            entity_id.as_str(),
+            W6_LIBRARY_ENTITY,
+            BTreeMap::from([(
+                "library".into(),
+                GraphProposalValue::String(m.library_name.clone().into_boxed_str()),
+            )]),
+            GraphConfidence::Derived,
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+        )
+        .map_err(graph_error)?;
+        entity_proposals.push(entity);
+        relation_proposals.push(
+            GraphRelationProposal::new(
+                m.relation_proposal_id.as_str(),
+                m.relation,
+                GraphRelationProposalInput {
+                    source: GraphProposalEndpoint::Existing(caller.clone()),
+                    target: GraphProposalEndpoint::Proposed(entity_id.into_boxed_str()),
+                    confidence: GraphConfidence::Derived,
+                    source_handle_ids: Vec::new(),
+                    evidence_ids: Vec::new(),
+                    coverage_ids: Vec::new(),
+                },
+            )
+            .map_err(graph_error)?,
+        );
+    }
     let projectable = !matches.is_empty();
     let graph_coverage = relation_families
         .into_iter()
@@ -1043,8 +1087,8 @@ pub fn recognize_source_library(
         graph.generation().clone(),
         input.context.context_id(),
         SOURCE_STATE_LIBRARY_PARTITION,
-        Vec::new(),
-        Vec::new(),
+        entity_proposals,
+        relation_proposals,
     )
     .map_err(graph_error)?;
     checkpoint(stop)?;
@@ -1236,11 +1280,16 @@ fn build_library_fact(
     )
 }
 
-// The normative library relations are closed by the pinned source-load registry.
-// This pack reports that gap explicitly instead of aliasing them onto an unrelated
-// relation kind, so the map is intentionally empty of equivalents.
-fn relation_id_for(_relation: &str) -> Option<GraphRelationKind> {
-    None
+// The source-load registry declares the library relations as UsesApi. This map is
+// the single place that binds a pack relation id to that registry kind, so an
+// unregistered id fails loudly instead of being silently aliased.
+fn relation_id_for(relation: &str) -> Option<GraphRelationKind> {
+    match relation {
+        W6_REQUIRE_RELATION | W6_NEW_RELATION | W6_EMBED_RELATION => {
+            Some(GraphRelationKind::UsesApi)
+        }
+        _ => None,
+    }
 }
 
 fn validate_call_support(

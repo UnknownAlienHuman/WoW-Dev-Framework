@@ -9,9 +9,13 @@ use super::*;
 pub use wow_recognizers::source_bridge::{
     W2BridgeRecognition, W2Input, w2_recognize_native_event_bridges,
 };
+pub use wow_recognizers::source_scripts::{W5HookInput, W5HookRecognition, recognize_source_hooks};
 pub use wow_recognizers::source_signals::{
     W1Input, W1Recognition, W3Input, W3Recognition, W4Recognition, recognize_source_cvar_callbacks,
     w1_recognize_native_frame_events, w3_recognize_signals,
+};
+pub use wow_recognizers::source_state::{
+    SourceLibraryInput, SourceLibraryRecognition, recognize_source_library,
 };
 fn recognizer_error(error: wow_recognizers::RecognizerError) -> ServiceError {
     super::error(match error.code() {
@@ -76,6 +80,8 @@ pub(super) fn publish_signals(
     W2BridgeRecognition,
     W3Recognition,
     W4Recognition,
+    W5HookRecognition,
+    SourceLibraryRecognition,
 )> {
     let report = provenance
         .function_call_report()
@@ -110,7 +116,8 @@ pub(super) fn publish_signals(
             )
         })
         .collect::<Vec<_>>();
-
+    // The hook adapters borrow the path, so the borrowing crosswalk is materialized
+    // once from the owned declarations and reused by every later adapter.
     // core.signal.native_frame_event@1
     let frame = w1_recognize_native_frame_events(
         W1Input {
@@ -139,6 +146,14 @@ pub(super) fn publish_signals(
         .iter()
         .map(|(path, span, proposal)| ((path.clone(), *span), proposal.as_str()))
         .collect::<BTreeMap<_, _>>();
+    // The hook adapters borrow the path, so the borrowing crosswalk is materialized
+    // once here and reused by every later family.
+    let hook_declarations = declarations
+        .iter()
+        .map(|(path, span, proposal)| ((path.as_str(), *span), proposal.as_str()))
+        .collect::<BTreeMap<_, _>>();
+    let hook_function_proposals = function_proposals.clone();
+    let hook_call_support = call_support.clone();
     let bridge = w2_recognize_native_event_bridges(
         W2Input {
             owner: owner_view,
@@ -197,15 +212,49 @@ pub(super) fn publish_signals(
     checkpoint(stop)?;
     let cvar_snapshot = replacement(owner_view, cvar.batch, cvar.coverage, stop)?;
 
+    // core.hook.set_script@1 / core.hook.hook_script@1 / core.hook.secure_posthook@1
+    let hooks_input = W5HookInput {
+        owner: &cvar_snapshot,
+        source_partition: wow_project::graph::SOURCE_GRAPH_PARTITION,
+        report,
+        context: provenance.context(),
+        function_proposals: hook_function_proposals.clone(),
+        declaration_proposals: hook_declarations.clone(),
+        call_support: hook_call_support.clone(),
+        source_handles: provenance.source_handles(),
+        evidence: provenance.evidence(),
+    };
+    let hooks = recognize_source_hooks(hooks_input, stop).map_err(recognizer_error)?;
+    checkpoint(stop)?;
+    let hooks_snapshot = replacement(&cvar_snapshot, hooks.batch, hooks.coverage, stop)?;
+
+    // core.library.libstub_require@1 / core.library.libstub_new@1 / core.library.embed@1
+    let library_input = SourceLibraryInput {
+        owner: &hooks_snapshot,
+        source_partition: wow_project::graph::SOURCE_GRAPH_PARTITION,
+        report,
+        context: provenance.context(),
+        function_proposals: hook_function_proposals,
+        call_support: hook_call_support,
+        source_handles: provenance.source_handles(),
+        evidence: provenance.evidence(),
+    };
+    let library = recognize_source_library(library_input, stop).map_err(recognizer_error)?;
+    checkpoint(stop)?;
+    let library_snapshot = replacement(&hooks_snapshot, library.batch, library.coverage, stop)?;
+
     Ok((
-        cvar_snapshot,
+        library_snapshot,
         frame.recognition,
         bridge.recognition,
         custom.recognition,
         cvar.recognition,
+        hooks.recognition,
+        library.recognition,
     ))
 }
 #[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_arguments)]
 pub(super) fn maps(
     snapshot: &GraphPartitionSnapshot,
     provenance: &ProjectGraphProvenance,
@@ -215,6 +264,12 @@ pub(super) fn maps(
     cvar_recognition: &W4Recognition,
     stop: &AtomicBool,
 ) -> ServiceResult<SignalTopology> {
+    let _ = (
+        signal_recognition,
+        bridge_recognition,
+        custom_recognition,
+        cvar_recognition,
+    );
     let bounds = snapshot.snapshot().limits();
     let mut function_nodes = BTreeMap::new();
     for function in provenance.functions() {
@@ -240,6 +295,14 @@ pub(super) fn maps(
             wow_recognizers::source_signals::W3_SIGNAL_PARTITION,
         ),
         ("cvar_key", wow_recognizers::source_signals::W4_PARTITION),
+        (
+            "hook_script",
+            wow_recognizers::source_scripts::W5_HOOK_PARTITION,
+        ),
+        (
+            "library",
+            wow_recognizers::source_state::SOURCE_STATE_LIBRARY_PARTITION,
+        ),
     ];
 
     let mut nodes = Vec::new();

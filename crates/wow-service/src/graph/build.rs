@@ -67,6 +67,8 @@ struct BuiltGraph {
     bridge_recognition: signals::W2BridgeRecognition,
     custom_recognition: signals::W3Recognition,
     cvar_recognition: signals::W4Recognition,
+    hook_recognition: signals::W5HookRecognition,
+    library_recognition: signals::SourceLibraryRecognition,
     signal_nodes: Vec<signals::SignalNode>,
     signal_edges: Vec<signals::SignalEdge>,
 }
@@ -192,6 +194,10 @@ pub struct GraphBuildResult {
     custom_recognition: Option<signals::W3Recognition>,
     #[serde(skip_serializing_if = "Option::is_none")]
     cvar_recognition: Option<signals::W4Recognition>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    hook_recognition: Option<signals::W5HookRecognition>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    library_recognition: Option<signals::SourceLibraryRecognition>,
     signal_nodes: Vec<signals::SignalNode>,
     signal_edges: Vec<signals::SignalEdge>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -323,6 +329,8 @@ pub fn execute_graph_build(
         bridge_recognition: None,
         custom_recognition: None,
         cvar_recognition: None,
+        hook_recognition: None,
+        library_recognition: None,
         signal_nodes: Vec::new(),
         signal_edges: Vec::new(),
         state_nodes: StateNodes::empty(),
@@ -385,6 +393,8 @@ pub fn execute_graph_build(
             bridge_recognition,
             custom_recognition,
             cvar_recognition,
+            hook_recognition,
+            library_recognition,
             state_nodes,
             state_edges,
             signal_nodes,
@@ -419,6 +429,8 @@ pub fn execute_graph_build(
             result.bridge_recognition = Some(bridge_recognition);
             result.custom_recognition = Some(custom_recognition);
             result.cvar_recognition = Some(cvar_recognition);
+            result.hook_recognition = Some(hook_recognition);
+            result.library_recognition = Some(library_recognition);
             result.signal_nodes = signal_nodes;
             result.signal_edges = signal_edges;
             result.handler_nodes = handler_nodes;
@@ -496,8 +508,15 @@ fn compose(
     let (snapshot, state_recognition) = state::publish(&scripts_snapshot, &provenance, stop)?;
     // W11 signal and hook families publish after every earlier owner, so each
     // adapter crosswalks against the accepted source graph that precedes it.
-    let (snapshot, signal_recognition, bridge_recognition, custom_recognition, cvar_recognition) =
-        signals::publish_signals(&snapshot, &provenance, stop)?;
+    let (
+        snapshot,
+        signal_recognition,
+        bridge_recognition,
+        custom_recognition,
+        cvar_recognition,
+        hook_recognition,
+        library_recognition,
+    ) = signals::publish_signals(&snapshot, &provenance, stop)?;
     let (state_nodes, state_edges) = state::maps(&snapshot, &provenance, &state_recognition, stop)?;
     let signal_topology = signals::maps(
         &snapshot,
@@ -661,6 +680,8 @@ fn compose(
         cvar_recognition,
         signal_nodes,
         signal_edges,
+        hook_recognition,
+        library_recognition,
         handler_nodes,
         script_edges,
     })

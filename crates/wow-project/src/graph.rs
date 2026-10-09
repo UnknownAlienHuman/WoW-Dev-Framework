@@ -562,6 +562,14 @@ fn registry() -> ProjectResult<GraphRegistryBundle> {
         ),
         // Script hooks and the secure posthook family.
         (
+            "lua_sets_script",
+            GraphRelationKind::SetsScript,
+            vec![
+                "lua_source_declaration".into(),
+                "lua_source_function".into(),
+            ],
+        ),
+        (
             "lua_hooks_script",
             GraphRelationKind::HooksScript,
             vec![
@@ -578,6 +586,11 @@ fn registry() -> ProjectResult<GraphRegistryBundle> {
             ],
         ),
         // Library requirement and structural embedding.
+        (
+            "lua_declares_library",
+            GraphRelationKind::UsesApi,
+            vec!["library".into()],
+        ),
         (
             "lua_requires_library",
             GraphRelationKind::UsesApi,
