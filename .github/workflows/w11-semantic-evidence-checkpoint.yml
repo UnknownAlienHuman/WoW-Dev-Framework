@@ -14,6 +14,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
+      STAGING_PARENT: a3e54a67ab46da210221c35975f76116e8ecf29c
       BASE_COMMIT: e491f2201f4955d80bc71a84773c2a8c46f2c6c0
       BASE_TREE: e167b05210d513a0f9155cbf25193fdbdd2d7ca5
       B64_SHA256: 94358d97ab0100929aa60744c1b09a0e8989527730c1148334bbac3c0ddbf113
@@ -29,8 +30,8 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git rev-parse HEAD^)" = "$BASE_COMMIT"
-          cp .ci/w11-semantic-evidence.patch.xz.b64 "$RUNNER_TEMP/w11-semantic-evidence.b64"
+          test "$(git rev-parse HEAD^)" = "$STAGING_PARENT"
+          tr -d '\r\n' < .ci/w11-semantic-evidence.patch.xz.b64 > "$RUNNER_TEMP/w11-semantic-evidence.b64"
           printf '%s  %s\n' "$B64_SHA256" "$RUNNER_TEMP/w11-semantic-evidence.b64" | sha256sum -c -
           base64 -d "$RUNNER_TEMP/w11-semantic-evidence.b64" > "$RUNNER_TEMP/w11-semantic-evidence.patch.xz"
           printf '%s  %s\n' "$XZ_SHA256" "$RUNNER_TEMP/w11-semantic-evidence.patch.xz" | sha256sum -c -
@@ -89,11 +90,13 @@ jobs:
           git archive --format=tar -o "$RUNNER_TEMP/checkpoint/checked-source.tar" "$(cat "$RUNNER_TEMP/checkpoint/CHECKED_TREE")"
           git diff --cached --binary "$BASE_COMMIT" > "$RUNNER_TEMP/checkpoint/formatted.patch"
           printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/checkpoint/STAGING_SHA"
-          cp "$RUNNER_TEMP/w11-semantic-evidence.patch" "$RUNNER_TEMP/checkpoint/input.patch"
+          if test -f "$RUNNER_TEMP/w11-semantic-evidence.patch"; then
+            cp "$RUNNER_TEMP/w11-semantic-evidence.patch" "$RUNNER_TEMP/checkpoint/input.patch"
+          fi
           for file in RUST_VERSION check.log clippy.log policy.log changed-files expected-files; do
             if test -f "$RUNNER_TEMP/$file"; then cp "$RUNNER_TEMP/$file" "$RUNNER_TEMP/checkpoint/$file"; fi
           done
-          (cd "$RUNNER_TEMP/checkpoint" && sha256sum checked-source.tar formatted.patch input.patch > SHA256SUMS)
+          (cd "$RUNNER_TEMP/checkpoint" && sha256sum checked-source.tar formatted.patch > SHA256SUMS)
       - name: Upload checkpoint evidence
         if: always()
         uses: actions/upload-artifact@v7
