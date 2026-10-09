@@ -462,9 +462,9 @@ use wow_emmy::function_calls::{FunctionCallReport, SourceCallLiteral};
 // managed-object or Secret legality: these are universal structural roles only.
 
 pub const W5_HOOK_PARTITION: &str = "wow-recognizers.lua-hooks";
-pub const W5_HOOK_PROFILE: &str = "wow-recognizers/lua-hooks/1";
+pub const W5_HOOK_PROFILE: &str = "wow-recognizers/lua-hooks/2";
 const W5_FACT_PARTITION: &str = "wow-recognizers.lua-hook-facts";
-const W5_FACT_PROFILE: &str = "wow-recognizers-lua-hook-call-facts-1";
+const W5_FACT_PROFILE: &str = "wow-recognizers-lua-hook-call-facts-2";
 const W5_FACT_KIND: &str = "lua_call";
 const W5_SET_SCRIPT_RULE: &str = "core.hook.set_script";
 const W5_HOOK_SCRIPT_RULE: &str = "core.hook.hook_script";
@@ -472,8 +472,8 @@ const W5_SECURE_POSTHOOK_RULE: &str = "core.hook.secure_posthook";
 const W5_SET_SCRIPT_RELATION: &str = "lua_sets_script";
 const W5_HOOK_SCRIPT_RELATION: &str = "lua_hooks_script";
 const W5_SECURE_POSTHOOK_RELATION: &str = "lua_secure_hooks_function";
-const W5_SET_SCRIPT_CALLABLE: &str = "SetScript";
-const W5_HOOK_SCRIPT_CALLABLE: &str = "HookScript";
+const W5_SET_SCRIPT_CALLABLE: &str = "Frame.SetScript";
+const W5_HOOK_SCRIPT_CALLABLE: &str = "Frame.HookScript";
 const W5_SECURE_HOOK_CALLABLE: &str = "hooksecurefunc";
 const W5_SCRIPT_NAME_ORDINAL: usize = 0;
 const W5_HANDLER_ORDINAL: usize = 1;
@@ -609,6 +609,9 @@ struct W5Site {
     caller_proposal_id: String,
     callable_key: &'static str,
     colon_call: bool,
+    receiver_proposal: Option<String>,
+    receiver_handle: Option<StableHandleId>,
+    receiver_evidence: Option<EvidenceId>,
     argument_count: usize,
     arguments: Vec<W5Argument>,
 }
@@ -809,6 +812,18 @@ pub fn recognize_source_hooks(
         if !caller_nodes.contains_key(call.caller_function_id()) {
             return Err(failure(RecognizerErrorCode::AdapterBindingMissing));
         }
+        let receiver_binding = if call.is_colon_call() {
+            input.report.exact_call_receiver(call).and_then(|receiver| {
+                let key = (receiver.target().path.clone(), receiver.target().span);
+                let proposal = declaration_proposal_ids.get(&key)?.clone();
+                let binding = declarations.get(&key)?;
+                Some((proposal, binding.handle, binding.evidence))
+            })
+        } else {
+            None
+        };
+        let receiver_exact = matches!(callable, W5_SET_SCRIPT_CALLABLE | W5_HOOK_SCRIPT_CALLABLE)
+            && call.is_colon_call();
         let mut fields = BTreeMap::from([
             (
                 "call_id".into(),
@@ -836,7 +851,7 @@ pub fn recognize_source_hooks(
             (
                 "receiver_kind".into(),
                 RecognizerFactValue::String(
-                    if call.is_colon_call() {
+                    if receiver_exact {
                         W5_RECEIVER_EXACT
                     } else {
                         W5_RECEIVER_DYNAMIC
@@ -845,7 +860,13 @@ pub fn recognize_source_hooks(
                 ),
             ),
         ]);
-        let exact_arguments = call.arguments().len() <= W5_MAX_ARGUMENTS;
+        if let Some((proposal, _, _)) = &receiver_binding {
+            fields.insert(
+                "receiver".into(),
+                RecognizerFactValue::Reference(proposal.clone().into()),
+            );
+        }
+        let mut exact_arguments = call.arguments().len() <= W5_MAX_ARGUMENTS;
         let mut arguments = Vec::new();
         for (ordinal, argument) in call.arguments().iter().take(W5_MAX_ARGUMENTS).enumerate() {
             let resolved = w5_argument(&input, &declaration_proposal_ids, argument, ordinal)?;
@@ -892,12 +913,19 @@ pub fn recognize_source_hooks(
                     RecognizerFactValue::String(key.clone().into_boxed_str()),
                 );
             }
+            exact_arguments &= resolved.kind != "dynamic";
             arguments.push(resolved);
         }
         fields.insert(
             "exact_arguments".into(),
             RecognizerFactValue::Boolean(exact_arguments),
         );
+        let mut source_handles = BTreeSet::from([handle]);
+        let mut evidence_ids = BTreeSet::from([evidence]);
+        if let Some((_, receiver_handle, receiver_evidence)) = &receiver_binding {
+            source_handles.insert(*receiver_handle);
+            evidence_ids.insert(*receiver_evidence);
+        }
         facts.push(RecognizerFact::new(
             input.context.context_id(),
             RecognizerFactInput {
@@ -909,14 +937,14 @@ pub fn recognize_source_hooks(
                 )?,
                 producer_id: "wow.emmy".into(),
                 producer_version: W5_FACT_PROFILE.into(),
-                confidence: if exact_arguments {
+                confidence: if exact_arguments && (receiver_exact || !call.is_colon_call()) {
                     GraphConfidence::Derived
                 } else {
                     GraphConfidence::Possible
                 },
                 fields,
-                source_handle_ids: vec![handle],
-                evidence_ids: vec![evidence],
+                source_handle_ids: source_handles.into_iter().collect(),
+                evidence_ids: evidence_ids.into_iter().collect(),
             },
             fact_limits,
         )?);
@@ -925,6 +953,11 @@ pub fn recognize_source_hooks(
             caller_proposal_id: caller_proposal.to_owned(),
             callable_key: callable,
             colon_call: call.is_colon_call(),
+            receiver_proposal: receiver_binding
+                .as_ref()
+                .map(|(proposal, _, _)| proposal.clone()),
+            receiver_handle: receiver_binding.as_ref().map(|(_, handle, _)| *handle),
+            receiver_evidence: receiver_binding.as_ref().map(|(_, _, evidence)| *evidence),
             argument_count: call.arguments().len(),
             arguments,
         });
@@ -1030,23 +1063,32 @@ pub fn recognize_source_hooks(
                 W5_SECURE_POSTHOOK_RULE => w5_secure_target(site, 0),
                 _ => return Err(failure(RecognizerErrorCode::AdapterFactMismatch)),
             };
-            let handles = BTreeSet::from([call_handle]);
+            let mut handles = BTreeSet::from([call_handle]);
             let mut evidence = BTreeSet::from([call_evidence]);
+            if let Some(receiver_handle) = site.receiver_handle {
+                handles.insert(receiver_handle);
+            }
+            if let Some(receiver_evidence) = site.receiver_evidence {
+                evidence.insert(receiver_evidence);
+            }
             if let Some(proposal) = &to_proposal {
                 let binding = w5_binding(&declarations, &declaration_proposal_ids, proposal)?;
+                handles.insert(binding.handle);
                 evidence.insert(binding.evidence);
             }
             let graph_id = proposal_id.to_string();
-            relations.push(W5RelationSpec {
-                proposal_id: graph_id.clone(),
-                call_id: call_id.to_string(),
-                caller_function_id: call.caller_function_id().to_owned(),
-                relation_kind_id,
-                to_proposal,
-                confidence: graph_confidence(*confidence),
-                handles: handles.into_iter().collect(),
-                evidence: evidence.into_iter().collect(),
-            });
+            if to_proposal.is_some() {
+                relations.push(W5RelationSpec {
+                    proposal_id: graph_id.clone(),
+                    call_id: call_id.to_string(),
+                    caller_function_id: call.caller_function_id().to_owned(),
+                    relation_kind_id,
+                    to_proposal: to_proposal.clone(),
+                    confidence: graph_confidence(*confidence),
+                    handles: handles.into_iter().collect(),
+                    evidence: evidence.into_iter().collect(),
+                });
+            }
             match outcome.rule_id() {
                 W5_SET_SCRIPT_RULE => {
                     let endpoints = w5_object_or_handler(site, W5_HANDLER_ORDINAL);
@@ -1072,9 +1114,9 @@ pub fn recognize_source_hooks(
                     });
                 }
                 W5_SECURE_POSTHOOK_RULE => {
-                    let callback_exact = site
-                        .arguments
-                        .get(W5_POSTHOOK_CALLBACK_ORDINAL)
+                    let callback_ordinal = w5_callback_ordinal(site);
+                    let callback_exact = callback_ordinal
+                        .and_then(|ordinal| site.arguments.get(ordinal))
                         .is_some_and(|argument| argument.reference_proposal.is_some());
                     secure_posthook_matches.push(W5SecurePosthookMatch {
                         call_id: call_id.to_string(),
@@ -1087,10 +1129,8 @@ pub fn recognize_source_hooks(
                         } else {
                             W5_CALLBACK_DYNAMIC
                         },
-                        callback_proposal_id: w5_argument_proposal(
-                            site,
-                            W5_POSTHOOK_CALLBACK_ORDINAL,
-                        ),
+                        callback_proposal_id: callback_ordinal
+                            .and_then(|ordinal| w5_argument_proposal(site, ordinal)),
                         hook_kind: W5_HOOK_KIND_SECURE_POSTHOOK,
                         relation_proposal_id: graph_id,
                     });
@@ -1148,7 +1188,7 @@ pub fn recognize_source_hooks(
         // A dynamic target keeps the call-side match but never publishes an endpoint.
         // This producer therefore only emits relations with an exact resolved target.
         let Some(to_proposal) = relation.to_proposal.clone() else {
-            return Err(failure(RecognizerErrorCode::AdapterBindingMissing));
+            continue;
         };
         let binding = w5_binding(&declarations, &declaration_proposal_ids, &to_proposal)?;
         let caller = caller_nodes
@@ -1322,7 +1362,7 @@ fn w5_argument(
 /// stays exact.
 fn w5_object_or_handler(site: &W5Site, handler_ordinal: usize) -> W5Endpoints {
     W5Endpoints {
-        object: None,
+        object: site.receiver_proposal.clone(),
         handler: w5_argument_proposal(site, handler_ordinal),
     }
 }
@@ -1333,6 +1373,14 @@ fn w5_object_or_handler(site: &W5Site, handler_ordinal: usize) -> W5Endpoints {
 /// `hooksecurefunc(table, methodName, callback)` resolves `table` to its Main declaration
 /// and keeps the exact literal member name. Any other shape stays a dynamic target: no
 /// target proposal, no exact member, and no safe-hook claim.
+fn w5_callback_ordinal(site: &W5Site) -> Option<usize> {
+    match site.argument_count {
+        2 => Some(1),
+        3 => Some(2),
+        _ => None,
+    }
+}
+
 fn w5_secure_target(site: &W5Site, target_ordinal: usize) -> Option<String> {
     match site.argument_count {
         2 | 3 => site
@@ -1510,11 +1558,11 @@ fn w5_hook_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRec
         schema_version: crate::RECOGNIZER_PACK_SCHEMA_VERSION,
         pack: RecognizerPack {
             pack_id: "wow-core-lua-hooks".into(),
-            version: "1".into(),
+            version: "2".into(),
             trust_class: RecognizerPackTrustClass::Core,
             fact_schema_profile_id: W5_FACT_PROFILE.into(),
             graph_registry_bundle_id: registry_bundle_id.into(),
-            evaluation_profile_id: "wow-recognizers-w11-hooks-1".into(),
+            evaluation_profile_id: "wow-recognizers-w11-hooks-2".into(),
             rollout: RecognizerPackRollout::Shadow,
             budgets: RecognizerPackBudgets {
                 max_rules: 8,
@@ -1553,10 +1601,6 @@ fn w5_hook_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRec
                         RecognizerClause::FieldEq {
                             field: "call.argument_0_kind".into(),
                             value: crate::RecognizerPackLiteral::String("literal".into()),
-                        },
-                        RecognizerClause::FieldEq {
-                            field: "call.exact_arguments".into(),
-                            value: crate::RecognizerPackLiteral::Boolean(true),
                         },
                     ],
                     captures: Vec::new(),
@@ -1600,10 +1644,6 @@ fn w5_hook_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRec
                             field: "call.argument_0_kind".into(),
                             value: crate::RecognizerPackLiteral::String("literal".into()),
                         },
-                        RecognizerClause::FieldEq {
-                            field: "call.exact_arguments".into(),
-                            value: crate::RecognizerPackLiteral::Boolean(true),
-                        },
                     ],
                     captures: Vec::new(),
                     outputs: vec![RecognizerOutput::RelationAssertion {
@@ -1646,11 +1686,21 @@ fn w5_hook_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRec
                                             field: "call.argument_count".into(),
                                             value: crate::RecognizerPackLiteral::Integer(2),
                                         },
-                                        RecognizerClause::FieldEq {
-                                            field: "call.argument_0_kind".into(),
-                                            value: crate::RecognizerPackLiteral::String(
-                                                "main_reference".into(),
-                                            ),
+                                        RecognizerClause::AnyOf {
+                                            clauses: vec![
+                                                RecognizerClause::FieldEq {
+                                                    field: "call.argument_0_kind".into(),
+                                                    value: crate::RecognizerPackLiteral::String(
+                                                        "main_reference".into(),
+                                                    ),
+                                                },
+                                                RecognizerClause::FieldEq {
+                                                    field: "call.argument_0_kind".into(),
+                                                    value: crate::RecognizerPackLiteral::String(
+                                                        "literal".into(),
+                                                    ),
+                                                },
+                                            ],
                                         },
                                     ],
                                 },
@@ -1675,10 +1725,6 @@ fn w5_hook_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRec
                                     ],
                                 },
                             ],
-                        },
-                        RecognizerClause::FieldEq {
-                            field: "call.exact_arguments".into(),
-                            value: crate::RecognizerPackLiteral::Boolean(true),
                         },
                     ],
                     captures: Vec::new(),

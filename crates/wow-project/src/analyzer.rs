@@ -17,8 +17,26 @@ use crate::{
 
 /// Reviewed universal callables needed by active E2 core recognizers. These are
 /// exact analyzer queries, not source-text names or platform-availability claims.
-const CORE_RECOGNIZER_CALLABLE_QUERIES: &[&str] =
-    &["Frame.RegisterEvent", "Frame.RegisterUnitEvent"];
+const CORE_RECOGNIZER_CALLABLE_QUERIES: &[&str] = &[
+    "CreateFrame",
+    "CreateFromMixins",
+    "Mixin",
+    "Frame.RegisterEvent",
+    "Frame.RegisterUnitEvent",
+    "EventRegistry.RegisterFrameEvent",
+    "EventRegistry.RegisterFrameEventAndCallback",
+    "EventRegistry.RegisterFrameEventAndCallbackWithHandle",
+    "EventRegistry.RegisterCallback",
+    "EventRegistry.TriggerEvent",
+    "CVarCallbackRegistry.RegisterCallback",
+    "Frame.SetScript",
+    "Frame.HookScript",
+    "hooksecurefunc",
+    "LibStub",
+    "LibStub.GetLibrary",
+    "LibStub.NewLibrary",
+    "LibStub.EmbedLibrary",
+];
 
 /// Analyzer capability observation scope.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]

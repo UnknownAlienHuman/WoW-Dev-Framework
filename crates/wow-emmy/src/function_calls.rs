@@ -116,6 +116,20 @@ impl SourceCallArgument {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SourceCallReceiver {
+    key: String,
+    target: SymbolTarget,
+}
+impl SourceCallReceiver {
+    pub fn key(&self) -> &str {
+        &self.key
+    }
+    pub const fn target(&self) -> &SymbolTarget {
+        &self.target
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SourceCallFact {
     fact_id: String,
@@ -211,6 +225,40 @@ impl FunctionCallReport {
     }
     pub fn calls(&self) -> &[SourceCallFact] {
         &self.calls
+    }
+    /// Returns the exact simple global receiver for one colon call when the
+    /// existing global-access owner observed one unique unaliased declaration.
+    /// Nested/member receivers, locals, aliases and unresolved roots remain
+    /// unavailable instead of being guessed from source text.
+    pub fn exact_call_receiver(&self, call: &SourceCallFact) -> Option<SourceCallReceiver> {
+        if !call.is_colon_call()
+            || self
+                .calls
+                .binary_search_by(|candidate| candidate.fact_id().cmp(call.fact_id()))
+                .is_err()
+        {
+            return None;
+        }
+        let mut receivers = self
+            .global_accesses
+            .iter()
+            .filter(|access| {
+                access.path() == call.path()
+                    && access.function_id() == call.caller_function_id()
+                    && access.span() == call.callee_span()
+            })
+            .filter_map(|access| {
+                let [crate::global_access::GlobalAccessKey::String(_member)] = access.keys() else {
+                    return None;
+                };
+                exact_callable_access_key(access)?;
+                Some(SourceCallReceiver {
+                    key: access.root_name().to_owned(),
+                    target: access.declaration()?.clone(),
+                })
+            });
+        let receiver = receivers.next()?;
+        receivers.next().is_none().then_some(receiver)
     }
     pub fn named_targets(&self) -> &BTreeMap<String, SourceCallTarget> {
         &self.named_targets

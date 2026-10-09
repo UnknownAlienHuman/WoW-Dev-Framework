@@ -55,7 +55,7 @@ use crate::{
     ProjectError, ProjectErrorCode, ProjectKind, ProjectPhase, ProjectResult, ProjectView,
 };
 
-pub const SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/13";
+pub const SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/14";
 pub const SOURCE_GRAPH_PARTITION: &str = "wow-project.source-load";
 const MAX_FILES: usize = 4096;
 const MAX_LOADS: usize = 8192;
@@ -504,7 +504,7 @@ fn registry() -> ProjectResult<GraphRegistryBundle> {
         "native_event",
         vec!["project".into()],
         vec!["event".into()],
-        vec![GraphConfidence::Proven],
+        vec![GraphConfidence::Derived, GraphConfidence::Possible],
     )
     .map_err(|_| invalid())?;
     let custom_signal = GraphEntityKindDefinition::new(
@@ -615,7 +615,7 @@ fn registry() -> ProjectResult<GraphRegistryBundle> {
     }
     GraphRegistryBundle::build(
         "wow-project.source-load",
-        "11",
+        "12",
         vec![
             file,
             package,

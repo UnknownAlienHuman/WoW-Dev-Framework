@@ -36,9 +36,9 @@ use crate::{
 };
 
 pub const W2_PARTITION: &str = "wow-recognizers.lua-native-event-bridges";
-pub const W2_PROFILE: &str = "wow-recognizers/lua-native-event-bridges/1";
+pub const W2_PROFILE: &str = "wow-recognizers/lua-native-event-bridges/2";
 const W2_FACT_PARTITION: &str = "wow-recognizers.lua-native-event-bridge-facts";
-const W2_FACT_PROFILE: &str = "wow-recognizers-lua-native-event-bridge-facts-1";
+const W2_FACT_PROFILE: &str = "wow-recognizers-lua-native-event-bridge-facts-2";
 const W2_BRIDGE_RULE: &str = "core.signal.native_event_registry_bridge";
 const W2_FACT_KIND: &str = "lua_native_event_bridge";
 const W2_NATIVE_EVENT_ENTITY: &str = "native_event";
@@ -54,16 +54,12 @@ const MAX_ARGUMENTS: usize = 8;
 /// Exact resolved callables that bind a native event through the registry and a
 /// custom callback. The first argument is the event key, the second is the frame
 /// or target receiver; the callback argument is retained only when it resolves.
-const W2_REGISTER_CALLABLES: [&str; 4] = [
-    "EventRegistry.RegisterCallback",
+const W2_REGISTER_CALLABLES: [&str; 3] = [
     "EventRegistry.RegisterFrameEvent",
     "EventRegistry.RegisterFrameEventAndCallback",
-    "EventRegistry.RegisterFrameEventWithCallback",
+    "EventRegistry.RegisterFrameEventAndCallbackWithHandle",
 ];
-const W2_UNREGISTER_CALLABLES: [&str; 2] = [
-    "EventRegistry.UnregisterCallback",
-    "EventRegistry.UnregisterFrameEvent",
-];
+const W2_UNREGISTER_CALLABLES: [&str; 0] = [];
 /// Exact resolved EventRegistry-receiver constructions. A bridge originates from
 /// a resolved registry owner, never from a bare `EventRegistry` name expression,
 /// a library target, or an unresolved global.
@@ -162,8 +158,11 @@ struct W2Site {
     call_id: String,
     caller_proposal_id: String,
     caller_function_id: String,
+    caller_node: GraphNodeId,
     registry_proposal_id: String,
     registry_node: GraphNodeId,
+    registry_handle: StableHandleId,
+    registry_evidence: EvidenceId,
     event_key: String,
     event_ordinal: usize,
     frame_binding: Option<W2Binding>,
@@ -357,7 +356,7 @@ pub fn w2_recognize_native_event_bridges(
 
         // The receiver must be an exact resolved registry owner, never a bare
         // `EventRegistry` name expression, a library target or an unresolved global.
-        let registry_binding = w2_registry_binding(call, &declarations);
+        let registry_binding = w2_registry_binding(input.report, call, &declarations);
         let Some(registry_binding) = registry_binding else {
             continue;
         };
@@ -381,20 +380,10 @@ pub fn w2_recognize_native_event_bridges(
             return Err(w2_failure(RecognizerErrorCode::BudgetExceeded));
         }
 
-        // The registering frame-event forms bind the frame/target receiver as the
-        // second argument and the callback as the third. An unresolved frame
-        // receiver never becomes a degraded match, and a plain RegisterCallback
-        // carries no frame receiver at all.
-        let frame_binding = match shape.frame_ordinal.map(|ordinal| arguments.get(ordinal)) {
-            Some(Some(argument)) => match w2_frame_binding(Some(argument), &declarations) {
-                W2FrameResolution::Resolved(id) => Some(id),
-                W2FrameResolution::Unresolved if side.is_registration() => {
-                    continue;
-                }
-                _ => None,
-            },
-            _ => None,
-        };
+        // Current Blizzard `RegisterFrameEventAndCallback*` forms take the event
+        // key first and the callback second. The EventRegistry object is the Lua
+        // colon receiver, not an ordinary positional argument.
+        let frame_binding = None;
         let callback_binding = match shape.callback_ordinal.map(|ordinal| arguments.get(ordinal)) {
             Some(Some(argument)) => w2_frame_binding(Some(argument), &declarations).resolved(),
             _ => None,
@@ -407,12 +396,20 @@ pub fn w2_recognize_native_event_bridges(
             return Err(w2_failure(RecognizerErrorCode::BudgetExceeded));
         }
         let caller_function_id = call.caller_function_id().to_owned();
+        let caller_proposal_id = w2_caller_proposal(&input, &caller_function_id)?.to_owned();
+        let caller_node = function_nodes
+            .get(&caller_proposal_id)
+            .cloned()
+            .ok_or_else(|| w2_failure(RecognizerErrorCode::AdapterBindingMissing))?;
         let site = W2Site {
             call_id: call.fact_id().into(),
-            caller_proposal_id: w2_caller_proposal(&input, &caller_function_id)?.into(),
+            caller_proposal_id,
             caller_function_id,
+            caller_node,
             registry_proposal_id,
             registry_node: registry_binding.node.clone(),
+            registry_handle: registry_binding.handle,
+            registry_evidence: registry_binding.evidence,
             event_key,
             event_ordinal: shape.event_ordinal,
             frame_binding: frame_binding.clone(),
@@ -536,12 +533,10 @@ pub fn w2_recognize_native_event_bridges(
     let mut entity_proposals = Vec::new();
     let mut event_entities = BTreeMap::<String, String>::new();
     for event in events {
-        if event_entities
-            .insert(event.event_key.clone(), event.proposal_id.clone())
-            .is_some()
-        {
-            return Err(w2_failure(RecognizerErrorCode::AdapterBindingDuplicate));
+        if event_entities.contains_key(&event.event_key) {
+            continue;
         }
+        event_entities.insert(event.event_key.clone(), event.proposal_id.clone());
         entity_proposals.push(
             GraphEntityProposal::new(
                 event.proposal_id.clone(),
@@ -738,11 +733,10 @@ fn w2_relation_call_id(
     let Some(RecognizerFactValue::String(event_key)) = fact.field("event_key") else {
         return Err(w2_failure(RecognizerErrorCode::AdapterFactMismatch));
     };
-    let Some(RecognizerFactValue::Reference(registry_receiver)) = fact.field("registry_receiver")
-    else {
+    let Some(RecognizerFactValue::Reference(caller)) = fact.field("caller") else {
         return Err(w2_failure(RecognizerErrorCode::AdapterFactMismatch));
     };
-    let expected_source = RecognizerFactValue::Reference(registry_receiver.clone());
+    let expected_source = RecognizerFactValue::Reference(caller.clone());
     let expected_target = RecognizerFactValue::String(event_key.clone());
     if request.source != expected_source || request.target != expected_target {
         return Err(w2_failure(RecognizerErrorCode::AdapterFactMismatch));
@@ -762,33 +756,14 @@ fn w2_push_relation(
     registrations: &mut BTreeMap<String, String>,
     bridge_map: &mut BTreeMap<String, String>,
 ) -> RecognizerResult<()> {
-    if request.source != RecognizerFactValue::Reference(site.registry_proposal_id.clone().into()) {
+    if request.source != RecognizerFactValue::Reference(site.caller_proposal_id.clone().into()) {
         return Err(w2_failure(RecognizerErrorCode::AdapterFactMismatch));
     }
-    let expected_target = RecognizerFactValue::Reference(event_entity_proposal_id.into());
+    let expected_target = RecognizerFactValue::String(site.event_key.clone().into());
     if request.target != expected_target {
         return Err(w2_failure(RecognizerErrorCode::AdapterFactMismatch));
     }
-    let source = match request.relation {
-        W2Relation::Registers => GraphProposalEndpoint::Existing(site.registry_node.clone()),
-        W2Relation::Bridges => {
-            let Some(frame_node) = site.frame_node.as_ref() else {
-                return Err(w2_failure(RecognizerErrorCode::AdapterFactMismatch));
-            };
-            if request.source
-                != RecognizerFactValue::Reference(
-                    site.frame_proposal_id
-                        .as_ref()
-                        .ok_or_else(|| w2_failure(RecognizerErrorCode::AdapterFactMismatch))?
-                        .clone()
-                        .into(),
-                )
-            {
-                return Err(w2_failure(RecognizerErrorCode::AdapterFactMismatch));
-            }
-            GraphProposalEndpoint::Existing(frame_node.clone())
-        }
-    };
+    let source = GraphProposalEndpoint::Existing(site.caller_node.clone());
     let owned = match request.relation {
         W2Relation::Registers => registrations,
         W2Relation::Bridges => bridge_map,
@@ -821,36 +796,23 @@ fn w2_side(call: &SourceCallFact) -> Option<W2Side> {
     if !call.is_colon_call() {
         return None;
     }
-    let key = call.resolved_callable_key()?;
-    if W2_REGISTER_CALLABLES.contains(&key) {
-        Some(W2Side::Registers)
-    } else if W2_UNREGISTER_CALLABLES.contains(&key) {
-        Some(W2Side::Unregisters)
-    } else {
-        None
-    }
+    W2_REGISTER_CALLABLES
+        .contains(&call.resolved_callable_key()?)
+        .then_some(W2Side::Registers)
 }
 
-/// Argument positions per bridge form. The event key is always first. The
-/// frame/target receiver and the callback positions are the declared shape of the
-/// exact resolved callable, never an assumed table overload.
-/// Argument positions per bridge form. The event key is always first. The
-/// frame/target receiver is the second argument of every frame-event form, and the
-/// callback is the third argument of the `*AndCallback` forms. These positions are
-/// the declared shape of the exact resolved callable, never an assumed table
-/// overload.
-fn w2_argument_shape(call: &SourceCallFact, side: W2Side) -> W2ArgumentShape {
-    let key = call.resolved_callable_key().unwrap_or_default();
-    let frame_event = key.contains("FrameEvent");
-    let and_callback = key.contains("AndCallback") || key.contains("WithCallback");
+/// Current EventRegistry bridge forms take the native event key first. The
+/// `*AndCallback*` forms take the callback second; `RegisterFrameEvent` has no
+/// callback argument. The registry itself is the colon receiver.
+fn w2_argument_shape(call: &SourceCallFact, _side: W2Side) -> W2ArgumentShape {
+    let callback_ordinal = call
+        .resolved_callable_key()
+        .is_some_and(|key| key.contains("AndCallback"))
+        .then_some(1);
     W2ArgumentShape {
         event_ordinal: 0,
-        frame_ordinal: (frame_event && side == W2Side::Registers).then_some(1),
-        callback_ordinal: if frame_event && and_callback {
-            Some(2)
-        } else {
-            None
-        },
+        frame_ordinal: None,
+        callback_ordinal,
     }
 }
 
@@ -901,10 +863,21 @@ fn w2_frame_binding(
 /// resolve to an exact Main declaration reached by an exact EventRegistry
 /// receiver resolution, never a bare `EventRegistry` name expression.
 fn w2_registry_binding(
+    report: &FunctionCallReport,
     call: &SourceCallFact,
     declarations: &BTreeMap<(String, SourceSpan), W2Binding>,
 ) -> Option<W2Binding> {
-    w2_frame_binding(call.arguments().first(), declarations).resolved()
+    let receiver = report.exact_call_receiver(call)?;
+    let target = receiver.target();
+    if receiver.key() != "EventRegistry"
+        || target.role != "main"
+        || target.workspace_id != report.main_snapshot_id()
+    {
+        return None;
+    }
+    declarations
+        .get(&(target.path.clone(), target.span))
+        .cloned()
 }
 
 fn w2_caller_proposal<'a>(
@@ -980,8 +953,12 @@ fn w2_signal_fact(
             producer_version: W2_FACT_PROFILE.into(),
             confidence: GraphConfidence::Derived,
             fields,
-            source_handle_ids: vec![site.handle],
-            evidence_ids: vec![site.evidence],
+            source_handle_ids: BTreeSet::from([site.handle, site.registry_handle])
+                .into_iter()
+                .collect(),
+            evidence_ids: BTreeSet::from([site.evidence, site.registry_evidence])
+                .into_iter()
+                .collect(),
         },
         limits,
     )
@@ -1120,11 +1097,11 @@ fn w2_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRecogniz
         schema_version: crate::RECOGNIZER_PACK_SCHEMA_VERSION,
         pack: RecognizerPack {
             pack_id: "wow-core-lua-native-event-bridges".into(),
-            version: "1".into(),
+            version: "2".into(),
             trust_class: RecognizerPackTrustClass::Core,
             fact_schema_profile_id: W2_FACT_PROFILE.into(),
             graph_registry_bundle_id: registry_bundle_id.into(),
-            evaluation_profile_id: "wow-recognizers-w11-native-event-bridge-1".into(),
+            evaluation_profile_id: "wow-recognizers-w11-native-event-bridge-2".into(),
             rollout: RecognizerPackRollout::Shadow,
             budgets: RecognizerPackBudgets {
                 max_rules: 8,
@@ -1161,14 +1138,14 @@ fn w2_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRecogniz
                     RecognizerOutput::RelationAssertion {
                         output_id: "registry_registers_native_event".into(),
                         relation_kind_id: W2_REGISTERS_RELATION.into(),
-                        source: "bridge.registry_receiver".into(),
+                        source: "bridge.caller".into(),
                         target: "bridge.event_key".into(),
                         confidence: RecognizerOutputConfidence::Derived,
                     },
                     RecognizerOutput::RelationAssertion {
                         output_id: "registry_bridges_native_event".into(),
                         relation_kind_id: W2_BRIDGES_RELATION.into(),
-                        source: "bridge.frame_receiver".into(),
+                        source: "bridge.caller".into(),
                         target: "bridge.event_key".into(),
                         confidence: RecognizerOutputConfidence::Derived,
                     },

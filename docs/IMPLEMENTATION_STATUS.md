@@ -416,3 +416,20 @@ not full E2-D acceptance: live project views, incremental invalidation, retentio
 GC, backup/restore, epoch replacement and crash/power-loss acceptance remain open.
 Only the existing internal project-to-store dependency is activated; no tests or
 external dependency versions are changed. Full launch gates stay unchanged.
+
+## W11 semantic-repair checkpoint
+
+A read-through after the first W11 publication found positive-path defects that
+ordinary workspace CI did not exercise: colon receivers were reused as positional
+arguments, `RegisterUnitEvent` argument order was reversed, hook callable keys did
+not match the production analyzer profile, library matcher fact IDs were confused
+with call IDs, and library graph proposals lacked mandatory support. The bounded
+repair route and remaining acceptance order are recorded in
+[W11_SEMANTIC_REPAIR_MAP_2026-10-09.md](W11_SEMANTIC_REPAIR_MAP_2026-10-09.md).
+
+The repaired slice remains structural static evidence. It does not establish
+runtime event delivery, frame lifecycle, callback safety, taint/combat legality,
+loaded library revisions or complete E2 acceptance. Full per-rule pipeline cases,
+fixture/checksum freeze, the remaining TOC/XML/state rules, `apps/wow` real-addon
+acceptance and the mandatory final WoW API Ketho MCP comparison remain open until
+separately executed and recorded.

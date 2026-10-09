@@ -43,9 +43,9 @@ use crate::{
 //  revision or toolchain version. Only universal graph roles are used.
 
 pub const W1_SIGNAL_PARTITION: &str = "wow-recognizers.lua-native-frame-events";
-const W1_SIGNAL_PROFILE: &str = "wow-recognizers/lua-native-frame-events/1";
+const W1_SIGNAL_PROFILE: &str = "wow-recognizers/lua-native-frame-events/2";
 const W1_FACT_PARTITION: &str = "wow-recognizers.lua-native-frame-event-facts";
-const W1_FACT_PROFILE: &str = "wow-recognizers-lua-native-frame-event-facts-1";
+const W1_FACT_PROFILE: &str = "wow-recognizers-lua-native-frame-event-facts-2";
 const W1_RULE: &str = "core.signal.native_frame_event";
 const W1_RULE_VERSION: u32 = 1;
 const W1_REGISTER_EVENT_CALLABLE: &str = "Frame.RegisterEvent";
@@ -101,20 +101,16 @@ impl W1RegistrationKind {
         }
     }
 
-    /// Argument slot of the first event-name argument. RegisterUnitEvent places
-    /// the unit token first, so its event slot starts one position later.
+    /// Both reviewed WoW forms take the native event name first.
     const fn event_ordinal(self) -> usize {
-        match self {
-            Self::FrameEvent => 0,
-            Self::FrameUnitEvent => 1,
-        }
+        0
     }
 
-    /// Argument slot holding the single exact unit token, when this shape has one.
+    /// `RegisterUnitEvent(event, unit1, ...)` starts its ordered unit list at 1.
     const fn unit_ordinal(self) -> Option<usize> {
         match self {
             Self::FrameEvent => None,
-            Self::FrameUnitEvent => Some(0),
+            Self::FrameUnitEvent => Some(1),
         }
     }
 
@@ -407,15 +403,12 @@ pub fn w1_recognize_native_frame_events(
         if arguments.len() > W1_MAX_ARGUMENTS {
             return Err(w1_failure(RecognizerErrorCode::BudgetExceeded));
         }
-        let (event_names, exact_event_names) = w1_event_names(arguments, kind)?;
-        let (unit_tokens, _) = w1_unit_tokens(arguments, kind)?;
-        let handlers = w1_handlers(
-            &input,
-            arguments,
-            kind,
-            &declarations,
-            input.report.main_snapshot_id(),
-        )?;
+        let (event_names, event_exact) = w1_event_names(arguments, kind)?;
+        let (unit_tokens, units_exact) = w1_unit_tokens(arguments, kind)?;
+        let exact_event_names = event_exact && units_exact;
+        // RegisterEvent/RegisterUnitEvent do not carry a callback argument. Handler
+        // ownership is supplied by the independent SetScript/XML producers.
+        let handlers = Vec::new();
 
         let site = W1Site {
             call_id: call.fact_id().to_owned(),
@@ -500,7 +493,7 @@ pub fn w1_recognize_native_frame_events(
                 )?,
                 producer_id: "wow.emmy".into(),
                 producer_version: W1_FACT_PROFILE.into(),
-                confidence: if site.exact_event_names && !site.handlers.is_empty() {
+                confidence: if site.exact_event_names {
                     GraphConfidence::Derived
                 } else {
                     GraphConfidence::Possible
@@ -556,114 +549,125 @@ pub fn w1_recognize_native_frame_events(
     let mut entities = Vec::new();
     let mut relations = Vec::new();
     let mut event_by_call = BTreeMap::<String, String>::new();
+    let mut event_by_key = BTreeMap::<String, String>::new();
     let mut registers_by_call = BTreeMap::<String, String>::new();
+
+    // Proposal order is canonical by proposal ID, not by output kind. Resolve all
+    // entities first so relation validation never depends on hash ordering.
     for outcome in output.outcomes() {
         for proposal in outcome.proposals() {
-            match proposal {
-                crate::RecognizerProposedAssertion::Entity {
-                    proposal_id,
-                    entity_kind_id,
-                    semantic_key,
-                    confidence,
-                    source_handle_ids,
-                    evidence_ids,
-                    coverage_ids,
-                    ..
-                } => {
-                    if entity_kind_id.as_ref() != W1_EVENT_ENTITY || semantic_key.len() != 1 {
-                        return Err(w1_failure(RecognizerErrorCode::AdapterFactMismatch));
-                    }
-                    let Some(RecognizerFactValue::Reference(call_id)) = semantic_key.get("call")
-                    else {
-                        return Err(w1_failure(RecognizerErrorCode::AdapterFactMismatch));
-                    };
-                    let site = sites
-                        .get(call_id.as_ref())
-                        .ok_or_else(|| w1_failure(RecognizerErrorCode::AdapterBindingMissing))?;
-                    if event_by_call
-                        .insert(call_id.to_string(), proposal_id.to_string())
-                        .is_some()
-                    {
-                        return Err(w1_failure(RecognizerErrorCode::AdapterBindingDuplicate));
-                    }
-                    let mut identity = BTreeMap::from([(
-                        "call".into(),
-                        GraphProposalValue::Reference(call_id.clone()),
-                    )]);
-                    for (index, name) in
-                        site.event_names.iter().take(W1_MAX_EVENT_NAMES).enumerate()
-                    {
-                        identity.insert(
-                            format!("event_{index}").into_boxed_str(),
-                            GraphProposalValue::Identifier(name.as_str().into()),
-                        );
-                    }
-                    entities.push(
-                        GraphEntityProposal::new(
-                            proposal_id.to_string(),
-                            W1_EVENT_ENTITY,
-                            identity,
-                            w1_graph_confidence(*confidence),
-                            source_handle_ids.clone(),
-                            evidence_ids.clone(),
-                            coverage_ids.clone(),
-                        )
-                        .map_err(w1_graph_error)?,
-                    );
-                }
-                crate::RecognizerProposedAssertion::Relation {
-                    proposal_id,
-                    relation_kind_id,
-                    source,
-                    target,
-                    confidence,
-                    source_handle_ids,
-                    evidence_ids,
-                    coverage_ids,
-                    ..
-                } => {
-                    if relation_kind_id.as_ref() != W1_REGISTERS_DEFINITION {
-                        return Err(w1_failure(RecognizerErrorCode::AdapterFactMismatch));
-                    }
-                    let RecognizerFactValue::Reference(caller_proposal) = source else {
-                        return Err(w1_failure(RecognizerErrorCode::AdapterFactMismatch));
-                    };
-                    let RecognizerFactValue::Reference(call_id) = target else {
-                        return Err(w1_failure(RecognizerErrorCode::AdapterFactMismatch));
-                    };
-                    let site = sites
-                        .get(call_id.as_ref())
-                        .ok_or_else(|| w1_failure(RecognizerErrorCode::AdapterBindingMissing))?;
-                    if site.caller.proposal_id != caller_proposal.as_ref() {
-                        return Err(w1_failure(RecognizerErrorCode::AdapterBindingMissing));
-                    }
-                    let event_id = event_by_call
-                        .get(call_id.as_ref())
-                        .ok_or_else(|| w1_failure(RecognizerErrorCode::AdapterBindingMissing))?
-                        .clone();
-                    if registers_by_call
-                        .insert(call_id.to_string(), proposal_id.to_string())
-                        .is_some()
-                    {
-                        return Err(w1_failure(RecognizerErrorCode::AdapterBindingDuplicate));
-                    }
-                    relations.push(
-                        GraphRelationProposal::new(
-                            proposal_id.to_string(),
-                            W1_REGISTERS_DEFINITION,
-                            GraphRelationProposalInput {
-                                source: GraphProposalEndpoint::Existing(site.caller.node.clone()),
-                                target: GraphProposalEndpoint::Proposed(event_id.into()),
-                                confidence: w1_graph_confidence(*confidence),
-                                source_handle_ids: source_handle_ids.clone(),
-                                evidence_ids: evidence_ids.clone(),
-                                coverage_ids: coverage_ids.clone(),
-                            },
-                        )
-                        .map_err(w1_graph_error)?,
-                    );
-                }
+            let crate::RecognizerProposedAssertion::Entity {
+                proposal_id,
+                entity_kind_id,
+                semantic_key,
+                confidence,
+                source_handle_ids,
+                evidence_ids,
+                coverage_ids,
+                ..
+            } = proposal
+            else {
+                continue;
+            };
+            if entity_kind_id.as_ref() != W1_EVENT_ENTITY || semantic_key.len() != 1 {
+                return Err(w1_failure(RecognizerErrorCode::AdapterFactMismatch));
             }
+            let Some(RecognizerFactValue::Reference(call_id)) = semantic_key.get("call") else {
+                return Err(w1_failure(RecognizerErrorCode::AdapterFactMismatch));
+            };
+            let site = sites
+                .get(call_id.as_ref())
+                .ok_or_else(|| w1_failure(RecognizerErrorCode::AdapterBindingMissing))?;
+            let [event_key] = site.event_names.as_slice() else {
+                return Err(w1_failure(RecognizerErrorCode::AdapterFactMismatch));
+            };
+            let entity_id = if let Some(existing) = event_by_key.get(event_key) {
+                existing.clone()
+            } else {
+                let entity_id = proposal_id.to_string();
+                event_by_key.insert(event_key.clone(), entity_id.clone());
+                entities.push(
+                    GraphEntityProposal::new(
+                        entity_id.clone(),
+                        W1_EVENT_ENTITY,
+                        BTreeMap::from([(
+                            "event".into(),
+                            GraphProposalValue::String(event_key.clone().into()),
+                        )]),
+                        w1_graph_confidence(*confidence),
+                        source_handle_ids.clone(),
+                        evidence_ids.clone(),
+                        coverage_ids.clone(),
+                    )
+                    .map_err(w1_graph_error)?,
+                );
+                entity_id
+            };
+            if event_by_call
+                .insert(call_id.to_string(), entity_id)
+                .is_some()
+            {
+                return Err(w1_failure(RecognizerErrorCode::AdapterBindingDuplicate));
+            }
+        }
+    }
+
+    for outcome in output.outcomes() {
+        for proposal in outcome.proposals() {
+            let crate::RecognizerProposedAssertion::Relation {
+                proposal_id,
+                relation_kind_id,
+                source,
+                target,
+                confidence,
+                source_handle_ids,
+                evidence_ids,
+                coverage_ids,
+                ..
+            } = proposal
+            else {
+                continue;
+            };
+            if relation_kind_id.as_ref() != W1_REGISTERS_DEFINITION {
+                return Err(w1_failure(RecognizerErrorCode::AdapterFactMismatch));
+            }
+            let RecognizerFactValue::Reference(caller_proposal) = source else {
+                return Err(w1_failure(RecognizerErrorCode::AdapterFactMismatch));
+            };
+            let RecognizerFactValue::Reference(call_id) = target else {
+                return Err(w1_failure(RecognizerErrorCode::AdapterFactMismatch));
+            };
+            let site = sites
+                .get(call_id.as_ref())
+                .ok_or_else(|| w1_failure(RecognizerErrorCode::AdapterBindingMissing))?;
+            if site.caller.proposal_id != caller_proposal.as_ref() {
+                return Err(w1_failure(RecognizerErrorCode::AdapterBindingMissing));
+            }
+            let event_id = event_by_call
+                .get(call_id.as_ref())
+                .ok_or_else(|| w1_failure(RecognizerErrorCode::AdapterBindingMissing))?
+                .clone();
+            if registers_by_call
+                .insert(call_id.to_string(), proposal_id.to_string())
+                .is_some()
+            {
+                return Err(w1_failure(RecognizerErrorCode::AdapterBindingDuplicate));
+            }
+            relations.push(
+                GraphRelationProposal::new(
+                    proposal_id.to_string(),
+                    W1_REGISTERS_DEFINITION,
+                    GraphRelationProposalInput {
+                        source: GraphProposalEndpoint::Existing(site.caller.node.clone()),
+                        target: GraphProposalEndpoint::Proposed(event_id.into()),
+                        confidence: w1_graph_confidence(*confidence),
+                        source_handle_ids: source_handle_ids.clone(),
+                        evidence_ids: evidence_ids.clone(),
+                        coverage_ids: coverage_ids.clone(),
+                    },
+                )
+                .map_err(w1_graph_error)?,
+            );
         }
     }
 
@@ -678,55 +682,9 @@ pub fn w1_recognize_native_frame_events(
         return Err(w1_failure(RecognizerErrorCode::AdapterBindingMissing));
     }
 
-    // One handles_native_event relation per exact resolved Main handler endpoint.
-    let mut handle_relations = BTreeMap::<(String, String), String>::new();
-    for (call_id, site) in &sites {
-        w1_checkpoint(stop)?;
-        let event_id = event_by_call
-            .get(call_id)
-            .ok_or_else(|| w1_failure(RecognizerErrorCode::AdapterBindingMissing))?
-            .clone();
-        for handler in &site.handlers {
-            let relation_id =
-                w1_handler_relation_id(call_id, &handler.declaration, handler.argument_ordinal)?;
-            let confidence = if site.exact_event_names {
-                GraphConfidence::Derived
-            } else {
-                GraphConfidence::Possible
-            };
-            relations.push(
-                GraphRelationProposal::new(
-                    relation_id.as_str(),
-                    W1_HANDLES_DEFINITION,
-                    GraphRelationProposalInput {
-                        source: GraphProposalEndpoint::Proposed(event_id.clone().into()),
-                        target: GraphProposalEndpoint::Existing(handler.declaration.node.clone()),
-                        confidence,
-                        source_handle_ids: BTreeSet::from([
-                            site.handle,
-                            handler.declaration.handle,
-                        ])
-                        .into_iter()
-                        .collect(),
-                        evidence_ids: BTreeSet::from([site.evidence, handler.declaration.evidence])
-                            .into_iter()
-                            .collect(),
-                        coverage_ids: Vec::new(),
-                    },
-                )
-                .map_err(w1_graph_error)?,
-            );
-            if handle_relations
-                .insert(
-                    (call_id.clone(), handler.declaration.node.to_string()),
-                    relation_id.clone(),
-                )
-                .is_some()
-            {
-                return Err(w1_failure(RecognizerErrorCode::AdapterBindingDuplicate));
-            }
-        }
-    }
+    // RegisterEvent/RegisterUnitEvent do not identify their eventual handler.
+    // The SetsScript/XML producers own that cross-family association.
+    let handle_relations = BTreeMap::<(String, String), String>::new();
 
     // Describe every stored relation family. This producer never certifies
     // source-owned relations and never grants absence authority.
@@ -743,7 +701,7 @@ pub fn w1_recognize_native_frame_events(
             let (state, blocker) = if relation == GraphRelationKind::RegistersNativeEvent {
                 (GraphCoverageState::Partial, W1_REGISTERS_BLOCKER)
             } else if relation == GraphRelationKind::HandlesNativeEvent {
-                (GraphCoverageState::Partial, W1_HANDLES_BLOCKER)
+                (GraphCoverageState::NotEvaluated, W1_HANDLES_BLOCKER)
             } else {
                 (GraphCoverageState::NotEvaluated, W1_OTHER_RELATION_BLOCKER)
             };
@@ -864,9 +822,9 @@ fn w1_validate_support(
 // ===== BEGIN WORKER 3: custom registry producer and subscription =====
 
 pub const W3_SIGNAL_PARTITION: &str = "wow-recognizers.lua-custom-signals";
-pub const W3_SIGNAL_PROFILE: &str = "wow-recognizers/lua-custom-signals/1";
+pub const W3_SIGNAL_PROFILE: &str = "wow-recognizers/lua-custom-signals/2";
 const W3_FACT_PARTITION: &str = "wow-recognizers.lua-custom-signal-facts";
-const W3_FACT_PROFILE: &str = "wow-recognizers-lua-custom-signal-facts-1";
+const W3_FACT_PROFILE: &str = "wow-recognizers-lua-custom-signal-facts-2";
 const W3_PRODUCER_RULE: &str = "core.signal.custom_registry_producer";
 const W3_SUBSCRIPTION_RULE: &str = "core.signal.custom_registry_subscription";
 const W3_TRIGGER_EVENT_CALLABLE: &str = "EventRegistry.TriggerEvent";
@@ -1058,11 +1016,11 @@ fn w1_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRecogniz
         schema_version: crate::RECOGNIZER_PACK_SCHEMA_VERSION,
         pack: RecognizerPack {
             pack_id: "wow-core-lua-native-frame-events".into(),
-            version: "1".into(),
+            version: "2".into(),
             trust_class: RecognizerPackTrustClass::Core,
             fact_schema_profile_id: W1_FACT_PROFILE.into(),
             graph_registry_bundle_id: registry_bundle_id.into(),
-            evaluation_profile_id: "wow-recognizers-w11-native-frame-event-1".into(),
+            evaluation_profile_id: "wow-recognizers-w11-native-frame-event-2".into(),
             rollout: RecognizerPackRollout::Shadow,
             budgets: RecognizerPackBudgets {
                 max_rules: 4,
@@ -1164,24 +1122,31 @@ fn w1_unit_tokens(
     arguments: &[wow_emmy::function_calls::SourceCallArgument],
     kind: W1RegistrationKind,
 ) -> RecognizerResult<(Vec<String>, bool)> {
-    let Some(ordinal) = kind.unit_ordinal() else {
+    let Some(start) = kind.unit_ordinal() else {
         return Ok((Vec::new(), true));
     };
-    let Some(argument) = arguments.get(ordinal) else {
+    if arguments.len() <= start {
         return Ok((Vec::new(), false));
-    };
-    match argument.literal() {
-        Some(wow_emmy::function_calls::SourceCallLiteral::String(value)) => {
-            if value.len() > W1_MAX_EVENT_BYTES {
-                return Err(w1_failure(RecognizerErrorCode::BudgetExceeded));
-            }
-            if value.is_empty() {
-                return Ok((Vec::new(), false));
-            }
-            Ok((vec![value.clone()], true))
-        }
-        _ => Ok((Vec::new(), false)),
     }
+    let mut tokens = Vec::new();
+    for argument in &arguments[start..] {
+        let Some(wow_emmy::function_calls::SourceCallLiteral::String(value)) = argument.literal()
+        else {
+            return Ok((Vec::new(), false));
+        };
+        if value.is_empty() || value.len() > W1_MAX_EVENT_BYTES {
+            return if value.len() > W1_MAX_EVENT_BYTES {
+                Err(w1_failure(RecognizerErrorCode::BudgetExceeded))
+            } else {
+                Ok((Vec::new(), false))
+            };
+        }
+        if tokens.len() >= W1_MAX_UNIT_TOKENS {
+            return Err(w1_failure(RecognizerErrorCode::BudgetExceeded));
+        }
+        tokens.push(value.clone());
+    }
+    Ok((tokens, true))
 }
 
 pub struct W3Proposals {
@@ -1255,8 +1220,11 @@ struct W3Site {
     fact_id: String,
     call_id: String,
     caller_proposal_id: String,
+    caller_node: GraphNodeId,
     receiver_proposal_id: String,
     receiver_node: GraphNodeId,
+    receiver_handle: StableHandleId,
+    receiver_evidence: EvidenceId,
     event_key: String,
     event_ordinal: usize,
     argument_count: usize,
@@ -1269,16 +1237,16 @@ struct W3Site {
 enum W3Assertion {
     Emitter {
         call_id: String,
+        caller_proposal_id: String,
         receiver_proposal_id: String,
-        receiver_node: GraphNodeId,
         event_key: String,
         relation_proposal_id: String,
         confidence: RecognizerOutputConfidence,
     },
     Subscription {
         call_id: String,
+        caller_proposal_id: String,
         receiver_proposal_id: String,
-        receiver_node: GraphNodeId,
         event_key: String,
         relation_proposal_id: String,
         producer_call_id: Option<String>,
@@ -1321,6 +1289,7 @@ pub fn w3_recognize_signals(
     let accepted = source_partition.report().accepted_entities();
 
     let mut function_proposals = BTreeMap::<String, String>::new();
+    let mut function_nodes = BTreeMap::<String, GraphNodeId>::new();
     let mut function_ids = BTreeSet::new();
     for function in input.report.functions() {
         w3_checkpoint(stop)?;
@@ -1372,11 +1341,12 @@ pub fn w3_recognize_signals(
             return Err(w3_failure(RecognizerErrorCode::AdapterBindingDuplicate));
         }
         function_proposals.insert(function.fact_id().to_owned(), proposal_id.to_owned());
+        function_nodes.insert(function.fact_id().to_owned(), node);
     }
 
     let mut declarations = BTreeMap::<(String, SourceSpan), W3Binding>::new();
     let mut declaration_keys = BTreeMap::<String, W3ReceiverTarget>::new();
-    let mut receiver_nodes = BTreeMap::<String, GraphNodeId>::new();
+    let mut receiver_proposal_ids = BTreeSet::<String>::new();
     for ((path, span), proposal_id) in &input.declaration_proposals {
         w3_checkpoint(stop)?;
         let proposal = source_partition
@@ -1423,10 +1393,7 @@ pub fn w3_recognize_signals(
         if graph.node(&node).is_none() {
             return Err(w3_failure(RecognizerErrorCode::AdapterIdentityMismatch));
         }
-        if receiver_nodes
-            .insert((*proposal_id).to_owned(), node.clone())
-            .is_some()
-        {
+        if !receiver_proposal_ids.insert((*proposal_id).to_owned()) {
             return Err(w3_failure(RecognizerErrorCode::AdapterBindingDuplicate));
         }
         declaration_keys.insert(
@@ -1460,7 +1427,14 @@ pub fn w3_recognize_signals(
         let Some(side) = w3_side(call) else {
             continue;
         };
-        let Some(site) = w3_build_site(&input, call, side, &declarations, &declaration_keys)?
+        let Some(site) = w3_build_site(
+            &input,
+            call,
+            side,
+            &declarations,
+            &declaration_keys,
+            &function_nodes,
+        )?
         else {
             continue;
         };
@@ -1511,44 +1485,51 @@ pub fn w3_recognize_signals(
     let output = execute_recognizer_plan(input.context, &pack, &plan, &bundle, fact_limits, stop)?;
 
     let mut assertions = Vec::new();
-    let mut producer_call_ids = BTreeSet::<(String, String)>::new();
+    let empty_producers = BTreeMap::<(String, String), Vec<String>>::new();
     for outcome in output.outcomes() {
-        match outcome.rule_id() {
-            W3_PRODUCER_RULE if outcome.rule_version() == 1 => {
-                for proposal in outcome.proposals() {
-                    assertions.push(w3_read_assertion(
-                        proposal,
-                        W3SignalSide::Producer,
-                        &bundle,
-                        &receiver_nodes,
-                        &producer_call_ids,
-                    )?);
-                }
+        if outcome.rule_id() == W3_PRODUCER_RULE && outcome.rule_version() == 1 {
+            for proposal in outcome.proposals() {
+                assertions.push(w3_read_assertion(
+                    proposal,
+                    W3SignalSide::Producer,
+                    &bundle,
+                    &empty_producers,
+                )?);
             }
-            W3_SUBSCRIPTION_RULE if outcome.rule_version() == 1 => {
-                for proposal in outcome.proposals() {
-                    assertions.push(w3_read_assertion(
-                        proposal,
-                        W3SignalSide::Subscription,
-                        &bundle,
-                        &receiver_nodes,
-                        &producer_call_ids,
-                    )?);
-                }
-            }
-            _ => return Err(w3_failure(RecognizerErrorCode::AdapterFactMismatch)),
+        } else if outcome.rule_id() != W3_SUBSCRIPTION_RULE || outcome.rule_version() != 1 {
+            return Err(w3_failure(RecognizerErrorCode::AdapterFactMismatch));
         }
     }
 
-    // Producer call identities are collected in a first pass so a later
-    // subscription can be confirmed against an earlier exact producer regardless
-    // of outcome order.
+    let mut producer_calls = BTreeMap::<(String, String), Vec<String>>::new();
     for assertion in &assertions {
         if let W3Assertion::Emitter {
-            call_id, event_key, ..
+            call_id,
+            receiver_proposal_id,
+            event_key,
+            ..
         } = assertion
         {
-            producer_call_ids.insert((event_key.clone(), call_id.clone()));
+            producer_calls
+                .entry((receiver_proposal_id.clone(), event_key.clone()))
+                .or_default()
+                .push(call_id.clone());
+        }
+    }
+    for calls in producer_calls.values_mut() {
+        calls.sort();
+        calls.dedup();
+    }
+    for outcome in output.outcomes() {
+        if outcome.rule_id() == W3_SUBSCRIPTION_RULE && outcome.rule_version() == 1 {
+            for proposal in outcome.proposals() {
+                assertions.push(w3_read_assertion(
+                    proposal,
+                    W3SignalSide::Subscription,
+                    &bundle,
+                    &producer_calls,
+                )?);
+            }
         }
     }
 
@@ -1556,129 +1537,126 @@ pub fn w3_recognize_signals(
     let mut relations = Vec::new();
     let mut producer_matches = Vec::new();
     let mut subscription_matches = Vec::new();
+    let mut signal_entities = BTreeMap::<String, String>::new();
     for assertion in &assertions {
-        match assertion {
+        let (
+            call_id,
+            caller_proposal_id,
+            receiver_proposal_id,
+            event_key,
+            relation_proposal_id,
+            confidence,
+            producer_call_id,
+        ) = match assertion {
             W3Assertion::Emitter {
                 call_id,
+                caller_proposal_id,
                 receiver_proposal_id,
-                receiver_node,
                 event_key,
                 relation_proposal_id,
                 confidence,
-            } => {
-                let site = sites
-                    .get(call_id.as_str())
-                    .ok_or_else(|| w3_failure(RecognizerErrorCode::AdapterBindingMissing))?;
-                let binding = declarations
-                    .values()
-                    .next()
-                    .ok_or_else(|| w3_failure(RecognizerErrorCode::AdapterBindingMissing))?;
-                let confidence = w3_graph_confidence(*confidence);
-                let handles = BTreeSet::from([site.handle, binding.handle])
-                    .into_iter()
-                    .collect::<Vec<_>>();
-                let evidence = BTreeSet::from([site.evidence, binding.evidence])
-                    .into_iter()
-                    .collect::<Vec<_>>();
-                let signal_id = w3_entity_id("emitter", call_id);
-                entities.push(
-                    GraphEntityProposal::new(
-                        signal_id.as_str(),
-                        W3_CUSTOM_SIGNAL_ENTITY,
-                        BTreeMap::from([
-                            (
-                                "producer".into(),
-                                GraphProposalValue::Reference(receiver_proposal_id.clone().into()),
-                            ),
-                            (
-                                "event".into(),
-                                GraphProposalValue::String(event_key.clone().into()),
-                            ),
-                        ]),
-                        confidence,
-                        handles.clone(),
-                        evidence.clone(),
-                        Vec::new(),
-                    )
-                    .map_err(w3_graph_error)?,
-                );
-                relations.push(
-                    GraphRelationProposal::new(
-                        relation_proposal_id.as_str(),
-                        W3_EMITTER_RELATION_ID,
-                        GraphRelationProposalInput {
-                            source: GraphProposalEndpoint::Existing(receiver_node.clone()),
-                            target: GraphProposalEndpoint::Proposed(signal_id.as_str().into()),
-                            confidence,
-                            source_handle_ids: handles,
-                            evidence_ids: evidence,
-                            coverage_ids: Vec::new(),
-                        },
-                    )
-                    .map_err(w3_graph_error)?,
-                );
-                producer_matches.push(W3ProducerMatch {
-                    call_id: call_id.clone(),
-                    event_key: event_key.clone(),
-                    receiver_declaration_proposal_id: receiver_proposal_id.clone(),
-                    relation_proposal_id: relation_proposal_id.clone(),
-                });
-            }
+            } => (
+                call_id,
+                caller_proposal_id,
+                receiver_proposal_id,
+                event_key,
+                relation_proposal_id,
+                *confidence,
+                None,
+            ),
             W3Assertion::Subscription {
                 call_id,
+                caller_proposal_id,
                 receiver_proposal_id,
-                receiver_node,
                 event_key,
                 relation_proposal_id,
                 producer_call_id,
                 confidence,
-            } => {
-                let site = sites
-                    .get(call_id.as_str())
-                    .ok_or_else(|| w3_failure(RecognizerErrorCode::AdapterBindingMissing))?;
-                let binding = declarations
-                    .values()
-                    .next()
-                    .ok_or_else(|| w3_failure(RecognizerErrorCode::AdapterBindingMissing))?;
-                let confidence = w3_graph_confidence(*confidence);
-                let handles = BTreeSet::from([site.handle, binding.handle])
-                    .into_iter()
-                    .collect::<Vec<_>>();
-                let evidence = BTreeSet::from([site.evidence, binding.evidence])
-                    .into_iter()
-                    .collect::<Vec<_>>();
-                // The producer endpoint is only available when an exact compatible
-                // producer was observed; otherwise the relay is the consumer itself.
-                let producer_node = match producer_call_id {
-                    Some(producer) => sites
-                        .get(producer.as_str())
-                        .map(|producer_site| producer_site.receiver_node.clone()),
-                    None => None,
-                };
-                let target = match producer_node {
-                    Some(node) => GraphProposalEndpoint::Existing(node),
-                    None => GraphProposalEndpoint::Existing(receiver_node.clone()),
-                };
-                relations.push(
-                    GraphRelationProposal::new(
-                        relation_proposal_id.as_str(),
-                        W3_SUBSCRIPTION_RELATION_ID,
-                        GraphRelationProposalInput {
-                            source: GraphProposalEndpoint::Existing(receiver_node.clone()),
-                            target,
-                            confidence,
-                            source_handle_ids: handles,
-                            evidence_ids: evidence,
-                            coverage_ids: Vec::new(),
-                        },
-                    )
-                    .map_err(w3_graph_error)?,
-                );
+            } => (
+                call_id,
+                caller_proposal_id,
+                receiver_proposal_id,
+                event_key,
+                relation_proposal_id,
+                *confidence,
+                producer_call_id.as_ref(),
+            ),
+        };
+        let site = sites
+            .get(call_id.as_str())
+            .ok_or_else(|| w3_failure(RecognizerErrorCode::AdapterBindingMissing))?;
+        if site.caller_proposal_id != *caller_proposal_id
+            || site.receiver_proposal_id != *receiver_proposal_id
+            || site.event_key != *event_key
+        {
+            return Err(w3_failure(RecognizerErrorCode::AdapterFactMismatch));
+        }
+        let handles = BTreeSet::from([site.handle, site.receiver_handle])
+            .into_iter()
+            .collect::<Vec<_>>();
+        let evidence = BTreeSet::from([site.evidence, site.receiver_evidence])
+            .into_iter()
+            .collect::<Vec<_>>();
+        let graph_confidence = if matches!(assertion, W3Assertion::Subscription { .. })
+            && producer_call_id.is_none()
+        {
+            GraphConfidence::Possible
+        } else {
+            w3_graph_confidence(confidence)
+        };
+        let signal_id = if let Some(existing) = signal_entities.get(event_key) {
+            existing.clone()
+        } else {
+            let signal_id = w3_entity_id("signal", event_key);
+            signal_entities.insert(event_key.clone(), signal_id.clone());
+            entities.push(
+                GraphEntityProposal::new(
+                    signal_id.clone(),
+                    W3_CUSTOM_SIGNAL_ENTITY,
+                    BTreeMap::from([(
+                        "signal".into(),
+                        GraphProposalValue::String(event_key.clone().into()),
+                    )]),
+                    graph_confidence,
+                    handles.clone(),
+                    evidence.clone(),
+                    Vec::new(),
+                )
+                .map_err(w3_graph_error)?,
+            );
+            signal_id
+        };
+        relations.push(
+            GraphRelationProposal::new(
+                relation_proposal_id.as_str(),
+                match assertion {
+                    W3Assertion::Emitter { .. } => W3_EMITTER_RELATION_ID,
+                    W3Assertion::Subscription { .. } => W3_SUBSCRIPTION_RELATION_ID,
+                },
+                GraphRelationProposalInput {
+                    source: GraphProposalEndpoint::Existing(site.caller_node.clone()),
+                    target: GraphProposalEndpoint::Proposed(signal_id.into()),
+                    confidence: graph_confidence,
+                    source_handle_ids: handles,
+                    evidence_ids: evidence,
+                    coverage_ids: Vec::new(),
+                },
+            )
+            .map_err(w3_graph_error)?,
+        );
+        match assertion {
+            W3Assertion::Emitter { .. } => producer_matches.push(W3ProducerMatch {
+                call_id: call_id.clone(),
+                event_key: event_key.clone(),
+                receiver_declaration_proposal_id: receiver_proposal_id.clone(),
+                relation_proposal_id: relation_proposal_id.clone(),
+            }),
+            W3Assertion::Subscription { .. } => {
                 subscription_matches.push(W3SubscriptionMatch {
                     call_id: call_id.clone(),
                     event_key: event_key.clone(),
                     receiver_declaration_proposal_id: receiver_proposal_id.clone(),
-                    producer_call_id: producer_call_id.clone(),
+                    producer_call_id: producer_call_id.cloned(),
                     relation_proposal_id: relation_proposal_id.clone(),
                     confirmed: producer_call_id.is_some(),
                 });
@@ -1686,50 +1664,24 @@ pub fn w3_recognize_signals(
         }
     }
 
-    let producer_keys = producer_matches
+    let producer_events = producer_matches
         .iter()
-        .map(|producer| (producer.event_key.clone(), producer.call_id.clone()))
+        .map(|producer| producer.event_key.as_str())
         .collect::<BTreeSet<_>>();
     let mut unconfirmed = Vec::new();
-    for fact in bundle.facts() {
-        w3_checkpoint(stop)?;
-        if fact.kind() != W3_CUSTOM_SIGNAL_FACT {
+    for subscription in &subscription_matches {
+        if subscription.confirmed {
             continue;
         }
-        let Some(RecognizerFactValue::Reference(call_id)) = fact.field("call_id") else {
-            return Err(w3_failure(RecognizerErrorCode::AdapterFactMismatch));
-        };
-        let Some(RecognizerFactValue::String(callable_key)) = fact.field("callable_key") else {
-            return Err(w3_failure(RecognizerErrorCode::AdapterFactMismatch));
-        };
-        if callable_key.as_ref() != W3_REGISTER_CALLBACK_CALLABLE {
-            continue;
-        }
-        if subscription_matches
-            .iter()
-            .any(|subscription| subscription.call_id == call_id.as_ref())
-        {
-            continue;
-        }
-        let Some(RecognizerFactValue::String(event_key)) = fact.field("event_key") else {
-            return Err(w3_failure(RecognizerErrorCode::AdapterFactMismatch));
-        };
-        let Some(RecognizerFactValue::Reference(receiver)) = fact.field("receiver") else {
-            return Err(w3_failure(RecognizerErrorCode::AdapterFactMismatch));
-        };
-        let reason = if producer_keys
-            .iter()
-            .any(|(key, _)| key.as_str() == event_key.as_ref())
-        {
-            W3UnconfirmedReason::ProducerEventKeyMismatch
-        } else {
-            W3UnconfirmedReason::ProducerAbsentInReport
-        };
         unconfirmed.push(W3UnconfirmedSubscription {
-            call_id: call_id.to_string(),
-            event_key: event_key.to_string(),
-            receiver_declaration_proposal_id: receiver.to_string(),
-            reason,
+            call_id: subscription.call_id.clone(),
+            event_key: subscription.event_key.clone(),
+            receiver_declaration_proposal_id: subscription.receiver_declaration_proposal_id.clone(),
+            reason: if producer_events.contains(subscription.event_key.as_str()) {
+                W3UnconfirmedReason::ProducerEventKeyMismatch
+            } else {
+                W3UnconfirmedReason::ProducerAbsentInReport
+            },
         });
     }
 
@@ -1812,6 +1764,7 @@ fn w3_build_site(
     _side: W3SignalSide,
     declarations: &BTreeMap<(String, SourceSpan), W3Binding>,
     declaration_keys: &BTreeMap<String, W3ReceiverTarget>,
+    function_nodes: &BTreeMap<String, GraphNodeId>,
 ) -> RecognizerResult<Option<W3Site>> {
     let (handle, evidence) = *input
         .call_support
@@ -1839,14 +1792,11 @@ fn w3_build_site(
         return Ok(None);
     }
 
-    let receiver_argument = arguments
-        .first()
-        .ok_or_else(|| w3_failure(RecognizerErrorCode::AdapterFactMismatch))?;
-    let target = receiver_argument
-        .reference_target()
-        .ok_or_else(|| w3_failure(RecognizerErrorCode::AdapterFactMismatch))?;
-    let key = receiver_argument.reference_key();
-    if !w3_is_resolved_custom_registry(key, target, input) {
+    let Some(receiver) = input.report.exact_call_receiver(call) else {
+        return Ok(None);
+    };
+    let target = receiver.target();
+    if !w3_is_resolved_custom_registry(Some(receiver.key()), target, input) {
         return Ok(None);
     }
     let declaration_proposal = input
@@ -1880,14 +1830,20 @@ fn w3_build_site(
     let caller_proposal = function_proposals
         .get(call.caller_function_id())
         .ok_or_else(|| w3_failure(RecognizerErrorCode::AdapterBindingMissing))?;
-    let caller_proposal = caller_proposal.to_owned();
+    let caller_node = function_nodes
+        .get(call.caller_function_id())
+        .cloned()
+        .ok_or_else(|| w3_failure(RecognizerErrorCode::AdapterBindingMissing))?;
 
     Ok(Some(W3Site {
         fact_id: call.fact_id().to_owned(),
         call_id: call.fact_id().to_owned(),
-        caller_proposal_id: caller_proposal.to_owned(),
+        caller_proposal_id: (*caller_proposal).to_owned(),
+        caller_node,
         receiver_proposal_id: declaration_proposal.to_owned(),
         receiver_node: binding.node.clone(),
+        receiver_handle: binding.handle,
+        receiver_evidence: binding.evidence,
         event_key,
         event_ordinal: ordinal,
         argument_count: arguments.len(),
@@ -1908,22 +1864,12 @@ fn w3_is_resolved_custom_registry(
     target: &wow_emmy::bindings::SymbolTarget,
     input: &W3Input<'_>,
 ) -> bool {
-    if target.role != "main" || target.workspace_id != input.report.main_snapshot_id() {
-        return false;
-    }
-    if target.path.is_empty() || target.content_digest.is_empty() {
-        return false;
-    }
-    if target.span.byte_start() == target.span.byte_end() {
-        return false;
-    }
-    let Some(key) = receiver_key else {
-        return false;
-    };
-    let Some(member) = key.rsplit('.').next() else {
-        return false;
-    };
-    matches!(member, "TriggerEvent" | "RegisterCallback")
+    receiver_key == Some("EventRegistry")
+        && target.role == "main"
+        && target.workspace_id == input.report.main_snapshot_id()
+        && !target.path.is_empty()
+        && !target.content_digest.is_empty()
+        && target.span.byte_start() != target.span.byte_end()
 }
 
 fn w3_validate_receiver(
@@ -2026,22 +1972,25 @@ fn w3_signal_fact(
                 GraphConfidence::Possible
             },
             fields,
-            source_handle_ids: vec![site.handle],
-            evidence_ids: vec![site.evidence],
+            source_handle_ids: BTreeSet::from([site.handle, site.receiver_handle])
+                .into_iter()
+                .collect(),
+            evidence_ids: BTreeSet::from([site.evidence, site.receiver_evidence])
+                .into_iter()
+                .collect(),
         },
         limits,
     )
 }
 
-/// Re-reads one plan output and rebinds it to the exact fact and receiver. The
-/// asserted source must be the resolved receiver and the asserted target the exact
-/// literal event key; anything else is an adapter defect, not a degraded match.
+/// Re-reads one plan output and rebinds it to the exact fact. Graph relations
+/// originate from the enclosing source function; the exact receiver remains
+/// retained evidence and producer/subscriber compatibility input.
 fn w3_read_assertion(
     proposal: &crate::RecognizerProposedAssertion,
     side: W3SignalSide,
     bundle: &RecognizerFactBundle,
-    receiver_nodes: &BTreeMap<String, GraphNodeId>,
-    producer_call_ids: &BTreeSet<(String, String)>,
+    producer_calls: &BTreeMap<(String, String), Vec<String>>,
 ) -> RecognizerResult<W3Assertion> {
     let crate::RecognizerProposedAssertion::Relation {
         relation_kind_id,
@@ -2069,50 +2018,45 @@ fn w3_read_assertion(
     let Some(RecognizerFactValue::Reference(call_id)) = fact.field("call_id") else {
         return Err(w3_failure(RecognizerErrorCode::AdapterFactMismatch));
     };
-    let Some(RecognizerFactValue::String(event_key)) = fact.field("event_key") else {
+    let Some(RecognizerFactValue::Reference(caller)) = fact.field("caller") else {
         return Err(w3_failure(RecognizerErrorCode::AdapterFactMismatch));
     };
     let Some(RecognizerFactValue::Reference(receiver)) = fact.field("receiver") else {
         return Err(w3_failure(RecognizerErrorCode::AdapterFactMismatch));
     };
+    let Some(RecognizerFactValue::String(event_key)) = fact.field("event_key") else {
+        return Err(w3_failure(RecognizerErrorCode::AdapterFactMismatch));
+    };
     let Some(RecognizerFactValue::String(callable_key)) = fact.field("callable_key") else {
         return Err(w3_failure(RecognizerErrorCode::AdapterFactMismatch));
     };
-    if callable_key.as_ref() != side.callable() {
+    if callable_key.as_ref() != side.callable()
+        || source != &RecognizerFactValue::Reference(caller.clone())
+        || target != &RecognizerFactValue::String(event_key.clone())
+    {
         return Err(w3_failure(RecognizerErrorCode::AdapterFactMismatch));
     }
-    if source != &RecognizerFactValue::Reference(receiver.clone()) {
-        return Err(w3_failure(RecognizerErrorCode::AdapterFactMismatch));
-    }
-    if target != &RecognizerFactValue::String(event_key.clone()) {
-        return Err(w3_failure(RecognizerErrorCode::AdapterFactMismatch));
-    }
-    let receiver_node = receiver_nodes
-        .get(receiver.as_ref())
-        .cloned()
-        .ok_or_else(|| w3_failure(RecognizerErrorCode::AdapterBindingMissing))?;
     let producer_call_id = match side {
-        // A subscription is only confirmed against a producer whose exact event
-        // key and resolved receiver match. Absence never becomes a match.
-        W3SignalSide::Subscription => producer_call_ids
-            .iter()
-            .find(|(key, _)| key == event_key.as_ref())
-            .map(|(_, call)| call.clone()),
         W3SignalSide::Producer => None,
+        W3SignalSide::Subscription => producer_calls
+            .get(&(receiver.to_string(), event_key.to_string()))
+            .filter(|calls| calls.len() == 1)
+            .and_then(|calls| calls.first())
+            .cloned(),
     };
     Ok(match side {
         W3SignalSide::Producer => W3Assertion::Emitter {
             call_id: call_id.to_string(),
+            caller_proposal_id: caller.to_string(),
             receiver_proposal_id: receiver.to_string(),
-            receiver_node,
             event_key: event_key.to_string(),
             relation_proposal_id: w3_relation_id("emitter", call_id.as_ref()),
             confidence: *confidence,
         },
         W3SignalSide::Subscription => W3Assertion::Subscription {
             call_id: call_id.to_string(),
+            caller_proposal_id: caller.to_string(),
             receiver_proposal_id: receiver.to_string(),
-            receiver_node,
             event_key: event_key.to_string(),
             relation_proposal_id: w3_relation_id("subscription", call_id.as_ref()),
             producer_call_id,
@@ -2255,11 +2199,11 @@ fn w3_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRecogniz
         schema_version: crate::RECOGNIZER_PACK_SCHEMA_VERSION,
         pack: RecognizerPack {
             pack_id: "wow-core-lua-custom-signals".into(),
-            version: "1".into(),
+            version: "2".into(),
             trust_class: RecognizerPackTrustClass::Core,
             fact_schema_profile_id: W3_FACT_PROFILE.into(),
             graph_registry_bundle_id: registry_bundle_id.into(),
-            evaluation_profile_id: "wow-recognizers-w11-custom-signals-1".into(),
+            evaluation_profile_id: "wow-recognizers-w11-custom-signals-2".into(),
             rollout: RecognizerPackRollout::Shadow,
             budgets: RecognizerPackBudgets {
                 max_rules: 8,
@@ -2296,7 +2240,7 @@ fn w3_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRecogniz
                     outputs: vec![RecognizerOutput::RelationAssertion {
                         output_id: "custom_signal_producer_emits".into(),
                         relation_kind_id: W3_EMITTER_RELATION_ID.into(),
-                        source: "signal.receiver".into(),
+                        source: "signal.caller".into(),
                         target: "signal.event_key".into(),
                         confidence: RecognizerOutputConfidence::Derived,
                     }],
@@ -2342,7 +2286,7 @@ fn w3_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRecogniz
                     outputs: vec![RecognizerOutput::RelationAssertion {
                         output_id: "custom_signal_subscription_handles".into(),
                         relation_kind_id: W3_SUBSCRIPTION_RELATION_ID.into(),
-                        source: "signal.receiver".into(),
+                        source: "signal.caller".into(),
                         target: "signal.event_key".into(),
                         confidence: RecognizerOutputConfidence::Derived,
                     }],
@@ -2384,9 +2328,9 @@ fn w3_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRecogniz
 //  version. Only universal graph roles are used.
 
 pub const W4_PARTITION: &str = "wow-recognizers.lua-cvar-callbacks";
-const W4_PROFILE: &str = "wow-recognizers/lua-cvar-callbacks/1";
+const W4_PROFILE: &str = "wow-recognizers/lua-cvar-callbacks/2";
 const W4_FACT_PARTITION: &str = "wow-recognizers.lua-cvar-callback-facts";
-const W4_FACT_PROFILE: &str = "wow-recognizers-lua-cvar-callback-facts-1";
+const W4_FACT_PROFILE: &str = "wow-recognizers-lua-cvar-callback-facts-2";
 const W4_RULE: &str = "core.signal.cvar_callback";
 const W4_RULE_VERSION: u32 = 1;
 const W4_REGISTERS_CVAR: &str = "CVarCallbackRegistry.RegisterCallback";
@@ -2450,6 +2394,7 @@ struct W4Site {
     exact_cvar_key: bool,
     colon_call: bool,
     caller: W4FunctionBinding,
+    receiver: W3Binding,
     callback: Option<W3Binding>,
     handle: StableHandleId,
     evidence: EvidenceId,
@@ -2523,11 +2468,11 @@ fn w4_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRecogniz
         schema_version: crate::RECOGNIZER_PACK_SCHEMA_VERSION,
         pack: RecognizerPack {
             pack_id: "wow-core-lua-cvar-callbacks".into(),
-            version: "1".into(),
+            version: "2".into(),
             trust_class: RecognizerPackTrustClass::Core,
             fact_schema_profile_id: W4_FACT_PROFILE.into(),
             graph_registry_bundle_id: registry_bundle_id.into(),
-            evaluation_profile_id: "wow-recognizers-w11-cvar-callback-1".into(),
+            evaluation_profile_id: "wow-recognizers-w11-cvar-callback-2".into(),
             rollout: RecognizerPackRollout::Shadow,
             budgets: RecognizerPackBudgets {
                 max_rules: 4,
@@ -2656,8 +2601,12 @@ fn w4_signal_fact(
                 GraphConfidence::Possible
             },
             fields,
-            source_handle_ids: vec![site.handle],
-            evidence_ids: vec![site.evidence],
+            source_handle_ids: BTreeSet::from([site.handle, site.receiver.handle])
+                .into_iter()
+                .collect(),
+            evidence_ids: BTreeSet::from([site.evidence, site.receiver.evidence])
+                .into_iter()
+                .collect(),
         },
         limits,
     )
@@ -2842,6 +2791,20 @@ pub fn recognize_source_cvar_callbacks(
         if !exact_cvar_key {
             continue;
         }
+        let Some(receiver) = input.report.exact_call_receiver(call) else {
+            continue;
+        };
+        let target = receiver.target();
+        if receiver.key() != "CVarCallbackRegistry"
+            || target.role != "main"
+            || target.workspace_id != input.report.main_snapshot_id()
+        {
+            continue;
+        }
+        let receiver = declarations
+            .get(&(target.path.clone(), target.span))
+            .cloned()
+            .ok_or_else(|| w4_failure(RecognizerErrorCode::AdapterBindingMissing))?;
         let callback = w4_callback(call, &declarations);
 
         let site = W4Site {
@@ -2856,6 +2819,7 @@ pub fn recognize_source_cvar_callbacks(
                 handle: caller.handle,
                 evidence: caller.evidence,
             },
+            receiver,
             callback,
             handle,
             evidence,
@@ -2909,116 +2873,132 @@ pub fn recognize_source_cvar_callbacks(
     let mut relations = Vec::new();
     let mut matches = Vec::new();
     let mut entity_by_call = BTreeMap::<String, String>::new();
+    let mut entity_by_key = BTreeMap::<String, String>::new();
     let mut registers_by_call = BTreeMap::<String, String>::new();
 
+    // Matcher proposals are sorted by proposal ID, so materialize entities before
+    // relations instead of relying on output declaration order.
     for outcome in output.outcomes() {
         if outcome.rule_id() != W4_RULE || outcome.rule_version() != W4_RULE_VERSION {
             return Err(w4_failure(RecognizerErrorCode::AdapterFactMismatch));
         }
         for proposal in outcome.proposals() {
-            match proposal {
-                crate::RecognizerProposedAssertion::Entity {
-                    proposal_id,
-                    entity_kind_id,
-                    semantic_key,
-                    confidence,
-                    source_handle_ids,
-                    evidence_ids,
-                    coverage_ids,
-                    ..
-                } => {
-                    if entity_kind_id.as_ref() != W4_CVAR_ENTITY || semantic_key.len() != 1 {
-                        return Err(w4_failure(RecognizerErrorCode::AdapterFactMismatch));
-                    }
-                    let Some(RecognizerFactValue::Reference(call_id)) = semantic_key.get("call")
-                    else {
-                        return Err(w4_failure(RecognizerErrorCode::AdapterFactMismatch));
-                    };
-                    let Some(site) = sites.get(call_id.as_ref()) else {
-                        return Err(w4_failure(RecognizerErrorCode::AdapterBindingMissing));
-                    };
-                    if !graph_nodes
-                        .iter()
-                        .any(|node| node.node_id() == &site.caller.node)
-                    {
-                        return Err(w4_failure(RecognizerErrorCode::AdapterBindingMissing));
-                    }
-                    let confidence = w4_graph_confidence(*confidence);
-                    if confidence != GraphConfidence::Possible
-                        && confidence != GraphConfidence::Derived
-                    {
-                        return Err(w4_failure(RecognizerErrorCode::AdapterFactMismatch));
-                    }
-                    let entity = GraphEntityProposal::new(
-                        proposal_id.to_string(),
+            let crate::RecognizerProposedAssertion::Entity {
+                proposal_id,
+                entity_kind_id,
+                semantic_key,
+                confidence,
+                source_handle_ids,
+                evidence_ids,
+                coverage_ids,
+                ..
+            } = proposal
+            else {
+                continue;
+            };
+            if entity_kind_id.as_ref() != W4_CVAR_ENTITY || semantic_key.len() != 1 {
+                return Err(w4_failure(RecognizerErrorCode::AdapterFactMismatch));
+            }
+            let Some(RecognizerFactValue::Reference(call_id)) = semantic_key.get("call") else {
+                return Err(w4_failure(RecognizerErrorCode::AdapterFactMismatch));
+            };
+            let site = sites
+                .get(call_id.as_ref())
+                .ok_or_else(|| w4_failure(RecognizerErrorCode::AdapterBindingMissing))?;
+            if !graph_nodes
+                .iter()
+                .any(|node| node.node_id() == &site.caller.node)
+            {
+                return Err(w4_failure(RecognizerErrorCode::AdapterBindingMissing));
+            }
+            let graph_confidence = w4_graph_confidence(*confidence);
+            let entity_id = if let Some(existing) = entity_by_key.get(&site.cvar_key) {
+                existing.clone()
+            } else {
+                let entity_id = proposal_id.to_string();
+                entity_by_key.insert(site.cvar_key.clone(), entity_id.clone());
+                entities.push(
+                    GraphEntityProposal::new(
+                        entity_id.clone(),
                         W4_CVAR_ENTITY,
                         BTreeMap::from([(
                             "cvar".into(),
                             GraphProposalValue::String(site.cvar_key.clone().into()),
                         )]),
-                        confidence,
+                        graph_confidence,
                         source_handle_ids.clone(),
                         evidence_ids.clone(),
                         coverage_ids.clone(),
                     )
-                    .map_err(w4_graph_error)?;
-                    entity_by_call.insert(call_id.as_ref().to_string(), proposal_id.to_string());
-                    entities.push(entity);
-                    let _ = source_handle_ids;
-                }
-                crate::RecognizerProposedAssertion::Relation {
-                    proposal_id,
-                    relation_kind_id,
-                    source,
-                    target,
-                    confidence,
-                    source_handle_ids,
-                    evidence_ids,
-                    coverage_ids,
-                    ..
-                } => {
-                    if relation_kind_id.as_ref() != W4_REGISTERS_DEFINITION {
-                        return Err(w4_failure(RecognizerErrorCode::AdapterFactMismatch));
-                    }
-                    let RecognizerFactValue::Reference(caller_proposal) = source else {
-                        return Err(w4_failure(RecognizerErrorCode::AdapterFactMismatch));
-                    };
-                    let RecognizerFactValue::Reference(call_id) = target else {
-                        return Err(w4_failure(RecognizerErrorCode::AdapterFactMismatch));
-                    };
-                    let site = sites
-                        .get(call_id.as_ref())
-                        .ok_or_else(|| w4_failure(RecognizerErrorCode::AdapterBindingMissing))?;
-                    if site.caller.proposal_id != caller_proposal.as_ref() {
-                        return Err(w4_failure(RecognizerErrorCode::AdapterBindingMissing));
-                    }
-                    let cvar_node = entity_by_call
-                        .get(call_id.as_ref())
-                        .ok_or_else(|| w4_failure(RecognizerErrorCode::AdapterBindingMissing))?
-                        .clone();
-                    if registers_by_call
-                        .insert(call_id.as_ref().to_string(), proposal_id.to_string())
-                        .is_some()
-                    {
-                        return Err(w4_failure(RecognizerErrorCode::AdapterBindingDuplicate));
-                    }
-                    relations.push(
-                        GraphRelationProposal::new(
-                            proposal_id.to_string(),
-                            W4_REGISTERS_DEFINITION,
-                            GraphRelationProposalInput {
-                                source: GraphProposalEndpoint::Existing(site.caller.node.clone()),
-                                target: GraphProposalEndpoint::Proposed(cvar_node.into()),
-                                confidence: w4_graph_confidence(*confidence),
-                                source_handle_ids: source_handle_ids.clone(),
-                                evidence_ids: evidence_ids.clone(),
-                                coverage_ids: coverage_ids.clone(),
-                            },
-                        )
-                        .map_err(w4_graph_error)?,
-                    );
-                }
+                    .map_err(w4_graph_error)?,
+                );
+                entity_id
+            };
+            if entity_by_call
+                .insert(call_id.to_string(), entity_id)
+                .is_some()
+            {
+                return Err(w4_failure(RecognizerErrorCode::AdapterBindingDuplicate));
             }
+        }
+    }
+
+    for outcome in output.outcomes() {
+        for proposal in outcome.proposals() {
+            let crate::RecognizerProposedAssertion::Relation {
+                proposal_id,
+                relation_kind_id,
+                source,
+                target,
+                confidence,
+                source_handle_ids,
+                evidence_ids,
+                coverage_ids,
+                ..
+            } = proposal
+            else {
+                continue;
+            };
+            if relation_kind_id.as_ref() != W4_REGISTERS_DEFINITION {
+                return Err(w4_failure(RecognizerErrorCode::AdapterFactMismatch));
+            }
+            let RecognizerFactValue::Reference(caller_proposal) = source else {
+                return Err(w4_failure(RecognizerErrorCode::AdapterFactMismatch));
+            };
+            let RecognizerFactValue::Reference(call_id) = target else {
+                return Err(w4_failure(RecognizerErrorCode::AdapterFactMismatch));
+            };
+            let site = sites
+                .get(call_id.as_ref())
+                .ok_or_else(|| w4_failure(RecognizerErrorCode::AdapterBindingMissing))?;
+            if site.caller.proposal_id != caller_proposal.as_ref() {
+                return Err(w4_failure(RecognizerErrorCode::AdapterBindingMissing));
+            }
+            let cvar_node = entity_by_call
+                .get(call_id.as_ref())
+                .ok_or_else(|| w4_failure(RecognizerErrorCode::AdapterBindingMissing))?
+                .clone();
+            if registers_by_call
+                .insert(call_id.to_string(), proposal_id.to_string())
+                .is_some()
+            {
+                return Err(w4_failure(RecognizerErrorCode::AdapterBindingDuplicate));
+            }
+            relations.push(
+                GraphRelationProposal::new(
+                    proposal_id.to_string(),
+                    W4_REGISTERS_DEFINITION,
+                    GraphRelationProposalInput {
+                        source: GraphProposalEndpoint::Existing(site.caller.node.clone()),
+                        target: GraphProposalEndpoint::Proposed(cvar_node.into()),
+                        confidence: w4_graph_confidence(*confidence),
+                        source_handle_ids: source_handle_ids.clone(),
+                        evidence_ids: evidence_ids.clone(),
+                        coverage_ids: coverage_ids.clone(),
+                    },
+                )
+                .map_err(w4_graph_error)?,
+            );
         }
     }
 

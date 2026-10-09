@@ -604,9 +604,9 @@ use crate::{
 };
 
 pub const SOURCE_STATE_LIBRARY_PARTITION: &str = "wow-recognizers.lua-library";
-pub const SOURCE_STATE_LIBRARY_PROFILE: &str = "wow-recognizers/source-library/1";
+pub const SOURCE_STATE_LIBRARY_PROFILE: &str = "wow-recognizers/source-library/2";
 const W6_FACT_PARTITION: &str = "wow-recognizers.lua-library-facts";
-const W6_FACT_PROFILE: &str = "wow-recognizers-lua-library-facts-1";
+const W6_FACT_PROFILE: &str = "wow-recognizers-lua-library-facts-2";
 const W6_MAX_CALLS: usize = 8192;
 const W6_MAX_FUNCTIONS: usize = 8192;
 const W6_MAX_ARGUMENTS_RETAINED: usize = 3;
@@ -710,6 +710,7 @@ struct W6Relation {
     rule_id: String,
     relation: &'static str,
     call_id: String,
+    confidence: GraphConfidence,
     source_handle_ids: Vec<StableHandleId>,
     evidence_ids: Vec<EvidenceId>,
     coverage_ids: Vec<wow_core::CoverageId>,
@@ -849,7 +850,7 @@ pub fn recognize_source_library(
         {
             return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
         }
-        let normalized = W6Call {
+        let mut normalized = W6Call {
             call_id: call.fact_id().to_owned(),
             caller_proposal_id: caller_proposal_id.to_owned(),
             callable_key: call.resolved_callable_key().map(str::to_owned),
@@ -866,6 +867,7 @@ pub fn recognize_source_library(
             argument_1_value,
             argument_2_kind,
         };
+        normalized.exact = library_key(&normalized)?.is_some();
         facts.push(build_library_fact(&input, &normalized, fact_limits)?);
         calls.push(normalized);
     }
@@ -938,16 +940,32 @@ pub fn recognize_source_library(
             if relation_kind_id.as_ref() != expected {
                 return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
             }
+            let [fact_id] = decisive_fact_ids.as_slice() else {
+                return Err(failure(RecognizerErrorCode::AdapterBindingMissing));
+            };
+            let fact = bundle
+                .fact_by_id(fact_id)
+                .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
+            let Some(RecognizerFactValue::Reference(call_id)) = fact.field("call_id") else {
+                return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
+            };
+            let Some(RecognizerFactValue::Reference(fact_caller)) = fact.field("caller") else {
+                return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
+            };
+            let Some(RecognizerFactValue::String(fact_library)) = fact.field("library_name") else {
+                return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
+            };
             let RecognizerFactValue::Reference(caller_proposal_id) = source else {
                 return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
             };
-            if !caller_nodes.contains_key(caller_proposal_id.as_ref()) {
-                return Err(failure(RecognizerErrorCode::AdapterBindingMissing));
-            }
             let RecognizerFactValue::String(library_name) = target else {
                 return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
             };
-            if !valid_library_name(library_name.as_ref()) {
+            if caller_proposal_id != fact_caller
+                || library_name != fact_library
+                || !caller_nodes.contains_key(caller_proposal_id.as_ref())
+                || !valid_library_name(library_name.as_ref())
+            {
                 return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
             }
             if source_handle_ids.is_empty()
@@ -957,26 +975,23 @@ pub fn recognize_source_library(
                 || !coverage_ids.windows(2).all(|pair| pair[0] < pair[1])
                 || source_handle_ids.len() > 64
                 || evidence_ids.len() > 64
+                || !calls.iter().any(|call| call.call_id == call_id.as_ref())
             {
                 return Err(failure(RecognizerErrorCode::AdapterBindingInvalid));
-            }
-            let call_id = decisive_fact_ids
-                .first()
-                .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?
-                .to_string();
-            if !calls.iter().any(|call| call.call_id == call_id) {
-                return Err(failure(RecognizerErrorCode::AdapterBindingMissing));
             }
             pending.push(W6Relation {
                 proposal_id: proposal_id.to_string(),
                 rule_id: outcome.rule_id().to_owned(),
                 relation: expected,
-                call_id,
+                call_id: call_id.to_string(),
+                confidence: match *confidence {
+                    RecognizerOutputConfidence::Derived => GraphConfidence::Derived,
+                    RecognizerOutputConfidence::Possible => GraphConfidence::Possible,
+                },
                 source_handle_ids: source_handle_ids.clone(),
                 evidence_ids: evidence_ids.clone(),
                 coverage_ids: coverage_ids.clone(),
             });
-            let _ = confidence;
         }
     }
     if pending.len() > W6_MAX_PROPOSALS {
@@ -999,7 +1014,7 @@ pub fn recognize_source_library(
             caller_proposal_id: call.caller_proposal_id.clone(),
             version: key.version,
             relation_proposal_id: relation.proposal_id.clone(),
-            rule_id: relation_for_rule(relation.rule_id.as_str())
+            rule_id: rule_id(relation.rule_id.as_str())
                 .ok_or_else(|| failure(RecognizerErrorCode::AdapterFactMismatch))?,
             relation: relation.relation,
         });
@@ -1017,30 +1032,38 @@ pub fn recognize_source_library(
     // match and is never promoted to a loaded revision or ownership claim.
     let mut entity_proposals = Vec::<GraphEntityProposal>::new();
     let mut relation_proposals = Vec::<GraphRelationProposal>::new();
-    let mut seen_names = BTreeSet::<String>::new();
+    let mut entity_ids = BTreeMap::<String, String>::new();
     for m in &matches {
         checkpoint(stop)?;
-        if !seen_names.insert(m.library_name.clone()) {
-            continue;
-        }
+        let relation = pending
+            .iter()
+            .find(|relation| relation.proposal_id == m.relation_proposal_id)
+            .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
         let caller = caller_nodes
             .get(&m.caller_proposal_id)
             .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
-        let entity_id = format!("w6-library-{}-{}", m.library_name, m.relation_proposal_id);
-        let entity = GraphEntityProposal::new(
-            entity_id.as_str(),
-            W6_LIBRARY_ENTITY,
-            BTreeMap::from([(
-                "library".into(),
-                GraphProposalValue::String(m.library_name.clone().into_boxed_str()),
-            )]),
-            GraphConfidence::Derived,
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-        )
-        .map_err(graph_error)?;
-        entity_proposals.push(entity);
+        let entity_id = if let Some(existing) = entity_ids.get(&m.library_name) {
+            existing.clone()
+        } else {
+            let entity_id = format!("w6-library-{}", relation.proposal_id);
+            entity_ids.insert(m.library_name.clone(), entity_id.clone());
+            entity_proposals.push(
+                GraphEntityProposal::new(
+                    entity_id.clone(),
+                    W6_LIBRARY_ENTITY,
+                    BTreeMap::from([(
+                        "library".into(),
+                        GraphProposalValue::String(m.library_name.clone().into_boxed_str()),
+                    )]),
+                    relation.confidence,
+                    relation.source_handle_ids.clone(),
+                    relation.evidence_ids.clone(),
+                    relation.coverage_ids.clone(),
+                )
+                .map_err(graph_error)?,
+            );
+            entity_id
+        };
         relation_proposals.push(
             GraphRelationProposal::new(
                 m.relation_proposal_id.as_str(),
@@ -1048,10 +1071,10 @@ pub fn recognize_source_library(
                 GraphRelationProposalInput {
                     source: GraphProposalEndpoint::Existing(caller.clone()),
                     target: GraphProposalEndpoint::Proposed(entity_id.into_boxed_str()),
-                    confidence: GraphConfidence::Derived,
-                    source_handle_ids: Vec::new(),
-                    evidence_ids: Vec::new(),
-                    coverage_ids: Vec::new(),
+                    confidence: relation.confidence,
+                    source_handle_ids: relation.source_handle_ids.clone(),
+                    evidence_ids: relation.evidence_ids.clone(),
+                    coverage_ids: relation.coverage_ids.clone(),
                 },
             )
             .map_err(graph_error)?,
@@ -1061,23 +1084,26 @@ pub fn recognize_source_library(
     let graph_coverage = relation_families
         .into_iter()
         .map(|relation| {
-            let blocker = if projectable
-                && W6_LIBRARY_RELATIONS
-                    .iter()
-                    .any(|declared| relation_id_for(declared) == Some(relation))
+            let (state, blocker) = if W6_LIBRARY_RELATIONS
+                .iter()
+                .any(|declared| relation_id_for(declared) == Some(relation))
             {
-                "lua_library.library_relations_not_yet_declared_by_source_load_registry"
+                (
+                    GraphCoverageState::Partial,
+                    if projectable {
+                        "lua_library.exact_reviewed_libstub_structure_only"
+                    } else {
+                        "lua_library.no_exact_reviewed_libstub_call_observed"
+                    },
+                )
             } else {
-                "lua_library.relation_owned_by_other_producer"
+                (
+                    GraphCoverageState::NotEvaluated,
+                    "lua_library.relation_owned_by_other_producer",
+                )
             };
-            GraphCoverageRecord::new(
-                relation,
-                GraphCoverageState::NotEvaluated,
-                false,
-                vec![blocker.into()],
-                graph.limits(),
-            )
-            .map_err(graph_error)
+            GraphCoverageRecord::new(relation, state, false, vec![blocker.into()], graph.limits())
+                .map_err(graph_error)
         })
         .collect::<RecognizerResult<Vec<_>>>()?;
     let batch = GraphProposalBatch::build(
@@ -1112,6 +1138,15 @@ fn relation_for_rule(rule_id: &str) -> Option<&'static str> {
         W6_REQUIRE_RULE => Some(W6_REQUIRE_RELATION),
         W6_NEW_RULE => Some(W6_NEW_RELATION),
         W6_EMBED_RULE => Some(W6_EMBED_RELATION),
+        _ => None,
+    }
+}
+
+fn rule_id(rule_id: &str) -> Option<&'static str> {
+    match rule_id {
+        W6_REQUIRE_RULE => Some(W6_REQUIRE_RULE),
+        W6_NEW_RULE => Some(W6_NEW_RULE),
+        W6_EMBED_RULE => Some(W6_EMBED_RULE),
         _ => None,
     }
 }
@@ -1158,21 +1193,28 @@ fn library_key(call: &W6Call) -> RecognizerResult<Option<W6LibraryKey>> {
     let Some(callable_key) = call.callable_key.as_deref() else {
         return Ok(None);
     };
-    if call.colon_call || !call.exact || call.argument_count == 0 {
+    if call.argument_count == 0 || call.argument_count > W6_MAX_ARGUMENTS_RETAINED {
         return Ok(None);
     }
-    match callable_key {
-        W6_LIBSTUB_CALLABLE | W6_NEW_LIBRARY_CALLABLE | W6_GET_LIBRARY_CALLABLE
-            if call.argument_0_kind == Some("string") =>
-        {
-            let literal = call
-                .argument_0_value
-                .as_deref()
-                .ok_or_else(|| failure(RecognizerErrorCode::AdapterFactMismatch))?;
-            split_library_key(literal).map(Some)
+    let literal = match callable_key {
+        W6_LIBSTUB_CALLABLE if !call.colon_call && call.argument_0_kind == Some("string") => {
+            call.argument_0_value.as_deref()
         }
-        _ => Ok(None),
-    }
+        W6_GET_LIBRARY_CALLABLE | W6_NEW_LIBRARY_CALLABLE
+            if call.colon_call && call.argument_0_kind == Some("string") =>
+        {
+            call.argument_0_value.as_deref()
+        }
+        W6_EMBED_LIBRARY_CALLABLE
+            if !call.colon_call
+                && call.argument_0_kind == Some("reference")
+                && call.argument_1_kind == Some("string") =>
+        {
+            call.argument_1_value.as_deref()
+        }
+        _ => None,
+    };
+    literal.map(split_library_key).transpose()
 }
 
 fn build_library_fact(
@@ -1341,11 +1383,11 @@ fn library_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRec
         schema_version: crate::RECOGNIZER_PACK_SCHEMA_VERSION,
         pack: RecognizerPack {
             pack_id: "wow-core-lua-library".into(),
-            version: "1".into(),
+            version: "2".into(),
             trust_class: RecognizerPackTrustClass::Core,
             fact_schema_profile_id: W6_FACT_PROFILE.into(),
             graph_registry_bundle_id: registry_bundle_id.into(),
-            evaluation_profile_id: "wow-recognizers-w12-library-1".into(),
+            evaluation_profile_id: "wow-recognizers-w11-library-2".into(),
             rollout: RecognizerPackRollout::Shadow,
             budgets: RecognizerPackBudgets {
                 max_rules: 4,
@@ -1367,13 +1409,37 @@ fn library_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRec
                             alias: "call".into(),
                             kind: "lua_call".into(),
                         },
-                        RecognizerClause::FieldEq {
-                            field: "call.callable_key".into(),
-                            value: crate::RecognizerPackLiteral::String(W6_LIBSTUB_CALLABLE.into()),
-                        },
-                        RecognizerClause::FieldEq {
-                            field: "call.colon_call".into(),
-                            value: crate::RecognizerPackLiteral::Boolean(false),
+                        RecognizerClause::AnyOf {
+                            clauses: vec![
+                                RecognizerClause::AllOf {
+                                    clauses: vec![
+                                        RecognizerClause::FieldEq {
+                                            field: "call.callable_key".into(),
+                                            value: crate::RecognizerPackLiteral::String(
+                                                W6_LIBSTUB_CALLABLE.into(),
+                                            ),
+                                        },
+                                        RecognizerClause::FieldEq {
+                                            field: "call.colon_call".into(),
+                                            value: crate::RecognizerPackLiteral::Boolean(false),
+                                        },
+                                    ],
+                                },
+                                RecognizerClause::AllOf {
+                                    clauses: vec![
+                                        RecognizerClause::FieldEq {
+                                            field: "call.callable_key".into(),
+                                            value: crate::RecognizerPackLiteral::String(
+                                                W6_GET_LIBRARY_CALLABLE.into(),
+                                            ),
+                                        },
+                                        RecognizerClause::FieldEq {
+                                            field: "call.colon_call".into(),
+                                            value: crate::RecognizerPackLiteral::Boolean(true),
+                                        },
+                                    ],
+                                },
+                            ],
                         },
                         RecognizerClause::FieldEq {
                             field: "call.argument_0_kind".into(),
@@ -1407,20 +1473,15 @@ fn library_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRec
                             alias: "call".into(),
                             kind: "lua_call".into(),
                         },
-                        RecognizerClause::FieldIn {
+                        RecognizerClause::FieldEq {
                             field: "call.callable_key".into(),
-                            values: vec![
-                                crate::RecognizerPackLiteral::String(
-                                    W6_NEW_LIBRARY_CALLABLE.into(),
-                                ),
-                                crate::RecognizerPackLiteral::String(
-                                    W6_GET_LIBRARY_CALLABLE.into(),
-                                ),
-                            ],
+                            value: crate::RecognizerPackLiteral::String(
+                                W6_NEW_LIBRARY_CALLABLE.into(),
+                            ),
                         },
                         RecognizerClause::FieldEq {
                             field: "call.colon_call".into(),
-                            value: crate::RecognizerPackLiteral::Boolean(false),
+                            value: crate::RecognizerPackLiteral::Boolean(true),
                         },
                         RecognizerClause::FieldEq {
                             field: "call.argument_0_kind".into(),
@@ -1481,8 +1542,8 @@ fn library_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRec
                     outputs: vec![RecognizerOutput::RelationAssertion {
                         output_id: "libstub_embed".into(),
                         relation_kind_id: W6_EMBED_RELATION.into(),
-                        source: "call.argument_0_key".into(),
-                        target: "call.argument_1_value".into(),
+                        source: "call.caller".into(),
+                        target: "call.library_name".into(),
                         confidence: RecognizerOutputConfidence::Derived,
                     }],
                     positive_fixture_ids: vec!["RECOG-TOC-003".into()],
