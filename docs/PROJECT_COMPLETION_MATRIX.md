@@ -27,7 +27,7 @@ The root [Cargo.toml](../Cargo.toml) activates **16 members**, including the int
 |---|---|---|
 | `wow-core` | Typed identities, canonical JSON, evidence, coverage, results and operation primitives | Reconcile the complete E0-A contract/test matrix; compilation is not the acceptance ledger |
 | `wow-emmy` | Real pinned analyzer adapter, explicit Main/Library workspaces, same-session XML virtual units, syntax/semantic diagnostics, direct member calls and scoped local-flow facts | E0-C fixture/pin/checksum closure; additional semantic operations and update probes are not inferred from parser compatibility |
-| `wow-project` | Explicit inventories, bounded disk/selected TOC-XML acquisition and load receipts, analyzer bindings, XML virtual-semantic reports, immutable generations, exact source artifacts/handles, guarded updates and publication | E0-D fixture identity closure; effective XML receiver/load semantics, full TOC/XML/load acceptance, overlays and durable project publication |
+| `wow-project` | Explicit inventories, bounded TOC/XML/load receipts, analyzer bindings, immutable generations, exact source artifacts/handles, guarded updates, publication and physical-input native replay | E0-D fixture identity closure; effective XML receiver/load semantics, full load acceptance, overlays, loader-plan replay and full durable project publication |
 | `wow-rules` | `wow.api.exists@1` over physical Main and exact-static XML inline facts; `wow.secret.local_operation@1` over its bounded physical flow slice | E0-E normative fixtures, exact prerequisite identities and complete capability/negative-authority cases; no inferred XML receiver/runtime authority |
 | `wow-service` | E0 status/check over immutable normalized contexts, mixed physical/XML rule scopes and exact XML finding projection; separate ReferenceView administration/publication | E0-F end-to-end fixture/CLI closure; full E1 Reference Pack and later public operation families |
 | `wow-store` | Typed SQLite objects, catalogs/CAS, operation journal, leases, GC and integrity | Full E1-A migration/crash/backup acceptance; separate manifested retained ProjectStore exists, not full E2-D publication acceptance |
@@ -61,7 +61,7 @@ no Rust implementation in the audited source. Their documentation is not a binar
 | E1-A–E1-C | Partial executable | Finish only verified missing contract/acceptance slices; do not recreate existing store/reference/annotation implementations |
 | E1-D | Partial executable Reference Pack service and active internal builder with durable materialization/finalization | Close external parity/license/rebuild evidence, Windows/process-loss acceptance and complete package gates; code presence is not `ValidatedLocal` |
 | E2-A–E2-B | Partial executable | All 26 active E2-B rule IDs are service-published after the W11 semantic repair, TOC, XML and state slices; close public CLI/full-pipeline fixtures and package acceptance |
-| E2-C–E2-D | Partial executable source index and retained manifested store | Live project publication, incremental invalidation, retention/GC/backup/epoch replacement and complete acceptance remain open; see [GRAPH_STORE.md](../apps/wow/GRAPH_STORE.md) |
+| E2-C–E2-D | Partial source index, retained manifested store and native physical-input live pair service | CLI and loader-plan live publication, incremental invalidation, retention/GC/backup/epoch replacement and complete acceptance remain open; see [REPLAY_PUBLICATION.md](../crates/wow-project/REPLAY_PUBLICATION.md) |
 | E3-A–E3-C | Not started | Exact Blizzard source universe, context owners and service/CLI after E2 closure |
 | E4-A–E4-C | Not started | Search, lineage/migration/static impact and routing after A0 prerequisites |
 | E5-A–E5-C | Not started | Calibration, independent review/holdout and governed publication lifecycle |
@@ -226,3 +226,17 @@ record-bearing batches/snapshots and explanation payloads use explicit v2 schema
 Fresh workspace checks on 2026-10-09 passed: native policy, fmt, check, strict
 Clippy, tests (842 passed, 1 ignored, 103 targets), rustdoc and build. This is a
 functional W12 checkpoint, not full E2-A/E2-D acceptance or a live ProjectView.
+
+## W13 physical-input live pair checkpoint
+
+An owned archive now reconstructs a real physical-input ProjectView through the
+existing native publisher. Project/graph source coherence and complete logical
+membership are validated before store activation. Service acquisition pins one
+Current/Exact transaction and generation lease through native replay and owner
+checks; the actual immutable pair survives later current advancement.
+
+Fresh workspace policy, fmt, check, strict Clippy, tests (844 passed, 1 ignored,
+103 targets), rustdoc and build passed on 2026-10-09. TOC/XML/package replay and
+public CLI wiring remain open, as do full W13/E2, crash, incremental, retention,
+backup and runtime acceptance. See
+[REPLAY_PUBLICATION.md](../crates/wow-project/REPLAY_PUBLICATION.md).

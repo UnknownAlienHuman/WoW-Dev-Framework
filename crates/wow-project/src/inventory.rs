@@ -261,6 +261,10 @@ impl ProjectInputFile {
     pub(crate) fn workspace_input(&self) -> LuaWorkspaceFileInput {
         LuaWorkspaceFileInput::new(self.relative_path().as_str(), self.text.as_ref())
     }
+
+    pub(crate) fn retained_text(&self) -> &str {
+        &self.text
+    }
 }
 
 /// Validated closed project input inventory.

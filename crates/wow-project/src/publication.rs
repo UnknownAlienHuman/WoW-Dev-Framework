@@ -208,6 +208,10 @@ impl ProjectPublisher {
         self.current.as_ref()
     }
 
+    pub(crate) fn replay_inputs(&self) -> (&[ProjectInputFile], &[LuaWorkspaceSnapshot], bool) {
+        (&self.current_inputs, &self.libraries, self.function_calls)
+    }
+
     #[must_use]
     pub fn last_known_good(&self) -> Option<&Arc<ProjectSnapshot>> {
         self.current.as_ref()

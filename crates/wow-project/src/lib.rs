@@ -20,6 +20,7 @@ mod inventory;
 pub mod load;
 mod publication;
 mod registry;
+pub mod replay;
 mod snapshot;
 mod update;
 pub mod xml_bindings;

@@ -531,6 +531,29 @@ regressions cover stale batches, cycles, confidence promotion, conflict retentio
 canonical identities, depth truncation and v1/v2 stored read-back. Full W12/E2
 acceptance and W13 live acquisition remain open.
 
+## W13 physical-input live pair
+
+`ProjectReplay` and `ProjectPublicationBundle` now preserve exact Main/Library
+inputs and configuration independently of serialized analyzer state. Native
+read-back runs the approved existing ProjectPublisher, compares original semantic
+IDs and recomputes source19 proposals against the stored graph. Logical member
+versions derive a publication set before the store generation; store identities
+cannot enter project/graph recipes.
+
+`wow-service::live_project::LiveProjectStore` publishes and acquires an actual
+ProjectView/GraphPartitionSnapshot pair through a distinct registered epoch,
+inactive read-back validation and exact current CAS. A `LiveProjectRead` retains
+one transaction and generation lease through all owner checks. Missing/mutated
+records and mixed project/graph inputs fail; old readers survive current advancement.
+
+The first admitted profile is physical Lua configuration. Loader-plan inputs
+return explicit DeferredCapability, and public CLI wiring remains open. Other
+recognizer sidecars are not independently replayed or certified. See
+[REPLAY_PUBLICATION.md](../crates/wow-project/REPLAY_PUBLICATION.md).
+Fresh whole-workspace policy, fmt, check, strict Clippy, tests (844 passed,
+1 ignored, 103 targets), rustdoc and build passed on 2026-10-09. Full W13/E2,
+incremental, crash, backup/GC, source-parity and runtime acceptance remain open.
+
 ## W11 semantic-repair checkpoint
 
 A read-through after the first W11 publication found positive-path defects that

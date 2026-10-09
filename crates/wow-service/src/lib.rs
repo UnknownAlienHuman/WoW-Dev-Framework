@@ -13,6 +13,7 @@ mod configuration;
 mod error;
 pub mod graph;
 mod identity;
+pub mod live_project;
 pub mod local;
 mod model;
 mod operation;

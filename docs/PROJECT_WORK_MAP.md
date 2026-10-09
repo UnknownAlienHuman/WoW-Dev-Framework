@@ -77,7 +77,7 @@ full graph acceptance and the checkpoint's CI conclusions remain open.
 | [W11 / PR 102](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/102) | Public CLI and per-rule acceptance closure | All 26 functional rule IDs publish; full E2-B acceptance remains open |
 | [Issue 103](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/103) | Executable structural mutations and admitted per-rule fixtures | After functional implementation; frozen fixtures are not rewritten by tests |
 | [W12 / PR 80](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/80) | Extend real producer chains and conflict assessment | Exact retained records, publication validation and bounded explanations are executable; full acceptance remains open |
-| [W13 / PR 81](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/81) | Coherent live ProjectView/GraphView publication | A graph-only retained snapshot is insufficient |
+| [W13 / PR 81](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/81) | CLI and loader-plan live publication | Physical Lua native replay and coherent leased pair acquisition are executable; full acceptance remains open |
 | [W14 / PR 82](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/82), [W15 / PR 83](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/83), [W16 / PR 84](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/84) | Incremental invalidation, retained roots/GC, backup/recovery | Exact generation and durable reconciliation gates |
 | [W17 / PR 85](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/85), [W18 / PR 86](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/86), [W19 / PR 87](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/87) | Blizzard source universe, Project Map/skeletons, context packs | Real prerequisite views before context |
 | [W20 / PR 88](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/88), [W21 / PR 89](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/89) | Search, lineage and static impact | Exact immutable generation inputs |
@@ -168,6 +168,29 @@ formatting, whole-workspace check, strict Clippy, tests (842 passed, 1 ignored,
 actual publication, stale/cyclic/promoted-input rejection, canonical identities,
 conflict retention, exact state chains and stored v1/v2 read-back. These checks
 do not close W12/E2 package acceptance, W13 live views or source/runtime gates.
+
+## W13 physical-input live pair checkpoint
+
+The W12 predecessor `8ef387c3534b275664f9307dc2647278e3ef7fae` was published
+and read back with all 27 changed blob identities. W13 now has an owned native
+replay archive, a project/graph publication bundle and a separate service store
+profile. Read-back runs the real ProjectPublisher over exact captured Main and
+Library inputs, compares original semantic IDs and validates the source graph
+against that live view before activation. A returned pair holds one store read
+transaction/lease; Current/Exact reads cannot mix generations.
+
+The admitted profile is physical Lua configuration. Loader plans reject explicitly;
+CLI wiring, TOC/XML/package replay and remaining W13 acceptance are next work.
+This path does not relabel a retained graph receipt as a live project or certify
+all recognizer sidecars. See
+[REPLAY_PUBLICATION.md](../crates/wow-project/REPLAY_PUBLICATION.md).
+
+Fresh workspace gates on 2026-10-09 passed: policy, fmt, check, strict Clippy,
+tests (844 passed, 1 ignored, 103 targets), rustdoc and build. Actual store tests
+cover close/reopen, old leased readers during current advancement, CAS rejection,
+Main/Library separation, cancellation and missing/mutated/mixed input rejection.
+Gethe `live` was re-resolved to `09b9db7948abc9b9648dedaab51eb0cf3ee67b31`;
+materialization and native annotation parity remain NotEvaluated.
 
 Gethe `live` resolved at operation start to
 `09b9db7948abc9b9648dedaab51eb0cf3ee67b31`. This is one observation, not a
