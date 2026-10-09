@@ -17,6 +17,7 @@ use crate::{
 };
 
 pub const PROJECT_CONFIGURATION_SCHEMA_VERSION: u64 = 1;
+/// Frozen legacy receipt recipe. New publication selects generation v2 explicitly.
 pub const PROJECT_GENERATION_SCHEMA_VERSION: u64 = 1;
 pub const PROJECT_SNAPSHOT_SCHEMA_VERSION: u64 = 1;
 pub const PROJECT_CONTRACT_ID: &str = "wow-project/e0-d/1";

@@ -355,11 +355,178 @@ fn explicit_library_intent_preserves_legacy_keep_and_matches_final_rebuild() -> 
     )?;
     assert!(outcome.changed());
     assert_eq!(outcome.snapshot().snapshot_id(), expected.snapshot_id());
+    assert_eq!(
+        outcome.snapshot().project_generation(),
+        expected.project_generation()
+    );
+    assert_ne!(
+        outcome.snapshot().project_generation(),
+        current.project_generation()
+    );
     assert_ne!(
         outcome.snapshot().analyzer_binding().analyzer_snapshot_id(),
         current.analyzer_binding().analyzer_snapshot_id()
     );
-    assert_eq!(current.file_manifest(), outcome.snapshot().file_manifest());
+    assert!(
+        current
+            .file_manifest()
+            .iter()
+            .map(|file| file.manifest())
+            .eq(outcome
+                .snapshot()
+                .file_manifest()
+                .iter()
+                .map(|file| file.manifest()))
+    );
+    for (old, new) in current
+        .file_manifest()
+        .iter()
+        .zip(outcome.snapshot().file_manifest())
+    {
+        assert_eq!(
+            new.project_generation(),
+            outcome.snapshot().project_generation()
+        );
+        assert_eq!(
+            new.source_handle_base().project_generation(),
+            Some(outcome.snapshot().project_generation())
+        );
+        assert_ne!(
+            old.source_handle_base().handle_id(),
+            new.source_handle_base().handle_id()
+        );
+        assert_eq!(old.project_generation(), current.project_generation());
+    }
+    Ok(())
+}
+
+#[test]
+fn frozen_native_replays_preserve_original_generation_recipe() -> TestResult {
+    use wow_project::replay::ProjectReplay;
+    let stop = std::sync::atomic::AtomicBool::new(false);
+    for (bytes, generation) in [
+        (
+            include_str!("data/native-replay-legacy/physical.json"),
+            "generation:project:sha256:af43cc3430ed7451f0816ff89baa1cb58c3da76a02d734614df8e052705019fd",
+        ),
+        (
+            include_str!("data/native-replay-legacy/standalone.json"),
+            "generation:project:sha256:fb66d0ba08c6b7cc9fa4cc4c366ada8e703fe905ec6860b8e9d03fd48f4565de",
+        ),
+        (
+            include_str!("data/native-replay-legacy/packages.json"),
+            "generation:project:sha256:80bfdfe06182952bf4df863217af7bb7b0d77027407dca0a69e6bebbcbdbc7bc",
+        ),
+    ] {
+        let archive: serde_json::Value = serde_json::from_str(bytes)?;
+        assert!(archive.get("generation_schema_version").is_none());
+        let replay: ProjectReplay = serde_json::from_value(archive.clone())?;
+        let view = replay.hydrate(&stop)?;
+        view.snapshot().validate()?;
+        assert_eq!(view.project_generation().to_string(), generation);
+        assert_eq!(
+            view.snapshot_id(),
+            archive["project_snapshot_id"]
+                .as_str()
+                .ok_or("missing project ID")?
+        );
+        assert_eq!(
+            view.analyzer_snapshot_id(),
+            archive["analyzer_snapshot_id"]
+                .as_str()
+                .ok_or("missing analyzer ID")?
+        );
+        let candidate = serde_json::to_value(view.snapshot().generation_candidate())?;
+        assert_eq!(candidate["project_generation_schema_version"], 1);
+        assert!(candidate.get("library_snapshot_ids").is_none());
+        assert!(candidate.get("function_call_facts").is_none());
+        for upgrade_schema in [false, true] {
+            let mut changed = archive.clone();
+            changed["generation_schema_version"] = 2.into();
+            if upgrade_schema {
+                changed["schema"] = "wow-project/native-project-replay/4".into();
+            }
+            assert!(
+                serde_json::from_value::<ProjectReplay>(changed)?
+                    .hydrate(&stop)
+                    .is_err()
+            );
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn library_order_is_canonical_and_fact_profile_changes_generation() -> TestResult {
+    use wow_project::replay::ProjectReplay;
+    let configuration = strict_configuration()?;
+    let backend = configuration.analyzer_binding().backend().clone();
+    let first = library_for(backend.clone())?;
+    let second = LuaWorkspaceSnapshot::build(
+        backend,
+        LuaWorkspaceUniverse::Fixture,
+        vec![LuaWorkspaceFileInput::new(
+            "library/Extra.lua",
+            "---@meta\nfunction ExtraApi() end\n",
+        )],
+        LuaWorkspaceLimits::new(8, 16_384, 256 * 1024, 512 * 1024)?,
+    )?;
+    let input = |libraries| -> Result<ProjectInputBundle, Box<dyn Error>> {
+        Ok(ProjectInputBundle::closed(
+            configuration.clone(),
+            baseline_files()?,
+            libraries,
+        )?)
+    };
+    let mut plain = ProjectPublisher::default();
+    let left = plain.publish_initial(input(vec![first.clone(), second.clone()])?)?;
+    let right =
+        ProjectPublisher::new().publish_initial(input(vec![second.clone(), first.clone()])?)?;
+    assert_eq!(left.snapshot_id(), right.snapshot_id());
+    assert_eq!(left.project_generation(), right.project_generation());
+    let mut callable = ProjectPublisher::with_function_call_facts();
+    let extended = callable.publish_initial(input(vec![first, second])?)?;
+    assert_ne!(left.project_generation(), extended.project_generation());
+    assert_eq!(
+        left.generation_candidate().function_call_facts(),
+        Some(false)
+    );
+    assert_eq!(
+        extended.generation_candidate().function_call_facts(),
+        Some(true)
+    );
+    assert!(left.analyzer_binding().function_call_report().is_none());
+    assert!(extended.analyzer_binding().function_call_report().is_some());
+    let stop = std::sync::atomic::AtomicBool::new(false);
+    let replay = ProjectReplay::capture(&callable, &stop)?;
+    assert_eq!(replay.hydrate(&stop)?.snapshot_id(), extended.snapshot_id());
+    let archive = serde_json::to_value(replay)?;
+    assert_eq!(archive["schema"], "wow-project/native-project-replay/4");
+    assert_eq!(archive["generation_schema_version"], 2);
+    for mutation in 0..3 {
+        let mut changed = archive.clone();
+        match mutation {
+            0 => changed["function_calls"] = false.into(),
+            1 => {
+                changed
+                    .as_object_mut()
+                    .ok_or("archive object missing")?
+                    .remove("generation_schema_version");
+            }
+            _ => {
+                changed
+                    .as_object_mut()
+                    .ok_or("archive object missing")?
+                    .remove("generation_schema_version");
+                changed["schema"] = "wow-project/native-project-replay/1".into();
+            }
+        }
+        assert!(
+            serde_json::from_value::<ProjectReplay>(changed)?
+                .hydrate(&stop)
+                .is_err()
+        );
+    }
     Ok(())
 }
 

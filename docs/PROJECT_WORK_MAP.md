@@ -274,5 +274,28 @@ Policy, fmt, workspace check, strict Clippy, tests (850 passed, 1 ignored,
 source directories before full publication and Exact reopen and rejects variant,
 unreachable-corpus, root-selection and foreign-Main substitutions. Full W13/E2
 acceptance and external source/runtime checks remain open. The next functional
-slice is W14 exact Library binding in generation identity with explicit legacy
+slice at this predecessor was W14 exact Library binding with explicit legacy
 replay compatibility, before incremental invalidation and W15 retention/GC.
+
+## W14 exact analyzer-input generation checkpoint
+
+Package predecessor `144761fa45c4ffa17393d1ac40caacc51c55730b` was published
+and read back with all 15 changed blobs. New publishers now use generation recipe
+v2 with exact sorted Library snapshot IDs and the function-call-facts flag. Both
+inputs validate before analysis and against the final analyzer binding. Library
+replacement reaches the same IDs as an independent final-state build; Main bytes
+remain unchanged while generation-bound file records and handles rebind.
+
+Native replay v4 covers physical, standalone and package inputs. Frozen native
+v1/v2/v3 fixtures were captured before this change and reproduce their original
+project/analyzer/generation IDs. Old epochs open only under exact V1/V2/V3
+catalogs and reject v4 writes without changing current or epoch identity.
+No migration or legacy recipe widening is provided.
+
+Policy, fmt, workspace check, strict Clippy, tests (852 passed, 1 ignored,
+103 targets), rustdoc and build passed on 2026-10-09. The next functional slice
+is an actual native analyzer update batch and exact unchanged-input reuse,
+followed by durable W13 update publication/removal closure, W15 retention and W16
+recovery. Full W14/E2 acceptance and the deferred Gethe/Ketho/runtime gates remain
+open. Current Gethe `live` was re-resolved to
+`09b9db7948abc9b9648dedaab51eb0cf3ee67b31`; it was not materialized.

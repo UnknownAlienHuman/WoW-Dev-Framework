@@ -109,9 +109,12 @@ fn owners_from_bundle(
 ) -> TestResult<(ProjectPublisher, GraphPartitionSnapshot)> {
     let mut publisher = ProjectPublisher::with_function_call_facts();
     let view = publisher.publish_initial(bundle)?.open_view();
+    Ok((publisher, graph_from_view(&view)?))
+}
+fn graph_from_view(view: &ProjectView) -> TestResult<GraphPartitionSnapshot> {
     let stop = AtomicBool::new(false);
     let (registry, batch, coverage, _, limits) =
-        wow_project::graph::build_source_graph_proposals(&view, &stop)?.into_parts();
+        wow_project::graph::build_source_graph_proposals(view, &stop)?.into_parts();
     let foundation = GraphSnapshot::build(
         batch.universe().clone(),
         batch.generation().clone(),
@@ -135,7 +138,7 @@ fn owners_from_bundle(
         )?
         .candidate()
         .clone();
-    Ok((publisher, graph))
+    Ok(graph)
 }
 fn root(name: &str) -> TestResult<std::path::PathBuf> {
     Ok(std::env::temp_dir().join(format!(
@@ -234,7 +237,8 @@ fn package_pair_replays_complete_scopes_and_never_admits_unreachable_main() -> T
         owners_from_bundle(input_bundle_with_plans(files, None, Some((&load, &main)))?)?;
     let replay = ProjectReplay::capture(&publisher, &stop)?;
     let archive = serde_json::to_value(&replay)?;
-    assert_eq!(archive["schema"], "wow-project/native-project-replay/3");
+    assert_eq!(archive["schema"], "wow-project/native-project-replay/4");
+    assert_eq!(archive["generation_schema_version"], 2);
     assert_eq!(archive["files"].as_array().ok_or("files missing")?.len(), 0);
     assert_eq!(
         archive["packages"]["packages"]
@@ -422,7 +426,8 @@ fn standalone_toc_xml_pair_replays_without_disk_and_rejects_archive_substitution
     let (publisher, graph) = owners_from_bundle(input_bundle_with_plan(files, Some(&plan))?)?;
     let replay = ProjectReplay::capture(&publisher, &stop)?;
     let archive = serde_json::to_value(&replay)?;
-    assert_eq!(archive["schema"], "wow-project/native-project-replay/2");
+    assert_eq!(archive["schema"], "wow-project/native-project-replay/4");
+    assert_eq!(archive["generation_schema_version"], 2);
     assert_eq!(
         archive["load"]["documents"]
             .as_array()
@@ -483,13 +488,7 @@ fn standalone_toc_xml_pair_replays_without_disk_and_rejects_archive_substitution
         wow_project::ProjectErrorCode::AnalysisCancelled
     );
     let store_root = root.join("store");
-    let mut store = LiveProjectStore {
-        store: ProjectStore::create(
-            &store_root,
-            graph.snapshot().universe().as_str(),
-            catalog_for(publication::STORAGE_SCHEMAS_V2)?,
-        )?,
-    };
+    let mut store = LiveProjectStore::create(&store_root, graph.snapshot().universe().as_str())?;
     let epoch = store.store.epoch().clone();
     store.publish(&publisher, &graph, "fixture:toc-xml-pair", None, &stop)?;
     let before = store.read(&ReadSelector::Current, &stop)?;
@@ -533,41 +532,81 @@ fn standalone_toc_xml_pair_replays_without_disk_and_rejects_archive_substitution
 }
 
 #[test]
-fn original_physical_epoch_reopens_without_changing_catalog_or_identities() -> TestResult {
+fn original_epochs_reopen_exactly_and_refuse_new_generation_recipe() -> TestResult {
+    use wow_project::replay::ProjectReplay;
     let stop = AtomicBool::new(false);
-    let (publisher, graph) = owners("return External()")?;
-    let root = root("legacy-epoch")?;
-    let mut store = LiveProjectStore {
-        store: ProjectStore::create(
-            &root,
-            graph.snapshot().universe().as_str(),
-            catalog_for(publication::STORAGE_SCHEMAS_V1)?,
-        )?,
-    };
-    let epoch = store.store.epoch().clone();
-    let operation = store.publish(&publisher, &graph, "fixture:legacy-live-pair", None, &stop)?;
-    let read = store.read(&ReadSelector::Current, &stop)?;
-    let set_id = read.publication_set_id().to_owned();
-    assert!(
-        read.read
-            .manifest()
-            .members
-            .iter()
-            .any(|member| member.schema == "wow-project.live-replay.v1")
-    );
-    drop(read);
-    drop(store);
-    let store = LiveProjectStore::open(&root)?;
-    assert_eq!(store.store.epoch(), &epoch);
-    let read = store.read(&ReadSelector::Exact(operation.generation_id), &stop)?;
-    assert_eq!(read.graph(), &graph);
-    assert_eq!(read.publication_set_id(), set_id);
-    drop(read);
-    drop(store);
+    let root = root("legacy-epochs")?;
+    std::fs::create_dir(&root)?;
+    let (new, new_graph) = owners("return External()")?;
+    for (name, bytes, schemas) in [
+        (
+            "physical",
+            include_str!("../../../wow-project/tests/data/native-replay-legacy/physical.json"),
+            publication::STORAGE_SCHEMAS_V1,
+        ),
+        (
+            "standalone",
+            include_str!("../../../wow-project/tests/data/native-replay-legacy/standalone.json"),
+            publication::STORAGE_SCHEMAS_V2,
+        ),
+        (
+            "packages",
+            include_str!("../../../wow-project/tests/data/native-replay-legacy/packages.json"),
+            publication::STORAGE_SCHEMAS_V3,
+        ),
+    ] {
+        let replay: ProjectReplay = serde_json::from_str(bytes)?;
+        let project = replay.hydrate(&stop)?;
+        let graph = graph_from_view(&project)?;
+        let store_root = root.join(name);
+        let mut store = LiveProjectStore {
+            store: ProjectStore::create(
+                &store_root,
+                graph.snapshot().universe().as_str(),
+                catalog_for(schemas)?,
+            )?,
+        };
+        let epoch = store.store.epoch().clone();
+        let bundle = ProjectPublicationBundle::from_replay(&replay, &graph, &stop)?;
+        let operation =
+            store.publish_bundle(bundle, &format!("fixture:legacy-{name}"), None, &stop)?;
+        let current = store.current()?.ok_or("missing legacy current")?;
+        let read = store.read(&ReadSelector::Current, &stop)?;
+        let set_id = read.publication_set_id().to_owned();
+        assert_eq!(read.project().snapshot_id(), project.snapshot_id());
+        assert_eq!(read.graph(), &graph);
+        drop(read);
+        assert!(
+            store
+                .publish(
+                    &new,
+                    &new_graph,
+                    &format!("fixture:v4-to-{name}"),
+                    Some(current.record_id.clone()),
+                    &stop
+                )
+                .is_err()
+        );
+        assert_eq!(store.current()?, Some(current.clone()));
+        assert_eq!(store.store.epoch(), &epoch);
+        drop(store);
+        let store = LiveProjectStore::open(&store_root)?;
+        assert_eq!(store.store.epoch(), &epoch);
+        assert_eq!(store.current()?, Some(current));
+        let read = store.read(&ReadSelector::Exact(operation.generation_id), &stop)?;
+        assert_eq!(read.project().snapshot_id(), project.snapshot_id());
+        assert_eq!(
+            read.project().project_generation(),
+            project.project_generation()
+        );
+        assert_eq!(read.graph(), &graph);
+        assert_eq!(read.publication_set_id(), set_id);
+        drop(read);
+        drop(store);
+    }
     std::fs::remove_dir_all(root)?;
     Ok(())
 }
-
 #[test]
 fn native_service_composition_publishes_once_and_rejects_stale_parent() -> TestResult {
     let stop = AtomicBool::new(false);
@@ -773,7 +812,7 @@ fn missing_or_mutated_replay_and_mixed_project_graph_never_activate() -> TestRes
             value["files"][0]["text"] = serde_json::Value::String("return 42\n".into());
             records[index] = wow_store::project::PartitionRecord::new(
                 "live.project.replay",
-                "wow-project.live-replay.v1",
+                "wow-project.live-replay.v4",
                 &value,
             )?;
         } else {

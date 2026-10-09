@@ -52,23 +52,21 @@ impl LiveProjectStore {
         })
     }
     pub fn open(root: &Path) -> ServiceResult<Self> {
-        // Both opens require an exact registered epoch. The store rejects a
+        // Each open requires an exact registered epoch. The store rejects a
         // catalog mismatch before opening SQLite writable; no migration occurs.
-        let store = match ProjectStore::open(root, &catalog()?) {
-            Ok(store) => store,
-            Err(error) if error.code() == StoreErrorCode::IntegrityViolation => {
-                match ProjectStore::open(root, &catalog_for(publication::STORAGE_SCHEMAS_V2)?) {
-                    Ok(store) => store,
-                    Err(error) if error.code() == StoreErrorCode::IntegrityViolation => {
-                        ProjectStore::open(root, &catalog_for(publication::STORAGE_SCHEMAS_V1)?)
-                            .map_err(store_error)?
-                    }
-                    Err(error) => return Err(store_error(error)),
-                }
+        for schemas in [
+            publication::STORAGE_SCHEMAS,
+            publication::STORAGE_SCHEMAS_V3,
+            publication::STORAGE_SCHEMAS_V2,
+            publication::STORAGE_SCHEMAS_V1,
+        ] {
+            match ProjectStore::open(root, &catalog_for(schemas)?) {
+                Ok(store) => return Ok(Self { store }),
+                Err(error) if error.code() == StoreErrorCode::IntegrityViolation => {}
+                Err(error) => return Err(store_error(error)),
             }
-            Err(error) => return Err(store_error(error)),
-        };
-        Ok(Self { store })
+        }
+        Err(fail(ServiceErrorCode::IdentityMismatch))
     }
     pub fn current(&self) -> ServiceResult<Option<CurrentPublication>> {
         self.store.current().map_err(store_error)

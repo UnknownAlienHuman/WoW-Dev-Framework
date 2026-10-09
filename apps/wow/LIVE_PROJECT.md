@@ -5,6 +5,11 @@ profiles expose coherent publication and acquisition through
 `wow-service::live_project`. The app remains a transport over one service operation
 per command. Full W13/E2 acceptance remains open.
 
+New publications use native/storage replay v4 and generation recipe v2, binding
+exact Library snapshot identities and the function-call-facts profile. Existing
+V1/V2/V3 stores remain readable under their exact catalogs but reject v4 writes;
+initialize a new private store for new publications. No migration occurs.
+
 ```text
 wow project publish --config project.json --project <ProjectId> --store-root <new-private-directory> --operation-id <id> --expected-current absent --initialize --allow-partial
 wow project read --store-root <directory> --store-generation current
@@ -61,14 +66,14 @@ recreates the original semantic IDs without reopening source directories. Missin
 excluded and unresolved load decisions remain explicit. Surplus archived files,
 changed documents/context and substituted schema versions reject.
 
-Physical archives keep v1 encoding. Existing physical epochs reopen against their
+At the standalone checkpoint, physical archives kept v1 encoding. Existing epochs reopened against their
 exact original catalog without changing epoch or membership identities; they
 accept physical publications only. Initialize a new private store to publish v2
 loader archives. No epoch migration is performed. Fresh full workspace gates and
 build passed on 2026-10-09: 849 tests passed, 1 ignored, 103 targets. The new service
 regression runs the complete TOC/XML producer chain after source removal.
 
-Multi-package replay uses native/storage v3. It retains every selected package's
+At the package checkpoint, replay used native/storage v3. It retains every selected package's
 captured sources, including unreachable Lua, and exact bytes of all declared TOC
 variants. It reconstructs dependencies, reachability, file order and namespaced
 Main with the existing package owner. Unreachable files and unselected-variant
@@ -78,3 +83,9 @@ V1/V2 epochs keep their exact catalogs and reject v3 writes before current chang
 initialize a new private store for v3. Full workspace gates/build passed on
 2026-10-09: 850 tests passed, 1 ignored, 103 targets. The real package service
 regression deletes its source directory before publication and Exact reopen.
+
+The generation checkpoint passed all workspace gates and build on 2026-10-09:
+852 tests passed, 1 ignored, 103 targets. Frozen old archives hydrate with exact
+original IDs; V1/V2/V3 stores retain their epoch/current identities and Exact
+read-back after rejecting v4 publication. Full W14 reuse/removal and W13/E2
+acceptance remain open.

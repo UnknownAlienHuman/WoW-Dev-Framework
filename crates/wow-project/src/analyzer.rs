@@ -210,6 +210,8 @@ pub(crate) fn build_analyzer_binding(
 ) -> ProjectResult<ProjectAnalyzerBinding> {
     checkpoint(stop)?;
     generation.validate(configuration, inventory)?;
+    generation.validate_library_ids(libraries.iter().map(LuaWorkspaceSnapshot::snapshot_id))?;
+    generation.validate_function_call_facts(function_calls)?;
     if libraries.is_empty() {
         return Err(ProjectError::new(
             ProjectErrorCode::AnalyzerFailed,

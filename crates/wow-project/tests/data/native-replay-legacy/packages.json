@@ -1,0 +1,177 @@
+{
+  "schema": "wow-project/native-project-replay/3",
+  "configuration": {
+    "project_id": "fixture-live-pair",
+    "kind": "fixture",
+    "workspace_id": "workspace:main:project-pair-regression",
+    "source_origin_id": "project-origin:project-pair-regression",
+    "logical_root": "fixtures/project-pair/main",
+    "profile": {
+      "profile_id": "profile:fixture:project-pair-regression-v1",
+      "profile_kind": "fixture",
+      "flavor_id": "retail",
+      "interface": 120100,
+      "source_kind": "synthetic_fixture",
+      "source_revision": "fixture:live-pair-v1",
+      "source_logical_digest": "sha256:0707070707070707070707070707070707070707070707070707070707070707",
+      "schema_versions": [
+        {
+          "schema_id": "schema:wow:fixture-e0",
+          "version": "1.0.0"
+        }
+      ],
+      "fixture_scope": "native live pair regression"
+    },
+    "reference_generation": "generation:reference:sha256:97675ba211ab64855e16865ac469cfe32478719078c34f7c34d31a1a07d99918",
+    "analyzer": {
+      "analyzer_contract_id": "wow-emmy/e0-c/1",
+      "accepted_pin_id": "emmy-pin:aaaca68425d9362876228649b0b8d92f07654daa",
+      "compatibility_probe_report_id": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "analyzer_configuration_digest": "sha256:0303030303030303030303030303030303030303030303030303030303030303",
+      "analyzer_fixture_contract_id": "wow-emmy/e0-c/1",
+      "expected_library_contract_id": "wow-emmy-e0-c-library-v1",
+      "backend": {
+        "crate_name": "emmylua_code_analysis",
+        "crate_version": "0.25.1",
+        "revision": "aaaca68425d9362876228649b0b8d92f07654daa",
+        "tree": "9175c01384e650b9a5bd64da69c36f47dbeaaf67",
+        "surface_sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "compatibility_report_sha256": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+      }
+    },
+    "capabilities": {
+      "mandatory": [
+        "emmy.library.loaded",
+        "emmy.session.ready",
+        "emmy.source_coordinates.exact",
+        "project.analyzer.snapshot.available",
+        "project.fixture.configuration.valid",
+        "project.fixture.files.complete",
+        "project.generation.coherent",
+        "project.source.handle.resolve",
+        "project.source.registry.complete"
+      ],
+      "degradable": [
+        "emmy.fact.calls",
+        "emmy.fact.control_flow",
+        "emmy.fact.guards",
+        "emmy.fact.local_bindings",
+        "emmy.fact.local_flow",
+        "emmy.fact.operations",
+        "emmy.fact.references",
+        "emmy.file.diagnostics",
+        "emmy.file.parsed",
+        "project.analyzer.facts.available",
+        "project.analyzer.generic_diagnostics.available"
+      ],
+      "deferred": [
+        "project.event_hook_index.complete",
+        "project.graph.complete",
+        "project.installed_runtime_universe.available",
+        "project.load_graph.complete",
+        "project.persistence.available",
+        "project.state_index.complete",
+        "project.toc.complete",
+        "project.xml.complete"
+      ]
+    },
+    "budgets": {
+      "max_files": 64,
+      "max_total_source_bytes": 2097152,
+      "max_single_file_bytes": 262144,
+      "max_update_operations": 64,
+      "max_analyzer_facts": 262144,
+      "max_generic_findings": 65536,
+      "max_output_bytes": 16777216
+    },
+    "expected_configuration_digest": "sha256:eba8de94591f402efa43fcf6ef1fe1b596ddc3c2c382322c10078840816e3b2b"
+  },
+  "files": [],
+  "libraries": [
+    {
+      "snapshot_id": "workspace:sha256:08a330b544152cccb3f3f773ad75b2a60956452e2808fc5c1120fefdb91eefc8",
+      "universe": "fixture",
+      "files": [
+        {
+          "path": "library/Core.lua",
+          "text": "---@meta\n---@return number\nfunction External() end\n"
+        }
+      ]
+    }
+  ],
+  "function_calls": true,
+  "project_snapshot_id": "project-snapshot:sha256:c4dfa0d581b474d38414a43cab57fbadc12c2706eb6936f68ef46c7633538213",
+  "analyzer_snapshot_id": "project-analyzer-snapshot:sha256:ae98f97f519047e565863dbf9a2b2bfdc24efb9043cec775f326cc35cd2e5f30",
+  "packages": {
+    "packages": [
+      {
+        "name": "App",
+        "selected_root": true,
+        "selected_toc": "App.toc",
+        "selected_plan_digest": "sha256:608ec141ead94efc11453cb9716c5a52e16a2cfeafb90e2be9ea29bd40d24c24",
+        "variants": [
+          "App.toc",
+          "Inactive.toc"
+        ],
+        "sources": [
+          {
+            "path": "App.toc",
+            "text": "## Interface: 120100\n## Dependencies: Dep\n## OptionalDeps: MissingOptional\nmain.lua\nframes.xml\n"
+          },
+          {
+            "path": "Inactive.toc",
+            "text": "## Interface: 120100\nignored.lua\n"
+          },
+          {
+            "path": "frames.xml",
+            "text": "<Ui xmlns=\"http://www.blizzard.com/wow/ui/\"><Frame name=\"PackageFrame\"><Scripts><OnLoad>local package_body = true</OnLoad></Scripts></Frame></Ui>"
+          },
+          {
+            "path": "main.lua",
+            "text": "local value = External()\nreturn value\n"
+          }
+        ]
+      },
+      {
+        "name": "Dep",
+        "selected_root": false,
+        "selected_toc": "Dep.toc",
+        "selected_plan_digest": "sha256:d71e975d1991547964209754e5391bd1871d62e9549be4c9c0de36207d1ea72e",
+        "variants": [
+          "Dep.toc"
+        ],
+        "sources": [
+          {
+            "path": "Dep.toc",
+            "text": "## Interface: 120100\n## LoadOnDemand: 1\nmain.lua\n"
+          },
+          {
+            "path": "main.lua",
+            "text": "local prerequisite = true\n"
+          }
+        ]
+      },
+      {
+        "name": "Other",
+        "selected_root": false,
+        "selected_toc": "Other.toc",
+        "selected_plan_digest": "sha256:cfd431da1c267d1b744b442d42fc5883bac5d70efce76c791f46ebb5be520a8f",
+        "variants": [
+          "Other.toc"
+        ],
+        "sources": [
+          {
+            "path": "Other.toc",
+            "text": "## Interface: 120100\nmain.lua\n"
+          },
+          {
+            "path": "main.lua",
+            "text": "local unreachable_package = 42\n"
+          }
+        ]
+      }
+    ],
+    "expected_load_digest": "sha256:6e02ac9c5bf186bfefd67fd0c0aabe7dae7737134bdea448ef7d7acfb6ec57fd",
+    "expected_main_digest": "sha256:8b8d2c6039fe26206081df30b573a29d2382ed9a75c6583b9d799c96b133e9ab"
+  }
+}

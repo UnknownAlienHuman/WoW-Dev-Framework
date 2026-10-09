@@ -16,10 +16,18 @@ NoChange. Nonempty replacement is checked against an independent final-state
 native publication. Cancellation reaches file-operation and analyzer boundaries
 and the final publication boundary; it also applies to NoChange.
 
-This remains a full candidate rebuild. Exact Library binding in the project
-generation recipe, analyzer update batches, reuse proofs, transitive graph removal
-and W13 update publication remain open. These controls alone are not full W14
-incremental acceptance.
+New publications use generation recipe v2, binding the exact sorted Library
+snapshot identities and the publisher's function-call-facts profile. A Library
+replacement changes the generation even when Main bytes remain identical;
+generation-bound file records and source handles are rebuilt for that target.
+Independent final-state publication yields the same project/analyzer identities.
+The original `derive` receipt recipe remains v1; new publishers use
+`derive_with_analysis`, while `derive_with_libraries` defaults the fact flag to
+false. Old archives hydrate only through the crate-private legacy publisher.
+
+This remains a full candidate rebuild. Analyzer update batches, reuse proofs,
+transitive graph removal and W13 update publication remain open. These controls
+and exact identities alone are not full W14 incremental acceptance.
 
 ## 1. Update request
 

@@ -15,9 +15,9 @@ and 32 MiB aggregate source bytes before copying. Encoded records also obey the
 existing store's 32 MiB record and 64 MiB generation ceilings; JSON escaping may
 make an otherwise admissible source set exceed the record budget.
 
-Physical-input archives retain the exact v1 encoding. Standalone TOC/XML archives
-use `wow-project/native-project-replay/2` and the `wow-project.live-replay.v2`
-storage schema. They add a selected TOC, explicit selection context, raw consumed
+Legacy physical-input archives retain the exact v1 encoding. Legacy standalone
+TOC/XML archives use `wow-project/native-project-replay/2` and the
+`wow-project.live-replay.v2` storage schema. They add a selected TOC, explicit selection context, raw consumed
 TOC/XML documents and expected load-plan digest. These documents count against
 the same aggregate archive budget. Loader-specific ceilings remain 1,024 consumed
 files, 1 MiB per source and 16 MiB aggregate, plus existing parser/index limits.
@@ -80,7 +80,7 @@ Library binding and full acceptance remain open at this predecessor.
 
 ## Complete declared package corpus
 
-Package replay uses `wow-project/native-project-replay/3` and
+Legacy package replay uses `wow-project/native-project-replay/3` and
 `wow-project.live-replay.v3`. The package archive owns every selected closure's
 Lua/TOC/XML bytes, all declared variant TOCs, the shared explicit context and Main
 fixture references. The legacy Main `files` array is empty, so reached Lua is not
@@ -96,7 +96,7 @@ package/Main digest and original project/analyzer identity must reproduce. An
 unreachable package retains its captured corpus but stays outside Main; a
 nonselected TOC retains its exact identity without loading its entries.
 
-New epochs admit v1/v2/v3. Previously published v1 and v2 epochs reopen only against
+At the package checkpoint, new epochs admitted v1/v2/v3. Previously published v1 and v2 epochs reopened only against
 their exact original catalogs; a v3 write to one rejects without changing current
 or its epoch. This is explicit compatibility, not migration or catalog widening.
 The full service path now also maps source package edges through the existing
@@ -110,3 +110,27 @@ XML inline source, unreachable package and nonselected variant. It removes the
 source directory, rejects corpus/variant/root/Main substitutions, executes complete
 service publication and reopens Exact. Full W13/E2 acceptance, generation Library
 binding, incremental reuse, retention/recovery and source/runtime gates remain open.
+
+## Generation-bound replay v4
+
+New publishers use generation recipe v2, binding exact sorted Library snapshot
+IDs and the function-call-facts flag. Every input profile now captures
+`wow-project/native-project-replay/4` with `generation_schema_version: 2` and
+stores `wow-project.live-replay.v4`. Physical, standalone and package byte
+representations retain their existing bounded loader responsibilities.
+
+Old v1/v2/v3 archives omit this field and reproduce the original v1 recipe through
+the crate-private legacy publisher. Both new recipe inputs disappear entirely
+from legacy receipt serialization. Hydration requires the original project and
+analyzer identities and exact canonical recapture; changing a version marker or
+the fact option cannot upgrade or downgrade an existing archive.
+
+`ProjectPublicationBundle::from_replay` performs actual hydration and the same
+project/graph owner checks before constructing a handoff from a retained archive.
+It cannot substitute metadata labels for a live analyzer session.
+
+New epochs admit v1/v2/v3/v4. Existing V1/V2/V3 epochs open only under their exact
+frozen catalogs and reject v4 writes without changing current or epoch identity.
+Initialize a new private store for new publications; no epoch migration or catalog
+widening is provided. Frozen native compatibility fixtures were captured on
+`144761f` before the generation change and are never rewritten by tests.

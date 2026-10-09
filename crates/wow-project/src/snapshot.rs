@@ -74,6 +74,9 @@ impl ProjectSnapshot {
     ) -> ProjectResult<Self> {
         configuration.validate()?;
         generation_candidate.validate(&configuration, &input_inventory)?;
+        generation_candidate.validate_library_ids(analyzer_binding.library_snapshot_ids())?;
+        generation_candidate
+            .validate_function_call_facts(analyzer_binding.function_call_report().is_some())?;
         if generation_candidate.project_generation() != source_registry.project_generation()
             || generation_candidate.project_generation() != analyzer_binding.project_generation()
             || configuration.configuration_digest()
@@ -152,6 +155,10 @@ impl ProjectSnapshot {
         self.configuration.validate()?;
         self.generation_candidate
             .validate(&self.configuration, &self.input_inventory)?;
+        self.generation_candidate
+            .validate_library_ids(self.analyzer_binding.library_snapshot_ids())?;
+        self.generation_candidate
+            .validate_function_call_facts(self.analyzer_binding.function_call_report().is_some())?;
         self.generation_context.validate().map_err(|source| {
             ProjectError::new(
                 ProjectErrorCode::SnapshotInvalid,

@@ -627,3 +627,20 @@ loaded library revisions or complete E2 acceptance. Full per-rule pipeline cases
 fixture/checksum freeze, the remaining XML/state rules, `apps/wow` real-addon
 acceptance and the mandatory final WoW API Ketho MCP comparison remain open until
 separately executed and recorded.
+
+## W14 exact analyzer-input generation checkpoint (2026-10-09)
+
+New generation recipe v2 binds sorted exact Library snapshot IDs and the
+function-call-facts flag. Publisher and service target derivation use the same
+inputs; analyzer and snapshot validators require their equality. Library-only
+replacement now changes generation and rebinds source handles while retaining
+Main bytes, matching independent final-state publication. Clear/empty replacement
+still rejects through the E0 mandatory-Library validator and preserves current.
+
+New archives use native/storage replay v4 with explicit generation version 2.
+Frozen v1/v2/v3 archives reproduce their original v1 recipe and semantic IDs.
+Exact legacy catalogs reopen without migration and reject v4 writes without
+current or epoch mutation. Policy, fmt, check, strict Clippy, tests (852 passed,
+1 ignored, 103 targets), rustdoc and build passed. Incremental analyzer batches,
+reuse, durable updates/removal closure, retention/recovery and full W14/E2 or
+Gethe/Ketho/runtime acceptance remain open.

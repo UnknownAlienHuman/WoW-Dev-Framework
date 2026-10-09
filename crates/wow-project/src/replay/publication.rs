@@ -12,6 +12,7 @@ pub const STORAGE_SCHEMAS: &[&str] = &[
     "wow-project.live-replay.v1",
     "wow-project.live-replay.v2",
     "wow-project.live-replay.v3",
+    "wow-project.live-replay.v4",
     "wow-project.live-pair.v1",
 ];
 /// Exact catalog of already published physical-input epochs. It is never widened
@@ -20,6 +21,12 @@ pub const STORAGE_SCHEMAS_V1: &[&str] = &["wow-project.live-replay.v1", "wow-pro
 pub const STORAGE_SCHEMAS_V2: &[&str] = &[
     "wow-project.live-replay.v1",
     "wow-project.live-replay.v2",
+    "wow-project.live-pair.v1",
+];
+pub const STORAGE_SCHEMAS_V3: &[&str] = &[
+    "wow-project.live-replay.v1",
+    "wow-project.live-replay.v2",
+    "wow-project.live-replay.v3",
     "wow-project.live-pair.v1",
 ];
 pub const STORAGE_CHECK: &str = "wow-project.live-pair-native-replay.v1";
@@ -56,6 +63,18 @@ impl ProjectPublicationBundle {
             .open_view();
         validate_pair(&project, graph, stop)?;
         plan(&replay, &project, graph, stop)
+    }
+
+    /// Restore an exact retained native archive through real owner analysis
+    /// before admitting its original project/graph pair to publication.
+    pub fn from_replay(
+        replay: &ProjectReplay,
+        graph: &GraphPartitionSnapshot,
+        stop: &AtomicBool,
+    ) -> ProjectResult<Self> {
+        let project = replay.hydrate(stop)?;
+        validate_pair(&project, graph, stop)?;
+        plan(replay, &project, graph, stop)
     }
     pub fn into_parts(self) -> (Vec<PartitionRecord>, BTreeMap<String, String>) {
         (self.records, self.bindings)
@@ -97,6 +116,7 @@ impl AcquiredProjectPair {
             "wow-project.live-replay.v1"
                 | "wow-project.live-replay.v2"
                 | "wow-project.live-replay.v3"
+                | "wow-project.live-replay.v4"
         ) {
             return Err(invalid());
         }

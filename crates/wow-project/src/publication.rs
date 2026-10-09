@@ -17,13 +17,20 @@ use crate::{
 ///
 /// Candidate state is private. The current pointer changes only after the full
 /// configuration/inventory/analyzer/registry/snapshot transaction validates.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct ProjectPublisher {
     current: Option<Arc<ProjectSnapshot>>,
     current_inputs: Vec<ProjectInputFile>,
     libraries: Vec<LuaWorkspaceSnapshot>,
     last_failure: Option<ProjectError>,
     function_calls: bool,
+    legacy_generation: bool,
+}
+
+impl Default for ProjectPublisher {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ProjectPublisher {
@@ -35,6 +42,7 @@ impl ProjectPublisher {
             libraries: Vec::new(),
             last_failure: None,
             function_calls: false,
+            legacy_generation: false,
         }
     }
 
@@ -45,6 +53,15 @@ impl ProjectPublisher {
     pub fn with_function_call_facts() -> Self {
         Self {
             function_calls: true,
+            ..Self::new()
+        }
+    }
+
+    /// Only old native archives may reproduce the frozen generation recipe.
+    pub(crate) fn legacy_replay(function_calls: bool) -> Self {
+        Self {
+            function_calls,
+            legacy_generation: true,
             ..Self::new()
         }
     }
@@ -77,6 +94,7 @@ impl ProjectPublisher {
             inventory.clone(),
             libraries.clone(),
             self.function_calls,
+            self.legacy_generation,
             stop,
         ) {
             Ok(snapshot) => {
@@ -212,6 +230,7 @@ impl ProjectPublisher {
             inventory.clone(),
             libraries.clone(),
             self.function_calls,
+            self.legacy_generation,
             stop,
         ) {
             Ok(snapshot) => {
@@ -306,9 +325,19 @@ fn build_snapshot(
     inventory: ProjectInputInventory,
     libraries: Vec<LuaWorkspaceSnapshot>,
     function_calls: bool,
+    legacy_generation: bool,
     stop: &AtomicBool,
 ) -> ProjectResult<ProjectSnapshot> {
-    let generation = ProjectGenerationCandidate::derive(&configuration, &inventory)?;
+    let generation = if legacy_generation {
+        ProjectGenerationCandidate::derive(&configuration, &inventory)?
+    } else {
+        ProjectGenerationCandidate::derive_with_analysis(
+            &configuration,
+            &inventory,
+            &libraries,
+            function_calls,
+        )?
+    };
     let analyzer = build_analyzer_binding(
         &configuration,
         &inventory,

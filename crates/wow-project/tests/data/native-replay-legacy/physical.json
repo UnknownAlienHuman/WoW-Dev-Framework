@@ -1,0 +1,110 @@
+{
+  "schema": "wow-project/native-project-replay/1",
+  "configuration": {
+    "project_id": "fixture-live-pair",
+    "kind": "fixture",
+    "workspace_id": "workspace:main:project-pair-regression",
+    "source_origin_id": "project-origin:project-pair-regression",
+    "logical_root": "fixtures/project-pair/main",
+    "profile": {
+      "profile_id": "profile:fixture:project-pair-regression-v1",
+      "profile_kind": "fixture",
+      "flavor_id": "retail",
+      "interface": 120100,
+      "source_kind": "synthetic_fixture",
+      "source_revision": "fixture:live-pair-v1",
+      "source_logical_digest": "sha256:0707070707070707070707070707070707070707070707070707070707070707",
+      "schema_versions": [
+        {
+          "schema_id": "schema:wow:fixture-e0",
+          "version": "1.0.0"
+        }
+      ],
+      "fixture_scope": "native live pair regression"
+    },
+    "reference_generation": "generation:reference:sha256:97675ba211ab64855e16865ac469cfe32478719078c34f7c34d31a1a07d99918",
+    "analyzer": {
+      "analyzer_contract_id": "wow-emmy/e0-c/1",
+      "accepted_pin_id": "emmy-pin:aaaca68425d9362876228649b0b8d92f07654daa",
+      "compatibility_probe_report_id": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "analyzer_configuration_digest": "sha256:0303030303030303030303030303030303030303030303030303030303030303",
+      "analyzer_fixture_contract_id": "wow-emmy/e0-c/1",
+      "expected_library_contract_id": "wow-emmy-e0-c-library-v1",
+      "backend": {
+        "crate_name": "emmylua_code_analysis",
+        "crate_version": "0.25.1",
+        "revision": "aaaca68425d9362876228649b0b8d92f07654daa",
+        "tree": "9175c01384e650b9a5bd64da69c36f47dbeaaf67",
+        "surface_sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "compatibility_report_sha256": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+      }
+    },
+    "capabilities": {
+      "mandatory": [
+        "emmy.library.loaded",
+        "emmy.session.ready",
+        "emmy.source_coordinates.exact",
+        "project.analyzer.snapshot.available",
+        "project.fixture.configuration.valid",
+        "project.fixture.files.complete",
+        "project.generation.coherent",
+        "project.source.handle.resolve",
+        "project.source.registry.complete"
+      ],
+      "degradable": [
+        "emmy.fact.calls",
+        "emmy.fact.control_flow",
+        "emmy.fact.guards",
+        "emmy.fact.local_bindings",
+        "emmy.fact.local_flow",
+        "emmy.fact.operations",
+        "emmy.fact.references",
+        "emmy.file.diagnostics",
+        "emmy.file.parsed",
+        "project.analyzer.facts.available",
+        "project.analyzer.generic_diagnostics.available"
+      ],
+      "deferred": [
+        "project.event_hook_index.complete",
+        "project.graph.complete",
+        "project.installed_runtime_universe.available",
+        "project.load_graph.complete",
+        "project.persistence.available",
+        "project.state_index.complete",
+        "project.toc.complete",
+        "project.xml.complete"
+      ]
+    },
+    "budgets": {
+      "max_files": 64,
+      "max_total_source_bytes": 2097152,
+      "max_single_file_bytes": 262144,
+      "max_update_operations": 64,
+      "max_analyzer_facts": 262144,
+      "max_generic_findings": 65536,
+      "max_output_bytes": 16777216
+    },
+    "expected_configuration_digest": "sha256:00fc72bc0353d9b30b8f2dc7663db22e2ef177ae3a3d48d016939e2ef565513b"
+  },
+  "files": [
+    {
+      "path": "main.lua",
+      "text": "local value = External()\nreturn value\n"
+    }
+  ],
+  "libraries": [
+    {
+      "snapshot_id": "workspace:sha256:08a330b544152cccb3f3f773ad75b2a60956452e2808fc5c1120fefdb91eefc8",
+      "universe": "fixture",
+      "files": [
+        {
+          "path": "library/Core.lua",
+          "text": "---@meta\n---@return number\nfunction External() end\n"
+        }
+      ]
+    }
+  ],
+  "function_calls": true,
+  "project_snapshot_id": "project-snapshot:sha256:fe78313b5f5e30b6356aa1e6a5f5684776edc01020848971435973eae63bc336",
+  "analyzer_snapshot_id": "project-analyzer-snapshot:sha256:160877865d936979ab6c451a3aaaa5c14b894a3a808a7318000645520ca662cd"
+}

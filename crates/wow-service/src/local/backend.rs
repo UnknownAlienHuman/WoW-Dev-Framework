@@ -55,8 +55,13 @@ impl LocalProjectBackend {
             .analyzer_pin_id(project.analyzer_binding().accepted_pin_id())
             .rule_registry_id(registry.registry_id())
             .build()?;
-        let target = ProjectGenerationCandidate::derive(project, input.bundle.inventory())
-            .map_err(|_| owner_error("project generation derivation failed"))?;
+        let target = ProjectGenerationCandidate::derive_with_analysis(
+            project,
+            input.bundle.inventory(),
+            input.bundle.libraries(),
+            function_calls,
+        )
+        .map_err(|_| owner_error("project generation derivation failed"))?;
         Ok(Self {
             input: input.bundle,
             reference: input.reference,

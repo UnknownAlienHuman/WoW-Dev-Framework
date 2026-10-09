@@ -21,6 +21,7 @@ use wow_emmy::{
 const REPLAY_SCHEMA: &str = "wow-project/native-project-replay/1";
 const LOAD_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/2";
 const PACKAGE_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/3";
+const LIBRARY_BOUND_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/4";
 const MAX_FILES: usize = 8192;
 const MAX_LIBRARIES: usize = 64;
 const MAX_FILE_BYTES: usize = 16 * 1024 * 1024;
@@ -65,8 +66,8 @@ struct ReplayLibrary {
     files: Vec<ReplayFile>,
 }
 
-/// Data-only archive, distinct from the executable owner view. Physical Lua
-/// uses v1; selected standalone TOC/XML replay uses the explicit v2 profile.
+/// Data-only archive, distinct from the executable owner view. New publications
+/// use v4 with Library-bound generation; v1/v2/v3 retain their original recipe.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectReplay {
@@ -77,6 +78,8 @@ pub struct ProjectReplay {
     function_calls: bool,
     project_snapshot_id: String,
     analyzer_snapshot_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    generation_schema_version: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     load: Option<ReplayLoad>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -190,8 +193,18 @@ impl ProjectReplay {
             });
         }
         retained_libraries.sort_by(|a, b| a.snapshot_id.cmp(&b.snapshot_id));
+        let generation_schema_version = match snapshot
+            .generation_candidate()
+            .project_generation_schema_version()
+        {
+            1 => None,
+            2 => Some(2),
+            _ => return Err(invalid()),
+        };
         let replay = Self {
-            schema: if packages.is_some() {
+            schema: if generation_schema_version.is_some() {
+                LIBRARY_BOUND_REPLAY_SCHEMA
+            } else if packages.is_some() {
                 PACKAGE_REPLAY_SCHEMA
             } else if load.is_some() {
                 LOAD_REPLAY_SCHEMA
@@ -205,6 +218,7 @@ impl ProjectReplay {
             function_calls,
             project_snapshot_id: snapshot.snapshot_id().into(),
             analyzer_snapshot_id: snapshot.analyzer_binding().analyzer_snapshot_id().into(),
+            generation_schema_version,
             load,
             packages,
         };
@@ -212,16 +226,16 @@ impl ProjectReplay {
         Ok(replay)
     }
     fn validate_budget(&self, stop: &AtomicBool) -> ProjectResult<()> {
+        let expected_schema = match self.generation_schema_version {
+            Some(2) => LIBRARY_BOUND_REPLAY_SCHEMA,
+            None if self.packages.is_some() => PACKAGE_REPLAY_SCHEMA,
+            None if self.load.is_some() => LOAD_REPLAY_SCHEMA,
+            None => REPLAY_SCHEMA,
+            Some(_) => return Err(invalid()),
+        };
         if (self.load.is_some() && self.packages.is_some())
             || (self.packages.is_some() && !self.files.is_empty())
-            || self.schema
-                != if self.packages.is_some() {
-                    PACKAGE_REPLAY_SCHEMA
-                } else if self.load.is_some() {
-                    LOAD_REPLAY_SCHEMA
-                } else {
-                    REPLAY_SCHEMA
-                }
+            || self.schema != expected_schema
             || self.libraries.len() > MAX_LIBRARIES
             || self.files.len() > MAX_FILES
             || self.files.windows(2).any(|p| p[0].path >= p[1].path)
@@ -340,7 +354,9 @@ impl ProjectReplay {
                 .collect::<ProjectResult<Vec<_>>>()?
         };
         let bundle = ProjectInputBundle::closed(config, files, libraries)?;
-        let mut publisher = if self.function_calls {
+        let mut publisher = if self.generation_schema_version.is_none() {
+            ProjectPublisher::legacy_replay(self.function_calls)
+        } else if self.function_calls {
             ProjectPublisher::with_function_call_facts()
         } else {
             ProjectPublisher::new()
@@ -356,7 +372,9 @@ impl ProjectReplay {
         Ok(snapshot.open_view())
     }
     fn storage_schema(&self) -> &'static str {
-        if self.packages.is_some() {
+        if self.generation_schema_version == Some(2) {
+            "wow-project.live-replay.v4"
+        } else if self.packages.is_some() {
             "wow-project.live-replay.v3"
         } else if self.load.is_some() {
             "wow-project.live-replay.v2"

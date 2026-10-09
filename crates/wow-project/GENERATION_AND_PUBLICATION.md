@@ -17,6 +17,29 @@ It is not:
 
 ## 2. Generation derivation inputs
 
+Recipe version 2 adds two exact inputs that recipe version 1 omitted: the
+sorted Library snapshot identity set and the function-call-facts flag. Both
+change the derived `ProjectGenerationId` whenever they differ, so two projects
+whose Main files and configuration are byte-identical but whose Library set or
+analysis mode differs no longer derive one generation.
+
+The Library set is captured as a sorted list of exact Library workspace
+snapshot identities. Sorting makes the derivation independent of the caller's
+argument order; identities, not library names, are the input. The
+function-call-facts flag records whether the publisher was constructed with
+function-call analysis enabled, because that choice changes the analyzer outputs
+that the generation must bind.
+
+`derive` is the original version 1 derivation and stays available for retained
+receipts: it supplies no Library set and no fact flag. Every new publication
+uses a recipe version 2 entry point. `derive_with_libraries` derives version 2
+from the exact Library corpus it is given and defaults `function_call_facts` to
+`false`; it does not reproduce the version 1 receipt. `derive_with_analysis`
+derives version 2 from the exact Library corpus and the owned analyzer fact
+profile, mirroring the publisher's construction. Re-deriving an archived version
+1 generation through either version 2 entry point produces a different ID by
+design, which is why the version 1 path is retained rather than removed.
+
 ```text
 ProjectGenerationDerivationInput
     project configuration schema/version
@@ -28,6 +51,8 @@ ProjectGenerationDerivationInput
     analyzer compatibility-probe contract/report ID
     analyzer configuration digest
     canonical final first-party file manifest
+    sorted Library snapshot identity set, when the recipe carries it
+    function-call-facts flag, when the recipe carries it
     capability policy identity
     budget policy identity when output-affecting
     project-generation schema version
@@ -66,11 +91,26 @@ wow-project:project-generation:e0-d:1
 
 Canonical derivation input must be independently serializable/testable. Do not hash an opaque in-memory struct or debug representation.
 
+The current recipe carries version 2 as an explicit derivation input. The
+`wow-core` generation domain remains unchanged; the candidate receipt uses
+`wow-project/generation-candidate/e0-d/2`. A receipt records its recipe version, so an archived
+version 1 receipt stays verifiable on its own terms. Re-deriving a version 1
+generation through the recipe version 2 code path produces a different ID by
+design, and that is a hard stop rather than a defect to be normalized away.
+
 ## 5. Candidate versus published generation
 
 ### Candidate
 
-A valid derivation produces `ProjectGenerationCandidate` and target `ProjectGenerationId`.
+A valid derivation produces `ProjectGenerationCandidate` and target
+`ProjectGenerationId`.
+
+Recipe version 2 adds `library_snapshot_ids` and `function_call_facts` to the
+candidate. Both are optional in the serialized receipt: a candidate derived
+through the legacy version 1 path leaves them absent, and the absence is what
+keeps its bytes identical to an archived version 1 candidate. A recipe version 2
+candidate carries them, and a consumer that finds neither field must treat the
+record as a version 1 derivation rather than defaulting the values.
 
 Candidate means:
 

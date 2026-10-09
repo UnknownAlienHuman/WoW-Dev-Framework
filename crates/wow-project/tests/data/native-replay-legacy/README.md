@@ -1,0 +1,7 @@
+# Frozen native replay compatibility fixtures
+
+Captured on 2026-10-09 from main `144761fa45c4ffa17393d1ac40caacc51c55730b` using the original native Rust ProjectPublisher (generation recipe v1) and ProjectReplay. These are synthetic regression inputs, not Blizzard, backend compatibility or package acceptance evidence. Emmy backend constants are the actual pinned workspace constants; the probe/config fixture identities are synthetic. Tests read these files and never regenerate them.
+
+- `physical.json`: generation `generation:project:sha256:af43cc3430ed7451f0816ff89baa1cb58c3da76a02d734614df8e052705019fd`, project `project-snapshot:sha256:fe78313b5f5e30b6356aa1e6a5f5684776edc01020848971435973eae63bc336`, analyzer `project-analyzer-snapshot:sha256:160877865d936979ab6c451a3aaaa5c14b894a3a808a7318000645520ca662cd`.
+- `standalone.json`: generation `generation:project:sha256:fb66d0ba08c6b7cc9fa4cc4c366ada8e703fe905ec6860b8e9d03fd48f4565de`, project `project-snapshot:sha256:f49e712a7ecb183baf7e29473465897de2419a1bef3be20b722835c938c7e81b`, analyzer `project-analyzer-snapshot:sha256:3f8012267b819fcbe50fd9cdfc16899e5a8fb2000bff010a299abf5103625deb`.
+- `packages.json`: generation `generation:project:sha256:80bfdfe06182952bf4df863217af7bb7b0d77027407dca0a69e6bebbcbdbc7bc`, project `project-snapshot:sha256:c4dfa0d581b474d38414a43cab57fbadc12c2706eb6936f68ef46c7633538213`, analyzer `project-analyzer-snapshot:sha256:ae98f97f519047e565863dbf9a2b2bfdc24efb9043cec775f326cc35cd2e5f30`.
