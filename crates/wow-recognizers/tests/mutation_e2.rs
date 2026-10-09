@@ -195,3 +195,39 @@ fn dynamic_hook_target_loses_the_exact_literal() -> TestResult {
     );
     Ok(())
 }
+
+/// The event key observed for one fixture. A repository or owner rename must
+/// not change which decisive literal a rule resolves, so this helper reports
+/// only the resolved callable key per call, never any path or name.
+fn resolved_keys(text: &str) -> TestResult<Vec<String>> {
+    let main = workspace("main/events.lua", text)?;
+    let stop = AtomicBool::new(false);
+    let queries = vec![String::from("EventRegistry.RegisterCallback")];
+    let session = analyze_member_call_session(&main, &[], &queries, true, &stop)?;
+    let report = session
+        .function_calls
+        .ok_or("the function-call sidecar is required")?;
+    Ok(report
+        .calls()
+        .iter()
+        .filter_map(|call| call.resolved_callable_key())
+        .map(str::to_owned)
+        .collect())
+}
+
+const REPO_A: &str = "EventRegistry = {}\nfunction EventRegistry:RegisterCallback(key, callback) end\nlocal function onEvent() end\nEventRegistry:RegisterCallback(\"Fixture.Event\", onEvent)\n";
+
+const REPO_B: &str = "EventRegistry = {}\nfunction EventRegistry:RegisterCallback(key, callback) end\nlocal renamed = function() end\nEventRegistry:RegisterCallback(\"Fixture.Event\", renamed)\n";
+
+/// RECOG-MUT-001: renaming repository, owner and local identities must not
+/// change the decisive literal the rule resolves.
+#[test]
+fn repository_and_local_rename_preserves_the_decisive_literal() -> TestResult {
+    let before = resolved_keys(REPO_A)?;
+    let after = resolved_keys(REPO_B)?;
+    assert_eq!(
+        before, after,
+        "a rename must not change which decisive literal resolves"
+    );
+    Ok(())
+}
