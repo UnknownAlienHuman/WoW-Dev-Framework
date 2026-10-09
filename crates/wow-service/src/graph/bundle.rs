@@ -1,4 +1,4 @@
-//! Transport admission of a graph-build v13 receipt. The graph and project owners
+//! Transport admission of a graph-build v14 receipt. The graph and project owners
 //! independently validate the snapshot and source/evidence projection; remaining
 //! build sidecars are integrity-bound data, not reconstructed semantic owners.
 use serde_json::Value;
@@ -10,7 +10,6 @@ use super::{GraphReadFailure, GraphReadStage, checkpoint, hash, input};
 use crate::ServiceErrorCode;
 
 pub const GRAPH_BUNDLE_MAX_BYTES: usize = 32 * 1024 * 1024;
-const BUILD_SCHEMA: &str = "wow-service/graph-build-result/13";
 
 pub(super) struct AdmittedBundle {
     pub owner: GraphPartitionSnapshot,
@@ -26,7 +25,7 @@ pub(super) fn admit(bytes: &[u8], stop: &AtomicBool) -> Result<AdmittedBundle, G
     let Value::Object(mut root) = value else {
         return Err(invalid());
     };
-    if root.get("schema").and_then(Value::as_str) != Some(BUILD_SCHEMA)
+    if root.get("schema").and_then(Value::as_str) != Some(super::build::GRAPH_BUILD_RESULT_SCHEMA)
         || root.get("status").and_then(Value::as_str) != Some("partial")
         || root.contains_key("failure")
     {

@@ -45,7 +45,7 @@ launch gates remain open.
 
 `wow graph build` now composes file/load/XML/inheritance/mixin source proposals,
 Main callable/call facts, and independent direct-call and XML script-assignment
-and SavedVariables read/write recognizer partitions. The v7 receipt retains exact source/evidence, skipped-site
+and SavedVariables read/write recognizer partitions. The v14 receipt retains exact source/evidence, skipped-site
 outcomes and final node/edge crosswalks. Inline XML handlers reuse existing syntax
 units; named handlers use concrete Emmy signatures. Method and inherited handler
 associations are Possible, not effective dispatch. The selected TOC seeds
@@ -80,18 +80,18 @@ than a silent skip. The published partitions are projected into node and edge
 crosswalks and bound into `BuiltGraph` and `GraphBuildResult` alongside the existing
 owners.
 
-The frozen E2-B contract declares 26 active rule ids. Nineteen are implemented and
+The frozen E2-B contract declares 26 active rule ids. Twenty-three are implemented and
 published as functional core rule service ids: the core.lua.* triples (create_frame,
 create_from_mixins, mixin_assignment), the eleven signal/hook/library families above and
-the five selected-TOC families described below. The CVar adapter now publishes the
+the five selected-TOC and four XML families described below. The CVar adapter now publishes the
 exact matcher predicates it consumes (`has_cvar_key` and `exact_cvar_key`) and retains
 an exact callback declaration in both fact support and the recognition receipt when
-one resolves; a dynamic callback does not fabricate an endpoint. Four `core.xml.*`
-and three `core.state.*` rules remain. Existing XML/state owners have partial
+one resolves; a dynamic callback does not fabricate an endpoint. Three `core.state.*`
+rules remain. Existing state owners have partial
 source records and earlier consumers; the remaining declarative core adapters
 and their service publication must reuse those owners.
 
-Nineteen published rule ids are not full acceptance. E2 acceptance, the E0
+Twenty-three published rule ids are not full acceptance. E2 acceptance, the E0
 fixtures/identity/checksum gates, real-addon runtime validation, the Ketho parity
 baseline, the complete `apps/wow` CLI surface and coherent ProjectStore publication
 remain open and are NotEvaluated.
@@ -124,12 +124,37 @@ omissions; repeated files do not manufacture an ordering DAG or runtime loading
 claims. Package ownership deduplicates support when the package and TOC file
 share the same whole-file observation.
 
-The source projection profile is `wow-project/source-load-proposals/16`, registry
-version 13; the build result is `wow-service/graph-build-result/13` and request
+The source projection profile is `wow-project/source-load-proposals/17`, registry
+version 14; the build result is `wow-service/graph-build-result/14` and request
 shape remains `/9`. A named-package fixture verifies all five TOC families through
 real project publication, matcher, partition replacement and final crosswalk.
 See [PROJECT_WORK_MAP.md](PROJECT_WORK_MAP.md) for exact local verification and
 the remaining acceptance gates.
+
+## W11 XML core families
+
+The service publishes `core.xml.template`, `core.xml.object`,
+`core.xml.inherits` and `core.xml.script`, all at rule version 1. Object declaration
+and explicit parentage have separate partitions; parentage consumes already
+materialized Object nodes. TOC package/variant ownership precedes these phases.
+Typed `wow-project` records feed data-only shadow packs through the existing
+compiler/matcher, with exact support, bundles, outcomes, receipts and final
+`xml_topology` crosswalks. Default rollout still requires every fixture category.
+
+Explicit ParentOf is parent to child and never inferred from lexical nesting.
+Inherits and ReferencesTemplate preserve separate meanings. Script bindings reuse
+accepted source proposals and the same Emmy lookup session. Source-only Script
+chunks stay analyzed without callback bindings. Missing or ambiguous targets
+remain omissions. Partial captured-structure coverage keeps matcher assertions
+Possible; the Object axis requires explicit IncludePossible traversal. Generic
+XML elements do not certify runtime classes or effective callback dispatch.
+
+Fresh whole-workspace checks, strict Clippy, rustdoc, formatting, native repository
+policy and tests passed on 2026-10-09: 837 passed, 1 ignored, 102 test targets.
+The integration fixture exercises all five publication phases and final IDs,
+explicit versus lexical parentage, confidence filtering, inheritance, named/inline
+handlers, unresolved/ambiguous targets and source-only chunks. This is functional
+pipeline verification; full E2-B and per-rule fixture freeze remain open.
 
 
 ## Explicit graph source read-back

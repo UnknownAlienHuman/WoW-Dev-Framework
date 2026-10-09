@@ -24,7 +24,7 @@ use wow_emmy::{
     LuaWorkspaceUniverse, VIRTUAL_SEMANTIC_PROFILE, VirtualSemanticReport,
 };
 
-pub const XML_LUA_ANALYSIS_PROFILE: &str = "wow-project/xml-lua-semantics/3";
+pub const XML_LUA_ANALYSIS_PROFILE: &str = "wow-project/xml-lua-semantics/4";
 pub const XML_LUA_CONTEXT_POLICY_PROFILE: &str = "wow-project/xml-lua-context-policy/1";
 pub const XML_LUA_EXACT_SCRIPT_SITE: &str = "exact_xml_script_site";
 pub const XML_LUA_IMPLICIT_RECEIVER_NOT_EVALUATED: &str = "not_evaluated_unwrapped_source";
@@ -549,21 +549,35 @@ fn collect_plan(
                 return Err(exhausted());
             }
             let package_name = package.map(|(name, _)| name.to_owned());
+            #[derive(Serialize)]
+            struct UnitIdentity<'a> {
+                generation: ProjectGenerationId,
+                load_profile: &'static str,
+                load_plan_digest: ContentDigest<CanonicalResult>,
+                #[serde(skip_serializing_if = "Option::is_none")]
+                package: Option<&'a str>,
+                document: &'a str,
+                document_digest: ContentDigest<SourceContent>,
+                occurrence: &'a str,
+                extracted_unit: &'a str,
+                parser_profile: &'static str,
+                semantic_profile: &'static str,
+            }
             let unit_id = crate::identity::canonical_id(
                 "project-lua-unit:sha256:",
                 XML_LUA_ANALYSIS_PROFILE,
-                &(
+                &UnitIdentity {
                     generation,
                     load_profile,
                     load_plan_digest,
-                    package_name.as_deref(),
-                    &document,
+                    package: package_name.as_deref(),
+                    document: &document,
                     document_digest,
-                    &element.occurrence_id,
-                    &body.unit_id,
-                    VIRTUAL_SYNTAX_PROFILE,
-                    VIRTUAL_SEMANTIC_PROFILE,
-                ),
+                    occurrence: &element.occurrence_id,
+                    extracted_unit: &body.unit_id,
+                    parser_profile: VIRTUAL_SYNTAX_PROFILE,
+                    semantic_profile: VIRTUAL_SEMANTIC_PROFILE,
+                },
                 ProjectPhase::Analyzer,
             )?;
             let virtual_path = {
@@ -889,19 +903,31 @@ pub(crate) fn finish(
     let semantic_analysis_id = semantic_report
         .as_ref()
         .map(|report| report.analysis_id().to_owned());
+    #[derive(Serialize)]
+    struct AnalysisIdentity<'a> {
+        generation: ProjectGenerationId,
+        load_profile: &'static str,
+        load_plan_digest: ContentDigest<CanonicalResult>,
+        parser_analysis_id: &'a str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        semantic_analysis_id: Option<&'a str>,
+        semantic_state: XmlLuaSemanticState,
+        units: &'a [XmlLuaUnitAnalysis],
+        unresolved: &'a [XmlLuaUnresolvedScript],
+    }
     let analysis_id = crate::identity::canonical_id(
         "project-xml-lua-analysis:sha256:",
         XML_LUA_ANALYSIS_PROFILE,
-        &(
-            prepared.generation,
-            prepared.load_profile,
-            prepared.load_plan_digest,
-            prepared.parser_report.analysis_id(),
-            semantic_analysis_id.as_deref(),
+        &AnalysisIdentity {
+            generation: prepared.generation,
+            load_profile: prepared.load_profile,
+            load_plan_digest: prepared.load_plan_digest,
+            parser_analysis_id: prepared.parser_report.analysis_id(),
+            semantic_analysis_id: semantic_analysis_id.as_deref(),
             semantic_state,
-            &units,
-            &prepared.unresolved,
-        ),
+            units: &units,
+            unresolved: &prepared.unresolved,
+        },
         ProjectPhase::Analyzer,
     )?;
     Ok(ProjectXmlLuaAnalysis {

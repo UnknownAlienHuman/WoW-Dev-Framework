@@ -96,6 +96,37 @@ Partial (NotEvaluated without captured XML), with no negative authority. The
 Ownership axis and ordinary `inherits` subgraphs can inspect these nodes. The
 Inheritance axis also includes the explicit Main mixin links described below.
 
+## Declarative XML core rules
+
+After the TOC families, five service partitions publish four rule IDs:
+`core.xml.template@1`, `core.xml.object@1` (declaration, then parentage),
+`core.xml.inherits@1` and `core.xml.script@1`. They consume retained owner facts
+and accepted preceding nodes through the existing pack compiler/matcher.
+`xml_template`, `xml_object` and `xml_script_site` are structural entities;
+generic XML elements do not certify a runtime Frame or Region class.
+
+An admitted explicit `parent` name produces ParentOf from parent to child.
+Lexical containment remains distinct and cannot create that relation. The Object
+axis binds a versioned MultiParent recipe over ParentOf. Template inheritance
+also retains a separate ReferencesTemplate relation. Missing, ambiguous, cyclic
+or otherwise unsupported references remain exact fact-bound omissions.
+
+Named and inline script handlers reuse accepted source proposals and exact
+analyzer support. Callable lookup requests include XML names in the same Emmy
+session, and the function report retains its constituent lookup report identities.
+Script chunks remain source units without callback bindings. Inline association
+does not infer an implicit receiver or effective runtime dispatch.
+
+Captured XML coverage is Partial, so matcher assertions are Possible even where
+the source binding is Derived. Object traversal must explicitly request
+IncludePossible to follow them. `xml_recognition` retains every normalized bundle,
+matcher outcome and support receipt; `xml_topology` binds them to final graph
+node/edge identities. Full E2-B fixture freeze and acceptance remain open.
+The composite registry still rejects Ownership and Inheritance axis binding
+with AxisProfileInvalid where multiple definitions map to the same stored
+relation enum. Direct graph relations and crosswalks remain available; this
+checkpoint does not widen those axis recipes or choose an arbitrary definition.
+
 ## XML mixin source links
 
 Explicit XML `mixin` entries now reuse the retained XML-to-Lua binding report.
@@ -127,7 +158,7 @@ precedence. Inherited mixins are reached through explicit `Inherits` paths, not
 copied into fabricated transitive `MixesIn` edges. Coverage stays Partial with
 no negative authority; zero mixin entries yield NotEvaluated, not proven absence.
 
-The current source projection profile is 16 (registry version 13), and the
+The current source projection profile is 17 (registry version 14), and the
 graph-build result is v13. Bare retained graph and graph-read formats are unchanged.
 Source review: Gethe `live` resolved to
 `09b9db7948abc9b9648dedaab51eb0cf3ee67b31` on 2026-09-24;
@@ -389,8 +420,8 @@ observed modes and NotEvaluated otherwise; neither is authoritative absence.
 Ordinary `wow check` / `status` retain TOC declarations but do not enable the
 optional semantic graph-access collection.
 
-The source graph projection is `wow-project/source-load-proposals/16`; the graph-build
-result is `wow-service/graph-build-result/13` while the unchanged request shape remains
+The source graph projection is `wow-project/source-load-proposals/17`; the graph-build
+result is `wow-service/graph-build-result/14` while the unchanged request shape remains
 `wow-service/graph-build-request/9`. The optional Emmy call report is v5; existing
 global-access/state-recognizer profiles keep their own versions.
 Typed keys intentionally change state-path identities and the v7 build receipt
@@ -415,11 +446,13 @@ build. The bare-snapshot route remains unchanged. See
 
 ## Artifact and provenance formats
 
-`json` (default) emits `wow-service/graph-build-result/13`: request, status,
+`json` (default) emits `wow-service/graph-build-result/14`: request, status,
 `snapshot`, `file_nodes`, `xml_nodes`, `lua_nodes`, `function_nodes`, `call_edges`,
 `frame_nodes`, `creation_edges`, `handler_nodes`, `script_edges`, `provenance`,
 `call_recognition`, `construction_recognition`, `script_recognition`, `state_nodes`,
 `state_edges`, `state_recognition`, boundaries and canonical digests.
+The receipt also retains `toc_recognition`/`toc_topology` and
+`xml_recognition`/`xml_topology` for the ordered declarative core producers.
 `file_nodes` maps logical source paths to final materialized node IDs, rather than
 producer-input IDs. `provenance` retains the exact project/analyzer snapshot IDs,
 GenerationContext, file manifest, real SourceHandles/EvidenceRecords and optional
@@ -457,8 +490,10 @@ callable scopes and 8,192 call facts; at most 4,096 script sources/inline nodes,
 visits. Source ownership contributes at most one edge per source occurrence.
 State projection admits at most 1,024 declaration entries, 8,192 paths and 8,192
 access sites; each observation carries at most 32 source/evidence references.
-Combined owner ceilings are 33,792 nodes and 74,752 edges (including recognizer
-calls/assignments/state accesses); charged projection text is capped
+Combined capacities include the bounded TOC, XML, Lua, signal, hook, library and
+state producers and are emitted in the exact snapshot limits. The source owner
+calculates them from each producer ceiling; traversal separately admits at most
+100,000 inspected edges. Charged source projection text is capped
 at 4 MiB. The Emmy sidecar separately caps 65,536 callable records/signatures,
 65,536 calls, 65,536 generic global accesses (64 literal-key levels, 1 KiB per
 name/key and 8 MiB of charged access text), 4,096 named callable targets, 2,000,000 AST visits, 256 ancestor steps per scope lookup and 32 MiB

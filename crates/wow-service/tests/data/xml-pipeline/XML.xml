@@ -1,0 +1,29 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+  <Frame name="XmlVirtualTemplate" virtual="true"/>
+  <Frame name="XmlOwnedFrame" virtual="false">
+    <Size x="32" y="32"/>
+    <Scripts><OnLoad function="XmlOwnedFrame.OnLoad"/></Scripts>
+  </Frame>
+  <Button name="XmlChildButton" parent="XmlOwnedFrame" inherits="XmlVirtualTemplate">
+    <Scripts>
+      <OnClick>
+        XmlChildButton.OnClick(self)
+      </OnClick>
+    </Scripts>
+  </Button>
+  <Frame name="XmlNestedTemplate" virtual="true">
+    <Frames>
+      <Frame parentKey="LexicalChild"/>
+    </Frames>
+  </Frame>
+  <Button name="XmlUnresolvedScript">
+    <Scripts>
+      <OnEnter function="XmlMissingHandler.OnEnter"/>
+    </Scripts>
+  </Button>
+  <Button name="XmlInheritsUnresolved" inherits="XmlAbsentTemplate"/>
+  <Frame name="XmlAmbiguousTemplate" virtual="true"/>
+  <Frame name="XmlAmbiguousTemplate" virtual="true"/>
+  <Frame name="XmlAmbiguousConsumer" inherits="XmlAmbiguousTemplate"/>
+  <Script>local source_only = true</Script>
+</Ui>

@@ -746,6 +746,125 @@ fn source_graph_materializes_with_a_bounded_query_budget() -> TestResult {
 }
 
 #[test]
+fn xml_facts_keep_explicit_parent_and_lexical_containment_with_exact_support() -> TestResult {
+    use wow_project::graph::ProjectXmlFactKind;
+    use wow_project::load::xml_references::XmlReferenceResolution;
+    let stop = std::sync::atomic::AtomicBool::new(false);
+    let directory = wow_project::disk::ProjectInputDirectory::open(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/xml-facts"),
+    )?;
+    let (files, plan) = directory
+        .read_toc_project(
+            ".",
+            &wow_project::disk::ProjectDiskFile::new("Fixture.toc"),
+            &fixture_profile()?,
+            &stop,
+        )?
+        .into_parts();
+    let config = configuration_with_load(
+        ProjectCapabilityPolicy::strict_e0()?,
+        ProjectBudgetPolicy::fixture_e0()?,
+        Some(&plan),
+    )?;
+    let mut publisher = ProjectPublisher::with_function_call_facts();
+    publisher.publish_initial(bundle(config, files, false)?)?;
+    let (registry, batch, coverage, provenance, limits) =
+        wow_project::graph::build_source_graph_proposals(&publisher.open_current()?, &stop)?
+            .into_parts();
+    let find = |name: &str| {
+        provenance
+            .xml_facts()
+            .iter()
+            .find(|fact| {
+                matches!(
+                    &fact.kind, ProjectXmlFactKind::Declaration { declaration, .. }
+                        if declaration.name.as_deref() == Some(name)
+                )
+            })
+            .ok_or_else(|| test_error("missing XML declaration"))
+    };
+    let child = find("Child")?;
+    let parent = find("Parent")?;
+    let lexical = find("LexicalChild")?;
+    let parent_refs = provenance
+        .xml_facts()
+        .iter()
+        .filter(|fact| matches!(fact.kind, ProjectXmlFactKind::Parent { .. }))
+        .collect::<Vec<_>>();
+    assert_eq!(parent_refs.len(), 1);
+    assert_eq!(parent_refs[0].occurrence_id, child.occurrence_id);
+    assert!(matches!(&parent_refs[0].kind, ProjectXmlFactKind::Parent {
+        target_occurrence_id: Some(target),
+        resolution: XmlReferenceResolution::UniqueLocalDeclaration { declaration_id }, ..
+    } if target == &parent.occurrence_id && target == declaration_id));
+    assert!(
+        provenance
+            .xml_containment()
+            .iter()
+            .any(|record| record.occurrence_id == lexical.occurrence_id
+                && record.parent_occurrence_id.is_some())
+    );
+    assert!(
+        provenance
+            .xml_facts()
+            .iter()
+            .any(|fact| matches!(&fact.kind,
+        ProjectXmlFactKind::InheritanceUnresolved { name, .. } if name == "MissingTemplate"))
+    );
+    for fact in provenance.xml_facts() {
+        let handle = &provenance.source_handles()[&fact.source_handle_id];
+        assert_eq!(fact.context_id, provenance.context().context_id());
+        assert_eq!(handle.span(), fact.span);
+        assert_eq!(handle.content_digest(), &fact.content_digest);
+        assert_eq!(
+            provenance.evidence()[&fact.evidence_id].source_handle_ids(),
+            [fact.source_handle_id]
+        );
+    }
+    assert!(
+        provenance
+            .script_bindings()
+            .iter()
+            .any(|binding| binding.handler_kind == "lua_source_function"
+                && binding.semantic_context.is_none()),
+        "script sites: {:?}; callable targets: {:?}",
+        provenance.script_sites(),
+        provenance
+            .function_call_report()
+            .map(|report| report.named_targets())
+    );
+    assert!(provenance.script_sites().iter().any(|site|
+        site.consumer_id.is_none() && site.blockers.contains(&"owner_not_captured")));
+    wow_core::canonical_json_bytes(&provenance)?;
+    let foundation = wow_graph::GraphSnapshot::build(
+        batch.universe().clone(),
+        batch.generation().clone(),
+        limits,
+        Vec::new(),
+        Vec::new(),
+        coverage.clone(),
+    )?;
+    let owner = wow_graph::GraphPartitionSnapshot::new(
+        registry,
+        foundation,
+        batch.source_context_id(),
+        &stop,
+    )?;
+    let replacement = owner.prepare_replacement(
+        wow_graph::GraphPartitionReplacement {
+            expected_snapshot_id: owner.snapshot().snapshot_id().clone(),
+            expected_partition_digest: None,
+            producer_version: env!("CARGO_PKG_VERSION").into(),
+            batch,
+            coverage,
+        },
+        &stop,
+    )?;
+    replacement.candidate().validate(&stop)?;
+    Ok(())
+}
+
+#[test]
 fn toc_facts_retain_normalized_conditions_occurrences_and_exact_support() -> TestResult {
     use std::collections::BTreeMap;
     use wow_project::graph::ProjectTocFactKind;

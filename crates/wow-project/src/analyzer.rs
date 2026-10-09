@@ -300,10 +300,16 @@ pub(crate) fn build_analyzer_binding(
         .map(|p| p.queries())
         .unwrap_or_default();
     let callable_queries = if function_calls {
-        CORE_RECOGNIZER_CALLABLE_QUERIES
+        // XML symbol lookup and callable ownership must use the same admitted
+        // query set and analyzer session. A resolved name alone is not a handler.
+        let mut queries_to_resolve = CORE_RECOGNIZER_CALLABLE_QUERIES
             .iter()
             .map(|query| (*query).to_owned())
-            .collect::<Vec<_>>()
+            .collect::<Vec<_>>();
+        queries_to_resolve.extend(queries.iter().cloned());
+        queries_to_resolve.sort();
+        queries_to_resolve.dedup();
+        queries_to_resolve
     } else {
         Vec::new()
     };

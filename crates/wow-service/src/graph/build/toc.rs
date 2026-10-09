@@ -197,65 +197,13 @@ pub(super) fn publish(
     Ok((snapshot, recognitions))
 }
 
-fn materialized_edge_id(
-    snapshot: &GraphPartitionSnapshot,
-    partition_id: &str,
-    proposal_id: &str,
-    nodes: &std::collections::BTreeMap<wow_graph::GraphNodeId, wow_graph::GraphNodeId>,
-) -> ServiceResult<wow_graph::GraphEdgeId> {
-    let partition = snapshot
-        .partition(partition_id)
-        .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?;
-    let accepted = partition.report().accepted_relations();
-    let index = accepted
-        .binary_search_by(|entry| entry.proposal_id().cmp(proposal_id))
-        .map_err(|_| error(ServiceErrorCode::InternalContractViolation))?;
-    let original = accepted[index].edge();
-    let edge = wow_graph::GraphEdge::new(
-        nodes
-            .get(original.from())
-            .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?
-            .clone(),
-        nodes
-            .get(original.to())
-            .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?
-            .clone(),
-        original.relation(),
-        original.confidence(),
-        original.evidence_ids().to_vec(),
-        snapshot.snapshot().limits(),
-    )
-    .map_err(graph_error)?;
-    if snapshot.snapshot().edge(edge.edge_id()).is_none() {
-        return Err(error(ServiceErrorCode::InternalContractViolation));
-    }
-    Ok(edge.edge_id().clone())
-}
-
 pub(super) fn maps(
     snapshot: &GraphPartitionSnapshot,
     recognitions: &[SourceTocRecognition],
     stop: &AtomicBool,
 ) -> ServiceResult<TocTopology> {
     let limits = snapshot.snapshot().limits();
-    let input = snapshot.input_view(stop).map_err(graph_error)?;
-    let mut nodes = std::collections::BTreeMap::new();
-    for original in input.nodes() {
-        checkpoint(stop)?;
-        let rebound = wow_graph::GraphNode::new(
-            snapshot.snapshot().universe().clone(),
-            snapshot.snapshot().generation().clone(),
-            original.kind(),
-            original.owner_key(),
-            original.evidence_ids().to_vec(),
-            limits,
-        )
-        .map_err(graph_error)?;
-        if snapshot.snapshot().node(rebound.node_id()).is_none() {
-            return Err(error(ServiceErrorCode::InternalContractViolation));
-        }
-        nodes.insert(original.node_id().clone(), rebound.node_id().clone());
-    }
+    let nodes = super::materialized::nodes(snapshot, stop)?;
     let mut topology = TocTopology::default();
     for recognition in recognitions {
         let rule_id = recognition.family.rule_id().to_owned();
@@ -273,7 +221,8 @@ pub(super) fn maps(
                 });
             }
             for proposal_id in &receipt.relation_proposal_ids {
-                let edge_id = materialized_edge_id(snapshot, partition_id, proposal_id, &nodes)?;
+                let edge_id =
+                    super::materialized::edge_id(snapshot, partition_id, proposal_id, &nodes)?;
                 let edge = snapshot
                     .snapshot()
                     .edge(&edge_id)

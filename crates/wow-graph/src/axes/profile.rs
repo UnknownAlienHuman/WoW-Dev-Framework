@@ -8,6 +8,9 @@ pub const GRAPH_AXIS_PROFILE_SCHEMA: &str = "wow-graph/axis-profile/e2-a/1";
 /// changes any v1 profile, digest or stored assertion identity.
 pub const GRAPH_AXIS_PROFILE_SCHEMA_V2: &str = "wow-graph/axis-profile/e2-a/2";
 
+/// Object parentage has its own recipe; it never aliases lexical containment.
+pub const GRAPH_AXIS_PROFILE_SCHEMA_V3: &str = "wow-graph/axis-profile/e2-a/3";
+
 /// Repository-owned query meanings, not executable or source-defined predicates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -96,11 +99,13 @@ impl GraphAxisProfile {
         }
         // The recipe follows the registry alone. Binding and reconstruction
         // therefore derive the same schema and families, and neither a request
-        // nor a deserialized profile can choose a different Load review.
+        // nor a deserialized profile can choose a different axis recipe.
         relations.sort_by_key(|s| s.relation);
         let cycle_policy: Box<str> = "preserve_edges_with_visited_nodes".into();
         let ordering: Box<str> = "multi_root_bfs_node_then_edge_id/1".into();
-        let schema = if axis == GraphAxis::Load && matches!(load_recipe(registry), LoadRecipe::V2) {
+        let schema = if axis == GraphAxis::Object {
+            GRAPH_AXIS_PROFILE_SCHEMA_V3
+        } else if axis == GraphAxis::Load && matches!(load_recipe(registry), LoadRecipe::V2) {
             GRAPH_AXIS_PROFILE_SCHEMA_V2
         } else {
             GRAPH_AXIS_PROFILE_SCHEMA
@@ -174,16 +179,17 @@ fn families(
     // The Load family set is derived from the exact registry, so binding and
     // validation always agree and no caller can select a recipe.
     let shape = match axis {
-        GraphAxis::Ownership | GraphAxis::Inheritance => GraphAxisShape::MultiParent,
+        GraphAxis::Ownership | GraphAxis::Inheritance | GraphAxis::Object => {
+            GraphAxisShape::MultiParent
+        }
         _ => GraphAxisShape::DirectedNetwork,
     };
     let families = match axis {
-        // Neither lexical contains/declares nor object parent_of is representable
-        // in the current closed GraphRelationKind schema. Do not alias owns or
-        // factory_creates into those distinct semantics.
-        GraphAxis::Lexical | GraphAxis::Object => {
+        // Lexical containment remains outside this reviewed axis recipe.
+        GraphAxis::Lexical => {
             return Err(error(GraphErrorCode::AxisUnsupported));
         }
+        GraphAxis::Object => vec![(ParentOf, Forward)],
         GraphAxis::Ownership => vec![(Owns, Forward)],
         GraphAxis::Load => match load_recipe(registry) {
             LoadRecipe::V1 => vec![(Loads, Forward), (DependsOn, Reverse)],

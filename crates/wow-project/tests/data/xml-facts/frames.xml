@@ -1,0 +1,10 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+  <Frame name="Template" virtual="true"/>
+  <Frame name="Parent" virtual="false"/>
+  <Frame name="Child" virtual="false" parent="Parent" inherits="Template">
+    <Frames><Frame name="LexicalChild" virtual="false"/></Frames>
+    <Scripts><OnLoad function="NamedHandler"/></Scripts>
+  </Frame>
+  <Frame name="Unresolved" inherits="MissingTemplate"/>
+  <Script>local source_only = true</Script>
+</Ui>

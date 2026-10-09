@@ -105,6 +105,10 @@ pub enum GraphRelationKind {
     Loads,
     LoadsBefore,
     Inherits,
+    /// Explicit resolved parentage on the object/XML axis.
+    ParentOf,
+    /// Exact static reference to an admitted template declaration.
+    ReferencesTemplate,
     MixesIn,
     Instantiates,
     FactoryCreates,

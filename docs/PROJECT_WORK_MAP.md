@@ -12,13 +12,13 @@ in `main`, with bounded owner responsibilities and verified remote publication.
 
 ## Current functional checkpoint
 
-W11 has 19 of 26 declared core rule IDs in its service publication path. The
-five TOC families now publish through the service alongside the earlier W11
-families; seven rules remain, being four XML and three state. Existing
+W11 has 23 of 26 declared core rule IDs in its service publication path. The
+five TOC and four XML families now publish through the service alongside the earlier W11
+families; three state rules remain. Existing
 TOC/XML/load/analyzer owners supply the records; recognizers
 must consume typed facts rather than parsing source again.
 
-The active TOC slice has three responsibilities:
+The completed TOC slice has three responsibilities:
 
 | Owner | Responsibility | Current state |
 |---|---|---|
@@ -45,6 +45,23 @@ Loads, DependsOn, LoadsBefore and OptionalDependsOn for an extended registry.
 It still rejects ambiguous registered definition IDs rather than silently
 narrowing an axis.
 
+The XML slice consumes retained declaration, explicit parent, inheritance and
+script facts. Five ordered partitions implement four unique rule IDs:
+`core.xml.template`, `core.xml.object` (declaration and parentage phases),
+`core.xml.inherits` and `core.xml.script`. Object parentage reads materialized
+Object nodes; TOC publication supplies package/variant ownership first. Each
+evaluation retains its normalized fact bundle, matcher output and exact receipts.
+The final `xml_topology` crosswalk reads materialized node/edge identities.
+
+Explicit `ParentOf` runs parent to child; lexical nesting cannot manufacture it.
+The Object axis uses a versioned MultiParent recipe. `Inherits` and
+`ReferencesTemplate` retain distinct relations. Named and inline handlers reuse
+the same Emmy session and exact source support; unresolved and ambiguous targets
+remain omissions. Script chunks remain analyzed source units without callback
+bindings. Captured XML coverage stays Partial, so matcher outputs remain Possible;
+Object traversal requires `IncludePossible` to follow these edges. No runtime
+frame class, implicit receiver, effective dispatch or negative authority follows.
+
 The source-graph query-budget defect is repaired in the starting checkpoint and
 has a local executable regression: graph
 capacity and traversal budget are now separate, so source graph construction
@@ -57,7 +74,7 @@ full graph acceptance and the checkpoint's CI conclusions remain open.
 
 | Queue / reference | Next responsibility | Boundary |
 |---|---|---|
-| [W11 / PR 102](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/102) | TOC, XML, state facts/rules and application crosswalk closure | Full E2-B acceptance remains open |
+| [W11 / PR 102](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/102) | Three state core rules and application crosswalk closure | TOC/XML functional paths verified; full E2-B acceptance remains open |
 | [Issue 103](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/103) | Executable structural mutations and admitted per-rule fixtures | After functional implementation; frozen fixtures are not rewritten by tests |
 | [W12 / PR 80](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/80) | Conflict retention and complete derivation explanations | Existing graph query code is reused |
 | [W13 / PR 81](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/81) | Coherent live ProjectView/GraphView publication | A graph-only retained snapshot is insufficient |
@@ -77,10 +94,11 @@ Specification PRs supply scope, not evidence that code is implemented.
 The current local compiler is Rust 1.99.0, observed on 2026-10-09. Native repository
 policy checks also passed at the recorded native policy checkpoint.
 
-The TOC checkpoint was verified with whole-workspace `cargo check --locked
+The XML checkpoint was verified with whole-workspace `cargo check --locked
 --all-targets --all-features`, strict Clippy under `-D warnings`,
 `RUSTDOCFLAGS="-D warnings" cargo doc`, `cargo fmt --all --check`,
-and the full workspace test suite: 835 passed, 1 ignored, across 102 test targets.
+`cargo xtask check` and the full workspace test suite: 837 passed, 1 ignored,
+across 102 test targets. Native policy checked 1,391 distributable files.
 
 The single ignored test is `both_consumers_interpret_generated_library`. It
 requires two explicitly approved consumer executables, so it stays ignored rather than
@@ -94,9 +112,13 @@ replacement and the final node/edge crosswalk, including repeated LoadOnDemand a
 SavedVariable support. That is a functional path over fixture and synthetic project
 inputs, not package acceptance.
 
-The source-graph projection profile is `wow-project/source-load-proposals/16`
-(registry version 13),
-the graph-build result is `wow-service/graph-build-result/13`, and the unchanged
+The XML pipeline additionally verifies explicit versus lexical parentage, Object
+traversal confidence filtering, inheritance/template references, exact named and
+inline handler bindings, unresolved/ambiguous omissions and source-only chunks.
+
+The source-graph projection profile is `wow-project/source-load-proposals/17`
+(registry version 14),
+the graph-build result is `wow-service/graph-build-result/14`, and the unchanged
 request shape is `wow-service/graph-build-request/9`. Existing retained graphs and
 graph-read request formats are unchanged.
 

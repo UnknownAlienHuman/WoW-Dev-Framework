@@ -16,12 +16,16 @@ use wow_project::graph::{
 mod calls;
 mod construction;
 mod lua_mixins;
+mod materialized;
 mod scripts;
 mod signals;
 mod state;
 mod toc;
 #[cfg(test)]
 mod toc_tests;
+mod xml;
+#[cfg(test)]
+mod xml_tests;
 use calls::{CallEdge, FunctionNode};
 use construction::{CreationEdge, FrameNode};
 use lua_mixins::{
@@ -36,6 +40,7 @@ use wow_recognizers::source_scripts::SourceScriptRecognition;
 use wow_recognizers::source_state::SourceStateRecognition;
 
 const MAX_BUNDLE_BYTES: usize = 32 * 1024 * 1024;
+pub(super) const GRAPH_BUILD_RESULT_SCHEMA: &str = "wow-service/graph-build-result/14";
 
 struct BuiltGraph {
     snapshot: GraphPartitionSnapshot,
@@ -76,6 +81,8 @@ struct BuiltGraph {
     signal_edges: Vec<signals::SignalEdge>,
     toc_recognition: Vec<wow_recognizers::source_toc::SourceTocRecognition>,
     toc_topology: toc::TocTopology,
+    xml_recognition: Vec<wow_recognizers::source_xml::SourceXmlRecognition>,
+    xml_topology: xml::XmlTopology,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -207,6 +214,8 @@ pub struct GraphBuildResult {
     signal_edges: Vec<signals::SignalEdge>,
     toc_recognition: Vec<wow_recognizers::source_toc::SourceTocRecognition>,
     toc_topology: toc::TocTopology,
+    xml_recognition: Vec<wow_recognizers::source_xml::SourceXmlRecognition>,
+    xml_topology: xml::XmlTopology,
     #[serde(skip_serializing_if = "Option::is_none")]
     snapshot: Option<GraphPartitionSnapshot>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -278,6 +287,8 @@ impl GraphBuildResult {
         self.state_edges.clear();
         self.toc_recognition.clear();
         self.toc_topology = toc::TocTopology::default();
+        self.xml_recognition.clear();
+        self.xml_topology = xml::XmlTopology::default();
         self.signal_recognition = None;
         self.bridge_recognition = None;
         self.custom_recognition = None;
@@ -317,7 +328,7 @@ pub fn execute_graph_build(
 ) -> ServiceResult<GraphBuildResult> {
     let request_digest = super::hash(&bounded(request, super::GRAPH_REQUEST_MAX_BYTES)?);
     let mut result = GraphBuildResult {
-        schema: "wow-service/graph-build-result/13",
+        schema: GRAPH_BUILD_RESULT_SCHEMA,
         request: request.clone(),
         request_digest,
         status: GraphReadStatus::Partial,
@@ -352,6 +363,8 @@ pub fn execute_graph_build(
         signal_edges: Vec::new(),
         toc_recognition: Vec::new(),
         toc_topology: toc::TocTopology::default(),
+        xml_recognition: Vec::new(),
+        xml_topology: xml::XmlTopology::default(),
         state_nodes: StateNodes::empty(),
         state_edges: Vec::new(),
         handler_nodes: Vec::new(),
@@ -422,6 +435,8 @@ pub fn execute_graph_build(
             signal_edges,
             toc_recognition,
             toc_topology,
+            xml_recognition,
+            xml_topology,
             handler_nodes,
             script_edges,
         }) => {
@@ -458,6 +473,8 @@ pub fn execute_graph_build(
             result.signal_edges = signal_edges;
             result.toc_recognition = toc_recognition;
             result.toc_topology = toc_topology;
+            result.xml_recognition = xml_recognition;
+            result.xml_topology = xml_topology;
             result.handler_nodes = handler_nodes;
             result.script_edges = script_edges;
             result.snapshot = Some(snapshot);
@@ -543,7 +560,9 @@ fn compose(
         library_recognition,
     ) = signals::publish_signals(&snapshot, &provenance, stop)?;
     let (snapshot, toc_recognition) = toc::publish(&snapshot, &provenance, stop)?;
+    let (snapshot, xml_recognition) = xml::publish(&snapshot, &provenance, stop)?;
     let toc_topology = toc::maps(&snapshot, &toc_recognition, stop)?;
+    let xml_topology = xml::maps(&snapshot, &xml_recognition, stop)?;
     let (state_nodes, state_edges) = state::maps(&snapshot, &provenance, &state_recognition, stop)?;
     let signal_topology = signals::maps(
         &snapshot,
@@ -709,6 +728,8 @@ fn compose(
         signal_edges,
         toc_recognition,
         toc_topology,
+        xml_recognition,
+        xml_topology,
         hook_recognition,
         library_recognition,
         handler_nodes,

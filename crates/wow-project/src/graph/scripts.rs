@@ -137,10 +137,14 @@ pub(super) fn project(
         return Ok(output);
     };
     let xml_bindings = analyzer.xml_bindings();
-    if functions.symbol_lookup_analysis_id()
-        != xml_bindings
-            .and_then(|b| b.symbol_lookup())
-            .map(|r| r.analysis_id())
+    if xml_bindings
+        .and_then(|b| b.symbol_lookup())
+        .is_some_and(|report| {
+            !functions
+                .symbol_lookup_analysis_ids()
+                .iter()
+                .any(|id| id == report.analysis_id())
+        })
     {
         return Err(invalid());
     }
@@ -236,10 +240,13 @@ pub(super) fn project(
         .map(|f| (f.path.as_str(), f))
         .collect::<BTreeMap<_, _>>();
     for (document, index) in plan.xml_documents() {
-        for element in index
-            .scripts()
-            .filter(|e| e.ui_namespace && e.role == XmlElementRole::ScriptBinding)
-        {
+        for element in index.scripts().filter(|e| {
+            e.ui_namespace
+                && matches!(
+                    e.role,
+                    XmlElementRole::ScriptBinding | XmlElementRole::Script
+                )
+        }) {
             crate::analyzer::checkpoint(stop)?;
             if sources.len() >= MAX_HANDLERS {
                 return Err(exhausted());
@@ -283,7 +290,10 @@ pub(super) fn project(
             {
                 return Err(invalid());
             }
-            if script.source_kind == XmlScriptSource::InlineBody && element.issues.is_empty() {
+            if element.role == XmlElementRole::ScriptBinding
+                && script.source_kind == XmlScriptSource::InlineBody
+                && element.issues.is_empty()
+            {
                 let unit = parsed
                     .get(element.occurrence_id.as_str())
                     .ok_or_else(invalid)?;
@@ -394,7 +404,12 @@ pub(super) fn project(
             Site {
                 source,
                 element: elements[source.script_id.as_str()],
-                consumer: source.declaring_owner_id.as_deref(),
+                // Script chunks have lexical owners but no callback receiver.
+                // Keep raw ownership and the parsed unit in their source reports.
+                consumer: source
+                    .declaring_owner_id
+                    .as_deref()
+                    .filter(|_| elements[source.script_id.as_str()].role != XmlElementRole::Script),
                 inherited: false,
                 complete: true,
             },
@@ -453,9 +468,20 @@ fn collect_site(
     if provenance.script_sites.len() >= MAX_SITES {
         return Err(exhausted());
     }
+    #[derive(Serialize)]
+    struct SiteIdentity<'a> {
+        script_id: &'a str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        consumer: Option<&'a str>,
+        inherited: bool,
+    }
     let digest = crate::identity::canonical_digest(
-        "wow-project/xml-script-site/1",
-        &(&site.source.script_id, site.consumer, site.inherited),
+        "wow-project/xml-script-site/2",
+        &SiteIdentity {
+            script_id: &site.source.script_id,
+            consumer: site.consumer,
+            inherited: site.inherited,
+        },
         ProjectPhase::View,
     )?;
     let mut receipt = ProjectGraphScriptSite {
@@ -683,15 +709,24 @@ fn add_binding(
             })
             + 768,
     )?;
+    #[derive(Serialize)]
+    struct BindingIdentity<'a> {
+        site_id: &'a str,
+        receiver: &'a str,
+        handler: &'a str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        semantic_context: Option<&'a crate::xml_lua::XmlLuaSemanticContext>,
+        confidence: GraphConfidence,
+    }
     let digest = crate::identity::canonical_digest(
-        "wow-project/xml-script-binding/2",
-        &(
-            &receipt.site_id,
-            &receiver.proposal,
-            &handler.proposal,
-            &semantic_context,
+        "wow-project/xml-script-binding/3",
+        &BindingIdentity {
+            site_id: &receipt.site_id,
+            receiver: &receiver.proposal,
+            handler: &handler.proposal,
+            semantic_context: semantic_context.as_ref(),
             confidence,
-        ),
+        },
         ProjectPhase::View,
     )?;
     let binding_id = format!("xml-script-binding:{digest}");

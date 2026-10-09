@@ -16,7 +16,7 @@ use crate::references::{
 };
 use crate::{EmmyBackendIdentity, LuaWorkspaceFile, LuaWorkspaceSnapshot};
 
-pub const FUNCTION_CALL_PROFILE: &str = "wow-emmy/function-call-facts/6";
+pub const FUNCTION_CALL_PROFILE: &str = "wow-emmy/function-call-facts/7";
 // Existing callable/call occurrence keys keep their original recipe. Added
 // normalized call arguments/callable keys change report identity, not old occurrence keys.
 const OCCURRENCE_PROFILE: &str = "wow-emmy/function-call-facts/1";
@@ -202,6 +202,8 @@ pub struct FunctionCallReport {
     named_targets: BTreeMap<String, SourceCallTarget>,
     #[serde(skip_serializing_if = "Option::is_none")]
     symbol_lookup_analysis_id: Option<String>,
+    /// Exact reports that contributed callable lookups in this semantic session.
+    symbol_lookup_analysis_ids: Vec<String>,
     analysis_id: String,
 }
 impl FunctionCallReport {
@@ -266,6 +268,9 @@ impl FunctionCallReport {
     pub fn symbol_lookup_analysis_id(&self) -> Option<&str> {
         self.symbol_lookup_analysis_id.as_deref()
     }
+    pub fn symbol_lookup_analysis_ids(&self) -> &[String] {
+        &self.symbol_lookup_analysis_ids
+    }
     pub fn source_health_complete(&self) -> bool {
         self.files.iter().all(|file| file.parse_error_count == 0)
     }
@@ -283,12 +288,20 @@ impl FunctionCallReport {
                 &self.global_accesses,
                 &self.named_targets,
                 self.symbol_lookup_analysis_id.as_slice(),
+                &self.symbol_lookup_analysis_ids,
             ),
         )
     }
     pub fn validate(&self) -> EmmyMemberCallResult<()> {
+        let lookup_ids = self
+            .symbol_lookup_analysis_ids
+            .iter()
+            .map(String::as_str)
+            .collect::<Vec<_>>();
+        let expected_lookup_id = lookup_identity(&self.main_snapshot_id, &lookup_ids)?;
         if self.profile != FUNCTION_CALL_PROFILE
             || self.identity()? != self.analysis_id
+            || self.symbol_lookup_analysis_id != expected_lookup_id
             || self.functions.len() > MAX_FUNCTIONS
             || self.calls.len() > MAX_CALLS
             || self.global_accesses.len() > crate::global_access::MAX_ACCESSES
@@ -596,7 +609,7 @@ pub(crate) fn collect(
     main_root: &Path,
     libraries: &[(&LuaWorkspaceSnapshot, PathBuf)],
     callable_signatures: &BTreeMap<String, LuaSignatureId>,
-    symbol_lookup_analysis_id: Option<&str>,
+    symbol_lookup_analysis_ids: &[&str],
     stop: &AtomicBool,
 ) -> EmmyMemberCallResult<FunctionCallReport> {
     let mut signatures = HashMap::new();
@@ -911,7 +924,11 @@ pub(crate) fn collect(
         calls,
         global_accesses,
         named_targets,
-        symbol_lookup_analysis_id: symbol_lookup_analysis_id.map(str::to_owned),
+        symbol_lookup_analysis_id: lookup_identity(main.snapshot_id(), symbol_lookup_analysis_ids)?,
+        symbol_lookup_analysis_ids: symbol_lookup_analysis_ids
+            .iter()
+            .map(|id| (*id).to_owned())
+            .collect(),
         analysis_id: String::new(),
     };
     struct Count(usize);
@@ -933,4 +950,18 @@ pub(crate) fn collect(
     report.validate()?;
     checkpoint(stop)?;
     Ok(report)
+}
+
+fn lookup_identity(main: &str, ids: &[&str]) -> EmmyMemberCallResult<Option<String>> {
+    if ids.len() > 2
+        || ids.windows(2).any(|pair| pair[0] >= pair[1])
+        || ids.iter().any(|id| id.is_empty() || id.len() > 1024)
+    {
+        return Err(invalid());
+    }
+    if ids.is_empty() {
+        Ok(None)
+    } else {
+        canonical_id("emmy-function-call-lookups:sha256:", &(main, ids)).map(Some)
+    }
 }

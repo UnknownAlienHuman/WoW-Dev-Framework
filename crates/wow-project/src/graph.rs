@@ -6,6 +6,8 @@ mod retained_evidence;
 mod source_read;
 mod toc_facts;
 mod toc_registry;
+mod xml_facts;
+mod xml_registry;
 pub use retained_evidence::RetainedProjectGraphEvidence;
 pub use source_read::{
     ProjectSourceExcerpt, ProjectSourceExcerptStatus, ProjectSourceFileRead,
@@ -13,6 +15,10 @@ pub use source_read::{
     ProjectSourceReadTruncation, RetainedProjectSourceManifest,
 };
 pub use toc_facts::{PROJECT_TOC_FACT_PROFILE, ProjectTocFact, ProjectTocFactKind};
+pub use xml_facts::{
+    PROJECT_XML_FACT_PROFILE, ProjectXmlContainment, ProjectXmlFact,
+    ProjectXmlFactDeclarationState, ProjectXmlFactKind, ProjectXmlFactScope,
+};
 mod state;
 pub use state::{
     ProjectGraphStateBinding, ProjectGraphStateDeclaration, ProjectGraphStateOutcome,
@@ -58,7 +64,7 @@ use crate::{
     ProjectError, ProjectErrorCode, ProjectKind, ProjectPhase, ProjectResult, ProjectView,
 };
 
-pub const SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/16";
+pub const SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/17";
 pub const SOURCE_GRAPH_PARTITION: &str = "wow-project.source-load";
 const MAX_FILES: usize = 4096;
 const MAX_LOADS: usize = 8192;
@@ -67,6 +73,11 @@ const MAX_RECOGNIZER_NODES: usize = functions::MAX_CALLS * 2;
 const MAX_SIGNAL_RELATION_EDGES: usize = 131072;
 const MAX_RECOGNIZER_EDGES: usize = functions::MAX_CALLS * 19 + MAX_SIGNAL_RELATION_EDGES;
 const MAX_MIXIN_ASSIGNMENT_EDGES: usize = 65_536;
+const MAX_XML_RECOGNIZER_NODES: usize = xml::MAX_DECLARATIONS + scripts::MAX_HANDLERS;
+const MAX_XML_RECOGNIZER_EDGES: usize = xml::MAX_DECLARATIONS * 3
+    + xml::MAX_INHERITANCE_REFERENCES * 2
+    + scripts::MAX_HANDLERS * 2
+    + scripts::MAX_BINDINGS * 3;
 const MAX_NODES: usize = MAX_FILES
     + packages::MAX_PACKAGE_NODES
     + xml::MAX_DECLARATIONS
@@ -76,6 +87,7 @@ const MAX_NODES: usize = MAX_FILES
     + state::MAX_ROOTS
     + state::MAX_PATHS
     + MAX_RECOGNIZER_NODES
+    + MAX_XML_RECOGNIZER_NODES
     + (packages::MAX_PACKAGE_NODES + 1) * 4;
 
 const MAX_EDGES: usize = MAX_LOADS
@@ -87,6 +99,7 @@ const MAX_EDGES: usize = MAX_LOADS
     + functions::MAX_FUNCTIONS
     + MAX_RECOGNIZER_EDGES
     + MAX_MIXIN_ASSIGNMENT_EDGES
+    + MAX_XML_RECOGNIZER_EDGES
     + scripts::MAX_HANDLERS
     + scripts::MAX_BINDINGS
     + state::MAX_ROOTS
@@ -119,6 +132,8 @@ pub struct ProjectGraphProvenance {
     package_dependencies: Vec<ProjectGraphPackageDependency>,
     package_loads: Vec<ProjectGraphPackageLoad>,
     toc_facts: Vec<ProjectTocFact>,
+    xml_facts: Vec<ProjectXmlFact>,
+    xml_containment: Vec<ProjectXmlContainment>,
     xml_declarations: Vec<ProjectGraphXmlDeclaration>,
     xml_inheritance: Vec<ProjectGraphXmlReference>,
     lua_declarations: Vec<ProjectGraphLuaDeclaration>,
@@ -155,6 +170,12 @@ pub struct ProjectGraphProvenance {
 impl ProjectGraphProvenance {
     pub fn toc_facts(&self) -> &[ProjectTocFact] {
         &self.toc_facts
+    }
+    pub fn xml_facts(&self) -> &[ProjectXmlFact] {
+        &self.xml_facts
+    }
+    pub fn xml_containment(&self) -> &[ProjectXmlContainment] {
+        &self.xml_containment
     }
     #[must_use]
     pub fn packages(&self) -> &[ProjectGraphPackage] {
@@ -462,7 +483,11 @@ fn registry() -> ProjectResult<GraphRegistryBundle> {
     let handler = GraphEntityKindDefinition::new(
         "xml_source_handler",
         vec!["project".into()],
-        vec!["document".into(), "occurrence".into()],
+        vec![
+            "document".into(),
+            "occurrence".into(),
+            "semantic_context_id".into(),
+        ],
         vec![GraphConfidence::Derived],
     )
     .map_err(|_| invalid())?;
@@ -643,7 +668,8 @@ fn registry() -> ProjectResult<GraphRegistryBundle> {
         library,
     ];
     toc_registry::extend(&mut entities, &mut relations)?;
-    GraphRegistryBundle::build("wow-project.source-load", "13", entities, relations)
+    xml_registry::extend(&mut entities, &mut relations)?;
+    GraphRegistryBundle::build("wow-project.source-load", "14", entities, relations)
         .map_err(|_| invalid())
 }
 
@@ -872,6 +898,8 @@ pub fn build_source_graph_proposals(
         package_dependencies: Vec::new(),
         package_loads: Vec::new(),
         toc_facts: Vec::new(),
+        xml_facts: Vec::new(),
+        xml_containment: Vec::new(),
         xml_declarations: Vec::new(),
         xml_inheritance: Vec::new(),
         lua_declarations: Vec::new(),
@@ -1027,6 +1055,10 @@ pub fn build_source_graph_proposals(
         &mut text_bytes,
         stop,
     )?;
+    let (xml_facts, xml_containment) =
+        xml_facts::project(project, &mut provenance, &mut text_bytes, stop)?;
+    provenance.xml_facts = xml_facts;
+    provenance.xml_containment = xml_containment;
     if entities.len() > MAX_NODES || relations.len() > MAX_EDGES {
         return Err(exhausted());
     }

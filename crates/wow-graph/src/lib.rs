@@ -68,9 +68,9 @@ pub use explain::{
 };
 
 pub use axes::{
-    GRAPH_AXIS_PROFILE_SCHEMA, GRAPH_AXIS_PROFILE_SCHEMA_V2, GRAPH_AXIS_QUERY_SCHEMA, GraphAxis,
-    GraphAxisBoundary, GraphAxisProfile, GraphAxisQuery, GraphAxisRelation, GraphAxisResult,
-    GraphAxisShape, GraphAxisTraversal,
+    GRAPH_AXIS_PROFILE_SCHEMA, GRAPH_AXIS_PROFILE_SCHEMA_V2, GRAPH_AXIS_PROFILE_SCHEMA_V3,
+    GRAPH_AXIS_QUERY_SCHEMA, GraphAxis, GraphAxisBoundary, GraphAxisProfile, GraphAxisQuery,
+    GraphAxisRelation, GraphAxisResult, GraphAxisShape, GraphAxisTraversal,
 };
 
 pub use direct::{

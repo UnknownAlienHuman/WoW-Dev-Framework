@@ -726,14 +726,6 @@ fn analyze_member_call_session_impl(
         .collect::<Vec<_>>();
     lookup_analysis_ids.sort_unstable();
     lookup_analysis_ids.dedup();
-    let lookup_analysis_id = if lookup_analysis_ids.is_empty() {
-        None
-    } else {
-        Some(canonical_id(
-            "emmy-function-call-lookups:sha256:",
-            &(main.snapshot_id(), &lookup_analysis_ids),
-        )?)
-    };
     let function_calls = if include_function_calls {
         Some(crate::function_calls::collect(
             &analysis,
@@ -741,7 +733,7 @@ fn analyze_member_call_session_impl(
             &main_root,
             &library_roots,
             &callable_signatures,
-            lookup_analysis_id.as_deref(),
+            &lookup_analysis_ids,
             stop,
         )?)
     } else {
