@@ -27,6 +27,12 @@ project-store-wal-manifested-partitions-v1
 
 Public manifests use root-relative validated paths. Absolute paths remain private runtime configuration.
 
+The [versioned restore selector](../PROJECT_REGISTRY.md) extends this topology
+with `instances/<operation-derived-instance>/epochs/<unchanged-epoch-hash>/`.
+Legacy registries retain the location above. Normal generation updates stay in
+one selected database; explicit restored-instance replacement retains older
+files and readers and preserves every semantic epoch/generation identity.
+
 ## Why not one database per project generation
 
 Rejected for normal updates because one-file changes can require copying/rebuilding an entire database, historical retention duplicates pages, and incremental producer partitions lose their natural replacement unit. A whole new database remains appropriate only for an incompatible epoch rebuild.

@@ -333,7 +333,12 @@ ProjectStoreRegistryRecord
     record digest
 ```
 
-Only incompatible profile/schema changes use this outer atomic record.
+Ordinary generation publication stays inside the selected database. Incompatible
+profile/schema changes use a new semantic epoch and this outer atomic record.
+The separately versioned [physical-instance restore contract](../PROJECT_REGISTRY.md)
+also permits guarded selection of an independently restored instance with the
+exact unchanged semantic EpochManifest. Physical locator and selection revision
+never enter semantic generation identities.
 
 ## Canonical ordering
 

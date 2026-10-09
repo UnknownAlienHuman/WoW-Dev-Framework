@@ -32,7 +32,7 @@ impl ReadSnapshot {
         stop: &AtomicBool,
     ) -> StoreResult<Self> {
         checkpoint(stop)?;
-        if db.life.leases.borrow().values().sum::<usize>() >= MAX_READERS {
+        if db.life.reader_admissions.get() >= MAX_READERS {
             return Err(failure(StoreErrorCode::BudgetExceeded));
         }
         let connection = db.read_connection()?;
@@ -68,6 +68,9 @@ impl ReadSnapshot {
             .checked_add(1)
             .ok_or_else(|| failure(StoreErrorCode::BudgetExceeded))?;
         db.life.lease_revision.set(next_revision);
+        db.life
+            .reader_admissions
+            .set(db.life.reader_admissions.get() + 1);
         *db.life
             .leases
             .borrow_mut()
@@ -119,6 +122,9 @@ impl ReadSnapshot {
 }
 impl Drop for ReadSnapshot {
     fn drop(&mut self) {
+        self.life
+            .reader_admissions
+            .set(self.life.reader_admissions.get().saturating_sub(1));
         self.life
             .lease_revision
             .set(self.life.lease_revision.get().saturating_add(1));

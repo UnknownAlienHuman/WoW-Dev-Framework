@@ -1,8 +1,8 @@
 //! Explicit new-root backup artifacts and owner-validated isolated restoration.
 //! The SQLite backup API includes the held committed WAL view. Artifact roots
 //! have no normal project registry until an explicit validated restore finishes.
-mod copy;
-mod identity;
+pub(super) mod copy;
+pub(super) mod identity;
 mod model;
 #[cfg(test)]
 mod tests;
@@ -29,9 +29,9 @@ use std::{
 /// methods expose only verified reads; ordinary ProjectStore::open cannot adopt
 /// this root, which has no project-store registry.
 pub struct VerifiedBackup {
-    store: ProjectStore,
-    root: PathBuf,
-    manifest: BackupManifest,
+    pub(super) store: ProjectStore,
+    pub(super) root: PathBuf,
+    pub(super) manifest: BackupManifest,
 }
 impl ProjectStore {
     /// Write one whole inline snapshot to an explicitly selected new directory.
@@ -226,19 +226,7 @@ impl VerifiedBackup {
         stop: &AtomicBool,
     ) -> StoreResult<ProjectStore> {
         self.verify(stop)?;
-        let mut verified = BTreeSet::new();
-        for check in checks {
-            checkpoint(stop)?;
-            if check.epoch != self.store.db.epoch.epoch_id
-                || &check.validation.checks != self.store.db.epoch.catalog.checks()
-                || !verified.insert(check.validation.generation_id)
-            {
-                return Err(invalid());
-            }
-        }
-        if verified != self.manifest.generations.iter().cloned().collect() {
-            return Err(invalid());
-        }
+        self.restore_validation_digest(checks, stop)?;
         let dir = database::epoch_directory(&self.root, &self.store.db.epoch)?;
         // A previous failed finish may have written this exact confined file.
         // Reconcile its bytes rather than deleting or silently substituting it.
@@ -266,8 +254,54 @@ impl VerifiedBackup {
                 path: self.store.db.path.clone(),
                 epoch: self.store.db.epoch.clone(),
                 life: Rc::clone(&self.store.db.life),
+                root: self.root.clone(),
+                selection: Some(super::registry::RegistrySelection::from_bytes(
+                    &epoch_bytes,
+                    &self.store.db.epoch,
+                    0,
+                    None,
+                )),
             },
         })
+    }
+    pub(super) fn restore_validation_digest(
+        &self,
+        checks: Vec<ValidatedRead>,
+        stop: &AtomicBool,
+    ) -> StoreResult<String> {
+        let mut verified = BTreeSet::new();
+        let mut validations = BTreeMap::new();
+        for check in checks {
+            checkpoint(stop)?;
+            if check.epoch != self.store.db.epoch.epoch_id
+                || &check.validation.checks != self.store.db.epoch.catalog.checks()
+                || !verified.insert(check.validation.generation_id.clone())
+            {
+                return Err(invalid());
+            }
+            let read = self.read(
+                &ReadSelector::Exact(check.validation.generation_id.clone()),
+                stop,
+            )?;
+            if ValidationRecord::new(
+                read.manifest(),
+                self.store.db.epoch.catalog.checks().clone(),
+            )? != check.validation
+            {
+                return Err(invalid());
+            }
+            validations.insert(
+                check.validation.generation_id,
+                check.validation.validation_id,
+            );
+        }
+        if verified != self.manifest.generations.iter().cloned().collect() {
+            return Err(invalid());
+        }
+        Ok(digest(
+            "project-replacement-owners",
+            &encode(&(self.manifest.snapshot_digest(), validations), 262144)?,
+        ))
     }
 }
 fn manifest(
@@ -325,10 +359,14 @@ fn open_artifact(root: &Path, epoch: EpochManifest, lock: File) -> StoreResult<D
         connection,
         path,
         epoch,
+        root: root.to_owned(),
+        selection: None,
         life: Rc::new(Lifetime {
-            _lock: lock,
+            _lock: Rc::new(lock),
+            _instance_lock: None,
             leases: RefCell::new(BTreeMap::new()),
             lease_revision: Cell::new(0),
+            reader_admissions: Rc::new(Cell::new(0)),
         }),
     })
 }
@@ -370,7 +408,7 @@ fn new_lock(root: &Path) -> StoreResult<File> {
         .map_err(|_| failure(StoreErrorCode::WriterBusy))?;
     Ok(lock)
 }
-fn write_new(path: &Path, bytes: &[u8]) -> StoreResult<()> {
+pub(super) fn write_new(path: &Path, bytes: &[u8]) -> StoreResult<()> {
     let mut file =
         File::create_new(path).map_err(|_| failure(StoreErrorCode::DatabaseUnavailable))?;
     file.write_all(bytes)

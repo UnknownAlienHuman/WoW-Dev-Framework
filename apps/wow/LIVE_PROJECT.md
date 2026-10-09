@@ -24,7 +24,10 @@ membership/seals, canonical receipts and scope coverage. It performs no repair o
 implicit activation. Complete applicable coverage exits 0, incomplete coverage 2,
 invalid coverage/admission 4, and cancellation 130. Unknown acknowledgment remains
 explicit. The native service also exposes verified backup and restoration to a new
-private path with real Project/Graph owner replay; see
+private path and explicit guarded physical-instance replacement with real
+Project/Graph owner replay. `restore_replace` and exact `resume_replacement` are
+service APIs; this CLI does not dispatch restore. Older readers and semantic IDs
+survive; quarantine, schema migration and full acceptance remain open. See
 [PROJECT_RECOVERY.md](../../crates/wow-store/PROJECT_RECOVERY.md).
 
 `publish` accepts the existing explicit materialized-input, physical-file,

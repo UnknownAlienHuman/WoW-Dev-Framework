@@ -746,3 +746,23 @@ Workspace policy, fmt, check, strict Clippy, tests (877 passed, 1 ignored,
 same-root epoch replacement, supported migration, process termination, power loss,
 sharing/cleanup faults and full W16/E2 acceptance remain open. See
 [PROJECT_RECOVERY.md](../crates/wow-store/PROJECT_RECOVERY.md).
+
+## W16 guarded physical-instance replacement (2026-10-09)
+
+The outer registry now admits legacy unchanged EpochManifest bytes and a separate
+v2 physical selector. A new operation-derived confined instance preserves exact
+semantic epoch/generation/partition and native owner identities. Explicit
+selector/current guards, native whole-snapshot copy, all owner replay, synced
+staging, one selector replacement and independent read-back precede selection.
+Root/instance locks, old files/readers and aggregate reader admission survive;
+normal publication inside the new instance preserves the original replacement
+receipt. Explicit staged or unknown-result reconciliation never repeats copying
+or a committed selector replacement. Service wrappers compose the actual owners.
+
+Seven store regressions, native Project/Graph replacement, Windows selector-sharing
+failure and native termination after four completed durable boundaries pass.
+Workspace policy, fmt, check, strict Clippy, tests (887 passed, 1 ignored,
+107 targets), rustdoc and build pass. Quarantine, incompatible-epoch/schema
+migration, interruption inside writes/OS calls, power loss, cleanup faults and full
+W16/E2 or Gethe/Ketho/runtime acceptance remain open. See
+[PROJECT_REGISTRY.md](../crates/wow-store/PROJECT_REGISTRY.md).

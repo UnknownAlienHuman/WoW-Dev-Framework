@@ -1,12 +1,14 @@
 use super::{LiveProjectStore, project_error, store_error};
 use crate::ServiceResult;
-use std::path::Path;
-use std::sync::atomic::AtomicBool;
+use std::{path::Path, sync::atomic::AtomicBool};
 use wow_graph::GraphPartitionSnapshot;
 use wow_project::replay::publication::{self, AcquiredProjectPair};
 use wow_store::OperationId;
+use wow_store::project::{
+    CurrentRecordId, ReadSelector, RegistrySelection, ReplacementReceipt, ValidatedRead,
+    VerifiedBackup,
+};
 pub use wow_store::project::{CurrentState, RecoveryReport, ScopeState};
-use wow_store::project::{ReadSelector, ValidatedRead, VerifiedBackup};
 
 impl LiveProjectStore {
     /// Observe physical seals, membership and receipts on one held snapshot.
@@ -30,6 +32,64 @@ impl LiveProjectStore {
             .map_err(store_error)?;
         validate_owners(&backup, stop)?;
         Ok(backup)
+    }
+
+    pub fn registry_selection(&self) -> ServiceResult<RegistrySelection> {
+        self.store.registry_selection().map_err(store_error)
+    }
+
+    /// Observe the selected original receipt without dispatching another effect.
+    pub fn replacement_receipt(
+        &self,
+        operation_id: &str,
+        request_digest: &str,
+    ) -> ServiceResult<Option<ReplacementReceipt>> {
+        let id = OperationId::new(operation_id).map_err(store_error)?;
+        self.store
+            .replacement_receipt(&id, request_digest)
+            .map_err(store_error)
+    }
+
+    /// Restore one explicit backup and select it under both exact live guards.
+    /// Every retained native Project/Graph pair is replayed before activation.
+    pub fn restore_replace(
+        &mut self,
+        backup: &VerifiedBackup,
+        operation_id: &str,
+        expected: &RegistrySelection,
+        expected_current: Option<CurrentRecordId>,
+        stop: &AtomicBool,
+    ) -> ServiceResult<ReplacementReceipt> {
+        let id = OperationId::new(operation_id).map_err(store_error)?;
+        let candidate = self
+            .store
+            .stage_replacement(backup, &id, expected, expected_current, stop)
+            .map_err(store_error)?;
+        let checks = validate_owners(candidate.backup(), stop)?;
+        self.store
+            .activate_replacement(candidate, checks, stop)
+            .map_err(store_error)
+    }
+
+    /// Explicitly reconcile the original staged/published intent. No copy or
+    /// selector change is repeated for an already selected exact operation.
+    pub fn resume_replacement(
+        &mut self,
+        operation_id: &str,
+        expected: &RegistrySelection,
+        expected_current: Option<CurrentRecordId>,
+        snapshot_digest: &str,
+        stop: &AtomicBool,
+    ) -> ServiceResult<ReplacementReceipt> {
+        let id = OperationId::new(operation_id).map_err(store_error)?;
+        let candidate = self
+            .store
+            .reopen_replacement(&id, expected, expected_current, snapshot_digest, stop)
+            .map_err(store_error)?;
+        let checks = validate_owners(candidate.backup(), stop)?;
+        self.store
+            .activate_replacement(candidate, checks, stop)
+            .map_err(store_error)
     }
 }
 

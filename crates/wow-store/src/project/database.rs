@@ -1,4 +1,7 @@
-use super::model::*;
+use super::{
+    model::*,
+    registry::{self, RegistrySelection},
+};
 use crate::{StoreError, StoreErrorCode, StoreResult};
 use rusqlite::{Connection, OpenFlags, OptionalExtension, config::DbConfig};
 use std::{
@@ -64,15 +67,19 @@ CREATE TABLE gc_operations (
 
 pub(super) struct Lifetime {
     // The OS-held writer lease survives the writer while any read snapshot lives.
-    pub _lock: File,
+    pub _lock: Rc<File>,
+    pub _instance_lock: Option<Rc<File>>,
     pub leases: RefCell<BTreeMap<StoreGenerationId, usize>>,
     pub lease_revision: Cell<u64>,
+    pub reader_admissions: Rc<Cell<usize>>,
 }
 pub(super) struct Database {
     pub connection: Connection,
     pub path: PathBuf,
     pub epoch: EpochManifest,
     pub life: Rc<Lifetime>,
+    pub root: PathBuf,
+    pub selection: Option<RegistrySelection>,
 }
 
 impl Database {
@@ -174,11 +181,15 @@ impl Database {
         Ok(Self {
             connection,
             path,
+            selection: Some(RegistrySelection::from_bytes(&bytes, &epoch, 0, None)),
+            root,
             epoch,
             life: Rc::new(Lifetime {
-                _lock: lock,
+                _lock: Rc::new(lock),
+                _instance_lock: None,
                 leases: RefCell::new(BTreeMap::new()),
                 lease_revision: Cell::new(0),
+                reader_admissions: Rc::new(Cell::new(0)),
             }),
         })
     }
@@ -193,21 +204,24 @@ impl Database {
             .map_err(|_| failure(StoreErrorCode::DatabaseUnavailable))?;
         lock.try_lock()
             .map_err(|_| failure(StoreErrorCode::WriterBusy))?;
-        let registry_path = root.join("project-store-registry.json");
-        regular(&registry_path, 65536)?;
-        let mut bytes = Vec::new();
-        File::open(registry_path)
-            .map_err(|_| invalid())?
-            .take(65537)
-            .read_to_end(&mut bytes)
-            .map_err(|_| invalid())?;
-        if bytes.len() > 65536 {
-            return Err(invalid());
-        }
-        let epoch = admit_epoch(&bytes, catalog)?;
-        directory(&root.join("epochs"))?;
-        let dir = epoch_directory(&root, &epoch)?;
-        directory(&dir)?;
+        let admitted = registry::read(&root, catalog)?;
+        let epoch = admitted.epoch;
+        let bytes = encode(&epoch, 65536)?;
+        let dir = admitted.selection.directory(&root, &epoch)?;
+        let instance_lock = if let Some(record) = admitted.record {
+            let path = record.instance_root(&root).join("writer.lock");
+            regular(&path, 0)?;
+            let file = OpenOptions::new()
+                .read(true)
+                .write(true)
+                .open(path)
+                .map_err(|_| invalid())?;
+            file.try_lock()
+                .map_err(|_| failure(StoreErrorCode::WriterBusy))?;
+            Some(Rc::new(file))
+        } else {
+            None
+        };
         let epoch_path = dir.join("epoch-manifest.json");
         regular(&epoch_path, 65536)?;
         let mut epoch_bytes = Vec::new();
@@ -244,10 +258,14 @@ impl Database {
             connection,
             path,
             epoch,
+            root,
+            selection: Some(admitted.selection),
             life: Rc::new(Lifetime {
-                _lock: lock,
+                _lock: Rc::new(lock),
+                _instance_lock: instance_lock,
                 leases: RefCell::new(BTreeMap::new()),
                 lease_revision: Cell::new(0),
+                reader_admissions: Rc::new(Cell::new(0)),
             }),
         })
     }
@@ -282,6 +300,15 @@ impl Database {
     pub fn ensure_idle(&self) -> StoreResult<()> {
         if !self.connection.is_autocommit() {
             return Err(failure(StoreErrorCode::OutcomeUnknown));
+        }
+        if let Some(selection) = &self.selection {
+            let observed = registry::read_file(
+                &self.root.join(registry::REGISTRY_FILE),
+                registry::MAX_REGISTRY,
+            )?;
+            if digest("project-registry", &observed) != selection.digest() {
+                return Err(failure(StoreErrorCode::OutcomeUnknown));
+            }
         }
         Ok(())
     }

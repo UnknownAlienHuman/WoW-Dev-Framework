@@ -25,8 +25,8 @@ operation release, complete bounded inline root closure, exact policy CAS and
 guarded transactional GC through store/service APIs. Shared/current/leased/pinned
 data survives; released operation evidence and GC receipts survive collection and
 reopen. W16 now adds read-only recovery, verified native SQLite backup and
-owner-validated restoration to a new private path. Quarantine, live epoch
-replacement, migration and object/epoch/platform gates remain next; full W14/E2,
+owner-validated isolated restore and guarded live physical-instance replacement.
+Quarantine, incompatible-epoch migration and object/epoch/platform gates remain next; full W14/E2,
 W15 and W16 acceptance remain open. See
 [PROJECT_GC.md](../crates/wow-store/PROJECT_GC.md).
 
@@ -37,6 +37,20 @@ IDs and requires every included native Project/Graph owner before finalizing a
 new private restore registry. The source current and older leased readers survive.
 `wow project recover` exposes the physical report; service APIs provide backup and
 isolated restore. See [PROJECT_RECOVERY.md](../crates/wow-store/PROJECT_RECOVERY.md).
+
+The subsequent W16 selector slice separates physical instances from semantic
+epoch/generation IDs. Exact selector/current guards precede native copy and every
+owner check; one synced selector replacement and independent snapshot read-back
+precede future reads. Old files/readers and the shared root writer lock survive.
+Staged or committed-but-unacknowledged intent reconciles explicitly without a
+second copy or selector effect. Windows sharing refusal and native process
+termination at four completed durable boundaries pass. No quarantine, incompatible
+schema migration, interrupted-write or power-loss acceptance follows. See
+[PROJECT_REGISTRY.md](../crates/wow-store/PROJECT_REGISTRY.md).
+
+Fresh selector-slice policy, fmt, workspace check, strict Clippy, tests (887 passed,
+1 ignored, 107 targets), rustdoc and build passed on 2026-10-09. Remaining W16 work
+precedes W17; Gethe/Ketho/runtime and full package acceptance stay open.
 
 Fresh W16 policy, fmt, workspace check, strict Clippy, tests (877 passed,
 1 ignored, 106 targets), rustdoc and build passed on 2026-10-09. The ignored consumer and source/runtime gates stay

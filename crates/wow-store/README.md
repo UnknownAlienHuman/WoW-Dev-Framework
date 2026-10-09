@@ -31,6 +31,7 @@ no existing schema migrates automatically. Current owner routes:
 - [Generation retention](PROJECT_RETENTION.md)
 - [Release and guarded inline collection](PROJECT_GC.md)
 - [Recovery, verified native backup and isolated restore](PROJECT_RECOVERY.md)
+- [Guarded physical-instance replacement and exact reconciliation](PROJECT_REGISTRY.md)
 
 ### E6-B — external Candidate generic persistence
 

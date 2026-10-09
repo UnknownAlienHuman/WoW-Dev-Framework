@@ -1,9 +1,9 @@
 # ProjectStore recovery and verified backup
 
 Updated 2026-10-09. This W16 slice implements read-only physical reconciliation,
-native verified backup and restoration to a new private path. Store fixtures and
-native Project/Graph replay pass. Live epoch replacement, quarantine, migrations,
-process termination, power loss and platform fault acceptance remain open.
+native verified backup, isolated restore and guarded same-epoch physical-instance
+replacement. Store fixtures and native Project/Graph replay pass. Quarantine,
+incompatible-epoch migration, power loss and full platform acceptance remain open.
 
 ## Recovery observation
 
@@ -87,9 +87,13 @@ file writes stay `OutcomeUnknown`; a caller must inspect the original candidate.
 `restore_live_project_to_new` runs native Project/Graph replay for all included
 generations and supplies those capabilities. Original semantic epoch, generation,
 validation, publication and owner identities survive. The physical path is separate;
-this does not replace a live registry or migrate schemas. Source current and its
-older leased readers continue unchanged. A same-root replacement needs a separate
-versioned physical locator and guarded publication contract.
+this operation finishes a separate root. Source current and its older leased
+readers continue unchanged. Explicit live replacement uses the separate
+[versioned physical selector](PROJECT_REGISTRY.md), exact source/current guards
+and repeat native owner validation. It preserves IDs, keeps old files/readers,
+and reconciles original staged or already-selected intent without blind effects.
+`LiveProjectStore::restore_replace` and `resume_replacement` expose that path;
+no CLI restore or production-store operation was executed by this checkpoint.
 
 ## Evidence and remaining work
 
@@ -100,7 +104,10 @@ manifest substitution, cancellation, an existing destination sentinel, canonical
 orphan-manifest descriptor corruption, and frozen v1/v2 backups. Native service
 replay verifies both retained Project/Graph pairs and the still-held source reader.
 
-These fixtures do not establish process-kill/power-loss behavior, hostile OS access,
-sharing/cleanup faults, full W16/E2 acceptance or Gethe/Ketho/runtime acceptance.
-Quarantine, live replacement, supported migrations and object/epoch reclamation
-remain separate functional and operational requirements.
+The physical replacement fixtures also verify stale guards, corrupt/missing-owner
+targets, shared admission/locks across successive instances, explicit unknown
+result reconciliation and Windows selector-sharing failure. Four native child
+termination probes cover completed prepare/stage/validate/activate boundaries.
+They do not establish interruption inside a write/OS call, power loss, hostile OS
+access, cleanup faults, full W16/E2 or Gethe/Ketho/runtime acceptance. Quarantine,
+supported migrations and object/epoch reclamation remain separate requirements.

@@ -853,3 +853,5 @@ fn missing_or_mutated_replay_and_mixed_project_graph_never_activate() -> TestRes
 }
 #[path = "recovery_tests.rs"]
 mod recovery_tests;
+#[path = "replacement_tests.rs"]
+mod replacement_tests;

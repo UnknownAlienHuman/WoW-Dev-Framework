@@ -8,7 +8,9 @@ mod model;
 mod publication;
 mod read;
 mod recovery;
+mod registry;
 mod release;
+mod replacement;
 mod retention;
 use crate::{OperationId, StoreError, StoreResult};
 pub use backup::{BackupManifest, VerifiedBackup};
@@ -25,7 +27,9 @@ pub use recovery::{
     AcknowledgmentState, CurrentState, RecoveryDisposition, RecoveryIncident, RecoveryOperation,
     RecoveryReport, RecoveryScope, ScopeCoverage, ScopeState,
 };
+pub use registry::RegistrySelection;
 pub use release::PublicationRelease;
+pub use replacement::{ReplacementCandidate, ReplacementReceipt};
 pub use retention::{RetentionRoot, RetentionRootId, RetentionRootKind};
 use std::{path::Path, sync::atomic::AtomicBool};
 

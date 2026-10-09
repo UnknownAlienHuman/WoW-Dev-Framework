@@ -12,7 +12,7 @@ use std::sync::atomic::AtomicBool;
 /// All persisted semantic identities from one held snapshot. Membership and
 /// payloads are already canonically checked by recovery; their IDs bind bytes.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub(super) struct BackupState {
+pub(in crate::project) struct BackupState {
     pub epoch: EpochManifest,
     pub recovery: RecoveryReport,
     pub generations: Vec<StoreGenerationId>,
@@ -32,7 +32,7 @@ impl BackupState {
         ))
     }
 }
-pub(super) fn capture(
+pub(in crate::project) fn capture(
     c: &Connection,
     epoch: &EpochManifest,
     stop: &AtomicBool,
