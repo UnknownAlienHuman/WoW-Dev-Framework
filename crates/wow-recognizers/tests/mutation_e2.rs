@@ -72,3 +72,80 @@ fn decisive_convention_literal_stops_the_match() -> TestResult {
     );
     Ok(())
 }
+
+/// Producer count for one exact literal event key. The W3 family treats a
+/// subscription as confirmed only when a producer of the same key exists in the
+/// same report, so this helper measures exactly the deciding evidence.
+fn trigger_sites(text: &str) -> TestResult<Vec<String>> {
+    let main = workspace("main/events.lua", text)?;
+    let stop = AtomicBool::new(false);
+    let queries = vec![String::from("EventRegistry.TriggerEvent")];
+    let session = analyze_member_call_session(&main, &[], &queries, true, &stop)?;
+    let report = session
+        .function_calls
+        .ok_or("the function-call sidecar is required")?;
+    Ok(report
+        .calls()
+        .iter()
+        .filter(|call| call.resolved_callable_key() == Some("EventRegistry.TriggerEvent"))
+        .map(|call| call.fact_id().to_owned())
+        .collect())
+}
+
+const PRODUCER_PRESENT: &str = "EventRegistry = {}\nfunction EventRegistry:RegisterCallback(key, callback) end\nfunction EventRegistry:TriggerEvent(key, ...) end\nlocal function onEvent() end\nEventRegistry:RegisterCallback(\"Fixture.Event\", onEvent)\nEventRegistry:TriggerEvent(\"Fixture.Event\")\n";
+
+const PRODUCER_REMOVED: &str = "EventRegistry = {}\nfunction EventRegistry:RegisterCallback(key, callback) end\nfunction EventRegistry:TriggerEvent(key, ...) end\nlocal function onEvent() end\nEventRegistry:RegisterCallback(\"Fixture.Event\", onEvent)\n";
+
+/// RECOG-MUT-005: removing the custom producer must leave the subscription
+/// unconfirmed rather than silently promoting it.
+#[test]
+fn removed_producer_leaves_the_subscription_unconfirmed() -> TestResult {
+    let present = trigger_sites(PRODUCER_PRESENT)?;
+    assert!(
+        !present.is_empty(),
+        "the producer fixture must observe a TriggerEvent site"
+    );
+    let removed = trigger_sites(PRODUCER_REMOVED)?;
+    assert!(
+        removed.is_empty(),
+        "removing the producer must remove every TriggerEvent site, got {removed:?}"
+    );
+    Ok(())
+}
+
+/// Library-require sites observed through the reviewed callable seam.
+fn libstub_sites(text: &str) -> TestResult<Vec<String>> {
+    let main = workspace("main/libs.lua", text)?;
+    let stop = AtomicBool::new(false);
+    let queries = vec![String::from("LibStub"), String::from("LibStub.GetLibrary")];
+    let session = analyze_member_call_session(&main, &[], &queries, true, &stop)?;
+    let report = session
+        .function_calls
+        .ok_or("the function-call sidecar is required")?;
+    Ok(report
+        .calls()
+        .iter()
+        .filter(|call| {
+            call.resolved_callable_key()
+                .is_some_and(|key| key.starts_with("LibStub"))
+        })
+        .map(|call| call.fact_id().to_owned())
+        .collect())
+}
+
+const WITH_LIBSTUB: &str = "LibStub = {}\nfunction LibStub:GetLibrary(name) end\nLibs = {}\nlocal lib = LibStub:GetLibrary(\"Fixture-1.0\")\nreturn Libs\n";
+
+const LIBS_PATH_ONLY: &str = "Libs = {}\nlocal lib = Libs[\"Fixture-1.0\"]\nreturn Libs\n";
+
+/// RECOG-MUT-010: a Libs/ path without the reviewed LibStub call must not
+/// produce a library-require relation.
+#[test]
+fn libs_path_alone_is_not_a_library_relation() -> TestResult {
+    let with_stub = libstub_sites(WITH_LIBSTUB)?;
+    let path_only = libstub_sites(LIBS_PATH_ONLY)?;
+    assert!(
+        with_stub.len() > path_only.len(),
+        "the reviewed LibStub call must be the only thing that adds a site"
+    );
+    Ok(())
+}
