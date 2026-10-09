@@ -60,6 +60,37 @@ neighbors, paths, subgraphs, axes and retained-support explanations. Remaining
 recognizer families, effective XML receiver/runtime dispatch semantics and coherent ProjectStore
 publication are not completed by this source slice. Full E2 acceptance remains open.
 
+## W11 signal, hook and library recognizer families
+
+`wow-recognizers` now implements the remaining core structural families that the
+frozen E2-B profile declares: `core.signal.native_frame_event@1`,
+`core.signal.native_event_registry_bridge@1`,
+`core.signal.custom_registry_producer@1`, `core.signal.custom_registry_subscription@1`,
+`core.signal.cvar_callback@1`, `core.hook.set_script@1`, `core.hook.hook_script@1`,
+`core.hook.secure_posthook@1`, `core.library.libstub_require@1`,
+`core.library.libstub_new@1` and `core.library.embed@1`.
+
+Each family is an independent declarative producer partition that consumes only
+generation-bound Emmy owner facts. No source text is reparsed, and no client
+build, Interface value, source revision, provider revision or toolchain version is
+asserted anywhere in these adapters. `wow-project` gained the matching universal
+graph registry entries (`native_event`, `custom_signal`, `cvar_key`, `library`
+entities and the registration/bridge/callback/script-hook/secure-hook/library
+relations) so producer batches pass registry validation.
+
+Structural limits are preserved: an exact resolved receiver and an exact literal
+key are required for a confirmed relation, a dynamic receiver or key keeps the
+outcome Possible, and absent evidence is never reported as a clean negative. The
+library version string is retained as exact evidence, not as proof of a loaded
+revision. `Libs/` folder names alone never prove an embed relation.
+
+Validated locally with `cargo check --workspace --all-targets --all-features`,
+`cargo clippy -p wow-recognizers --all-targets --all-features -- -D warnings`,
+`cargo fmt --all --check`, `cargo test --workspace --all-features` and
+`cargo xtask check`. These are focused owner checks; service-side partition
+publication, the `apps/wow` graph export lane, structural mutation fixtures and
+full E2 package acceptance remain open and are NotEvaluated.
+
 ## Explicit graph source read-back
 
 `wow graph explain --bundle ... --source-root <Main-root>` joins the existing

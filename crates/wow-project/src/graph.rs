@@ -60,7 +60,9 @@ pub const SOURCE_GRAPH_PARTITION: &str = "wow-project.source-load";
 const MAX_FILES: usize = 4096;
 const MAX_LOADS: usize = 8192;
 const MAX_RECOGNIZER_NODES: usize = functions::MAX_CALLS * 2;
-const MAX_RECOGNIZER_EDGES: usize = functions::MAX_CALLS * 19;
+
+const MAX_SIGNAL_RELATION_EDGES: usize = 131072;
+const MAX_RECOGNIZER_EDGES: usize = functions::MAX_CALLS * 19 + MAX_SIGNAL_RELATION_EDGES;
 const MAX_MIXIN_ASSIGNMENT_EDGES: usize = 65_536;
 const MAX_NODES: usize = MAX_FILES
     + packages::MAX_PACKAGE_NODES
@@ -71,6 +73,7 @@ const MAX_NODES: usize = MAX_FILES
     + state::MAX_ROOTS
     + state::MAX_PATHS
     + MAX_RECOGNIZER_NODES;
+
 const MAX_EDGES: usize = MAX_LOADS
     + packages::MAX_PACKAGE_RELATIONS
     + xml::MAX_DECLARATIONS
@@ -493,6 +496,110 @@ fn registry() -> ProjectResult<GraphRegistryBundle> {
             .map_err(|_| invalid())?,
         );
     }
+    // Signal and event family. A Lua function registers, bridges or handles a
+    // native frame event, a custom registry signal or a CVar callback. The
+    // event, signal and CVar identities are exact literal evidence, never
+    // inferred from a plausible name.
+    let native_event = GraphEntityKindDefinition::new(
+        "native_event",
+        vec!["project".into()],
+        vec!["event".into()],
+        vec![GraphConfidence::Proven],
+    )
+    .map_err(|_| invalid())?;
+    let custom_signal = GraphEntityKindDefinition::new(
+        "custom_signal",
+        vec!["project".into()],
+        vec!["signal".into()],
+        vec![GraphConfidence::Derived, GraphConfidence::Possible],
+    )
+    .map_err(|_| invalid())?;
+    let cvar_key = GraphEntityKindDefinition::new(
+        "cvar_key",
+        vec!["project".into()],
+        vec!["cvar".into()],
+        vec![GraphConfidence::Derived, GraphConfidence::Possible],
+    )
+    .map_err(|_| invalid())?;
+    let library = GraphEntityKindDefinition::new(
+        "library",
+        vec!["project".into()],
+        vec!["library".into()],
+        vec![GraphConfidence::Derived, GraphConfidence::Possible],
+    )
+    .map_err(|_| invalid())?;
+    // Each tuple is (relation id, relation kind, allowed target entity kinds).
+    for (id, relation, targets) in [
+        (
+            "lua_registers_native_event",
+            GraphRelationKind::RegistersNativeEvent,
+            vec!["native_event".into()],
+        ),
+        (
+            "lua_handles_native_event",
+            GraphRelationKind::HandlesNativeEvent,
+            vec!["native_event".into()],
+        ),
+        (
+            "lua_bridges_native_event",
+            GraphRelationKind::BridgesNativeEvent,
+            vec!["native_event".into()],
+        ),
+        (
+            "lua_emits_custom_signal",
+            GraphRelationKind::EmitsCustomSignal,
+            vec!["custom_signal".into()],
+        ),
+        (
+            "lua_handles_custom_signal",
+            GraphRelationKind::HandlesCustomSignal,
+            vec!["custom_signal".into()],
+        ),
+        (
+            "lua_registers_cvar_callback",
+            GraphRelationKind::RegistersCvarCallback,
+            vec!["cvar_key".into()],
+        ),
+        // Script hooks and the secure posthook family.
+        (
+            "lua_hooks_script",
+            GraphRelationKind::HooksScript,
+            vec![
+                "lua_source_declaration".into(),
+                "lua_source_function".into(),
+            ],
+        ),
+        (
+            "lua_secure_hooks_function",
+            GraphRelationKind::SecureHooksFunction,
+            vec![
+                "lua_source_declaration".into(),
+                "lua_source_function".into(),
+            ],
+        ),
+        // Library requirement and structural embedding.
+        (
+            "lua_requires_library",
+            GraphRelationKind::UsesApi,
+            vec!["library".into()],
+        ),
+        (
+            "lua_embeds_library",
+            GraphRelationKind::UsesApi,
+            vec!["library".into()],
+        ),
+    ] {
+        relations.push(
+            GraphRelationKindDefinition::new(
+                id,
+                relation,
+                vec!["lua_source_function".into()],
+                targets,
+                vec![GraphConfidence::Derived, GraphConfidence::Possible],
+            )
+            .map_err(|_| invalid())?,
+        );
+    }
     GraphRegistryBundle::build(
         "wow-project.source-load",
         "11",
@@ -507,6 +614,10 @@ fn registry() -> ProjectResult<GraphRegistryBundle> {
             handler,
             state_root,
             state_path,
+            native_event,
+            custom_signal,
+            cvar_key,
+            library,
         ],
         relations,
     )
