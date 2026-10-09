@@ -21,7 +21,9 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use wow_core::{SourceSpan, canonical_json_bytes};
 
-use crate::references::{EmmyMemberCallFact, EmmyMemberReferenceFact, analyze_member_calls};
+use crate::references::{
+    EmmyMemberCallFact, EmmyMemberCallReport, EmmyMemberReferenceFact, analyze_member_calls,
+};
 use crate::syntax::{EMMYLUA_CODE_ANALYSIS_VERSION, EMMYLUA_REVISION, EMMYLUA_TREE};
 use crate::{LuaWorkspaceFile, LuaWorkspaceSnapshot};
 
@@ -581,6 +583,33 @@ pub fn analyze_local_flow(
         }
     }
 
+    collect_registered(&analysis, main, &main_root, &member_report)
+}
+
+/// Collect local-flow facts from an already registered native semantic session.
+///
+/// The member-call report is the exact prerequisite validated by the retained
+/// owner against this same Main snapshot and its Library set. This collector
+/// never re-runs a member session, never reopens a Library workspace and never
+/// re-derives its own Library ordering: it consumes the analyzed report as-is,
+/// so a cached owner and a fresh analysis produce identical identities.
+pub(crate) fn collect_registered(
+    analysis: &EmmyLuaAnalysis,
+    main: &LuaWorkspaceSnapshot,
+    main_root: &Path,
+    member_report: &EmmyMemberCallReport,
+) -> EmmyLocalFlowResult<EmmyLocalFlowReport> {
+    // A stale or foreign member report must never silently authorize flow facts.
+    if member_report.main_snapshot_id() != main.snapshot_id() {
+        return Err(EmmyLocalFlowError::new(
+            EmmyLocalFlowErrorCode::MemberCallAnalysisFailed,
+            "retained member-call report belongs to another Main workspace",
+            None,
+        ));
+    }
+    let member_calls = member_report.calls();
+    let member_references = member_report.references();
+
     let mut files = Vec::with_capacity(main.files().len());
     let mut bindings = Vec::new();
     let mut uses = Vec::new();
@@ -589,7 +618,7 @@ pub fn analyze_local_flow(
     let mut control_flow = Vec::new();
 
     for file in main.files() {
-        let model = semantic_model(&analysis, &main_root, file)?;
+        let model = semantic_model(analysis, main_root, file)?;
         let parse_errors = model.get_file_parse_error().unwrap_or_default();
         if !parse_errors.is_empty() {
             files.push(EmmyLocalFlowFileReport {
@@ -613,14 +642,8 @@ pub fn analyze_local_flow(
         let control_start = control_flow.len();
 
         let root = model.get_root().clone();
-        let mut file_bindings = collect_bindings(
-            main,
-            file,
-            &model,
-            &root,
-            member_report.calls(),
-            member_report.references(),
-        )?;
+        let mut file_bindings =
+            collect_bindings(main, file, &model, &root, member_calls, member_references)?;
         let semantic_bindings = file_bindings
             .iter()
             .enumerate()
@@ -672,9 +695,11 @@ pub fn analyze_local_flow(
     guards.sort();
     control_flow.sort();
 
-    let library_snapshot_ids = ordered_libraries
-        .iter()
-        .map(|snapshot| snapshot.snapshot_id().into())
+    // The Library corpus travels inside the exact retained member report, so a
+    // collector never observes a different set than the admitted session.
+    let library_snapshot_ids = member_report
+        .library_snapshot_ids()
+        .map(|id| id.into())
         .collect::<Vec<Box<str>>>();
     #[derive(Serialize)]
     struct ReportIdentity<'a> {

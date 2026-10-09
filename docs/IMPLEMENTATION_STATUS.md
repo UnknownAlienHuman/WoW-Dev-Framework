@@ -41,6 +41,31 @@ W09 load closure is now an input to the W10 virtual-semantic path. Functional
 development continues through bounded W10 consumers; existing full acceptance and
 launch gates remain open.
 
+The active W14 physical path now retains native parser state and applies exact
+Main file deltas, with conservative complete semantic reindexing and fresh
+target-bound reports. Durable full-graph update/removal closure remains the
+next functional responsibility before W15 retention and W16 recovery.
+
+## W14 retained physical native analysis (2026-10-09)
+
+`AnalyzerUpdateBatch` binds an exact previous Main snapshot and target generation
+to a complete derived Add/Update/Remove set. `ProjectPublisher` retains private
+native syntax and Main/Library semantic engines. Only changed texts re-enter the
+parser; unchanged trees survive. Semantic indexes and all reports are rebuilt
+conservatively from that exact retained corpus. No dependency-specific fact reuse
+or performance bound is claimed. Library/configuration replacement and
+standalone/package/virtual inputs use cold owners.
+
+Failure after native mutation poisons the session; any project candidate failure
+or cancellation discards it and retains the last immutable publication. NoChange
+keeps its exact Arc without native work. Green allocation/mapping checks,
+independent full report parity, same-session remove/readd, exact declaration
+removal and original frozen replay IDs pass. Workspace policy, fmt, check,
+strict Clippy, tests (859 passed, 1 ignored, 104 targets), rustdoc and build passed;
+the strengthened declaration-removal proof passed separately afterward.
+Durable full-graph update/removal closure, retention/recovery and complete W14/E2
+or source/Ketho/runtime acceptance remain open.
+
 ## Source graph and XML handler route
 
 `wow graph build` now composes file/load/XML/inheritance/mixin source proposals,

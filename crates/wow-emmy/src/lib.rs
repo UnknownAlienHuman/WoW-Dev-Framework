@@ -11,6 +11,7 @@ pub mod compatibility;
 pub mod flow;
 pub mod function_calls;
 pub mod references;
+pub mod session;
 pub mod syntax;
 pub mod virtual_semantics;
 pub mod virtual_syntax;

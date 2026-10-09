@@ -206,6 +206,7 @@ pub(crate) fn build_analyzer_binding(
     generation: &ProjectGenerationCandidate,
     libraries: &[LuaWorkspaceSnapshot],
     function_calls: bool,
+    cache: &mut Option<wow_emmy::session::AnalyzerSession>,
     stop: &AtomicBool,
 ) -> ProjectResult<ProjectAnalyzerBinding> {
     checkpoint(stop)?;
@@ -283,15 +284,6 @@ pub(crate) fn build_analyzer_binding(
     )?;
     checkpoint(stop)?;
 
-    let syntax_report = analyze_syntax(&main_workspace).map_err(|source| {
-        ProjectError::new(
-            ProjectErrorCode::AnalyzerFailed,
-            ProjectPhase::Analyzer,
-            format!("syntax analysis failed: {source}"),
-        )
-        .with_candidate_generation(generation.project_generation())
-    })?;
-    checkpoint(stop)?;
     let library_refs = ordered_libraries.iter().collect::<Vec<_>>();
     let pending_bindings = configuration
         .load_plan()
@@ -316,44 +308,112 @@ pub(crate) fn build_analyzer_binding(
         Vec::new()
     };
     let query_profile = wow_emmy::MemberCallSessionQueryProfile::new(queries, &callable_queries);
-    let session = match pending_xml_lua
-        .as_ref()
-        .and_then(crate::xml_lua::PreparedProjectXmlLuaAnalysis::virtual_workspace)
-    {
-        Some(virtual_workspace) => {
-            wow_emmy::references::analyze_member_call_session_with_virtual_and_callable_queries(
+    let (syntax_report, session, local_flow_report) =
+        if configuration.load_plan().is_none() && configuration.package_load_plan().is_none() {
+            if !cache
+                .as_ref()
+                .is_some_and(|owner| owner.compatible(&main_workspace, &ordered_libraries))
+            {
+                *cache = Some(
+                    wow_emmy::session::AnalyzerSession::open(
+                        main_workspace.clone(),
+                        &ordered_libraries,
+                        stop,
+                    )
+                    .map_err(|source| session_error(source, generation.project_generation()))?,
+                );
+            }
+            let owner = cache.as_mut().ok_or_else(|| {
+                ProjectError::new(
+                    ProjectErrorCode::AnalyzerFailed,
+                    ProjectPhase::Analyzer,
+                    "native analyzer owner unavailable",
+                )
+            })?;
+            let reports = if owner.main().snapshot_id() == main_workspace.snapshot_id() {
+                owner.reports(query_profile, function_calls, stop)
+            } else {
+                let batch = wow_emmy::session::AnalyzerUpdateBatch::between(
+                    owner.main(),
+                    main_workspace.clone(),
+                    generation.project_generation(),
+                )
+                .map_err(|source| session_error(source, generation.project_generation()))?;
+                owner.apply_update(batch, query_profile, function_calls, stop)
+            }
+            .map_err(|source| session_error(source, generation.project_generation()))?;
+            (
+                reports.syntax,
+                wow_emmy::references::MemberCallSession {
+                    member_calls: reports.member_calls,
+                    symbol_lookup: reports.symbol_lookup,
+                    function_calls: reports.function_calls,
+                    virtual_semantics: None,
+                },
+                reports.local_flow,
+            )
+        } else {
+            // Loader/virtual shape changes use the existing exact cold owner path.
+            *cache = None;
+            let syntax_report = analyze_syntax(&main_workspace).map_err(|source| {
+                ProjectError::new(
+                    ProjectErrorCode::AnalyzerFailed,
+                    ProjectPhase::Analyzer,
+                    format!("syntax analysis failed: {source}"),
+                )
+                .with_candidate_generation(generation.project_generation())
+            })?;
+            checkpoint(stop)?;
+            let session = match pending_xml_lua
+            .as_ref()
+            .and_then(crate::xml_lua::PreparedProjectXmlLuaAnalysis::virtual_workspace)
+        {
+            Some(virtual_workspace) => {
+                wow_emmy::references::analyze_member_call_session_with_virtual_and_callable_queries(
+                    &main_workspace,
+                    &library_refs,
+                    virtual_workspace,
+                    generation.project_generation(),
+                    query_profile,
+                    function_calls,
+                    stop,
+                )
+            }
+            None => wow_emmy::references::analyze_member_call_session_with_callable_queries(
                 &main_workspace,
                 &library_refs,
-                virtual_workspace,
-                generation.project_generation(),
                 query_profile,
                 function_calls,
                 stop,
-            )
+            ),
         }
-        None => wow_emmy::references::analyze_member_call_session_with_callable_queries(
-            &main_workspace,
-            &library_refs,
-            query_profile,
-            function_calls,
-            stop,
-        ),
-    }
-    .map_err(|source| {
-        let code = match source.code() {
-            wow_emmy::EmmyMemberCallErrorCode::Cancelled => ProjectErrorCode::AnalysisCancelled,
-            wow_emmy::EmmyMemberCallErrorCode::FactBudgetExceeded => {
-                ProjectErrorCode::SourceBudgetExceeded
-            }
-            _ => ProjectErrorCode::AnalyzerFailed,
+        .map_err(|source| {
+            let code = match source.code() {
+                wow_emmy::EmmyMemberCallErrorCode::Cancelled => ProjectErrorCode::AnalysisCancelled,
+                wow_emmy::EmmyMemberCallErrorCode::FactBudgetExceeded => {
+                    ProjectErrorCode::SourceBudgetExceeded
+                }
+                _ => ProjectErrorCode::AnalyzerFailed,
+            };
+            ProjectError::new(
+                code,
+                ProjectPhase::Analyzer,
+                "member and symbol lookup analysis failed",
+            )
+            .with_candidate_generation(generation.project_generation())
+        })?;
+            let local_flow_report =
+                analyze_local_flow(&main_workspace, &library_refs).map_err(|source| {
+                    ProjectError::new(
+                        ProjectErrorCode::AnalyzerFailed,
+                        ProjectPhase::Analyzer,
+                        format!("local-flow analysis failed: {source}"),
+                    )
+                    .with_candidate_generation(generation.project_generation())
+                })?;
+
+            (syntax_report, session, local_flow_report)
         };
-        ProjectError::new(
-            code,
-            ProjectPhase::Analyzer,
-            "member and symbol lookup analysis failed",
-        )
-        .with_candidate_generation(generation.project_generation())
-    })?;
     let wow_emmy::references::MemberCallSession {
         member_calls: member_call_report,
         symbol_lookup,
@@ -389,17 +449,6 @@ pub(crate) fn build_analyzer_binding(
         )?),
         _ => None,
     };
-    checkpoint(stop)?;
-    let local_flow_report =
-        analyze_local_flow(&main_workspace, &library_refs).map_err(|source| {
-            ProjectError::new(
-                ProjectErrorCode::AnalyzerFailed,
-                ProjectPhase::Analyzer,
-                format!("local-flow analysis failed: {source}"),
-            )
-            .with_candidate_generation(generation.project_generation())
-        })?;
-
     checkpoint(stop)?;
     if syntax_report.diagnostics().len().saturating_add(
         xml_lua_analysis
@@ -513,6 +562,22 @@ pub(crate) fn build_analyzer_binding(
     })
 }
 
+fn session_error(
+    source: wow_emmy::session::AnalyzerSessionError,
+    generation: ProjectGenerationId,
+) -> ProjectError {
+    let code = match source.code() {
+        wow_emmy::session::AnalyzerSessionErrorCode::Cancelled => {
+            ProjectErrorCode::AnalysisCancelled
+        }
+        wow_emmy::session::AnalyzerSessionErrorCode::OutputBudgetExceeded => {
+            ProjectErrorCode::SourceBudgetExceeded
+        }
+        _ => ProjectErrorCode::AnalyzerFailed,
+    };
+    ProjectError::new(code, ProjectPhase::Analyzer, source.to_string())
+        .with_candidate_generation(generation)
+}
 fn validate_workspace_manifest(
     workspace: &LuaWorkspaceSnapshot,
     inventory: &ProjectInputInventory,

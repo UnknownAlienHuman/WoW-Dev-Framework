@@ -61,7 +61,7 @@ no Rust implementation in the audited source. Their documentation is not a binar
 | E1-A–E1-C | Partial executable | Finish only verified missing contract/acceptance slices; do not recreate existing store/reference/annotation implementations |
 | E1-D | Partial executable Reference Pack service and active internal builder with durable materialization/finalization | Close external parity/license/rebuild evidence, Windows/process-loss acceptance and complete package gates; code presence is not `ValidatedLocal` |
 | E2-A–E2-B | Partial executable | All 26 active E2-B rule IDs are service-published after the W11 semantic repair, TOC, XML and state slices; close public CLI/full-pipeline fixtures and package acceptance |
-| E2-C–E2-D | Partial source index, manifested store, native live pair service/CLI, cancellable updates and exact Library/fact-profile generation binding | Incremental reuse/invalidation, durable updates/removal closure, retention/GC/backup/epoch replacement and complete acceptance remain open; see [REPLAY_PUBLICATION.md](../crates/wow-project/REPLAY_PUBLICATION.md) |
+| E2-C–E2-D | Partial source index, manifested store, native live pair service/CLI, cancellable updates, exact Library/fact-profile generation binding and retained physical native parser updates | Dependency-specific fact reuse, durable updates/removal closure, retention/GC/backup/epoch replacement and complete acceptance remain open; see [REPLAY_PUBLICATION.md](../crates/wow-project/REPLAY_PUBLICATION.md) |
 | E3-A–E3-C | Not started | Exact Blizzard source universe, context owners and service/CLI after E2 closure |
 | E4-A–E4-C | Not started | Search, lineage/migration/static impact and routing after A0 prerequisites |
 | E5-A–E5-C | Not started | Calibration, independent review/holdout and governed publication lifecycle |
@@ -276,3 +276,16 @@ under exact V1/V2/V3 catalogs; v4 writes preserve current and epoch on rejection
 Workspace policy, fmt, check, strict Clippy, tests (852 passed, 1 ignored,
 103 targets), rustdoc and build passed on 2026-10-09. Analyzer batches, reuse,
 durable updates/removal closure and full W14/E2 acceptance remain open.
+
+Physical W14 updates now apply exact Main deltas to retained native syntax and
+semantic engines. Unchanged green allocations survive; removals drop URI mappings
+and exact symbol declarations. Complete semantic reindexing and fresh target
+report extraction match independent cold final-state builds, including optional
+function facts and same-session remove/readd. Library/configuration replacement
+and standalone/package/virtual inputs use cold owners. Failure poisons/discards
+the mutable cache, preserving current; NoChange keeps its exact Arc. Frozen
+legacy replay IDs still match. Workspace policy, fmt, check, strict Clippy,
+tests (859 passed, 1 ignored, 104 targets), rustdoc and build passed on 2026-10-09;
+the strengthened declaration-removal regression also passed separately.
+Dependency-specific fact reuse, durable updates/removal closure and full W14/E2
+acceptance remain open.

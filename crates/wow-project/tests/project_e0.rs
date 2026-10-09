@@ -287,6 +287,7 @@ fn shuffled_input_order_is_identity_invariant() -> TestResult {
 #[test]
 fn no_change_preserves_the_exact_arc_and_analyzer_snapshot() -> TestResult {
     let (mut publisher, current) = publish_strict()?;
+    let previous_work = publisher.last_analyzer_update_work();
     let request = ProjectUpdateRequest::new(current.configuration().clone(), Vec::new())
         .expected_generation(current.project_generation())
         .expected_snapshot_digest(current.canonical_snapshot_digest());
@@ -294,6 +295,7 @@ fn no_change_preserves_the_exact_arc_and_analyzer_snapshot() -> TestResult {
     assert!(!outcome.changed());
     assert!(matches!(&outcome, ProjectUpdateOutcome::NoChange(_)));
     assert!(Arc::ptr_eq(&current, outcome.snapshot()));
+    assert_eq!(publisher.last_analyzer_update_work(), previous_work);
     assert_eq!(
         current.analyzer_binding().analyzer_snapshot_id(),
         outcome.snapshot().analyzer_binding().analyzer_snapshot_id()
@@ -586,6 +588,31 @@ fn successful_update_publishes_atomically_and_keeps_old_view_immutable() -> Test
     let outcome = publisher.apply_update(request)?;
     assert!(outcome.changed());
     let new_snapshot = outcome.snapshot();
+    let work = publisher
+        .last_analyzer_update_work()
+        .ok_or("missing native update work")?;
+    assert_eq!(work.updated_files, 1);
+    assert_eq!(work.added_files, 0);
+    assert_eq!(work.removed_files, 0);
+    assert_eq!(work.reused_files, old_snapshot.file_manifest().len() - 1);
+    let mut final_files = baseline_files()?;
+    final_files.retain(|file| file.relative_path().as_str() != "main/clean.lua");
+    final_files.push(ProjectInputFile::declared(
+        "main/clean.lua",
+        "local accepted = C_E0Fixture.KnownApi(\"changed\")\nreturn accepted\n",
+        ProjectLanguageKind::Lua,
+        ProjectFileRole::FirstPartyMain,
+        Some("wow-emmy/workspace-fixture:main/clean.lua"),
+    )?);
+    let expected = ProjectPublisher::new().publish_initial(bundle(
+        old_snapshot.configuration().clone(),
+        final_files,
+        false,
+    )?)?;
+    assert_eq!(
+        new_snapshot.canonical_snapshot_digest(),
+        expected.canonical_snapshot_digest()
+    );
     assert_ne!(
         old_snapshot.project_generation(),
         new_snapshot.project_generation()

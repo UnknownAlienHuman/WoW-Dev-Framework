@@ -3,6 +3,7 @@ use std::sync::atomic::AtomicBool;
 
 use wow_core::ProjectGenerationId;
 use wow_emmy::LuaWorkspaceSnapshot;
+use wow_emmy::session::{AnalyzerSession, AnalyzerUpdateWork};
 
 use crate::analyzer::build_analyzer_binding;
 use crate::update::apply_file_operations;
@@ -25,6 +26,10 @@ pub struct ProjectPublisher {
     last_failure: Option<ProjectError>,
     function_calls: bool,
     legacy_generation: bool,
+    /// Retained native session for the current physical input set. Build state
+    /// only: it never mutates a published snapshot and is discarded on any
+    /// candidate failure or cancellation.
+    analyzer_session: Option<AnalyzerSession>,
 }
 
 impl Default for ProjectPublisher {
@@ -43,6 +48,7 @@ impl ProjectPublisher {
             last_failure: None,
             function_calls: false,
             legacy_generation: false,
+            analyzer_session: None,
         }
     }
 
@@ -95,6 +101,7 @@ impl ProjectPublisher {
             libraries.clone(),
             self.function_calls,
             self.legacy_generation,
+            &mut self.analyzer_session,
             stop,
         ) {
             Ok(snapshot) => {
@@ -106,6 +113,7 @@ impl ProjectPublisher {
                 Ok(snapshot)
             }
             Err(error) => {
+                self.analyzer_session = None;
                 self.last_failure = Some(error.clone());
                 Err(error)
             }
@@ -225,12 +233,18 @@ impl ProjectPublisher {
             self.last_failure = None;
             return Ok(ProjectUpdateOutcome::NoChange(current));
         }
+        if target_configuration.configuration_digest()
+            != current.configuration().configuration_digest()
+        {
+            self.analyzer_session = None;
+        }
         match build_snapshot(
             target_configuration,
             inventory.clone(),
             libraries.clone(),
             self.function_calls,
             self.legacy_generation,
+            &mut self.analyzer_session,
             stop,
         ) {
             Ok(snapshot) => {
@@ -251,6 +265,14 @@ impl ProjectPublisher {
     #[must_use]
     pub fn current_snapshot(&self) -> Option<&Arc<ProjectSnapshot>> {
         self.current.as_ref()
+    }
+
+    /// Observed Main parser work from the latest successful native transition.
+    #[must_use]
+    pub fn last_analyzer_update_work(&self) -> Option<AnalyzerUpdateWork> {
+        self.analyzer_session
+            .as_ref()
+            .map(AnalyzerSession::last_work)
     }
 
     pub(crate) fn replay_inputs(&self) -> (&[ProjectInputFile], &[LuaWorkspaceSnapshot], bool) {
@@ -311,6 +333,7 @@ impl ProjectPublisher {
         error: ProjectError,
         current: &ProjectSnapshot,
     ) -> ProjectResult<T> {
+        self.analyzer_session = None;
         let error = error.with_current(
             current.project_generation(),
             current.canonical_snapshot_digest(),
@@ -326,6 +349,7 @@ fn build_snapshot(
     libraries: Vec<LuaWorkspaceSnapshot>,
     function_calls: bool,
     legacy_generation: bool,
+    cache: &mut Option<AnalyzerSession>,
     stop: &AtomicBool,
 ) -> ProjectResult<ProjectSnapshot> {
     let generation = if legacy_generation {
@@ -344,6 +368,7 @@ fn build_snapshot(
         &generation,
         &libraries,
         function_calls,
+        cache,
         stop,
     )?;
     let registry = ProjectSourceRegistry::build(

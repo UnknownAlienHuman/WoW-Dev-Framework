@@ -12,6 +12,13 @@ in `main`, with bounded owner responsibilities and verified remote publication.
 
 ## Current functional checkpoint
 
+The active W14 slice now applies physical Main deltas through retained native
+syntax/semantic engines. It reuses unchanged parsed trees and conservatively
+reindexes all semantics before extracting target-bound reports. Exact Library
+and configuration replacement, standalone/package replay and virtual inputs
+retain cold paths. Durable full-graph updates/removal closure remain next,
+followed by W15 retention/GC and W16 recovery; full W14/E2 acceptance is open.
+
 W11 has all 26 declared core rule IDs in its functional service publication path.
 The five TOC, four XML and three state families publish alongside the earlier W11
 families. Existing
@@ -299,3 +306,28 @@ followed by durable W13 update publication/removal closure, W15 retention and W1
 recovery. Full W14/E2 acceptance and the deferred Gethe/Ketho/runtime gates remain
 open. Current Gethe `live` was re-resolved to
 `09b9db7948abc9b9648dedaab51eb0cf3ee67b31`; it was not materialized.
+
+## W14 retained physical native-analysis checkpoint
+
+Predecessor `3a7ed0fb83d984d0c43ab896d23fe635ef33eb89` was published and read
+back with all 22 changed blobs. Physical updates now derive a complete native
+Main delta under an exact previous-snapshot precondition. Only changed files
+are reparsed in the existing syntax and semantic lanes. Unchanged Main/Library
+trees remain retained, while complete semantic reindexing recomputes dependent
+outputs and existing collectors extract fresh target-bound identities.
+
+Safe green-node pointer checks prove unchanged allocation retention; full cold
+report parity covers add/update/remove, same-session remove/readd and optional
+function facts. Exact symbol lookup observes the original declaration and its
+removal from the unchanged consumer's session. Project update output matches an
+independent final-state publication. Errors/cancellation discard the mutable
+cache and retain current; NoChange returns the same immutable Arc. Library or
+configuration changes reopen the owner; standalone/package/virtual replay stays
+on the existing cold path and frozen original IDs remain valid.
+
+Policy, fmt, workspace check, strict Clippy, tests (859 passed, 1 ignored,
+104 targets), rustdoc and build passed on 2026-10-09. The final declaration-removal
+proof also passed separately. Dependency-specific fact reuse, durable full-graph
+update/removal closure, retention/recovery and full W14/E2 acceptance remain
+open. Gethe materialization, Ketho parity and named-client runtime gates remain
+NotEvaluated until the product implementation/build stage is complete.

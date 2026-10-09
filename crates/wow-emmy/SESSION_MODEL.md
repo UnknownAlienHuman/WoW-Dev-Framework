@@ -2,6 +2,16 @@
 
 **Status:** normative E0-C lifecycle contract.
 
+The executable physical project route now retains `session::AnalyzerSession`.
+Separate Main syntax and Main/Library semantic engines preserve the existing
+native configurations. An exact `AnalyzerUpdateBatch` supplies only changed
+texts to VFS; removed paths lose their native mappings. Complete semantic
+reindexing retains unchanged parsed trees, then the existing collectors produce
+fresh target-bound reports. Failure after mutation poisons the cache; project
+publication retains the last immutable snapshot. Library/configuration changes
+and loader/virtual inputs use a cold owner. Dependency-specific fact reuse and
+the complete actor/acceptance contract below remain open.
+
 ## 1. Ownership
 
 One `AnalyzerSessionActor` owns one mutable upstream analysis instance. No other component mutates that instance directly.

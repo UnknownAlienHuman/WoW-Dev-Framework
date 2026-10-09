@@ -25,6 +25,16 @@ use super::{
 pub(super) fn analyze(snapshot: &LuaWorkspaceSnapshot) -> EmmySyntaxResult<EmmySyntaxReport> {
     validate_backend(snapshot)?;
     let root = virtual_root(snapshot.snapshot_id());
+    let analysis = build_registered(snapshot, &root)?;
+    collect_registered(&analysis, snapshot, &root)
+}
+
+/// Register exact supplied bytes under the existing physical diagnostic policy.
+pub(crate) fn build_registered(
+    snapshot: &LuaWorkspaceSnapshot,
+    root: &Path,
+) -> EmmySyntaxResult<EmmyLuaAnalysis> {
+    validate_backend(snapshot)?;
     let mut analysis = EmmyLuaAnalysis::new();
     let mut configuration = Emmyrc::default();
     configuration.runtime.version = EmmyrcLuaVersion::Lua51;
@@ -32,10 +42,10 @@ pub(super) fn analyze(snapshot: &LuaWorkspaceSnapshot) -> EmmySyntaxResult<EmmyS
     analysis.update_config(Arc::new(configuration));
     match snapshot.universe() {
         LuaWorkspaceUniverse::Project | LuaWorkspaceUniverse::Fixture => {
-            analysis.add_main_workspace(root.clone());
+            analysis.add_main_workspace(root.to_path_buf());
         }
         LuaWorkspaceUniverse::BlizzardUi => {
-            analysis.add_library_workspace(&WorkspaceFolder::new(root.clone(), true));
+            analysis.add_library_workspace(&WorkspaceFolder::new(root.to_path_buf(), true));
         }
     }
 
@@ -51,7 +61,7 @@ pub(super) fn analyze(snapshot: &LuaWorkspaceSnapshot) -> EmmySyntaxResult<EmmyS
             None,
         ));
     }
-    collect_registered(&analysis, snapshot, &root)
+    Ok(analysis)
 }
 
 /// Collect accepted diagnostics from an already populated exact analyzer
@@ -199,7 +209,7 @@ fn validate_backend(snapshot: &LuaWorkspaceSnapshot) -> EmmySyntaxResult<()> {
     Ok(())
 }
 
-fn virtual_root(snapshot_id: &str) -> PathBuf {
+pub(crate) fn virtual_root(snapshot_id: &str) -> PathBuf {
     let stable = snapshot_id
         .bytes()
         .map(|byte| {

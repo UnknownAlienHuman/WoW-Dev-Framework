@@ -497,14 +497,6 @@ fn analyze_member_call_session_impl(
             None,
         ));
     }
-    validate_compiled_backend(main)?;
-    if matches!(main.universe(), crate::LuaWorkspaceUniverse::BlizzardUi) {
-        return Err(EmmyMemberCallError::new(
-            EmmyMemberCallErrorCode::InvalidMainWorkspace,
-            "a Blizzard UI snapshot cannot be used as the Main project workspace",
-            None,
-        ));
-    }
     if virtual_units.is_some() != project_generation.is_some() {
         return Err(EmmyMemberCallError::new(
             EmmyMemberCallErrorCode::InvalidMainWorkspace,
@@ -512,239 +504,321 @@ fn analyze_member_call_session_impl(
             None,
         ));
     }
-
-    let mut ordered_libraries = libraries.to_vec();
-    ordered_libraries.sort_by(|left, right| {
-        left.snapshot_id()
-            .as_bytes()
-            .cmp(right.snapshot_id().as_bytes())
-    });
-    let mut identities = BTreeSet::new();
-    identities.insert(main.snapshot_id());
-    if let Some(virtual_units) = virtual_units {
-        crate::bindings::checkpoint(stop)?;
-        validate_compiled_backend(virtual_units)?;
-        if virtual_units.backend() != main.backend()
-            || matches!(
-                virtual_units.universe(),
-                crate::LuaWorkspaceUniverse::BlizzardUi
-            )
-        {
-            return Err(EmmyMemberCallError::new(
-                EmmyMemberCallErrorCode::IncompatibleBackend,
-                "virtual Main units do not share the physical Main analyzer identity",
-                None,
-            ));
-        }
-        if !identities.insert(virtual_units.snapshot_id()) {
-            return Err(EmmyMemberCallError::new(
-                EmmyMemberCallErrorCode::DuplicateWorkspaceSnapshot,
-                "virtual Main and physical Main snapshots must be distinct",
-                None,
-            ));
-        }
-    }
-    for library in &ordered_libraries {
-        crate::bindings::checkpoint(stop)?;
-        validate_compiled_backend(library)?;
-        if library.backend() != main.backend() {
-            return Err(EmmyMemberCallError::new(
-                EmmyMemberCallErrorCode::IncompatibleBackend,
-                "Main and Library snapshots do not share one exact analyzer identity",
-                None,
-            ));
-        }
-        if !identities.insert(library.snapshot_id()) {
-            return Err(EmmyMemberCallError::new(
-                EmmyMemberCallErrorCode::DuplicateWorkspaceSnapshot,
-                "the same workspace snapshot was supplied in more than one role",
-                None,
-            ));
-        }
-    }
-
-    let main_root = virtual_root("main", main.snapshot_id());
-    let virtual_main_root =
-        virtual_units.map(|snapshot| virtual_root("xml-virtual", snapshot.snapshot_id()));
-    let library_roots = ordered_libraries
-        .iter()
-        .enumerate()
-        .map(|(ordinal, snapshot)| {
-            (
-                *snapshot,
-                virtual_root(&format!("library-{ordinal}"), snapshot.snapshot_id()),
-            )
-        })
-        .collect::<Vec<_>>();
-
-    let mut analysis = EmmyLuaAnalysis::new();
-    let mut configuration = Emmyrc::default();
-    configuration.runtime.version = EmmyrcLuaVersion::Lua51;
-    configuration.diagnostics.enable = virtual_units.is_some();
-    analysis.update_config(Arc::new(configuration));
-    analysis.add_main_workspace(main_root.clone());
-    if let Some(root) = &virtual_main_root {
-        analysis.add_main_workspace(root.clone());
-    }
-    for (_, root) in &library_roots {
-        analysis.add_library_workspace(&WorkspaceFolder::new(root.clone(), true));
-    }
-
-    let mut exact_files = Vec::new();
-    for (snapshot, root) in &library_roots {
-        exact_files.extend(
-            snapshot
-                .files()
-                .iter()
-                .map(|file| (root.join(file.path()), Some(file.text().to_owned()))),
-        );
-    }
-    exact_files.extend(
-        main.files()
-            .iter()
-            .map(|file| (main_root.join(file.path()), Some(file.text().to_owned()))),
-    );
-    if let (Some(snapshot), Some(root)) = (virtual_units, virtual_main_root.as_ref()) {
-        exact_files.extend(
-            snapshot
-                .files()
-                .iter()
-                .map(|file| (root.join(file.path()), Some(file.text().to_owned()))),
-        );
-    }
-    let expected_files = exact_files.len();
-    if analysis.update_files_by_path(exact_files).len() != expected_files {
-        return Err(EmmyMemberCallError::new(
-            EmmyMemberCallErrorCode::AnalyzerFileRegistrationFailed,
-            "upstream did not register every supplied Main, virtual and Library file",
-            None,
-        ));
-    }
-
-    for (snapshot, root) in &library_roots {
-        for file in snapshot.files() {
-            crate::bindings::checkpoint(stop)?;
-            let model = semantic_model(&analysis, root, file)?;
-            if model
-                .get_file_parse_error()
-                .is_some_and(|errors| !errors.is_empty())
-            {
-                return Err(EmmyMemberCallError::new(
-                    EmmyMemberCallErrorCode::LibraryHealthFailed,
-                    "a Library file has parse errors; resolution-dependent facts are unavailable",
-                    Some(file.path()),
-                ));
-            }
-        }
-    }
-
-    let library_snapshot_ids = ordered_libraries
-        .iter()
-        .map(|snapshot| snapshot.snapshot_id().into())
-        .collect::<Vec<Box<str>>>();
-    let report =
-        collect_member_call_report(&analysis, main, &main_root, &library_snapshot_ids, stop)?;
-    let virtual_semantics = match (
+    let registered = RegisteredMemberAnalysis::new(main, libraries, virtual_units, stop)?;
+    registered.collect(
+        main,
         virtual_units,
-        virtual_main_root.as_ref(),
         project_generation,
-    ) {
-        (Some(snapshot), Some(root), Some(project_generation)) => {
+        MemberCallSessionQueryProfile::new(queries, callable_queries),
+        include_function_calls,
+        stop,
+    )
+}
+
+/// Private native engine. Immutable framework snapshots never contain it.
+#[derive(Debug)]
+pub(crate) struct RegisteredMemberAnalysis {
+    pub(crate) analysis: EmmyLuaAnalysis,
+    pub(crate) main_root: PathBuf,
+    virtual_main_root: Option<PathBuf>,
+    library_roots: Vec<(LuaWorkspaceSnapshot, PathBuf)>,
+}
+
+impl RegisteredMemberAnalysis {
+    pub(crate) fn new(
+        main: &LuaWorkspaceSnapshot,
+        libraries: &[&LuaWorkspaceSnapshot],
+        virtual_units: Option<&LuaWorkspaceSnapshot>,
+        stop: &std::sync::atomic::AtomicBool,
+    ) -> EmmyMemberCallResult<Self> {
+        validate_compiled_backend(main)?;
+        if matches!(main.universe(), crate::LuaWorkspaceUniverse::BlizzardUi) {
+            return Err(EmmyMemberCallError::new(
+                EmmyMemberCallErrorCode::InvalidMainWorkspace,
+                "a Blizzard UI snapshot cannot be used as the Main project workspace",
+                None,
+            ));
+        }
+
+        let mut ordered_libraries = libraries.to_vec();
+        ordered_libraries.sort_by(|left, right| {
+            left.snapshot_id()
+                .as_bytes()
+                .cmp(right.snapshot_id().as_bytes())
+        });
+        let mut identities = BTreeSet::new();
+        identities.insert(main.snapshot_id());
+        if let Some(virtual_units) = virtual_units {
             crate::bindings::checkpoint(stop)?;
-            let syntax_report =
-                crate::syntax::analyzer::collect_registered(&analysis, snapshot, root)
-                    .map_err(map_virtual_syntax_error)?;
-            let virtual_member_calls =
-                collect_member_call_report(&analysis, snapshot, root, &library_snapshot_ids, stop)?;
-            if report
-                .references
-                .len()
-                .saturating_add(virtual_member_calls.references.len())
-                > MAX_FACTS
-                || report
-                    .calls
-                    .len()
-                    .saturating_add(virtual_member_calls.calls.len())
-                    > MAX_FACTS
+            validate_compiled_backend(virtual_units)?;
+            if virtual_units.backend() != main.backend()
+                || matches!(
+                    virtual_units.universe(),
+                    crate::LuaWorkspaceUniverse::BlizzardUi
+                )
             {
                 return Err(EmmyMemberCallError::new(
-                    EmmyMemberCallErrorCode::FactBudgetExceeded,
-                    "physical and virtual direct-member facts exceed the session budget",
+                    EmmyMemberCallErrorCode::IncompatibleBackend,
+                    "virtual Main units do not share the physical Main analyzer identity",
                     None,
                 ));
             }
-            Some(crate::virtual_semantics::VirtualSemanticReport::new(
-                project_generation,
-                main,
-                snapshot,
-                library_snapshot_ids.clone(),
-                syntax_report,
-                virtual_member_calls,
-            )?)
+            if !identities.insert(virtual_units.snapshot_id()) {
+                return Err(EmmyMemberCallError::new(
+                    EmmyMemberCallErrorCode::DuplicateWorkspaceSnapshot,
+                    "virtual Main and physical Main snapshots must be distinct",
+                    None,
+                ));
+            }
         }
-        (None, None, None) => None,
-        _ => {
+        for library in &ordered_libraries {
+            crate::bindings::checkpoint(stop)?;
+            validate_compiled_backend(library)?;
+            if library.backend() != main.backend() {
+                return Err(EmmyMemberCallError::new(
+                    EmmyMemberCallErrorCode::IncompatibleBackend,
+                    "Main and Library snapshots do not share one exact analyzer identity",
+                    None,
+                ));
+            }
+            if !identities.insert(library.snapshot_id()) {
+                return Err(EmmyMemberCallError::new(
+                    EmmyMemberCallErrorCode::DuplicateWorkspaceSnapshot,
+                    "the same workspace snapshot was supplied in more than one role",
+                    None,
+                ));
+            }
+        }
+
+        let main_root = virtual_root("main", main.snapshot_id());
+        let virtual_main_root =
+            virtual_units.map(|snapshot| virtual_root("xml-virtual", snapshot.snapshot_id()));
+        let library_roots = ordered_libraries
+            .iter()
+            .enumerate()
+            .map(|(ordinal, snapshot)| {
+                (
+                    *snapshot,
+                    virtual_root(&format!("library-{ordinal}"), snapshot.snapshot_id()),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        let mut analysis = EmmyLuaAnalysis::new();
+        let mut configuration = Emmyrc::default();
+        configuration.runtime.version = EmmyrcLuaVersion::Lua51;
+        configuration.diagnostics.enable = virtual_units.is_some();
+        analysis.update_config(Arc::new(configuration));
+        analysis.add_main_workspace(main_root.clone());
+        if let Some(root) = &virtual_main_root {
+            analysis.add_main_workspace(root.clone());
+        }
+        for (_, root) in &library_roots {
+            analysis.add_library_workspace(&WorkspaceFolder::new(root.clone(), true));
+        }
+
+        let mut exact_files = Vec::new();
+        for (snapshot, root) in &library_roots {
+            exact_files.extend(
+                snapshot
+                    .files()
+                    .iter()
+                    .map(|file| (root.join(file.path()), Some(file.text().to_owned()))),
+            );
+        }
+        exact_files.extend(
+            main.files()
+                .iter()
+                .map(|file| (main_root.join(file.path()), Some(file.text().to_owned()))),
+        );
+        if let (Some(snapshot), Some(root)) = (virtual_units, virtual_main_root.as_ref()) {
+            exact_files.extend(
+                snapshot
+                    .files()
+                    .iter()
+                    .map(|file| (root.join(file.path()), Some(file.text().to_owned()))),
+            );
+        }
+        let expected_files = exact_files.len();
+        if analysis.update_files_by_path(exact_files).len() != expected_files {
             return Err(EmmyMemberCallError::new(
-                EmmyMemberCallErrorCode::InvalidMainWorkspace,
-                "virtual semantic session inputs are incomplete",
+                EmmyMemberCallErrorCode::AnalyzerFileRegistrationFailed,
+                "upstream did not register every supplied Main, virtual and Library file",
                 None,
             ));
         }
-    };
 
-    let mut callable_signatures = std::collections::BTreeMap::new();
-    let lookups = if queries.is_empty() {
-        None
-    } else {
-        Some(crate::bindings::resolve(
-            &analysis,
-            main,
-            &main_root,
-            &library_roots,
-            queries,
-            include_function_calls.then_some(&mut callable_signatures),
-            stop,
-        )?)
-    };
-    let callable_lookups = if include_function_calls && !callable_queries.is_empty() {
-        Some(crate::bindings::resolve(
-            &analysis,
-            main,
-            &main_root,
-            &library_roots,
-            callable_queries,
-            Some(&mut callable_signatures),
-            stop,
-        )?)
-    } else {
-        None
-    };
-    let mut lookup_analysis_ids = lookups
-        .iter()
-        .chain(callable_lookups.iter())
-        .map(|report| report.analysis_id())
-        .collect::<Vec<_>>();
-    lookup_analysis_ids.sort_unstable();
-    lookup_analysis_ids.dedup();
-    let function_calls = if include_function_calls {
-        Some(crate::function_calls::collect(
-            &analysis,
-            main,
-            &main_root,
-            &library_roots,
-            &callable_signatures,
-            &lookup_analysis_ids,
-            stop,
-        )?)
-    } else {
-        None
-    };
-    Ok(MemberCallSession {
-        member_calls: report,
-        symbol_lookup: lookups,
-        function_calls,
-        virtual_semantics,
-    })
+        for (snapshot, root) in &library_roots {
+            for file in snapshot.files() {
+                crate::bindings::checkpoint(stop)?;
+                let model = semantic_model(&analysis, root, file)?;
+                if model
+                    .get_file_parse_error()
+                    .is_some_and(|errors| !errors.is_empty())
+                {
+                    return Err(EmmyMemberCallError::new(
+                        EmmyMemberCallErrorCode::LibraryHealthFailed,
+                        "a Library file has parse errors; resolution-dependent facts are unavailable",
+                        Some(file.path()),
+                    ));
+                }
+            }
+        }
+
+        Ok(Self {
+            analysis,
+            main_root,
+            virtual_main_root,
+            library_roots: library_roots
+                .into_iter()
+                .map(|(s, r)| (s.clone(), r))
+                .collect(),
+        })
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn collect(
+        &self,
+        main: &LuaWorkspaceSnapshot,
+        virtual_units: Option<&LuaWorkspaceSnapshot>,
+        project_generation: Option<ProjectGenerationId>,
+        profile: MemberCallSessionQueryProfile<'_>,
+        include_function_calls: bool,
+        stop: &std::sync::atomic::AtomicBool,
+    ) -> EmmyMemberCallResult<MemberCallSession> {
+        crate::bindings::checkpoint(stop)?;
+        crate::bindings::validate_queries(profile.symbol_queries)?;
+        crate::bindings::validate_queries(profile.callable_queries)?;
+        if !include_function_calls && !profile.callable_queries.is_empty() {
+            return Err(EmmyMemberCallError::new(
+                EmmyMemberCallErrorCode::InvalidMainWorkspace,
+                "callable-only queries require the function-call sidecar",
+                None,
+            ));
+        }
+        let analysis = &self.analysis;
+        let main_root = &self.main_root;
+        let virtual_main_root = &self.virtual_main_root;
+        let library_roots = self
+            .library_roots
+            .iter()
+            .map(|(s, r)| (s, r.clone()))
+            .collect::<Vec<_>>();
+        let queries = profile.symbol_queries;
+        let callable_queries = profile.callable_queries;
+        let library_snapshot_ids = library_roots
+            .iter()
+            .map(|(snapshot, _)| snapshot.snapshot_id().into())
+            .collect::<Vec<Box<str>>>();
+        let report =
+            collect_member_call_report(analysis, main, main_root, &library_snapshot_ids, stop)?;
+        let virtual_semantics = match (
+            virtual_units,
+            virtual_main_root.as_ref(),
+            project_generation,
+        ) {
+            (Some(snapshot), Some(root), Some(project_generation)) => {
+                crate::bindings::checkpoint(stop)?;
+                let syntax_report =
+                    crate::syntax::analyzer::collect_registered(analysis, snapshot, root)
+                        .map_err(map_virtual_syntax_error)?;
+                let virtual_member_calls = collect_member_call_report(
+                    analysis,
+                    snapshot,
+                    root,
+                    &library_snapshot_ids,
+                    stop,
+                )?;
+                if report
+                    .references
+                    .len()
+                    .saturating_add(virtual_member_calls.references.len())
+                    > MAX_FACTS
+                    || report
+                        .calls
+                        .len()
+                        .saturating_add(virtual_member_calls.calls.len())
+                        > MAX_FACTS
+                {
+                    return Err(EmmyMemberCallError::new(
+                        EmmyMemberCallErrorCode::FactBudgetExceeded,
+                        "physical and virtual direct-member facts exceed the session budget",
+                        None,
+                    ));
+                }
+                Some(crate::virtual_semantics::VirtualSemanticReport::new(
+                    project_generation,
+                    main,
+                    snapshot,
+                    library_snapshot_ids.clone(),
+                    syntax_report,
+                    virtual_member_calls,
+                )?)
+            }
+            (None, None, None) => None,
+            _ => {
+                return Err(EmmyMemberCallError::new(
+                    EmmyMemberCallErrorCode::InvalidMainWorkspace,
+                    "virtual semantic session inputs are incomplete",
+                    None,
+                ));
+            }
+        };
+
+        let mut callable_signatures = std::collections::BTreeMap::new();
+        let lookups = if queries.is_empty() {
+            None
+        } else {
+            Some(crate::bindings::resolve(
+                analysis,
+                main,
+                main_root,
+                &library_roots,
+                queries,
+                include_function_calls.then_some(&mut callable_signatures),
+                stop,
+            )?)
+        };
+        let callable_lookups = if include_function_calls && !callable_queries.is_empty() {
+            Some(crate::bindings::resolve(
+                analysis,
+                main,
+                main_root,
+                &library_roots,
+                callable_queries,
+                Some(&mut callable_signatures),
+                stop,
+            )?)
+        } else {
+            None
+        };
+        let mut lookup_analysis_ids = lookups
+            .iter()
+            .chain(callable_lookups.iter())
+            .map(|report| report.analysis_id())
+            .collect::<Vec<_>>();
+        lookup_analysis_ids.sort_unstable();
+        lookup_analysis_ids.dedup();
+        let function_calls = if include_function_calls {
+            Some(crate::function_calls::collect(
+                analysis,
+                main,
+                main_root,
+                &library_roots,
+                &callable_signatures,
+                &lookup_analysis_ids,
+                stop,
+            )?)
+        } else {
+            None
+        };
+        Ok(MemberCallSession {
+            member_calls: report,
+            symbol_lookup: lookups,
+            function_calls,
+            virtual_semantics,
+        })
+    }
 }
 
 fn collect_member_call_report(

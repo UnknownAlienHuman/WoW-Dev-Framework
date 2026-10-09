@@ -25,9 +25,26 @@ The original `derive` receipt recipe remains v1; new publishers use
 `derive_with_analysis`, while `derive_with_libraries` defaults the fact flag to
 false. Old archives hydrate only through the crate-private legacy publisher.
 
-This remains a full candidate rebuild. Analyzer update batches, reuse proofs,
-transitive graph removal and W13 update publication remain open. These controls
-and exact identities alone are not full W14 incremental acceptance.
+Physical Lua updates now retain `wow-emmy::session::AnalyzerSession`. An exact
+`AnalyzerUpdateBatch` binds the previous Main snapshot, target generation and
+all added/changed/removed paths. Only changed texts enter the two existing native
+parser lanes; unchanged Main and Library trees stay in VFS. Semantic indexes are
+conservatively rebuilt over the complete retained corpus, and all reports are
+extracted against the target snapshot. Fact/diagnostic reuse is not inferred.
+`last_analyzer_update_work()` reports Main parser work rather than fact reuse.
+
+Library or configuration changes reopen the native owner. Standalone TOC/XML
+and package inputs retain the existing cold path. Precondition checks precede
+mutation; any candidate error or cancellation discards the cache and preserves
+the previous immutable publication. NoChange returns the same snapshot without
+native work. Native failure poisons its mutable session before any further use.
+
+Independent cold parity covers add/update/remove, same-session remove/readd,
+function-call and symbol-query reports, and removal of an exact declaration
+observed before the update. Safe green-node pointer comparisons verify retained
+trees; old replay fixtures retain their original IDs. Transitive graph removal,
+W13 durable update publication, dependency-specific fact reuse and full W14
+incremental acceptance remain open.
 
 ## 1. Update request
 
