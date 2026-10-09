@@ -18,8 +18,16 @@ and conservatively reindexes semantics before extracting target-bound reports.
 The exact retained publication record remains the base for idempotent retries;
 inactive validation and current CAS preserve older leased readers. Exact Library
 and configuration replacement retain cold analysis paths. Standalone/package
-durable updates and dependency-specific fact reuse remain open. W15 retention/GC
-and W16 recovery are next; full W14/E2 acceptance remains open.
+durable updates and dependency-specific fact reuse remain open. W15 has executable
+persistent exact generation pins in a separately selected physical v2 profile,
+with frozen v1 reopening unchanged. Operation-root release, complete retained
+closure and guarded GC remain next, followed by W16 recovery; full W14/E2 and
+W15 acceptance remain open. See
+[PROJECT_RETENTION.md](../crates/wow-store/PROJECT_RETENTION.md).
+
+The roots checkpoint passed workspace policy, fmt, check, strict Clippy, tests
+(864 passed, 1 ignored, 105 targets), rustdoc and build on 2026-10-09. The ignored
+consumer check and Gethe/Ketho/runtime gates remain open.
 
 W11 has all 26 declared core rule IDs in its functional service publication path.
 The five TOC, four XML and three state families publish alongside the earlier W11

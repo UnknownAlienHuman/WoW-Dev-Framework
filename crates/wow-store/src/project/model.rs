@@ -7,6 +7,7 @@ use std::{
 };
 
 pub const PHYSICAL_PROFILE: &str = "project-store-wal-manifested-partitions-v1";
+pub const RETAINED_PHYSICAL_PROFILE: &str = "project-store-wal-manifested-partitions-v2";
 pub const RECORD_PROFILE: &str = "wow-store/retained-partition-records/1";
 pub const MAX_RECORD_BYTES: usize = 32 * 1024 * 1024;
 pub const MAX_GENERATION_BYTES: usize = 64 * 1024 * 1024;
@@ -174,6 +175,22 @@ impl EpochManifest {
         runtime: String,
         schema_digest: String,
     ) -> StoreResult<Self> {
+        Self::with_physical_profile(owner, catalog, runtime, schema_digest, PHYSICAL_PROFILE)
+    }
+
+    pub(super) fn with_physical_profile(
+        owner: &str,
+        catalog: RecordCatalog,
+        runtime: String,
+        schema_digest: String,
+        physical_profile: &str,
+    ) -> StoreResult<Self> {
+        if !matches!(
+            physical_profile,
+            PHYSICAL_PROFILE | RETAINED_PHYSICAL_PROFILE
+        ) {
+            return Err(failure(StoreErrorCode::ConfigurationInvalid));
+        }
         if !named(owner) {
             return Err(failure(StoreErrorCode::ConfigurationInvalid));
         }
@@ -181,7 +198,7 @@ impl EpochManifest {
         let bytes = encode(
             &(
                 RECORD_PROFILE,
-                PHYSICAL_PROFILE,
+                physical_profile,
                 owner,
                 &catalog,
                 &runtime,
@@ -191,7 +208,7 @@ impl EpochManifest {
         )?;
         Ok(Self {
             schema: RECORD_PROFILE.into(),
-            physical_profile: PHYSICAL_PROFILE.into(),
+            physical_profile: physical_profile.into(),
             owner: owner.into(),
             catalog,
             sqlite_runtime_digest: runtime,
@@ -204,6 +221,9 @@ impl EpochManifest {
     }
     pub fn owner(&self) -> &str {
         &self.owner
+    }
+    pub fn physical_profile(&self) -> &str {
+        &self.physical_profile
     }
 }
 

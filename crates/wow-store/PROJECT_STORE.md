@@ -1,6 +1,9 @@
 # ProjectStore E2-D routing and selected physical model
 
-**Status:** normative E2-D design selection; implementation has not started.
+**Status:** normative E2-D design selection with partial executable publication
+and retention. Full E2-D acceptance remains open. The frozen v1 design below is
+extended by the separately selected v2 persistent-root profile in
+[`PROJECT_RETENTION.md`](PROJECT_RETENTION.md); existing v1 epochs are not migrated.
 
 The pre-E2 document intentionally left the physical model open. E2-D now selects the smallest design that satisfies incremental publication, immutable historical readers, graph partition replacement, and bounded storage growth:
 

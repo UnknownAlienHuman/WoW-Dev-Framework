@@ -1,6 +1,7 @@
 //! Coherent native project/graph publication through the existing manifested
 //! store. Current resolves once; actual replay and all owner checks hold its lease.
 mod operations;
+mod retention;
 #[cfg(test)]
 mod tests;
 use crate::{ServiceError, ServiceErrorCode, ServiceResult};
@@ -52,7 +53,8 @@ impl LiveProjectRead {
 impl LiveProjectStore {
     pub fn create(root: &Path, owner: &str) -> ServiceResult<Self> {
         Ok(Self {
-            store: ProjectStore::create(root, owner, catalog()?).map_err(store_error)?,
+            store: ProjectStore::create_with_retention(root, owner, catalog()?)
+                .map_err(store_error)?,
         })
     }
     pub fn open(root: &Path) -> ServiceResult<Self> {

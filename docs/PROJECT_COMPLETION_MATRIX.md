@@ -303,3 +303,16 @@ Workspace policy, fmt, check, strict Clippy, tests (860 passed, 1 ignored,
 intent test and CLI guards passed separately. Dependency-specific fact reuse,
 loader/package durable updates, retention/recovery and full W14/E2 acceptance
 remain open. Publication does not close the Gethe/Ketho or named-client gates.
+
+W15 now has persistent exact generation holds under a separately selected physical
+v2 profile. SQL roots retain canonical identity, attributable holder, finite kind
+and exact epoch/generation. Put is idempotent only for the complete original root;
+removal checks its digest. Real store and native service reopen regressions pass;
+v1 physical epochs and frozen owner catalogs remain readable without migration.
+Unresolved transactions cannot prove durable commit success. No generation or
+partition deletion is implemented here. Final workspace policy, fmt, check, strict
+Clippy, tests (864 passed, 1 ignored, 105 targets), rustdoc and build passed on
+2026-10-09. Operation release/idempotency tombstones,
+complete root/shared-data closure, stale-plan rejection, GC/recovery and full W15
+acceptance remain open; see
+[PROJECT_RETENTION.md](../crates/wow-store/PROJECT_RETENTION.md).

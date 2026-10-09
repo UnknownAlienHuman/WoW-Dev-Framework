@@ -40,6 +40,15 @@ CREATE TABLE current_publication (
 CREATE INDEX membership_version ON membership(version);
 "#;
 
+const RETENTION_SCHEMA: &str = r#"
+CREATE TABLE retention_roots (
+    root_id TEXT PRIMARY KEY,
+    generation_id TEXT NOT NULL REFERENCES generations(generation_id),
+    record BLOB NOT NULL CHECK(length(record)<=65536)
+) STRICT;
+CREATE INDEX retention_generation ON retention_roots(generation_id);
+"#;
+
 pub(super) struct Lifetime {
     // The OS-held writer lease survives the writer while any read snapshot lives.
     pub _lock: File,
@@ -54,9 +63,28 @@ pub(super) struct Database {
 
 impl Database {
     pub fn create(root: &Path, owner: &str, catalog: RecordCatalog) -> StoreResult<Self> {
-        let schema_digest = expected_schema()?;
+        Self::create_profile(root, owner, catalog, PHYSICAL_PROFILE)
+    }
+    pub fn create_with_retention(
+        root: &Path,
+        owner: &str,
+        catalog: RecordCatalog,
+    ) -> StoreResult<Self> {
+        Self::create_profile(root, owner, catalog, RETAINED_PHYSICAL_PROFILE)
+    }
+    fn create_profile(
+        root: &Path,
+        owner: &str,
+        catalog: RecordCatalog,
+        profile: &str,
+    ) -> StoreResult<Self> {
+        let schema_digest = expected_schema(profile)?;
         let runtime = runtime_id()?;
-        let epoch = EpochManifest::new(owner, catalog, runtime, schema_digest)?;
+        let epoch = if profile == PHYSICAL_PROFILE {
+            EpochManifest::new(owner, catalog, runtime, schema_digest)?
+        } else {
+            EpochManifest::with_physical_profile(owner, catalog, runtime, schema_digest, profile)?
+        };
         // Creation never adopts a pre-existing directory or SQLite database.
         create_private_directory(root).map_err(|_| failure(StoreErrorCode::DatabaseUnavailable))?;
         let root = admitted_root(root)?;
@@ -88,11 +116,16 @@ impl Database {
             .pragma_update(None, "application_id", APPLICATION_ID)
             .map_err(StoreError::database)?;
         connection
-            .pragma_update(None, "user_version", 1)
+            .pragma_update(None, "user_version", physical_version(profile)?)
             .map_err(StoreError::database)?;
         connection
             .execute_batch(SCHEMA)
             .map_err(StoreError::database)?;
+        if profile == RETAINED_PHYSICAL_PROFILE {
+            connection
+                .execute_batch(RETENTION_SCHEMA)
+                .map_err(StoreError::database)?;
+        }
         let bytes = encode(&epoch, 65536)?;
         connection
             .execute(
@@ -149,11 +182,12 @@ impl Database {
             return Err(invalid());
         }
         let epoch: EpochManifest = serde_json::from_slice(&bytes).map_err(|_| invalid())?;
-        let expected = EpochManifest::new(
+        let expected = EpochManifest::with_physical_profile(
             &epoch.owner,
             catalog.clone(),
             runtime_id()?,
-            expected_schema()?,
+            expected_schema(&epoch.physical_profile)?,
+            &epoch.physical_profile,
         )?;
         if epoch != expected || encode(&epoch, 65536)? != bytes {
             return Err(invalid());
@@ -204,6 +238,7 @@ impl Database {
         })
     }
     pub fn read_connection(&self) -> StoreResult<Connection> {
+        self.ensure_idle()?;
         let c = connect(&self.path, true)?;
         validate_header(&c, &self.epoch)?;
         c.execute_batch("BEGIN DEFERRED")
@@ -211,6 +246,7 @@ impl Database {
         Ok(c)
     }
     pub fn write_budget(&self, bytes: usize) -> StoreResult<()> {
+        self.ensure_idle()?;
         // Reserve WAL growth conservatively before entering any transaction. A
         // pinned reader can cause an explicit refusal, never unbounded growth.
         let mut wal = self.path.as_os_str().to_os_string();
@@ -223,6 +259,12 @@ impl Database {
         let reserve = (bytes as u64).saturating_mul(3).saturating_add(1024 * 1024);
         if size.saturating_add(reserve) > 128 * 1024 * 1024 {
             return Err(failure(StoreErrorCode::BudgetExceeded));
+        }
+        Ok(())
+    }
+    pub fn ensure_idle(&self) -> StoreResult<()> {
+        if !self.connection.is_autocommit() {
+            return Err(failure(StoreErrorCode::OutcomeUnknown));
         }
         Ok(())
     }
@@ -342,9 +384,21 @@ fn enable_writer(c: &Connection) -> StoreResult<()> {
     }
     Ok(())
 }
-fn expected_schema() -> StoreResult<String> {
+fn physical_version(profile: &str) -> StoreResult<i64> {
+    match profile {
+        PHYSICAL_PROFILE => Ok(1),
+        RETAINED_PHYSICAL_PROFILE => Ok(2),
+        _ => Err(failure(StoreErrorCode::ConfigurationInvalid)),
+    }
+}
+fn expected_schema(profile: &str) -> StoreResult<String> {
+    physical_version(profile)?;
     let c = Connection::open_in_memory().map_err(StoreError::database)?;
     c.execute_batch(SCHEMA).map_err(StoreError::database)?;
+    if profile == RETAINED_PHYSICAL_PROFILE {
+        c.execute_batch(RETENTION_SCHEMA)
+            .map_err(StoreError::database)?;
+    }
     schema_digest(&c)
 }
 fn schema_digest(c: &Connection) -> StoreResult<String> {
@@ -389,7 +443,7 @@ fn validate_header(c: &Connection, epoch: &EpochManifest) -> StoreResult<()> {
         || vacuum != 0
         || encoding != "UTF-8"
         || app != APPLICATION_ID
-        || version != 1
+        || version != physical_version(&epoch.physical_profile)?
         || mode != "wal"
         || schema_digest(c)? != epoch.schema_digest
     {

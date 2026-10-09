@@ -5,15 +5,17 @@ mod database;
 mod model;
 mod publication;
 mod read;
+mod retention;
 use crate::{OperationId, StoreError, StoreResult};
 use database::Database;
 pub use model::{
     CurrentPublication, CurrentRecordId, EpochId, EpochManifest, GenerationManifest,
     PHYSICAL_PROFILE, PartitionMember, PartitionRecord, PartitionVersionId, PublicationOperation,
-    PublicationRequest, PublicationState, RECORD_PROFILE, RecordCatalog, StoreGenerationId,
-    ValidationId,
+    PublicationRequest, PublicationState, RECORD_PROFILE, RETAINED_PHYSICAL_PROFILE, RecordCatalog,
+    StoreGenerationId, ValidationId,
 };
 pub use read::{ReadSelector, ReadSnapshot, ValidatedRead};
+pub use retention::{RetentionRoot, RetentionRootId, RetentionRootKind};
 use std::{path::Path, sync::atomic::AtomicBool};
 
 /// One process-local owner. All read snapshots share its OS-held writer lock;
@@ -28,6 +30,15 @@ impl ProjectStore {
         catalog: RecordCatalog,
     ) -> StoreResult<Self> {
         Database::create(root.as_ref(), owner, catalog).map(|db| Self { db })
+    }
+    /// Create a new selected epoch with durable retention roots. Existing v1
+    /// epochs keep their exact schema and manifest; no migration is performed.
+    pub fn create_with_retention(
+        root: impl AsRef<Path>,
+        owner: &str,
+        catalog: RecordCatalog,
+    ) -> StoreResult<Self> {
+        Database::create_with_retention(root.as_ref(), owner, catalog).map(|db| Self { db })
     }
     pub fn open(root: impl AsRef<Path>, catalog: &RecordCatalog) -> StoreResult<Self> {
         Database::open(root.as_ref(), catalog).map(|db| Self { db })
@@ -57,9 +68,11 @@ impl ProjectStore {
         &self.db.epoch
     }
     pub fn current(&self) -> StoreResult<Option<CurrentPublication>> {
+        self.db.ensure_idle()?;
         read::read_current(&self.db.connection, &self.db.epoch)
     }
     pub fn operation(&self, id: &OperationId) -> StoreResult<Option<PublicationOperation>> {
+        self.db.ensure_idle()?;
         read::read_operation(&self.db.connection, id, &self.db.epoch)
     }
     pub fn read(&self, selector: &ReadSelector, stop: &AtomicBool) -> StoreResult<ReadSnapshot> {
@@ -68,6 +81,7 @@ impl ProjectStore {
     /// Explicit nonblocking checkpoint. Busy/remaining frames are reported; no
     /// loop revokes readers or grows a query's budget to make it succeed.
     pub fn checkpoint(&self, stop: &AtomicBool) -> StoreResult<CheckpointReport> {
+        self.db.ensure_idle()?;
         model::checkpoint(stop)?;
         let (busy, frames, checkpointed) = self
             .db

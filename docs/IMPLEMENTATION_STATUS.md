@@ -692,3 +692,21 @@ intent test passed afterward; CLI guard/help smoke also passed. Full W14/E2,
 loader/package durable updates, dependency-specific fact reuse, retention/recovery
 and source/runtime acceptance remain open. Current Gethe materialization still
 follows the product implementation/build stage.
+
+## W15 persistent generation roots (2026-10-09)
+
+New live stores select physical profile v2 with SQL-authoritative, attributable
+generation holds. Put/list/digest-guarded removal bind exact epoch and generation,
+reject same-ID substitution, remain bounded and cancellable, and survive reopen.
+Frozen v1 schemas, payload catalogs and epoch bytes are preserved; old service
+stores remain readable and refuse the unsupported retention API without migration.
+Commit observation rejects an active connection transaction as `OutcomeUnknown`,
+including the existing publication path. See
+[PROJECT_RETENTION.md](../crates/wow-store/PROJECT_RETENTION.md).
+
+The store lifecycle and nine live-project service regressions passed, including
+real native publication/reopen and all frozen legacy catalogs. Final workspace
+policy, fmt, check, strict Clippy, tests (864 passed, 1 ignored, 105 targets),
+rustdoc and build passed. This slice provides
+no deletion. Operation-root release/tombstones, complete GC closure and plans,
+backup/recovery, Windows/crash and full W15/E2 acceptance remain open.

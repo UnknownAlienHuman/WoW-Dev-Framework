@@ -16,6 +16,7 @@ use wow_project::{
 type TestResult<T = ()> = Result<T, Box<dyn Error>>;
 mod durable;
 mod library_modes;
+mod retention;
 
 fn input_bundle(source: &str) -> TestResult<ProjectInputBundle> {
     input_bundle_with_plan(vec![ProjectInputFile::new("main.lua", source)?], None)

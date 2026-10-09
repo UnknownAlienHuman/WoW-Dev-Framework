@@ -156,6 +156,7 @@ impl ProjectStore {
         stop: &AtomicBool,
     ) -> StoreResult<PublicationOperation> {
         checkpoint(stop)?;
+        self.db.ensure_idle()?;
         if validated.epoch != self.db.epoch.epoch_id {
             return Err(invalid());
         }
@@ -266,6 +267,7 @@ impl ProjectStore {
         expected: &PublicationOperation,
         committed: rusqlite::Result<()>,
     ) -> StoreResult<PublicationOperation> {
+        self.db.ensure_idle()?;
         match self.operation(&expected.operation_id) {
             Ok(Some(op)) if op == *expected => Ok(op),
             Ok(_) if committed.is_ok() => Err(invalid()),
@@ -283,6 +285,81 @@ fn ensure_request(op: &PublicationOperation, request: &PublicationRequest) -> St
     if op.request_digest != request.digest || op.generation_id != request.manifest.generation_id {
         Err(failure(StoreErrorCode::OperationConflict))
     } else {
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn active_transaction_never_proves_a_durable_publication_result()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let root = std::env::temp_dir().join(format!(
+            "wow-publication-commit-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)?
+                .as_nanos()
+        ));
+        let catalog = RecordCatalog::new(&["fixture.partition.v1"], &["fixture.owner.v1"])?;
+        let mut store = ProjectStore::create_with_retention(&root, "fixture.commit", catalog)?;
+        let request = PublicationRequest::new(
+            store.epoch(),
+            OperationId::new("fixture:commit")?,
+            None,
+            [("fixture.owner".into(), "fixture:commit".into())].into(),
+            vec![PartitionRecord::new(
+                "fixture.data",
+                "fixture.partition.v1",
+                &vec![1u32],
+            )?],
+        )?;
+        let operation = store.prepare(&request, &AtomicBool::new(false))?;
+        store.db.connection.execute_batch("BEGIN IMMEDIATE")?;
+        // Even a valid observed record cannot establish the outcome while the
+        // connection could still expose writes from an unresolved transaction.
+        assert_eq!(
+            read_operation(&store.db.connection, request.operation_id(), store.epoch())?,
+            Some(operation.clone())
+        );
+        assert_eq!(
+            store
+                .reconcile(request.operation_id())
+                .err()
+                .ok_or("public reconciliation used pending rows")?
+                .code(),
+            StoreErrorCode::OutcomeUnknown
+        );
+        assert_eq!(
+            store
+                .current()
+                .err()
+                .ok_or("public current used pending rows")?
+                .code(),
+            StoreErrorCode::OutcomeUnknown
+        );
+        assert_eq!(
+            store
+                .retention_roots(&AtomicBool::new(false))
+                .err()
+                .ok_or("public roots used pending rows")?
+                .code(),
+            StoreErrorCode::OutcomeUnknown
+        );
+        assert_eq!(
+            store
+                .observe_commit(&operation, Err(rusqlite::Error::InvalidQuery))
+                .err()
+                .ok_or("pending transaction treated as committed")?
+                .code(),
+            StoreErrorCode::OutcomeUnknown
+        );
+        store.db.connection.execute_batch("ROLLBACK")?;
+        assert_eq!(store.observe_commit(&operation, Ok(()))?, operation);
+        drop(store);
+        std::fs::remove_dir_all(root)?;
         Ok(())
     }
 }
