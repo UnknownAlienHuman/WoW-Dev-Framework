@@ -695,3 +695,40 @@ fn canonical_path_and_file_identity_guards_are_strict() -> TestResult {
     assert!(ProjectSourceOriginId::new("project-origin:latest").is_err());
     Ok(())
 }
+
+#[test]
+fn source_graph_materializes_with_a_bounded_query_budget() -> TestResult {
+    let (publisher, snapshot) = publish_strict()?;
+    let view = publisher.open_current()?;
+    let stop = std::sync::atomic::AtomicBool::new(false);
+    let (registry, batch, coverage, provenance, limits) =
+        wow_project::graph::build_source_graph_proposals(&view, &stop)?.into_parts();
+    let foundation = wow_graph::GraphSnapshot::build(
+        batch.universe().clone(),
+        batch.generation().clone(),
+        limits,
+        Vec::new(),
+        Vec::new(),
+        coverage.clone(),
+    )?;
+    let owner = wow_graph::GraphPartitionSnapshot::new(
+        registry,
+        foundation,
+        batch.source_context_id(),
+        &stop,
+    )?;
+    let replacement = owner.prepare_replacement(
+        wow_graph::GraphPartitionReplacement {
+            expected_snapshot_id: owner.snapshot().snapshot_id().clone(),
+            expected_partition_digest: None,
+            producer_version: env!("CARGO_PKG_VERSION").into(),
+            batch,
+            coverage,
+        },
+        &stop,
+    )?;
+    replacement.candidate().validate(&stop)?;
+    assert_eq!(provenance.files().len(), snapshot.file_manifest().len());
+    assert!(!replacement.candidate().snapshot().nodes().is_empty());
+    Ok(())
+}

@@ -843,8 +843,14 @@ pub fn build_source_graph_proposals(
     )?;
     let generation =
         GraphGenerationId::new(format!("source-graph-input:{seed}")).map_err(|_| invalid())?;
-    let limits = GraphLimits::new(MAX_NODES as u32, MAX_EDGES as u32, 32, 64, MAX_EDGES as u32)
-        .map_err(|_| invalid())?;
+    let limits = GraphLimits::new(
+        MAX_NODES as u32,
+        MAX_EDGES as u32,
+        32,
+        64,
+        MAX_EDGES.min(100_000) as u32,
+    )
+    .map_err(|_| invalid())?;
     let mut provenance = ProjectGraphProvenance {
         profile: SOURCE_GRAPH_PROFILE,
         project_snapshot_id: project.snapshot_id().into(),
