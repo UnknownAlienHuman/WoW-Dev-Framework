@@ -106,7 +106,7 @@ pub(super) fn collect(
     )? {
         checkpoint(stop)?;
         let id = OperationId::new(key)?;
-        let receipt = store.reconcile_gc(&id)?.ok_or_else(invalid)?;
+        let receipt = super::read_receipt(&c, &store.db.epoch, &id)?.ok_or_else(invalid)?;
         receipt_bytes = receipt_bytes
             .checked_add(receipt.canonical_bytes()?.len())
             .filter(|n| *n <= 64 * 1024 * 1024)
@@ -115,7 +115,7 @@ pub(super) fn collect(
     }
     let current = read_current(&c, &store.db.epoch)?;
     let mut protected = policy.retained_generations().clone();
-    let pins = store.retention_roots(stop)?;
+    let pins = crate::project::retention::read_roots(&c, &store.db.epoch, stop)?;
     for pin in &pins {
         protected.insert(pin.generation_id().clone());
     }

@@ -30,7 +30,7 @@ The root [Cargo.toml](../Cargo.toml) activates **16 members**, including the int
 | `wow-project` | Explicit inventories, bounded TOC/XML/package receipts, analyzer bindings, immutable generations, exact source artifacts/handles, guarded updates, publication and physical/standalone/package native replay | E0-D fixture identity closure; effective XML receiver/load semantics, full load acceptance, overlays and full durable project publication |
 | `wow-rules` | `wow.api.exists@1` over physical Main and exact-static XML inline facts; `wow.secret.local_operation@1` over its bounded physical flow slice | E0-E normative fixtures, exact prerequisite identities and complete capability/negative-authority cases; no inferred XML receiver/runtime authority |
 | `wow-service` | E0 status/check over immutable normalized contexts, mixed physical/XML rule scopes and exact XML finding projection; separate ReferenceView administration/publication | E0-F end-to-end fixture/CLI closure; full E1 Reference Pack and later public operation families |
-| `wow-store` | Typed SQLite objects, catalogs/CAS, operation journal, leases, GC and integrity | Full E1-A migration/crash/backup acceptance; separate manifested retained ProjectStore exists, not full E2-D publication acceptance |
+| `wow-store` | Typed SQLite objects, catalogs/CAS, operation journal, leases, GC and integrity; manifested physical recovery, native backup and owner-validated isolated restore | Full E1-A migration/crash/backup and E2-D acceptance; quarantine, live epoch replacement and platform faults remain open |
 | `wow-reference` | Native source/model/corrections/aliases, compatibility imports, persistent ReferenceView and publication | E0-B/E1-B normative fixture and full Reference Pack/coverage acceptance |
 | `wow-annotations` | Native Ketho-derived library projection, alias/type/catalog/inheritance/navigation slices and consumer tests | Full E1-C contract/corpus parity; scoped passing consumers are not universal semantic certification |
 | `wow-graph` | Immutable snapshots, proposals/registries, neighbors, producer partitions, bounded queries, exact retained derivation/conflict records, evidence resolution and v1/v2 persistence | Complete producer-chain coverage and automatic conflict assessment, normative fixtures and coherent E2-D publication |
@@ -326,3 +326,18 @@ reopen. Final workspace policy, fmt, check, strict Clippy, tests (866 passed,
 1 ignored, 106 targets), rustdoc and build passed on 2026-10-09. Object/epoch collection, recovery and
 platform faults remain open, so full W15/E2 remains unaccepted. See
 [PROJECT_GC.md](../crates/wow-store/PROJECT_GC.md).
+
+W16 adds executable read-only reconciliation under one admitted SQLite snapshot,
+complete manifest/seal descriptors, canonical receipts and explicit invalid/
+incomplete/not-applicable coverage. Activation acknowledgment stays unknown.
+Verified native SQLite backup includes committed WAL and independently preserves
+the exact inline snapshot and body identities. Restoration to a new private path
+requires actual owner capabilities for every retained generation before registry
+publication; native service replay checks all Project/Graph pairs and preserves
+source current and older readers. See
+[PROJECT_RECOVERY.md](../crates/wow-store/PROJECT_RECOVERY.md).
+
+Workspace policy, fmt, check, strict Clippy, tests (877 passed, 1 ignored,
+106 targets), rustdoc and build passed on 2026-10-09.
+Quarantine, same-root epoch selection, supported migrations, process termination,
+power loss and sharing/cleanup faults remain open. Full W16/E2 is unaccepted.

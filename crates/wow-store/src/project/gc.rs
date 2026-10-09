@@ -5,6 +5,7 @@ mod policy;
 use super::{ProjectStore, database::Lifetime, model::*, release::require_release};
 use crate::{OperationId, StoreError, StoreErrorCode, StoreResult};
 pub use model::ProjectGcPolicy;
+pub(super) use policy::read_policy;
 use rusqlite::{OptionalExtension, TransactionBehavior, params};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -326,22 +327,7 @@ impl ProjectStore {
     pub fn reconcile_gc(&self, id: &OperationId) -> StoreResult<Option<ProjectGcReceipt>> {
         require_release(&self.db.epoch)?;
         self.db.ensure_idle()?;
-        OperationId::new(id.as_str())?;
-        let raw: Option<(String,Vec<u8>)> = self.db.connection.query_row("SELECT CASE WHEN length(request_digest)<=128 THEN request_digest END,CASE WHEN length(record)<=2097152 THEN record END FROM gc_operations WHERE operation_id=?1",
-            [id.as_str()], |r|Ok((r.get(0)?,r.get(1)?))).optional().map_err(StoreError::database)?;
-        let Some((request_digest, bytes)) = raw else {
-            return Ok(None);
-        };
-        let receipt: ProjectGcReceipt = serde_json::from_slice(&bytes).map_err(|_| invalid())?;
-        let expected = ProjectGcReceipt::new(id.clone(), receipt.report.clone())?;
-        if receipt != expected
-            || receipt.request_digest != request_digest
-            || receipt.report.epoch_id != *self.db.epoch.epoch_id()
-            || encode(&receipt, 2 * 1024 * 1024)? != bytes
-        {
-            return Err(invalid());
-        }
-        Ok(Some(receipt))
+        read_receipt(&self.db.connection, &self.db.epoch, id)
     }
     fn gc_data_version(&self) -> StoreResult<i64> {
         self.db
@@ -349,4 +335,28 @@ impl ProjectStore {
             .query_row("PRAGMA data_version", [], |r| r.get(0))
             .map_err(StoreError::database)
     }
+}
+
+pub(super) fn read_receipt(
+    c: &rusqlite::Connection,
+    epoch: &EpochManifest,
+    id: &OperationId,
+) -> StoreResult<Option<ProjectGcReceipt>> {
+    require_release(epoch)?;
+    OperationId::new(id.as_str())?;
+    let raw: Option<(String,Vec<u8>)> = c.query_row("SELECT CASE WHEN length(request_digest)<=128 THEN request_digest END,CASE WHEN length(record)<=2097152 THEN record END FROM gc_operations WHERE operation_id=?1",
+            [id.as_str()], |r|Ok((r.get(0)?,r.get(1)?))).optional().map_err(StoreError::database)?;
+    let Some((request_digest, bytes)) = raw else {
+        return Ok(None);
+    };
+    let receipt: ProjectGcReceipt = serde_json::from_slice(&bytes).map_err(|_| invalid())?;
+    let expected = ProjectGcReceipt::new(id.clone(), receipt.report.clone())?;
+    if receipt != expected
+        || receipt.request_digest != request_digest
+        || receipt.report.epoch_id != *epoch.epoch_id()
+        || encode(&receipt, 2 * 1024 * 1024)? != bytes
+    {
+        return Err(invalid());
+    }
+    Ok(Some(receipt))
 }

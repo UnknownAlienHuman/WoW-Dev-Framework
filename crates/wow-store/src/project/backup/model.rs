@@ -1,0 +1,64 @@
+//! Serialize-only manifest for an exact physical project-store backup.
+use serde::Serialize;
+
+use super::super::{
+    RecoveryReport,
+    model::{CurrentPublication, EpochManifest, PartitionVersionId, StoreGenerationId, encode},
+};
+use crate::{OperationId, StoreResult};
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct BackupManifest {
+    pub(super) schema: String,
+    pub(super) operation_id: OperationId,
+    pub(super) request_digest: String,
+    pub(super) epoch: EpochManifest,
+    pub(super) snapshot_digest: String,
+    pub(super) generations: Vec<StoreGenerationId>,
+    pub(super) partitions: Vec<PartitionVersionId>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(super) current: Option<CurrentPublication>,
+    pub(super) payload_digest: String,
+    pub(super) payload_bytes: u64,
+    pub(super) recovery: RecoveryReport,
+    pub(super) object_closure: String,
+}
+
+impl BackupManifest {
+    pub fn operation_id(&self) -> &OperationId {
+        &self.operation_id
+    }
+    pub fn request_digest(&self) -> &str {
+        &self.request_digest
+    }
+    pub fn epoch(&self) -> &EpochManifest {
+        &self.epoch
+    }
+    pub fn snapshot_digest(&self) -> &str {
+        &self.snapshot_digest
+    }
+    pub fn generations(&self) -> &[StoreGenerationId] {
+        &self.generations
+    }
+    pub fn partitions(&self) -> &[PartitionVersionId] {
+        &self.partitions
+    }
+    pub fn current(&self) -> Option<&CurrentPublication> {
+        self.current.as_ref()
+    }
+    pub fn payload_digest(&self) -> &str {
+        &self.payload_digest
+    }
+    pub fn payload_bytes(&self) -> u64 {
+        self.payload_bytes
+    }
+    pub fn recovery(&self) -> &RecoveryReport {
+        &self.recovery
+    }
+    pub fn object_closure(&self) -> &str {
+        &self.object_closure
+    }
+    pub fn canonical_bytes(&self) -> StoreResult<Vec<u8>> {
+        encode(self, 16 * 1024 * 1024)
+    }
+}

@@ -2,6 +2,10 @@
 //! store. Current resolves once; actual replay and all owner checks hold its lease.
 mod gc;
 mod operations;
+mod recovery;
+pub use recovery::{
+    CurrentState, RecoveryReport, ScopeState, recover_live_project, restore_live_project_to_new,
+};
 mod retention;
 #[cfg(test)]
 mod tests;

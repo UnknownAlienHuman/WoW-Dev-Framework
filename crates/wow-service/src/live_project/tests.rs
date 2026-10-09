@@ -851,3 +851,5 @@ fn missing_or_mutated_replay_and_mixed_project_graph_never_activate() -> TestRes
     std::fs::remove_dir_all(root)?;
     Ok(())
 }
+#[path = "recovery_tests.rs"]
+mod recovery_tests;

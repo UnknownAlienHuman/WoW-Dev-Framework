@@ -1,6 +1,8 @@
 # `wow-store` contract router
 
-**Status:** planned storage documentation is complete through the E7-B generic release and installation seam; no Rust code exists.
+**Status:** Rust storage and manifested ProjectStore slices are executable. Full
+package acceptance remains open. The later E6/E7 routes below are normative
+contracts, not implementation or release evidence.
 
 `wow-store` owns generic physical persistence only. It depends directly on `wow-core` and never imports Reference, project, graph, recognizer, rule, search, context, provider, session, editor, release, installation, or application semantics. Domain owners and service supply registered schemas, canonical logical bytes, prepared operations, validation contracts, and retention edges.
 
@@ -21,6 +23,14 @@ project-store-wal-manifested-partitions-v1
 ```
 
 It uses one owned SQLite database per ProjectStore epoch, WAL with one writer, immutable content-addressed partition versions, complete generation membership maps, published-inactive construction, fresh read-back validation, separate current CAS, snapshot-bound readers, and explicit retention and GC.
+
+Executable selected profiles retain frozen v1, add exact generation roots in v2,
+and release/inline GC in v3. New native live-project service stores select v3;
+no existing schema migrates automatically. Current owner routes:
+
+- [Generation retention](PROJECT_RETENTION.md)
+- [Release and guarded inline collection](PROJECT_GC.md)
+- [Recovery, verified native backup and isolated restore](PROJECT_RECOVERY.md)
 
 ### E6-B — external Candidate generic persistence
 

@@ -24,9 +24,23 @@ with frozen v1 reopening unchanged. A separately selected v3 slice now supplies
 operation release, complete bounded inline root closure, exact policy CAS and
 guarded transactional GC through store/service APIs. Shared/current/leased/pinned
 data survives; released operation evidence and GC receipts survive collection and
-reopen. W16 recovery and object/epoch/platform gates remain next; full W14/E2 and
-W15 acceptance remain open. See
+reopen. W16 now adds read-only recovery, verified native SQLite backup and
+owner-validated restoration to a new private path. Quarantine, live epoch
+replacement, migration and object/epoch/platform gates remain next; full W14/E2,
+W15 and W16 acceptance remain open. See
 [PROJECT_GC.md](../crates/wow-store/PROJECT_GC.md).
+
+The W16 slice observes complete physical closure under one held read transaction,
+preserves unknown acknowledgment, rejects corrupt/incomplete backup inputs and
+independently reopens the SQLite-safe artifact. It preserves original semantic
+IDs and requires every included native Project/Graph owner before finalizing a
+new private restore registry. The source current and older leased readers survive.
+`wow project recover` exposes the physical report; service APIs provide backup and
+isolated restore. See [PROJECT_RECOVERY.md](../crates/wow-store/PROJECT_RECOVERY.md).
+
+Fresh W16 policy, fmt, workspace check, strict Clippy, tests (877 passed,
+1 ignored, 106 targets), rustdoc and build passed on 2026-10-09. The ignored consumer and source/runtime gates stay
+open; this does not complete W16/E2 acceptance.
 
 The roots checkpoint passed workspace policy, fmt, check, strict Clippy, tests
 (864 passed, 1 ignored, 105 targets), rustdoc and build on 2026-10-09. The ignored

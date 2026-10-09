@@ -1,17 +1,19 @@
-//! Strict transport for service-owned live project publication and acquisition.
+//! Strict transport for live project publication, acquisition and physical recovery.
 use crate::args::Format;
 use std::{
     collections::BTreeMap,
     ffi::{OsStr, OsString},
     io::Write,
-    path::PathBuf,
+    path::{Path, PathBuf},
+    sync::atomic::{AtomicBool, Ordering},
 };
 use wow_service::{
     ServiceErrorCode,
     graph::GraphBuildRequest,
     live_project::{
-        LiveProjectLibraryMode, LiveProjectPublishRequest, LiveProjectUpdateRequest,
-        publish_local_project, read_live_project, reconcile_live_project, update_local_project,
+        CurrentState, LiveProjectLibraryMode, LiveProjectPublishRequest, LiveProjectUpdateRequest,
+        ScopeState, publish_local_project, read_live_project, reconcile_live_project,
+        recover_live_project, update_local_project,
     },
 };
 
@@ -19,8 +21,10 @@ const HELP: &str = concat!(
     "wow project publish --config <project.json> --project <ProjectId> [--generation current|<ProjectGenerationId>] --store-root <private-directory> --operation-id <id> --expected-current absent|<record-id> --allow-partial [--initialize] [--format json|text]\n",
     "wow project update --config <final-project.json> --project <ProjectId> [--generation current|<ProjectGenerationId>] --store-root <directory> --operation-id <id> --expected-current <record-id> --library keep|replace|clear --allow-partial [--format json|text]\n",
     "wow project read --store-root <directory> --store-generation current|<generation-id> [--format json|text]\n",
-    "wow project reconcile --store-root <directory> --operation-id <id> [--format json|text]\n\n",
+    "wow project reconcile --store-root <directory> --operation-id <id> [--format json|text]\n",
+    "wow project recover --store-root <directory> [--format json|text]\n\n",
     "Publish retains exact Main/Library inputs and the full native graph chain. Update applies explicit final physical Lua inputs against the exact retained base. Read acquires one leased project/graph pair; TOC/XML/package replay is supported for reads/publication. Reconcile observes the original operation. Partial coverage exits 2. See apps/wow/LIVE_PROJECT.md.\n",
+    "Recover observes physical store state without initialization, repair, activation or domain approval. Validated/not-applicable coverage exits 0; incomplete/unverified exits 2; invalid/corrupt exits 4; cancellation exits 130.\n",
 );
 
 enum Command {
@@ -40,6 +44,7 @@ enum Command {
     Reconcile {
         operation: String,
     },
+    Recover,
 }
 struct Arguments {
     root: PathBuf,
@@ -51,7 +56,7 @@ pub fn run(values: Vec<OsString>) -> u8 {
     if (values.len() == 2
         || (values.len() == 3
             && values.get(1).is_some_and(|v| {
-                v == "publish" || v == "update" || v == "read" || v == "reconcile"
+                v == "publish" || v == "update" || v == "read" || v == "reconcile" || v == "recover"
             })))
         && values.last().is_some_and(|v| v == "--help" || v == "-h")
     {
@@ -81,6 +86,7 @@ pub fn run(values: Vec<OsString>) -> u8 {
         } => update_local_project(&config, &graph, &args.root, &request, &stop),
         Command::Read { generation } => read_live_project(&args.root, &generation, &stop),
         Command::Reconcile { operation } => reconcile_live_project(&args.root, &operation, &stop),
+        Command::Recover => return run_recovery(&args.root, args.format, &stop),
     };
     let result = match result {
         Ok(r) => r,
@@ -118,6 +124,62 @@ pub fn run(values: Vec<OsString>) -> u8 {
     exit
 }
 
+fn run_recovery(root: &Path, format: Format, stop: &AtomicBool) -> u8 {
+    let report = match recover_live_project(root, stop) {
+        Ok(report) => report,
+        Err(error) => {
+            super::diagnostic(&format!("{:?}: {}", error.code(), error.message()));
+            return if error.code() == ServiceErrorCode::Cancelled {
+                130
+            } else {
+                4
+            };
+        }
+    };
+    let exit = if report.current_state() == CurrentState::Corrupt
+        || report
+            .coverage()
+            .iter()
+            .any(|coverage| coverage.state() == ScopeState::Invalid)
+    {
+        4
+    } else if report.current_state() == CurrentState::Unverified
+        || report
+            .coverage()
+            .iter()
+            .any(|coverage| coverage.state() == ScopeState::Incomplete)
+    {
+        2
+    } else {
+        0
+    };
+    let mut bytes = match report.canonical_bytes() {
+        Ok(bytes) => bytes,
+        Err(_) => {
+            super::diagnostic("physical recovery report encoding failed");
+            return 4;
+        }
+    };
+    if format == Format::Text {
+        bytes.splice(
+            0..0,
+            b"Physical project-store recovery observation\n"
+                .iter()
+                .copied(),
+        );
+    }
+    if stop.load(Ordering::Acquire) {
+        return 130;
+    }
+    bytes.push(b'\n');
+    let mut out = std::io::stdout().lock();
+    if out.write_all(&bytes).and_then(|()| out.flush()).is_err() {
+        super::diagnostic("physical recovery report output failed");
+        return 4;
+    }
+    exit
+}
+
 fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
     if values.len() > 64 || values.iter().map(|v| v.len()).sum::<usize>() > 128 * 1024 {
         return Err("project argument limit exceeded");
@@ -128,7 +190,10 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
     }
     let action = values.next().ok_or("missing project operation")?;
     let action = action.to_str().ok_or("invalid project operation")?;
-    if !matches!(action, "publish" | "update" | "read" | "reconcile") {
+    if !matches!(
+        action,
+        "publish" | "update" | "read" | "reconcile" | "recover"
+    ) {
         return Err("unknown project operation");
     }
     let mut options = BTreeMap::new();
@@ -148,7 +213,7 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
             "--config" | "--project" | "--generation" | "--expected-current"
                 if matches!(action, "publish" | "update") => {}
             "--library" if action == "update" => {}
-            "--operation-id" if action != "read" => {}
+            "--operation-id" if matches!(action, "publish" | "update" | "reconcile") => {}
             "--store-generation" if action == "read" => {}
             _ => return Err("unknown or duplicate project option"),
         }
@@ -231,6 +296,7 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
         "reconcile" => Command::Reconcile {
             operation: required_text(&mut options, "--operation-id")?,
         },
+        "recover" => Command::Recover,
         _ => return Err("unknown project operation"),
     };
     Ok(Arguments {

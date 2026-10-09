@@ -10,19 +10,30 @@ impl ProjectStore {
     pub fn gc_policy(&self) -> StoreResult<Option<ProjectGcPolicy>> {
         require_release(&self.db.epoch)?;
         self.db.ensure_idle()?;
-        let raw: Option<(String,Vec<u8>)> = self.db.connection.query_row(
+        read_policy(&self.db.connection, &self.db.epoch)
+    }
+}
+
+pub(in crate::project) fn read_policy(
+    c: &rusqlite::Connection,
+    epoch: &EpochManifest,
+) -> StoreResult<Option<ProjectGcPolicy>> {
+    require_release(epoch)?;
+    let raw: Option<(String,Vec<u8>)> = c.query_row(
             "SELECT CASE WHEN length(policy_digest)<=128 THEN policy_digest END,CASE WHEN length(record)<=262144 THEN record END FROM gc_policy WHERE id=1",[],|r|Ok((r.get(0)?,r.get(1)?)))
             .optional().map_err(StoreError::database)?;
-        let Some((digest, bytes)) = raw else {
-            return Ok(None);
-        };
-        let policy: ProjectGcPolicy = serde_json::from_slice(&bytes).map_err(|_| invalid())?;
-        policy.validate()?;
-        if policy.digest()? != digest || encode(&policy, 256 * 1024)? != bytes {
-            return Err(invalid());
-        }
-        Ok(Some(policy))
+    let Some((digest, bytes)) = raw else {
+        return Ok(None);
+    };
+    let policy: ProjectGcPolicy = serde_json::from_slice(&bytes).map_err(|_| invalid())?;
+    policy.validate()?;
+    if policy.digest()? != digest || encode(&policy, 256 * 1024)? != bytes {
+        return Err(invalid());
     }
+    Ok(Some(policy))
+}
+
+impl ProjectStore {
     /// Select the exact authoritative policy under expected-current CAS. No
     /// plan selects a policy implicitly, and tightening never deletes data.
     pub fn select_gc_policy(

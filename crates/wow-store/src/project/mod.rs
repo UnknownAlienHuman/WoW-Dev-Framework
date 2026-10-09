@@ -1,14 +1,17 @@
 //! First executable manifested-partition ProjectStore profile. Domain adapters
 //! own their records and validation; this owner supplies WAL, exact membership,
 //! read leases, durable operation state and a single coherent current CAS.
+mod backup;
 mod database;
 mod gc;
 mod model;
 mod publication;
 mod read;
+mod recovery;
 mod release;
 mod retention;
 use crate::{OperationId, StoreError, StoreResult};
+pub use backup::{BackupManifest, VerifiedBackup};
 use database::Database;
 pub use gc::{ProjectGcPlan, ProjectGcPolicy, ProjectGcReceipt, ProjectGcReport};
 pub use model::{
@@ -18,6 +21,10 @@ pub use model::{
     RETAINED_PHYSICAL_PROFILE, RecordCatalog, StoreGenerationId, ValidationId,
 };
 pub use read::{ReadSelector, ReadSnapshot, ValidatedRead};
+pub use recovery::{
+    AcknowledgmentState, CurrentState, RecoveryDisposition, RecoveryIncident, RecoveryOperation,
+    RecoveryReport, RecoveryScope, ScopeCoverage, ScopeState,
+};
 pub use release::PublicationRelease;
 pub use retention::{RetentionRoot, RetentionRootId, RetentionRootKind};
 use std::{path::Path, sync::atomic::AtomicBool};

@@ -204,17 +204,7 @@ impl Database {
         if bytes.len() > 65536 {
             return Err(invalid());
         }
-        let epoch: EpochManifest = serde_json::from_slice(&bytes).map_err(|_| invalid())?;
-        let expected = EpochManifest::with_physical_profile(
-            &epoch.owner,
-            catalog.clone(),
-            runtime_id()?,
-            expected_schema(&epoch.physical_profile)?,
-            &epoch.physical_profile,
-        )?;
-        if epoch != expected || encode(&epoch, 65536)? != bytes {
-            return Err(invalid());
-        }
+        let epoch = admit_epoch(&bytes, catalog)?;
         directory(&root.join("epochs"))?;
         let dir = epoch_directory(&root, &epoch)?;
         directory(&dir)?;
@@ -267,6 +257,9 @@ impl Database {
         validate_header(&c, &self.epoch)?;
         c.execute_batch("BEGIN DEFERRED")
             .map_err(StoreError::database)?;
+        // Bind schema and epoch admission to the same snapshot as subsequent
+        // closure reads, rather than only the pre-transaction observation.
+        validate_header(&c, &self.epoch)?;
         Ok(c)
     }
     pub fn write_budget(&self, bytes: usize) -> StoreResult<()> {
@@ -294,7 +287,25 @@ impl Database {
     }
 }
 
-fn create_private_directory(root: &Path) -> std::io::Result<()> {
+pub(super) fn admit_epoch(bytes: &[u8], catalog: &RecordCatalog) -> StoreResult<EpochManifest> {
+    if bytes.len() > 65536 {
+        return Err(invalid());
+    }
+    let epoch: EpochManifest = serde_json::from_slice(bytes).map_err(|_| invalid())?;
+    let expected = EpochManifest::with_physical_profile(
+        &epoch.owner,
+        catalog.clone(),
+        runtime_id()?,
+        expected_schema(&epoch.physical_profile)?,
+        &epoch.physical_profile,
+    )?;
+    if epoch != expected || encode(&epoch, 65536)? != bytes {
+        return Err(invalid());
+    }
+    Ok(epoch)
+}
+
+pub(super) fn create_private_directory(root: &Path) -> std::io::Result<()> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::DirBuilderExt;
@@ -305,18 +316,18 @@ fn create_private_directory(root: &Path) -> std::io::Result<()> {
         fs::create_dir(root)
     }
 }
-fn admitted_root(root: &Path) -> StoreResult<PathBuf> {
+pub(super) fn admitted_root(root: &Path) -> StoreResult<PathBuf> {
     directory(root)?;
     fs::canonicalize(root).map_err(|_| failure(StoreErrorCode::DatabaseUnavailable))
 }
-fn directory(path: &Path) -> StoreResult<()> {
+pub(super) fn directory(path: &Path) -> StoreResult<()> {
     let m = fs::symlink_metadata(path).map_err(|_| failure(StoreErrorCode::DatabaseUnavailable))?;
     if m.file_type().is_symlink() || !m.is_dir() || reparse(&m) {
         return Err(invalid());
     }
     Ok(())
 }
-fn regular(path: &Path, max: u64) -> StoreResult<()> {
+pub(super) fn regular(path: &Path, max: u64) -> StoreResult<()> {
     let m = fs::symlink_metadata(path).map_err(|_| failure(StoreErrorCode::DatabaseUnavailable))?;
     if m.file_type().is_symlink() || !m.is_file() || reparse(&m) || m.len() > max {
         return Err(invalid());
@@ -332,7 +343,7 @@ fn reparse(m: &fs::Metadata) -> bool {
 fn reparse(_: &fs::Metadata) -> bool {
     false
 }
-fn epoch_directory(root: &Path, epoch: &EpochManifest) -> StoreResult<PathBuf> {
+pub(super) fn epoch_directory(root: &Path, epoch: &EpochManifest) -> StoreResult<PathBuf> {
     let id = epoch
         .epoch_id
         .as_str()
@@ -385,7 +396,7 @@ pub(super) fn connect(path: &Path, readonly: bool) -> StoreResult<Connection> {
     }
     Ok(c)
 }
-fn enable_writer(c: &Connection) -> StoreResult<()> {
+pub(super) fn enable_writer(c: &Connection) -> StoreResult<()> {
     let mode: String = c
         .query_row("PRAGMA journal_mode=WAL", [], |r| r.get(0))
         .map_err(StoreError::database)?;
@@ -448,7 +459,7 @@ fn schema_digest(c: &Connection) -> StoreResult<String> {
     }
     Ok(digest("schema", &encode(&entries, 65536)?))
 }
-fn validate_header(c: &Connection, epoch: &EpochManifest) -> StoreResult<()> {
+pub(super) fn validate_header(c: &Connection, epoch: &EpochManifest) -> StoreResult<()> {
     let app: i64 = c
         .query_row("PRAGMA application_id", [], |r| r.get(0))
         .map_err(StoreError::database)?;

@@ -725,3 +725,24 @@ policy, fmt, check, strict Clippy, tests (866 passed, 1 ignored, 106 targets),
 rustdoc and build passed. Object/epoch deletion, backup/recovery, process/power-loss and
 Windows fault acceptance remain open; see
 [PROJECT_GC.md](../crates/wow-store/PROJECT_GC.md).
+
+## W16 recovery, verified backup and isolated restore (2026-10-09)
+
+Exact admitted physical v1/v2/v3 stores now expose one held read-only recovery
+snapshot with current/scope classifications, canonical operation dispositions and
+unknown acknowledgment. Complete manifest-to-seal descriptors, payload digests,
+validation/history, applicable pins/policy/GC receipts and SQLite/FK integrity are
+checked. Missing legacy tables are not applicable; an unselected v3 policy is valid.
+
+Native bounded SQLite backup includes committed WAL, retains original identities,
+reopens independently and binds exact snapshot/body digests in a canonical manifest.
+An explicit new private restore path receives its registry only after exact owner
+capabilities for every generation. Native service replay checks all Project/Graph
+pairs. Source current, prior receipts and older leased readers survive. The public
+`wow project recover` command reports physical coverage without implicit effects.
+
+Workspace policy, fmt, check, strict Clippy, tests (877 passed, 1 ignored,
+106 targets), rustdoc and build pass. Quarantine,
+same-root epoch replacement, supported migration, process termination, power loss,
+sharing/cleanup faults and full W16/E2 acceptance remain open. See
+[PROJECT_RECOVERY.md](../crates/wow-store/PROJECT_RECOVERY.md).

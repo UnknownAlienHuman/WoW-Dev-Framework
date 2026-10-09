@@ -117,22 +117,36 @@ impl ProjectStore {
         require_retention(&self.db.epoch)?;
         self.db.ensure_idle()?;
         checkpoint(stop)?;
-        let mut statement = self.db.connection.prepare("SELECT CASE WHEN length(root_id)<=256 THEN root_id END FROM retention_roots ORDER BY root_id LIMIT 1025").map_err(StoreError::database)?;
-        let rows = statement
-            .query_map([], |r| r.get::<_, String>(0))
-            .map_err(StoreError::database)?;
-        let mut result = Vec::new();
-        for id in rows {
-            checkpoint(stop)?;
-            if result.len() >= MAX_ROOTS as usize {
-                return Err(failure(StoreErrorCode::BudgetExceeded));
-            }
-            let id = RetentionRootId::new(id.map_err(StoreError::database)?)?;
-            result.push(read_root(&self.db.connection, &id, &self.db.epoch)?.ok_or_else(invalid)?);
-        }
-        checkpoint(stop)?;
-        Ok(result)
+        read_roots(&self.db.connection, &self.db.epoch, stop)
     }
+}
+
+/// On-connection root inventory for a held recovery snapshot. The caller owns
+/// the transaction and profile admission; this reads and validates only.
+pub(super) fn read_roots(
+    c: &Connection,
+    epoch: &EpochManifest,
+    stop: &AtomicBool,
+) -> StoreResult<Vec<RetentionRoot>> {
+    require_retention(epoch)?;
+    checkpoint(stop)?;
+    let mut statement = c
+        .prepare("SELECT CASE WHEN length(root_id)<=256 THEN root_id END FROM retention_roots ORDER BY root_id LIMIT 1025")
+        .map_err(StoreError::database)?;
+    let rows = statement
+        .query_map([], |r| r.get::<_, String>(0))
+        .map_err(StoreError::database)?;
+    let mut result = Vec::new();
+    for id in rows {
+        checkpoint(stop)?;
+        if result.len() >= MAX_ROOTS as usize {
+            return Err(failure(StoreErrorCode::BudgetExceeded));
+        }
+        let id = RetentionRootId::new(id.map_err(StoreError::database)?)?;
+        result.push(read_root(c, &id, epoch)?.ok_or_else(invalid)?);
+    }
+    checkpoint(stop)?;
+    Ok(result)
 }
 
 fn require_retention(epoch: &EpochManifest) -> StoreResult<()> {

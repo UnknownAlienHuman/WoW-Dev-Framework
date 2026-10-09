@@ -15,8 +15,17 @@ wow project publish --config project.json --project <ProjectId> --store-root <ne
 wow project read --store-root <directory> --store-generation current
 wow project read --store-root <directory> --store-generation <StoreGenerationId>
 wow project reconcile --store-root <directory> --operation-id <original-id>
+wow project recover --store-root <directory> --format json
 wow project update --config final-project.json --project <ProjectId> --store-root <directory> --operation-id <id> --expected-current <record-id> --library keep --allow-partial
 ```
+
+`recover` observes one held physical store snapshot, including complete current
+membership/seals, canonical receipts and scope coverage. It performs no repair or
+implicit activation. Complete applicable coverage exits 0, incomplete coverage 2,
+invalid coverage/admission 4, and cancellation 130. Unknown acknowledgment remains
+explicit. The native service also exposes verified backup and restoration to a new
+private path with real Project/Graph owner replay; see
+[PROJECT_RECOVERY.md](../../crates/wow-store/PROJECT_RECOVERY.md).
 
 `publish` accepts the existing explicit materialized-input, physical-file,
 selected-TOC or package-universe configuration. The service constructs one original
