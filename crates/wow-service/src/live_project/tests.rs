@@ -22,6 +22,16 @@ fn input_bundle_with_plan(
     files: Vec<ProjectInputFile>,
     plan: Option<&wow_project::load::ProjectLoadPlan>,
 ) -> TestResult<ProjectInputBundle> {
+    input_bundle_with_plans(files, plan, None)
+}
+fn input_bundle_with_plans(
+    files: Vec<ProjectInputFile>,
+    plan: Option<&wow_project::load::ProjectLoadPlan>,
+    packages: Option<(
+        &wow_project::load::ProjectPackageLoadPlan,
+        &wow_project::load::ProjectPackageMainPlan,
+    )>,
+) -> TestResult<ProjectInputBundle> {
     // Synthetic test identities authorize no product compatibility/acceptance.
     let backend = EmmyBackendIdentity::new(
         "emmylua_code_analysis",
@@ -71,8 +81,12 @@ fn input_bundle_with_plan(
     .logical_root("fixtures/project-pair/main")
     .capability_policy(ProjectCapabilityPolicy::degraded_e0()?)
     .budget_policy(ProjectBudgetPolicy::fixture_e0()?);
-    let config = match plan {
+    let builder = match plan {
         Some(plan) => builder.load_plan(plan)?,
+        None => builder,
+    };
+    let config = match packages {
+        Some((load, main)) => builder.package_load_plan(load, main)?,
         None => builder,
     }
     .build()?;
@@ -131,6 +145,200 @@ fn root(name: &str) -> TestResult<std::path::PathBuf> {
             .duration_since(std::time::UNIX_EPOCH)?
             .as_nanos()
     )))
+}
+
+#[test]
+fn package_pair_replays_complete_scopes_and_never_admits_unreachable_main() -> TestResult {
+    use wow_project::disk::{ProjectDiskFile, ProjectInputDirectory};
+    use wow_project::load::{
+        ProjectPackageInput, ProjectPackageReachability, ProjectPackageVariantInput,
+    };
+    use wow_project::replay::ProjectReplay;
+    let stop = AtomicBool::new(false);
+    let root = root("packages")?;
+    let source_root = root.join("input");
+    for name in ["App", "Dep", "Other"] {
+        std::fs::create_dir_all(source_root.join(name))?;
+    }
+    for (path, text) in [
+        (
+            "App/App.toc",
+            "## Interface: 120100\n## Dependencies: Dep\n## OptionalDeps: MissingOptional\nmain.lua\nframes.xml\n",
+        ),
+        ("App/Inactive.toc", "## Interface: 120100\nignored.lua\n"),
+        ("App/main.lua", "local value = External()\nreturn value\n"),
+        (
+            "App/frames.xml",
+            "<Ui xmlns=\"http://www.blizzard.com/wow/ui/\"><Frame name=\"PackageFrame\"><Scripts><OnLoad>local package_body = true</OnLoad></Scripts></Frame></Ui>",
+        ),
+        (
+            "Dep/Dep.toc",
+            "## Interface: 120100\n## LoadOnDemand: 1\nmain.lua\n",
+        ),
+        ("Dep/main.lua", "local prerequisite = true\n"),
+        ("Other/Other.toc", "## Interface: 120100\nmain.lua\n"),
+        ("Other/main.lua", "local unreachable_package = 42\n"),
+    ] {
+        std::fs::write(source_root.join(path), text)?;
+    }
+    let declarations = ["App", "Dep", "Other"].map(|name| {
+        let mut variants = vec![ProjectPackageVariantInput::new(
+            ProjectDiskFile::new(format!("{name}.toc")),
+            true,
+        )];
+        if name == "App" {
+            variants.push(ProjectPackageVariantInput::new(
+                ProjectDiskFile::new("Inactive.toc"),
+                false,
+            ));
+        }
+        ProjectPackageInput::new(name, name, name == "App", variants)
+    });
+    let profile = input_bundle("return true")?
+        .configuration()
+        .selected_profile()
+        .clone();
+    let (files, load, main) = ProjectInputDirectory::open(&source_root)?
+        .read_package_project_with_context(&declarations, &profile, None, &stop)?
+        .into_namespaced_main()?
+        .into_parts();
+    assert_eq!(files.len(), 2);
+    assert_eq!(
+        load.packages()
+            .iter()
+            .find(|package| package.package == "Other")
+            .ok_or("Other missing")?
+            .reachability,
+        ProjectPackageReachability::Unreachable
+    );
+    assert_eq!(
+        load.package_plan("Other")
+            .ok_or("Other plan missing")?
+            .sources()
+            .len(),
+        2
+    );
+    let bundle = input_bundle_with_plans(files.clone(), None, Some((&load, &main)))?;
+    let reference = wow_reference::ReferenceView::new(
+        bundle.configuration().reference_generation().to_string(),
+        Vec::new(),
+        Vec::new(),
+    )?;
+    let service_input = crate::LocalProjectInput::new_with_package_plans(
+        bundle,
+        reference,
+        load.clone(),
+        main.clone(),
+    )?;
+    let (publisher, graph) =
+        owners_from_bundle(input_bundle_with_plans(files, None, Some((&load, &main)))?)?;
+    let replay = ProjectReplay::capture(&publisher, &stop)?;
+    let archive = serde_json::to_value(&replay)?;
+    assert_eq!(archive["schema"], "wow-project/native-project-replay/3");
+    assert_eq!(archive["files"].as_array().ok_or("files missing")?.len(), 0);
+    assert_eq!(
+        archive["packages"]["packages"]
+            .as_array()
+            .ok_or("packages missing")?
+            .len(),
+        3
+    );
+    std::fs::remove_dir_all(&source_root)?;
+    let restored = replay.hydrate(&stop)?;
+    assert_eq!(restored.configuration().package_load_plan(), Some(&load));
+    assert_eq!(restored.configuration().package_main_plan(), Some(&main));
+    assert_eq!(
+        restored.snapshot_id(),
+        publisher
+            .current_snapshot()
+            .ok_or("owner missing")?
+            .snapshot_id()
+    );
+    assert!(restored.file_by_path("packages/App/main.lua")?.is_some());
+    assert!(restored.file_by_path("packages/Dep/main.lua")?.is_some());
+    assert!(restored.file_by_path("packages/Other/main.lua")?.is_none());
+    assert!(
+        load.package_plan("App")
+            .ok_or("App missing")?
+            .sources()
+            .iter()
+            .all(|source| source.path != "ignored.lua")
+    );
+    for mutation in 0..5 {
+        let mut changed = archive.clone();
+        match mutation {
+            0 => {
+                changed["packages"]["packages"][2]["sources"][1]["text"] =
+                    "local fabricated = true".into()
+            }
+            1 => {
+                changed["packages"]["packages"][2]["sources"]
+                    .as_array_mut()
+                    .ok_or("sources missing")?
+                    .pop();
+            }
+            2 => {
+                changed["packages"]["packages"][0]["sources"][1]["text"] =
+                    "## Interface: 120100\nchanged.lua\n".into()
+            }
+            3 => changed["packages"]["packages"][2]["selected_root"] = true.into(),
+            _ => {
+                changed["files"] = serde_json::json!([{"path":"foreign.lua", "text":"return true"}])
+            }
+        }
+        let substituted: ProjectReplay = serde_json::from_value(changed)?;
+        assert!(
+            substituted.hydrate(&stop).is_err(),
+            "package archive mutation {mutation} was accepted"
+        );
+    }
+    let request = LiveProjectPublishRequest::new("fixture:package-composed", "absent", true, true)?;
+    let graph_request =
+        crate::graph::GraphBuildRequest::new("fixture-live-pair".into(), "current".into())?;
+    let store_root = root.join("store");
+    let result =
+        operations::publish_input(service_input, &graph_request, &store_root, &request, &stop)?;
+    assert_eq!(result.exit_code(), 2);
+    let store = LiveProjectStore::open(&store_root)?;
+    let read = store.read(&ReadSelector::Current, &stop)?;
+    assert_eq!(
+        read.project().configuration().package_load_plan(),
+        Some(&load)
+    );
+    assert_eq!(read.project().snapshot_id(), restored.snapshot_id());
+    assert_eq!(read.graph().source_context_id(), graph.source_context_id());
+    let generation = read.store_generation_id().clone();
+    let set_id = read.publication_set_id().to_owned();
+    drop(read);
+    drop(store);
+    let store = LiveProjectStore::open(&store_root)?;
+    let read = store.read(&ReadSelector::Exact(generation), &stop)?;
+    assert_eq!(
+        read.project().configuration().package_main_plan(),
+        Some(&main)
+    );
+    assert_eq!(read.publication_set_id(), set_id);
+    drop(read);
+    drop(store);
+    let legacy_root = root.join("legacy-v2");
+    let mut legacy = LiveProjectStore {
+        store: ProjectStore::create(
+            &legacy_root,
+            graph.snapshot().universe().as_str(),
+            catalog_for(publication::STORAGE_SCHEMAS_V2)?,
+        )?,
+    };
+    let legacy_epoch = legacy.store.epoch().clone();
+    assert!(
+        legacy
+            .publish(&publisher, &graph, "fixture:package-to-legacy", None, &stop)
+            .is_err()
+    );
+    assert!(legacy.current()?.is_none());
+    assert_eq!(legacy.store.epoch(), &legacy_epoch);
+    drop(legacy);
+    std::fs::remove_dir_all(root)?;
+    Ok(())
 }
 
 #[test]
@@ -275,7 +483,14 @@ fn standalone_toc_xml_pair_replays_without_disk_and_rejects_archive_substitution
         wow_project::ProjectErrorCode::AnalysisCancelled
     );
     let store_root = root.join("store");
-    let mut store = LiveProjectStore::create(&store_root, graph.snapshot().universe().as_str())?;
+    let mut store = LiveProjectStore {
+        store: ProjectStore::create(
+            &store_root,
+            graph.snapshot().universe().as_str(),
+            catalog_for(publication::STORAGE_SCHEMAS_V2)?,
+        )?,
+    };
+    let epoch = store.store.epoch().clone();
     store.publish(&publisher, &graph, "fixture:toc-xml-pair", None, &stop)?;
     let before = store.read(&ReadSelector::Current, &stop)?;
     let generation = before.store_generation_id().clone();
@@ -283,6 +498,7 @@ fn standalone_toc_xml_pair_replays_without_disk_and_rejects_archive_substitution
     drop(before);
     drop(store);
     let store = LiveProjectStore::open(&store_root)?;
+    assert_eq!(store.store.epoch(), &epoch);
     let reopened = store.read(&ReadSelector::Exact(generation), &stop)?;
     assert_eq!(reopened.project().configuration().load_plan(), Some(&plan));
     assert_eq!(reopened.graph(), &graph);

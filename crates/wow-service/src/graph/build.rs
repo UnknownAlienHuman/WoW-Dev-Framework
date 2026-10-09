@@ -559,12 +559,17 @@ fn compose_backend(
     }
     let project = backend.acquire_project(&request.selector, stop)?;
     let proposals = build_source_graph_proposals(&project, stop).map_err(|e| {
-        error(match e.code() {
-            wow_project::ProjectErrorCode::AnalysisCancelled
-            | wow_project::ProjectErrorCode::SourceReadCancelled => ServiceErrorCode::Cancelled,
-            wow_project::ProjectErrorCode::SourceBudgetExceeded => ServiceErrorCode::BudgetExceeded,
-            _ => ServiceErrorCode::InternalContractViolation,
-        })
+        ServiceError::new(
+            match e.code() {
+                wow_project::ProjectErrorCode::AnalysisCancelled
+                | wow_project::ProjectErrorCode::SourceReadCancelled => ServiceErrorCode::Cancelled,
+                wow_project::ProjectErrorCode::SourceBudgetExceeded => {
+                    ServiceErrorCode::BudgetExceeded
+                }
+                _ => ServiceErrorCode::InternalContractViolation,
+            },
+            format!("native source graph projection rejected ({:?})", e.code()),
+        )
     })?;
     let (registry, batch, coverage, provenance, limits) = proposals.into_parts();
     checkpoint(stop)?;
@@ -619,13 +624,19 @@ fn compose_backend(
         library_recognition,
     ) = signals::publish_signals(&snapshot, &provenance, stop)
         .map_err(|e| stage_error("signals", e))?;
-    let (snapshot, toc_recognition) = toc::publish(&snapshot, &provenance, stop)?;
-    let (snapshot, xml_recognition) = xml::publish(&snapshot, &provenance, stop)?;
-    let (snapshot, state_root_recognition) = toc::publish_state_root(&snapshot, &provenance, stop)?;
+    let (snapshot, toc_recognition) =
+        toc::publish(&snapshot, &provenance, stop).map_err(|e| stage_error("toc", e))?;
+    let (snapshot, xml_recognition) =
+        xml::publish(&snapshot, &provenance, stop).map_err(|e| stage_error("xml", e))?;
+    let (snapshot, state_root_recognition) = toc::publish_state_root(&snapshot, &provenance, stop)
+        .map_err(|e| stage_error("state-roots", e))?;
     let (snapshot, state_core_recognition) =
-        state_core::publish(&snapshot, &provenance, &state_recognition, stop)?;
-    let toc_topology = toc::maps(&snapshot, &toc_recognition, stop)?;
-    let xml_topology = xml::maps(&snapshot, &xml_recognition, stop)?;
+        state_core::publish(&snapshot, &provenance, &state_recognition, stop)
+            .map_err(|e| stage_error("state-core", e))?;
+    let toc_topology = toc::maps(&snapshot, &toc_recognition, stop)
+        .map_err(|e| stage_error("toc-crosswalk", e))?;
+    let xml_topology = xml::maps(&snapshot, &xml_recognition, stop)
+        .map_err(|e| stage_error("xml-crosswalk", e))?;
     let state_root_topology = toc::maps(
         &snapshot,
         std::slice::from_ref(&state_root_recognition),
@@ -663,6 +674,7 @@ fn compose_backend(
         stop,
     )?;
     checkpoint(stop)?;
+    let source_nodes = materialized::nodes(&snapshot, stop)?;
     let mut file_nodes = Vec::new();
     for file in provenance.files() {
         checkpoint(stop)?;
@@ -688,7 +700,7 @@ fn compose_backend(
         package_file_edges.push(PackageFileEdge {
             package: receipt.package.clone(),
             path: receipt.path.clone(),
-            edge_id: materialized_edge_id(&snapshot, &receipt.proposal_id)?,
+            edge_id: materialized_edge_id(&snapshot, &receipt.proposal_id, &source_nodes)?,
         });
     }
     let mut package_dependency_edges = Vec::new();
@@ -707,7 +719,7 @@ fn compose_backend(
             dependency: dependency.dependency.clone(),
             kind: dependency.kind,
             confidence: *confidence,
-            edge_id: materialized_edge_id(&snapshot, proposal_id)?,
+            edge_id: materialized_edge_id(&snapshot, proposal_id, &source_nodes)?,
         });
     }
     let mut package_load_edges = Vec::new();
@@ -725,7 +737,7 @@ fn compose_backend(
             package: load.package.clone(),
             target: load.target.clone(),
             confidence: *confidence,
-            edge_id: materialized_edge_id(&snapshot, proposal_id)?,
+            edge_id: materialized_edge_id(&snapshot, proposal_id, &source_nodes)?,
         });
     }
     let mut xml_nodes = Vec::new();
@@ -757,9 +769,12 @@ fn compose_backend(
         GraphReadStage::Snapshot,
         stop,
     )
-    .map_err(|e| error(e.code))?;
+    .map_err(|e| stage_error("final-graph-decode", error(e.code)))?;
     if admitted != snapshot {
-        return Err(error(ServiceErrorCode::InternalContractViolation));
+        return Err(ServiceError::new(
+            ServiceErrorCode::InternalContractViolation,
+            "final graph export differs from its admitted owner snapshot",
+        ));
     }
     checkpoint(stop)?;
     Ok(BuiltGraph {
@@ -836,7 +851,12 @@ pub(super) fn materialized_partition_node_id(
     let accepted = partition.report().accepted_entities();
     let index = accepted
         .binary_search_by(|entry| entry.proposal_id().cmp(proposal_id))
-        .map_err(|_| error(ServiceErrorCode::InternalContractViolation))?;
+        .map_err(|_| {
+            ServiceError::new(
+                ServiceErrorCode::InternalContractViolation,
+                "source entity receipt is absent from accepted entities",
+            )
+        })?;
     let accepted = accepted[index].node();
     let node = wow_graph::GraphNode::new(
         snapshot.snapshot().universe().clone(),
@@ -848,7 +868,10 @@ pub(super) fn materialized_partition_node_id(
     )
     .map_err(graph_error)?;
     if snapshot.snapshot().node(node.node_id()).is_none() {
-        return Err(error(ServiceErrorCode::InternalContractViolation));
+        return Err(ServiceError::new(
+            ServiceErrorCode::InternalContractViolation,
+            "accepted source entity is absent from materialized graph",
+        ));
     }
     Ok(node.node_id().clone())
 }
@@ -857,19 +880,14 @@ pub(super) fn materialized_partition_node_id(
 fn materialized_edge_id(
     snapshot: &GraphPartitionSnapshot,
     proposal_id: &str,
+    nodes: &std::collections::BTreeMap<wow_graph::GraphNodeId, wow_graph::GraphNodeId>,
 ) -> ServiceResult<wow_graph::GraphEdgeId> {
-    let partition = snapshot
-        .partition(wow_project::graph::SOURCE_GRAPH_PARTITION)
-        .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?;
-    let accepted = partition.report().accepted_relations();
-    let index = accepted
-        .binary_search_by(|entry| entry.proposal_id().cmp(proposal_id))
-        .map_err(|_| error(ServiceErrorCode::InternalContractViolation))?;
-    let edge = accepted[index].edge();
-    if snapshot.snapshot().edge(edge.edge_id()).is_none() {
-        return Err(error(ServiceErrorCode::InternalContractViolation));
-    }
-    Ok(edge.edge_id().clone())
+    materialized::edge_id(
+        snapshot,
+        wow_project::graph::SOURCE_GRAPH_PARTITION,
+        proposal_id,
+        nodes,
+    )
 }
 
 fn checkpoint(stop: &AtomicBool) -> ServiceResult<()> {
@@ -895,11 +913,14 @@ fn stage_error(stage: &'static str, error: ServiceError) -> ServiceError {
     )
 }
 fn graph_error(e: wow_graph::GraphError) -> ServiceError {
-    error(match e.code() {
-        wow_graph::GraphErrorCode::Cancelled => ServiceErrorCode::Cancelled,
-        wow_graph::GraphErrorCode::BudgetExceeded => ServiceErrorCode::BudgetExceeded,
-        _ => ServiceErrorCode::InternalContractViolation,
-    })
+    ServiceError::new(
+        match e.code() {
+            wow_graph::GraphErrorCode::Cancelled => ServiceErrorCode::Cancelled,
+            wow_graph::GraphErrorCode::BudgetExceeded => ServiceErrorCode::BudgetExceeded,
+            _ => ServiceErrorCode::InternalContractViolation,
+        },
+        format!("source graph owner rejected ({:?})", e.code()),
+    )
 }
 
 fn bounded(value: &impl Serialize, limit: usize) -> ServiceResult<Vec<u8>> {

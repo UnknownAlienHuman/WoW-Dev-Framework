@@ -4,6 +4,7 @@
 //! runtime load success.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
 use serde::{Deserialize, Serialize};
@@ -423,6 +424,8 @@ pub struct ProjectPackageLoadPlan {
     digest: ContentDigest<CanonicalResult>,
     #[serde(skip)]
     retained_plans: BTreeMap<String, ProjectLoadPlan>,
+    #[serde(skip)]
+    retained_variants: BTreeMap<String, BTreeMap<String, Arc<str>>>,
 }
 
 impl ProjectPackageLoadPlan {
@@ -469,6 +472,13 @@ impl ProjectPackageLoadPlan {
         self.retained_plans.get(package)
     }
 
+    pub(crate) fn variant_text(&self, package: &str, toc: &str) -> Option<&str> {
+        self.retained_variants
+            .get(package)?
+            .get(toc)
+            .map(AsRef::as_ref)
+    }
+
     /// Resolve one retained TOC/XML/Lua source to its package-qualified logical
     /// project path. The source must belong to the exact selected package plan.
     #[must_use]
@@ -496,6 +506,23 @@ impl ProjectPackageLoadPlan {
                 return Err(invalid(
                     "package selected TOC receipt differs from its canonical node",
                 ));
+            }
+            let variants = self
+                .retained_variants
+                .get(&package.package)
+                .ok_or_else(|| invalid("package variant sources are missing"))?;
+            if variants.len() != package.variants.len() {
+                return Err(invalid("package variant source set differs"));
+            }
+            for variant in &package.variants {
+                let text = variants
+                    .get(&variant.toc)
+                    .ok_or_else(|| invalid("package variant source is missing"))?;
+                if text.len() as u64 != variant.byte_length
+                    || crate::identity::source_digest(text.as_bytes()) != variant.content_digest
+                {
+                    return Err(invalid("package variant source identity differs"));
+                }
             }
         }
         Ok(())
@@ -667,91 +694,194 @@ impl ProjectInputDirectory {
         context: Option<&TocLoadContext>,
         stop: &AtomicBool,
     ) -> ProjectResult<ProjectPackageLoadInput> {
-        checkpoint(stop)?;
-        profile
-            .validate()
-            .map_err(|_| invalid("package load profile is invalid"))?;
-        if let Some(context) = context {
-            context.validate()?;
-        }
-        let declarations = validate_declarations(packages)?;
-        let mut loaded = Vec::with_capacity(declarations.len());
-        let mut variants = BTreeMap::<String, Vec<ProjectPackageVariantReceipt>>::new();
-        let mut total_sources = 0usize;
-        let mut total_bytes = 0usize;
+        read_package_sources(PackageSources::Disk(self), packages, profile, context, stop)
+    }
+}
 
-        for package in declarations {
+pub(crate) fn read_retained_packages(
+    sources: BTreeMap<&str, BTreeMap<&str, &str>>,
+    packages: &[ProjectPackageInput],
+    profile: &ProfileIdentity,
+    context: Option<&TocLoadContext>,
+    stop: &AtomicBool,
+) -> ProjectResult<ProjectPackageLoadInput> {
+    validate_declarations(packages)?;
+    if sources.len() != packages.len()
+        || packages
+            .iter()
+            .any(|package| !sources.contains_key(package.name.as_str()))
+    {
+        return Err(invalid(
+            "retained package source scopes differ from declarations",
+        ));
+    }
+    let mut count = 0usize;
+    let mut bytes = 0usize;
+    for scope in sources.values() {
+        for (path, text) in scope {
             checkpoint(stop)?;
-            let selected = package
-                .variants
-                .iter()
-                .find(|variant| variant.selected)
-                .ok_or_else(|| invalid("package has no selected TOC variant"))?;
-            let input = self.read_toc_project_with_context(
+            validate_path(path)?;
+            count = count.checked_add(1).ok_or_else(budget)?;
+            bytes = bytes.checked_add(text.len()).ok_or_else(budget)?;
+            if count > MAX_PACKAGE_SOURCES
+                || bytes > MAX_PACKAGE_SOURCE_BYTES
+                || text.len() > DISK_SOURCE_MAX_BYTES
+            {
+                return Err(budget());
+            }
+            if text.contains('\0') {
+                return Err(invalid("retained package source contains a NUL character"));
+            }
+        }
+    }
+    read_package_sources(
+        PackageSources::Retained(sources),
+        packages,
+        profile,
+        context,
+        stop,
+    )
+}
+
+enum PackageSources<'a> {
+    Disk(&'a ProjectInputDirectory),
+    Retained(BTreeMap<&'a str, BTreeMap<&'a str, &'a str>>),
+}
+
+fn read_package_sources(
+    sources: PackageSources<'_>,
+    packages: &[ProjectPackageInput],
+    profile: &ProfileIdentity,
+    context: Option<&TocLoadContext>,
+    stop: &AtomicBool,
+) -> ProjectResult<ProjectPackageLoadInput> {
+    checkpoint(stop)?;
+    profile
+        .validate()
+        .map_err(|_| invalid("package load profile is invalid"))?;
+    if let Some(context) = context {
+        context.validate()?;
+    }
+    let declarations = validate_declarations(packages)?;
+    let mut loaded = Vec::with_capacity(declarations.len());
+    let mut variants = BTreeMap::<String, Vec<ProjectPackageVariantReceipt>>::new();
+    let mut variant_sources = BTreeMap::<String, BTreeMap<String, Arc<str>>>::new();
+    let mut total_sources = 0usize;
+    let mut total_bytes = 0usize;
+
+    for package in declarations {
+        checkpoint(stop)?;
+        let selected = package
+            .variants
+            .iter()
+            .find(|variant| variant.selected)
+            .ok_or_else(|| invalid("package has no selected TOC variant"))?;
+        let input = match &sources {
+            PackageSources::Disk(directory) => directory.read_toc_project_with_context(
                 &package.root,
                 &selected.toc,
                 profile,
                 context,
                 stop,
-            )?;
-            let (files, plan) = input.into_parts();
-            let selected_source = plan
-                .sources()
-                .iter()
-                .find(|source| source.path == selected.toc.path())
-                .ok_or_else(|| invalid("selected TOC is absent from its load receipt"))?;
-            let mut receipts = vec![ProjectPackageVariantReceipt {
-                package: package.name.clone(),
-                toc: selected.toc.path().to_owned(),
-                selected: true,
-                content_digest: selected_source.content_digest,
-                byte_length: selected_source.byte_length,
-            }];
-            let directory = self.subdirectory(&package.root)?;
-            for variant in package.variants.iter().filter(|variant| !variant.selected) {
-                checkpoint(stop)?;
-                let bytes = directory.read(&variant.toc, DISK_SOURCE_MAX_BYTES, stop)?;
-                let text = std::str::from_utf8(&bytes)
-                    .map_err(|_| invalid("unselected TOC variant must contain UTF-8"))?;
-                if text.contains('\0') {
-                    return Err(invalid("unselected TOC variant contains a NUL character"));
+            )?,
+            PackageSources::Retained(scopes) => {
+                let scope = &scopes[package.name.as_str()];
+                let selected_sources = scope
+                    .iter()
+                    .filter(|(path, _)| !path.ends_with(".toc") || **path == selected.toc.path())
+                    .map(|(path, text)| (*path, *text))
+                    .collect();
+                super::read_retained_toc(selected_sources, &selected.toc, profile, context, stop)?
+            }
+        };
+        let (files, plan) = input.into_parts();
+        let selected_source = plan
+            .sources()
+            .iter()
+            .find(|source| source.path == selected.toc.path())
+            .ok_or_else(|| invalid("selected TOC is absent from its load receipt"))?;
+        let mut receipts = vec![ProjectPackageVariantReceipt {
+            package: package.name.clone(),
+            toc: selected.toc.path().to_owned(),
+            selected: true,
+            content_digest: selected_source.content_digest,
+            byte_length: selected_source.byte_length,
+        }];
+        let mut texts = BTreeMap::from([(
+            selected.toc.path().to_owned(),
+            Arc::<str>::from(
+                plan.document_text(selected.toc.path())
+                    .ok_or_else(|| invalid("selected TOC text is missing"))?,
+            ),
+        )]);
+        for variant in package.variants.iter().filter(|variant| !variant.selected) {
+            checkpoint(stop)?;
+            let text: Arc<str> = match &sources {
+                PackageSources::Disk(directory) => {
+                    let bytes = directory.subdirectory(&package.root)?.read(
+                        &variant.toc,
+                        DISK_SOURCE_MAX_BYTES,
+                        stop,
+                    )?;
+                    String::from_utf8(bytes)
+                        .map_err(|_| invalid("unselected TOC variant must contain UTF-8"))?
+                        .into()
                 }
-                receipts.push(ProjectPackageVariantReceipt {
-                    package: package.name.clone(),
-                    toc: variant.toc.path().to_owned(),
-                    selected: false,
-                    content_digest: crate::identity::source_digest(&bytes),
-                    byte_length: bytes.len() as u64,
-                });
-                total_sources = total_sources.checked_add(1).ok_or_else(budget)?;
-                total_bytes = total_bytes.checked_add(bytes.len()).ok_or_else(budget)?;
+                PackageSources::Retained(scopes) => {
+                    let text = scopes[package.name.as_str()]
+                        .get(variant.toc.path())
+                        .ok_or_else(|| invalid("unselected TOC variant source is missing"))?;
+                    variant.toc.verify(text.as_bytes())?;
+                    Arc::from(*text)
+                }
+            };
+            if text.contains('\0') {
+                return Err(invalid("unselected TOC variant contains a NUL character"));
             }
-            receipts.sort_by(|left, right| left.toc.cmp(&right.toc));
-            total_sources = total_sources
-                .checked_add(plan.sources().len())
-                .ok_or_else(budget)?;
-            for source in plan.sources() {
-                let length = usize::try_from(source.byte_length).map_err(|_| budget())?;
-                total_bytes = total_bytes.checked_add(length).ok_or_else(budget)?;
-            }
-            if total_sources > MAX_PACKAGE_SOURCES || total_bytes > MAX_PACKAGE_SOURCE_BYTES {
-                return Err(budget());
-            }
-            variants.insert(package.name.clone(), receipts);
-            loaded.push(ProjectLoadedPackage {
+            receipts.push(ProjectPackageVariantReceipt {
                 package: package.name.clone(),
-                files,
-                plan,
+                toc: variant.toc.path().to_owned(),
+                selected: false,
+                content_digest: crate::identity::source_digest(text.as_bytes()),
+                byte_length: text.len() as u64,
             });
+            total_sources = total_sources.checked_add(1).ok_or_else(budget)?;
+            total_bytes = total_bytes.checked_add(text.len()).ok_or_else(budget)?;
+            texts.insert(variant.toc.path().to_owned(), text);
         }
-
-        loaded.sort_by(|left, right| left.package.cmp(&right.package));
-        let plan = build_plan(packages, &loaded, variants, profile, stop)?;
-        Ok(ProjectPackageLoadInput {
-            packages: loaded,
+        receipts.sort_by(|left, right| left.toc.cmp(&right.toc));
+        total_sources = total_sources
+            .checked_add(plan.sources().len())
+            .ok_or_else(budget)?;
+        for source in plan.sources() {
+            let length = usize::try_from(source.byte_length).map_err(|_| budget())?;
+            total_bytes = total_bytes.checked_add(length).ok_or_else(budget)?;
+        }
+        if total_sources > MAX_PACKAGE_SOURCES || total_bytes > MAX_PACKAGE_SOURCE_BYTES {
+            return Err(budget());
+        }
+        if let PackageSources::Retained(scopes) = &sources
+            && scopes[package.name.as_str()].len() != plan.sources().len() + texts.len() - 1
+        {
+            return Err(invalid(
+                "retained package source set includes undeclared variants",
+            ));
+        }
+        variant_sources.insert(package.name.clone(), texts);
+        variants.insert(package.name.clone(), receipts);
+        loaded.push(ProjectLoadedPackage {
+            package: package.name.clone(),
+            files,
             plan,
-        })
+        });
     }
+
+    loaded.sort_by(|left, right| left.package.cmp(&right.package));
+    let plan = build_plan(packages, &loaded, variants, variant_sources, profile, stop)?;
+    Ok(ProjectPackageLoadInput {
+        packages: loaded,
+        plan,
+    })
 }
 
 fn validate_declarations(
@@ -906,6 +1036,7 @@ fn build_plan(
     declarations: &[ProjectPackageInput],
     loaded: &[ProjectLoadedPackage],
     variants: BTreeMap<String, Vec<ProjectPackageVariantReceipt>>,
+    retained_variants: BTreeMap<String, BTreeMap<String, Arc<str>>>,
     profile: &ProfileIdentity,
     stop: &AtomicBool,
 ) -> ProjectResult<ProjectPackageLoadPlan> {
@@ -1202,6 +1333,7 @@ fn build_plan(
         coverage,
         digest,
         retained_plans,
+        retained_variants,
     };
     plan.validate_retained_plans()?;
     Ok(plan)

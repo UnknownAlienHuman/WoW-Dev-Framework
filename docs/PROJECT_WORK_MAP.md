@@ -77,7 +77,7 @@ full graph acceptance and the checkpoint's CI conclusions remain open.
 | [W11 / PR 102](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/102) | Public CLI and per-rule acceptance closure | All 26 functional rule IDs publish; full E2-B acceptance remains open |
 | [Issue 103](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/103) | Executable structural mutations and admitted per-rule fixtures | After functional implementation; frozen fixtures are not rewritten by tests |
 | [W12 / PR 80](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/80) | Extend real producer chains and conflict assessment | Exact retained records, publication validation and bounded explanations are executable; full acceptance remains open |
-| [W13 / PR 81](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/81) | Package-plan live publication | Physical Lua and standalone TOC/XML native replay, CLI publication/read/reconcile and coherent leased pair acquisition are executable; package replay and full acceptance remain open |
+| [W13 / PR 81](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/81) | Full live-pair acceptance | Physical Lua, standalone TOC/XML and declared-package native replay plus coherent leased acquisition are executable; full acceptance remains open |
 | [W14 / PR 82](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/82), [W15 / PR 83](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/83), [W16 / PR 84](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/84) | Incremental invalidation, retained roots/GC, backup/recovery | Exact generation and durable reconciliation gates |
 | [W17 / PR 85](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/85), [W18 / PR 86](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/86), [W19 / PR 87](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/87) | Blizzard source universe, Project Map/skeletons, context packs | Real prerequisite views before context |
 | [W20 / PR 88](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/88), [W21 / PR 89](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/89) | Search, lineage and static impact | Exact immutable generation inputs |
@@ -252,3 +252,27 @@ currently omits unreachable packages, so replay must retain their actual capture
 bytes and variant sources before reconstructing the package closure. W13/E2
 acceptance, generation Library binding, retention/backup and source/runtime gates
 remain open. Gethe preparation still follows product implementation/build.
+
+## W13 declared-package replay checkpoint
+
+Standalone predecessor `c317f9aaa59feb4b0e74665e5a69fd14f029ac48` was published
+and read back with all 12 changed blob identities. Native replay v3 now retains
+all selected package closures and variant TOC bytes, including unreachable Lua
+that Main flattening omits. The original package loader rebuilds dependencies,
+reachability, order and namespaced Main; all original plan and semantic IDs must
+match. Package bytes are archived once and never executed. Prior v1/v2 epochs
+retain exact catalogs and reject unsupported v3 writes without current mutation.
+
+The full service regression exposed a stale source-edge crosswalk: accepted
+edges belonged to the input generation, while later publication rebound endpoints
+to the final generation. The service now uses its existing node/edge rebinder for
+package ownership, dependency and load edges, preserving relation/confidence/evidence
+and verifying final presence. No graph validator was relaxed.
+
+Policy, fmt, workspace check, strict Clippy, tests (850 passed, 1 ignored,
+103 targets), rustdoc and build passed on 2026-10-09. The native regression removes
+source directories before full publication and Exact reopen and rejects variant,
+unreachable-corpus, root-selection and foreign-Main substitutions. Full W13/E2
+acceptance and external source/runtime checks remain open. The next functional
+slice is W14 exact Library binding in generation identity with explicit legacy
+replay compatibility, before incremental invalidation and W15 retention/GC.

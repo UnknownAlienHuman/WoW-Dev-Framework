@@ -592,6 +592,25 @@ Fresh workspace policy, fmt, check, strict Clippy, tests (849 passed, 1 ignored,
 incremental reuse, retention/backup and full W13/E2/source/runtime acceptance remain
 open. See [REPLAY_PUBLICATION.md](../crates/wow-project/REPLAY_PUBLICATION.md).
 
+## W13 declared-package replay checkpoint (2026-10-09)
+
+Native/storage replay v3 captures every selected package closure, all declared TOC
+variants and Main fixture references. Unreachable Lua remains retained independently
+of analyzer Main. Package bytes are stored once; the original bounded package
+loader rebuilds dependencies, reachability, order and collision-free Main. Every
+selected, package/Main and project/analyzer identity must reproduce after source
+removal. Old v1/v2 encodings and exact epoch catalogs remain compatible; v3 writes
+require an epoch that admits v3, without migration or widening an older catalog.
+
+The complete service package path also repairs source ownership/dependency/load
+crosswalks: accepted edge endpoints are rebound with the existing helper to the
+final graph generation, preserving evidence/confidence and checking final presence.
+Fresh policy, fmt, workspace check, strict Clippy, tests (850 passed, 1 ignored,
+103 targets), rustdoc and build passed. Native full-service publication and stored
+Exact reopen run after source deletion; corpus, variant, root and foreign-Main
+substitution guards pass. Full W13/E2 acceptance, exact Library generation binding,
+incremental reuse, retention/recovery and source/runtime gates remain open.
+
 ## W11 semantic-repair checkpoint
 
 A read-through after the first W11 publication found positive-path defects that

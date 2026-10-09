@@ -147,13 +147,6 @@ pub(super) struct ReplayConfiguration {
 impl ReplayConfiguration {
     pub(super) fn from_configuration(config: &ProjectConfiguration) -> ProjectResult<Self> {
         config.validate()?;
-        if config.package_load_plan().is_some() || config.package_main_plan().is_some() {
-            return Err(crate::ProjectError::new(
-                crate::ProjectErrorCode::DeferredCapability,
-                crate::ProjectPhase::Publication,
-                "package-plan replay is not supported by the native archive profile",
-            ));
-        }
         let capabilities = config.capability_policy();
         Ok(Self {
             project_id: config.project_id().clone(),
@@ -182,6 +175,10 @@ impl ReplayConfiguration {
     pub(super) fn rebuild(
         &self,
         load_plan: Option<&crate::load::ProjectLoadPlan>,
+        package_plans: Option<(
+            &crate::load::ProjectPackageLoadPlan,
+            &crate::load::ProjectPackageMainPlan,
+        )>,
     ) -> ProjectResult<ProjectConfiguration> {
         let builder = ProjectConfigurationBuilder::new(
             self.project_id.clone(),
@@ -204,6 +201,10 @@ impl ReplayConfiguration {
         .budget_policy(self.budgets.rebuild()?);
         let builder = match load_plan {
             Some(plan) => builder.load_plan(plan)?,
+            None => builder,
+        };
+        let builder = match package_plans {
+            Some((load, main)) => builder.package_load_plan(load, main)?,
             None => builder,
         };
         let config = builder.build()?;

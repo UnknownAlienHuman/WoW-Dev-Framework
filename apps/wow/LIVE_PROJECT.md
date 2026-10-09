@@ -1,9 +1,9 @@
 # Native live project commands
 
-Physical Lua and explicitly selected standalone TOC/XML profiles expose coherent
-publication and acquisition through `wow-service::live_project`. The app remains
-a transport over one service operation per command. Multi-package replay is
-still unavailable.
+Physical Lua, explicitly selected standalone TOC/XML and declared multi-package
+profiles expose coherent publication and acquisition through
+`wow-service::live_project`. The app remains a transport over one service operation
+per command. Full W13/E2 acceptance remains open.
 
 ```text
 wow project publish --config project.json --project <ProjectId> --store-root <new-private-directory> --operation-id <id> --expected-current absent --initialize --allow-partial
@@ -12,8 +12,9 @@ wow project read --store-root <directory> --store-generation <StoreGenerationId>
 wow project reconcile --store-root <directory> --operation-id <original-id>
 ```
 
-`publish` accepts the existing explicit materialized-input, physical-file or selected-TOC
-configuration. The service constructs one original native publisher and runs the
+`publish` accepts the existing explicit materialized-input, physical-file,
+selected-TOC or package-universe configuration. The service constructs one original
+native publisher and runs the
 same graph producer chain as `wow graph build`. It captures exact Main/Library
 bytes, validates native read-back while the candidate is inactive, then activates
 only with the supplied expected-current CAS. Later publications omit
@@ -66,3 +67,14 @@ accept physical publications only. Initialize a new private store to publish v2
 loader archives. No epoch migration is performed. Fresh full workspace gates and
 build passed on 2026-10-09: 849 tests passed, 1 ignored, 103 targets. The new service
 regression runs the complete TOC/XML producer chain after source removal.
+
+Multi-package replay uses native/storage v3. It retains every selected package's
+captured sources, including unreachable Lua, and exact bytes of all declared TOC
+variants. It reconstructs dependencies, reachability, file order and namespaced
+Main with the existing package owner. Unreachable files and unselected-variant
+entries remain outside analyzer Main; their actual source identities stay bound.
+Package sources are archived once, independently of the flattened Main namespace.
+V1/V2 epochs keep their exact catalogs and reject v3 writes before current changes;
+initialize a new private store for v3. Full workspace gates/build passed on
+2026-10-09: 850 tests passed, 1 ignored, 103 targets. The real package service
+regression deletes its source directory before publication and Exact reopen.

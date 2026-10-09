@@ -331,6 +331,23 @@ impl LocalProjectInput {
         Self::new_with_load(bundle, reference, load)
     }
 
+    /// Compose exact package and Main namespace receipts from their native owner.
+    pub fn new_with_package_plans(
+        bundle: ProjectInputBundle,
+        reference: ReferenceView,
+        load_plan: wow_project::load::ProjectPackageLoadPlan,
+        main_plan: wow_project::load::ProjectPackageMainPlan,
+    ) -> ServiceResult<Self> {
+        Self::new_with_load(
+            bundle,
+            reference,
+            LocalProjectLoad::PackageUniverse {
+                load_plan,
+                main_plan,
+            },
+        )
+    }
+
     fn new_with_load(
         bundle: ProjectInputBundle,
         reference: ReferenceView,

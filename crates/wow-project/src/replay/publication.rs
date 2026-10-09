@@ -11,11 +11,17 @@ use wow_store::project::{PartitionRecord, ReadSnapshot};
 pub const STORAGE_SCHEMAS: &[&str] = &[
     "wow-project.live-replay.v1",
     "wow-project.live-replay.v2",
+    "wow-project.live-replay.v3",
     "wow-project.live-pair.v1",
 ];
 /// Exact catalog of already published physical-input epochs. It is never widened
 /// in place; reopening it preserves its original epoch and membership identities.
 pub const STORAGE_SCHEMAS_V1: &[&str] = &["wow-project.live-replay.v1", "wow-project.live-pair.v1"];
+pub const STORAGE_SCHEMAS_V2: &[&str] = &[
+    "wow-project.live-replay.v1",
+    "wow-project.live-replay.v2",
+    "wow-project.live-pair.v1",
+];
 pub const STORAGE_CHECK: &str = "wow-project.live-pair-native-replay.v1";
 const HEADER_KEY: &str = "live.project.header";
 const REPLAY_KEY: &str = "live.project.replay";
@@ -88,7 +94,9 @@ impl AcquiredProjectPair {
             .ok_or_else(invalid)?;
         if !matches!(
             replay_schema,
-            "wow-project.live-replay.v1" | "wow-project.live-replay.v2"
+            "wow-project.live-replay.v1"
+                | "wow-project.live-replay.v2"
+                | "wow-project.live-replay.v3"
         ) {
             return Err(invalid());
         }

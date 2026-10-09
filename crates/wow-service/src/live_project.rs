@@ -57,8 +57,14 @@ impl LiveProjectStore {
         let store = match ProjectStore::open(root, &catalog()?) {
             Ok(store) => store,
             Err(error) if error.code() == StoreErrorCode::IntegrityViolation => {
-                ProjectStore::open(root, &catalog_for(publication::STORAGE_SCHEMAS_V1)?)
-                    .map_err(store_error)?
+                match ProjectStore::open(root, &catalog_for(publication::STORAGE_SCHEMAS_V2)?) {
+                    Ok(store) => store,
+                    Err(error) if error.code() == StoreErrorCode::IntegrityViolation => {
+                        ProjectStore::open(root, &catalog_for(publication::STORAGE_SCHEMAS_V1)?)
+                            .map_err(store_error)?
+                    }
+                    Err(error) => return Err(store_error(error)),
+                }
             }
             Err(error) => return Err(store_error(error)),
         };

@@ -2,6 +2,7 @@
 //! identifiers are compared after real analysis; they never manufacture a session.
 mod configuration;
 mod load;
+mod packages;
 pub mod publication;
 
 use crate::{
@@ -10,6 +11,7 @@ use crate::{
 };
 use configuration::ReplayConfiguration;
 use load::ReplayLoad;
+use packages::ReplayPackages;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::AtomicBool;
 use wow_emmy::{
@@ -18,6 +20,7 @@ use wow_emmy::{
 
 const REPLAY_SCHEMA: &str = "wow-project/native-project-replay/1";
 const LOAD_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/2";
+const PACKAGE_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/3";
 const MAX_FILES: usize = 8192;
 const MAX_LIBRARIES: usize = 64;
 const MAX_FILE_BYTES: usize = 16 * 1024 * 1024;
@@ -76,6 +79,8 @@ pub struct ProjectReplay {
     analyzer_snapshot_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     load: Option<ReplayLoad>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    packages: Option<ReplayPackages>,
 }
 impl ProjectReplay {
     pub fn capture(publisher: &ProjectPublisher, stop: &AtomicBool) -> ProjectResult<Self> {
@@ -87,10 +92,15 @@ impl ProjectReplay {
         if inputs.len() > MAX_FILES || libraries.len() > MAX_LIBRARIES {
             return Err(exhausted());
         }
-        let mut count = inputs.len();
+        let package_plan = snapshot.configuration().package_load_plan();
+        let mut count = if package_plan.is_some() {
+            0
+        } else {
+            inputs.len()
+        };
         let mut bytes = 0usize;
         // Charge borrowed input bytes before copying an archive.
-        for file in inputs {
+        for file in inputs.iter().filter(|_| package_plan.is_none()) {
             crate::analyzer::checkpoint(stop)?;
             bytes = bytes
                 .checked_add(file.retained_text().len())
@@ -134,8 +144,24 @@ impl ProjectReplay {
             .load_plan()
             .map(|plan| ReplayLoad::capture(plan, inputs))
             .transpose()?;
+        let packages = package_plan
+            .map(|plan| {
+                ReplayPackages::capture(
+                    plan,
+                    snapshot
+                        .configuration()
+                        .package_main_plan()
+                        .ok_or_else(invalid)?,
+                    inputs,
+                    stop,
+                    &mut count,
+                    &mut bytes,
+                )
+            })
+            .transpose()?;
         let mut files = inputs
             .iter()
+            .filter(|_| packages.is_none())
             .map(|file| ReplayFile {
                 path: file.relative_path().as_str().into(),
                 text: file.retained_text().into(),
@@ -165,7 +191,9 @@ impl ProjectReplay {
         }
         retained_libraries.sort_by(|a, b| a.snapshot_id.cmp(&b.snapshot_id));
         let replay = Self {
-            schema: if load.is_some() {
+            schema: if packages.is_some() {
+                PACKAGE_REPLAY_SCHEMA
+            } else if load.is_some() {
                 LOAD_REPLAY_SCHEMA
             } else {
                 REPLAY_SCHEMA
@@ -178,17 +206,22 @@ impl ProjectReplay {
             project_snapshot_id: snapshot.snapshot_id().into(),
             analyzer_snapshot_id: snapshot.analyzer_binding().analyzer_snapshot_id().into(),
             load,
+            packages,
         };
         replay.validate_budget(stop)?;
         Ok(replay)
     }
     fn validate_budget(&self, stop: &AtomicBool) -> ProjectResult<()> {
-        if self.schema
-            != if self.load.is_some() {
-                LOAD_REPLAY_SCHEMA
-            } else {
-                REPLAY_SCHEMA
-            }
+        if (self.load.is_some() && self.packages.is_some())
+            || (self.packages.is_some() && !self.files.is_empty())
+            || self.schema
+                != if self.packages.is_some() {
+                    PACKAGE_REPLAY_SCHEMA
+                } else if self.load.is_some() {
+                    LOAD_REPLAY_SCHEMA
+                } else {
+                    REPLAY_SCHEMA
+                }
             || self.libraries.len() > MAX_LIBRARIES
             || self.files.len() > MAX_FILES
             || self.files.windows(2).any(|p| p[0].path >= p[1].path)
@@ -212,6 +245,14 @@ impl ProjectReplay {
             .iter()
             .chain(self.libraries.iter().flat_map(|lib| &lib.files))
             .chain(documents)
+            .chain(
+                self.packages
+                    .as_ref()
+                    .map(ReplayPackages::sources)
+                    .transpose()?
+                    .into_iter()
+                    .flatten(),
+            )
         {
             crate::analyzer::checkpoint(stop)?;
             count = count.checked_add(1).ok_or_else(exhausted)?;
@@ -242,7 +283,16 @@ impl ProjectReplay {
             .as_ref()
             .map(|load| load.rebuild(&self.files, self.configuration.profile(), stop))
             .transpose()?;
-        let config = self.configuration.rebuild(load_plan.as_ref())?;
+        let package_main = self
+            .packages
+            .as_ref()
+            .map(|packages| packages.rebuild(self.configuration.profile(), stop))
+            .transpose()?;
+        let package_parts = package_main.map(crate::load::ProjectPackageMainInput::into_parts);
+        let config = self.configuration.rebuild(
+            load_plan.as_ref(),
+            package_parts.as_ref().map(|(_, load, main)| (load, main)),
+        )?;
         let backend = config.analyzer_binding().backend().clone();
         let limits = LuaWorkspaceLimits::new(
             MAX_FILES as u64,
@@ -270,19 +320,25 @@ impl ProjectReplay {
             }
             libraries.push(snapshot);
         }
-        let files = self
-            .files
-            .iter()
-            .map(|file| {
-                ProjectInputFile::declared(
-                    file.path.clone(),
-                    file.text.clone(),
-                    crate::ProjectLanguageKind::Lua,
-                    crate::ProjectFileRole::FirstPartyMain,
-                    file.fixture_ref.clone(),
-                )
-            })
-            .collect::<ProjectResult<Vec<_>>>()?;
+        let files = if let Some((files, _, _)) = package_parts {
+            self.packages
+                .as_ref()
+                .ok_or_else(invalid)?
+                .restore_fixture_refs(files)?
+        } else {
+            self.files
+                .iter()
+                .map(|file| {
+                    ProjectInputFile::declared(
+                        file.path.clone(),
+                        file.text.clone(),
+                        crate::ProjectLanguageKind::Lua,
+                        crate::ProjectFileRole::FirstPartyMain,
+                        file.fixture_ref.clone(),
+                    )
+                })
+                .collect::<ProjectResult<Vec<_>>>()?
+        };
         let bundle = ProjectInputBundle::closed(config, files, libraries)?;
         let mut publisher = if self.function_calls {
             ProjectPublisher::with_function_call_facts()
@@ -300,7 +356,9 @@ impl ProjectReplay {
         Ok(snapshot.open_view())
     }
     fn storage_schema(&self) -> &'static str {
-        if self.load.is_some() {
+        if self.packages.is_some() {
+            "wow-project.live-replay.v3"
+        } else if self.load.is_some() {
             "wow-project.live-replay.v2"
         } else {
             "wow-project.live-replay.v1"

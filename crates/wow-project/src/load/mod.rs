@@ -24,6 +24,7 @@ pub use saved_variables::{TocSavedVariable, TocSavedVariableScope, TocSavedVaria
 // Intra-crate re-export for the source-graph fact projection. It is not a
 // public API: the normalized metadata projection stays an internal owner seam.
 pub(crate) use package_closure::project_metadata;
+pub(crate) use package_closure::read_retained_packages;
 mod xml;
 mod xml_index;
 pub mod xml_references;
@@ -154,7 +155,7 @@ pub struct ProjectLoadPlan {
     xml_references: xml_references::XmlReferenceReport,
     digest: ContentDigest<CanonicalResult>,
     #[serde(skip)]
-    documents: Arc<BTreeMap<String, String>>,
+    captured_sources: Arc<BTreeMap<String, Arc<str>>>,
 }
 
 impl ProjectLoadPlan {
@@ -255,7 +256,13 @@ impl ProjectLoadPlan {
     /// This never reopens a file that may have changed since acquisition.
     #[must_use]
     pub fn document_text(&self, path: &str) -> Option<&str> {
-        self.documents.get(path).map(String::as_str)
+        (path == self.selected_toc || self.xml_documents.contains_key(path))
+            .then(|| self.captured_text(path))
+            .flatten()
+    }
+    /// Complete captured scope, including package-local Lua outside analyzer Main.
+    pub(crate) fn captured_text(&self, path: &str) -> Option<&str> {
+        self.captured_sources.get(path).map(AsRef::as_ref)
     }
 }
 
@@ -373,7 +380,6 @@ fn read_toc_source(
         issues: Vec::new(),
         active: BTreeSet::new(),
         files: BTreeMap::new(),
-        documents: BTreeMap::new(),
         xml_documents: BTreeMap::new(),
         xml_nodes: 0,
         xml_attributes: 0,
@@ -383,9 +389,6 @@ fn read_toc_source(
     let text = loader.capture(selected_toc)?;
     loader.charge_parse(text.len().saturating_mul(2))?;
     let parsed = toc::parse(&text, profile.interface(), context, stop)?;
-    loader
-        .documents
-        .insert(path.to_owned(), text.as_ref().to_owned());
     loader.expand(path, &text, parsed, 0, false)?;
     if let LoaderSource::Retained(sources) = &loader.source
         && sources.len() != loader.captured.len()
@@ -456,7 +459,7 @@ fn read_toc_source(
             xml_documents: loader.xml_documents,
             xml_references,
             digest,
-            documents: Arc::new(loader.documents),
+            captured_sources: Arc::new(loader.captured),
         },
     })
 }
@@ -472,7 +475,6 @@ struct Loader<'a> {
     issues: Vec<LoadIssue>,
     active: BTreeSet<String>,
     files: BTreeMap<String, ProjectInputFile>,
-    documents: BTreeMap<String, String>,
     xml_documents: BTreeMap<String, XmlDocumentIndex>,
     xml_nodes: usize,
     xml_attributes: usize,
@@ -644,9 +646,6 @@ impl Loader<'_> {
                         }
                         self.xml_documents.insert(target.clone(), index);
                     }
-                    self.documents
-                        .entry(target.clone())
-                        .or_insert_with(|| content.as_ref().to_owned());
                     self.expand(&target, &content, parsed, depth + 1, record.bootstrap)?;
                 }
                 _ => return Err(invalid("unsupported load reference kind")),
