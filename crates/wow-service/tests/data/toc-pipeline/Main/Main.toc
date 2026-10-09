@@ -1,0 +1,8 @@
+## Interface: 120100
+## Dependencies [AllowLoadGameType retail]: Required
+## OptionalDeps: Optional, MissingAddon
+## LoadOnDemand: 1
+## LoadOnDemand: 1
+## SavedVariables: PipelineDB, PipelineDB
+first.lua
+second.lua

@@ -216,8 +216,16 @@ pub(super) fn project(
                         source_handle_ids: vec![
                             package_record.source_handle_id,
                             file_record.source_handle_id,
-                        ],
-                        evidence_ids: vec![package_record.evidence_id, file_record.evidence_id],
+                        ]
+                        .into_iter()
+                        .collect::<BTreeSet<_>>()
+                        .into_iter()
+                        .collect(),
+                        evidence_ids: [package_record.evidence_id, file_record.evidence_id]
+                            .into_iter()
+                            .collect::<BTreeSet<_>>()
+                            .into_iter()
+                            .collect(),
                         coverage_ids: Vec::new(),
                     },
                 )

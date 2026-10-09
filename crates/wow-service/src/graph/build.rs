@@ -19,6 +19,9 @@ mod lua_mixins;
 mod scripts;
 mod signals;
 mod state;
+mod toc;
+#[cfg(test)]
+mod toc_tests;
 use calls::{CallEdge, FunctionNode};
 use construction::{CreationEdge, FrameNode};
 use lua_mixins::{
@@ -71,6 +74,8 @@ struct BuiltGraph {
     library_recognition: signals::SourceLibraryRecognition,
     signal_nodes: Vec<signals::SignalNode>,
     signal_edges: Vec<signals::SignalEdge>,
+    toc_recognition: Vec<wow_recognizers::source_toc::SourceTocRecognition>,
+    toc_topology: toc::TocTopology,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -200,6 +205,8 @@ pub struct GraphBuildResult {
     library_recognition: Option<signals::SourceLibraryRecognition>,
     signal_nodes: Vec<signals::SignalNode>,
     signal_edges: Vec<signals::SignalEdge>,
+    toc_recognition: Vec<wow_recognizers::source_toc::SourceTocRecognition>,
+    toc_topology: toc::TocTopology,
     #[serde(skip_serializing_if = "Option::is_none")]
     snapshot: Option<GraphPartitionSnapshot>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -269,6 +276,16 @@ impl GraphBuildResult {
         self.state_recognition = None;
         self.state_nodes = StateNodes::empty();
         self.state_edges.clear();
+        self.toc_recognition.clear();
+        self.toc_topology = toc::TocTopology::default();
+        self.signal_recognition = None;
+        self.bridge_recognition = None;
+        self.custom_recognition = None;
+        self.cvar_recognition = None;
+        self.hook_recognition = None;
+        self.library_recognition = None;
+        self.signal_nodes.clear();
+        self.signal_edges.clear();
         self.handler_nodes.clear();
         self.script_edges.clear();
         self.snapshot = None;
@@ -300,7 +317,7 @@ pub fn execute_graph_build(
 ) -> ServiceResult<GraphBuildResult> {
     let request_digest = super::hash(&bounded(request, super::GRAPH_REQUEST_MAX_BYTES)?);
     let mut result = GraphBuildResult {
-        schema: "wow-service/graph-build-result/12",
+        schema: "wow-service/graph-build-result/13",
         request: request.clone(),
         request_digest,
         status: GraphReadStatus::Partial,
@@ -333,6 +350,8 @@ pub fn execute_graph_build(
         library_recognition: None,
         signal_nodes: Vec::new(),
         signal_edges: Vec::new(),
+        toc_recognition: Vec::new(),
+        toc_topology: toc::TocTopology::default(),
         state_nodes: StateNodes::empty(),
         state_edges: Vec::new(),
         handler_nodes: Vec::new(),
@@ -350,6 +369,8 @@ pub fn execute_graph_build(
             "not_coherent_project_store_publication",
             "package_dependencies_and_order_are_static_selected_toc_evidence_not_runtime_load_success",
             "package_order_groups_remain_exact_provenance_not_synthetic_transitive_edges",
+            "toc_declarations_are_static_structure_with_explicit_omissions_not_runtime_load_success",
+            "toc_repeated_or_unselected_occurrences_do_not_form_a_synthetic_file_order_dag",
             "dynamic_library_inline_xml_calls_and_remaining_recognizers_not_evaluated",
             "create_frame_is_static_construction_evidence_not_runtime_frame_existence",
             "create_from_mixins_is_static_main_declaration_evidence_not_runtime_instantiation",
@@ -399,6 +420,8 @@ pub fn execute_graph_build(
             state_edges,
             signal_nodes,
             signal_edges,
+            toc_recognition,
+            toc_topology,
             handler_nodes,
             script_edges,
         }) => {
@@ -433,6 +456,8 @@ pub fn execute_graph_build(
             result.library_recognition = Some(library_recognition);
             result.signal_nodes = signal_nodes;
             result.signal_edges = signal_edges;
+            result.toc_recognition = toc_recognition;
+            result.toc_topology = toc_topology;
             result.handler_nodes = handler_nodes;
             result.script_edges = script_edges;
             result.snapshot = Some(snapshot);
@@ -517,6 +542,8 @@ fn compose(
         hook_recognition,
         library_recognition,
     ) = signals::publish_signals(&snapshot, &provenance, stop)?;
+    let (snapshot, toc_recognition) = toc::publish(&snapshot, &provenance, stop)?;
+    let toc_topology = toc::maps(&snapshot, &toc_recognition, stop)?;
     let (state_nodes, state_edges) = state::maps(&snapshot, &provenance, &state_recognition, stop)?;
     let signal_topology = signals::maps(
         &snapshot,
@@ -680,6 +707,8 @@ fn compose(
         cvar_recognition,
         signal_nodes,
         signal_edges,
+        toc_recognition,
+        toc_topology,
         hook_recognition,
         library_recognition,
         handler_nodes,

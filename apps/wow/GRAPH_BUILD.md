@@ -42,11 +42,34 @@ edges are not representable in the current stored graph schema. This graph is a
 static file-reference topology, not proof of client execution or global load order.
 
 For explicit-file/inline input without a TOC, captured Lua nodes are still exported
-but load coverage is NotEvaluated. With a TOC, Loads coverage is Partial. Package
-DependsOn coverage is always NotEvaluated; no dependency edges are fabricated.
-The registry supports the existing Load axis while unsupported axis families
-remain unsupported. XML runtime objects and runtime relationships are not generated.
+but load coverage is NotEvaluated. With a TOC, Loads coverage is Partial. An explicit
+package universe supplies resolved required/optional dependency targets; missing
+targets remain omissions. Axis recipes still reject ambiguous registered relation
+definitions rather than silently combining meanings. XML runtime objects and
+runtime relationships are not generated.
 Captured Lua functions and direct calls are projected as described below. Source XML declarations and explicit inheritance are projected below. Negative authority is false throughout this route.
+
+## Selected-TOC core recognizers
+
+The five `core.toc.*@1` families publish independent package, file-order,
+dependency, load-policy and SavedVariables partitions after the source owners.
+Facts come from the retained load plans; the recognizer never reparses TOC text.
+Package identity requires an explicitly declared package. Standalone TOC input
+can retain manifest/variant structure with a package-identity omission.
+
+`toc_recognition` retains every normalized fact bundle, coverage witness, full
+matcher outcome and original-fact/proposal receipt. `toc_topology` binds accepted
+entity and relation proposals to final node/edge IDs and reports omissions.
+Equivalent entities retain all evidence from repeated declarations. Unresolved
+dependencies have no fabricated target, and repeated or unselected file entries
+cannot become a synthetic ordering DAG. LOD metadata is source structure and
+does not assert runtime loading or frame existence.
+
+This functional service path has an end-to-end named-package fixture including
+required/optional/missing dependencies and repeated LOD/SavedVariables declarations.
+Full CLI/real-addon acceptance, per-rule fixture freeze and the Ketho comparative
+gate remain open. Packs remain shadow evaluations; incomplete acceptance fixture
+categories do not qualify default rollout.
 
 ## XML source topology
 
@@ -104,7 +127,8 @@ precedence. Inherited mixins are reached through explicit `Inherits` paths, not
 copied into fabricated transitive `MixesIn` edges. Coverage stays Partial with
 no negative authority; zero mixin entries yield NotEvaluated, not proven absence.
 
-The source projection/registry is now profile 10 and the graph-build result is v10. Existing retained graphs and graph-read request formats are unchanged.
+The current source projection profile is 16 (registry version 13), and the
+graph-build result is v13. Bare retained graph and graph-read formats are unchanged.
 Source review: Gethe `live` resolved to
 `09b9db7948abc9b9648dedaab51eb0cf3ee67b31` on 2026-09-24;
 `Interface/AddOns/Blizzard_SharedXML/Shared/FrameTemplate/RingedFrameTemplate.xml`.
@@ -365,8 +389,8 @@ observed modes and NotEvaluated otherwise; neither is authoritative absence.
 Ordinary `wow check` / `status` retain TOC declarations but do not enable the
 optional semantic graph-access collection.
 
-The source graph projection is `wow-project/source-load-proposals/10`; the graph-build
-result is `wow-service/graph-build-result/10` while the unchanged request shape remains
+The source graph projection is `wow-project/source-load-proposals/16`; the graph-build
+result is `wow-service/graph-build-result/13` while the unchanged request shape remains
 `wow-service/graph-build-request/9`. The optional Emmy call report is v5; existing
 global-access/state-recognizer profiles keep their own versions.
 Typed keys intentionally change state-path identities and the v7 build receipt
@@ -391,7 +415,7 @@ build. The bare-snapshot route remains unchanged. See
 
 ## Artifact and provenance formats
 
-`json` (default) emits `wow-service/graph-build-result/10`: request, status,
+`json` (default) emits `wow-service/graph-build-result/13`: request, status,
 `snapshot`, `file_nodes`, `xml_nodes`, `lua_nodes`, `function_nodes`, `call_edges`,
 `frame_nodes`, `creation_edges`, `handler_nodes`, `script_edges`, `provenance`,
 `call_recognition`, `construction_recognition`, `script_recognition`, `state_nodes`,

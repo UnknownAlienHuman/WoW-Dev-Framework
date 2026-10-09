@@ -273,3 +273,54 @@ fn noncore_pack_cannot_request_default_rollout() -> TestResult {
     );
     Ok(())
 }
+
+#[test]
+fn shadow_rollout_accepts_absent_fixture_categories_but_default_rejects_them() -> TestResult {
+    // Shadow evaluation is executable development work, so a rule whose fixture
+    // categories are genuinely absent keeps that gap visible instead of borrowing
+    // an unrelated fixture id to satisfy the gate.
+    let mut document = valid_document();
+    document.pack.rules[0].positive_fixture_ids = Vec::new();
+    document.pack.rules[0].near_negative_fixture_ids = Vec::new();
+    document.pack.rules[0].partial_fixture_ids = Vec::new();
+    document.pack.rules[0].mutation_fixture_ids = Vec::new();
+    assert_eq!(document.pack.rollout, RecognizerPackRollout::Shadow);
+    let shadow = parse_recognizer_pack(&canonical(&document)?)?;
+    assert!(
+        shadow.document().pack.rules[0]
+            .positive_fixture_ids
+            .is_empty()
+    );
+    shadow.validate()?;
+
+    // The identical document is refused once it requests default rollout, because
+    // default eligibility requires every fixture category to carry evidence.
+    let mut failing = document;
+    failing.pack.rollout = RecognizerPackRollout::Default;
+    assert_eq!(
+        parse_recognizer_pack(&canonical(&failing)?)
+            .err()
+            .ok_or("default rollout without fixtures must fail")?
+            .code(),
+        RecognizerErrorCode::PackInvalid
+    );
+
+    // A partially populated category still fails closed under default rollout.
+    let mut partial = valid_document();
+    partial.pack.rollout = RecognizerPackRollout::Default;
+    partial.pack.rules[0].mutation_fixture_ids = Vec::new();
+    assert_eq!(
+        parse_recognizer_pack(&canonical(&partial)?)
+            .err()
+            .ok_or("default rollout with one empty category must fail")?
+            .code(),
+        RecognizerErrorCode::PackInvalid
+    );
+
+    // Default rollout and complete fixture categories remain accepted.
+    let mut complete = valid_document();
+    complete.pack.rollout = RecognizerPackRollout::Default;
+    let compiled = parse_recognizer_pack(&canonical(&complete)?)?;
+    compiled.validate()?;
+    Ok(())
+}

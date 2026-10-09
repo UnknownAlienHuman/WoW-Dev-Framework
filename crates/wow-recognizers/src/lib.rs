@@ -22,6 +22,7 @@ pub mod source_mixins;
 pub mod source_scripts;
 pub mod source_signals;
 pub mod source_state;
+pub mod source_toc;
 
 pub use emmy::{
     EMMY_DIRECT_CALL_ADAPTER_SCHEMA, EmmyDirectCallAdaptation, EmmyDirectCallBinding,

@@ -3,7 +3,7 @@
 Updated 2026-10-09, America/New_York. This map routes implementation work; it
 does not replace the package contracts or certify their acceptance.
 
-The verified starting checkpoint is `a248dadb89eb964e2f0167c762d633800f70d200`,
+The verified starting checkpoint is `56c3a706d40a27ba5faf73cc6e427a540883cada`,
 published and read back from `main`. It follows `e4d8ee7`, including the checked W11
 semantic-repair product tree recorded in
 [W11_SEMANTIC_REPAIR_MAP_2026-10-09.md](W11_SEMANTIC_REPAIR_MAP_2026-10-09.md).
@@ -12,18 +12,19 @@ in `main`, with bounded owner responsibilities and verified remote publication.
 
 ## Current functional checkpoint
 
-W11 has 14 of 26 declared core rule IDs in its service publication path. The
-remaining work starts with the five TOC rules, followed by four XML and three
-state rules. Existing TOC/XML/load/analyzer owners supply the records; recognizers
+W11 has 19 of 26 declared core rule IDs in its service publication path. The
+five TOC families now publish through the service alongside the earlier W11
+families; seven rules remain, being four XML and three state. Existing
+TOC/XML/load/analyzer owners supply the records; recognizers
 must consume typed facts rather than parsing source again.
 
 The active TOC slice has three responsibilities:
 
 | Owner | Responsibility | Current state |
 |---|---|---|
-| `wow-project` | Retain normalized TOC metadata and expose exact package, file-order, dependency, LOD and SavedVariables facts | Executable owner projection; integrated recognizer acceptance remains open |
-| `wow-recognizers` | Compile and match five declarative core TOC families with source support, omissions and coverage | In progress |
-| `wow-service` / `apps/wow` | Replace each partition in owner order and expose final graph crosswalks through the existing build command | In progress |
+| `wow-project` | Retain normalized TOC metadata and expose exact package, file-order, dependency, LOD and SavedVariables facts | Executable owner projection; service integration verified, full acceptance open |
+| `wow-recognizers` | Compile and match five declarative core TOC families with source support, omissions and coverage | Executable; service-published through the TOC pipeline |
+| `wow-service` / `apps/wow` | Replace each partition in owner order and expose final graph crosswalks through the existing build command | Executable for the TOC slice |
 
 The TOC owner now retains normalized key/value pairs after conditional selection.
 Package dependency projection consumes these retained records, preserving
@@ -31,7 +32,12 @@ conditional directives that the previous raw-span reparse lost. Generation-bound
 facts retain source order, excluded/unresolved selections, repeated targets,
 declaration occurrences and exact span/content/evidence identities. Missing
 fields are omitted from strict canonical JSON rather than serialized as null.
-This is producer code, not publication of the five declarative TOC rules.
+The service publishes five independent TOC partitions in dependency order. Each
+evaluation retains its exact normalized fact bundle, coverage witnesses and full
+matcher output; receipts bind original fact IDs to final graph proposals.
+Equivalent entity assertions retain every source/evidence witness. Repeated or
+unselected file occurrences cannot manufacture an ordering DAG, and unresolved
+dependencies remain explicit omissions.
 
 The graph registry includes the distinct TOC entity/relation meanings. The
 versioned Load recipe preserves v1 identities for old registries and requires
@@ -68,17 +74,37 @@ Specification PRs supply scope, not evidence that code is implemented.
 
 ## Verification and source preparation
 
-The current local compiler is Rust 1.99.0, observed on 2026-10-09. Workspace
-all-target/all-feature compilation, strict Clippy and warnings-as-errors rustdoc
-passed after the TOC owner changes. All 52 existing/new graph and project tests
-passed, including a real TOC acquisition -> ProjectView -> source
-facts -> graph partition regression passed locally. The regression covers
-normalized conditions, repeated files, duplicate declarations and exact support.
-Five Load recipe checks cover original/extended families, incomplete/ambiguous
-registries and preservation of other axes.
-Full TOC recognizer/service pipeline, package acceptance and named-client runtime
-checks remain NotEvaluated until their actual results are recorded. Whole-workspace
-tests remain separate from the focused graph/project test run.
+The current local compiler is Rust 1.99.0, observed on 2026-10-09. Native repository
+policy checks also passed at the recorded native policy checkpoint.
+
+The TOC checkpoint was verified with whole-workspace `cargo check --locked
+--all-targets --all-features`, strict Clippy under `-D warnings`,
+`RUSTDOCFLAGS="-D warnings" cargo doc`, `cargo fmt --all --check`,
+and the full workspace test suite: 835 passed, 1 ignored, across 102 test targets.
+
+The single ignored test is `both_consumers_interpret_generated_library`. It
+requires two explicitly approved consumer executables, so it stays ignored rather than
+being counted as a pass; it remains mandatory in the consumer CI job.
+Current Gethe materialization and the native annotation driver comparison remain
+NotEvaluated and follow the product implementation/build stage.
+
+The TOC pipeline ran end to end through the named package loader,
+ProjectPublisher, all five declarative TOC matcher families, service partition
+replacement and the final node/edge crosswalk, including repeated LoadOnDemand and
+SavedVariable support. That is a functional path over fixture and synthetic project
+inputs, not package acceptance.
+
+The source-graph projection profile is `wow-project/source-load-proposals/16`
+(registry version 13),
+the graph-build result is `wow-service/graph-build-result/13`, and the unchanged
+request shape is `wow-service/graph-build-request/9`. Existing retained graphs and
+graph-read request formats are unchanged.
+
+Full W11 fixture freeze, the `apps/wow` CLI acceptance lane, real-addon
+graph-build acceptance, the Ketho MCP comparative gate, Windows and named-client WoW
+runtime checks remain open, as does full E2-B package acceptance. The earlier focused
+graph/project test run remains part of this evidence and is not a substitute for the
+whole-workspace suite.
 
 Gethe `live` resolved at operation start to
 `09b9db7948abc9b9648dedaab51eb0cf3ee67b31`. This is one observation, not a

@@ -1,5 +1,11 @@
 # W11 semantic repair map — 2026-10-09
 
+This is the evidence record for the semantic-repair checkpoint below. The later
+TOC slice publishes all five `core.toc.*` families through the service and raises
+the functional census to 19/26. Continue from current `main` using
+[PROJECT_WORK_MAP.md](PROJECT_WORK_MAP.md); the 14/26 census and starting SHA in
+this historical record describe the earlier checkpoint.
+
 ## 1. Точная точка старта
 
 Продолжать работу от финального проверенного product commit:

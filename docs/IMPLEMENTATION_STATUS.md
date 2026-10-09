@@ -80,21 +80,21 @@ than a silent skip. The published partitions are projected into node and edge
 crosswalks and bound into `BuiltGraph` and `GraphBuildResult` alongside the existing
 owners.
 
-The frozen E2-B contract declares 26 active rule ids. Fourteen are implemented and
-published: the core.lua.* triples (create_frame, create_from_mixins,
-mixin_assignment) plus the eleven families above. The CVar adapter now publishes the
+The frozen E2-B contract declares 26 active rule ids. Nineteen are implemented and
+published as functional core rule service ids: the core.lua.* triples (create_frame,
+create_from_mixins, mixin_assignment), the eleven signal/hook/library families above and
+the five selected-TOC families described below. The CVar adapter now publishes the
 exact matcher predicates it consumes (`has_cvar_key` and `exact_cvar_key`) and retains
 an exact callback declaration in both fact support and the recognition receipt when
-one resolves; a dynamic callback does not fabricate an endpoint. The remaining twelve are
-core.toc.* (5), core.xml.* (4) and core.state.* (3). Their upstream fact types do
-not exist in Rust yet: TocPackageFact and XmlTemplateFact appear only in the
-normative documents, and the contract itself marks the
-wow-project/e2-toc-xml-fact-adapter as a future prerequisite for real project
-integration. Recognizer code never parses source, so those rules stay unimplemented
-until an owner publishes their facts.
+one resolves; a dynamic callback does not fabricate an endpoint. Four `core.xml.*`
+and three `core.state.*` rules remain. Existing XML/state owners have partial
+source records and earlier consumers; the remaining declarative core adapters
+and their service publication must reuse those owners.
 
-Structural mutation fixtures per family, the apps/wow graph export lane and full E2
-package acceptance remain open and are NotEvaluated.
+Nineteen published rule ids are not full acceptance. E2 acceptance, the E0
+fixtures/identity/checksum gates, real-addon runtime validation, the Ketho parity
+baseline, the complete `apps/wow` CLI surface and coherent ProjectStore publication
+remain open and are NotEvaluated.
 
 A subsequent W11 semantic-closure audit tightened three owner boundaries without
 widening rule authority: native-frame-event support now validates exact source handles,
@@ -106,6 +106,30 @@ remain unprojected/Possible rather than receiving fabricated support. The affect
 producer/fact/evaluation profiles are versioned. These functional checkpoints use
 formatting, affected-chain `cargo check`, strict Clippy and repository policy only;
 the planned full rule-specific test and fixture-freeze phase remains NotEvaluated.
+
+## W11 selected-TOC core families
+
+The service now publishes `core.toc.package`, `core.toc.file_order`,
+`core.toc.dependencies`, `core.toc.load_on_demand` and `core.toc.saved_variables`,
+all at rule version 1, in independent partitions. `wow-project` owns parsing,
+selection and exact generation-bound facts; recognizers use data-only shadow
+packs through the existing compiler/matcher. Missing acceptance fixture categories
+stay empty in shadow packs. Default rollout still requires all four categories.
+
+Each evaluation retains the normalized fact bundle, coverage records and complete
+matcher output. Receipts map original facts to graph proposals; the service reads
+back final node/edge identities after all producers. Equivalent entity assertions
+merge all evidence. Unresolved dependencies and uncertain selections retain
+omissions; repeated files do not manufacture an ordering DAG or runtime loading
+claims. Package ownership deduplicates support when the package and TOC file
+share the same whole-file observation.
+
+The source projection profile is `wow-project/source-load-proposals/16`, registry
+version 13; the build result is `wow-service/graph-build-result/13` and request
+shape remains `/9`. A named-package fixture verifies all five TOC families through
+real project publication, matcher, partition replacement and final crosswalk.
+See [PROJECT_WORK_MAP.md](PROJECT_WORK_MAP.md) for exact local verification and
+the remaining acceptance gates.
 
 
 ## Explicit graph source read-back
@@ -398,8 +422,8 @@ application, protection, taint or execution claim is made. At that checkpoint,
 `CreateFromMixins`, mixin assignment and the event/callback/hook/library families
 were still unimplemented; the later W11 sections supersede that historical state.
 
-`wow graph build` result schema is now `wow-service/graph-build-result/10` and
-the source graph profile is `wow-project/source-load-proposals/10`; the request
+At that checkpoint, `wow graph build` used `wow-service/graph-build-result/10` and
+the source graph profile was `wow-project/source-load-proposals/10`; the request
 shape remains unchanged. Focused Linux/Rust 1.99.0 checkpoint
 `36969801633` passed formatting, strict Clippy for the complete affected chain,
 repository policy and the exact seven-product-file boundary, then published
@@ -444,6 +468,6 @@ repair route and remaining acceptance order are recorded in
 The repaired slice remains structural static evidence. It does not establish
 runtime event delivery, frame lifecycle, callback safety, taint/combat legality,
 loaded library revisions or complete E2 acceptance. Full per-rule pipeline cases,
-fixture/checksum freeze, the remaining TOC/XML/state rules, `apps/wow` real-addon
+fixture/checksum freeze, the remaining XML/state rules, `apps/wow` real-addon
 acceptance and the mandatory final WoW API Ketho MCP comparison remain open until
 separately executed and recorded.

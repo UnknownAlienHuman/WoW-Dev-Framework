@@ -321,12 +321,20 @@ fn validate_document(document: &RecognizerPackDocument) -> RecognizerResult<()> 
             ));
         }
         previous = Some(key);
-        validate_rule(rule, &pack.budgets)?;
+        validate_rule(
+            rule,
+            &pack.budgets,
+            pack.rollout == RecognizerPackRollout::Default,
+        )?;
     }
     Ok(())
 }
 
-fn validate_rule(rule: &RecognizerRule, budgets: &RecognizerPackBudgets) -> RecognizerResult<()> {
+fn validate_rule(
+    rule: &RecognizerRule,
+    budgets: &RecognizerPackBudgets,
+    require_fixture_refs: bool,
+) -> RecognizerResult<()> {
     validate_component(&rule.rule_id, RecognizerErrorCode::PackInvalid)?;
     validate_component(&rule.scope, RecognizerErrorCode::PackInvalid)?;
     if rule.version == 0
@@ -340,10 +348,12 @@ fn validate_rule(rule: &RecognizerRule, budgets: &RecognizerPackBudgets) -> Reco
         ));
     }
     validate_sorted_ids(&rule.required_capabilities, true)?;
-    validate_sorted_ids(&rule.positive_fixture_ids, true)?;
-    validate_sorted_ids(&rule.near_negative_fixture_ids, true)?;
-    validate_sorted_ids(&rule.partial_fixture_ids, true)?;
-    validate_sorted_ids(&rule.mutation_fixture_ids, true)?;
+    // Shadow evaluation is executable development, not default-rollout acceptance.
+    // Keep missing fixture categories visible instead of borrowing unrelated IDs.
+    validate_sorted_ids(&rule.positive_fixture_ids, require_fixture_refs)?;
+    validate_sorted_ids(&rule.near_negative_fixture_ids, require_fixture_refs)?;
+    validate_sorted_ids(&rule.partial_fixture_ids, require_fixture_refs)?;
+    validate_sorted_ids(&rule.mutation_fixture_ids, require_fixture_refs)?;
 
     let mut aliases = BTreeSet::new();
     let mut clause_count = 0usize;
