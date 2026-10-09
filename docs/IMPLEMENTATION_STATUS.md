@@ -70,6 +70,20 @@ Structural limits are preserved: an exact resolved receiver and an exact literal
 
 Validated locally with `cargo check --workspace --all-targets --all-features`, `cargo clippy --workspace --all-targets --all-features -- -D warnings`, `cargo fmt --all --check`, `cargo test --workspace --all-targets --all-features` and `cargo xtask check`. These are focused owner checks; service-side partition publication, the `apps/wow` graph export lane, structural mutation fixtures and full E2 package acceptance remain open and are NotEvaluated.
 
+Service-side publication of these eleven families is now executable.
+`crates/wow-service/src/graph/build/signals.rs` publishes all four signal and hook
+groups inside the established owner order: native frame events, EventRegistry
+bridges, custom registry producers and subscriptions, and CVar callbacks. Each
+adapter crosswalks against the accepted source graph that precedes it, so an
+unrecognized binding is an error rather than a silent skip. The published
+partitions are projected into node and edge crosswalks and bound into `BuiltGraph`
+and `GraphBuildResult` alongside the existing owners. Validated by CI run
+[37890327910](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/37890327910):
+all nine jobs success on Windows and Ubuntu.
+
+Structural mutation fixtures, the `apps/wow` graph export lane and full E2 package
+acceptance remain open and are NotEvaluated.
+
 ## Explicit graph source read-back
 
 `wow graph explain --bundle ... --source-root <Main-root>` joins the existing
