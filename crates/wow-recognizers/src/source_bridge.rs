@@ -67,10 +67,10 @@ const W2_UNREGISTER_CALLABLES: [&str; 2] = [
 /// Exact resolved EventRegistry-receiver constructions. A bridge originates from
 /// a resolved registry owner, never from a bare `EventRegistry` name expression,
 /// a library target, or an unresolved global.
-const W2_POSITIVE_FIXTURE_IDS: [&str; 2] = ["RECOG-EVENT-004", "RECOG-BRIDGE-001"];
-const W2_NEAR_NEGATIVE_FIXTURE_IDS: [&str; 2] = ["RECOG-EVENT-003", "RECOG-EVENT-014"];
-const W2_PARTIAL_FIXTURE_IDS: [&str; 2] = ["RECOG-EVENT-012", "RECOG-EVENT-013"];
-const W2_MUTATION_FIXTURE_IDS: [&str; 2] = ["RECOG-EVENT-009", "RECOG-BRIDGE-003"];
+const W2_POSITIVE_FIXTURE_IDS: [&str; 2] = ["RECOG-EVENT-004", "RECOG-EVENT-001"];
+const W2_NEAR_NEGATIVE_FIXTURE_IDS: [&str; 2] = ["RECOG-EVENT-007", "RECOG-EVENT-009"];
+const W2_PARTIAL_FIXTURE_IDS: [&str; 2] = ["RECOG-EVENT-004", "RECOG-EVENT-005"];
+const W2_MUTATION_FIXTURE_IDS: [&str; 2] = ["RECOG-EVENT-009", "RECOG-EVENT-001"];
 
 /// Caller-side crosswalks are checked against the real source proposals, support
 /// records and the exact analyzer report. No name, path or repository text is

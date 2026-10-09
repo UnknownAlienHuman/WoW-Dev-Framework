@@ -530,9 +530,9 @@ fn create_frame_pack(registry_bundle_id: &str) -> RecognizerResult<crate::Compil
                     },
                 ],
                 positive_fixture_ids: vec!["RECOG-FRAME-001".into()],
-                near_negative_fixture_ids: vec!["RECOG-FRAME-002".into()],
+                near_negative_fixture_ids: vec!["RECOG-TOC-003".into()],
                 partial_fixture_ids: vec!["RECOG-FRAME-003".into()],
-                mutation_fixture_ids: vec!["RECOG-FRAME-004".into()],
+                mutation_fixture_ids: vec!["RECOG-XML-004".into()],
             }],
         },
     };

@@ -66,8 +66,8 @@ const W1_REGISTERS_BLOCKER: &str =
 const W1_HANDLES_BLOCKER: &str = "lua_native_frame_events.exact_main_handler_declarations_only";
 const W1_OTHER_RELATION_BLOCKER: &str = "lua_native_frame_events.relation_owned_by_other_producer";
 const W1_POSITIVE_FIXTURE_IDS: [&str; 1] = ["RECOG-EVENT-001"];
-const W1_NEAR_NEGATIVE_FIXTURE_IDS: [&str; 1] = ["RECOG-EVENT-002"];
-const W1_PARTIAL_FIXTURE_IDS: [&str; 1] = ["RECOG-EVENT-003"];
+const W1_NEAR_NEGATIVE_FIXTURE_IDS: [&str; 1] = ["RECOG-EVENT-005"];
+const W1_PARTIAL_FIXTURE_IDS: [&str; 1] = ["RECOG-EVENT-007"];
 const W1_MUTATION_FIXTURE_IDS: [&str; 1] = ["RECOG-EVENT-004"];
 
 /// One exact registration site, resolved from structured facts only. A
@@ -880,10 +880,10 @@ const W3_MAX_ARGUMENTS: usize = 4;
 const W3_MAX_SITES: usize = 65_536;
 const W3_MAX_EVENT_KEY_BYTES: usize = 1024;
 
-const W3_POSITIVE_FIXTURE_IDS: [&str; 1] = ["RECOG-SIGNAL-001"];
-const W3_NEAR_NEGATIVE_FIXTURE_IDS: [&str; 1] = ["RECOG-SIGNAL-002"];
-const W3_PARTIAL_FIXTURE_IDS: [&str; 1] = ["RECOG-SIGNAL-003"];
-const W3_MUTATION_FIXTURE_IDS: [&str; 2] = ["RECOG-SIGNAL-004", "RECOG-SIGNAL-005"];
+const W3_POSITIVE_FIXTURE_IDS: [&str; 1] = ["RECOG-EVENT-001"];
+const W3_NEAR_NEGATIVE_FIXTURE_IDS: [&str; 1] = ["RECOG-EVENT-009"];
+const W3_PARTIAL_FIXTURE_IDS: [&str; 1] = ["RECOG-EVENT-005"];
+const W3_MUTATION_FIXTURE_IDS: [&str; 2] = ["RECOG-EVENT-006", "RECOG-EVENT-007"];
 
 /// One resolved custom-signal producer site: a resolved custom-registry receiver
 /// and one literal event key. A dynamic receiver or key never enters this block.
@@ -2401,10 +2401,10 @@ const W4_MAX_DECLARATIONS: usize = 8192;
 const W4_MAX_ARGUMENTS: usize = 8;
 const W4_MAX_CVAR_KEY_BYTES: usize = 512;
 
-const W4_POSITIVE_FIXTURE_IDS: [&str; 1] = ["RECOG-CVAR-001"];
-const W4_NEAR_NEGATIVE_FIXTURE_IDS: [&str; 1] = ["RECOG-CVAR-002"];
-const W4_PARTIAL_FIXTURE_IDS: [&str; 1] = ["RECOG-CVAR-003"];
-const W4_MUTATION_FIXTURE_IDS: [&str; 1] = ["RECOG-CVAR-004"];
+const W4_POSITIVE_FIXTURE_IDS: [&str; 1] = ["RECOG-EVENT-004"];
+const W4_NEAR_NEGATIVE_FIXTURE_IDS: [&str; 1] = ["RECOG-EVENT-001"];
+const W4_PARTIAL_FIXTURE_IDS: [&str; 1] = ["RECOG-EVENT-005"];
+const W4_MUTATION_FIXTURE_IDS: [&str; 1] = ["RECOG-EVENT-009"];
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct W4CvarMatch {
