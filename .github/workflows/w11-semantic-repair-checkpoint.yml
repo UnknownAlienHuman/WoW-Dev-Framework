@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
-      STAGING_PARENT: e83890be51e161827ecb4d6a0fc4a7f7cfdf82c8
+      STAGING_PARENT: fb623c5b768a9a96a664afbc4c83dc16db924898
       BASE_COMMIT: a2bf0af3675203c07078c03f5641cef649b6c0ed
       BASE_TREE: 1bf20ba91719786dd589a66c9bb6e1a5c1d98b1d
       B64_SHA256: 1d6ec1ace3e49bee7223b775da179be7400b7f61a29aeac8a799fda30794193a
@@ -84,7 +84,6 @@ jobs:
           crates/wow-recognizers/src/source_signals.rs
           crates/wow-recognizers/src/source_state.rs
           docs/IMPLEMENTATION_STATUS.md
-          docs/W11_SEMANTIC_REPAIR_MAP_2026-10-09.md
           FILES
           sed -i 's/^          //' "$RUNNER_TEMP/expected-files"
           sort -o "$RUNNER_TEMP/expected-files" "$RUNNER_TEMP/expected-files"
@@ -100,8 +99,8 @@ jobs:
           git archive --format=tar -o "$RUNNER_TEMP/checkpoint/checked-source.tar" "$(cat "$RUNNER_TEMP/checkpoint/CHECKED_TREE")"
           git diff --cached --binary "$BASE_COMMIT" > "$RUNNER_TEMP/checkpoint/formatted.patch"
           printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/checkpoint/STAGING_SHA"
-          cp "$RUNNER_TEMP/w11-semantic-repair.patch" "$RUNNER_TEMP/checkpoint/input.patch" || true
-          cp "$RUNNER_TEMP/w11-semantic-repair-fix1.patch" "$RUNNER_TEMP/checkpoint/fix1.patch" || true
+          cp "$RUNNER_TEMP/w11-semantic-repair.patch" "$RUNNER_TEMP/checkpoint/input.patch"
+          cp "$RUNNER_TEMP/w11-semantic-repair-fix1.patch" "$RUNNER_TEMP/checkpoint/fix1.patch"
           for file in RUST_VERSION check.log clippy.log policy.log changed-files expected-files; do
             if test -f "$RUNNER_TEMP/$file"; then cp "$RUNNER_TEMP/$file" "$RUNNER_TEMP/checkpoint/$file"; fi
           done
