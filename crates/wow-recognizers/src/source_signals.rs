@@ -1206,6 +1206,7 @@ pub struct W3Input<'a> {
 }
 
 /// One resolved Main declaration location owning its node and support records.
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct W3Binding {
     node: GraphNodeId,
     handle: StableHandleId,
@@ -2371,3 +2372,721 @@ fn w3_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRecogniz
 }
 
 // ===== END WORKER 3: custom registry producer and subscription =====
+
+// ===== BEGIN WORKER 4: cvar callback =====
+
+//  Exact resolved `CVarCallbackRegistry:RegisterCallback` facts -> declarative core
+//  recognizer -> graph proposals. Source text is never reparsed here. The CVar key,
+//  the callback target, the owner and every span come from the generation-bound
+//  Emmy function-call report. This producer never claims combat safety, taint
+//  state or secret-payload accessibility, and it never reads, caches or infers a
+//  client build, Interface value, source revision, provider revision or toolchain
+//  version. Only universal graph roles are used.
+
+const W4_PARTITION: &str = "wow-recognizers.lua-cvar-callbacks";
+const W4_PROFILE: &str = "wow-recognizers/lua-cvar-callbacks/1";
+const W4_FACT_PARTITION: &str = "wow-recognizers.lua-cvar-callback-facts";
+const W4_FACT_PROFILE: &str = "wow-recognizers-lua-cvar-callback-facts-1";
+const W4_RULE: &str = "core.signal.cvar_callback";
+const W4_RULE_VERSION: u32 = 1;
+const W4_REGISTERS_CVAR: &str = "CVarCallbackRegistry.RegisterCallback";
+const W4_CVAR_ENTITY: &str = "cvar_key";
+const W4_REGISTERS_DEFINITION: &str = "lua_registers_cvar_callback";
+const W4_REGISTERS_BLOCKER: &str = "lua_cvar_callbacks.exact_resolved_registercallback_calls_only";
+const W4_OTHER_RELATION_BLOCKER: &str = "lua_cvar_callbacks.relation_owned_by_other_producer";
+const W4_FACT_KIND: &str = "lua_cvar_callback_call";
+const W4_MAX_CALLS: usize = 8192;
+const W4_MAX_FUNCTIONS: usize = 8192;
+const W4_MAX_DECLARATIONS: usize = 8192;
+const W4_MAX_ARGUMENTS: usize = 8;
+const W4_MAX_CVAR_KEY_BYTES: usize = 512;
+
+const W4_POSITIVE_FIXTURE_IDS: [&str; 1] = ["RECOG-CVAR-001"];
+const W4_NEAR_NEGATIVE_FIXTURE_IDS: [&str; 1] = ["RECOG-CVAR-002"];
+const W4_PARTIAL_FIXTURE_IDS: [&str; 1] = ["RECOG-CVAR-003"];
+const W4_MUTATION_FIXTURE_IDS: [&str; 1] = ["RECOG-CVAR-004"];
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct W4CvarMatch {
+    pub call_id: String,
+    pub cvar_key: String,
+    pub entity_proposal_id: String,
+    pub registers_proposal_id: String,
+    pub callback_proposal_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct W4Recognition {
+    profile: &'static str,
+    analyzer_report_id: String,
+    fact_bundle_id: String,
+    pack_digest: String,
+    plan_id: String,
+    output_partition_id: String,
+    matches: Vec<W4CvarMatch>,
+}
+
+impl W4Recognition {
+    pub fn matches(&self) -> &[W4CvarMatch] {
+        &self.matches
+    }
+}
+
+pub struct W4Proposals {
+    pub batch: GraphProposalBatch,
+    pub coverage: Vec<GraphCoverageRecord>,
+    pub recognition: W4Recognition,
+}
+
+struct W4FunctionBinding {
+    node: GraphNodeId,
+    proposal_id: String,
+    handle: StableHandleId,
+    evidence: EvidenceId,
+}
+struct W4Site {
+    call_id: String,
+    cvar_key: String,
+    exact_cvar_key: bool,
+    colon_call: bool,
+    caller: W4FunctionBinding,
+    callback: Option<W3Binding>,
+    handle: StableHandleId,
+    evidence: EvidenceId,
+}
+
+fn w4_checkpoint(stop: &AtomicBool) -> RecognizerResult<()> {
+    if stop.load(Ordering::Relaxed) {
+        return Err(w4_failure(RecognizerErrorCode::Cancelled));
+    }
+    Ok(())
+}
+
+fn w4_failure(code: RecognizerErrorCode) -> RecognizerError {
+    RecognizerError::new(code, String::new())
+}
+
+fn w4_graph_error(_error: wow_graph::GraphError) -> RecognizerError {
+    w4_failure(RecognizerErrorCode::AdapterFactMismatch)
+}
+
+fn w4_graph_confidence(confidence: RecognizerOutputConfidence) -> GraphConfidence {
+    match confidence {
+        RecognizerOutputConfidence::Derived => GraphConfidence::Derived,
+        RecognizerOutputConfidence::Possible => GraphConfidence::Possible,
+    }
+}
+
+/// Resolves the exact CVar key literal from the registration argument slot. A
+/// dynamic key never fabricates a CVar identity and keeps the site inexact.
+fn w4_cvar_key(
+    arguments: &[wow_emmy::function_calls::SourceCallArgument],
+) -> RecognizerResult<(String, bool)> {
+    let Some(argument) = arguments.first() else {
+        return Ok((String::new(), false));
+    };
+    match argument.literal() {
+        Some(wow_emmy::function_calls::SourceCallLiteral::String(value)) => {
+            if value.len() > W4_MAX_CVAR_KEY_BYTES {
+                return Err(w4_failure(RecognizerErrorCode::BudgetExceeded));
+            }
+            if value.is_empty() {
+                return Ok((String::new(), false));
+            }
+            Ok((value.clone(), true))
+        }
+        _ => Ok((String::new(), false)),
+    }
+}
+
+/// Resolves the exact callback declaration for one `RegisterCallback` call. Only a
+/// resolved Main declaration becomes a callback; a library target, an unresolved
+/// global or an alias keeps the endpoint absent without degrading the CVar key.
+fn w4_callback(
+    call: &wow_emmy::function_calls::SourceCallFact,
+    declarations: &BTreeMap<(String, SourceSpan), W3Binding>,
+) -> Option<W3Binding> {
+    let argument = call.arguments().get(1)?;
+    let key = argument.reference_key()?;
+    let target = argument.reference_target()?;
+    if target.role != "main" {
+        return None;
+    }
+    let _ = key;
+    declarations
+        .get(&(target.path.clone(), target.span))
+        .cloned()
+}
+
+fn w4_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRecognizerPack> {
+    let document = RecognizerPackDocument {
+        schema_version: crate::RECOGNIZER_PACK_SCHEMA_VERSION,
+        pack: RecognizerPack {
+            pack_id: "wow-core-lua-cvar-callbacks".into(),
+            version: "1".into(),
+            trust_class: RecognizerPackTrustClass::Core,
+            fact_schema_profile_id: W4_FACT_PROFILE.into(),
+            graph_registry_bundle_id: registry_bundle_id.into(),
+            evaluation_profile_id: "wow-recognizers-w11-cvar-callback-1".into(),
+            rollout: RecognizerPackRollout::Shadow,
+            budgets: RecognizerPackBudgets {
+                max_rules: 4,
+                max_clauses_per_rule: 32,
+                max_clause_depth: 4,
+                max_join_expansions_per_rule: 100_000,
+                max_matches_per_rule_partition: 10_000,
+                max_proposals_per_rule_partition: 20_000,
+                max_explanation_bytes: 1_048_576,
+            },
+            rules: vec![RecognizerRule {
+                rule_id: W4_RULE.into(),
+                version: W4_RULE_VERSION,
+                required_capabilities: vec!["emmy.fact.calls".into()],
+                scope: "function".into(),
+                clauses: vec![
+                    RecognizerClause::Fact {
+                        alias: "call".into(),
+                        kind: W4_FACT_KIND.into(),
+                    },
+                    RecognizerClause::FieldEq {
+                        field: "call.colon_call".into(),
+                        value: crate::RecognizerPackLiteral::Boolean(true),
+                    },
+                    RecognizerClause::FieldEq {
+                        field: "call.has_cvar_key".into(),
+                        value: crate::RecognizerPackLiteral::Boolean(true),
+                    },
+                    RecognizerClause::FieldEq {
+                        field: "call.exact_cvar_key".into(),
+                        value: crate::RecognizerPackLiteral::Boolean(true),
+                    },
+                ],
+                captures: vec![crate::RecognizerCapture {
+                    name: "cvar_key".into(),
+                    value_type: "bounded_string".into(),
+                    source: "call.cvar_key".into(),
+                    cardinality: crate::RecognizerCaptureCardinality::Optional,
+                }],
+                outputs: vec![
+                    RecognizerOutput::EntityAssertion {
+                        output_id: "cvar_key_entity".into(),
+                        entity_kind_id: W4_CVAR_ENTITY.into(),
+                        semantic_key: BTreeMap::from([("call".into(), "call.call_id".into())]),
+                        confidence: RecognizerOutputConfidence::Derived,
+                    },
+                    RecognizerOutput::RelationAssertion {
+                        output_id: "cvar_callback_registers".into(),
+                        relation_kind_id: W4_REGISTERS_DEFINITION.into(),
+                        source: "call.caller".into(),
+                        target: "call.call_id".into(),
+                        confidence: RecognizerOutputConfidence::Derived,
+                    },
+                ],
+                positive_fixture_ids: (W4_POSITIVE_FIXTURE_IDS
+                    .iter()
+                    .map(|value| (*value).into())
+                    .collect::<Vec<Box<str>>>()),
+                near_negative_fixture_ids: (W4_NEAR_NEGATIVE_FIXTURE_IDS
+                    .iter()
+                    .map(|value| (*value).into())
+                    .collect::<Vec<Box<str>>>()),
+                partial_fixture_ids: (W4_PARTIAL_FIXTURE_IDS
+                    .iter()
+                    .map(|value| (*value).into())
+                    .collect::<Vec<Box<str>>>()),
+                mutation_fixture_ids: (W4_MUTATION_FIXTURE_IDS
+                    .iter()
+                    .map(|value| (*value).into())
+                    .collect::<Vec<Box<str>>>()),
+            }],
+        },
+    };
+    let bytes = canonical_json_bytes(&document)
+        .map_err(|_| w4_failure(RecognizerErrorCode::PackIdentityMismatch))?;
+    parse_recognizer_pack(&bytes)
+}
+
+/// Builds one CVar-callback fact from one resolved site. The fact declares the call,
+/// the caller, the resolved callable key and the exact CVar key.
+fn w4_signal_fact(
+    input: &W3Input<'_>,
+    site: &W4Site,
+    limits: RecognizerFactLimits,
+) -> RecognizerResult<RecognizerFact> {
+    let fields = BTreeMap::from([
+        (
+            "call_id".into(),
+            RecognizerFactValue::Reference(site.call_id.clone().into()),
+        ),
+        (
+            "caller".into(),
+            RecognizerFactValue::Reference(site.caller.proposal_id.clone().into()),
+        ),
+        (
+            "callable_key".into(),
+            RecognizerFactValue::String(W4_REGISTERS_CVAR.into()),
+        ),
+        ("colon_call".into(), RecognizerFactValue::Boolean(true)),
+        (
+            "cvar_key".into(),
+            RecognizerFactValue::String(site.cvar_key.clone().into()),
+        ),
+    ]);
+    let caller_function_id = input
+        .report
+        .calls()
+        .iter()
+        .find(|call| call.fact_id() == site.call_id.as_str())
+        .map(|call| call.caller_function_id())
+        .ok_or_else(|| w4_failure(RecognizerErrorCode::AdapterBindingMissing))?;
+    RecognizerFact::new(
+        input.context.context_id(),
+        RecognizerFactInput {
+            kind: W4_FACT_KIND.into(),
+            partition_id: W4_FACT_PARTITION.into(),
+            scope: RecognizerFactScope::new(
+                RecognizerFactScopeKind::Function,
+                caller_function_id.to_owned(),
+            )?,
+            producer_id: "wow.emmy".into(),
+            producer_version: W4_FACT_PROFILE.into(),
+            confidence: if site.exact_cvar_key {
+                GraphConfidence::Derived
+            } else {
+                GraphConfidence::Possible
+            },
+            fields,
+            source_handle_ids: vec![site.handle],
+            evidence_ids: vec![site.evidence],
+        },
+        limits,
+    )
+}
+
+pub fn recognize_source_cvar_callbacks(
+    input: W3Input<'_>,
+    stop: &AtomicBool,
+) -> RecognizerResult<W4Proposals> {
+    w4_checkpoint(stop)?;
+    if input.report.calls().len() > W4_MAX_CALLS
+        || input.report.functions().len() > W4_MAX_FUNCTIONS
+        || input.function_proposals.len() != input.report.functions().len()
+        || input.call_support.len() != input.report.calls().len()
+        || input.declaration_proposals.len() > W4_MAX_DECLARATIONS
+    {
+        return Err(w4_failure(RecognizerErrorCode::BudgetExceeded));
+    }
+    input
+        .report
+        .validate()
+        .map_err(|_| w4_failure(RecognizerErrorCode::AdapterFactMismatch))?;
+    input
+        .context
+        .validate()
+        .map_err(|_| w4_failure(RecognizerErrorCode::AdapterIdentityMismatch))?;
+    if input.owner.source_context_id() != input.context.context_id() {
+        return Err(w4_failure(RecognizerErrorCode::AdapterBindingInvalid));
+    }
+
+    let graph = input.owner.input_view(stop).map_err(w4_graph_error)?;
+    let source_partition = input
+        .owner
+        .partition(input.source_partition)
+        .ok_or_else(|| w4_failure(RecognizerErrorCode::AdapterBindingMissing))?;
+    let accepted = source_partition.report().accepted_entities();
+
+    // Every enclosing function must cross into an accepted source_function
+    // proposal. This producer owns no function identity of its own.
+    let mut functions = BTreeMap::<String, W4FunctionBinding>::new();
+    for function in input.report.functions() {
+        w4_checkpoint(stop)?;
+        let proposal_id = *input
+            .function_proposals
+            .get(function.fact_id())
+            .ok_or_else(|| w4_failure(RecognizerErrorCode::AdapterBindingMissing))?;
+        let proposal = source_partition
+            .batch()
+            .entity_proposal(proposal_id)
+            .ok_or_else(|| w4_failure(RecognizerErrorCode::AdapterBindingMissing))?;
+        let expected = BTreeMap::from([
+            (
+                "document".into(),
+                GraphProposalValue::String(function.path().into()),
+            ),
+            (
+                "function".into(),
+                GraphProposalValue::String(function.fact_id().into()),
+            ),
+        ]);
+        if proposal.entity_kind_id() != "lua_source_function"
+            || proposal.semantic_key() != &expected
+            || proposal.confidence() != GraphConfidence::Derived
+        {
+            return Err(w4_failure(RecognizerErrorCode::AdapterFactMismatch));
+        }
+        let ([handle], [evidence]) = (proposal.source_handle_ids(), proposal.evidence_ids()) else {
+            return Err(w4_failure(RecognizerErrorCode::AdapterBindingInvalid));
+        };
+        w3_validate_support_without_digest(
+            &input,
+            *handle,
+            *evidence,
+            function.path(),
+            function.span(),
+        )?;
+        let index = accepted
+            .binary_search_by(|item| item.proposal_id().cmp(proposal_id))
+            .map_err(|_| w4_failure(RecognizerErrorCode::AdapterBindingMissing))?;
+        let node = accepted[index].node().node_id().clone();
+        if graph.node(&node).is_none()
+            || functions
+                .insert(
+                    function.fact_id().to_owned(),
+                    W4FunctionBinding {
+                        node,
+                        proposal_id: proposal_id.to_owned(),
+                        handle: *handle,
+                        evidence: *evidence,
+                    },
+                )
+                .is_some()
+        {
+            return Err(w4_failure(RecognizerErrorCode::AdapterBindingDuplicate));
+        }
+    }
+
+    // Main-declaration crosswalk, used only for the exact callback endpoint.
+    let mut declarations = BTreeMap::<(String, SourceSpan), W3Binding>::new();
+    for ((path, span), proposal_id) in &input.declaration_proposals {
+        w4_checkpoint(stop)?;
+        let proposal = source_partition
+            .batch()
+            .entity_proposal(proposal_id)
+            .ok_or_else(|| w4_failure(RecognizerErrorCode::AdapterBindingMissing))?;
+        let (Some(start), Some(end)) = (span.byte_start(), span.byte_end()) else {
+            return Err(w4_failure(RecognizerErrorCode::AdapterFactMismatch));
+        };
+        let expected = BTreeMap::from([
+            (
+                "document".into(),
+                GraphProposalValue::String((*path).clone().into()),
+            ),
+            (
+                "span_start".into(),
+                GraphProposalValue::Integer(
+                    i64::try_from(start)
+                        .map_err(|_| w4_failure(RecognizerErrorCode::AdapterFactMismatch))?,
+                ),
+            ),
+            (
+                "span_end".into(),
+                GraphProposalValue::Integer(
+                    i64::try_from(end)
+                        .map_err(|_| w4_failure(RecognizerErrorCode::AdapterFactMismatch))?,
+                ),
+            ),
+        ]);
+        if proposal.entity_kind_id() != "lua_source_declaration"
+            || proposal.semantic_key() != &expected
+            || proposal.confidence() != GraphConfidence::Derived
+        {
+            return Err(w4_failure(RecognizerErrorCode::AdapterFactMismatch));
+        }
+        let ([handle], [evidence]) = (proposal.source_handle_ids(), proposal.evidence_ids()) else {
+            return Err(w4_failure(RecognizerErrorCode::AdapterBindingInvalid));
+        };
+        let index = accepted
+            .binary_search_by(|item| item.proposal_id().cmp(proposal_id))
+            .map_err(|_| w4_failure(RecognizerErrorCode::AdapterBindingMissing))?;
+        let node = accepted[index].node().node_id().clone();
+        if graph.node(&node).is_none() {
+            return Err(w4_failure(RecognizerErrorCode::AdapterIdentityMismatch));
+        }
+        if declarations
+            .insert(
+                ((*path).clone(), *span),
+                W3Binding {
+                    node,
+                    handle: *handle,
+                    evidence: *evidence,
+                },
+            )
+            .is_some()
+        {
+            return Err(w4_failure(RecognizerErrorCode::AdapterBindingDuplicate));
+        }
+    }
+
+    let fact_limits = RecognizerFactLimits::default();
+    let mut facts = Vec::new();
+    let mut sites = BTreeMap::<String, W4Site>::new();
+    for call in input.report.calls() {
+        w4_checkpoint(stop)?;
+        if call.resolved_callable_key() != Some(W4_REGISTERS_CVAR) || !call.is_colon_call() {
+            continue;
+        }
+        let Some(caller) = functions.get(call.caller_function_id()) else {
+            return Err(w4_failure(RecognizerErrorCode::AdapterBindingMissing));
+        };
+        let (handle, evidence) = *input
+            .call_support
+            .get(call.fact_id())
+            .ok_or_else(|| w4_failure(RecognizerErrorCode::AdapterBindingMissing))?;
+        w3_validate_support(&input, handle, evidence, call)?;
+
+        let arguments = call.arguments();
+        if arguments.len() > W4_MAX_ARGUMENTS {
+            return Err(w4_failure(RecognizerErrorCode::BudgetExceeded));
+        }
+        let (cvar_key, exact_cvar_key) = w4_cvar_key(arguments)?;
+        if !exact_cvar_key {
+            continue;
+        }
+        let callback = w4_callback(call, &declarations);
+
+        let site = W4Site {
+            call_id: call.fact_id().to_owned(),
+            cvar_key,
+
+            exact_cvar_key,
+            colon_call: call.is_colon_call(),
+            caller: W4FunctionBinding {
+                node: caller.node.clone(),
+                proposal_id: caller.proposal_id.clone(),
+                handle: caller.handle,
+                evidence: caller.evidence,
+            },
+            callback,
+            handle,
+            evidence,
+        };
+        facts.push(w4_signal_fact(&input, &site, fact_limits)?);
+        if sites.insert(site.call_id.clone(), site).is_some() {
+            return Err(w4_failure(RecognizerErrorCode::AdapterBindingDuplicate));
+        }
+    }
+
+    let coverage = vec![RecognizerFactCoverage::new(
+        RecognizerFactCoverageInput {
+            context_id: input.context.context_id(),
+            partition_id: W4_FACT_PARTITION.into(),
+            capability_id: "emmy.fact.calls".into(),
+            producer_id: "wow.emmy".into(),
+            producer_version: W4_FACT_PROFILE.into(),
+            state: if input.report.source_health_complete() {
+                RecognizerFactCoverageState::Complete
+            } else {
+                RecognizerFactCoverageState::NotEvaluated
+            },
+            blocker_ids: if input.report.source_health_complete() {
+                Vec::new()
+            } else {
+                vec!["emmy.call_source_parse_failed".into()]
+            },
+        },
+        fact_limits,
+    )?];
+    let bundle = RecognizerFactBundle::build(
+        input.context,
+        W4_FACT_PARTITION,
+        Vec::new(),
+        facts,
+        coverage,
+        fact_limits,
+    )?;
+    let pack = w4_pack(input.owner.registry().bundle_id())?;
+    let plan = compile_recognizer_plan(&pack)?;
+    let output = execute_recognizer_plan(input.context, &pack, &plan, &bundle, fact_limits, stop)?;
+
+    let graph_nodes = input
+        .owner
+        .input_view(stop)
+        .map_err(w4_graph_error)?
+        .nodes()
+        .to_vec();
+    let _limits = input.owner.snapshot().limits();
+    let mut entities = Vec::new();
+    let mut relations = Vec::new();
+    let mut matches = Vec::new();
+    let mut entity_by_call = BTreeMap::<String, String>::new();
+    let mut registers_by_call = BTreeMap::<String, String>::new();
+
+    for outcome in output.outcomes() {
+        if outcome.rule_id() != W4_RULE || outcome.rule_version() != W4_RULE_VERSION {
+            return Err(w4_failure(RecognizerErrorCode::AdapterFactMismatch));
+        }
+        for proposal in outcome.proposals() {
+            match proposal {
+                crate::RecognizerProposedAssertion::Entity {
+                    proposal_id,
+                    entity_kind_id,
+                    semantic_key,
+                    confidence,
+                    source_handle_ids,
+                    evidence_ids,
+                    coverage_ids,
+                    ..
+                } => {
+                    if entity_kind_id.as_ref() != W4_CVAR_ENTITY || semantic_key.len() != 1 {
+                        return Err(w4_failure(RecognizerErrorCode::AdapterFactMismatch));
+                    }
+                    let Some(RecognizerFactValue::Reference(call_id)) = semantic_key.get("call")
+                    else {
+                        return Err(w4_failure(RecognizerErrorCode::AdapterFactMismatch));
+                    };
+                    let Some(site) = sites.get(call_id.as_ref()) else {
+                        return Err(w4_failure(RecognizerErrorCode::AdapterBindingMissing));
+                    };
+                    if !graph_nodes
+                        .iter()
+                        .any(|node| node.node_id() == &site.caller.node)
+                    {
+                        return Err(w4_failure(RecognizerErrorCode::AdapterBindingMissing));
+                    }
+                    let confidence = w4_graph_confidence(*confidence);
+                    if confidence != GraphConfidence::Possible
+                        && confidence != GraphConfidence::Derived
+                    {
+                        return Err(w4_failure(RecognizerErrorCode::AdapterFactMismatch));
+                    }
+                    let entity = GraphEntityProposal::new(
+                        proposal_id.to_string(),
+                        W4_CVAR_ENTITY,
+                        BTreeMap::from([(
+                            "cvar".into(),
+                            GraphProposalValue::String(site.cvar_key.clone().into()),
+                        )]),
+                        confidence,
+                        source_handle_ids.clone(),
+                        evidence_ids.clone(),
+                        coverage_ids.clone(),
+                    )
+                    .map_err(w4_graph_error)?;
+                    entity_by_call.insert(call_id.as_ref().to_string(), proposal_id.to_string());
+                    entities.push(entity);
+                    let _ = source_handle_ids;
+                }
+                crate::RecognizerProposedAssertion::Relation {
+                    proposal_id,
+                    relation_kind_id,
+                    source,
+                    target,
+                    confidence,
+                    source_handle_ids,
+                    evidence_ids,
+                    coverage_ids,
+                    ..
+                } => {
+                    if relation_kind_id.as_ref() != W4_REGISTERS_DEFINITION {
+                        return Err(w4_failure(RecognizerErrorCode::AdapterFactMismatch));
+                    }
+                    let RecognizerFactValue::Reference(caller_proposal) = source else {
+                        return Err(w4_failure(RecognizerErrorCode::AdapterFactMismatch));
+                    };
+                    let RecognizerFactValue::Reference(call_id) = target else {
+                        return Err(w4_failure(RecognizerErrorCode::AdapterFactMismatch));
+                    };
+                    let site = sites
+                        .get(call_id.as_ref())
+                        .ok_or_else(|| w4_failure(RecognizerErrorCode::AdapterBindingMissing))?;
+                    if site.caller.proposal_id != caller_proposal.as_ref() {
+                        return Err(w4_failure(RecognizerErrorCode::AdapterBindingMissing));
+                    }
+                    let cvar_node = entity_by_call
+                        .get(call_id.as_ref())
+                        .ok_or_else(|| w4_failure(RecognizerErrorCode::AdapterBindingMissing))?
+                        .clone();
+                    if registers_by_call
+                        .insert(call_id.as_ref().to_string(), proposal_id.to_string())
+                        .is_some()
+                    {
+                        return Err(w4_failure(RecognizerErrorCode::AdapterBindingDuplicate));
+                    }
+                    relations.push(
+                        GraphRelationProposal::new(
+                            proposal_id.to_string(),
+                            W4_REGISTERS_DEFINITION,
+                            GraphRelationProposalInput {
+                                source: GraphProposalEndpoint::Existing(site.caller.node.clone()),
+                                target: GraphProposalEndpoint::Proposed(cvar_node.into()),
+                                confidence: w4_graph_confidence(*confidence),
+                                source_handle_ids: source_handle_ids.clone(),
+                                evidence_ids: evidence_ids.clone(),
+                                coverage_ids: coverage_ids.clone(),
+                            },
+                        )
+                        .map_err(w4_graph_error)?,
+                    );
+                }
+            }
+        }
+    }
+
+    // Every retained site needs exactly one CVar entity and one registers
+    // relation. A missing pair is an adapter mismatch, never a silent drop.
+    if sites.len() != entity_by_call.len() || sites.len() != registers_by_call.len() {
+        return Err(w4_failure(RecognizerErrorCode::AdapterFactMismatch));
+    }
+    for (call_id, site) in &sites {
+        w4_checkpoint(stop)?;
+        let Some(entity_proposal_id) = entity_by_call.get(call_id) else {
+            return Err(w4_failure(RecognizerErrorCode::AdapterBindingMissing));
+        };
+        let Some(registers_proposal_id) = registers_by_call.get(call_id) else {
+            return Err(w4_failure(RecognizerErrorCode::AdapterBindingMissing));
+        };
+        matches.push(W4CvarMatch {
+            call_id: call_id.clone(),
+            cvar_key: site.cvar_key.clone(),
+            entity_proposal_id: entity_proposal_id.to_string(),
+            registers_proposal_id: registers_proposal_id.clone(),
+            callback_proposal_id: None,
+        });
+    }
+
+    let recognition = W4Recognition {
+        profile: W4_PROFILE,
+        analyzer_report_id: input.report.analysis_id().into(),
+        fact_bundle_id: bundle.bundle_id().to_string(),
+        pack_digest: pack.pack_digest().into(),
+        plan_id: plan.plan_id().to_string(),
+        output_partition_id: output.partition_id().to_string(),
+        matches,
+    };
+    let relation_families = input
+        .owner
+        .registry()
+        .relation_kinds()
+        .iter()
+        .map(|definition| definition.relation())
+        .collect::<BTreeSet<_>>();
+    let graph_coverage = relation_families
+        .into_iter()
+        .map(|relation| {
+            let (state, blocker) = if relation == GraphRelationKind::RegistersCvarCallback {
+                (GraphCoverageState::Partial, W4_REGISTERS_BLOCKER)
+            } else {
+                (GraphCoverageState::NotEvaluated, W4_OTHER_RELATION_BLOCKER)
+            };
+            GraphCoverageRecord::new(relation, state, false, vec![blocker.into()], graph.limits())
+                .map_err(w4_graph_error)
+        })
+        .collect::<RecognizerResult<Vec<_>>>()?;
+    let batch = GraphProposalBatch::build(
+        input.owner.registry().bundle_id(),
+        input.owner.registry().registry_digest(),
+        graph.universe().clone(),
+        graph.generation().clone(),
+        input.context.context_id(),
+        W4_PARTITION,
+        entities,
+        relations,
+    )
+    .map_err(w4_graph_error)?;
+    Ok(W4Proposals {
+        batch,
+        coverage: graph_coverage,
+        recognition,
+    })
+}
+// ===== END WORKER 4: cvar callback =====
