@@ -14,10 +14,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
-      STAGING_PARENT: a3e54a67ab46da210221c35975f76116e8ecf29c
+      STAGING_PARENT: afe40b6158a4ca8cb870294abf15df73f1430a05
       BASE_COMMIT: e491f2201f4955d80bc71a84773c2a8c46f2c6c0
       BASE_TREE: e167b05210d513a0f9155cbf25193fdbdd2d7ca5
-      B64_SHA256: 94358d97ab0100929aa60744c1b09a0e8989527730c1148334bbac3c0ddbf113
       XZ_SHA256: 6bdb79762f769556e9c1c5605351c9eb49cca1650824039eb3c13db1e0ce636d
       PATCH_SHA256: 495c18cd710cf25549f885aa3f51ec9c05b9367292984a6873475d0817d59ef0
     steps:
@@ -31,9 +30,7 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test "$(git rev-parse HEAD^)" = "$STAGING_PARENT"
-          tr -d '\r\n' < .ci/w11-semantic-evidence.patch.xz.b64 > "$RUNNER_TEMP/w11-semantic-evidence.b64"
-          printf '%s  %s\n' "$B64_SHA256" "$RUNNER_TEMP/w11-semantic-evidence.b64" | sha256sum -c -
-          base64 -d "$RUNNER_TEMP/w11-semantic-evidence.b64" > "$RUNNER_TEMP/w11-semantic-evidence.patch.xz"
+          cp .ci/w11-semantic-evidence.patch.xz.b64 "$RUNNER_TEMP/w11-semantic-evidence.patch.xz"
           printf '%s  %s\n' "$XZ_SHA256" "$RUNNER_TEMP/w11-semantic-evidence.patch.xz" | sha256sum -c -
           xz -dc "$RUNNER_TEMP/w11-semantic-evidence.patch.xz" > "$RUNNER_TEMP/w11-semantic-evidence.patch"
           printf '%s  %s\n' "$PATCH_SHA256" "$RUNNER_TEMP/w11-semantic-evidence.patch" | sha256sum -c -
