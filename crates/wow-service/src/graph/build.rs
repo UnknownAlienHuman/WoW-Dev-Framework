@@ -17,6 +17,7 @@ mod calls;
 mod construction;
 mod lua_mixins;
 mod scripts;
+mod signals;
 mod state;
 use calls::{CallEdge, FunctionNode};
 use construction::{CreationEdge, FrameNode};
@@ -62,6 +63,12 @@ struct BuiltGraph {
     instantiation_edges: Vec<InstantiationEdge>,
     construction_mixin_edges: Vec<ConstructionMixinEdge>,
     assignment_mixin_edges: Vec<AssignmentMixinEdge>,
+    signal_recognition: signals::W1Recognition,
+    bridge_recognition: signals::W2BridgeRecognition,
+    custom_recognition: signals::W3Recognition,
+    cvar_recognition: signals::W4Recognition,
+    signal_nodes: Vec<signals::SignalNode>,
+    signal_edges: Vec<signals::SignalEdge>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -177,6 +184,16 @@ pub struct GraphBuildResult {
     state_recognition: Option<SourceStateRecognition>,
     state_nodes: StateNodes,
     state_edges: Vec<StateEdge>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    signal_recognition: Option<signals::W1Recognition>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    bridge_recognition: Option<signals::W2BridgeRecognition>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    custom_recognition: Option<signals::W3Recognition>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cvar_recognition: Option<signals::W4Recognition>,
+    signal_nodes: Vec<signals::SignalNode>,
+    signal_edges: Vec<signals::SignalEdge>,
     #[serde(skip_serializing_if = "Option::is_none")]
     snapshot: Option<GraphPartitionSnapshot>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -302,6 +319,12 @@ pub fn execute_graph_build(
         mixin_assignment_recognition: None,
         script_recognition: None,
         state_recognition: None,
+        signal_recognition: None,
+        bridge_recognition: None,
+        custom_recognition: None,
+        cvar_recognition: None,
+        signal_nodes: Vec::new(),
+        signal_edges: Vec::new(),
         state_nodes: StateNodes::empty(),
         state_edges: Vec::new(),
         handler_nodes: Vec::new(),
@@ -358,8 +381,14 @@ pub fn execute_graph_build(
             mixin_assignment_recognition,
             script_recognition,
             state_recognition,
+            signal_recognition,
+            bridge_recognition,
+            custom_recognition,
+            cvar_recognition,
             state_nodes,
             state_edges,
+            signal_nodes,
+            signal_edges,
             handler_nodes,
             script_edges,
         }) => {
@@ -386,6 +415,12 @@ pub fn execute_graph_build(
             result.state_recognition = Some(state_recognition);
             result.state_nodes = state_nodes;
             result.state_edges = state_edges;
+            result.signal_recognition = Some(signal_recognition);
+            result.bridge_recognition = Some(bridge_recognition);
+            result.custom_recognition = Some(custom_recognition);
+            result.cvar_recognition = Some(cvar_recognition);
+            result.signal_nodes = signal_nodes;
+            result.signal_edges = signal_edges;
             result.handler_nodes = handler_nodes;
             result.script_edges = script_edges;
             result.snapshot = Some(snapshot);
@@ -459,7 +494,22 @@ fn compose(
     let (scripts_snapshot, script_recognition) =
         scripts::publish(&mixin_snapshot, &provenance, stop)?;
     let (snapshot, state_recognition) = state::publish(&scripts_snapshot, &provenance, stop)?;
+    // W11 signal and hook families publish after every earlier owner, so each
+    // adapter crosswalks against the accepted source graph that precedes it.
+    let (snapshot, signal_recognition, bridge_recognition, custom_recognition, cvar_recognition) =
+        signals::publish_signals(&snapshot, &provenance, stop)?;
     let (state_nodes, state_edges) = state::maps(&snapshot, &provenance, &state_recognition, stop)?;
+    let signal_topology = signals::maps(
+        &snapshot,
+        &provenance,
+        &signal_recognition,
+        &bridge_recognition,
+        &custom_recognition,
+        &cvar_recognition,
+        stop,
+    )?;
+    let signal_nodes = signal_topology.nodes;
+    let signal_edges = signal_topology.edges;
     let (handler_nodes, script_edges) =
         scripts::maps(&snapshot, &provenance, &script_recognition, stop)?;
     let (function_nodes, call_edges) =
@@ -605,6 +655,12 @@ fn compose(
         state_recognition,
         state_nodes,
         state_edges,
+        signal_recognition,
+        bridge_recognition,
+        custom_recognition,
+        cvar_recognition,
+        signal_nodes,
+        signal_edges,
         handler_nodes,
         script_edges,
     })

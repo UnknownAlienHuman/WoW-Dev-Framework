@@ -42,7 +42,7 @@ use crate::{
 //  caches or infers a client build, Interface value, source revision, provider
 //  revision or toolchain version. Only universal graph roles are used.
 
-const W1_SIGNAL_PARTITION: &str = "wow-recognizers.lua-native-frame-events";
+pub const W1_SIGNAL_PARTITION: &str = "wow-recognizers.lua-native-frame-events";
 const W1_SIGNAL_PROFILE: &str = "wow-recognizers/lua-native-frame-events/1";
 const W1_FACT_PARTITION: &str = "wow-recognizers.lua-native-frame-event-facts";
 const W1_FACT_PROFILE: &str = "wow-recognizers-lua-native-frame-event-facts-1";
@@ -2383,7 +2383,7 @@ fn w3_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRecogniz
 //  client build, Interface value, source revision, provider revision or toolchain
 //  version. Only universal graph roles are used.
 
-const W4_PARTITION: &str = "wow-recognizers.lua-cvar-callbacks";
+pub const W4_PARTITION: &str = "wow-recognizers.lua-cvar-callbacks";
 const W4_PROFILE: &str = "wow-recognizers/lua-cvar-callbacks/1";
 const W4_FACT_PARTITION: &str = "wow-recognizers.lua-cvar-callback-facts";
 const W4_FACT_PROFILE: &str = "wow-recognizers-lua-cvar-callback-facts-1";
