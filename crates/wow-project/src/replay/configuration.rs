@@ -1,5 +1,5 @@
-//! Input DTOs rebuild through existing owner validators. Loader-plan receipts
-//! cannot be deserialized or reconstructed from their digest in this profile.
+//! Input DTOs rebuild through existing owner validators. Load receipts are
+//! reconstructed from source bytes before being attached to the configuration.
 use super::invalid;
 use crate::{
     AnalyzerBindingDeclaration, ProjectBudgetPolicy, ProjectCapabilityPolicy, ProjectConfiguration,
@@ -147,14 +147,11 @@ pub(super) struct ReplayConfiguration {
 impl ReplayConfiguration {
     pub(super) fn from_configuration(config: &ProjectConfiguration) -> ProjectResult<Self> {
         config.validate()?;
-        if config.load_plan().is_some()
-            || config.package_load_plan().is_some()
-            || config.package_main_plan().is_some()
-        {
+        if config.package_load_plan().is_some() || config.package_main_plan().is_some() {
             return Err(crate::ProjectError::new(
                 crate::ProjectErrorCode::DeferredCapability,
                 crate::ProjectPhase::Publication,
-                "loader-plan replay is not supported by the physical Lua archive profile",
+                "package-plan replay is not supported by the native archive profile",
             ));
         }
         let capabilities = config.capability_policy();
@@ -179,8 +176,14 @@ impl ReplayConfiguration {
             expected_configuration_digest: config.configuration_digest(),
         })
     }
-    pub(super) fn rebuild(&self) -> ProjectResult<ProjectConfiguration> {
-        let config = ProjectConfigurationBuilder::new(
+    pub(super) fn profile(&self) -> &ProfileIdentity {
+        &self.profile
+    }
+    pub(super) fn rebuild(
+        &self,
+        load_plan: Option<&crate::load::ProjectLoadPlan>,
+    ) -> ProjectResult<ProjectConfiguration> {
+        let builder = ProjectConfigurationBuilder::new(
             self.project_id.clone(),
             match self.kind {
                 ReplayKind::Fixture => ProjectKind::Fixture,
@@ -198,8 +201,12 @@ impl ReplayConfiguration {
             self.capabilities.degradable.clone(),
             self.capabilities.deferred.clone(),
         )?)
-        .budget_policy(self.budgets.rebuild()?)
-        .build()?;
+        .budget_policy(self.budgets.rebuild()?);
+        let builder = match load_plan {
+            Some(plan) => builder.load_plan(plan)?,
+            None => builder,
+        };
+        let config = builder.build()?;
         if config.configuration_digest() != self.expected_configuration_digest {
             return Err(invalid());
         }

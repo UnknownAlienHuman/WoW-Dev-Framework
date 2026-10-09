@@ -1,6 +1,7 @@
 //! Exact captured inputs for an approved native project replay. Stored analyzer
 //! identifiers are compared after real analysis; they never manufacture a session.
 mod configuration;
+mod load;
 pub mod publication;
 
 use crate::{
@@ -8,6 +9,7 @@ use crate::{
     ProjectPublisher, ProjectResult, ProjectView,
 };
 use configuration::ReplayConfiguration;
+use load::ReplayLoad;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::AtomicBool;
 use wow_emmy::{
@@ -15,6 +17,7 @@ use wow_emmy::{
 };
 
 const REPLAY_SCHEMA: &str = "wow-project/native-project-replay/1";
+const LOAD_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/2";
 const MAX_FILES: usize = 8192;
 const MAX_LIBRARIES: usize = 64;
 const MAX_FILE_BYTES: usize = 16 * 1024 * 1024;
@@ -59,8 +62,8 @@ struct ReplayLibrary {
     files: Vec<ReplayFile>,
 }
 
-/// Data-only archive, distinct from the executable owner view. The initial
-/// admitted profile is physical Lua inputs; loader-plan archives reject explicitly.
+/// Data-only archive, distinct from the executable owner view. Physical Lua
+/// uses v1; selected standalone TOC/XML replay uses the explicit v2 profile.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectReplay {
@@ -71,6 +74,8 @@ pub struct ProjectReplay {
     function_calls: bool,
     project_snapshot_id: String,
     analyzer_snapshot_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    load: Option<ReplayLoad>,
 }
 impl ProjectReplay {
     pub fn capture(publisher: &ProjectPublisher, stop: &AtomicBool) -> ProjectResult<Self> {
@@ -109,6 +114,26 @@ impl ProjectReplay {
                 }
             }
         }
+        if let Some(plan) = snapshot.configuration().load_plan() {
+            for source in plan
+                .sources()
+                .iter()
+                .filter(|source| !source.path.ends_with(".lua"))
+            {
+                crate::analyzer::checkpoint(stop)?;
+                let text = plan.document_text(&source.path).ok_or_else(invalid)?;
+                count = count.checked_add(1).ok_or_else(exhausted)?;
+                bytes = bytes.checked_add(text.len()).ok_or_else(exhausted)?;
+                if count > MAX_FILES || bytes > MAX_SOURCE_BYTES || text.len() > MAX_FILE_BYTES {
+                    return Err(exhausted());
+                }
+            }
+        }
+        let load = snapshot
+            .configuration()
+            .load_plan()
+            .map(|plan| ReplayLoad::capture(plan, inputs))
+            .transpose()?;
         let mut files = inputs
             .iter()
             .map(|file| ReplayFile {
@@ -140,19 +165,30 @@ impl ProjectReplay {
         }
         retained_libraries.sort_by(|a, b| a.snapshot_id.cmp(&b.snapshot_id));
         let replay = Self {
-            schema: REPLAY_SCHEMA.into(),
+            schema: if load.is_some() {
+                LOAD_REPLAY_SCHEMA
+            } else {
+                REPLAY_SCHEMA
+            }
+            .into(),
             configuration,
             files,
             libraries: retained_libraries,
             function_calls,
             project_snapshot_id: snapshot.snapshot_id().into(),
             analyzer_snapshot_id: snapshot.analyzer_binding().analyzer_snapshot_id().into(),
+            load,
         };
         replay.validate_budget(stop)?;
         Ok(replay)
     }
     fn validate_budget(&self, stop: &AtomicBool) -> ProjectResult<()> {
-        if self.schema != REPLAY_SCHEMA
+        if self.schema
+            != if self.load.is_some() {
+                LOAD_REPLAY_SCHEMA
+            } else {
+                REPLAY_SCHEMA
+            }
             || self.libraries.len() > MAX_LIBRARIES
             || self.files.len() > MAX_FILES
             || self.files.windows(2).any(|p| p[0].path >= p[1].path)
@@ -165,10 +201,17 @@ impl ProjectReplay {
         }
         let mut count = 0usize;
         let mut bytes = 0usize;
+        let documents = self
+            .load
+            .as_ref()
+            .map(ReplayLoad::documents)
+            .transpose()?
+            .unwrap_or(&[]);
         for file in self
             .files
             .iter()
             .chain(self.libraries.iter().flat_map(|lib| &lib.files))
+            .chain(documents)
         {
             crate::analyzer::checkpoint(stop)?;
             count = count.checked_add(1).ok_or_else(exhausted)?;
@@ -194,7 +237,12 @@ impl ProjectReplay {
     /// Library bytes, then compares both original semantic identities.
     pub fn hydrate(&self, stop: &AtomicBool) -> ProjectResult<ProjectView> {
         self.validate_budget(stop)?;
-        let config = self.configuration.rebuild()?;
+        let load_plan = self
+            .load
+            .as_ref()
+            .map(|load| load.rebuild(&self.files, self.configuration.profile(), stop))
+            .transpose()?;
+        let config = self.configuration.rebuild(load_plan.as_ref())?;
         let backend = config.analyzer_binding().backend().clone();
         let limits = LuaWorkspaceLimits::new(
             MAX_FILES as u64,
@@ -250,6 +298,13 @@ impl ProjectReplay {
         }
         crate::analyzer::checkpoint(stop)?;
         Ok(snapshot.open_view())
+    }
+    fn storage_schema(&self) -> &'static str {
+        if self.load.is_some() {
+            "wow-project.live-replay.v2"
+        } else {
+            "wow-project.live-replay.v1"
+        }
     }
 }
 fn invalid() -> ProjectError {

@@ -1,9 +1,9 @@
 # Native live project pair publication
 
-The first W13 owner/service path accepts an already published physical Lua
-project and its exact graph. Native service operations and the
+The W13 owner/service path accepts an already published physical Lua or selected
+standalone TOC/XML project and its exact graph. Native service operations and the
 [`wow project` CLI](../../apps/wow/LIVE_PROJECT.md) expose this profile; full E2-D
-acceptance remains open. TOC/XML and package loader plans currently reject with
+acceptance remains open. Multi-package loader plans currently reject with
 `DeferredCapability` / `OperationNotImplementedForMilestone`.
 
 `ProjectReplay::capture` archives the original Main files, fixture references,
@@ -14,6 +14,17 @@ The archive precharges at most 8,192 files, 64 Library workspaces, 16 MiB per fi
 and 32 MiB aggregate source bytes before copying. Encoded records also obey the
 existing store's 32 MiB record and 64 MiB generation ceilings; JSON escaping may
 make an otherwise admissible source set exceed the record budget.
+
+Physical-input archives retain the exact v1 encoding. Standalone TOC/XML archives
+use `wow-project/native-project-replay/2` and the `wow-project.live-replay.v2`
+storage schema. They add a selected TOC, explicit selection context, raw consumed
+TOC/XML documents and expected load-plan digest. These documents count against
+the same aggregate archive budget. Loader-specific ceilings remain 1,024 consumed
+files, 1 MiB per source and 16 MiB aggregate, plus existing parser/index limits.
+The replay runs the same loader using a typed retained source port; it neither
+deserializes a load receipt nor creates temporary source files. Exact consumed
+sets, source digests, decisions, indexes and plan IDs must reproduce. Unselected
+or unavailable files are not discovered during replay.
 
 `hydrate` rebuilds configuration and Library workspaces through their existing
 validators, runs `ProjectPublisher::publish_initial_cancellable` over the exact
@@ -57,3 +68,12 @@ mixed project/graph rejection. The later CLI/service checkpoint additionally
 passes the complete producer chain and public read/reconciliation projections
 (847 tests passed, 1 ignored, 103 targets). Loader-plan replay, incremental reuse, crash,
 backup/GC, real-addon, source-parity and full W13/E2 acceptance remain open.
+
+Fresh full workspace gates and build passed for standalone replay on 2026-10-09:
+849 tests passed, 1 ignored, 103 targets. Tests remove the source directory before
+hydrate and full service composition, compare the exact retained plan/semantic IDs,
+reject missing/mutated/surplus/context/schema substitutions and exercise store
+reopen under Exact. Existing physical epochs retain their original catalog and
+epoch IDs through a strictly validated legacy open; v2 writes require a new store.
+There is no migration or catalog widening in place. Package replay, generation
+Library binding and full acceptance remain open.

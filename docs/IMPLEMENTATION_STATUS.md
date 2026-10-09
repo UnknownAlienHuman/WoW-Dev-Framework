@@ -574,6 +574,24 @@ rustdoc and build passed; final transport lint/build passed separately. Loader-p
 replay, fixture freeze, genuine backend probes, Ketho/source and runtime acceptance
 remain open. See [PROJECT_WORK_MAP.md](PROJECT_WORK_MAP.md) for the dependency order.
 
+## W13 standalone TOC/XML replay checkpoint (2026-10-09)
+
+Selected-TOC configurations now pass the existing public live-project service/CLI
+path. Native replay v2 captures selection context and exact consumed TOC/XML bytes
+alongside Main/Library. A typed retained source port runs the same bounded loader,
+then requires the original load-plan digest and project/analyzer identities.
+Missing, excluded and unresolved decisions remain explicit; surplus or substituted
+bytes/context/schema reject. No loader receipt or analyzer session is deserialized.
+
+Physical replay keeps v1 encoding. Strict legacy-catalog reopen preserves existing
+physical epoch and membership IDs; v2 loader archives require a newly initialized
+store, without migration. Full service TOC/XML composition, source-directory
+removal, native hydrate and Exact reopen are exercised by the new regression.
+Fresh workspace policy, fmt, check, strict Clippy, tests (849 passed, 1 ignored,
+103 targets), rustdoc and build passed. Package replay, generation Library binding,
+incremental reuse, retention/backup and full W13/E2/source/runtime acceptance remain
+open. See [REPLAY_PUBLICATION.md](../crates/wow-project/REPLAY_PUBLICATION.md).
+
 ## W11 semantic-repair checkpoint
 
 A read-through after the first W11 publication found positive-path defects that

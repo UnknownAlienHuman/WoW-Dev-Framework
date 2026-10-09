@@ -296,112 +296,173 @@ impl ProjectInputDirectory {
         stop: &AtomicBool,
     ) -> ProjectResult<ProjectLoadInput> {
         checkpoint(stop)?;
-        if let Some(context) = context {
-            context.validate()?;
-        }
-        profile
-            .validate()
-            .map_err(|_| invalid("selected TOC profile is invalid"))?;
-        selected_toc.validate()?;
-        if !selected_toc.path().ends_with(".toc") {
-            return Err(invalid("selected TOC must name a .toc file"));
-        }
-        let directory = self.subdirectory(root)?;
-        let mut loader = Loader {
-            directory,
+        read_toc_source(
+            LoaderSource::Disk(self.subdirectory(root)?),
+            selected_toc,
+            profile,
+            context,
             stop,
-            total_bytes: 0,
-            parsed_bytes: 0,
-            captured: BTreeMap::new(),
-            case_paths: BTreeMap::new(),
-            records: Vec::new(),
-            issues: Vec::new(),
-            active: BTreeSet::new(),
-            files: BTreeMap::new(),
-            documents: BTreeMap::new(),
-            xml_documents: BTreeMap::new(),
-            xml_nodes: 0,
-            xml_attributes: 0,
-            xml_segments: 0,
-        };
-        let path = selected_toc.path();
-        let text = loader.capture(selected_toc)?;
-        loader.charge_parse(text.len().saturating_mul(2))?;
-        let parsed = toc::parse(&text, profile.interface(), context, stop)?;
-        loader
-            .documents
-            .insert(path.to_owned(), text.as_ref().to_owned());
-        loader.expand(path, &text, parsed, 0, false)?;
-        if loader.files.is_empty() {
-            return Err(invalid(
-                "selected TOC closure contains no analyzable Lua files",
-            ));
-        }
-        let sources = loader
-            .captured
-            .iter()
-            .map(|(path, text)| LoadSource {
-                path: path.clone(),
-                content_digest: crate::identity::source_digest(text.as_bytes()),
-                byte_length: text.len() as u64,
-            })
-            .collect::<Vec<_>>();
-        // Source digests bind comments, order, directives and inline/unknown XML,
-        // even when the unique Lua file inventory happens to remain unchanged.
-        let xml_references = xml_references::resolve(&loader.xml_documents, &loader.records, stop)?;
-        let target_profile_digest = profile_digest(profile)?;
-        #[derive(Serialize)]
-        struct Identity<'a> {
-            profile: &'static str,
-            selected_toc: &'a str,
-            target_profile_digest: ContentDigest<CanonicalResult>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            load_context: Option<&'a TocLoadContext>,
-            sources: &'a [LoadSource],
-            records: &'a [LoadRecord],
-            issues: &'a [LoadIssue],
-            xml_documents: &'a BTreeMap<String, XmlDocumentIndex>,
-            xml_references_digest: ContentDigest<CanonicalResult>,
-        }
-        let digest = crate::identity::canonical_digest(
-            "wow-project/load-plan/7",
-            &Identity {
-                profile: LOAD_PROFILE,
-                selected_toc: path,
-                target_profile_digest,
-                load_context: context,
-                sources: &sources,
-                records: &loader.records,
-                issues: &loader.issues,
-                xml_documents: &loader.xml_documents,
-                xml_references_digest: xml_references.digest(),
-            },
-            ProjectPhase::Inventory,
-        )?;
-        checkpoint(stop)?;
-        Ok(ProjectLoadInput {
-            files: loader.files.into_values().collect(),
-            plan: ProjectLoadPlan {
-                profile: LOAD_PROFILE,
-                selected_toc: path.to_owned(),
-                target_flavor: profile.flavor_id().to_owned(),
-                target_interface: profile.interface(),
-                target_profile_digest,
-                load_context: context.cloned(),
-                sources,
-                records: loader.records,
-                issues: loader.issues,
-                xml_documents: loader.xml_documents,
-                xml_references,
-                digest,
-                documents: Arc::new(loader.documents),
-            },
-        })
+        )
     }
 }
 
+/// Replays only the captured closure through the same loader. Missing entries
+/// remain missing; surplus archived sources cannot silently enter another scope.
+pub(crate) fn read_retained_toc(
+    sources: BTreeMap<&str, &str>,
+    selected_toc: &ProjectDiskFile,
+    profile: &ProfileIdentity,
+    context: Option<&TocLoadContext>,
+    stop: &AtomicBool,
+) -> ProjectResult<ProjectLoadInput> {
+    if sources.len() > DISK_INVENTORY_MAX_FILES {
+        return Err(budget());
+    }
+    let mut total = 0usize;
+    for (path, text) in &sources {
+        checkpoint(stop)?;
+        validate_path(path)?;
+        total = total.checked_add(text.len()).ok_or_else(budget)?;
+        if text.len() > DISK_SOURCE_MAX_BYTES || total > DISK_INVENTORY_MAX_BYTES {
+            return Err(budget());
+        }
+        if text.contains('\0') {
+            return Err(invalid("load source contains a NUL character"));
+        }
+    }
+    read_toc_source(
+        LoaderSource::Retained(sources),
+        selected_toc,
+        profile,
+        context,
+        stop,
+    )
+}
+
+enum LoaderSource<'a> {
+    Disk(ProjectInputDirectory),
+    Retained(BTreeMap<&'a str, &'a str>),
+}
+
+fn read_toc_source(
+    source: LoaderSource<'_>,
+    selected_toc: &ProjectDiskFile,
+    profile: &ProfileIdentity,
+    context: Option<&TocLoadContext>,
+    stop: &AtomicBool,
+) -> ProjectResult<ProjectLoadInput> {
+    checkpoint(stop)?;
+    if let Some(context) = context {
+        context.validate()?;
+    }
+    profile
+        .validate()
+        .map_err(|_| invalid("selected TOC profile is invalid"))?;
+    selected_toc.validate()?;
+    if !selected_toc.path().ends_with(".toc") {
+        return Err(invalid("selected TOC must name a .toc file"));
+    }
+    let mut loader = Loader {
+        source,
+        stop,
+        total_bytes: 0,
+        parsed_bytes: 0,
+        captured: BTreeMap::new(),
+        case_paths: BTreeMap::new(),
+        records: Vec::new(),
+        issues: Vec::new(),
+        active: BTreeSet::new(),
+        files: BTreeMap::new(),
+        documents: BTreeMap::new(),
+        xml_documents: BTreeMap::new(),
+        xml_nodes: 0,
+        xml_attributes: 0,
+        xml_segments: 0,
+    };
+    let path = selected_toc.path();
+    let text = loader.capture(selected_toc)?;
+    loader.charge_parse(text.len().saturating_mul(2))?;
+    let parsed = toc::parse(&text, profile.interface(), context, stop)?;
+    loader
+        .documents
+        .insert(path.to_owned(), text.as_ref().to_owned());
+    loader.expand(path, &text, parsed, 0, false)?;
+    if let LoaderSource::Retained(sources) = &loader.source
+        && sources.len() != loader.captured.len()
+    {
+        return Err(invalid(
+            "retained load sources differ from the consumed closure",
+        ));
+    }
+    if loader.files.is_empty() {
+        return Err(invalid(
+            "selected TOC closure contains no analyzable Lua files",
+        ));
+    }
+    let sources = loader
+        .captured
+        .iter()
+        .map(|(path, text)| LoadSource {
+            path: path.clone(),
+            content_digest: crate::identity::source_digest(text.as_bytes()),
+            byte_length: text.len() as u64,
+        })
+        .collect::<Vec<_>>();
+    // Source digests bind comments, order, directives and inline/unknown XML,
+    // even when the unique Lua file inventory happens to remain unchanged.
+    let xml_references = xml_references::resolve(&loader.xml_documents, &loader.records, stop)?;
+    let target_profile_digest = profile_digest(profile)?;
+    #[derive(Serialize)]
+    struct Identity<'a> {
+        profile: &'static str,
+        selected_toc: &'a str,
+        target_profile_digest: ContentDigest<CanonicalResult>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        load_context: Option<&'a TocLoadContext>,
+        sources: &'a [LoadSource],
+        records: &'a [LoadRecord],
+        issues: &'a [LoadIssue],
+        xml_documents: &'a BTreeMap<String, XmlDocumentIndex>,
+        xml_references_digest: ContentDigest<CanonicalResult>,
+    }
+    let digest = crate::identity::canonical_digest(
+        "wow-project/load-plan/7",
+        &Identity {
+            profile: LOAD_PROFILE,
+            selected_toc: path,
+            target_profile_digest,
+            load_context: context,
+            sources: &sources,
+            records: &loader.records,
+            issues: &loader.issues,
+            xml_documents: &loader.xml_documents,
+            xml_references_digest: xml_references.digest(),
+        },
+        ProjectPhase::Inventory,
+    )?;
+    checkpoint(stop)?;
+    Ok(ProjectLoadInput {
+        files: loader.files.into_values().collect(),
+        plan: ProjectLoadPlan {
+            profile: LOAD_PROFILE,
+            selected_toc: path.to_owned(),
+            target_flavor: profile.flavor_id().to_owned(),
+            target_interface: profile.interface(),
+            target_profile_digest,
+            load_context: context.cloned(),
+            sources,
+            records: loader.records,
+            issues: loader.issues,
+            xml_documents: loader.xml_documents,
+            xml_references,
+            digest,
+            documents: Arc::new(loader.documents),
+        },
+    })
+}
+
 struct Loader<'a> {
-    directory: ProjectInputDirectory,
+    source: LoaderSource<'a>,
     stop: &'a AtomicBool,
     total_bytes: usize,
     parsed_bytes: usize,
@@ -447,16 +508,33 @@ impl Loader<'_> {
             return Err(budget());
         }
         let remaining = DISK_INVENTORY_MAX_BYTES.saturating_sub(self.total_bytes);
-        let bytes =
-            self.directory
-                .read(selected, remaining.min(DISK_SOURCE_MAX_BYTES), self.stop)?;
-        self.total_bytes += bytes.len();
-        let text =
-            String::from_utf8(bytes).map_err(|_| invalid("load source must contain UTF-8"))?;
+        let limit = remaining.min(DISK_SOURCE_MAX_BYTES);
+        let text: Arc<str> = match &self.source {
+            LoaderSource::Disk(directory) => {
+                let bytes = directory.read(selected, limit, self.stop)?;
+                String::from_utf8(bytes)
+                    .map_err(|_| invalid("load source must contain UTF-8"))?
+                    .into()
+            }
+            LoaderSource::Retained(sources) => {
+                let text = sources.get(path).ok_or_else(|| {
+                    ProjectError::new(
+                        ProjectErrorCode::MissingDeclaredFile,
+                        ProjectPhase::Inventory,
+                        "declared source is outside the retained closure",
+                    )
+                })?;
+                if text.len() > limit {
+                    return Err(budget());
+                }
+                selected.verify(text.as_bytes())?;
+                Arc::from(*text)
+            }
+        };
+        self.total_bytes += text.len();
         if text.contains('\0') {
             return Err(invalid("load source contains a NUL character"));
         }
-        let text: Arc<str> = text.into();
         self.captured.insert(path.to_owned(), Arc::clone(&text));
         Ok(text)
     }

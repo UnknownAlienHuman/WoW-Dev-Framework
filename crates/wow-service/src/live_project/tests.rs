@@ -16,6 +16,12 @@ use wow_project::{
 type TestResult<T = ()> = Result<T, Box<dyn Error>>;
 
 fn input_bundle(source: &str) -> TestResult<ProjectInputBundle> {
+    input_bundle_with_plan(vec![ProjectInputFile::new("main.lua", source)?], None)
+}
+fn input_bundle_with_plan(
+    files: Vec<ProjectInputFile>,
+    plan: Option<&wow_project::load::ProjectLoadPlan>,
+) -> TestResult<ProjectInputBundle> {
     // Synthetic test identities authorize no product compatibility/acceptance.
     let backend = EmmyBackendIdentity::new(
         "emmylua_code_analysis",
@@ -49,7 +55,7 @@ fn input_bundle(source: &str) -> TestResult<ProjectInputBundle> {
         "wow-emmy-e0-c-library-v1",
         backend.clone(),
     )?;
-    let config = ProjectConfigurationBuilder::new(
+    let builder = ProjectConfigurationBuilder::new(
         ProjectId::new("fixture-live-pair")?,
         ProjectKind::Fixture,
         profile,
@@ -64,7 +70,11 @@ fn input_bundle(source: &str) -> TestResult<ProjectInputBundle> {
     )?)
     .logical_root("fixtures/project-pair/main")
     .capability_policy(ProjectCapabilityPolicy::degraded_e0()?)
-    .budget_policy(ProjectBudgetPolicy::fixture_e0()?)
+    .budget_policy(ProjectBudgetPolicy::fixture_e0()?);
+    let config = match plan {
+        Some(plan) => builder.load_plan(plan)?,
+        None => builder,
+    }
     .build()?;
     let library = LuaWorkspaceSnapshot::build(
         backend,
@@ -75,17 +85,16 @@ fn input_bundle(source: &str) -> TestResult<ProjectInputBundle> {
         )],
         LuaWorkspaceLimits::new(8, 4096, 16384, 65536)?,
     )?;
-    Ok(ProjectInputBundle::closed(
-        config,
-        vec![ProjectInputFile::new("main.lua", source)?],
-        vec![library],
-    )?)
+    Ok(ProjectInputBundle::closed(config, files, vec![library])?)
 }
 fn owners(source: &str) -> TestResult<(ProjectPublisher, GraphPartitionSnapshot)> {
+    owners_from_bundle(input_bundle(source)?)
+}
+fn owners_from_bundle(
+    bundle: ProjectInputBundle,
+) -> TestResult<(ProjectPublisher, GraphPartitionSnapshot)> {
     let mut publisher = ProjectPublisher::with_function_call_facts();
-    let view = publisher
-        .publish_initial(input_bundle(source)?)?
-        .open_view();
+    let view = publisher.publish_initial(bundle)?.open_view();
     let stop = AtomicBool::new(false);
     let (registry, batch, coverage, _, limits) =
         wow_project::graph::build_source_graph_proposals(&view, &stop)?.into_parts();
@@ -122,6 +131,225 @@ fn root(name: &str) -> TestResult<std::path::PathBuf> {
             .duration_since(std::time::UNIX_EPOCH)?
             .as_nanos()
     )))
+}
+
+#[test]
+fn standalone_toc_xml_pair_replays_without_disk_and_rejects_archive_substitution() -> TestResult {
+    use std::collections::BTreeMap;
+    use wow_project::{
+        disk::{ProjectDiskFile, ProjectInputDirectory},
+        load::{LoadIssueKind, LoadSelection, TocLoadContext},
+        replay::ProjectReplay,
+    };
+    let stop = AtomicBool::new(false);
+    let root = root("toc-xml")?;
+    let source_root = root.join("input");
+    std::fs::create_dir_all(source_root.join("nested"))?;
+    for (path, text) in [
+        (
+            "Fixture.toc",
+            "## Interface: 120100\nmain.lua\nframes.xml\nmissing.lua\nexcluded.lua [AllowLoadGameType classic]\n",
+        ),
+        (
+            "main.lua",
+            "function NamedHandler() return External() end\n",
+        ),
+        (
+            "frames.xml",
+            "<Ui xmlns=\"http://www.blizzard.com/wow/ui/\"><Include file=\"nested/child.xml\"/></Ui>",
+        ),
+        (
+            "nested/child.xml",
+            "<Ui xmlns=\"http://www.blizzard.com/wow/ui/\"><Script file=\"helper.lua\"/><Frame name=\"ReplayFrame\"><Scripts><OnLoad>local value = External()</OnLoad><OnShow function=\"NamedHandler\"/></Scripts></Frame></Ui>",
+        ),
+        ("nested/helper.lua", "local helper = true\n"),
+    ] {
+        std::fs::write(source_root.join(path), text)?;
+    }
+    let profile = input_bundle("return true")?
+        .configuration()
+        .selected_profile()
+        .clone();
+    let context = TocLoadContext {
+        game_types: BTreeMap::from([("classic".into(), false)]),
+        family: None,
+        game: None,
+        text_locale: None,
+        location: None,
+        environment: None,
+    };
+    let (files, plan) = ProjectInputDirectory::open(&source_root)?
+        .read_toc_project_with_context(
+            ".",
+            &ProjectDiskFile::new("Fixture.toc"),
+            &profile,
+            Some(&context),
+            &stop,
+        )?
+        .into_parts();
+    assert!(
+        plan.issues()
+            .iter()
+            .any(|issue| issue.kind == LoadIssueKind::MissingFile)
+    );
+    assert!(
+        plan.records()
+            .iter()
+            .any(|record| record.selection == LoadSelection::Excluded)
+    );
+    assert_eq!(plan.sources().len(), 5);
+    let reference = wow_reference::ReferenceView::new(
+        input_bundle_with_plan(files.clone(), Some(&plan))?
+            .configuration()
+            .reference_generation()
+            .to_string(),
+        Vec::new(),
+        Vec::new(),
+    )?;
+    let service_input = crate::LocalProjectInput::new_with_load_plan(
+        input_bundle_with_plan(files.clone(), Some(&plan))?,
+        reference,
+        Some(plan.clone()),
+    )?;
+    let (publisher, graph) = owners_from_bundle(input_bundle_with_plan(files, Some(&plan))?)?;
+    let replay = ProjectReplay::capture(&publisher, &stop)?;
+    let archive = serde_json::to_value(&replay)?;
+    assert_eq!(archive["schema"], "wow-project/native-project-replay/2");
+    assert_eq!(
+        archive["load"]["documents"]
+            .as_array()
+            .ok_or("documents missing")?
+            .len(),
+        3
+    );
+    std::fs::remove_dir_all(&source_root)?;
+    let restored = replay.hydrate(&stop)?;
+    assert_eq!(restored.configuration().load_plan(), Some(&plan));
+    assert_eq!(
+        restored.snapshot_id(),
+        publisher
+            .current_snapshot()
+            .ok_or("missing owner")?
+            .snapshot_id()
+    );
+    assert!(
+        restored
+            .snapshot()
+            .analyzer_binding()
+            .function_call_report()
+            .is_some()
+    );
+    for mutation in 0..5 {
+        let mut changed = archive.clone();
+        match mutation {
+            0 => {
+                changed["load"]["documents"][0]["text"] = "## Interface: 120100\nmain.lua\n".into()
+            }
+            1 => {
+                changed["load"]["documents"]
+                    .as_array_mut()
+                    .ok_or("documents missing")?
+                    .pop();
+            }
+            2 => {
+                changed["load"]["documents"]
+                    .as_array_mut()
+                    .ok_or("documents missing")?
+                    .push(serde_json::json!({"path":"unused.xml", "text":"<Ui/>"}));
+            }
+            3 => changed["load"]["context"]["game_types"]["classic"] = true.into(),
+            _ => changed["schema"] = "wow-project/native-project-replay/1".into(),
+        }
+        let substituted: ProjectReplay = serde_json::from_value(changed)?;
+        assert!(
+            substituted.hydrate(&stop).is_err(),
+            "archive mutation {mutation} was accepted"
+        );
+    }
+    assert_eq!(
+        replay
+            .hydrate(&AtomicBool::new(true))
+            .err()
+            .ok_or("cancellation accepted")?
+            .code(),
+        wow_project::ProjectErrorCode::AnalysisCancelled
+    );
+    let store_root = root.join("store");
+    let mut store = LiveProjectStore::create(&store_root, graph.snapshot().universe().as_str())?;
+    store.publish(&publisher, &graph, "fixture:toc-xml-pair", None, &stop)?;
+    let before = store.read(&ReadSelector::Current, &stop)?;
+    let generation = before.store_generation_id().clone();
+    let set_id = before.publication_set_id().to_owned();
+    drop(before);
+    drop(store);
+    let store = LiveProjectStore::open(&store_root)?;
+    let reopened = store.read(&ReadSelector::Exact(generation), &stop)?;
+    assert_eq!(reopened.project().configuration().load_plan(), Some(&plan));
+    assert_eq!(reopened.graph(), &graph);
+    assert_eq!(reopened.publication_set_id(), set_id);
+    drop(reopened);
+    drop(store);
+    let composed_root = root.join("composed");
+    let request = LiveProjectPublishRequest::new("fixture:toc-xml-composed", "absent", true, true)?;
+    let graph_request =
+        crate::graph::GraphBuildRequest::new("fixture-live-pair".into(), "current".into())?;
+    let result = operations::publish_input(
+        service_input,
+        &graph_request,
+        &composed_root,
+        &request,
+        &stop,
+    )?;
+    assert_eq!(result.exit_code(), 2);
+    let composed = LiveProjectStore::open(&composed_root)?;
+    let read = composed.read(&ReadSelector::Current, &stop)?;
+    assert_eq!(read.project().configuration().load_plan(), Some(&plan));
+    assert_eq!(read.project().snapshot_id(), restored.snapshot_id());
+    assert!(
+        read.graph()
+            .partition(wow_recognizers::source_xml::SourceXmlFamily::Object.partition_id())
+            .is_some()
+    );
+    drop(read);
+    drop(composed);
+    std::fs::remove_dir_all(root)?;
+    Ok(())
+}
+
+#[test]
+fn original_physical_epoch_reopens_without_changing_catalog_or_identities() -> TestResult {
+    let stop = AtomicBool::new(false);
+    let (publisher, graph) = owners("return External()")?;
+    let root = root("legacy-epoch")?;
+    let mut store = LiveProjectStore {
+        store: ProjectStore::create(
+            &root,
+            graph.snapshot().universe().as_str(),
+            catalog_for(publication::STORAGE_SCHEMAS_V1)?,
+        )?,
+    };
+    let epoch = store.store.epoch().clone();
+    let operation = store.publish(&publisher, &graph, "fixture:legacy-live-pair", None, &stop)?;
+    let read = store.read(&ReadSelector::Current, &stop)?;
+    let set_id = read.publication_set_id().to_owned();
+    assert!(
+        read.read
+            .manifest()
+            .members
+            .iter()
+            .any(|member| member.schema == "wow-project.live-replay.v1")
+    );
+    drop(read);
+    drop(store);
+    let store = LiveProjectStore::open(&root)?;
+    assert_eq!(store.store.epoch(), &epoch);
+    let read = store.read(&ReadSelector::Exact(operation.generation_id), &stop)?;
+    assert_eq!(read.graph(), &graph);
+    assert_eq!(read.publication_set_id(), set_id);
+    drop(read);
+    drop(store);
+    std::fs::remove_dir_all(root)?;
+    Ok(())
 }
 
 #[test]

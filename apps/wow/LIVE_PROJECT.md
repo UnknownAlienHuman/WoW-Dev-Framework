@@ -1,8 +1,9 @@
 # Native live project commands
 
-The physical Lua profile now exposes coherent publication and acquisition through
-`wow-service::live_project`. The app remains a transport over one service operation
-per command. TOC/XML/package replay is still unavailable.
+Physical Lua and explicitly selected standalone TOC/XML profiles expose coherent
+publication and acquisition through `wow-service::live_project`. The app remains
+a transport over one service operation per command. Multi-package replay is
+still unavailable.
 
 ```text
 wow project publish --config project.json --project <ProjectId> --store-root <new-private-directory> --operation-id <id> --expected-current absent --initialize --allow-partial
@@ -11,7 +12,7 @@ wow project read --store-root <directory> --store-generation <StoreGenerationId>
 wow project reconcile --store-root <directory> --operation-id <original-id>
 ```
 
-`publish` accepts the existing explicit materialized-input or physical-file
+`publish` accepts the existing explicit materialized-input, physical-file or selected-TOC
 configuration. The service constructs one original native publisher and runs the
 same graph producer chain as `wow graph build`. It captures exact Main/Library
 bytes, validates native read-back while the candidate is inactive, then activates
@@ -51,3 +52,17 @@ The service smoke also exposed invalid canonical pack constructors in the bridge
 hook and library families. Constructors now order fixture/rule IDs before the
 unchanged strict validators; profiles are bridge4, hooks5 and library3. Coverage
 keeps no negative authority. No acceptance fixture is regenerated.
+
+The standalone TOC/XML checkpoint uses native replay v2 and retains the exact
+selected TOC, selection context and consumed TOC/XML bytes alongside Main/Library.
+Read-back runs the same bounded loader, checks the original plan digest and
+recreates the original semantic IDs without reopening source directories. Missing,
+excluded and unresolved load decisions remain explicit. Surplus archived files,
+changed documents/context and substituted schema versions reject.
+
+Physical archives keep v1 encoding. Existing physical epochs reopen against their
+exact original catalog without changing epoch or membership identities; they
+accept physical publications only. Initialize a new private store to publish v2
+loader archives. No epoch migration is performed. Fresh full workspace gates and
+build passed on 2026-10-09: 849 tests passed, 1 ignored, 103 targets. The new service
+regression runs the complete TOC/XML producer chain after source removal.

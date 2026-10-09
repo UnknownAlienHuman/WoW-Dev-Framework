@@ -77,7 +77,7 @@ full graph acceptance and the checkpoint's CI conclusions remain open.
 | [W11 / PR 102](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/102) | Public CLI and per-rule acceptance closure | All 26 functional rule IDs publish; full E2-B acceptance remains open |
 | [Issue 103](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/103) | Executable structural mutations and admitted per-rule fixtures | After functional implementation; frozen fixtures are not rewritten by tests |
 | [W12 / PR 80](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/80) | Extend real producer chains and conflict assessment | Exact retained records, publication validation and bounded explanations are executable; full acceptance remains open |
-| [W13 / PR 81](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/81) | Loader-plan live publication | Physical Lua native replay, CLI publication/read/reconcile and coherent leased pair acquisition are executable; full acceptance remains open |
+| [W13 / PR 81](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/81) | Package-plan live publication | Physical Lua and standalone TOC/XML native replay, CLI publication/read/reconcile and coherent leased pair acquisition are executable; package replay and full acceptance remain open |
 | [W14 / PR 82](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/82), [W15 / PR 83](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/83), [W16 / PR 84](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/84) | Incremental invalidation, retained roots/GC, backup/recovery | Exact generation and durable reconciliation gates |
 | [W17 / PR 85](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/85), [W18 / PR 86](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/86), [W19 / PR 87](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/87) | Blizzard source universe, Project Map/skeletons, context packs | Real prerequisite views before context |
 | [W20 / PR 88](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/88), [W21 / PR 89](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/89) | Search, lineage and static impact | Exact immutable generation inputs |
@@ -231,3 +231,24 @@ rustdoc and build passed on 2026-10-09. CLI transport lint/build also passed aft
 the final help guard. Remaining W13 loader-plan replay, fixture freeze, genuine
 backend probes, source/Ketho parity, real-addon/runtime and full E2 acceptance
 stay open. Gethe materialization follows the product implementation/build stage.
+
+## W13 standalone TOC/XML replay checkpoint
+
+The CLI/update-controls predecessor `6e864fc272150913ef5e96d9bdde75eabd27d4a7`
+was published and read back with all 24 changed blob identities. Standalone replay
+now retains selected TOC/context and all consumed TOC/XML documents in explicit
+native replay v2. A typed retained source port reuses the existing loader, including
+bounded parsing, missing/excluded/unresolved decisions, inline Lua and XML indexes.
+Read-back requires the original plan digest and exact project/analyzer identities.
+Surplus and substituted archives reject; physical v1 encoding remains unchanged.
+Legacy physical store epochs reopen against their exact original catalog, while
+v2 loader writes require a newly initialized store. No migration is performed.
+
+Fresh policy, fmt, workspace check, strict Clippy, tests (849 passed, 1 ignored,
+103 targets), rustdoc and build passed on 2026-10-09. The regression removes source
+files before hydrate and the complete service producer chain, then reopens the
+actual stored pair under Exact. Multi-package replay remains next: Main flattening
+currently omits unreachable packages, so replay must retain their actual captured
+bytes and variant sources before reconstructing the package closure. W13/E2
+acceptance, generation Library binding, retention/backup and source/runtime gates
+remain open. Gethe preparation still follows product implementation/build.

@@ -52,9 +52,17 @@ impl LiveProjectStore {
         })
     }
     pub fn open(root: &Path) -> ServiceResult<Self> {
-        Ok(Self {
-            store: ProjectStore::open(root, &catalog()?).map_err(store_error)?,
-        })
+        // Both opens require an exact registered epoch. The store rejects a
+        // catalog mismatch before opening SQLite writable; no migration occurs.
+        let store = match ProjectStore::open(root, &catalog()?) {
+            Ok(store) => store,
+            Err(error) if error.code() == StoreErrorCode::IntegrityViolation => {
+                ProjectStore::open(root, &catalog_for(publication::STORAGE_SCHEMAS_V1)?)
+                    .map_err(store_error)?
+            }
+            Err(error) => return Err(store_error(error)),
+        };
+        Ok(Self { store })
     }
     pub fn current(&self) -> ServiceResult<Option<CurrentPublication>> {
         self.store.current().map_err(store_error)
@@ -150,8 +158,11 @@ impl LiveProjectStore {
     }
 }
 fn catalog() -> ServiceResult<RecordCatalog> {
+    catalog_for(publication::STORAGE_SCHEMAS)
+}
+fn catalog_for(project_schemas: &[&'static str]) -> ServiceResult<RecordCatalog> {
     let mut schemas = GraphPartitionSnapshot::STORAGE_SCHEMAS.to_vec();
-    schemas.extend_from_slice(publication::STORAGE_SCHEMAS);
+    schemas.extend_from_slice(project_schemas);
     RecordCatalog::new(
         &schemas,
         &[

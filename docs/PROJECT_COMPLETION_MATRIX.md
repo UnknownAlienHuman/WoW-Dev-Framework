@@ -27,7 +27,7 @@ The root [Cargo.toml](../Cargo.toml) activates **16 members**, including the int
 |---|---|---|
 | `wow-core` | Typed identities, canonical JSON, evidence, coverage, results and operation primitives | Reconcile the complete E0-A contract/test matrix; compilation is not the acceptance ledger |
 | `wow-emmy` | Real pinned analyzer adapter, explicit Main/Library workspaces, same-session XML virtual units, syntax/semantic diagnostics, direct member calls and scoped local-flow facts | E0-C fixture/pin/checksum closure; additional semantic operations and update probes are not inferred from parser compatibility |
-| `wow-project` | Explicit inventories, bounded TOC/XML/load receipts, analyzer bindings, immutable generations, exact source artifacts/handles, guarded updates, publication and physical-input native replay | E0-D fixture identity closure; effective XML receiver/load semantics, full load acceptance, overlays, loader-plan replay and full durable project publication |
+| `wow-project` | Explicit inventories, bounded TOC/XML/load receipts, analyzer bindings, immutable generations, exact source artifacts/handles, guarded updates, publication and physical/standalone TOC/XML native replay | E0-D fixture identity closure; effective XML receiver/load semantics, full load acceptance, overlays, package-plan replay and full durable project publication |
 | `wow-rules` | `wow.api.exists@1` over physical Main and exact-static XML inline facts; `wow.secret.local_operation@1` over its bounded physical flow slice | E0-E normative fixtures, exact prerequisite identities and complete capability/negative-authority cases; no inferred XML receiver/runtime authority |
 | `wow-service` | E0 status/check over immutable normalized contexts, mixed physical/XML rule scopes and exact XML finding projection; separate ReferenceView administration/publication | E0-F end-to-end fixture/CLI closure; full E1 Reference Pack and later public operation families |
 | `wow-store` | Typed SQLite objects, catalogs/CAS, operation journal, leases, GC and integrity | Full E1-A migration/crash/backup acceptance; separate manifested retained ProjectStore exists, not full E2-D publication acceptance |
@@ -61,7 +61,7 @@ no Rust implementation in the audited source. Their documentation is not a binar
 | E1-A–E1-C | Partial executable | Finish only verified missing contract/acceptance slices; do not recreate existing store/reference/annotation implementations |
 | E1-D | Partial executable Reference Pack service and active internal builder with durable materialization/finalization | Close external parity/license/rebuild evidence, Windows/process-loss acceptance and complete package gates; code presence is not `ValidatedLocal` |
 | E2-A–E2-B | Partial executable | All 26 active E2-B rule IDs are service-published after the W11 semantic repair, TOC, XML and state slices; close public CLI/full-pipeline fixtures and package acceptance |
-| E2-C–E2-D | Partial source index, retained manifested store, native physical-input live pair service/CLI and cancellable update controls | Loader-plan live publication, generation Library binding, incremental reuse/invalidation, retention/GC/backup/epoch replacement and complete acceptance remain open; see [REPLAY_PUBLICATION.md](../crates/wow-project/REPLAY_PUBLICATION.md) |
+| E2-C–E2-D | Partial source index, retained manifested store, native physical/standalone TOC/XML live pair service/CLI and cancellable update controls | Package-plan live publication, generation Library binding, incremental reuse/invalidation, retention/GC/backup/epoch replacement and complete acceptance remain open; see [REPLAY_PUBLICATION.md](../crates/wow-project/REPLAY_PUBLICATION.md) |
 | E3-A–E3-C | Not started | Exact Blizzard source universe, context owners and service/CLI after E2 closure |
 | E4-A–E4-C | Not started | Search, lineage/migration/static impact and routing after A0 prerequisites |
 | E5-A–E5-C | Not started | Calibration, independent review/holdout and governed publication lifecycle |
@@ -248,3 +248,11 @@ cancellation and typed Library intent are executable; current E0 policy rejects
 Clear/empty replacement. Full Library generation binding and incremental reuse
 are not implemented. Fresh workspace gates passed on 2026-10-09 (847 tests,
 1 ignored, 103 targets). See [LIVE_PROJECT.md](../apps/wow/LIVE_PROJECT.md).
+
+Standalone TOC/XML replay now reuses the same loader over captured documents and
+selection context. Exact plan and project/analyzer IDs reproduce after source
+removal; full service composition and stored Exact reopen pass. Physical v1 bytes
+and legacy epoch catalogs remain compatible; loader replay uses explicit v2 and a
+new store catalog. Workspace policy, fmt, check, strict Clippy, tests (849 passed,
+1 ignored, 103 targets), rustdoc and build passed on 2026-10-09. Multi-package replay,
+generation Library binding and full E2 acceptance remain open.
