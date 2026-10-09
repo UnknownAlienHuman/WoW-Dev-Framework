@@ -1397,6 +1397,7 @@ fn canonical_target(path: &Path, label: &str) -> Result<PathBuf> {
 }
 
 fn create_private_directory(path: &Path) -> Result<()> {
+    #[allow(unused_mut)]
     let mut builder = fs::DirBuilder::new();
     #[cfg(unix)]
     {
