@@ -43,9 +43,9 @@ use crate::{
 //  revision or toolchain version. Only universal graph roles are used.
 
 pub const W1_SIGNAL_PARTITION: &str = "wow-recognizers.lua-native-frame-events";
-const W1_SIGNAL_PROFILE: &str = "wow-recognizers/lua-native-frame-events/2";
+const W1_SIGNAL_PROFILE: &str = "wow-recognizers/lua-native-frame-events/3";
 const W1_FACT_PARTITION: &str = "wow-recognizers.lua-native-frame-event-facts";
-const W1_FACT_PROFILE: &str = "wow-recognizers-lua-native-frame-event-facts-2";
+const W1_FACT_PROFILE: &str = "wow-recognizers-lua-native-frame-event-facts-3";
 const W1_RULE: &str = "core.signal.native_frame_event";
 const W1_RULE_VERSION: u32 = 1;
 const W1_REGISTER_EVENT_CALLABLE: &str = "Frame.RegisterEvent";
@@ -783,11 +783,18 @@ fn w1_checkpoint(stop: &AtomicBool) -> RecognizerResult<()> {
 }
 
 fn w1_failure(code: RecognizerErrorCode) -> RecognizerError {
-    RecognizerError::new(code, String::new())
+    RecognizerError::new(
+        code,
+        "exact native frame-event facts could not produce a coherent W11 partition",
+    )
 }
 
-fn w1_graph_error(_error: wow_graph::GraphError) -> RecognizerError {
-    w1_failure(RecognizerErrorCode::AdapterFactMismatch)
+fn w1_graph_error(error: wow_graph::GraphError) -> RecognizerError {
+    w1_failure(match error.code() {
+        wow_graph::GraphErrorCode::Cancelled => RecognizerErrorCode::Cancelled,
+        wow_graph::GraphErrorCode::BudgetExceeded => RecognizerErrorCode::BudgetExceeded,
+        _ => RecognizerErrorCode::GraphProjectionFailed,
+    })
 }
 
 fn w1_graph_confidence(confidence: RecognizerOutputConfidence) -> GraphConfidence {
@@ -800,29 +807,54 @@ fn w1_graph_confidence(confidence: RecognizerOutputConfidence) -> GraphConfidenc
 /// Validate one support record against the exact source handle and evidence.
 fn w1_validate_support(
     input: &W1Input<'_>,
-    handle: StableHandleId,
-    evidence: EvidenceId,
+    handle_id: StableHandleId,
+    evidence_id: EvidenceId,
     path: &str,
     content_digest: &str,
     span: SourceSpan,
 ) -> RecognizerResult<()> {
-    if input.source_handles.contains_key(&handle)
-        && input.evidence.contains_key(&evidence)
-        && !path.is_empty()
-        && !content_digest.is_empty()
+    let handle = input
+        .source_handles
+        .get(&handle_id)
+        .ok_or_else(|| w1_failure(RecognizerErrorCode::AdapterBindingMissing))?;
+    let evidence = input
+        .evidence
+        .get(&evidence_id)
+        .ok_or_else(|| w1_failure(RecognizerErrorCode::AdapterBindingMissing))?;
+    handle
+        .validate()
+        .map_err(|_| w1_failure(RecognizerErrorCode::AdapterFactMismatch))?;
+    evidence
+        .validate()
+        .map_err(|_| w1_failure(RecognizerErrorCode::AdapterFactMismatch))?;
+    let digest = content_digest
+        .parse::<ContentDigest<SourceContent>>()
+        .map_err(|_| w1_failure(RecognizerErrorCode::AdapterFactMismatch))?;
+    if handle.handle_id() != handle_id
+        || handle.path().as_str() != path
+        || handle.span() != span
+        || handle.content_digest() != &digest
+        || handle.project_generation() != input.context.project_generation()
+        || handle.reference_generation() != Some(input.context.reference_generation())
+        || evidence.evidence_id() != evidence_id
+        || evidence.context_id() != input.context.context_id()
+        || evidence.source_handle_ids() != [handle_id]
+        || evidence.provenance() != ProvenanceClass::ProjectSource
+        || evidence.confidence() != EvidenceConfidence::Proven
+        || evidence.claim_scope() != ClaimScope::SourceObservation
+        || !evidence.derivation_input_ids().is_empty()
+        || !evidence.coverage_refs().is_empty()
     {
-        let _ = span;
-        Ok(())
-    } else {
-        Err(w1_failure(RecognizerErrorCode::AdapterBindingMissing))
+        return Err(w1_failure(RecognizerErrorCode::AdapterFactMismatch));
     }
+    Ok(())
 }
 // ===== END WORKER 1: native frame event =====
 
 // ===== BEGIN WORKER 3: custom registry producer and subscription =====
 
 pub const W3_SIGNAL_PARTITION: &str = "wow-recognizers.lua-custom-signals";
-pub const W3_SIGNAL_PROFILE: &str = "wow-recognizers/lua-custom-signals/3";
+pub const W3_SIGNAL_PROFILE: &str = "wow-recognizers/lua-custom-signals/4";
 const W3_FACT_PARTITION: &str = "wow-recognizers.lua-custom-signal-facts";
 const W3_FACT_PROFILE: &str = "wow-recognizers-lua-custom-signal-facts-2";
 const W3_PRODUCER_RULE: &str = "core.signal.custom_registry_producer";
@@ -1016,11 +1048,11 @@ fn w1_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRecogniz
         schema_version: crate::RECOGNIZER_PACK_SCHEMA_VERSION,
         pack: RecognizerPack {
             pack_id: "wow-core-lua-native-frame-events".into(),
-            version: "2".into(),
+            version: "3".into(),
             trust_class: RecognizerPackTrustClass::Core,
             fact_schema_profile_id: W1_FACT_PROFILE.into(),
             graph_registry_bundle_id: registry_bundle_id.into(),
-            evaluation_profile_id: "wow-recognizers-w11-native-frame-event-2".into(),
+            evaluation_profile_id: "wow-recognizers-w11-native-frame-event-3".into(),
             rollout: RecognizerPackRollout::Shadow,
             budgets: RecognizerPackBudgets {
                 max_rules: 4,
@@ -1242,6 +1274,9 @@ enum W3Assertion {
         event_key: String,
         relation_proposal_id: String,
         confidence: RecognizerOutputConfidence,
+        source_handle_ids: Vec<StableHandleId>,
+        evidence_ids: Vec<EvidenceId>,
+        coverage_ids: Vec<wow_core::CoverageId>,
     },
     Subscription {
         call_id: String,
@@ -1251,6 +1286,9 @@ enum W3Assertion {
         relation_proposal_id: String,
         producer_call_id: Option<String>,
         confidence: RecognizerOutputConfidence,
+        source_handle_ids: Vec<StableHandleId>,
+        evidence_ids: Vec<EvidenceId>,
+        coverage_ids: Vec<wow_core::CoverageId>,
     },
 }
 
@@ -1547,6 +1585,9 @@ pub fn w3_recognize_signals(
             relation_proposal_id,
             confidence,
             producer_call_id,
+            source_handle_ids,
+            evidence_ids,
+            coverage_ids,
         ) = match assertion {
             W3Assertion::Emitter {
                 call_id,
@@ -1555,6 +1596,9 @@ pub fn w3_recognize_signals(
                 event_key,
                 relation_proposal_id,
                 confidence,
+                source_handle_ids,
+                evidence_ids,
+                coverage_ids,
             } => (
                 call_id,
                 caller_proposal_id,
@@ -1563,6 +1607,9 @@ pub fn w3_recognize_signals(
                 relation_proposal_id,
                 *confidence,
                 None,
+                source_handle_ids,
+                evidence_ids,
+                coverage_ids,
             ),
             W3Assertion::Subscription {
                 call_id,
@@ -1572,6 +1619,9 @@ pub fn w3_recognize_signals(
                 relation_proposal_id,
                 producer_call_id,
                 confidence,
+                source_handle_ids,
+                evidence_ids,
+                coverage_ids,
             } => (
                 call_id,
                 caller_proposal_id,
@@ -1580,6 +1630,9 @@ pub fn w3_recognize_signals(
                 relation_proposal_id,
                 *confidence,
                 producer_call_id.as_ref(),
+                source_handle_ids,
+                evidence_ids,
+                coverage_ids,
             ),
         };
         let site = sites
@@ -1591,8 +1644,12 @@ pub fn w3_recognize_signals(
         {
             return Err(w3_failure(RecognizerErrorCode::AdapterFactMismatch));
         }
-        let mut handles = BTreeSet::from([site.handle, site.receiver_handle]);
-        let mut evidence = BTreeSet::from([site.evidence, site.receiver_evidence]);
+        let mut handles = source_handle_ids.iter().copied().collect::<BTreeSet<_>>();
+        let mut evidence = evidence_ids.iter().copied().collect::<BTreeSet<_>>();
+        handles.insert(site.handle);
+        handles.insert(site.receiver_handle);
+        evidence.insert(site.evidence);
+        evidence.insert(site.receiver_evidence);
         if let Some(producer_call_id) = producer_call_id {
             let producer = sites
                 .get(producer_call_id.as_str())
@@ -1627,7 +1684,7 @@ pub fn w3_recognize_signals(
                     graph_confidence,
                     handles.clone(),
                     evidence.clone(),
-                    Vec::new(),
+                    coverage_ids.clone(),
                 )
                 .map_err(w3_graph_error)?,
             );
@@ -1646,7 +1703,7 @@ pub fn w3_recognize_signals(
                     confidence: graph_confidence,
                     source_handle_ids: handles,
                     evidence_ids: evidence,
-                    coverage_ids: Vec::new(),
+                    coverage_ids: coverage_ids.clone(),
                 },
             )
             .map_err(w3_graph_error)?,
@@ -2005,6 +2062,9 @@ fn w3_read_assertion(
         target,
         confidence,
         decisive_fact_ids,
+        source_handle_ids,
+        evidence_ids,
+        coverage_ids,
         ..
     } = proposal
     else {
@@ -2019,7 +2079,10 @@ fn w3_read_assertion(
     let fact = bundle
         .fact_by_id(fact_id)
         .ok_or_else(|| w3_failure(RecognizerErrorCode::AdapterBindingMissing))?;
-    if fact.kind() != W3_CUSTOM_SIGNAL_FACT {
+    if fact.kind() != W3_CUSTOM_SIGNAL_FACT
+        || source_handle_ids.as_slice() != fact.source_handle_ids()
+        || evidence_ids.as_slice() != fact.evidence_ids()
+    {
         return Err(w3_failure(RecognizerErrorCode::AdapterFactMismatch));
     }
     let Some(RecognizerFactValue::Reference(call_id)) = fact.field("call_id") else {
@@ -2059,6 +2122,9 @@ fn w3_read_assertion(
             event_key: event_key.to_string(),
             relation_proposal_id: w3_relation_id("emitter", call_id.as_ref()),
             confidence: *confidence,
+            source_handle_ids: source_handle_ids.clone(),
+            evidence_ids: evidence_ids.clone(),
+            coverage_ids: coverage_ids.clone(),
         },
         W3SignalSide::Subscription => W3Assertion::Subscription {
             call_id: call_id.to_string(),
@@ -2068,6 +2134,9 @@ fn w3_read_assertion(
             relation_proposal_id: w3_relation_id("subscription", call_id.as_ref()),
             producer_call_id,
             confidence: *confidence,
+            source_handle_ids: source_handle_ids.clone(),
+            evidence_ids: evidence_ids.clone(),
+            coverage_ids: coverage_ids.clone(),
         },
     })
 }

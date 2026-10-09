@@ -96,6 +96,17 @@ until an owner publishes their facts.
 Structural mutation fixtures per family, the apps/wow graph export lane and full E2
 package acceptance remain open and are NotEvaluated.
 
+A subsequent W11 semantic-closure audit tightened three owner boundaries without
+widening rule authority: native-frame-event support now validates exact source handles,
+digests, generations and evidence provenance; custom-signal graph proposals preserve
+the matcher support/coverage closure and include the unique compatible producer support;
+script/hook facts and graph relations retain every exact resolved receiver, target,
+handler and callback declaration used by the claim. Dynamic or unresolved endpoints
+remain unprojected/Possible rather than receiving fabricated support. The affected
+producer/fact/evaluation profiles are versioned. These functional checkpoints use
+formatting, affected-chain `cargo check`, strict Clippy and repository policy only;
+the planned full rule-specific test and fixture-freeze phase remains NotEvaluated.
+
 
 ## Explicit graph source read-back
 

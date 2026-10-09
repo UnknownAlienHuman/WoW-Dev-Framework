@@ -462,9 +462,9 @@ use wow_emmy::function_calls::{FunctionCallReport, SourceCallLiteral};
 // managed-object or Secret legality: these are universal structural roles only.
 
 pub const W5_HOOK_PARTITION: &str = "wow-recognizers.lua-hooks";
-pub const W5_HOOK_PROFILE: &str = "wow-recognizers/lua-hooks/3";
+pub const W5_HOOK_PROFILE: &str = "wow-recognizers/lua-hooks/4";
 const W5_FACT_PARTITION: &str = "wow-recognizers.lua-hook-facts";
-const W5_FACT_PROFILE: &str = "wow-recognizers-lua-hook-call-facts-3";
+const W5_FACT_PROFILE: &str = "wow-recognizers-lua-hook-call-facts-4";
 const W5_FACT_KIND: &str = "lua_call";
 const W5_SET_SCRIPT_RULE: &str = "core.hook.set_script";
 const W5_HOOK_SCRIPT_RULE: &str = "core.hook.hook_script";
@@ -632,6 +632,7 @@ struct W5RelationSpec {
     confidence: GraphConfidence,
     handles: Vec<StableHandleId>,
     evidence: Vec<EvidenceId>,
+    coverage: Vec<wow_core::CoverageId>,
 }
 
 struct W5Binding {
@@ -926,6 +927,13 @@ pub fn recognize_source_hooks(
             source_handles.insert(*receiver_handle);
             evidence_ids.insert(*receiver_evidence);
         }
+        for argument in &arguments {
+            if let Some(proposal) = argument.reference_proposal.as_deref() {
+                let binding = w5_binding(&declarations, &declaration_proposal_ids, proposal)?;
+                source_handles.insert(binding.handle);
+                evidence_ids.insert(binding.evidence);
+            }
+        }
         facts.push(RecognizerFact::new(
             input.context.context_id(),
             RecognizerFactInput {
@@ -1012,6 +1020,9 @@ pub fn recognize_source_hooks(
                 relation_kind_id: proposed_relation,
                 confidence,
                 decisive_fact_ids,
+                source_handle_ids,
+                evidence_ids,
+                coverage_ids,
                 ..
             } = proposal
             else {
@@ -1023,7 +1034,11 @@ pub fn recognize_source_hooks(
             let fact = bundle
                 .fact_by_id(fact_id)
                 .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
-            if fact.kind() != W5_FACT_KIND || proposed_relation.as_ref() != relation_kind_id {
+            if fact.kind() != W5_FACT_KIND
+                || proposed_relation.as_ref() != relation_kind_id
+                || source_handle_ids.as_slice() != fact.source_handle_ids()
+                || evidence_ids.as_slice() != fact.evidence_ids()
+            {
                 return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
             }
             let Some(RecognizerFactValue::Reference(call_id)) = fact.field("call_id") else {
@@ -1063,8 +1078,10 @@ pub fn recognize_source_hooks(
                 W5_SECURE_POSTHOOK_RULE => w5_secure_target(site, 0),
                 _ => return Err(failure(RecognizerErrorCode::AdapterFactMismatch)),
             };
-            let mut handles = BTreeSet::from([call_handle]);
-            let mut evidence = BTreeSet::from([call_evidence]);
+            let mut handles = source_handle_ids.iter().copied().collect::<BTreeSet<_>>();
+            let mut evidence = evidence_ids.iter().copied().collect::<BTreeSet<_>>();
+            handles.insert(call_handle);
+            evidence.insert(call_evidence);
             if let Some(receiver_handle) = site.receiver_handle {
                 handles.insert(receiver_handle);
             }
@@ -1087,6 +1104,7 @@ pub fn recognize_source_hooks(
                     confidence: graph_confidence(*confidence),
                     handles: handles.into_iter().collect(),
                     evidence: evidence.into_iter().collect(),
+                    coverage: coverage_ids.clone(),
                 });
             }
             match outcome.rule_id() {
@@ -1204,7 +1222,7 @@ pub fn recognize_source_hooks(
                     confidence: relation.confidence,
                     source_handle_ids: relation.handles.clone(),
                     evidence_ids: relation.evidence.clone(),
-                    coverage_ids: Vec::new(),
+                    coverage_ids: relation.coverage.clone(),
                 },
             )
             .map_err(graph_error)?,
@@ -1558,11 +1576,11 @@ fn w5_hook_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRec
         schema_version: crate::RECOGNIZER_PACK_SCHEMA_VERSION,
         pack: RecognizerPack {
             pack_id: "wow-core-lua-hooks".into(),
-            version: "3".into(),
+            version: "4".into(),
             trust_class: RecognizerPackTrustClass::Core,
             fact_schema_profile_id: W5_FACT_PROFILE.into(),
             graph_registry_bundle_id: registry_bundle_id.into(),
-            evaluation_profile_id: "wow-recognizers-w11-hooks-3".into(),
+            evaluation_profile_id: "wow-recognizers-w11-hooks-4".into(),
             rollout: RecognizerPackRollout::Shadow,
             budgets: RecognizerPackBudgets {
                 max_rules: 8,
