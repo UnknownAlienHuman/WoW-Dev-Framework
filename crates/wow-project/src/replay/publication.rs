@@ -85,6 +85,8 @@ impl ProjectPublicationBundle {
 /// This is distinct from serialized storage records and public result DTOs.
 pub struct AcquiredProjectPair {
     project: ProjectView,
+    publisher: ProjectPublisher,
+    supports_physical_update: bool,
     graph: GraphPartitionSnapshot,
     publication_set_id: String,
 }
@@ -97,6 +99,18 @@ impl AcquiredProjectPair {
     }
     pub fn publication_set_id(&self) -> &str {
         &self.publication_set_id
+    }
+    /// Consume the validated owner; legacy and loader profiles cannot be updated
+    /// through the physical-input protocol.
+    pub fn into_update_publisher(self) -> ProjectResult<ProjectPublisher> {
+        if !self.supports_physical_update {
+            return Err(crate::ProjectError::new(
+                crate::ProjectErrorCode::DeferredCapability,
+                ProjectPhase::Update,
+                "retained archive has no physical update capability",
+            ));
+        }
+        Ok(self.publisher)
     }
     pub fn read(read: &ReadSnapshot, stop: &AtomicBool) -> ProjectResult<Self> {
         crate::analyzer::checkpoint(stop)?;
@@ -125,7 +139,8 @@ impl AcquiredProjectPair {
             return Err(invalid());
         }
         let graph = GraphPartitionSnapshot::read_stored(read, stop).map_err(graph_error)?;
-        let project = replay.hydrate(stop)?;
+        let publisher = replay.hydrate_owner(stop)?;
+        let project = publisher.open_current()?;
         validate_pair(&project, &graph, stop)?;
         let expected = plan(&replay, &project, &graph, stop)?;
         if expected.bindings != read.manifest().bindings
@@ -152,6 +167,8 @@ impl AcquiredProjectPair {
         }
         Ok(Self {
             project,
+            publisher,
+            supports_physical_update: replay.supports_physical_update(),
             graph,
             publication_set_id: header.publication_set_id,
         })

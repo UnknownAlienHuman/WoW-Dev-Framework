@@ -50,13 +50,21 @@ pub(super) fn publish(
         stop,
     )
     .map_err(|e| {
-        error(match e.code() {
+        let code = match e.code() {
             wow_recognizers::RecognizerErrorCode::Cancelled => ServiceErrorCode::Cancelled,
             wow_recognizers::RecognizerErrorCode::BudgetExceeded => {
                 ServiceErrorCode::BudgetExceeded
             }
             _ => ServiceErrorCode::InternalContractViolation,
-        })
+        };
+        ServiceError::new(
+            code,
+            format!(
+                "source call recognizer rejected ({:?}): {}",
+                e.code(),
+                e.message()
+            ),
+        )
     })?;
     checkpoint(stop)?;
     let candidate = source

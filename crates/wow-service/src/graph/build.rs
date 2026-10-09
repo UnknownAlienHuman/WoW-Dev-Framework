@@ -118,6 +118,18 @@ impl GraphBuildRequest {
             projection: SOURCE_GRAPH_PROFILE,
         })
     }
+
+    pub(crate) fn acquire_project(
+        &self,
+        backend: &LocalProjectBackend,
+        stop: &AtomicBool,
+    ) -> ServiceResult<wow_project::ProjectView> {
+        checkpoint(stop)?;
+        if backend.configuration().project_id() != self.project_id {
+            return Err(error(ServiceErrorCode::IdentityMismatch));
+        }
+        backend.acquire_project(&self.selector, stop)
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -543,7 +555,20 @@ pub(crate) fn live_publication(
 )> {
     checkpoint(stop)?;
     let backend = LocalProjectBackend::for_graph(input)?;
-    let built = compose_backend(&backend, request, stop)?;
+    live_publication_from_backend(&backend, request, stop)
+}
+
+/// Reuse the same complete producer chain over an already validated native owner.
+pub(crate) fn live_publication_from_backend(
+    backend: &LocalProjectBackend,
+    request: &GraphBuildRequest,
+    stop: &AtomicBool,
+) -> ServiceResult<(
+    wow_project::replay::publication::ProjectPublicationBundle,
+    String,
+)> {
+    checkpoint(stop)?;
+    let built = compose_backend(backend, request, stop)?;
     let bundle = backend.capture_project_bundle(&built.snapshot, stop)?;
     Ok((bundle, built.snapshot.snapshot().universe().as_str().into()))
 }
@@ -554,10 +579,7 @@ fn compose_backend(
     stop: &AtomicBool,
 ) -> ServiceResult<BuiltGraph> {
     checkpoint(stop)?;
-    if backend.configuration().project_id() != request.project_id {
-        return Err(error(ServiceErrorCode::IdentityMismatch));
-    }
-    let project = backend.acquire_project(&request.selector, stop)?;
+    let project = request.acquire_project(backend, stop)?;
     let proposals = build_source_graph_proposals(&project, stop).map_err(|e| {
         ServiceError::new(
             match e.code() {

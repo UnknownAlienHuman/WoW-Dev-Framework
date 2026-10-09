@@ -291,6 +291,11 @@ impl ProjectReplay {
     /// Executes the approved existing owner path over exact archived Main and
     /// Library bytes, then compares both original semantic identities.
     pub fn hydrate(&self, stop: &AtomicBool) -> ProjectResult<ProjectView> {
+        self.hydrate_owner(stop)?.open_current()
+    }
+
+    /// Restore and validate the original native owner once for leased updates.
+    pub(crate) fn hydrate_owner(&self, stop: &AtomicBool) -> ProjectResult<ProjectPublisher> {
         self.validate_budget(stop)?;
         let load_plan = self
             .load
@@ -369,7 +374,14 @@ impl ProjectReplay {
             return Err(invalid());
         }
         crate::analyzer::checkpoint(stop)?;
-        Ok(snapshot.open_view())
+        Ok(publisher)
+    }
+
+    /// Whether this archive carries the modern Library-bound physical profile
+    /// whose retained owner may accept a durable update. Legacy v1/v2/v3 and
+    /// standalone or package corpora remain read-only compatibility records.
+    pub(crate) fn supports_physical_update(&self) -> bool {
+        self.generation_schema_version == Some(2) && self.load.is_none() && self.packages.is_none()
     }
     fn storage_schema(&self) -> &'static str {
         if self.generation_schema_version == Some(2) {

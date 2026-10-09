@@ -15,6 +15,7 @@ wow project publish --config project.json --project <ProjectId> --store-root <ne
 wow project read --store-root <directory> --store-generation current
 wow project read --store-root <directory> --store-generation <StoreGenerationId>
 wow project reconcile --store-root <directory> --operation-id <original-id>
+wow project update --config final-project.json --project <ProjectId> --store-root <directory> --operation-id <id> --expected-current <record-id> --library keep --allow-partial
 ```
 
 `publish` accepts the existing explicit materialized-input, physical-file,
@@ -29,6 +30,27 @@ only with the supplied expected-current CAS. Later publications omit
 The store contains source text and belongs in an explicitly owned private
 directory. Source files are neither executed nor changed. One owning process
 uses a store at a time; another owner receives a typed busy result.
+
+`update` requires an existing modern physical-Lua publication and an explicit
+final input configuration. The service derives Add/Update/Remove against the
+exact expected publication record, retains its actual native owner under a lease,
+and rebuilds the complete graph producer chain before inactive validation and
+current CAS. Standalone TOC/XML, package and legacy archives remain unavailable
+for this update route. Their read/publication routes remain supported.
+
+`--library keep|replace|clear` is required. Keep requires the supplied final
+Library inventory to match the retained owner; Replace uses the supplied Library
+set. Clear and empty replacement reject through the current mandatory-Library
+policy. They cannot silently become Keep. There is no update initialization.
+
+A NoChange result validates project/generation selection, keeps the original
+current record and consumes no operation ID. It exits 2 for Partial coverage.
+Changed requests retain the existing operation fingerprint: the same ID/base/
+target returns its original receipt even after another activation, while a
+different target conflicts. Reconstructing that exact request may perform native
+analysis and graph composition again; durable publication effects are not repeated.
+Embedders can call `LiveProjectStore::update` on the existing owner while older
+leased readers continue to observe their original immutable pairs.
 
 `read` resolves Current or Exact once, holds the original transaction/generation
 lease through actual native replay and owner validation, and projects exact

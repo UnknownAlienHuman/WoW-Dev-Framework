@@ -669,3 +669,26 @@ current or epoch mutation. Policy, fmt, check, strict Clippy, tests (852 passed,
 1 ignored, 103 targets), rustdoc and build passed. Incremental analyzer batches,
 reuse, durable updates/removal closure, retention/recovery and full W14/E2 or
 Gethe/Ketho/runtime acceptance remain open.
+
+## W14 durable full-graph physical update (2026-10-09)
+
+The service now reads the exact retained expected publication, retains its native
+publisher under the original lease, derives explicit final file operations and
+Library intent, and composes every graph producer before validated current CAS.
+The public `wow project update` command is a single service transport. NoChange
+validates project/generation selection and has no publication effects or consumed
+operation ID. A changed request's original canonical fingerprint controls retries,
+including after a later activation; contradictory targets conflict.
+
+Independent final-state full-graph equality covers Add/Update/Remove and exact
+old-reader/Exact/historical identities. Keep/Replace/Clear remain distinct; empty
+Library rejection preserves current. The Main-call path fixes the observation-ID
+versus source-EvidenceId mismatch through source-function-calls v2 and exact
+retained typed supports, without promoting confidence or coverage.
+
+Workspace policy, fmt, check, strict Clippy, tests (860 passed, 1 ignored,
+104 targets), rustdoc and build passed. One additional focused service Library
+intent test passed afterward; CLI guard/help smoke also passed. Full W14/E2,
+loader/package durable updates, dependency-specific fact reuse, retention/recovery
+and source/runtime acceptance remain open. Current Gethe materialization still
+follows the product implementation/build stage.

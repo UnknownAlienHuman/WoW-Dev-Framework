@@ -5,8 +5,8 @@ mod operations;
 mod tests;
 use crate::{ServiceError, ServiceErrorCode, ServiceResult};
 pub use operations::{
-    LiveProjectPublishRequest, LiveProjectResult, publish_local_project, read_live_project,
-    reconcile_live_project,
+    LiveProjectLibraryMode, LiveProjectPublishRequest, LiveProjectResult, LiveProjectUpdateRequest,
+    publish_local_project, read_live_project, reconcile_live_project, update_local_project,
 };
 use std::{path::Path, sync::atomic::AtomicBool};
 use wow_graph::GraphPartitionSnapshot;
@@ -43,6 +43,10 @@ impl LiveProjectRead {
     }
     pub fn current_at_acquisition(&self) -> Option<&CurrentPublication> {
         self.read.current_at_acquisition()
+    }
+    fn into_update_publisher(self) -> ServiceResult<(ProjectPublisher, ReadSnapshot)> {
+        let publisher = self.pair.into_update_publisher().map_err(project_error)?;
+        Ok((publisher, self.read))
     }
 }
 impl LiveProjectStore {

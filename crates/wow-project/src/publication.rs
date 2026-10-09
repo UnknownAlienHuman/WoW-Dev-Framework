@@ -127,6 +127,79 @@ impl ProjectPublisher {
         self.apply_update_cancellable(request, &AtomicBool::new(false))
     }
 
+    /// Derive an explicit final-input delta against this exact published base.
+    /// No paths or bytes are discovered. Existing file declarations cannot be
+    /// replaced incidentally by a text update.
+    pub fn derive_update_request(
+        &self,
+        target: &ProjectInputBundle,
+        libraries: ProjectLibraryOperation,
+    ) -> ProjectResult<ProjectUpdateRequest> {
+        let current = self.current.as_ref().ok_or_else(|| {
+            ProjectError::new(
+                ProjectErrorCode::NoPublishedSnapshot,
+                ProjectPhase::Update,
+                "final-input update requires a published base",
+            )
+        })?;
+        current.validate()?;
+        let old = self
+            .current_inputs
+            .iter()
+            .map(|file| (file.relative_path().as_str(), file))
+            .collect::<std::collections::BTreeMap<_, _>>();
+        let new = target
+            .inventory()
+            .files()
+            .iter()
+            .map(|file| (file.relative_path().as_str(), file))
+            .collect::<std::collections::BTreeMap<_, _>>();
+        let paths = old
+            .keys()
+            .chain(new.keys())
+            .copied()
+            .collect::<std::collections::BTreeSet<_>>();
+        let mut operations = Vec::new();
+        for path in paths {
+            match (old.get(path), new.get(path)) {
+                (None, Some(file)) => {
+                    operations.push(crate::ProjectFileOperation::add((*file).clone()))
+                }
+                (Some(file), None) => operations.push(crate::ProjectFileOperation::remove(
+                    file.file_id().clone(),
+                    file.content_digest(),
+                )),
+                (Some(previous), Some(next)) => {
+                    if previous.role() != next.role()
+                        || previous.language_kind() != next.language_kind()
+                        || previous.source_fixture_ref() != next.source_fixture_ref()
+                    {
+                        return Err(ProjectError::new(
+                            ProjectErrorCode::UpdateRequestInvalid,
+                            ProjectPhase::Update,
+                            "text update changes an existing file declaration",
+                        )
+                        .with_file_id(previous.file_id().as_str()));
+                    }
+                    if previous.content_digest() != next.content_digest() {
+                        operations.push(crate::ProjectFileOperation::update(
+                            previous.file_id().clone(),
+                            previous.content_digest(),
+                            next.retained_text(),
+                        ));
+                    }
+                }
+                (None, None) => {}
+            }
+        }
+        Ok(
+            ProjectUpdateRequest::new(target.configuration().clone(), operations)
+                .expected_generation(current.project_generation())
+                .expected_snapshot_digest(current.canonical_snapshot_digest())
+                .with_library_operation(libraries),
+        )
+    }
+
     /// Builds a private candidate using the caller's cancellation flag. A failed
     /// or cancelled update retains the exact previous immutable publication.
     pub fn apply_update_cancellable(

@@ -22,7 +22,7 @@ use crate::{
 };
 
 pub const SOURCE_CALL_PARTITION: &str = "wow-recognizers.lua-direct-calls";
-pub const SOURCE_CALL_PROFILE: &str = "wow-recognizers/source-function-calls/1";
+pub const SOURCE_CALL_PROFILE: &str = "wow-recognizers/source-function-calls/2";
 const MAX_FUNCTIONS: usize = 8192;
 const MAX_CALLS: usize = 8192;
 
@@ -148,7 +148,10 @@ pub fn recognize_source_calls(
             || proposal.semantic_key() != &expected
             || proposal.confidence() != GraphConfidence::Derived
         {
-            return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
+            return Err(RecognizerError::new(
+                RecognizerErrorCode::AdapterFactMismatch,
+                "source callable proposal differs from its analyzer fact",
+            ));
         }
         let ([handle], [evidence]) = (proposal.source_handle_ids(), proposal.evidence_ids()) else {
             return Err(failure(RecognizerErrorCode::AdapterBindingInvalid));
@@ -206,10 +209,10 @@ pub fn recognize_source_calls(
                 if caller.node == target.node {
                     Some(SourceCallOutcome::SelfRecursionUnsupported)
                 } else {
-                    let evidence_ids = BTreeSet::from([evidence, caller.evidence, target.evidence])
-                        .into_iter()
-                        .map(|id| id.to_string().into_boxed_str())
-                        .collect();
+                    let source_evidence =
+                        BTreeSet::from([evidence, caller.evidence, target.evidence])
+                            .into_iter()
+                            .collect::<Vec<_>>();
                     let observation = StructuredObservation::new(
                         StructuredObservationInput {
                             source_snapshot_id: graph.snapshot_id().clone(),
@@ -218,7 +221,10 @@ pub fn recognize_source_calls(
                             to: target.node.clone(),
                             origin: ObservationOrigin::AnalyzerFact,
                             confidence: GraphConfidence::Derived,
-                            evidence_ids,
+                            evidence_ids: source_evidence
+                                .iter()
+                                .map(|id| id.to_string().into_boxed_str())
+                                .collect(),
                         },
                         limits,
                     )?;
@@ -228,7 +234,7 @@ pub fn recognize_source_calls(
                     if pending
                         .insert(
                             observation.observation_id().to_string(),
-                            (call.fact_id(), handles),
+                            (call.fact_id(), handles, source_evidence),
                         )
                         .is_some()
                     {
@@ -278,20 +284,29 @@ pub fn recognize_source_calls(
         if assertion.relation() != GraphRelationKind::Calls
             || assertion.confidence() != GraphConfidence::Derived
         {
-            return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
+            return Err(RecognizerError::new(
+                RecognizerErrorCode::AdapterFactMismatch,
+                "source call assertion has incompatible relation or confidence",
+            ));
         }
-        let (call_id, handles) = pending
+        let (call_id, handles, evidence_ids) = pending
             .remove(assertion.observation_id().as_str())
             .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingUnknown))?;
         let proposal_id = assertion.assertion_id().to_string();
-        let evidence_ids = assertion
-            .evidence_ids()
+        // The generic assertion also names its structured observation. That
+        // receipt is retained in RecognitionReport, not a source EvidenceRecord.
+        // Check the exact engine handoff before forwarding the original typed
+        // source supports to the graph owner.
+        let mut expected_evidence = evidence_ids
             .iter()
-            .map(|id| {
-                id.parse::<EvidenceId>()
-                    .map_err(|_| failure(RecognizerErrorCode::AdapterFactMismatch))
-            })
-            .collect::<RecognizerResult<Vec<_>>>()?;
+            .map(|id| id.to_string().into_boxed_str())
+            .collect::<Vec<_>>();
+        expected_evidence.push(assertion.observation_id().as_str().into());
+        expected_evidence.sort();
+        expected_evidence.dedup();
+        if assertion.evidence_ids() != expected_evidence {
+            return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
+        }
         relations.push(
             GraphRelationProposal::new(
                 proposal_id.as_str(),
@@ -425,7 +440,10 @@ fn validate_support(
         || !evidence.derivation_input_ids().is_empty()
         || !evidence.coverage_refs().is_empty()
     {
-        return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
+        return Err(RecognizerError::new(
+            RecognizerErrorCode::AdapterFactMismatch,
+            "source callable support differs from its exact source evidence",
+        ));
     }
     Ok(())
 }

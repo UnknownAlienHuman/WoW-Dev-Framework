@@ -25,6 +25,12 @@ pub struct LocalProjectInput {
         Option<std::sync::Arc<super::native_artifact::NativeArtifactEvidence>>,
 }
 
+impl LocalProjectInput {
+    pub(crate) fn project_bundle(&self) -> &ProjectInputBundle {
+        &self.bundle
+    }
+}
+
 pub(super) enum LocalProjectLoad {
     Explicit,
     SelectedToc(wow_project::load::ProjectLoadPlan),

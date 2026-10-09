@@ -10,6 +10,10 @@ use std::{rc::Rc, sync::atomic::AtomicBool};
 pub enum ReadSelector {
     Current,
     Exact(StoreGenerationId),
+    /// One exact retained activation-history record. This resolves the original
+    /// expected base for an idempotent retry after current advanced; it is
+    /// neither the latest current nor a generation lookup by other means.
+    Publication(CurrentRecordId),
 }
 
 /// A real SQLite read transaction plus process-local generation lease. The
@@ -33,15 +37,22 @@ impl ReadSnapshot {
         }
         let connection = db.read_connection()?;
         let current = read_current(&connection, &db.epoch)?;
-        let id = match selector {
-            ReadSelector::Current => {
-                &current
-                    .as_ref()
-                    .ok_or_else(|| failure(StoreErrorCode::GenerationMissing))?
-                    .generation_id
+        // The selected base is resolved on this same read connection, inside the
+        // same transaction as every later member check. `current` is only the
+        // observed current and never becomes the selected base for a Publication.
+        let selected = match selector {
+            ReadSelector::Current => current
+                .as_ref()
+                .ok_or_else(|| failure(StoreErrorCode::GenerationMissing))?
+                .generation_id
+                .clone(),
+            ReadSelector::Exact(id) => id.clone(),
+            ReadSelector::Publication(record) => {
+                checkpoint(stop)?;
+                read_history(&connection, record, &db.epoch)?.generation_id
             }
-            ReadSelector::Exact(id) => id,
         };
+        let id = &selected;
         let manifest = read_manifest(&connection, id, &db.epoch)?;
         let mut statement = connection.prepare("SELECT CASE WHEN length(logical_key)<=256 THEN logical_key END,CASE WHEN length(version)<=128 THEN version END FROM membership WHERE generation_id=?1 ORDER BY logical_key LIMIT 257")
             .map_err(StoreError::database)?;

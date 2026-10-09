@@ -134,3 +134,17 @@ frozen catalogs and reject v4 writes without changing current or epoch identity.
 Initialize a new private store for new publications; no epoch migration or catalog
 widening is provided. Frozen native compatibility fixtures were captured on
 `144761f` before the generation change and are never rewritten by tests.
+
+## Retained owner updates
+
+Acquisition retains the actual validated `ProjectPublisher` from native hydration
+alongside the immutable project/graph pair. Consuming this owner for update does
+not analyze the same base twice. Only physical archives with generation recipe
+v2 support this handoff; legacy and loader/package archives remain read-only for
+the physical update route. Their exact native acquisition remains unchanged.
+
+The service holds the original read lease through update and validated current
+CAS. It resolves the requested publication record inside that read transaction,
+independently of `current_at_acquisition`, so an idempotent retry after later
+activation still uses its original base. No mutable owner or serialized success
+flag replaces the project/graph validation.

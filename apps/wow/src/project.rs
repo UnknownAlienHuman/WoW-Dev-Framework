@@ -10,17 +10,29 @@ use wow_service::{
     ServiceErrorCode,
     graph::GraphBuildRequest,
     live_project::{
-        LiveProjectPublishRequest, publish_local_project, read_live_project, reconcile_live_project,
+        LiveProjectLibraryMode, LiveProjectPublishRequest, LiveProjectUpdateRequest,
+        publish_local_project, read_live_project, reconcile_live_project, update_local_project,
     },
 };
 
-const HELP: &str = "wow project publish --config <project.json> --project <ProjectId> [--generation current|<ProjectGenerationId>] --store-root <private-directory> --operation-id <id> --expected-current absent|<record-id> --allow-partial [--initialize] [--format json|text]\nwow project read --store-root <directory> --store-generation current|<generation-id> [--format json|text]\nwow project reconcile --store-root <directory> --operation-id <id> [--format json|text]\n\nPublish retains exact physical Lua Main/Library inputs and the same native graph producer chain, validates fresh replay before current CAS, and never changes source files. Read restores one actual project/graph pair under a held lease. TOC/XML/package replay is unavailable. Reconcile observes the original operation without repeating effects. Partial coverage exits 2. See apps/wow/LIVE_PROJECT.md.\n";
+const HELP: &str = concat!(
+    "wow project publish --config <project.json> --project <ProjectId> [--generation current|<ProjectGenerationId>] --store-root <private-directory> --operation-id <id> --expected-current absent|<record-id> --allow-partial [--initialize] [--format json|text]\n",
+    "wow project update --config <final-project.json> --project <ProjectId> [--generation current|<ProjectGenerationId>] --store-root <directory> --operation-id <id> --expected-current <record-id> --library keep|replace|clear --allow-partial [--format json|text]\n",
+    "wow project read --store-root <directory> --store-generation current|<generation-id> [--format json|text]\n",
+    "wow project reconcile --store-root <directory> --operation-id <id> [--format json|text]\n\n",
+    "Publish retains exact Main/Library inputs and the full native graph chain. Update applies explicit final physical Lua inputs against the exact retained base. Read acquires one leased project/graph pair; TOC/XML/package replay is supported for reads/publication. Reconcile observes the original operation. Partial coverage exits 2. See apps/wow/LIVE_PROJECT.md.\n",
+);
 
 enum Command {
     Publish {
         config: PathBuf,
         graph: GraphBuildRequest,
         request: LiveProjectPublishRequest,
+    },
+    Update {
+        config: PathBuf,
+        graph: GraphBuildRequest,
+        request: LiveProjectUpdateRequest,
     },
     Read {
         generation: String,
@@ -38,9 +50,9 @@ struct Arguments {
 pub fn run(values: Vec<OsString>) -> u8 {
     if (values.len() == 2
         || (values.len() == 3
-            && values
-                .get(1)
-                .is_some_and(|v| v == "publish" || v == "read" || v == "reconcile")))
+            && values.get(1).is_some_and(|v| {
+                v == "publish" || v == "update" || v == "read" || v == "reconcile"
+            })))
         && values.last().is_some_and(|v| v == "--help" || v == "-h")
     {
         return if std::io::stdout().lock().write_all(HELP.as_bytes()).is_ok() {
@@ -62,6 +74,11 @@ pub fn run(values: Vec<OsString>) -> u8 {
             graph,
             request,
         } => publish_local_project(&config, &graph, &args.root, &request, &stop),
+        Command::Update {
+            config,
+            graph,
+            request,
+        } => update_local_project(&config, &graph, &args.root, &request, &stop),
         Command::Read { generation } => read_live_project(&args.root, &generation, &stop),
         Command::Reconcile { operation } => reconcile_live_project(&args.root, &operation, &stop),
     };
@@ -111,7 +128,7 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
     }
     let action = values.next().ok_or("missing project operation")?;
     let action = action.to_str().ok_or("invalid project operation")?;
-    if !matches!(action, "publish" | "read" | "reconcile") {
+    if !matches!(action, "publish" | "update" | "read" | "reconcile") {
         return Err("unknown project operation");
     }
     let mut options = BTreeMap::new();
@@ -123,13 +140,14 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
                 initialize = true;
                 continue;
             }
-            "--allow-partial" if action == "publish" && !allow_partial => {
+            "--allow-partial" if matches!(action, "publish" | "update") && !allow_partial => {
                 allow_partial = true;
                 continue;
             }
             "--store-root" | "--format" => {}
             "--config" | "--project" | "--generation" | "--expected-current"
-                if action == "publish" => {}
+                if matches!(action, "publish" | "update") => {}
+            "--library" if action == "update" => {}
             "--operation-id" if action != "read" => {}
             "--store-generation" if action == "read" => {}
             _ => return Err("unknown or duplicate project option"),
@@ -172,6 +190,36 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
             )
             .map_err(|_| "publish requires valid exact guards and --allow-partial")?;
             Command::Publish {
+                config,
+                graph,
+                request,
+            }
+        }
+        "update" => {
+            let config = PathBuf::from(
+                options
+                    .remove("--config")
+                    .ok_or("update requires --config")?,
+            );
+            let graph = GraphBuildRequest::new(
+                required_text(&mut options, "--project")?,
+                text(&mut options, "--generation")?.unwrap_or_else(|| "current".into()),
+            )
+            .map_err(|_| "invalid project or generation")?;
+            let libraries = match required_text(&mut options, "--library")?.as_str() {
+                "keep" => LiveProjectLibraryMode::Keep,
+                "replace" => LiveProjectLibraryMode::Replace,
+                "clear" => LiveProjectLibraryMode::Clear,
+                _ => return Err("update requires --library keep|replace|clear"),
+            };
+            let request = LiveProjectUpdateRequest::new(
+                &required_text(&mut options, "--operation-id")?,
+                &required_text(&mut options, "--expected-current")?,
+                libraries,
+                allow_partial,
+            )
+            .map_err(|_| "update requires valid exact guards and --allow-partial")?;
+            Command::Update {
                 config,
                 graph,
                 request,

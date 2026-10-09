@@ -150,3 +150,10 @@ the existing ScriptAssignment matcher. It preserves Possible method/inherited
 associations without selecting effective dispatch. It does not depend on
 `wow-project`, parse XML, resolve Lua names, or execute source. Full source site
 receipts remain with the project; service composes the independent producer.
+
+The source-function-calls v2 adapter retains typed source `EvidenceId` supports
+for each Main call relation. The generic engine also names its structured
+observation in an assertion; the adapter checks that complete exact handoff and
+keeps the observation in the recognition receipt, rather than parsing it as a
+source evidence record. The graph proposal retains call/caller/target source
+supports and the engine's confidence. No runtime or negative authority follows.

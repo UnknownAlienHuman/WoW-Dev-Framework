@@ -12,12 +12,14 @@ in `main`, with bounded owner responsibilities and verified remote publication.
 
 ## Current functional checkpoint
 
-The active W14 slice now applies physical Main deltas through retained native
-syntax/semantic engines. It reuses unchanged parsed trees and conservatively
-reindexes all semantics before extracting target-bound reports. Exact Library
-and configuration replacement, standalone/package replay and virtual inputs
-retain cold paths. Durable full-graph updates/removal closure remain next,
-followed by W15 retention/GC and W16 recovery; full W14/E2 acceptance is open.
+W14 now publishes explicit final physical Main deltas through the retained native
+owner and the complete graph producer chain. It reuses unchanged parsed trees
+and conservatively reindexes semantics before extracting target-bound reports.
+The exact retained publication record remains the base for idempotent retries;
+inactive validation and current CAS preserve older leased readers. Exact Library
+and configuration replacement retain cold analysis paths. Standalone/package
+durable updates and dependency-specific fact reuse remain open. W15 retention/GC
+and W16 recovery are next; full W14/E2 acceptance remains open.
 
 W11 has all 26 declared core rule IDs in its functional service publication path.
 The five TOC, four XML and three state families publish alongside the earlier W11
@@ -331,3 +333,33 @@ proof also passed separately. Dependency-specific fact reuse, durable full-graph
 update/removal closure, retention/recovery and full W14/E2 acceptance remain
 open. Gethe materialization, Ketho parity and named-client runtime gates remain
 NotEvaluated until the product implementation/build stage is complete.
+
+## W14 durable full-graph physical update checkpoint
+
+Predecessor `a08ab335e2978f64e8a8c8032dd3524ebc9449a2` was published and read
+back with all 15 changed blobs. `wow project update` now transports explicit
+final physical inputs, exact expected-current/operation guards and mandatory
+Library Keep/Replace/Clear intent to the service. NoChange validates the graph
+project/generation selector and consumes no operation ID. Changed operations use
+the existing prepare/read-back/validate/activate pipeline and its canonical
+fingerprint. A replay after later activation returns the original receipt;
+substitution of its target conflicts, without silently rebasing the original base.
+
+Full graph equality against independently built final inputs verifies removal
+closure over all producer partitions, not only source files. Old leased readers
+and Exact/historical acquisition retain their original project/graph identities.
+Library Keep rejects contradictory final inputs; Replace binds the exact new set;
+Clear still rejects through the current mandatory-Library policy.
+
+The real Main-call scenario also repaired a previously unexercised producer type
+mismatch: generic recognizer assertions include an observation ID, which is not
+a source EvidenceId. Source-function-calls v2 verifies that exact assertion
+handoff, forwards original typed call/caller/target supports and retains the
+observation receipt. Coverage and confidence are not promoted.
+
+Fresh 2026-10-09 workspace policy, fmt, check, strict Clippy, tests (860 passed,
+1 ignored, 104 targets), rustdoc and build passed. The additional service Library
+intent test passed separately after the full suite. CLI smoke verified help,
+mandatory Library intent, duplicate/initialization rejection and no store creation
+for invalid input. Full W14/E2, loader/package updates, dependency-specific fact
+reuse, retention/recovery and Gethe/Ketho/runtime acceptance remain open.

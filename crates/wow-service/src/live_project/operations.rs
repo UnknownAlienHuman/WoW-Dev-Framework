@@ -46,6 +46,39 @@ impl LiveProjectPublishRequest {
     }
 }
 
+/// Explicit Library intent for a supplied final physical project input.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LiveProjectLibraryMode {
+    Keep,
+    Replace,
+    Clear,
+}
+
+pub struct LiveProjectUpdateRequest {
+    operation_id: OperationId,
+    expected: CurrentRecordId,
+    libraries: LiveProjectLibraryMode,
+}
+impl LiveProjectUpdateRequest {
+    pub fn new(
+        operation_id: &str,
+        expected_current: &str,
+        libraries: LiveProjectLibraryMode,
+        allow_partial: bool,
+    ) -> ServiceResult<Self> {
+        if !allow_partial {
+            return Err(fail(ServiceErrorCode::InvalidRequest));
+        }
+        Ok(Self {
+            operation_id: OperationId::new(operation_id)
+                .map_err(|_| fail(ServiceErrorCode::InvalidRequest))?,
+            expected: CurrentRecordId::parse(expected_current)
+                .map_err(|_| fail(ServiceErrorCode::InvalidRequest))?,
+            libraries,
+        })
+    }
+}
+
 #[derive(Debug, Serialize)]
 struct PairSummary {
     publication_set_id: String,
@@ -121,7 +154,7 @@ impl LiveProjectResult {
     }
     pub fn exit_code(&self) -> u8 {
         match self.status {
-            "activated" | "acquired" => 2,
+            "activated" | "acquired" | "no_change" => 2,
             "observed" => 0,
             _ => 3,
         }
@@ -176,6 +209,110 @@ pub(super) fn publish_input(
     // Report the committed operation, rather than a later current observation.
     result.operation = Some(operation);
     Ok(result)
+}
+
+/// Apply explicit final inputs against an exact retained base, rebuild every
+/// graph producer and activate only through the existing validated store CAS.
+pub fn update_local_project(
+    config: &Path,
+    graph_request: &GraphBuildRequest,
+    root: &Path,
+    request: &LiveProjectUpdateRequest,
+    stop: &AtomicBool,
+) -> ServiceResult<LiveProjectResult> {
+    super::publication_checkpoint(stop)?;
+    let input = LocalProjectInput::from_config_path(config, stop)?;
+    update_input(input, graph_request, root, request, stop)
+}
+
+pub(super) fn update_input(
+    input: LocalProjectInput,
+    graph_request: &GraphBuildRequest,
+    root: &Path,
+    request: &LiveProjectUpdateRequest,
+    stop: &AtomicBool,
+) -> ServiceResult<LiveProjectResult> {
+    super::publication_checkpoint(stop)?;
+    let mut store = LiveProjectStore::open(root)?;
+    store.update(input, graph_request, request, stop)
+}
+
+impl LiveProjectStore {
+    /// Advance this owned store while previously acquired readers retain their
+    /// original lease. Separate owners still obey the OS writer lock.
+    pub fn update(
+        &mut self,
+        input: LocalProjectInput,
+        graph_request: &GraphBuildRequest,
+        request: &LiveProjectUpdateRequest,
+        stop: &AtomicBool,
+    ) -> ServiceResult<LiveProjectResult> {
+        super::publication_checkpoint(stop)?;
+        let target = input.project_bundle();
+        if target.configuration().load_plan().is_some()
+            || target.configuration().package_load_plan().is_some()
+        {
+            return Err(fail(ServiceErrorCode::OperationNotImplementedForMilestone));
+        }
+        let store = self;
+        let retained_operation = store.reconcile(request.operation_id.as_str())?;
+        // A fresh operation cannot acquire an old base and silently rebase it.
+        if retained_operation.is_none()
+            && store.current()?.as_ref().map(|current| &current.record_id)
+                != Some(&request.expected)
+        {
+            return Err(fail(ServiceErrorCode::StoreCurrentConflict));
+        }
+        let read = store.read(&ReadSelector::Publication(request.expected.clone()), stop)?;
+        let base_summary = PairSummary::from_read(&read);
+        let (mut publisher, _base_lease) = read.into_update_publisher()?;
+        let libraries = match request.libraries {
+            LiveProjectLibraryMode::Keep => wow_project::ProjectLibraryOperation::Keep,
+            LiveProjectLibraryMode::Replace => {
+                wow_project::ProjectLibraryOperation::Replace(target.libraries().to_vec())
+            }
+            LiveProjectLibraryMode::Clear => wow_project::ProjectLibraryOperation::Clear,
+        };
+        let update = publisher
+            .derive_update_request(target, libraries)
+            .map_err(super::project_error)?;
+        let outcome = publisher
+            .apply_update_cancellable(update, stop)
+            .map_err(super::project_error)?;
+        let backend = crate::LocalProjectBackend::for_graph_with_publisher(input, publisher, stop)?;
+        super::publication_checkpoint(stop)?;
+        if !outcome.changed() {
+            graph_request.acquire_project(&backend, stop)?;
+            if retained_operation.is_some() {
+                return Err(fail(ServiceErrorCode::OperationConflict));
+            }
+            let current = store.current()?;
+            if current.as_ref().map(|value| &value.record_id) != Some(&request.expected) {
+                return Err(fail(ServiceErrorCode::StoreCurrentConflict));
+            }
+            let mut result = LiveProjectResult::new("no_change");
+            result.scope = "native-live-project-update-v1";
+            result.current = current;
+            result.pair = Some(base_summary);
+            return Ok(result);
+        }
+        let (bundle, owner) =
+            crate::graph::live_publication_from_backend(&backend, graph_request, stop)?;
+        if store.store.epoch().owner() != owner {
+            return Err(fail(ServiceErrorCode::IdentityMismatch));
+        }
+        super::publication_checkpoint(stop)?;
+        let operation = store.publish_bundle(
+            bundle,
+            request.operation_id.as_str(),
+            Some(request.expected.clone()),
+            stop,
+        )?;
+        let mut result = LiveProjectResult::new("activated");
+        result.scope = "native-live-project-update-v1";
+        result.operation = Some(operation);
+        Ok(result)
+    }
 }
 
 pub fn read_live_project(

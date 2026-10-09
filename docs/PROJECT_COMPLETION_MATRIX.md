@@ -289,3 +289,17 @@ tests (859 passed, 1 ignored, 104 targets), rustdoc and build passed on 2026-10-
 the strengthened declaration-removal regression also passed separately.
 Dependency-specific fact reuse, durable updates/removal closure and full W14/E2
 acceptance remain open.
+
+Durable W14 physical updates now retain the native owner from exact original
+publication acquisition and rebuild every graph producer before validated
+current CAS. Independent cold full-graph equality verifies Add/Update/Remove;
+older leased readers and Exact/historical pairs remain intact. NoChange validates
+the requested project/generation without consuming an operation ID. Retried
+operations keep their original base and receipt after later activation, while
+target substitution conflicts. The public CLI requires explicit Library intent.
+Source-function-calls v2 repairs the typed source-support/observation handoff.
+Workspace policy, fmt, check, strict Clippy, tests (860 passed, 1 ignored,
+104 targets), rustdoc and build passed on 2026-10-09; an additional focused Library
+intent test and CLI guards passed separately. Dependency-specific fact reuse,
+loader/package durable updates, retention/recovery and full W14/E2 acceptance
+remain open. Publication does not close the Gethe/Ketho or named-client gates.

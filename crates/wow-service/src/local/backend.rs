@@ -44,6 +44,69 @@ impl LocalProjectBackend {
         Self::configured(input, true)
     }
 
+    /// Retain an already published native publisher for this exact input. The
+    /// publisher's current snapshot must describe the same configuration,
+    /// inventory manifest, Library set, analysis profile and target generation as
+    /// the supplied input, so a durable full-graph update can reuse one native
+    /// session instead of opening a second one.
+    pub(crate) fn for_graph_with_publisher(
+        input: LocalProjectInput,
+        publisher: ProjectPublisher,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Self> {
+        crate::local::cancelled(stop)?;
+        let backend = Self::configured(input, true)?;
+        let snapshot = publisher
+            .open_current()
+            .map_err(|_| owner_error("retained publisher has no current project snapshot"))?;
+        let view = snapshot;
+        let configuration = view.configuration();
+        let analyzer = view.snapshot().analyzer_binding();
+        let candidate = view.snapshot().generation_candidate();
+        if view.project_generation().to_string() != backend.target_generation {
+            return Err(owner_error(
+                "retained publisher generation differs from the supplied input",
+            ));
+        }
+        if configuration.configuration_digest()
+            != backend.input.configuration().configuration_digest()
+        {
+            return Err(owner_error(
+                "retained publisher configuration differs from the supplied input",
+            ));
+        }
+        if candidate.final_file_manifest_digest() != backend.input.inventory().manifest_digest() {
+            return Err(owner_error(
+                "retained publisher inventory differs from the supplied input",
+            ));
+        }
+        let current_library_ids = analyzer.library_snapshot_ids().collect::<Vec<_>>();
+        let mut target_library_ids = backend
+            .input
+            .libraries()
+            .iter()
+            .map(|library| library.snapshot_id())
+            .collect::<Vec<_>>();
+        target_library_ids.sort_unstable();
+        if current_library_ids != target_library_ids {
+            return Err(owner_error(
+                "retained publisher Library set differs from the supplied input",
+            ));
+        }
+        if analyzer.function_call_report().is_none() {
+            return Err(owner_error(
+                "retained publisher has no function-call report for the graph backend",
+            ));
+        }
+        crate::local::cancelled(stop)?;
+        backend
+            .published
+            .lock()
+            .map_err(|_| owner_error("project publication lock poisoned"))?
+            .replace(PublishedLocalProject { view, publisher });
+        Ok(backend)
+    }
+
     fn configured(input: LocalProjectInput, function_calls: bool) -> ServiceResult<Self> {
         let project = input.bundle.configuration();
         let registry = RuleRegistry::for_profile(project.selected_profile().profile_id().as_str())

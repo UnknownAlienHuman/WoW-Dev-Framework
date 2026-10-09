@@ -42,9 +42,12 @@ native work. Native failure poisons its mutable session before any further use.
 Independent cold parity covers add/update/remove, same-session remove/readd,
 function-call and symbol-query reports, and removal of an exact declaration
 observed before the update. Safe green-node pointer comparisons verify retained
-trees; old replay fixtures retain their original IDs. Transitive graph removal,
-W13 durable update publication, dependency-specific fact reuse and full W14
-incremental acceptance remain open.
+trees; old replay fixtures retain their original IDs. The service now derives
+explicit final physical inputs against the exact retained publication, advances
+that native owner and rebuilds the entire graph producer chain before validated
+current CAS. Full-graph removal matches independent final-state publication.
+Dependency-specific fact reuse, loader/package durable updates and full W14
+incremental acceptance remain open. See `apps/wow/LIVE_PROJECT.md`.
 
 ## 1. Update request
 
