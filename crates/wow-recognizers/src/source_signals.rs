@@ -2335,9 +2335,9 @@ fn w3_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRecogniz
 //  version. Only universal graph roles are used.
 
 pub const W4_PARTITION: &str = "wow-recognizers.lua-cvar-callbacks";
-const W4_PROFILE: &str = "wow-recognizers/lua-cvar-callbacks/2";
+const W4_PROFILE: &str = "wow-recognizers/lua-cvar-callbacks/3";
 const W4_FACT_PARTITION: &str = "wow-recognizers.lua-cvar-callback-facts";
-const W4_FACT_PROFILE: &str = "wow-recognizers-lua-cvar-callback-facts-2";
+const W4_FACT_PROFILE: &str = "wow-recognizers-lua-cvar-callback-facts-3";
 const W4_RULE: &str = "core.signal.cvar_callback";
 const W4_RULE_VERSION: u32 = 1;
 const W4_REGISTERS_CVAR: &str = "CVarCallbackRegistry.RegisterCallback";
@@ -2402,7 +2402,14 @@ struct W4Site {
     colon_call: bool,
     caller: W4FunctionBinding,
     receiver: W3Binding,
-    callback: Option<W3Binding>,
+    callback: Option<W4CallbackBinding>,
+    handle: StableHandleId,
+    evidence: EvidenceId,
+}
+
+#[derive(Clone)]
+struct W4CallbackBinding {
+    proposal_id: String,
     handle: StableHandleId,
     evidence: EvidenceId,
 }
@@ -2457,17 +2464,23 @@ fn w4_cvar_key(
 fn w4_callback(
     call: &wow_emmy::function_calls::SourceCallFact,
     declarations: &BTreeMap<(String, SourceSpan), W3Binding>,
-) -> Option<W3Binding> {
+    declaration_proposals: &BTreeMap<(String, SourceSpan), &str>,
+    main_snapshot_id: &str,
+) -> Option<W4CallbackBinding> {
     let argument = call.arguments().get(1)?;
-    let key = argument.reference_key()?;
+    argument.reference_key()?;
     let target = argument.reference_target()?;
-    if target.role != "main" {
+    if target.role != "main" || target.workspace_id != main_snapshot_id {
         return None;
     }
-    let _ = key;
-    declarations
-        .get(&(target.path.clone(), target.span))
-        .cloned()
+    let declaration_key = (target.path.clone(), target.span);
+    let binding = declarations.get(&declaration_key)?;
+    let proposal_id = declaration_proposals.get(&declaration_key)?;
+    Some(W4CallbackBinding {
+        proposal_id: (*proposal_id).to_owned(),
+        handle: binding.handle,
+        evidence: binding.evidence,
+    })
 }
 
 fn w4_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRecognizerPack> {
@@ -2475,11 +2488,11 @@ fn w4_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRecogniz
         schema_version: crate::RECOGNIZER_PACK_SCHEMA_VERSION,
         pack: RecognizerPack {
             pack_id: "wow-core-lua-cvar-callbacks".into(),
-            version: "2".into(),
+            version: "3".into(),
             trust_class: RecognizerPackTrustClass::Core,
             fact_schema_profile_id: W4_FACT_PROFILE.into(),
             graph_registry_bundle_id: registry_bundle_id.into(),
-            evaluation_profile_id: "wow-recognizers-w11-cvar-callback-2".into(),
+            evaluation_profile_id: "wow-recognizers-w11-cvar-callback-3".into(),
             rollout: RecognizerPackRollout::Shadow,
             budgets: RecognizerPackBudgets {
                 max_rules: 4,
@@ -2565,7 +2578,7 @@ fn w4_signal_fact(
     site: &W4Site,
     limits: RecognizerFactLimits,
 ) -> RecognizerResult<RecognizerFact> {
-    let fields = BTreeMap::from([
+    let mut fields = BTreeMap::from([
         (
             "call_id".into(),
             RecognizerFactValue::Reference(site.call_id.clone().into()),
@@ -2580,10 +2593,28 @@ fn w4_signal_fact(
         ),
         ("colon_call".into(), RecognizerFactValue::Boolean(true)),
         (
+            "has_cvar_key".into(),
+            RecognizerFactValue::Boolean(!site.cvar_key.is_empty()),
+        ),
+        (
+            "exact_cvar_key".into(),
+            RecognizerFactValue::Boolean(site.exact_cvar_key),
+        ),
+        (
             "cvar_key".into(),
             RecognizerFactValue::String(site.cvar_key.clone().into()),
         ),
     ]);
+    let mut source_handle_ids = BTreeSet::from([site.handle, site.receiver.handle]);
+    let mut evidence_ids = BTreeSet::from([site.evidence, site.receiver.evidence]);
+    if let Some(callback) = site.callback.as_ref() {
+        fields.insert(
+            "callback".into(),
+            RecognizerFactValue::Reference(callback.proposal_id.clone().into()),
+        );
+        source_handle_ids.insert(callback.handle);
+        evidence_ids.insert(callback.evidence);
+    }
     let caller_function_id = input
         .report
         .calls()
@@ -2608,12 +2639,8 @@ fn w4_signal_fact(
                 GraphConfidence::Possible
             },
             fields,
-            source_handle_ids: BTreeSet::from([site.handle, site.receiver.handle])
-                .into_iter()
-                .collect(),
-            evidence_ids: BTreeSet::from([site.evidence, site.receiver.evidence])
-                .into_iter()
-                .collect(),
+            source_handle_ids: source_handle_ids.into_iter().collect(),
+            evidence_ids: evidence_ids.into_iter().collect(),
         },
         limits,
     )
@@ -2812,7 +2839,12 @@ pub fn recognize_source_cvar_callbacks(
             .get(&(target.path.clone(), target.span))
             .cloned()
             .ok_or_else(|| w4_failure(RecognizerErrorCode::AdapterBindingMissing))?;
-        let callback = w4_callback(call, &declarations);
+        let callback = w4_callback(
+            call,
+            &declarations,
+            &input.declaration_proposals,
+            input.report.main_snapshot_id(),
+        );
 
         let site = W4Site {
             call_id: call.fact_id().to_owned(),
@@ -3027,7 +3059,10 @@ pub fn recognize_source_cvar_callbacks(
             cvar_key: site.cvar_key.clone(),
             entity_proposal_id: entity_proposal_id.to_string(),
             registers_proposal_id: registers_proposal_id.clone(),
-            callback_proposal_id: None,
+            callback_proposal_id: site
+                .callback
+                .as_ref()
+                .map(|callback| callback.proposal_id.clone()),
         });
     }
 

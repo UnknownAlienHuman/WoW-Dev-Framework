@@ -82,7 +82,10 @@ owners.
 
 The frozen E2-B contract declares 26 active rule ids. Fourteen are implemented and
 published: the core.lua.* triples (create_frame, create_from_mixins,
-mixin_assignment) plus the eleven families above. The remaining twelve are
+mixin_assignment) plus the eleven families above. The CVar adapter now publishes the
+exact matcher predicates it consumes (`has_cvar_key` and `exact_cvar_key`) and retains
+an exact callback declaration in both fact support and the recognition receipt when
+one resolves; a dynamic callback does not fabricate an endpoint. The remaining twelve are
 core.toc.* (5), core.xml.* (4) and core.state.* (3). Their upstream fact types do
 not exist in Rust yet: TocPackageFact and XmlTemplateFact appear only in the
 normative documents, and the contract itself marks the
