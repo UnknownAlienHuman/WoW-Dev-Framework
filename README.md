@@ -4,7 +4,7 @@
 
 > **Planned architecture:** complete through E7-B.
 >
-> **Implementation frontier:** 14 active workspace members, including real analyzer, project, rules, service, storage, graph and recognizer slices. Full package acceptance remains incomplete. Next: close the E0 fixture prerequisites and I0-F/R0; do not recreate the existing owners.
+> **Implementation frontier:** 16 active workspace members, including real analyzer, project, rules, service, storage, graph and recognizer slices. Full package acceptance remains incomplete. Next: finish the remaining TOC/XML/state recognizer path, then its acceptance evidence and downstream owners. See the [current work map](docs/PROJECT_WORK_MAP.md).
 >
 > **First runnable gate:** E0-A through E0-F (`wow status` and `wow check`).
 >
@@ -41,6 +41,7 @@ Detailed state and implementation order:
 - [`docs/IMPLEMENTATION_HANDOFF.md`](docs/IMPLEMENTATION_HANDOFF.md)
 - [`docs/CONFORMANCE_COMMANDS.md`](docs/CONFORMANCE_COMMANDS.md)
 - [`docs/PROJECT_COMPLETION_MATRIX.md`](docs/PROJECT_COMPLETION_MATRIX.md)
+- [`docs/PROJECT_WORK_MAP.md`](docs/PROJECT_WORK_MAP.md)
 
 ## Planned public product
 

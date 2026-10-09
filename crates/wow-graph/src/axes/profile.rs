@@ -4,6 +4,10 @@ use serde::{Deserialize, Serialize};
 
 pub const GRAPH_AXIS_PROFILE_SCHEMA: &str = "wow-graph/axis-profile/e2-a/1";
 
+/// Explicit second Load recipe, selected only by registry content. It never
+/// changes any v1 profile, digest or stored assertion identity.
+pub const GRAPH_AXIS_PROFILE_SCHEMA_V2: &str = "wow-graph/axis-profile/e2-a/2";
+
 /// Repository-owned query meanings, not executable or source-defined predicates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -71,7 +75,7 @@ impl GraphAxisProfile {
     /// reject instead of arbitrarily choosing or conflating their meanings.
     pub fn bind(registry: &GraphRegistryBundle, axis: GraphAxis) -> GraphResult<Self> {
         registry.validate()?;
-        let (shape, families) = families(axis)?;
+        let (shape, families) = families(axis, registry)?;
         let mut relations = Vec::new();
         for (relation, direction) in families {
             let mut matches = registry
@@ -90,13 +94,21 @@ impl GraphAxisProfile {
                 forward_direction: direction,
             });
         }
+        // The recipe follows the registry alone. Binding and reconstruction
+        // therefore derive the same schema and families, and neither a request
+        // nor a deserialized profile can choose a different Load review.
         relations.sort_by_key(|s| s.relation);
         let cycle_policy: Box<str> = "preserve_edges_with_visited_nodes".into();
         let ordering: Box<str> = "multi_root_bfs_node_then_edge_id/1".into();
+        let schema = if axis == GraphAxis::Load && matches!(load_recipe(registry), LoadRecipe::V2) {
+            GRAPH_AXIS_PROFILE_SCHEMA_V2
+        } else {
+            GRAPH_AXIS_PROFILE_SCHEMA
+        };
         let digest = digest(
             "graph-axis-profile:sha256:",
             &(
-                GRAPH_AXIS_PROFILE_SCHEMA,
+                schema,
                 axis,
                 registry.registry_digest(),
                 shape,
@@ -106,7 +118,7 @@ impl GraphAxisProfile {
             ),
         )?;
         Ok(Self {
-            schema: GRAPH_AXIS_PROFILE_SCHEMA.into(),
+            schema: schema.into(),
             axis,
             registry_digest: registry.registry_digest().into(),
             shape,
@@ -155,9 +167,12 @@ impl GraphAxisProfile {
 /// Network axes retain stored directions and never acquire "parent" semantics.
 fn families(
     axis: GraphAxis,
+    registry: &GraphRegistryBundle,
 ) -> GraphResult<(GraphAxisShape, Vec<(GraphRelationKind, GraphDirection)>)> {
     use GraphDirection::{Incoming as Reverse, Outgoing as Forward};
     use GraphRelationKind::*;
+    // The Load family set is derived from the exact registry, so binding and
+    // validation always agree and no caller can select a recipe.
     let shape = match axis {
         GraphAxis::Ownership | GraphAxis::Inheritance => GraphAxisShape::MultiParent,
         _ => GraphAxisShape::DirectedNetwork,
@@ -170,7 +185,15 @@ fn families(
             return Err(error(GraphErrorCode::AxisUnsupported));
         }
         GraphAxis::Ownership => vec![(Owns, Forward)],
-        GraphAxis::Load => vec![(Loads, Forward), (DependsOn, Reverse)],
+        GraphAxis::Load => match load_recipe(registry) {
+            LoadRecipe::V1 => vec![(Loads, Forward), (DependsOn, Reverse)],
+            LoadRecipe::V2 => vec![
+                (Loads, Forward),
+                (DependsOn, Reverse),
+                (LoadsBefore, Forward),
+                (OptionalDependsOn, Reverse),
+            ],
+        },
         GraphAxis::Inheritance => vec![(Inherits, Reverse), (MixesIn, Reverse)],
         GraphAxis::Registration => vec![
             (RegistersNativeEvent, Forward),
@@ -190,4 +213,29 @@ fn families(
         GraphAxis::Call => vec![(Calls, Forward)],
     };
     Ok((shape, families))
+}
+
+/// Which Load relation families one reviewed profile covers. Derived from the
+/// exact registry, never from a request, a deserialized profile or a default.
+enum LoadRecipe {
+    /// The original family set. Its schema, families, directions, ordering and
+    /// digest inputs stay byte-identical to the pre-extension profile.
+    V1,
+    /// Selected only when the registry admits `LoadsBefore` or `OptionalDependsOn`.
+    /// It then requires all four Load kinds to be registered.
+    V2,
+}
+
+fn load_recipe(registry: &GraphRegistryBundle) -> LoadRecipe {
+    let admits_extended = registry.relation_kinds().iter().any(|definition| {
+        matches!(
+            definition.relation(),
+            GraphRelationKind::LoadsBefore | GraphRelationKind::OptionalDependsOn
+        )
+    });
+    if admits_extended {
+        LoadRecipe::V2
+    } else {
+        LoadRecipe::V1
+    }
 }

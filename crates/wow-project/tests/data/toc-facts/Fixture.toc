@@ -1,0 +1,10 @@
+## Interface: 120100
+## Dependencies [AllowLoadGameType retail]: RequiredAddon
+## OptionalDeps [AllowLoadGameType classic]: ExcludedAddon
+## Dependencies [AllowLoadGameType unknown]: UnresolvedAddon
+## LoadOnDemand [AllowLoadGameType retail]: 1
+## SavedVariables: FixtureDB, FixtureDB
+first.lua
+second.lua
+first.lua
+missing.lua [AllowLoadGameType unknown]

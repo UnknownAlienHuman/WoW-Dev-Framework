@@ -19,7 +19,7 @@ use crate::disk::{
 use crate::{ProjectInputFile, ProjectPhase, ProjectResult};
 
 /// Versioned multi-package static load closure. This is not runtime evidence.
-pub const PACKAGE_LOAD_PROFILE: &str = "wow-project/package-load-closure/1";
+pub const PACKAGE_LOAD_PROFILE: &str = "wow-project/package-load-closure/2";
 /// Collision-free analyzer Main namespace derived from one exact package closure.
 pub const PACKAGE_MAIN_NAMESPACE_PROFILE: &str = "wow-project/package-main-namespace/1";
 /// Public logical root used only inside the project/analyzer source universe.
@@ -817,18 +817,22 @@ fn valid_package_name(value: &str) -> bool {
         && value != ".."
 }
 
+/// Normalized selected-TOC metadata projection consumed by this owner.
 #[derive(Default)]
-struct MetadataProjection {
-    dependencies: Vec<TocDependencyDeclaration>,
-    load_on_demand: TocLoadOnDemandState,
-    conflicting_load_on_demand: bool,
+pub(crate) struct MetadataProjection {
+    pub(crate) dependencies: Vec<TocDependencyDeclaration>,
+    pub(crate) load_on_demand: TocLoadOnDemandState,
+    pub(crate) conflicting_load_on_demand: bool,
 }
 
-fn project_metadata(package: &str, plan: &ProjectLoadPlan) -> ProjectResult<MetadataProjection> {
+/// Project selected-TOC metadata from the normalized directives retained at
+/// parse time. This reads the single source parse instead of re-splitting raw
+/// spans, which would discard conditional filtering that already happened.
+pub(crate) fn project_metadata(
+    package: &str,
+    plan: &ProjectLoadPlan,
+) -> ProjectResult<MetadataProjection> {
     let document = plan.selected_toc();
-    let text = plan
-        .document_text(document)
-        .ok_or_else(|| invalid("selected TOC bytes are absent from the load receipt"))?;
     let mut projection = MetadataProjection::default();
     let mut load_values = Vec::new();
     for record in plan
@@ -836,25 +840,12 @@ fn project_metadata(package: &str, plan: &ProjectLoadPlan) -> ProjectResult<Meta
         .iter()
         .filter(|record| record.document == document && record.kind == LoadRecordKind::Metadata)
     {
-        let start = usize::try_from(record.byte_start).map_err(|_| budget())?;
-        let end = usize::try_from(record.byte_end).map_err(|_| budget())?;
-        let raw = text
-            .get(start..end)
-            .ok_or_else(|| invalid("TOC metadata span is outside retained source"))?;
-        let raw = if start == 0 {
-            raw.trim_start_matches('\u{feff}')
-        } else {
-            raw
-        };
-        let Some(metadata) = raw.trim().strip_prefix("##") else {
+        let Some(metadata) = record.metadata.as_ref() else {
             continue;
         };
-        let Some((key, value)) = metadata.trim().split_once(':') else {
-            continue;
-        };
-        let key = key.trim().to_ascii_lowercase();
-        let value = value.trim();
-        let dependency_kind = match key.as_str() {
+        let key = metadata.key.as_str();
+        let value = metadata.value.as_str();
+        let dependency_kind = match key {
             "dependencies" | "requireddeps" | "dependson" => Some(TocDependencyKind::Required),
             "optionaldeps" => Some(TocDependencyKind::Optional),
             _ => None,
@@ -869,7 +860,7 @@ fn project_metadata(package: &str, plan: &ProjectLoadPlan) -> ProjectResult<Meta
                     package: package.to_owned(),
                     dependency,
                     kind,
-                    source_key: key.clone(),
+                    source_key: key.to_owned(),
                     document: document.to_owned(),
                     byte_start: record.byte_start,
                     byte_end: record.byte_end,

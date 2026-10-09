@@ -4,12 +4,15 @@ mod packages;
 pub mod persistence;
 mod retained_evidence;
 mod source_read;
+mod toc_facts;
+mod toc_registry;
 pub use retained_evidence::RetainedProjectGraphEvidence;
 pub use source_read::{
     ProjectSourceExcerpt, ProjectSourceExcerptStatus, ProjectSourceFileRead,
     ProjectSourceFileStatus, ProjectSourceReadLimits, ProjectSourceReadReport,
     ProjectSourceReadTruncation, RetainedProjectSourceManifest,
 };
+pub use toc_facts::{PROJECT_TOC_FACT_PROFILE, ProjectTocFact, ProjectTocFactKind};
 mod state;
 pub use state::{
     ProjectGraphStateBinding, ProjectGraphStateDeclaration, ProjectGraphStateOutcome,
@@ -55,7 +58,7 @@ use crate::{
     ProjectError, ProjectErrorCode, ProjectKind, ProjectPhase, ProjectResult, ProjectView,
 };
 
-pub const SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/14";
+pub const SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/15";
 pub const SOURCE_GRAPH_PARTITION: &str = "wow-project.source-load";
 const MAX_FILES: usize = 4096;
 const MAX_LOADS: usize = 8192;
@@ -72,7 +75,8 @@ const MAX_NODES: usize = MAX_FILES
     + scripts::MAX_HANDLERS
     + state::MAX_ROOTS
     + state::MAX_PATHS
-    + MAX_RECOGNIZER_NODES;
+    + MAX_RECOGNIZER_NODES
+    + (packages::MAX_PACKAGE_NODES + 1) * 4;
 
 const MAX_EDGES: usize = MAX_LOADS
     + packages::MAX_PACKAGE_RELATIONS
@@ -89,6 +93,7 @@ const MAX_EDGES: usize = MAX_LOADS
     + state::MAX_PATHS
     + state::MAX_ACCESSES;
 const MAX_TEXT_BYTES: usize = 4 * 1024 * 1024;
+const MAX_QUERY_EDGES: usize = 100_000;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -113,6 +118,7 @@ pub struct ProjectGraphProvenance {
     package_files: Vec<ProjectGraphPackageFile>,
     package_dependencies: Vec<ProjectGraphPackageDependency>,
     package_loads: Vec<ProjectGraphPackageLoad>,
+    toc_facts: Vec<ProjectTocFact>,
     xml_declarations: Vec<ProjectGraphXmlDeclaration>,
     xml_inheritance: Vec<ProjectGraphXmlReference>,
     lua_declarations: Vec<ProjectGraphLuaDeclaration>,
@@ -147,6 +153,9 @@ pub struct ProjectGraphProvenance {
 }
 
 impl ProjectGraphProvenance {
+    pub fn toc_facts(&self) -> &[ProjectTocFact] {
+        &self.toc_facts
+    }
     #[must_use]
     pub fn packages(&self) -> &[ProjectGraphPackage] {
         &self.packages
@@ -471,7 +480,11 @@ fn registry() -> ProjectResult<GraphRegistryBundle> {
         "state_root",
         vec!["project".into()],
         vec!["document".into(), "name".into(), "scope".into()],
-        vec![GraphConfidence::Proven],
+        vec![
+            GraphConfidence::Proven,
+            GraphConfidence::Derived,
+            GraphConfidence::Possible,
+        ],
     )
     .map_err(|_| invalid())?;
     let state_path = GraphEntityKindDefinition::new(
@@ -613,28 +626,25 @@ fn registry() -> ProjectResult<GraphRegistryBundle> {
             .map_err(|_| invalid())?,
         );
     }
-    GraphRegistryBundle::build(
-        "wow-project.source-load",
-        "12",
-        vec![
-            file,
-            package,
-            declaration,
-            lua,
-            function,
-            frame,
-            mixin_instance,
-            handler,
-            state_root,
-            state_path,
-            native_event,
-            custom_signal,
-            cvar_key,
-            library,
-        ],
-        relations,
-    )
-    .map_err(|_| invalid())
+    let mut entities = vec![
+        file,
+        package,
+        declaration,
+        lua,
+        function,
+        frame,
+        mixin_instance,
+        handler,
+        state_root,
+        state_path,
+        native_event,
+        custom_signal,
+        cvar_key,
+        library,
+    ];
+    toc_registry::extend(&mut entities, &mut relations)?;
+    GraphRegistryBundle::build("wow-project.source-load", "13", entities, relations)
+        .map_err(|_| invalid())
 }
 
 fn support(
@@ -848,7 +858,7 @@ pub fn build_source_graph_proposals(
         MAX_EDGES as u32,
         32,
         64,
-        MAX_EDGES.min(100_000) as u32,
+        MAX_EDGES.min(MAX_QUERY_EDGES) as u32,
     )
     .map_err(|_| invalid())?;
     let mut provenance = ProjectGraphProvenance {
@@ -861,6 +871,7 @@ pub fn build_source_graph_proposals(
         package_files: Vec::new(),
         package_dependencies: Vec::new(),
         package_loads: Vec::new(),
+        toc_facts: Vec::new(),
         xml_declarations: Vec::new(),
         xml_inheritance: Vec::new(),
         lua_declarations: Vec::new(),
@@ -1009,6 +1020,13 @@ pub fn build_source_graph_proposals(
     let state = state::project(project, &ids, &mut provenance, &mut text_bytes, stop)?;
     entities.extend(state.entities);
     relations.extend(state.relations);
+    provenance.toc_facts = toc_facts::project(
+        project,
+        &source_by_path,
+        &mut provenance,
+        &mut text_bytes,
+        stop,
+    )?;
     if entities.len() > MAX_NODES || relations.len() > MAX_EDGES {
         return Err(exhausted());
     }

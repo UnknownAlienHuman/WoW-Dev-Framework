@@ -3,7 +3,8 @@
 mod profile;
 
 pub use profile::{
-    GRAPH_AXIS_PROFILE_SCHEMA, GraphAxis, GraphAxisProfile, GraphAxisRelation, GraphAxisShape,
+    GRAPH_AXIS_PROFILE_SCHEMA, GRAPH_AXIS_PROFILE_SCHEMA_V2, GraphAxis, GraphAxisProfile,
+    GraphAxisRelation, GraphAxisShape,
 };
 
 use crate::{

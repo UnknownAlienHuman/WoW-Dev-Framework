@@ -1,6 +1,6 @@
 use super::{
     LoadIssueKind as Issue, LoadRecordKind as Kind, LoadSelection, MAX_RECORDS, Record,
-    TocLoadContext, budget, conditions, invalid, package,
+    TocLoadContext, TocMetadata, budget, conditions, invalid, package,
 };
 use crate::ProjectResult;
 use crate::disk::checkpoint;
@@ -36,6 +36,14 @@ pub(super) fn parse(
         } else if let Some(metadata) = content.strip_prefix("##") {
             record.kind = Kind::Metadata;
             let metadata = conditions::project(metadata.trim(), &mut record, context, true)?;
+            // Retain the normalized key/value that this single source parse
+            // already derived, so downstream owners never re-split raw spans.
+            if let Some((key, value)) = metadata.split_once(':') {
+                record.metadata = Some(TocMetadata {
+                    key: key.trim().to_ascii_lowercase(),
+                    value: value.trim().to_owned(),
+                });
+            }
             if record.selection != LoadSelection::Included {
                 records.push(record);
                 offset = end;

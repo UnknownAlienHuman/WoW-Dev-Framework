@@ -64,6 +64,14 @@ fn configuration_with(
     capability_policy: ProjectCapabilityPolicy,
     budget_policy: ProjectBudgetPolicy,
 ) -> Result<ProjectConfiguration, Box<dyn Error>> {
+    configuration_with_load(capability_policy, budget_policy, None)
+}
+
+fn configuration_with_load(
+    capability_policy: ProjectCapabilityPolicy,
+    budget_policy: ProjectBudgetPolicy,
+    load_plan: Option<&wow_project::load::ProjectLoadPlan>,
+) -> Result<ProjectConfiguration, Box<dyn Error>> {
     let backend = backend()?;
     let compatibility_report_sha256 = backend.compatibility_report_sha256().to_owned();
     let analyzer_binding = AnalyzerBindingDeclaration::new(
@@ -75,7 +83,7 @@ fn configuration_with(
         "wow-emmy-e0-c-library-v1",
         backend,
     )?;
-    Ok(ProjectConfigurationBuilder::new(
+    let builder = ProjectConfigurationBuilder::new(
         ProjectId::new("fixture-project-e0-v1")?,
         ProjectKind::Fixture,
         fixture_profile()?,
@@ -88,8 +96,12 @@ fn configuration_with(
     )?)
     .logical_root("fixtures/e0/project/main")
     .capability_policy(capability_policy)
-    .budget_policy(budget_policy)
-    .build()?)
+    .budget_policy(budget_policy);
+    let builder = match load_plan {
+        Some(plan) => builder.load_plan(plan)?,
+        None => builder,
+    };
+    Ok(builder.build()?)
 }
 
 fn strict_configuration() -> Result<ProjectConfiguration, Box<dyn Error>> {
@@ -730,5 +742,132 @@ fn source_graph_materializes_with_a_bounded_query_budget() -> TestResult {
     replacement.candidate().validate(&stop)?;
     assert_eq!(provenance.files().len(), snapshot.file_manifest().len());
     assert!(!replacement.candidate().snapshot().nodes().is_empty());
+    Ok(())
+}
+
+#[test]
+fn toc_facts_retain_normalized_conditions_occurrences_and_exact_support() -> TestResult {
+    use std::collections::BTreeMap;
+    use wow_project::graph::ProjectTocFactKind;
+    use wow_project::load::{LoadSelection, TocLoadContext, TocLoadOnDemandState};
+
+    let stop = std::sync::atomic::AtomicBool::new(false);
+    let directory = wow_project::disk::ProjectInputDirectory::open(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/toc-facts"),
+    )?;
+    let context = TocLoadContext {
+        game_types: BTreeMap::from([("retail".into(), true), ("classic".into(), false)]),
+        family: None,
+        game: None,
+        text_locale: None,
+        location: None,
+        environment: None,
+    };
+    let (files, plan) = directory
+        .read_toc_project_with_context(
+            ".",
+            &wow_project::disk::ProjectDiskFile::new("Fixture.toc"),
+            &fixture_profile()?,
+            Some(&context),
+            &stop,
+        )?
+        .into_parts();
+    let configuration = configuration_with_load(
+        ProjectCapabilityPolicy::strict_e0()?,
+        ProjectBudgetPolicy::fixture_e0()?,
+        Some(&plan),
+    )?;
+    let mut publisher = ProjectPublisher::new();
+    publisher.publish_initial(bundle(configuration, files, false)?)?;
+    let view = publisher.open_current()?;
+    let (registry, batch, coverage, provenance, limits) =
+        wow_project::graph::build_source_graph_proposals(&view, &stop)?.into_parts();
+    let facts = provenance.toc_facts();
+    assert!(!facts.is_empty());
+    assert!(
+        facts
+            .windows(2)
+            .all(|pair| pair[0].fact_id < pair[1].fact_id)
+    );
+    for fact in facts {
+        assert_eq!(fact.context_id, provenance.context().context_id());
+        assert_eq!(fact.selected_toc, "Fixture.toc");
+        assert!(fact.package.is_none());
+        let handle = &provenance.source_handles()[&fact.source_handle_id];
+        assert_eq!(handle.content_digest(), &fact.content_digest);
+        assert_eq!(handle.span(), fact.span);
+        assert_eq!(
+            provenance.evidence()[&fact.evidence_id].source_handle_ids(),
+            [fact.source_handle_id]
+        );
+    }
+    for (name, selection) in [
+        ("RequiredAddon", LoadSelection::Included),
+        ("ExcludedAddon", LoadSelection::Excluded),
+        ("UnresolvedAddon", LoadSelection::Unresolved),
+    ] {
+        assert!(facts.iter().any(|fact| fact.selection == selection
+            && matches!(&fact.kind, ProjectTocFactKind::Dependency { name: actual, .. } if actual == name)));
+    }
+    assert!(facts.iter().any(|fact| matches!(
+        fact.kind,
+        ProjectTocFactKind::LoadOnDemand {
+            declared_state: TocLoadOnDemandState::True,
+            effective_state: TocLoadOnDemandState::True,
+            conflicting: false,
+            ..
+        }
+    )));
+    assert_eq!(
+        facts
+            .iter()
+            .filter(|fact| matches!(&fact.kind,
+        ProjectTocFactKind::File { path: Some(path), repeated: true, .. } if path == "first.lua"))
+            .count(),
+        2
+    );
+    assert!(facts.iter().any(|fact| fact.selection == LoadSelection::Unresolved
+        && matches!(&fact.kind, ProjectTocFactKind::File { path: None, declared_target: Some(path), .. }
+            if path == "missing.lua")));
+    assert_eq!(
+        facts
+            .iter()
+            .filter(|fact| matches!(&fact.kind,
+        ProjectTocFactKind::SavedVariable { name, .. } if name == "FixtureDB"))
+            .count(),
+        2
+    );
+    assert!(facts.iter().any(|fact| matches!(
+        fact.kind,
+        ProjectTocFactKind::Package {
+            source_complete: false,
+            ..
+        }
+    )));
+    let foundation = wow_graph::GraphSnapshot::build(
+        batch.universe().clone(),
+        batch.generation().clone(),
+        limits,
+        Vec::new(),
+        Vec::new(),
+        coverage.clone(),
+    )?;
+    let owner = wow_graph::GraphPartitionSnapshot::new(
+        registry,
+        foundation,
+        batch.source_context_id(),
+        &stop,
+    )?;
+    let prepared = owner.prepare_replacement(
+        wow_graph::GraphPartitionReplacement {
+            expected_snapshot_id: owner.snapshot().snapshot_id().clone(),
+            expected_partition_digest: None,
+            producer_version: env!("CARGO_PKG_VERSION").into(),
+            batch,
+            coverage,
+        },
+        &stop,
+    )?;
+    prepared.candidate().validate(&stop)?;
     Ok(())
 }

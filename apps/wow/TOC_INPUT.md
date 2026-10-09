@@ -65,6 +65,25 @@ analysis. A blocking issue degrades that component and the overall check result;
 partial acquisition cannot become `clean`. Existing `project.toc.complete`,
 `project.xml.complete` and full load-graph capabilities remain deferred.
 
+## Normalized TOC metadata receipts
+
+Each `## key: value` directive produces one `TocMetadata` receipt alongside its
+source-mapped record. The receipt holds the lowercased key and the trimmed value
+after conditional clauses are stripped. `## Dependencies`, `## OptionalDeps`
+and `## LoadOnDemand` projections consume these retained pairs without a second
+parse. Their selection remains on the containing source-mapped record.
+
+An excluded directive remains an `Excluded` record even when the effective
+active metadata state is `NotDeclared`. A directive whose predicates lack
+context stays `Unresolved`. These records preserve declarations separately from
+their selected effect and cannot manufacture complete or negative coverage.
+Unknown and `X-*` keys may retain a normalized pair without gaining a supported
+semantic role.
+
+A directive without a key/value delimiter has no normalized pair. Malformed or
+empty values may still be retained, with their existing issue/selection records.
+Retention does not certify a directive's semantics or client load behavior.
+
 ## Resource and security policy
 
 The existing no-follow, regular-file, bounded, cancellable reader is reused.

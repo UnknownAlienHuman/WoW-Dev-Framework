@@ -101,6 +101,7 @@ pub(crate) fn select(
             selection: record.selection,
             declared_target: record.declared_target,
             conditions: record.conditions,
+            metadata: record.metadata,
             saved_variables: record.saved_variables,
         });
     }

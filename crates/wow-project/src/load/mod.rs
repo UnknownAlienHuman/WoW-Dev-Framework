@@ -2,11 +2,13 @@
 //! Not a client emulator, complete semantic graph, or persistent E2 candidate.
 mod conditions;
 pub(crate) mod document_toc;
+mod metadata;
 mod package;
 mod package_closure;
 mod saved_variables;
 mod toc;
 pub use document_toc::DocumentTocSelection;
+pub use metadata::TocMetadata;
 pub use package_closure::{
     PACKAGE_LOAD_PROFILE, PACKAGE_MAIN_NAMESPACE_PROFILE, PACKAGE_MAIN_NAMESPACE_ROOT,
     ProjectLoadedPackage, ProjectPackageCycleKind, ProjectPackageInput, ProjectPackageLoadCoverage,
@@ -18,6 +20,10 @@ pub use package_closure::{
     TocDependencyResolution, TocLoadOnDemandState,
 };
 pub use saved_variables::{TocSavedVariable, TocSavedVariableScope, TocSavedVariableState};
+
+// Intra-crate re-export for the source-graph fact projection. It is not a
+// public API: the normalized metadata projection stays an internal owner seam.
+pub(crate) use package_closure::project_metadata;
 mod xml;
 mod xml_index;
 pub mod xml_references;
@@ -47,7 +53,7 @@ use crate::disk::{
 use crate::{ProjectError, ProjectErrorCode, ProjectInputFile, ProjectPhase, ProjectResult};
 
 /// Versioned, deliberately restricted acquisition semantics; never a WoW build.
-pub const LOAD_PROFILE: &str = "wow-project/toc-xml-files/6";
+pub const LOAD_PROFILE: &str = "wow-project/toc-xml-files/7";
 const MAX_RECORDS: usize = 32_768;
 const MAX_INCLUDE_DEPTH: usize = 32;
 
@@ -68,6 +74,10 @@ pub struct LoadRecord {
     pub declared_target: Option<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub conditions: Vec<TocCondition>,
+    /// Normalized metadata directive retained at parse time. Absent for
+    /// non-metadata records.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<TocMetadata>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub saved_variables: Vec<TocSavedVariable>,
 }
@@ -354,7 +364,7 @@ impl ProjectInputDirectory {
             xml_references_digest: ContentDigest<CanonicalResult>,
         }
         let digest = crate::identity::canonical_digest(
-            "wow-project/load-plan/6",
+            "wow-project/load-plan/7",
             &Identity {
                 profile: LOAD_PROFILE,
                 selected_toc: path,
@@ -489,6 +499,7 @@ impl Loader<'_> {
                 selection: record.selection,
                 declared_target: record.declared_target,
                 conditions: record.conditions,
+                metadata: record.metadata,
                 saved_variables: record.saved_variables,
             });
             for kind in record.issues {
@@ -587,6 +598,7 @@ struct Record {
     selection: LoadSelection,
     declared_target: Option<String>,
     conditions: Vec<TocCondition>,
+    metadata: Option<TocMetadata>,
     issues: Vec<LoadIssueKind>,
     saved_variables: Vec<TocSavedVariable>,
 }
@@ -601,6 +613,7 @@ impl Record {
             selection: LoadSelection::Included,
             declared_target: None,
             conditions: Vec::new(),
+            metadata: None,
             issues: Vec::new(),
             saved_variables: Vec::new(),
         }
