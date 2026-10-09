@@ -149,3 +149,49 @@ fn libs_path_alone_is_not_a_library_relation() -> TestResult {
     );
     Ok(())
 }
+
+/// Hook-target sites whose callback resolves to a Main declaration. When the
+/// target becomes dynamic the site must not fabricate an endpoint.
+fn hookscript_rows(text: &str) -> TestResult<Vec<(String, bool)>> {
+    let main = workspace("main/hooks.lua", text)?;
+    let stop = AtomicBool::new(false);
+    let queries = vec![String::from("HookScript")];
+    let session = analyze_member_call_session(&main, &[], &queries, true, &stop)?;
+    let report = session
+        .function_calls
+        .ok_or("the function-call sidecar is required")?;
+    Ok(report
+        .calls()
+        .iter()
+        .filter(|call| call.resolved_callable_key() == Some("HookScript"))
+        .map(|call| {
+            let argument_is_literal = call
+                .arguments()
+                .get(1)
+                .and_then(|argument| argument.literal().cloned())
+                .is_some();
+            (call.fact_id().to_owned(), argument_is_literal)
+        })
+        .collect())
+}
+
+const HOOK_EXACT: &str = "HookScript = function() end\nframe = {}\nfunction handler() end\nHookScript(frame, \"OnShow\", handler)\n";
+
+const HOOK_DYNAMIC: &str = "HookScript = function() end\nframe = {}\nframe.name = \"OnShow\"\nfunction handler() end\nHookScript(frame, frame.name, handler)\n";
+
+/// RECOG-MUT-006: converting an exact hook target to a dynamic one must
+/// drop the script-name literal, so no safe-hook endpoint is fabricated.
+#[test]
+fn dynamic_hook_target_loses_the_exact_literal() -> TestResult {
+    let exact = hookscript_rows(HOOK_EXACT)?;
+    let dynamic = hookscript_rows(HOOK_DYNAMIC)?;
+    assert!(
+        exact.iter().any(|(_, literal)| *literal),
+        "the exact fixture must retain the script-name literal, got {exact:?}"
+    );
+    assert!(
+        !dynamic.iter().any(|(_, literal)| *literal),
+        "the dynamic fixture must not retain a literal, got {dynamic:?}"
+    );
+    Ok(())
+}
