@@ -14,8 +14,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
+      STAGING_PARENT: 060124225befb2529d956578914f0b403944c065
       BASE_COMMIT: a2bf0af3675203c07078c03f5641cef649b6c0ed
       BASE_TREE: 1bf20ba91719786dd589a66c9bb6e1a5c1d98b1d
+      B64_SHA256: 1d6ec1ace3e49bee7223b775da179be7400b7f61a29aeac8a799fda30794193a
+      XZ_SHA256: 276c93c80de8335b71a2fcbd29e7fe3f7f0ec2a61f9e859bca1370b96c12dc17
       PATCH_SHA256: c0107b92dbad6dc6aa53a8544969c3be5c4b6cc46c467981ec21e22447969773
     steps:
       - uses: actions/checkout@v7
@@ -27,11 +30,16 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git rev-parse HEAD^)" = "$BASE_COMMIT"
-          xz -dc .ci/w11-semantic-repair.patch.xz > "$RUNNER_TEMP/w11-semantic-repair.patch"
+          test "$(git rev-parse HEAD^)" = "$STAGING_PARENT"
+          cat .ci/w11-semantic-repair.patch.b64.* > "$RUNNER_TEMP/w11-semantic-repair.b64"
+          printf '%s  %s\n' "$B64_SHA256" "$RUNNER_TEMP/w11-semantic-repair.b64" | sha256sum -c -
+          base64 -d "$RUNNER_TEMP/w11-semantic-repair.b64" > "$RUNNER_TEMP/w11-semantic-repair.patch.xz"
+          printf '%s  %s\n' "$XZ_SHA256" "$RUNNER_TEMP/w11-semantic-repair.patch.xz" | sha256sum -c -
+          xz -dc "$RUNNER_TEMP/w11-semantic-repair.patch.xz" > "$RUNNER_TEMP/w11-semantic-repair.patch"
           printf '%s  %s\n' "$PATCH_SHA256" "$RUNNER_TEMP/w11-semantic-repair.patch" | sha256sum -c -
           git rm -- \
             .ci/w11-semantic-repair.patch.xz \
+            .ci/w11-semantic-repair.patch.b64.* \
             .github/workflows/w11-semantic-repair-checkpoint.yml
           test "$(git write-tree)" = "$BASE_TREE"
           git apply --index "$RUNNER_TEMP/w11-semantic-repair.patch"
@@ -87,7 +95,7 @@ jobs:
           git archive --format=tar -o "$RUNNER_TEMP/checkpoint/checked-source.tar" "$(cat "$RUNNER_TEMP/checkpoint/CHECKED_TREE")"
           git diff --cached --binary "$BASE_COMMIT" > "$RUNNER_TEMP/checkpoint/formatted.patch"
           printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/checkpoint/STAGING_SHA"
-          cp "$RUNNER_TEMP/w11-semantic-repair.patch" "$RUNNER_TEMP/checkpoint/input.patch"
+          cp "$RUNNER_TEMP/w11-semantic-repair.patch" "$RUNNER_TEMP/checkpoint/input.patch" || true
           for file in RUST_VERSION check.log clippy.log policy.log changed-files expected-files; do
             if test -f "$RUNNER_TEMP/$file"; then cp "$RUNNER_TEMP/$file" "$RUNNER_TEMP/checkpoint/$file"; fi
           done
