@@ -420,8 +420,8 @@ observed modes and NotEvaluated otherwise; neither is authoritative absence.
 Ordinary `wow check` / `status` retain TOC declarations but do not enable the
 optional semantic graph-access collection.
 
-The source graph projection is `wow-project/source-load-proposals/18`; the graph-build
-result is `wow-service/graph-build-result/15` while the unchanged request shape remains
+The source graph projection is `wow-project/source-load-proposals/19`; the graph-build
+result is `wow-service/graph-build-result/16` while the unchanged request shape remains
 `wow-service/graph-build-request/9`. The optional Emmy call report is v5; existing
 global-access/state-recognizer profiles keep their own versions.
 Typed keys intentionally change state-path identities and the v7 build receipt
@@ -438,15 +438,18 @@ examples are not a runtime acceptance probe or a fixed dependency.
 
 ## Reading a retained bundle
 
-All graph reads accept the current v15 JSON receipt directly through `--bundle`.
+All graph reads accept the current v16 JSON receipt directly through `--bundle`.
 `wow graph explain --bundle build.json --request explain.json` resolves the
 retained source/evidence tables and derivation inputs without rerunning the
-build. The bare-snapshot route remains unchanged. See
+build. Source and state producers retain exact assertion derivations; explanations
+return real chains or missing/truncated boundaries. Record-bearing batches and
+snapshots use v2, while old record-free snapshots remain readable with unchanged
+identities. The read request shape remains compatible. See
 [GRAPH_EVIDENCE.md](GRAPH_EVIDENCE.md) for exact admission and proof boundaries.
 
 ## Artifact and provenance formats
 
-`json` (default) emits `wow-service/graph-build-result/15`: request, status,
+`json` (default) emits `wow-service/graph-build-result/16`: request, status,
 `snapshot`, `file_nodes`, `xml_nodes`, `lua_nodes`, `function_nodes`, `call_edges`,
 `frame_nodes`, `creation_edges`, `handler_nodes`, `script_edges`, `provenance`,
 `call_recognition`, `construction_recognition`, `script_recognition`, `state_nodes`,

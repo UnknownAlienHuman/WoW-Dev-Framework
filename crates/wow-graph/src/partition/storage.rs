@@ -19,6 +19,8 @@ impl GraphPartitionSnapshot {
         "wow-graph.foundation.v1",
         "wow-graph.producer.v1",
         "wow-graph.materialized.v1",
+        "wow-graph.header.v2",
+        "wow-graph.producer.v2",
     ];
     pub const STORAGE_CHECK: &'static str = "wow-graph.retained-partition-closure.v1";
 
@@ -43,12 +45,21 @@ impl GraphPartitionSnapshot {
         for p in &self.partitions {
             check_cancelled(stop)?;
             let key = producer_key(p.partition_id())?;
-            records.push(PartitionRecord::new(&key, "wow-graph.producer.v1", p)?);
+            let schema = if p.batch().assertion_records().is_some() {
+                "wow-graph.producer.v2"
+            } else {
+                "wow-graph.producer.v1"
+            };
+            records.push(PartitionRecord::new(&key, schema, p)?);
             producers.push(key);
         }
         records.push(PartitionRecord::new(
             "graph.header",
-            "wow-graph.header.v1",
+            if self.schema.as_ref() == GRAPH_PARTITION_SNAPSHOT_SCHEMA_V2 {
+                "wow-graph.header.v2"
+            } else {
+                "wow-graph.header.v1"
+            },
             &Header {
                 schema: self.schema.clone(),
                 source_context_id: self.source_context_id,
@@ -61,7 +72,24 @@ impl GraphPartitionSnapshot {
     /// the existing registry/proposal/materialization validator, not Lua analysis.
     pub fn read_stored(read: &ReadSnapshot, stop: &AtomicBool) -> GraphResult<Self> {
         check_cancelled(stop)?;
-        let header: Header = load(read, "graph.header", "wow-graph.header.v1", stop)?;
+        let header_schema = read
+            .manifest()
+            .members
+            .iter()
+            .find(|member| member.key == "graph.header")
+            .map(|member| member.schema.as_str())
+            .ok_or_else(|| invalid("stored graph header missing"))?;
+        if !["wow-graph.header.v1", "wow-graph.header.v2"].contains(&header_schema) {
+            return Err(invalid("unsupported stored graph header schema"));
+        }
+        let header: Header = load(read, "graph.header", header_schema, stop)?;
+        if (header.schema.as_ref() == GRAPH_PARTITION_SNAPSHOT_SCHEMA_V2)
+            != (header_schema == "wow-graph.header.v2")
+        {
+            return Err(invalid(
+                "stored graph header version disagrees with snapshot",
+            ));
+        }
         if header.producers.len() > MAX_GRAPH_PRODUCER_PARTITIONS {
             return Err(invalid("stored producer count exceeds profile"));
         }
@@ -79,7 +107,24 @@ impl GraphPartitionSnapshot {
             if !expected.insert(key.clone()) {
                 return Err(invalid("duplicate stored graph partition"));
             }
-            let p: GraphProducerPartition = load(read, &key, "wow-graph.producer.v1", stop)?;
+            let producer_schema = read
+                .manifest()
+                .members
+                .iter()
+                .find(|member| member.key == key)
+                .map(|member| member.schema.as_str())
+                .ok_or_else(|| invalid("stored producer missing"))?;
+            if !["wow-graph.producer.v1", "wow-graph.producer.v2"].contains(&producer_schema) {
+                return Err(invalid("unsupported stored graph producer schema"));
+            }
+            let p: GraphProducerPartition = load(read, &key, producer_schema, stop)?;
+            if p.batch().assertion_records().is_some()
+                != (producer_schema == "wow-graph.producer.v2")
+            {
+                return Err(invalid(
+                    "stored producer version disagrees with its assertion records",
+                ));
+            }
             if producer_key(p.partition_id())? != key {
                 return Err(invalid("stored graph partition key mismatch"));
             }

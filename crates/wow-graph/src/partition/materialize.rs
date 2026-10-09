@@ -102,6 +102,8 @@ fn aggregate_coverage(
     partitions: &[GraphProducerPartition],
     cancelled: &AtomicBool,
 ) -> GraphResult<Vec<GraphCoverageRecord>> {
+    let conflicted =
+        crate::assertion_validation::conflicted_relations(partitions, foundation, cancelled)?;
     let mut relations = BTreeSet::new();
     for record in foundation
         .coverage()
@@ -140,6 +142,10 @@ fn aggregate_coverage(
         }
         // This layer aggregates producer observations, not authoritative platform
         // negatives. A complete empty matcher batch does not change that boundary.
+        if conflicted.contains(&relation) {
+            state = state.max(GraphCoverageState::Partial);
+            blockers.insert("graph.partition.unresolved_assertion_conflict".into());
+        }
         coverage.push(GraphCoverageRecord::new(
             relation,
             state,

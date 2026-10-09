@@ -23,7 +23,7 @@ use wow_emmy::function_calls::FunctionCallReport;
 use wow_emmy::global_access::{GlobalAccessKind, GlobalAccessResolution};
 
 pub const SOURCE_STATE_PARTITION: &str = "wow-recognizers.saved-variable-access";
-pub const SOURCE_STATE_PROFILE: &str = "wow-recognizers/source-saved-variable-access/2";
+pub const SOURCE_STATE_PROFILE: &str = "wow-recognizers/source-saved-variable-access/3";
 const MAX_BINDINGS: usize = 8192;
 
 /// Normalized source facts. The adapter checks the original global-access fact,
@@ -349,6 +349,7 @@ pub fn recognize_source_state(
     )?;
     let mut relations = Vec::new();
     let mut receipts = Vec::new();
+    let mut derivations = Vec::new();
     for assertion in recognition.assertions() {
         checkpoint(stop)?;
         let fact = pending
@@ -359,6 +360,45 @@ pub fn recognize_source_state(
             return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
         }
         let proposal_id = assertion.assertion_id().to_string();
+        let source = input
+            .owner
+            .partition(input.source_partition)
+            .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
+        let mut prerequisites = vec![
+            fact.caller_proposal_id,
+            fact.target_proposal_id,
+            fact.root_proposal_id,
+        ];
+        prerequisites.sort();
+        prerequisites.dedup();
+        derivations.push(wow_graph::GraphDerivationRecord {
+            output: wow_graph::GraphLocalAssertion {
+                kind: wow_graph::GraphAssertionKind::Relation,
+                proposal_id: proposal_id.clone().into(),
+            },
+            rule_id: match fact.kind {
+                GlobalAccessKind::Read => "wow-recognizers.state-read-admission",
+                GlobalAccessKind::Write => "wow-recognizers.state-write-admission",
+                GlobalAccessKind::UnsupportedAssignment => {
+                    return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
+                }
+            }
+            .into(),
+            rule_version: 1,
+            inputs: prerequisites
+                .into_iter()
+                .map(|id| wow_graph::GraphAssertionRef::Producer {
+                    partition_id: source.partition_id().into(),
+                    batch_id: source.batch().batch_id().into(),
+                    assertion: wow_graph::GraphLocalAssertion {
+                        kind: wow_graph::GraphAssertionKind::Entity,
+                        proposal_id: id.into(),
+                    },
+                })
+                .collect(),
+            rebuttals: Vec::new(),
+            missing: Vec::new(),
+        });
         relations.push(
             GraphRelationProposal::new(
                 proposal_id.as_str(),
@@ -432,6 +472,21 @@ pub fn recognize_source_state(
     )
     .map_err(graph_error)?;
     checkpoint(stop)?;
+    let batch = if derivations.is_empty() {
+        batch
+    } else {
+        let records = wow_graph::GraphAssertionRecords::build(
+            wow_graph::GraphAssertionRecordScope {
+                universe: graph.universe().clone(),
+                generation: graph.generation().clone(),
+                source_context_id: input.context.context_id(),
+            },
+            derivations,
+            Vec::new(),
+        )
+        .map_err(graph_error)?;
+        batch.with_assertion_records(records).map_err(graph_error)?
+    };
     Ok(SourceStateProposals {
         batch,
         coverage,

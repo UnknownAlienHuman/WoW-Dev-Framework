@@ -8,7 +8,8 @@ wow graph explain --bundle build.json --request explain.json --format json
 
 Use a fresh output path for shell redirection. A produced build receipt has exit
 2 (Partial), not a construction failure. Preserve it rather than rerunning source
-analysis to retrieve its evidence. The new read route accepts graph-build **v7**;
+analysis to retrieve its evidence. The current read route accepts graph-build **v16**
+with source projection19 and request9;
 older receipts remain readable as their bare `snapshot` through `--snapshot`.
 There is no implicit schema migration, latest-generation selection or fallback.
 
@@ -47,16 +48,53 @@ The new outer schema is `wow-service/graph-bundle-read-result/1`, with transport
 bundle digest, original result digest, canonical snapshot digest and admitted
 catalog digest. `input_boundaries` retains construction limitations. A query
 cannot upgrade the bundle's Partial state to Complete. Failures expose typed
-stage/code, not parser messages or source text. The previous `--snapshot` request,
-result schema, canonical bytes and behavior are unchanged when the new optional
-field below is absent. Graph-build v7 bytes and identity recipes are unchanged.
+stage/code, not parser messages or source text. Record-free proposal batches and
+partition snapshots keep v1 encodings and identities. Record-bearing batches and
+snapshots use explicit v2 schemas; stored header/producer versions must agree with
+their contents. Both snapshot versions validate through `--snapshot`. Older build
+receipt envelopes are rejected as bundles; extract their original bare snapshot
+instead of changing their schema or resealing them as v16.
+
+## Exact assertion derivations and conflicts
+
+Explanation payloads now use `wow-graph/retained-explanation/e2-a/2` and, when
+evidence is resolved, `wow-graph/resolved-explanation/e2-a/2`. Outer service read
+schemas remain unchanged. `supports` retains direct contributors;
+`assertion_supports` contains exact additional producer assertions reached through
+`derivations` and reported `conflicts`. Each observation retains a content-derived
+record ID, producer partition/version/digest, local output ID and exact local or
+cross-producer references. Derivation inputs and rebuttals remain distinct. Source
+handles and evidence IDs stay on the original proposals and resolve through the
+same retained catalog.
+
+Publication validates all records before rendering: mixed input scopes, stale
+producer batches, absent assertions, cycles and confidence promotion reject.
+Derived outputs cannot claim direct Proven authority. Conflict participants remain
+intact and unresolved; no winner is selected. Incident relation coverage is
+conservatively downgraded. Producer-reported conflicts do not establish a complete
+automatic assessment, so no reported conflict is not an authoritative clean result.
+
+`derivation_complete` describes only the returned exact chain closure. Non-Proven
+assertions without records, explicit missing prerequisites, foundation boundaries
+or truncation keep it false. Source19 and state producers retain real chains;
+other producers may still lack records. Complete closure never upgrades confidence,
+coverage or runtime authority.
+
+Graph explanation `limits.max_derivation_depth` defaults to 32, accepts 0–64 and
+is optional in older requests. Depth zero retains the requested derivation record
+but does not expand its inputs. Graph traversal shares scan, support and complete
+payload byte limits with contributor collection. `derivation_depth`,
+`assertion_work`, `supports` and `output_bytes` truncations remain explicit. Evidence
+record traversal below has its own separate depth/work limits. Neither traversal
+silently retries with larger limits.
 
 ## Explained evidence
 
-`explain --bundle` returns `payload.explanation` (the existing complete graph
+`explain --bundle` returns `payload.explanation` (the bounded graph
 explanation) plus `payload.evidence_resolution`. It follows evidence attached to
 the selected node/edge, both endpoints, and every returned producer support,
-including proposal-only source handles. Exact `EvidenceRecord` derivation inputs
+including additional assertion-chain supports and proposal-only source handles.
+Exact `EvidenceRecord` derivation inputs
 are expanded breadth-first. Shared evidence and source handles are emitted once.
 No producer, provenance, confidence, claim scope or coverage reference is rewritten.
 
@@ -109,9 +147,10 @@ is implicit. Cancellation discards the payload; individual core validation and
 serializer calls are bounded but not forcibly interruptible.
 
 `closure_complete` covers only the selected evidence/source closure.
-`supports_complete` separately reports contributor enumeration. A complete
-closure removes only the unresolved-evidence boundary; it does not invent full
-inference-rule records, conflict assessment, source authentication, runtime or
+`supports_complete` separately reports contributor enumeration and is false when
+graph traversal truncates. A complete closure removes only the unresolved-evidence
+boundary; it does not invent missing inference-rule records, complete conflict
+assessment, source authentication, runtime or
 coherent ProjectStore publication. `source_bytes_verified` and
 `coverage_references_resolved` remain false. Default output stays Partial, or
 Truncated when either graph-support or evidence limits are reached.

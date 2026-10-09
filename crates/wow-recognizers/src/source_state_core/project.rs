@@ -253,10 +253,10 @@ pub(super) fn execute(
     )
     .map_err(graph_error)?;
     Ok(SourceStateCoreProposals {
-        batch,
+        batch: records::attach(input, family, &receipts, batch, stop)?,
         coverage,
         recognition: SourceStateCoreRecognition {
-            profile: "wow-recognizers/state-structural/1",
+            profile: "wow-recognizers/state-structural/2",
             family,
             analyzer_report_id: input.recognition.analyzer_report_id().into(),
             evaluations,

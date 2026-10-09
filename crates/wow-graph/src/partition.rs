@@ -19,6 +19,7 @@ use crate::{
 };
 
 pub const GRAPH_PARTITION_SNAPSHOT_SCHEMA: &str = "wow-graph/partition-snapshot/e2-a/1";
+pub const GRAPH_PARTITION_SNAPSHOT_SCHEMA_V2: &str = "wow-graph/partition-snapshot/e2-a/2";
 pub const MAX_GRAPH_PRODUCER_PARTITIONS: usize = 64;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -212,7 +213,7 @@ impl GraphPartitionSnapshot {
 
     pub fn validate(&self, cancelled: &AtomicBool) -> GraphResult<()> {
         check_cancelled(cancelled)?;
-        if self.schema.as_ref() != GRAPH_PARTITION_SNAPSHOT_SCHEMA
+        if self.schema.as_ref() != record_schema(&self.partitions)
             || self.partitions.len() > MAX_GRAPH_PRODUCER_PARTITIONS
         {
             return Err(invalid(
@@ -326,10 +327,12 @@ fn rebuild(
             ));
         }
     }
+    crate::assertion_validation::validate(&partitions, cancelled)?;
+    let schema = record_schema(&partitions);
     let generation = GraphGenerationId::new(digest(
         "graph-generation",
         &(
-            GRAPH_PARTITION_SNAPSHOT_SCHEMA,
+            schema,
             registry.registry_digest(),
             source_context_id,
             foundation.snapshot_id(),
@@ -338,13 +341,24 @@ fn rebuild(
     )?)?;
     let snapshot = materialize::rebind(&input, generation, cancelled)?;
     Ok(GraphPartitionSnapshot {
-        schema: GRAPH_PARTITION_SNAPSHOT_SCHEMA.into(),
+        schema: schema.into(),
         registry,
         source_context_id,
         foundation,
         partitions,
         snapshot,
     })
+}
+
+fn record_schema(partitions: &[GraphProducerPartition]) -> &'static str {
+    if partitions
+        .iter()
+        .any(|partition| partition.batch().assertion_records().is_some())
+    {
+        GRAPH_PARTITION_SNAPSHOT_SCHEMA_V2
+    } else {
+        GRAPH_PARTITION_SNAPSHOT_SCHEMA
+    }
 }
 
 fn check_batch(

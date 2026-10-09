@@ -3,6 +3,7 @@
 mod adapt;
 mod pack;
 mod project;
+mod records;
 
 use crate::source_state::{SOURCE_STATE_PARTITION, SourceStateRecognition};
 use crate::{

@@ -50,11 +50,15 @@ states and negative-authority flags remain untouched. Entity-kind coverage is
 not modeled by the existing relation-only coverage schema; entity explanations
 say so rather than substituting incidental relation coverage.
 
-`support_complete` means only that all retained contributors were returned. It
-is not evidence completeness or full normative explanation acceptance. The
-current snapshot retains handles rather than external EvidenceRecord bodies,
-derivation DAGs or a conflict assessment; the result explicitly lists these
-boundaries. A foundation record also lacks producer/batch metadata. Its unknown
+`support_complete` means only that all retained direct contributors were returned.
+`assertion_supports`, `derivations` and `conflicts` extend them with exact producer
+chains and reported unresolved conflict participants. `derivation_complete` means
+the selected chains close through retained records or direct Proven assertions;
+missing legacy records, explicit missing prerequisites and truncation keep it false.
+Neither flag is full normative explanation acceptance. External EvidenceRecord
+bodies require the separate evidence-catalog route. Complete automatic conflict
+assessment remains unavailable; the result explicitly preserves that boundary.
+A foundation record also lacks producer/batch metadata. Its unknown
 producer is not attributed to a later partition or the query itself. No empty
 conflict list is offered as proof of consistency. Rejected replacement batches
 are outside a published snapshot and cannot be reconstructed from it.
@@ -68,6 +72,9 @@ validation outside the snapshot owner.
 
 Defaults: 500,000 scanned producer assertions, 128 returned supports and 1 MiB of
 canonical output. Hard maxima: 4,000,000 / 4,096 / 8 MiB; minimum output is 16 KiB.
+Derivation depth defaults to 32, permits 0–64 and shares the same scan/support/byte
+budgets. Depth zero retains the selected record but omits its dependencies with an
+explicit truncation. Old requests omitting the depth field use the default.
 The scan counts accepted entity or relation records, as appropriate, including
 nonmatches. Foundation lookup is binary. The scan budget is preflighted before
 full partition validation. Validation itself retains its existing bounded

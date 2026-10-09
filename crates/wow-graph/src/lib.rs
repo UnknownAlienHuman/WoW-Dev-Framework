@@ -2,6 +2,8 @@
 
 //! Immutable exact-generation graph records and bounded evidence-aware queries.
 
+mod assertion_records;
+mod assertion_validation;
 mod axes;
 mod direct;
 mod error;
@@ -18,6 +20,10 @@ mod query;
 mod registry;
 mod subgraph;
 
+pub use assertion_records::{
+    GraphAssertionKind, GraphAssertionRecordScope, GraphAssertionRecords, GraphAssertionRef,
+    GraphConflictKind, GraphConflictRecord, GraphDerivationRecord, GraphLocalAssertion,
+};
 pub use error::{GraphError, GraphErrorCode, GraphResult};
 pub use identity::{
     GraphEdgeId, GraphGenerationId, GraphNodeId, GraphPublicationKey, GraphSnapshotId,
@@ -28,9 +34,9 @@ pub use model::{
     GraphRelationKind, GraphSnapshot,
 };
 pub use partition::{
-    GRAPH_PARTITION_SNAPSHOT_SCHEMA, GraphPartitionChange, GraphPartitionReplacement,
-    GraphPartitionReplacementPlan, GraphPartitionSnapshot, GraphProducerPartition,
-    MAX_GRAPH_PRODUCER_PARTITIONS,
+    GRAPH_PARTITION_SNAPSHOT_SCHEMA, GRAPH_PARTITION_SNAPSHOT_SCHEMA_V2, GraphPartitionChange,
+    GraphPartitionReplacement, GraphPartitionReplacementPlan, GraphPartitionSnapshot,
+    GraphProducerPartition, MAX_GRAPH_PRODUCER_PARTITIONS,
 };
 pub use partition_session::GraphPartitionSession;
 pub use paths::{
@@ -42,11 +48,11 @@ pub use persistent::{
     PersistentGraphStore, PublishedGraphSnapshot, StoredGraphSnapshot,
 };
 pub use proposal::{
-    GRAPH_PROPOSAL_BATCH_SCHEMA, GRAPH_PROPOSAL_REPORT_SCHEMA, GraphAcceptedEntityProposal,
-    GraphAcceptedRelationProposal, GraphEntityProposal, GraphProposalBatch, GraphProposalEndpoint,
-    GraphProposalRejection, GraphProposalRejectionCode, GraphProposalValidationReport,
-    GraphProposalValue, GraphRelationProposal, GraphRelationProposalInput,
-    validate_graph_proposal_batch,
+    GRAPH_PROPOSAL_BATCH_SCHEMA, GRAPH_PROPOSAL_BATCH_SCHEMA_V2, GRAPH_PROPOSAL_REPORT_SCHEMA,
+    GraphAcceptedEntityProposal, GraphAcceptedRelationProposal, GraphEntityProposal,
+    GraphProposalBatch, GraphProposalEndpoint, GraphProposalRejection, GraphProposalRejectionCode,
+    GraphProposalValidationReport, GraphProposalValue, GraphRelationProposal,
+    GraphRelationProposalInput, validate_graph_proposal_batch,
 };
 pub use query::{GraphDirection, GraphNeighborQuery, GraphNeighborResult, GraphQueryState};
 pub use registry::{
@@ -61,9 +67,10 @@ pub use subgraph::{
 };
 
 pub use explain::{
-    GRAPH_EXPLANATION_SCHEMA, GraphAssertionSupport, GraphCoverageObservation, GraphCoverageOrigin,
-    GraphExplainLimits, GraphExplainQuery, GraphExplainSubject, GraphExplainedRecord,
-    GraphExplanation, GraphExplanationBoundary, GraphExplanationCoverage, GraphExplanationRegistry,
+    GRAPH_EXPLANATION_SCHEMA, GraphAssertionSupport, GraphConflictObservation,
+    GraphCoverageObservation, GraphCoverageOrigin, GraphDerivationObservation, GraphExplainLimits,
+    GraphExplainQuery, GraphExplainSubject, GraphExplainedRecord, GraphExplanation,
+    GraphExplanationBoundary, GraphExplanationCoverage, GraphExplanationRegistry,
     GraphExplanationTruncation, GraphProducerSupportOrigin,
 };
 

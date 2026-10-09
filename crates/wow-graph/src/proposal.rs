@@ -10,6 +10,7 @@ use crate::{
 };
 
 pub const GRAPH_PROPOSAL_BATCH_SCHEMA: &str = "wow-graph/proposal-batch/e2-a/1";
+pub const GRAPH_PROPOSAL_BATCH_SCHEMA_V2: &str = "wow-graph/proposal-batch/e2-a/2";
 pub const GRAPH_PROPOSAL_REPORT_SCHEMA: &str = "wow-graph/proposal-report/e2-a/1";
 const MAX_PROPOSALS: usize = 200_000;
 const MAX_IDENTITY_FIELDS: usize = 64;
@@ -269,6 +270,13 @@ impl GraphRelationProposal {
         &self.relation_kind_id
     }
 
+    pub const fn confidence(&self) -> GraphConfidence {
+        self.confidence
+    }
+    pub const fn endpoints(&self) -> [&GraphProposalEndpoint; 2] {
+        [&self.source, &self.target]
+    }
+
     pub fn source_handle_ids(&self) -> &[StableHandleId] {
         &self.source_handle_ids
     }
@@ -290,6 +298,8 @@ pub struct GraphProposalBatch {
     producer_partition_id: Box<str>,
     entity_proposals: Vec<GraphEntityProposal>,
     relation_proposals: Vec<GraphRelationProposal>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    assertion_records: Option<crate::GraphAssertionRecords>,
 }
 
 impl GraphProposalBatch {
@@ -353,6 +363,7 @@ impl GraphProposalBatch {
             producer_partition_id: &producer_partition_id,
             entity_proposals: &entity_proposals,
             relation_proposals: &relation_proposals,
+            assertion_records: None,
         })?;
         Ok(Self {
             schema: GRAPH_PROPOSAL_BATCH_SCHEMA.into(),
@@ -365,17 +376,24 @@ impl GraphProposalBatch {
             producer_partition_id,
             entity_proposals,
             relation_proposals,
+            assertion_records: None,
         })
     }
 
     pub fn validate(&self) -> GraphResult<()> {
-        if self.schema.as_ref() != GRAPH_PROPOSAL_BATCH_SCHEMA {
+        if self.schema.as_ref()
+            != if self.assertion_records.is_some() {
+                GRAPH_PROPOSAL_BATCH_SCHEMA_V2
+            } else {
+                GRAPH_PROPOSAL_BATCH_SCHEMA
+            }
+        {
             return Err(GraphError::new(
                 GraphErrorCode::ProposalBatchInvalid,
                 "graph proposal batch schema is unsupported",
             ));
         }
-        let rebuilt = Self::build(
+        let mut rebuilt = Self::build(
             self.registry_bundle_id.clone(),
             self.registry_digest.clone(),
             self.universe.clone(),
@@ -385,6 +403,9 @@ impl GraphProposalBatch {
             self.entity_proposals.clone(),
             self.relation_proposals.clone(),
         )?;
+        if let Some(records) = &self.assertion_records {
+            rebuilt = rebuilt.with_assertion_records(records.clone())?;
+        }
         if rebuilt != *self {
             return Err(GraphError::new(
                 GraphErrorCode::ProposalBatchIdentityMismatch,
@@ -397,6 +418,59 @@ impl GraphProposalBatch {
     #[must_use]
     pub fn batch_id(&self) -> &str {
         &self.batch_id
+    }
+
+    /// Attach producer-owned support/conflict data to this exact batch. Local
+    /// addresses avoid circular hashes; external addresses bind exact batch IDs.
+    /// The partition owner validates cross-producer closure before publication.
+    pub fn with_assertion_records(
+        mut self,
+        records: crate::GraphAssertionRecords,
+    ) -> GraphResult<Self> {
+        records.validate()?;
+        if records.scope.universe != self.universe
+            || records.scope.generation != self.generation
+            || records.scope.source_context_id != self.source_context_id
+        {
+            return Err(GraphError::new(
+                GraphErrorCode::GenerationMismatch,
+                "assertion records name another input scope",
+            ));
+        }
+        for derivation in &records.derivations {
+            let exists = match derivation.output.kind {
+                crate::GraphAssertionKind::Entity => self
+                    .entity_proposal(&derivation.output.proposal_id)
+                    .is_some(),
+                crate::GraphAssertionKind::Relation => self
+                    .relation_proposal(&derivation.output.proposal_id)
+                    .is_some(),
+            };
+            if !exists {
+                return Err(GraphError::new(
+                    GraphErrorCode::ProposalBatchInvalid,
+                    "derivation output is not in its producer batch",
+                ));
+            }
+        }
+        self.batch_id = derive_batch_id(BatchIdentity {
+            registry_bundle_id: &self.registry_bundle_id,
+            registry_digest: &self.registry_digest,
+            universe: &self.universe,
+            generation: &self.generation,
+            source_context_id: self.source_context_id,
+            producer_partition_id: &self.producer_partition_id,
+            entity_proposals: &self.entity_proposals,
+            relation_proposals: &self.relation_proposals,
+            assertion_records: Some(&records),
+        })?;
+        self.schema = GRAPH_PROPOSAL_BATCH_SCHEMA_V2.into();
+        self.assertion_records = Some(records);
+        Ok(self)
+    }
+
+    pub fn assertion_records(&self) -> Option<&crate::GraphAssertionRecords> {
+        self.assertion_records.as_ref()
     }
 
     #[must_use]
@@ -862,6 +936,8 @@ struct BatchIdentity<'a> {
     producer_partition_id: &'a str,
     entity_proposals: &'a [GraphEntityProposal],
     relation_proposals: &'a [GraphRelationProposal],
+    #[serde(skip_serializing_if = "Option::is_none")]
+    assertion_records: Option<&'a crate::GraphAssertionRecords>,
 }
 
 fn derive_batch_id(identity: BatchIdentity<'_>) -> GraphResult<Box<str>> {

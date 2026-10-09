@@ -60,7 +60,7 @@ fn select<'a>(
     }
 }
 
-fn origin(partition: &GraphProducerPartition) -> GraphProducerSupportOrigin<'_> {
+pub(super) fn origin(partition: &GraphProducerPartition) -> GraphProducerSupportOrigin<'_> {
     GraphProducerSupportOrigin {
         partition_id: partition.partition_id(),
         partition_digest: partition.partition_digest(),
@@ -220,6 +220,10 @@ pub(super) fn execute<'a>(
         },
         record,
         supports: Vec::new(),
+        assertion_supports: Vec::new(),
+        derivations: Vec::new(),
+        conflicts: Vec::new(),
+        derivation_complete: false,
         coverage,
         scanned_assertions: 0,
         total_supports: 0,
@@ -306,6 +310,7 @@ pub(super) fn execute<'a>(
         ));
     }
     result.support_complete = result.supports.len() == result.total_supports as usize;
+    super::records::collect(owner, &mut result, cancelled)?;
     result.boundaries.sort();
     checkpoint(cancelled)?;
     if encoded(&result)?.len() > query.limits.max_output_bytes as usize {

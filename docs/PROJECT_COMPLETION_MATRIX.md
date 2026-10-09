@@ -33,7 +33,7 @@ The root [Cargo.toml](../Cargo.toml) activates **16 members**, including the int
 | `wow-store` | Typed SQLite objects, catalogs/CAS, operation journal, leases, GC and integrity | Full E1-A migration/crash/backup acceptance; separate manifested retained ProjectStore exists, not full E2-D publication acceptance |
 | `wow-reference` | Native source/model/corrections/aliases, compatibility imports, persistent ReferenceView and publication | E0-B/E1-B normative fixture and full Reference Pack/coverage acceptance |
 | `wow-annotations` | Native Ketho-derived library projection, alias/type/catalog/inheritance/navigation slices and consumer tests | Full E1-C contract/corpus parity; scoped passing consumers are not universal semantic certification |
-| `wow-graph` | Immutable snapshots, proposals/registries, neighbors, producer partitions, bounded paths/subgraphs, retained-support explanations and scoped persistence | Full conflict/derivation explanations, cross-owner evidence resolution, normative fixtures and coherent E2-D publication |
+| `wow-graph` | Immutable snapshots, proposals/registries, neighbors, producer partitions, bounded queries, exact retained derivation/conflict records, evidence resolution and v1/v2 persistence | Complete producer-chain coverage and automatic conflict assessment, normative fixtures and coherent E2-D publication |
 | `wow-recognizers` | Structured facts, pack parser/compiler, bounded matcher and all 26 active E2-B rule IDs published through service partitions: three `core.lua.*`, five `core.toc.*`, four `core.xml.*`, three `core.state.*`, plus signal, callback, hook and library families | Full rule-specific fixtures/checksum freeze, public CLI/real-addon graph-build acceptance and E5 governance remain separate |
 | `wow-render-contract`, `wow-ketho-literals`, `modules/ketho-literals` | Typed literal wire contract, native renderer and Wasm guest | Scoped algorithm implementation, not public application/release acceptance |
 | `tools/xtask` | Native policy/source/manifest/library checks, guarded exact fast-forward, managed checkout materialization and checkout-free exact GitHub API/blob snapshots under explicit `auto`/`prompt`/`never` policy with durable replay | Lower-layer hostile-network qualification, background scheduling, live platform/fault acceptance and full schema/fixture closure remain incomplete |
@@ -212,3 +212,17 @@ partition versions, complete generation membership, read-back owner validation
 and current-record CAS. See [GRAPH_STORE.md](../apps/wow/GRAPH_STORE.md). Retained
 graph/project evidence is not a rehydrated live ProjectView. No acceptance,
 crash/power-loss, GC, backup/restore, runtime or release gate is closed by this code.
+
+## W12 retained assertion records checkpoint
+
+Exact derivation and reported conflict records are now validated at graph
+publication. Explanations traverse actual supporting/rebutting assertions, retain
+both conflict participants and report missing or truncated chains explicitly.
+Source graph and state producers preserve exact prerequisites through captured
+files; other producer chains and complete automatic conflict assessment remain
+open. Legacy record-free identities and stored v1 graphs remain readable;
+record-bearing batches/snapshots and explanation payloads use explicit v2 schemas.
+
+Fresh workspace checks on 2026-10-09 passed: native policy, fmt, check, strict
+Clippy, tests (842 passed, 1 ignored, 103 targets), rustdoc and build. This is a
+functional W12 checkpoint, not full E2-A/E2-D acceptance or a live ProjectView.

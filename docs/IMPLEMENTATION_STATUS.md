@@ -45,7 +45,7 @@ launch gates remain open.
 
 `wow graph build` now composes file/load/XML/inheritance/mixin source proposals,
 Main callable/call facts, and independent direct-call and XML script-assignment
-and SavedVariables read/write recognizer partitions. The v15 receipt retains exact source/evidence, skipped-site
+and SavedVariables read/write recognizer partitions. The v16 receipt retains exact source/evidence, skipped-site
 outcomes and final node/edge crosswalks. Inline XML handlers reuse existing syntax
 units; named handlers use concrete Emmy signatures. Method and inherited handler
 associations are Possible, not effective dispatch. The selected TOC seeds
@@ -123,8 +123,8 @@ omissions; repeated files do not manufacture an ordering DAG or runtime loading
 claims. Package ownership deduplicates support when the package and TOC file
 share the same whole-file observation.
 
-The source projection profile is `wow-project/source-load-proposals/18`, registry
-version 15; the build result is `wow-service/graph-build-result/15` and request
+The source projection profile is `wow-project/source-load-proposals/19`, registry
+version 15; the build result is `wow-service/graph-build-result/16` and request
 shape remains `/9`. A named-package fixture verifies all five TOC families through
 real project publication, matcher, partition replacement and final crosswalk.
 See [PROJECT_WORK_MAP.md](PROJECT_WORK_MAP.md) for exact local verification and
@@ -404,8 +404,10 @@ truncation. See [SUBGRAPH_USAGE.md](../crates/wow-graph/SUBGRAPH_USAGE.md).
 This completes the bounded subgraph code slice of E2-01, not its full acceptance.
 Exact retained-support explanations now use `GraphExplainQuery`; see
 [EXPLANATION_USAGE.md](../crates/wow-graph/EXPLANATION_USAGE.md). Registry-bound axes are described in
-[AXIS_USAGE.md](../crates/wow-graph/AXIS_USAGE.md). Full conflict/derivation/evidence
-resolution and coherent ProjectStore acquisition remain open.
+[AXIS_USAGE.md](../crates/wow-graph/AXIS_USAGE.md). Exact retained assertion
+records and evidence resolution now extend this route; complete producer-chain
+coverage, automatic conflict assessment and coherent live ProjectStore acquisition
+remain open.
 
 ## Retained graph CLI
 
@@ -474,13 +476,15 @@ real-addon acceptance or package gate is claimed.
 
 ## Retained source evidence reads
 
-Graph-build v7 bundles now feed every graph read directly. Explain joins the
+Current graph-build v16 bundles feed every graph read directly. Explain joins the
 validated partition owner to project-admitted file/handle metadata and a
 core-validated evidence catalog, with bounded shared derivation expansion.
 See [GRAPH_EVIDENCE.md](../apps/wow/GRAPH_EVIDENCE.md). Source bytes are not
-reopened; full graph conflicts/inference-rule records, sidecar replay, runtime
-and coherent ProjectStore remain open. Existing bare-snapshot encodings and
-build identities are unchanged. This advances code, not acceptance gates.
+reopened. W12 adds producer derivation and reported conflict records; complete
+automatic conflict assessment, sidecar replay, runtime and coherent live
+ProjectStore remain open. Record-free v1 snapshots retain their encodings and
+identities; record-bearing snapshots use v2. Older build receipts can still supply
+their extracted bare snapshot, without relabeling the receipt as v16.
 
 ## Manifested retained ProjectStore code slice
 
@@ -489,13 +493,43 @@ versions, complete generation membership, pinned read transactions, durable
 operation phases and inactive/read-back/validation/current-CAS publication.
 `wow graph publish` and `reconcile` are explicit service operations; all six graph
 reads can select one current/exact stored generation. Graph and project adapters
-restore and validate retained v7 bundle data without another analyzer session.
+restore and validate current retained bundle data without another analyzer session.
 See [GRAPH_STORE.md](../apps/wow/GRAPH_STORE.md). This supersedes the earlier
 blanket “no persistent ProjectStore” descriptions for this narrow storage slice,
 not full E2-D acceptance: live project views, incremental invalidation, retention,
 GC, backup/restore, epoch replacement and crash/power-loss acceptance remain open.
 Only the existing internal project-to-store dependency is activated; no tests or
 external dependency versions are changed. Full launch gates stay unchanged.
+
+## W12 retained assertion records
+
+`GraphProposalBatch::with_assertion_records` binds exact local/cross-producer
+inputs, rebuttals, missing prerequisites and reported unresolved conflicts.
+Partition publication validates exact batch identities, input scope, acyclic
+closure, bounded depth and confidence monotonicity. It retains all participants
+and conservatively downgrades incident relation coverage. It does not certify the
+authenticity or completeness of a producer's conflict judgment.
+
+Source19 and legacy/core state producers attach real graph prerequisites without
+another parser or analyzer. The service state explanation closes through source
+entities and captured files. Explanations return additional assertion supports,
+actual derivation/conflict observations and an explicit `derivation_complete`
+flag under scan/support/output/depth budgets. Missing legacy records and truncated
+chains retain boundaries; conflict assessment remains unavailable unless provided
+by a future complete owner assessment.
+
+Record-free v1 batch/snapshot identities remain unchanged. Record-bearing batches
+and snapshots use v2, with matching stored header/producer schemas; the loader
+accepts and validates both. Explanation and resolved-explanation payloads use v2.
+Current bundle import requires result16/source19/request9; legacy receipts remain
+available through extracted bare snapshots. See
+[GRAPH_EVIDENCE.md](../apps/wow/GRAPH_EVIDENCE.md).
+
+Fresh workspace gates on 2026-10-09 passed: policy, fmt, check, strict Clippy,
+842 tests passed (1 ignored, 103 targets), rustdoc and build. Actual publication
+regressions cover stale batches, cycles, confidence promotion, conflict retention,
+canonical identities, depth truncation and v1/v2 stored read-back. Full W12/E2
+acceptance and W13 live acquisition remain open.
 
 ## W11 semantic-repair checkpoint
 

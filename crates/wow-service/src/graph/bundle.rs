@@ -1,4 +1,4 @@
-//! Transport admission of a graph-build v15 receipt. The graph and project owners
+//! Transport admission of a graph-build v16 receipt. The graph and project owners
 //! independently validate the snapshot and source/evidence projection; remaining
 //! build sidecars are integrity-bound data, not reconstructed semantic owners.
 use serde_json::Value;

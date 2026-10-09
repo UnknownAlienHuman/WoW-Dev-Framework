@@ -335,6 +335,48 @@ fn state_core_pipeline_publishes_roots_and_literal_paths() -> Result<(), Box<dyn
         topology.edges.iter().all(|edge| !edge.fact_ids.is_empty()),
         "every core state edge keeps exact support"
     );
+    let first = topology.edges.first().ok_or("missing core relation")?;
+    let explanation = wow_graph::GraphExplainQuery::new(
+        final_snapshot.snapshot().snapshot_id().clone(),
+        wow_graph::GraphExplainSubject::Relation(first.edge_id.clone()),
+        wow_graph::GraphExplainLimits::default(),
+    )?
+    .execute(&final_snapshot, &stop)?;
+    assert!(
+        !explanation.derivations().is_empty(),
+        "real core producer retains its exact graph prerequisites"
+    );
+    assert!(
+        !explanation.assertion_supports().is_empty(),
+        "explain follows the admitted predecessor assertion"
+    );
+    assert!(
+        explanation.derivation_complete(),
+        "the state chain closes through source assertions and exact captured files"
+    );
+    assert!(explanation.derivations().iter().any(|observation| {
+        observation
+            .record
+            .rule_id
+            .starts_with("wow-project.source-graph.entity.")
+    }));
+    let shallow = wow_graph::GraphExplainLimits {
+        max_derivation_depth: 0,
+        ..wow_graph::GraphExplainLimits::default()
+    };
+    let truncated = wow_graph::GraphExplainQuery::new(
+        final_snapshot.snapshot().snapshot_id().clone(),
+        wow_graph::GraphExplainSubject::Relation(first.edge_id.clone()),
+        shallow,
+    )?
+    .execute(&final_snapshot, &stop)?;
+    assert!(!truncated.derivation_complete());
+    assert!(
+        truncated
+            .truncations()
+            .contains(&wow_graph::GraphExplanationTruncation::DerivationDepth)
+    );
+    assert!(!explanation.absence_authoritative());
     Ok(())
 }
 

@@ -43,7 +43,7 @@ use wow_recognizers::source_scripts::SourceScriptRecognition;
 use wow_recognizers::source_state::SourceStateRecognition;
 
 const MAX_BUNDLE_BYTES: usize = 32 * 1024 * 1024;
-pub(super) const GRAPH_BUILD_RESULT_SCHEMA: &str = "wow-service/graph-build-result/15";
+pub(super) const GRAPH_BUILD_RESULT_SCHEMA: &str = "wow-service/graph-build-result/16";
 
 struct BuiltGraph {
     snapshot: GraphPartitionSnapshot,

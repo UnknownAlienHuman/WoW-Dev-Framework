@@ -2,6 +2,7 @@
 //! Results borrow their immutable owner: evidence handles are not dereferenced,
 //! and missing conflict/derivation records are never manufactured.
 mod collect;
+mod records;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -16,7 +17,7 @@ use crate::{
     GraphRelationProposal, GraphResult, GraphSnapshotId, GraphUniverseId,
 };
 
-pub const GRAPH_EXPLANATION_SCHEMA: &str = "wow-graph/retained-explanation/e2-a/1";
+pub const GRAPH_EXPLANATION_SCHEMA: &str = "wow-graph/retained-explanation/e2-a/2";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(
@@ -38,6 +39,8 @@ pub struct GraphExplainLimits {
     pub max_scanned_assertions: u32,
     pub max_supports: u32,
     pub max_output_bytes: u32,
+    #[serde(default = "default_derivation_depth")]
+    pub max_derivation_depth: u32,
 }
 impl Default for GraphExplainLimits {
     fn default() -> Self {
@@ -45,6 +48,7 @@ impl Default for GraphExplainLimits {
             max_scanned_assertions: 500_000,
             max_supports: 128,
             max_output_bytes: 1_048_576,
+            max_derivation_depth: default_derivation_depth(),
         }
     }
 }
@@ -53,6 +57,7 @@ impl GraphExplainLimits {
         if !(1..=4_000_000).contains(&self.max_scanned_assertions)
             || !(1..=4096).contains(&self.max_supports)
             || !(16_384..=8_388_608).contains(&self.max_output_bytes)
+            || self.max_derivation_depth > 64
         {
             return Err(invalid(
                 "explanation limits are outside the bounded profile",
@@ -60,6 +65,9 @@ impl GraphExplainLimits {
         }
         Ok(())
     }
+}
+fn default_derivation_depth() -> u32 {
+    32
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -249,6 +257,8 @@ pub enum GraphExplanationBoundary {
     ConflictAssessmentNotAvailable,
     FoundationProducerNotRetained,
     EntityCoverageNotModeled,
+    DerivationSupportMissing,
+    RetainedConflictsUnresolved,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -256,6 +266,8 @@ pub enum GraphExplanationBoundary {
 pub enum GraphExplanationTruncation {
     Supports,
     OutputBytes,
+    DerivationDepth,
+    AssertionWork,
 }
 
 /// A read view, not a publishable assertion or graph snapshot. `support_complete`
@@ -272,6 +284,10 @@ pub struct GraphExplanation<'a> {
     registry: GraphExplanationRegistry<'a>,
     record: GraphExplainedRecord<'a>,
     supports: Vec<GraphAssertionSupport<'a>>,
+    assertion_supports: Vec<GraphAssertionSupport<'a>>,
+    derivations: Vec<GraphDerivationObservation<'a>>,
+    conflicts: Vec<GraphConflictObservation<'a>>,
+    derivation_complete: bool,
     coverage: Vec<GraphExplanationCoverage<'a>>,
     scanned_assertions: u32,
     total_supports: u32,
@@ -279,6 +295,19 @@ pub struct GraphExplanation<'a> {
     truncations: Vec<GraphExplanationTruncation>,
     boundaries: Vec<GraphExplanationBoundary>,
     absence_authoritative: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct GraphDerivationObservation<'a> {
+    pub record_id: Box<str>,
+    pub producer: GraphProducerSupportOrigin<'a>,
+    pub record: &'a crate::GraphDerivationRecord,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct GraphConflictObservation<'a> {
+    pub record_id: Box<str>,
+    pub producer: GraphProducerSupportOrigin<'a>,
+    pub record: &'a crate::GraphConflictRecord,
 }
 impl<'a> GraphExplanation<'a> {
     pub(crate) fn mark_evidence_resolution(&mut self, complete: bool) {
@@ -310,6 +339,18 @@ impl<'a> GraphExplanation<'a> {
     #[must_use]
     pub fn supports(&self) -> &[GraphAssertionSupport<'a>] {
         &self.supports
+    }
+    pub fn assertion_supports(&self) -> &[GraphAssertionSupport<'a>] {
+        &self.assertion_supports
+    }
+    pub fn derivations(&self) -> &[GraphDerivationObservation<'a>] {
+        &self.derivations
+    }
+    pub fn conflicts(&self) -> &[GraphConflictObservation<'a>] {
+        &self.conflicts
+    }
+    pub fn derivation_complete(&self) -> bool {
+        self.derivation_complete
     }
     #[must_use]
     pub fn coverage(&self) -> &[GraphExplanationCoverage<'a>] {

@@ -127,11 +127,12 @@ impl GraphExplainQuery {
             limits.max_work,
             stop,
         )?;
-        let supports_complete = explanation.support_complete();
+        let supports_complete =
+            explanation.support_complete() && explanation.truncations().is_empty();
         let mut result = GraphResolvedExplanation {
-            schema: "wow-graph/resolved-explanation/e2-a/1",
+            schema: "wow-graph/resolved-explanation/e2-a/2",
             query_digest: digest(
-                "graph-resolved-explanation-query/1",
+                "graph-resolved-explanation-query/2",
                 &(self, limits, catalog.digest()),
             )?,
             explanation,
@@ -214,7 +215,11 @@ fn collect_roots(
             evidence.insert(id.clone());
         }
     }
-    for support in explanation.supports() {
+    for support in explanation
+        .supports()
+        .iter()
+        .chain(explanation.assertion_supports())
+    {
         let (evidence_ids, source_ids) = match support {
             GraphAssertionSupport::ProducerEntity { proposal, .. } => {
                 (proposal.evidence_ids(), proposal.source_handle_ids())

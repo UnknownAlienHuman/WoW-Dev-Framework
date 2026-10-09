@@ -3,8 +3,8 @@
 Updated 2026-10-09, America/New_York. This map routes implementation work; it
 does not replace the package contracts or certify their acceptance.
 
-The verified starting checkpoint is `56c3a706d40a27ba5faf73cc6e427a540883cada`,
-published and read back from `main`. It follows `e4d8ee7`, including the checked W11
+The verified W11 predecessor is `342359b41ba3b6ad6ec3b6ee7654408c0fe01a78`,
+published and read back from `main`. It includes the checked W11
 semantic-repair product tree recorded in
 [W11_SEMANTIC_REPAIR_MAP_2026-10-09.md](W11_SEMANTIC_REPAIR_MAP_2026-10-09.md).
 The root workspace contains 16 real Rust members. Work continues sequentially
@@ -76,7 +76,7 @@ full graph acceptance and the checkpoint's CI conclusions remain open.
 |---|---|---|
 | [W11 / PR 102](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/102) | Public CLI and per-rule acceptance closure | All 26 functional rule IDs publish; full E2-B acceptance remains open |
 | [Issue 103](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/103) | Executable structural mutations and admitted per-rule fixtures | After functional implementation; frozen fixtures are not rewritten by tests |
-| [W12 / PR 80](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/80) | Conflict retention and complete derivation explanations | Existing graph query code is reused |
+| [W12 / PR 80](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/80) | Extend real producer chains and conflict assessment | Exact retained records, publication validation and bounded explanations are executable; full acceptance remains open |
 | [W13 / PR 81](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/81) | Coherent live ProjectView/GraphView publication | A graph-only retained snapshot is insufficient |
 | [W14 / PR 82](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/82), [W15 / PR 83](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/83), [W16 / PR 84](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/84) | Incremental invalidation, retained roots/GC, backup/recovery | Exact generation and durable reconciliation gates |
 | [W17 / PR 85](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/85), [W18 / PR 86](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/86), [W19 / PR 87](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/87) | Blizzard source universe, Project Map/skeletons, context packs | Real prerequisite views before context |
@@ -116,11 +116,12 @@ The XML pipeline additionally verifies explicit versus lexical parentage, Object
 traversal confidence filtering, inheritance/template references, exact named and
 inline handler bindings, unresolved/ambiguous omissions and source-only chunks.
 
-The source-graph projection profile is `wow-project/source-load-proposals/18`
+The source-graph projection profile is `wow-project/source-load-proposals/19`
 (registry version 15),
-the graph-build result is `wow-service/graph-build-result/15`, and the unchanged
-request shape is `wow-service/graph-build-request/9`. Existing retained graphs and
-graph-read request formats are unchanged.
+the graph-build result is `wow-service/graph-build-result/16`, and the unchanged
+request shape is `wow-service/graph-build-request/9`. Legacy record-free batches
+and snapshots retain v1 identities; record-bearing ones use explicit v2 schemas.
+Explanation payloads use v2; graph-read request shapes remain compatible.
 
 The state checkpoint publishes `core.state.saved_variable_root`,
 `core.state.literal_path_read` and `core.state.literal_path_write`. Root facts
@@ -145,6 +146,28 @@ graph-build acceptance, the Ketho MCP comparative gate, Windows and named-client
 runtime checks remain open, as does full E2-B package acceptance. The earlier focused
 graph/project test run remains part of this evidence and is not a substitute for the
 whole-workspace suite.
+
+## W12 assertion records checkpoint
+
+Graph publication now admits producer-local and exact cross-producer assertion
+references, derivation inputs/rebuttals and reported unresolved conflicts. It
+rejects cycles, stale batches, mixed scopes and confidence promotion before
+publication. Conflicting participants remain intact; incident relation coverage
+is downgraded conservatively, without a selected winner or negative authority.
+
+Explanations return exact additional supports, derivation/conflict observations,
+producer versions and missing/truncated boundaries under scan, support, byte and
+depth limits. Source19 and legacy/core state producers retain real prerequisites;
+the service state chain closes through captured file assertions. Other producers
+may still lack derivation records. Reported conflicts are not a complete automatic
+conflict assessment. See [GRAPH_EVIDENCE.md](../apps/wow/GRAPH_EVIDENCE.md).
+
+Fresh checks on 2026-10-09 passed: native policy (1,409 distributable files),
+formatting, whole-workspace check, strict Clippy, tests (842 passed, 1 ignored,
+103 targets), rustdoc and whole-workspace build. Focused regressions exercise
+actual publication, stale/cyclic/promoted-input rejection, canonical identities,
+conflict retention, exact state chains and stored v1/v2 read-back. These checks
+do not close W12/E2 package acceptance, W13 live views or source/runtime gates.
 
 Gethe `live` resolved at operation start to
 `09b9db7948abc9b9648dedaab51eb0cf3ee67b31`. This is one observation, not a

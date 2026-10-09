@@ -1,4 +1,5 @@
 //! Direct source/load/XML proposals. No recognizer inference or graph publication.
+mod derivations;
 mod functions;
 mod packages;
 pub mod persistence;
@@ -64,7 +65,7 @@ use crate::{
     ProjectError, ProjectErrorCode, ProjectKind, ProjectPhase, ProjectResult, ProjectView,
 };
 
-pub const SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/18";
+pub const SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/19";
 pub const SOURCE_GRAPH_PARTITION: &str = "wow-project.source-load";
 const MAX_FILES: usize = 4096;
 const MAX_LOADS: usize = 8192;
@@ -1172,6 +1173,14 @@ pub fn build_source_graph_proposals(
         )
         .map_err(|_| invalid())?,
     ];
+    let derivations = derivations::records(
+        &provenance,
+        &universe,
+        &generation,
+        &entities,
+        &relations,
+        stop,
+    )?;
     let batch = GraphProposalBatch::build(
         registry.bundle_id(),
         registry.registry_digest(),
@@ -1182,6 +1191,7 @@ pub fn build_source_graph_proposals(
         entities,
         relations,
     )
+    .and_then(|batch| batch.with_assertion_records(derivations))
     .map_err(|_| invalid())?;
     crate::analyzer::checkpoint(stop)?;
     Ok(ProjectSourceGraphProposals {
