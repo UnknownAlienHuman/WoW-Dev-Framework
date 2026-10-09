@@ -36,9 +36,9 @@ use crate::{
 };
 
 pub const W2_PARTITION: &str = "wow-recognizers.lua-native-event-bridges";
-pub const W2_PROFILE: &str = "wow-recognizers/lua-native-event-bridges/2";
+pub const W2_PROFILE: &str = "wow-recognizers/lua-native-event-bridges/3";
 const W2_FACT_PARTITION: &str = "wow-recognizers.lua-native-event-bridge-facts";
-const W2_FACT_PROFILE: &str = "wow-recognizers-lua-native-event-bridge-facts-2";
+const W2_FACT_PROFILE: &str = "wow-recognizers-lua-native-event-bridge-facts-3";
 const W2_BRIDGE_RULE: &str = "core.signal.native_event_registry_bridge";
 const W2_FACT_KIND: &str = "lua_native_event_bridge";
 const W2_NATIVE_EVENT_ENTITY: &str = "native_event";
@@ -940,6 +940,12 @@ fn w2_signal_fact(
             RecognizerFactValue::Reference(callback.proposal_id.clone().into()),
         );
     }
+    let mut source_handle_ids = BTreeSet::from([site.handle, site.registry_handle]);
+    let mut evidence_ids = BTreeSet::from([site.evidence, site.registry_evidence]);
+    if let Some(callback) = site.callback_binding.as_ref() {
+        source_handle_ids.insert(callback.handle);
+        evidence_ids.insert(callback.evidence);
+    }
     RecognizerFact::new(
         input.context.context_id(),
         RecognizerFactInput {
@@ -953,12 +959,8 @@ fn w2_signal_fact(
             producer_version: W2_FACT_PROFILE.into(),
             confidence: GraphConfidence::Derived,
             fields,
-            source_handle_ids: BTreeSet::from([site.handle, site.registry_handle])
-                .into_iter()
-                .collect(),
-            evidence_ids: BTreeSet::from([site.evidence, site.registry_evidence])
-                .into_iter()
-                .collect(),
+            source_handle_ids: source_handle_ids.into_iter().collect(),
+            evidence_ids: evidence_ids.into_iter().collect(),
         },
         limits,
     )
@@ -1097,11 +1099,11 @@ fn w2_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRecogniz
         schema_version: crate::RECOGNIZER_PACK_SCHEMA_VERSION,
         pack: RecognizerPack {
             pack_id: "wow-core-lua-native-event-bridges".into(),
-            version: "2".into(),
+            version: "3".into(),
             trust_class: RecognizerPackTrustClass::Core,
             fact_schema_profile_id: W2_FACT_PROFILE.into(),
             graph_registry_bundle_id: registry_bundle_id.into(),
-            evaluation_profile_id: "wow-recognizers-w11-native-event-bridge-2".into(),
+            evaluation_profile_id: "wow-recognizers-w11-native-event-bridge-3".into(),
             rollout: RecognizerPackRollout::Shadow,
             budgets: RecognizerPackBudgets {
                 max_rules: 8,

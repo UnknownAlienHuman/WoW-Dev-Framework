@@ -462,9 +462,9 @@ use wow_emmy::function_calls::{FunctionCallReport, SourceCallLiteral};
 // managed-object or Secret legality: these are universal structural roles only.
 
 pub const W5_HOOK_PARTITION: &str = "wow-recognizers.lua-hooks";
-pub const W5_HOOK_PROFILE: &str = "wow-recognizers/lua-hooks/2";
+pub const W5_HOOK_PROFILE: &str = "wow-recognizers/lua-hooks/3";
 const W5_FACT_PARTITION: &str = "wow-recognizers.lua-hook-facts";
-const W5_FACT_PROFILE: &str = "wow-recognizers-lua-hook-call-facts-2";
+const W5_FACT_PROFILE: &str = "wow-recognizers-lua-hook-call-facts-3";
 const W5_FACT_KIND: &str = "lua_call";
 const W5_SET_SCRIPT_RULE: &str = "core.hook.set_script";
 const W5_HOOK_SCRIPT_RULE: &str = "core.hook.hook_script";
@@ -823,7 +823,7 @@ pub fn recognize_source_hooks(
             None
         };
         let receiver_exact = matches!(callable, W5_SET_SCRIPT_CALLABLE | W5_HOOK_SCRIPT_CALLABLE)
-            && call.is_colon_call();
+            && receiver_binding.is_some();
         let mut fields = BTreeMap::from([
             (
                 "call_id".into(),
@@ -1558,11 +1558,11 @@ fn w5_hook_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRec
         schema_version: crate::RECOGNIZER_PACK_SCHEMA_VERSION,
         pack: RecognizerPack {
             pack_id: "wow-core-lua-hooks".into(),
-            version: "2".into(),
+            version: "3".into(),
             trust_class: RecognizerPackTrustClass::Core,
             fact_schema_profile_id: W5_FACT_PROFILE.into(),
             graph_registry_bundle_id: registry_bundle_id.into(),
-            evaluation_profile_id: "wow-recognizers-w11-hooks-2".into(),
+            evaluation_profile_id: "wow-recognizers-w11-hooks-3".into(),
             rollout: RecognizerPackRollout::Shadow,
             budgets: RecognizerPackBudgets {
                 max_rules: 8,
@@ -1593,10 +1593,6 @@ fn w5_hook_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRec
                         RecognizerClause::FieldEq {
                             field: "call.colon_call".into(),
                             value: crate::RecognizerPackLiteral::Boolean(true),
-                        },
-                        RecognizerClause::FieldEq {
-                            field: "call.receiver_kind".into(),
-                            value: crate::RecognizerPackLiteral::String(W5_RECEIVER_EXACT.into()),
                         },
                         RecognizerClause::FieldEq {
                             field: "call.argument_0_kind".into(),
@@ -1635,10 +1631,6 @@ fn w5_hook_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRec
                         RecognizerClause::FieldEq {
                             field: "call.colon_call".into(),
                             value: crate::RecognizerPackLiteral::Boolean(true),
-                        },
-                        RecognizerClause::FieldEq {
-                            field: "call.receiver_kind".into(),
-                            value: crate::RecognizerPackLiteral::String(W5_RECEIVER_EXACT.into()),
                         },
                         RecognizerClause::FieldEq {
                             field: "call.argument_0_kind".into(),

@@ -822,7 +822,7 @@ fn w1_validate_support(
 // ===== BEGIN WORKER 3: custom registry producer and subscription =====
 
 pub const W3_SIGNAL_PARTITION: &str = "wow-recognizers.lua-custom-signals";
-pub const W3_SIGNAL_PROFILE: &str = "wow-recognizers/lua-custom-signals/2";
+pub const W3_SIGNAL_PROFILE: &str = "wow-recognizers/lua-custom-signals/3";
 const W3_FACT_PARTITION: &str = "wow-recognizers.lua-custom-signal-facts";
 const W3_FACT_PROFILE: &str = "wow-recognizers-lua-custom-signal-facts-2";
 const W3_PRODUCER_RULE: &str = "core.signal.custom_registry_producer";
@@ -1591,12 +1591,19 @@ pub fn w3_recognize_signals(
         {
             return Err(w3_failure(RecognizerErrorCode::AdapterFactMismatch));
         }
-        let handles = BTreeSet::from([site.handle, site.receiver_handle])
-            .into_iter()
-            .collect::<Vec<_>>();
-        let evidence = BTreeSet::from([site.evidence, site.receiver_evidence])
-            .into_iter()
-            .collect::<Vec<_>>();
+        let mut handles = BTreeSet::from([site.handle, site.receiver_handle]);
+        let mut evidence = BTreeSet::from([site.evidence, site.receiver_evidence]);
+        if let Some(producer_call_id) = producer_call_id {
+            let producer = sites
+                .get(producer_call_id.as_str())
+                .ok_or_else(|| w3_failure(RecognizerErrorCode::AdapterBindingMissing))?;
+            handles.insert(producer.handle);
+            handles.insert(producer.receiver_handle);
+            evidence.insert(producer.evidence);
+            evidence.insert(producer.receiver_evidence);
+        }
+        let handles = handles.into_iter().collect::<Vec<_>>();
+        let evidence = evidence.into_iter().collect::<Vec<_>>();
         let graph_confidence = if matches!(assertion, W3Assertion::Subscription { .. })
             && producer_call_id.is_none()
         {

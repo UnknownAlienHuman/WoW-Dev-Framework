@@ -366,7 +366,7 @@ keep the previous analyzer mode. See [GRAPH_BUILD.md](../apps/wow/GRAPH_BUILD.md
 Dynamic/Library/inline-XML calls, direct self-edges, non-call recognizers, persistent
 ProjectStore and full E2 acceptance remain open. No acceptance/checksum gate moves.
 
-## W11 first core construction recognizer slice
+## Historical W11 first construction checkpoint
 
 The first W11 family slice is executable on `main`. The Emmy function-call sidecar
 profile is now `wow-emmy/function-call-facts/5`: each physical Main call retains
@@ -380,9 +380,9 @@ pack/parser/compiler/matcher into the independent
 entities keyed by the exact call occurrence and `FactoryCreates` relations from the
 captured caller function. Dynamic/unresolved arguments retain Possible or
 NotEvaluated authority; no runtime frame existence, lifecycle, parent/template
-application, protection, taint or execution claim is made. `CreateFromMixins`,
-mixin assignment and the remaining W11 event/callback/hook/library families remain
-unimplemented by this slice.
+application, protection, taint or execution claim is made. At that checkpoint,
+`CreateFromMixins`, mixin assignment and the event/callback/hook/library families
+were still unimplemented; the later W11 sections supersede that historical state.
 
 `wow graph build` result schema is now `wow-service/graph-build-result/10` and
 the source graph profile is `wow-project/source-load-proposals/10`; the request
