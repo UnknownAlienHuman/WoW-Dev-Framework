@@ -20,6 +20,9 @@ mod materialized;
 mod scripts;
 mod signals;
 mod state;
+mod state_core;
+#[cfg(test)]
+mod state_core_tests;
 mod toc;
 #[cfg(test)]
 mod toc_tests;
@@ -40,7 +43,7 @@ use wow_recognizers::source_scripts::SourceScriptRecognition;
 use wow_recognizers::source_state::SourceStateRecognition;
 
 const MAX_BUNDLE_BYTES: usize = 32 * 1024 * 1024;
-pub(super) const GRAPH_BUILD_RESULT_SCHEMA: &str = "wow-service/graph-build-result/14";
+pub(super) const GRAPH_BUILD_RESULT_SCHEMA: &str = "wow-service/graph-build-result/15";
 
 struct BuiltGraph {
     snapshot: GraphPartitionSnapshot,
@@ -83,6 +86,10 @@ struct BuiltGraph {
     toc_topology: toc::TocTopology,
     xml_recognition: Vec<wow_recognizers::source_xml::SourceXmlRecognition>,
     xml_topology: xml::XmlTopology,
+    state_root_recognition: wow_recognizers::source_toc::SourceTocRecognition,
+    state_root_topology: toc::TocTopology,
+    state_core_recognition: Vec<wow_recognizers::source_state_core::SourceStateCoreRecognition>,
+    state_core_topology: state_core::StateCoreTopology,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -217,6 +224,11 @@ pub struct GraphBuildResult {
     xml_recognition: Vec<wow_recognizers::source_xml::SourceXmlRecognition>,
     xml_topology: xml::XmlTopology,
     #[serde(skip_serializing_if = "Option::is_none")]
+    state_root_recognition: Option<wow_recognizers::source_toc::SourceTocRecognition>,
+    state_root_topology: toc::TocTopology,
+    state_core_recognition: Vec<wow_recognizers::source_state_core::SourceStateCoreRecognition>,
+    state_core_topology: state_core::StateCoreTopology,
+    #[serde(skip_serializing_if = "Option::is_none")]
     snapshot: Option<GraphPartitionSnapshot>,
     #[serde(skip_serializing_if = "Option::is_none")]
     snapshot_input_digest: Option<Box<str>>,
@@ -289,6 +301,10 @@ impl GraphBuildResult {
         self.toc_topology = toc::TocTopology::default();
         self.xml_recognition.clear();
         self.xml_topology = xml::XmlTopology::default();
+        self.state_root_recognition = None;
+        self.state_root_topology = toc::TocTopology::default();
+        self.state_core_recognition.clear();
+        self.state_core_topology = state_core::StateCoreTopology::default();
         self.signal_recognition = None;
         self.bridge_recognition = None;
         self.custom_recognition = None;
@@ -365,6 +381,10 @@ pub fn execute_graph_build(
         toc_topology: toc::TocTopology::default(),
         xml_recognition: Vec::new(),
         xml_topology: xml::XmlTopology::default(),
+        state_root_recognition: None,
+        state_root_topology: toc::TocTopology::default(),
+        state_core_recognition: Vec::new(),
+        state_core_topology: state_core::StateCoreTopology::default(),
         state_nodes: StateNodes::empty(),
         state_edges: Vec::new(),
         handler_nodes: Vec::new(),
@@ -437,6 +457,10 @@ pub fn execute_graph_build(
             toc_topology,
             xml_recognition,
             xml_topology,
+            state_root_recognition,
+            state_root_topology,
+            state_core_recognition,
+            state_core_topology,
             handler_nodes,
             script_edges,
         }) => {
@@ -475,6 +499,10 @@ pub fn execute_graph_build(
             result.toc_topology = toc_topology;
             result.xml_recognition = xml_recognition;
             result.xml_topology = xml_topology;
+            result.state_root_recognition = Some(state_root_recognition);
+            result.state_root_topology = state_root_topology;
+            result.state_core_recognition = state_core_recognition;
+            result.state_core_topology = state_core_topology;
             result.handler_nodes = handler_nodes;
             result.script_edges = script_edges;
             result.snapshot = Some(snapshot);
@@ -561,8 +589,17 @@ fn compose(
     ) = signals::publish_signals(&snapshot, &provenance, stop)?;
     let (snapshot, toc_recognition) = toc::publish(&snapshot, &provenance, stop)?;
     let (snapshot, xml_recognition) = xml::publish(&snapshot, &provenance, stop)?;
+    let (snapshot, state_root_recognition) = toc::publish_state_root(&snapshot, &provenance, stop)?;
+    let (snapshot, state_core_recognition) =
+        state_core::publish(&snapshot, &provenance, &state_recognition, stop)?;
     let toc_topology = toc::maps(&snapshot, &toc_recognition, stop)?;
     let xml_topology = xml::maps(&snapshot, &xml_recognition, stop)?;
+    let state_root_topology = toc::maps(
+        &snapshot,
+        std::slice::from_ref(&state_root_recognition),
+        stop,
+    )?;
+    let state_core_topology = state_core::maps(&snapshot, &state_core_recognition, stop)?;
     let (state_nodes, state_edges) = state::maps(&snapshot, &provenance, &state_recognition, stop)?;
     let signal_topology = signals::maps(
         &snapshot,
@@ -730,6 +767,10 @@ fn compose(
         toc_topology,
         xml_recognition,
         xml_topology,
+        state_root_recognition,
+        state_root_topology,
+        state_core_recognition,
+        state_core_topology,
         hook_recognition,
         library_recognition,
         handler_nodes,

@@ -64,7 +64,7 @@ use crate::{
     ProjectError, ProjectErrorCode, ProjectKind, ProjectPhase, ProjectResult, ProjectView,
 };
 
-pub const SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/17";
+pub const SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/18";
 pub const SOURCE_GRAPH_PARTITION: &str = "wow-project.source-load";
 const MAX_FILES: usize = 4096;
 const MAX_LOADS: usize = 8192;
@@ -73,6 +73,7 @@ const MAX_RECOGNIZER_NODES: usize = functions::MAX_CALLS * 2;
 const MAX_SIGNAL_RELATION_EDGES: usize = 131072;
 const MAX_RECOGNIZER_EDGES: usize = functions::MAX_CALLS * 19 + MAX_SIGNAL_RELATION_EDGES;
 const MAX_MIXIN_ASSIGNMENT_EDGES: usize = 65_536;
+const MAX_STATE_CORE_EDGES: usize = state::MAX_ROOTS + state::MAX_ACCESSES;
 const MAX_XML_RECOGNIZER_NODES: usize = xml::MAX_DECLARATIONS + scripts::MAX_HANDLERS;
 const MAX_XML_RECOGNIZER_EDGES: usize = xml::MAX_DECLARATIONS * 3
     + xml::MAX_INHERITANCE_REFERENCES * 2
@@ -100,6 +101,7 @@ const MAX_EDGES: usize = MAX_LOADS
     + MAX_RECOGNIZER_EDGES
     + MAX_MIXIN_ASSIGNMENT_EDGES
     + MAX_XML_RECOGNIZER_EDGES
+    + MAX_STATE_CORE_EDGES
     + scripts::MAX_HANDLERS
     + scripts::MAX_BINDINGS
     + state::MAX_ROOTS
@@ -516,7 +518,7 @@ fn registry() -> ProjectResult<GraphRegistryBundle> {
         "state_path",
         vec!["project".into()],
         vec!["root".into(), "path".into()],
-        vec![GraphConfidence::Derived],
+        vec![GraphConfidence::Derived, GraphConfidence::Possible],
     )
     .map_err(|_| invalid())?;
     for (id, relation) in [
@@ -669,7 +671,7 @@ fn registry() -> ProjectResult<GraphRegistryBundle> {
     ];
     toc_registry::extend(&mut entities, &mut relations)?;
     xml_registry::extend(&mut entities, &mut relations)?;
-    GraphRegistryBundle::build("wow-project.source-load", "14", entities, relations)
+    GraphRegistryBundle::build("wow-project.source-load", "15", entities, relations)
         .map_err(|_| invalid())
 }
 

@@ -239,7 +239,9 @@ pub(super) fn execute(
             GraphRelationKind::OptionalDependsOn,
         ],
         SourceTocFamily::LoadOnDemand => vec![GraphRelationKind::Defines],
-        SourceTocFamily::SavedVariables => vec![GraphRelationKind::Owns],
+        SourceTocFamily::SavedVariables | SourceTocFamily::SavedVariableRoot => {
+            vec![GraphRelationKind::Owns]
+        }
     };
     let coverage = input
         .owner

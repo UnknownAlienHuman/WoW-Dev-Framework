@@ -26,8 +26,13 @@ pub enum SourceTocFamily {
     Dependencies,
     LoadOnDemand,
     SavedVariables,
+    SavedVariableRoot,
 }
 impl SourceTocFamily {
+    /// The five original core.toc families keep their exact identities, order
+    /// and partition digests. SavedVariableRoot is excluded from ALL because the
+    /// service publishes it explicitly after these five; listing it here would
+    /// publish the state-root partition twice.
     pub const ALL: [Self; 5] = [
         Self::Package,
         Self::FileOrder,
@@ -42,6 +47,7 @@ impl SourceTocFamily {
             Self::Dependencies => "core.toc.dependencies",
             Self::LoadOnDemand => "core.toc.load_on_demand",
             Self::SavedVariables => "core.toc.saved_variables",
+            Self::SavedVariableRoot => "core.state.saved_variable_root",
         }
     }
     pub const fn partition_id(self) -> &'static str {
@@ -51,6 +57,7 @@ impl SourceTocFamily {
             Self::Dependencies => "wow-recognizers.toc-dependencies",
             Self::LoadOnDemand => "wow-recognizers.toc-load-on-demand",
             Self::SavedVariables => "wow-recognizers.toc-saved-variables",
+            Self::SavedVariableRoot => "wow-recognizers.state-root",
         }
     }
     pub const fn capability_id(self) -> &'static str {
@@ -60,6 +67,7 @@ impl SourceTocFamily {
             Self::Dependencies => "project.toc.dependencies",
             Self::LoadOnDemand => "project.toc.load_on_demand",
             Self::SavedVariables => "project.toc.saved_variables",
+            Self::SavedVariableRoot => "project.toc.saved_variable_root",
         }
     }
 }
@@ -202,6 +210,7 @@ enum Recipe {
     OptionalDependency,
     LoadPolicy,
     SavedVariable,
+    StateRoot,
 }
 impl Recipe {
     const fn family(self) -> SourceTocFamily {
@@ -211,6 +220,7 @@ impl Recipe {
             Self::RequiredDependency | Self::OptionalDependency => SourceTocFamily::Dependencies,
             Self::LoadPolicy => SourceTocFamily::LoadOnDemand,
             Self::SavedVariable => SourceTocFamily::SavedVariables,
+            Self::StateRoot => SourceTocFamily::SavedVariableRoot,
         }
     }
     const fn name(self) -> &'static str {
@@ -223,6 +233,7 @@ impl Recipe {
             Self::OptionalDependency => "toc_dependency_optional",
             Self::LoadPolicy => "toc_load_policy",
             Self::SavedVariable => "toc_saved_variable",
+            Self::StateRoot => "toc_state_root",
         }
     }
     fn for_family(family: SourceTocFamily) -> Vec<Self> {
@@ -234,6 +245,7 @@ impl Recipe {
             }
             SourceTocFamily::LoadOnDemand => vec![Self::LoadPolicy],
             SourceTocFamily::SavedVariables => vec![Self::SavedVariable],
+            SourceTocFamily::SavedVariableRoot => vec![Self::StateRoot],
         }
     }
 }

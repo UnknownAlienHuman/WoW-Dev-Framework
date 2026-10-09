@@ -45,7 +45,7 @@ launch gates remain open.
 
 `wow graph build` now composes file/load/XML/inheritance/mixin source proposals,
 Main callable/call facts, and independent direct-call and XML script-assignment
-and SavedVariables read/write recognizer partitions. The v14 receipt retains exact source/evidence, skipped-site
+and SavedVariables read/write recognizer partitions. The v15 receipt retains exact source/evidence, skipped-site
 outcomes and final node/edge crosswalks. Inline XML handlers reuse existing syntax
 units; named handlers use concrete Emmy signatures. Method and inherited handler
 associations are Possible, not effective dispatch. The selected TOC seeds
@@ -80,18 +80,17 @@ than a silent skip. The published partitions are projected into node and edge
 crosswalks and bound into `BuiltGraph` and `GraphBuildResult` alongside the existing
 owners.
 
-The frozen E2-B contract declares 26 active rule ids. Twenty-three are implemented and
+The frozen E2-B contract declares 26 active rule ids. All are implemented and
 published as functional core rule service ids: the core.lua.* triples (create_frame,
 create_from_mixins, mixin_assignment), the eleven signal/hook/library families above and
-the five selected-TOC and four XML families described below. The CVar adapter now publishes the
+the five selected-TOC, four XML and three state families described below. The CVar adapter now publishes the
 exact matcher predicates it consumes (`has_cvar_key` and `exact_cvar_key`) and retains
 an exact callback declaration in both fact support and the recognition receipt when
-one resolves; a dynamic callback does not fabricate an endpoint. Three `core.state.*`
-rules remain. Existing state owners have partial
-source records and earlier consumers; the remaining declarative core adapters
-and their service publication must reuse those owners.
+one resolves; a dynamic callback does not fabricate an endpoint. The `core.state.*`
+adapters reuse selected TOC facts and the admitted legacy state partition, retaining
+the original analyzer/span/support validation rather than running another analysis.
 
-Twenty-three published rule ids are not full acceptance. E2 acceptance, the E0
+Twenty-six published rule ids are not full acceptance. E2 acceptance, the E0
 fixtures/identity/checksum gates, real-addon runtime validation, the Ketho parity
 baseline, the complete `apps/wow` CLI surface and coherent ProjectStore publication
 remain open and are NotEvaluated.
@@ -124,8 +123,8 @@ omissions; repeated files do not manufacture an ordering DAG or runtime loading
 claims. Package ownership deduplicates support when the package and TOC file
 share the same whole-file observation.
 
-The source projection profile is `wow-project/source-load-proposals/17`, registry
-version 14; the build result is `wow-service/graph-build-result/14` and request
+The source projection profile is `wow-project/source-load-proposals/18`, registry
+version 15; the build result is `wow-service/graph-build-result/15` and request
 shape remains `/9`. A named-package fixture verifies all five TOC families through
 real project publication, matcher, partition replacement and final crosswalk.
 See [PROJECT_WORK_MAP.md](PROJECT_WORK_MAP.md) for exact local verification and
@@ -156,6 +155,24 @@ explicit versus lexical parentage, confidence filtering, inheritance, named/inli
 handlers, unresolved/ambiguous targets and source-only chunks. This is functional
 pipeline verification; full E2-B and per-rule fixture freeze remain open.
 
+
+## W11 state core families
+
+`core.state.saved_variable_root`, `core.state.literal_path_read` and
+`core.state.literal_path_write` publish at rule version 1. Root publication reuses
+the selected TOC adapter. Read/write publication consumes exact admitted legacy
+accesses and binds their complete source-handle/evidence vectors before executing
+the existing matcher. Path keys remain the owner's Identifier root plus String
+path; equivalent paths merge support. Recognition retains bundles, outputs,
+admission partition digest and final proposal crosswalks. All source-level
+associations remain Partial/Possible; empty target shapes are NotEvaluated.
+
+Fresh whole-workspace build, check, strict Clippy, rustdoc, format, native policy
+and tests passed on 2026-10-09 (838 passed, 1 ignored, 102 targets). The integration
+fixture verifies exact account/character roots, alias support, dynamic omissions,
+local shadowing, merged paths and rejection of a substituted source handle at
+unchanged endpoints/evidence. No runtime persistence, public CLI acceptance,
+per-rule fixture freeze or full E2-B acceptance follows.
 
 ## Explicit graph source read-back
 

@@ -34,7 +34,7 @@ The root [Cargo.toml](../Cargo.toml) activates **16 members**, including the int
 | `wow-reference` | Native source/model/corrections/aliases, compatibility imports, persistent ReferenceView and publication | E0-B/E1-B normative fixture and full Reference Pack/coverage acceptance |
 | `wow-annotations` | Native Ketho-derived library projection, alias/type/catalog/inheritance/navigation slices and consumer tests | Full E1-C contract/corpus parity; scoped passing consumers are not universal semantic certification |
 | `wow-graph` | Immutable snapshots, proposals/registries, neighbors, producer partitions, bounded paths/subgraphs, retained-support explanations and scoped persistence | Full conflict/derivation explanations, cross-owner evidence resolution, normative fixtures and coherent E2-D publication |
-| `wow-recognizers` | Structured facts, pack parser/compiler, bounded matcher and 23 of 26 active E2-B rule IDs published through service partitions: three `core.lua.*`, five `core.toc.*`, four `core.xml.*`, plus signal, callback, hook and library families | Three state rules, full rule-specific fixtures/checksum freeze, real-addon graph-build acceptance and E5 governance remain separate |
+| `wow-recognizers` | Structured facts, pack parser/compiler, bounded matcher and all 26 active E2-B rule IDs published through service partitions: three `core.lua.*`, five `core.toc.*`, four `core.xml.*`, three `core.state.*`, plus signal, callback, hook and library families | Full rule-specific fixtures/checksum freeze, public CLI/real-addon graph-build acceptance and E5 governance remain separate |
 | `wow-render-contract`, `wow-ketho-literals`, `modules/ketho-literals` | Typed literal wire contract, native renderer and Wasm guest | Scoped algorithm implementation, not public application/release acceptance |
 | `tools/xtask` | Native policy/source/manifest/library checks, guarded exact fast-forward, managed checkout materialization and checkout-free exact GitHub API/blob snapshots under explicit `auto`/`prompt`/`never` policy with durable replay | Lower-layer hostile-network qualification, background scheduling, live platform/fault acceptance and full schema/fixture closure remain incomplete |
 
@@ -60,7 +60,7 @@ no Rust implementation in the audited source. Their documentation is not a binar
 | E0-F | Partial service and inline/disk-input public CLI | Thin `wow status`/`wow check`, owner-composed fixture, output/exit/cancellation/resource gates |
 | E1-A–E1-C | Partial executable | Finish only verified missing contract/acceptance slices; do not recreate existing store/reference/annotation implementations |
 | E1-D | Partial executable Reference Pack service and active internal builder with durable materialization/finalization | Close external parity/license/rebuild evidence, Windows/process-loss acceptance and complete package gates; code presence is not `ValidatedLocal` |
-| E2-A–E2-B | Partial executable | Twenty-three of 26 active E2-B rule IDs are service-published after the W11 semantic repair, TOC and XML slices; implement the three state rules from typed owner facts, then close full-pipeline fixtures and package acceptance |
+| E2-A–E2-B | Partial executable | All 26 active E2-B rule IDs are service-published after the W11 semantic repair, TOC, XML and state slices; close public CLI/full-pipeline fixtures and package acceptance |
 | E2-C–E2-D | Partial executable source index and retained manifested store | Live project publication, incremental invalidation, retention/GC/backup/epoch replacement and complete acceptance remain open; see [GRAPH_STORE.md](../apps/wow/GRAPH_STORE.md) |
 | E3-A–E3-C | Not started | Exact Blizzard source universe, context owners and service/CLI after E2 closure |
 | E4-A–E4-C | Not started | Search, lineage/migration/static impact and routing after A0 prerequisites |
@@ -75,9 +75,9 @@ Existing acceptance requirements remain separate and must not be reported passed
 
 1. **I0-F/W10/W11 functional path:** `apps/wow` routes explicit materialized inputs through
    actual project/analyzer/reference/rule owners. Managed source snapshots and W09 load
-   closure feed W10 XML semantics. Twenty-three W11 rules are now service-published after the
-   semantic-repair checkpoint, TOC and XML slices; continue with typed state facts and the
-   three rules without inventing receiver, runtime or negative authority.
+   closure feed W10 XML semantics. All 26 W11 rules are service-published after the
+   semantic-repair checkpoint, TOC, XML and state slices; continue with public CLI and
+   mutation acceptance without inventing receiver, runtime or negative authority.
 2. **E0 acceptance:** retain existing fixtures/checksums; close their remaining
    evidence after functional implementation, not as an endless prerequisite for it.
 3. **I1:** the builder/service/materialization code path is active. Close remaining

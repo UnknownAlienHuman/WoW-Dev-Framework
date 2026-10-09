@@ -150,11 +150,37 @@ pub(super) fn publish(
     provenance: &ProjectGraphProvenance,
     stop: &AtomicBool,
 ) -> ServiceResult<(GraphPartitionSnapshot, Vec<SourceTocRecognition>)> {
+    publish_families(source, provenance, &SourceTocFamily::ALL, stop)
+}
+
+pub(super) fn publish_state_root(
+    source: &GraphPartitionSnapshot,
+    provenance: &ProjectGraphProvenance,
+    stop: &AtomicBool,
+) -> ServiceResult<(GraphPartitionSnapshot, SourceTocRecognition)> {
+    let (snapshot, mut recognitions) = publish_families(
+        source,
+        provenance,
+        &[SourceTocFamily::SavedVariableRoot],
+        stop,
+    )?;
+    let recognition = recognitions
+        .pop()
+        .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?;
+    Ok((snapshot, recognition))
+}
+
+fn publish_families(
+    source: &GraphPartitionSnapshot,
+    provenance: &ProjectGraphProvenance,
+    families: &[SourceTocFamily],
+    stop: &AtomicBool,
+) -> ServiceResult<(GraphPartitionSnapshot, Vec<SourceTocRecognition>)> {
     let facts = provenance.toc_facts();
     let converted = convert(facts);
     let mut snapshot = source.clone();
     let mut recognitions = Vec::new();
-    for family in SourceTocFamily::ALL {
+    for &family in families {
         checkpoint(stop)?;
         let proposals = recognize_source_toc(
             SourceTocInput {

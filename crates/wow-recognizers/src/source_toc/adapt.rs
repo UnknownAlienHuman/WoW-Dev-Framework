@@ -263,12 +263,21 @@ pub(super) fn seeds(
     };
     for fact in input.facts {
         checkpoint(stop)?;
+        // A SavedVariable fact feeds two phases. The original SavedVariables
+        // phase is unchanged; SavedVariableRoot is selected only when the
+        // service asks for it explicitly, after the original five have run.
         let belongs = match fact.kind {
             SourceTocFactKind::Package { .. } => SourceTocFamily::Package,
             SourceTocFactKind::File { .. } => SourceTocFamily::FileOrder,
             SourceTocFactKind::Dependency { .. } => SourceTocFamily::Dependencies,
             SourceTocFactKind::LoadOnDemand { .. } => SourceTocFamily::LoadOnDemand,
-            SourceTocFactKind::SavedVariable { .. } => SourceTocFamily::SavedVariables,
+            SourceTocFactKind::SavedVariable { .. } => {
+                if family == SourceTocFamily::SavedVariableRoot {
+                    SourceTocFamily::SavedVariableRoot
+                } else {
+                    SourceTocFamily::SavedVariables
+                }
+            }
         };
         if belongs != family {
             continue;
@@ -373,7 +382,18 @@ pub(super) fn seeds(
                     result.omit(&[fact], "toc.state_owner_not_materialized");
                     continue;
                 };
-                let mut seed = Seed::new(Recipe::SavedVariable, fact);
+                // The state-root phase reuses the exact same retained facts,
+                // owner resolution and typed fields. Only the recipe and the
+                // declared identity differ, so no second selection or parse
+                // pass and no divergent name/scope spelling is possible.
+                let mut seed = Seed::new(
+                    if family == SourceTocFamily::SavedVariableRoot {
+                        Recipe::StateRoot
+                    } else {
+                        Recipe::SavedVariable
+                    },
+                    fact,
+                );
                 seed.text("name", name);
                 seed.text("scope", scope.name());
                 seed.endpoint("source", source);

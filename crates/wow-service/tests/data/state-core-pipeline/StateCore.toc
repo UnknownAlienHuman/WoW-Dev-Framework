@@ -1,0 +1,6 @@
+## Interface: 120100
+## Dependencies: None
+## LoadOnDemand: 1
+## SavedVariables: StateCoreAccountDB
+## SavedVariablesPerCharacter: StateCoreCharacterDB
+state.lua

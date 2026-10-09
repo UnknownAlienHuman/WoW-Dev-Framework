@@ -65,6 +65,12 @@ pub struct SourceStateRecognition {
     receipts: Vec<SourceStateReceipt>,
 }
 impl SourceStateRecognition {
+    pub fn analyzer_report_id(&self) -> &str {
+        &self.analyzer_report_id
+    }
+    pub fn source_partition(&self) -> &str {
+        &self.source_partition
+    }
     pub fn recognition(&self) -> &RecognitionReport {
         &self.recognition
     }

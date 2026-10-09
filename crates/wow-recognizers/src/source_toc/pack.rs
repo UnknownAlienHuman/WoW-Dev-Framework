@@ -41,7 +41,8 @@ pub(super) fn compile(recipe: Recipe, registry: &str) -> RecognizerResult<Compil
             ),
             relation("toc_defines_load_policy", "source", "policy_ref"),
         ],
-        Recipe::SavedVariable => vec![
+        // The state-root phase declares the same entity and Owns relation.
+        Recipe::SavedVariable | Recipe::StateRoot => vec![
             entity(
                 "root",
                 "state_root",
@@ -61,6 +62,14 @@ pub(super) fn compile(recipe: Recipe, registry: &str) -> RecognizerResult<Compil
         Recipe::OptionalDependency => "RECOG-TOC-004",
         Recipe::LoadPolicy => "RECOG-TOC-006",
         Recipe::SavedVariable => "RECOG-TOC-008",
+        // No admitted fixture case exists yet, so no ID is claimed.
+        Recipe::StateRoot => "",
+    };
+    // An empty ID is not a fixture reference.
+    let positive = if positive.is_empty() {
+        Vec::new()
+    } else {
+        vec![positive.into()]
     };
     let document = RecognizerPackDocument {
         schema_version: crate::RECOGNIZER_PACK_SCHEMA_VERSION,
@@ -98,7 +107,7 @@ pub(super) fn compile(recipe: Recipe, registry: &str) -> RecognizerResult<Compil
                 ],
                 captures: Vec::new(),
                 outputs,
-                positive_fixture_ids: vec![positive.into()],
+                positive_fixture_ids: positive,
                 near_negative_fixture_ids: Vec::new(),
                 partial_fixture_ids: Vec::new(),
                 mutation_fixture_ids: Vec::new(),

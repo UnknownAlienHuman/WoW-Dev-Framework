@@ -158,7 +158,7 @@ precedence. Inherited mixins are reached through explicit `Inherits` paths, not
 copied into fabricated transitive `MixesIn` edges. Coverage stays Partial with
 no negative authority; zero mixin entries yield NotEvaluated, not proven absence.
 
-The current source projection profile is 17 (registry version 14), and the
+The current source projection profile is 18 (registry version 15), and the
 graph-build result is v13. Bare retained graph and graph-read formats are unchanged.
 Source review: Gethe `live` resolved to
 `09b9db7948abc9b9648dedaab51eb0cf3ee67b31` on 2026-09-24;
@@ -420,8 +420,8 @@ observed modes and NotEvaluated otherwise; neither is authoritative absence.
 Ordinary `wow check` / `status` retain TOC declarations but do not enable the
 optional semantic graph-access collection.
 
-The source graph projection is `wow-project/source-load-proposals/17`; the graph-build
-result is `wow-service/graph-build-result/14` while the unchanged request shape remains
+The source graph projection is `wow-project/source-load-proposals/18`; the graph-build
+result is `wow-service/graph-build-result/15` while the unchanged request shape remains
 `wow-service/graph-build-request/9`. The optional Emmy call report is v5; existing
 global-access/state-recognizer profiles keep their own versions.
 Typed keys intentionally change state-path identities and the v7 build receipt
@@ -438,7 +438,7 @@ examples are not a runtime acceptance probe or a fixed dependency.
 
 ## Reading a retained bundle
 
-All graph reads accept this v10 JSON receipt directly through `--bundle`.
+All graph reads accept the current v15 JSON receipt directly through `--bundle`.
 `wow graph explain --bundle build.json --request explain.json` resolves the
 retained source/evidence tables and derivation inputs without rerunning the
 build. The bare-snapshot route remains unchanged. See
@@ -446,13 +446,21 @@ build. The bare-snapshot route remains unchanged. See
 
 ## Artifact and provenance formats
 
-`json` (default) emits `wow-service/graph-build-result/14`: request, status,
+`json` (default) emits `wow-service/graph-build-result/15`: request, status,
 `snapshot`, `file_nodes`, `xml_nodes`, `lua_nodes`, `function_nodes`, `call_edges`,
 `frame_nodes`, `creation_edges`, `handler_nodes`, `script_edges`, `provenance`,
 `call_recognition`, `construction_recognition`, `script_recognition`, `state_nodes`,
 `state_edges`, `state_recognition`, boundaries and canonical digests.
 The receipt also retains `toc_recognition`/`toc_topology` and
 `xml_recognition`/`xml_topology` for the ordered declarative core producers.
+The three state core rule IDs add `state_root_recognition`/`state_root_topology`
+and `state_core_recognition`/`state_core_topology`. Roots use selected TOC facts;
+read/write facts consume the exact admitted legacy state accesses, with their
+original analyzer and support validation. Equivalent literal paths merge every
+access witness while evaluations retain original matcher outputs. All crosswalks
+refer to the final snapshot. Partial coverage keeps core access outputs Possible;
+empty target shapes are NotEvaluated. Dynamic keys and local shadows cannot
+create an exact path. These are structural associations, not runtime persistence.
 `file_nodes` maps logical source paths to final materialized node IDs, rather than
 producer-input IDs. `provenance` retains the exact project/analyzer snapshot IDs,
 GenerationContext, file manifest, real SourceHandles/EvidenceRecords and optional

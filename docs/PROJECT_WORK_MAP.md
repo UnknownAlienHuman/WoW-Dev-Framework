@@ -12,9 +12,9 @@ in `main`, with bounded owner responsibilities and verified remote publication.
 
 ## Current functional checkpoint
 
-W11 has 23 of 26 declared core rule IDs in its service publication path. The
-five TOC and four XML families now publish through the service alongside the earlier W11
-families; three state rules remain. Existing
+W11 has all 26 declared core rule IDs in its functional service publication path.
+The five TOC, four XML and three state families publish alongside the earlier W11
+families. Existing
 TOC/XML/load/analyzer owners supply the records; recognizers
 must consume typed facts rather than parsing source again.
 
@@ -74,7 +74,7 @@ full graph acceptance and the checkpoint's CI conclusions remain open.
 
 | Queue / reference | Next responsibility | Boundary |
 |---|---|---|
-| [W11 / PR 102](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/102) | Three state core rules and application crosswalk closure | TOC/XML functional paths verified; full E2-B acceptance remains open |
+| [W11 / PR 102](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/102) | Public CLI and per-rule acceptance closure | All 26 functional rule IDs publish; full E2-B acceptance remains open |
 | [Issue 103](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/103) | Executable structural mutations and admitted per-rule fixtures | After functional implementation; frozen fixtures are not rewritten by tests |
 | [W12 / PR 80](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/80) | Conflict retention and complete derivation explanations | Existing graph query code is reused |
 | [W13 / PR 81](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/81) | Coherent live ProjectView/GraphView publication | A graph-only retained snapshot is insufficient |
@@ -116,11 +116,29 @@ The XML pipeline additionally verifies explicit versus lexical parentage, Object
 traversal confidence filtering, inheritance/template references, exact named and
 inline handler bindings, unresolved/ambiguous omissions and source-only chunks.
 
-The source-graph projection profile is `wow-project/source-load-proposals/17`
-(registry version 14),
-the graph-build result is `wow-service/graph-build-result/14`, and the unchanged
+The source-graph projection profile is `wow-project/source-load-proposals/18`
+(registry version 15),
+the graph-build result is `wow-service/graph-build-result/15`, and the unchanged
 request shape is `wow-service/graph-build-request/9`. Existing retained graphs and
 graph-read request formats are unchanged.
+
+The state checkpoint publishes `core.state.saved_variable_root`,
+`core.state.literal_path_read` and `core.state.literal_path_write`. Root facts
+reuse the selected TOC owner; access facts consume the exact admitted legacy
+state partition after its analyzer/span/support validation. Read/write packs
+execute the existing matcher. Typed path identities match the source owner;
+equivalent paths merge every access witness, and final crosswalks retain exact
+materialized IDs. Partial coverage keeps outputs Possible; empty target shapes
+are NotEvaluated. Dynamic keys, ambiguous roots and local shadowing cannot
+manufacture exact state paths. These are static associations, not runtime values
+or persistence claims.
+
+Fresh state checks on 2026-10-09 passed: native policy (1,399 distributable files),
+formatting, whole-workspace check, strict Clippy, rustdoc, whole-workspace build
+and tests (838 passed, 1 ignored, 102 targets). The focused pipeline also rejects
+substituted source handles at unchanged edge endpoints/evidence and checks exact
+alias support, dynamic-key omissions and local shadowing. Full rule fixture freeze,
+public CLI and named-client acceptance remain open.
 
 Full W11 fixture freeze, the `apps/wow` CLI acceptance lane, real-addon
 graph-build acceptance, the Ketho MCP comparative gate, Windows and named-client WoW

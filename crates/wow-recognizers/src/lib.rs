@@ -22,6 +22,7 @@ pub mod source_mixins;
 pub mod source_scripts;
 pub mod source_signals;
 pub mod source_state;
+pub mod source_state_core;
 pub mod source_toc;
 pub mod source_xml;
 
