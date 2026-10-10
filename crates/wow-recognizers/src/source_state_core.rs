@@ -5,7 +5,9 @@ mod pack;
 mod project;
 mod records;
 
-use crate::source_state::{SOURCE_STATE_PARTITION, SourceStateRecognition};
+use crate::source_state::{
+    SOURCE_STATE_PARTITION, SourceStateAssertionRecognition, SourceStateRecognition,
+};
 use crate::{
     RecognizerError, RecognizerErrorCode, RecognizerFact, RecognizerFactBundle,
     RecognizerFactCoverage, RecognizerFactCoverageInput, RecognizerFactCoverageState,
@@ -19,7 +21,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use wow_core::{GenerationContext, canonical_json_bytes};
 use wow_graph::{
-    GraphConfidence, GraphCoverageRecord, GraphCoverageState, GraphEntityProposal, GraphNodeId,
+    GraphAssertionKind, GraphAssertionRef, GraphConfidence, GraphCoverageRecord,
+    GraphCoverageState, GraphEntityProposal, GraphLocalAssertion, GraphNodeId,
     GraphPartitionSnapshot, GraphProposalBatch, GraphProposalEndpoint, GraphProposalValue,
     GraphRelationKind, GraphRelationProposal, GraphRelationProposalInput,
 };
@@ -78,6 +81,41 @@ pub struct SourceStateCoreInput<'a> {
     pub context: &'a GenerationContext,
     pub recognition: &'a SourceStateRecognition,
 }
+pub struct SourceStateCoreAssertionInput<'a> {
+    pub owner: &'a GraphPartitionSnapshot,
+    pub context: &'a GenerationContext,
+    pub recognition: &'a SourceStateAssertionRecognition,
+}
+struct CoreInput<'a> {
+    owner: &'a GraphPartitionSnapshot,
+    context: &'a GenerationContext,
+    recognition: CoreRecognition<'a>,
+}
+#[derive(Clone, Copy)]
+enum CoreRecognition<'a> {
+    Legacy(&'a SourceStateRecognition),
+    Assertions(&'a SourceStateAssertionRecognition),
+}
+impl CoreRecognition<'_> {
+    fn analyzer_report_id(&self) -> &str {
+        match self {
+            Self::Legacy(value) => value.analyzer_report_id(),
+            Self::Assertions(value) => value.analyzer_report_id(),
+        }
+    }
+    fn recognition(&self) -> &crate::RecognitionReport {
+        match self {
+            Self::Legacy(value) => value.recognition(),
+            Self::Assertions(value) => value.recognition(),
+        }
+    }
+    fn receipts(&self) -> &[crate::source_state::SourceStateReceipt] {
+        match self {
+            Self::Legacy(value) => value.receipts(),
+            Self::Assertions(value) => value.receipts(),
+        }
+    }
+}
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SourceStateCoreEvaluation {
     pub recipe: &'static str,
@@ -106,14 +144,49 @@ pub struct SourceStateCoreProposals {
     pub coverage: Vec<GraphCoverageRecord>,
     pub recognition: SourceStateCoreRecognition,
 }
+#[derive(Serialize)]
+struct CoreOutputMetadata<'a> {
+    batch: &'a GraphProposalBatch,
+    coverage: &'a [GraphCoverageRecord],
+    recognition: &'a SourceStateCoreRecognition,
+}
 
 pub fn recognize_source_state_core(
     input: SourceStateCoreInput<'_>,
     family: SourceStateCoreFamily,
     stop: &AtomicBool,
 ) -> RecognizerResult<SourceStateCoreProposals> {
+    let input = CoreInput {
+        owner: input.owner,
+        context: input.context,
+        recognition: CoreRecognition::Legacy(input.recognition),
+    };
     let admitted = adapt::normalize(&input, family, stop)?;
     project::execute(&input, family, admitted, stop)
+}
+pub fn recognize_source_state_core_assertions(
+    input: SourceStateCoreAssertionInput<'_>,
+    family: SourceStateCoreFamily,
+    stop: &AtomicBool,
+) -> RecognizerResult<SourceStateCoreProposals> {
+    crate::source_assertions::preflight(input.recognition, stop)?;
+    let input = CoreInput {
+        owner: input.owner,
+        context: input.context,
+        recognition: CoreRecognition::Assertions(input.recognition),
+    };
+    let admitted = adapt::normalize(&input, family, stop)?;
+    let output = project::execute(&input, family, admitted, stop)?;
+    crate::source_assertions::preflight(
+        &CoreOutputMetadata {
+            batch: &output.batch,
+            coverage: &output.coverage,
+            recognition: &output.recognition,
+        },
+        stop,
+    )?;
+    checkpoint(stop)?;
+    Ok(output)
 }
 fn confidence_of(value: RecognizerOutputConfidence) -> GraphConfidence {
     match value {

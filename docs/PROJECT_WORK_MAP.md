@@ -132,9 +132,19 @@ all-target/all-feature check, strict Clippy, tests (940 passed, 0 failed, 1 igno
 recognizer, configuration and replay channels remain unchanged. See
 [native direct producer plan](PLATFORM_DIRECT_PRODUCERS.md).
 
-Next: integrate the split into the application routes, supply missing direct
-roles, and implement fingerprints, bounded SkeletonInputView and source
-service/CLI transport. Full W17, E0/E2, real mirror/performance/runtime and
+Additive native assertion adapters now compose TOC/XML/script/state facts over
+the retained direct graph, including core Read/Write. Exact Producer addresses,
+native scope and original support remain bound to the actual predecessor.
+One disk-absent native chain passes with 12 accesses, one script assignment,
+17 XML results and six reads/six writes, including genuine substitution refusal
+and pre-set cancellation. All workspace gates/build pass, completed
+2026-10-10 09:19:03 UTC: 941 passed, 0 failed, 1 ignored, 112 targets. See
+[native recognizer assertions](PLATFORM_RECOGNIZER_ASSERTIONS.md).
+
+Next: select the split in configuration/service/replay and integrate remaining
+recognizer routes, supply missing direct roles, and implement fingerprints,
+bounded SkeletonInputView and source service/CLI transport. Full W17, E0/E2,
+real mirror/performance/runtime and
 W18-W26 remain open. Gethe preparation follows product implementation/build.
 
 W14 now publishes explicit final physical Main deltas through the retained native
@@ -419,7 +429,7 @@ full graph acceptance and the checkpoint's CI conclusions remain open.
 | [W12 / PR 80](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/80) | Extend real producer chains and conflict assessment | Exact retained records, publication validation and bounded explanations are executable; full acceptance remains open |
 | [W13 / PR 81](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/81) | Full live-pair acceptance | Physical Lua, standalone TOC/XML and declared-package native replay plus coherent leased acquisition are executable; full acceptance remains open |
 | [W14 / PR 82](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/82), [W15 / PR 83](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/83), [W16 / PR 84](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/84) | Incremental invalidation, retained roots/GC, backup/recovery | Source selector/hold portability and guarded live cross-epoch selection/retry are executable; portable full history and full W16/E2 acceptance remain open |
-| [W17 / PR 85](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/85), [W18 / PR 86](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/86), [W19 / PR 87](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/87) | Blizzard source universe, Project Map/skeletons, context packs | W17 raw/package admission, native source graph/reads, genuine replay and stable namespace publication are executable; a separate native four-stage plan finishes exact direct assertions. Split application integration, missing direct roles, fingerprints and bounded producer views still precede context |
+| [W17 / PR 85](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/85), [W18 / PR 86](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/86), [W19 / PR 87](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/87) | Blizzard source universe, Project Map/skeletons, context packs | W17 raw/package admission, native source graph/reads, genuine replay and stable namespace publication are executable; the separate direct plan has native TOC/XML/script/state assertion consumers. Configuration/service/replay selection, remaining recognizer routes, missing direct roles, fingerprints and bounded producer views still precede context |
 | [W20 / PR 88](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/88), [W21 / PR 89](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/89) | Search, lineage and static impact | Exact immutable generation inputs |
 | [W22 / PR 90](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/90), [W23 / PR 91](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/91) | Sessions/MCP and private LSP overlays | Implemented capabilities only |
 | [W24 / PR 92](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/92), [W25 / PR 93](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/93) | Calibration governance and selected Windows build/release tooling | No inferred review, signing or installed state |
@@ -475,6 +485,8 @@ partition. It preserves both earlier routes; see
 the existing input scope, not another service/configuration/replay selector.
 It admits four captured stages plus selected raw prelude without changing the
 above channels; see [PLATFORM_DIRECT_PRODUCERS.md](PLATFORM_DIRECT_PRODUCERS.md).
+Additive [native recognizer assertions](PLATFORM_RECOGNIZER_ASSERTIONS.md) consume
+its exact addresses without selecting the split in application publication.
 
 The state checkpoint publishes `core.state.saved_variable_root`,
 `core.state.literal_path_read` and `core.state.literal_path_write`. Root facts

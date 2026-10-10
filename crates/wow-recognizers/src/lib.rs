@@ -15,6 +15,7 @@ mod matcher;
 mod model;
 mod pack;
 mod plan;
+mod source_assertions;
 pub mod source_bridge;
 pub mod source_calls;
 pub mod source_construction;

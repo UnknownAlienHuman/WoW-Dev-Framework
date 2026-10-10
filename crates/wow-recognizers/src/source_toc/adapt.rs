@@ -73,7 +73,11 @@ struct Nodes {
     toc: BTreeMap<NodeKey, Endpoint>,
 }
 impl Nodes {
-    fn read(input: &SourceTocInput<'_>, stop: &AtomicBool) -> RecognizerResult<Self> {
+    fn read(
+        input: &TocInput<'_>,
+        source_files: &SourceFiles<'_>,
+        stop: &AtomicBool,
+    ) -> RecognizerResult<Self> {
         let collect = |partition: &str| -> RecognizerResult<BTreeMap<NodeKey, Endpoint>> {
             let mut result = BTreeMap::<NodeKey, Endpoint>::new();
             if let Some(partition) = input.owner.partition(partition) {
@@ -117,7 +121,12 @@ impl Nodes {
             Ok(result)
         };
         Ok(Self {
-            source: collect(input.source_partition)?,
+            source: match source_files {
+                SourceFiles::Legacy(partition) => collect(partition)?,
+                SourceFiles::Assertions { scope, files } => {
+                    assertion_files(input, scope, files, stop)?
+                }
+            },
             toc: collect(SourceTocFamily::Package.partition_id())?,
         })
     }
@@ -149,6 +158,143 @@ impl Nodes {
         self.find(true, "source_file", &[("path", path)])
     }
 }
+
+fn assertion_files(
+    input: &TocInput<'_>,
+    scope: &GraphAssertionRecordScope,
+    files: &BTreeMap<&str, GraphAssertionRef>,
+    stop: &AtomicBool,
+) -> RecognizerResult<BTreeMap<NodeKey, Endpoint>> {
+    let lookup = input.owner.producer_lookup(stop).map_err(graph_error)?;
+    if lookup.scope() != scope {
+        return Err(failure(RecognizerErrorCode::AdapterIdentityMismatch));
+    }
+    validate_assertion_catalog(input, stop)?;
+    let mut paths = BTreeSet::new();
+    for fact in input.facts {
+        checkpoint(stop)?;
+        if let SourceTocFactKind::File {
+            path: Some(path), ..
+        } = &fact.kind
+        {
+            paths.insert(*path);
+        }
+    }
+    let mut result = BTreeMap::new();
+    for (path, reference) in files {
+        checkpoint(stop)?;
+        if !paths.contains(*path) {
+            return Err(failure(RecognizerErrorCode::AdapterBindingInvalid));
+        }
+        let GraphAssertionRef::Producer { assertion, .. } = reference else {
+            return Err(failure(RecognizerErrorCode::AdapterBindingInvalid));
+        };
+        let resolved = crate::source_assertions::entity(
+            &lookup,
+            scope,
+            reference,
+            &assertion.proposal_id,
+            stop,
+        )?;
+        let proposal = resolved.proposal();
+        let expected =
+            BTreeMap::from([("path".into(), GraphProposalValue::String((*path).into()))]);
+        if proposal.entity_kind_id() != "source_file"
+            || proposal.semantic_key() != &expected
+            || proposal.confidence() != GraphConfidence::Proven
+        {
+            return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
+        }
+        let ([handle_id], [evidence_id]) = (proposal.source_handle_ids(), proposal.evidence_ids())
+        else {
+            return Err(failure(RecognizerErrorCode::AdapterBindingInvalid));
+        };
+        let expected_proposal = wow_graph::GraphEntityProposal::new(
+            proposal.proposal_id(),
+            "source_file",
+            expected.clone(),
+            GraphConfidence::Proven,
+            vec![*handle_id],
+            vec![*evidence_id],
+            Vec::new(),
+        )
+        .map_err(graph_error)?;
+        if proposal != &expected_proposal {
+            return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
+        }
+        let handle = input
+            .source_handles
+            .get(handle_id)
+            .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
+        let evidence = input
+            .evidence
+            .get(evidence_id)
+            .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
+        if handle.path().as_str() != *path
+            || handle.span() != SourceSpan::whole_file()
+            || evidence.source_handle_ids() != [*handle_id]
+            || evidence.provenance() != ProvenanceClass::ProjectSource
+            || evidence.confidence() != EvidenceConfidence::Proven
+            || evidence.claim_scope() != ClaimScope::SourceObservation
+            || !evidence.derivation_input_ids().is_empty()
+            || !evidence.coverage_refs().is_empty()
+        {
+            return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
+        }
+        let key = (
+            "source_file".to_owned(),
+            canonical_json_bytes(&expected)
+                .map_err(|_| failure(RecognizerErrorCode::AdapterFactMismatch))?,
+        );
+        if result
+            .insert(
+                key,
+                Endpoint {
+                    token: resolved.accepted().node().node_id().to_string(),
+                    handles: vec![*handle_id],
+                    evidence: vec![*evidence_id],
+                },
+            )
+            .is_some()
+        {
+            return Err(failure(RecognizerErrorCode::AdapterBindingDuplicate));
+        }
+    }
+    checkpoint(stop)?;
+    Ok(result)
+}
+
+fn validate_assertion_catalog(input: &TocInput<'_>, stop: &AtomicBool) -> RecognizerResult<()> {
+    for (id, handle) in input.source_handles {
+        checkpoint(stop)?;
+        handle
+            .validate()
+            .map_err(|_| failure(RecognizerErrorCode::AdapterFactMismatch))?;
+        if handle.handle_id() != *id
+            || handle.project_generation() != input.context.project_generation()
+            || handle.reference_generation() != Some(input.context.reference_generation())
+        {
+            return Err(failure(RecognizerErrorCode::AdapterIdentityMismatch));
+        }
+    }
+    for (id, evidence) in input.evidence {
+        checkpoint(stop)?;
+        evidence
+            .validate()
+            .map_err(|_| failure(RecognizerErrorCode::AdapterFactMismatch))?;
+        if evidence.evidence_id() != *id || evidence.context_id() != input.context.context_id() {
+            return Err(failure(RecognizerErrorCode::AdapterIdentityMismatch));
+        }
+        for handle in evidence.source_handle_ids() {
+            checkpoint(stop)?;
+            if !input.source_handles.contains_key(handle) {
+                return Err(failure(RecognizerErrorCode::AdapterBindingMissing));
+            }
+        }
+    }
+    Ok(())
+}
+
 pub(super) struct Seeds {
     pub values: Vec<Seed>,
     pub omissions: Vec<SourceTocOmission>,
@@ -181,7 +327,7 @@ impl Seeds {
     }
 }
 
-pub(super) fn validate(input: &SourceTocInput<'_>, stop: &AtomicBool) -> RecognizerResult<()> {
+pub(super) fn validate(input: &TocInput<'_>, stop: &AtomicBool) -> RecognizerResult<()> {
     input
         .context
         .validate()
@@ -251,11 +397,12 @@ pub(super) fn validate(input: &SourceTocInput<'_>, stop: &AtomicBool) -> Recogni
 }
 
 pub(super) fn seeds(
-    input: &SourceTocInput<'_>,
+    input: &TocInput<'_>,
+    source_files: &SourceFiles<'_>,
     family: SourceTocFamily,
     stop: &AtomicBool,
 ) -> RecognizerResult<Seeds> {
-    let nodes = Nodes::read(input, stop)?;
+    let nodes = Nodes::read(input, source_files, stop)?;
     let mut result = Seeds {
         values: Vec::new(),
         omissions: Vec::new(),
@@ -414,7 +561,7 @@ pub(super) fn seeds(
 }
 
 fn order(
-    input: &SourceTocInput<'_>,
+    input: &TocInput<'_>,
     nodes: &Nodes,
     result: &mut Seeds,
     stop: &AtomicBool,

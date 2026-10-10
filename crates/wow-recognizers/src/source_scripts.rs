@@ -1,10 +1,17 @@
 //! Project-owned XML handler facts -> the existing script-assignment recognizer.
 //! This adapter verifies the exact graph/evidence crosswalk, not XML or Lua syntax.
 #![allow(dead_code)]
+mod assertions;
 use crate::{
     ObservationFamily, ObservationOrigin, RecognitionCoverage, RecognitionCoverageState,
     RecognitionReport, RecognizerError, RecognizerErrorCode, RecognizerLimits, RecognizerRegistry,
     RecognizerResult, StructuredObservation, StructuredObservationInput, run_recognizers,
+};
+pub(crate) use assertions::ContextMetadata;
+pub use assertions::{
+    SOURCE_SCRIPT_ASSERTION_PROFILE, SourceScriptAssertionEndpoints, SourceScriptAssertionFact,
+    SourceScriptAssertionInput, SourceScriptAssertionProposals, SourceScriptAssertionRecognition,
+    recognize_source_script_assertions,
 };
 use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
@@ -14,10 +21,11 @@ use wow_core::{
     SourceHandle, StableHandleId,
 };
 use wow_graph::{
-    GraphAssertionKind, GraphAssertionRef, GraphConfidence, GraphCoverageRecord,
-    GraphCoverageState, GraphLocalAssertion, GraphNodeId, GraphPartitionSnapshot,
-    GraphProposalBatch, GraphProposalEndpoint, GraphProposalValue, GraphRelationKind,
-    GraphRelationProposal, GraphRelationProposalInput,
+    GraphAssertionKind, GraphAssertionRecordScope, GraphAssertionRef, GraphConfidence,
+    GraphCoverageRecord, GraphCoverageState, GraphEntityProposal, GraphLocalAssertion, GraphNodeId,
+    GraphPartitionSnapshot, GraphProducerLookup, GraphProducerPartition, GraphProposalBatch,
+    GraphProposalEndpoint, GraphProposalValue, GraphRelationKind, GraphRelationProposal,
+    GraphRelationProposalInput, GraphSnapshot,
 };
 
 pub const SOURCE_SCRIPT_PARTITION: &str = "wow-recognizers.xml-script-bindings";
@@ -83,6 +91,127 @@ pub struct SourceScriptProposals {
     pub recognition: SourceScriptRecognition,
 }
 
+struct ScriptData<'a> {
+    owner: &'a GraphPartitionSnapshot,
+    context: &'a GenerationContext,
+    source_handles: &'a BTreeMap<StableHandleId, SourceHandle>,
+    evidence: &'a BTreeMap<EvidenceId, EvidenceRecord>,
+}
+
+enum ScriptFacts<'a, 'b> {
+    Legacy(&'b [SourceScriptFact<'a>]),
+    Assertions(&'b [SourceScriptAssertionFact<'a>]),
+}
+impl<'a> ScriptFacts<'a, '_> {
+    fn len(&self) -> usize {
+        match self {
+            Self::Legacy(facts) => facts.len(),
+            Self::Assertions(facts) => facts.len(),
+        }
+    }
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    fn fact(&self, index: usize) -> &SourceScriptFact<'a> {
+        match self {
+            Self::Legacy(facts) => &facts[index],
+            Self::Assertions(facts) => &facts[index].fact,
+        }
+    }
+}
+
+enum ScriptEndpoints<'a, 'b> {
+    Legacy(&'a GraphProducerPartition),
+    Assertions {
+        lookup: &'b GraphProducerLookup<'a>,
+        scope: &'b GraphAssertionRecordScope,
+        facts: &'b [SourceScriptAssertionFact<'a>],
+    },
+}
+struct ScriptEndpoint<'a> {
+    proposal: &'a GraphEntityProposal,
+    node: Option<&'a GraphNodeId>,
+}
+impl<'a> ScriptEndpoints<'a, '_> {
+    fn proposal(
+        &self,
+        index: usize,
+        receiver: bool,
+        proposal_id: &str,
+        stop: &AtomicBool,
+    ) -> RecognizerResult<ScriptEndpoint<'a>> {
+        match self {
+            Self::Legacy(partition) => Ok(ScriptEndpoint {
+                proposal: partition
+                    .batch()
+                    .entity_proposal(proposal_id)
+                    .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?,
+                node: None,
+            }),
+            Self::Assertions {
+                lookup,
+                scope,
+                facts,
+            } => {
+                let endpoints = &facts[index].endpoints;
+                let reference = if receiver {
+                    &endpoints.receiver
+                } else {
+                    &endpoints.handler
+                };
+                let resolved =
+                    crate::source_assertions::entity(lookup, scope, reference, proposal_id, stop)?;
+                Ok(ScriptEndpoint {
+                    proposal: resolved.proposal(),
+                    node: Some(resolved.accepted().node().node_id()),
+                })
+            }
+        }
+    }
+    fn node(
+        &self,
+        endpoint: &ScriptEndpoint<'_>,
+        receiver: bool,
+        graph: &GraphSnapshot,
+    ) -> RecognizerResult<GraphNodeId> {
+        let proposal = endpoint.proposal;
+        let valid = if receiver {
+            proposal.entity_kind_id() == "xml_source_declaration"
+        } else {
+            matches!(
+                proposal.entity_kind_id(),
+                "lua_source_function" | "xml_source_handler"
+            )
+        };
+        if !valid {
+            return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
+        }
+        let node = match self {
+            Self::Legacy(partition) => {
+                let accepted = partition.report().accepted_entities();
+                let index = accepted
+                    .binary_search_by(|p| p.proposal_id().cmp(proposal.proposal_id()))
+                    .map_err(|_| failure(RecognizerErrorCode::AdapterBindingMissing))?;
+                accepted[index].node().node_id()
+            }
+            Self::Assertions { .. } => endpoint
+                .node
+                .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?,
+        };
+        if graph.node(node).is_none() {
+            return Err(failure(RecognizerErrorCode::AdapterIdentityMismatch));
+        }
+        Ok(node.clone())
+    }
+}
+
+struct ScriptOutput {
+    batch: GraphProposalBatch,
+    coverage: Vec<GraphCoverageRecord>,
+    recognition: RecognitionReport,
+    receipts: Vec<SourceScriptReceipt>,
+}
+
 pub fn recognize_source_scripts(
     input: SourceScriptInput<'_>,
     stop: &AtomicBool,
@@ -103,37 +232,43 @@ pub fn recognize_source_scripts(
         .owner
         .partition(input.source_partition)
         .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
-    let accepted = partition.report().accepted_entities();
-    let endpoint = |proposal_id: &str, receiver: bool| -> RecognizerResult<GraphNodeId> {
-        let proposal = partition
-            .batch()
-            .entity_proposal(proposal_id)
-            .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
-        let valid = if receiver {
-            proposal.entity_kind_id() == "xml_source_declaration"
-        } else {
-            matches!(
-                proposal.entity_kind_id(),
-                "lua_source_function" | "xml_source_handler"
-            )
-        };
-        if !valid {
-            return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
-        }
-        let index = accepted
-            .binary_search_by(|p| p.proposal_id().cmp(proposal_id))
-            .map_err(|_| failure(RecognizerErrorCode::AdapterBindingMissing))?;
-        let node = accepted[index].node();
-        if graph.node(node.node_id()).is_none() {
-            return Err(failure(RecognizerErrorCode::AdapterIdentityMismatch));
-        }
-        Ok(node.node_id().clone())
-    };
+    let output = recognize_script_facts(
+        &ScriptData {
+            owner: input.owner,
+            context: input.context,
+            source_handles: input.source_handles,
+            evidence: input.evidence,
+        },
+        ScriptFacts::Legacy(&input.facts),
+        ScriptEndpoints::Legacy(partition),
+        &graph,
+        stop,
+    )?;
+    Ok(SourceScriptProposals {
+        batch: output.batch,
+        coverage: output.coverage,
+        recognition: SourceScriptRecognition {
+            profile: SOURCE_SCRIPT_PROFILE,
+            source_partition: input.source_partition.into(),
+            recognition: output.recognition,
+            receipts: output.receipts,
+        },
+    })
+}
+
+fn recognize_script_facts(
+    input: &ScriptData<'_>,
+    facts: ScriptFacts<'_, '_>,
+    endpoints: ScriptEndpoints<'_, '_>,
+    graph: &GraphSnapshot,
+    stop: &AtomicBool,
+) -> RecognizerResult<ScriptOutput> {
     let limits = RecognizerLimits::new(MAX_BINDINGS as u32, MAX_BINDINGS as u32, 19, 32)?;
     let mut observations = Vec::new();
     let mut pending = BTreeMap::new();
     let mut fact_ids = BTreeSet::new();
-    for fact in &input.facts {
+    for index in 0..facts.len() {
+        let fact = facts.fact(index);
         checkpoint(stop)?;
         if !valid_content_id(fact.fact_id, "xml-script-binding:sha256:")
             || !matches!(
@@ -144,23 +279,17 @@ pub fn recognize_source_scripts(
         {
             return Err(failure(RecognizerErrorCode::AdapterBindingInvalid));
         }
-        let handler = partition
-            .batch()
-            .entity_proposal(fact.handler_proposal_id)
-            .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
+        let handler = endpoints.proposal(index, false, fact.handler_proposal_id, stop)?;
         validate_semantic_context(
             fact,
-            handler.entity_kind_id(),
-            handler.semantic_key().get("semantic_context_id"),
+            handler.proposal.entity_kind_id(),
+            handler.proposal.semantic_key().get("semantic_context_id"),
         )?;
-        validate_support(&input, fact)?;
+        validate_support(input, fact)?;
+        let receiver = endpoints.proposal(index, true, fact.receiver_proposal_id, stop)?;
         // Every endpoint's original source support must be carried by the
         // observation. An ID alone is not evidence for the XML/Lua binding.
-        for id in [fact.receiver_proposal_id, fact.handler_proposal_id] {
-            let proposal = partition
-                .batch()
-                .entity_proposal(id)
-                .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
+        for proposal in [receiver.proposal, handler.proposal] {
             if proposal
                 .source_handle_ids()
                 .iter()
@@ -177,8 +306,8 @@ pub fn recognize_source_scripts(
             StructuredObservationInput {
                 source_snapshot_id: graph.snapshot_id().clone(),
                 family: ObservationFamily::ScriptAssignment,
-                from: endpoint(fact.receiver_proposal_id, true)?,
-                to: endpoint(fact.handler_proposal_id, false)?,
+                from: endpoints.node(&receiver, true, graph)?,
+                to: endpoints.node(&handler, false, graph)?,
                 origin: ObservationOrigin::ProjectFact,
                 confidence: fact.confidence,
                 evidence_ids: fact
@@ -202,7 +331,7 @@ pub fn recognize_source_scripts(
         .map(|family| {
             RecognitionCoverage::new(
                 family,
-                if family == ObservationFamily::ScriptAssignment && !input.facts.is_empty() {
+                if family == ObservationFamily::ScriptAssignment && !facts.is_empty() {
                     RecognitionCoverageState::Partial
                 } else {
                     RecognitionCoverageState::NotEvaluated
@@ -218,7 +347,7 @@ pub fn recognize_source_scripts(
         .collect::<RecognizerResult<Vec<_>>>()?;
     let recognition = run_recognizers(
         &RecognizerRegistry::e2_default()?,
-        &graph,
+        graph,
         observations,
         coverage,
         limits,
@@ -259,7 +388,7 @@ pub fn recognize_source_scripts(
             proposal_id,
         });
     }
-    if !pending.is_empty() || receipts.len() != input.facts.len() {
+    if !pending.is_empty() || receipts.len() != facts.len() {
         return Err(failure(RecognizerErrorCode::AdapterBindingMissing));
     }
     receipts.sort_by(|a, b| a.binding_id.cmp(&b.binding_id));
@@ -274,7 +403,7 @@ pub fn recognize_source_scripts(
         .map(|relation| {
             GraphCoverageRecord::new(
                 relation,
-                if relation == GraphRelationKind::SetsScript && !input.facts.is_empty() {
+                if relation == GraphRelationKind::SetsScript && !facts.is_empty() {
                     GraphCoverageState::Partial
                 } else {
                     GraphCoverageState::NotEvaluated
@@ -303,15 +432,11 @@ pub fn recognize_source_scripts(
     )
     .map_err(graph_error)?;
     checkpoint(stop)?;
-    Ok(SourceScriptProposals {
+    Ok(ScriptOutput {
         batch,
         coverage,
-        recognition: SourceScriptRecognition {
-            profile: SOURCE_SCRIPT_PROFILE,
-            source_partition: input.source_partition.into(),
-            recognition,
-            receipts,
-        },
+        recognition,
+        receipts,
     })
 }
 
@@ -359,10 +484,7 @@ fn validate_semantic_context(
     Ok(())
 }
 
-fn validate_support(
-    input: &SourceScriptInput<'_>,
-    fact: &SourceScriptFact<'_>,
-) -> RecognizerResult<()> {
+fn validate_support(input: &ScriptData<'_>, fact: &SourceScriptFact<'_>) -> RecognizerResult<()> {
     if fact.source_handle_ids.is_empty()
         || fact.source_handle_ids.len() > 32
         || fact.evidence_ids.is_empty()

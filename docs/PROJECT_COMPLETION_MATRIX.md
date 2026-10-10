@@ -2,8 +2,8 @@
 
 **Audited:** 2026-09-19 America/New_York. Execution inventory refreshed 2026-10-10
 through the scoped W17 replay/stable namespace, native lookup, raw traversal,
-selected package/raw graph and native direct-plan checkpoints below, including
-their final workspace gate census.
+selected package/raw graph, native direct-plan and assertion-adapter checkpoints
+below, including their final workspace gate census.
 
 This is the current execution ledger. [IMPLEMENTATION_HANDOFF.md](IMPLEMENTATION_HANDOFF.md)
 remains the normative I0–I7 plan; do not restart its historical bootstrap steps.
@@ -636,3 +636,20 @@ source-span and XML object/region/parent/span roles, fingerprints, bounded
 SkeletonInputView and source service/CLI transport remain open. Full W17/E3,
 real corpus/performance/runtime, native fault/exhaustion and W18-W26 acceptance
 remain NotEvaluated. Gethe materialization stays deferred.
+
+Native assertion adapters now compose TOC/XML/scripts/state access and core
+Read/Write over the exact direct graph. Separate state/script recognition
+envelopes retain scope/endpoints; existing matcher families and entry points
+remain. One disk-absent native scenario passes with 12 accesses, one script
+assignment, 17 XML results and six reads/six writes, exact support/input and
+core prerequisite checks, genuine substitution refusal and pre-set cancellation.
+Final local workspace gates/build pass, completed 2026-10-10 09:19:03 UTC:
+941 passed, 0 failed, 1 ignored, 112 targets. See
+[native recognizer assertions](PLATFORM_RECOGNIZER_ASSERTIONS.md).
+
+This is native caller composition. Configuration/service/replay/CLI routes and
+catalogs remain unchanged; selection of the split and other recognizer routes
+remain open. Missing direct roles, fingerprints, SkeletonInputView, source
+transport, full W17/E3, real Gethe/Ketho corpus/performance/runtime and native
+fault/exhaustion acceptance remain open. Gethe materialization stays deferred;
+W18-W26 are unchanged.

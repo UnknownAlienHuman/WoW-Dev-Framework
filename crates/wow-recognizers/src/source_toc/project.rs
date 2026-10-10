@@ -16,7 +16,7 @@ use wow_graph::{
 };
 
 pub(super) fn execute(
-    input: &SourceTocInput<'_>,
+    input: &TocInput<'_>,
     family: SourceTocFamily,
     seeds: Seeds,
     stop: &AtomicBool,
@@ -333,7 +333,7 @@ fn merge_entity(
 }
 
 fn fact(
-    input: &SourceTocInput<'_>,
+    input: &TocInput<'_>,
     seed: &Seed,
     limits: RecognizerFactLimits,
 ) -> RecognizerResult<RecognizerFact> {
@@ -356,7 +356,7 @@ fn fact(
         limits,
     )
 }
-fn validate_support(input: &SourceTocInput<'_>, seed: &Seed) -> RecognizerResult<()> {
+fn validate_support(input: &TocInput<'_>, seed: &Seed) -> RecognizerResult<()> {
     let mut supported = BTreeSet::new();
     for id in &seed.evidence {
         let evidence = input

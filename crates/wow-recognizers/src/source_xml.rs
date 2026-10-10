@@ -13,7 +13,10 @@ use wow_core::{
     ContentDigest, EvidenceId, EvidenceRecord, GenerationContext, GenerationContextId,
     SourceContent, SourceHandle, SourceSpan, StableHandleId,
 };
-use wow_graph::{GraphConfidence, GraphCoverageRecord, GraphPartitionSnapshot, GraphProposalBatch};
+use wow_graph::{
+    GraphAssertionRecordScope, GraphAssertionRef, GraphConfidence, GraphCoverageRecord,
+    GraphPartitionSnapshot, GraphProposalBatch,
+};
 
 pub const SOURCE_XML_PROFILE: &str = "wow-recognizers/xml-structural/1";
 const FACT_PROFILE: &str = "wow-recognizers-xml-facts-1";
@@ -268,6 +271,30 @@ pub struct SourceXmlInput<'a> {
     pub evidence: &'a BTreeMap<EvidenceId, EvidenceRecord>,
 }
 
+/// Exact direct producer addresses, resolved only in the held input generation.
+pub struct SourceXmlAssertionInput<'a> {
+    pub owner: &'a GraphPartitionSnapshot,
+    pub scope: &'a GraphAssertionRecordScope,
+    pub context: &'a GenerationContext,
+    pub facts: &'a [SourceXmlFact<'a>],
+    pub script_bindings: &'a [SourceXmlScriptBinding<'a>],
+    /// Qualified source-file path to the original Inventory Entity assertion.
+    pub source_files: &'a BTreeMap<&'a str, GraphAssertionRef>,
+    /// Original XML/Analyzer entity proposal ID to its exact Entity assertion.
+    pub source_entities: &'a BTreeMap<&'a str, GraphAssertionRef>,
+    pub source_handles: &'a BTreeMap<StableHandleId, SourceHandle>,
+    pub evidence: &'a BTreeMap<EvidenceId, EvidenceRecord>,
+}
+
+struct XmlData<'a> {
+    owner: &'a GraphPartitionSnapshot,
+    context: &'a GenerationContext,
+    facts: &'a [SourceXmlFact<'a>],
+    script_bindings: &'a [SourceXmlScriptBinding<'a>],
+    source_handles: &'a BTreeMap<StableHandleId, SourceHandle>,
+    evidence: &'a BTreeMap<EvidenceId, EvidenceRecord>,
+}
+
 /// One exact project-owned script binding. The receiver and handler are always
 /// accepted proposal identities from the source input partition; the optional
 /// semantic context is only present for inline XML handlers and always evaluates
@@ -330,9 +357,262 @@ pub fn recognize_source_xml(
     stop: &AtomicBool,
 ) -> RecognizerResult<SourceXmlProposals> {
     checkpoint(stop)?;
-    adapt::validate(&input, stop)?;
-    let seeds = adapt::seeds(&input, family, stop)?;
-    project::execute(&input, family, seeds, stop)
+    let data = XmlData {
+        owner: input.owner,
+        context: input.context,
+        facts: input.facts,
+        script_bindings: input.script_bindings,
+        source_handles: input.source_handles,
+        evidence: input.evidence,
+    };
+    adapt::validate(&data, true, stop)?;
+    let seeds = adapt::legacy_seeds(&data, input.source_partition, family, stop)?;
+    let graph = input.owner.input_view(stop).map_err(graph_error)?;
+    project::execute(&data, &graph, family, seeds, stop)
+}
+
+pub fn recognize_source_xml_assertions(
+    input: SourceXmlAssertionInput<'_>,
+    family: SourceXmlFamily,
+    stop: &AtomicBool,
+) -> RecognizerResult<SourceXmlProposals> {
+    checkpoint(stop)?;
+    if input.facts.len() > MAX_FACTS
+        || input.script_bindings.len() > 8192
+        || input
+            .source_files
+            .len()
+            .saturating_add(input.source_entities.len())
+            > MAX_FACTS * 2
+    {
+        return Err(failure(RecognizerErrorCode::BudgetExceeded));
+    }
+    let data = XmlData {
+        owner: input.owner,
+        context: input.context,
+        facts: input.facts,
+        script_bindings: input.script_bindings,
+        source_handles: input.source_handles,
+        evidence: input.evidence,
+    };
+    crate::source_assertions::preflight(
+        &XmlInputMetadata {
+            scope: input.scope,
+            context: input.context,
+            facts: XmlFactMetadata(input.facts),
+            script_bindings: XmlBindingMetadata(input.script_bindings),
+            source_files: input.source_files,
+            source_entities: input.source_entities,
+            source_handles: input.source_handles,
+            evidence: input.evidence,
+        },
+        stop,
+    )?;
+    let lookup = input.owner.producer_lookup(stop).map_err(graph_error)?;
+    if lookup.scope() != input.scope {
+        return Err(failure(RecognizerErrorCode::AdapterIdentityMismatch));
+    }
+    adapt::validate(&data, false, stop)?;
+    let seeds = adapt::assertion_seeds(
+        &data,
+        &lookup,
+        input.scope,
+        input.source_files,
+        input.source_entities,
+        family,
+        stop,
+    )?;
+    let output = project::execute(&data, lookup.input_view(), family, seeds, stop)?;
+    crate::source_assertions::preflight(
+        &(&output.batch, &output.coverage, &output.recognition),
+        stop,
+    )?;
+    checkpoint(stop)?;
+    Ok(output)
+}
+
+#[derive(Serialize)]
+struct XmlInputMetadata<'a, 'b> {
+    scope: &'b GraphAssertionRecordScope,
+    context: &'b GenerationContext,
+    facts: XmlFactMetadata<'a, 'b>,
+    script_bindings: XmlBindingMetadata<'a, 'b>,
+    source_files: &'b BTreeMap<&'a str, GraphAssertionRef>,
+    source_entities: &'b BTreeMap<&'a str, GraphAssertionRef>,
+    source_handles: &'b BTreeMap<StableHandleId, SourceHandle>,
+    evidence: &'b BTreeMap<EvidenceId, EvidenceRecord>,
+}
+struct XmlFactMetadata<'a, 'b>(&'b [SourceXmlFact<'a>]);
+impl Serialize for XmlFactMetadata<'_, '_> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeSeq;
+        #[derive(Serialize)]
+        struct Fact<'a, 'b> {
+            fact_id: &'a str,
+            context_id: GenerationContextId,
+            selected_toc: &'a str,
+            flavor: &'a str,
+            package: Option<&'a str>,
+            document: &'a str,
+            occurrence_id: &'a str,
+            ordinal: u64,
+            content_digest: &'b ContentDigest<SourceContent>,
+            span: SourceSpan,
+            source_handle_id: StableHandleId,
+            evidence_id: EvidenceId,
+            kind: XmlKindMetadata<'a, 'b>,
+        }
+        let mut seq = serializer.serialize_seq(Some(self.0.len()))?;
+        for fact in self.0 {
+            seq.serialize_element(&Fact {
+                fact_id: fact.fact_id,
+                context_id: fact.context_id,
+                selected_toc: fact.selected_toc,
+                flavor: fact.flavor,
+                package: fact.package,
+                document: fact.document,
+                occurrence_id: fact.occurrence_id,
+                ordinal: fact.ordinal,
+                content_digest: &fact.content_digest,
+                span: fact.span,
+                source_handle_id: fact.source_handle_id,
+                evidence_id: fact.evidence_id,
+                kind: XmlKindMetadata(&fact.kind),
+            })?;
+        }
+        seq.end()
+    }
+}
+struct XmlKindMetadata<'a, 'b>(&'b SourceXmlFactKind<'a>);
+impl Serialize for XmlKindMetadata<'_, '_> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self.0 {
+            SourceXmlFactKind::Declaration {
+                role,
+                element_name,
+                name,
+                virtual_template,
+                intrinsic,
+                mixin_names,
+                valid_declaration,
+                parent_occurrence_id,
+            } => (
+                "declaration",
+                role,
+                element_name,
+                name,
+                virtual_template.name(),
+                intrinsic.name(),
+                mixin_names,
+                valid_declaration,
+                parent_occurrence_id,
+            )
+                .serialize(serializer),
+            SourceXmlFactKind::Parent {
+                reference_id,
+                name,
+                resolution,
+                order,
+                cycle_id,
+            } => {
+                let group = match resolution {
+                    SourceXmlParentResolution::Ambiguous { name_group } => Some(*name_group),
+                    _ => None,
+                };
+                (
+                    "parent",
+                    reference_id,
+                    name,
+                    resolution.name(),
+                    resolution.target(),
+                    group,
+                    order.map(SourceXmlReferenceOrder::name),
+                    cycle_id,
+                )
+                    .serialize(serializer)
+            }
+            SourceXmlFactKind::Inheritance {
+                reference_id,
+                target_occurrence_id,
+                order,
+                cycle_id,
+            } => (
+                "inheritance",
+                reference_id,
+                target_occurrence_id,
+                order.map(SourceXmlReferenceOrder::name),
+                cycle_id,
+            )
+                .serialize(serializer),
+            SourceXmlFactKind::InheritanceUnresolved { reference_id, name } => {
+                ("inheritance_unresolved", reference_id, name).serialize(serializer)
+            }
+            SourceXmlFactKind::Script {
+                reference_id,
+                script_name,
+                source_kind,
+                owner_occurrence_id,
+                inherit,
+                intrinsic_order,
+                file_reference,
+                function_reference,
+                method_reference,
+            } => (
+                "script",
+                reference_id,
+                script_name,
+                source_kind.name(),
+                owner_occurrence_id,
+                inherit,
+                intrinsic_order,
+                file_reference,
+                function_reference,
+                method_reference,
+            )
+                .serialize(serializer),
+        }
+    }
+}
+struct XmlBindingMetadata<'a, 'b>(&'b [SourceXmlScriptBinding<'a>]);
+impl Serialize for XmlBindingMetadata<'_, '_> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeSeq;
+        #[derive(Serialize)]
+        struct Binding<'a> {
+            binding_id: &'a str,
+            site_id: &'a str,
+            script_id: &'a str,
+            receiver_proposal_id: &'a str,
+            handler_proposal_id: &'a str,
+            handler_kind: &'a str,
+            consumer_occurrence_id: Option<&'a str>,
+            inherited: bool,
+            confidence: GraphConfidence,
+            semantic_context: Option<crate::source_scripts::ContextMetadata<'a>>,
+            source_handle_ids: &'a [StableHandleId],
+            evidence_ids: &'a [EvidenceId],
+        }
+        let mut seq = serializer.serialize_seq(Some(self.0.len()))?;
+        for binding in self.0 {
+            seq.serialize_element(&Binding {
+                binding_id: binding.binding_id,
+                site_id: binding.site_id,
+                script_id: binding.script_id,
+                receiver_proposal_id: binding.receiver_proposal_id,
+                handler_proposal_id: binding.handler_proposal_id,
+                handler_kind: binding.handler_kind,
+                consumer_occurrence_id: binding.consumer_occurrence_id,
+                inherited: binding.inherited,
+                confidence: binding.confidence,
+                semantic_context: binding
+                    .semantic_context
+                    .map(crate::source_scripts::ContextMetadata::from),
+                source_handle_ids: binding.source_handle_ids,
+                evidence_ids: binding.evidence_ids,
+            })?;
+        }
+        seq.end()
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

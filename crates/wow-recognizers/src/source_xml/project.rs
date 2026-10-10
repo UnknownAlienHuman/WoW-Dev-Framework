@@ -16,12 +16,12 @@ use wow_graph::{
 };
 
 pub(super) fn execute(
-    input: &SourceXmlInput<'_>,
+    input: &XmlData<'_>,
+    graph: &GraphSnapshot,
     family: SourceXmlFamily,
     seeds: Seeds,
     stop: &AtomicBool,
 ) -> RecognizerResult<SourceXmlProposals> {
-    let graph = input.owner.input_view(stop).map_err(graph_error)?;
     let limits = RecognizerFactLimits::new(MAX_FACTS as u32, 8, 8, 32, 64, 64, 16)?;
     let mut grouped =
         BTreeMap::<(String, Vec<u8>), (GraphEntityProposal, BTreeSet<wow_core::CoverageId>)>::new();
@@ -189,8 +189,8 @@ pub(super) fn execute(
                             id.as_str(),
                             relation_kind_id.clone(),
                             GraphRelationProposalInput {
-                                source: endpoint(source, &matched, &proposed, &graph)?,
-                                target: endpoint(target, &matched, &proposed, &graph)?,
+                                source: endpoint(source, &matched, &proposed, graph)?,
+                                target: endpoint(target, &matched, &proposed, graph)?,
                                 confidence: confidence_of(*confidence),
                                 source_handle_ids: source_handle_ids.clone(),
                                 evidence_ids: evidence_ids.clone(),
@@ -330,7 +330,7 @@ fn merge_entity(
 }
 
 fn fact(
-    input: &SourceXmlInput<'_>,
+    input: &XmlData<'_>,
     seed: &Seed,
     limits: RecognizerFactLimits,
 ) -> RecognizerResult<RecognizerFact> {
@@ -353,7 +353,7 @@ fn fact(
         limits,
     )
 }
-fn validate_support(input: &SourceXmlInput<'_>, seed: &Seed) -> RecognizerResult<()> {
+fn validate_support(input: &XmlData<'_>, seed: &Seed) -> RecognizerResult<()> {
     let mut supported = BTreeSet::new();
     for id in &seed.evidence {
         let evidence = input

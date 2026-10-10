@@ -3,8 +3,9 @@
 `build_platform_graph_proposal_plan` projects one held platform `ProjectView`
 into four ordered captured-direct stages and, when selected, the existing raw
 inventory prelude. It finishes against the exact admitted native graph owner.
-This is a library API; service, recognizer and replay publication retain their
-existing layouts. The native case and final workspace gates/build pass on
+This is a library API; additive native recognizer adapters consume its exact
+addresses while service and replay publication retain their existing layouts.
+The native cases and final workspace gates/build pass on
 2026-10-10. Full W17/E3 acceptance remains open.
 
 ## Native inputs and API
@@ -104,15 +105,22 @@ registry and source context; its different partition layout determines a
 different materialized graph. Reusing input scope does not select that layout in
 old service or replay channels.
 
-Configuration selectors, service request/result profiles, recognizer routes,
-ordinary replay v1-v4, platform replay v5-v8 and storage/catalog/epoch recipes
+Configuration selectors, service request/result profiles, legacy recognizer
+entry points, ordinary replay v1-v4, platform replay v5-v8 and storage/catalog/epoch recipes
 remain unchanged. Published package/raw application routes retain their
 monolithic captured producer. Their recognizer partitions remain separate. See
 [package graph](PLATFORM_PACKAGE_GRAPH.md) and
 [raw inventory graph](PLATFORM_RAW_INVENTORY_GRAPH.md).
 
-Service/recognizer/replay integration of the split, missing selected-TOC/variant/
-load-unit, inventory/source-span and XML object/region/parent/span roles,
+Additive [native recognizer assertion APIs](PLATFORM_RECOGNIZER_ASSERTIONS.md)
+consume this plan's exact Producer addresses for TOC/XML/scripts/state access
+and core Read/Write. Finish the direct graph before extending it with recognizers.
+Scripts retain endpoint references in their recognition envelope; state/core
+retain actual graph derivation records. This native caller composition does not
+select the split in configuration, service publication or replay.
+
+Configuration/service/replay selection and remaining recognizer routes, missing
+selected-TOC/variant/load-unit, inventory/source-span and XML object/region/parent/span roles,
 structural fingerprints, bounded `SkeletonInputView` and source service/CLI
 transport remain open. Full W17/E3/package, real Gethe/Ketho corpus, performance,
 native fault/exhaustion and WoW runtime acceptance remain NotEvaluated. Gethe
@@ -130,9 +138,13 @@ Producer addresses and catalog support. Existing `/6` and `/7` replay hydration
 and unchanged monolithic payloads are checked; `/8` raw replay capture and its
 monolithic/raw payloads remain unchanged.
 
-Final workspace gates/build completed at **2026-10-10 08:35:50 UTC**:
+The native assertion chain additionally passes with disk absent, exact support
+and native endpoint checks, genuine substitution refusal and pre-set cancellation;
+see its [scoped verification](PLATFORM_RECOGNIZER_ASSERTIONS.md#scoped-verification-and-remaining-work).
+
+Final workspace gates/build completed at **2026-10-10 09:19:03 UTC**:
 `cargo xtask check`, `cargo fmt --all --check`, workspace all-target/all-feature
-check, strict Clippy, tests (**940 passed, 0 failed, 1 ignored, 112 targets**),
+check, strict Clippy, tests (**941 passed, 0 failed, 1 ignored, 112 targets**),
 strict rustdoc under `RUSTDOCFLAGS=-D warnings`, and workspace
 all-target/all-feature build all passed. These are local scoped results;
 remote publication and CI are not asserted.

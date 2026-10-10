@@ -67,8 +67,12 @@ gates/build (939 passed, 0 failed, 1 ignored, 111 targets); see
 [raw inventory graph](PLATFORM_RAW_INVENTORY_GRAPH.md). A separate native-only
 four-stage direct plan now also passes its scoped case and workspace gates/build
 (940 passed, 0 failed, 1 ignored, 112 targets); see
-[native direct producers](PLATFORM_DIRECT_PRODUCERS.md). Split application
-integration, missing direct roles, fingerprints, SkeletonInputView and source
+[native direct producers](PLATFORM_DIRECT_PRODUCERS.md). Native assertion adapters
+now also pass one composed scenario and final workspace gates/build
+(941 passed, 0 failed, 1 ignored, 112 targets); see
+[native recognizer assertions](PLATFORM_RECOGNIZER_ASSERTIONS.md).
+Configuration/service/replay selection of the split, remaining recognizer routes,
+missing direct roles, fingerprints, SkeletonInputView and source
 service/CLI transport follow.
 Broad package acceptance remains open.
 
@@ -1291,3 +1295,24 @@ SkeletonInputView and source service/CLI transport remain open. Full W17/E3,
 corpus/performance/runtime and native fault/exhaustion acceptance stay
 NotEvaluated; no source completeness or license permission is inferred.
 Gethe materialization stays deferred and W18-W26 remain unchanged.
+
+## W17 native recognizer assertion adapters (2026-10-10)
+
+Additive native entry points compose retained TOC/XML/scripts/state access and
+core Read/Write over the direct plan's exact Producer addresses. Separate
+state/script recognition envelopes retain native scope and endpoints; core
+checks actual admitted access derivations. Existing matcher families and
+legacy entry points remain. The single disk-absent native chain passes with
+12 accesses, one script assignment, 17 XML results and six reads/six writes,
+including exact support/input checks, genuine binding substitution refusal
+and pre-set cancellation. See
+[PLATFORM_RECOGNIZER_ASSERTIONS.md](PLATFORM_RECOGNIZER_ASSERTIONS.md).
+
+Final local workspace policy, fmt, all-target/all-feature check, strict Clippy,
+tests (941 passed, 0 failed, 1 ignored, 112 targets), strict rustdoc and
+all-target/all-feature build pass, completed 2026-10-10 09:19:03 UTC.
+Configuration/service/replay/CLI routes and existing catalogs remain unchanged.
+Selection of the split and remaining recognizer routes, missing direct roles,
+fingerprints, SkeletonInputView and source transport remain open. Full W17/E3,
+real Gethe/Ketho corpus/performance/runtime and native fault/exhaustion acceptance
+remain NotEvaluated; Gethe materialization is deferred and W18-W26 unchanged.

@@ -1,10 +1,16 @@
 //! TOC state-slot crosswalks -> the existing state-read/state-write recognizers.
 //! This adapter joins exact retained owner facts; it does not parse source.
 #![allow(dead_code)]
+mod assertions;
 use crate::{
     ObservationFamily, ObservationOrigin, RecognitionCoverage, RecognitionCoverageState,
     RecognitionReport, RecognizerErrorCode, RecognizerLimits, RecognizerRegistry, RecognizerResult,
     StructuredObservation, StructuredObservationInput, run_recognizers,
+};
+pub use assertions::{
+    SOURCE_STATE_ASSERTION_PROFILE, SourceStateAssertionEndpoints, SourceStateAssertionFact,
+    SourceStateAssertionInput, SourceStateAssertionProposals, SourceStateAssertionRecognition,
+    recognize_source_state_assertions,
 };
 use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
@@ -14,10 +20,10 @@ use wow_core::{
     GenerationContext, ProvenanceClass, SourceContent, SourceHandle, SourceSpan, StableHandleId,
 };
 use wow_graph::{
-    GraphAssertionKind, GraphAssertionRef, GraphConfidence, GraphCoverageRecord,
-    GraphCoverageState, GraphEntityProposal, GraphLocalAssertion, GraphNodeId,
-    GraphPartitionSnapshot, GraphProposalBatch, GraphProposalEndpoint, GraphProposalValue,
-    GraphRelationKind, GraphRelationProposal, GraphRelationProposalInput,
+    GraphAssertionKind, GraphAssertionRecordScope, GraphAssertionRef, GraphConfidence,
+    GraphCoverageRecord, GraphCoverageState, GraphEntityProposal, GraphLocalAssertion, GraphNodeId,
+    GraphPartitionSnapshot, GraphProducerLookup, GraphProposalBatch, GraphProposalEndpoint,
+    GraphProposalValue, GraphRelationKind, GraphRelationProposal, GraphRelationProposalInput,
 };
 
 use wow_emmy::function_calls::FunctionCallReport;
@@ -29,6 +35,7 @@ const MAX_BINDINGS: usize = 8192;
 
 /// Normalized source facts. The adapter checks the original global-access fact,
 /// concrete function occurrence, declared root and literal path, not just names.
+#[derive(Clone, Copy, Serialize)]
 pub struct SourceStateFact<'a> {
     pub fact_id: &'a str,
     pub access_id: &'a str,
@@ -89,6 +96,203 @@ pub fn recognize_source_state(
     input: SourceStateInput<'_>,
     stop: &AtomicBool,
 ) -> RecognizerResult<SourceStateProposals> {
+    let source_partition = input.source_partition;
+    let input = StateInput {
+        owner: input.owner,
+        report: input.report,
+        context: input.context,
+        facts: input.facts,
+        source_handles: input.source_handles,
+        evidence: input.evidence,
+    };
+    let result = recognize_state(&input, &StateBindings::Legacy(source_partition), stop)?;
+    Ok(SourceStateProposals {
+        batch: result.batch,
+        coverage: result.coverage,
+        recognition: SourceStateRecognition {
+            profile: SOURCE_STATE_PROFILE,
+            analyzer_report_id: input.report.analysis_id().into(),
+            source_partition: source_partition.into(),
+            recognition: result.recognition,
+            receipts: result.receipts,
+        },
+    })
+}
+
+struct StateInput<'a> {
+    owner: &'a GraphPartitionSnapshot,
+    report: &'a FunctionCallReport,
+    context: &'a GenerationContext,
+    facts: Vec<SourceStateFact<'a>>,
+    source_handles: &'a BTreeMap<StableHandleId, SourceHandle>,
+    evidence: &'a BTreeMap<EvidenceId, EvidenceRecord>,
+}
+struct StateOutput {
+    batch: GraphProposalBatch,
+    coverage: Vec<GraphCoverageRecord>,
+    recognition: RecognitionReport,
+    receipts: Vec<SourceStateReceipt>,
+}
+enum StateBindings<'a> {
+    Legacy(&'a str),
+    Assertions {
+        scope: &'a GraphAssertionRecordScope,
+        endpoints: &'a BTreeMap<&'a str, &'a SourceStateAssertionEndpoints>,
+    },
+}
+#[derive(Clone, Copy)]
+enum StateRole {
+    Root,
+    Caller,
+    Target,
+}
+impl StateRole {
+    fn id<'a>(self, fact: &SourceStateFact<'a>) -> &'a str {
+        match self {
+            Self::Root => fact.root_proposal_id,
+            Self::Caller => fact.caller_proposal_id,
+            Self::Target => fact.target_proposal_id,
+        }
+    }
+    fn reference(self, endpoints: &SourceStateAssertionEndpoints) -> &GraphAssertionRef {
+        match self {
+            Self::Root => &endpoints.root,
+            Self::Caller => &endpoints.caller,
+            Self::Target => &endpoints.target,
+        }
+    }
+}
+impl StateBindings<'_> {
+    fn proposal<'a>(
+        &self,
+        owner: &'a GraphPartitionSnapshot,
+        lookup: &GraphProducerLookup<'a>,
+        fact: &SourceStateFact<'_>,
+        role: StateRole,
+        stop: &AtomicBool,
+    ) -> RecognizerResult<&'a GraphEntityProposal> {
+        match self {
+            Self::Legacy(partition) => owner
+                .partition(partition)
+                .and_then(|p| p.batch().entity_proposal(role.id(fact)))
+                .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing)),
+            Self::Assertions { scope, endpoints } => {
+                let refs = endpoints
+                    .get(fact.fact_id)
+                    .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
+                Ok(crate::source_assertions::entity(
+                    lookup,
+                    scope,
+                    role.reference(refs),
+                    role.id(fact),
+                    stop,
+                )?
+                .proposal())
+            }
+        }
+    }
+    fn node(
+        &self,
+        owner: &GraphPartitionSnapshot,
+        lookup: &GraphProducerLookup<'_>,
+        fact: &SourceStateFact<'_>,
+        role: StateRole,
+        stop: &AtomicBool,
+    ) -> RecognizerResult<GraphNodeId> {
+        match self {
+            Self::Legacy(partition) => {
+                let accepted = owner
+                    .partition(partition)
+                    .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?
+                    .report()
+                    .accepted_entities();
+                let index = accepted
+                    .binary_search_by(|p| p.proposal_id().cmp(role.id(fact)))
+                    .map_err(|_| failure(RecognizerErrorCode::AdapterBindingMissing))?;
+                let node = accepted[index].node();
+                if lookup.input_view().node(node.node_id()).is_none() {
+                    return Err(failure(RecognizerErrorCode::AdapterIdentityMismatch));
+                }
+                Ok(node.node_id().clone())
+            }
+            Self::Assertions { scope, endpoints } => {
+                let refs = endpoints
+                    .get(fact.fact_id)
+                    .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
+                let resolved = crate::source_assertions::entity(
+                    lookup,
+                    scope,
+                    role.reference(refs),
+                    role.id(fact),
+                    stop,
+                )?;
+                let node = resolved.accepted().node().node_id().clone();
+                checkpoint(stop)?;
+                Ok(node)
+            }
+        }
+    }
+    fn same_root_target(&self, fact: &SourceStateFact<'_>) -> RecognizerResult<bool> {
+        match self {
+            Self::Legacy(_) => Ok(fact.target_proposal_id == fact.root_proposal_id),
+            Self::Assertions { endpoints, .. } => {
+                let refs = endpoints
+                    .get(fact.fact_id)
+                    .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
+                Ok(refs.root == refs.target)
+            }
+        }
+    }
+    fn prerequisites(
+        &self,
+        owner: &GraphPartitionSnapshot,
+        fact: &SourceStateFact<'_>,
+        stop: &AtomicBool,
+    ) -> RecognizerResult<Vec<GraphAssertionRef>> {
+        let refs = match self {
+            Self::Legacy(partition) => {
+                let source = owner
+                    .partition(partition)
+                    .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
+                let mut ids = vec![
+                    fact.caller_proposal_id,
+                    fact.target_proposal_id,
+                    fact.root_proposal_id,
+                ];
+                ids.sort();
+                ids.dedup();
+                ids.into_iter()
+                    .map(|id| GraphAssertionRef::Producer {
+                        partition_id: source.partition_id().into(),
+                        batch_id: source.batch().batch_id().into(),
+                        assertion: GraphLocalAssertion {
+                            kind: GraphAssertionKind::Entity,
+                            proposal_id: id.into(),
+                        },
+                    })
+                    .collect()
+            }
+            Self::Assertions { endpoints, .. } => {
+                let refs = endpoints
+                    .get(fact.fact_id)
+                    .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
+                [refs.caller.clone(), refs.target.clone(), refs.root.clone()]
+                    .into_iter()
+                    .collect::<BTreeSet<_>>()
+                    .into_iter()
+                    .collect()
+            }
+        };
+        checkpoint(stop)?;
+        Ok(refs)
+    }
+}
+
+fn recognize_state(
+    input: &StateInput<'_>,
+    bindings: &StateBindings<'_>,
+    stop: &AtomicBool,
+) -> RecognizerResult<StateOutput> {
     checkpoint(stop)?;
     if input.facts.len() > MAX_BINDINGS {
         return Err(failure(RecognizerErrorCode::BudgetExceeded));
@@ -104,22 +308,17 @@ pub fn recognize_source_state(
     if input.owner.source_context_id() != input.context.context_id() {
         return Err(failure(RecognizerErrorCode::AdapterIdentityMismatch));
     }
-    let graph = input.owner.input_view(stop).map_err(graph_error)?;
-    let partition = input
-        .owner
-        .partition(input.source_partition)
-        .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
-    let accepted = partition.report().accepted_entities();
-    let endpoint = |proposal_id: &str| -> RecognizerResult<GraphNodeId> {
-        let index = accepted
-            .binary_search_by(|p| p.proposal_id().cmp(proposal_id))
-            .map_err(|_| failure(RecognizerErrorCode::AdapterBindingMissing))?;
-        let node = accepted[index].node();
-        if graph.node(node.node_id()).is_none() {
+    let lookup = input.owner.producer_lookup(stop).map_err(graph_error)?;
+    let graph = lookup.input_view();
+    match bindings {
+        StateBindings::Legacy(partition) if input.owner.partition(partition).is_none() => {
+            return Err(failure(RecognizerErrorCode::AdapterBindingMissing));
+        }
+        StateBindings::Assertions { scope, .. } if *scope != lookup.scope() => {
             return Err(failure(RecognizerErrorCode::AdapterIdentityMismatch));
         }
-        Ok(node.node_id().clone())
-    };
+        _ => {}
+    }
     let accesses = input
         .report
         .global_accesses()
@@ -191,19 +390,13 @@ pub fn recognize_source_state(
         {
             return Err(failure(RecognizerErrorCode::AdapterIdentityMismatch));
         }
-        validate_support(&input, fact)?;
+        validate_support(input, fact)?;
         let function = functions
             .get(access.function_id())
             .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
-        let proposal = |id: &str| {
-            partition
-                .batch()
-                .entity_proposal(id)
-                .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))
-        };
-        let caller = proposal(fact.caller_proposal_id)?;
-        let root = proposal(fact.root_proposal_id)?;
-        let target = proposal(fact.target_proposal_id)?;
+        let caller = bindings.proposal(input.owner, &lookup, fact, StateRole::Caller, stop)?;
+        let root = bindings.proposal(input.owner, &lookup, fact, StateRole::Root, stop)?;
+        let target = bindings.proposal(input.owner, &lookup, fact, StateRole::Target, stop)?;
         if caller.entity_kind_id() != "lua_source_function"
             || caller.confidence() != GraphConfidence::Derived
             || caller.semantic_key()
@@ -225,7 +418,9 @@ pub fn recognize_source_state(
             return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
         }
         if access.keys().is_empty() {
-            if fact.target_proposal_id != fact.root_proposal_id {
+            if fact.target_proposal_id != fact.root_proposal_id
+                || !bindings.same_root_target(fact)?
+            {
                 return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
             }
         } else {
@@ -253,14 +448,14 @@ pub fn recognize_source_state(
         // A reused symbolic path need not repeat its first observation's evidence.
         // This observation instead proves the identical path at its own exact site.
         located_support(
-            &input,
+            input,
             fact,
             access.path(),
             access.content_digest(),
             access.span(),
         )?;
         located_support(
-            &input,
+            input,
             fact,
             function.path(),
             function.content_digest(),
@@ -274,7 +469,7 @@ pub fn recognize_source_state(
             return Err(failure(RecognizerErrorCode::AdapterIdentityMismatch));
         }
         located_support(
-            &input,
+            input,
             fact,
             &declaration.path,
             &declaration.content_digest,
@@ -283,7 +478,7 @@ pub fn recognize_source_state(
         for hop in access.aliases() {
             checkpoint(stop)?;
             located_support(
-                &input,
+                input,
                 fact,
                 access.path(),
                 access.content_digest(),
@@ -294,8 +489,8 @@ pub fn recognize_source_state(
             StructuredObservationInput {
                 source_snapshot_id: graph.snapshot_id().clone(),
                 family: family(fact.kind)?,
-                from: endpoint(fact.caller_proposal_id)?,
-                to: endpoint(fact.target_proposal_id)?,
+                from: bindings.node(input.owner, &lookup, fact, StateRole::Caller, stop)?,
+                to: bindings.node(input.owner, &lookup, fact, StateRole::Target, stop)?,
                 origin: ObservationOrigin::ProjectFact,
                 confidence,
                 evidence_ids: fact
@@ -342,7 +537,7 @@ pub fn recognize_source_state(
         .collect::<RecognizerResult<Vec<_>>>()?;
     let recognition = run_recognizers(
         &RecognizerRegistry::e2_default()?,
-        &graph,
+        graph,
         observations,
         coverage,
         limits,
@@ -361,17 +556,7 @@ pub fn recognize_source_state(
             return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
         }
         let proposal_id = assertion.assertion_id().to_string();
-        let source = input
-            .owner
-            .partition(input.source_partition)
-            .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
-        let mut prerequisites = vec![
-            fact.caller_proposal_id,
-            fact.target_proposal_id,
-            fact.root_proposal_id,
-        ];
-        prerequisites.sort();
-        prerequisites.dedup();
+        let prerequisites = bindings.prerequisites(input.owner, fact, stop)?;
         derivations.push(wow_graph::GraphDerivationRecord {
             output: wow_graph::GraphLocalAssertion {
                 kind: wow_graph::GraphAssertionKind::Relation,
@@ -386,17 +571,7 @@ pub fn recognize_source_state(
             }
             .into(),
             rule_version: 1,
-            inputs: prerequisites
-                .into_iter()
-                .map(|id| wow_graph::GraphAssertionRef::Producer {
-                    partition_id: source.partition_id().into(),
-                    batch_id: source.batch().batch_id().into(),
-                    assertion: wow_graph::GraphLocalAssertion {
-                        kind: wow_graph::GraphAssertionKind::Entity,
-                        proposal_id: id.into(),
-                    },
-                })
-                .collect(),
+            inputs: prerequisites,
             rebuttals: Vec::new(),
             missing: Vec::new(),
         });
@@ -488,16 +663,11 @@ pub fn recognize_source_state(
         .map_err(graph_error)?;
         batch.with_assertion_records(records).map_err(graph_error)?
     };
-    Ok(SourceStateProposals {
+    Ok(StateOutput {
         batch,
         coverage,
-        recognition: SourceStateRecognition {
-            profile: SOURCE_STATE_PROFILE,
-            analyzer_report_id: input.report.analysis_id().into(),
-            source_partition: input.source_partition.into(),
-            recognition,
-            receipts,
-        },
+        recognition,
+        receipts,
     })
 }
 
@@ -548,7 +718,7 @@ fn require_support(
     Ok(())
 }
 fn located_support(
-    input: &SourceStateInput<'_>,
+    input: &StateInput<'_>,
     fact: &SourceStateFact<'_>,
     path: &str,
     digest: &str,
@@ -568,10 +738,7 @@ fn located_support(
     Ok(())
 }
 
-fn validate_support(
-    input: &SourceStateInput<'_>,
-    fact: &SourceStateFact<'_>,
-) -> RecognizerResult<()> {
+fn validate_support(input: &StateInput<'_>, fact: &SourceStateFact<'_>) -> RecognizerResult<()> {
     if fact.source_handle_ids.is_empty()
         || fact.source_handle_ids.len() > 32
         || fact.evidence_ids.is_empty()

@@ -17,6 +17,8 @@ use wow_project::platform_source::{
     PlatformTarget, ProfileExclusion, SourceAdmissionLimits,
 };
 
+mod native_assertions;
+
 const SOURCE_PROFILE: &str = "profile:fixture:service-platform-namespace-v1";
 
 fn platform_bundle(
@@ -41,6 +43,29 @@ fn platform_bundle_with_profiles(
     opaque_revision: u8,
     selected_bindings: bool,
     graph_profile: Option<PlatformGraphProfile>,
+    stop: &AtomicBool,
+) -> TestResult<ProjectInputBundle> {
+    platform_bundle_with_profile_source(
+        path,
+        opaque_revision,
+        selected_bindings,
+        graph_profile,
+        None,
+        stop,
+    )
+}
+
+struct PlatformFixtureSource<'a> {
+    toc: &'a [u8],
+    lua: &'a [u8],
+}
+
+fn platform_bundle_with_profile_source(
+    path: &Path,
+    opaque_revision: u8,
+    selected_bindings: bool,
+    graph_profile: Option<PlatformGraphProfile>,
+    source: Option<&PlatformFixtureSource<'_>>,
     stop: &AtomicBool,
 ) -> TestResult<ProjectInputBundle> {
     // Keep the published /20 duplicate-package fixture and older inputs exact.
@@ -84,7 +109,11 @@ fn platform_bundle_with_profiles(
         (
             "Fixture.toc",
             PlatformFileKind::Toc,
-            include_bytes!("../../../../wow-project/tests/data/xml-facts/Fixture.toc"),
+            source.map_or(
+                include_bytes!("../../../../wow-project/tests/data/xml-facts/Fixture.toc")
+                    .as_slice(),
+                |source| source.toc,
+            ),
         ),
         (
             "frames.xml",
@@ -94,7 +123,10 @@ fn platform_bundle_with_profiles(
         (
             "defs.lua",
             PlatformFileKind::Lua,
-            include_bytes!("../../../../wow-project/tests/data/xml-facts/defs.lua"),
+            source.map_or(
+                include_bytes!("../../../../wow-project/tests/data/xml-facts/defs.lua").as_slice(),
+                |source| source.lua,
+            ),
         ),
         ("opaque.bin", PlatformFileKind::Unknown, &opaque),
     ];

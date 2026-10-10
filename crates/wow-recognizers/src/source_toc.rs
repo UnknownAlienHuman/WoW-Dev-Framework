@@ -12,7 +12,10 @@ use wow_core::{
     ContentDigest, EvidenceId, EvidenceRecord, GenerationContext, GenerationContextId,
     SourceContent, SourceHandle, SourceSpan, StableHandleId,
 };
-use wow_graph::{GraphCoverageRecord, GraphPartitionSnapshot, GraphProposalBatch};
+use wow_graph::{
+    GraphAssertionRecordScope, GraphAssertionRef, GraphCoverageRecord, GraphPartitionSnapshot,
+    GraphProposalBatch,
+};
 
 pub const SOURCE_TOC_PROFILE: &str = "wow-recognizers/toc-structural/1";
 const FACT_PROFILE: &str = "wow-recognizers-toc-facts-1";
@@ -74,6 +77,7 @@ impl SourceTocFamily {
 
 /// The operation's retained facts, including excluded/unresolved occurrences.
 /// Omitted payload details remain available in the project-owned provenance.
+#[derive(Serialize)]
 pub struct SourceTocFact<'a> {
     pub fact_id: &'a str,
     pub context_id: GenerationContextId,
@@ -88,12 +92,13 @@ pub struct SourceTocFact<'a> {
     pub evidence_id: EvidenceId,
     pub kind: SourceTocFactKind<'a>,
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum SourceTocSelection {
     Included,
     Excluded,
     Unresolved,
 }
+#[derive(Serialize)]
 pub enum SourceTocFactKind<'a> {
     Package {
         source_complete: bool,
@@ -117,7 +122,7 @@ pub enum SourceTocFactKind<'a> {
         declared: bool,
     },
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum SourceTocLoadState {
     NotDeclared,
     False,
@@ -134,7 +139,7 @@ impl SourceTocLoadState {
         }
     }
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum SourceTocScope {
     Account,
     Character,
@@ -154,6 +159,36 @@ pub struct SourceTocInput<'a> {
     pub facts: &'a [SourceTocFact<'a>],
     pub source_handles: &'a BTreeMap<StableHandleId, SourceHandle>,
     pub evidence: &'a BTreeMap<EvidenceId, EvidenceRecord>,
+}
+
+/// Explicit native file addresses in the original graph input generation.
+/// This entrypoint never falls back to scanning a source partition.
+pub struct SourceTocAssertionInput<'a> {
+    pub owner: &'a GraphPartitionSnapshot,
+    pub scope: &'a GraphAssertionRecordScope,
+    pub context: &'a GenerationContext,
+    pub facts: &'a [SourceTocFact<'a>],
+    pub source_files: &'a BTreeMap<&'a str, GraphAssertionRef>,
+    pub source_handles: &'a BTreeMap<StableHandleId, SourceHandle>,
+    pub evidence: &'a BTreeMap<EvidenceId, EvidenceRecord>,
+}
+
+#[derive(Serialize)]
+struct TocInput<'a> {
+    #[serde(skip)]
+    owner: &'a GraphPartitionSnapshot,
+    context: &'a GenerationContext,
+    facts: &'a [SourceTocFact<'a>],
+    source_handles: &'a BTreeMap<StableHandleId, SourceHandle>,
+    evidence: &'a BTreeMap<EvidenceId, EvidenceRecord>,
+}
+
+enum SourceFiles<'a> {
+    Legacy(&'a str),
+    Assertions {
+        scope: &'a GraphAssertionRecordScope,
+        files: &'a BTreeMap<&'a str, GraphAssertionRef>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -195,9 +230,57 @@ pub fn recognize_source_toc(
     stop: &AtomicBool,
 ) -> RecognizerResult<SourceTocProposals> {
     checkpoint(stop)?;
+    let source_files = SourceFiles::Legacy(input.source_partition);
+    let input = TocInput {
+        owner: input.owner,
+        context: input.context,
+        facts: input.facts,
+        source_handles: input.source_handles,
+        evidence: input.evidence,
+    };
     adapt::validate(&input, stop)?;
-    let seeds = adapt::seeds(&input, family, stop)?;
+    let seeds = adapt::seeds(&input, &source_files, family, stop)?;
     project::execute(&input, family, seeds, stop)
+}
+
+/// Reuses the existing TOC matcher with exact, explicitly supplied file receipts.
+pub fn recognize_source_toc_assertions(
+    input: SourceTocAssertionInput<'_>,
+    family: SourceTocFamily,
+    stop: &AtomicBool,
+) -> RecognizerResult<SourceTocProposals> {
+    checkpoint(stop)?;
+    if input.facts.len() > MAX_FACTS
+        || input.source_files.len() > MAX_FACTS * 2
+        || input.source_handles.len() > MAX_FACTS * 2
+        || input.evidence.len() > MAX_FACTS * 2
+    {
+        return Err(failure(RecognizerErrorCode::BudgetExceeded));
+    }
+    let scope = input.scope;
+    let files = input.source_files;
+    let input = TocInput {
+        owner: input.owner,
+        context: input.context,
+        facts: input.facts,
+        source_handles: input.source_handles,
+        evidence: input.evidence,
+    };
+    crate::source_assertions::preflight(&(&input, scope, files), stop)?;
+    adapt::validate(&input, stop)?;
+    let seeds = adapt::seeds(
+        &input,
+        &SourceFiles::Assertions { scope, files },
+        family,
+        stop,
+    )?;
+    let output = project::execute(&input, family, seeds, stop)?;
+    crate::source_assertions::preflight(
+        &(&output.batch, &output.coverage, &output.recognition),
+        stop,
+    )?;
+    checkpoint(stop)?;
+    Ok(output)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

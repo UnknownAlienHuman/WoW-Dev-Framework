@@ -1,7 +1,7 @@
 //! Real pack/matcher execution and typed graph proposal projection.
 use super::*;
 pub(super) fn execute(
-    input: &SourceStateCoreInput<'_>,
+    input: &CoreInput<'_>,
     family: SourceStateCoreFamily,
     admitted: adapt::AdmittedFacts,
     stop: &AtomicBool,
@@ -13,6 +13,7 @@ pub(super) fn execute(
         limits,
         admission_partition_digest,
         endpoints,
+        prerequisites,
     } = admitted;
     let mut entities =
         BTreeMap::<Vec<u8>, (GraphEntityProposal, BTreeSet<wow_core::CoverageId>)>::new();
@@ -253,7 +254,7 @@ pub(super) fn execute(
     )
     .map_err(graph_error)?;
     Ok(SourceStateCoreProposals {
-        batch: records::attach(input, family, &receipts, batch, stop)?,
+        batch: records::attach(family, &receipts, &prerequisites, batch, stop)?,
         coverage,
         recognition: SourceStateCoreRecognition {
             profile: "wow-recognizers/state-structural/2",

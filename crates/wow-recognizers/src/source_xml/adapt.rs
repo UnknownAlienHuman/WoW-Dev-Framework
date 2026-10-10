@@ -4,7 +4,7 @@ use super::*;
 use crate::RecognizerFactValue as Value;
 use std::collections::BTreeSet;
 use wow_core::{ClaimScope, EvidenceConfidence, ProvenanceClass, canonical_json_bytes};
-use wow_graph::{GraphConfidence, GraphProposalValue};
+use wow_graph::{GraphConfidence, GraphProducerLookup, GraphProposalValue, GraphResolvedEntity};
 
 const XML_CONTEXT_ID_PREFIX: &str = "project-xml-lua-context:sha256:";
 const EXACT_XML_SCRIPT_SITE: &str = "exact_xml_script_site";
@@ -32,58 +32,67 @@ struct Nodes {
     source_proposals: BTreeMap<String, Endpoint>,
 }
 impl Nodes {
-    fn read(input: &SourceXmlInput<'_>, stop: &AtomicBool) -> RecognizerResult<Self> {
-        let collect = |partition: &str| -> RecognizerResult<BTreeMap<NodeKey, Endpoint>> {
-            let mut result = BTreeMap::<NodeKey, Endpoint>::new();
-            let Some(partition) = input.owner.partition(partition) else {
-                return Ok(result);
+    fn collect(
+        input: &XmlData<'_>,
+        partition: &str,
+        stop: &AtomicBool,
+    ) -> RecognizerResult<BTreeMap<NodeKey, Endpoint>> {
+        let mut result = BTreeMap::<NodeKey, Endpoint>::new();
+        let Some(partition) = input.owner.partition(partition) else {
+            return Ok(result);
+        };
+        for accepted in partition.report().accepted_entities() {
+            checkpoint(stop)?;
+            if result.len() >= MAX_FACTS * 2 {
+                return Err(failure(RecognizerErrorCode::BudgetExceeded));
+            }
+            let proposal = partition
+                .batch()
+                .entity_proposal(accepted.proposal_id())
+                .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
+            let key = (
+                proposal.entity_kind_id().to_owned(),
+                canonical_json_bytes(proposal.semantic_key())
+                    .map_err(|_| failure(RecognizerErrorCode::AdapterFactMismatch))?,
+            );
+            let endpoint = Endpoint {
+                token: accepted.node().node_id().to_string(),
+                kind: proposal.entity_kind_id().to_owned(),
+                key: proposal.semantic_key().clone(),
+                handles: proposal.source_handle_ids().to_vec(),
+                evidence: proposal.evidence_ids().to_vec(),
             };
-            for accepted in partition.report().accepted_entities() {
-                checkpoint(stop)?;
-                if result.len() >= MAX_FACTS * 2 {
+            // Duplicate entity witnesses share one graph node while the
+            // support of every contributing witness stays retained.
+            if let Some(previous) = result.get_mut(&key) {
+                if previous.token != endpoint.token {
+                    return Err(failure(RecognizerErrorCode::AdapterBindingDuplicate));
+                }
+                previous.handles.extend(endpoint.handles);
+                previous.handles.sort();
+                previous.handles.dedup();
+                previous.evidence.extend(endpoint.evidence);
+                previous.evidence.sort();
+                previous.evidence.dedup();
+                if previous.handles.len() > 64 || previous.evidence.len() > 64 {
                     return Err(failure(RecognizerErrorCode::BudgetExceeded));
                 }
-                let proposal = partition
-                    .batch()
-                    .entity_proposal(accepted.proposal_id())
-                    .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
-                let key = (
-                    proposal.entity_kind_id().to_owned(),
-                    canonical_json_bytes(proposal.semantic_key())
-                        .map_err(|_| failure(RecognizerErrorCode::AdapterFactMismatch))?,
-                );
-                let endpoint = Endpoint {
-                    token: accepted.node().node_id().to_string(),
-                    kind: proposal.entity_kind_id().to_owned(),
-                    key: proposal.semantic_key().clone(),
-                    handles: proposal.source_handle_ids().to_vec(),
-                    evidence: proposal.evidence_ids().to_vec(),
-                };
-                // Duplicate entity witnesses share one graph node while the
-                // support of every contributing witness stays retained.
-                if let Some(previous) = result.get_mut(&key) {
-                    if previous.token != endpoint.token {
-                        return Err(failure(RecognizerErrorCode::AdapterBindingDuplicate));
-                    }
-                    previous.handles.extend(endpoint.handles);
-                    previous.handles.sort();
-                    previous.handles.dedup();
-                    previous.evidence.extend(endpoint.evidence);
-                    previous.evidence.sort();
-                    previous.evidence.dedup();
-                    if previous.handles.len() > 64 || previous.evidence.len() > 64 {
-                        return Err(failure(RecognizerErrorCode::BudgetExceeded));
-                    }
-                } else {
-                    result.insert(key, endpoint);
-                }
+            } else {
+                result.insert(key, endpoint);
             }
-            Ok(result)
-        };
+        }
+        Ok(result)
+    }
+
+    fn read(
+        input: &XmlData<'_>,
+        source_partition: &str,
+        stop: &AtomicBool,
+    ) -> RecognizerResult<Self> {
         let mut source_proposals = BTreeMap::new();
         let partition = input
             .owner
-            .partition(input.source_partition)
+            .partition(source_partition)
             .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
         for accepted in partition.report().accepted_entities() {
             checkpoint(stop)?;
@@ -109,12 +118,114 @@ impl Nodes {
             }
         }
         Ok(Self {
-            source: collect(input.source_partition)?,
-            template: collect(SourceXmlFamily::Template.partition_id())?,
-            object: collect(SourceXmlFamily::Object.partition_id())?,
-            toc: collect(crate::source_toc::SourceTocFamily::Package.partition_id())?,
+            source: Self::collect(input, source_partition, stop)?,
+            template: Self::collect(input, SourceXmlFamily::Template.partition_id(), stop)?,
+            object: Self::collect(input, SourceXmlFamily::Object.partition_id(), stop)?,
+            toc: Self::collect(
+                input,
+                crate::source_toc::SourceTocFamily::Package.partition_id(),
+                stop,
+            )?,
             source_proposals,
         })
+    }
+
+    fn read_assertions<'a>(
+        input: &XmlData<'a>,
+        lookup: &GraphProducerLookup<'a>,
+        scope: &GraphAssertionRecordScope,
+        source_files: &BTreeMap<&'a str, GraphAssertionRef>,
+        source_entities: &BTreeMap<&'a str, GraphAssertionRef>,
+        stop: &AtomicBool,
+    ) -> RecognizerResult<Self> {
+        let mut files = Vec::new();
+        let mut entities = Vec::new();
+        for (path, reference) in source_files {
+            checkpoint(stop)?;
+            let GraphAssertionRef::Producer { assertion, .. } = reference else {
+                return Err(failure(RecognizerErrorCode::AdapterBindingInvalid));
+            };
+            let resolved = crate::source_assertions::entity(
+                lookup,
+                scope,
+                reference,
+                &assertion.proposal_id,
+                stop,
+            )?;
+            let proposal = resolved.proposal();
+            if proposal.entity_kind_id() != "source_file"
+                || proposal.semantic_key().len() != 1
+                || !matches!(proposal.semantic_key().get("path"),
+                    Some(GraphProposalValue::String(value)) if value.as_ref() == *path)
+            {
+                return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
+            }
+            files.push((*path, resolved));
+        }
+        for (proposal_id, reference) in source_entities {
+            checkpoint(stop)?;
+            let resolved =
+                crate::source_assertions::entity(lookup, scope, reference, proposal_id, stop)?;
+            if !matches!(
+                resolved.proposal().entity_kind_id(),
+                "xml_source_declaration" | "xml_source_handler" | "lua_source_function"
+            ) {
+                return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
+            }
+            entities.push((*proposal_id, resolved));
+        }
+        // Count actual native semantic/support data and the independently owned
+        // recognizer endpoints together before cloning keys or endpoint records.
+        crate::source_assertions::preflight(
+            &(
+                scope,
+                source_files,
+                source_entities,
+                ResolvedMetadata(&files),
+                ResolvedMetadata(&entities),
+                RecognizerEndpointMetadata(input.owner),
+            ),
+            stop,
+        )?;
+        let mut source = BTreeMap::new();
+        let mut source_proposals = BTreeMap::new();
+        for (_, resolved) in &files {
+            checkpoint(stop)?;
+            let proposal = resolved.proposal();
+            let key = (
+                proposal.entity_kind_id().to_owned(),
+                canonical_json_bytes(proposal.semantic_key())
+                    .map_err(|_| failure(RecognizerErrorCode::AdapterFactMismatch))?,
+            );
+            let endpoint = endpoint_of(resolved);
+            if source.insert(key, endpoint).is_some() {
+                return Err(failure(RecognizerErrorCode::AdapterBindingDuplicate));
+            }
+            checkpoint(stop)?;
+        }
+        for (proposal_id, resolved) in &entities {
+            checkpoint(stop)?;
+            if source_proposals
+                .insert((*proposal_id).to_owned(), endpoint_of(resolved))
+                .is_some()
+            {
+                return Err(failure(RecognizerErrorCode::AdapterBindingDuplicate));
+            }
+            checkpoint(stop)?;
+        }
+        let result = Self {
+            source,
+            template: Self::collect(input, SourceXmlFamily::Template.partition_id(), stop)?,
+            object: Self::collect(input, SourceXmlFamily::Object.partition_id(), stop)?,
+            toc: Self::collect(
+                input,
+                crate::source_toc::SourceTocFamily::Package.partition_id(),
+                stop,
+            )?,
+            source_proposals,
+        };
+        checkpoint(stop)?;
+        Ok(result)
     }
     fn find<'a>(
         &self,
@@ -180,6 +291,57 @@ impl Nodes {
         } else {
             self.object(fact.document, fact.occurrence_id)
         }
+    }
+}
+
+fn endpoint_of(resolved: &GraphResolvedEntity<'_>) -> Endpoint {
+    let proposal = resolved.proposal();
+    Endpoint {
+        token: resolved.accepted().node().node_id().to_string(),
+        kind: proposal.entity_kind_id().to_owned(),
+        key: proposal.semantic_key().clone(),
+        handles: proposal.source_handle_ids().to_vec(),
+        evidence: proposal.evidence_ids().to_vec(),
+    }
+}
+struct ResolvedMetadata<'a, 'b>(&'b [(&'a str, GraphResolvedEntity<'a>)]);
+impl Serialize for ResolvedMetadata<'_, '_> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeSeq;
+        let mut seq = serializer.serialize_seq(Some(self.0.len()))?;
+        for (key, resolved) in self.0 {
+            seq.serialize_element(&(
+                key,
+                resolved.proposal(),
+                resolved.accepted().node().node_id(),
+            ))?;
+        }
+        seq.end()
+    }
+}
+struct RecognizerEndpointMetadata<'a>(&'a GraphPartitionSnapshot);
+impl Serialize for RecognizerEndpointMetadata<'_> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeSeq;
+        let mut seq = serializer.serialize_seq(None)?;
+        for partition_id in [
+            SourceXmlFamily::Template.partition_id(),
+            SourceXmlFamily::Object.partition_id(),
+            crate::source_toc::SourceTocFamily::Package.partition_id(),
+        ] {
+            if let Some(partition) = self.0.partition(partition_id) {
+                for accepted in partition.report().accepted_entities() {
+                    let proposal = partition
+                        .batch()
+                        .entity_proposal(accepted.proposal_id())
+                        .ok_or_else(|| {
+                            serde::ser::Error::custom("XML endpoint binding is missing")
+                        })?;
+                    seq.serialize_element(&(partition_id, proposal, accepted.node().node_id()))?;
+                }
+            }
+        }
+        seq.end()
     }
 }
 
@@ -276,12 +438,18 @@ impl Seeds {
     }
 }
 
-pub(super) fn validate(input: &SourceXmlInput<'_>, stop: &AtomicBool) -> RecognizerResult<()> {
+pub(super) fn validate(
+    input: &XmlData<'_>,
+    validate_owner: bool,
+    stop: &AtomicBool,
+) -> RecognizerResult<()> {
     input
         .context
         .validate()
         .map_err(|_| failure(RecognizerErrorCode::AdapterIdentityMismatch))?;
-    input.owner.validate(stop).map_err(graph_error)?;
+    if validate_owner {
+        input.owner.validate(stop).map_err(graph_error)?;
+    }
     if input.owner.source_context_id() != input.context.context_id() {
         return Err(failure(RecognizerErrorCode::AdapterIdentityMismatch));
     }
@@ -385,7 +553,7 @@ pub(super) fn validate(input: &SourceXmlInput<'_>, stop: &AtomicBool) -> Recogni
 }
 
 fn validate_support(
-    input: &SourceXmlInput<'_>,
+    input: &XmlData<'_>,
     handles: &[StableHandleId],
     evidence: &[EvidenceId],
 ) -> RecognizerResult<()> {
@@ -488,12 +656,43 @@ fn content_id(value: &str, prefix: &str) -> bool {
     })
 }
 
-pub(super) fn seeds(
-    input: &SourceXmlInput<'_>,
+pub(super) fn legacy_seeds(
+    input: &XmlData<'_>,
+    source_partition: &str,
     family: SourceXmlFamily,
     stop: &AtomicBool,
 ) -> RecognizerResult<Seeds> {
-    let nodes = Nodes::read(input, stop)?;
+    seeds(
+        input,
+        family,
+        Nodes::read(input, source_partition, stop)?,
+        stop,
+    )
+}
+
+pub(super) fn assertion_seeds<'a>(
+    input: &XmlData<'a>,
+    lookup: &GraphProducerLookup<'a>,
+    scope: &GraphAssertionRecordScope,
+    source_files: &BTreeMap<&'a str, GraphAssertionRef>,
+    source_entities: &BTreeMap<&'a str, GraphAssertionRef>,
+    family: SourceXmlFamily,
+    stop: &AtomicBool,
+) -> RecognizerResult<Seeds> {
+    seeds(
+        input,
+        family,
+        Nodes::read_assertions(input, lookup, scope, source_files, source_entities, stop)?,
+        stop,
+    )
+}
+
+fn seeds(
+    input: &XmlData<'_>,
+    family: SourceXmlFamily,
+    nodes: Nodes,
+    stop: &AtomicBool,
+) -> RecognizerResult<Seeds> {
     let declarations = input
         .facts
         .iter()
