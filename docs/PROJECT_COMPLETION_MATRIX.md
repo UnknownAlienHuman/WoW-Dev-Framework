@@ -2,7 +2,7 @@
 
 **Audited:** 2026-09-19 America/New_York. Execution inventory refreshed 2026-10-10
 through the scoped W17 replay/stable namespace, native lookup, raw traversal,
-selected package/raw graph, native direct-plan, assertion-adapter and selected direct-service checkpoints
+selected package/raw graph, native direct-plan, assertion-adapter, selected direct-service and native XML source-map checkpoints
 below, including their final workspace gate census.
 
 This is the current execution ledger. [IMPLEMENTATION_HANDOFF.md](IMPLEMENTATION_HANDOFF.md)
@@ -64,7 +64,7 @@ no Rust implementation in the audited source. Their documentation is not a binar
 | E1-D | Partial executable Reference Pack service and active internal builder with durable materialization/finalization | Close external parity/license/rebuild evidence, Windows/process-loss acceptance and complete package gates; code presence is not `ValidatedLocal` |
 | E2-A–E2-B | Partial executable | All 26 active E2-B rule IDs are service-published after the W11 semantic repair, TOC, XML and state slices; close public CLI/full-pipeline fixtures and package acceptance |
 | E2-C–E2-D | Partial source index, manifested store, native live pair service/CLI, cancellable updates, exact Library/fact-profile binding, retained physical parser updates and durable physical update/removal publication; bounded retention/GC, recovery/replacement, inactive migration/READY preparation, portable source authority and guarded cross-epoch selection/reconciliation | Dependency-specific fact reuse, standalone/package durable updates, portable full migration history and complete E2 acceptance remain open; see [REPLAY_PUBLICATION.md](../crates/wow-project/REPLAY_PUBLICATION.md) |
-| E3-A | Partial exact raw/package admission, owner-bound configuration, native Main/package graph, Included-member graph/native reads, genuine replay/stable namespace publication, selected native four-stage direct service/replay, additive captured-span containment and native project/raw, selected TOC and lexical XML roles with exact assertion/evidence capability | XML object/region classification and virtual-Lua source mapping, fingerprints, bounded SkeletonInputView and source service/CLI transport; full source-universe acceptance remains open |
+| E3-A | Partial exact raw/package admission, owner-bound configuration, native Main/package graph, Included-member graph/native reads, genuine replay/stable namespace publication, selected native four-stage direct service/replay, additive captured-span containment and native project/raw, selected TOC, lexical XML roles and XML-to-virtual-Lua mapping with exact assertion/evidence capability | XML object/region classification, fingerprints, bounded SkeletonInputView and source service/CLI transport; full source-universe acceptance remains open |
 | E3-B–E3-C | Not started | Context owners and service/CLI after their actual producer inputs |
 | E4-A–E4-C | Not started | Search, lineage/migration/static impact and routing after A0 prerequisites |
 | E5-A–E5-C | Not started | Calibration, independent review/holdout and governed publication lifecycle |

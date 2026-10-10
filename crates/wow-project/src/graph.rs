@@ -12,17 +12,22 @@ mod producer_evidence;
 use platform_producers::DirectRecipe;
 pub use platform_producers::{
     PLATFORM_DIRECT_GRAPH_PROFILE, PLATFORM_DIRECT_GRAPH_WITH_INVENTORY_SPANS_PROFILE,
-    PLATFORM_DIRECT_GRAPH_WITH_STRUCTURAL_ROLES_PROFILE, PlatformGraphProducerProposals,
+    PLATFORM_DIRECT_GRAPH_WITH_STRUCTURAL_ROLES_PROFILE,
+    PLATFORM_DIRECT_GRAPH_WITH_XML_SOURCE_MAPS_PROFILE, PlatformGraphProducerProposals,
     PlatformGraphProposalPlan, PlatformGraphProvenance, build_platform_graph_proposal_plan,
     build_platform_graph_proposal_plan_with_inventory_spans,
     build_platform_graph_proposal_plan_with_structural_roles,
+    build_platform_graph_proposal_plan_with_xml_source_maps,
 };
 mod projection;
 mod structural_registry;
 mod toc_roles;
 mod xml_roles;
+mod xml_source_map_registry;
+mod xml_source_maps;
 pub use projection::PlatformGraphProducer;
 use projection::{EntityDraft, RelationDraft};
+pub use xml_source_maps::{XmlSourceMapOmission, XmlSourceMapOmissionOutcome, XmlSourceMapSummary};
 mod raw_inventory;
 pub use raw_inventory::{
     PLATFORM_RAW_INVENTORY_PARTITION, PLATFORM_RAW_MEMBER_KIND, ProjectRawInventoryManifest,
@@ -772,9 +777,14 @@ fn registry_for_recipe(
     if recipe.structural_roles() {
         structural_registry::extend(&mut entities, &mut relations)?;
     }
+    if recipe.xml_source_maps() {
+        xml_source_map_registry::extend(&mut entities, &mut relations)?;
+    }
     GraphRegistryBundle::build(
         "wow-project.source-load",
-        if recipe.structural_roles() {
+        if recipe.xml_source_maps() {
+            "19"
+        } else if recipe.structural_roles() {
             "18"
         } else if recipe.inventory_spans() {
             "17"

@@ -24,6 +24,15 @@ membership, selected TOC roles and lexical XML containment/script/reference role
 It retains `Some(count)` span omissions. Application and replay routes still
 select native /1; neither extension introduces an application selector.
 
+The separate
+[`build_platform_graph_proposal_plan_with_xml_source_maps`](PLATFORM_XML_SOURCE_MAPS.md)
+entry extends /3 with original XML-to-virtual-Lua unit/piece associations. Native
+/4 selects registry19 and stage version4. Preparation admits exact XML-piece
+support before Inventory spans; XmlStructure then joins the genuine script sites,
+units and spans. `xml_source_maps()` returns a read-only native summary on the
+plan and finished capability; /1-/3 retain None. Application/replay selection is
+unchanged.
+
 ## Native inputs and API
 
 The APIs are exported from `wow_project::graph`. Construction requires a genuine
@@ -137,8 +146,9 @@ select the split in configuration, service publication or replay.
 
 Native /3 now supplies project/raw membership, selected TOC/variant/load-unit
 and lexical XML/script/parent-reference roles over retained native receipts; see
-[structural roles](PLATFORM_STRUCTURAL_ROLES.md). Full XML object/region
-classification and virtual-Lua source mapping,
+[structural roles](PLATFORM_STRUCTURAL_ROLES.md). Native /4 supplies
+[virtual-Lua source mapping](PLATFORM_XML_SOURCE_MAPS.md). Full XML object/region
+classification,
 structural fingerprints, bounded `SkeletonInputView` and source service/CLI
 transport remain open. Full W17/E3/package, real Gethe/Ketho corpus, performance,
 native fault/exhaustion and WoW runtime acceptance remain NotEvaluated. Gethe
@@ -160,9 +170,15 @@ The native assertion chain additionally passes with disk absent, exact support
 and native endpoint checks, genuine substitution refusal and pre-set cancellation;
 see its [scoped verification](PLATFORM_RECOGNIZER_ASSERTIONS.md#scoped-verification-and-remaining-work).
 
-Final workspace gates/build completed at **2026-10-10 09:19:03 UTC**:
+The expanded lifecycle also passes native /4 mapping, transformed segments,
+removed-markup caret alternatives, actual member-call observations, partial parse
+state and exact augmented/raw catalog closure. Its top-level inline Scripts
+retain native SourceOnly load state; older recipes are compared within that same
+run. See the [mapping verification scope](PLATFORM_XML_SOURCE_MAPS.md#scoped-verification).
+
+Final workspace gates/build completed at **2026-10-10 12:00:49 UTC**:
 `cargo xtask check`, `cargo fmt --all --check`, workspace all-target/all-feature
-check, strict Clippy, tests (**941 passed, 0 failed, 1 ignored, 112 targets**),
+check, strict Clippy, tests (**944 passed, 0 failed, 1 ignored, 112 targets**),
 strict rustdoc under `RUSTDOCFLAGS=-D warnings`, and workspace
 all-target/all-feature build all passed. These are local scoped results;
 remote publication and CI are not asserted.

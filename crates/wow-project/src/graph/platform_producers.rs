@@ -12,12 +12,15 @@ pub const PLATFORM_DIRECT_GRAPH_WITH_INVENTORY_SPANS_PROFILE: &str =
     "wow-project/platform-direct-producers/2";
 pub const PLATFORM_DIRECT_GRAPH_WITH_STRUCTURAL_ROLES_PROFILE: &str =
     "wow-project/platform-direct-producers/3";
+pub const PLATFORM_DIRECT_GRAPH_WITH_XML_SOURCE_MAPS_PROFILE: &str =
+    "wow-project/platform-direct-producers/4";
 
 #[derive(Clone, Copy)]
 pub(super) enum DirectRecipe {
     Original,
     InventorySpans,
     StructuralRoles,
+    XmlSourceMaps,
 }
 impl DirectRecipe {
     const fn profile(self) -> &'static str {
@@ -25,6 +28,7 @@ impl DirectRecipe {
             Self::Original => PLATFORM_DIRECT_GRAPH_PROFILE,
             Self::InventorySpans => PLATFORM_DIRECT_GRAPH_WITH_INVENTORY_SPANS_PROFILE,
             Self::StructuralRoles => PLATFORM_DIRECT_GRAPH_WITH_STRUCTURAL_ROLES_PROFILE,
+            Self::XmlSourceMaps => PLATFORM_DIRECT_GRAPH_WITH_XML_SOURCE_MAPS_PROFILE,
         }
     }
     const fn producer_version(self) -> &'static str {
@@ -32,13 +36,20 @@ impl DirectRecipe {
             Self::Original => "1",
             Self::InventorySpans => "2",
             Self::StructuralRoles => "3",
+            Self::XmlSourceMaps => "4",
         }
     }
     pub(super) const fn inventory_spans(self) -> bool {
-        matches!(self, Self::InventorySpans | Self::StructuralRoles)
+        matches!(
+            self,
+            Self::InventorySpans | Self::StructuralRoles | Self::XmlSourceMaps
+        )
     }
     pub(super) const fn structural_roles(self) -> bool {
-        matches!(self, Self::StructuralRoles)
+        matches!(self, Self::StructuralRoles | Self::XmlSourceMaps)
+    }
+    pub(super) const fn xml_source_maps(self) -> bool {
+        matches!(self, Self::XmlSourceMaps)
     }
 }
 const ORDER: [PlatformGraphProducer; 4] = [
@@ -54,6 +65,7 @@ const MAX_DIRECT_ASSERTIONS: usize = 200_000;
 pub struct PlatformGraphProposalPlan<'a> {
     recipe: DirectRecipe,
     inventory_span_omissions: Option<usize>,
+    xml_source_maps: Option<XmlSourceMapSummary>,
     project: &'a ProjectView,
     collected: CollectedSourceGraph,
     scope: GraphAssertionRecordScope,
@@ -89,6 +101,7 @@ impl PlatformGraphProducerProposals {
 pub struct PlatformGraphProvenance<'a> {
     recipe: DirectRecipe,
     inventory_span_omissions: Option<usize>,
+    xml_source_maps: Option<XmlSourceMapSummary>,
     project: &'a ProjectView,
     graph: &'a GraphPartitionSnapshot,
     scope: GraphAssertionRecordScope,
@@ -105,6 +118,11 @@ impl PlatformGraphProvenance<'_> {
     #[must_use]
     pub const fn inventory_span_omissions(&self) -> Option<usize> {
         self.inventory_span_omissions
+    }
+    /// Mapping metadata belongs only to the native /4 recipe.
+    #[must_use]
+    pub const fn xml_source_maps(&self) -> Option<&XmlSourceMapSummary> {
+        self.xml_source_maps.as_ref()
     }
     #[must_use]
     pub const fn project(&self) -> &ProjectView {
@@ -157,6 +175,15 @@ pub fn build_platform_graph_proposal_plan_with_structural_roles<'a>(
     build_plan(project, DirectRecipe::StructuralRoles, stop)
 }
 
+/// Associate every retained registered inline Lua unit and exact XML mapping
+/// segment with the original script site and source support.
+pub fn build_platform_graph_proposal_plan_with_xml_source_maps<'a>(
+    project: &'a ProjectView,
+    stop: &AtomicBool,
+) -> ProjectResult<PlatformGraphProposalPlan<'a>> {
+    build_plan(project, DirectRecipe::XmlSourceMaps, stop)
+}
+
 fn build_plan<'a>(
     project: &'a ProjectView,
     recipe: DirectRecipe,
@@ -175,6 +202,13 @@ fn build_plan<'a>(
         ));
     }
     let mut collected = collect_source_graph_proposals_for_recipe(project, recipe, stop)?;
+    if recipe.xml_source_maps() {
+        if collected.provenance.profile != source_graph_profile(config) {
+            return Err(invalid());
+        }
+        // New piece support belongs to this native report, never source /22.
+        collected.provenance.profile = recipe.profile();
+    }
     if collected
         .entities
         .len()
@@ -188,6 +222,17 @@ fn build_plan<'a>(
     let mut exact = 0;
     raw_inventory::charge_serialized(&mut exact, &collected, stop)?;
     let mut budget = ProducerBudget::new(exact.max(collected.text_bytes))?;
+    // New source pieces must enter the native catalog before Inventory spans.
+    let prepared_maps = if recipe.xml_source_maps() {
+        Some(xml_source_maps::prepare(
+            project,
+            &mut collected.provenance,
+            &mut budget,
+            stop,
+        )?)
+    } else {
+        None
+    };
     let inventory_span_omissions = if recipe.inventory_spans() {
         let omitted = inventory_roles::append_spans(
             project,
@@ -237,6 +282,7 @@ fn build_plan<'a>(
     } else {
         None
     };
+    let mut xml_source_maps = None;
     if recipe.structural_roles() {
         inventory_project::append_project(
             project,
@@ -262,6 +308,17 @@ fn build_plan<'a>(
             &mut budget,
             stop,
         )?;
+        if let Some(prepared) = prepared_maps {
+            xml_source_maps = Some(xml_source_maps::append(
+                project,
+                &collected.provenance,
+                prepared,
+                &mut collected.entities,
+                &mut collected.relations,
+                &mut budget,
+                stop,
+            )?);
+        }
         let raw_count = collected
             .inventory_batch
             .as_ref()
@@ -287,15 +344,19 @@ fn build_plan<'a>(
             .iter_mut()
             .find(|record| record.relation() == GraphRelationKind::Contains)
             .ok_or_else(invalid)?;
+        let mut reasons = vec![
+            "source_graph.native_captured_spans_and_declared_inventory_membership_only".into(),
+            "source_graph.native_selected_toc_and_lexical_xml_containment_only".into(),
+            "source_graph.original_inventory_omissions_and_span_omissions_retained".into(),
+        ];
+        if recipe.xml_source_maps() {
+            reasons.push("source_graph.native_xml_map_segment_containment_only".into());
+        }
         let coverage = GraphCoverageRecord::new(
             GraphRelationKind::Contains,
             GraphCoverageState::Partial,
             false,
-            vec![
-                "source_graph.native_captured_spans_and_declared_inventory_membership_only".into(),
-                "source_graph.native_selected_toc_and_lexical_xml_containment_only".into(),
-                "source_graph.original_inventory_omissions_and_span_omissions_retained".into(),
-            ],
+            reasons,
             collected.limits,
         )
         .map_err(graph_error)?;
@@ -321,6 +382,26 @@ fn build_plan<'a>(
             .map_err(graph_error)?;
             budget.charge_serialized(&coverage, stop)?;
             collected.coverage.push(coverage);
+        }
+        if recipe.xml_source_maps() {
+            let owns = collected
+                .coverage
+                .iter_mut()
+                .find(|record| record.relation() == GraphRelationKind::Owns)
+                .ok_or_else(invalid)?;
+            let mut reasons = owns.blocker_ids().to_vec();
+            reasons.push("source_graph.native_xml_virtual_mapping_only".into());
+            reasons.push("source_graph.xml_virtual_receiver_dispatch_not_evaluated".into());
+            let coverage = GraphCoverageRecord::new(
+                GraphRelationKind::Owns,
+                GraphCoverageState::Partial,
+                false,
+                reasons,
+                collected.limits,
+            )
+            .map_err(graph_error)?;
+            budget.charge_serialized(&coverage, stop)?;
+            *owns = coverage;
         }
     }
     let scope = GraphAssertionRecordScope {
@@ -403,6 +484,7 @@ fn build_plan<'a>(
     Ok(PlatformGraphProposalPlan {
         recipe,
         inventory_span_omissions,
+        xml_source_maps,
         project,
         collected,
         scope,
@@ -421,6 +503,11 @@ impl<'a> PlatformGraphProposalPlan<'a> {
     #[must_use]
     pub const fn inventory_span_omissions(&self) -> Option<usize> {
         self.inventory_span_omissions
+    }
+    /// Mapping metadata belongs only to the native /4 recipe.
+    #[must_use]
+    pub const fn xml_source_maps(&self) -> Option<&XmlSourceMapSummary> {
+        self.xml_source_maps.as_ref()
     }
     #[must_use]
     pub fn registry(&self) -> &GraphRegistryBundle {
@@ -773,6 +860,7 @@ impl<'a> PlatformGraphProposalPlan<'a> {
         Ok(PlatformGraphProvenance {
             recipe: self.recipe,
             inventory_span_omissions: self.inventory_span_omissions,
+            xml_source_maps: self.xml_source_maps,
             project: self.project,
             graph: owner,
             scope: self.scope,
@@ -857,6 +945,11 @@ fn entity_permission(recipe: DirectRecipe, producer: PlatformGraphProducer, kind
                             | "xml_source_load_site"
                             | "xml_source_parent_reference"
                     ))
+                || (recipe.xml_source_maps()
+                    && matches!(
+                        kind,
+                        "xml_source_virtual_lua_unit" | "xml_source_virtual_lua_map_piece"
+                    ))
         }
     }
 }
@@ -913,6 +1006,13 @@ fn relation_permission(recipe: DirectRecipe, producer: PlatformGraphProducer, ki
                         | "xml_external_script_target"
                         | "xml_occurrence_owns_parent_reference"
                 ))
+                || (recipe.xml_source_maps()
+                    && matches!(
+                        kind,
+                        "xml_script_site_owns_virtual_lua"
+                            | "xml_virtual_lua_contains_map_piece"
+                            | "xml_map_piece_source_span"
+                    ))
         }
     }
 }

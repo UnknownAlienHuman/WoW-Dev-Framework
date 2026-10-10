@@ -63,7 +63,8 @@ support or incompatible predecessor admission prevents a finished capability.
 Native /1 and /2 remain separate. Source /22, service request12/result19 and
 replay/storage v9 retain native /1; /3 adds no configuration, service, CLI or
 replay selector. The registry-16 raw excerpt binder does not admit registry18.
-Full XML object/region classification, virtual-Lua source mapping, fingerprints,
+The separate [native /4 entry](PLATFORM_XML_SOURCE_MAPS.md) adds virtual-Lua source
+mapping; /3 retains its existing roles and recipe. Full XML object/region classification, fingerprints,
 bounded SkeletonInputView and source transport remain open, alongside full
 W17/E3/package acceptance and W18-W26. Gethe preparation remains deferred until
 the product implementation/build stage is complete.
@@ -79,7 +80,14 @@ Partial coverage, separate registry scopes and wrong-version refusal. Original
 /1 and /2 proposals plus source /21 and replay /8 remain unchanged; unresolved
 inheritance remains retained.
 
-The unchanged fixture does not exercise load-policy, explicit parent-reference
+The published /3 checkpoint used the original two-package fixture. The subsequent
+/4 lifecycle extension adds real inline handlers and parse-failed top-level Scripts;
+the latter retain native blocking InlineLuaNotAnalyzed issues and SourceOnly load
+state. It compares older native /1-/3 and source/replay recipes within the expanded
+same-run input, rather than claiming that changed fixture bytes retain old IDs.
+See [mapping verification](PLATFORM_XML_SOURCE_MAPS.md#scoped-verification).
+
+Neither fixture exercises load-policy, explicit parent-reference
 or XML load-site/target branches. Root-swap substitution, overlapping/unmatched
 roots, conditional/excluded/repeated/missing-target load branches, exhaustion and
 injected cancellation are not executed acceptance results of this lifecycle.

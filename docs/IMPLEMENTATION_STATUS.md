@@ -1406,3 +1406,45 @@ XML object/region classification, virtual-Lua source mapping, fingerprints,
 SkeletonInputView and source transport remain open. Full W17/E3/package,
 Gethe/Ketho corpus, performance, WoW runtime and W18-W26 acceptance remain open;
 Gethe preparation stays deferred until product implementation/build.
+
+## W17 native XML-to-virtual-Lua source maps (2026-10-10)
+
+`build_platform_graph_proposal_plan_with_xml_source_maps` selects native /4,
+registry19 and stage version4 over the genuine raw-selected platform ProjectView.
+Preparation validates retained XML/script/body and actual native parser, member,
+Main/virtual/ordered Library/session receipts, then admits original XML-piece
+handles and evidence before Inventory span projection. XmlStructure joins exact
+/3 script-site and Inventory span proposals with the real virtual unit and each
+original native segment. No source extractor, parser or analyzer session is added.
+
+The augmented /4 source report preserves original captured support; the finished
+catalog also retains every original raw handle/evidence record. Captured qualified
+project paths and original raw inventory paths remain separate owner domains.
+Serialize-only summary/omission metadata keeps optional actual analysis identity,
+unit/piece counts, semantic state and typed ExternalFile/ReferenceOnly/
+UnresolvedScript/UnreachableInline outcomes. Metadata does not admit a capability.
+
+Native mappings preserve entity/newline spellings, removed-markup gaps and ordered
+caret alternatives. Diagnostics and actual member-callee references/calls remain
+bound through their original observation digest and held typed records. Parse-
+failed units retain PartialFailedParse; a top-level Script's blocking native
+InlineLuaNotAnalyzed and SourceOnly load state remain intact. Shared conservative
+4 MiB metadata accounting and cumulative 200,000 mapping visits/emissions apply
+before copies; inherited assertion/node/edge limits and cancellation remain active.
+
+The expanded existing disk-absent two-package lifecycle passes with four real
+units, transformed segments, gap alternatives, ReferenceOnly omissions and exact
+site/unit/piece/span/support/catalog closure. Older /1-/3, source21 and replay8
+recipes are compared within the same input run. Absent analysis, empty inline
+body, external/unreachable sites, fault/exhaustion and injected /4 cancellation
+are not executed acceptance results. Final local policy, fmt, workspace
+all-target/all-feature check, strict Clippy, tests, strict rustdoc and build pass,
+completed 2026-10-10 12:00:49 UTC: 944 passed, 0 failed, 1 ignored, 112 targets.
+See [native XML source maps](PLATFORM_XML_SOURCE_MAPS.md).
+
+Only the explicit library entry selects /4. Source /22, service request12/result19
+and replay/storage v9 retain native /1; this checkpoint adds no application
+selector. XML object/region classification, fingerprints, SkeletonInputView and
+source transport remain open, alongside full W17/E3/package, E0/E2, Gethe/Ketho
+corpus/performance/runtime and W18-W26 acceptance. Gethe materialization still
+follows product implementation/build. Remote publication and CI are separate.

@@ -926,7 +926,7 @@ impl Output<'_> {
     }
 }
 
-fn canonical_text<T: Serialize>(
+pub(super) fn canonical_text<T: Serialize>(
     value: &T,
     budget: &mut ProducerBudget,
     stop: &AtomicBool,

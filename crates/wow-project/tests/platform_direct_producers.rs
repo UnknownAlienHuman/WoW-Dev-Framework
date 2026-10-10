@@ -11,9 +11,10 @@ use std::{
 
 use sha2::{Digest, Sha256};
 use wow_core::{
-    CanonicalResult, ContentDigest, EvidenceId, ProfileIdentityBuilder, ProfileKind,
-    ReferenceGenerationId, SchemaVersionEntry, SourceContent, SourceKind, SourceLogicalSnapshot,
-    SourceSpan, SourceSpanKind, StableHandleId, domain_separated_digest,
+    CanonicalResult, ClaimScope, ContentDigest, EvidenceConfidence, EvidenceId, EvidenceRecord,
+    ProfileIdentityBuilder, ProfileKind, ProvenanceClass, ReferenceGenerationId,
+    SchemaVersionEntry, SourceContent, SourceKind, SourceLogicalSnapshot, SourceSpan,
+    SourceSpanKind, StableHandleId, domain_separated_digest,
 };
 use wow_emmy::{
     EMMYLUA_CODE_ANALYSIS_VERSION, EMMYLUA_REVISION, EMMYLUA_TREE, EmmyBackendIdentity,
@@ -33,16 +34,19 @@ use wow_project::{
     disk::{ProjectDiskFile, ProjectInputDirectory},
     graph::{
         PLATFORM_DIRECT_GRAPH_PROFILE, PLATFORM_DIRECT_GRAPH_WITH_INVENTORY_SPANS_PROFILE,
-        PLATFORM_DIRECT_GRAPH_WITH_STRUCTURAL_ROLES_PROFILE, PlatformGraphProducer,
+        PLATFORM_DIRECT_GRAPH_WITH_STRUCTURAL_ROLES_PROFILE,
+        PLATFORM_DIRECT_GRAPH_WITH_XML_SOURCE_MAPS_PROFILE, PlatformGraphProducer,
         PlatformGraphProposalPlan, ProjectGraphPackageLoadOutcome, ProjectGraphProvenance,
         ProjectGraphXmlReferenceOutcome, ProjectTocFactKind, ProjectXmlFactKind,
-        SOURCE_GRAPH_PARTITION, build_platform_graph_proposal_plan,
+        SOURCE_GRAPH_PARTITION, XmlSourceMapOmissionOutcome, build_platform_graph_proposal_plan,
         build_platform_graph_proposal_plan_with_inventory_spans,
-        build_platform_graph_proposal_plan_with_structural_roles, build_source_graph_proposals,
+        build_platform_graph_proposal_plan_with_structural_roles,
+        build_platform_graph_proposal_plan_with_xml_source_maps, build_source_graph_proposals,
     },
     load::{
-        LoadRecordKind, LoadSelection, ProjectPackageInput, ProjectPackageReachability,
-        ProjectPackageVariantInput, XmlElementRole,
+        LoadIssueKind, LoadRecordKind, LoadSelection, ProjectPackageInput,
+        ProjectPackageReachability, ProjectPackageVariantInput, XmlElementRole, XmlInlineLua,
+        XmlLuaMapKind, XmlScriptSource,
     },
     platform_source::{
         BlizzardUiSourceProfile, BlizzardUiSourceProfileRequest, PlatformEntryDisposition,
@@ -52,12 +56,17 @@ use wow_project::{
         PlatformSourceOrigin, PlatformSourceRevision, PlatformTarget, SourceAdmissionLimits,
     },
     replay::ProjectReplay,
+    xml_lua::{
+        XML_LUA_IMPLICIT_RECEIVER_NOT_EVALUATED, XML_LUA_RUNTIME_DISPATCH_NOT_EVALUATED,
+        XmlLuaDiagnosticMapping, XmlLuaMappedSpan, XmlLuaSemanticState,
+    },
 };
 
 type ResultOf<T = ()> = Result<T, Box<dyn Error>>;
 static NEXT_ROOT: AtomicUsize = AtomicUsize::new(0);
 const PACKAGES: [&str; 2] = ["Alpha", "Beta"];
-const XML: &str = r#"<Ui xmlns="http://www.blizzard.com/wow/ui/">
+const XML: &str = concat!(
+    r#"<Ui xmlns="http://www.blizzard.com/wow/ui/">
   <Frame name="Template" virtual="true">
     <Scripts><OnShow function="UniqueHandler"/></Scripts>
   </Frame>
@@ -66,11 +75,16 @@ const XML: &str = r#"<Ui xmlns="http://www.blizzard.com/wow/ui/">
       <OnLoad function="SharedHandler"/>
       <OnClick function="UniqueHandler"/>
       <OnEvent function="BadHandler()"/>
+      <OnHide>local text = "&amp;&#xE9;";"#,
+    "\r\n",
+    r#"local n = 1<!--gap--><![CDATA[ + 2]]>; self:Probe(); return self.value, text, n</OnHide>
     </Scripts>
   </Frame>
   <Frame name="Inherited" inherits="Template,MissingTemplate"/>
+  <Script>local broken = </Script>
 </Ui>
-"#;
+"#
+);
 
 struct FixtureRoot(PathBuf);
 impl FixtureRoot {
@@ -412,6 +426,7 @@ fn inventory_spans(
         .collect::<BTreeSet<_>>();
     let omitted = source.source_handles().len() - known.len();
     let mut plan = build_platform_graph_proposal_plan_with_inventory_spans(view, stop)?;
+    assert!(plan.xml_source_maps().is_none());
     assert_eq!(
         plan.profile(),
         PLATFORM_DIRECT_GRAPH_WITH_INVENTORY_SPANS_PROFILE
@@ -775,10 +790,11 @@ fn structural_roles(
     spans: &GraphPartitionSnapshot,
     source: &ProjectGraphProvenance,
     stop: &AtomicBool,
-) -> ResultOf {
+) -> ResultOf<GraphPartitionSnapshot> {
     assert_eq!(original.registry().version(), "16");
     assert_eq!(spans.registry().version(), "17");
     let mut plan = build_platform_graph_proposal_plan_with_structural_roles(view, stop)?;
+    assert!(plan.xml_source_maps().is_none());
     assert_eq!(
         plan.profile(),
         PLATFORM_DIRECT_GRAPH_WITH_STRUCTURAL_ROLES_PROFILE
@@ -1518,7 +1534,7 @@ fn structural_roles(
                 .filter(|f| matches!(f.kind, ProjectTocFactKind::File { .. }))
                 .count()
         );
-        // This fixture has no declared load-policy, parent-name or XML load site.
+        // This fixture has no declared load-policy or explicit parent-name reference.
         assert!(
             !source
                 .toc_facts()
@@ -1535,6 +1551,7 @@ fn structural_roles(
         let mut occurrence_nodes = BTreeMap::<&str, Vec<_>>::new();
         let mut documents = BTreeSet::new();
         let mut scripts = BTreeSet::new();
+        let mut load_sites = BTreeSet::new();
         for row in source.xml_containment() {
             let package = row
                 .scope
@@ -1699,10 +1716,72 @@ fn structural_roles(
                 )?;
                 assert!(scripts.insert(script.proposal_id()));
             }
-            assert!(!matches!(
-                element.role,
-                XmlElementRole::Include | XmlElementRole::Script
-            ));
+            assert_ne!(element.role, XmlElementRole::Include);
+            if element.role == XmlElementRole::Script {
+                let script = element.script.as_ref().ok_or("top-level script missing")?;
+                assert_eq!(script.source_kind, XmlScriptSource::InlineBody);
+                let site = role(xml.batch(), "xml_source_load_site", &occurrence_fields)?;
+                let records = plan
+                    .records()
+                    .iter()
+                    .filter(|record| {
+                        record.document == *local
+                            && record.byte_end == element.start_tag_span.byte_end
+                            && matches!(
+                                record.kind,
+                                LoadRecordKind::LuaFile
+                                    | LoadRecordKind::XmlFile
+                                    | LoadRecordKind::XmlElement
+                                    | LoadRecordKind::Unknown
+                            )
+                    })
+                    .collect::<Vec<_>>();
+                let issues = plan
+                    .issues()
+                    .iter()
+                    .filter(|issue| {
+                        issue.document == *local
+                            && issue.byte_end == element.start_tag_span.byte_end
+                    })
+                    .collect::<Vec<_>>();
+                let [record] = records.as_slice() else {
+                    return Err("top-level script must have one native source-only record".into());
+                };
+                assert_eq!(record.kind, LoadRecordKind::XmlElement);
+                assert_eq!(record.selection, LoadSelection::Included);
+                let [issue] = issues.as_slice() else {
+                    return Err("inline Script must retain its native load-analysis issue".into());
+                };
+                assert_eq!(issue.kind, LoadIssueKind::InlineLuaNotAnalyzed);
+                assert!(issue.blocks_complete && element.issues.is_empty());
+                let node = load
+                    .packages()
+                    .iter()
+                    .find(|node| node.package == package)
+                    .ok_or("top-level package missing")?;
+                let state = serde_json::json!({"role": element.role, "structure_issues": &element.issues,
+                    "records": &records, "issues": &issues, "reachability": node.reachability,
+                    "phase": node.phase, "outcome": "source_only"});
+                assert_eq!(
+                    site.semantic_key().get("state"),
+                    Some(&string(&wow_core::canonical_json_string(&state)?))
+                );
+                role_support(
+                    site.source_handle_ids(),
+                    site.evidence_ids(),
+                    &[row.source_handle_id],
+                    &[row.evidence_id],
+                );
+                edge(
+                    "xml_occurrence_owns_load_site",
+                    occurrence.proposal_id(),
+                    site.proposal_id(),
+                    &[row.source_handle_id],
+                    &[row.evidence_id],
+                    GraphConfidence::Proven,
+                )?;
+                assert!(load_sites.insert(site.proposal_id()));
+            }
             let address = finished
                 .assertion(&key(GraphAssertionKind::Entity, occurrence.proposal_id()))
                 .ok_or("XML occurrence address missing")?;
@@ -1759,10 +1838,31 @@ fn structural_roles(
                 .iter()
                 .any(|f| matches!(f.kind, ProjectXmlFactKind::Parent { .. }))
         );
-        assert!(!xml.batch().entity_proposals().iter().any(|p| matches!(
-            p.entity_kind_id(),
-            "xml_source_load_site" | "xml_source_parent_reference"
-        )));
+        assert_eq!(load_sites.len(), PACKAGES.len());
+        assert_eq!(
+            xml.batch()
+                .entity_proposals()
+                .iter()
+                .filter(|proposal| proposal.entity_kind_id() == "xml_source_load_site")
+                .count(),
+            load_sites.len()
+        );
+        assert!(
+            !xml.batch()
+                .entity_proposals()
+                .iter()
+                .any(|p| matches!(p.entity_kind_id(), "xml_source_parent_reference"))
+        );
+        assert!(!xml.report().accepted_relations().iter().any(|accepted| {
+            xml.batch()
+                .relation_proposal(accepted.proposal_id())
+                .is_some_and(|proposal| {
+                    matches!(
+                        proposal.relation_kind_id(),
+                        "xml_include_target" | "xml_external_script_target"
+                    )
+                })
+        }));
     }
     let role_edges = edges
         .values()
@@ -1809,6 +1909,980 @@ fn structural_roles(
         *spans.foundation().generation()
     );
     assert_eq!(unchanged.inventory_span_omissions(), Some(omitted));
+    Ok(owner)
+}
+
+fn mapped_xml_span(body: &XmlInlineLua, span: &XmlLuaMappedSpan) -> ResultOf {
+    let start = usize::try_from(span.virtual_byte_start)?;
+    let end = usize::try_from(span.virtual_byte_end)?;
+    assert!(!span.xml_spans.is_empty());
+    assert_eq!(
+        span.mapping == XmlLuaDiagnosticMapping::CaretBoundaries,
+        start == end
+    );
+    let expected = if start == end {
+        body.map_position(start)?
+    } else {
+        body.map_range(start, end)?
+    };
+    assert_eq!(span.xml_spans, expected);
+    Ok(())
+}
+
+fn xml_source_maps(
+    view: &ProjectView,
+    priors: [&GraphPartitionSnapshot; 3],
+    source: &ProjectGraphProvenance,
+    stop: &AtomicBool,
+) -> ResultOf {
+    let analyzer = view.snapshot().analyzer_binding();
+    let analysis = analyzer
+        .xml_lua_analysis()
+        .ok_or("native XML analysis missing")?;
+    let semantic = analysis
+        .semantic_report()
+        .ok_or("native virtual semantics missing")?;
+    assert_eq!(semantic.project_generation(), view.project_generation());
+    assert_eq!(
+        semantic.main_snapshot_id(),
+        analyzer.main_workspace().snapshot_id()
+    );
+    assert!(
+        semantic
+            .library_snapshot_ids()
+            .eq(analyzer.library_snapshot_ids())
+    );
+    assert_eq!(semantic.wrapper_profile(), "none_exact_unwrapped_source");
+    assert_eq!(
+        semantic.syntax_report().workspace_snapshot_id(),
+        semantic.virtual_snapshot_id()
+    );
+    assert_eq!(
+        semantic.member_call_report().main_snapshot_id(),
+        semantic.virtual_snapshot_id()
+    );
+    assert!(
+        semantic
+            .member_call_report()
+            .library_snapshot_ids()
+            .eq(analyzer.library_snapshot_ids())
+    );
+    assert_eq!(analysis.units().len(), PACKAGES.len() * 2);
+    assert_eq!(
+        analysis.parser_report().units().len(),
+        analysis.units().len()
+    );
+    assert_eq!(
+        semantic.syntax_report().files().len(),
+        analysis.units().len()
+    );
+    assert_eq!(
+        semantic.member_call_report().files().len(),
+        analysis.units().len()
+    );
+    assert!(analysis.unresolved_scripts().is_empty());
+
+    let mut plan = build_platform_graph_proposal_plan_with_xml_source_maps(view, stop)?;
+    assert_eq!(
+        plan.profile(),
+        PLATFORM_DIRECT_GRAPH_WITH_XML_SOURCE_MAPS_PROFILE
+    );
+    assert_eq!(plan.registry().version(), "19");
+    let scope = plan.scope().clone();
+    let summary = plan
+        .xml_source_maps()
+        .ok_or("native /4 summary missing")?
+        .clone();
+    assert_eq!(summary.analysis_id(), Some(analysis.analysis_id()));
+    assert_eq!(summary.semantic_state(), analysis.semantic_state());
+    assert_eq!(
+        summary.semantic_state(),
+        XmlLuaSemanticState::PartialFailedParse
+    );
+    assert_eq!(summary.unit_count(), analysis.units().len());
+    assert!(summary.piece_count() > summary.unit_count());
+    for (prior, version) in priors.into_iter().zip(["16", "17", "18"]) {
+        assert_eq!(prior.registry().version(), version);
+        assert_eq!(&scope.universe, prior.foundation().universe());
+        assert_ne!(&scope.generation, prior.foundation().generation());
+        assert_eq!(scope.source_context_id, prior.source_context_id());
+        refused(plan.build_stage(PlatformGraphProducer::Inventory, prior, stop))?;
+    }
+    let raw_id = wow_project::graph::PLATFORM_RAW_INVENTORY_PARTITION;
+    let raw = plan.raw_inventory_batch().ok_or("/4 raw prelude missing")?;
+    assert_eq!(raw.registry_digest(), plan.registry().registry_digest());
+    assert_eq!(raw.generation(), &scope.generation);
+    assert_eq!(raw.universe(), &scope.universe);
+    assert_eq!(raw.source_context_id(), scope.source_context_id);
+    assert_eq!(
+        raw.entity_proposals(),
+        priors[0]
+            .partition(raw_id)
+            .ok_or("original raw prelude missing")?
+            .batch()
+            .entity_proposals()
+    );
+    let mut owner = initial(&plan, stop)?;
+    for &producer in plan.producer_order() {
+        let stage = plan.build_stage(producer, &owner, stop)?;
+        assert_eq!(stage.producer_version(), "4");
+        let (batch, coverage) = stage.into_parts();
+        if producer == PlatformGraphProducer::Inventory {
+            let old_stage = admit(&owner, batch.clone(), "3", coverage.clone(), stop)?;
+            refused(plan.build_stage(PlatformGraphProducer::TocLoad, &old_stage, stop))?;
+        }
+        owner = admit(&owner, batch, "4", coverage, stop)?;
+    }
+    owner.validate(stop)?;
+    assert_eq!(
+        owner
+            .partitions()
+            .iter()
+            .map(|p| p.partition_id())
+            .collect::<BTreeSet<_>>(),
+        BTreeSet::from([
+            raw_id,
+            PlatformGraphProducer::Inventory.partition_id(),
+            PlatformGraphProducer::TocLoad.partition_id(),
+            PlatformGraphProducer::AnalyzerStructure.partition_id(),
+            PlatformGraphProducer::XmlStructure.partition_id()
+        ])
+    );
+    assert!(owner.partition(SOURCE_GRAPH_PARTITION).is_none());
+    let finished = plan.finish(&owner, stop)?;
+    assert!(std::ptr::eq(finished.project(), view));
+    assert!(std::ptr::eq(finished.graph(), &owner));
+    assert_eq!(finished.scope(), &scope);
+    assert_eq!(
+        finished.profile(),
+        PLATFORM_DIRECT_GRAPH_WITH_XML_SOURCE_MAPS_PROFILE
+    );
+    assert_eq!(finished.xml_source_maps(), Some(&summary));
+    let augmented = finished.source();
+    assert_eq!(
+        serde_json::to_value(augmented)?["profile"],
+        PLATFORM_DIRECT_GRAPH_WITH_XML_SOURCE_MAPS_PROFILE
+    );
+    assert_eq!(augmented.context(), source.context());
+    assert_eq!(augmented.files(), source.files());
+    assert_eq!(augmented.xml_facts(), source.xml_facts());
+    assert_eq!(augmented.xml_containment(), source.xml_containment());
+    assert_eq!(augmented.package_loads(), source.package_loads());
+    assert_eq!(augmented.xml_inheritance(), source.xml_inheritance());
+    assert_eq!(augmented.raw_inventory(), source.raw_inventory());
+    for (id, handle) in source.source_handles() {
+        assert_eq!(augmented.source_handles().get(id), Some(handle));
+    }
+    for (id, record) in source.evidence() {
+        assert_eq!(augmented.evidence().get(id), Some(record));
+    }
+
+    let lookup = owner.producer_lookup(stop)?;
+    assert_eq!(lookup.scope(), &scope);
+    let mut nodes = BTreeMap::new();
+    for partition in owner.partitions() {
+        assert!(partition.report().rejections().is_empty());
+        assert_eq!(
+            partition.report().accepted_entities().len(),
+            partition.batch().entity_proposals().len()
+        );
+        if partition.partition_id() != raw_id {
+            assert_eq!(partition.producer_version(), "4");
+        }
+        for coverage in partition.coverage() {
+            assert!(!coverage.negative_authority());
+        }
+        for accepted in partition.report().accepted_entities() {
+            let address = finished
+                .assertion(&key(GraphAssertionKind::Entity, accepted.proposal_id()))
+                .ok_or("/4 entity address missing")?;
+            let resolved = lookup.entity(&scope, address, stop)?;
+            assert_eq!(resolved.reference(), *address);
+            assert_eq!(resolved.partition(), partition);
+            assert_eq!(resolved.accepted(), accepted);
+            assert_eq!(
+                partition.batch().entity_proposal(accepted.proposal_id()),
+                Some(resolved.proposal())
+            );
+            assert_eq!(accepted.node().generation(), &scope.generation);
+            assert_eq!(
+                lookup.input_view().node(accepted.node().node_id()),
+                Some(accepted.node())
+            );
+            assert!(
+                nodes
+                    .insert(accepted.node().node_id().clone(), accepted.proposal_id())
+                    .is_none()
+            );
+        }
+    }
+    let mut edges = BTreeMap::new();
+    for partition in owner.partitions() {
+        for accepted in partition.report().accepted_relations() {
+            let address = finished
+                .assertion(&key(GraphAssertionKind::Relation, accepted.proposal_id()))
+                .ok_or("/4 relation address missing")?;
+            let resolved = lookup.relation(&scope, address, stop)?;
+            assert_eq!(resolved.reference(), *address);
+            assert_eq!(resolved.partition(), partition);
+            assert_eq!(resolved.accepted(), accepted);
+            let proposal = resolved.proposal();
+            assert_eq!(
+                partition.batch().relation_proposal(accepted.proposal_id()),
+                Some(proposal)
+            );
+            assert_eq!(
+                lookup.input_view().edge(accepted.edge().edge_id()),
+                Some(accepted.edge())
+            );
+            for (endpoint, node) in proposal
+                .endpoints()
+                .into_iter()
+                .zip([accepted.edge().from(), accepted.edge().to()])
+            {
+                let id = *nodes.get(node).ok_or("/4 endpoint missing")?;
+                let native = lookup.entity(
+                    &scope,
+                    finished
+                        .assertion(&key(GraphAssertionKind::Entity, id))
+                        .ok_or("/4 endpoint address missing")?,
+                    stop,
+                )?;
+                assert_eq!(native.accepted().node().node_id(), node);
+                match endpoint {
+                    GraphProposalEndpoint::Proposed(local) => {
+                        assert_eq!(local.as_ref(), id);
+                        assert_eq!(native.partition(), partition);
+                    }
+                    GraphProposalEndpoint::Existing(input) => {
+                        assert_eq!(input, node);
+                        assert_ne!(native.partition().partition_id(), partition.partition_id());
+                    }
+                }
+            }
+            let from = *nodes
+                .get(accepted.edge().from())
+                .ok_or("/4 edge source missing")?;
+            let to = *nodes
+                .get(accepted.edge().to())
+                .ok_or("/4 edge target missing")?;
+            assert!(
+                edges
+                    .insert(
+                        (proposal.relation_kind_id(), from, to),
+                        (proposal, accepted)
+                    )
+                    .is_none()
+            );
+        }
+    }
+    assert_eq!(owner.snapshot().nodes().len(), nodes.len());
+    assert_eq!(owner.snapshot().edges().len(), edges.len());
+    let inventory = owner
+        .partition(PlatformGraphProducer::Inventory.partition_id())
+        .ok_or("/4 Inventory missing")?;
+    let xml = owner
+        .partition(PlatformGraphProducer::XmlStructure.partition_id())
+        .ok_or("/4 XML partition missing")?;
+    for (partition, relation) in [
+        (inventory, GraphRelationKind::Contains),
+        (xml, GraphRelationKind::Contains),
+        (xml, GraphRelationKind::Owns),
+    ] {
+        let coverage = partition
+            .coverage()
+            .iter()
+            .find(|row| row.relation() == relation)
+            .ok_or("/4 mapping coverage missing")?;
+        assert_eq!(coverage.state(), GraphCoverageState::Partial);
+        assert!(!coverage.negative_authority());
+        assert!(!coverage.blocker_ids().is_empty());
+    }
+
+    let load = view
+        .configuration()
+        .platform_packages()
+        .ok_or("/4 packages missing")?
+        .load_plan();
+    let mut expected_handles = source.source_handles().clone();
+    let mut expected_evidence = source.evidence().clone();
+    let mut unit_ids = BTreeSet::new();
+    let mut piece_ids = BTreeSet::new();
+    let mut repeated_sites = BTreeMap::<&str, Vec<_>>::new();
+    let mut checked_edges = BTreeSet::new();
+    let mut complete_handlers = 0;
+    let mut failed_scripts = 0;
+    let mut mapped_references = 0;
+    {
+        let mut edge = |kind: &str,
+                        from: &str,
+                        to: &str,
+                        handle: StableHandleId,
+                        evidence: EvidenceId,
+                        relation: GraphRelationKind|
+         -> ResultOf {
+            let (proposal, accepted) = edges
+                .get(&(kind, from, to))
+                .ok_or("native mapping edge missing")?;
+            assert_eq!(proposal.confidence(), GraphConfidence::Proven);
+            assert_eq!(accepted.edge().relation(), relation);
+            role_support(
+                proposal.source_handle_ids(),
+                proposal.evidence_ids(),
+                &[handle],
+                &[evidence],
+            );
+            assert!(checked_edges.insert(proposal.proposal_id()));
+            Ok(())
+        };
+        for unit in analysis.units() {
+            let package = unit
+                .package
+                .as_deref()
+                .ok_or("native XML unit package missing")?;
+            let package_plan = load
+                .package_plan(package)
+                .ok_or("native unit package plan missing")?;
+            let (local, index) = package_plan
+                .xml_documents()
+                .iter()
+                .find(|(local, _)| {
+                    load.source_path(package, local).as_deref() == Some(unit.document.as_str())
+                })
+                .ok_or("native unit XML index missing")?;
+            let element = index
+                .element(&unit.script_occurrence_id)
+                .ok_or("native script occurrence missing")?;
+            let script = element
+                .script
+                .as_ref()
+                .ok_or("native inline script missing")?;
+            assert_eq!(script.source_kind, XmlScriptSource::InlineBody);
+            let body = script
+                .inline_lua
+                .as_ref()
+                .ok_or("native inline body missing")?;
+            let text = package_plan
+                .document_text(local)
+                .ok_or("retained XML bytes missing")?;
+            assert_eq!(text, XML);
+            assert_eq!(unit.document_digest, index.source_digest());
+            assert_eq!(unit.script_name, element.qualified_name);
+            assert_eq!(unit.extracted_unit_id, body.unit_id);
+            assert_eq!(unit.content_digest, body.content_digest);
+            assert_eq!(unit.byte_length, body.byte_length);
+            assert_eq!(body.byte_length, u64::try_from(body.text().len())?);
+            assert_eq!(body.content_digest, raw_digest(body.text().as_bytes()));
+            assert!(unit.context.admits_static_source_association());
+            assert_eq!(
+                unit.context.implicit_receiver(),
+                XML_LUA_IMPLICIT_RECEIVER_NOT_EVALUATED
+            );
+            assert_eq!(
+                unit.context.runtime_dispatch(),
+                XML_LUA_RUNTIME_DISPATCH_NOT_EVALUATED
+            );
+            let parsed = analysis
+                .parser_report()
+                .units()
+                .iter()
+                .find(|row| row.unit_id.as_str() == unit.unit_id.as_ref())
+                .ok_or("native syntax unit missing")?;
+            assert_eq!(parsed.content_digest, body.content_digest);
+            assert_eq!(parsed.byte_length, body.byte_length);
+            assert_eq!(parsed.diagnostics.len(), unit.diagnostics.len());
+            let syntax = semantic
+                .syntax_report()
+                .files()
+                .iter()
+                .find(|row| row.path() == unit.virtual_path)
+                .ok_or("native virtual syntax receipt missing")?;
+            let members = semantic
+                .member_call_report()
+                .files()
+                .iter()
+                .find(|row| row.path() == unit.virtual_path)
+                .ok_or("native virtual member receipt missing")?;
+            assert_eq!(syntax.content_sha256(), body.content_digest.canonical());
+            assert_eq!(members.content_sha256(), body.content_digest.canonical());
+            assert_eq!(
+                unit.semantic_state,
+                if members.status() == wow_emmy::EmmyFactFileStatus::Complete {
+                    XmlLuaSemanticState::Complete
+                } else {
+                    XmlLuaSemanticState::PartialFailedParse
+                }
+            );
+            let fact = source
+                .xml_facts()
+                .iter()
+                .find(|row| {
+                    row.scope.package.as_deref() == Some(package)
+                        && row.document == unit.document
+                        && row.occurrence_id == unit.script_occurrence_id
+                        && matches!(row.kind, ProjectXmlFactKind::Script { .. })
+                })
+                .ok_or("native unit Script fact missing")?;
+            assert_eq!(fact.document_digest, index.digest());
+            assert_eq!(fact.content_digest, unit.document_digest);
+            let scope_text = wow_core::canonical_json_string(&fact.scope)?;
+            let observations =
+                ContentDigest::<CanonicalResult>::from_bytes(domain_separated_digest(
+                    "wow-project/platform-xml-unit-observations/1",
+                    &(
+                        &unit.diagnostics,
+                        &unit.semantic_diagnostics,
+                        &unit.member_references,
+                        &unit.member_calls,
+                    ),
+                )?);
+            let proposal = role(
+                xml.batch(),
+                "xml_source_virtual_lua_unit",
+                &[("unit_id", string(&unit.unit_id))],
+            )?;
+            let unit_key = BTreeMap::from([
+                ("scope".into(), string(&scope_text)),
+                ("document".into(), string(&unit.document)),
+                (
+                    "document_digest".into(),
+                    string(&index.digest().canonical()),
+                ),
+                ("occurrence".into(), string(&unit.script_occurrence_id)),
+                ("unit_id".into(), string(&unit.unit_id)),
+                ("extracted_unit_id".into(), string(&body.unit_id)),
+                ("virtual_path".into(), string(&unit.virtual_path)),
+                (
+                    "content_digest".into(),
+                    string(&body.content_digest.canonical()),
+                ),
+                (
+                    "byte_length".into(),
+                    GraphProposalValue::Integer(i64::try_from(body.byte_length)?),
+                ),
+                ("analysis_id".into(), string(analysis.analysis_id())),
+                ("semantic_state".into(), identifier(&unit.semantic_state)?),
+                (
+                    "semantic_context".into(),
+                    string(&wow_core::canonical_json_string(&unit.context)?),
+                ),
+                (
+                    "mapped_observations_digest".into(),
+                    string(&observations.canonical()),
+                ),
+            ]);
+            assert_eq!(proposal.semantic_key(), &unit_key);
+            assert_eq!(proposal.confidence(), GraphConfidence::Proven);
+            role_support(
+                proposal.source_handle_ids(),
+                proposal.evidence_ids(),
+                &[fact.source_handle_id],
+                &[fact.evidence_id],
+            );
+            assert!(unit_ids.insert(proposal.proposal_id()));
+            let site = role(
+                xml.batch(),
+                "xml_source_script_site",
+                &[
+                    ("scope", string(&scope_text)),
+                    ("document", string(&unit.document)),
+                    ("document_digest", string(&index.digest().canonical())),
+                    ("occurrence", string(&unit.script_occurrence_id)),
+                ],
+            )?;
+            role_support(
+                site.source_handle_ids(),
+                site.evidence_ids(),
+                &[fact.source_handle_id],
+                &[fact.evidence_id],
+            );
+            assert_eq!(
+                site.semantic_key().get("state"),
+                Some(&string(&wow_core::canonical_json_string(&fact.kind)?))
+            );
+            edge(
+                "xml_script_site_owns_virtual_lua",
+                site.proposal_id(),
+                proposal.proposal_id(),
+                fact.source_handle_id,
+                fact.evidence_id,
+                GraphRelationKind::Owns,
+            )?;
+            repeated_sites
+                .entry(&unit.script_occurrence_id)
+                .or_default()
+                .push((
+                    package,
+                    unit.unit_id.as_ref(),
+                    proposal.proposal_id(),
+                    body.unit_id.as_str(),
+                ));
+
+            let mut virtual_end = 0;
+            let mut xml_end = script.body_span.byte_start;
+            let mut kinds = BTreeSet::new();
+            for (ordinal, segment) in body.segments().iter().enumerate() {
+                assert_eq!(segment.lua_byte_start, virtual_end);
+                assert!(segment.lua_byte_start < segment.lua_byte_end);
+                assert!(xml_end <= segment.xml_span.byte_start);
+                assert!(segment.xml_span.byte_end <= script.body_span.byte_end);
+                let start = usize::try_from(segment.lua_byte_start)?;
+                let end = usize::try_from(segment.lua_byte_end)?;
+                let lua = body
+                    .text()
+                    .get(start..end)
+                    .ok_or("native virtual segment boundary invalid")?;
+                let original = text
+                    .get(
+                        usize::try_from(segment.xml_span.byte_start)?
+                            ..usize::try_from(segment.xml_span.byte_end)?,
+                    )
+                    .ok_or("native XML piece boundary invalid")?;
+                match segment.kind {
+                    XmlLuaMapKind::Identity => assert_eq!(lua, original),
+                    XmlLuaMapKind::XmlNewline => {
+                        assert_eq!(lua, "\n");
+                        assert_eq!(original, "\r\n");
+                    }
+                    XmlLuaMapKind::XmlEntity => match original {
+                        "&amp;" => assert_eq!(lua, "&"),
+                        "&#xE9;" => assert_eq!(lua, "é"),
+                        _ => return Err("unexpected fixture entity spelling".into()),
+                    },
+                }
+                assert_eq!(body.map_range(start, end)?, vec![segment.xml_span.clone()]);
+                kinds.insert(serde_json::to_string(&segment.kind)?);
+                virtual_end = segment.lua_byte_end;
+                xml_end = segment.xml_span.byte_end;
+                let handle = view.source_handle(
+                    &unit.document,
+                    SourceSpan::byte_range(segment.xml_span.byte_start, segment.xml_span.byte_end)?,
+                    None,
+                )?;
+                assert_eq!(handle.path().as_str(), unit.document);
+                assert_eq!(*handle.content_digest(), index.source_digest());
+                let record = EvidenceRecord::new(
+                    source.context().context_id(),
+                    ProvenanceClass::ProjectSource,
+                    EvidenceConfidence::Proven,
+                    ClaimScope::SourceObservation,
+                    "wow.project".parse()?,
+                    env!("CARGO_PKG_VERSION").parse()?,
+                    vec![handle.handle_id()],
+                    Vec::new(),
+                    Vec::new(),
+                )?;
+                assert_eq!(
+                    augmented.source_handles().get(&handle.handle_id()),
+                    Some(&handle)
+                );
+                assert_eq!(
+                    augmented.evidence().get(&record.evidence_id()),
+                    Some(&record)
+                );
+                if let Some(previous) = expected_handles.insert(handle.handle_id(), handle.clone())
+                {
+                    assert_eq!(previous, handle);
+                }
+                if let Some(previous) =
+                    expected_evidence.insert(record.evidence_id(), record.clone())
+                {
+                    assert_eq!(previous, record);
+                }
+                let piece = role(
+                    xml.batch(),
+                    "xml_source_virtual_lua_map_piece",
+                    &[
+                        ("unit_id", string(&unit.unit_id)),
+                        (
+                            "ordinal",
+                            GraphProposalValue::Integer(i64::try_from(ordinal)?),
+                        ),
+                    ],
+                )?;
+                assert_eq!(
+                    piece.semantic_key(),
+                    &BTreeMap::from([
+                        ("unit_id".into(), string(&unit.unit_id)),
+                        (
+                            "ordinal".into(),
+                            GraphProposalValue::Integer(i64::try_from(ordinal)?)
+                        ),
+                        (
+                            "virtual_byte_start".into(),
+                            GraphProposalValue::Integer(i64::try_from(segment.lua_byte_start)?)
+                        ),
+                        (
+                            "virtual_byte_end".into(),
+                            GraphProposalValue::Integer(i64::try_from(segment.lua_byte_end)?)
+                        ),
+                        ("mapping_kind".into(), identifier(&segment.kind)?),
+                        (
+                            "xml_span".into(),
+                            string(&wow_core::canonical_json_string(&segment.xml_span)?)
+                        ),
+                        (
+                            "source_handle".into(),
+                            string(&handle.handle_id().canonical())
+                        ),
+                    ])
+                );
+                assert_eq!(piece.confidence(), GraphConfidence::Proven);
+                role_support(
+                    piece.source_handle_ids(),
+                    piece.evidence_ids(),
+                    &[handle.handle_id()],
+                    &[record.evidence_id()],
+                );
+                assert!(piece_ids.insert(piece.proposal_id()));
+                let span = role(
+                    inventory.batch(),
+                    "source_span",
+                    &[("source_handle", string(&handle.handle_id().canonical()))],
+                )?;
+                role_support(
+                    span.source_handle_ids(),
+                    span.evidence_ids(),
+                    &[handle.handle_id()],
+                    &[record.evidence_id()],
+                );
+                edge(
+                    "xml_virtual_lua_contains_map_piece",
+                    proposal.proposal_id(),
+                    piece.proposal_id(),
+                    handle.handle_id(),
+                    record.evidence_id(),
+                    GraphRelationKind::Contains,
+                )?;
+                edge(
+                    "xml_map_piece_source_span",
+                    piece.proposal_id(),
+                    span.proposal_id(),
+                    handle.handle_id(),
+                    record.evidence_id(),
+                    GraphRelationKind::Owns,
+                )?;
+            }
+            assert_eq!(virtual_end, body.byte_length);
+            let first_caret = body.map_position(0)?;
+            let last_caret = body.map_position(usize::try_from(body.byte_length)?)?;
+            assert!(
+                first_caret
+                    .iter()
+                    .chain(&last_caret)
+                    .all(|span| span.byte_start == span.byte_end)
+            );
+            assert_eq!(
+                first_caret
+                    .first()
+                    .ok_or("native start caret missing")?
+                    .byte_start,
+                body.segments()
+                    .first()
+                    .ok_or("native first piece missing")?
+                    .xml_span
+                    .byte_start
+            );
+            assert_eq!(
+                last_caret
+                    .last()
+                    .ok_or("native end caret missing")?
+                    .byte_end,
+                body.segments()
+                    .last()
+                    .ok_or("native last piece missing")?
+                    .xml_span
+                    .byte_end
+            );
+            if unit.script_name == "OnHide" {
+                assert_eq!(unit.semantic_state, XmlLuaSemanticState::Complete);
+                assert!(unit.diagnostics.is_empty());
+                assert_eq!(
+                    kinds,
+                    BTreeSet::from([
+                        serde_json::to_string(&XmlLuaMapKind::Identity)?,
+                        serde_json::to_string(&XmlLuaMapKind::XmlNewline)?,
+                        serde_json::to_string(&XmlLuaMapKind::XmlEntity)?
+                    ])
+                );
+                assert!(body.text().contains("local text = \"&é\";\n"));
+                assert!(
+                    body.text()
+                        .contains("local n = 1 + 2; self:Probe(); return self.value, text, n")
+                );
+                let mut gaps = BTreeSet::new();
+                for neighbors in body.segments().windows(2) {
+                    let [left, right] = neighbors else {
+                        return Err("native segment window invalid".into());
+                    };
+                    if left.xml_span.byte_end == right.xml_span.byte_start {
+                        continue;
+                    }
+                    assert_eq!(left.lua_byte_end, right.lua_byte_start);
+                    let gap = text
+                        .get(
+                            usize::try_from(left.xml_span.byte_end)?
+                                ..usize::try_from(right.xml_span.byte_start)?,
+                        )
+                        .ok_or("native XML gap invalid")?;
+                    let alternatives = body.map_position(usize::try_from(left.lua_byte_end)?)?;
+                    assert_eq!(alternatives.len(), 2);
+                    assert_eq!(
+                        alternatives
+                            .iter()
+                            .map(|span| (span.byte_start, span.byte_end))
+                            .collect::<Vec<_>>(),
+                        vec![
+                            (left.xml_span.byte_end, left.xml_span.byte_end),
+                            (right.xml_span.byte_start, right.xml_span.byte_start)
+                        ]
+                    );
+                    gaps.insert(gap);
+                }
+                assert_eq!(gaps, BTreeSet::from(["<!--gap--><![CDATA[", "]]>"]));
+                assert!(!unit.member_references.is_empty());
+                assert!(!unit.member_calls.is_empty());
+                complete_handlers += 1;
+            } else {
+                assert_eq!(unit.script_name, "Script");
+                assert_eq!(unit.semantic_state, XmlLuaSemanticState::PartialFailedParse);
+                assert!(!unit.diagnostics.is_empty());
+                assert_eq!(body.text(), "local broken = ");
+                failed_scripts += 1;
+            }
+            for (diagnostic, parsed) in unit.diagnostics.iter().zip(&parsed.diagnostics) {
+                assert_eq!(&diagnostic.parser_diagnostic, parsed);
+                mapped_xml_span(
+                    body,
+                    &XmlLuaMappedSpan {
+                        virtual_byte_start: parsed.byte_start,
+                        virtual_byte_end: parsed.byte_end,
+                        mapping: diagnostic.mapping,
+                        xml_spans: diagnostic.xml_spans.clone(),
+                    },
+                )?;
+            }
+            for diagnostic in &unit.semantic_diagnostics {
+                mapped_xml_span(body, &diagnostic.source)?;
+            }
+            for reference in &unit.member_references {
+                mapped_xml_span(body, &reference.receiver_source)?;
+                mapped_xml_span(body, &reference.member_source)?;
+                mapped_xml_span(body, &reference.reference_source)?;
+                mapped_references += 1;
+            }
+            for call in &unit.member_calls {
+                mapped_xml_span(body, &call.callee_source)?;
+                mapped_xml_span(body, &call.call_source)?;
+            }
+        }
+    }
+    assert_eq!(complete_handlers, PACKAGES.len());
+    assert_eq!(failed_scripts, PACKAGES.len());
+    assert!(mapped_references >= PACKAGES.len());
+    assert_eq!(unit_ids.len(), summary.unit_count());
+    assert_eq!(piece_ids.len(), summary.piece_count());
+    assert_eq!(repeated_sites.len(), 2);
+    for sites in repeated_sites.values() {
+        let [left, right] = sites.as_slice() else {
+            return Err("two-package unit closure missing".into());
+        };
+        assert_ne!(left.0, right.0);
+        assert_ne!(left.1, right.1);
+        assert_ne!(left.2, right.2);
+        assert_eq!(left.3, right.3);
+    }
+    for (kind, expected) in [
+        ("xml_source_virtual_lua_unit", unit_ids.len()),
+        ("xml_source_virtual_lua_map_piece", piece_ids.len()),
+    ] {
+        assert_eq!(
+            xml.batch()
+                .entity_proposals()
+                .iter()
+                .filter(|p| p.entity_kind_id() == kind)
+                .count(),
+            expected
+        );
+    }
+    let actual_map_edges = edges
+        .values()
+        .filter(|(proposal, _)| {
+            matches!(
+                proposal.relation_kind_id(),
+                "xml_script_site_owns_virtual_lua"
+                    | "xml_virtual_lua_contains_map_piece"
+                    | "xml_map_piece_source_span"
+            )
+        })
+        .map(|(proposal, _)| proposal.proposal_id())
+        .collect::<BTreeSet<_>>();
+    assert_eq!(checked_edges, actual_map_edges);
+    assert_eq!(
+        checked_edges.len(),
+        summary.unit_count() + summary.piece_count() * 2
+    );
+
+    let reference_sites = source
+        .xml_facts()
+        .iter()
+        .filter(|fact| {
+            matches!(
+                fact.kind,
+                ProjectXmlFactKind::Script {
+                    source_kind: XmlScriptSource::ReferenceOnly,
+                    ..
+                }
+            )
+        })
+        .collect::<Vec<_>>();
+    assert!(!reference_sites.is_empty());
+    assert_eq!(summary.omissions().len(), reference_sites.len());
+    let mut omitted = BTreeSet::new();
+    for omission in summary.omissions() {
+        assert_eq!(
+            omission.outcome(),
+            XmlSourceMapOmissionOutcome::ReferenceOnly
+        );
+        let fact = reference_sites
+            .iter()
+            .find(|fact| {
+                &fact.scope == omission.scope()
+                    && fact.document == omission.document()
+                    && fact.occurrence_id == omission.occurrence()
+            })
+            .ok_or("native omission fact missing")?;
+        assert_eq!(omission.document_digest(), fact.document_digest);
+        assert!(omitted.insert((
+            wow_core::canonical_json_string(omission.scope())?,
+            omission.document(),
+            omission.occurrence()
+        )));
+    }
+    assert_eq!(augmented.source_handles(), &expected_handles);
+    assert_eq!(augmented.evidence(), &expected_evidence);
+    assert_eq!(
+        finished.inventory_span_omissions(),
+        Some(
+            expected_handles
+                .values()
+                .filter(|handle| handle.span().kind() == SourceSpanKind::Unknown)
+                .count()
+        )
+    );
+    let spans = inventory
+        .batch()
+        .entity_proposals()
+        .iter()
+        .filter(|p| p.entity_kind_id() == "source_span")
+        .map(|proposal| {
+            let [handle] = proposal.source_handle_ids() else {
+                return Err("/4 span handle closure invalid".into());
+            };
+            Ok(*handle)
+        })
+        .collect::<ResultOf<BTreeSet<_>>>()?;
+    assert_eq!(
+        spans,
+        expected_handles
+            .iter()
+            .filter(|(_, handle)| handle.span().kind() != SourceSpanKind::Unknown)
+            .map(|(id, _)| *id)
+            .collect::<BTreeSet<_>>()
+    );
+    assert_eq!(
+        inventory
+            .batch()
+            .entity_proposals()
+            .iter()
+            .filter(|p| p.entity_kind_id() == "source_span")
+            .count(),
+        spans.len()
+    );
+    // Captured XML/Main handles close through ProjectView. Original raw paths
+    // close through their retained raw owner, including unregistered members.
+    for handle in expected_handles.values() {
+        assert_eq!(
+            view.source_handle(
+                handle.path().as_str(),
+                handle.span(),
+                handle.entity_key().cloned()
+            )?,
+            *handle
+        );
+    }
+    for member in source
+        .raw_inventory()
+        .ok_or("/4 raw manifest missing")?
+        .members()
+    {
+        if let Some(previous) = expected_handles.insert(
+            member.source_handle.handle_id(),
+            member.source_handle.clone(),
+        ) {
+            assert_eq!(previous, member.source_handle);
+        }
+        if let Some(previous) =
+            expected_evidence.insert(member.evidence.evidence_id(), member.evidence.clone())
+        {
+            assert_eq!(previous, member.evidence);
+        }
+    }
+    let catalog = GraphEvidenceCatalog::new(
+        source.context().clone(),
+        expected_evidence.clone(),
+        expected_handles.clone(),
+        stop,
+    )?;
+    assert_eq!(finished.evidence_catalog().context(), source.context());
+    assert_eq!(finished.evidence_catalog().digest(), catalog.digest());
+    for (id, handle) in &expected_handles {
+        assert_eq!(finished.evidence_catalog().source_handle(id), Some(handle));
+    }
+    for (id, record) in &expected_evidence {
+        assert_eq!(finished.evidence_catalog().evidence(id), Some(record));
+        assert_eq!(record.context_id(), scope.source_context_id);
+    }
+    let check_support = |handles: &[StableHandleId], evidence: &[EvidenceId]| {
+        for id in handles {
+            assert_eq!(
+                finished.evidence_catalog().source_handle(id),
+                expected_handles.get(id)
+            );
+        }
+        for id in evidence {
+            assert_eq!(
+                finished.evidence_catalog().evidence(id),
+                expected_evidence.get(id)
+            );
+        }
+    };
+    for partition in owner.partitions() {
+        for proposal in partition.batch().entity_proposals() {
+            check_support(proposal.source_handle_ids(), proposal.evidence_ids());
+        }
+        for accepted in partition.report().accepted_relations() {
+            let proposal = partition
+                .batch()
+                .relation_proposal(accepted.proposal_id())
+                .ok_or("/4 accepted relation missing")?;
+            check_support(proposal.source_handle_ids(), proposal.evidence_ids());
+        }
+    }
+    // Retained older capabilities remain valid; no second analysis or old-stage rebuild.
+    for prior in priors {
+        prior.validate(stop)?;
+    }
+    let unchanged = build_platform_graph_proposal_plan_with_structural_roles(view, stop)?;
+    assert_eq!(
+        unchanged.profile(),
+        PLATFORM_DIRECT_GRAPH_WITH_STRUCTURAL_ROLES_PROFILE
+    );
+    assert_eq!(unchanged.registry(), priors[2].registry());
+    assert_eq!(unchanged.foundation(), priors[2].foundation());
+    assert!(unchanged.xml_source_maps().is_none());
+    assert!(source.xml_facts().iter().any(|fact| matches!(&fact.kind,
+        ProjectXmlFactKind::InheritanceUnresolved { name, .. } if name == "MissingTemplate")));
     Ok(())
 }
 
@@ -2232,7 +3306,13 @@ fn direct_package_stages_bind_native_predecessors_and_preserve_replay() -> Resul
         );
     }
     let spans_owner = inventory_spans(&raw_view, &raw_owner, &raw_source, &stop)?;
-    structural_roles(&raw_view, &raw_owner, &spans_owner, &raw_source, &stop)?;
+    let roles_owner = structural_roles(&raw_view, &raw_owner, &spans_owner, &raw_source, &stop)?;
+    xml_source_maps(
+        &raw_view,
+        [&raw_owner, &spans_owner, &roles_owner],
+        &raw_source,
+        &stop,
+    )?;
     assert!(!root.0.exists());
     let unchanged_raw = build_source_graph_proposals(&raw_view, &stop)?;
     assert_eq!(unchanged_raw.inventory_batch(), Some(&raw_batch));

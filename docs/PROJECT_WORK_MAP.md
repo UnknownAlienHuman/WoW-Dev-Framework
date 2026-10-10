@@ -175,7 +175,19 @@ See [native structural roles](PLATFORM_STRUCTURAL_ROLES.md). Explicit load-polic
 parent-reference and XML load-target branches are outside that fixture's coverage.
 Source /22, service request12/result19 and replay/storage v9 remain on native /1.
 
-Next: finish XML object/region classification and virtual-Lua source mapping, then implement fingerprints,
+The separate native /4 entry now binds original XML inline units and exact mapping
+pieces to genuine /3 script sites and Inventory spans. Support admission precedes
+span projection; mapped observations retain the same native analysis/session,
+transformations, removed-markup caret alternatives and PartialFailedParse state.
+The expanded disk-absent lifecycle passes with four units, ReferenceOnly omissions
+and exact captured/piece/raw catalog closure. Source /22, service and replay/storage
+v9 remain on native /1. All workspace gates/build pass, completed
+2026-10-10 12:00:49 UTC: 944 passed, 0 failed, 1 ignored, 112 targets. See
+[native XML source maps](PLATFORM_XML_SOURCE_MAPS.md). Absent/empty/external/unreachable
+mapping branches, fault/exhaustion and real-source/runtime qualification are not
+executed acceptance results of this fixture.
+
+Next: finish XML object/region classification, then implement fingerprints,
 bounded SkeletonInputView and source service/CLI transport. Full W17, E0/E2,
 real mirror/performance/runtime and
 W18-W26 remain open. Gethe preparation follows product implementation/build.
