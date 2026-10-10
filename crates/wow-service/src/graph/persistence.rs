@@ -363,6 +363,7 @@ fn store_error(error: StoreError) -> ServiceError {
         StoreErrorCode::CurrentConflict => ServiceErrorCode::StoreCurrentConflict,
         StoreErrorCode::OperationConflict => ServiceErrorCode::OperationConflict,
         StoreErrorCode::OutcomeUnknown => ServiceErrorCode::StoreOutcomeUnknown,
+        StoreErrorCode::Quarantined => ServiceErrorCode::StoreQuarantined,
         StoreErrorCode::BudgetExceeded | StoreErrorCode::ObjectTooLarge => {
             ServiceErrorCode::BudgetExceeded
         }

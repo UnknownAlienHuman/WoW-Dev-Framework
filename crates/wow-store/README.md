@@ -32,6 +32,7 @@ no existing schema migrates automatically. Current owner routes:
 - [Release and guarded inline collection](PROJECT_GC.md)
 - [Recovery, verified native backup and isolated restore](PROJECT_RECOVERY.md)
 - [Guarded physical-instance replacement and exact reconciliation](PROJECT_REGISTRY.md)
+- [Authoritative physical-instance quarantine and read-only recovery](PROJECT_QUARANTINE.md)
 
 ### E6-B — external Candidate generic persistence
 
@@ -131,14 +132,11 @@ Every write, CAS, backup, restore, publication, or GC effect reconciles by exact
 
 ## Current implementation state
 
-```text
-planned documentation frontier: E7-B generic storage seams
-implementation frontier: not-started
-first implementation package: I1-A after wow-core
-repository next package: I0-A / wow-core E0-A
-Cargo.toml: absent
-Rust source: absent
-CI/workflows: absent
-```
+Rust owners implement the generic immutable store and manifested ProjectStore
+profiles, native live-pair storage, retention/inline GC, physical recovery,
+verified backup, guarded same-epoch replacement and whole-instance quarantine.
+Later E6/E7 seams remain normative future routes. Current executable scope and
+unaccepted gates are recorded in the linked owner contracts and the root
+[implementation status](../../docs/IMPLEMENTATION_STATUS.md).
 
 Directory and seam presence does not bypass prerequisite implementation, fixtures, checksums, crash tests, benchmarks, adapters, clients, platforms, or release evidence.

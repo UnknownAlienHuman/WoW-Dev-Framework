@@ -92,7 +92,7 @@ pub fn run(values: Vec<OsString>) -> u8 {
     let result = match result {
         Ok(result) => result,
         Err(error) => {
-            super::diagnostic(error.message());
+            super::diagnostic(&format!("{:?}: {}", error.code(), error.message()));
             return if error.code() == ServiceErrorCode::Cancelled {
                 130
             } else {

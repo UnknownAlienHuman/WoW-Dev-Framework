@@ -1489,6 +1489,7 @@ fn store_error_code(code: StoreErrorCode) -> &'static str {
         StoreErrorCode::CurrentConflict => "current_conflict",
         StoreErrorCode::GenerationMissing => "generation_missing",
         StoreErrorCode::OutcomeUnknown => "outcome_unknown",
+        StoreErrorCode::Quarantined => "quarantined",
     }
 }
 

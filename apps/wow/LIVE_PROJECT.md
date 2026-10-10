@@ -27,8 +27,17 @@ explicit. The native service also exposes verified backup and restoration to a n
 private path and explicit guarded physical-instance replacement with real
 Project/Graph owner replay. `restore_replace` and exact `resume_replacement` are
 service APIs; this CLI does not dispatch restore. Older readers and semantic IDs
-survive; quarantine, schema migration and full acceptance remain open. See
+survive; guarded restore from quarantine, schema migration and full acceptance remain open. See
 [PROJECT_RECOVERY.md](../../crates/wow-store/PROJECT_RECOVERY.md).
+
+The service now exposes explicit whole-instance quarantine through
+`LiveProjectQuarantineInspection` and `LiveProjectStore::quarantine`, plus the
+separate read-only `QuarantinedLiveProject`. Standalone inspection can observe and
+explicitly hold damaged SQL without normal writable admission. Exact raw Current
+and recovery evidence guard the hold; old native pairs remain coherent and new
+normal operations return `StoreQuarantined`. This CLI retains that typed error
+and does not dispatch quarantine or restore. See
+[PROJECT_QUARANTINE.md](../../crates/wow-store/PROJECT_QUARANTINE.md).
 
 `publish` accepts the existing explicit materialized-input, physical-file,
 selected-TOC or package-universe configuration. The service constructs one original

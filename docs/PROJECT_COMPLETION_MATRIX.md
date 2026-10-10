@@ -30,7 +30,7 @@ The root [Cargo.toml](../Cargo.toml) activates **16 members**, including the int
 | `wow-project` | Explicit inventories, bounded TOC/XML/package receipts, analyzer bindings, immutable generations, exact source artifacts/handles, guarded updates, publication and physical/standalone/package native replay | E0-D fixture identity closure; effective XML receiver/load semantics, full load acceptance, overlays and full durable project publication |
 | `wow-rules` | `wow.api.exists@1` over physical Main and exact-static XML inline facts; `wow.secret.local_operation@1` over its bounded physical flow slice | E0-E normative fixtures, exact prerequisite identities and complete capability/negative-authority cases; no inferred XML receiver/runtime authority |
 | `wow-service` | E0 status/check over immutable normalized contexts, mixed physical/XML rule scopes and exact XML finding projection; separate ReferenceView administration/publication | E0-F end-to-end fixture/CLI closure; full E1 Reference Pack and later public operation families |
-| `wow-store` | Typed SQLite objects, catalogs/CAS, operation journal, leases, GC and integrity; manifested recovery, native backup, isolated restore and guarded same-epoch physical-instance replacement | Full E1-A/E2-D acceptance; quarantine, incompatible-epoch migration, interrupted-write/power-loss and cleanup faults remain open |
+| `wow-store` | Typed SQLite objects, catalogs/CAS, operation journal, leases, GC and integrity; manifested recovery, native backup, isolated restore, guarded same-epoch physical-instance replacement and authoritative whole-instance quarantine | Full E1-A/E2-D acceptance; guarded quarantine restore, domain quarantine, incompatible-epoch migration, interrupted-write/power-loss and cleanup faults remain open |
 | `wow-reference` | Native source/model/corrections/aliases, compatibility imports, persistent ReferenceView and publication | E0-B/E1-B normative fixture and full Reference Pack/coverage acceptance |
 | `wow-annotations` | Native Ketho-derived library projection, alias/type/catalog/inheritance/navigation slices and consumer tests | Full E1-C contract/corpus parity; scoped passing consumers are not universal semantic certification |
 | `wow-graph` | Immutable snapshots, proposals/registries, neighbors, producer partitions, bounded queries, exact retained derivation/conflict records, evidence resolution and v1/v2 persistence | Complete producer-chain coverage and automatic conflict assessment, normative fixtures and coherent E2-D publication |
@@ -341,3 +341,16 @@ Workspace policy, fmt, check, strict Clippy, tests (877 passed, 1 ignored,
 106 targets), rustdoc and build passed on 2026-10-09.
 Quarantine, same-root epoch selection, supported migrations, process termination,
 power loss and sharing/cleanup faults remain open. Full W16/E2 is unaccepted.
+
+Subsequent selector and quarantine checkpoints preserve exact semantic IDs while
+selecting confined physical instances and explicit schema-3 holds. Quarantine
+binds the preceding normal selector, raw Current and immutable recovery evidence;
+normal new reads/publication/activation/GC/backup refuse, existing leased pairs
+remain coherent. A separate readonly inspection can hold damaged SQL without a
+normal writable open. Exact selected receipts reconcile without redispatch.
+Seven store regressions and one native service lifecycle pass, including actual
+Windows sharing refusal and selected-instance scope with absent Current. Final
+workspace policy, fmt, check, strict Clippy, tests (895 passed, 1 ignored,
+107 targets), rustdoc and build pass. Guarded restore, fine-grained/domain
+quarantine, supported migrations, interruption inside writes/OS calls, power
+loss, cleanup and Gethe/Ketho/runtime remain separate open gates.

@@ -1,7 +1,7 @@
 # Project registry v2: guarded physical-instance replacement
 
 **Status:** executable bounded W16 slice, verified with native Windows fixtures.
-Full W16/E2 acceptance, quarantine, incompatible-epoch migration and actual
+Full W16/E2 acceptance, guarded recovery from quarantine, incompatible-epoch migration and actual
 power-loss durability remain open.
 
 ## Scope and E2 exception
@@ -43,6 +43,14 @@ catalog/profile and legacy location rule: revision zero, no instance ID, and
 `epochs/<epoch-hash>/project.sqlite`. Reading it does not rewrite its bytes or
 widen its catalog. V2 revision is the expected revision plus one, checked for
 overflow; its unchanged epoch remains independently admitted under the catalog.
+
+The separate [quarantine schema 3](PROJECT_QUARANTINE.md) holds the preceding
+selected physical instance. `RegistrySelection` then includes an operation-derived
+quarantine marker. An absent marker is omitted, preserving all valid legacy/v2
+bytes. Normal replacement intents reject a quarantine selector; recovery from
+that state requires a separately versioned guard and remains follow-up work.
+Absent expected/activated Current fields are omitted under strict canonical JSON;
+existing valid `Some` encodings remain unchanged.
 
 The instance ID is the operation-derived `project-instance` digest's 64 lowercase
 hex characters. The owner resolves only this confined layout:

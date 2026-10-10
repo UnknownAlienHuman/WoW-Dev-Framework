@@ -766,3 +766,26 @@ Workspace policy, fmt, check, strict Clippy, tests (887 passed, 1 ignored,
 migration, interruption inside writes/OS calls, power loss, cleanup faults and full
 W16/E2 or Gethe/Ketho/runtime acceptance remain open. See
 [PROJECT_REGISTRY.md](../crates/wow-store/PROJECT_REGISTRY.md).
+
+## W16 authoritative physical-instance quarantine (2026-10-09)
+
+Outer registry schema 3 now holds the selected physical instance while preserving
+frozen SQL schemas, Epoch/Generation/Partition and native owner IDs. Exact normal
+selector, raw Current observation and bounded immutable evidence bind an explicit
+operation. Damaged or unreadable Current never becomes absence. Normal new reads,
+publication/activation, GC and backup reject the hold; already held native pairs
+and root/instance locks survive. A standalone typed readonly inspection admits
+the canonical registry/files without a writable SQL open and can explicitly hold
+a damaged body/header. Exact selected receipts reconcile without another rename.
+
+Thin native service wrappers expose inspection and readonly recovery. Seven store
+regressions and one actual Project/Graph lifecycle pass, including damaged
+pointer/history/payload/header, stale evidence, archive substitution, pointer
+shape/budgets, old leases, absent Current in a selected instance and real Windows
+sharing refusal with exact reconciliation. The nullable-field repair preserves
+all valid legacy/Some encodings. Workspace policy, fmt, check, strict Clippy,
+tests (895 passed, 1 ignored, 107 targets), strict rustdoc and build pass; final CLI
+diagnostics passed focused strict Clippy/build. Guarded restore from quarantine,
+fine-grained/domain quarantine, incompatible-epoch migrations, interruption inside
+writes/OS calls, power loss, cleanup and full W16/E2/source/runtime acceptance
+remain open. See [PROJECT_QUARANTINE.md](../crates/wow-store/PROJECT_QUARANTINE.md).

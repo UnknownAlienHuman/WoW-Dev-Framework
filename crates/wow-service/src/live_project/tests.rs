@@ -17,6 +17,8 @@ type TestResult<T = ()> = Result<T, Box<dyn Error>>;
 mod durable;
 mod gc;
 mod library_modes;
+#[path = "quarantine_tests.rs"]
+mod quarantine;
 mod retention;
 
 fn input_bundle(source: &str) -> TestResult<ProjectInputBundle> {

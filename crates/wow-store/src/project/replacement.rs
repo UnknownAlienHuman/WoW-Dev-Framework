@@ -38,6 +38,7 @@ pub struct ReplacementReceipt {
     request_digest: String,
     previous: RegistrySelection,
     selected: RegistrySelection,
+    #[serde(skip_serializing_if = "Option::is_none")]
     activated_current: Option<CurrentPublication>,
     snapshot_digest: String,
     owner_validation_digest: String,
@@ -314,6 +315,9 @@ impl ProjectStore {
             return Err(failure(StoreErrorCode::OutcomeUnknown));
         }
         let observed = registry::read(&self.db.root, &self.db.epoch.catalog)?;
+        if observed.quarantine.is_some() {
+            return Err(failure(StoreErrorCode::Quarantined));
+        }
         if observed.selection == intent.expected {
             self.require_replacement_base(&intent.expected, intent.expected_current.as_ref())?;
             return Ok(None);
@@ -341,7 +345,7 @@ fn share_admission(backup: &mut VerifiedBackup, source: &Rc<Lifetime>) {
         reader_admissions: Rc::clone(&source.reader_admissions),
     });
 }
-fn write_exact_or_new(path: &std::path::Path, bytes: &[u8]) -> StoreResult<()> {
+pub(super) fn write_exact_or_new(path: &std::path::Path, bytes: &[u8]) -> StoreResult<()> {
     match fs::symlink_metadata(path) {
         Ok(_) => {
             if registry::read_file(path, registry::MAX_REGISTRY)? != bytes {

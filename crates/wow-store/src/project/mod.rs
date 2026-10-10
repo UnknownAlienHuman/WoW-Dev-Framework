@@ -6,6 +6,7 @@ mod database;
 mod gc;
 mod model;
 mod publication;
+mod quarantine;
 mod read;
 mod recovery;
 mod registry;
@@ -21,6 +22,10 @@ pub use model::{
     GenerationManifest, PHYSICAL_PROFILE, PartitionMember, PartitionRecord, PartitionVersionId,
     PublicationOperation, PublicationRequest, PublicationState, RECORD_PROFILE,
     RETAINED_PHYSICAL_PROFILE, RecordCatalog, StoreGenerationId, ValidationId,
+};
+pub use quarantine::{
+    CurrentObservation, PointerReadFailure, QuarantineInspection, QuarantineReceipt,
+    QuarantinedStore,
 };
 pub use read::{ReadSelector, ReadSnapshot, ValidatedRead};
 pub use recovery::{

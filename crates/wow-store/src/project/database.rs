@@ -205,6 +205,9 @@ impl Database {
         lock.try_lock()
             .map_err(|_| failure(StoreErrorCode::WriterBusy))?;
         let admitted = registry::read(&root, catalog)?;
+        if admitted.quarantine.is_some() {
+            return Err(failure(StoreErrorCode::Quarantined));
+        }
         let epoch = admitted.epoch;
         let bytes = encode(&epoch, 65536)?;
         let dir = admitted.selection.directory(&root, &epoch)?;
@@ -307,6 +310,12 @@ impl Database {
                 registry::MAX_REGISTRY,
             )?;
             if digest("project-registry", &observed) != selection.digest() {
+                if registry::read(&self.root, &self.epoch.catalog)?
+                    .quarantine
+                    .is_some()
+                {
+                    return Err(failure(StoreErrorCode::Quarantined));
+                }
                 return Err(failure(StoreErrorCode::OutcomeUnknown));
             }
         }

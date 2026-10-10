@@ -2,6 +2,8 @@
 //! store. Current resolves once; actual replay and all owner checks hold its lease.
 mod gc;
 mod operations;
+mod quarantine;
+pub use quarantine::{LiveProjectQuarantineInspection, QuarantinedLiveProject};
 mod recovery;
 pub use recovery::{
     CurrentState, RecoveryReport, ScopeState, recover_live_project, restore_live_project_to_new,
@@ -214,6 +216,7 @@ fn store_error(error: StoreError) -> ServiceError {
         StoreErrorCode::CurrentConflict => ServiceErrorCode::StoreCurrentConflict,
         StoreErrorCode::OperationConflict => ServiceErrorCode::OperationConflict,
         StoreErrorCode::OutcomeUnknown => ServiceErrorCode::StoreOutcomeUnknown,
+        StoreErrorCode::Quarantined => ServiceErrorCode::StoreQuarantined,
         StoreErrorCode::WriterBusy => ServiceErrorCode::OperationBusy,
         StoreErrorCode::GenerationMissing => ServiceErrorCode::ExactGenerationUnavailable,
         StoreErrorCode::BudgetExceeded | StoreErrorCode::ObjectTooLarge => {

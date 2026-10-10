@@ -20,6 +20,8 @@ pub struct RegistrySelection {
     revision: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     instance: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    quarantine: Option<String>,
 }
 impl RegistrySelection {
     pub fn digest(&self) -> &str {
@@ -42,18 +44,40 @@ impl RegistrySelection {
             epoch: epoch.epoch_id.clone(),
             revision,
             instance,
+            quarantine: None,
         }
     }
-    fn validate(&self) -> StoreResult<()> {
+    pub(super) fn validate(&self) -> StoreResult<()> {
         if !hashed(&self.digest, "project-registry")
+            || self
+                .quarantine
+                .as_ref()
+                .is_some_and(|id| !instance_valid(id) || self.revision == 0)
             || match &self.instance {
-                None => self.revision != 0,
+                None => self.revision != 0 && self.quarantine.is_none(),
                 Some(id) => self.revision == 0 || !instance_valid(id),
             }
         {
             return Err(invalid());
         }
         Ok(())
+    }
+    pub fn is_quarantined(&self) -> bool {
+        self.quarantine.is_some()
+    }
+    pub(super) fn quarantined(&self, bytes: &[u8], revision: u64, id: String) -> Self {
+        Self {
+            digest: digest("project-registry", bytes),
+            epoch: self.epoch.clone(),
+            revision,
+            instance: self.instance.clone(),
+            quarantine: Some(id),
+        }
+    }
+    pub(super) fn instance_root(&self, root: &Path) -> Option<PathBuf> {
+        self.instance
+            .as_ref()
+            .map(|id| root.join("instances").join(id))
     }
     pub(super) fn directory(&self, root: &Path, epoch: &EpochManifest) -> StoreResult<PathBuf> {
         self.validate()?;
@@ -83,6 +107,7 @@ pub(super) struct ReplacementIntent {
     pub schema: String,
     pub operation_id: OperationId,
     pub expected: RegistrySelection,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub expected_current: Option<CurrentRecordId>,
     pub epoch: EpochId,
     pub snapshot_digest: String,
@@ -110,6 +135,7 @@ impl ReplacementIntent {
         self.expected.validate()?;
         OperationId::new(self.operation_id.as_str())?;
         if self.schema != "wow-store/project-replacement-intent/1"
+            || self.expected.is_quarantined()
             || self.epoch != self.expected.epoch
             || !hashed(&self.snapshot_digest, "project-backup-snapshot")
         {
@@ -138,6 +164,7 @@ pub(super) struct RegistryRecord {
     pub instance: String,
     pub request_digest: String,
     pub owner_validation_digest: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub activated_current: Option<CurrentPublication>,
 }
 impl RegistryRecord {
@@ -214,18 +241,59 @@ pub(super) struct AdmittedRegistry {
     pub epoch: EpochManifest,
     pub selection: RegistrySelection,
     pub record: Option<RegistryRecord>,
+    pub quarantine: Option<super::quarantine::model::QuarantineRecord>,
 }
 pub(super) fn read(root: &Path, catalog: &RecordCatalog) -> StoreResult<AdmittedRegistry> {
     let bytes = read_file(&root.join(REGISTRY_FILE), MAX_REGISTRY)?;
-    // Each branch reconstructs canonical bytes; legacy manifests are unchanged.
-    if let Ok(epoch) = database::admit_epoch(&bytes, catalog) {
+    if let Ok(record) = serde_json::from_slice::<super::quarantine::model::QuarantineRecord>(&bytes)
+    {
+        record.validate()?;
+        database::admit_epoch(&encode(&record.epoch, 65536)?, catalog)?;
+        if record.bytes()? != bytes {
+            return Err(invalid());
+        }
+        database::directory(&root.join("quarantines"))?;
+        let archive = record.archive(root)?;
+        database::directory(&archive)?;
+        let previous_bytes = read_file(&archive.join("selection.json"), MAX_REGISTRY)?;
+        // Archived authority is a normal selector only: no recursive history decoder.
+        let previous = read_normal(root, catalog, &previous_bytes)?;
+        let evidence = read_file(
+            &archive.join("evidence.json"),
+            super::quarantine::model::MAX_EVIDENCE,
+        )?;
+        if previous.selection != record.previous
+            || previous.epoch != record.epoch
+            || evidence.len() != record.evidence_length
+            || digest("project-quarantine-evidence", &evidence) != record.evidence_digest
+            || read_file(&archive.join("record.json"), MAX_REGISTRY)? != bytes
+        {
+            return Err(invalid());
+        }
         return Ok(AdmittedRegistry {
-            selection: RegistrySelection::from_bytes(&bytes, &epoch, 0, None),
-            epoch,
-            record: None,
+            epoch: record.epoch.clone(),
+            selection: record.selection()?,
+            record: previous.record,
+            quarantine: Some(record),
         });
     }
-    let record: RegistryRecord = serde_json::from_slice(&bytes).map_err(|_| invalid())?;
+    read_normal(root, catalog, &bytes)
+}
+pub(super) fn read_normal(
+    root: &Path,
+    catalog: &RecordCatalog,
+    bytes: &[u8],
+) -> StoreResult<AdmittedRegistry> {
+    // Each branch reconstructs canonical bytes; legacy manifests are unchanged.
+    if let Ok(epoch) = database::admit_epoch(bytes, catalog) {
+        return Ok(AdmittedRegistry {
+            selection: RegistrySelection::from_bytes(bytes, &epoch, 0, None),
+            epoch,
+            record: None,
+            quarantine: None,
+        });
+    }
+    let record: RegistryRecord = serde_json::from_slice(bytes).map_err(|_| invalid())?;
     record.validate()?;
     database::admit_epoch(&encode(&record.epoch, 65536)?, catalog)?;
     if record.bytes()? != bytes {
@@ -243,6 +311,7 @@ pub(super) fn read(root: &Path, catalog: &RecordCatalog) -> StoreResult<Admitted
         epoch: record.epoch.clone(),
         selection,
         record: Some(record),
+        quarantine: None,
     })
 }
 pub(super) fn read_file(path: &Path, max: usize) -> StoreResult<Vec<u8>> {

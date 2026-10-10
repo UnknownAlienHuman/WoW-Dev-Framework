@@ -65,10 +65,12 @@ pub fn run(values: Vec<OsString>) -> u8 {
     let result = match result {
         Ok(r) => r,
         Err(e) => {
-            super::diagnostic(e.message());
-            super::diagnostic(
-                "After an uncertain publication, reconcile the same operation ID; do not create a replacement operation.",
-            );
+            super::diagnostic(&format!("{:?}: {}", e.code(), e.message()));
+            if e.code() == ServiceErrorCode::StoreOutcomeUnknown {
+                super::diagnostic(
+                    "After an uncertain publication, reconcile the same operation ID; do not create a replacement operation.",
+                );
+            }
             return if e.code() == ServiceErrorCode::Cancelled {
                 130
             } else {

@@ -25,8 +25,9 @@ operation release, complete bounded inline root closure, exact policy CAS and
 guarded transactional GC through store/service APIs. Shared/current/leased/pinned
 data survives; released operation evidence and GC receipts survive collection and
 reopen. W16 now adds read-only recovery, verified native SQLite backup and
-owner-validated isolated restore and guarded live physical-instance replacement.
-Quarantine, incompatible-epoch migration and object/epoch/platform gates remain next; full W14/E2,
+owner-validated isolated restore, guarded live physical-instance replacement and
+explicit whole-instance quarantine with typed read-only observation.
+Guarded recovery from quarantine, incompatible-epoch migration and object/epoch/platform gates remain next; full W14/E2,
 W15 and W16 acceptance remain open. See
 [PROJECT_GC.md](../crates/wow-store/PROJECT_GC.md).
 
@@ -51,6 +52,25 @@ schema migration, interrupted-write or power-loss acceptance follows. See
 Fresh selector-slice policy, fmt, workspace check, strict Clippy, tests (887 passed,
 1 ignored, 107 targets), rustdoc and build passed on 2026-10-09. Remaining W16 work
 precedes W17; Gethe/Ketho/runtime and full package acceptance stay open.
+
+The quarantine slice uses an authoritative outer schema-3 hold with an unchanged
+epoch, exact preceding normal selector, raw Current observation and immutable
+bounded recovery evidence. Malformed or unreadable Current is never absence.
+Normal new reads, publication/activation, GC and backup reject the hold; old
+leased native pairs/files and locks remain. Standalone readonly admission can
+explicitly hold a damaged SQL body without opening it writable. Exact selected
+receipts reconcile without another selector effect. This slice supplies no
+restore, migration, cleanup or automatic repair. See
+[PROJECT_QUARANTINE.md](../crates/wow-store/PROJECT_QUARANTINE.md).
+
+Seven store regressions and one actual native Project/Graph service lifecycle
+pass, including physical-instance scope, old readers, damaged pointer/header,
+archive substitution, stale evidence and real Windows sharing refusal. Workspace
+policy, fmt, check, strict Clippy, tests (895 passed, 1 ignored, 107 targets),
+rustdoc and build pass on 2026-10-09; final CLI diagnostics passed focused strict
+Clippy/build. Next functional work is owner-validated guarded recovery from an
+explicit verified backup while preserving archived hold authority through later
+selection/backup, then supported inactive migration. Full W16/E2 stays open.
 
 Fresh W16 policy, fmt, workspace check, strict Clippy, tests (877 passed,
 1 ignored, 106 targets), rustdoc and build passed on 2026-10-09. The ignored consumer and source/runtime gates stay

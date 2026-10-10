@@ -20,6 +20,7 @@ pub enum ServiceErrorCode {
     OperationBusy,
     StoreCurrentConflict,
     StoreOutcomeUnknown,
+    StoreQuarantined,
     OperationNotImplementedForMilestone,
     BudgetExceeded,
     Cancelled,

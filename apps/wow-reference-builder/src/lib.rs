@@ -125,7 +125,8 @@ impl From<ServiceError> for CliError {
             | ServiceErrorCode::CanonicalizationFailed
             | ServiceErrorCode::InternalContractViolation => ExitClass::Security,
             ServiceErrorCode::OperationNotImplementedForMilestone
-            | ServiceErrorCode::ComponentUnavailable => ExitClass::Unavailable,
+            | ServiceErrorCode::ComponentUnavailable
+            | ServiceErrorCode::StoreQuarantined => ExitClass::Unavailable,
             ServiceErrorCode::ExactGenerationUnavailable
             | ServiceErrorCode::CurrentGenerationUnavailable
             | ServiceErrorCode::ProjectTargetExcluded

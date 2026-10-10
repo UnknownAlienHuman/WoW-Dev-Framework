@@ -25,6 +25,7 @@ pub enum StoreErrorCode {
     CurrentConflict,
     GenerationMissing,
     OutcomeUnknown,
+    Quarantined,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

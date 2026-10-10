@@ -197,6 +197,16 @@ Quarantine is logical state inside the owned epoch plus protected diagnostic/obj
 
 No path move is required for correctness; any physical quarantine copy/export is a separate bounded operation.
 
+For a whole selected physical instance whose SQL state may be damaged, the
+versioned outer registry can carry the authoritative hold independently of that
+SQL state. It binds the unchanged epoch, preceding normal selector, bounded raw
+Current observation and exact retained recovery evidence; frozen SQL schemas and
+semantic IDs remain unchanged. See [PROJECT_QUARANTINE](../PROJECT_QUARANTINE.md).
+Normal new admission, activation, backup and GC reject this hold, while already
+leased snapshots retain their original data. This physical-instance slice does
+not complete fine-grained domain quarantine or authorize automatic repair,
+deletion or unvalidated restoration.
+
 ## Last-known-good and rollback
 
 Last-known-good is an explicit retained publication set, not “the previous row.” Recovery may propose it but cannot:
