@@ -14,7 +14,8 @@ use wow_core::{
     GenerationContext, ProvenanceClass, SourceContent, SourceHandle, SourceSpan, StableHandleId,
 };
 use wow_graph::{
-    GraphConfidence, GraphCoverageRecord, GraphCoverageState, GraphEntityProposal, GraphNodeId,
+    GraphAssertionKind, GraphAssertionRef, GraphConfidence, GraphCoverageRecord,
+    GraphCoverageState, GraphEntityProposal, GraphLocalAssertion, GraphNodeId,
     GraphPartitionSnapshot, GraphProposalBatch, GraphProposalEndpoint, GraphProposalValue,
     GraphRelationKind, GraphRelationProposal, GraphRelationProposalInput,
 };
@@ -801,12 +802,12 @@ pub fn recognize_source_library(
         return Err(failure(RecognizerErrorCode::AdapterIdentityMismatch));
     }
 
-    let graph = input.owner.input_view(stop).map_err(graph_error)?;
+    let lookup = input.owner.producer_lookup(stop).map_err(graph_error)?;
+    let graph = lookup.input_view();
     let source_partition = input
         .owner
         .partition(input.source_partition)
         .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
-    let accepted = source_partition.report().accepted_entities();
     let mut caller_nodes = BTreeMap::<String, GraphNodeId>::new();
     let mut proposal_nodes = BTreeMap::<String, GraphNodeId>::new();
     for function in input.report.functions() {
@@ -815,17 +816,45 @@ pub fn recognize_source_library(
             .function_proposals
             .get(function.fact_id())
             .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
-        let index = accepted
-            .binary_search_by(|item| item.proposal_id().cmp(proposal_id))
-            .map_err(|_| failure(RecognizerErrorCode::AdapterBindingMissing))?;
-        let node = accepted[index].node().node_id().clone();
-        if graph.node(&node).is_none()
-            || proposal_nodes
-                .insert(proposal_id.to_owned(), node.clone())
-                .is_some()
-            || caller_nodes
-                .insert(function.fact_id().to_owned(), node)
-                .is_some()
+        let reference = GraphAssertionRef::Producer {
+            partition_id: source_partition.partition_id().into(),
+            batch_id: source_partition.batch().batch_id().into(),
+            assertion: GraphLocalAssertion {
+                kind: GraphAssertionKind::Entity,
+                proposal_id: proposal_id.into(),
+            },
+        };
+        let resolved = lookup
+            .entity(lookup.scope(), &reference, stop)
+            .map_err(|error| {
+                if error.code() == wow_graph::GraphErrorCode::PartitionInvalid {
+                    failure(RecognizerErrorCode::AdapterBindingMissing)
+                } else {
+                    graph_error(error)
+                }
+            })?;
+        let proposal = resolved.proposal();
+        let expected = BTreeMap::from([
+            (
+                "document".into(),
+                GraphProposalValue::String(function.path().into()),
+            ),
+            (
+                "function".into(),
+                GraphProposalValue::String(function.fact_id().into()),
+            ),
+        ]);
+        if proposal.entity_kind_id() != "lua_source_function"
+            || proposal.semantic_key() != &expected
+            || proposal.confidence() != GraphConfidence::Derived
+        {
+            return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
+        }
+        let node = resolved.accepted().node().node_id().clone();
+        if proposal_nodes
+            .insert(proposal_id.to_owned(), node.clone())
+            .is_some()
+            || caller_nodes.insert(proposal_id.to_owned(), node).is_some()
         {
             return Err(failure(RecognizerErrorCode::AdapterBindingDuplicate));
         }

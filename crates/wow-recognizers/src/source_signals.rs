@@ -17,7 +17,8 @@ use wow_core::{
 };
 use wow_emmy::function_calls::FunctionCallReport;
 use wow_graph::{
-    GraphConfidence, GraphCoverageRecord, GraphCoverageState, GraphEntityProposal, GraphNodeId,
+    GraphAssertionKind, GraphAssertionRef, GraphConfidence, GraphCoverageRecord,
+    GraphCoverageState, GraphEntityProposal, GraphLocalAssertion, GraphNodeId,
     GraphPartitionSnapshot, GraphProposalBatch, GraphProposalEndpoint, GraphProposalValue,
     GraphRelationKind, GraphRelationProposal, GraphRelationProposalInput,
 };
@@ -223,15 +224,14 @@ pub fn w1_recognize_native_frame_events(
         return Err(w1_failure(RecognizerErrorCode::AdapterBindingInvalid));
     }
 
-    // input_view validates the exact owner and reverses publication rebinding,
-    // so a materialized generation node ID is never used as an input here.
-    let graph = input.owner.input_view(stop).map_err(w1_graph_error)?;
+    // The lookup validates the exact owner once and resolves input-generation
+    // receipts, so a materialized generation node ID is never used here.
+    let lookup = input.owner.producer_lookup(stop).map_err(w1_graph_error)?;
+    let graph = lookup.input_view();
     let source_partition = input
         .owner
         .partition(input.source_partition)
         .ok_or_else(|| w1_failure(RecognizerErrorCode::AdapterBindingMissing))?;
-    let accepted = source_partition.report().accepted_entities();
-
     // Every enclosing function must cross into an accepted source_function
     // proposal. This producer owns no function identity of its own.
     let mut functions = BTreeMap::<String, W1FunctionBinding>::new();
@@ -242,10 +242,21 @@ pub fn w1_recognize_native_frame_events(
             .function_proposals
             .get(function.fact_id())
             .ok_or_else(|| w1_failure(RecognizerErrorCode::AdapterBindingMissing))?;
-        let proposal = source_partition
-            .batch()
-            .entity_proposal(proposal_id)
-            .ok_or_else(|| w1_failure(RecognizerErrorCode::AdapterBindingMissing))?;
+        let resolved = lookup
+            .entity(
+                lookup.scope(),
+                &GraphAssertionRef::Producer {
+                    partition_id: source_partition.partition_id().into(),
+                    batch_id: source_partition.batch().batch_id().into(),
+                    assertion: GraphLocalAssertion {
+                        kind: GraphAssertionKind::Entity,
+                        proposal_id: proposal_id.into(),
+                    },
+                },
+                stop,
+            )
+            .map_err(w1_entity_binding_error)?;
+        let proposal = resolved.proposal();
         let expected = BTreeMap::from([
             (
                 "document".into(),
@@ -273,12 +284,8 @@ pub fn w1_recognize_native_frame_events(
             function.content_digest(),
             function.span(),
         )?;
-        let index = accepted
-            .binary_search_by(|item| item.proposal_id().cmp(proposal_id))
-            .map_err(|_| w1_failure(RecognizerErrorCode::AdapterBindingMissing))?;
-        let node = accepted[index].node().node_id().clone();
-        if graph.node(&node).is_none()
-            || !function_proposal_ids.insert(proposal_id.to_owned())
+        let node = resolved.accepted().node().node_id().clone();
+        if !function_proposal_ids.insert(proposal_id.to_owned())
             || functions
                 .insert(
                     function.fact_id().to_owned(),
@@ -299,10 +306,21 @@ pub fn w1_recognize_native_frame_events(
     let mut declarations = BTreeMap::<(String, SourceSpan), W1DeclarationBinding>::new();
     for ((path, span), proposal_id) in &input.declaration_proposals {
         w1_checkpoint(stop)?;
-        let proposal = source_partition
-            .batch()
-            .entity_proposal(proposal_id)
-            .ok_or_else(|| w1_failure(RecognizerErrorCode::AdapterBindingMissing))?;
+        let resolved = lookup
+            .entity(
+                lookup.scope(),
+                &GraphAssertionRef::Producer {
+                    partition_id: source_partition.partition_id().into(),
+                    batch_id: source_partition.batch().batch_id().into(),
+                    assertion: GraphLocalAssertion {
+                        kind: GraphAssertionKind::Entity,
+                        proposal_id: (*proposal_id).into(),
+                    },
+                },
+                stop,
+            )
+            .map_err(w1_entity_binding_error)?;
+        let proposal = resolved.proposal();
         let (Some(start), Some(end)) = (span.byte_start(), span.byte_end()) else {
             return Err(w1_failure(RecognizerErrorCode::AdapterFactMismatch));
         };
@@ -344,24 +362,20 @@ pub fn w1_recognize_native_frame_events(
             .to_string()
             .parse::<ContentDigest<SourceContent>>()
             .map_err(|_| w1_failure(RecognizerErrorCode::AdapterFactMismatch))?;
-        let index = accepted
-            .binary_search_by(|item| item.proposal_id().cmp(proposal_id))
-            .map_err(|_| w1_failure(RecognizerErrorCode::AdapterBindingMissing))?;
-        let node = accepted[index].node().node_id().clone();
-        if graph.node(&node).is_none()
-            || declarations
-                .insert(
-                    ((*path).to_owned(), *span),
-                    W1DeclarationBinding {
-                        node,
-                        handle: *handle,
-                        evidence: *evidence,
-                        path: (*path).to_owned(),
-                        span: *span,
-                        digest,
-                    },
-                )
-                .is_some()
+        let node = resolved.accepted().node().node_id().clone();
+        if declarations
+            .insert(
+                ((*path).to_owned(), *span),
+                W1DeclarationBinding {
+                    node,
+                    handle: *handle,
+                    evidence: *evidence,
+                    path: (*path).to_owned(),
+                    span: *span,
+                    digest,
+                },
+            )
+            .is_some()
         {
             return Err(w1_failure(RecognizerErrorCode::AdapterBindingDuplicate));
         }
@@ -787,6 +801,14 @@ fn w1_failure(code: RecognizerErrorCode) -> RecognizerError {
         code,
         "exact native frame-event facts could not produce a coherent W11 partition",
     )
+}
+
+fn w1_entity_binding_error(error: wow_graph::GraphError) -> RecognizerError {
+    if error.code() == wow_graph::GraphErrorCode::PartitionInvalid {
+        w1_failure(RecognizerErrorCode::AdapterBindingMissing)
+    } else {
+        w1_graph_error(error)
+    }
 }
 
 fn w1_graph_error(error: wow_graph::GraphError) -> RecognizerError {
@@ -1319,13 +1341,12 @@ pub fn w3_recognize_signals(
         return Err(w3_failure(RecognizerErrorCode::AdapterBindingInvalid));
     }
 
-    let graph = input.owner.input_view(stop).map_err(w3_graph_error)?;
+    let lookup = input.owner.producer_lookup(stop).map_err(w3_graph_error)?;
+    let graph = lookup.input_view();
     let source_partition = input
         .owner
         .partition(input.source_partition)
         .ok_or_else(|| w3_failure(RecognizerErrorCode::AdapterBindingMissing))?;
-    let accepted = source_partition.report().accepted_entities();
-
     let mut function_proposals = BTreeMap::<String, String>::new();
     let mut function_nodes = BTreeMap::<String, GraphNodeId>::new();
     let mut function_ids = BTreeSet::new();
@@ -1335,10 +1356,21 @@ pub fn w3_recognize_signals(
             .function_proposals
             .get(function.fact_id())
             .ok_or_else(|| w3_failure(RecognizerErrorCode::AdapterBindingMissing))?;
-        let proposal = source_partition
-            .batch()
-            .entity_proposal(proposal_id)
-            .ok_or_else(|| w3_failure(RecognizerErrorCode::AdapterBindingMissing))?;
+        let resolved = lookup
+            .entity(
+                lookup.scope(),
+                &GraphAssertionRef::Producer {
+                    partition_id: source_partition.partition_id().into(),
+                    batch_id: source_partition.batch().batch_id().into(),
+                    assertion: GraphLocalAssertion {
+                        kind: GraphAssertionKind::Entity,
+                        proposal_id: proposal_id.into(),
+                    },
+                },
+                stop,
+            )
+            .map_err(w3_entity_binding_error)?;
+        let proposal = resolved.proposal();
         let expected = BTreeMap::from([
             (
                 "document".into(),
@@ -1371,11 +1403,8 @@ pub fn w3_recognize_signals(
                     .map_err(|_| w3_failure(RecognizerErrorCode::AdapterFactMismatch))?,
             ),
         )?;
-        let index = accepted
-            .binary_search_by(|item| item.proposal_id().cmp(proposal_id))
-            .map_err(|_| w3_failure(RecognizerErrorCode::AdapterBindingMissing))?;
-        let node = accepted[index].node().node_id().clone();
-        if graph.node(&node).is_none() || !function_ids.insert(function.fact_id().to_owned()) {
+        let node = resolved.accepted().node().node_id().clone();
+        if !function_ids.insert(function.fact_id().to_owned()) {
             return Err(w3_failure(RecognizerErrorCode::AdapterBindingDuplicate));
         }
         function_proposals.insert(function.fact_id().to_owned(), proposal_id.to_owned());
@@ -1387,10 +1416,21 @@ pub fn w3_recognize_signals(
     let mut receiver_proposal_ids = BTreeSet::<String>::new();
     for ((path, span), proposal_id) in &input.declaration_proposals {
         w3_checkpoint(stop)?;
-        let proposal = source_partition
-            .batch()
-            .entity_proposal(proposal_id)
-            .ok_or_else(|| w3_failure(RecognizerErrorCode::AdapterBindingMissing))?;
+        let resolved = lookup
+            .entity(
+                lookup.scope(),
+                &GraphAssertionRef::Producer {
+                    partition_id: source_partition.partition_id().into(),
+                    batch_id: source_partition.batch().batch_id().into(),
+                    assertion: GraphLocalAssertion {
+                        kind: GraphAssertionKind::Entity,
+                        proposal_id: (*proposal_id).into(),
+                    },
+                },
+                stop,
+            )
+            .map_err(w3_entity_binding_error)?;
+        let proposal = resolved.proposal();
         let (Some(start), Some(end)) = (span.byte_start(), span.byte_end()) else {
             return Err(w3_failure(RecognizerErrorCode::AdapterFactMismatch));
         };
@@ -1424,13 +1464,7 @@ pub fn w3_recognize_signals(
             return Err(w3_failure(RecognizerErrorCode::AdapterBindingInvalid));
         };
         w3_validate_support_without_digest(&input, *handle, *evidence, path, *span)?;
-        let index = accepted
-            .binary_search_by(|item| item.proposal_id().cmp(proposal_id))
-            .map_err(|_| w3_failure(RecognizerErrorCode::AdapterBindingMissing))?;
-        let node = accepted[index].node().node_id().clone();
-        if graph.node(&node).is_none() {
-            return Err(w3_failure(RecognizerErrorCode::AdapterIdentityMismatch));
-        }
+        let node = resolved.accepted().node().node_id().clone();
         if !receiver_proposal_ids.insert((*proposal_id).to_owned()) {
             return Err(w3_failure(RecognizerErrorCode::AdapterBindingDuplicate));
         }
@@ -2262,6 +2296,14 @@ fn w3_failure(code: RecognizerErrorCode) -> RecognizerError {
     )
 }
 
+fn w3_entity_binding_error(error: wow_graph::GraphError) -> RecognizerError {
+    if error.code() == wow_graph::GraphErrorCode::PartitionInvalid {
+        w3_failure(RecognizerErrorCode::AdapterBindingMissing)
+    } else {
+        w3_graph_error(error)
+    }
+}
+
 fn w3_graph_error(error: wow_graph::GraphError) -> RecognizerError {
     w3_failure(match error.code() {
         wow_graph::GraphErrorCode::Cancelled => RecognizerErrorCode::Cancelled,
@@ -2494,8 +2536,20 @@ fn w4_failure(code: RecognizerErrorCode) -> RecognizerError {
     RecognizerError::new(code, String::new())
 }
 
-fn w4_graph_error(_error: wow_graph::GraphError) -> RecognizerError {
-    w4_failure(RecognizerErrorCode::AdapterFactMismatch)
+fn w4_entity_binding_error(error: wow_graph::GraphError) -> RecognizerError {
+    if error.code() == wow_graph::GraphErrorCode::PartitionInvalid {
+        w4_failure(RecognizerErrorCode::AdapterBindingMissing)
+    } else {
+        w4_graph_error(error)
+    }
+}
+
+fn w4_graph_error(error: wow_graph::GraphError) -> RecognizerError {
+    w4_failure(match error.code() {
+        wow_graph::GraphErrorCode::Cancelled => RecognizerErrorCode::Cancelled,
+        wow_graph::GraphErrorCode::BudgetExceeded => RecognizerErrorCode::BudgetExceeded,
+        _ => RecognizerErrorCode::AdapterFactMismatch,
+    })
 }
 
 fn w4_graph_confidence(confidence: RecognizerOutputConfidence) -> GraphConfidence {
@@ -2740,13 +2794,12 @@ pub fn recognize_source_cvar_callbacks(
         return Err(w4_failure(RecognizerErrorCode::AdapterBindingInvalid));
     }
 
-    let graph = input.owner.input_view(stop).map_err(w4_graph_error)?;
+    let lookup = input.owner.producer_lookup(stop).map_err(w4_graph_error)?;
+    let graph = lookup.input_view();
     let source_partition = input
         .owner
         .partition(input.source_partition)
         .ok_or_else(|| w4_failure(RecognizerErrorCode::AdapterBindingMissing))?;
-    let accepted = source_partition.report().accepted_entities();
-
     // Every enclosing function must cross into an accepted source_function
     // proposal. This producer owns no function identity of its own.
     let mut functions = BTreeMap::<String, W4FunctionBinding>::new();
@@ -2756,10 +2809,21 @@ pub fn recognize_source_cvar_callbacks(
             .function_proposals
             .get(function.fact_id())
             .ok_or_else(|| w4_failure(RecognizerErrorCode::AdapterBindingMissing))?;
-        let proposal = source_partition
-            .batch()
-            .entity_proposal(proposal_id)
-            .ok_or_else(|| w4_failure(RecognizerErrorCode::AdapterBindingMissing))?;
+        let resolved = lookup
+            .entity(
+                lookup.scope(),
+                &GraphAssertionRef::Producer {
+                    partition_id: source_partition.partition_id().into(),
+                    batch_id: source_partition.batch().batch_id().into(),
+                    assertion: GraphLocalAssertion {
+                        kind: GraphAssertionKind::Entity,
+                        proposal_id: proposal_id.into(),
+                    },
+                },
+                stop,
+            )
+            .map_err(w4_entity_binding_error)?;
+        let proposal = resolved.proposal();
         let expected = BTreeMap::from([
             (
                 "document".into(),
@@ -2786,22 +2850,18 @@ pub fn recognize_source_cvar_callbacks(
             function.path(),
             function.span(),
         )?;
-        let index = accepted
-            .binary_search_by(|item| item.proposal_id().cmp(proposal_id))
-            .map_err(|_| w4_failure(RecognizerErrorCode::AdapterBindingMissing))?;
-        let node = accepted[index].node().node_id().clone();
-        if graph.node(&node).is_none()
-            || functions
-                .insert(
-                    function.fact_id().to_owned(),
-                    W4FunctionBinding {
-                        node,
-                        proposal_id: proposal_id.to_owned(),
-                        handle: *handle,
-                        evidence: *evidence,
-                    },
-                )
-                .is_some()
+        let node = resolved.accepted().node().node_id().clone();
+        if functions
+            .insert(
+                function.fact_id().to_owned(),
+                W4FunctionBinding {
+                    node,
+                    proposal_id: proposal_id.to_owned(),
+                    handle: *handle,
+                    evidence: *evidence,
+                },
+            )
+            .is_some()
         {
             return Err(w4_failure(RecognizerErrorCode::AdapterBindingDuplicate));
         }
@@ -2811,10 +2871,21 @@ pub fn recognize_source_cvar_callbacks(
     let mut declarations = BTreeMap::<(String, SourceSpan), W3Binding>::new();
     for ((path, span), proposal_id) in &input.declaration_proposals {
         w4_checkpoint(stop)?;
-        let proposal = source_partition
-            .batch()
-            .entity_proposal(proposal_id)
-            .ok_or_else(|| w4_failure(RecognizerErrorCode::AdapterBindingMissing))?;
+        let resolved = lookup
+            .entity(
+                lookup.scope(),
+                &GraphAssertionRef::Producer {
+                    partition_id: source_partition.partition_id().into(),
+                    batch_id: source_partition.batch().batch_id().into(),
+                    assertion: GraphLocalAssertion {
+                        kind: GraphAssertionKind::Entity,
+                        proposal_id: (*proposal_id).into(),
+                    },
+                },
+                stop,
+            )
+            .map_err(w4_entity_binding_error)?;
+        let proposal = resolved.proposal();
         let (Some(start), Some(end)) = (span.byte_start(), span.byte_end()) else {
             return Err(w4_failure(RecognizerErrorCode::AdapterFactMismatch));
         };
@@ -2847,13 +2918,7 @@ pub fn recognize_source_cvar_callbacks(
         let ([handle], [evidence]) = (proposal.source_handle_ids(), proposal.evidence_ids()) else {
             return Err(w4_failure(RecognizerErrorCode::AdapterBindingInvalid));
         };
-        let index = accepted
-            .binary_search_by(|item| item.proposal_id().cmp(proposal_id))
-            .map_err(|_| w4_failure(RecognizerErrorCode::AdapterBindingMissing))?;
-        let node = accepted[index].node().node_id().clone();
-        if graph.node(&node).is_none() {
-            return Err(w4_failure(RecognizerErrorCode::AdapterIdentityMismatch));
-        }
+        let node = resolved.accepted().node().node_id().clone();
         if declarations
             .insert(
                 ((*path).clone(), *span),
@@ -2970,12 +3035,8 @@ pub fn recognize_source_cvar_callbacks(
     let plan = compile_recognizer_plan(&pack)?;
     let output = execute_recognizer_plan(input.context, &pack, &plan, &bundle, fact_limits, stop)?;
 
-    let graph_nodes = input
-        .owner
-        .input_view(stop)
-        .map_err(w4_graph_error)?
-        .nodes()
-        .to_vec();
+    w4_checkpoint(stop)?;
+    let graph_nodes = graph.nodes().to_vec();
     let _limits = input.owner.snapshot().limits();
     let mut entities = Vec::new();
     let mut relations = Vec::new();
@@ -3181,3 +3242,84 @@ pub fn recognize_source_cvar_callbacks(
     })
 }
 // ===== END WORKER 4: cvar callback =====
+
+#[cfg(test)]
+mod w4_tests {
+    use super::*;
+    use wow_graph::{
+        GraphDirection, GraphErrorCode, GraphGenerationId, GraphLimits, GraphNeighborQuery,
+        GraphNeighborReadLimits, GraphNeighborReadQuery, GraphNode, GraphSnapshot, GraphUniverseId,
+    };
+
+    #[test]
+    fn graph_error_lowering_preserves_cancellation_and_budget()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let limits = GraphLimits::default();
+        let universe = GraphUniverseId::new("project:cvar-error-lowering")?;
+        let generation = GraphGenerationId::new("input-generation:cvar-error-lowering")?;
+        let node = GraphNode::new(
+            universe.clone(),
+            generation.clone(),
+            "lua_source_function",
+            "cvar-error-lowering",
+            Vec::new(),
+            limits,
+        )?;
+        let node_id = node.node_id().clone();
+        let snapshot = GraphSnapshot::build(
+            universe,
+            generation,
+            limits,
+            vec![node],
+            Vec::new(),
+            Vec::new(),
+        )?;
+        let query = GraphNeighborReadQuery::new(
+            snapshot.snapshot_id().clone(),
+            GraphNeighborQuery::new(
+                node_id,
+                GraphDirection::Outgoing,
+                vec![GraphRelationKind::Calls],
+                limits.max_query_edges + 1,
+            )?,
+            GraphNeighborReadLimits::default(),
+        )?;
+        let stop = AtomicBool::new(true);
+        let cancelled = query
+            .execute(&snapshot, &stop)
+            .err()
+            .ok_or("stopped native graph read must reject")?;
+        assert_eq!(cancelled.code(), GraphErrorCode::Cancelled);
+        assert_eq!(
+            w4_graph_error(cancelled).code(),
+            RecognizerErrorCode::Cancelled
+        );
+
+        stop.store(false, Ordering::Release);
+        let budget = query
+            .execute(&snapshot, &stop)
+            .err()
+            .ok_or("native query above the snapshot budget must reject")?;
+        assert_eq!(budget.code(), GraphErrorCode::BudgetExceeded);
+        assert_eq!(
+            w4_graph_error(budget).code(),
+            RecognizerErrorCode::BudgetExceeded
+        );
+
+        let invalid = GraphCoverageRecord::new(
+            GraphRelationKind::Calls,
+            GraphCoverageState::Partial,
+            true,
+            Vec::new(),
+            limits,
+        )
+        .err()
+        .ok_or("partial native coverage cannot authorize absence")?;
+        assert_eq!(invalid.code(), GraphErrorCode::SnapshotInvalid);
+        assert_eq!(
+            w4_graph_error(invalid).code(),
+            RecognizerErrorCode::AdapterFactMismatch
+        );
+        Ok(())
+    }
+}

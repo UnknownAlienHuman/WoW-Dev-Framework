@@ -31,6 +31,7 @@
 
 - One immutable foundation, registry bundle and source context bind the input stream.
 - Each producer partition retains its complete original batch, version, validation report and coverage under an exact digest.
+- Exact public Producer assertion lookup validates one immutable input view and returns original entity/relation proposals with their accepted input-generation receipts. Stale batches, mixed scopes, Local references and missing bindings reject; see [PARTITION_USAGE.md](PARTITION_USAGE.md).
 - Single and bounded multi-partition replacements name one expected graph snapshot and each previous partition digest; absent means create-only.
 - Multi-partition plans reject duplicates, validate all guards against the same base, use one fixed surviving endpoint view and publish all or none. The ordered change manifest retains exact before/after partition digests.
 - The owner removes only the named partitions, validates independent replacements against surviving endpoints and checks the complete final graph for dangling references. Endpoint and dependent-edge owners can be disabled together.

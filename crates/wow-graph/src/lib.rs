@@ -15,6 +15,7 @@ mod partition;
 mod partition_session;
 mod paths;
 mod persistent;
+mod producer_lookup;
 mod proposal;
 mod query;
 mod registry;
@@ -47,6 +48,7 @@ pub use persistent::{
     GRAPH_SNAPSHOT_OBJECT_KIND, GRAPH_SNAPSHOT_OBJECT_SCHEMA_VERSION, GRAPH_STORE_SCHEMA,
     PersistentGraphStore, PublishedGraphSnapshot, StoredGraphSnapshot,
 };
+pub use producer_lookup::{GraphProducerLookup, GraphResolvedEntity, GraphResolvedRelation};
 pub use proposal::{
     GRAPH_PROPOSAL_BATCH_SCHEMA, GRAPH_PROPOSAL_BATCH_SCHEMA_V2, GRAPH_PROPOSAL_REPORT_SCHEMA,
     GraphAcceptedEntityProposal, GraphAcceptedRelationProposal, GraphEntityProposal,

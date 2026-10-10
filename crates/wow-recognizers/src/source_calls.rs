@@ -10,7 +10,8 @@ use wow_core::{
 };
 use wow_emmy::function_calls::{FunctionCallReport, SourceCallTarget};
 use wow_graph::{
-    GraphConfidence, GraphCoverageRecord, GraphCoverageState, GraphNodeId, GraphPartitionSnapshot,
+    GraphAssertionKind, GraphAssertionRef, GraphConfidence, GraphCoverageRecord,
+    GraphCoverageState, GraphLocalAssertion, GraphNodeId, GraphPartitionSnapshot,
     GraphProposalBatch, GraphProposalEndpoint, GraphProposalValue, GraphRelationKind,
     GraphRelationProposal, GraphRelationProposalInput,
 };
@@ -111,14 +112,14 @@ pub fn recognize_source_calls(
     {
         return Err(failure(RecognizerErrorCode::AdapterBindingInvalid));
     }
-    // input_view validates the complete owner and reverses publication rebinding.
+    // One validated lookup resolves exact producer receipts in the input generation.
     // Assertions must never use node IDs from a materialized generation as inputs.
-    let graph = input.owner.input_view(stop).map_err(graph_error)?;
+    let lookup = input.owner.producer_lookup(stop).map_err(graph_error)?;
+    let graph = lookup.input_view();
     let partition = input
         .owner
         .partition(input.source_partition)
         .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
-    let accepted = partition.report().accepted_entities();
     let mut bindings = BTreeMap::new();
     let mut used_proposals = BTreeSet::new();
     for function in input.report.functions() {
@@ -130,10 +131,24 @@ pub fn recognize_source_calls(
         if !used_proposals.insert(proposal_id) {
             return Err(failure(RecognizerErrorCode::AdapterBindingDuplicate));
         }
-        let proposal = partition
-            .batch()
-            .entity_proposal(proposal_id)
-            .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
+        let reference = GraphAssertionRef::Producer {
+            partition_id: partition.partition_id().into(),
+            batch_id: partition.batch().batch_id().into(),
+            assertion: GraphLocalAssertion {
+                kind: GraphAssertionKind::Entity,
+                proposal_id: proposal_id.into(),
+            },
+        };
+        let resolved = lookup
+            .entity(lookup.scope(), &reference, stop)
+            .map_err(|error| {
+                if error.code() == wow_graph::GraphErrorCode::PartitionInvalid {
+                    failure(RecognizerErrorCode::AdapterBindingMissing)
+                } else {
+                    graph_error(error)
+                }
+            })?;
+        let proposal = resolved.proposal();
         let expected = BTreeMap::from([
             (
                 "document".into(),
@@ -164,13 +179,7 @@ pub fn recognize_source_calls(
             function.content_digest(),
             function.span(),
         )?;
-        let index = accepted
-            .binary_search_by(|p| p.proposal_id().cmp(proposal_id))
-            .map_err(|_| failure(RecognizerErrorCode::AdapterBindingMissing))?;
-        let node = accepted[index].node();
-        if graph.node(node.node_id()).is_none() {
-            return Err(failure(RecognizerErrorCode::AdapterIdentityMismatch));
-        }
+        let node = resolved.accepted().node();
         bindings.insert(
             function.fact_id(),
             FunctionBinding {
@@ -272,7 +281,7 @@ pub fn recognize_source_calls(
         .collect::<RecognizerResult<Vec<_>>>()?;
     let recognition = run_recognizers(
         &RecognizerRegistry::e2_default()?,
-        &graph,
+        graph,
         observations,
         coverage,
         limits,

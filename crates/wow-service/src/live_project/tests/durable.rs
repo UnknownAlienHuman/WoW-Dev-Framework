@@ -19,6 +19,116 @@ fn result(value: &LiveProjectResult) -> TestResult<serde_json::Value> {
 }
 
 #[test]
+fn native_library_caller_survives_full_publication_and_foreign_binding_refuses() -> TestResult {
+    use wow_recognizers::source_state::{
+        SOURCE_STATE_LIBRARY_PARTITION, SourceLibraryInput, recognize_source_library,
+    };
+    let stop = AtomicBool::new(false);
+    let store_root = root("native-library-caller")?;
+    let request =
+        crate::graph::GraphBuildRequest::new("fixture-live-pair".into(), "current".into())?;
+    operations::publish_input(
+        input(&[(
+            "library-call.lua",
+            "function LibStub(name) return {} end\nfunction Require() return LibStub(\"FixtureLibrary-1\") end\n",
+        )])?,
+        &request,
+        &store_root,
+        &LiveProjectPublishRequest::new("fixture:native-library-caller", "absent", true, true)?,
+        &stop,
+    )?;
+    let store = LiveProjectStore::open(&store_root)?;
+    let held = store.read(&ReadSelector::Current, &stop)?;
+    held.graph().validate(&stop)?;
+    let (_, _, _, provenance, _) =
+        wow_project::graph::build_source_graph_proposals(held.project(), &stop)?.into_parts();
+    let report = provenance
+        .function_call_report()
+        .ok_or("missing native call report")?;
+    let call = report
+        .calls()
+        .iter()
+        .find(|call| call.resolved_callable_key() == Some("LibStub"))
+        .ok_or("native LibStub call not captured")?;
+    let caller = provenance
+        .functions()
+        .iter()
+        .find(|function| function.function_id == call.caller_function_id())
+        .ok_or("caller proposal not captured")?;
+    let lookup = held.graph().producer_lookup(&stop)?;
+    let source = held
+        .graph()
+        .partition(wow_project::graph::SOURCE_GRAPH_PARTITION)
+        .ok_or("source partition missing")?;
+    let address = wow_graph::GraphAssertionRef::Producer {
+        partition_id: source.partition_id().into(),
+        batch_id: source.batch().batch_id().into(),
+        assertion: wow_graph::GraphLocalAssertion {
+            kind: wow_graph::GraphAssertionKind::Entity,
+            proposal_id: caller.proposal_id.clone().into(),
+        },
+    };
+    let expected_caller = lookup.entity(lookup.scope(), &address, &stop)?;
+    let library = held
+        .graph()
+        .partition(SOURCE_STATE_LIBRARY_PARTITION)
+        .ok_or("library partition missing")?;
+    assert_eq!(library.report().accepted_entities().len(), 1);
+    assert_eq!(library.report().accepted_relations().len(), 1);
+    assert_eq!(
+        library.report().accepted_relations()[0].edge().from(),
+        expected_caller.accepted().node().node_id()
+    );
+
+    // Swapping two real accepted callable proposals must fail semantic admission.
+    let mut functions = provenance
+        .functions()
+        .iter()
+        .map(|function| (function.function_id.as_str(), function.proposal_id.as_str()))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    let other = provenance
+        .functions()
+        .iter()
+        .find(|function| function.function_id != caller.function_id)
+        .ok_or("second callable missing")?;
+    functions.insert(caller.function_id.as_str(), other.proposal_id.as_str());
+    functions.insert(other.function_id.as_str(), caller.proposal_id.as_str());
+    let error = recognize_source_library(
+        SourceLibraryInput {
+            owner: held.graph(),
+            source_partition: wow_project::graph::SOURCE_GRAPH_PARTITION,
+            report,
+            context: provenance.context(),
+            function_proposals: functions,
+            call_support: provenance
+                .call_sites()
+                .iter()
+                .map(|site| {
+                    (
+                        site.call_id.as_str(),
+                        (site.source_handle_id, site.evidence_id),
+                    )
+                })
+                .collect(),
+            source_handles: provenance.source_handles(),
+            evidence: provenance.evidence(),
+        },
+        &stop,
+    )
+    .err()
+    .ok_or("permuted callable proposals accepted")?;
+    assert_eq!(
+        error.code(),
+        wow_recognizers::RecognizerErrorCode::AdapterFactMismatch
+    );
+    drop(lookup);
+    drop(held);
+    drop(store);
+    std::fs::remove_dir_all(store_root)?;
+    Ok(())
+}
+
+#[test]
 fn full_graph_update_matches_cold_and_preserves_original_base_and_readers() -> TestResult {
     let stop = AtomicBool::new(false);
     let store_root = root("durable-update")?;

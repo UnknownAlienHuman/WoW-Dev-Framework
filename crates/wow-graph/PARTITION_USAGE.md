@@ -10,6 +10,57 @@ Use `input_view(cancelled)` to obtain endpoint IDs for `GraphProposalEndpoint::E
 
 Construct a `GraphProposalBatch` with the same registry ID/digest, input universe/generation and source context. Its `producer_partition_id` is the ownership key. The graph revalidates the entire batch; it does not accept a caller-supplied validation report as authority.
 
+## Exact producer assertion lookup
+
+`owner.producer_lookup(cancelled)` returns a `GraphProducerLookup` that borrows
+the immutable `GraphPartitionSnapshot` and owns one validated input view.
+`lookup.scope()` returns its `GraphAssertionRecordScope`;
+`lookup.input_view()` borrows that input `GraphSnapshot`.
+
+Resolve an entity with `lookup.entity(scope, reference, cancelled)` or a relation
+with `lookup.relation(scope, reference, cancelled)`. Each requires an exact
+`GraphAssertionRef::Producer`: partition ID, original batch ID, assertion kind
+and proposal ID. The scope must match the input universe, generation and source
+context. Resolution checks the native proposal, accepted receipt and membership
+in the input view.
+
+This fragment assumes the caller defines `CallerError::MissingProducerPartition`
+and implements `From<GraphError>` for its error type. The owner, IDs and
+cancellation flag are supplied by the caller.
+
+```rust,ignore
+let lookup = owner.producer_lookup(&cancelled)?;
+let partition = owner
+    .partition(producer_partition_id)
+    .ok_or(CallerError::MissingProducerPartition)?;
+let reference = GraphAssertionRef::Producer {
+    partition_id: partition.partition_id().into(),
+    batch_id: partition.batch().batch_id().into(),
+    assertion: GraphLocalAssertion {
+        kind: GraphAssertionKind::Entity,
+        proposal_id: proposal_id.into(),
+    },
+};
+let resolved = lookup.entity(lookup.scope(), &reference, &cancelled)?;
+let input_node_id = resolved.accepted().node().node_id();
+```
+
+`GraphResolvedEntity` and `GraphResolvedRelation` expose `partition()`,
+`proposal()`, `accepted()` and `reference()`. The last reconstructs their exact
+Producer address. Relation lookup uses `GraphAssertionKind::Relation` and its
+accepted receipt exposes `edge()` instead of `node()`.
+
+Wrong scope or kind, Local references and missing proposals/accepted bindings
+return `PartitionInvalid`; a stale batch returns `PartitionStale`.
+Cancellation returns `Cancelled`. Lookup construction propagates underlying
+owner-validation errors.
+
+Resolved node/edge IDs belong to the **input generation**. Final IDs in
+`owner.snapshot()` require separate materialization/rebinding. Adapters still
+validate their own fact keys and source/evidence support. Lookup neither
+publishes nor changes coverage or confidence; failure supplies no absence
+authority. It adds no serialized schema or semantic identity recipe.
+
 ## Plan and publish
 
 ```rust,ignore

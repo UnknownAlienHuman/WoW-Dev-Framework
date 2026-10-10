@@ -13,7 +13,8 @@ use wow_core::{
 use wow_emmy::bindings::SymbolTarget;
 use wow_emmy::function_calls::FunctionCallReport;
 use wow_graph::{
-    GraphConfidence, GraphCoverageRecord, GraphCoverageState, GraphEntityProposal, GraphNodeId,
+    GraphAssertionKind, GraphAssertionRef, GraphConfidence, GraphCoverageRecord,
+    GraphCoverageState, GraphEntityProposal, GraphLocalAssertion, GraphNodeId,
     GraphPartitionSnapshot, GraphProposalBatch, GraphProposalEndpoint, GraphProposalValue,
     GraphRelationKind, GraphRelationProposal, GraphRelationProposalInput,
 };
@@ -169,13 +170,12 @@ pub fn recognize_source_mixins(
         return Err(failure(RecognizerErrorCode::AdapterBindingInvalid));
     }
 
-    let graph = input.owner.input_view(stop).map_err(graph_error)?;
+    let lookup = input.owner.producer_lookup(stop).map_err(graph_error)?;
+    let graph = lookup.input_view();
     let source_partition = input
         .owner
         .partition(input.source_partition)
         .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
-    let accepted = source_partition.report().accepted_entities();
-
     let mut function_ids = BTreeSet::new();
     let mut proposal_nodes = BTreeMap::<String, GraphNodeId>::new();
     for function in input.report.functions() {
@@ -184,10 +184,21 @@ pub fn recognize_source_mixins(
             .function_proposals
             .get(function.fact_id())
             .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
-        let proposal = source_partition
-            .batch()
-            .entity_proposal(proposal_id)
-            .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
+        let resolved = lookup
+            .entity(
+                lookup.scope(),
+                &GraphAssertionRef::Producer {
+                    partition_id: source_partition.partition_id().into(),
+                    batch_id: source_partition.batch().batch_id().into(),
+                    assertion: GraphLocalAssertion {
+                        kind: GraphAssertionKind::Entity,
+                        proposal_id: proposal_id.into(),
+                    },
+                },
+                stop,
+            )
+            .map_err(entity_binding_error)?;
+        let proposal = resolved.proposal();
         let expected = BTreeMap::from([
             (
                 "document".into(),
@@ -215,14 +226,10 @@ pub fn recognize_source_mixins(
             function.content_digest(),
             function.span(),
         )?;
-        let index = accepted
-            .binary_search_by(|item| item.proposal_id().cmp(proposal_id))
-            .map_err(|_| failure(RecognizerErrorCode::AdapterBindingMissing))?;
-        let node = accepted[index].node().node_id().clone();
-        if graph.node(&node).is_none()
-            || proposal_nodes
-                .insert(proposal_id.to_owned(), node.clone())
-                .is_some()
+        let node = resolved.accepted().node().node_id().clone();
+        if proposal_nodes
+            .insert(proposal_id.to_owned(), node.clone())
+            .is_some()
             || !function_ids.insert(function.fact_id().to_owned())
         {
             return Err(failure(RecognizerErrorCode::AdapterBindingDuplicate));
@@ -237,10 +244,21 @@ pub fn recognize_source_mixins(
             return Err(failure(RecognizerErrorCode::AdapterBindingDuplicate));
         }
         checkpoint(stop)?;
-        let proposal = source_partition
-            .batch()
-            .entity_proposal(proposal_id)
-            .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
+        let resolved = lookup
+            .entity(
+                lookup.scope(),
+                &GraphAssertionRef::Producer {
+                    partition_id: source_partition.partition_id().into(),
+                    batch_id: source_partition.batch().batch_id().into(),
+                    assertion: GraphLocalAssertion {
+                        kind: GraphAssertionKind::Entity,
+                        proposal_id: (*proposal_id).into(),
+                    },
+                },
+                stop,
+            )
+            .map_err(entity_binding_error)?;
+        let proposal = resolved.proposal();
         let (Some(start), Some(end)) = (span.byte_start(), span.byte_end()) else {
             return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
         };
@@ -274,13 +292,7 @@ pub fn recognize_source_mixins(
             return Err(failure(RecognizerErrorCode::AdapterBindingInvalid));
         };
         validate_support_without_digest(&input, *handle, *evidence, path, *span)?;
-        let index = accepted
-            .binary_search_by(|item| item.proposal_id().cmp(proposal_id))
-            .map_err(|_| failure(RecognizerErrorCode::AdapterBindingMissing))?;
-        let node = accepted[index].node().node_id().clone();
-        if graph.node(&node).is_none() {
-            return Err(failure(RecognizerErrorCode::AdapterIdentityMismatch));
-        }
+        let node = resolved.accepted().node().node_id().clone();
         let key = ((*path).to_owned(), *span);
         if declarations
             .insert(
@@ -811,21 +823,31 @@ pub fn recognize_source_mixin_assignments(
         return Err(failure(RecognizerErrorCode::AdapterBindingInvalid));
     }
 
-    let graph = input.owner.input_view(stop).map_err(graph_error)?;
+    let lookup = input.owner.producer_lookup(stop).map_err(graph_error)?;
+    let graph = lookup.input_view();
     let source_partition = input
         .owner
         .partition(input.source_partition)
         .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
-    let accepted = source_partition.report().accepted_entities();
-
     let mut declarations = BTreeMap::<String, SourceBinding>::new();
     let mut declaration_keys = BTreeMap::<(String, SourceSpan), String>::new();
     for ((path, span), proposal_id) in &input.declaration_proposals {
         checkpoint(stop)?;
-        let proposal = source_partition
-            .batch()
-            .entity_proposal(proposal_id)
-            .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
+        let resolved = lookup
+            .entity(
+                lookup.scope(),
+                &GraphAssertionRef::Producer {
+                    partition_id: source_partition.partition_id().into(),
+                    batch_id: source_partition.batch().batch_id().into(),
+                    assertion: GraphLocalAssertion {
+                        kind: GraphAssertionKind::Entity,
+                        proposal_id: (*proposal_id).into(),
+                    },
+                },
+                stop,
+            )
+            .map_err(entity_binding_error)?;
+        let proposal = resolved.proposal();
         let (Some(start), Some(end)) = (span.byte_start(), span.byte_end()) else {
             return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
         };
@@ -859,21 +881,17 @@ pub fn recognize_source_mixin_assignments(
             return Err(failure(RecognizerErrorCode::AdapterBindingInvalid));
         };
         validate_support_without_digest(&input, *handle, *evidence, path, *span)?;
-        let index = accepted
-            .binary_search_by(|item| item.proposal_id().cmp(proposal_id))
-            .map_err(|_| failure(RecognizerErrorCode::AdapterBindingMissing))?;
-        let node = accepted[index].node().node_id().clone();
-        if graph.node(&node).is_none()
-            || declarations
-                .insert(
-                    (*proposal_id).to_owned(),
-                    SourceBinding {
-                        node,
-                        handle: *handle,
-                        evidence: *evidence,
-                    },
-                )
-                .is_some()
+        let node = resolved.accepted().node().node_id().clone();
+        if declarations
+            .insert(
+                (*proposal_id).to_owned(),
+                SourceBinding {
+                    node,
+                    handle: *handle,
+                    evidence: *evidence,
+                },
+            )
+            .is_some()
             || declaration_keys
                 .insert(((*path).to_owned(), *span), (*proposal_id).to_owned())
                 .is_some()
@@ -1547,6 +1565,14 @@ fn failure(code: RecognizerErrorCode) -> RecognizerError {
         code,
         "exact Lua mixin facts could not produce a coherent W11 partition",
     )
+}
+
+fn entity_binding_error(error: wow_graph::GraphError) -> RecognizerError {
+    if error.code() == wow_graph::GraphErrorCode::PartitionInvalid {
+        failure(RecognizerErrorCode::AdapterBindingMissing)
+    } else {
+        graph_error(error)
+    }
 }
 
 fn graph_error(error: wow_graph::GraphError) -> RecognizerError {

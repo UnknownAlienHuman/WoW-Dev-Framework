@@ -55,9 +55,11 @@ namespace now has native publication/readback across changing source
 snapshots and an explicit typed service selection; see
 [PLATFORM_STORE_NAMESPACE.md](PLATFORM_STORE_NAMESPACE.md). Fresh workspace
 policy, fmt, check, strict Clippy, tests (929 passed, 1 ignored, 109 targets), strict
-rustdoc and build pass on 2026-10-10. Platform partitions/fingerprints,
-SkeletonInputView and source
-service/CLI transport follow. Broad package acceptance remains open.
+rustdoc and build pass on 2026-10-10. Exact native producer assertion lookup now
+serves callable/declaration joins; see the scoped checkpoint below and
+[usage](../crates/wow-graph/PARTITION_USAGE.md). Package XML/state projection,
+complete raw-member inventory, platform partitions/fingerprints, SkeletonInputView
+and source service/CLI transport follow. Broad package acceptance remains open.
 
 ## W14 retained physical native analysis (2026-10-09)
 
@@ -1060,3 +1062,36 @@ logical store namespace/publication, platform partition/fingerprint owners and
 bounded SkeletonInputView. Original Partial admission and unevaluated source/license/
 runtime authority remain separate; full W17/E3 and real mirror/performance/runtime
 acceptance are open. Gethe materialization remains deferred.
+
+## Native producer assertion lookup bridge (2026-10-10)
+
+`GraphPartitionSnapshot::producer_lookup` validates one immutable native owner
+and input view. Exact `GraphAssertionRef::Producer` addresses resolve original
+entity/relation proposals and accepted input-generation receipts after checking
+universe, generation, source context, partition, batch, kind and membership.
+Local, stale, missing and foreign addresses refuse; cancellation propagates.
+Final publication IDs remain the graph materializer's separate responsibility.
+See [PARTITION_USAGE.md](../crates/wow-graph/PARTITION_USAGE.md).
+
+Existing calls, construction, mixin/assignment, event bridge, frame/custom signal,
+CVar callback, hook and library callable/declaration joins use this native lookup.
+Their public inputs, successful canonical recipes and separate fact/support
+checks remain intact. This does not convert XML script assignment or state access
+to multiple producer owners. A library caller key mismatch is repaired without
+changing fact/proposal identities; exact kind/document/function/confidence checks
+refuse callable substitution. CVar now preserves typed cancellation and budget
+errors from native graph admission and lookup.
+
+Workspace policy, fmt, all-target/all-feature check, strict Clippy, tests
+(932 passed, 1 ignored, 110 targets), strict rustdoc and build pass. The native
+two-producer case verifies exact entity/relation resolution, input/final ID
+separation and scope/kind/Local/missing/stale/cancellation refusals. A complete
+service/store fixture publishes and reopens a real native LibStub caller and
+refuses swapped accepted callable proposals. A focused W4 test verifies graph
+error lowering; it does not establish a timed cancellation race.
+
+No wire schema, CLI operation, semantic hash or producer profile is added here.
+Independent platform producer construction, complete raw inventory projection,
+package XML/state graph inputs, fingerprints, SkeletonInputView and source
+service/CLI transport remain open. Full E2/E3/package acceptance and real
+Gethe/Ketho corpus/performance/runtime checks remain separate and NotEvaluated.

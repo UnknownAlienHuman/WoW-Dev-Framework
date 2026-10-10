@@ -1,7 +1,7 @@
 # Project completion matrix
 
 **Audited:** 2026-09-19 America/New_York. Execution inventory refreshed 2026-10-10
-through the scoped W17 replay/stable namespace checkpoint below.
+through the scoped W17 replay/stable namespace and native lookup checkpoints below.
 
 This is the current execution ledger. [IMPLEMENTATION_HANDOFF.md](IMPLEMENTATION_HANDOFF.md)
 remains the normative I0–I7 plan; do not restart its historical bootstrap steps.
@@ -33,7 +33,7 @@ The root [Cargo.toml](../Cargo.toml) activates **16 members**, including the int
 | `wow-store` | Typed SQLite objects, catalogs/CAS, journal, leases, GC and integrity; manifested recovery, native backup, isolated restore, same-epoch replacement, whole-instance quarantine/guarded restore, portable holds and inactive physical v1/v2 to v3 migration with guarded staging, target export, private immutable mapped-root/Current preparation and portable original-epoch selector/hold authority | Full E1-A/E2-D acceptance; live cross-epoch selection/reconciliation, original source SQL/history hydration, portable full migration history, payload/runtime migration, domain quarantine, interrupted-write/power-loss and cleanup faults remain open |
 | `wow-reference` | Native source/model/corrections/aliases, compatibility imports, persistent ReferenceView and publication | E0-B/E1-B normative fixture and full Reference Pack/coverage acceptance |
 | `wow-annotations` | Native Ketho-derived library projection, alias/type/catalog/inheritance/navigation slices and consumer tests | Full E1-C contract/corpus parity; scoped passing consumers are not universal semantic certification |
-| `wow-graph` | Immutable snapshots, proposals/registries, neighbors, producer partitions, bounded queries, exact retained derivation/conflict records, evidence resolution and v1/v2 persistence | Complete producer-chain coverage and automatic conflict assessment, normative fixtures and coherent E2-D publication |
+| `wow-graph` | Immutable snapshots, proposals/registries, neighbors, producer partitions, exact native Producer proposal/accepted-receipt lookup, bounded queries, exact retained derivation/conflict records, evidence resolution and v1/v2 persistence | Complete producer-chain coverage and automatic conflict assessment, normative fixtures and coherent E2-D publication |
 | `wow-recognizers` | Structured facts, pack parser/compiler, bounded matcher and all 26 active E2-B rule IDs published through service partitions: three `core.lua.*`, five `core.toc.*`, four `core.xml.*`, three `core.state.*`, plus signal, callback, hook and library families | Full rule-specific fixtures/checksum freeze, public CLI/real-addon graph-build acceptance and E5 governance remain separate |
 | `wow-render-contract`, `wow-ketho-literals`, `modules/ketho-literals` | Typed literal wire contract, native renderer and Wasm guest | Scoped algorithm implementation, not public application/release acceptance |
 | `tools/xtask` | Native policy/source/manifest/library checks, guarded exact fast-forward, managed checkout materialization and checkout-free exact GitHub API/blob snapshots under explicit `auto`/`prompt`/`never` policy with durable replay | Lower-layer hostile-network qualification, background scheduling, live platform/fault acceptance and full schema/fixture closure remain incomplete |
@@ -519,3 +519,20 @@ strict Clippy, tests (929 passed, 1 ignored, 109 targets), strict rustdoc and bu
 pass on 2026-10-10. Platform partitions/fingerprints, SkeletonInputView and source
 service/CLI transport remain open. This is not full W17/E3 or package acceptance;
 real Gethe/Ketho corpus, performance and WoW runtime checks remain NotEvaluated.
+
+The native producer lookup checkpoint joins original proposals and accepted input
+receipts over one validated immutable owner. Calls/construction/mixin, signal,
+event bridge, CVar, hook and library analyzer endpoint joins use this bridge.
+Exact scope/batch/kind and input membership remain required; adapters retain
+their separate fact/support checks. Library caller proposal keys now agree and
+foreign callable permutations refuse. CVar cancellation/budget codes propagate.
+Successful canonical recipes and serialized schemas remain unchanged; see
+[producer lookup usage](../crates/wow-graph/PARTITION_USAGE.md).
+
+Workspace policy, fmt, check, strict Clippy, tests (932 passed, 1 ignored,
+110 targets), strict rustdoc and build pass on 2026-10-10. Native two-producer
+lookup/refusal, W4 typed error lowering and full service/store LibStub
+publication/readback cover the bounded bridge. Package XML/state graph projection,
+complete raw-member inventory, independent platform partitions/fingerprints,
+SkeletonInputView and source transport remain open. No package or E2/E3 acceptance
+state advances; real corpus/performance/runtime remain NotEvaluated.

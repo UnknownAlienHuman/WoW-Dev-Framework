@@ -58,7 +58,24 @@ fresh workspace policy, fmt, check, strict Clippy, tests (929 passed, 1 ignored,
 109 targets), strict rustdoc and build on 2026-10-10. See
 [PLATFORM_STORE_NAMESPACE.md](PLATFORM_STORE_NAMESPACE.md).
 
-Next: independently owned platform graph partitions/fingerprints, bounded
+The graph owner now provides exact Producer assertion lookup over one validated
+input view. Callable/declaration joins in calls, construction, mixins, events,
+signals, CVar, hooks and library recognition consume native proposals and accepted
+receipts while retaining their fact/support checks. Library caller keys now agree
+with their actual proposals; swapped callable bindings refuse. CVar preserves
+typed cancellation and budget errors. Successful canonical recipes and serialized
+schemas remain unchanged. See
+[producer lookup usage](../crates/wow-graph/PARTITION_USAGE.md).
+
+Workspace policy, fmt, all-target/all-feature check, strict Clippy, tests
+(932 passed, 1 ignored, 110 targets), strict rustdoc and build pass on 2026-10-10.
+The native bridge test covers exact addresses across two producers and input/final
+ID separation. A real service fixture publishes and reopens a LibStub caller,
+then refuses a permutation of two accepted callable proposals. These are bounded
+synthetic checks; Gethe/Ketho corpus and WoW runtime remain NotEvaluated.
+
+Next: package XML/state graph projection through retained native inputs, complete
+raw-member inventory and independently owned platform graph partitions/fingerprints, bounded
 SkeletonInputView and source service/CLI transport. Full W17, E0/E2, real
 mirror/performance/runtime and W18-W26 remain open. Gethe preparation follows
 product implementation/build.
