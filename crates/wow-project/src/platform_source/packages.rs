@@ -74,6 +74,12 @@ impl PlatformPackageSpecialization {
     pub(crate) const fn request(&self) -> &PlatformPackageRequest {
         &self.request
     }
+
+    /// Original admitted package declarations retain the physical logical roots;
+    /// package-qualified Main paths cannot reconstruct this membership authority.
+    pub(crate) fn package_inputs(&self) -> &[ProjectPackageInput] {
+        &self.request.packages
+    }
 }
 
 impl AdmittedPlatformSource {

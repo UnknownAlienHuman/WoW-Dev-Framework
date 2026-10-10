@@ -161,7 +161,21 @@ replay/storage v9 still select /1. All workspace gates/build pass, completed
 2026-10-10 10:31:01 UTC: 944 passed, 0 failed, 1 ignored, 112 targets. See
 [captured Inventory spans](PLATFORM_INVENTORY_SPANS.md).
 
-Next: supply remaining project/full-inventory joins and direct TOC/XML roles, then implement fingerprints,
+The explicit native-only /3 entry now adds project/package/file/raw membership,
+selected TOC manifest/variant/occurrence/policy roles and lexical XML
+document/occurrence/script/load/parent-reference roles. Registry18 and stage
+version3 are selected before the input generation. Project authority binds the
+original package request, including physical roots; raw targets resolve genuine
+earlier Producer receipts. Existing support/outcomes remain intact, and Contains,
+Defines and LoadsBefore stay Partial without negative authority. The unchanged
+disk-absent lifecycle verifies exact joins/catalog/endpoints, /1-/2 preservation
+and incompatible registry/version refusal. Full workspace gates/build pass,
+completed 2026-10-10 11:07:55 UTC: 944 passed, 0 failed, 1 ignored, 112 targets.
+See [native structural roles](PLATFORM_STRUCTURAL_ROLES.md). Explicit load-policy,
+parent-reference and XML load-target branches are outside that fixture's coverage.
+Source /22, service request12/result19 and replay/storage v9 remain on native /1.
+
+Next: finish XML object/region classification and virtual-Lua source mapping, then implement fingerprints,
 bounded SkeletonInputView and source service/CLI transport. Full W17, E0/E2,
 real mirror/performance/runtime and
 W18-W26 remain open. Gethe preparation follows product implementation/build.

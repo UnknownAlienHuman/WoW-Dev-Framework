@@ -52,8 +52,11 @@ and catalog closure, accepted Producer addresses, Partial Contains coverage,
 wrong-version/foreign-registry refusal and unchanged native /1 owner plus replay8.
 It adds no fixture matrix. Unknown-span injection, empty-range and boundary fault
 fixtures, real Gethe/Ketho corpus, performance, WoW runtime and full W17/E3
-acceptance remain NotEvaluated. Missing Inventory/project/raw-role joins, TOC/XML
-roles, fingerprints, SkeletonInputView and source transport remain open.
+acceptance remain NotEvaluated. The separate
+[native /3 entry](PLATFORM_STRUCTURAL_ROLES.md) now adds project/raw membership,
+selected TOC and lexical XML roles with these same captured spans. XML object/region
+classification, virtual-Lua source mapping, fingerprints, SkeletonInputView and
+source transport remain open.
 
 Final local workspace policy, fmt, all-target/all-feature check, strict Clippy,
 tests, strict rustdoc and all-target/all-feature build pass, completed

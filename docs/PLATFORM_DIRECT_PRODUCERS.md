@@ -16,6 +16,14 @@ and exact file containment. The original entry below remains native /1. Both
 plan and finished capability expose `inventory_span_omissions()`: None for /1,
 Some(count) for /2. Application source /22 and replay/storage v9 use /1.
 
+The separate
+[`build_platform_graph_proposal_plan_with_structural_roles`](PLATFORM_STRUCTURAL_ROLES.md)
+entry requires the existing raw-inventory selection and adds native /3,
+registry18 and stage version3. It extends captured spans with exact project/raw
+membership, selected TOC roles and lexical XML containment/script/reference roles.
+It retains `Some(count)` span omissions. Application and replay routes still
+select native /1; neither extension introduces an application selector.
+
 ## Native inputs and API
 
 The APIs are exported from `wow_project::graph`. Construction requires a genuine
@@ -127,8 +135,10 @@ Scripts retain endpoint references in their recognition envelope; state/core
 retain actual graph derivation records. This native caller composition does not
 select the split in configuration, service publication or replay.
 
-Missing source-project/full-inventory joins, selected-TOC/variant/load-unit and
-XML object/region/parent/source-map roles,
+Native /3 now supplies project/raw membership, selected TOC/variant/load-unit
+and lexical XML/script/parent-reference roles over retained native receipts; see
+[structural roles](PLATFORM_STRUCTURAL_ROLES.md). Full XML object/region
+classification and virtual-Lua source mapping,
 structural fingerprints, bounded `SkeletonInputView` and source service/CLI
 transport remain open. Full W17/E3/package, real Gethe/Ketho corpus, performance,
 native fault/exhaustion and WoW runtime acceptance remain NotEvaluated. Gethe

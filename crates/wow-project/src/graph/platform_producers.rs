@@ -10,27 +10,35 @@ use wow_graph::{
 pub const PLATFORM_DIRECT_GRAPH_PROFILE: &str = "wow-project/platform-direct-producers/1";
 pub const PLATFORM_DIRECT_GRAPH_WITH_INVENTORY_SPANS_PROFILE: &str =
     "wow-project/platform-direct-producers/2";
+pub const PLATFORM_DIRECT_GRAPH_WITH_STRUCTURAL_ROLES_PROFILE: &str =
+    "wow-project/platform-direct-producers/3";
 
 #[derive(Clone, Copy)]
-enum DirectRecipe {
+pub(super) enum DirectRecipe {
     Original,
     InventorySpans,
+    StructuralRoles,
 }
 impl DirectRecipe {
     const fn profile(self) -> &'static str {
         match self {
             Self::Original => PLATFORM_DIRECT_GRAPH_PROFILE,
             Self::InventorySpans => PLATFORM_DIRECT_GRAPH_WITH_INVENTORY_SPANS_PROFILE,
+            Self::StructuralRoles => PLATFORM_DIRECT_GRAPH_WITH_STRUCTURAL_ROLES_PROFILE,
         }
     }
     const fn producer_version(self) -> &'static str {
         match self {
             Self::Original => "1",
             Self::InventorySpans => "2",
+            Self::StructuralRoles => "3",
         }
     }
-    const fn inventory_spans(self) -> bool {
-        matches!(self, Self::InventorySpans)
+    pub(super) const fn inventory_spans(self) -> bool {
+        matches!(self, Self::InventorySpans | Self::StructuralRoles)
+    }
+    pub(super) const fn structural_roles(self) -> bool {
+        matches!(self, Self::StructuralRoles)
     }
 }
 const ORDER: [PlatformGraphProducer; 4] = [
@@ -140,6 +148,15 @@ pub fn build_platform_graph_proposal_plan_with_inventory_spans<'a>(
     build_plan(project, DirectRecipe::InventorySpans, stop)
 }
 
+/// Project retained Inventory, TOC and lexical XML structural roles over the
+/// same native source owner. Application/replay selection remains explicit.
+pub fn build_platform_graph_proposal_plan_with_structural_roles<'a>(
+    project: &'a ProjectView,
+    stop: &AtomicBool,
+) -> ProjectResult<PlatformGraphProposalPlan<'a>> {
+    build_plan(project, DirectRecipe::StructuralRoles, stop)
+}
+
 fn build_plan<'a>(
     project: &'a ProjectView,
     recipe: DirectRecipe,
@@ -149,6 +166,7 @@ fn build_plan<'a>(
     let config = project.configuration();
     if config.project_kind() != ProjectKind::BlizzardUiPlatformSource
         || config.platform_graph_profile().is_none()
+        || (recipe.structural_roles() && !raw_inventory::selected(config))
     {
         return Err(ProjectError::new(
             ProjectErrorCode::DeferredCapability,
@@ -156,11 +174,7 @@ fn build_plan<'a>(
             "direct platform stages require a selected genuine platform project",
         ));
     }
-    let mut collected = collect_source_graph_proposals_with_inventory_spans(
-        project,
-        recipe.inventory_spans(),
-        stop,
-    )?;
+    let mut collected = collect_source_graph_proposals_for_recipe(project, recipe, stop)?;
     if collected
         .entities
         .len()
@@ -223,6 +237,92 @@ fn build_plan<'a>(
     } else {
         None
     };
+    if recipe.structural_roles() {
+        inventory_project::append_project(
+            project,
+            &collected.provenance,
+            &mut collected.entities,
+            &mut collected.relations,
+            &mut budget,
+            stop,
+        )?;
+        toc_roles::append(
+            project,
+            &collected.provenance,
+            &mut collected.entities,
+            &mut collected.relations,
+            &mut budget,
+            stop,
+        )?;
+        xml_roles::append(
+            project,
+            &collected.provenance,
+            &mut collected.entities,
+            &mut collected.relations,
+            &mut budget,
+            stop,
+        )?;
+        let raw_count = collected
+            .inventory_batch
+            .as_ref()
+            .ok_or_else(invalid)?
+            .entity_proposals()
+            .len();
+        let all_entities = collected
+            .entities
+            .len()
+            .checked_add(raw_count)
+            .ok_or_else(exhausted)?;
+        if all_entities > MAX_NODES
+            || collected.relations.len() > MAX_EDGES
+            || all_entities
+                .checked_add(collected.relations.len())
+                .ok_or_else(exhausted)?
+                > MAX_DIRECT_ASSERTIONS
+        {
+            return Err(exhausted());
+        }
+        let contains = collected
+            .coverage
+            .iter_mut()
+            .find(|record| record.relation() == GraphRelationKind::Contains)
+            .ok_or_else(invalid)?;
+        let coverage = GraphCoverageRecord::new(
+            GraphRelationKind::Contains,
+            GraphCoverageState::Partial,
+            false,
+            vec![
+                "source_graph.native_captured_spans_and_declared_inventory_membership_only".into(),
+                "source_graph.native_selected_toc_and_lexical_xml_containment_only".into(),
+                "source_graph.original_inventory_omissions_and_span_omissions_retained".into(),
+            ],
+            collected.limits,
+        )
+        .map_err(graph_error)?;
+        budget.charge_serialized(&coverage, stop)?;
+        *contains = coverage;
+        for (relation, blocker) in [
+            (
+                GraphRelationKind::Defines,
+                "source_graph.native_selected_toc_definitions_only",
+            ),
+            (
+                GraphRelationKind::LoadsBefore,
+                "source_graph.native_toc_lexical_order_is_not_runtime_execution_order",
+            ),
+        ] {
+            let coverage = GraphCoverageRecord::new(
+                relation,
+                GraphCoverageState::Partial,
+                false,
+                vec![blocker.into()],
+                collected.limits,
+            )
+            .map_err(graph_error)?;
+            budget.charge_serialized(&coverage, stop)?;
+            collected.coverage.push(coverage);
+        }
+    }
     let scope = GraphAssertionRecordScope {
         universe: collected.universe.clone(),
         generation: collected.generation.clone(),
@@ -241,6 +341,25 @@ fn build_plan<'a>(
     budget.charge_serialized(&foundation, stop)?;
     let mut owners = BTreeMap::<Box<str>, PlatformGraphProducer>::new();
     let mut keys = BTreeSet::new();
+    if recipe.structural_roles() {
+        let raw = collected.inventory_batch.as_ref().ok_or_else(invalid)?;
+        for proposal in raw.entity_proposals() {
+            crate::analyzer::checkpoint(stop)?;
+            budget.charge_serialized(
+                &(proposal.proposal_id(), PlatformGraphProducer::Inventory),
+                stop,
+            )?;
+            if owners
+                .insert(
+                    proposal.proposal_id().into(),
+                    PlatformGraphProducer::Inventory,
+                )
+                .is_some()
+            {
+                return Err(invalid());
+            }
+        }
+    }
     for draft in &collected.entities {
         crate::analyzer::checkpoint(stop)?;
         if !entity_permission(recipe, draft.producer, draft.proposal.entity_kind_id())
@@ -357,6 +476,34 @@ impl<'a> PlatformGraphProposalPlan<'a> {
         self.validate_predecessor(owner, index, false, stop)?;
         let lookup = owner.producer_lookup(stop).map_err(graph_error)?;
         let mut addresses = BTreeMap::new();
+        let mut address_budget = self.budget;
+        if self.recipe.structural_roles() {
+            let raw = self
+                .collected
+                .inventory_batch
+                .as_ref()
+                .ok_or_else(invalid)?;
+            for proposal in raw.entity_proposals() {
+                crate::analyzer::checkpoint(stop)?;
+                let reference = producer_reference(
+                    raw,
+                    local(GraphAssertionKind::Entity, proposal.proposal_id()),
+                );
+                let resolved = lookup
+                    .entity(&self.scope, &reference, stop)
+                    .map_err(graph_error)?;
+                if resolved.proposal() != proposal {
+                    return Err(invalid());
+                }
+                address_budget.charge_serialized(&(&reference, proposal.proposal_id()), stop)?;
+                if addresses
+                    .insert(proposal.proposal_id().into(), resolved.reference())
+                    .is_some()
+                {
+                    return Err(invalid());
+                }
+            }
+        }
         for draft in &self.collected.entities {
             crate::analyzer::checkpoint(stop)?;
             if draft.producer > producer {
@@ -385,7 +532,7 @@ impl<'a> PlatformGraphProposalPlan<'a> {
         let mut entities = Vec::new();
         let mut relations = Vec::new();
         let mut original_relations = Vec::new();
-        let base = self.budget;
+        let base = address_budget;
         let mut provisional = base;
         for draft in &self.collected.entities {
             crate::analyzer::checkpoint(stop)?;
@@ -682,14 +829,34 @@ fn entity_permission(recipe: DirectRecipe, producer: PlatformGraphProducer, kind
         PlatformGraphProducer::Inventory => {
             matches!(kind, "source_file" | "source_package")
                 || (recipe.inventory_spans() && kind == "source_span")
+                || (recipe.structural_roles() && kind == "source_project")
         }
-        PlatformGraphProducer::TocLoad => kind == "state_root",
+        PlatformGraphProducer::TocLoad => {
+            kind == "state_root"
+                || (recipe.structural_roles()
+                    && matches!(
+                        kind,
+                        "source_toc_manifest"
+                            | "source_toc_variant"
+                            | "source_toc_load_occurrence"
+                            | "source_toc_load_policy"
+                    ))
+        }
         PlatformGraphProducer::AnalyzerStructure => matches!(
             kind,
             "lua_source_declaration" | "lua_source_function" | "state_path"
         ),
         PlatformGraphProducer::XmlStructure => {
             matches!(kind, "xml_source_declaration" | "xml_source_handler")
+                || (recipe.structural_roles()
+                    && matches!(
+                        kind,
+                        "xml_source_document"
+                            | "xml_source_occurrence"
+                            | "xml_source_script_site"
+                            | "xml_source_load_site"
+                            | "xml_source_parent_reference"
+                    ))
         }
     }
 }
@@ -698,19 +865,55 @@ fn relation_permission(recipe: DirectRecipe, producer: PlatformGraphProducer, ki
         PlatformGraphProducer::Inventory => {
             kind == "source_package_owns"
                 || (recipe.inventory_spans() && kind == "source_file_contains_span")
+                || (recipe.structural_roles()
+                    && matches!(
+                        kind,
+                        "source_project_contains_package"
+                            | "source_project_contains_file"
+                            | "source_project_contains_raw_member"
+                            | "source_package_contains_raw_member"
+                    ))
         }
-        PlatformGraphProducer::TocLoad => matches!(
-            kind,
-            "source_loads"
-                | "source_package_depends_on"
-                | "source_package_loads"
-                | "source_declaration_owns"
-        ),
+        PlatformGraphProducer::TocLoad => {
+            matches!(
+                kind,
+                "source_loads"
+                    | "source_package_depends_on"
+                    | "source_package_loads"
+                    | "source_declaration_owns"
+            ) || (recipe.structural_roles()
+                && matches!(
+                    kind,
+                    "source_package_selects_toc"
+                        | "source_toc_defines_variant"
+                        | "source_toc_contains_occurrence"
+                        | "source_toc_occurrence_loads"
+                        | "source_toc_occurs_before"
+                        | "source_toc_defines_load_policy"
+                ))
+        }
         PlatformGraphProducer::AnalyzerStructure => kind == "source_declaration_owns",
-        PlatformGraphProducer::XmlStructure => matches!(
-            kind,
-            "source_loads" | "source_declaration_owns" | "source_xml_inherits" | "source_mixes_in"
-        ),
+        PlatformGraphProducer::XmlStructure => {
+            matches!(
+                kind,
+                "source_loads"
+                    | "source_declaration_owns"
+                    | "source_xml_inherits"
+                    | "source_mixes_in"
+            ) || (recipe.structural_roles()
+                && matches!(
+                    kind,
+                    "xml_file_contains_document"
+                        | "xml_document_contains_occurrence"
+                        | "xml_lexical_contains"
+                        | "xml_occurrence_source_span"
+                        | "xml_occurrence_owns_script_site"
+                        | "xml_occurrence_owns_load_site"
+                        | "xml_include_target"
+                        | "xml_external_script_target"
+                        | "xml_occurrence_owns_parent_reference"
+                ))
+        }
     }
 }
 pub(super) fn graph_error(error: wow_graph::GraphError) -> ProjectError {

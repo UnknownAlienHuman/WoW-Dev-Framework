@@ -1365,3 +1365,44 @@ See [Inventory spans](PLATFORM_INVENTORY_SPANS.md). Remaining direct project/raw
 TOC/XML roles, fingerprints, SkeletonInputView, transport, full W17/E3 and later
 W18-W26 remain open. Real Gethe/Ketho corpus/performance/runtime remain
 NotEvaluated; source acquisition still follows product implementation/build.
+
+## W17 native project, selected TOC and lexical XML roles (2026-10-10)
+
+`build_platform_graph_proposal_plan_with_structural_roles` requires a genuine
+raw-selected platform ProjectView and selects native /3, registry18 and stage
+version3 before input generation/foundation/raw construction. It reuses the
+existing native collector, package/load/index receipts and captured handles;
+Inventory spans precede the new adapters. Project identity includes a digest of
+the genuine binding plus original package request, retaining physical roots,
+variants and context without changing older binding/configuration recipes.
+
+Inventory adds project/package/file/raw membership from the held source receipt
+and original declared roots. TocLoad adds selected manifest/variant, lexical load
+occurrence/unit witness, policy and static ordering roles. XmlStructure adds
+qualified documents/occurrences, lexical nesting, captured-span ownership, script
+and load sites plus retained parent-reference state. Guarded target edges require
+actual native receipts and captured files. Static/source observations do not
+establish runtime parentage or client execution order. Contains, Defines and
+LoadsBefore remain scoped/Partial without negative authority; original omissions,
+load uncertainty and unresolved inheritance remain retained.
+
+Raw endpoints resolve genuine earlier Producer proposals and accepted
+input-generation receipts. Stage scratch accounting commits only after successful
+construction. Shared conservative 4 MiB metadata and inherited node/edge plus
+combined 200,000 assertion limits remain in force. Native /1-/2, source /22,
+service request12/result19, replay/storage v9 and the registry16 raw-read binder
+retain their recipes; /3 is a separate library entry.
+
+One existing disk-absent two-package lifecycle passes with exact role/support/
+catalog/endpoint checks, incompatible predecessor refusal and old /1-/2/source21/
+replay8 preservation. The original fixture has no load-policy, explicit parent
+reference or XML load site; those branches and root-swap/exhaustion/injected-
+cancellation cases remain NotEvaluated. Final local workspace policy, fmt,
+all-target/all-feature check, strict Clippy, tests, strict rustdoc and build pass,
+completed 2026-10-10 11:07:55 UTC: 944 passed, 0 failed, 1 ignored, 112 targets.
+See [native structural roles](PLATFORM_STRUCTURAL_ROLES.md).
+
+XML object/region classification, virtual-Lua source mapping, fingerprints,
+SkeletonInputView and source transport remain open. Full W17/E3/package,
+Gethe/Ketho corpus, performance, WoW runtime and W18-W26 acceptance remain open;
+Gethe preparation stays deferred until product implementation/build.

@@ -11,8 +11,9 @@ use std::{
 
 use sha2::{Digest, Sha256};
 use wow_core::{
-    CanonicalResult, ContentDigest, ProfileIdentityBuilder, ProfileKind, ReferenceGenerationId,
-    SchemaVersionEntry, SourceContent, SourceKind, SourceLogicalSnapshot, SourceSpanKind,
+    CanonicalResult, ContentDigest, EvidenceId, ProfileIdentityBuilder, ProfileKind,
+    ReferenceGenerationId, SchemaVersionEntry, SourceContent, SourceKind, SourceLogicalSnapshot,
+    SourceSpan, SourceSpanKind, StableHandleId, domain_separated_digest,
 };
 use wow_emmy::{
     EMMYLUA_CODE_ANALYSIS_VERSION, EMMYLUA_REVISION, EMMYLUA_TREE, EmmyBackendIdentity,
@@ -20,9 +21,9 @@ use wow_emmy::{
 };
 use wow_graph::{
     GraphAssertionKind, GraphAssertionRef, GraphConfidence, GraphCoverageRecord,
-    GraphCoverageState, GraphEvidenceCatalog, GraphLocalAssertion, GraphPartitionReplacement,
-    GraphPartitionSnapshot, GraphProposalBatch, GraphProposalEndpoint, GraphProposalValue,
-    GraphRelationKind, GraphSnapshot,
+    GraphCoverageState, GraphEntityProposal, GraphEvidenceCatalog, GraphLocalAssertion,
+    GraphPartitionReplacement, GraphPartitionSnapshot, GraphProposalBatch, GraphProposalEndpoint,
+    GraphProposalValue, GraphRelationKind, GraphSnapshot,
 };
 use wow_project::{
     AnalyzerBindingDeclaration, PackageXmlBindingProfile, PlatformGraphProfile,
@@ -32,12 +33,17 @@ use wow_project::{
     disk::{ProjectDiskFile, ProjectInputDirectory},
     graph::{
         PLATFORM_DIRECT_GRAPH_PROFILE, PLATFORM_DIRECT_GRAPH_WITH_INVENTORY_SPANS_PROFILE,
-        PlatformGraphProducer, PlatformGraphProposalPlan, ProjectGraphPackageLoadOutcome,
-        ProjectGraphProvenance, ProjectGraphXmlReferenceOutcome, SOURCE_GRAPH_PARTITION,
-        build_platform_graph_proposal_plan,
-        build_platform_graph_proposal_plan_with_inventory_spans, build_source_graph_proposals,
+        PLATFORM_DIRECT_GRAPH_WITH_STRUCTURAL_ROLES_PROFILE, PlatformGraphProducer,
+        PlatformGraphProposalPlan, ProjectGraphPackageLoadOutcome, ProjectGraphProvenance,
+        ProjectGraphXmlReferenceOutcome, ProjectTocFactKind, ProjectXmlFactKind,
+        SOURCE_GRAPH_PARTITION, build_platform_graph_proposal_plan,
+        build_platform_graph_proposal_plan_with_inventory_spans,
+        build_platform_graph_proposal_plan_with_structural_roles, build_source_graph_proposals,
     },
-    load::{ProjectPackageInput, ProjectPackageVariantInput},
+    load::{
+        LoadRecordKind, LoadSelection, ProjectPackageInput, ProjectPackageReachability,
+        ProjectPackageVariantInput, XmlElementRole,
+    },
     platform_source::{
         BlizzardUiSourceProfile, BlizzardUiSourceProfileRequest, PlatformEntryDisposition,
         PlatformFileKind, PlatformInventoryEntry, PlatformInventoryScope, PlatformLicenseRecord,
@@ -173,26 +179,29 @@ impl FixtureRoot {
             source.source_bytes("UI/Beta/frames.xml")?
         );
         std::fs::remove_dir_all(&self.0)?;
-        let declarations = PACKAGES
-            .iter()
-            .map(|p| {
-                ProjectPackageInput::new(
-                    *p,
-                    format!("UI/{p}"),
-                    true,
-                    vec![ProjectPackageVariantInput::new(
-                        ProjectDiskFile::new("Fixture.toc"),
-                        true,
-                    )],
-                )
-            })
-            .collect::<Vec<_>>();
+        let declarations = package_declarations();
         Ok(Arc::new(source.specialize_packages(
             &declarations,
             None,
             stop,
         )?))
     }
+}
+fn package_declarations() -> Vec<ProjectPackageInput> {
+    PACKAGES
+        .iter()
+        .map(|p| {
+            ProjectPackageInput::new(
+                *p,
+                format!("UI/{p}"),
+                true,
+                vec![ProjectPackageVariantInput::new(
+                    ProjectDiskFile::new("Fixture.toc"),
+                    true,
+                )],
+            )
+        })
+        .collect()
 }
 impl Drop for FixtureRoot {
     fn drop(&mut self) {
@@ -389,7 +398,7 @@ fn inventory_spans(
     original: &GraphPartitionSnapshot,
     source: &ProjectGraphProvenance,
     stop: &AtomicBool,
-) -> ResultOf {
+) -> ResultOf<GraphPartitionSnapshot> {
     assert_eq!(original.registry().version(), "16");
     assert_eq!(
         wow_project::graph::source_graph_profile(view.configuration()),
@@ -710,6 +719,1096 @@ fn inventory_spans(
     assert_eq!(legacy_finished.profile(), PLATFORM_DIRECT_GRAPH_PROFILE);
     assert_eq!(legacy_finished.inventory_span_omissions(), None);
     assert_eq!(legacy_finished.source(), source);
+    Ok(owner)
+}
+
+fn role<'a>(
+    batch: &'a GraphProposalBatch,
+    kind: &str,
+    fields: &[(&str, GraphProposalValue)],
+) -> ResultOf<&'a GraphEntityProposal> {
+    let mut matches = batch.entity_proposals().iter().filter(|proposal| {
+        proposal.entity_kind_id() == kind
+            && fields
+                .iter()
+                .all(|(field, value)| proposal.semantic_key().get(*field) == Some(value))
+    });
+    let proposal = matches.next().ok_or("structural role missing")?;
+    assert!(matches.next().is_none(), "ambiguous structural role");
+    Ok(proposal)
+}
+
+fn string(value: &str) -> GraphProposalValue {
+    GraphProposalValue::String(value.into())
+}
+
+fn identifier(value: &impl serde::Serialize) -> ResultOf<GraphProposalValue> {
+    let serde_json::Value::String(value) = serde_json::to_value(value)? else {
+        return Err("native role identifier must be a string".into());
+    };
+    Ok(GraphProposalValue::Identifier(value.into()))
+}
+
+fn role_support(
+    actual_handles: &[StableHandleId],
+    actual_evidence: &[EvidenceId],
+    handles: &[StableHandleId],
+    evidence: &[EvidenceId],
+) {
+    let expected_handles = handles.iter().copied().collect::<BTreeSet<_>>();
+    let expected_evidence = evidence.iter().copied().collect::<BTreeSet<_>>();
+    assert_eq!(actual_handles.len(), expected_handles.len());
+    assert_eq!(actual_evidence.len(), expected_evidence.len());
+    assert_eq!(
+        actual_handles.iter().copied().collect::<BTreeSet<_>>(),
+        expected_handles
+    );
+    assert_eq!(
+        actual_evidence.iter().copied().collect::<BTreeSet<_>>(),
+        expected_evidence
+    );
+}
+
+fn structural_roles(
+    view: &ProjectView,
+    original: &GraphPartitionSnapshot,
+    spans: &GraphPartitionSnapshot,
+    source: &ProjectGraphProvenance,
+    stop: &AtomicBool,
+) -> ResultOf {
+    assert_eq!(original.registry().version(), "16");
+    assert_eq!(spans.registry().version(), "17");
+    let mut plan = build_platform_graph_proposal_plan_with_structural_roles(view, stop)?;
+    assert_eq!(
+        plan.profile(),
+        PLATFORM_DIRECT_GRAPH_WITH_STRUCTURAL_ROLES_PROFILE
+    );
+    assert_eq!(plan.registry().version(), "18");
+    let omitted = source
+        .source_handles()
+        .values()
+        .filter(|handle| handle.span().kind() == SourceSpanKind::Unknown)
+        .count();
+    assert_eq!(plan.inventory_span_omissions(), Some(omitted));
+    for prior in [original, spans] {
+        assert_eq!(&plan.scope().universe, prior.foundation().universe());
+        assert_ne!(&plan.scope().generation, prior.foundation().generation());
+        assert_eq!(plan.scope().source_context_id, prior.source_context_id());
+        refused(plan.build_stage(PlatformGraphProducer::Inventory, prior, stop))?;
+    }
+    let scope = plan.scope().clone();
+    let raw = plan
+        .raw_inventory_batch()
+        .ok_or("structural raw prelude missing")?;
+    assert_eq!(raw.universe(), &scope.universe);
+    assert_eq!(raw.generation(), &scope.generation);
+    assert_eq!(raw.source_context_id(), scope.source_context_id);
+    assert_eq!(raw.registry_digest(), plan.registry().registry_digest());
+    let raw_id = wow_project::graph::PLATFORM_RAW_INVENTORY_PARTITION;
+    assert_eq!(
+        raw.entity_proposals(),
+        original
+            .partition(raw_id)
+            .ok_or("original raw partition missing")?
+            .batch()
+            .entity_proposals()
+    );
+    let mut owner = initial(&plan, stop)?;
+    assert_eq!(owner.partitions().len(), 1);
+    for &producer in plan.producer_order() {
+        let stage = plan.build_stage(producer, &owner, stop)?;
+        assert_eq!(stage.producer_version(), "3");
+        let (batch, coverage) = stage.into_parts();
+        if producer == PlatformGraphProducer::Inventory {
+            let wrong_version = admit(&owner, batch.clone(), "2", coverage.clone(), stop)?;
+            refused(plan.build_stage(PlatformGraphProducer::TocLoad, &wrong_version, stop))?;
+        }
+        owner = admit(&owner, batch, "3", coverage, stop)?;
+    }
+    owner.validate(stop)?;
+    assert_eq!(
+        owner
+            .partitions()
+            .iter()
+            .map(|p| p.partition_id())
+            .collect::<BTreeSet<_>>(),
+        BTreeSet::from([
+            raw_id,
+            PlatformGraphProducer::Inventory.partition_id(),
+            PlatformGraphProducer::TocLoad.partition_id(),
+            PlatformGraphProducer::AnalyzerStructure.partition_id(),
+            PlatformGraphProducer::XmlStructure.partition_id()
+        ])
+    );
+    assert!(owner.partition(SOURCE_GRAPH_PARTITION).is_none());
+    let finished = plan.finish(&owner, stop)?;
+    assert_eq!(
+        finished.profile(),
+        PLATFORM_DIRECT_GRAPH_WITH_STRUCTURAL_ROLES_PROFILE
+    );
+    assert_eq!(finished.inventory_span_omissions(), Some(omitted));
+    assert!(std::ptr::eq(finished.project(), view));
+    assert!(std::ptr::eq(finished.graph(), &owner));
+    assert_eq!(finished.scope(), &scope);
+    // Includes exact load/TOC/XML outcomes and the original unresolved inheritance.
+    assert_eq!(finished.source(), source);
+    assert!(source.xml_facts().iter().any(|fact| matches!(&fact.kind,
+        ProjectXmlFactKind::InheritanceUnresolved { name, .. } if name == "MissingTemplate")));
+    assert!(
+        source
+            .xml_inheritance()
+            .iter()
+            .any(|row| row.outcome == ProjectGraphXmlReferenceOutcome::Unresolved)
+    );
+
+    let manifest = source
+        .raw_inventory()
+        .ok_or("structural raw manifest missing")?;
+    let packages = view
+        .configuration()
+        .platform_packages()
+        .ok_or("platform packages missing")?;
+    let receipt = packages.source().receipt();
+    assert_eq!(manifest.inventory(), receipt.inventory());
+    assert_eq!(manifest.coverage(), receipt.coverage());
+    assert_eq!(
+        manifest.inventory().license.state,
+        PlatformLicenseState::Unknown
+    );
+    assert!(
+        manifest
+            .inventory()
+            .roots
+            .iter()
+            .all(|root| root.scope == PlatformInventoryScope::DeclaredPartial)
+    );
+    let mut handles = source.source_handles().clone();
+    let mut evidence = source.evidence().clone();
+    for member in manifest.members() {
+        if let Some(prior) = handles.insert(
+            member.source_handle.handle_id(),
+            member.source_handle.clone(),
+        ) {
+            assert_eq!(prior, member.source_handle);
+        }
+        if let Some(prior) = evidence.insert(member.evidence.evidence_id(), member.evidence.clone())
+        {
+            assert_eq!(prior, member.evidence);
+        }
+        let native = packages.source().raw_member(&member.path, stop)?;
+        assert_eq!(native.entry().kind, member.kind);
+        assert_eq!(native.content_digest(), member.content_digest);
+        assert_eq!(native.bytes().len() as u64, member.byte_length);
+    }
+    let catalog = GraphEvidenceCatalog::new(
+        source.context().clone(),
+        evidence.clone(),
+        handles.clone(),
+        stop,
+    )?;
+    assert_eq!(finished.evidence_catalog().digest(), catalog.digest());
+    assert_eq!(finished.evidence_catalog().context(), source.context());
+    for (id, handle) in &handles {
+        assert_eq!(finished.evidence_catalog().source_handle(id), Some(handle));
+    }
+    for (id, record) in &evidence {
+        assert_eq!(finished.evidence_catalog().evidence(id), Some(record));
+        assert_eq!(record.context_id(), scope.source_context_id);
+    }
+    for handle in source.source_handles().values() {
+        assert_eq!(
+            view.source_handle(
+                handle.path().as_str(),
+                handle.span(),
+                handle.entity_key().cloned()
+            )?,
+            *handle
+        );
+    }
+
+    let lookup = owner.producer_lookup(stop)?;
+    assert_eq!(lookup.scope(), &scope);
+    let old_nodes = spans
+        .partitions()
+        .iter()
+        .flat_map(|partition| {
+            partition
+                .report()
+                .accepted_entities()
+                .iter()
+                .map(|accepted| (accepted.node().node_id().clone(), accepted.proposal_id()))
+        })
+        .collect::<BTreeMap<_, _>>();
+    let mut nodes = BTreeMap::new();
+    let mut preserved_entities = 0;
+    let mut preserved_relations = 0;
+    for partition in owner.partitions() {
+        assert!(partition.report().rejections().is_empty());
+        assert_eq!(
+            partition.report().accepted_entities().len(),
+            partition.batch().entity_proposals().len()
+        );
+        if partition.partition_id() != raw_id {
+            assert_eq!(partition.producer_version(), "3");
+        }
+        for coverage in partition.coverage() {
+            assert!(!coverage.negative_authority());
+        }
+        for accepted in partition.report().accepted_entities() {
+            let address = finished
+                .assertion(&key(GraphAssertionKind::Entity, accepted.proposal_id()))
+                .ok_or("structural entity address missing")?;
+            let resolved = lookup.entity(&scope, address, stop)?;
+            assert_eq!(resolved.reference(), *address);
+            assert_eq!(resolved.partition(), partition);
+            assert_eq!(resolved.accepted(), accepted);
+            let proposal = resolved.proposal();
+            assert_eq!(
+                partition.batch().entity_proposal(accepted.proposal_id()),
+                Some(proposal)
+            );
+            assert_eq!(accepted.node().generation(), &scope.generation);
+            assert_eq!(
+                lookup.input_view().node(accepted.node().node_id()),
+                Some(accepted.node())
+            );
+            for id in proposal.source_handle_ids() {
+                assert_eq!(
+                    finished.evidence_catalog().source_handle(id),
+                    Some(handles.get(id).ok_or("entity support missing")?)
+                );
+            }
+            for id in proposal.evidence_ids() {
+                assert_eq!(
+                    finished.evidence_catalog().evidence(id),
+                    Some(evidence.get(id).ok_or("entity evidence missing")?)
+                );
+            }
+            if let Some(old) = spans
+                .partition(partition.partition_id())
+                .and_then(|p| p.batch().entity_proposal(accepted.proposal_id()))
+            {
+                assert_eq!(proposal, old);
+                preserved_entities += 1;
+            }
+            assert!(
+                nodes
+                    .insert(accepted.node().node_id().clone(), accepted.proposal_id())
+                    .is_none()
+            );
+        }
+    }
+    let mut edges = BTreeMap::new();
+    for partition in owner.partitions() {
+        for accepted in partition.report().accepted_relations() {
+            let address = finished
+                .assertion(&key(GraphAssertionKind::Relation, accepted.proposal_id()))
+                .ok_or("structural relation address missing")?;
+            let resolved = lookup.relation(&scope, address, stop)?;
+            assert_eq!(resolved.reference(), *address);
+            assert_eq!(resolved.partition(), partition);
+            assert_eq!(resolved.accepted(), accepted);
+            let proposal = resolved.proposal();
+            assert_eq!(
+                partition.batch().relation_proposal(accepted.proposal_id()),
+                Some(proposal)
+            );
+            for id in proposal.source_handle_ids() {
+                assert_eq!(
+                    finished.evidence_catalog().source_handle(id),
+                    Some(handles.get(id).ok_or("relation support missing")?)
+                );
+            }
+            for id in proposal.evidence_ids() {
+                assert_eq!(
+                    finished.evidence_catalog().evidence(id),
+                    Some(evidence.get(id).ok_or("relation evidence missing")?)
+                );
+            }
+            for (endpoint, node) in proposal
+                .endpoints()
+                .into_iter()
+                .zip([accepted.edge().from(), accepted.edge().to()])
+            {
+                let id = *nodes.get(node).ok_or("structural endpoint missing")?;
+                let native = lookup.entity(
+                    &scope,
+                    finished
+                        .assertion(&key(GraphAssertionKind::Entity, id))
+                        .ok_or("endpoint address missing")?,
+                    stop,
+                )?;
+                assert_eq!(native.accepted().node().node_id(), node);
+                match endpoint {
+                    GraphProposalEndpoint::Proposed(local) => {
+                        assert_eq!(local.as_ref(), id);
+                        assert_eq!(native.partition(), partition);
+                    }
+                    GraphProposalEndpoint::Existing(input) => {
+                        assert_eq!(input, node);
+                        assert!(lookup.input_view().node(input).is_some());
+                        assert_ne!(native.partition().partition_id(), partition.partition_id());
+                    }
+                }
+            }
+            if let Some(old_partition) = spans.partition(partition.partition_id())
+                && let Some(old) = old_partition
+                    .batch()
+                    .relation_proposal(accepted.proposal_id())
+            {
+                assert_eq!(proposal.relation_kind_id(), old.relation_kind_id());
+                assert_eq!(proposal.confidence(), old.confidence());
+                assert_eq!(proposal.source_handle_ids(), old.source_handle_ids());
+                assert_eq!(proposal.evidence_ids(), old.evidence_ids());
+                let old_accepted = old_partition
+                    .report()
+                    .accepted_relations()
+                    .iter()
+                    .find(|row| row.proposal_id() == accepted.proposal_id())
+                    .ok_or("old relation receipt missing")?;
+                assert_eq!(
+                    nodes.get(accepted.edge().from()),
+                    old_nodes.get(old_accepted.edge().from())
+                );
+                assert_eq!(
+                    nodes.get(accepted.edge().to()),
+                    old_nodes.get(old_accepted.edge().to())
+                );
+                preserved_relations += 1;
+            }
+            let from = *nodes
+                .get(accepted.edge().from())
+                .ok_or("edge source missing")?;
+            let to = *nodes
+                .get(accepted.edge().to())
+                .ok_or("edge target missing")?;
+            assert!(
+                edges
+                    .insert((proposal.relation_kind_id(), from, to), proposal)
+                    .is_none()
+            );
+        }
+        let records = partition.batch().assertion_records();
+        if let Some(records) = records {
+            assert_eq!(&records.scope, &scope);
+            for derivation in &records.derivations {
+                assert!(finished.assertion(&derivation.output).is_some());
+                for input in &derivation.inputs {
+                    if let GraphAssertionRef::Producer { assertion, .. } = input {
+                        assert_eq!(finished.assertion(assertion), Some(input));
+                        lookup.entity(&scope, input, stop)?;
+                    }
+                }
+            }
+        }
+    }
+    assert_eq!(
+        preserved_entities,
+        spans
+            .partitions()
+            .iter()
+            .map(|p| p.report().accepted_entities().len())
+            .sum::<usize>()
+    );
+    assert_eq!(
+        preserved_relations,
+        spans
+            .partitions()
+            .iter()
+            .map(|p| p.report().accepted_relations().len())
+            .sum::<usize>()
+    );
+
+    let inventory = owner
+        .partition(PlatformGraphProducer::Inventory.partition_id())
+        .ok_or("Inventory missing")?;
+    let toc = owner
+        .partition(PlatformGraphProducer::TocLoad.partition_id())
+        .ok_or("TocLoad missing")?;
+    let xml = owner
+        .partition(PlatformGraphProducer::XmlStructure.partition_id())
+        .ok_or("XmlStructure missing")?;
+    for (partition, relation) in [
+        (inventory, GraphRelationKind::Contains),
+        (toc, GraphRelationKind::Contains),
+        (toc, GraphRelationKind::Defines),
+        (toc, GraphRelationKind::LoadsBefore),
+        (xml, GraphRelationKind::Contains),
+        (xml, GraphRelationKind::Owns),
+    ] {
+        let coverage = partition
+            .coverage()
+            .iter()
+            .find(|row| row.relation() == relation)
+            .ok_or("structural coverage missing")?;
+        assert_eq!(coverage.state(), GraphCoverageState::Partial);
+        assert!(!coverage.negative_authority());
+        assert!(!coverage.blocker_ids().is_empty());
+    }
+
+    let mut checked = BTreeSet::new();
+    {
+        let mut edge = |kind: &str,
+                        from: &str,
+                        to: &str,
+                        handles: &[StableHandleId],
+                        evidence: &[EvidenceId],
+                        confidence: GraphConfidence|
+         -> ResultOf {
+            let proposal = edges
+                .get(&(kind, from, to))
+                .ok_or("structural role edge missing")?;
+            assert_eq!(proposal.confidence(), confidence);
+            role_support(
+                proposal.source_handle_ids(),
+                proposal.evidence_ids(),
+                handles,
+                evidence,
+            );
+            assert!(checked.insert(proposal.proposal_id()));
+            Ok(())
+        };
+        let project = role(inventory.batch(), "source_project", &[])?;
+        let declarations = package_declarations();
+        // This JSON is expected digest material only; every authority above is native.
+        let request = serde_json::json!({"packages": &declarations});
+        let authority = ContentDigest::<CanonicalResult>::from_bytes(domain_separated_digest(
+            "wow-project/platform-source-project-package-authority/1",
+            &(packages.binding().binding_digest(), &request),
+        )?);
+        assert_ne!(authority, packages.binding().binding_digest());
+        assert_eq!(
+            project.semantic_key(),
+            &BTreeMap::from([
+                (
+                    "project".into(),
+                    string(view.configuration().project_id().as_str())
+                ),
+                ("project_snapshot".into(), string(view.snapshot_id())),
+                (
+                    "source_snapshot".into(),
+                    string(receipt.source_snapshot_id())
+                ),
+                (
+                    "profile_digest".into(),
+                    string(&receipt.profile_digest().canonical())
+                ),
+                (
+                    "content_manifest_digest".into(),
+                    string(&receipt.content_manifest_digest().canonical())
+                ),
+                (
+                    "admission_digest".into(),
+                    string(&receipt.admission_digest().canonical())
+                ),
+                ("package_binding".into(), string(&authority.canonical())),
+            ])
+        );
+        let witness = manifest
+            .members()
+            .iter()
+            .min_by(|a, b| a.path.cmp(&b.path))
+            .ok_or("project raw support missing")?;
+        role_support(
+            project.source_handle_ids(),
+            project.evidence_ids(),
+            &[witness.source_handle.handle_id()],
+            &[witness.evidence.evidence_id()],
+        );
+        assert_eq!(project.confidence(), GraphConfidence::Proven);
+        for package in source.packages() {
+            edge(
+                "source_project_contains_package",
+                project.proposal_id(),
+                &package.proposal_id,
+                &[witness.source_handle.handle_id(), package.source_handle_id],
+                &[witness.evidence.evidence_id(), package.evidence_id],
+                GraphConfidence::Proven,
+            )?;
+        }
+        for file in source.files() {
+            edge(
+                "source_project_contains_file",
+                project.proposal_id(),
+                &file.proposal_id,
+                &[witness.source_handle.handle_id(), file.source_handle_id],
+                &[witness.evidence.evidence_id(), file.evidence_id],
+                GraphConfidence::Proven,
+            )?;
+        }
+        for member in manifest.members() {
+            edge(
+                "source_project_contains_raw_member",
+                project.proposal_id(),
+                &member.proposal_id,
+                &[
+                    witness.source_handle.handle_id(),
+                    member.source_handle.handle_id(),
+                ],
+                &[
+                    witness.evidence.evidence_id(),
+                    member.evidence.evidence_id(),
+                ],
+                GraphConfidence::Proven,
+            )?;
+            for declaration in &declarations {
+                if member
+                    .path
+                    .strip_prefix(declaration.root())
+                    .is_some_and(|tail| tail.starts_with('/'))
+                {
+                    let package = source
+                        .packages()
+                        .iter()
+                        .find(|row| row.package == declaration.name())
+                        .ok_or("original root package missing")?;
+                    edge(
+                        "source_package_contains_raw_member",
+                        &package.proposal_id,
+                        &member.proposal_id,
+                        &[package.source_handle_id, member.source_handle.handle_id()],
+                        &[package.evidence_id, member.evidence.evidence_id()],
+                        GraphConfidence::Proven,
+                    )?;
+                }
+            }
+        }
+
+        let load = packages.load_plan();
+        for node in load.packages() {
+            let package = source
+                .packages()
+                .iter()
+                .find(|row| row.package == node.package)
+                .ok_or("selected package missing")?;
+            let plan = load
+                .package_plan(&node.package)
+                .ok_or("selected plan missing")?;
+            let fact = source
+                .toc_facts()
+                .iter()
+                .find(|row| {
+                    row.package.as_deref() == Some(node.package.as_str())
+                        && matches!(row.kind, ProjectTocFactKind::Package { .. })
+                })
+                .ok_or("TOC package fact missing")?;
+            let manifest = role(
+                toc.batch(),
+                "source_toc_manifest",
+                &[("document", string(&fact.selected_toc))],
+            )?;
+            assert_eq!(
+                manifest.semantic_key(),
+                &BTreeMap::from([
+                    ("document".into(), string(&fact.selected_toc)),
+                    ("plan_digest".into(), string(&plan.digest().canonical())),
+                ])
+            );
+            let variant = role(
+                toc.batch(),
+                "source_toc_variant",
+                &[("document", string(&fact.selected_toc))],
+            )?;
+            assert_eq!(
+                variant.semantic_key(),
+                &BTreeMap::from([
+                    ("document".into(), string(&fact.selected_toc)),
+                    (
+                        "flavor".into(),
+                        GraphProposalValue::Identifier(fact.flavor.clone().into())
+                    ),
+                    (
+                        "selected_root".into(),
+                        GraphProposalValue::Boolean(node.selected_root)
+                    ),
+                    ("load_on_demand".into(), identifier(&node.load_on_demand)?),
+                    ("static_phase".into(), identifier(&node.phase)?),
+                    (
+                        "order_group".into(),
+                        GraphProposalValue::Integer(i64::try_from(package.order_group)?)
+                    ),
+                    ("reachability".into(), identifier(&node.reachability)?),
+                ])
+            );
+            for proposal in [manifest, variant] {
+                role_support(
+                    proposal.source_handle_ids(),
+                    proposal.evidence_ids(),
+                    &[fact.source_handle_id],
+                    &[fact.evidence_id],
+                );
+                assert_eq!(proposal.confidence(), GraphConfidence::Derived);
+            }
+            edge(
+                "source_package_selects_toc",
+                &package.proposal_id,
+                manifest.proposal_id(),
+                &[fact.source_handle_id],
+                &[fact.evidence_id],
+                GraphConfidence::Derived,
+            )?;
+            edge(
+                "source_toc_defines_variant",
+                manifest.proposal_id(),
+                variant.proposal_id(),
+                &[fact.source_handle_id],
+                &[fact.evidence_id],
+                GraphConfidence::Derived,
+            )?;
+            let mut previous = None;
+            for record in plan.records().iter().filter(|record| {
+                record.document == plan.selected_toc()
+                    && matches!(
+                        record.kind,
+                        LoadRecordKind::LuaFile | LoadRecordKind::XmlFile
+                    )
+            }) {
+                let fact = source
+                    .toc_facts()
+                    .iter()
+                    .find(|row| {
+                        row.package.as_deref() == Some(node.package.as_str())
+                            && row.ordinal == record.ordinal
+                            && matches!(row.kind, ProjectTocFactKind::File { .. })
+                    })
+                    .ok_or("selected file fact missing")?;
+                let ProjectTocFactKind::File {
+                    path,
+                    file_kind,
+                    bootstrap,
+                    conditions,
+                    repeated,
+                    ..
+                } = &fact.kind
+                else {
+                    return Err("expected TOC file fact".into());
+                };
+                assert_eq!(
+                    fact.span,
+                    SourceSpan::byte_range(record.byte_start, record.byte_end)?
+                );
+                assert_eq!(fact.selection, record.selection);
+                assert_eq!(fact.selection, LoadSelection::Included);
+                assert_eq!(*file_kind, record.kind);
+                assert_eq!(*conditions, record.conditions);
+                assert_eq!(*bootstrap, record.bootstrap);
+                let unit = load
+                    .units()
+                    .iter()
+                    .find(|unit| {
+                        unit.package == node.package
+                            && unit.document == record.document
+                            && unit.source_ordinal == record.ordinal
+                    })
+                    .ok_or("native TOC unit witness missing")?;
+                assert_eq!(unit.reachability, ProjectPackageReachability::Reachable);
+                let conditions_digest = ContentDigest::<CanonicalResult>::from_bytes(
+                    domain_separated_digest("wow-project/platform-toc-conditions/1", conditions)?,
+                );
+                let unit_witness = serde_json::json!({"state": "admitted", "unit": unit});
+                let unit_digest =
+                    ContentDigest::<CanonicalResult>::from_bytes(domain_separated_digest(
+                        "wow-project/platform-toc-load-unit-witness/1",
+                        &unit_witness,
+                    )?);
+                let occurrence = role(
+                    toc.batch(),
+                    "source_toc_load_occurrence",
+                    &[("fact_id", string(&fact.fact_id))],
+                )?;
+                assert_eq!(
+                    occurrence.semantic_key(),
+                    &BTreeMap::from([
+                        ("fact_id".into(), string(&fact.fact_id)),
+                        ("document".into(), string(&fact.selected_toc)),
+                        (
+                            "ordinal".into(),
+                            GraphProposalValue::Integer(i64::try_from(fact.ordinal)?)
+                        ),
+                        ("file_kind".into(), identifier(file_kind)?),
+                        ("selection".into(), identifier(&fact.selection)?),
+                        (
+                            "conditions_digest".into(),
+                            string(&conditions_digest.canonical())
+                        ),
+                        ("repeated".into(), GraphProposalValue::Boolean(*repeated)),
+                        ("bootstrap".into(), GraphProposalValue::Boolean(*bootstrap)),
+                        ("load_unit_witness".into(), string(&unit_digest.canonical())),
+                        ("static_phase".into(), identifier(&unit.phase)?),
+                        (
+                            "order_group".into(),
+                            GraphProposalValue::Integer(i64::try_from(unit.order_group)?)
+                        ),
+                        ("reachability".into(), identifier(&node.reachability)?),
+                    ])
+                );
+                role_support(
+                    occurrence.source_handle_ids(),
+                    occurrence.evidence_ids(),
+                    &[fact.source_handle_id],
+                    &[fact.evidence_id],
+                );
+                edge(
+                    "source_toc_contains_occurrence",
+                    variant.proposal_id(),
+                    occurrence.proposal_id(),
+                    &[fact.source_handle_id],
+                    &[fact.evidence_id],
+                    GraphConfidence::Derived,
+                )?;
+                let target = load
+                    .source_path(&node.package, &unit.target)
+                    .ok_or("qualified TOC target missing")?;
+                assert_eq!(path.as_deref(), Some(target.as_str()));
+                let file = source
+                    .files()
+                    .iter()
+                    .find(|file| file.path == target)
+                    .ok_or("TOC target file missing")?;
+                edge(
+                    "source_toc_occurrence_loads",
+                    occurrence.proposal_id(),
+                    &file.proposal_id,
+                    &[fact.source_handle_id],
+                    &[fact.evidence_id],
+                    GraphConfidence::Derived,
+                )?;
+                if let Some((prior, prior_handle, prior_evidence)) = previous {
+                    edge(
+                        "source_toc_occurs_before",
+                        prior,
+                        occurrence.proposal_id(),
+                        &[prior_handle, fact.source_handle_id],
+                        &[prior_evidence, fact.evidence_id],
+                        GraphConfidence::Derived,
+                    )?;
+                }
+                previous = Some((
+                    occurrence.proposal_id(),
+                    fact.source_handle_id,
+                    fact.evidence_id,
+                ));
+            }
+        }
+        assert_eq!(
+            toc.batch()
+                .entity_proposals()
+                .iter()
+                .filter(|p| p.entity_kind_id() == "source_toc_manifest")
+                .count(),
+            load.packages().len()
+        );
+        assert_eq!(
+            toc.batch()
+                .entity_proposals()
+                .iter()
+                .filter(|p| p.entity_kind_id() == "source_toc_variant")
+                .count(),
+            load.packages().len()
+        );
+        assert_eq!(
+            toc.batch()
+                .entity_proposals()
+                .iter()
+                .filter(|p| p.entity_kind_id() == "source_toc_load_occurrence")
+                .count(),
+            source
+                .toc_facts()
+                .iter()
+                .filter(|f| matches!(f.kind, ProjectTocFactKind::File { .. }))
+                .count()
+        );
+        // This fixture has no declared load-policy, parent-name or XML load site.
+        assert!(
+            !source
+                .toc_facts()
+                .iter()
+                .any(|f| matches!(f.kind, ProjectTocFactKind::LoadOnDemand { .. }))
+        );
+        assert!(
+            !toc.batch()
+                .entity_proposals()
+                .iter()
+                .any(|p| p.entity_kind_id() == "source_toc_load_policy")
+        );
+
+        let mut occurrence_nodes = BTreeMap::<&str, Vec<_>>::new();
+        let mut documents = BTreeSet::new();
+        let mut scripts = BTreeSet::new();
+        for row in source.xml_containment() {
+            let package = row
+                .scope
+                .package
+                .as_deref()
+                .ok_or("XML package scope missing")?;
+            let plan = load.package_plan(package).ok_or("XML plan missing")?;
+            let (local, index) = plan
+                .xml_documents()
+                .iter()
+                .find(|(local, _)| {
+                    load.source_path(package, local).as_deref() == Some(row.document.as_str())
+                })
+                .ok_or("native XML document missing")?;
+            let element = index
+                .elements()
+                .iter()
+                .find(|element| element.occurrence_id == row.occurrence_id)
+                .ok_or("native XML occurrence missing")?;
+            assert_eq!(element.parent_occurrence_id, row.parent_occurrence_id);
+            assert_eq!(element.qualified_name, row.element_name);
+            let scope_text = wow_core::canonical_json_string(&row.scope)?;
+            let fields = [
+                ("scope", string(&scope_text)),
+                ("document", string(&row.document)),
+                ("document_digest", string(&index.digest().canonical())),
+            ];
+            let document = role(xml.batch(), "xml_source_document", &fields)?;
+            let file = source
+                .files()
+                .iter()
+                .find(|file| file.path == row.document)
+                .ok_or("XML file missing")?;
+            assert_eq!(
+                document.semantic_key().get("content_digest"),
+                Some(&string(&file.content_digest.canonical()))
+            );
+            role_support(
+                document.source_handle_ids(),
+                document.evidence_ids(),
+                &[file.source_handle_id],
+                &[file.evidence_id],
+            );
+            if documents.insert(document.proposal_id()) {
+                edge(
+                    "xml_file_contains_document",
+                    &file.proposal_id,
+                    document.proposal_id(),
+                    &[file.source_handle_id],
+                    &[file.evidence_id],
+                    GraphConfidence::Proven,
+                )?;
+            }
+            let mut occurrence_fields = fields.to_vec();
+            occurrence_fields.push(("occurrence", string(&row.occurrence_id)));
+            let occurrence = role(xml.batch(), "xml_source_occurrence", &occurrence_fields)?;
+            let serde_json::Value::String(role_name) = serde_json::to_value(element.role)? else {
+                return Err("native XML role must be a string".into());
+            };
+            assert_eq!(
+                occurrence.semantic_key().get("role"),
+                Some(&string(&role_name))
+            );
+            assert_eq!(
+                occurrence.semantic_key().get("source_handle"),
+                Some(&string(&row.source_handle_id.canonical()))
+            );
+            role_support(
+                occurrence.source_handle_ids(),
+                occurrence.evidence_ids(),
+                &[row.source_handle_id],
+                &[row.evidence_id],
+            );
+            assert_eq!(occurrence.confidence(), GraphConfidence::Proven);
+            let handle = source
+                .source_handles()
+                .get(&row.source_handle_id)
+                .ok_or("XML support missing")?;
+            assert_eq!(handle.path().as_str(), row.document);
+            assert_eq!(handle.span(), row.span);
+            assert_eq!(handle.span().byte_start(), Some(element.span.byte_start));
+            assert_eq!(handle.span().byte_end(), Some(element.span.byte_end));
+            assert_eq!(*handle.content_digest(), row.content_digest);
+            assert_eq!(row.document_digest, index.digest());
+            assert_eq!(row.content_digest, index.source_digest());
+            edge(
+                "xml_document_contains_occurrence",
+                document.proposal_id(),
+                occurrence.proposal_id(),
+                &[row.source_handle_id],
+                &[row.evidence_id],
+                GraphConfidence::Proven,
+            )?;
+            let span = role(
+                inventory.batch(),
+                "source_span",
+                &[("source_handle", string(&row.source_handle_id.canonical()))],
+            )?;
+            edge(
+                "xml_occurrence_source_span",
+                occurrence.proposal_id(),
+                span.proposal_id(),
+                &[row.source_handle_id],
+                &[row.evidence_id],
+                GraphConfidence::Proven,
+            )?;
+            if let Some(parent_id) = &row.parent_occurrence_id {
+                let parent = source
+                    .xml_containment()
+                    .iter()
+                    .find(|parent| {
+                        parent.scope == row.scope
+                            && parent.document == row.document
+                            && parent.occurrence_id == *parent_id
+                    })
+                    .ok_or("XML lexical parent missing")?;
+                let mut parent_fields = fields.to_vec();
+                parent_fields.push(("occurrence", string(parent_id)));
+                let parent_role = role(xml.batch(), "xml_source_occurrence", &parent_fields)?;
+                edge(
+                    "xml_lexical_contains",
+                    parent_role.proposal_id(),
+                    occurrence.proposal_id(),
+                    &[parent.source_handle_id, row.source_handle_id],
+                    &[parent.evidence_id, row.evidence_id],
+                    GraphConfidence::Proven,
+                )?;
+                assert!(
+                    parent.span.byte_start() <= row.span.byte_start()
+                        && parent.span.byte_end() >= row.span.byte_end()
+                );
+            }
+            if element.script.is_some() {
+                let fact = source
+                    .xml_facts()
+                    .iter()
+                    .find(|fact| {
+                        fact.scope == row.scope
+                            && fact.document == row.document
+                            && fact.occurrence_id == row.occurrence_id
+                            && matches!(fact.kind, ProjectXmlFactKind::Script { .. })
+                    })
+                    .ok_or("native XML script fact missing")?;
+                let script = role(xml.batch(), "xml_source_script_site", &occurrence_fields)?;
+                assert_eq!(
+                    script.semantic_key().get("state"),
+                    Some(&string(&wow_core::canonical_json_string(&fact.kind)?))
+                );
+                role_support(
+                    script.source_handle_ids(),
+                    script.evidence_ids(),
+                    &[fact.source_handle_id],
+                    &[fact.evidence_id],
+                );
+                edge(
+                    "xml_occurrence_owns_script_site",
+                    occurrence.proposal_id(),
+                    script.proposal_id(),
+                    &[fact.source_handle_id],
+                    &[fact.evidence_id],
+                    GraphConfidence::Proven,
+                )?;
+                assert!(scripts.insert(script.proposal_id()));
+            }
+            assert!(!matches!(
+                element.role,
+                XmlElementRole::Include | XmlElementRole::Script
+            ));
+            let address = finished
+                .assertion(&key(GraphAssertionKind::Entity, occurrence.proposal_id()))
+                .ok_or("XML occurrence address missing")?;
+            occurrence_nodes
+                .entry(&row.occurrence_id)
+                .or_default()
+                .push((
+                    package,
+                    lookup
+                        .entity(&scope, address, stop)?
+                        .accepted()
+                        .node()
+                        .node_id()
+                        .clone(),
+                ));
+            assert_eq!(
+                load.source_path(package, local).as_deref(),
+                Some(row.document.as_str())
+            );
+        }
+        assert!(!occurrence_nodes.is_empty() && !scripts.is_empty());
+        for scoped in occurrence_nodes.values() {
+            assert_eq!(scoped.len(), 2);
+            assert_ne!(scoped[0].0, scoped[1].0);
+            assert_ne!(scoped[0].1, scoped[1].1);
+        }
+        assert_eq!(
+            xml.batch()
+                .entity_proposals()
+                .iter()
+                .filter(|p| p.entity_kind_id() == "xml_source_document")
+                .count(),
+            documents.len()
+        );
+        assert_eq!(
+            xml.batch()
+                .entity_proposals()
+                .iter()
+                .filter(|p| p.entity_kind_id() == "xml_source_occurrence")
+                .count(),
+            source.xml_containment().len()
+        );
+        assert_eq!(
+            xml.batch()
+                .entity_proposals()
+                .iter()
+                .filter(|p| p.entity_kind_id() == "xml_source_script_site")
+                .count(),
+            scripts.len()
+        );
+        assert!(
+            !source
+                .xml_facts()
+                .iter()
+                .any(|f| matches!(f.kind, ProjectXmlFactKind::Parent { .. }))
+        );
+        assert!(!xml.batch().entity_proposals().iter().any(|p| matches!(
+            p.entity_kind_id(),
+            "xml_source_load_site" | "xml_source_parent_reference"
+        )));
+    }
+    let role_edges = edges
+        .values()
+        .filter(|proposal| {
+            matches!(
+                proposal.relation_kind_id(),
+                "source_project_contains_package"
+                    | "source_project_contains_file"
+                    | "source_project_contains_raw_member"
+                    | "source_package_contains_raw_member"
+                    | "source_package_selects_toc"
+                    | "source_toc_defines_variant"
+                    | "source_toc_contains_occurrence"
+                    | "source_toc_occurrence_loads"
+                    | "source_toc_occurs_before"
+                    | "source_toc_defines_load_policy"
+                    | "xml_file_contains_document"
+                    | "xml_document_contains_occurrence"
+                    | "xml_lexical_contains"
+                    | "xml_occurrence_source_span"
+                    | "xml_occurrence_owns_script_site"
+                    | "xml_occurrence_owns_load_site"
+                    | "xml_include_target"
+                    | "xml_external_script_target"
+                    | "xml_occurrence_owns_parent_reference"
+            )
+        })
+        .map(|proposal| proposal.proposal_id())
+        .collect::<BTreeSet<_>>();
+    assert_eq!(checked, role_edges);
+
+    // Both older native owners stay usable; /2 is retained, not reconstructed.
+    original.validate(stop)?;
+    spans.validate(stop)?;
+    let unchanged = build_platform_graph_proposal_plan_with_inventory_spans(view, stop)?;
+    assert_eq!(
+        unchanged.profile(),
+        PLATFORM_DIRECT_GRAPH_WITH_INVENTORY_SPANS_PROFILE
+    );
+    assert_eq!(unchanged.registry(), spans.registry());
+    assert_eq!(unchanged.foundation(), spans.foundation());
+    assert_eq!(
+        unchanged.scope().generation,
+        *spans.foundation().generation()
+    );
+    assert_eq!(unchanged.inventory_span_omissions(), Some(omitted));
     Ok(())
 }
 
@@ -1132,7 +2231,8 @@ fn direct_package_stages_bind_native_predecessors_and_preserve_replay() -> Resul
             Some(&member.evidence)
         );
     }
-    inventory_spans(&raw_view, &raw_owner, &raw_source, &stop)?;
+    let spans_owner = inventory_spans(&raw_view, &raw_owner, &raw_source, &stop)?;
+    structural_roles(&raw_view, &raw_owner, &spans_owner, &raw_source, &stop)?;
     assert!(!root.0.exists());
     let unchanged_raw = build_source_graph_proposals(&raw_view, &stop)?;
     assert_eq!(unchanged_raw.inventory_batch(), Some(&raw_batch));

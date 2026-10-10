@@ -1,6 +1,7 @@
 //! Direct source/load/XML proposals. No recognizer inference or graph publication.
 mod derivations;
 mod functions;
+mod inventory_project;
 mod inventory_roles;
 mod load_inputs;
 mod packages;
@@ -8,12 +9,18 @@ mod platform_producers;
 mod producer_budget;
 mod producer_derivations;
 mod producer_evidence;
+use platform_producers::DirectRecipe;
 pub use platform_producers::{
     PLATFORM_DIRECT_GRAPH_PROFILE, PLATFORM_DIRECT_GRAPH_WITH_INVENTORY_SPANS_PROFILE,
-    PlatformGraphProducerProposals, PlatformGraphProposalPlan, PlatformGraphProvenance,
-    build_platform_graph_proposal_plan, build_platform_graph_proposal_plan_with_inventory_spans,
+    PLATFORM_DIRECT_GRAPH_WITH_STRUCTURAL_ROLES_PROFILE, PlatformGraphProducerProposals,
+    PlatformGraphProposalPlan, PlatformGraphProvenance, build_platform_graph_proposal_plan,
+    build_platform_graph_proposal_plan_with_inventory_spans,
+    build_platform_graph_proposal_plan_with_structural_roles,
 };
 mod projection;
+mod structural_registry;
+mod toc_roles;
+mod xml_roles;
 pub use projection::PlatformGraphProducer;
 use projection::{EntityDraft, RelationDraft};
 mod raw_inventory;
@@ -367,13 +374,13 @@ fn charge(used: &mut usize, bytes: usize) -> ProjectResult<()> {
 }
 
 fn registry(project_kind: ProjectKind, raw_inventory: bool) -> ProjectResult<GraphRegistryBundle> {
-    registry_with_inventory_spans(project_kind, raw_inventory, false)
+    registry_for_recipe(project_kind, raw_inventory, DirectRecipe::Original)
 }
 
-fn registry_with_inventory_spans(
+fn registry_for_recipe(
     project_kind: ProjectKind,
     raw_inventory: bool,
-    inventory_spans: bool,
+    recipe: DirectRecipe,
 ) -> ProjectResult<GraphRegistryBundle> {
     let universe_class = match project_kind {
         ProjectKind::Fixture | ProjectKind::Repository => "project",
@@ -738,7 +745,7 @@ fn registry_with_inventory_spans(
     if raw_inventory {
         raw_inventory::extend_registry(&mut entities)?;
     }
-    if inventory_spans {
+    if recipe.inventory_spans() {
         if project_kind != ProjectKind::BlizzardUiPlatformSource {
             return Err(invalid());
         }
@@ -762,9 +769,14 @@ fn registry_with_inventory_spans(
             .map_err(|_| invalid())?,
         );
     }
+    if recipe.structural_roles() {
+        structural_registry::extend(&mut entities, &mut relations)?;
+    }
     GraphRegistryBundle::build(
         "wow-project.source-load",
-        if inventory_spans {
+        if recipe.structural_roles() {
+            "18"
+        } else if recipe.inventory_spans() {
             "17"
         } else if raw_inventory {
             "16"
@@ -913,12 +925,12 @@ fn collect_source_graph_proposals(
     project: &ProjectView,
     stop: &AtomicBool,
 ) -> ProjectResult<CollectedSourceGraph> {
-    collect_source_graph_proposals_with_inventory_spans(project, false, stop)
+    collect_source_graph_proposals_for_recipe(project, DirectRecipe::Original, stop)
 }
 
-fn collect_source_graph_proposals_with_inventory_spans(
+fn collect_source_graph_proposals_for_recipe(
     project: &ProjectView,
-    inventory_spans: bool,
+    recipe: DirectRecipe,
     stop: &AtomicBool,
 ) -> ProjectResult<CollectedSourceGraph> {
     crate::analyzer::checkpoint(stop)?;
@@ -1047,8 +1059,7 @@ fn collect_source_graph_proposals_with_inventory_spans(
         }
     }
     let raw_selected = raw_inventory::selected(config);
-    let registry =
-        registry_with_inventory_spans(config.project_kind(), raw_selected, inventory_spans)?;
+    let registry = registry_for_recipe(config.project_kind(), raw_selected, recipe)?;
     let universe = match config.project_kind() {
         ProjectKind::BlizzardUiPlatformSource => {
             let binding = config.platform_package_binding().ok_or_else(invalid)?;
