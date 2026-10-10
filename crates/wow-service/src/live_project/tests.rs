@@ -14,6 +14,8 @@ use wow_project::{
     ProjectConfigurationBuilder, ProjectId, ProjectInputBundle, ProjectInputFile, ProjectKind,
 };
 type TestResult<T = ()> = Result<T, Box<dyn Error>>;
+#[path = "current_recovery_tests.rs"]
+mod current_recovery;
 mod durable;
 mod gc;
 mod library_modes;

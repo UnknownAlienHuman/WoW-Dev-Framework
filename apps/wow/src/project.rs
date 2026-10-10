@@ -11,8 +11,9 @@ use wow_service::{
     ServiceErrorCode,
     graph::GraphBuildRequest,
     live_project::{
-        CurrentState, LiveProjectLibraryMode, LiveProjectPublishRequest, LiveProjectUpdateRequest,
-        ScopeState, publish_local_project, read_live_project, reconcile_live_project,
+        CurrentDomainObservation, CurrentState, LiveProjectLibraryMode, LiveProjectPublishRequest,
+        LiveProjectUpdateRequest, RecoveryReport, ScopeState, publish_local_project,
+        read_live_project, reconcile_live_project, recover_current_live_project,
         recover_live_project, update_local_project,
     },
 };
@@ -22,9 +23,10 @@ const HELP: &str = concat!(
     "wow project update --config <final-project.json> --project <ProjectId> [--generation current|<ProjectGenerationId>] --store-root <directory> --operation-id <id> --expected-current <record-id> --library keep|replace|clear --allow-partial [--format json|text]\n",
     "wow project read --store-root <directory> --store-generation current|<generation-id> [--format json|text]\n",
     "wow project reconcile --store-root <directory> --operation-id <id> [--format json|text]\n",
-    "wow project recover --store-root <directory> [--format json|text]\n\n",
+    "wow project recover --store-root <directory> [--domain-current] [--format json|text]\n\n",
     "Publish retains exact Main/Library inputs and the full native graph chain. Update applies explicit final physical Lua inputs against the exact retained base. Read acquires one leased project/graph pair; TOC/XML/package replay is supported for reads/publication. Reconcile observes the original operation. Partial coverage exits 2. See apps/wow/LIVE_PROJECT.md.\n",
     "Recover observes physical store state without initialization, repair, activation or domain approval. Validated/not-applicable coverage exits 0; incomplete/unverified exits 2; invalid/corrupt exits 4; cancellation exits 130.\n",
+    "--domain-current also replays the exact observed Current through native Project/Graph owners and retains physical evidence on failure. Other generations receive no domain verdict.\n",
 );
 
 enum Command {
@@ -44,7 +46,9 @@ enum Command {
     Reconcile {
         operation: String,
     },
-    Recover,
+    Recover {
+        domain_current: bool,
+    },
 }
 struct Arguments {
     root: PathBuf,
@@ -86,7 +90,9 @@ pub fn run(values: Vec<OsString>) -> u8 {
         } => update_local_project(&config, &graph, &args.root, &request, &stop),
         Command::Read { generation } => read_live_project(&args.root, &generation, &stop),
         Command::Reconcile { operation } => reconcile_live_project(&args.root, &operation, &stop),
-        Command::Recover => return run_recovery(&args.root, args.format, &stop),
+        Command::Recover { domain_current } => {
+            return run_recovery(&args.root, domain_current, args.format, &stop);
+        }
     };
     let result = match result {
         Ok(r) => r,
@@ -124,7 +130,10 @@ pub fn run(values: Vec<OsString>) -> u8 {
     exit
 }
 
-fn run_recovery(root: &Path, format: Format, stop: &AtomicBool) -> u8 {
+fn run_recovery(root: &Path, domain_current: bool, format: Format, stop: &AtomicBool) -> u8 {
+    if domain_current {
+        return run_current_recovery(root, format, stop);
+    }
     let report = match recover_live_project(root, stop) {
         Ok(report) => report,
         Err(error) => {
@@ -136,23 +145,7 @@ fn run_recovery(root: &Path, format: Format, stop: &AtomicBool) -> u8 {
             };
         }
     };
-    let exit = if report.current_state() == CurrentState::Corrupt
-        || report
-            .coverage()
-            .iter()
-            .any(|coverage| coverage.state() == ScopeState::Invalid)
-    {
-        4
-    } else if report.current_state() == CurrentState::Unverified
-        || report
-            .coverage()
-            .iter()
-            .any(|coverage| coverage.state() == ScopeState::Incomplete)
-    {
-        2
-    } else {
-        0
-    };
+    let exit = physical_recovery_exit(&report);
     let mut bytes = match report.canonical_bytes() {
         Ok(bytes) => bytes,
         Err(_) => {
@@ -171,10 +164,78 @@ fn run_recovery(root: &Path, format: Format, stop: &AtomicBool) -> u8 {
     if stop.load(Ordering::Acquire) {
         return 130;
     }
+    write_recovery(bytes, exit)
+}
+
+fn physical_recovery_exit(report: &RecoveryReport) -> u8 {
+    if report.current_state() == CurrentState::Corrupt
+        || report
+            .coverage()
+            .iter()
+            .any(|coverage| coverage.state() == ScopeState::Invalid)
+    {
+        4
+    } else if report.current_state() == CurrentState::Unverified
+        || report
+            .coverage()
+            .iter()
+            .any(|coverage| coverage.state() == ScopeState::Incomplete)
+    {
+        2
+    } else {
+        0
+    }
+}
+
+fn run_current_recovery(root: &Path, format: Format, stop: &AtomicBool) -> u8 {
+    let report = match recover_current_live_project(root, stop) {
+        Ok(report) => report,
+        Err(error) => {
+            super::diagnostic(&format!("{:?}: {}", error.code(), error.message()));
+            return if error.code() == ServiceErrorCode::Cancelled {
+                130
+            } else {
+                4
+            };
+        }
+    };
+    let physical_exit = physical_recovery_exit(report.physical());
+    let exit = match report.current_domain() {
+        CurrentDomainObservation::Cancelled(_) => 130,
+        CurrentDomainObservation::Failed(_) => 4,
+        _ if physical_exit == 4 => 4,
+        CurrentDomainObservation::Unverified | CurrentDomainObservation::Incomplete(_) => 2,
+        _ => physical_exit,
+    };
+    let mut bytes = match report.canonical_bytes() {
+        Ok(bytes) => bytes,
+        Err(_) => {
+            super::diagnostic("current domain recovery report encoding failed");
+            return 4;
+        }
+    };
+    if format == Format::Text {
+        bytes.splice(
+            0..0,
+            b"Exact Current Project/Graph recovery observation\n"
+                .iter()
+                .copied(),
+        );
+    }
+    // A completed physical observation remains useful after replay cancellation.
+    let exit = if stop.load(Ordering::Acquire) {
+        130
+    } else {
+        exit
+    };
+    write_recovery(bytes, exit)
+}
+
+fn write_recovery(mut bytes: Vec<u8>, exit: u8) -> u8 {
     bytes.push(b'\n');
     let mut out = std::io::stdout().lock();
     if out.write_all(&bytes).and_then(|()| out.flush()).is_err() {
-        super::diagnostic("physical recovery report output failed");
+        super::diagnostic("recovery report output failed");
         return 4;
     }
     exit
@@ -197,7 +258,7 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
         return Err("unknown project operation");
     }
     let mut options = BTreeMap::new();
-    let (mut initialize, mut allow_partial) = (false, false);
+    let (mut initialize, mut allow_partial, mut domain_current) = (false, false, false);
     while let Some(option) = values.next() {
         let option = option.into_string().map_err(|_| "invalid project option")?;
         match option.as_str() {
@@ -207,6 +268,10 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
             }
             "--allow-partial" if matches!(action, "publish" | "update") && !allow_partial => {
                 allow_partial = true;
+                continue;
+            }
+            "--domain-current" if action == "recover" && !domain_current => {
+                domain_current = true;
                 continue;
             }
             "--store-root" | "--format" => {}
@@ -296,7 +361,7 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
         "reconcile" => Command::Reconcile {
             operation: required_text(&mut options, "--operation-id")?,
         },
-        "recover" => Command::Recover,
+        "recover" => Command::Recover { domain_current },
         _ => return Err("unknown project operation"),
     };
     Ok(Arguments {

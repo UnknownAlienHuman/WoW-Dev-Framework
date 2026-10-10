@@ -37,6 +37,7 @@ pub enum GraphErrorCode {
     ArtifactSchemaMismatch,
     ArtifactDecodeFailed,
     StoreFailure,
+    StoreReadUnavailable,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

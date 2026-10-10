@@ -67,6 +67,7 @@ pub enum ProjectErrorCode {
     FileNotPresent,
     DeferredCapability,
     CanonicalizationFailed,
+    StoreReadUnavailable,
 }
 
 /// One bounded project failure. It never embeds source text or host paths.

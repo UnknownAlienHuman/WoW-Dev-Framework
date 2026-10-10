@@ -16,6 +16,7 @@ wow project read --store-root <directory> --store-generation current
 wow project read --store-root <directory> --store-generation <StoreGenerationId>
 wow project reconcile --store-root <directory> --operation-id <original-id>
 wow project recover --store-root <directory> --format json
+wow project recover --store-root <directory> --domain-current --format json
 wow project update --config final-project.json --project <ProjectId> --store-root <directory> --operation-id <id> --expected-current <record-id> --library keep --allow-partial
 ```
 
@@ -29,6 +30,14 @@ Project/Graph owner replay. `restore_replace` and exact `resume_replacement` are
 service APIs; this CLI does not dispatch restore. Older readers and semantic IDs
 survive; guarded restore from quarantine, schema migration and full acceptance remain open. See
 [PROJECT_RECOVERY.md](../../crates/wow-store/PROJECT_RECOVERY.md).
+
+`--domain-current` adds native Project/Graph replay of the exact Current publication
+retained by the physical report. It keeps that physical evidence beside a typed
+Validated, Absent, Unverified, Failed, Incomplete or Cancelled domain observation;
+other generations receive no domain verdict. Replay failure or cancellation does
+not discard the completed physical report. This observation grants no repair or
+activation authority. See
+[PROJECT_CURRENT_RECOVERY.md](../../crates/wow-service/PROJECT_CURRENT_RECOVERY.md).
 
 The service now exposes explicit whole-instance quarantine through
 `LiveProjectQuarantineInspection` and `LiveProjectStore::quarantine`, plus the

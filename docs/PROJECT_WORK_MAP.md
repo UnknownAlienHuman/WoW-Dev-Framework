@@ -95,8 +95,8 @@ budget-exhaustion fault fixtures remain NotEvaluated. Next functional work is
 an explicit supported source-to-target epoch migration ending at validated inactive
 state, with fresh IDs/maps and original source history retained as evidence; this
 is supplied by the subsequent checkpoint below.
-Current-domain recovery observation and broader W16/E2, source/runtime, power-loss,
-inside-write and deletion acceptance remain open. Gethe materialization still
+Broader W16/E2, source/runtime, power-loss, inside-write and deletion acceptance
+remain open. Gethe materialization still
 follows product implementation/build, before its external comparative checks.
 
 The inactive migration checkpoint consumes an explicit independently verified
@@ -114,10 +114,26 @@ completed records reject without logical repair; the existing record never repla
 fresh owner replay. Policy, fmt, workspace check, strict Clippy, 906 tests
 (1 ignored, 107 targets), strict rustdoc and build pass on 2026-10-09. See
 [PROJECT_MIGRATION.md](../crates/wow-store/PROJECT_MIGRATION.md).
-Next W16 owners are exact cross-epoch selection with mapped retention and typed
-Current-domain observation. Pre-intent staging recovery, payload/old-runtime
+Next W16 owners are exact cross-epoch selection with mapped retention.
+Pre-intent staging recovery, payload/old-runtime
 transformation, domain quarantine, inside-write/power-loss/deletion/platform and
 full W16/E2 gates remain open. Gethe preparation follows product implementation.
+
+The Current-domain observation now replays the exact publication retained by the
+physical recovery report through native Project/Graph owners. The held pair supplies
+its actual semantic IDs; later Current advancement cannot substitute a different
+publication. Physical evidence survives replay failure, unavailable components or
+cancellation, and Corrupt/Unverified never becomes Absent. The service and explicit
+`wow project recover --domain-current` transport grant no repair/activation authority
+or verdict for other generations. Native storage availability errors retain an
+Incomplete outcome rather than becoming identity failures. See
+[PROJECT_CURRENT_RECOVERY.md](../crates/wow-service/PROJECT_CURRENT_RECOVERY.md).
+
+Three native cases and workspace policy, fmt, check, strict Clippy, tests
+(909 passed, 1 ignored, 107 targets), strict rustdoc and build pass on 2026-10-09.
+Actual CLI help, strict flag rejection and missing-root routing pass; positive
+published-root CLI recovery and injected late cancellation/availability remain
+NotEvaluated. Cross-epoch activation/mapped roots and full W16/E2 acceptance stay open.
 
 Fresh W16 policy, fmt, workspace check, strict Clippy, tests (877 passed,
 1 ignored, 106 targets), rustdoc and build passed on 2026-10-09. The ignored consumer and source/runtime gates stay

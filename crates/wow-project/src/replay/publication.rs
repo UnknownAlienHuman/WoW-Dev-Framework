@@ -321,6 +321,11 @@ fn graph_error(error: wow_graph::GraphError) -> crate::ProjectError {
             "native project pair validation cancelled",
         ),
         wow_graph::GraphErrorCode::BudgetExceeded => super::exhausted(),
+        wow_graph::GraphErrorCode::StoreReadUnavailable => crate::ProjectError::new(
+            crate::ProjectErrorCode::StoreReadUnavailable,
+            ProjectPhase::Publication,
+            "native project pair graph store read is unavailable",
+        ),
         _ => invalid(),
     }
 }
@@ -334,6 +339,13 @@ fn store_error(error: wow_store::StoreError) -> crate::ProjectError {
         wow_store::StoreErrorCode::BudgetExceeded | wow_store::StoreErrorCode::ObjectTooLarge => {
             super::exhausted()
         }
+        wow_store::StoreErrorCode::DatabaseUnavailable
+        | wow_store::StoreErrorCode::WriterBusy
+        | wow_store::StoreErrorCode::OutcomeUnknown => crate::ProjectError::new(
+            crate::ProjectErrorCode::StoreReadUnavailable,
+            ProjectPhase::Publication,
+            "native project pair store read is unavailable",
+        ),
         _ => invalid(),
     }
 }

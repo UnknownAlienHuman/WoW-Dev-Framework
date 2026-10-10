@@ -817,8 +817,7 @@ and real Windows sharing refusal with staged/selected reconciliation. Workspace
 policy, fmt, check, strict Clippy, 901 tests (1 ignored, 107 targets), rustdoc and
 build passed. Final capacity preflight passed 40 store tests and refreshed
 workspace gates; the broad suite was not repeated.
-Budget-exhaustion fault fixtures, supported inactive epoch migration, current-domain
-recovery observation, domain quarantine, inside-write interruption, power loss,
+Budget-exhaustion fault fixtures, domain quarantine, inside-write interruption, power loss,
 deletion and full W16/E2/Gethe/Ketho/runtime acceptance remain open. See
 [PROJECT_QUARANTINE_RESTORE.md](../crates/wow-store/PROJECT_QUARANTINE_RESTORE.md).
 
@@ -839,8 +838,28 @@ Both target epoch manifests are rechecked before validation mutation.
 
 Four store and one native service regressions pass. Workspace policy, fmt, check,
 strict Clippy, tests (906 passed, 1 ignored, 107 targets), strict rustdoc and build
-passed. Exact cross-epoch activation, mapped target retention, typed Current-domain
-observation, payload/old-runtime transformation, domain quarantine, pre-intent
+passed. Exact cross-epoch activation, mapped target retention,
+payload/old-runtime transformation, domain quarantine, pre-intent
 staging recovery, inside-write/power-loss/deletion/platform and full W16/E2 or
 Gethe/Ketho/runtime acceptance remain open. See
 [PROJECT_MIGRATION.md](../crates/wow-store/PROJECT_MIGRATION.md).
+
+## W16 exact Current-domain recovery observation (2026-10-09)
+
+The service now retains the physical RecoveryReport beside a versioned observation
+of only its exact Current publication. A held native Project/Graph replay returns
+actual pair IDs or typed acquisition/replay Failed, Incomplete or Cancelled outcomes.
+Corrupt/Unverified physical state never becomes Absent, and later Current cannot
+replace the selected history record. Native store availability errors retain their
+Incomplete classification. Existing physical-only recovery stays available; explicit
+`wow project recover --domain-current` dispatches one service operation and writes
+completed physical evidence even after replay cancellation.
+
+Three native cases and workspace policy, fmt, check, strict Clippy, tests
+(909 passed, 1 ignored, 107 targets), strict rustdoc and build pass. Actual CLI help,
+strict flags and missing-root routing pass. Positive published-root CLI smoke and
+injected late cancellation/availability remain NotEvaluated. No repair/activation
+authority, all-generation domain validation or full W16/E2 acceptance follows.
+Cross-epoch activation with mapped retention, domain quarantine, payload/runtime
+migration and platform/source/runtime gates remain open. See
+[PROJECT_CURRENT_RECOVERY.md](../crates/wow-service/PROJECT_CURRENT_RECOVERY.md).

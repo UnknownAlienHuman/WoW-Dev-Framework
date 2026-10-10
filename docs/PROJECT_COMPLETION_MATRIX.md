@@ -1,7 +1,7 @@
 # Project completion matrix
 
 **Audited:** 2026-09-19 America/New_York. Execution inventory refreshed 2026-10-09
-through the scoped W16 inactive physical migration checkpoint below.
+through the scoped W16 Current-domain recovery checkpoint below.
 
 This is the current execution ledger. [IMPLEMENTATION_HANDOFF.md](IMPLEMENTATION_HANDOFF.md)
 remains the normative I0–I7 plan; do not restart its historical bootstrap steps.
@@ -363,7 +363,20 @@ aliases, and stops at validated inactive state without target Current or registr
 Partial-state and final-record preflight precede resume effects; both epoch
 manifests are rechecked before validation writes. Workspace policy, fmt, check,
 strict Clippy, tests (906 passed, 1 ignored, 107 targets), strict rustdoc and build
-pass on 2026-10-09. Cross-epoch selection/mapped roots, typed Current-domain recovery,
+pass on 2026-10-09. Cross-epoch selection/mapped roots,
 payload/old-runtime transformation, pre-intent staging recovery and full W16/E2 or
 platform/source/runtime acceptance stay open. See
 [PROJECT_MIGRATION.md](../crates/wow-store/PROJECT_MIGRATION.md).
+
+Typed Current-domain recovery is now executable beside the unchanged physical
+report. Native owners replay its exact retained publication under a held read and
+return actual pair IDs or phased Failed/Incomplete/Cancelled outcomes. Corrupt or
+Unverified physical Current never becomes Absent. Explicit CLI `--domain-current`
+dispatches one service operation and retains completed physical evidence on replay
+cancellation. It grants no repair/activation authority or all-generation verdict.
+Three native cases and workspace policy, fmt, check, strict Clippy, tests
+(909 passed, 1 ignored, 107 targets), strict rustdoc and build pass on 2026-10-09.
+CLI help/strict-option/missing-root checks pass; positive published-root CLI smoke,
+injected availability/late cancellation and full W16/E2/source/runtime acceptance
+remain separate open gates. See
+[PROJECT_CURRENT_RECOVERY.md](../crates/wow-service/PROJECT_CURRENT_RECOVERY.md).

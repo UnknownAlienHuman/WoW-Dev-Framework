@@ -185,7 +185,11 @@ fn storage_error(e: wow_store::StoreError) -> GraphError {
     GraphError::new(
         match e.code() {
             wow_store::StoreErrorCode::Cancelled => GraphErrorCode::Cancelled,
-            wow_store::StoreErrorCode::BudgetExceeded => GraphErrorCode::BudgetExceeded,
+            wow_store::StoreErrorCode::BudgetExceeded
+            | wow_store::StoreErrorCode::ObjectTooLarge => GraphErrorCode::BudgetExceeded,
+            wow_store::StoreErrorCode::DatabaseUnavailable
+            | wow_store::StoreErrorCode::WriterBusy
+            | wow_store::StoreErrorCode::OutcomeUnknown => GraphErrorCode::StoreReadUnavailable,
             _ => GraphErrorCode::StoreFailure,
         },
         "stored graph read failed",

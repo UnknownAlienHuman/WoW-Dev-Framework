@@ -1,6 +1,11 @@
 //! Coherent native project/graph publication through the existing manifested
 //! store. Current resolves once; actual replay and all owner checks hold its lease.
+mod current_recovery;
 mod gc;
+pub use current_recovery::{
+    CurrentDomainFailure, CurrentDomainIds, CurrentDomainObservation, CurrentDomainPhase,
+    LiveProjectRecoveryObservation, recover_current_live_project,
+};
 mod migration;
 pub use migration::{migrate_live_project_to_new, resume_live_project_migration};
 mod operations;
@@ -208,6 +213,9 @@ pub(crate) fn project_error(error: wow_project::ProjectError) -> ServiceError {
         wow_project::ProjectErrorCode::SourceBudgetExceeded => ServiceErrorCode::BudgetExceeded,
         wow_project::ProjectErrorCode::DeferredCapability => {
             ServiceErrorCode::OperationNotImplementedForMilestone
+        }
+        wow_project::ProjectErrorCode::StoreReadUnavailable => {
+            ServiceErrorCode::ComponentUnavailable
         }
         _ => ServiceErrorCode::IdentityMismatch,
     })
