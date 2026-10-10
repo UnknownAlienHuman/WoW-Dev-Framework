@@ -44,9 +44,17 @@ pub(super) struct BindingSites<'a> {
     pub inherited: Vec<XmlInheritedScriptSource>,
 }
 
+#[derive(Default)]
+pub(super) struct Budget {
+    visits: usize,
+    text_bytes: usize,
+    inherited: usize,
+}
+
 pub(super) fn collect<'a>(
     plan: &'a ProjectLoadPlan,
-    receivers: &mut receivers::Resolver<'a>,
+    receivers: &mut receivers::Resolver<'a, '_>,
+    budget: &mut Budget,
     stop: &AtomicBool,
 ) -> ProjectResult<BindingSites<'a>> {
     let mut elements = BTreeMap::new();
@@ -97,8 +105,6 @@ pub(super) fn collect<'a>(
     if by_owner.is_empty() {
         return Ok(BindingSites { sites, inherited });
     }
-    let mut visits = 0usize;
-    let mut text_bytes = 0usize;
     for index in plan.xml_documents().values() {
         for consumer in index.declarations() {
             crate::analyzer::checkpoint(stop)?;
@@ -112,8 +118,8 @@ pub(super) fn collect<'a>(
             let sources = receivers.resolve(&consumer.occurrence_id, stop)?;
             for declaration_id in &sources.declarations {
                 crate::analyzer::checkpoint(stop)?;
-                visits = visits.checked_add(1).ok_or_else(exhausted)?;
-                if visits > 262_144 {
+                budget.visits = budget.visits.checked_add(1).ok_or_else(exhausted)?;
+                if budget.visits > 262_144 {
                     return Err(exhausted());
                 }
                 if declaration_id == &consumer.occurrence_id {
@@ -124,18 +130,20 @@ pub(super) fn collect<'a>(
                 };
                 for source in scripts {
                     crate::analyzer::checkpoint(stop)?;
-                    if inherited.len() >= MAX_BINDINGS {
+                    if budget.inherited >= MAX_BINDINGS {
                         return Err(exhausted());
                     }
+                    budget.inherited += 1;
                     let script = source.element.script.as_ref().ok_or_else(invalid)?;
-                    text_bytes = text_bytes
+                    budget.text_bytes = budget
+                        .text_bytes
                         .checked_add(
                             consumer.occurrence_id.len()
                                 + declaration_id.len()
                                 + source.element.occurrence_id.len(),
                         )
                         .ok_or_else(exhausted)?;
-                    if text_bytes > 16 * 1024 * 1024 {
+                    if budget.text_bytes > 16 * 1024 * 1024 {
                         return Err(exhausted());
                     }
                     let inherited_index = inherited.len();

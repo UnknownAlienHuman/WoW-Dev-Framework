@@ -62,7 +62,7 @@ no Rust implementation in the audited source. Their documentation is not a binar
 | E1-D | Partial executable Reference Pack service and active internal builder with durable materialization/finalization | Close external parity/license/rebuild evidence, Windows/process-loss acceptance and complete package gates; code presence is not `ValidatedLocal` |
 | E2-A–E2-B | Partial executable | All 26 active E2-B rule IDs are service-published after the W11 semantic repair, TOC, XML and state slices; close public CLI/full-pipeline fixtures and package acceptance |
 | E2-C–E2-D | Partial source index, manifested store, native live pair service/CLI, cancellable updates, exact Library/fact-profile binding, retained physical parser updates and durable physical update/removal publication; bounded retention/GC, recovery/replacement, inactive migration/READY preparation, portable source authority and guarded cross-epoch selection/reconciliation | Dependency-specific fact reuse, standalone/package durable updates, portable full migration history and complete E2 acceptance remain open; see [REPLAY_PUBLICATION.md](../crates/wow-project/REPLAY_PUBLICATION.md) |
-| E3-A | Partial exact raw/package admission, owner-bound platform configuration, native physical/XML Main/source graph, genuine replay and selected stable namespace publication/readback across source snapshots | Platform partitions/fingerprints, bounded SkeletonInputView and service/CLI source transport; full source-universe acceptance remains open |
+| E3-A | Partial exact raw/package admission, owner-bound platform configuration, native physical/XML Main/source graph, opt-in same-session package XML bindings, genuine replay and selected stable namespace publication/readback across source snapshots | Package XML/state and raw-member graph projection, independent partitions/fingerprints, bounded SkeletonInputView and service/CLI source transport; full source-universe acceptance remains open |
 | E3-B–E3-C | Not started | Context owners and service/CLI after their actual producer inputs |
 | E4-A–E4-C | Not started | Search, lineage/migration/static impact and routing after A0 prerequisites |
 | E5-A–E5-C | Not started | Calibration, independent review/holdout and governed publication lifecycle |
@@ -550,3 +550,17 @@ rustdoc and build pass on 2026-10-10. Raw graph entity/read binding, package
 XML/state projection, independent platform producers, fingerprints,
 SkeletonInputView and source service/CLI transport remain open. This adds no
 E0/E2/E3 acceptance or real corpus/performance/runtime result.
+
+The explicitly selected same-session package XML binding owner now retains
+package-local documents/rows/receiver sources and one original union lookup from
+the existing Main/Library session. Scoped addresses preserve repeated local XML
+IDs and shared Lua ambiguity. The selector participates in configuration/analyzer
+identity; selected /6 replay re-enters the genuine native owners without disk.
+Old v1-v5 recipes/catalogs remain exact and refuse a misrouted new publication.
+See [package XML bindings](PLATFORM_PACKAGE_XML_BINDINGS.md).
+
+Two project cases and one native namespace/store case pass. Workspace policy,
+fmt, check, strict Clippy, tests (936 passed, 1 ignored, 111 targets), strict
+rustdoc and build pass on 2026-10-10. This does not add package graph projection
+or runtime authority; full W17/E3, corpus/performance/runtime and later W18-W26
+acceptance remain open.

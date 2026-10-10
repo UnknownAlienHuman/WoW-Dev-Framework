@@ -1,7 +1,15 @@
 //! XML-to-Lua source linking. XML owners form data queries; only wow-emmy
 //! resolves Lua declarations. No receiver construction or callback invocation.
+mod packages;
 mod receivers;
 mod scripts;
+
+pub use packages::{
+    PACKAGE_XML_LUA_BINDING_PROFILE, ProjectPackageXmlDocument, ProjectPackageXmlLuaBindingAddress,
+    ProjectPackageXmlLuaBindingGroup, ProjectPackageXmlLuaBindingScope,
+    ProjectPackageXmlLuaBindings,
+};
+pub(crate) use packages::{PreparedPackageBindings, finish_packages, prepare_packages};
 
 pub use scripts::XmlInheritedScriptSource;
 
@@ -143,6 +151,19 @@ impl PreparedBindings {
         &self.queries
     }
 }
+
+/// Separate original category limits, shared across every package in an operation.
+#[derive(Default)]
+struct PreparationBudget {
+    bindings: usize,
+    query_refs: usize,
+    query_visits: usize,
+    text_bytes: usize,
+    queries: BTreeSet<String>,
+    limit_query_union: bool,
+    receivers: receivers::Budget,
+    scripts: scripts::Budget,
+}
 fn invalid() -> ProjectError {
     ProjectError::new(
         ProjectErrorCode::AnalyzerSnapshotMismatch,
@@ -220,16 +241,21 @@ pub(crate) fn prepare(
     plan: &ProjectLoadPlan,
     stop: &AtomicBool,
 ) -> ProjectResult<PreparedBindings> {
+    prepare_with_budget(plan, &mut PreparationBudget::default(), stop)
+}
+
+fn prepare_with_budget(
+    plan: &ProjectLoadPlan,
+    budget: &mut PreparationBudget,
+    stop: &AtomicBool,
+) -> ProjectResult<PreparedBindings> {
     let mut bindings = Vec::new();
-    let mut receivers = receivers::Resolver::new(plan, stop)?;
+    let mut receivers = receivers::Resolver::new(plan, &mut budget.receivers, stop)?;
     let mut all_queries = BTreeSet::new();
-    let mut query_refs = 0usize;
-    let mut query_visits = 0usize;
-    let mut text_bytes = 0usize;
     let scripts::BindingSites {
         sites,
         mut inherited,
-    } = scripts::collect(plan, &mut receivers, stop)?;
+    } = scripts::collect(plan, &mut receivers, &mut budget.scripts, stop)?;
     for site in sites {
         let path = site.document;
         let element = site.element;
@@ -281,8 +307,9 @@ pub(crate) fn prepare(
                     let mut unsupported = false;
                     for mixin in &sources.mixins {
                         crate::analyzer::checkpoint(stop)?;
-                        query_visits = query_visits.checked_add(1).ok_or_else(exhausted)?;
-                        if query_visits > 262_144 {
+                        budget.query_visits =
+                            budget.query_visits.checked_add(1).ok_or_else(exhausted)?;
+                        if budget.query_visits > 262_144 {
                             return Err(exhausted());
                         }
                         let length = mixin
@@ -304,11 +331,14 @@ pub(crate) fn prepare(
                         // repeated names keep their distinct XML origins above.
                         if distinct.insert(query) {
                             query_bytes = query_bytes.checked_add(length).ok_or_else(exhausted)?;
-                            let total_refs = query_refs
+                            let total_refs = budget
+                                .query_refs
                                 .checked_add(distinct.len())
                                 .ok_or_else(exhausted)?;
-                            let total_bytes =
-                                text_bytes.checked_add(query_bytes).ok_or_else(exhausted)?;
+                            let total_bytes = budget
+                                .text_bytes
+                                .checked_add(query_bytes)
+                                .ok_or_else(exhausted)?;
                             if total_refs > MAX_QUERY_REFS
                                 || distinct.len() > 4096
                                 || total_bytes > 16 * 1024 * 1024
@@ -343,9 +373,10 @@ pub(crate) fn prepare(
         }
         for (kind, ordinal, span, mut queries, mut state, receiver_source_id) in pending {
             crate::analyzer::checkpoint(stop)?;
-            if bindings.len() >= MAX_BINDINGS {
+            if budget.bindings >= MAX_BINDINGS {
                 return Err(exhausted());
             }
+            budget.bindings += 1;
             if !element.issues.is_empty() {
                 state = XmlLuaBindingState::InvalidSource;
             }
@@ -358,10 +389,12 @@ pub(crate) fn prepare(
             ) {
                 queries.clear();
             }
-            query_refs = query_refs
+            budget.query_refs = budget
+                .query_refs
                 .checked_add(queries.len())
                 .ok_or_else(exhausted)?;
-            text_bytes = text_bytes
+            budget.text_bytes = budget
+                .text_bytes
                 .checked_add(
                     path.len()
                         + receiver_source_id.as_ref().map_or(0, String::len)
@@ -369,12 +402,17 @@ pub(crate) fn prepare(
                         + queries.iter().map(String::len).sum::<usize>(),
                 )
                 .ok_or_else(exhausted)?;
-            if query_refs > MAX_QUERY_REFS || text_bytes > 16 * 1024 * 1024 {
+            if budget.query_refs > MAX_QUERY_REFS || budget.text_bytes > 16 * 1024 * 1024 {
                 return Err(exhausted());
             }
             all_queries.extend(queries.iter().cloned());
-            if all_queries.len() > 4096 {
-                return Err(exhausted());
+            // Standalone /3 delegates an oversized union to native Emmy, whose
+            // existing error lowering includes the candidate generation.
+            if budget.limit_query_union {
+                budget.queries.extend(queries.iter().cloned());
+                if budget.queries.len() > 4096 {
+                    return Err(exhausted());
+                }
             }
             bindings.push(XmlLuaBinding {
                 document: path.to_owned(),
@@ -407,6 +445,108 @@ pub(crate) fn prepare(
     })
 }
 
+#[derive(Default)]
+struct ClassificationBudget {
+    bindings: usize,
+    query_refs: usize,
+}
+
+fn classify(
+    prepared: &mut PreparedBindings,
+    report: &SymbolLookupReport,
+    budget: &mut ClassificationBudget,
+    stop: &AtomicBool,
+) -> ProjectResult<()> {
+    for binding in &mut prepared.bindings {
+        crate::analyzer::checkpoint(stop)?;
+        budget.bindings = budget.bindings.checked_add(1).ok_or_else(exhausted)?;
+        budget.query_refs = budget
+            .query_refs
+            .checked_add(binding.queries.len())
+            .ok_or_else(exhausted)?;
+        if budget.bindings > MAX_BINDINGS || budget.query_refs > MAX_QUERY_REFS {
+            return Err(exhausted());
+        }
+        if binding.queries.is_empty() {
+            continue;
+        }
+        if !report.source_health_complete() {
+            binding.state = XmlLuaBindingState::SourceParseFailed;
+            continue;
+        }
+        if let Some(consumer) = &binding.consumer_id {
+            let sources = prepared
+                .receiver_sources
+                .get(consumer)
+                .ok_or_else(invalid)?;
+            if !sources.complete {
+                binding.state = XmlLuaBindingState::ReceiverNotResolved;
+                continue;
+            }
+        }
+        if binding.kind == XmlLuaBindingKind::Method {
+            let sources = binding
+                .receiver_source_id
+                .as_ref()
+                .and_then(|id| prepared.receiver_sources.get(id))
+                .ok_or_else(invalid)?;
+            if !sources.complete {
+                binding.state = XmlLuaBindingState::ReceiverNotResolved;
+                continue;
+            }
+        }
+        let results = binding
+            .queries
+            .iter()
+            .map(|q| report.lookups().get(q).ok_or_else(invalid))
+            .collect::<ProjectResult<Vec<_>>>()?;
+        binding.state = if results
+            .iter()
+            .any(|r| r.state == SymbolLookupState::SourceParseFailed)
+        {
+            XmlLuaBindingState::SourceParseFailed
+        } else if results
+            .iter()
+            .any(|r| r.state == SymbolLookupState::Indeterminate)
+        {
+            XmlLuaBindingState::Indeterminate
+        } else if results
+            .iter()
+            .any(|r| r.state == SymbolLookupState::Ambiguous)
+        {
+            XmlLuaBindingState::Ambiguous
+        } else if results
+            .iter()
+            .any(|r| r.state == SymbolLookupState::UnsupportedPath)
+        {
+            XmlLuaBindingState::UnsupportedPath
+        } else if binding.kind == XmlLuaBindingKind::Method {
+            // Direct and inherited source mixins provide candidates, not
+            // a constructed receiver or runtime method precedence.
+            let targets: BTreeSet<_> = results
+                .iter()
+                .filter(|r| r.state == SymbolLookupState::UniqueAnalyzerDeclaration)
+                .flat_map(|r| r.targets.iter())
+                .collect();
+            if targets.len() > 1 {
+                XmlLuaBindingState::Ambiguous
+            } else if targets.len() == 1 {
+                XmlLuaBindingState::DeclaredMixinCandidates
+            } else {
+                XmlLuaBindingState::NotObserved
+            }
+        } else if results
+            .iter()
+            .all(|r| r.state == SymbolLookupState::UniqueAnalyzerDeclaration)
+        {
+            XmlLuaBindingState::UniqueAnalyzerDeclaration
+        } else {
+            XmlLuaBindingState::NotObserved
+        };
+    }
+    Ok(())
+}
+
 pub(crate) fn finish(
     mut prepared: PreparedBindings,
     lookup: Option<SymbolLookupReport>,
@@ -421,85 +561,12 @@ pub(crate) fn finish(
         if report.lookups().keys().ne(prepared.queries.iter()) {
             return Err(invalid());
         }
-        for binding in &mut prepared.bindings {
-            crate::analyzer::checkpoint(stop)?;
-            if binding.queries.is_empty() {
-                continue;
-            }
-            if !report.source_health_complete() {
-                binding.state = XmlLuaBindingState::SourceParseFailed;
-                continue;
-            }
-            if let Some(consumer) = &binding.consumer_id {
-                let sources = prepared
-                    .receiver_sources
-                    .get(consumer)
-                    .ok_or_else(invalid)?;
-                if !sources.complete {
-                    binding.state = XmlLuaBindingState::ReceiverNotResolved;
-                    continue;
-                }
-            }
-            if binding.kind == XmlLuaBindingKind::Method {
-                let sources = binding
-                    .receiver_source_id
-                    .as_ref()
-                    .and_then(|id| prepared.receiver_sources.get(id))
-                    .ok_or_else(invalid)?;
-                if !sources.complete {
-                    binding.state = XmlLuaBindingState::ReceiverNotResolved;
-                    continue;
-                }
-            }
-            let results = binding
-                .queries
-                .iter()
-                .map(|q| report.lookups().get(q).ok_or_else(invalid))
-                .collect::<ProjectResult<Vec<_>>>()?;
-            binding.state = if results
-                .iter()
-                .any(|r| r.state == SymbolLookupState::SourceParseFailed)
-            {
-                XmlLuaBindingState::SourceParseFailed
-            } else if results
-                .iter()
-                .any(|r| r.state == SymbolLookupState::Indeterminate)
-            {
-                XmlLuaBindingState::Indeterminate
-            } else if results
-                .iter()
-                .any(|r| r.state == SymbolLookupState::Ambiguous)
-            {
-                XmlLuaBindingState::Ambiguous
-            } else if results
-                .iter()
-                .any(|r| r.state == SymbolLookupState::UnsupportedPath)
-            {
-                XmlLuaBindingState::UnsupportedPath
-            } else if binding.kind == XmlLuaBindingKind::Method {
-                // Direct and inherited source mixins provide candidates, not
-                // a constructed receiver or runtime method precedence.
-                let targets: BTreeSet<_> = results
-                    .iter()
-                    .filter(|r| r.state == SymbolLookupState::UniqueAnalyzerDeclaration)
-                    .flat_map(|r| r.targets.iter())
-                    .collect();
-                if targets.len() > 1 {
-                    XmlLuaBindingState::Ambiguous
-                } else if targets.len() == 1 {
-                    XmlLuaBindingState::DeclaredMixinCandidates
-                } else {
-                    XmlLuaBindingState::NotObserved
-                }
-            } else if results
-                .iter()
-                .all(|r| r.state == SymbolLookupState::UniqueAnalyzerDeclaration)
-            {
-                XmlLuaBindingState::UniqueAnalyzerDeclaration
-            } else {
-                XmlLuaBindingState::NotObserved
-            };
-        }
+        classify(
+            &mut prepared,
+            report,
+            &mut ClassificationBudget::default(),
+            stop,
+        )?;
     }
     #[derive(Serialize)]
     struct Identity<'a> {

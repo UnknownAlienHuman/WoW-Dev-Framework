@@ -64,10 +64,11 @@ pub struct XmlReceiverSources {
 }
 
 #[derive(Default)]
-struct Budget {
+pub(super) struct Budget {
     steps: usize,
     records: usize,
     text_bytes: usize,
+    owners: usize,
 }
 impl Budget {
     fn step(&mut self) -> ProjectResult<()> {
@@ -90,17 +91,21 @@ impl Budget {
 
 /// Borrow owner-produced indexes. Never reread source, expand ambiguous name
 /// groups, follow `parent`, or derive templates from display names.
-pub(super) struct Resolver<'a> {
+pub(super) struct Resolver<'a, 'b> {
     elements: BTreeMap<&'a str, &'a XmlElementRecord>,
     sites: &'a BTreeMap<String, XmlDeclarationSite>,
     inherits: BTreeMap<&'a str, Vec<&'a XmlReferenceRecord>>,
     blocked_references: BTreeSet<&'a str>,
     blocked_declarations: BTreeSet<&'a str>,
-    budget: Budget,
+    budget: &'b mut Budget,
     receivers: BTreeMap<String, XmlReceiverSources>,
 }
-impl<'a> Resolver<'a> {
-    pub(super) fn new(plan: &'a ProjectLoadPlan, stop: &AtomicBool) -> ProjectResult<Self> {
+impl<'a, 'b> Resolver<'a, 'b> {
+    pub(super) fn new(
+        plan: &'a ProjectLoadPlan,
+        budget: &'b mut Budget,
+        stop: &AtomicBool,
+    ) -> ProjectResult<Self> {
         let mut elements = BTreeMap::new();
         for index in plan.xml_documents().values() {
             for element in index.elements() {
@@ -149,7 +154,7 @@ impl<'a> Resolver<'a> {
             inherits,
             blocked_references,
             blocked_declarations,
-            budget: Budget::default(),
+            budget,
             receivers: BTreeMap::new(),
         })
     }
@@ -161,9 +166,10 @@ impl<'a> Resolver<'a> {
     ) -> ProjectResult<&XmlReceiverSources> {
         crate::analyzer::checkpoint(stop)?;
         if !self.receivers.contains_key(owner_id) {
-            if self.receivers.len() >= MAX_BINDINGS {
+            if self.budget.owners >= MAX_BINDINGS {
                 return Err(exhausted());
             }
+            self.budget.owners += 1;
             // Charge both the shared-table key and the explicit owner ID.
             self.budget
                 .retain(owner_id.len().checked_mul(2).ok_or_else(exhausted)?)?;
@@ -197,7 +203,7 @@ impl<'a> Resolver<'a> {
             let Some(declaration) = element.declaration.as_ref() else {
                 block(
                     &mut receipt,
-                    &mut self.budget,
+                    self.budget,
                     id,
                     XmlReceiverBlockerKind::NoDeclaration,
                     None,
@@ -210,7 +216,7 @@ impl<'a> Resolver<'a> {
             if !element.ui_namespace || !site.valid_declaration || !element.issues.is_empty() {
                 block(
                     &mut receipt,
-                    &mut self.budget,
+                    self.budget,
                     id,
                     XmlReceiverBlockerKind::InvalidDeclaration,
                     None,
@@ -220,7 +226,7 @@ impl<'a> Resolver<'a> {
             if self.blocked_declarations.contains(id) {
                 block(
                     &mut receipt,
-                    &mut self.budget,
+                    self.budget,
                     id,
                     XmlReceiverBlockerKind::DeclarationConflict,
                     None,
@@ -229,7 +235,7 @@ impl<'a> Resolver<'a> {
             if site.load_ordinals.len() != 1 {
                 block(
                     &mut receipt,
-                    &mut self.budget,
+                    self.budget,
                     id,
                     XmlReceiverBlockerKind::SourceLoadUnresolved,
                     None,
@@ -261,7 +267,7 @@ impl<'a> Resolver<'a> {
                 else {
                     block(
                         &mut receipt,
-                        &mut self.budget,
+                        self.budget,
                         id,
                         XmlReceiverBlockerKind::UnresolvedInheritance,
                         reference_id,
@@ -274,7 +280,7 @@ impl<'a> Resolver<'a> {
                 {
                     block(
                         &mut receipt,
-                        &mut self.budget,
+                        self.budget,
                         id,
                         XmlReceiverBlockerKind::TargetNotDeclaredTemplate,
                         reference_id,
@@ -288,7 +294,7 @@ impl<'a> Resolver<'a> {
                 {
                     block(
                         &mut receipt,
-                        &mut self.budget,
+                        self.budget,
                         id,
                         XmlReceiverBlockerKind::InheritanceConflict,
                         reference_id,
@@ -297,7 +303,7 @@ impl<'a> Resolver<'a> {
                 if reference.order != Some(XmlReferenceOrder::TargetBeforeSource) {
                     block(
                         &mut receipt,
-                        &mut self.budget,
+                        self.budget,
                         id,
                         XmlReceiverBlockerKind::InheritanceOrderUnresolved,
                         reference_id,

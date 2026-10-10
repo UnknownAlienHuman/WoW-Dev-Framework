@@ -85,6 +85,7 @@ impl LiveProjectStore {
         // catalog mismatch before opening SQLite writable; no migration occurs.
         for schemas in [
             publication::STORAGE_SCHEMAS,
+            publication::STORAGE_SCHEMAS_V5,
             publication::STORAGE_SCHEMAS_V4,
             publication::STORAGE_SCHEMAS_V3,
             publication::STORAGE_SCHEMAS_V2,

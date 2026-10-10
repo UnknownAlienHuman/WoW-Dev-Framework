@@ -7,8 +7,8 @@ mod platform;
 pub mod publication;
 
 use crate::{
-    ProjectError, ProjectErrorCode, ProjectInputBundle, ProjectInputFile, ProjectPhase,
-    ProjectPublisher, ProjectResult, ProjectView,
+    PackageXmlBindingProfile, ProjectError, ProjectErrorCode, ProjectInputBundle, ProjectInputFile,
+    ProjectPhase, ProjectPublisher, ProjectResult, ProjectView,
 };
 use configuration::ReplayConfiguration;
 use load::ReplayLoad;
@@ -25,6 +25,7 @@ const LOAD_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/2";
 const PACKAGE_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/3";
 const LIBRARY_BOUND_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/4";
 const PLATFORM_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/5";
+const PACKAGE_XML_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/6";
 const MAX_FILES: usize = 8192;
 const MAX_LIBRARIES: usize = 64;
 const MAX_FILE_BYTES: usize = 16 * 1024 * 1024;
@@ -73,8 +74,9 @@ struct ReplayLibrary {
 }
 
 /// Data-only archive, distinct from the executable owner view. New publications
-/// use v4 with Library-bound generation or v5 for a genuine platform corpus;
-/// v1/v2/v3 retain their original recipe.
+/// use v4 with Library-bound generation, v5 for a genuine platform corpus, or v6
+/// for explicitly selected same-session package XML bindings. Earlier archives
+/// retain their original recipe.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectReplay {
@@ -230,13 +232,17 @@ impl ProjectReplay {
             2 => Some(2),
             _ => return Err(invalid()),
         };
+        let platform_schema = match configuration.package_xml_binding_profile() {
+            Some(PackageXmlBindingProfile::SameSessionV1) => PACKAGE_XML_REPLAY_SCHEMA,
+            None => PLATFORM_REPLAY_SCHEMA,
+        };
         let platform = if let Some(owner) = platform_owner {
             if generation_schema_version != Some(2) {
                 return Err(invalid());
             }
             let envelope_size = encoded_size(
                 &PlatformEnvelopeBudget {
-                    schema: PLATFORM_REPLAY_SCHEMA,
+                    schema: platform_schema,
                     configuration: &configuration,
                     files: &files,
                     libraries: &retained_libraries,
@@ -261,7 +267,7 @@ impl ProjectReplay {
         };
         let replay = Self {
             schema: if platform.is_some() {
-                PLATFORM_REPLAY_SCHEMA
+                platform_schema
             } else if generation_schema_version.is_some() {
                 LIBRARY_BOUND_REPLAY_SCHEMA
             } else if packages.is_some() {
@@ -286,15 +292,27 @@ impl ProjectReplay {
         replay.validate_budget(stop)?;
         Ok(replay)
     }
+    fn expected_schema(&self) -> ProjectResult<&'static str> {
+        match (
+            self.generation_schema_version,
+            self.configuration.package_xml_binding_profile(),
+        ) {
+            (Some(2), Some(PackageXmlBindingProfile::SameSessionV1))
+                if self.configuration.is_platform() && self.platform.is_some() =>
+            {
+                Ok(PACKAGE_XML_REPLAY_SCHEMA)
+            }
+            (_, Some(_)) => Err(invalid()),
+            (Some(2), None) if self.platform.is_some() => Ok(PLATFORM_REPLAY_SCHEMA),
+            (Some(2), None) => Ok(LIBRARY_BOUND_REPLAY_SCHEMA),
+            (None, None) if self.packages.is_some() => Ok(PACKAGE_REPLAY_SCHEMA),
+            (None, None) if self.load.is_some() => Ok(LOAD_REPLAY_SCHEMA),
+            (None, None) => Ok(REPLAY_SCHEMA),
+            (Some(_), None) => Err(invalid()),
+        }
+    }
     fn validate_budget(&self, stop: &AtomicBool) -> ProjectResult<()> {
-        let expected_schema = match self.generation_schema_version {
-            Some(2) if self.platform.is_some() => PLATFORM_REPLAY_SCHEMA,
-            Some(2) => LIBRARY_BOUND_REPLAY_SCHEMA,
-            None if self.packages.is_some() => PACKAGE_REPLAY_SCHEMA,
-            None if self.load.is_some() => LOAD_REPLAY_SCHEMA,
-            None => REPLAY_SCHEMA,
-            Some(_) => return Err(invalid()),
-        };
+        let expected_schema = self.expected_schema()?;
         if (self.load.is_some() && self.packages.is_some())
             || (self.packages.is_some() && !self.files.is_empty())
             || self.schema != expected_schema
@@ -470,17 +488,18 @@ impl ProjectReplay {
             && self.packages.is_none()
             && self.platform.is_none()
     }
-    fn storage_schema(&self) -> &'static str {
-        if self.platform.is_some() {
-            "wow-project.live-replay.v5"
-        } else if self.generation_schema_version == Some(2) {
-            "wow-project.live-replay.v4"
-        } else if self.packages.is_some() {
-            "wow-project.live-replay.v3"
-        } else if self.load.is_some() {
-            "wow-project.live-replay.v2"
-        } else {
-            "wow-project.live-replay.v1"
+    fn storage_schema(&self) -> ProjectResult<&'static str> {
+        if self.schema != self.expected_schema()? {
+            return Err(invalid());
+        }
+        match self.schema.as_str() {
+            REPLAY_SCHEMA => Ok("wow-project.live-replay.v1"),
+            LOAD_REPLAY_SCHEMA => Ok("wow-project.live-replay.v2"),
+            PACKAGE_REPLAY_SCHEMA => Ok("wow-project.live-replay.v3"),
+            LIBRARY_BOUND_REPLAY_SCHEMA => Ok("wow-project.live-replay.v4"),
+            PLATFORM_REPLAY_SCHEMA => Ok("wow-project.live-replay.v5"),
+            PACKAGE_XML_REPLAY_SCHEMA => Ok("wow-project.live-replay.v6"),
+            _ => Err(invalid()),
         }
     }
 }

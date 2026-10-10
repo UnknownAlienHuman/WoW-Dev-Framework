@@ -114,6 +114,7 @@ pub struct ProjectAnalyzerBinding {
     local_flow_report: EmmyLocalFlowReport,
     xml_lua_analysis: Option<crate::xml_lua::ProjectXmlLuaAnalysis>,
     xml_bindings: Option<crate::xml_bindings::ProjectXmlLuaBindings>,
+    package_xml_bindings: Option<crate::xml_bindings::ProjectPackageXmlLuaBindings>,
     capability_records: Vec<ProjectAnalyzerCapabilityRecord>,
 }
 
@@ -173,6 +174,13 @@ impl ProjectAnalyzerBinding {
     }
 
     #[must_use]
+    pub fn package_xml_bindings(
+        &self,
+    ) -> Option<&crate::xml_bindings::ProjectPackageXmlLuaBindings> {
+        self.package_xml_bindings.as_ref()
+    }
+
+    #[must_use]
     pub fn capability_records(&self) -> &[ProjectAnalyzerCapabilityRecord] {
         &self.capability_records
     }
@@ -214,6 +222,22 @@ pub(crate) fn main_workspace_universe(
             "platform Main requires the exact platform kind and retained package owner",
         )),
         (_, false) => Ok(LuaWorkspaceUniverse::Project),
+    }
+}
+
+enum PendingXmlBindings {
+    None,
+    Standalone(crate::xml_bindings::PreparedBindings),
+    Packages(crate::xml_bindings::PreparedPackageBindings),
+}
+
+impl PendingXmlBindings {
+    fn queries(&self) -> &[String] {
+        match self {
+            Self::None => &[],
+            Self::Standalone(pending) => pending.queries(),
+            Self::Packages(pending) => pending.queries(),
+        }
     }
 }
 
@@ -307,14 +331,22 @@ pub(crate) fn build_analyzer_binding(
     checkpoint(stop)?;
 
     let library_refs = ordered_libraries.iter().collect::<Vec<_>>();
-    let pending_bindings = configuration
-        .load_plan()
-        .map(|plan| crate::xml_bindings::prepare(plan, stop))
-        .transpose()?;
-    let queries = pending_bindings
-        .as_ref()
-        .map(|p| p.queries())
-        .unwrap_or_default();
+    let pending_bindings = match configuration.package_xml_binding_profile() {
+        Some(crate::PackageXmlBindingProfile::SameSessionV1) => {
+            let load = configuration
+                .package_load_plan()
+                .ok_or_else(binding_inputs_invalid)?;
+            let main = configuration
+                .package_main_plan()
+                .ok_or_else(binding_inputs_invalid)?;
+            PendingXmlBindings::Packages(crate::xml_bindings::prepare_packages(load, main, stop)?)
+        }
+        None => match configuration.load_plan() {
+            Some(plan) => PendingXmlBindings::Standalone(crate::xml_bindings::prepare(plan, stop)?),
+            None => PendingXmlBindings::None,
+        },
+    };
+    let queries = pending_bindings.queries();
     let callable_queries = if function_calls {
         // XML symbol lookup and callable ownership must use the same admitted
         // query set and analyzer session. A resolved name alone is not a handler.
@@ -461,16 +493,57 @@ pub(crate) fn build_analyzer_binding(
     let xml_lua_analysis = pending_xml_lua
         .map(|pending| crate::xml_lua::finish(pending, virtual_semantics, stop))
         .transpose()?;
-    let xml_bindings = match (pending_bindings, configuration.load_plan()) {
-        (Some(pending), Some(plan)) => Some(crate::xml_bindings::finish(
-            pending,
-            symbol_lookup,
-            generation.project_generation(),
-            plan,
-            stop,
-        )?),
-        _ => None,
+    let library_snapshot_ids = ordered_libraries
+        .iter()
+        .map(|library| Box::<str>::from(library.snapshot_id()))
+        .collect::<Vec<_>>();
+    let (xml_bindings, package_xml_bindings) = match pending_bindings {
+        PendingXmlBindings::None => (None, None),
+        PendingXmlBindings::Standalone(pending) => (
+            Some(crate::xml_bindings::finish(
+                pending,
+                symbol_lookup,
+                generation.project_generation(),
+                configuration
+                    .load_plan()
+                    .ok_or_else(binding_inputs_invalid)?,
+                stop,
+            )?),
+            None,
+        ),
+        PendingXmlBindings::Packages(pending) => (
+            None,
+            Some(crate::xml_bindings::finish_packages(
+                pending,
+                configuration
+                    .package_load_plan()
+                    .ok_or_else(binding_inputs_invalid)?,
+                configuration
+                    .package_main_plan()
+                    .ok_or_else(binding_inputs_invalid)?,
+                generation.project_generation(),
+                main_workspace.snapshot_id(),
+                &library_snapshot_ids,
+                symbol_lookup,
+                stop,
+            )?),
+        ),
     };
+    if let Some(lookup) = package_xml_bindings
+        .as_ref()
+        .and_then(|report| report.symbol_lookup())
+        && function_calls
+        && !function_call_report.as_ref().is_some_and(|report| {
+            report
+                .symbol_lookup_analysis_ids()
+                .iter()
+                .any(|id| id == lookup.analysis_id())
+        })
+    {
+        return Err(
+            binding_inputs_invalid().with_candidate_generation(generation.project_generation())
+        );
+    }
     checkpoint(stop)?;
     if syntax_report.diagnostics().len().saturating_add(
         xml_lua_analysis
@@ -500,6 +573,7 @@ pub(crate) fn build_analyzer_binding(
         &member_call_report,
         &local_flow_report,
         xml_lua_analysis.as_ref(),
+        package_xml_bindings.as_ref(),
         generation.project_generation(),
     )?;
     let capability_records = build_capability_records(
@@ -515,10 +589,6 @@ pub(crate) fn build_analyzer_binding(
         generation.project_generation(),
     )?;
 
-    let library_snapshot_ids = ordered_libraries
-        .iter()
-        .map(|library| Box::<str>::from(library.snapshot_id()))
-        .collect::<Vec<_>>();
     #[derive(Serialize)]
     struct Identity<'a> {
         schema_version: u64,
@@ -537,6 +607,8 @@ pub(crate) fn build_analyzer_binding(
         xml_lua_analysis_id: Option<&'a str>,
         #[serde(skip_serializing_if = "Option::is_none")]
         xml_binding_analysis_id: Option<&'a str>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        package_xml_binding_analysis_id: Option<&'a str>,
         file_manifest_digest: ContentDigest<CanonicalResult>,
         capability_records: &'a [ProjectAnalyzerCapabilityRecord],
     }
@@ -561,6 +633,9 @@ pub(crate) fn build_analyzer_binding(
             function_call_analysis_id: function_call_report.as_ref().map(|r| r.analysis_id()),
             xml_lua_analysis_id: xml_lua_analysis.as_ref().map(|report| report.analysis_id()),
             xml_binding_analysis_id: xml_bindings.as_ref().map(|report| report.analysis_id()),
+            package_xml_binding_analysis_id: package_xml_bindings
+                .as_ref()
+                .map(|report| report.analysis_id()),
             file_manifest_digest: inventory.manifest_digest(),
             capability_records: &capability_records,
         },
@@ -580,8 +655,17 @@ pub(crate) fn build_analyzer_binding(
         local_flow_report,
         xml_lua_analysis,
         xml_bindings,
+        package_xml_bindings,
         capability_records,
     })
+}
+
+fn binding_inputs_invalid() -> ProjectError {
+    ProjectError::new(
+        ProjectErrorCode::AnalyzerSnapshotMismatch,
+        ProjectPhase::Analyzer,
+        "selected XML binding analysis disagrees with its native package or session owners",
+    )
 }
 
 fn session_error(
@@ -703,6 +787,7 @@ fn enforce_analyzer_budgets(
     member: &EmmyMemberCallReport,
     flow: &EmmyLocalFlowReport,
     xml_lua: Option<&crate::xml_lua::ProjectXmlLuaAnalysis>,
+    package_bindings: Option<&crate::xml_bindings::ProjectPackageXmlLuaBindings>,
     generation: ProjectGenerationId,
 ) -> ProjectResult<()> {
     let facts = member
@@ -714,7 +799,8 @@ fn enforce_analyzer_budgets(
         .saturating_add(flow.operations().len())
         .saturating_add(flow.guards().len())
         .saturating_add(flow.control_flow().len())
-        .saturating_add(xml_lua.map_or(0, |report| report.semantic_fact_count()));
+        .saturating_add(xml_lua.map_or(0, |report| report.semantic_fact_count()))
+        .saturating_add(package_bindings.map_or(0, package_binding_fact_count));
     let diagnostics = syntax
         .diagnostics()
         .len()
@@ -738,7 +824,8 @@ fn enforce_analyzer_budgets(
                 format!("analyzer reports cannot be serialized for budget validation: {source}"),
             )
         })?
-        .len();
+        .len()
+        .saturating_add(package_bindings.map_or(0, |report| report.serialized_byte_length()));
     if u64::try_from(output_bytes).unwrap_or(u64::MAX) > budget.max_output_bytes() {
         return Err(ProjectError::new(
             ProjectErrorCode::UpdateBudgetExceeded,
@@ -748,6 +835,34 @@ fn enforce_analyzer_budgets(
         .with_candidate_generation(generation));
     }
     Ok(())
+}
+
+fn package_binding_fact_count(report: &crate::xml_bindings::ProjectPackageXmlLuaBindings) -> usize {
+    let groups = report
+        .groups()
+        .iter()
+        .fold(report.groups().len(), |count, group| {
+            let count = count
+                .saturating_add(group.documents().len())
+                .saturating_add(group.bindings().len())
+                .saturating_add(group.inherited_script_sources().len());
+            group
+                .receiver_sources()
+                .values()
+                .fold(count, |count, sources| {
+                    count
+                        .saturating_add(1)
+                        .saturating_add(sources.declarations.len())
+                        .saturating_add(sources.references.len())
+                        .saturating_add(sources.mixins.len())
+                        .saturating_add(sources.blockers.len())
+                })
+        });
+    report.symbol_lookup().map_or(groups, |lookup| {
+        lookup.lookups().values().fold(groups, |count, row| {
+            count.saturating_add(1).saturating_add(row.targets.len())
+        })
+    })
 }
 
 fn build_capability_records(

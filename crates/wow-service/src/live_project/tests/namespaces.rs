@@ -19,6 +19,15 @@ fn platform_bundle(
     opaque_revision: u8,
     stop: &AtomicBool,
 ) -> TestResult<ProjectInputBundle> {
+    platform_bundle_with_bindings(path, opaque_revision, false, stop)
+}
+
+fn platform_bundle_with_bindings(
+    path: &Path,
+    opaque_revision: u8,
+    selected_bindings: bool,
+    stop: &AtomicBool,
+) -> TestResult<ProjectInputBundle> {
     let ordinary = input_bundle("return External()")?;
     let metadata = ordinary.configuration();
     let target = PlatformTarget {
@@ -130,7 +139,7 @@ fn platform_bundle(
         None,
         stop,
     )?);
-    let configuration = ProjectConfigurationBuilder::new(
+    let builder = ProjectConfigurationBuilder::new(
         metadata.project_id().clone(),
         ProjectKind::BlizzardUiPlatformSource,
         metadata.selected_profile().clone(),
@@ -142,7 +151,12 @@ fn platform_bundle(
     .logical_root(metadata.logical_root().as_str())
     .capability_policy(metadata.capability_policy().clone())
     .budget_policy(metadata.budget_policy())
-    .platform_packages(packages.clone())?
+    .platform_packages(packages.clone())?;
+    let configuration = if selected_bindings {
+        builder.with_package_xml_bindings(wow_project::PackageXmlBindingProfile::SameSessionV1)
+    } else {
+        builder
+    }
     .build()?;
     Ok(ProjectInputBundle::closed(
         configuration,
@@ -157,6 +171,121 @@ fn platform_owners(
     stop: &AtomicBool,
 ) -> TestResult<(ProjectPublisher, GraphPartitionSnapshot)> {
     owners_from_bundle(platform_bundle(path, opaque_revision, stop)?)
+}
+
+#[test]
+fn selected_package_bindings_reopen_exactly_and_frozen_v5_refuses_without_effects() -> TestResult {
+    use wow_project::replay::ProjectReplay;
+    let stop = AtomicBool::new(false);
+    let path = root("platform-package-bindings-v6")?;
+    let bundle = platform_bundle(&path.join("legacy-input"), 1, &stop)?;
+    let selected_bundle =
+        platform_bundle_with_bindings(&path.join("selected-input"), 1, true, &stop)?;
+    let configuration = selected_bundle.configuration();
+    let packages = configuration
+        .platform_packages()
+        .ok_or("platform missing")?;
+    let selection = PlatformStoreSelection::new(
+        configuration.project_id().clone(),
+        packages.source().profile().profile_id().clone(),
+    )?;
+    let (selected, graph) = owners_from_bundle(selected_bundle)?;
+    let view = selected.open_current()?;
+    let binding_id = view
+        .snapshot()
+        .analyzer_binding()
+        .package_xml_bindings()
+        .ok_or("selected binding missing")?
+        .analysis_id()
+        .to_owned();
+    let replay = ProjectReplay::capture(&selected, &stop)?;
+    assert_eq!(
+        serde_json::to_value(&replay)?["schema"],
+        "wow-project/native-project-replay/6"
+    );
+    let mut store = LiveProjectStore::create_in_namespace(&path.join("new"), &selection)?;
+    store.publish_in_namespace(
+        &selection,
+        &selected,
+        &graph,
+        "fixture:bindings-v6",
+        None,
+        &stop,
+    )?;
+    let current = store.current()?.ok_or("v6 Current missing")?;
+    drop(store);
+    let store = LiveProjectStore::open_in_namespace(&path.join("new"), &selection)?;
+    let read = store.read_in_namespace(&selection, &ReadSelector::Current, &stop)?;
+    assert_eq!(read.project().snapshot_id(), view.snapshot_id());
+    assert_eq!(read.graph(), &graph);
+    assert_eq!(
+        read.project()
+            .snapshot()
+            .analyzer_binding()
+            .package_xml_bindings()
+            .ok_or("reopened binding missing")?
+            .analysis_id(),
+        binding_id
+    );
+    assert_eq!(store.current()?, Some(current));
+    drop(read);
+    drop(store);
+
+    let (legacy_owner, legacy_graph) = owners_from_bundle(bundle)?;
+    let legacy_path = path.join("frozen-v5");
+    let mut legacy = LiveProjectStore {
+        store: ProjectStore::create_with_namespace(
+            &legacy_path,
+            selection.namespace(),
+            catalog_for(publication::STORAGE_SCHEMAS_V5)?,
+        )?,
+    };
+    legacy.publish_in_namespace(
+        &selection,
+        &legacy_owner,
+        &legacy_graph,
+        "fixture:legacy-v5",
+        None,
+        &stop,
+    )?;
+    let old_current = legacy.current()?.ok_or("v5 Current missing")?;
+    let old_epoch = legacy.store.epoch().clone();
+    assert!(
+        legacy
+            .publish_in_namespace(
+                &selection,
+                &selected,
+                &graph,
+                "fixture:refused-v6",
+                Some(old_current.record_id.clone()),
+                &stop
+            )
+            .is_err()
+    );
+    assert_eq!(legacy.current()?, Some(old_current.clone()));
+    assert!(legacy.reconcile("fixture:refused-v6")?.is_none());
+    drop(legacy);
+    let legacy = LiveProjectStore::open_in_namespace(&legacy_path, &selection)?;
+    assert_eq!(legacy.store.epoch(), &old_epoch);
+    assert_eq!(legacy.current()?, Some(old_current));
+    let old_read = legacy.read_in_namespace(&selection, &ReadSelector::Current, &stop)?;
+    assert_eq!(
+        old_read.project().snapshot_id(),
+        legacy_owner.open_current()?.snapshot_id()
+    );
+    assert!(
+        old_read
+            .project()
+            .snapshot()
+            .analyzer_binding()
+            .package_xml_bindings()
+            .is_none()
+    );
+    assert_eq!(old_read.graph(), &legacy_graph);
+    drop(old_read);
+    drop(legacy);
+    std::fs::remove_dir_all(path)?;
+    Ok(())
 }
 
 #[test]

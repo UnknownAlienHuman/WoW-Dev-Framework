@@ -82,6 +82,15 @@ policy, fmt, check, strict Clippy, tests (933 passed, 1 ignored, 110 targets),
 strict rustdoc and build pass on 2026-10-10. Source/admission/replay identities
 remain unchanged; see [source admission](PLATFORM_SOURCE_ADMISSION.md).
 
+Explicit same-session package named XML bindings now retain scoped local rows,
+receiver/inherited sources and one original union lookup. The opt-in configuration
+binds the recipe; selected native /6 replay reconstructs it exactly, while old
+v1-v5 routes/catalogs stay frozen. Native package and namespace compatibility
+cases pass, with workspace policy, fmt, check, strict Clippy, tests (936 passed,
+1 ignored, 111 targets), strict rustdoc and build on 2026-10-10. This adds no
+package graph relation or runtime dispatch; see
+[package XML bindings](PLATFORM_PACKAGE_XML_BINDINGS.md).
+
 Next: package XML/state graph projection through retained native inputs, complete
 raw-member graph projection and independently owned platform graph partitions/fingerprints, bounded
 SkeletonInputView and source service/CLI transport. Full W17, E0/E2, real

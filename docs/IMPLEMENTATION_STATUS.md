@@ -1124,3 +1124,34 @@ and build pass. Raw-member graph entities/read binding, package XML/state graph
 inputs, independent platform partitions, fingerprints, SkeletonInputView and
 source transport remain open. Full W17/E3 and real corpus/performance/runtime
 acceptance remain NotEvaluated; Gethe materialization remains deferred.
+
+## W17 selected same-session package XML bindings (2026-10-10)
+
+`PackageXmlBindingProfile::SameSessionV1` explicitly selects named XML analysis
+for a genuine retained platform package owner. `package_xml_bindings()` exposes
+the immutable native aggregate from the existing analyzer session. Each package
+keeps its exact local document/occurrence/receiver/inherited scope, while one
+query union and original lookup retain shared Main/Library ambiguity. Empty
+groups remain valid. Scoped native addresses resolve borrowed rows; declaration
+and receiver observations confer no runtime dispatch authority. See
+[package XML bindings](PLATFORM_PACKAGE_XML_BINDINGS.md).
+
+The new selector enters configuration identity and the package report enters
+analyzer identity with absent fields omitted. Shared finite preparation and
+classification limits, cancellable encoded counting and configured additive
+fact/output admission bound the new report. The old standalone /3 recipe and
+its refusal lowering remain unchanged.
+
+Selected native replay /6 captures the exact selector and re-enters actual
+source/package/configuration/analyzer owners without disk. Schema/profile
+mismatch has no fallback. Frozen v1-v5 catalogs reopen through live, migration
+and quarantine routes; old V5 refuses a v6 publication without retaining an
+operation or advancing Current. Two project cases and one native namespace/store
+case pass. Policy, fmt, all-target/all-feature check, strict Clippy, tests
+(936 passed, 1 ignored, 111 targets), strict rustdoc and build pass.
+
+The direct source graph remains monolithic /19. Package XML/state graph inputs,
+raw graph/read binding, independently owned platform producers, fingerprints,
+SkeletonInputView and source service/CLI remain open. Native package fault-limit
+cases, full W17/E3/package and real Gethe/Ketho corpus/performance/runtime
+acceptance remain NotEvaluated. Gethe preparation still follows implementation.

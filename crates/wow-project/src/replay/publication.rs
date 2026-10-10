@@ -15,6 +15,7 @@ pub const STORAGE_SCHEMAS: &[&str] = &[
     "wow-project.live-replay.v3",
     "wow-project.live-replay.v4",
     "wow-project.live-replay.v5",
+    "wow-project.live-replay.v6",
     "wow-project.live-pair.v1",
 ];
 /// Exact catalog of already published physical-input epochs. It is never widened
@@ -37,6 +38,15 @@ pub const STORAGE_SCHEMAS_V4: &[&str] = &[
     "wow-project.live-replay.v2",
     "wow-project.live-replay.v3",
     "wow-project.live-replay.v4",
+    "wow-project.live-pair.v1",
+];
+/// Exact catalog before opt-in same-session package XML binding replay.
+pub const STORAGE_SCHEMAS_V5: &[&str] = &[
+    "wow-project.live-replay.v1",
+    "wow-project.live-replay.v2",
+    "wow-project.live-replay.v3",
+    "wow-project.live-replay.v4",
+    "wow-project.live-replay.v5",
     "wow-project.live-pair.v1",
 ];
 pub const STORAGE_CHECK: &str = "wow-project.live-pair-native-replay.v1";
@@ -169,11 +179,12 @@ impl AcquiredProjectPair {
                 | "wow-project.live-replay.v3"
                 | "wow-project.live-replay.v4"
                 | "wow-project.live-replay.v5"
+                | "wow-project.live-replay.v6"
         ) {
             return Err(invalid());
         }
         let replay: ProjectReplay = load(read, REPLAY_KEY, replay_schema, stop)?;
-        if replay.storage_schema() != replay_schema {
+        if replay.storage_schema()? != replay_schema {
             return Err(invalid());
         }
         let graph = GraphPartitionSnapshot::read_stored(read, stop).map_err(graph_error)?;
@@ -283,7 +294,7 @@ fn plan(
 ) -> ProjectResult<ProjectPublicationBundle> {
     let mut records = graph.storage_records(stop).map_err(graph_error)?;
     records.push(
-        PartitionRecord::new(REPLAY_KEY, replay.storage_schema(), replay)
+        PartitionRecord::new(REPLAY_KEY, replay.storage_schema()?, replay)
             .map_err(|_| super::exhausted())?,
     );
     records.sort_by(|a, b| a.key().cmp(b.key()));

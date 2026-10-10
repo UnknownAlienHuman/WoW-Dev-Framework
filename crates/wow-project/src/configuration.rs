@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use wow_core::{
     CanonicalResult, CapabilityId, ContentDigest, NormalizedSourcePath, ProfileIdentity,
     ProfileKind, ReferenceGenerationId,
@@ -33,6 +33,14 @@ pub enum ProjectKind {
     Fixture,
     Repository,
     BlizzardUiPlatformSource,
+}
+
+/// Explicit additive analyzer recipe for genuine platform package inputs.
+/// An absent selection retains the historical package analysis unchanged.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PackageXmlBindingProfile {
+    SameSessionV1,
 }
 
 /// Explicit publication capability policy.
@@ -404,6 +412,8 @@ pub struct ProjectConfiguration {
     platform_package_binding_digest: Option<ContentDigest<CanonicalResult>>,
     #[serde(skip)]
     retained_platform_packages: Option<RetainedPlatformPackages>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    package_xml_binding_profile: Option<PackageXmlBindingProfile>,
 }
 
 impl ProjectConfiguration {
@@ -485,6 +495,12 @@ impl ProjectConfiguration {
                 self.package_main_plan(),
             )?;
         }
+        if self.package_xml_binding_profile.is_some()
+            && (self.project_kind != ProjectKind::BlizzardUiPlatformSource
+                || self.retained_platform_packages.is_none())
+        {
+            return Err(platform::invalid());
+        }
         if self.configuration_schema_version != PROJECT_CONFIGURATION_SCHEMA_VERSION {
             return Err(ProjectError::new(
                 ProjectErrorCode::InvalidConfiguration,
@@ -523,6 +539,7 @@ impl ProjectConfiguration {
             self.package_load_plan_digest,
             self.package_main_plan_digest,
             self.platform_package_binding_digest,
+            self.package_xml_binding_profile,
         )?;
         if expected != self.configuration_digest {
             return Err(ProjectError::new(
@@ -635,6 +652,11 @@ impl ProjectConfiguration {
     }
 
     #[must_use]
+    pub const fn package_xml_binding_profile(&self) -> Option<PackageXmlBindingProfile> {
+        self.package_xml_binding_profile
+    }
+
+    #[must_use]
     pub const fn configuration_digest(&self) -> ContentDigest<CanonicalResult> {
         self.configuration_digest
     }
@@ -660,6 +682,7 @@ pub struct ProjectConfigurationBuilder {
     retained_package_load_plan: Option<Arc<crate::load::ProjectPackageLoadPlan>>,
     retained_package_main_plan: Option<Arc<crate::load::ProjectPackageMainPlan>>,
     retained_platform_packages: Option<RetainedPlatformPackages>,
+    package_xml_binding_profile: Option<PackageXmlBindingProfile>,
 }
 
 impl ProjectConfigurationBuilder {
@@ -689,6 +712,7 @@ impl ProjectConfigurationBuilder {
             retained_package_load_plan: None,
             retained_package_main_plan: None,
             retained_platform_packages: None,
+            package_xml_binding_profile: None,
         }
     }
 
@@ -719,6 +743,14 @@ impl ProjectConfigurationBuilder {
     #[must_use]
     pub const fn budget_policy(mut self, budget_policy: ProjectBudgetPolicy) -> Self {
         self.budget_policy = Some(budget_policy);
+        self
+    }
+
+    /// Select package named XML analysis explicitly. Construction requires the
+    /// genuine platform source and its retained package/Main owners.
+    #[must_use]
+    pub const fn with_package_xml_bindings(mut self, profile: PackageXmlBindingProfile) -> Self {
+        self.package_xml_binding_profile = Some(profile);
         self
     }
 
@@ -844,6 +876,7 @@ impl ProjectConfigurationBuilder {
             self.package_load_plan_digest,
             self.package_main_plan_digest,
             platform_package_binding_digest,
+            self.package_xml_binding_profile,
         )?;
         let configuration = ProjectConfiguration {
             project_id: self.project_id,
@@ -866,6 +899,7 @@ impl ProjectConfigurationBuilder {
             retained_package_main_plan: self.retained_package_main_plan,
             platform_package_binding_digest,
             retained_platform_packages: self.retained_platform_packages,
+            package_xml_binding_profile: self.package_xml_binding_profile,
         };
         configuration.validate()?;
         Ok(configuration)
@@ -888,6 +922,7 @@ fn configuration_digest(
     package_load_plan_digest: Option<ContentDigest<CanonicalResult>>,
     package_main_plan_digest: Option<ContentDigest<CanonicalResult>>,
     platform_package_binding_digest: Option<ContentDigest<CanonicalResult>>,
+    package_xml_binding_profile: Option<PackageXmlBindingProfile>,
 ) -> ProjectResult<ContentDigest<CanonicalResult>> {
     #[derive(Serialize)]
     struct Identity<'a> {
@@ -914,6 +949,8 @@ fn configuration_digest(
         xml_binding_adapter: Option<&'static str>,
         #[serde(skip_serializing_if = "Option::is_none")]
         platform_package_binding_digest: Option<ContentDigest<CanonicalResult>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        package_xml_binding_profile: Option<PackageXmlBindingProfile>,
     }
     canonical_digest(
         "wow-project/configuration/e0-d/1",
@@ -936,6 +973,7 @@ fn configuration_digest(
             xml_binding_adapter: load_plan_digest
                 .map(|_| crate::xml_bindings::XML_LUA_BINDING_PROFILE),
             platform_package_binding_digest,
+            package_xml_binding_profile,
         },
         ProjectPhase::Configuration,
     )

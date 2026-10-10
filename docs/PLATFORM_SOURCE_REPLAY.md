@@ -1,10 +1,14 @@
 # Platform source replay
 
-**Status:** implemented and verified. Full workspace gates pass on 2026-10-10: policy,
+**Status:** implemented and verified. Original v5 checkpoint evidence on 2026-10-10: policy,
 fmt, all-target/all-feature check, strict Clippy, tests (925 passed, 1 ignored, 108
 targets), strict rustdoc under `RUSTDOCFLAGS=-D warnings`, and all-target/all-feature
 build. Implemented scope is source and package replay plus the durable native store
 channel. Full W17 acceptance remains open.
+
+The subsequent selected /6 checkpoint passed all seven workspace gates/build
+with 936 tests passed, 1 ignored and 111 targets; see
+[package XML bindings](PLATFORM_PACKAGE_XML_BINDINGS.md).
 
 Byte admission is documented in
 [PLATFORM_SOURCE_ADMISSION](PLATFORM_SOURCE_ADMISSION.md), package specialization in
@@ -33,17 +37,24 @@ the pair is returned.
 
 ## Additive schema, no legacy rewrite
 
-The platform channel is new-only. A platform archive uses
+The platform channel is new-only. An unselected platform archive uses
 `wow-project/native-project-replay/5` and the `wow-project.live-replay.v5` storage
 schema, and no earlier archive acquires a platform channel it did not have. Ordinary
 generation version 2 archives without the platform channel keep
 `wow-project/native-project-replay/4` and `wow-project.live-replay.v4`.
 
-Storage selection stays a closed ladder in order of specificity. Platform archives map
-to v5, ordinary generation version 2 to v4, package archives to v3, load-plan archives to
-v2, and legacy physical archives to v1. `wow-project.live-replay.v1` through `v4` are a
+Explicit same-session package XML binding selection adds
+`wow-project/native-project-replay/6` and `wow-project.live-replay.v6`; see
+[package XML bindings](PLATFORM_PACKAGE_XML_BINDINGS.md). It requires the typed
+selection and genuine platform channel. /6 without that selection and /5 with
+it refuse, with no fallback.
+
+Storage selection stays a closed ladder in order of specificity. Selected package
+XML platform archives map to v6, unselected platform archives to v5, ordinary
+generation version 2 to v4, package archives to v3, load-plan archives to v2,
+and legacy physical archives to v1. `wow-project.live-replay.v1` through `v5` are a
 frozen published catalog and are never widened in place, so reopening one preserves its
-original epoch and membership identities. The original v1 through v4 recipes are
+original epoch and membership identities. The original v1 through v5 recipes are
 unchanged.
 
 Replay capture refuses an archive whose schema, platform presence and generation schema

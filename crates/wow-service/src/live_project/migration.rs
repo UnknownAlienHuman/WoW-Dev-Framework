@@ -234,6 +234,7 @@ pub fn resume_live_project_migration(
     let id = OperationId::new(operation_id).map_err(store_error)?;
     for schemas in [
         publication::STORAGE_SCHEMAS,
+        publication::STORAGE_SCHEMAS_V5,
         publication::STORAGE_SCHEMAS_V4,
         publication::STORAGE_SCHEMAS_V3,
         publication::STORAGE_SCHEMAS_V2,

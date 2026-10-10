@@ -2,9 +2,9 @@
 //! reconstructed from source bytes before being attached to the configuration.
 use super::invalid;
 use crate::{
-    AnalyzerBindingDeclaration, ProjectBudgetPolicy, ProjectCapabilityPolicy, ProjectConfiguration,
-    ProjectConfigurationBuilder, ProjectId, ProjectKind, ProjectResult, ProjectSourceOriginId,
-    ProjectWorkspaceId,
+    AnalyzerBindingDeclaration, PackageXmlBindingProfile, ProjectBudgetPolicy,
+    ProjectCapabilityPolicy, ProjectConfiguration, ProjectConfigurationBuilder, ProjectId,
+    ProjectKind, ProjectResult, ProjectSourceOriginId, ProjectWorkspaceId,
 };
 use serde::{Deserialize, Serialize};
 use wow_core::{
@@ -144,6 +144,8 @@ pub(super) struct ReplayConfiguration {
     capabilities: ReplayCapabilities,
     budgets: ReplayBudgets,
     expected_configuration_digest: ContentDigest<CanonicalResult>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    package_xml_binding_profile: Option<PackageXmlBindingProfile>,
 }
 impl ReplayConfiguration {
     pub(super) fn from_configuration(config: &ProjectConfiguration) -> ProjectResult<Self> {
@@ -170,6 +172,7 @@ impl ReplayConfiguration {
             },
             budgets: ReplayBudgets::capture(config.budget_policy()),
             expected_configuration_digest: config.configuration_digest(),
+            package_xml_binding_profile: config.package_xml_binding_profile(),
         })
     }
     pub(super) fn profile(&self) -> &ProfileIdentity {
@@ -177,6 +180,9 @@ impl ReplayConfiguration {
     }
     pub(super) fn is_platform(&self) -> bool {
         self.kind == ReplayKind::BlizzardUiPlatformSource
+    }
+    pub(super) fn package_xml_binding_profile(&self) -> Option<PackageXmlBindingProfile> {
+        self.package_xml_binding_profile
     }
     pub(super) fn rebuild(
         &self,
@@ -222,6 +228,10 @@ impl ReplayConfiguration {
         };
         let builder = match platform {
             Some(owner) => builder.platform_packages(owner)?,
+            None => builder,
+        };
+        let builder = match self.package_xml_binding_profile {
+            Some(profile) => builder.with_package_xml_bindings(profile),
             None => builder,
         };
         let config = builder.build()?;
