@@ -128,6 +128,9 @@ impl QuarantineInspection {
         )?;
         // Refuse an unadmittable next hold before any archive or selector effect.
         inherited.admit_hold(&record, previous.len(), self.evidence.len())?;
+        let sources =
+            super::source_authority::read(&self.root, &observed.source_authorities, stop)?;
+        sources.admit_hold(&inherited, &record, previous.len(), self.evidence.len())?;
         let parent = self.root.join("quarantines");
         match fs::symlink_metadata(&parent) {
             Ok(_) => database::directory(&parent)?,

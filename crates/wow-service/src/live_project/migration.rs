@@ -61,6 +61,42 @@ fn finish_preparation(
 }
 
 impl LiveProjectStore {
+    /// Export a ready target with exact guarded portable source selector/hold authority.
+    #[allow(clippy::too_many_arguments)]
+    pub fn export_ready_migration_to_new(
+        &self,
+        migration: &ValidatedMigration,
+        ready: &ReadyMigration,
+        root: &Path,
+        operation_id: &str,
+        expected: &RegistrySelection,
+        expected_current: Option<&CurrentRecordId>,
+        stop: &AtomicBool,
+    ) -> ServiceResult<VerifiedBackup> {
+        let id = OperationId::new(operation_id).map_err(store_error)?;
+        let backup = self
+            .store
+            .export_ready_migration_to_new(
+                migration,
+                ready,
+                root,
+                &id,
+                expected,
+                expected_current,
+                stop,
+            )
+            .map_err(store_error)?;
+        for generation in backup.manifest().generations() {
+            let read = backup
+                .read(
+                    &wow_store::project::ReadSelector::Exact(generation.clone()),
+                    stop,
+                )
+                .map_err(store_error)?;
+            AcquiredProjectPair::read(&read, stop).map_err(project_error)?;
+        }
+        Ok(backup)
+    }
     /// Build an inactive migration only from the exact guarded live snapshot.
     /// The complete live closure is checked before and after physical staging;
     /// native owner validation follows without selecting the target epoch.

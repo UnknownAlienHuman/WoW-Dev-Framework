@@ -25,6 +25,9 @@ fn native_v1_migration_preserves_pairs_current_and_exact_resumed_receipt() -> Te
     let target_root = root("migration-native-target")?;
     let export_root = root("migration-native-export")?;
     let preparation_root = root("migration-native-preparation")?;
+    let portable_root = root("migration-native-portable")?;
+    let portable_restore_root = root("migration-native-portable-restore")?;
+    let portable_recopy_root = root("migration-native-portable-recopy")?;
     let mut live = LiveProjectStore {
         store: ProjectStore::create(
             &source_root,
@@ -260,6 +263,60 @@ fn native_v1_migration_preserves_pairs_current_and_exact_resumed_receipt() -> Te
     );
     drop(pair);
     drop(read);
+    let portable = live.export_ready_migration_to_new(
+        &resumed,
+        &ready,
+        &portable_root,
+        "fixture:native-portable",
+        &expected,
+        Some(&second_current.record_id),
+        &stop,
+    )?;
+    assert_eq!(portable.manifest().source_authorities().len(), 1);
+    assert!(portable.manifest().retained_quarantines().is_empty());
+    assert_eq!(
+        portable.manifest().epoch(),
+        ready.artifact().manifest().epoch()
+    );
+    assert_ne!(
+        portable.manifest().snapshot_digest(),
+        ready_receipt.artifact_snapshot_digest()
+    );
+    let portable_manifest = portable.manifest().clone();
+    drop(portable);
+    let portable = VerifiedBackup::open(
+        &portable_root,
+        &catalog()?,
+        portable_manifest.operation_id(),
+        portable_manifest.snapshot_digest(),
+        &stop,
+    )?;
+    let read = portable.read(&ReadSelector::Current, &stop)?;
+    let pair = AcquiredProjectPair::read(&read, &stop)?;
+    assert_eq!(pair.project().snapshot_id(), second_ids.0);
+    assert_eq!(pair.graph(), &second_graph);
+    drop(pair);
+    drop(read);
+    let restored = crate::live_project::restore_live_project_to_new(
+        &portable,
+        &portable_restore_root,
+        "fixture:native-portable-restore",
+        &stop,
+    )?;
+    let copy = restored.backup_to_new(
+        &portable_recopy_root,
+        "fixture:native-portable-recopy",
+        &stop,
+    )?;
+    assert_eq!(
+        copy.manifest().source_authorities(),
+        portable_manifest.source_authorities()
+    );
+    copy.verify(&stop)?;
+    drop(copy);
+    assert_eq!(restored.current()?.as_ref(), ready_receipt.target_current());
+    drop(restored);
+    drop(portable);
     drop(ready);
     let reconciled = resume_live_project_migration_preparation(
         &resumed,
@@ -286,6 +343,9 @@ fn native_v1_migration_preserves_pairs_current_and_exact_resumed_receipt() -> Te
         target_root,
         export_root,
         preparation_root,
+        portable_root,
+        portable_restore_root,
+        portable_recopy_root,
     ] {
         std::fs::remove_dir_all(path)?;
     }

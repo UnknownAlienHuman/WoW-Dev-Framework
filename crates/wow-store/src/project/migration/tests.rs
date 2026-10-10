@@ -1,4 +1,6 @@
 //! Native inactive-epoch migration preserves opaque owner records and source history.
+#[path = "authority_tests.rs"]
+mod authority;
 #[path = "live_tests.rs"]
 mod live;
 #[path = "ready_tests.rs"]

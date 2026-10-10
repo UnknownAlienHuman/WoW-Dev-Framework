@@ -45,6 +45,27 @@ impl BackupState {
             )?,
         ))
     }
+    pub fn digest_with_authorities(
+        &self,
+        refs: &[QuarantineReference],
+        sources: &[crate::project::source_authority::SourceAuthorityReference],
+    ) -> StoreResult<String> {
+        if sources.is_empty() {
+            return self.digest_with_quarantines(refs);
+        }
+        crate::project::source_authority::validate_references(sources)?;
+        Ok(digest(
+            "project-backup-snapshot",
+            &encode(
+                &(
+                    "wow-store/project-backup/3",
+                    self.digest_with_quarantines(refs)?,
+                    sources,
+                ),
+                16 * 1024 * 1024,
+            )?,
+        ))
+    }
 }
 pub(in crate::project) fn capture(
     c: &Connection,

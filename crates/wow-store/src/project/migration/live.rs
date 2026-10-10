@@ -6,7 +6,7 @@ use crate::project::{
     backup::identity::capture,
     model::{checkpoint, failure},
     quarantine::archives,
-    registry,
+    registry, source_authority,
 };
 use crate::{OperationId, StoreErrorCode, StoreResult};
 use std::{path::Path, sync::atomic::AtomicBool};
@@ -66,12 +66,14 @@ impl ProjectStore {
             stop,
         )?;
         archives.validate_epoch(&self.db.epoch)?;
+        let sources = source_authority::read(&self.db.root, &admitted.source_authorities, stop)?;
+        sources.admit_selected(&archives)?;
 
         {
             let connection = self.db.read_connection()?;
             let state = capture(&connection, &self.db.epoch, stop)?;
             if state.recovery.current().map(|current| &current.record_id) != expected_current
-                || state.digest_with_quarantines(archives.references())?
+                || state.digest_with_authorities(archives.references(), sources.references())?
                     != source.manifest().snapshot_digest()
             {
                 return Err(failure(StoreErrorCode::CurrentConflict));

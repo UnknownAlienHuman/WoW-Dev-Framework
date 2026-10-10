@@ -36,6 +36,11 @@ impl QuarantinedStore {
         if backup.manifest().epoch() != self.epoch() {
             return Err(invalid());
         }
+        let selected = registry::read(&self.root, &self.epoch().catalog)?;
+        if &selected.selection != expected {
+            return Err(failure(StoreErrorCode::CurrentConflict));
+        }
+        super::super::source_authority::preflight_transport(&self.root, &selected, backup, stop)?;
         let parent = self.root.join("instances");
         archives::directory(&parent)?;
         let root = parent.join(intent.instance()?);
@@ -132,7 +137,17 @@ impl QuarantinedStore {
             stop,
         )?;
         let closure = source.merge(target)?;
+        let source_authorities =
+            super::super::source_authority::read(&self.root, &previous.source_authorities, stop)?;
+        let target_authorities = super::super::source_authority::read(
+            &candidate.backup.root,
+            candidate.backup.manifest().source_authorities(),
+            stop,
+        )?;
+        let authorities = source_authorities.merge(target_authorities)?;
+        authorities.admit_selected(&closure)?;
         archives::write(&self.root, &closure, stop)?;
+        super::super::source_authority::write(&self.root, &authorities, stop)?;
         let record = RegistryRecord::with_quarantines(
             self.epoch().clone(),
             candidate.intent.clone(),
@@ -140,7 +155,8 @@ impl QuarantinedStore {
             candidate.backup.manifest().current().cloned(),
             closure.references().to_vec(),
             closure.max_revision(),
-        )?;
+        )?
+        .with_source_authorities(authorities.references().to_vec())?;
         if selected.as_ref().is_some_and(|actual| actual != &record) {
             return Err(failure(StoreErrorCode::OperationConflict));
         }
@@ -195,7 +211,10 @@ impl QuarantinedStore {
             .map_err(|_| failure(StoreErrorCode::OutcomeUnknown))?;
         let actual = backup::identity::capture(&fresh, &db.epoch, &AtomicBool::new(false))
             .and_then(|state| {
-                state.digest_with_quarantines(candidate.backup.manifest().retained_quarantines())
+                state.digest_with_authorities(
+                    candidate.backup.manifest().retained_quarantines(),
+                    candidate.backup.manifest().source_authorities(),
+                )
             })
             .map_err(|_| failure(StoreErrorCode::OutcomeUnknown))?;
         if actual != candidate.intent.snapshot_digest {

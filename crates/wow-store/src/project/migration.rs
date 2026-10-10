@@ -1,4 +1,5 @@
 //! Explicit supported physical migration, stopping at a validated inactive epoch.
+mod authority;
 mod live;
 mod model;
 mod plan;

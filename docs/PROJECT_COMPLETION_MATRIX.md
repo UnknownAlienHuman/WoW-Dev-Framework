@@ -1,7 +1,7 @@
 # Project completion matrix
 
 **Audited:** 2026-09-19 America/New_York. Execution inventory refreshed 2026-10-09
-through the scoped W16 private immutable migration-ready checkpoint below.
+through the scoped W16 portable original-source selector/hold checkpoint below.
 
 This is the current execution ledger. [IMPLEMENTATION_HANDOFF.md](IMPLEMENTATION_HANDOFF.md)
 remains the normative I0–I7 plan; do not restart its historical bootstrap steps.
@@ -29,8 +29,8 @@ The root [Cargo.toml](../Cargo.toml) activates **16 members**, including the int
 | `wow-emmy` | Real pinned analyzer adapter, explicit Main/Library workspaces, same-session XML virtual units, syntax/semantic diagnostics, direct member calls and scoped local-flow facts | E0-C fixture/pin/checksum closure; additional semantic operations and update probes are not inferred from parser compatibility |
 | `wow-project` | Explicit inventories, bounded TOC/XML/package receipts, analyzer bindings, immutable generations, exact source artifacts/handles, guarded updates, publication and physical/standalone/package native replay | E0-D fixture identity closure; effective XML receiver/load semantics, full load acceptance, overlays and full durable project publication |
 | `wow-rules` | `wow.api.exists@1` over physical Main and exact-static XML inline facts; `wow.secret.local_operation@1` over its bounded physical flow slice | E0-E normative fixtures, exact prerequisite identities and complete capability/negative-authority cases; no inferred XML receiver/runtime authority |
-| `wow-service` | E0 status/check over immutable normalized contexts, mixed physical/XML rule scopes and exact XML finding projection; separate ReferenceView administration/publication | E0-F end-to-end fixture/CLI closure; full E1 Reference Pack and later public operation families |
-| `wow-store` | Typed SQLite objects, catalogs/CAS, journal, leases, GC and integrity; manifested recovery, native backup, isolated restore, same-epoch replacement, whole-instance quarantine/guarded restore, portable holds and inactive physical v1/v2 to v3 migration with guarded staging, target export and private immutable mapped-root/Current preparation | Full E1-A/E2-D acceptance; live cross-epoch selection, portable original-epoch authority, payload/runtime migration, domain quarantine, interrupted-write/power-loss and cleanup faults remain open |
+| `wow-service` | E0 status/check over immutable normalized contexts, mixed physical/XML rule scopes and exact XML finding projection; separate ReferenceView administration/publication; native Project/Graph replay for guarded READY-target source-authority export | E0-F end-to-end fixture/CLI closure; full E1 Reference Pack and later public operation families |
+| `wow-store` | Typed SQLite objects, catalogs/CAS, journal, leases, GC and integrity; manifested recovery, native backup, isolated restore, same-epoch replacement, whole-instance quarantine/guarded restore, portable holds and inactive physical v1/v2 to v3 migration with guarded staging, target export, private immutable mapped-root/Current preparation and portable original-epoch selector/hold authority | Full E1-A/E2-D acceptance; live cross-epoch selection/reconciliation, original source SQL/history hydration, portable full migration history, payload/runtime migration, domain quarantine, interrupted-write/power-loss and cleanup faults remain open |
 | `wow-reference` | Native source/model/corrections/aliases, compatibility imports, persistent ReferenceView and publication | E0-B/E1-B normative fixture and full Reference Pack/coverage acceptance |
 | `wow-annotations` | Native Ketho-derived library projection, alias/type/catalog/inheritance/navigation slices and consumer tests | Full E1-C contract/corpus parity; scoped passing consumers are not universal semantic certification |
 | `wow-graph` | Immutable snapshots, proposals/registries, neighbors, producer partitions, bounded queries, exact retained derivation/conflict records, evidence resolution and v1/v2 persistence | Complete producer-chain coverage and automatic conflict assessment, normative fixtures and coherent E2-D publication |
@@ -61,7 +61,7 @@ no Rust implementation in the audited source. Their documentation is not a binar
 | E1-A–E1-C | Partial executable | Finish only verified missing contract/acceptance slices; do not recreate existing store/reference/annotation implementations |
 | E1-D | Partial executable Reference Pack service and active internal builder with durable materialization/finalization | Close external parity/license/rebuild evidence, Windows/process-loss acceptance and complete package gates; code presence is not `ValidatedLocal` |
 | E2-A–E2-B | Partial executable | All 26 active E2-B rule IDs are service-published after the W11 semantic repair, TOC, XML and state slices; close public CLI/full-pipeline fixtures and package acceptance |
-| E2-C–E2-D | Partial source index, manifested store, native live pair service/CLI, cancellable updates, exact Library/fact-profile generation binding and retained physical native parser updates | Dependency-specific fact reuse, durable updates/removal closure, retention/GC/backup/epoch replacement and complete acceptance remain open; see [REPLAY_PUBLICATION.md](../crates/wow-project/REPLAY_PUBLICATION.md) |
+| E2-C–E2-D | Partial source index, manifested store, native live pair service/CLI, cancellable updates, exact Library/fact-profile generation binding, retained physical parser updates and durable physical update/removal publication; bounded retention/GC, backup/recovery, same-epoch replacement, inactive migration/READY preparation and portable source selector/hold authority | Dependency-specific fact reuse, standalone/package durable updates, live cross-epoch selection/reconciliation, portable full migration history and complete E2 acceptance remain open; see [REPLAY_PUBLICATION.md](../crates/wow-project/REPLAY_PUBLICATION.md) |
 | E3-A–E3-C | Not started | Exact Blizzard source universe, context owners and service/CLI after E2 closure |
 | E4-A–E4-C | Not started | Search, lineage/migration/static impact and routing after A0 prerequisites |
 | E5-A–E5-C | Not started | Calibration, independent review/holdout and governed publication lifecycle |
@@ -403,3 +403,18 @@ policy, fmt, check, strict Clippy, tests (914 passed, 1 ignored, 107 targets), s
 rustdoc and build pass on 2026-10-09. Live cross-epoch selection, portable entire
 migration history, interrupted-copy/power-loss and full W16/E2/source/runtime gates
 remain open. See [PROJECT_MIGRATION_READY.md](../crates/wow-store/PROJECT_MIGRATION_READY.md).
+
+Guarded READY-target export now carries independently admitted original-epoch
+selector/hold evidence through backup, isolated restore, replacement and quarantine.
+Source/live and immutable migration/READY evidence stays unchanged. Complete flat
+dependency admission, canonical digest/length checks, inherited reference subsets
+and combined aggregate limits precede staging effects. Source holds remain separate
+from target holds. Three native store cases and the extended native Project/Graph
+service lifecycle pass; workspace policy, fmt, check, strict Clippy, tests
+(917 passed, 1 ignored, 107 targets), strict rustdoc and build pass on 2026-10-09.
+See [PROJECT_SOURCE_AUTHORITY.md](PROJECT_SOURCE_AUTHORITY.md).
+
+Live cross-epoch selection/reconciliation, original source SQL/history hydration,
+portable full migration history, payload/runtime transformation, domain quarantine,
+arbitrary interrupted-copy/inside-write/power-loss/deletion/platform and full
+W16/E2/source/runtime acceptance remain open. W17-W26 are unchanged.

@@ -7,7 +7,7 @@ use crate::{OperationId, StoreErrorCode, StoreResult};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fs, path::Path, sync::atomic::AtomicBool};
 
-pub(super) const MAX_HOLDS: usize = 32;
+pub(in crate::project) const MAX_HOLDS: usize = 32;
 const MAX_BYTES: usize = 64 * 1024 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -89,7 +89,7 @@ impl ArchiveSet {
             .ok_or_else(|| failure(StoreErrorCode::BudgetExceeded))?;
         Ok(())
     }
-    fn byte_length(&self) -> StoreResult<usize> {
+    pub(in crate::project) fn byte_length(&self) -> StoreResult<usize> {
         self.archives.iter().try_fold(0usize, |n, a| {
             let record_length = a.record.bytes()?.len();
             n.checked_add(a.selection.len())
@@ -121,6 +121,27 @@ impl ArchiveSet {
         validate_references(&result.references)?;
         result.byte_length()?;
         Ok(result)
+    }
+    pub(in crate::project) fn hold_identities(&self) -> Vec<(EpochId, QuarantineReference)> {
+        self.archives
+            .iter()
+            .map(|a| (a.record.epoch.epoch_id().clone(), a.reference.clone()))
+            .collect()
+    }
+    pub(in crate::project) fn required_authorities(
+        &self,
+    ) -> StoreResult<Vec<super::super::source_authority::SourceAuthorityReference>> {
+        let mut refs = Vec::new();
+        for archive in &self.archives {
+            refs.extend(
+                registry::read_normal_shallow(&archive.record.epoch.catalog, &archive.selection)?
+                    .source_authorities,
+            );
+        }
+        refs.sort();
+        refs.dedup();
+        super::super::source_authority::validate_references(&refs)?;
+        Ok(refs)
     }
 }
 pub(in crate::project) fn validate_references(refs: &[QuarantineReference]) -> StoreResult<()> {

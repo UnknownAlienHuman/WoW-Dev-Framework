@@ -6,6 +6,7 @@ use super::super::{
     model::{CurrentPublication, EpochManifest, PartitionVersionId, StoreGenerationId, encode},
     quarantine::archives::QuarantineReference,
 };
+use crate::project::source_authority::SourceAuthorityReference;
 use crate::{OperationId, StoreResult};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -25,6 +26,8 @@ pub struct BackupManifest {
     pub(super) object_closure: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(super) retained_quarantines: Vec<QuarantineReference>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(super) source_authorities: Vec<SourceAuthorityReference>,
 }
 
 impl BackupManifest {
@@ -66,5 +69,8 @@ impl BackupManifest {
     }
     pub fn canonical_bytes(&self) -> StoreResult<Vec<u8>> {
         encode(self, 16 * 1024 * 1024)
+    }
+    pub fn source_authorities(&self) -> &[SourceAuthorityReference] {
+        &self.source_authorities
     }
 }

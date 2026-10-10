@@ -43,6 +43,30 @@ impl ReadyMigration {
     pub fn receipt(&self) -> &MigrationReadyReceipt {
         &self.receipt
     }
+    pub(in crate::project::migration) fn verify_for_export(
+        &self,
+        migration: &ValidatedMigration,
+        stop: &AtomicBool,
+    ) -> StoreResult<()> {
+        self.artifact.verify(stop)?;
+        require_intent(migration, &self.receipt.intent, stop)?;
+        let state = inventory::inspect(
+            &self.artifact.store,
+            migration,
+            &self.receipt.intent,
+            true,
+            stop,
+        )?;
+        if state.digest()? != self.receipt.artifact_snapshot
+            || copy_binding(&self.artifact)? != self.receipt.artifact
+            || self.receipt.request_digest != self.receipt.intent.digest()?
+            || registry::read_file(&self.artifact.root.join(RECORD_FILE), MAX_METADATA)?
+                != self.receipt.canonical_bytes()?
+        {
+            return Err(failure(StoreErrorCode::OperationConflict));
+        }
+        Ok(())
+    }
 }
 impl MigrationPreparation {
     /// Create the preparation copy once; an incomplete existing root is never recopied.
@@ -69,6 +93,7 @@ impl MigrationPreparation {
             || export.manifest().snapshot_digest() != migration.receipt().target_snapshot_digest()
             || export.manifest().current().is_some()
             || !export.manifest().retained_quarantines().is_empty()
+            || !export.manifest().source_authorities().is_empty()
         {
             return Err(invalid());
         }

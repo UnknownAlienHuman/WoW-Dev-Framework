@@ -909,3 +909,29 @@ and build pass. Live cross-epoch selection, portable full migration history,
 arbitrary interrupted-copy recovery, power loss, domain quarantine and full W16/E2
 or Gethe/Ketho/runtime acceptance remain separate open gates. See
 [PROJECT_MIGRATION_READY.md](../crates/wow-store/PROJECT_MIGRATION_READY.md).
+
+## W16 portable original-source selector and hold authority (2026-10-09)
+
+`ProjectStore::export_ready_migration_to_new` and its `LiveProjectStore` wrapper
+export a new immutable READY-target backup under exact live selector, optional
+Current and complete source snapshot guards before and after copying. Held
+migration/READY receipts and closed inventories are revalidated; every exported
+native Project/Graph pair is replayed. Original live and immutable evidence stays
+unchanged. [PROJECT_SOURCE_AUTHORITY.md](PROJECT_SOURCE_AUTHORITY.md) describes the owner.
+
+Canonical original selectors and native hold archives retain their own epoch/catalog
+in a complete flat dependency DAG. Full admission rejects missing dependencies,
+cycles, substituted bytes and unsafe paths. Combined source/target context is
+admitted before staging files and freshly before activation, within 32 authority
+manifests, 32 distinct epoch/hold-operation identities and 64 MiB. Backup/open/verify,
+isolated restore, replacement and quarantine preserve the closure and inherited
+source references. Source-bearing backups use schema 3, restored registries 7 and
+replacement registries 8; empty sources preserve existing canonical bytes/digests.
+
+Three native store cases and the extended native Project/Graph service lifecycle
+pass. Workspace policy, fmt, all-target/all-feature check, strict Clippy, tests
+(917 passed, 1 ignored, 107 targets), strict rustdoc and build pass. Exact live
+cross-epoch selection/reconciliation remains next. Original source SQL/history
+hydration, portable full migration history, payload/runtime transformation, domain
+quarantine, arbitrary interrupted-copy recovery, inside-write/power-loss/deletion/
+platform and full W16/E2/Gethe/Ketho/runtime acceptance remain open. W17-W26 are unchanged.

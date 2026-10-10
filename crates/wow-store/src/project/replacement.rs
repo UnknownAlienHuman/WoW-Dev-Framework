@@ -128,6 +128,11 @@ impl ProjectStore {
         if backup.manifest().epoch() != self.epoch() {
             return Err(invalid());
         }
+        let selected = registry::read(&self.db.root, &self.db.epoch.catalog)?;
+        if &selected.selection != expected {
+            return Err(failure(StoreErrorCode::CurrentConflict));
+        }
+        super::source_authority::preflight_transport(&self.db.root, &selected, backup, stop)?;
         let intent = ReplacementIntent::new(
             operation.clone(),
             expected.clone(),
@@ -246,7 +251,17 @@ impl ProjectStore {
             stop,
         )?;
         let archives = held.merge(target)?;
+        let source_authorities =
+            super::source_authority::read(&self.db.root, &source.source_authorities, stop)?;
+        let target_authorities = super::source_authority::read(
+            &candidate.backup.root,
+            candidate.backup.manifest().source_authorities(),
+            stop,
+        )?;
+        let authorities = source_authorities.merge(target_authorities)?;
+        authorities.admit_selected(&archives)?;
         super::quarantine::archives::write(&self.db.root, &archives, stop)?;
+        super::source_authority::write(&self.db.root, &authorities, stop)?;
         let record = RegistryRecord::with_quarantines(
             self.db.epoch.clone(),
             candidate.intent.clone(),
@@ -254,7 +269,8 @@ impl ProjectStore {
             candidate.backup.manifest().current().cloned(),
             archives.references().to_vec(),
             archives.max_revision(),
-        )?;
+        )?
+        .with_source_authorities(authorities.references().to_vec())?;
         let bytes = record.bytes()?;
         let selection = record.selection()?;
         if already_selected
@@ -318,7 +334,10 @@ impl ProjectStore {
             .map_err(|_| failure(StoreErrorCode::OutcomeUnknown))?;
         let actual = backup::identity::capture(&fresh, &db.epoch, &AtomicBool::new(false))
             .and_then(|state| {
-                state.digest_with_quarantines(candidate.backup.manifest().retained_quarantines())
+                state.digest_with_authorities(
+                    candidate.backup.manifest().retained_quarantines(),
+                    candidate.backup.manifest().source_authorities(),
+                )
             })
             .map_err(|_| failure(StoreErrorCode::OutcomeUnknown))?;
         if actual != record.intent.snapshot_digest {

@@ -14,6 +14,7 @@ mod registry;
 mod release;
 mod replacement;
 mod retention;
+mod source_authority;
 use crate::{OperationId, StoreError, StoreResult};
 pub use backup::{BackupManifest, VerifiedBackup};
 use database::Database;
@@ -42,6 +43,7 @@ pub use registry::RegistrySelection;
 pub use release::PublicationRelease;
 pub use replacement::{ReplacementCandidate, ReplacementReceipt};
 pub use retention::{RetentionRoot, RetentionRootId, RetentionRootKind};
+pub use source_authority::SourceAuthorityReference;
 use std::{path::Path, sync::atomic::AtomicBool};
 
 /// One process-local owner. All read snapshots share its OS-held writer lock;
