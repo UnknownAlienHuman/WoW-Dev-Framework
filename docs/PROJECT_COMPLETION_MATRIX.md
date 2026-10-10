@@ -1,7 +1,7 @@
 # Project completion matrix
 
 **Audited:** 2026-09-19 America/New_York. Execution inventory refreshed 2026-10-10
-through the scoped W17 replay/stable namespace and native lookup checkpoints below.
+through the scoped W17 replay/stable namespace, native lookup and raw traversal checkpoints below.
 
 This is the current execution ledger. [IMPLEMENTATION_HANDOFF.md](IMPLEMENTATION_HANDOFF.md)
 remains the normative I0–I7 plan; do not restart its historical bootstrap steps.
@@ -533,6 +533,20 @@ Workspace policy, fmt, check, strict Clippy, tests (932 passed, 1 ignored,
 110 targets), strict rustdoc and build pass on 2026-10-10. Native two-producer
 lookup/refusal, W4 typed error lowering and full service/store LibStub
 publication/readback cover the bounded bridge. Package XML/state graph projection,
-complete raw-member inventory, independent platform partitions/fingerprints,
+complete raw-member graph projection, independent platform partitions/fingerprints,
 SkeletonInputView and source transport remain open. No package or E2/E3 acceptance
 state advances; real corpus/performance/runtime remain NotEvaluated.
+
+The native raw inventory cursor borrows every verified Included member from the
+genuine immutable source owner, including opaque bytes, with canonical order and
+exact original metadata. Checked traversal uses inherited limits; cancellation
+is terminal for that cursor. Omissions, Partial inventory coverage and all
+source/admission/replay identity recipes remain unchanged. See
+[source admission](PLATFORM_SOURCE_ADMISSION.md).
+
+One native disk-absent binary/omission/cancellation case and workspace policy,
+fmt, check, strict Clippy, tests (933 passed, 1 ignored, 110 targets), strict
+rustdoc and build pass on 2026-10-10. Raw graph entity/read binding, package
+XML/state projection, independent platform producers, fingerprints,
+SkeletonInputView and source service/CLI transport remain open. This adds no
+E0/E2/E3 acceptance or real corpus/performance/runtime result.

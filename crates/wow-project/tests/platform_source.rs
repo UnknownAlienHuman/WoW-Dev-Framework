@@ -310,6 +310,133 @@ fn native_admission_retains_bytes_and_separate_identity_scopes() -> TestResult {
 }
 
 #[test]
+fn native_raw_inventory_borrows_included_bytes_and_keeps_terminal_cancellation() -> TestResult {
+    let root = FixtureRoot::new()?;
+    let stop = AtomicBool::new(false);
+    let profile = BlizzardUiSourceProfile::new(profile_request()?)?;
+    let admitted =
+        root.directory()?
+            .admit_platform_source(&profile, inventory(&root, &profile)?, &stop)?;
+    let receipt = admitted.receipt().clone();
+    let included: Vec<_> = receipt
+        .inventory()
+        .entries
+        .iter()
+        .filter_map(|entry| match &entry.disposition {
+            PlatformEntryDisposition::Included {
+                digest,
+                byte_length,
+                ..
+            } => Some((entry.path.as_str(), entry.kind, *digest, *byte_length)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        included.iter().map(|entry| entry.0).collect::<Vec<_>>(),
+        [
+            "UI/Fixture.toc",
+            "UI/defs.lua",
+            "UI/frames.xml",
+            "UI/opaque.bin",
+        ]
+    );
+    assert_eq!(receipt.inventory().entries.len(), 6);
+    assert_eq!(receipt.coverage().inventory(), CoverageStatus::Partial);
+    assert_eq!(receipt.coverage().verified_files(), included.len());
+    // Admission owns the bytes; neither constructing nor draining a cursor can reread disk.
+    std::fs::remove_dir_all(&root.0)?;
+    assert!(!root.0.exists());
+
+    stop.store(true, Ordering::Relaxed);
+    let constructor_error = admitted
+        .raw_inventory(&stop)
+        .err()
+        .ok_or("cancelled raw cursor constructor succeeded")?;
+    assert_eq!(
+        constructor_error.code(),
+        ProjectErrorCode::SourceReadCancelled
+    );
+    stop.store(false, Ordering::Relaxed);
+
+    let mut interrupted = admitted.raw_inventory(&stop)?;
+    assert!(std::ptr::eq(interrupted.receipt(), admitted.receipt()));
+    assert_eq!(
+        interrupted
+            .next(&stop)?
+            .ok_or("raw cursor omitted its first Included member")?
+            .path(),
+        included.first().ok_or("fixture has no Included members")?.0
+    );
+    stop.store(true, Ordering::Relaxed);
+    let cancellation = interrupted
+        .next(&stop)
+        .err()
+        .ok_or("mid-cursor cancellation succeeded")?;
+    assert_eq!(cancellation.code(), ProjectErrorCode::SourceReadCancelled);
+    stop.store(false, Ordering::Relaxed);
+    for _ in 0..2 {
+        assert_eq!(
+            interrupted
+                .next(&stop)
+                .err()
+                .ok_or("failed raw cursor resumed after cancellation was cleared")?,
+            cancellation
+        );
+    }
+    assert_eq!(interrupted.receipt(), &receipt);
+
+    let mut cursor = admitted.raw_inventory(&stop)?;
+    let mut yielded_paths = Vec::new();
+    let mut yielded_bytes = 0;
+    for &(path, kind, digest, byte_length) in &included {
+        let member = cursor
+            .next(&stop)?
+            .ok_or("raw cursor exhausted before all Included members")?;
+        assert_eq!(member.path(), path);
+        assert_eq!(member.kind(), kind);
+        assert_eq!(member.content_digest(), digest);
+        assert_eq!(raw_digest(member.bytes()), digest);
+        assert_eq!(member.byte_length(), byte_length);
+        assert_eq!(u64::try_from(member.bytes().len())?, byte_length);
+        assert!(std::ptr::eq(
+            member.bytes(),
+            admitted.source_bytes(member.path())?
+        ));
+        if path == "UI/opaque.bin" {
+            assert_eq!(member.kind(), PlatformFileKind::Unknown);
+            assert_eq!(member.bytes(), &[0xff, 0xfe, 0, 1]);
+        }
+        yielded_paths.push(member.path());
+        yielded_bytes += member.byte_length();
+    }
+    for _ in 0..3 {
+        assert!(cursor.next(&stop)?.is_none());
+    }
+    assert_eq!(yielded_paths.len(), receipt.coverage().verified_files());
+    assert_eq!(yielded_bytes, receipt.coverage().verified_bytes());
+    for entry in &receipt.inventory().entries {
+        if !matches!(
+            &entry.disposition,
+            PlatformEntryDisposition::Included { .. }
+        ) {
+            assert!(!yielded_paths.contains(&entry.path.as_str()));
+            assert_eq!(
+                admitted
+                    .source_bytes(&entry.path)
+                    .err()
+                    .ok_or("omitted raw inventory entry yielded bytes")?
+                    .code(),
+                ProjectErrorCode::FileNotPresent
+            );
+        }
+    }
+    assert_eq!(cursor.receipt(), &receipt);
+    assert_eq!(admitted.receipt(), &receipt);
+    assert_eq!(admitted.profile().digest(), profile.digest());
+    Ok(())
+}
+
+#[test]
 fn native_admission_refuses_stale_binding_invalid_inventory_and_unresolved_content() -> TestResult {
     let root = FixtureRoot::new()?;
     let directory = root.directory()?;

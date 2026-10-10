@@ -5,7 +5,8 @@ Clippy, tests (921 passed, 1 ignored, 108 targets), strict rustdoc and build pas
 on 2026-10-09. The owner is written in
 [platform_source/mod.rs](../crates/wow-project/src/platform_source/mod.rs), with
 [profile.rs](../crates/wow-project/src/platform_source/profile.rs) and
-[model.rs](../crates/wow-project/src/platform_source/model.rs). The root records
+[model.rs](../crates/wow-project/src/platform_source/model.rs). Native borrowed traversal
+is in [raw_inventory.rs](../crates/wow-project/src/platform_source/raw_inventory.rs). The root records
 actual gate results; implemented scope is not full W17 acceptance.
 
 E3-A is normative for this boundary:
@@ -155,6 +156,28 @@ normalization or a semantic inference. `source_bytes` returns a retained path or
 `FileNotPresent`, so an undeclared or excluded path is an error rather than a silent
 empty result.
 
+`AdmittedPlatformSource::raw_inventory(stop)` returns a borrowed
+`PlatformRawInventory`. Its fallible `next(stop)` yields each Included member in
+canonical path order, including binary and otherwise unconsumed files.
+`PlatformRawMember` exposes the original path, declared kind, verified digest,
+length and exact borrowed byte slice. `receipt()` retains every disposition,
+omission and original coverage assertion. These native types have private fields
+and cannot be constructed from serialized receipts.
+
+Traversal reuses sealed membership and bytes without disk reads, decoding,
+hashing again or copying the corpus. Checked entry/member/byte accounting uses
+the admitted profile limits. Cancellation or another error terminates that
+cursor and subsequent calls retain its original error; clearing cancellation
+cannot skip an advanced member. A fresh cursor requires the actual source owner.
+Only successful exhaustion closes traversal of the Included set; a prefix does
+not. Traversal creates no source handles, evidence IDs, graph entities or semantic
+facts. Original identities and Partial inventory coverage remain unchanged.
+
+The native disk-absent binary/omission/cancellation case passes on 2026-10-10.
+Workspace policy, fmt, all-target/all-feature check, strict Clippy, tests
+(933 passed, 1 ignored, 110 targets), strict rustdoc and build pass. This qualifies
+the borrowed traversal slice, not complete raw-member graph projection or E3.
+
 ## Refusals
 
 Admission returns an error and no owner-held result on a profile that fails validation,
@@ -176,6 +199,7 @@ redistribution rights.
 Later [package specialization](PLATFORM_SOURCE_PACKAGES.md),
 [configuration/Main/source graph](PLATFORM_SOURCE_CONFIGURATION.md) and
 [genuine replay/durable publication](PLATFORM_SOURCE_REPLAY.md) now consume this
-bounded owner. Source acquisition, full mirror materialization, stable logical
-store namespace, platform partitions/fingerprints, SkeletonInputView, source
+bounded owner. [Stable logical namespace publication](PLATFORM_STORE_NAMESPACE.md)
+is also executable. Source acquisition, full mirror materialization, complete
+raw-member graph projection, platform partitions/fingerprints, SkeletonInputView, source
 service/CLI transport, runtime and full W17/E2 acceptance remain open.

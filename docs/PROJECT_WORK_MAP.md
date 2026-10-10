@@ -74,8 +74,16 @@ ID separation. A real service fixture publishes and reopens a LibStub caller,
 then refuses a permutation of two accepted callable proposals. These are bounded
 synthetic checks; Gethe/Ketho corpus and WoW runtime remain NotEvaluated.
 
+Native raw-member traversal now exposes every verified Included file, including
+opaque binary content, from the actual immutable source owner. It borrows exact
+metadata/bytes, retains omissions and Partial coverage, and enforces inherited
+limits plus terminal cancellation. The disk-absent native case and workspace
+policy, fmt, check, strict Clippy, tests (933 passed, 1 ignored, 110 targets),
+strict rustdoc and build pass on 2026-10-10. Source/admission/replay identities
+remain unchanged; see [source admission](PLATFORM_SOURCE_ADMISSION.md).
+
 Next: package XML/state graph projection through retained native inputs, complete
-raw-member inventory and independently owned platform graph partitions/fingerprints, bounded
+raw-member graph projection and independently owned platform graph partitions/fingerprints, bounded
 SkeletonInputView and source service/CLI transport. Full W17, E0/E2, real
 mirror/performance/runtime and W18-W26 remain open. Gethe preparation follows
 product implementation/build.

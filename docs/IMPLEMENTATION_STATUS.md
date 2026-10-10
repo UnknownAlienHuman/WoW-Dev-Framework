@@ -57,8 +57,10 @@ snapshots and an explicit typed service selection; see
 policy, fmt, check, strict Clippy, tests (929 passed, 1 ignored, 109 targets), strict
 rustdoc and build pass on 2026-10-10. Exact native producer assertion lookup now
 serves callable/declaration joins; see the scoped checkpoint below and
-[usage](../crates/wow-graph/PARTITION_USAGE.md). Package XML/state projection,
-complete raw-member inventory, platform partitions/fingerprints, SkeletonInputView
+[usage](../crates/wow-graph/PARTITION_USAGE.md). Native borrowed raw-member
+traversal is also executable; see [source admission](PLATFORM_SOURCE_ADMISSION.md).
+Package XML/state projection, complete raw-member graph projection,
+platform partitions/fingerprints, SkeletonInputView
 and source service/CLI transport follow. Broad package acceptance remains open.
 
 ## W14 retained physical native analysis (2026-10-09)
@@ -1091,7 +1093,34 @@ refuses swapped accepted callable proposals. A focused W4 test verifies graph
 error lowering; it does not establish a timed cancellation race.
 
 No wire schema, CLI operation, semantic hash or producer profile is added here.
-Independent platform producer construction, complete raw inventory projection,
+Independent platform producer construction, complete raw-member graph projection,
 package XML/state graph inputs, fingerprints, SkeletonInputView and source
 service/CLI transport remain open. Full E2/E3/package acceptance and real
 Gethe/Ketho corpus/performance/runtime checks remain separate and NotEvaluated.
+
+## W17 native retained raw-member traversal (2026-10-10)
+
+`AdmittedPlatformSource::raw_inventory` provides a borrowed fallible cursor over
+the entire canonical Included set. `PlatformRawMember` retains original paths,
+declared kinds, verified raw digests/lengths and exact byte slices, including
+opaque files. The cursor joins the real immutable inventory and retained byte
+map without allocating tables, copying bytes, decoding, hashing again or disk access.
+It preserves the source receipt with every omission and unevaluated capability.
+See [source admission](PLATFORM_SOURCE_ADMISSION.md).
+
+Checked entry/member/byte accounting uses admitted profile limits. Cancellation
+and other errors are terminal and retain the original error after the stop flag
+clears; failed traversal cannot resume past an advanced entry. Successful
+exhaustion checks complete Included count/byte closure. Existing source,
+admission, coverage, configuration, analyzer, graph and replay identities remain
+unchanged. No wire schema, parser, semantic fact or graph publication is added.
+
+The native fixture removes its input directory, drains every Included member
+with exact metadata/byte-pointer equality, retains binary content and omissions,
+and checks constructor/mid-cursor cancellation, terminal error retention, a fresh
+drain and repeated exhaustion. Workspace policy, fmt, all-target/all-feature
+check, strict Clippy, tests (933 passed, 1 ignored, 110 targets), strict rustdoc
+and build pass. Raw-member graph entities/read binding, package XML/state graph
+inputs, independent platform partitions, fingerprints, SkeletonInputView and
+source transport remain open. Full W17/E3 and real corpus/performance/runtime
+acceptance remain NotEvaluated; Gethe materialization remains deferred.
