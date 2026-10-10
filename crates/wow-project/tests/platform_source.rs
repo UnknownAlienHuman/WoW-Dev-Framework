@@ -257,6 +257,148 @@ fn package_census_retains_empty_and_inline_only_closures_without_main() -> TestR
 }
 
 #[test]
+fn package_census_stream_preserves_native_records_and_retained_main() -> TestResult {
+    use wow_project::{
+        disk::ProjectDiskFile,
+        load::census::{CensusCoverage, census_platform_packages},
+    };
+    let root = FixtureRoot::new()?;
+    let mut request = profile_request()?;
+    request.exclusions.clear();
+    request.roots[0].selected_tocs.clear();
+    let mut packages = Vec::new();
+    let mut entries = Vec::new();
+    for (name, metadata) in [
+        ("A", "## Dependencies: B\n## OptionalDeps: C, Missing\n"),
+        ("B", "## Dependencies: A\n"),
+        ("C", "## LoadOnDemand: 1\n"),
+    ] {
+        let package_root = format!("UI/{name}");
+        std::fs::create_dir(root.0.join(&package_root))?;
+        for (file, kind, text) in [
+            (
+                "selected.toc",
+                PlatformFileKind::Toc,
+                format!(
+                    "## Interface: {}\n{metadata}main.lua\nframes.xml\nframes.xml\n",
+                    request.target.reference_profile.interface()
+                ),
+            ),
+            ("other.toc", PlatformFileKind::Toc, "unused.lua\n".into()),
+            (
+                "main.lua",
+                PlatformFileKind::Lua,
+                "local value = 1\n".into(),
+            ),
+            (
+                "frames.xml",
+                PlatformFileKind::Xml,
+                if name == "C" {
+                    "<Ui><Script file=\"missing.lua\"/></Ui>".into()
+                } else {
+                    "<Ui><Frame><Scripts><OnLoad>local value = 1</OnLoad></Scripts></Frame></Ui>"
+                        .into()
+                },
+            ),
+        ] {
+            let path = format!("{package_root}/{file}");
+            std::fs::write(root.0.join(&path), text.as_bytes())?;
+            entries.push(PlatformInventoryEntry {
+                path,
+                kind,
+                disposition: PlatformEntryDisposition::Included {
+                    digest: raw_digest(text.as_bytes()),
+                    byte_length: text.len() as u64,
+                    object_id: None,
+                },
+            });
+        }
+        request.roots[0]
+            .selected_tocs
+            .push(format!("{package_root}/selected.toc"));
+        packages.push(ProjectPackageInput::new(
+            name,
+            package_root,
+            name == "A",
+            vec![
+                ProjectPackageVariantInput::new(ProjectDiskFile::new("selected.toc"), true),
+                ProjectPackageVariantInput::new(ProjectDiskFile::new("other.toc"), false),
+            ],
+        ));
+    }
+    let profile = BlizzardUiSourceProfile::new(request)?;
+    let mut declared = inventory(&root, &profile)?;
+    declared.roots[0].declared_entries = entries.len() as u64;
+    declared.entries = entries;
+    let stop = AtomicBool::new(false);
+    let source = Arc::new(
+        root.directory()?
+            .admit_platform_source(&profile, declared, &stop)?,
+    );
+    let native = source.specialize_packages(&packages, None, &stop)?;
+    let census = census_platform_packages(&source, &packages, None, &stop)?;
+    let wire = serde_json::to_value(&census)?;
+    let plan = native.load_plan();
+    assert_eq!(
+        wire["native_package_plan_digest"],
+        serde_json::to_value(plan.digest())?
+    );
+    assert_eq!(
+        wire["native_package_plan_json_bytes"],
+        serde_json::to_vec(plan)?.len()
+    );
+    assert_eq!(
+        wire["native_coverage"],
+        serde_json::to_value(plan.coverage())?
+    );
+    assert_eq!(
+        wire["dependency_declarations"],
+        serde_json::to_value(plan.dependencies())?
+    );
+    assert_eq!(
+        wire["native_package_issues"],
+        serde_json::to_value(plan.issues())?
+    );
+    assert_eq!(census.order_groups(), plan.order_groups());
+    assert_eq!(census.loads().load_units, plan.units().len() as u64);
+    assert_eq!(census.loads().main_lua_files, native.files().len() as u64);
+    assert_eq!(census.loads().unselected_variants, 3);
+    assert!(census.loads().units_without_retained_target > 0);
+    assert_eq!(census.coverage(), CensusCoverage::Partial);
+    assert!(plan.order_groups().iter().any(|group| group.cyclic));
+    for measurement in census.packages() {
+        let retained = plan
+            .package_plan(&measurement.package)
+            .ok_or("missing retained plan")?;
+        assert_eq!(measurement.native_load_plan_digest, retained.digest());
+        assert_eq!(
+            measurement.counts.native_plan_json_bytes,
+            serde_json::to_vec(retained)?.len() as u64
+        );
+        assert_eq!(measurement.load_issues, retained.issues());
+        assert!(
+            native
+                .main_plan()
+                .resolve_source(&measurement.package, "main.lua")
+                .is_some()
+        );
+    }
+    packages.reverse();
+    assert_eq!(
+        census.digest(),
+        census_platform_packages(&source, &packages, None, &stop)?.digest()
+    );
+    assert_eq!(
+        census_platform_packages(&source, &packages, None, &AtomicBool::new(true))
+            .err()
+            .ok_or("stream ignored cancellation")?
+            .code(),
+        ProjectErrorCode::SourceReadCancelled
+    );
+    Ok(())
+}
+
+#[test]
 fn package_census_measures_more_than_ordinary_capacity_without_exporting_it() -> TestResult {
     use wow_project::load::census::{CensusCoverage, census_platform_packages};
     let root = FixtureRoot::new()?;

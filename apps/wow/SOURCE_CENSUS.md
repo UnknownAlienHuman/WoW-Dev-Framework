@@ -141,13 +141,21 @@ targets retain the existing load coverage and issues; no dummy file is inserted.
 
 Measurement capacity equals the validated selected-TOC count, whose existing
 profile ceiling is 1024. Ordinary Main specialization, graph and replay retain
-their 64-package limit. The internal expanded measurement plan cannot be exported
-to those owners. Aggregate source limits remain 4096 package-qualified sources
+their 64-package limit. Census retains data-only observations and native record
+projections; it never constructs an expanded retained Main plan. Aggregate source
+limits remain 4096 package-qualified sources
 and 64 MiB, including unselected TOC variants. Per-package parser/load bounds also
-remain in force. Retained records/elements/attributes/map segments/dependencies
-cannot exceed the prior maximum fanout of 64 ordinary packages. The sum of
-serialized individual plans and the serialized package plan are separately
-bounded by the existing 64-MiB artifact envelope before census identity encoding.
+remain in force. Processed records/elements/attributes/map segments/dependencies
+cannot exceed the prior maximum fanout of 64 ordinary packages. Each package is
+loaded and measured once, then its captured text, physical Lua and XML indexes
+are dropped before loading the next package. Ordinary retained loading and census
+use one native dependency/SCC/order/unit/digest builder.
+
+The 64-MiB encoding ceiling bounds each individual load plan, aggregate retained
+compact projections and measurements, final native package records and the
+census result. `native_plan_json_bytes` sums observed individual encodings using
+checked arithmetic; dropped syntax plans do not consume the compact retention
+budget. Encoded bytes are not an allocator or resident-memory ceiling.
 These finite measurement limits are not a qualified full-corpus graph profile.
 
 The receipt binds admitted source/profile/manifest identities, explicit physical

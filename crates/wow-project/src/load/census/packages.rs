@@ -5,11 +5,10 @@ use crate::{
     ProjectPhase, ProjectResult,
     disk::checkpoint,
     load::{
-        LoadIssue, LoadSelection, ProjectPackageInput, ProjectPackageLoadCoverage,
+        LoadIssue, LoadRecordKind, LoadSelection, ProjectPackageInput, ProjectPackageLoadCoverage,
         ProjectPackageLoadIssue, ProjectPackageOrderGroup, ProjectPackageReachability,
         TocDependencyDeclaration, TocDependencyKind, TocDependencyResolution, TocLoadContext,
-        package_capacity::PackageLoadCapacity,
-        package_closure::read_admitted_packages_with_capacity,
+        package_capacity::PackageLoadCapacity, package_closure::stream_admitted_package_census,
     },
     platform_source::AdmittedPlatformSource,
 };
@@ -156,118 +155,68 @@ pub fn census_platform_packages(
     checkpoint(stop)?;
     let capacity = PackageLoadCapacity::census(source)?;
     let pinned = source.pin_packages(packages, context, capacity, stop)?;
-    let input = read_admitted_packages_with_capacity(
+    let mut measured = Vec::with_capacity(pinned.len());
+    let mut loads = PackageLoadCounts::default();
+    let plan = stream_admitted_package_census(
         source,
         &pinned,
-        &source.profile().target().reference_profile,
         context,
         stop,
-        capacity,
-    )?;
-    let (loaded, plan) = input.into_parts();
-    let mut sources_by_package = BTreeMap::new();
-    for package in &loaded {
-        checkpoint(stop)?;
-        sources_by_package.insert(
-            package.package(),
-            package
-                .plan()
-                .sources()
+        |package, variants, plan_bytes, remaining| {
+            let declaration = pinned
                 .iter()
-                .map(|source| source.path.as_str())
-                .collect::<BTreeSet<_>>(),
-        );
-    }
-    let mut units_by_package = BTreeMap::<&str, (u64, u64)>::new();
-    for unit in plan.units() {
+                .find(|item| item.name() == package.package())
+                .ok_or_else(|| super::invalid("census package declaration is missing"))?;
+            let observation = measure_package(package, declaration, variants, plan_bytes, stop)?;
+            let encoded = measure::encoded_size(&observation, stop)?;
+            if encoded > remaining {
+                return Err(crate::load::budget_at(
+                    "package census retained measurement encoding limit exceeded",
+                ));
+            }
+            loads.add(&observation.counts)?;
+            measured.push(observation);
+            Ok(encoded)
+        },
+    )?;
+    let mut native_units = BTreeMap::<&str, u64>::new();
+    for unit in &plan.units {
         checkpoint(stop)?;
-        let counts = units_by_package.entry(&unit.package).or_default();
-        measure::add(&mut counts.0, 1)?;
-        if !sources_by_package
-            .get(unit.package.as_str())
-            .is_some_and(|sources| sources.contains(unit.target.as_str()))
-        {
-            measure::add(&mut counts.1, 1)?;
-        }
+        measure::add(native_units.entry(unit.package.as_str()).or_default(), 1)?;
     }
-    // Counts borrow names from the native plan, not the loaded packages.
-    drop(sources_by_package);
-    let mut measurements = Vec::with_capacity(loaded.len());
-    let mut loads = PackageLoadCounts::default();
-    for package in loaded {
+    let mut measurements = Vec::with_capacity(measured.len());
+    for observation in measured {
         checkpoint(stop)?;
         let node = plan
-            .packages()
+            .packages
             .iter()
-            .find(|node| node.package == package.package())
+            .find(|node| node.package == observation.package)
             .ok_or_else(|| super::invalid("census native package node is missing"))?;
-        let declaration = pinned
-            .iter()
-            .find(|item| item.name() == package.package())
-            .ok_or_else(|| super::invalid("census package declaration is missing"))?;
-        let mut counts = PackageLoadCounts {
-            main_lua_files: package.files().len() as u64,
-            expanded_records: package.plan().records().len() as u64,
-            load_issues: package.plan().issues().len() as u64,
-            native_plan_json_bytes: measure::encoded_size(package.plan(), stop)?,
-            ..PackageLoadCounts::default()
-        };
-        for source in package.plan().sources() {
-            checkpoint(stop)?;
-            measure::add(&mut counts.selected_sources, 1)?;
-            measure::add(&mut counts.selected_source_bytes, source.byte_length)?;
+        if node.selected_plan_digest != observation.native_load_plan_digest
+            || node.selected_toc != observation.selected_toc
+            || native_units
+                .get(node.package.as_str())
+                .copied()
+                .unwrap_or_default()
+                != observation.counts.load_units
+        {
+            return Err(super::invalid(
+                "census native package projection differs from observation",
+            ));
         }
-        for variant in node.variants.iter().filter(|variant| !variant.selected) {
-            checkpoint(stop)?;
-            measure::add(&mut counts.unselected_variants, 1)?;
-            measure::add(&mut counts.unselected_variant_bytes, variant.byte_length)?;
-        }
-        for record in package.plan().records() {
-            checkpoint(stop)?;
-            match record.selection {
-                LoadSelection::Excluded => measure::add(&mut counts.excluded_records, 1)?,
-                LoadSelection::Unresolved => measure::add(&mut counts.unresolved_records, 1)?,
-                LoadSelection::Included => {}
-            }
-        }
-        let units = units_by_package
-            .get(package.package())
-            .copied()
-            .unwrap_or_default();
-        counts.load_units = units.0;
-        counts.units_without_retained_target = units.1;
-        for index in package.plan().xml_documents().values() {
-            checkpoint(stop)?;
-            measure::add(&mut counts.xml_documents, 1)?;
-            measure::add(&mut counts.xml_elements, index.elements().len() as u64)?;
-            measure::add(
-                &mut counts.xml_map_segments,
-                index.map_segment_count() as u64,
-            )?;
-            for element in index.elements() {
-                checkpoint(stop)?;
-                if let Some(script) = &element.script {
-                    measure::add(&mut counts.xml_script_sites, 1)?;
-                    if script.inline_lua.is_some() {
-                        measure::add(&mut counts.xml_inline_units, 1)?;
-                    }
-                }
-            }
-        }
-        loads.add(&counts)?;
         measurements.push(PackageLoadMeasurement {
-            package: package.package().to_owned(),
-            root: declaration.root().to_owned(),
+            package: observation.package,
+            root: observation.root,
             selected_toc: node.selected_toc.clone(),
             selected_root: node.selected_root,
             reachability: node.reachability,
-            native_load_plan_digest: package.plan().digest(),
-            counts,
-            load_issues: package.plan().issues().to_vec(),
+            native_load_plan_digest: observation.native_load_plan_digest,
+            counts: observation.counts,
+            load_issues: observation.load_issues,
         });
     }
     let mut dependencies = PackageDependencyCounts::default();
-    for dependency in plan.dependencies() {
+    for dependency in &plan.dependencies {
         checkpoint(stop)?;
         measure::add(&mut dependencies.declarations, 1)?;
         measure::add(
@@ -299,10 +248,10 @@ pub fn census_platform_packages(
         content_manifest_digest: receipt.content_manifest_digest(),
         load_context: context.cloned(),
         selected_toc_capacity: capacity.packages(),
-        native_package_plan_digest: plan.digest(),
+        native_package_plan_digest: plan.digest,
         native_package_plan_json_bytes: measure::encoded_size(&plan, stop)?,
-        native_coverage: plan.coverage(),
-        coverage: if plan.coverage().complete()
+        native_coverage: plan.coverage,
+        coverage: if plan.coverage.complete()
             && receipt.coverage().inventory() == CoverageStatus::Complete
         {
             CensusCoverage::DeclaredMembersMeasured
@@ -312,17 +261,17 @@ pub fn census_platform_packages(
         packages: measurements,
         loads,
         dependencies,
-        dependency_declarations: plan.dependencies().to_vec(),
-        native_package_issues: plan.issues().to_vec(),
-        order_groups: plan.order_groups().to_vec(),
+        dependency_declarations: plan.dependencies.clone(),
+        native_package_issues: plan.issues.clone(),
+        order_groups: plan.order_groups.clone(),
         cyclic_groups: plan
-            .order_groups()
+            .order_groups
             .iter()
             .filter(|group| group.cyclic)
             .count() as u64,
-        package_issues: plan.issues().len() as u64,
+        package_issues: plan.issues.len() as u64,
         blocking_package_issues: plan
-            .issues()
+            .issues
             .iter()
             .filter(|issue| issue.blocks_complete)
             .count() as u64,
@@ -336,4 +285,95 @@ pub fn census_platform_packages(
     )?;
     checkpoint(stop)?;
     Ok(result)
+}
+
+/// Exact measured data retained after one package's syntax has been dropped.
+/// Universe reachability is added only after the real native builder returns.
+#[derive(Serialize)]
+struct MeasuredPackage {
+    package: String,
+    root: String,
+    selected_toc: String,
+    native_load_plan_digest: ContentDigest<CanonicalResult>,
+    counts: PackageLoadCounts,
+    load_issues: Vec<LoadIssue>,
+}
+
+fn measure_package(
+    package: &crate::load::ProjectLoadedPackage,
+    declaration: &ProjectPackageInput,
+    variants: &[crate::load::ProjectPackageVariantReceipt],
+    plan_bytes: u64,
+    stop: &AtomicBool,
+) -> ProjectResult<MeasuredPackage> {
+    checkpoint(stop)?;
+    let plan = package.plan();
+    let mut counts = PackageLoadCounts {
+        main_lua_files: package.files().len() as u64,
+        expanded_records: plan.records().len() as u64,
+        load_issues: plan.issues().len() as u64,
+        native_plan_json_bytes: plan_bytes,
+        ..PackageLoadCounts::default()
+    };
+    let retained = plan
+        .sources()
+        .iter()
+        .map(|source| source.path.as_str())
+        .collect::<BTreeSet<_>>();
+    for source in plan.sources() {
+        checkpoint(stop)?;
+        measure::add(&mut counts.selected_sources, 1)?;
+        measure::add(&mut counts.selected_source_bytes, source.byte_length)?;
+    }
+    for variant in variants.iter().filter(|variant| !variant.selected) {
+        checkpoint(stop)?;
+        measure::add(&mut counts.unselected_variants, 1)?;
+        measure::add(&mut counts.unselected_variant_bytes, variant.byte_length)?;
+    }
+    for record in plan.records() {
+        checkpoint(stop)?;
+        match record.selection {
+            LoadSelection::Excluded => measure::add(&mut counts.excluded_records, 1)?,
+            LoadSelection::Unresolved => measure::add(&mut counts.unresolved_records, 1)?,
+            LoadSelection::Included => {}
+        }
+        if record.selection == LoadSelection::Included
+            && matches!(
+                record.kind,
+                LoadRecordKind::LuaFile | LoadRecordKind::XmlFile
+            )
+            && let Some(target) = &record.target
+        {
+            measure::add(&mut counts.load_units, 1)?;
+            if !retained.contains(target.as_str()) {
+                measure::add(&mut counts.units_without_retained_target, 1)?;
+            }
+        }
+    }
+    for index in plan.xml_documents().values() {
+        checkpoint(stop)?;
+        measure::add(&mut counts.xml_documents, 1)?;
+        measure::add(&mut counts.xml_elements, index.elements().len() as u64)?;
+        measure::add(
+            &mut counts.xml_map_segments,
+            index.map_segment_count() as u64,
+        )?;
+        for element in index.elements() {
+            checkpoint(stop)?;
+            if let Some(script) = &element.script {
+                measure::add(&mut counts.xml_script_sites, 1)?;
+                if script.inline_lua.is_some() {
+                    measure::add(&mut counts.xml_inline_units, 1)?;
+                }
+            }
+        }
+    }
+    Ok(MeasuredPackage {
+        package: package.package().to_owned(),
+        root: declaration.root().to_owned(),
+        selected_toc: plan.selected_toc().to_owned(),
+        native_load_plan_digest: plan.digest(),
+        counts,
+        load_issues: plan.issues().to_vec(),
+    })
 }

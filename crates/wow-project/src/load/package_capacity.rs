@@ -1,6 +1,6 @@
 //! Internal measurement capacity. It cannot be supplied by wire or exported as
 //! a Main/graph/replay capability. Other load entry points retain package64.
-use super::{ProjectLoadPlan, budget, census::bounded_encoded_size};
+use super::{ProjectLoadPlan, budget, budget_at, census::bounded_encoded_size};
 use crate::{ProjectResult, disk::checkpoint, platform_source::AdmittedPlatformSource};
 use std::sync::atomic::AtomicBool;
 
@@ -40,29 +40,28 @@ impl PackageLoadCapacity {
     }
 }
 
-/// Preserve the previous worst-case retained syntax fanout of 64 ordinary
-/// packages even when the exact measurement selection contains more packages.
-/// The selected source count/bytes remain separately capped by the load owner.
+/// Preserve the previous finite syntax-work fanout even when completed syntax
+/// indexes are dropped between packages. Each encoded plan remains bounded.
 #[derive(Default)]
 pub(crate) struct CensusRetention {
     records: usize,
     elements: usize,
     attributes: usize,
     segments: usize,
-    plan_json_bytes: u64,
 }
 impl CensusRetention {
     pub(crate) fn charge(
         &mut self,
         plan: &ProjectLoadPlan,
         stop: &AtomicBool,
-    ) -> ProjectResult<()> {
+    ) -> ProjectResult<u64> {
         checkpoint(stop)?;
         let fanout = super::package_closure::MAX_PACKAGES;
         charge(
             &mut self.records,
             plan.records().len(),
             fanout * super::MAX_RECORDS,
+            "package census processed-record count limit exceeded",
         )?;
         for index in plan.xml_documents().values() {
             checkpoint(stop)?;
@@ -70,31 +69,34 @@ impl CensusRetention {
                 &mut self.elements,
                 index.elements().len(),
                 fanout * super::MAX_RECORDS,
+                "package census processed-element count limit exceeded",
             )?;
             charge(
                 &mut self.attributes,
                 index.attribute_count(),
                 fanout * 65_536,
+                "package census processed-attribute count limit exceeded",
             )?;
             charge(
                 &mut self.segments,
                 index.map_segment_count(),
                 fanout * 65_536,
+                "package census processed-map-segment count limit exceeded",
             )?;
         }
-        self.plan_json_bytes = self
-            .plan_json_bytes
-            .checked_add(bounded_encoded_size(plan, stop)?)
-            .filter(|bytes| *bytes <= 64 * 1024 * 1024)
-            .ok_or_else(budget)?;
-        Ok(())
+        bounded_encoded_size(plan, stop)
     }
 }
 
-fn charge(total: &mut usize, count: usize, limit: usize) -> ProjectResult<()> {
+fn charge(
+    total: &mut usize,
+    count: usize,
+    limit: usize,
+    message: &'static str,
+) -> ProjectResult<()> {
     *total = total
         .checked_add(count)
         .filter(|sum| *sum <= limit)
-        .ok_or_else(budget)?;
+        .ok_or_else(|| budget_at(message))?;
     Ok(())
 }

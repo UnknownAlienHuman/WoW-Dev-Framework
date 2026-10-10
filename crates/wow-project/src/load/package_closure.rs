@@ -11,6 +11,9 @@ use serde::{Deserialize, Serialize};
 use wow_core::{CanonicalResult, ContentDigest, ProfileIdentity, SourceContent};
 
 use super::package_capacity::{CensusRetention, PackageLoadCapacity};
+mod acquisition;
+mod projection;
+mod unit_projection;
 use super::{
     LoadIssueKind, LoadRecordKind, LoadSelection, ProjectLoadPlan, TocLoadContext, budget, invalid,
     profile_digest,
@@ -20,6 +23,8 @@ use crate::disk::{
 };
 use crate::platform_source::AdmittedPlatformSource;
 use crate::{ProjectError, ProjectErrorCode, ProjectInputFile, ProjectPhase, ProjectResult};
+pub(crate) use projection::{PackagePlanRecords, build_records, project_package};
+use unit_projection::{PackageUnitDraft, project_units};
 
 /// Versioned multi-package static load closure. This is not runtime evidence.
 pub const PACKAGE_LOAD_PROFILE: &str = "wow-project/package-load-closure/2";
@@ -413,17 +418,8 @@ impl ProjectPackageMainPlan {
 /// roots are absent; each loaded package retains its ordinary ProjectLoadPlan.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ProjectPackageLoadPlan {
-    profile: &'static str,
-    target_flavor: String,
-    target_interface: u64,
-    target_profile_digest: ContentDigest<CanonicalResult>,
-    packages: Vec<ProjectPackageNode>,
-    dependencies: Vec<TocDependencyDeclaration>,
-    order_groups: Vec<ProjectPackageOrderGroup>,
-    units: Vec<ProjectPackageLoadUnit>,
-    issues: Vec<ProjectPackageLoadIssue>,
-    coverage: ProjectPackageLoadCoverage,
-    digest: ContentDigest<CanonicalResult>,
+    #[serde(flatten)]
+    records: PackagePlanRecords,
     #[serde(skip)]
     retained_plans: BTreeMap<String, ProjectLoadPlan>,
     #[serde(skip)]
@@ -433,37 +429,37 @@ pub struct ProjectPackageLoadPlan {
 impl ProjectPackageLoadPlan {
     #[must_use]
     pub const fn digest(&self) -> ContentDigest<CanonicalResult> {
-        self.digest
+        self.records.digest
     }
 
     #[must_use]
     pub fn packages(&self) -> &[ProjectPackageNode] {
-        &self.packages
+        &self.records.packages
     }
 
     #[must_use]
     pub fn dependencies(&self) -> &[TocDependencyDeclaration] {
-        &self.dependencies
+        &self.records.dependencies
     }
 
     #[must_use]
     pub fn order_groups(&self) -> &[ProjectPackageOrderGroup] {
-        &self.order_groups
+        &self.records.order_groups
     }
 
     #[must_use]
     pub fn units(&self) -> &[ProjectPackageLoadUnit] {
-        &self.units
+        &self.records.units
     }
 
     #[must_use]
     pub fn issues(&self) -> &[ProjectPackageLoadIssue] {
-        &self.issues
+        &self.records.issues
     }
 
     #[must_use]
     pub const fn coverage(&self) -> ProjectPackageLoadCoverage {
-        self.coverage
+        self.records.coverage
     }
 
     /// Reopen the exact selected-TOC receipt for one admitted package. These
@@ -493,12 +489,12 @@ impl ProjectPackageLoadPlan {
     }
 
     fn validate_retained_plans(&self) -> ProjectResult<()> {
-        if self.retained_plans.len() != self.packages.len() {
+        if self.retained_plans.len() != self.records.packages.len() {
             return Err(invalid(
                 "package load plan does not retain every selected TOC receipt",
             ));
         }
-        for package in &self.packages {
+        for package in &self.records.packages {
             let Some(plan) = self.retained_plans.get(&package.package) else {
                 return Err(invalid("package selected TOC receipt is missing"));
             };
@@ -531,9 +527,9 @@ impl ProjectPackageLoadPlan {
     }
 
     pub fn validate_profile(&self, profile: &ProfileIdentity) -> ProjectResult<()> {
-        if self.target_interface != profile.interface()
-            || self.target_flavor != profile.flavor_id()
-            || self.target_profile_digest != profile_digest(profile)?
+        if self.records.target_interface != profile.interface()
+            || self.records.target_flavor != profile.flavor_id()
+            || self.records.target_profile_digest != profile_digest(profile)?
         {
             return Err(invalid(
                 "package load plan target differs from the selected profile",
@@ -771,7 +767,7 @@ pub(crate) fn read_admitted_packages(
     )
 }
 
-pub(crate) fn read_admitted_packages_with_capacity(
+fn read_admitted_packages_with_capacity(
     source: &AdmittedPlatformSource,
     packages: &[ProjectPackageInput],
     profile: &ProfileIdentity,
@@ -818,155 +814,17 @@ fn read_package_sources(
     }
     let declarations = validate_declarations_with_capacity(packages, capacity)?;
     let mut loaded = Vec::with_capacity(declarations.len());
-    let mut variants = BTreeMap::<String, Vec<ProjectPackageVariantReceipt>>::new();
-    let mut variant_sources = BTreeMap::<String, BTreeMap<String, Arc<str>>>::new();
-    let mut total_sources = 0usize;
-    let mut total_bytes = 0usize;
-    let mut retention = CensusRetention::default();
-
+    let mut variants = BTreeMap::new();
+    let mut variant_sources = BTreeMap::new();
+    let mut source_budget = acquisition::PackageSourceBudget::default();
     for package in declarations {
-        checkpoint(stop)?;
-        let selected = package
-            .variants
-            .iter()
-            .find(|variant| variant.selected)
-            .ok_or_else(|| invalid("package has no selected TOC variant"))?;
-        let input = match &sources {
-            PackageSources::Disk(directory) => directory.read_toc_project_with_context(
-                &package.root,
-                &selected.toc,
-                profile,
-                context,
-                stop,
-            )?,
-            PackageSources::Retained(scopes) => {
-                let scope = &scopes[package.name.as_str()];
-                let selected_sources = scope
-                    .iter()
-                    .filter(|(path, _)| !path.ends_with(".toc") || **path == selected.toc.path())
-                    .map(|(path, text)| (*path, *text))
-                    .collect();
-                super::read_retained_toc(selected_sources, &selected.toc, profile, context, stop)?
-            }
-            PackageSources::Admitted(source) if capacity.is_census() => {
-                super::read_admitted_toc_for_census(
-                    source,
-                    &package.root,
-                    &selected.toc,
-                    context,
-                    stop,
-                )?
-            }
-            PackageSources::Admitted(source) => super::read_admitted_toc(
-                source,
-                &package.root,
-                &selected.toc,
-                profile,
-                context,
-                stop,
-            )?,
-        };
-        let (files, plan) = input.into_parts();
-        if capacity.is_census() {
-            retention.charge(&plan, stop)?;
-        }
-        let selected_source = plan
-            .sources()
-            .iter()
-            .find(|source| source.path == selected.toc.path())
-            .ok_or_else(|| invalid("selected TOC is absent from its load receipt"))?;
-        let mut receipts = vec![ProjectPackageVariantReceipt {
-            package: package.name.clone(),
-            toc: selected.toc.path().to_owned(),
-            selected: true,
-            content_digest: selected_source.content_digest,
-            byte_length: selected_source.byte_length,
-        }];
-        let mut texts = BTreeMap::from([(
-            selected.toc.path().to_owned(),
-            Arc::<str>::from(
-                plan.document_text(selected.toc.path())
-                    .ok_or_else(|| invalid("selected TOC text is missing"))?,
-            ),
-        )]);
-        for variant in package.variants.iter().filter(|variant| !variant.selected) {
-            checkpoint(stop)?;
-            let text: Arc<str> = match &sources {
-                PackageSources::Disk(directory) => {
-                    let bytes = directory.subdirectory(&package.root)?.read(
-                        &variant.toc,
-                        DISK_SOURCE_MAX_BYTES,
-                        stop,
-                    )?;
-                    String::from_utf8(bytes)
-                        .map_err(|_| invalid("unselected TOC variant must contain UTF-8"))?
-                        .into()
-                }
-                PackageSources::Retained(scopes) => {
-                    let text = scopes[package.name.as_str()]
-                        .get(variant.toc.path())
-                        .ok_or_else(|| invalid("unselected TOC variant source is missing"))?;
-                    variant.toc.verify(text.as_bytes())?;
-                    Arc::from(*text)
-                }
-                PackageSources::Admitted(source) => {
-                    let bytes = source.load_member(
-                        &package.root,
-                        &variant.toc,
-                        DISK_SOURCE_MAX_BYTES,
-                        stop,
-                    )?;
-                    let text = std::str::from_utf8(bytes).map_err(|_| {
-                        ProjectError::new(
-                            ProjectErrorCode::InvalidEncoding,
-                            ProjectPhase::Inventory,
-                            "unselected TOC variant must contain UTF-8",
-                        )
-                    })?;
-                    Arc::from(text)
-                }
-            };
-            if text.contains('\0') {
-                return Err(invalid("unselected TOC variant contains a NUL character"));
-            }
-            receipts.push(ProjectPackageVariantReceipt {
-                package: package.name.clone(),
-                toc: variant.toc.path().to_owned(),
-                selected: false,
-                content_digest: crate::identity::source_digest(text.as_bytes()),
-                byte_length: text.len() as u64,
-            });
-            total_sources = total_sources.checked_add(1).ok_or_else(budget)?;
-            total_bytes = total_bytes.checked_add(text.len()).ok_or_else(budget)?;
-            texts.insert(variant.toc.path().to_owned(), text);
-        }
-        receipts.sort_by(|left, right| left.toc.cmp(&right.toc));
-        total_sources = total_sources
-            .checked_add(plan.sources().len())
-            .ok_or_else(budget)?;
-        for source in plan.sources() {
-            let length = usize::try_from(source.byte_length).map_err(|_| budget())?;
-            total_bytes = total_bytes.checked_add(length).ok_or_else(budget)?;
-        }
-        if total_sources > MAX_PACKAGE_SOURCES || total_bytes > MAX_PACKAGE_SOURCE_BYTES {
-            return Err(budget());
-        }
-        if let PackageSources::Retained(scopes) = &sources
-            && scopes[package.name.as_str()].len() != plan.sources().len() + texts.len() - 1
-        {
-            return Err(invalid(
-                "retained package source set includes undeclared variants",
-            ));
-        }
-        variant_sources.insert(package.name.clone(), texts);
-        variants.insert(package.name.clone(), receipts);
-        loaded.push(ProjectLoadedPackage {
-            package: package.name.clone(),
-            files,
-            plan,
-        });
+        let selection =
+            acquisition::read_selected(&sources, package, profile, context, stop, capacity)?;
+        source_budget.charge(&selection)?;
+        variant_sources.insert(package.name.clone(), selection.texts);
+        variants.insert(package.name.clone(), selection.variants);
+        loaded.push(selection.loaded);
     }
-
     loaded.sort_by(|left, right| left.package.cmp(&right.package));
     let plan = build_plan(
         packages,
@@ -983,6 +841,63 @@ fn read_package_sources(
     })
 }
 
+/// Stream exact load observations, retaining only bounded data projections.
+/// The callback reports its own retained measurement encoding before admission.
+pub(crate) fn stream_admitted_package_census(
+    source: &AdmittedPlatformSource,
+    packages: &[ProjectPackageInput],
+    context: Option<&TocLoadContext>,
+    stop: &AtomicBool,
+    mut observe: impl FnMut(
+        &ProjectLoadedPackage,
+        &[ProjectPackageVariantReceipt],
+        u64,
+        u64,
+    ) -> ProjectResult<u64>,
+) -> ProjectResult<PackagePlanRecords> {
+    checkpoint(stop)?;
+    let capacity = PackageLoadCapacity::census(source)?;
+    let declarations = validate_declarations_with_capacity(packages, capacity)?;
+    if let Some(context) = context {
+        context.validate()?;
+    }
+    let profile = &source.profile().target().reference_profile;
+    let sources = PackageSources::Admitted(source);
+    let mut source_budget = acquisition::PackageSourceBudget::default();
+    let mut work_budget = CensusRetention::default();
+    let mut remaining = 64u64 * 1024 * 1024;
+    let mut projected = Vec::with_capacity(declarations.len());
+    for package in declarations {
+        checkpoint(stop)?;
+        let selection =
+            acquisition::read_selected(&sources, package, profile, context, stop, capacity)?;
+        source_budget.charge(&selection)?;
+        let plan_bytes = work_budget.charge(&selection.loaded.plan, stop)?;
+        let projection = project_package(
+            &package.name,
+            &selection.loaded.plan,
+            &selection.variants,
+            stop,
+        )?;
+        remaining = remaining
+            .checked_sub(super::census::bounded_encoded_size(&projection, stop)?)
+            .ok_or_else(|| {
+                super::budget_at("package census retained projection encoding limit exceeded")
+            })?;
+        let observed = observe(
+            &selection.loaded,
+            &selection.variants,
+            plan_bytes,
+            remaining,
+        )?;
+        remaining = remaining.checked_sub(observed).ok_or_else(|| {
+            super::budget_at("package census retained measurement encoding limit exceeded")
+        })?;
+        projected.push(projection);
+        // selection's physical Lua, captured text and XML indexes drop here.
+    }
+    build_records(packages, &projected, profile, stop, capacity)
+}
 pub(crate) fn validate_declarations(
     packages: &[ProjectPackageInput],
 ) -> ProjectResult<Vec<&ProjectPackageInput>> {
@@ -1054,7 +969,7 @@ fn valid_package_name(value: &str) -> bool {
 }
 
 /// Normalized selected-TOC metadata projection consumed by this owner.
-#[derive(Default)]
+#[derive(Debug, Clone, Default, Serialize)]
 pub(crate) struct MetadataProjection {
     pub(crate) dependencies: Vec<TocDependencyDeclaration>,
     pub(crate) load_on_demand: TocLoadOnDemandState,
@@ -1147,319 +1062,33 @@ fn build_plan(
     stop: &AtomicBool,
     capacity: PackageLoadCapacity,
 ) -> ProjectResult<ProjectPackageLoadPlan> {
-    let declaration_by_name = declarations
+    let projected = loaded
         .iter()
-        .map(|package| (package.name.clone(), package))
-        .collect::<BTreeMap<_, _>>();
-    let canonical_by_folded = declarations
-        .iter()
-        .map(|package| (package.name.to_ascii_lowercase(), package.name.clone()))
-        .collect::<BTreeMap<_, _>>();
-    let plan_by_name = loaded
-        .iter()
-        .map(|package| (package.package.clone(), &package.plan))
-        .collect::<BTreeMap<_, _>>();
-
-    let mut dependencies = Vec::new();
-    let mut load_on_demand = BTreeMap::new();
-    let mut issues = Vec::new();
-    let mut duplicate_edges = BTreeSet::new();
-    for (package, plan) in &plan_by_name {
-        checkpoint(stop)?;
-        let projection = project_metadata(package, plan)?;
-        load_on_demand.insert(package.clone(), projection.load_on_demand);
-        if projection.conflicting_load_on_demand {
-            issues.push(issue(
-                ProjectPackageLoadIssueKind::ConflictingLoadOnDemand,
-                package,
-                None,
-                None,
-                true,
-            ));
-        }
-        for mut dependency in projection.dependencies {
-            checkpoint(stop)?;
-            if capacity.is_census() && dependencies.len() >= MAX_PACKAGES * MAX_DEPENDENCIES {
-                return Err(budget());
-            }
-            let active = dependency.selection == LoadSelection::Included;
-            if dependency.selection == LoadSelection::Unresolved {
-                issues.push(issue_from_dependency(
-                    ProjectPackageLoadIssueKind::DependencyConditionUnresolved,
-                    &dependency,
-                    dependency.kind == TocDependencyKind::Required,
-                ));
-                dependency.resolution = TocDependencyResolution::ConditionUnresolved;
-            } else if dependency.selection == LoadSelection::Excluded {
-                dependency.resolution = TocDependencyResolution::Excluded;
-            } else if !valid_package_name(&dependency.dependency) {
-                issues.push(issue_from_dependency(
-                    ProjectPackageLoadIssueKind::InvalidDependencyName,
-                    &dependency,
-                    dependency.kind == TocDependencyKind::Required,
-                ));
-                dependency.resolution = TocDependencyResolution::InvalidName;
-            } else if active {
-                let folded = dependency.dependency.to_ascii_lowercase();
-                if let Some(resolved) = canonical_by_folded.get(&folded) {
-                    dependency.resolution = TocDependencyResolution::Resolved;
-                    dependency.resolved_package = Some(resolved.clone());
-                    let edge = (package.clone(), dependency.kind, resolved.clone());
-                    if !duplicate_edges.insert(edge) {
-                        issues.push(issue_from_dependency(
-                            ProjectPackageLoadIssueKind::DuplicateDependency,
-                            &dependency,
-                            false,
-                        ));
-                    }
-                    if package == resolved {
-                        issues.push(issue_from_dependency(
-                            ProjectPackageLoadIssueKind::SelfDependency,
-                            &dependency,
-                            true,
-                        ));
-                    }
-                } else {
-                    dependency.resolution = TocDependencyResolution::Missing;
-                    issues.push(issue_from_dependency(
-                        if dependency.kind == TocDependencyKind::Required {
-                            ProjectPackageLoadIssueKind::MissingRequiredDependency
-                        } else {
-                            ProjectPackageLoadIssueKind::MissingOptionalDependency
-                        },
-                        &dependency,
-                        dependency.kind == TocDependencyKind::Required,
-                    ));
-                }
-            }
-            dependencies.push(dependency);
-        }
-        if !local_file_closure_complete(plan) {
-            issues.push(issue(
-                ProjectPackageLoadIssueKind::PackageFileClosurePartial,
-                package,
-                None,
-                None,
-                true,
-            ));
-        }
-    }
-
-    // Ordinals are package-local in the parser projection. Rebind them to one
-    // deterministic global sequence after canonical package ordering.
-    for (ordinal, dependency) in dependencies.iter_mut().enumerate() {
-        dependency.ordinal = ordinal as u64;
-    }
-
-    let adjacency = resolved_adjacency(declarations, &dependencies);
-    let components = strongly_connected_components(
-        declaration_by_name.keys().cloned().collect(),
-        &adjacency,
-        stop,
-    )?;
-    let (order_groups, group_by_package, cycle_issues) =
-        order_components(&components, &dependencies, &adjacency, stop)?;
-    issues.extend(cycle_issues);
-
-    let reachability = classify_reachability(declarations, &dependencies, stop)?;
-    let mut nodes = Vec::with_capacity(declarations.len());
-    for declaration in declaration_by_name.values() {
-        checkpoint(stop)?;
-        let plan = plan_by_name
-            .get(&declaration.name)
-            .ok_or_else(|| invalid("loaded package plan is missing"))?;
-        let state = *reachability
-            .get(&declaration.name)
-            .unwrap_or(&ProjectPackageReachability::Unreachable);
-        let lod = *load_on_demand
-            .get(&declaration.name)
-            .unwrap_or(&TocLoadOnDemandState::NotDeclared);
-        nodes.push(ProjectPackageNode {
-            package: declaration.name.clone(),
-            selected_root: declaration.selected_root,
-            selected_toc: plan.selected_toc().to_owned(),
-            selected_plan_digest: plan.digest(),
-            variants: variants
-                .get(&declaration.name)
-                .cloned()
-                .ok_or_else(|| invalid("package variant receipt is missing"))?,
-            load_on_demand: lod,
-            reachability: state,
-            phase: package_phase(declaration, state, lod),
-        });
-    }
-    nodes.sort_by(|left, right| left.package.cmp(&right.package));
-
-    let node_by_name = nodes
-        .iter()
-        .map(|node| (node.package.as_str(), node))
-        .collect::<BTreeMap<_, _>>();
-    let mut units = Vec::new();
-    for group in &order_groups {
-        for package in &group.packages {
-            checkpoint(stop)?;
-            let node = node_by_name
-                .get(package.as_str())
-                .ok_or_else(|| invalid("package order references an unknown node"))?;
-            let plan = plan_by_name
-                .get(package)
-                .ok_or_else(|| invalid("package load plan is missing"))?;
-            for record in plan.records().iter().filter(|record| {
-                record.selection == LoadSelection::Included
-                    && matches!(
-                        record.kind,
-                        LoadRecordKind::LuaFile | LoadRecordKind::XmlFile
-                    )
-                    && record.target.is_some()
-            }) {
-                checkpoint(stop)?;
-                let target = record
-                    .target
-                    .as_ref()
-                    .ok_or_else(|| invalid("load unit has no target"))?;
-                #[derive(Serialize)]
-                struct UnitIdentity<'a> {
-                    profile: &'static str,
-                    package: &'a str,
-                    plan: ContentDigest<CanonicalResult>,
-                    source_ordinal: u64,
-                    document: &'a str,
-                    target: &'a str,
-                    kind: LoadRecordKind,
-                    bootstrap: bool,
-                }
-                let unit_digest = crate::identity::canonical_digest(
-                    "wow-project/package-load-unit/1",
-                    &UnitIdentity {
-                        profile: PACKAGE_LOAD_PROFILE,
-                        package,
-                        plan: plan.digest(),
-                        source_ordinal: record.ordinal,
-                        document: &record.document,
-                        target,
-                        kind: record.kind,
-                        bootstrap: record.bootstrap,
-                    },
-                    ProjectPhase::Inventory,
-                )?;
-                units.push(ProjectPackageLoadUnit {
-                    ordinal: units.len() as u64,
-                    unit_digest,
-                    package: package.clone(),
-                    order_group: *group_by_package
-                        .get(package)
-                        .ok_or_else(|| invalid("package order group is missing"))?,
-                    source_ordinal: record.ordinal,
-                    document: record.document.clone(),
-                    target: target.clone(),
-                    kind: record.kind,
-                    bootstrap: record.bootstrap,
-                    reachability: node.reachability,
-                    phase: if record.bootstrap {
-                        ProjectPackageLoadPhase::Bootstrap
-                    } else {
-                        node.phase
-                    },
-                });
-            }
-        }
-    }
-
-    issues.sort_by(|left, right| {
-        (
-            &left.package,
-            &left.dependency,
-            left.byte_start,
-            left.kind as u8,
-        )
-            .cmp(&(
-                &right.package,
-                &right.dependency,
-                right.byte_start,
-                right.kind as u8,
-            ))
-    });
-    let dependencies_complete = !issues.iter().any(|issue| {
-        issue.blocks_complete
-            && !matches!(
-                issue.kind,
-                ProjectPackageLoadIssueKind::PackageFileClosurePartial
-                    | ProjectPackageLoadIssueKind::RequiredDependencyCycle
-                    | ProjectPackageLoadIssueKind::OptionalDependencyCycle
-                    | ProjectPackageLoadIssueKind::MixedDependencyCycle
+        .map(|package| {
+            project_package(
+                &package.package,
+                &package.plan,
+                variants
+                    .get(&package.package)
+                    .ok_or_else(|| invalid("package variant receipt is missing"))?,
+                stop,
             )
-    });
-    let canonical_order_complete = !issues.iter().any(|issue| {
-        matches!(
-            issue.kind,
-            ProjectPackageLoadIssueKind::RequiredDependencyCycle
-                | ProjectPackageLoadIssueKind::OptionalDependencyCycle
-                | ProjectPackageLoadIssueKind::MixedDependencyCycle
-        )
-    });
-    let file_closure_complete = !issues
-        .iter()
-        .any(|issue| issue.kind == ProjectPackageLoadIssueKind::PackageFileClosurePartial);
-    let coverage = ProjectPackageLoadCoverage {
-        variants_complete: true,
-        dependencies_complete,
-        canonical_order_complete,
-        file_closure_complete,
-    };
-    let target_profile_digest = profile_digest(profile)?;
-    #[derive(Serialize)]
-    struct Identity<'a> {
-        profile: &'static str,
-        target_profile_digest: ContentDigest<CanonicalResult>,
-        packages: &'a [ProjectPackageNode],
-        dependencies: &'a [TocDependencyDeclaration],
-        order_groups: &'a [ProjectPackageOrderGroup],
-        units: &'a [ProjectPackageLoadUnit],
-        issues: &'a [ProjectPackageLoadIssue],
-        coverage: ProjectPackageLoadCoverage,
-    }
-    let identity = Identity {
-        profile: PACKAGE_LOAD_PROFILE,
-        target_profile_digest,
-        packages: &nodes,
-        dependencies: &dependencies,
-        order_groups: &order_groups,
-        units: &units,
-        issues: &issues,
-        coverage,
-    };
-    if capacity.is_census() {
-        super::census::bounded_encoded_size(&identity, stop)?;
-    }
-    let digest = crate::identity::canonical_digest(
-        "wow-project/package-load-plan/1",
-        &identity,
-        ProjectPhase::Inventory,
-    )?;
+        })
+        .collect::<ProjectResult<Vec<_>>>()?;
+    let records = build_records(declarations, &projected, profile, stop, capacity)?;
     let retained_plans = loaded
         .iter()
         .map(|package| (package.package.clone(), package.plan.clone()))
-        .collect::<BTreeMap<_, _>>();
+        .collect();
     checkpoint(stop)?;
     let plan = ProjectPackageLoadPlan {
-        profile: PACKAGE_LOAD_PROFILE,
-        target_flavor: profile.flavor_id().to_owned(),
-        target_interface: profile.interface(),
-        target_profile_digest,
-        packages: nodes,
-        dependencies,
-        order_groups,
-        units,
-        issues,
-        coverage,
-        digest,
+        records,
         retained_plans,
         retained_variants,
     };
     plan.validate_retained_plans()?;
     Ok(plan)
 }
-
 fn local_file_closure_complete(plan: &ProjectLoadPlan) -> bool {
     !plan.issues().iter().any(|issue| {
         issue.blocks_complete

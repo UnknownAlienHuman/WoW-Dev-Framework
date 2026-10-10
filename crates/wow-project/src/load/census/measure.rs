@@ -1,6 +1,6 @@
 use super::super::{
-    LoadRecordKind, LoadSelection, Record, TocLoadContext, XmlScriptSource, budget, invalid, toc,
-    xml,
+    LoadRecordKind, LoadSelection, Record, TocLoadContext, XmlScriptSource, budget, budget_at,
+    invalid, toc, xml,
 };
 use super::{CensusDocumentOutcome, CensusRefusal, CensusSyntaxCounts};
 use crate::{
@@ -147,7 +147,9 @@ pub(crate) fn encoded_size<T: Serialize + ?Sized>(
     let result = serde_json::to_writer(&mut counter, value);
     checkpoint(stop)?;
     if counter.overflow {
-        return Err(budget());
+        return Err(budget_at(
+            "census serialized artifact encoding byte limit exceeded",
+        ));
     }
     result.map_err(|_| invalid("census metadata cannot be encoded"))?;
     Ok(counter.used)

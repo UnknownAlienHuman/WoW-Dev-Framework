@@ -546,7 +546,7 @@ impl Loader<'_> {
     fn charge_parse(&mut self, bytes: usize) -> ProjectResult<()> {
         self.parsed_bytes = self.parsed_bytes.checked_add(bytes).ok_or_else(budget)?;
         if self.parsed_bytes > 64 * 1024 * 1024 {
-            return Err(budget());
+            return Err(budget_at("TOC/XML parsed-byte limit exceeded"));
         }
         Ok(())
     }
@@ -568,7 +568,7 @@ impl Loader<'_> {
             return Ok(Arc::clone(text));
         }
         if self.captured.len() >= DISK_INVENTORY_MAX_FILES {
-            return Err(budget());
+            return Err(budget_at("TOC/XML captured-source count limit exceeded"));
         }
         let remaining = DISK_INVENTORY_MAX_BYTES.saturating_sub(self.total_bytes);
         let limit = remaining.min(DISK_SOURCE_MAX_BYTES);
@@ -588,7 +588,7 @@ impl Loader<'_> {
                     )
                 })?;
                 if text.len() > limit {
-                    return Err(budget());
+                    return Err(budget_at("TOC/XML retained-source byte limit exceeded"));
                 }
                 selected.verify(text.as_bytes())?;
                 Arc::from(*text)
@@ -624,14 +624,14 @@ impl Loader<'_> {
         bootstrap: bool,
     ) -> ProjectResult<()> {
         if depth > MAX_INCLUDE_DEPTH {
-            return Err(budget());
+            return Err(budget_at("TOC/XML include-depth limit exceeded"));
         }
         self.active.insert(document.to_owned());
         for mut record in parsed {
             record.bootstrap |= bootstrap;
             checkpoint(self.stop)?;
             if self.records.len() >= MAX_RECORDS {
-                return Err(budget());
+                return Err(budget_at("TOC/XML expanded-record count limit exceeded"));
             }
             let target = record
                 .target
@@ -682,7 +682,7 @@ impl Loader<'_> {
                 );
             }
             if record.kind == LoadRecordKind::XmlFile && depth >= MAX_INCLUDE_DEPTH {
-                return Err(budget());
+                return Err(budget_at("TOC/XML include-depth limit exceeded"));
             }
             let content = match self.capture(&ProjectDiskFile::new(&target)) {
                 Ok(content) => content,
@@ -712,11 +712,18 @@ impl Loader<'_> {
                         self.xml_nodes += index.elements().len();
                         self.xml_attributes += index.attribute_count();
                         self.xml_segments += index.map_segment_count();
-                        if self.xml_nodes > MAX_RECORDS
-                            || self.xml_attributes > 65_536
-                            || self.xml_segments > 65_536
-                        {
-                            return Err(budget());
+                        if self.xml_nodes > MAX_RECORDS {
+                            return Err(budget_at("TOC/XML retained-element count limit exceeded"));
+                        }
+                        if self.xml_attributes > 65_536 {
+                            return Err(budget_at(
+                                "TOC/XML retained-attribute count limit exceeded",
+                            ));
+                        }
+                        if self.xml_segments > 65_536 {
+                            return Err(budget_at(
+                                "TOC/XML retained-map-segment count limit exceeded",
+                            ));
                         }
                         self.xml_documents.insert(target.clone(), index);
                     }
@@ -821,9 +828,12 @@ fn invalid(message: &'static str) -> ProjectError {
     )
 }
 fn budget() -> ProjectError {
+    budget_at("TOC/XML acquisition exceeds its bounded load profile")
+}
+fn budget_at(message: &'static str) -> ProjectError {
     ProjectError::new(
         ProjectErrorCode::SourceBudgetExceeded,
         ProjectPhase::Inventory,
-        "TOC/XML acquisition exceeds its bounded load profile",
+        message,
     )
 }

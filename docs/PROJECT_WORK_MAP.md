@@ -7,9 +7,9 @@ the work queue. Follow [the execution model](EXECUTION_MODEL.md).
 
 ## Verified routing base
 
-`main` checkpoint `a78320f8f6ff7c007ea650f57344b7dfc658d7e0`, tree
-`816ab8c35536063b20b3fcdb161828624f1b84d8`, was published and read back with all
-changed blobs. [Quick 38077176686](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/38077176686)
+`main` checkpoint `4a55c2c0f79ff99db84bbb1002f1a716de7f1dc9`, tree
+`00fe0ca02e9d9f41c4fc3b9a482c309f11e54172`, was published and read back with all
+changed blobs. [Quick 38079270175](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/38079270175)
 passed on that exact head. This is the verified base of this routing update;
 subsequent publication and gate evidence belong in the canonical Issue.
 
@@ -26,15 +26,17 @@ They describe one selected operation, not permanent client/source defaults.
 full-corpus qualification. Lexical source measurement returns honest Partial
 coverage. Original-byte BOM positions are corrected: all 1091 XML documents in
 the re-resolved corpus parse. Empty physical-Lua closures are measurable without
-Main capability. The selected native package operation now refuses with
-`BudgetExceeded: TOC/XML acquisition exceeds its bounded load profile`; the exact
-breached ceiling and package/graph counts remain unmeasured. Do not infer the selected map population from a whole-inventory
-lexical script count or compare XML-index JSON bytes with graph metadata bytes.
+Main capability. The cumulative 64-MiB syntax-plan encoding guard was identified
+and replaced by one-package streaming with bounded compact retention. The newly
+re-resolved 273-package native census now returns its exact measurements and
+Partial dependency/file-closure coverage. Ordinary retained Main, full graph/map
+population and their finite capacity remain unqualified. Do not infer the actual
+map-owner population from lexical script counts or compare XML-index JSON bytes
+with graph metadata bytes. Operation details belong in #113.
 
 | Order | Bounded functional responsibility | Required boundary |
 |---|---|---|
-| 1 — #113 | Identify the native package budget refusal and its exact breached ceiling | Use existing owner counters; no guessed capacity cause or automatic cap increase |
-| 2 — #113 | Measure the actual selected load/map/graph scopes and choose finite capacity or an explicit partition strategy | Owner-produced counts, checked arithmetic, cancellation and exact identities; no arbitrary cap increase or clipping |
+| 1 — #113 | Qualify remaining actual map/graph/Main scopes and choose finite capacity or an explicit partition strategy | Selected native load measurements exist; use actual downstream owner counts, checked arithmetic, cancellation and exact identities; no arbitrary cap increase or clipping |
 | 3 — [#114](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/114) | Make graph axes bind exact relation definitions | Stop overloading Owns/Loads; preserve actual registry/support meaning |
 | 4 — [#115](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/115) | Select coherent capability composition and reconcile transient variants | Name real application, persistence and replay consumers; no cumulative producer ladder |
 | 5 — [#117](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/117) | Freeze XML object/region classification authority | Current exact source/schema evidence, conservative unknowns; no runtime inference |
