@@ -64,9 +64,12 @@ the selected route below; two native cases and final workspace gates/build pass
 (938 passed, 0 failed, 1 ignored, 111 targets). The selected Included-member graph
 and held native byte binding now also pass the scoped lifecycle and workspace
 gates/build (939 passed, 0 failed, 1 ignored, 111 targets); see
-[raw inventory graph](PLATFORM_RAW_INVENTORY_GRAPH.md). The remaining platform
-direct-producer split, fingerprints, SkeletonInputView and source service/CLI
-transport follow.
+[raw inventory graph](PLATFORM_RAW_INVENTORY_GRAPH.md). A separate native-only
+four-stage direct plan now also passes its scoped case and workspace gates/build
+(940 passed, 0 failed, 1 ignored, 112 targets); see
+[native direct producers](PLATFORM_DIRECT_PRODUCERS.md). Split application
+integration, missing direct roles, fingerprints, SkeletonInputView and source
+service/CLI transport follow.
 Broad package acceptance remains open.
 
 ## W14 retained physical native analysis (2026-10-09)
@@ -1243,10 +1246,48 @@ tests (939 passed, 0 failed, 1 ignored, 111 targets), strict rustdoc with
 2026-10-10 07:48:26 UTC. This records local verification; remote publication and CI
 are not asserted. See [PLATFORM_RAW_INVENTORY_GRAPH.md](PLATFORM_RAW_INVENTORY_GRAPH.md).
 
-Remaining TOC/XML/analyzer direct assertions still share their prior source
-producer. The new inventory partition does not complete the four-way E3 split
-or its full containment/load relation model. Fingerprints, bounded
-SkeletonInputView and source service/CLI transport remain future work. Full
+At this raw application checkpoint, TOC/XML/analyzer direct assertions still
+shared their prior source producer. Its new inventory partition did not complete
+the four-way E3 split or its full containment/load relation model. Fingerprints,
+bounded SkeletonInputView and source service/CLI transport remain future work. Full
 W17/E3/package, real Gethe/Ketho corpus, performance, native fault/exhaustion and
 WoW runtime acceptance remain NotEvaluated. W18-W26 stay unchanged; Gethe
 acquisition/materialization remains deferred.
+
+## W17 native direct producer plan (2026-10-10)
+
+`build_platform_graph_proposal_plan` adds the separate library profile
+`wow-project/platform-direct-producers/1` over a genuine selected platform
+ProjectView. One common projection supplies either the unchanged flattened
+builder or four captured stages: Inventory, TocLoad, AnalyzerStructure and
+XmlStructure. The existing raw inventory batch remains an independent prelude
+when selected. No parser/analyzer rerun or temporary ProjectView is added.
+
+`build_stage` requires exact native predecessor admission; a pending stage can
+be retried without advancing merely because its batch was constructed.
+Cross-stage endpoints and derivations use genuine Producer lookup and accepted
+input-generation IDs. Consuming `finish` validates exactly four admitted stages
+plus selected raw, refuses unrelated partitions/tombstones and monolithic
+overlays, and returns borrowed `PlatformGraphProvenance` with exact assertion
+addresses and held-source evidence catalog. Private fields and no Deserialize
+route prevent metadata from constructing the capability. Partial inventory,
+confidence, omissions, ambiguity and provenance/license assertions remain intact.
+
+The native two-package case passes with source disk absent. It checks both
+four-stage and raw-plus-four-stage finish/catalog closure, exact endpoint and
+derivation support, scope/order/pending/version/overlay/surplus refusals, `/6`
+and `/7` hydration and unchanged `/8` capture plus old monolithic payloads.
+Final workspace policy, fmt, all-target/all-feature check, strict Clippy,
+tests (940 passed, 0 failed, 1 ignored, 112 targets), strict rustdoc under
+`RUSTDOCFLAGS=-D warnings` and all-target/all-feature build pass, completed
+2026-10-10 08:35:50 UTC. These are local scoped results, not remote publication
+or CI evidence. See [PLATFORM_DIRECT_PRODUCERS.md](PLATFORM_DIRECT_PRODUCERS.md).
+
+Configuration, service/recognizer routes, source `/19`–`/21`, ordinary replay
+v1-v4, platform replay v5-v8 and storage/catalog/epoch recipes remain unchanged.
+Application publication retains its existing monolithic captured producer.
+Split application integration, missing direct roles, fingerprints, bounded
+SkeletonInputView and source service/CLI transport remain open. Full W17/E3,
+corpus/performance/runtime and native fault/exhaustion acceptance stay
+NotEvaluated; no source completeness or license permission is inferred.
+Gethe materialization stays deferred and W18-W26 remain unchanged.

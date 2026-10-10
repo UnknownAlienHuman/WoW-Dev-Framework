@@ -105,12 +105,15 @@ full tests (**938 passed, 0 failed, 1 ignored, 111 targets**), strict rustdoc wi
 These results include the final unreachable-source omission correction. This
 records local verification; remote checkpoint publication is not asserted here.
 
-The package source producer remains monolithic; the existing recognizer partitions
-remain separate. A later explicit route adds the separate Included-member graph
-and bounded native byte binding; see
-[PLATFORM_RAW_INVENTORY_GRAPH.md](PLATFORM_RAW_INVENTORY_GRAPH.md). Independent
-platform direct producers and fingerprints, bounded SkeletonInputView and source
-service/CLI transport remain open. Full W17/E3/package acceptance, real Gethe/Ketho corpus,
+This published package route retains its monolithic captured source producer;
+the existing recognizer partitions remain separate. The explicit raw route adds
+Included-member graph and bounded native byte binding; see
+[PLATFORM_RAW_INVENTORY_GRAPH.md](PLATFORM_RAW_INVENTORY_GRAPH.md). A separate
+[native library plan](PLATFORM_DIRECT_PRODUCERS.md) now admits four captured
+direct stages without changing this route's configuration/service/replay
+channels. Split application integration, missing direct roles, fingerprints,
+bounded SkeletonInputView and source service/CLI transport remain open.
+Full W17/E3/package acceptance, real Gethe/Ketho corpus,
 performance, native fault/exhaustion and WoW runtime checks remain NotEvaluated.
 Original source inventory remains Partial; consumed-file checks establish neither
 whole-source completeness nor license permission.

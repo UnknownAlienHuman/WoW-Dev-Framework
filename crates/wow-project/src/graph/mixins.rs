@@ -51,8 +51,8 @@ pub struct ProjectGraphMixinReference {
 }
 
 pub(super) struct MixinProposals {
-    pub entities: Vec<GraphEntityProposal>,
-    pub relations: Vec<GraphRelationProposal>,
+    pub entities: Vec<EntityDraft>,
+    pub relations: Vec<RelationDraft>,
 }
 
 /// Exactly one complete Main declaration lookup may cross into the source graph.
@@ -148,8 +148,8 @@ pub(super) fn add_declaration(
     file_ids: &BTreeMap<&str, String>,
     provenance: &mut ProjectGraphProvenance,
     text_bytes: &mut usize,
-    entities: &mut Vec<GraphEntityProposal>,
-    relations: &mut Vec<GraphRelationProposal>,
+    entities: &mut Vec<EntityDraft>,
+    relations: &mut Vec<RelationDraft>,
 ) -> ProjectResult<usize> {
     let analyzer = project.snapshot().analyzer_binding();
     if target.role != "main" || target.workspace_id != analyzer.main_workspace().snapshot_id() {
@@ -204,7 +204,8 @@ pub(super) fn add_declaration(
     let start =
         i64::try_from(target.span.byte_start().ok_or_else(invalid)?).map_err(|_| invalid())?;
     let end = i64::try_from(target.span.byte_end().ok_or_else(invalid)?).map_err(|_| invalid())?;
-    entities.push(
+    entities.push(EntityDraft::new(
+        PlatformGraphProducer::AnalyzerStructure,
         GraphEntityProposal::new(
             proposal_id.as_str(),
             "lua_source_declaration",
@@ -222,9 +223,10 @@ pub(super) fn add_declaration(
             Vec::new(),
         )
         .map_err(|_| invalid())?,
-    );
+    ));
     relations.push(
-        GraphRelationProposal::new(
+        RelationDraft::new(
+            PlatformGraphProducer::AnalyzerStructure,
             ownership_proposal_id.as_str(),
             "source_declaration_owns",
             GraphRelationProposalInput {
@@ -377,7 +379,8 @@ pub(super) fn project(
                         charge(text_bytes, proposal_id.len())?;
                     }
                     output.relations.push(
-                        GraphRelationProposal::new(
+                        RelationDraft::new(
+                            PlatformGraphProducer::XmlStructure,
                             proposal_id.as_str(),
                             "source_mixes_in",
                             GraphRelationProposalInput {

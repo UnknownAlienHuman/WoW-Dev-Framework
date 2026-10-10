@@ -97,10 +97,13 @@ strict rustdoc under `RUSTDOCFLAGS=-D warnings`, and workspace
 all-target/all-feature build all passed. These are local verification results;
 remote publication and CI are not asserted.
 
-The remaining TOC/XML/analyzer direct assertions still share their prior source
-producer. This separate inventory partition does not complete the four-way E3
-split or the full inventory relation model. Fingerprints, bounded
-SkeletonInputView and source service/CLI transport remain future work. Full
-W17/E3/package, real Gethe/Ketho corpus, performance, native fault/exhaustion and
+This published raw route retains raw inventory plus its monolithic captured
+source producer. A separate [native library plan](PLATFORM_DIRECT_PRODUCERS.md)
+now admits the same original raw prelude followed by four captured direct stages;
+it changes no configuration/service/replay channel here. Split application
+integration, missing direct roles and the full inventory relation model remain
+open. Fingerprints, bounded SkeletonInputView and source service/CLI transport
+remain future work. Full W17/E3/package, real Gethe/Ketho corpus, performance,
+native fault/exhaustion and
 WoW runtime acceptance remain NotEvaluated. Gethe acquisition/materialization is
 deferred; W18-W26 are unchanged.

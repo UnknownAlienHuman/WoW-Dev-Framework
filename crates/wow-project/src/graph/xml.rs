@@ -49,8 +49,8 @@ pub struct ProjectGraphXmlReference {
 }
 
 pub(super) struct XmlProposals {
-    pub entities: Vec<GraphEntityProposal>,
-    pub relations: Vec<GraphRelationProposal>,
+    pub entities: Vec<EntityDraft>,
+    pub relations: Vec<RelationDraft>,
 }
 
 pub(super) fn source_span(
@@ -174,7 +174,8 @@ pub(super) fn project(
             let proposal_id = scope.proposal_id("xml", &declaration.document, id)?;
             let ownership_proposal_id =
                 scope.proposal_id("xml-owner", &declaration.document, id)?;
-            output.entities.push(
+            output.entities.push(EntityDraft::new(
+                PlatformGraphProducer::XmlStructure,
                 GraphEntityProposal::new(
                     proposal_id.as_str(),
                     "xml_source_declaration",
@@ -194,9 +195,10 @@ pub(super) fn project(
                     Vec::new(),
                 )
                 .map_err(|_| invalid())?,
-            );
+            ));
             output.relations.push(
-                GraphRelationProposal::new(
+                RelationDraft::new(
+                    PlatformGraphProducer::XmlStructure,
                     ownership_proposal_id.as_str(),
                     "source_declaration_owns",
                     GraphRelationProposalInput {
@@ -274,7 +276,8 @@ pub(super) fn project(
                         .ok_or_else(invalid)?;
                     let target_node = declaration_ids.get(target_id).ok_or_else(invalid)?;
                     output.relations.push(
-                        GraphRelationProposal::new(
+                        RelationDraft::new(
+                            PlatformGraphProducer::XmlStructure,
                             proposal_id.as_str(),
                             "source_xml_inherits",
                             GraphRelationProposalInput {

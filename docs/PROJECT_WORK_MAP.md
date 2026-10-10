@@ -120,11 +120,22 @@ policy, fmt, all-target/all-feature check, strict Clippy, tests (939 passed, 0 f
 completed 2026-10-10 07:48:26 UTC. See
 [raw inventory graph and native reads](PLATFORM_RAW_INVENTORY_GRAPH.md).
 
-Next: split the remaining platform direct producers and implement fingerprints,
-bounded SkeletonInputView and source service/CLI transport. The separate raw
-inventory partition is not the complete four-way E3 producer split. Full W17, E0/E2, real
-mirror/performance/runtime and W18-W26 remain open. Gethe preparation follows
-product implementation/build.
+The separate native library plan now admits captured Inventory, TocLoad,
+AnalyzerStructure and XmlStructure in order, with the existing raw inventory
+prelude when selected. Finish binds exact Producer addresses and evidence to the
+held project/graph and refuses surplus partitions or a monolithic overlay.
+The single native fixture covers both layouts and preserves existing `/6`–`/8`
+replay and monolithic payloads. Final workspace policy, fmt,
+all-target/all-feature check, strict Clippy, tests (940 passed, 0 failed, 1 ignored,
+112 targets), strict rustdoc and all-target/all-feature build pass, completed
+2026-10-10 08:35:50 UTC. This is a native-only owner checkpoint; service,
+recognizer, configuration and replay channels remain unchanged. See
+[native direct producer plan](PLATFORM_DIRECT_PRODUCERS.md).
+
+Next: integrate the split into the application routes, supply missing direct
+roles, and implement fingerprints, bounded SkeletonInputView and source
+service/CLI transport. Full W17, E0/E2, real mirror/performance/runtime and
+W18-W26 remain open. Gethe preparation follows product implementation/build.
 
 W14 now publishes explicit final physical Main deltas through the retained native
 owner and the complete graph producer chain. It reuses unchanged parsed trees
@@ -408,7 +419,7 @@ full graph acceptance and the checkpoint's CI conclusions remain open.
 | [W12 / PR 80](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/80) | Extend real producer chains and conflict assessment | Exact retained records, publication validation and bounded explanations are executable; full acceptance remains open |
 | [W13 / PR 81](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/81) | Full live-pair acceptance | Physical Lua, standalone TOC/XML and declared-package native replay plus coherent leased acquisition are executable; full acceptance remains open |
 | [W14 / PR 82](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/82), [W15 / PR 83](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/83), [W16 / PR 84](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/84) | Incremental invalidation, retained roots/GC, backup/recovery | Source selector/hold portability and guarded live cross-epoch selection/retry are executable; portable full history and full W16/E2 acceptance remain open |
-| [W17 / PR 85](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/85), [W18 / PR 86](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/86), [W19 / PR 87](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/87) | Blizzard source universe, Project Map/skeletons, context packs | W17 raw/package admission, owner-bound configuration, native platform Main/source graph, Included-member graph/native local reads, genuine replay and selected stable namespace publication are executable; the remaining direct-producer split/fingerprints and bounded producer views precede context |
+| [W17 / PR 85](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/85), [W18 / PR 86](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/86), [W19 / PR 87](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/87) | Blizzard source universe, Project Map/skeletons, context packs | W17 raw/package admission, native source graph/reads, genuine replay and stable namespace publication are executable; a separate native four-stage plan finishes exact direct assertions. Split application integration, missing direct roles, fingerprints and bounded producer views still precede context |
 | [W20 / PR 88](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/88), [W21 / PR 89](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/89) | Search, lineage and static impact | Exact immutable generation inputs |
 | [W22 / PR 90](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/90), [W23 / PR 91](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/91) | Sessions/MCP and private LSP overlays | Implemented capabilities only |
 | [W24 / PR 92](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/92), [W25 / PR 93](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/93) | Calibration governance and selected Windows build/release tooling | No inferred review, signing or installed state |
@@ -459,6 +470,11 @@ The opt-in raw inventory route separately selects source `/21`, registry 16,
 request `/11` and result `/18`, retaining the inventory batch as its own native
 partition. It preserves both earlier routes; see
 [PLATFORM_RAW_INVENTORY_GRAPH.md](PLATFORM_RAW_INVENTORY_GRAPH.md).
+
+`wow-project/platform-direct-producers/1` is a separate native library plan over
+the existing input scope, not another service/configuration/replay selector.
+It admits four captured stages plus selected raw prelude without changing the
+above channels; see [PLATFORM_DIRECT_PRODUCERS.md](PLATFORM_DIRECT_PRODUCERS.md).
 
 The state checkpoint publishes `core.state.saved_variable_root`,
 `core.state.literal_path_read` and `core.state.literal_path_write`. Root facts

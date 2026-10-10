@@ -25,8 +25,8 @@ pub struct ProjectGraphCallSite {
 }
 
 pub(super) struct FunctionProposals {
-    pub entities: Vec<GraphEntityProposal>,
-    pub relations: Vec<GraphRelationProposal>,
+    pub entities: Vec<EntityDraft>,
+    pub relations: Vec<RelationDraft>,
 }
 
 pub(super) fn project(
@@ -106,7 +106,8 @@ pub(super) fn project(
         let proposal_id = format!("function:{}", function.fact_id());
         let ownership_id = format!("function-owner:{}", function.fact_id());
         let (handle, evidence) = support(project, source, function.span(), provenance)?;
-        result.entities.push(
+        result.entities.push(EntityDraft::new(
+            PlatformGraphProducer::AnalyzerStructure,
             GraphEntityProposal::new(
                 proposal_id.as_str(),
                 "lua_source_function",
@@ -126,9 +127,10 @@ pub(super) fn project(
                 Vec::new(),
             )
             .map_err(|_| invalid())?,
-        );
+        ));
         result.relations.push(
-            GraphRelationProposal::new(
+            RelationDraft::new(
+                PlatformGraphProducer::AnalyzerStructure,
                 ownership_id.as_str(),
                 "source_declaration_owns",
                 GraphRelationProposalInput {

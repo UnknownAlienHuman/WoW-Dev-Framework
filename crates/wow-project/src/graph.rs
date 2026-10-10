@@ -3,6 +3,17 @@ mod derivations;
 mod functions;
 mod load_inputs;
 mod packages;
+mod platform_producers;
+mod producer_budget;
+mod producer_derivations;
+mod producer_evidence;
+pub use platform_producers::{
+    PLATFORM_DIRECT_GRAPH_PROFILE, PlatformGraphProducerProposals, PlatformGraphProposalPlan,
+    PlatformGraphProvenance, build_platform_graph_proposal_plan,
+};
+mod projection;
+pub use projection::PlatformGraphProducer;
+use projection::{EntityDraft, RelationDraft};
 mod raw_inventory;
 pub use raw_inventory::{
     PLATFORM_RAW_INVENTORY_PARTITION, PLATFORM_RAW_MEMBER_KIND, ProjectRawInventoryManifest,
@@ -776,6 +787,78 @@ pub fn build_source_graph_proposals(
     project: &ProjectView,
     stop: &AtomicBool,
 ) -> ProjectResult<ProjectSourceGraphProposals> {
+    let CollectedSourceGraph {
+        registry,
+        universe,
+        generation,
+        entities,
+        relations,
+        coverage,
+        provenance,
+        limits,
+        inventory_batch,
+        text_bytes: _,
+    } = collect_source_graph_proposals(project, stop)?;
+    let mut native_entities = Vec::new();
+    for entity in entities {
+        crate::analyzer::checkpoint(stop)?;
+        native_entities.push(entity.proposal);
+    }
+    let mut native_relations = Vec::new();
+    for relation in relations {
+        crate::analyzer::checkpoint(stop)?;
+        native_relations.push(relation.into_proposal().map_err(|_| invalid())?);
+    }
+    let derivations = derivations::records(
+        &provenance,
+        &universe,
+        &generation,
+        &native_entities,
+        &native_relations,
+        stop,
+    )?;
+    let batch = GraphProposalBatch::build(
+        registry.bundle_id(),
+        registry.registry_digest(),
+        universe,
+        generation,
+        provenance.context.context_id(),
+        SOURCE_GRAPH_PARTITION,
+        native_entities,
+        native_relations,
+    )
+    .and_then(|batch| batch.with_assertion_records(derivations))
+    .map_err(|_| invalid())?;
+    crate::analyzer::checkpoint(stop)?;
+    Ok(ProjectSourceGraphProposals {
+        registry,
+        batch,
+        coverage,
+        provenance,
+        limits,
+        inventory_batch,
+    })
+}
+
+#[derive(Serialize)]
+struct CollectedSourceGraph {
+    registry: GraphRegistryBundle,
+    universe: GraphUniverseId,
+    generation: GraphGenerationId,
+    entities: Vec<EntityDraft>,
+    relations: Vec<RelationDraft>,
+    coverage: Vec<GraphCoverageRecord>,
+    provenance: ProjectGraphProvenance,
+    limits: GraphLimits,
+    inventory_batch: Option<GraphProposalBatch>,
+    #[serde(skip)]
+    text_bytes: usize,
+}
+
+fn collect_source_graph_proposals(
+    project: &ProjectView,
+    stop: &AtomicBool,
+) -> ProjectResult<CollectedSourceGraph> {
     crate::analyzer::checkpoint(stop)?;
     project.snapshot().validate()?;
     crate::analyzer::checkpoint(stop)?;
@@ -1010,7 +1093,8 @@ pub fn build_source_graph_proposals(
         let id = format!("file:{key}");
         let (handle, evidence) =
             support(project, source, SourceSpan::whole_file(), &mut provenance)?;
-        entities.push(
+        entities.push(EntityDraft::new(
+            PlatformGraphProducer::Inventory,
             GraphEntityProposal::new(
                 id.as_str(),
                 "source_file",
@@ -1024,7 +1108,7 @@ pub fn build_source_graph_proposals(
                 Vec::new(),
             )
             .map_err(|_| invalid())?,
-        );
+        ));
         ids.insert(source.path.as_str(), id.clone());
         provenance.files.push(ProjectGraphFile {
             path: source.path.clone(),
@@ -1076,8 +1160,16 @@ pub fn build_source_graph_proposals(
             let span = SourceSpan::byte_range(record.byte_start, record.byte_end)
                 .map_err(|_| invalid())?;
             let (handle, evidence) = support(project, source, span, &mut provenance)?;
+            let producer = if record.document == plan.selected_toc() {
+                PlatformGraphProducer::TocLoad
+            } else if plan.xml_documents().contains_key(&record.document) {
+                PlatformGraphProducer::XmlStructure
+            } else {
+                return Err(invalid());
+            };
             relations.push(
-                GraphRelationProposal::new(
+                RelationDraft::new(
+                    producer,
                     format!("load:{}", record.ordinal),
                     "source_loads",
                     GraphRelationProposalInput {
@@ -1251,34 +1343,18 @@ pub fn build_source_graph_proposals(
         )
         .map_err(|_| invalid())?,
     ];
-    let derivations = derivations::records(
-        &provenance,
-        &universe,
-        &generation,
-        &entities,
-        &relations,
-        stop,
-    )?;
-    let batch = GraphProposalBatch::build(
-        registry.bundle_id(),
-        registry.registry_digest(),
+    crate::analyzer::checkpoint(stop)?;
+    Ok(CollectedSourceGraph {
+        registry,
         universe,
         generation,
-        provenance.context.context_id(),
-        SOURCE_GRAPH_PARTITION,
         entities,
         relations,
-    )
-    .and_then(|batch| batch.with_assertion_records(derivations))
-    .map_err(|_| invalid())?;
-    crate::analyzer::checkpoint(stop)?;
-    Ok(ProjectSourceGraphProposals {
-        registry,
-        batch,
         coverage,
         provenance,
         limits,
         inventory_batch,
+        text_bytes,
     })
 }
 

@@ -196,7 +196,8 @@ pub(super) fn project(
             source_handle_ids: handles.into_iter().collect(),
             evidence_ids: evidence.into_iter().collect(),
         };
-        output.entities.push(
+        output.entities.push(EntityDraft::new(
+            PlatformGraphProducer::TocLoad,
             GraphEntityProposal::new(
                 root.proposal_id.as_str(),
                 "state_root",
@@ -226,8 +227,9 @@ pub(super) fn project(
                 Vec::new(),
             )
             .map_err(|_| invalid())?,
-        );
+        ));
         output.relations.push(ownership(
+            PlatformGraphProducer::TocLoad,
             &format!("owner:{}", root.root_id),
             file_ids.get(document.as_str()).ok_or_else(invalid)?,
             &root.proposal_id,
@@ -373,7 +375,8 @@ pub(super) fn project(
                     return Err(exhausted());
                 }
                 let keys = String::from_utf8(keys).map_err(|_| invalid())?;
-                output.entities.push(
+                output.entities.push(EntityDraft::new(
+                    PlatformGraphProducer::AnalyzerStructure,
                     GraphEntityProposal::new(
                         path_id.as_str(),
                         "state_path",
@@ -390,8 +393,9 @@ pub(super) fn project(
                         Vec::new(),
                     )
                     .map_err(|_| invalid())?,
-                );
+                ));
                 output.relations.push(ownership(
+                    PlatformGraphProducer::AnalyzerStructure,
                     &format!("owner:{path_id}"),
                     &root.proposal_id,
                     &path_id,
@@ -461,13 +465,15 @@ fn id(prefix: &str, value: &impl Serialize) -> ProjectResult<String> {
     Ok(format!("{prefix}:{digest}"))
 }
 fn ownership(
+    producer: PlatformGraphProducer,
     id: &str,
     from: &str,
     to: &str,
     handles: &[StableHandleId],
     evidence: &[EvidenceId],
-) -> ProjectResult<GraphRelationProposal> {
-    GraphRelationProposal::new(
+) -> ProjectResult<RelationDraft> {
+    RelationDraft::new(
+        producer,
         id,
         "source_declaration_owns",
         GraphRelationProposalInput {

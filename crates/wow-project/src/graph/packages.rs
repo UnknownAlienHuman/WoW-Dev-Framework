@@ -79,8 +79,8 @@ pub struct ProjectGraphPackageLoad {
 }
 
 pub(super) struct PackageProposals {
-    pub entities: Vec<GraphEntityProposal>,
-    pub relations: Vec<GraphRelationProposal>,
+    pub entities: Vec<EntityDraft>,
+    pub relations: Vec<RelationDraft>,
 }
 
 pub(super) fn project(
@@ -134,7 +134,8 @@ pub(super) fn project(
             ProjectPhase::View,
         )?;
         let proposal_id = format!("package:{key}");
-        output.entities.push(
+        output.entities.push(EntityDraft::new(
+            PlatformGraphProducer::Inventory,
             GraphEntityProposal::new(
                 proposal_id.as_str(),
                 "source_package",
@@ -148,7 +149,7 @@ pub(super) fn project(
                 Vec::new(),
             )
             .map_err(|_| invalid())?,
-        );
+        ));
         package_ids.insert(package.package.as_str(), proposal_id.clone());
         provenance.packages.push(ProjectGraphPackage {
             package: package.package.clone(),
@@ -204,7 +205,8 @@ pub(super) fn project(
             )?;
             let proposal_id = format!("package-file:{key}");
             output.relations.push(
-                GraphRelationProposal::new(
+                RelationDraft::new(
+                    PlatformGraphProducer::Inventory,
                     proposal_id.as_str(),
                     "source_package_owns",
                     GraphRelationProposalInput {
@@ -284,7 +286,8 @@ pub(super) fn project(
                         return Err(exhausted());
                     }
                     output.relations.push(
-                        GraphRelationProposal::new(
+                        RelationDraft::new(
+                            PlatformGraphProducer::TocLoad,
                             proposal_id.as_str(),
                             "source_package_depends_on",
                             GraphRelationProposalInput {
@@ -373,7 +376,8 @@ pub(super) fn project(
                 return Err(exhausted());
             }
             output.relations.push(
-                GraphRelationProposal::new(
+                RelationDraft::new(
+                    PlatformGraphProducer::TocLoad,
                     proposal_id.as_str(),
                     "source_package_loads",
                     GraphRelationProposalInput {

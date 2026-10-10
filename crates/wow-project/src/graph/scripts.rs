@@ -97,8 +97,8 @@ pub struct ProjectGraphScriptBinding {
 }
 
 pub(super) struct ScriptProposals {
-    pub entities: Vec<GraphEntityProposal>,
-    pub relations: Vec<GraphRelationProposal>,
+    pub entities: Vec<EntityDraft>,
+    pub relations: Vec<RelationDraft>,
 }
 struct Endpoint {
     proposal: String,
@@ -354,7 +354,8 @@ pub(super) fn project(
                     }
                     let proposal_id =
                         scope.proposal_id("xml-handler", document, &element.occurrence_id)?;
-                    output.entities.push(
+                    output.entities.push(EntityDraft::new(
+                        PlatformGraphProducer::XmlStructure,
                         GraphEntityProposal::new(
                             proposal_id.as_str(),
                             "xml_source_handler",
@@ -382,9 +383,10 @@ pub(super) fn project(
                             Vec::new(),
                         )
                         .map_err(|_| invalid())?,
-                    );
+                    ));
                     output.relations.push(
-                        GraphRelationProposal::new(
+                        RelationDraft::new(
+                            PlatformGraphProducer::XmlStructure,
                             scope.proposal_id(
                                 "xml-handler-owner",
                                 document,

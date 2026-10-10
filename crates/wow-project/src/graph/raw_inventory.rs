@@ -295,7 +295,7 @@ pub(super) fn project(
     Ok((batch, manifest))
 }
 
-fn charge_serialized<T: Serialize>(
+pub(super) fn charge_serialized<T: Serialize>(
     used: &mut usize,
     value: &T,
     stop: &AtomicBool,
