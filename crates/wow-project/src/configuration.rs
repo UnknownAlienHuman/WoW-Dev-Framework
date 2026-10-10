@@ -16,6 +16,10 @@ use crate::{
     ProjectWorkspaceId,
 };
 
+mod platform;
+use crate::platform_source::{PlatformPackageBinding, PlatformPackageSpecialization};
+use platform::RetainedPlatformPackages;
+
 pub const PROJECT_CONFIGURATION_SCHEMA_VERSION: u64 = 1;
 /// Frozen legacy receipt recipe. New publication selects generation v2 explicitly.
 pub const PROJECT_GENERATION_SCHEMA_VERSION: u64 = 1;
@@ -28,6 +32,7 @@ pub const PROJECT_CONTRACT_ID: &str = "wow-project/e0-d/1";
 pub enum ProjectKind {
     Fixture,
     Repository,
+    BlizzardUiPlatformSource,
 }
 
 /// Explicit publication capability policy.
@@ -395,6 +400,10 @@ pub struct ProjectConfiguration {
     retained_package_load_plan: Option<Arc<crate::load::ProjectPackageLoadPlan>>,
     #[serde(skip)]
     retained_package_main_plan: Option<Arc<crate::load::ProjectPackageMainPlan>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    platform_package_binding_digest: Option<ContentDigest<CanonicalResult>>,
+    #[serde(skip)]
+    retained_platform_packages: Option<RetainedPlatformPackages>,
 }
 
 impl ProjectConfiguration {
@@ -458,6 +467,24 @@ impl ProjectConfiguration {
                 ));
             }
         }
+        if self.platform_package_binding_digest
+            != self
+                .retained_platform_packages
+                .as_ref()
+                .map(|packages| packages.binding().binding_digest())
+            || (self.project_kind == ProjectKind::BlizzardUiPlatformSource)
+                != self.retained_platform_packages.is_some()
+        {
+            return Err(platform::invalid());
+        }
+        if let Some(packages) = &self.retained_platform_packages {
+            packages.validate(
+                &self.selected_profile,
+                self.reference_generation,
+                self.package_load_plan(),
+                self.package_main_plan(),
+            )?;
+        }
         if self.configuration_schema_version != PROJECT_CONFIGURATION_SCHEMA_VERSION {
             return Err(ProjectError::new(
                 ProjectErrorCode::InvalidConfiguration,
@@ -469,6 +496,10 @@ impl ProjectConfiguration {
             (self.project_kind, self.selected_profile.profile_kind()),
             (ProjectKind::Fixture, ProfileKind::Fixture)
                 | (ProjectKind::Repository, ProfileKind::Release)
+                | (
+                    ProjectKind::BlizzardUiPlatformSource,
+                    ProfileKind::Fixture | ProfileKind::Release
+                )
         );
         if !kind_matches {
             return Err(ProjectError::new(
@@ -491,6 +522,7 @@ impl ProjectConfiguration {
             self.load_plan_digest,
             self.package_load_plan_digest,
             self.package_main_plan_digest,
+            self.platform_package_binding_digest,
         )?;
         if expected != self.configuration_digest {
             return Err(ProjectError::new(
@@ -582,6 +614,26 @@ impl ProjectConfiguration {
         self.package_main_plan_digest
     }
 
+    /// Genuine retained source admission and native package/Main owners.
+    #[must_use]
+    pub fn platform_packages(&self) -> Option<&PlatformPackageSpecialization> {
+        self.retained_platform_packages
+            .as_ref()
+            .map(RetainedPlatformPackages::owner)
+    }
+
+    #[must_use]
+    pub fn platform_package_binding(&self) -> Option<&PlatformPackageBinding> {
+        self.retained_platform_packages
+            .as_ref()
+            .map(RetainedPlatformPackages::binding)
+    }
+
+    #[must_use]
+    pub const fn platform_package_binding_digest(&self) -> Option<ContentDigest<CanonicalResult>> {
+        self.platform_package_binding_digest
+    }
+
     #[must_use]
     pub const fn configuration_digest(&self) -> ContentDigest<CanonicalResult> {
         self.configuration_digest
@@ -607,6 +659,7 @@ pub struct ProjectConfigurationBuilder {
     package_main_plan_digest: Option<ContentDigest<CanonicalResult>>,
     retained_package_load_plan: Option<Arc<crate::load::ProjectPackageLoadPlan>>,
     retained_package_main_plan: Option<Arc<crate::load::ProjectPackageMainPlan>>,
+    retained_platform_packages: Option<RetainedPlatformPackages>,
 }
 
 impl ProjectConfigurationBuilder {
@@ -635,6 +688,7 @@ impl ProjectConfigurationBuilder {
             package_main_plan_digest: None,
             retained_package_load_plan: None,
             retained_package_main_plan: None,
+            retained_platform_packages: None,
         }
     }
 
@@ -697,12 +751,54 @@ impl ProjectConfigurationBuilder {
                 "single-package and package-universe load plans are mutually exclusive",
             ));
         }
+        if let Some(packages) = &self.retained_platform_packages
+            && (packages.owner().load_plan() != load_plan
+                || packages.owner().main_plan() != main_plan)
+        {
+            return Err(platform::invalid());
+        }
         load_plan.validate_profile(&self.selected_profile)?;
         main_plan.validate_load_plan(load_plan)?;
         self.package_load_plan_digest = Some(load_plan.digest());
         self.package_main_plan_digest = Some(main_plan.digest());
         self.retained_package_load_plan = Some(Arc::new(load_plan.clone()));
         self.retained_package_main_plan = Some(Arc::new(main_plan.clone()));
+        Ok(self)
+    }
+
+    /// Bind a platform project to its actual admitted source and native package
+    /// owners. A digest or decoded receipt cannot construct this capability.
+    pub fn platform_packages(
+        mut self,
+        packages: Arc<PlatformPackageSpecialization>,
+    ) -> ProjectResult<Self> {
+        if self.project_kind != ProjectKind::BlizzardUiPlatformSource
+            || self.load_plan_digest.is_some()
+            || self
+                .retained_platform_packages
+                .as_ref()
+                .is_some_and(|held| held.binding() != packages.binding())
+            || self
+                .retained_package_load_plan
+                .as_ref()
+                .is_some_and(|held| held.as_ref() != packages.load_plan())
+            || self
+                .retained_package_main_plan
+                .as_ref()
+                .is_some_and(|held| held.as_ref() != packages.main_plan())
+        {
+            return Err(platform::invalid());
+        }
+        let retained = RetainedPlatformPackages::new(packages);
+        retained.validate(
+            &self.selected_profile,
+            self.reference_generation,
+            Some(retained.owner().load_plan()),
+            Some(retained.owner().main_plan()),
+        )?;
+        self =
+            self.package_load_plan(retained.owner().load_plan(), retained.owner().main_plan())?;
+        self.retained_platform_packages = Some(retained);
         Ok(self)
     }
 
@@ -729,6 +825,10 @@ impl ProjectConfigurationBuilder {
         let logical_root = parsed_logical_root.into_value();
         let capability_policy = required(self.capability_policy, "capability policy")?;
         let budget_policy = required(self.budget_policy, "budget policy")?;
+        let platform_package_binding_digest = self
+            .retained_platform_packages
+            .as_ref()
+            .map(|packages| packages.binding().binding_digest());
         let configuration_digest = configuration_digest(
             &self.project_id,
             self.project_kind,
@@ -743,6 +843,7 @@ impl ProjectConfigurationBuilder {
             self.load_plan_digest,
             self.package_load_plan_digest,
             self.package_main_plan_digest,
+            platform_package_binding_digest,
         )?;
         let configuration = ProjectConfiguration {
             project_id: self.project_id,
@@ -763,6 +864,8 @@ impl ProjectConfigurationBuilder {
             package_main_plan_digest: self.package_main_plan_digest,
             retained_package_load_plan: self.retained_package_load_plan,
             retained_package_main_plan: self.retained_package_main_plan,
+            platform_package_binding_digest,
+            retained_platform_packages: self.retained_platform_packages,
         };
         configuration.validate()?;
         Ok(configuration)
@@ -784,6 +887,7 @@ fn configuration_digest(
     load_plan_digest: Option<ContentDigest<CanonicalResult>>,
     package_load_plan_digest: Option<ContentDigest<CanonicalResult>>,
     package_main_plan_digest: Option<ContentDigest<CanonicalResult>>,
+    platform_package_binding_digest: Option<ContentDigest<CanonicalResult>>,
 ) -> ProjectResult<ContentDigest<CanonicalResult>> {
     #[derive(Serialize)]
     struct Identity<'a> {
@@ -808,6 +912,8 @@ fn configuration_digest(
         xml_lua_adapter: Option<&'static str>,
         #[serde(skip_serializing_if = "Option::is_none")]
         xml_binding_adapter: Option<&'static str>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        platform_package_binding_digest: Option<ContentDigest<CanonicalResult>>,
     }
     canonical_digest(
         "wow-project/configuration/e0-d/1",
@@ -829,6 +935,7 @@ fn configuration_digest(
             xml_lua_adapter: load_plan_digest.map(|_| crate::xml_lua::XML_LUA_ANALYSIS_PROFILE),
             xml_binding_adapter: load_plan_digest
                 .map(|_| crate::xml_bindings::XML_LUA_BINDING_PROFILE),
+            platform_package_binding_digest,
         },
         ProjectPhase::Configuration,
     )

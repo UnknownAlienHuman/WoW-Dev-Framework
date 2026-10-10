@@ -41,6 +41,7 @@ enum ReplayUniverse {
     Project,
     BlizzardUi,
     Fixture,
+    BlizzardUiMain,
 }
 impl ReplayUniverse {
     fn capture(universe: LuaWorkspaceUniverse) -> Self {
@@ -48,6 +49,7 @@ impl ReplayUniverse {
             LuaWorkspaceUniverse::Project => Self::Project,
             LuaWorkspaceUniverse::BlizzardUi => Self::BlizzardUi,
             LuaWorkspaceUniverse::Fixture => Self::Fixture,
+            LuaWorkspaceUniverse::BlizzardUiMain => Self::BlizzardUiMain,
         }
     }
     fn restore(self) -> LuaWorkspaceUniverse {
@@ -55,6 +57,7 @@ impl ReplayUniverse {
             Self::Project => LuaWorkspaceUniverse::Project,
             Self::BlizzardUi => LuaWorkspaceUniverse::BlizzardUi,
             Self::Fixture => LuaWorkspaceUniverse::Fixture,
+            Self::BlizzardUiMain => LuaWorkspaceUniverse::BlizzardUiMain,
         }
     }
 }
@@ -175,7 +178,9 @@ impl ProjectReplay {
         let mut retained_libraries = Vec::new();
         for library in libraries {
             crate::analyzer::checkpoint(stop)?;
-            if library.backend() != snapshot.configuration().analyzer_binding().backend() {
+            if library.universe() == LuaWorkspaceUniverse::BlizzardUiMain
+                || library.backend() != snapshot.configuration().analyzer_binding().backend()
+            {
                 return Err(invalid());
             }
             retained_libraries.push(ReplayLibrary {
@@ -280,7 +285,8 @@ impl ProjectReplay {
             }
         }
         for library in &self.libraries {
-            if library.files.windows(2).any(|p| p[0].path >= p[1].path)
+            if library.universe == ReplayUniverse::BlizzardUiMain
+                || library.files.windows(2).any(|p| p[0].path >= p[1].path)
                 || library.files.iter().any(|file| file.fixture_ref.is_some())
             {
                 return Err(invalid());

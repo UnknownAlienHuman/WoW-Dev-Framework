@@ -50,8 +50,7 @@ pub use xml::{
 use serde::{Deserialize, Serialize};
 use wow_core::{
     ClaimScope, EvidenceConfidence, EvidenceId, EvidenceRecord, GenerationContext, ProducerId,
-    ProvenanceClass, SourceHandle, SourceHandleBuilder, SourceOriginKind, SourceSpan,
-    StableHandleId, ToolVersion,
+    ProvenanceClass, SourceHandle, SourceHandleBuilder, SourceSpan, StableHandleId, ToolVersion,
 };
 use wow_graph::{
     GraphConfidence, GraphCoverageRecord, GraphCoverageState, GraphEntityKindDefinition,
@@ -315,17 +314,21 @@ fn charge(used: &mut usize, bytes: usize) -> ProjectResult<()> {
     Ok(())
 }
 
-fn registry() -> ProjectResult<GraphRegistryBundle> {
+fn registry(project_kind: ProjectKind) -> ProjectResult<GraphRegistryBundle> {
+    let universe_class = match project_kind {
+        ProjectKind::Fixture | ProjectKind::Repository => "project",
+        ProjectKind::BlizzardUiPlatformSource => "blizzard_ui_source",
+    };
     let file = GraphEntityKindDefinition::new(
         "source_file",
-        vec!["project".into()],
+        vec![universe_class.into()],
         vec!["path".into()],
         vec![GraphConfidence::Proven],
     )
     .map_err(|_| invalid())?;
     let package = GraphEntityKindDefinition::new(
         "source_package",
-        vec!["project".into()],
+        vec![universe_class.into()],
         vec!["package".into()],
         vec![GraphConfidence::Proven],
     )
@@ -379,7 +382,7 @@ fn registry() -> ProjectResult<GraphRegistryBundle> {
     );
     let declaration = GraphEntityKindDefinition::new(
         "xml_source_declaration",
-        vec!["project".into()],
+        vec![universe_class.into()],
         vec!["document".into(), "occurrence".into()],
         vec![GraphConfidence::Proven],
     )
@@ -413,7 +416,7 @@ fn registry() -> ProjectResult<GraphRegistryBundle> {
     );
     let lua = GraphEntityKindDefinition::new(
         "lua_source_declaration",
-        vec!["project".into()],
+        vec![universe_class.into()],
         vec!["document".into(), "span_start".into(), "span_end".into()],
         vec![GraphConfidence::Derived],
     )
@@ -434,7 +437,7 @@ fn registry() -> ProjectResult<GraphRegistryBundle> {
     );
     let function = GraphEntityKindDefinition::new(
         "lua_source_function",
-        vec!["project".into()],
+        vec![universe_class.into()],
         vec!["document".into(), "function".into()],
         vec![GraphConfidence::Derived],
     )
@@ -451,7 +454,7 @@ fn registry() -> ProjectResult<GraphRegistryBundle> {
     );
     let frame = GraphEntityKindDefinition::new(
         "frame",
-        vec!["project".into()],
+        vec![universe_class.into()],
         vec!["call".into()],
         vec![GraphConfidence::Derived, GraphConfidence::Possible],
     )
@@ -468,7 +471,7 @@ fn registry() -> ProjectResult<GraphRegistryBundle> {
     );
     let mixin_instance = GraphEntityKindDefinition::new(
         "mixin_instance",
-        vec!["project".into()],
+        vec![universe_class.into()],
         vec!["call".into()],
         vec![GraphConfidence::Derived, GraphConfidence::Possible],
     )
@@ -485,7 +488,7 @@ fn registry() -> ProjectResult<GraphRegistryBundle> {
     );
     let handler = GraphEntityKindDefinition::new(
         "xml_source_handler",
-        vec!["project".into()],
+        vec![universe_class.into()],
         vec![
             "document".into(),
             "occurrence".into(),
@@ -506,7 +509,7 @@ fn registry() -> ProjectResult<GraphRegistryBundle> {
     );
     let state_root = GraphEntityKindDefinition::new(
         "state_root",
-        vec!["project".into()],
+        vec![universe_class.into()],
         vec!["document".into(), "name".into(), "scope".into()],
         vec![
             GraphConfidence::Proven,
@@ -517,7 +520,7 @@ fn registry() -> ProjectResult<GraphRegistryBundle> {
     .map_err(|_| invalid())?;
     let state_path = GraphEntityKindDefinition::new(
         "state_path",
-        vec!["project".into()],
+        vec![universe_class.into()],
         vec!["root".into(), "path".into()],
         vec![GraphConfidence::Derived, GraphConfidence::Possible],
     )
@@ -543,28 +546,28 @@ fn registry() -> ProjectResult<GraphRegistryBundle> {
     // inferred from a plausible name.
     let native_event = GraphEntityKindDefinition::new(
         "native_event",
-        vec!["project".into()],
+        vec![universe_class.into()],
         vec!["event".into()],
         vec![GraphConfidence::Derived, GraphConfidence::Possible],
     )
     .map_err(|_| invalid())?;
     let custom_signal = GraphEntityKindDefinition::new(
         "custom_signal",
-        vec!["project".into()],
+        vec![universe_class.into()],
         vec!["signal".into()],
         vec![GraphConfidence::Derived, GraphConfidence::Possible],
     )
     .map_err(|_| invalid())?;
     let cvar_key = GraphEntityKindDefinition::new(
         "cvar_key",
-        vec!["project".into()],
+        vec![universe_class.into()],
         vec!["cvar".into()],
         vec![GraphConfidence::Derived, GraphConfidence::Possible],
     )
     .map_err(|_| invalid())?;
     let library = GraphEntityKindDefinition::new(
         "library",
-        vec!["project".into()],
+        vec![universe_class.into()],
         vec!["library".into()],
         vec![GraphConfidence::Derived, GraphConfidence::Possible],
     )
@@ -670,8 +673,8 @@ fn registry() -> ProjectResult<GraphRegistryBundle> {
         cvar_key,
         library,
     ];
-    toc_registry::extend(&mut entities, &mut relations)?;
-    xml_registry::extend(&mut entities, &mut relations)?;
+    toc_registry::extend(universe_class, &mut entities, &mut relations)?;
+    xml_registry::extend(universe_class, &mut entities, &mut relations)?;
     GraphRegistryBundle::build("wow-project.source-load", "15", entities, relations)
         .map_err(|_| invalid())
 }
@@ -683,10 +686,8 @@ fn support(
     provenance: &mut ProjectGraphProvenance,
 ) -> ProjectResult<(StableHandleId, EvidenceId)> {
     let config = project.configuration();
-    let origin = match config.project_kind() {
-        ProjectKind::Fixture => SourceOriginKind::Fixture,
-        ProjectKind::Repository => SourceOriginKind::GeneratedArtifact,
-    };
+    let (origin, revision) =
+        crate::registry::source_handle_identity(config, project.project_generation())?;
     let handle = if span == SourceSpan::whole_file()
         && let Some(file) = project.file_by_path(&source.path)?
     {
@@ -695,7 +696,7 @@ fn support(
         SourceHandleBuilder::new(
             origin,
             config.source_origin_id().as_str(),
-            project.project_generation().canonical(),
+            revision.as_ref(),
             &source.path,
             span,
             source.content_digest,
@@ -724,9 +725,10 @@ fn support(
     Ok((handle_id, evidence_id))
 }
 
-/// Export first-party files, selected direct references and source XML declarations.
-/// Library sources, dependency discovery, Calls edges, XML runtime objects and recognizer roles
-/// are not inferred. Callable source occurrences and call evidence are source-owned. One immutable ProjectView supplies every source identity.
+/// Export selected Main files, native load references and source XML declarations
+/// from one immutable ordinary or platform ProjectView. Callable occurrences and
+/// direct call evidence remain source-owned. Library sources, dependency discovery,
+/// XML runtime objects and recognizer roles are not inferred.
 pub fn build_source_graph_proposals(
     project: &ProjectView,
     stop: &AtomicBool,
@@ -856,19 +858,27 @@ pub fn build_source_graph_proposals(
             return Err(invalid());
         }
     }
-    let registry = registry()?;
-    let scope = crate::identity::canonical_digest(
-        "wow-project/source-graph-universe/1",
-        &(
-            config.project_id(),
-            config.workspace_id(),
-            config.source_origin_id(),
-            config.logical_root(),
-            config.selected_profile(),
-        ),
-        ProjectPhase::View,
-    )?;
-    let universe = GraphUniverseId::new(format!("project:{scope}")).map_err(|_| invalid())?;
+    let registry = registry(config.project_kind())?;
+    let universe = match config.project_kind() {
+        ProjectKind::BlizzardUiPlatformSource => {
+            let binding = config.platform_package_binding().ok_or_else(invalid)?;
+            GraphUniverseId::new(binding.universe_id()).map_err(|_| invalid())?
+        }
+        ProjectKind::Fixture | ProjectKind::Repository => {
+            let scope = crate::identity::canonical_digest(
+                "wow-project/source-graph-universe/1",
+                &(
+                    config.project_id(),
+                    config.workspace_id(),
+                    config.source_origin_id(),
+                    config.logical_root(),
+                    config.selected_profile(),
+                ),
+                ProjectPhase::View,
+            )?;
+            GraphUniverseId::new(format!("project:{scope}")).map_err(|_| invalid())?
+        }
+    };
     // This seed is not a published GraphGeneration. The graph owner derives the
     // materialized generation from the exact registry and accepted partition.
     let seed = crate::identity::canonical_digest(

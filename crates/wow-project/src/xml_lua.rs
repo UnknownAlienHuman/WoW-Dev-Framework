@@ -313,10 +313,19 @@ impl PreparedProjectXmlLuaAnalysis {
 pub(crate) fn prepare(
     configuration: &ProjectConfiguration,
     generation: ProjectGenerationId,
+    main_universe: LuaWorkspaceUniverse,
     physical_files: usize,
     physical_bytes: u64,
     stop: &AtomicBool,
 ) -> ProjectResult<Option<PreparedProjectXmlLuaAnalysis>> {
+    if main_universe != crate::analyzer::main_workspace_universe(configuration)? {
+        return Err(ProjectError::new(
+            ProjectErrorCode::AnalyzerSnapshotMismatch,
+            ProjectPhase::Analyzer,
+            "XML virtual Main universe differs from the configured physical Main route",
+        )
+        .with_candidate_generation(generation));
+    }
     let (load_profile, load_plan_digest) = if let Some(plan) = configuration.load_plan() {
         (LOAD_PROFILE, plan.digest())
     } else if let Some(plan) = configuration.package_load_plan() {
@@ -416,7 +425,7 @@ pub(crate) fn prepare(
         Some(
             LuaWorkspaceSnapshot::build(
                 configuration.analyzer_binding().backend().clone(),
-                LuaWorkspaceUniverse::Project,
+                main_universe,
                 sources
                     .iter()
                     .map(|source| {

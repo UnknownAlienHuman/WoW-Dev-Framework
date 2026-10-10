@@ -12,43 +12,39 @@ in `main`, with bounded owner responsibilities and verified remote publication.
 
 ## Current functional checkpoint
 
-W17 now admits explicit local platform-source bytes under an exact validated
-profile and closed declared-record accounting, before package or semantic indexing.
-Confined raw reads verify mandatory digest/length and preserve unknown/undecodable
-bytes. The owner retains immutable content and every explicit omission; caller
-provenance/security/compatibility/license assertions remain distinct. Separate
-content, snapshot and full-evidence identities exclude host directories and preserve
-provider-display independence. Inventory stays Partial, with root/Git completeness
-and downstream semantic/runtime authority unevaluated.
+W17 now binds genuine admitted source/package owners to
+`ProjectKind::BlizzardUiPlatformSource`. Configuration validates the complete
+Reference profile/generation and native load/Main association; naked kinds and
+competing plans refuse. The full source binding reaches configuration and generation
+identities, including inventory-only byte changes.
 
-Two native cases and workspace policy, fmt, check, strict Clippy, tests (921 passed,
-1 ignored, 108 targets), strict rustdoc and build pass on 2026-10-09. See
-[PLATFORM_SOURCE_ADMISSION.md](PLATFORM_SOURCE_ADMISSION.md).
-The retained-byte package/TOC/XML/Main adapter is now executable as recorded below.
-Next: bind the exact platform configuration/project/analyzer/graph and bounded
-SkeletonInputView. Full W17,
-E0/E2, real mirror/performance/runtime and W18-W26 remain open. Gethe preparation
-stays deferred until product implementation/build is complete.
+Physical and XML virtual implementation units use the additive `BlizzardUiMain`
+universe in the existing analyzer. The old `BlizzardUi` remains Library. Platform
+Main cannot become Library or be paired with ordinary virtual Main. Registry,
+view and source-graph handles share the exact source snapshot revision while
+retaining Reference/project generations. The source graph uses the sealed platform
+universe and its exact registry class, including TOC/XML definitions. Existing
+ordinary configuration/generation/registry recipes and legacy replay remain unchanged.
 
-`AdmittedPlatformSource::specialize_packages` now validates explicit native package
-declarations, requires the complete selected TOC set to equal the admitted profile,
-and pins every variant to observed retained bytes. New private Admitted load branches
-reuse the existing TOC/XML/package parsers, dependency closure and Main namespacing.
-Only demanded members are decoded; unrelated binary inventory remains retained.
-Requested exclusions/special/external/conflict/failed targets refuse with typed errors
-and logical paths. Strict Retained replay closure and existing native caps/recipes
-remain unchanged. A sealed source/load/Main binding and the original source Arc
-survive; no project/analyzer/graph/store publication capability is supplied.
+Four native cases and workspace policy, fmt, all-target/all-feature check, strict
+Clippy, tests (923 passed, 1 ignored, 108 targets), strict rustdoc and build pass on
+2026-10-10. The lifecycle publishes native Main/XML/source graph after source-directory
+removal, verifies owner/target/plan/Library refusal and source-handle closure, and
+advances the real guarded updater for an inventory-only binary change while preserving
+Main and an old snapshot. See
+[PLATFORM_SOURCE_CONFIGURATION.md](PLATFORM_SOURCE_CONFIGURATION.md).
 
-Three focused native cases and workspace policy, fmt, check, strict Clippy, tests
-(922 passed, 1 ignored, 108 targets), strict rustdoc and build pass on 2026-10-10.
-The new lifecycle loads after the physical source directory is removed and verifies
-caller-pin/cancel/excluded/unsupported refusal. See
-[PLATFORM_SOURCE_PACKAGES.md](PLATFORM_SOURCE_PACKAGES.md).
-Next is an owner-bound platform configuration/project kind and additive Main
-universe; current `BlizzardUi` remains Library-only. Native platform replay,
-graph/publication/SkeletonInputView, real mirror/performance/runtime and full W17
-acceptance remain open. W18-W26 are unchanged.
+The underlying [byte admission](PLATFORM_SOURCE_ADMISSION.md) and
+[retained-byte package specialization](PLATFORM_SOURCE_PACKAGES.md) preserve all
+raw members and explicit omissions without another parser or disk fallback.
+Original inventory remains Partial; root/Git completeness, materializer security,
+license permission and API/runtime authority do not follow from consumed-file checks.
+
+Native platform replay explicitly returns DeferredCapability before archive/store
+effects. Next: genuine raw-source/original-package replay, stable logical store
+namespace/publication, independently owned platform graph partitions/fingerprints,
+and bounded SkeletonInputView. Full W17, E0/E2, real mirror/performance/runtime and
+W18-W26 remain open. Gethe preparation follows product implementation/build.
 
 W14 now publishes explicit final physical Main deltas through the retained native
 owner and the complete graph producer chain. It reuses unchanged parsed trees
@@ -332,7 +328,7 @@ full graph acceptance and the checkpoint's CI conclusions remain open.
 | [W12 / PR 80](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/80) | Extend real producer chains and conflict assessment | Exact retained records, publication validation and bounded explanations are executable; full acceptance remains open |
 | [W13 / PR 81](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/81) | Full live-pair acceptance | Physical Lua, standalone TOC/XML and declared-package native replay plus coherent leased acquisition are executable; full acceptance remains open |
 | [W14 / PR 82](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/82), [W15 / PR 83](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/83), [W16 / PR 84](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/84) | Incremental invalidation, retained roots/GC, backup/recovery | Source selector/hold portability and guarded live cross-epoch selection/retry are executable; portable full history and full W16/E2 acceptance remain open |
-| [W17 / PR 85](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/85), [W18 / PR 86](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/86), [W19 / PR 87](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/87) | Blizzard source universe, Project Map/skeletons, context packs | W17 raw admission and retained-byte package/TOC/XML/Main specialization are executable; exact platform project/analyzer/graph and bounded producer views precede context |
+| [W17 / PR 85](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/85), [W18 / PR 86](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/86), [W19 / PR 87](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/87) | Blizzard source universe, Project Map/skeletons, context packs | W17 raw/package admission, owner-bound configuration, native platform Main and source-graph identity/materialization are executable; genuine replay/store namespace, platform partitions/fingerprints and bounded producer views precede context |
 | [W20 / PR 88](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/88), [W21 / PR 89](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/89) | Search, lineage and static impact | Exact immutable generation inputs |
 | [W22 / PR 90](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/90), [W23 / PR 91](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/91) | Sessions/MCP and private LSP overlays | Implemented capabilities only |
 | [W24 / PR 92](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/92), [W25 / PR 93](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/93) | Calibration governance and selected Windows build/release tooling | No inferred review, signing or installed state |

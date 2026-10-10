@@ -5,8 +5,8 @@ use wow_core::{
     CanonicalResult, CapabilityId, ContentDigest, CoverageId, CoveragePartitionId, CoverageRecord,
     CoverageStatus, EntityKey, GenerationContext, GenerationContextBuilder, MessageCode,
     NormalizedSourcePath, NotEvaluatedId, NotEvaluatedRecord, ProducerId, ProducerVersionEntry,
-    ProjectGenerationId, SourceContent, SourceHandle, SourceHandleBuilder, SourceOriginKind,
-    SourceSpan, SourceSpanKind, ToolVersion,
+    ProjectGenerationId, SourceContent, SourceHandle, SourceHandleBuilder, SourceSpan,
+    SourceSpanKind, ToolVersion,
 };
 use wow_emmy::{
     EmmyLocalBindingFact, EmmyLocalFlowReport, EmmyMemberCallReport, EmmyMemberReferenceFact,
@@ -17,7 +17,7 @@ use crate::configuration::PROJECT_SNAPSHOT_SCHEMA_VERSION;
 use crate::identity::{canonical_digest, canonical_id};
 use crate::{
     ProjectAnalyzerBinding, ProjectConfiguration, ProjectError, ProjectErrorCode, ProjectFileId,
-    ProjectFileRecord, ProjectGenerationCandidate, ProjectKind, ProjectPhase, ProjectResult,
+    ProjectFileRecord, ProjectGenerationCandidate, ProjectPhase, ProjectResult,
     ProjectSourceRegistry,
 };
 
@@ -510,14 +510,14 @@ impl ProjectView {
             )
             .with_relative_path(path));
         }
-        let origin = match self.configuration().project_kind() {
-            ProjectKind::Fixture => SourceOriginKind::Fixture,
-            ProjectKind::Repository => SourceOriginKind::GeneratedArtifact,
-        };
+        let (origin, revision) = crate::registry::source_handle_identity(
+            self.configuration(),
+            self.project_generation(),
+        )?;
         let mut builder = SourceHandleBuilder::new(
             origin,
             self.configuration().source_origin_id().as_str(),
-            self.project_generation().canonical(),
+            revision.as_ref(),
             source.path().as_str(),
             span,
             source.content_digest(),

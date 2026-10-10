@@ -3,8 +3,8 @@
 use super::invalid;
 use crate::{
     AnalyzerBindingDeclaration, ProjectBudgetPolicy, ProjectCapabilityPolicy, ProjectConfiguration,
-    ProjectConfigurationBuilder, ProjectId, ProjectKind, ProjectResult, ProjectSourceOriginId,
-    ProjectWorkspaceId,
+    ProjectConfigurationBuilder, ProjectError, ProjectErrorCode, ProjectId, ProjectKind,
+    ProjectPhase, ProjectResult, ProjectSourceOriginId, ProjectWorkspaceId,
 };
 use serde::{Deserialize, Serialize};
 use wow_core::{
@@ -147,13 +147,21 @@ pub(super) struct ReplayConfiguration {
 impl ReplayConfiguration {
     pub(super) fn from_configuration(config: &ProjectConfiguration) -> ProjectResult<Self> {
         config.validate()?;
+        let kind = match config.project_kind() {
+            ProjectKind::Fixture => ReplayKind::Fixture,
+            ProjectKind::Repository => ReplayKind::Repository,
+            ProjectKind::BlizzardUiPlatformSource => {
+                return Err(ProjectError::new(
+                    ProjectErrorCode::DeferredCapability,
+                    ProjectPhase::Publication,
+                    "native platform package replay transport is not implemented",
+                ));
+            }
+        };
         let capabilities = config.capability_policy();
         Ok(Self {
             project_id: config.project_id().clone(),
-            kind: match config.project_kind() {
-                ProjectKind::Fixture => ReplayKind::Fixture,
-                ProjectKind::Repository => ReplayKind::Repository,
-            },
+            kind,
             workspace_id: config.workspace_id().clone(),
             source_origin_id: config.source_origin_id().clone(),
             logical_root: config.logical_root().as_str().into(),

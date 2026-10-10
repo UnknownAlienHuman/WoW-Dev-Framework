@@ -1,7 +1,7 @@
 # Project completion matrix
 
 **Audited:** 2026-09-19 America/New_York. Execution inventory refreshed 2026-10-10
-through the scoped W17 retained-byte package/load checkpoint below.
+through the scoped W17 configuration/native Main/source-graph checkpoint below.
 
 This is the current execution ledger. [IMPLEMENTATION_HANDOFF.md](IMPLEMENTATION_HANDOFF.md)
 remains the normative I0–I7 plan; do not restart its historical bootstrap steps.
@@ -62,7 +62,7 @@ no Rust implementation in the audited source. Their documentation is not a binar
 | E1-D | Partial executable Reference Pack service and active internal builder with durable materialization/finalization | Close external parity/license/rebuild evidence, Windows/process-loss acceptance and complete package gates; code presence is not `ValidatedLocal` |
 | E2-A–E2-B | Partial executable | All 26 active E2-B rule IDs are service-published after the W11 semantic repair, TOC, XML and state slices; close public CLI/full-pipeline fixtures and package acceptance |
 | E2-C–E2-D | Partial source index, manifested store, native live pair service/CLI, cancellable updates, exact Library/fact-profile binding, retained physical parser updates and durable physical update/removal publication; bounded retention/GC, recovery/replacement, inactive migration/READY preparation, portable source authority and guarded cross-epoch selection/reconciliation | Dependency-specific fact reuse, standalone/package durable updates, portable full migration history and complete E2 acceptance remain open; see [REPLAY_PUBLICATION.md](../crates/wow-project/REPLAY_PUBLICATION.md) |
-| E3-A | Partial explicit local platform-source byte admission and retained-byte package/TOC/XML/Main specialization with sealed source/load binding | Exact platform configuration/project/analyzer/graph, native replay/publication and bounded SkeletonInputView; package specialization is not a complete source universe |
+| E3-A | Partial exact raw/package admission, owner-bound platform configuration, native physical/XML Main, registry and source-graph identity/materialization | Genuine source/package replay, stable logical store namespace/publication, platform partitions/fingerprints and bounded SkeletonInputView; full source-universe acceptance remains open |
 | E3-B–E3-C | Not started | Context owners and service/CLI after their actual producer inputs |
 | E4-A–E4-C | Not started | Search, lineage/migration/static impact and routing after A0 prerequisites |
 | E5-A–E5-C | Not started | Calibration, independent review/holdout and governed publication lifecycle |
@@ -473,3 +473,24 @@ cancel and declared omission refusal. See
 Exact platform configuration/project/analyzer/graph, native replay/publication,
 SkeletonInputView, real mirror/performance/runtime and full W17 acceptance remain
 open. W18-W26 remain open; Gethe materialization stays deferred.
+
+The platform configuration checkpoint now retains the genuine source/package
+specialization and validates exact Reference profile/generation plus native load/Main
+plans. A distinct ProjectKind and additive BlizzardUiMain physical/XML class preserve
+Main/Library separation. Registry, view and graph source handles bind the exact
+source snapshot; source graph definitions select its exact platform universe class.
+Old configuration/generation/registry recipes and replay identities remain unchanged.
+
+Four native cases and workspace policy, fmt, check, strict Clippy, tests (923 passed,
+1 ignored, 108 targets), strict rustdoc and build pass on 2026-10-10. One disk-absent
+lifecycle verifies native Main/XML/source-graph materialization, owner/plan/Library
+refusal, exact source handles, and real guarded generation advancement for an
+inventory-only byte change with unchanged parsed inputs and a valid old snapshot.
+See [PLATFORM_SOURCE_CONFIGURATION.md](PLATFORM_SOURCE_CONFIGURATION.md).
+
+Native platform replay deliberately refuses before archive/store effects. Genuine
+source/package transport, logical store namespace/publication, platform partitions/
+fingerprints, bounded SkeletonInputView, real mirror/performance/runtime and full
+W17/E3 acceptance remain open. Admission inventory remains Partial; consumed-file
+checks do not prove source/Git/root/license/API/runtime authority. W18-W26 remain
+open; Gethe materialization remains deferred.

@@ -42,6 +42,7 @@ pub enum EmmyMemberCallErrorCode {
     FactBudgetExceeded,
     CanonicalizationFailed,
     Cancelled,
+    InvalidLibraryWorkspace,
 }
 
 /// One bounded direct-member analysis failure.
@@ -563,6 +564,16 @@ impl RegisteredMemberAnalysis {
                     None,
                 ));
             }
+            if (main.universe() == crate::LuaWorkspaceUniverse::BlizzardUiMain
+                || virtual_units.universe() == crate::LuaWorkspaceUniverse::BlizzardUiMain)
+                && main.universe() != virtual_units.universe()
+            {
+                return Err(EmmyMemberCallError::new(
+                    EmmyMemberCallErrorCode::InvalidMainWorkspace,
+                    "platform physical and virtual Main workspaces must share one universe",
+                    None,
+                ));
+            }
             if !identities.insert(virtual_units.snapshot_id()) {
                 return Err(EmmyMemberCallError::new(
                     EmmyMemberCallErrorCode::DuplicateWorkspaceSnapshot,
@@ -574,6 +585,13 @@ impl RegisteredMemberAnalysis {
         for library in &ordered_libraries {
             crate::bindings::checkpoint(stop)?;
             validate_compiled_backend(library)?;
+            if library.universe() == crate::LuaWorkspaceUniverse::BlizzardUiMain {
+                return Err(EmmyMemberCallError::new(
+                    EmmyMemberCallErrorCode::InvalidLibraryWorkspace,
+                    "platform Main implementation cannot be used as a Library workspace",
+                    None,
+                ));
+            }
             if library.backend() != main.backend() {
                 return Err(EmmyMemberCallError::new(
                     EmmyMemberCallErrorCode::IncompatibleBackend,

@@ -179,6 +179,8 @@ pub enum LuaWorkspaceUniverse {
     Project,
     BlizzardUi,
     Fixture,
+    /// Platform implementation analyzed as Main, distinct from the legacy Library universe.
+    BlizzardUiMain,
 }
 
 /// Explicit limits applied before analyzer ingestion.
@@ -660,6 +662,12 @@ mod tests {
             files(),
             limits()?,
         )?;
+        let platform_main = LuaWorkspaceSnapshot::build(
+            backend()?,
+            LuaWorkspaceUniverse::BlizzardUiMain,
+            files(),
+            limits()?,
+        )?;
         let other_backend = EmmyBackendIdentity::new(
             ANALYZER_CRATE,
             Some("0.22.0"),
@@ -675,6 +683,8 @@ mod tests {
             limits()?,
         )?;
         assert_ne!(project.snapshot_id(), blizzard.snapshot_id());
+        assert_ne!(project.snapshot_id(), platform_main.snapshot_id());
+        assert_ne!(blizzard.snapshot_id(), platform_main.snapshot_id());
         assert_ne!(project.snapshot_id(), updated.snapshot_id());
         Ok(())
     }

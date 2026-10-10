@@ -8,6 +8,7 @@ use wow_core::{
 };
 
 use crate::identity::{canonical_digest, canonical_id};
+use crate::platform_source::PlatformSourceClass;
 use crate::{
     ProjectAnalyzerBinding, ProjectConfiguration, ProjectError, ProjectErrorCode, ProjectFileId,
     ProjectFileManifestEntry, ProjectInputInventory, ProjectKind, ProjectPhase, ProjectResult,
@@ -20,6 +21,39 @@ use crate::{
 pub enum ProjectSourceOriginKind {
     FixtureProject,
     RepositoryProject,
+    BlizzardUiPlatformSource,
+}
+
+/// One origin/revision recipe shared by file, retained-document and graph handles.
+pub(crate) fn source_handle_identity(
+    configuration: &ProjectConfiguration,
+    project_generation: ProjectGenerationId,
+) -> ProjectResult<(SourceOriginKind, Box<str>)> {
+    match configuration.project_kind() {
+        ProjectKind::Fixture => Ok((
+            SourceOriginKind::Fixture,
+            project_generation.canonical().into_boxed_str(),
+        )),
+        ProjectKind::Repository => Ok((
+            SourceOriginKind::GeneratedArtifact,
+            project_generation.canonical().into_boxed_str(),
+        )),
+        ProjectKind::BlizzardUiPlatformSource => {
+            let packages = configuration.platform_packages().ok_or_else(|| {
+                ProjectError::new(
+                    ProjectErrorCode::SourceRegistryInvalid,
+                    ProjectPhase::Registry,
+                    "platform source handles require retained package admission",
+                )
+                .with_candidate_generation(project_generation)
+            })?;
+            let origin = match packages.source().profile().source_class() {
+                PlatformSourceClass::SyntheticFixture => SourceOriginKind::Fixture,
+                PlatformSourceClass::VendorUiSourceMirror => SourceOriginKind::GeneratedArtifact,
+            };
+            Ok((origin, packages.binding().source_snapshot_id().into()))
+        }
+    }
 }
 
 /// Immutable project source-origin declaration bound to one generation.
@@ -165,14 +199,19 @@ impl ProjectSourceRegistry {
         let origin_kind = match configuration.project_kind() {
             ProjectKind::Fixture => ProjectSourceOriginKind::FixtureProject,
             ProjectKind::Repository => ProjectSourceOriginKind::RepositoryProject,
+            ProjectKind::BlizzardUiPlatformSource => {
+                ProjectSourceOriginKind::BlizzardUiPlatformSource
+            }
         };
+        let (core_origin_kind, revision) =
+            source_handle_identity(configuration, project_generation)?;
         let source_origin = ProjectSourceOrigin {
             origin_id: configuration.source_origin_id().clone(),
             project_id: configuration.project_id().clone(),
             workspace_id: configuration.workspace_id().clone(),
             origin_kind,
             logical_root: configuration.logical_root().clone(),
-            revision_identity: project_generation.canonical().into_boxed_str(),
+            revision_identity: revision.clone(),
             project_generation,
         };
         let mut file_records = Vec::with_capacity(inventory.files().len());
@@ -186,14 +225,10 @@ impl ProjectSourceRegistry {
                     )
                     .with_file_id(file.file_id().as_str())
                 })?;
-            let core_origin_kind = match configuration.project_kind() {
-                ProjectKind::Fixture => SourceOriginKind::Fixture,
-                ProjectKind::Repository => SourceOriginKind::GeneratedArtifact,
-            };
             let source_handle_base = SourceHandleBuilder::new(
                 core_origin_kind,
                 configuration.source_origin_id().as_str(),
-                project_generation.canonical(),
+                revision.as_ref(),
                 file.relative_path().as_str(),
                 SourceSpan::whole_file(),
                 file.content_digest(),

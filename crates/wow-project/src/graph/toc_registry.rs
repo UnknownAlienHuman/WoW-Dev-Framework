@@ -3,6 +3,7 @@
 use super::*;
 
 pub(super) fn extend(
+    universe_class: &str,
     entities: &mut Vec<GraphEntityKindDefinition>,
     relations: &mut Vec<GraphRelationKindDefinition>,
 ) -> ProjectResult<()> {
@@ -15,7 +16,7 @@ pub(super) fn extend(
         entities.push(
             GraphEntityKindDefinition::new(
                 kind,
-                vec!["project".into()],
+                vec![universe_class.into()],
                 fields.into_iter().map(Into::into).collect(),
                 vec![GraphConfidence::Derived, GraphConfidence::Possible],
             )

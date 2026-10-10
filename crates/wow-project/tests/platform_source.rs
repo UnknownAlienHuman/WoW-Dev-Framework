@@ -1,17 +1,30 @@
 use std::{
     error::Error,
     path::{Path, PathBuf},
-    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+    },
 };
 
 use sha2::{Digest, Sha256};
 use wow_core::{
     CanonicalResult, ContentDigest, CoverageStatus, ProfileIdentityBuilder, ProfileKind,
     ReferenceGenerationId, SchemaVersionEntry, SourceContent, SourceKind, SourceLogicalSnapshot,
+    SourceOriginKind, SourceSpan,
+};
+use wow_emmy::{
+    EMMYLUA_CODE_ANALYSIS_VERSION, EMMYLUA_REVISION, EMMYLUA_TREE, EmmyBackendIdentity,
+    EmmyMemberCallErrorCode, LuaWorkspaceFileInput, LuaWorkspaceLimits, LuaWorkspaceSnapshot,
+    LuaWorkspaceUniverse,
 };
 use wow_project::{
-    ProjectErrorCode,
+    AnalyzerBindingDeclaration, ProjectBudgetPolicy, ProjectCapabilityPolicy,
+    ProjectConfigurationBuilder, ProjectErrorCode, ProjectId, ProjectInputBundle, ProjectKind,
+    ProjectPhase, ProjectPublisher, ProjectSourceOriginId, ProjectSourceOriginKind,
+    ProjectWorkspaceId,
     disk::ProjectInputDirectory,
+    load::{ProjectPackageInput, ProjectPackageVariantInput},
     platform_source::{
         BlizzardUiSourceProfile, BlizzardUiSourceProfileRequest, PlatformEntryDisposition,
         PlatformFileKind, PlatformInventoryEntry, PlatformInventoryScope, PlatformLicenseRecord,
@@ -164,6 +177,57 @@ fn inventory(
         },
         compatibility_evidence: raw_digest(b"caller fixture compatibility assertion"),
     })
+}
+
+fn fixture_packages(name: &str) -> Vec<ProjectPackageInput> {
+    vec![ProjectPackageInput::new(
+        name,
+        "UI",
+        true,
+        vec![ProjectPackageVariantInput::new(
+            wow_project::disk::ProjectDiskFile::new("Fixture.toc"),
+            true,
+        )],
+    )]
+}
+
+fn configuration_builder(
+    kind: ProjectKind,
+    target: &PlatformTarget,
+) -> Result<ProjectConfigurationBuilder, Box<dyn Error>> {
+    let backend = EmmyBackendIdentity::new(
+        "emmylua_code_analysis",
+        Some(EMMYLUA_CODE_ANALYSIS_VERSION),
+        EMMYLUA_REVISION,
+        EMMYLUA_TREE,
+        format!("sha256:{}", "1".repeat(64)),
+        format!("sha256:{}", "2".repeat(64)),
+    )?;
+    let analyzer = AnalyzerBindingDeclaration::new(
+        "wow-emmy/e0-c/1",
+        format!("emmy-pin:{EMMYLUA_REVISION}"),
+        backend.compatibility_report_sha256(),
+        ContentDigest::<CanonicalResult>::from_bytes([3; 32]),
+        "wow-emmy/e0-c/1",
+        "wow-emmy-e0-c-library-v1",
+        backend.clone(),
+    )?;
+    Ok(ProjectConfigurationBuilder::new(
+        ProjectId::new("platform-source-lifecycle-fixture")?,
+        kind,
+        target.reference_profile.clone(),
+        target.reference_generation,
+        analyzer,
+    )
+    .workspace_id(ProjectWorkspaceId::new(
+        "workspace:main:platform-source-fixture",
+    )?)
+    .source_origin_id(ProjectSourceOriginId::new(
+        "project-origin:platform-source-fixture",
+    )?)
+    .logical_root("fixtures/platform-source/UI")
+    .capability_policy(ProjectCapabilityPolicy::strict_e0()?)
+    .budget_policy(ProjectBudgetPolicy::fixture_e0()?))
 }
 
 #[test]
@@ -341,9 +405,6 @@ fn native_admission_refuses_stale_binding_invalid_inventory_and_unresolved_conte
 #[test]
 fn platform_packages_reuse_native_load_from_retained_bytes_and_refuse_declared_omissions()
 -> TestResult {
-    use std::sync::Arc;
-    use wow_project::load::{ProjectPackageInput, ProjectPackageVariantInput};
-
     let root = FixtureRoot::new()?;
     let stop = AtomicBool::new(false);
     let profile = BlizzardUiSourceProfile::new(profile_request()?)?;
@@ -352,15 +413,7 @@ fn platform_packages_reuse_native_load_from_retained_bytes_and_refuse_declared_o
         root.directory()?
             .admit_platform_source(&profile, declared, &stop)?,
     );
-    let packages = vec![ProjectPackageInput::new(
-        "Fixture",
-        "UI",
-        true,
-        vec![ProjectPackageVariantInput::new(
-            wow_project::disk::ProjectDiskFile::new("Fixture.toc"),
-            true,
-        )],
-    )];
+    let packages = fixture_packages("Fixture");
     // No filesystem input remains for the native TOC/XML/package owners to reread.
     std::fs::remove_dir_all(&root.0)?;
     let loaded = source.specialize_packages(&packages, None, &stop)?;
@@ -463,5 +516,383 @@ fn platform_packages_reuse_native_load_from_retained_bytes_and_refuse_declared_o
             .map(|error| error.code()),
         Some(ProjectErrorCode::InvalidFileLanguage)
     );
+    Ok(())
+}
+
+#[test]
+fn platform_configuration_publishes_native_main_and_refuses_replay() -> TestResult {
+    let root = FixtureRoot::new()?;
+    let stop = AtomicBool::new(false);
+    let profile = BlizzardUiSourceProfile::new(profile_request()?)?;
+    let declared = inventory(&root, &profile)?;
+    let source = Arc::new(
+        root.directory()?
+            .admit_platform_source(&profile, declared, &stop)?,
+    );
+    std::fs::remove_dir_all(&root.0)?;
+    let loaded = Arc::new(source.specialize_packages(&fixture_packages("Fixture"), None, &stop)?);
+    let competing =
+        Arc::new(source.specialize_packages(&fixture_packages("Other"), None, &stop)?);
+
+    let builder = configuration_builder(ProjectKind::BlizzardUiPlatformSource, profile.target())?;
+    assert_eq!(
+        builder.clone().build().err().map(|error| error.code()),
+        Some(ProjectErrorCode::InvalidConfiguration)
+    );
+    assert_eq!(
+        builder
+            .clone()
+            .package_load_plan(loaded.load_plan(), loaded.main_plan())?
+            .build()
+            .err()
+            .map(|error| error.code()),
+        Some(ProjectErrorCode::InvalidConfiguration)
+    );
+    for kind in [ProjectKind::Fixture, ProjectKind::Repository] {
+        assert_eq!(
+            configuration_builder(kind, profile.target())?
+                .platform_packages(Arc::clone(&loaded))
+                .err()
+                .map(|error| error.code()),
+            Some(ProjectErrorCode::InvalidConfiguration)
+        );
+    }
+    let mut wrong_target = profile.target().clone();
+    wrong_target.reference_generation = ReferenceGenerationId::from_hash([9; 32]);
+    assert_eq!(
+        configuration_builder(ProjectKind::BlizzardUiPlatformSource, &wrong_target)?
+            .platform_packages(Arc::clone(&loaded))
+            .err()
+            .map(|error| error.code()),
+        Some(ProjectErrorCode::InvalidConfiguration)
+    );
+    let builder = builder.platform_packages(Arc::clone(&loaded))?;
+    let configuration = builder.clone().build()?;
+    assert_eq!(
+        builder
+            .clone()
+            .package_load_plan(loaded.load_plan(), loaded.main_plan())?
+            .build()?,
+        configuration
+    );
+    assert_eq!(
+        builder
+            .clone()
+            .platform_packages(Arc::clone(&loaded))?
+            .build()?,
+        configuration
+    );
+    assert_eq!(
+        builder
+            .clone()
+            .package_load_plan(competing.load_plan(), competing.main_plan())
+            .err()
+            .map(|error| error.code()),
+        Some(ProjectErrorCode::InvalidConfiguration)
+    );
+    assert_eq!(
+        builder
+            .clone()
+            .platform_packages(competing)
+            .err()
+            .map(|error| error.code()),
+        Some(ProjectErrorCode::InvalidConfiguration)
+    );
+    let single_plan = loaded
+        .load_plan()
+        .package_plan("Fixture")
+        .ok_or_else(|| std::io::Error::other("fixture package receipt missing"))?;
+    assert_eq!(
+        builder
+            .load_plan(single_plan)
+            .err()
+            .map(|error| error.code()),
+        Some(ProjectErrorCode::InvalidConfiguration)
+    );
+
+    configuration.validate()?;
+    assert_eq!(
+        configuration.project_kind(),
+        ProjectKind::BlizzardUiPlatformSource
+    );
+    assert_eq!(
+        configuration.platform_package_binding(),
+        Some(loaded.binding())
+    );
+    assert_eq!(
+        configuration.platform_package_binding_digest(),
+        Some(loaded.binding().binding_digest())
+    );
+    let retained = configuration
+        .platform_packages()
+        .ok_or_else(|| std::io::Error::other("platform owner missing"))?;
+    assert!(Arc::ptr_eq(retained.source(), &source));
+    assert_eq!(retained.files(), loaded.files());
+    assert_eq!(configuration.package_load_plan(), Some(loaded.load_plan()));
+    assert_eq!(configuration.package_main_plan(), Some(loaded.main_plan()));
+
+    let library = LuaWorkspaceSnapshot::build(
+        configuration.analyzer_binding().backend().clone(),
+        LuaWorkspaceUniverse::BlizzardUi,
+        vec![LuaWorkspaceFileInput::new(
+            "library/platform-fixture.lua",
+            "---@meta _\n---@class C_PlatformFixture\n---@field KnownApi fun(): boolean\nC_PlatformFixture = {}\n",
+        )],
+        LuaWorkspaceLimits::new(8, 16_384, 256 * 1024, 512 * 1024)?,
+    )?;
+    let mut publisher = ProjectPublisher::with_function_call_facts();
+    let snapshot = publisher.publish_initial_cancellable(
+        ProjectInputBundle::closed(
+            configuration.clone(),
+            loaded.files().to_vec(),
+            vec![library.clone()],
+        )?,
+        &stop,
+    )?;
+    snapshot.validate()?;
+    assert_eq!(snapshot.configuration(), &configuration);
+    let analyzer = snapshot.analyzer_binding();
+    assert_eq!(
+        analyzer.main_workspace().universe(),
+        LuaWorkspaceUniverse::BlizzardUiMain
+    );
+    assert_eq!(
+        analyzer.library_snapshot_ids().collect::<Vec<_>>(),
+        vec![library.snapshot_id()]
+    );
+    let xml = analyzer
+        .xml_lua_analysis()
+        .ok_or_else(|| std::io::Error::other("XML virtual analysis missing"))?;
+    assert!(!xml.units().is_empty());
+    let mut virtual_files = Vec::new();
+    for unit in xml.units() {
+        assert_eq!(unit.package.as_deref(), Some("Fixture"));
+        let index = single_plan
+            .xml_documents()
+            .iter()
+            .find_map(|(path, index)| {
+                (loaded.load_plan().source_path("Fixture", path).as_deref()
+                    == Some(unit.document.as_str()))
+                .then_some(index)
+            })
+            .ok_or_else(|| std::io::Error::other("virtual unit document missing"))?;
+        let body = index
+            .element(&unit.script_occurrence_id)
+            .and_then(|element| element.script.as_ref())
+            .and_then(|script| script.inline_lua.as_ref())
+            .ok_or_else(|| std::io::Error::other("virtual unit source missing"))?;
+        assert_eq!(unit.extracted_unit_id, body.unit_id);
+        assert_eq!(unit.content_digest, body.content_digest);
+        virtual_files.push(LuaWorkspaceFileInput::new(&unit.virtual_path, body.text()));
+    }
+    // Workspace identity includes the universe; use native unwrapped retained units.
+    let virtual_limits = LuaWorkspaceLimits::new(64, 16_384, 256 * 1024, 2 * 1024 * 1024)?;
+    let mismatched_virtual = LuaWorkspaceSnapshot::build(
+        configuration.analyzer_binding().backend().clone(),
+        LuaWorkspaceUniverse::Project,
+        virtual_files.clone(),
+        virtual_limits,
+    )?;
+    let expected_virtual = LuaWorkspaceSnapshot::build(
+        configuration.analyzer_binding().backend().clone(),
+        LuaWorkspaceUniverse::BlizzardUiMain,
+        virtual_files,
+        virtual_limits,
+    )?;
+    assert_eq!(
+        wow_emmy::analyze_member_calls(analyzer.main_workspace(), &[analyzer.main_workspace()])
+            .err()
+            .map(|error| error.code()),
+        Some(EmmyMemberCallErrorCode::InvalidLibraryWorkspace)
+    );
+    assert_eq!(
+        wow_emmy::references::analyze_member_call_session_with_virtual(
+            analyzer.main_workspace(),
+            &[&library],
+            &mismatched_virtual,
+            snapshot.project_generation(),
+            &[],
+            false,
+            &stop,
+        )
+        .err()
+        .map(|error| error.code()),
+        Some(EmmyMemberCallErrorCode::InvalidMainWorkspace)
+    );
+    let semantics = xml
+        .semantic_report()
+        .ok_or_else(|| std::io::Error::other("XML virtual semantics missing"))?;
+    assert_eq!(
+        semantics.virtual_snapshot_id(),
+        expected_virtual.snapshot_id()
+    );
+    assert_eq!(
+        semantics.main_snapshot_id(),
+        analyzer.main_workspace().snapshot_id()
+    );
+    assert_eq!(
+        semantics.project_generation(),
+        snapshot.project_generation()
+    );
+    assert_eq!(
+        semantics.library_snapshot_ids().collect::<Vec<_>>(),
+        vec![library.snapshot_id()]
+    );
+
+    let registry = snapshot.source_registry();
+    let origin = registry.source_origin();
+    assert_eq!(
+        origin.origin_kind(),
+        ProjectSourceOriginKind::BlizzardUiPlatformSource
+    );
+    assert_eq!(
+        origin.revision_identity(),
+        loaded.binding().source_snapshot_id()
+    );
+    assert_eq!(origin.project_generation(), snapshot.project_generation());
+    let view = publisher.open_current()?;
+    for file in snapshot.file_manifest() {
+        registry.validate_source_handle(file.source_handle_base())?;
+        assert_eq!(
+            file.source_handle_base().origin_kind(),
+            SourceOriginKind::Fixture
+        );
+        assert_eq!(
+            file.source_handle_base().revision(),
+            loaded.binding().source_snapshot_id()
+        );
+        assert_eq!(
+            file.source_handle_base().project_generation(),
+            Some(snapshot.project_generation())
+        );
+        assert_eq!(
+            view.source_handle(
+                file.relative_path().as_str(),
+                SourceSpan::whole_file(),
+                file.source_handle_base().entity_key().cloned()
+            )?,
+            *file.source_handle_base()
+        );
+    }
+    let (registry, batch, coverage, provenance, limits) =
+        wow_project::graph::build_source_graph_proposals(&view, &stop)?.into_parts();
+    assert_eq!(batch.universe().as_str(), loaded.binding().universe_id());
+    for kind in ["toc_manifest", "xml_object"] {
+        let definition = registry
+            .entity_kind(kind)
+            .ok_or_else(|| std::io::Error::other("platform structural registry kind missing"))?;
+        assert!(definition.allows_universe(batch.universe()));
+    }
+    assert_eq!(provenance.context(), snapshot.generation_context());
+    assert!(
+        provenance
+            .source_handles()
+            .values()
+            .any(|handle| handle.path().as_str() == "packages/Fixture/frames.xml")
+    );
+    for handle in provenance.source_handles().values() {
+        assert_eq!(handle.origin_kind(), SourceOriginKind::Fixture);
+        assert_eq!(
+            handle.origin_id(),
+            configuration.source_origin_id().as_str()
+        );
+        assert_eq!(handle.revision(), loaded.binding().source_snapshot_id());
+        assert_eq!(
+            handle.project_generation(),
+            Some(snapshot.project_generation())
+        );
+        assert_eq!(
+            handle.reference_generation(),
+            Some(configuration.reference_generation())
+        );
+        assert_eq!(
+            view.source_handle(
+                handle.path().as_str(),
+                handle.span(),
+                handle.entity_key().cloned()
+            )?,
+            *handle
+        );
+    }
+    let foundation = wow_graph::GraphSnapshot::build(
+        batch.universe().clone(),
+        batch.generation().clone(),
+        limits,
+        Vec::new(),
+        Vec::new(),
+        coverage.clone(),
+    )?;
+    let owner = wow_graph::GraphPartitionSnapshot::new(
+        registry,
+        foundation,
+        batch.source_context_id(),
+        &stop,
+    )?;
+    let replacement = owner.prepare_replacement(
+        wow_graph::GraphPartitionReplacement {
+            expected_snapshot_id: owner.snapshot().snapshot_id().clone(),
+            expected_partition_digest: None,
+            producer_version: env!("CARGO_PKG_VERSION").into(),
+            batch,
+            coverage,
+        },
+        &stop,
+    )?;
+    replacement.candidate().validate(&stop)?;
+    assert!(!replacement.candidate().snapshot().nodes().is_empty());
+    let refused = wow_project::replay::ProjectReplay::capture(&publisher, &stop)
+        .err()
+        .ok_or_else(|| std::io::Error::other("platform replay was accepted"))?;
+    assert_eq!(refused.code(), ProjectErrorCode::DeferredCapability);
+    assert_eq!(refused.phase(), ProjectPhase::Publication);
+    assert_eq!(
+        publisher.open_current()?.snapshot_id(),
+        snapshot.snapshot_id()
+    );
+
+    // A retained inventory-only byte change must bypass NoChange even when
+    // every parsed load/Main input and Library is identical.
+    let changed_root = FixtureRoot::new()?;
+    std::fs::write(changed_root.0.join("UI/opaque.bin"), [0xff, 0xfe, 0, 2])?;
+    let changed_inventory = inventory(&changed_root, &profile)?;
+    let changed_source = Arc::new(changed_root.directory()?.admit_platform_source(
+        &profile,
+        changed_inventory,
+        &stop,
+    )?);
+    std::fs::remove_dir_all(&changed_root.0)?;
+    let changed_packages =
+        Arc::new(changed_source.specialize_packages(&fixture_packages("Fixture"), None, &stop)?);
+    assert_eq!(changed_packages.files(), loaded.files());
+    assert_eq!(changed_packages.load_plan(), loaded.load_plan());
+    assert_eq!(changed_packages.main_plan(), loaded.main_plan());
+    let changed_configuration =
+        configuration_builder(ProjectKind::BlizzardUiPlatformSource, profile.target())?
+            .platform_packages(changed_packages)?
+            .build()?;
+    assert_ne!(
+        changed_configuration.configuration_digest(),
+        configuration.configuration_digest()
+    );
+    let request = wow_project::ProjectUpdateRequest::new(changed_configuration, Vec::new())
+        .expected_generation(snapshot.project_generation())
+        .expected_snapshot_digest(snapshot.canonical_snapshot_digest());
+    let wow_project::ProjectUpdateOutcome::Published(changed_snapshot) =
+        publisher.apply_update_cancellable(request, &stop)?
+    else {
+        return Err(std::io::Error::other("changed raw inventory was treated as NoChange").into());
+    };
+    assert_ne!(
+        changed_snapshot.project_generation(),
+        snapshot.project_generation()
+    );
+    assert_eq!(
+        changed_snapshot
+            .analyzer_binding()
+            .main_workspace()
+            .snapshot_id(),
+        analyzer.main_workspace().snapshot_id()
+    );
+    snapshot.validate()?;
     Ok(())
 }

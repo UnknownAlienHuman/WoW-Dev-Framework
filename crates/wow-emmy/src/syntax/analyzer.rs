@@ -41,7 +41,9 @@ pub(crate) fn build_registered(
     configuration.diagnostics.enable = true;
     analysis.update_config(Arc::new(configuration));
     match snapshot.universe() {
-        LuaWorkspaceUniverse::Project | LuaWorkspaceUniverse::Fixture => {
+        LuaWorkspaceUniverse::Project
+        | LuaWorkspaceUniverse::Fixture
+        | LuaWorkspaceUniverse::BlizzardUiMain => {
             analysis.add_main_workspace(root.to_path_buf());
         }
         LuaWorkspaceUniverse::BlizzardUi => {

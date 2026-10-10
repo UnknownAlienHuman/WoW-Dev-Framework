@@ -44,10 +44,10 @@ launch gates remain open.
 The physical update path retains native parser state and publishes exact final
 Main deltas through the complete graph producer chain. Bounded retention/GC,
 recovery, portable original-source authority and guarded cross-epoch selection
-are executable. The current functional frontier is W17: exact local platform-source
-byte admission and retained-byte package/TOC/XML/Main specialization are implemented;
-exact platform configuration/project/analyzer/graph binding follows. Broad package
-acceptance remains open.
+are executable. W17 now binds admitted platform source/package owners to exact
+configuration, native platform Main and source-graph identity/materialization.
+Genuine replay, logical store namespace, platform partitions/fingerprints and
+SkeletonInputView follow. Broad package acceptance remains open.
 
 ## W14 retained physical native analysis (2026-10-09)
 
@@ -1020,3 +1020,33 @@ additive Main universe, native replay, graph/publication/SkeletonInputView and f
 W17 or real mirror/performance/runtime acceptance remain open. The existing
 `BlizzardUi` workspace remains Library-only; platform implementation is Main.
 Gethe materialization follows product implementation/build.
+
+## W17 owner-bound configuration and native platform Main (2026-10-10)
+
+`ProjectKind::BlizzardUiPlatformSource` requires the genuine retained
+`PlatformPackageSpecialization`, exact Reference profile/generation and native
+load/Main plans. Build/validate reconstruct the sealed association; competing
+setters and naked/ordinary-kind substitutions refuse. An optional binding digest
+is omitted for old configurations, preserving their bytes and semantic recipes.
+
+The additive `BlizzardUiMain` class registers physical and XML virtual units as
+Main in the existing native analyzer; mixed platform/ordinary Main and platform
+Main-as-Library refuse. Old `BlizzardUi` keeps its Library behavior. Registry,
+view and graph handles share source snapshot revision and both generation bindings.
+Source graph registry definitions, including TOC/XML, select exactly the platform
+or ordinary class. Existing ordinary registry identities are unchanged.
+
+Four native cases and all workspace gates/build pass: policy, fmt, all-target/
+all-feature check, strict Clippy, tests (923 passed, 1 ignored, 108 targets), strict
+rustdoc and build. The disk-absent lifecycle materializes native Main/XML and source
+graph, checks exact handles/identities/refusals, and advances the guarded updater
+when only retained inventory bytes change, with unchanged parsed inputs and a valid
+old snapshot. Frozen legacy replay fixtures remain executable. See
+[PLATFORM_SOURCE_CONFIGURATION.md](PLATFORM_SOURCE_CONFIGURATION.md).
+
+Platform native replay returns DeferredCapability before copying archives or
+preparing store publication. Next are genuine raw/source/package replay, stable
+logical store namespace/publication, platform partition/fingerprint owners and
+bounded SkeletonInputView. Original Partial admission and unevaluated source/license/
+runtime authority remain separate; full W17/E3 and real mirror/performance/runtime
+acceptance are open. Gethe materialization remains deferred.

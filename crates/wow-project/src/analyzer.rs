@@ -12,7 +12,7 @@ use wow_emmy::{
 use crate::identity::{canonical_id, parse_source_digest};
 use crate::{
     ProjectConfiguration, ProjectError, ProjectErrorCode, ProjectFileId,
-    ProjectGenerationCandidate, ProjectInputInventory, ProjectPhase, ProjectResult,
+    ProjectGenerationCandidate, ProjectInputInventory, ProjectKind, ProjectPhase, ProjectResult,
 };
 
 /// Reviewed universal callables needed by active E2 core recognizers. These are
@@ -200,6 +200,23 @@ impl ProjectAnalyzerBinding {
     }
 }
 
+pub(crate) fn main_workspace_universe(
+    configuration: &ProjectConfiguration,
+) -> ProjectResult<LuaWorkspaceUniverse> {
+    match (
+        configuration.project_kind(),
+        configuration.platform_packages().is_some(),
+    ) {
+        (ProjectKind::BlizzardUiPlatformSource, true) => Ok(LuaWorkspaceUniverse::BlizzardUiMain),
+        (ProjectKind::BlizzardUiPlatformSource, false) | (_, true) => Err(ProjectError::new(
+            ProjectErrorCode::AnalyzerSnapshotMismatch,
+            ProjectPhase::Analyzer,
+            "platform Main requires the exact platform kind and retained package owner",
+        )),
+        (_, false) => Ok(LuaWorkspaceUniverse::Project),
+    }
+}
+
 pub(crate) fn build_analyzer_binding(
     configuration: &ProjectConfiguration,
     inventory: &ProjectInputInventory,
@@ -213,6 +230,8 @@ pub(crate) fn build_analyzer_binding(
     generation.validate(configuration, inventory)?;
     generation.validate_library_ids(libraries.iter().map(LuaWorkspaceSnapshot::snapshot_id))?;
     generation.validate_function_call_facts(function_calls)?;
+    let main_universe = main_workspace_universe(configuration)
+        .map_err(|error| error.with_candidate_generation(generation.project_generation()))?;
     if libraries.is_empty() {
         return Err(ProjectError::new(
             ProjectErrorCode::AnalyzerFailed,
@@ -226,8 +245,10 @@ pub(crate) fn build_analyzer_binding(
     ordered_libraries.sort_by(|left, right| left.snapshot_id().cmp(right.snapshot_id()));
     let mut library_ids = BTreeSet::new();
     for library in &ordered_libraries {
-        if library.universe() == LuaWorkspaceUniverse::Project
-            || library.backend() != backend
+        if matches!(
+            library.universe(),
+            LuaWorkspaceUniverse::Project | LuaWorkspaceUniverse::BlizzardUiMain
+        ) || library.backend() != backend
             || !library_ids.insert(library.snapshot_id().to_owned())
         {
             return Err(ProjectError::new(
@@ -242,7 +263,7 @@ pub(crate) fn build_analyzer_binding(
     let budget = configuration.budget_policy();
     let main_workspace = LuaWorkspaceSnapshot::build(
         backend.clone(),
-        LuaWorkspaceUniverse::Project,
+        main_universe,
         inventory
             .files()
             .iter()
@@ -274,6 +295,7 @@ pub(crate) fn build_analyzer_binding(
     let pending_xml_lua = crate::xml_lua::prepare(
         configuration,
         generation.project_generation(),
+        main_workspace.universe(),
         inventory.files().len(),
         inventory
             .files()
