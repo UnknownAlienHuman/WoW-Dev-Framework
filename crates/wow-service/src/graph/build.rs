@@ -130,6 +130,30 @@ impl GraphBuildRequest {
         }
         backend.acquire_project(&self.selector, stop)
     }
+
+    pub(crate) fn live_publication_in_namespace(
+        &self,
+        input: LocalProjectInput,
+        namespace: &wow_store::project::ProjectStoreNamespace,
+        stop: &AtomicBool,
+    ) -> ServiceResult<(
+        wow_project::replay::publication::ProjectPublicationBundle,
+        String,
+    )> {
+        live_publication_in_namespace(input, self, namespace, stop)
+    }
+
+    pub(crate) fn live_publication_from_backend_in_namespace(
+        &self,
+        backend: &LocalProjectBackend,
+        namespace: &wow_store::project::ProjectStoreNamespace,
+        stop: &AtomicBool,
+    ) -> ServiceResult<(
+        wow_project::replay::publication::ProjectPublicationBundle,
+        String,
+    )> {
+        live_publication_from_backend_in_namespace(backend, self, namespace, stop)
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -571,6 +595,36 @@ pub(crate) fn live_publication_from_backend(
     let built = compose_backend(backend, request, stop)?;
     let bundle = backend.capture_project_bundle(&built.snapshot, stop)?;
     Ok((bundle, built.snapshot.snapshot().universe().as_str().into()))
+}
+
+pub(crate) fn live_publication_in_namespace(
+    input: LocalProjectInput,
+    request: &GraphBuildRequest,
+    namespace: &wow_store::project::ProjectStoreNamespace,
+    stop: &AtomicBool,
+) -> ServiceResult<(
+    wow_project::replay::publication::ProjectPublicationBundle,
+    String,
+)> {
+    checkpoint(stop)?;
+    let backend = LocalProjectBackend::for_graph(input)?;
+    live_publication_from_backend_in_namespace(&backend, request, namespace, stop)
+}
+
+/// Capture the selected namespace from the same retained native producer chain.
+pub(crate) fn live_publication_from_backend_in_namespace(
+    backend: &LocalProjectBackend,
+    request: &GraphBuildRequest,
+    namespace: &wow_store::project::ProjectStoreNamespace,
+    stop: &AtomicBool,
+) -> ServiceResult<(
+    wow_project::replay::publication::ProjectPublicationBundle,
+    String,
+)> {
+    checkpoint(stop)?;
+    let built = compose_backend(backend, request, stop)?;
+    let bundle = backend.capture_project_bundle_in_namespace(&built.snapshot, namespace, stop)?;
+    Ok((bundle, namespace.id().as_str().into()))
 }
 
 fn compose_backend(

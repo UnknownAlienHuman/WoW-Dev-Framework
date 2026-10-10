@@ -21,6 +21,7 @@ mod gc;
 mod library_modes;
 #[path = "migration_tests.rs"]
 mod migration;
+mod namespaces;
 #[path = "quarantine_tests.rs"]
 mod quarantine;
 mod retention;

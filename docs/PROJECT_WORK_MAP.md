@@ -49,10 +49,19 @@ v5 without moving Current. See [PLATFORM_SOURCE_REPLAY.md](PLATFORM_SOURCE_REPLA
 
 Fresh workspace policy, fmt, all-target/all-feature check, strict Clippy, tests
 (925 passed, 1 ignored, 108 targets), strict rustdoc and build pass on 2026-10-10.
-Next: a stable logical store namespace for differing source snapshots,
-independently owned platform graph partitions/fingerprints and bounded
-SkeletonInputView. Full W17, E0/E2, real mirror/performance/runtime and W18-W26
-remain open. Gethe preparation follows product implementation/build.
+Stable logical namespace publication now validates the actual ProjectId and
+complete source-profile label in a new-only epoch. Two differing source snapshots
+advance one Current while older held readers keep their exact native pair. The
+selected one-shot service route composes actual graph producers and returns the
+admitted namespace. Two core cases and two native service cases pass, along with
+fresh workspace policy, fmt, check, strict Clippy, tests (929 passed, 1 ignored,
+109 targets), strict rustdoc and build on 2026-10-10. See
+[PLATFORM_STORE_NAMESPACE.md](PLATFORM_STORE_NAMESPACE.md).
+
+Next: independently owned platform graph partitions/fingerprints, bounded
+SkeletonInputView and source service/CLI transport. Full W17, E0/E2, real
+mirror/performance/runtime and W18-W26 remain open. Gethe preparation follows
+product implementation/build.
 
 W14 now publishes explicit final physical Main deltas through the retained native
 owner and the complete graph producer chain. It reuses unchanged parsed trees
@@ -336,7 +345,7 @@ full graph acceptance and the checkpoint's CI conclusions remain open.
 | [W12 / PR 80](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/80) | Extend real producer chains and conflict assessment | Exact retained records, publication validation and bounded explanations are executable; full acceptance remains open |
 | [W13 / PR 81](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/81) | Full live-pair acceptance | Physical Lua, standalone TOC/XML and declared-package native replay plus coherent leased acquisition are executable; full acceptance remains open |
 | [W14 / PR 82](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/82), [W15 / PR 83](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/83), [W16 / PR 84](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/84) | Incremental invalidation, retained roots/GC, backup/recovery | Source selector/hold portability and guarded live cross-epoch selection/retry are executable; portable full history and full W16/E2 acceptance remain open |
-| [W17 / PR 85](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/85), [W18 / PR 86](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/86), [W19 / PR 87](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/87) | Blizzard source universe, Project Map/skeletons, context packs | W17 raw/package admission, owner-bound configuration, native platform Main/source graph and genuine source/package replay with durable publication are executable; stable store namespace, platform partitions/fingerprints and bounded producer views precede context |
+| [W17 / PR 85](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/85), [W18 / PR 86](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/86), [W19 / PR 87](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/87) | Blizzard source universe, Project Map/skeletons, context packs | W17 raw/package admission, owner-bound configuration, native platform Main/source graph, genuine replay and selected stable namespace publication are executable; platform partitions/fingerprints and bounded producer views precede context |
 | [W20 / PR 88](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/88), [W21 / PR 89](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/89) | Search, lineage and static impact | Exact immutable generation inputs |
 | [W22 / PR 90](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/90), [W23 / PR 91](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/91) | Sessions/MCP and private LSP overlays | Implemented capabilities only |
 | [W24 / PR 92](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/92), [W25 / PR 93](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/93) | Calibration governance and selected Windows build/release tooling | No inferred review, signing or installed state |

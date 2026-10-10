@@ -11,6 +11,8 @@ pub use migration::{
     export_live_project_migration, migrate_live_project_to_new, prepare_live_project_migration,
     resume_live_project_migration, resume_live_project_migration_preparation,
 };
+mod namespace;
+pub use namespace::PlatformStoreSelection;
 mod operations;
 mod quarantine;
 pub use quarantine::{LiveProjectQuarantineInspection, QuarantinedLiveProject};
@@ -24,15 +26,17 @@ mod tests;
 use crate::{ServiceError, ServiceErrorCode, ServiceResult};
 pub use operations::{
     LiveProjectLibraryMode, LiveProjectPublishRequest, LiveProjectResult, LiveProjectUpdateRequest,
-    publish_local_project, read_live_project, reconcile_live_project, update_local_project,
+    publish_input_in_namespace, publish_local_project, read_live_project,
+    read_live_project_in_namespace, reconcile_live_project, reconcile_live_project_in_namespace,
+    update_input_in_namespace, update_local_project,
 };
 use std::{path::Path, sync::atomic::AtomicBool};
 use wow_graph::GraphPartitionSnapshot;
 use wow_project::replay::publication::{self, AcquiredProjectPair, ProjectPublicationBundle};
 use wow_project::{ProjectPublisher, ProjectView};
 use wow_store::project::{
-    CurrentPublication, CurrentRecordId, ProjectStore, PublicationOperation, PublicationRequest,
-    PublicationState, ReadSelector, ReadSnapshot, RecordCatalog,
+    CurrentPublication, CurrentRecordId, ProjectStore, ProjectStoreNamespace, PublicationOperation,
+    PublicationRequest, PublicationState, ReadSelector, ReadSnapshot, RecordCatalog,
 };
 use wow_store::{OperationId, StoreError, StoreErrorCode};
 
@@ -61,6 +65,9 @@ impl LiveProjectRead {
     }
     pub fn current_at_acquisition(&self) -> Option<&CurrentPublication> {
         self.read.current_at_acquisition()
+    }
+    pub fn namespace(&self) -> Option<&ProjectStoreNamespace> {
+        self.read.epoch().namespace()
     }
     fn into_update_publisher(self) -> ServiceResult<(ProjectPublisher, ReadSnapshot)> {
         let publisher = self.pair.into_update_publisher().map_err(project_error)?;
@@ -104,11 +111,18 @@ impl LiveProjectStore {
         expected_current: Option<CurrentRecordId>,
         stop: &AtomicBool,
     ) -> ServiceResult<PublicationOperation> {
-        if self.store.epoch().owner() != graph.snapshot().universe().as_str() {
-            return Err(fail(ServiceErrorCode::IdentityMismatch));
+        let bundle = match self.store.epoch().namespace() {
+            Some(namespace) => {
+                ProjectPublicationBundle::build_in_namespace(publisher, graph, namespace, stop)
+            }
+            None => {
+                if self.store.epoch().owner() != graph.snapshot().universe().as_str() {
+                    return Err(fail(ServiceErrorCode::IdentityMismatch));
+                }
+                ProjectPublicationBundle::build(publisher, graph, stop)
+            }
         }
-        let bundle =
-            ProjectPublicationBundle::build(publisher, graph, stop).map_err(project_error)?;
+        .map_err(project_error)?;
         self.publish_bundle(bundle, operation_id, expected_current, stop)
     }
     fn publish_bundle(

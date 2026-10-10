@@ -1,7 +1,7 @@
 # Project completion matrix
 
 **Audited:** 2026-09-19 America/New_York. Execution inventory refreshed 2026-10-10
-through the scoped W17 configuration/native Main/source-graph checkpoint below.
+through the scoped W17 replay/stable namespace checkpoint below.
 
 This is the current execution ledger. [IMPLEMENTATION_HANDOFF.md](IMPLEMENTATION_HANDOFF.md)
 remains the normative I0–I7 plan; do not restart its historical bootstrap steps.
@@ -62,7 +62,7 @@ no Rust implementation in the audited source. Their documentation is not a binar
 | E1-D | Partial executable Reference Pack service and active internal builder with durable materialization/finalization | Close external parity/license/rebuild evidence, Windows/process-loss acceptance and complete package gates; code presence is not `ValidatedLocal` |
 | E2-A–E2-B | Partial executable | All 26 active E2-B rule IDs are service-published after the W11 semantic repair, TOC, XML and state slices; close public CLI/full-pipeline fixtures and package acceptance |
 | E2-C–E2-D | Partial source index, manifested store, native live pair service/CLI, cancellable updates, exact Library/fact-profile binding, retained physical parser updates and durable physical update/removal publication; bounded retention/GC, recovery/replacement, inactive migration/READY preparation, portable source authority and guarded cross-epoch selection/reconciliation | Dependency-specific fact reuse, standalone/package durable updates, portable full migration history and complete E2 acceptance remain open; see [REPLAY_PUBLICATION.md](../crates/wow-project/REPLAY_PUBLICATION.md) |
-| E3-A | Partial exact raw/package admission, owner-bound platform configuration, native physical/XML Main/source graph and genuine source/package replay with durable native publication/readback | Stable logical store namespace across source snapshots, platform partitions/fingerprints, bounded SkeletonInputView and service/CLI source transport; full source-universe acceptance remains open |
+| E3-A | Partial exact raw/package admission, owner-bound platform configuration, native physical/XML Main/source graph, genuine replay and selected stable namespace publication/readback across source snapshots | Platform partitions/fingerprints, bounded SkeletonInputView and service/CLI source transport; full source-universe acceptance remains open |
 | E3-B–E3-C | Not started | Context owners and service/CLI after their actual producer inputs |
 | E4-A–E4-C | Not started | Search, lineage/migration/static impact and routing after A0 prerequisites |
 | E5-A–E5-C | Not started | Calibration, independent review/holdout and governed publication lifecycle |
@@ -497,9 +497,25 @@ remain unchanged. Exact old V4 catalogs reopen and refuse v5 before Current chan
 See [PLATFORM_SOURCE_REPLAY.md](PLATFORM_SOURCE_REPLAY.md).
 
 Fresh workspace policy, fmt, check, strict Clippy, tests (925 passed, 1 ignored,
-108 targets), strict rustdoc and build pass on 2026-10-10. Stable logical store
-namespace across source snapshots, platform partitions/fingerprints,
+108 targets), strict rustdoc and build pass on 2026-10-10. At that replay
+predecessor, stable logical namespace publication was still pending. Platform partitions/fingerprints,
 SkeletonInputView, service/CLI source transport, real mirror/performance/runtime
 and full W17/E3 acceptance remain open. Admission inventory remains Partial;
 consumed-file checks do not prove source/Git/root/license/API/runtime authority.
 W18-W26 remain open; Gethe materialization remains deferred.
+
+The stable namespace checkpoint adds a real typed ProjectStoreId and new-only
+namespace epoch with compiled catalog/runtime/schema/canonicalization/security
+bindings. Native source/project/graph owners reconstruct the complete selected
+generation bindings. Two source snapshots advance one Current without changing
+the store identity; old held readers remain coherent. Existing graph-owned epoch,
+catalog, semantic member and publication-set recipes remain unchanged.
+Selected one-shot service publication composes the actual graph producers and
+returns admitted namespace metadata. See
+[PLATFORM_STORE_NAMESPACE.md](PLATFORM_STORE_NAMESPACE.md).
+
+Two core cases and two native service cases pass. Workspace policy, fmt, check,
+strict Clippy, tests (929 passed, 1 ignored, 109 targets), strict rustdoc and build
+pass on 2026-10-10. Platform partitions/fingerprints, SkeletonInputView and source
+service/CLI transport remain open. This is not full W17/E3 or package acceptance;
+real Gethe/Ketho corpus, performance and WoW runtime checks remain NotEvaluated.

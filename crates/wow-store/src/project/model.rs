@@ -10,12 +10,15 @@ pub const PHYSICAL_PROFILE: &str = "project-store-wal-manifested-partitions-v1";
 pub const RETAINED_PHYSICAL_PROFILE: &str = "project-store-wal-manifested-partitions-v2";
 pub const GC_PHYSICAL_PROFILE: &str = "project-store-wal-manifested-partitions-v3";
 pub const RECORD_PROFILE: &str = "wow-store/retained-partition-records/1";
+pub const NAMESPACE_EPOCH_SCHEMA: &str = "wow-store/project-namespace-epoch/1";
 pub const MAX_RECORD_BYTES: usize = 32 * 1024 * 1024;
 pub const MAX_GENERATION_BYTES: usize = 64 * 1024 * 1024;
 pub const MAX_PARTITIONS: usize = 256;
 pub const MAX_GENERATIONS: i64 = 1024;
 pub const MAX_VERSIONS: i64 = 8192;
 pub const MAX_READERS: usize = 16;
+pub(super) const MAX_IDENTIFIER_BYTES: usize = 256;
+pub(super) const MAX_CATALOG_ENTRIES: usize = 64;
 
 pub(super) fn failure(code: StoreErrorCode) -> StoreError {
     StoreError::new(code, "manifested project storage operation failed")
@@ -66,7 +69,7 @@ pub(super) fn digest(prefix: &str, bytes: &[u8]) -> String {
 }
 pub(super) fn named(value: &str) -> bool {
     !value.is_empty()
-        && value.len() <= 256
+        && value.len() <= MAX_IDENTIFIER_BYTES
         && value
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-' | b':' | b'@'))
@@ -115,6 +118,7 @@ macro_rules! id {
     };
 }
 id!(EpochId, "project-epoch");
+id!(ProjectStoreId, "project-store");
 id!(PartitionVersionId, "project-partition");
 id!(StoreGenerationId, "project-store-generation");
 id!(CurrentRecordId, "project-current");
@@ -141,9 +145,9 @@ impl RecordCatalog {
     }
     fn validate(&self) -> StoreResult<()> {
         if self.schemas.is_empty()
-            || self.schemas.len() > 64
+            || self.schemas.len() > MAX_CATALOG_ENTRIES
             || self.checks.is_empty()
-            || self.checks.len() > 64
+            || self.checks.len() > MAX_CATALOG_ENTRIES
             || self.schemas.iter().chain(&self.checks).any(|s| !named(s))
         {
             return Err(failure(StoreErrorCode::ConfigurationInvalid));
@@ -168,6 +172,12 @@ pub struct EpochManifest {
     pub(super) sqlite_runtime_digest: String,
     pub(super) schema_digest: String,
     pub(super) epoch_id: EpochId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) namespace: Option<super::namespace::ProjectStoreNamespace>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) canonicalization_version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) security_limit_digest: Option<String>,
 }
 impl EpochManifest {
     pub(super) fn new(
@@ -215,6 +225,44 @@ impl EpochManifest {
             sqlite_runtime_digest: runtime,
             schema_digest,
             epoch_id: EpochId::derive(&bytes),
+            namespace: None,
+            canonicalization_version: None,
+            security_limit_digest: None,
+        })
+    }
+    pub(super) fn with_namespace(
+        namespace: &super::namespace::ProjectStoreNamespace,
+        catalog: RecordCatalog,
+        runtime: String,
+        schema_digest: String,
+        security_limit_digest: String,
+    ) -> StoreResult<Self> {
+        namespace.validate()?;
+        catalog.validate()?;
+        let bytes = encode(
+            &(
+                NAMESPACE_EPOCH_SCHEMA,
+                namespace,
+                GC_PHYSICAL_PROFILE,
+                &catalog,
+                &runtime,
+                &schema_digest,
+                wow_core::CANONICALIZATION_VERSION,
+                &security_limit_digest,
+            ),
+            65536,
+        )?;
+        Ok(Self {
+            schema: NAMESPACE_EPOCH_SCHEMA.into(),
+            physical_profile: GC_PHYSICAL_PROFILE.into(),
+            owner: namespace.id().as_str().into(),
+            catalog,
+            sqlite_runtime_digest: runtime,
+            schema_digest,
+            epoch_id: EpochId::derive(&bytes),
+            namespace: Some(namespace.clone()),
+            canonicalization_version: Some(wow_core::CANONICALIZATION_VERSION.into()),
+            security_limit_digest: Some(security_limit_digest),
         })
     }
     pub fn epoch_id(&self) -> &EpochId {
@@ -225,6 +273,9 @@ impl EpochManifest {
     }
     pub fn physical_profile(&self) -> &str {
         &self.physical_profile
+    }
+    pub fn namespace(&self) -> Option<&super::namespace::ProjectStoreNamespace> {
+        self.namespace.as_ref()
     }
 }
 

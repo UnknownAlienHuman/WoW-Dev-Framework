@@ -4,6 +4,7 @@ use wow_project::replay::publication::ProjectPublicationBundle;
 use wow_project::{ProjectGenerationCandidate, ProjectInputBundle, ProjectPublisher, ProjectView};
 use wow_reference::ReferenceView;
 use wow_rules::RuleRegistry;
+use wow_store::project::ProjectStoreNamespace;
 
 use super::{LocalProjectInput, cancelled, owner_error, projection};
 use crate::{
@@ -264,6 +265,24 @@ impl LocalProjectBackend {
             .as_ref()
             .ok_or_else(|| owner_error("project must be materialized before native publication"))?;
         ProjectPublicationBundle::build(&project.publisher, graph, stop)
+            .map_err(crate::live_project::project_error)
+    }
+
+    pub(crate) fn capture_project_bundle_in_namespace(
+        &self,
+        graph: &wow_graph::GraphPartitionSnapshot,
+        namespace: &ProjectStoreNamespace,
+        stop: &AtomicBool,
+    ) -> ServiceResult<ProjectPublicationBundle> {
+        cancelled(stop)?;
+        let retained = self
+            .published
+            .lock()
+            .map_err(|_| owner_error("project publication lock poisoned"))?;
+        let project = retained
+            .as_ref()
+            .ok_or_else(|| owner_error("project must be materialized before native publication"))?;
+        ProjectPublicationBundle::build_in_namespace(&project.publisher, graph, namespace, stop)
             .map_err(crate::live_project::project_error)
     }
 

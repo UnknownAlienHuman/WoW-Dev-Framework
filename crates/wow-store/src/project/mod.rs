@@ -6,6 +6,7 @@ mod database;
 mod gc;
 mod migration;
 mod model;
+mod namespace;
 mod publication;
 mod quarantine;
 mod read;
@@ -26,10 +27,12 @@ pub use migration::{
 };
 pub use model::{
     CurrentPublication, CurrentRecordId, EpochId, EpochManifest, GC_PHYSICAL_PROFILE,
-    GenerationManifest, MAX_RECORD_BYTES, PHYSICAL_PROFILE, PartitionMember, PartitionRecord,
-    PartitionVersionId, PublicationOperation, PublicationRequest, PublicationState, RECORD_PROFILE,
-    RETAINED_PHYSICAL_PROFILE, RecordCatalog, StoreGenerationId, ValidationId,
+    GenerationManifest, MAX_RECORD_BYTES, NAMESPACE_EPOCH_SCHEMA, PHYSICAL_PROFILE,
+    PartitionMember, PartitionRecord, PartitionVersionId, ProjectStoreId, PublicationOperation,
+    PublicationRequest, PublicationState, RECORD_PROFILE, RETAINED_PHYSICAL_PROFILE, RecordCatalog,
+    StoreGenerationId, ValidationId,
 };
+pub use namespace::{ProjectStoreNamespace, ProjectStoreNamespaceRequest};
 pub use quarantine::{
     CurrentObservation, PointerReadFailure, QuarantineInspection, QuarantineReceipt,
     QuarantineReference, QuarantinedStore,
@@ -75,6 +78,15 @@ impl ProjectStore {
         catalog: RecordCatalog,
     ) -> StoreResult<Self> {
         Database::create_with_gc(root.as_ref(), owner, catalog).map(|db| Self { db })
+    }
+    /// Create a new GC-profile epoch with an explicit stable logical identity.
+    /// Existing roots and legacy graph-owned epochs are never adopted or changed.
+    pub fn create_with_namespace(
+        root: impl AsRef<Path>,
+        namespace: &ProjectStoreNamespace,
+        catalog: RecordCatalog,
+    ) -> StoreResult<Self> {
+        Database::create_with_namespace(root.as_ref(), namespace, catalog).map(|db| Self { db })
     }
     pub fn open(root: impl AsRef<Path>, catalog: &RecordCatalog) -> StoreResult<Self> {
         Database::open(root.as_ref(), catalog).map(|db| Self { db })

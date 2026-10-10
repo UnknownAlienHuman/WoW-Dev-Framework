@@ -149,8 +149,10 @@ in exact legacy open, quarantine and migration fallback before V3/V2/V1.
 V4 reopening preserves epoch/Current/native pair identities; a v5 write refuses
 without changing Current. No existing catalog is widened. Native durable tests
 and all workspace gates/build pass on 2026-10-10 (925 passed, 1 ignored, 108 targets).
-Stable store namespace across differing source snapshots, independent platform
-producer partitions and full W17/E3 acceptance remain open.
+Stable store namespace across differing source snapshots now uses an explicit
+new-only epoch and reconstructed native bindings; see
+[PLATFORM_STORE_NAMESPACE](../../docs/PLATFORM_STORE_NAMESPACE.md).
+Independent platform producer partitions and full W17/E3 acceptance remain open.
 
 ## Retained owner updates
 

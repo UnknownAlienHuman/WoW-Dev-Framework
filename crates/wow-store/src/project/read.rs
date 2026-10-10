@@ -87,6 +87,9 @@ impl ReadSnapshot {
     pub fn manifest(&self) -> &GenerationManifest {
         &self.manifest
     }
+    pub fn epoch(&self) -> &EpochManifest {
+        &self.epoch
+    }
     pub fn current_at_acquisition(&self) -> Option<&CurrentPublication> {
         self.current_at_acquisition.as_ref()
     }

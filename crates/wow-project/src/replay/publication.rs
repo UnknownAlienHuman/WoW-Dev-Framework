@@ -1,12 +1,13 @@
 //! Project-owned coherent handoff to the manifested store. Semantic identities
 //! precede logical membership, publication-set identity and store generation.
+mod namespace;
 use super::{ProjectReplay, invalid};
 use crate::graph::{SOURCE_GRAPH_PARTITION, build_source_graph_proposals};
 use crate::{ProjectPhase, ProjectPublisher, ProjectResult, ProjectView};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, sync::atomic::AtomicBool};
 use wow_graph::GraphPartitionSnapshot;
-use wow_store::project::{PartitionRecord, ReadSnapshot};
+use wow_store::project::{PartitionRecord, ProjectStoreNamespace, ReadSnapshot};
 
 pub const STORAGE_SCHEMAS: &[&str] = &[
     "wow-project.live-replay.v1",
@@ -85,6 +86,33 @@ impl ProjectPublicationBundle {
         validate_pair(&project, graph, stop)?;
         plan(replay, &project, graph, stop)
     }
+    /// Publish into an explicitly selected stable platform namespace. The native
+    /// semantic records and publication-set identity precede store bindings.
+    pub fn build_in_namespace(
+        publisher: &ProjectPublisher,
+        graph: &GraphPartitionSnapshot,
+        namespace: &ProjectStoreNamespace,
+        stop: &AtomicBool,
+    ) -> ProjectResult<Self> {
+        let replay = ProjectReplay::capture(publisher, stop)?;
+        let project = publisher
+            .current_snapshot()
+            .ok_or_else(invalid)?
+            .open_view();
+        validate_pair(&project, graph, stop)?;
+        plan_in_namespace(&replay, &project, graph, Some(namespace), stop)
+    }
+    /// Re-enter native owners once before validating the selected namespace.
+    pub fn from_replay_in_namespace(
+        replay: &ProjectReplay,
+        graph: &GraphPartitionSnapshot,
+        namespace: &ProjectStoreNamespace,
+        stop: &AtomicBool,
+    ) -> ProjectResult<Self> {
+        let project = replay.hydrate(stop)?;
+        validate_pair(&project, graph, stop)?;
+        plan_in_namespace(replay, &project, graph, Some(namespace), stop)
+    }
     pub fn into_parts(self) -> (Vec<PartitionRecord>, BTreeMap<String, String>) {
         (self.records, self.bindings)
     }
@@ -152,10 +180,18 @@ impl AcquiredProjectPair {
         let publisher = replay.hydrate_owner(stop)?;
         let project = publisher.open_current()?;
         validate_pair(&project, &graph, stop)?;
-        let expected = plan(&replay, &project, &graph, stop)?;
+        // Dispatch from the actual epoch retained by this read lease. A failed
+        // namespace check cannot fall back to the legacy graph-universe mode.
+        let namespace = read.epoch().namespace();
+        let expected = plan_in_namespace(&replay, &project, &graph, namespace, stop)?;
+        let expected_owner = namespace.map_or_else(
+            || graph.snapshot().universe().as_str(),
+            |namespace| namespace.id().as_str(),
+        );
         if expected.bindings != read.manifest().bindings
             || expected.records.len() != read.manifest().members.len()
-            || read.manifest().owner != graph.snapshot().universe().as_str()
+            || read.manifest().owner != expected_owner
+            || read.epoch().owner() != expected_owner
         {
             return Err(invalid());
         }
@@ -222,6 +258,21 @@ fn validate_pair(
         return Err(invalid());
     }
     Ok(())
+}
+
+fn plan_in_namespace(
+    replay: &ProjectReplay,
+    project: &ProjectView,
+    graph: &GraphPartitionSnapshot,
+    namespace: Option<&ProjectStoreNamespace>,
+    stop: &AtomicBool,
+) -> ProjectResult<ProjectPublicationBundle> {
+    let mut plan = plan(replay, project, graph, stop)?;
+    if let Some(namespace) = namespace {
+        namespace::bind(&mut plan.bindings, namespace, project, graph)?;
+    }
+    crate::analyzer::checkpoint(stop)?;
+    Ok(plan)
 }
 
 fn plan(

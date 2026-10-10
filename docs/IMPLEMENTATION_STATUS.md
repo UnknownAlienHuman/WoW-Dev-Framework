@@ -50,9 +50,14 @@ Genuine source/package replay and durable native publication/readback now use an
 additive v5 channel while ordinary v1-v4 recipes and exact catalogs remain intact.
 Fresh workspace policy, fmt, check, strict Clippy, tests (925 passed, 1 ignored,
 108 targets), strict rustdoc and build pass on 2026-10-10. See
-[PLATFORM_SOURCE_REPLAY.md](PLATFORM_SOURCE_REPLAY.md). Stable logical store
-namespace across source snapshots, platform partitions/fingerprints and
-SkeletonInputView follow. Broad package acceptance remains open.
+[PLATFORM_SOURCE_REPLAY.md](PLATFORM_SOURCE_REPLAY.md). A stable logical store
+namespace now has native publication/readback across changing source
+snapshots and an explicit typed service selection; see
+[PLATFORM_STORE_NAMESPACE.md](PLATFORM_STORE_NAMESPACE.md). Fresh workspace
+policy, fmt, check, strict Clippy, tests (929 passed, 1 ignored, 109 targets), strict
+rustdoc and build pass on 2026-10-10. Platform partitions/fingerprints,
+SkeletonInputView and source
+service/CLI transport follow. Broad package acceptance remains open.
 
 ## W14 retained physical native analysis (2026-10-09)
 

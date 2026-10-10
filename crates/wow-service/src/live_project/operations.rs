@@ -1,6 +1,6 @@
 //! Public one-shot operations keep owner handles and selector resolution in the
 //! service. Frontends transport only explicit requests and bounded result DTOs.
-use super::{LiveProjectRead, LiveProjectStore, fail};
+use super::{LiveProjectRead, LiveProjectStore, PlatformStoreSelection, fail};
 use crate::{LocalProjectInput, ServiceErrorCode, ServiceResult, graph::GraphBuildRequest};
 use serde::Serialize;
 use std::{path::Path, sync::atomic::AtomicBool};
@@ -124,6 +124,13 @@ impl PairSummary {
 }
 
 #[derive(Debug, Serialize)]
+struct NamespaceSummary {
+    project_store_id: String,
+    logical_namespace: String,
+    owner_project_id: String,
+}
+
+#[derive(Debug, Serialize)]
 pub struct LiveProjectResult {
     schema: &'static str,
     scope: &'static str,
@@ -134,6 +141,8 @@ pub struct LiveProjectResult {
     current: Option<CurrentPublication>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pair: Option<PairSummary>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    namespace: Option<NamespaceSummary>,
     boundaries: [&'static str; 3],
 }
 impl LiveProjectResult {
@@ -145,12 +154,30 @@ impl LiveProjectResult {
             operation: None,
             current: None,
             pair: None,
+            namespace: None,
             boundaries: [
                 "physical_lua_inputs_only",
                 "source_graph_coverage_partial_no_negative_authority",
                 "not_full_e2_or_source_runtime_acceptance",
             ],
         }
+    }
+
+    fn bind_admitted_namespace(
+        &mut self,
+        namespace: Option<&wow_store::project::ProjectStoreNamespace>,
+    ) -> ServiceResult<()> {
+        if let Some(namespace) = namespace {
+            namespace.validate().map_err(super::store_error)?;
+            self.namespace = Some(NamespaceSummary {
+                project_store_id: namespace.id().as_str().into(),
+                logical_namespace: namespace.logical_namespace().into(),
+                owner_project_id: namespace.owner_project_id().into(),
+            });
+            self.scope = "native-platform-project-pair-namespace-v1";
+            self.boundaries[0] = "admitted_platform_source_inputs_only";
+        }
+        Ok(())
     }
     pub fn exit_code(&self) -> u8 {
         match self.status {
@@ -196,7 +223,7 @@ pub(super) fn publish_input(
     } else {
         LiveProjectStore::open(root)?
     };
-    if store.store.epoch().owner() != owner {
+    if store.store.epoch().namespace().is_some() || store.store.epoch().owner() != owner {
         return Err(fail(ServiceErrorCode::IdentityMismatch));
     }
     let operation = store.publish_bundle(
@@ -208,6 +235,46 @@ pub(super) fn publish_input(
     let mut result = LiveProjectResult::new("activated");
     // Report the committed operation, rather than a later current observation.
     result.operation = Some(operation);
+    result.bind_admitted_namespace(store.store.epoch().namespace())?;
+    Ok(result)
+}
+
+/// Publish actual native input into an explicitly selected logical platform store.
+pub fn publish_input_in_namespace(
+    input: LocalProjectInput,
+    graph_request: &GraphBuildRequest,
+    root: &Path,
+    selection: &PlatformStoreSelection,
+    request: &LiveProjectPublishRequest,
+    stop: &AtomicBool,
+) -> ServiceResult<LiveProjectResult> {
+    super::publication_checkpoint(stop)?;
+    selection.validate()?;
+    let existing = if request.initialize {
+        None
+    } else {
+        Some(LiveProjectStore::open_in_namespace(root, selection)?)
+    };
+    let (bundle, owner) =
+        graph_request.live_publication_in_namespace(input, selection.namespace(), stop)?;
+    super::publication_checkpoint(stop)?;
+    let mut store = match existing {
+        Some(store) => store,
+        None => LiveProjectStore::create_in_namespace(root, selection)?,
+    };
+    store.require_namespace(selection)?;
+    if store.store.epoch().owner() != owner {
+        return Err(fail(ServiceErrorCode::IdentityMismatch));
+    }
+    let operation = store.publish_bundle(
+        bundle,
+        request.operation_id.as_str(),
+        request.expected.clone(),
+        stop,
+    )?;
+    let mut result = LiveProjectResult::new("activated");
+    result.operation = Some(operation);
+    result.bind_admitted_namespace(store.store.epoch().namespace())?;
     Ok(result)
 }
 
@@ -237,6 +304,19 @@ pub(super) fn update_input(
     store.update(input, graph_request, request, stop)
 }
 
+pub fn update_input_in_namespace(
+    input: LocalProjectInput,
+    graph_request: &GraphBuildRequest,
+    root: &Path,
+    selection: &PlatformStoreSelection,
+    request: &LiveProjectUpdateRequest,
+    stop: &AtomicBool,
+) -> ServiceResult<LiveProjectResult> {
+    super::publication_checkpoint(stop)?;
+    let mut store = LiveProjectStore::open_in_namespace(root, selection)?;
+    store.update_in_namespace(selection, input, graph_request, request, stop)
+}
+
 impl LiveProjectStore {
     /// Advance this owned store while previously acquired readers retain their
     /// original lease. Separate owners still obey the OS writer lock.
@@ -249,6 +329,19 @@ impl LiveProjectStore {
     ) -> ServiceResult<LiveProjectResult> {
         super::publication_checkpoint(stop)?;
         let target = input.project_bundle();
+        if let Some(namespace) = self.store.epoch().namespace() {
+            namespace.validate().map_err(super::store_error)?;
+            let configuration = target.configuration();
+            let packages = configuration
+                .platform_packages()
+                .ok_or_else(|| fail(ServiceErrorCode::IdentityMismatch))?;
+            if namespace.owner_project_id() != configuration.project_id().as_str()
+                || namespace.logical_namespace()
+                    != packages.source().profile().profile_id().as_str()
+            {
+                return Err(fail(ServiceErrorCode::IdentityMismatch));
+            }
+        }
         if target.configuration().load_plan().is_some()
             || target.configuration().package_load_plan().is_some()
         {
@@ -300,10 +393,14 @@ impl LiveProjectStore {
             result.scope = "native-live-project-update-v1";
             result.current = current;
             result.pair = Some(base_summary);
+            result.bind_admitted_namespace(store.store.epoch().namespace())?;
             return Ok(result);
         }
-        let (bundle, owner) =
-            crate::graph::live_publication_from_backend(&backend, graph_request, stop)?;
+        let (bundle, owner) = match store.store.epoch().namespace() {
+            Some(namespace) => graph_request
+                .live_publication_from_backend_in_namespace(&backend, namespace, stop)?,
+            None => crate::graph::live_publication_from_backend(&backend, graph_request, stop)?,
+        };
         if store.store.epoch().owner() != owner {
             return Err(fail(ServiceErrorCode::IdentityMismatch));
         }
@@ -317,6 +414,7 @@ impl LiveProjectStore {
         let mut result = LiveProjectResult::new("activated");
         result.scope = "native-live-project-update-v1";
         result.operation = Some(operation);
+        result.bind_admitted_namespace(store.store.epoch().namespace())?;
         Ok(result)
     }
 }
@@ -326,17 +424,39 @@ pub fn read_live_project(
     generation: &str,
     stop: &AtomicBool,
 ) -> ServiceResult<LiveProjectResult> {
-    let selector = if generation == "current" {
-        ReadSelector::Current
-    } else {
-        ReadSelector::Exact(
-            StoreGenerationId::parse(generation)
-                .map_err(|_| fail(ServiceErrorCode::InvalidRequest))?,
-        )
-    };
+    let selector = read_selector(generation)?;
     let store = LiveProjectStore::open(root)?;
     let read = store.read(&selector, stop)?;
+    read_result(read, stop)
+}
+
+pub fn read_live_project_in_namespace(
+    root: &Path,
+    selection: &PlatformStoreSelection,
+    generation: &str,
+    stop: &AtomicBool,
+) -> ServiceResult<LiveProjectResult> {
+    super::publication_checkpoint(stop)?;
+    let selector = read_selector(generation)?;
+    let store = LiveProjectStore::open_in_namespace(root, selection)?;
+    let read = store.read_in_namespace(selection, &selector, stop)?;
+    read_result(read, stop)
+}
+
+fn read_selector(generation: &str) -> ServiceResult<ReadSelector> {
+    if generation == "current" {
+        Ok(ReadSelector::Current)
+    } else {
+        Ok(ReadSelector::Exact(
+            StoreGenerationId::parse(generation)
+                .map_err(|_| fail(ServiceErrorCode::InvalidRequest))?,
+        ))
+    }
+}
+
+fn read_result(read: LiveProjectRead, stop: &AtomicBool) -> ServiceResult<LiveProjectResult> {
     let mut result = LiveProjectResult::new("acquired");
+    result.bind_admitted_namespace(read.namespace())?;
     result.pair = Some(PairSummary::from_read(&read));
     result.current = read.current_at_acquisition().cloned();
     // All result projection completes under the original transaction/lease.
@@ -352,6 +472,25 @@ pub fn reconcile_live_project(
     super::publication_checkpoint(stop)?;
     let store = LiveProjectStore::open(root)?;
     let operation = store.reconcile(operation_id)?;
+    reconcile_result(&store, operation)
+}
+
+pub fn reconcile_live_project_in_namespace(
+    root: &Path,
+    selection: &PlatformStoreSelection,
+    operation_id: &str,
+    stop: &AtomicBool,
+) -> ServiceResult<LiveProjectResult> {
+    super::publication_checkpoint(stop)?;
+    let store = LiveProjectStore::open_in_namespace(root, selection)?;
+    let operation = store.reconcile_in_namespace(selection, operation_id)?;
+    reconcile_result(&store, operation)
+}
+
+fn reconcile_result(
+    store: &LiveProjectStore,
+    operation: Option<PublicationOperation>,
+) -> ServiceResult<LiveProjectResult> {
     let mut result = LiveProjectResult::new(
         if operation
             .as_ref()
@@ -366,5 +505,6 @@ pub fn reconcile_live_project(
     );
     result.operation = operation;
     result.current = store.current()?;
+    result.bind_admitted_namespace(store.store.epoch().namespace())?;
     Ok(result)
 }

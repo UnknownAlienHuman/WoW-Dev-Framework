@@ -1,5 +1,6 @@
 use super::{
     model::*,
+    namespace::ProjectStoreNamespace,
     registry::{self, RegistrySelection},
 };
 use crate::{StoreError, StoreErrorCode, StoreResult};
@@ -15,6 +16,17 @@ use std::{
 };
 
 const APPLICATION_ID: i64 = 0x5744_5031;
+const MAX_EPOCH_BYTES: usize = 65536;
+const MAX_DATABASE_BYTES: u64 = 1024 * 1024 * 1024;
+const MAX_SIDECAR_BYTES: u64 = 128 * 1024 * 1024;
+const BUSY_TIMEOUT_MS: u64 = 500;
+const DEFENSIVE: bool = true;
+const ENABLE_TRIGGERS: bool = false;
+const CREATE_POLICY: &str =
+    "PRAGMA page_size=4096; PRAGMA auto_vacuum=NONE; PRAGMA encoding=\"UTF-8\";";
+const CONNECT_POLICY: &str = "PRAGMA trusted_schema=OFF; PRAGMA foreign_keys=ON;";
+const READ_POLICY: &str = "PRAGMA query_only=ON";
+const WRITER_POLICY: &str = "PRAGMA synchronous=FULL; PRAGMA wal_autocheckpoint=256; PRAGMA journal_size_limit=8388608; PRAGMA max_page_count=262144;";
 const SCHEMA: &str = r#"
 CREATE TABLE epoch_metadata (id INTEGER PRIMARY KEY CHECK(id=1), manifest BLOB NOT NULL) STRICT;
 CREATE TABLE partition_versions (
@@ -96,6 +108,20 @@ impl Database {
     pub fn create_with_gc(root: &Path, owner: &str, catalog: RecordCatalog) -> StoreResult<Self> {
         Self::create_profile(root, owner, catalog, GC_PHYSICAL_PROFILE)
     }
+    pub fn create_with_namespace(
+        root: &Path,
+        namespace: &ProjectStoreNamespace,
+        catalog: RecordCatalog,
+    ) -> StoreResult<Self> {
+        let epoch = EpochManifest::with_namespace(
+            namespace,
+            catalog,
+            runtime_id()?,
+            expected_schema(GC_PHYSICAL_PROFILE)?,
+            security_limit_digest()?,
+        )?;
+        Self::select_initial(Self::create_unselected_epoch(root, epoch)?)
+    }
     pub(super) fn create_inactive_with_gc(
         root: &Path,
         owner: &str,
@@ -114,7 +140,11 @@ impl Database {
         catalog: RecordCatalog,
         profile: &str,
     ) -> StoreResult<Self> {
-        let mut db = Self::create_unselected_profile(root, owner, catalog, profile)?;
+        Self::select_initial(Self::create_unselected_profile(
+            root, owner, catalog, profile,
+        )?)
+    }
+    fn select_initial(mut db: Self) -> StoreResult<Self> {
         let bytes = encode(&db.epoch, 65536)?;
         // The outer selector is published only after a valid epoch exists. An
         // interrupted new root is not silently repaired/adopted on the next open.
@@ -140,6 +170,10 @@ impl Database {
         } else {
             EpochManifest::with_physical_profile(owner, catalog, runtime, schema_digest, profile)?
         };
+        Self::create_unselected_epoch(root, epoch)
+    }
+    fn create_unselected_epoch(root: &Path, epoch: EpochManifest) -> StoreResult<Self> {
+        let profile = epoch.physical_profile.as_str();
         // Creation never adopts a pre-existing directory or SQLite database.
         create_private_directory(root).map_err(|_| failure(StoreErrorCode::DatabaseUnavailable))?;
         let root = admitted_root(root)?;
@@ -163,9 +197,7 @@ impl Database {
         drop(file);
         let connection = connect(&path, false)?;
         connection
-            .execute_batch(
-                "PRAGMA page_size=4096; PRAGMA auto_vacuum=NONE; PRAGMA encoding=\"UTF-8\";",
-            )
+            .execute_batch(CREATE_POLICY)
             .map_err(StoreError::database)?;
         connection
             .pragma_update(None, "application_id", APPLICATION_ID)
@@ -303,7 +335,7 @@ impl Database {
             return Err(invalid());
         }
         let path = dir.join("project.sqlite");
-        regular(&path, 1024 * 1024 * 1024)?;
+        regular(&path, MAX_DATABASE_BYTES)?;
         for name in [
             "project.sqlite-wal",
             "project.sqlite-shm",
@@ -311,7 +343,7 @@ impl Database {
         ] {
             let sidecar = dir.join(name);
             match fs::symlink_metadata(&sidecar) {
-                Ok(_) => regular(&sidecar, 128 * 1024 * 1024)?,
+                Ok(_) => regular(&sidecar, MAX_SIDECAR_BYTES)?,
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
                 Err(_) => return Err(invalid()),
             }
@@ -395,18 +427,28 @@ fn read_epoch_file(path: &Path) -> StoreResult<Vec<u8>> {
 }
 
 pub(super) fn admit_epoch(bytes: &[u8], catalog: &RecordCatalog) -> StoreResult<EpochManifest> {
-    if bytes.len() > 65536 {
+    if bytes.len() > MAX_EPOCH_BYTES {
         return Err(invalid());
     }
     let epoch: EpochManifest = serde_json::from_slice(bytes).map_err(|_| invalid())?;
-    let expected = EpochManifest::with_physical_profile(
-        &epoch.owner,
-        catalog.clone(),
-        runtime_id()?,
-        expected_schema(&epoch.physical_profile)?,
-        &epoch.physical_profile,
-    )?;
-    if epoch != expected || encode(&epoch, 65536)? != bytes {
+    let expected = match epoch.schema.as_str() {
+        RECORD_PROFILE => EpochManifest::with_physical_profile(
+            &epoch.owner,
+            catalog.clone(),
+            runtime_id()?,
+            expected_schema(&epoch.physical_profile)?,
+            &epoch.physical_profile,
+        )?,
+        NAMESPACE_EPOCH_SCHEMA => EpochManifest::with_namespace(
+            epoch.namespace.as_ref().ok_or_else(invalid)?,
+            catalog.clone(),
+            runtime_id()?,
+            expected_schema(GC_PHYSICAL_PROFILE)?,
+            security_limit_digest()?,
+        )?,
+        _ => return Err(invalid()),
+    };
+    if epoch != expected || encode(&epoch, MAX_EPOCH_BYTES)? != bytes {
         return Err(invalid());
     }
     Ok(epoch)
@@ -481,6 +523,38 @@ fn runtime_id() -> StoreResult<String> {
         &encode(&(source, options), 65536)?,
     ))
 }
+fn security_limit_digest() -> StoreResult<String> {
+    let limits = BTreeMap::from([
+        ("identifier_bytes", MAX_IDENTIFIER_BYTES as u64),
+        ("catalog_entries", MAX_CATALOG_ENTRIES as u64),
+        ("record_bytes", MAX_RECORD_BYTES as u64),
+        ("generation_bytes", MAX_GENERATION_BYTES as u64),
+        ("partitions", MAX_PARTITIONS as u64),
+        ("generations", MAX_GENERATIONS as u64),
+        ("partition_versions", MAX_VERSIONS as u64),
+        ("readers", MAX_READERS as u64),
+        ("epoch_bytes", MAX_EPOCH_BYTES as u64),
+        ("database_bytes", MAX_DATABASE_BYTES),
+        ("sidecar_bytes", MAX_SIDECAR_BYTES),
+        ("busy_timeout_ms", BUSY_TIMEOUT_MS),
+    ]);
+    Ok(digest(
+        "project-security-limits",
+        &encode(
+            &(
+                "wow-store/project-security-limits/1",
+                limits,
+                DEFENSIVE,
+                ENABLE_TRIGGERS,
+                CREATE_POLICY,
+                CONNECT_POLICY,
+                READ_POLICY,
+                WRITER_POLICY,
+            ),
+            MAX_EPOCH_BYTES,
+        )?,
+    ))
+}
 pub(super) fn connect(path: &Path, readonly: bool) -> StoreResult<Connection> {
     let mode = if readonly {
         OpenFlags::SQLITE_OPEN_READ_ONLY
@@ -489,17 +563,16 @@ pub(super) fn connect(path: &Path, readonly: bool) -> StoreResult<Connection> {
     };
     let c = Connection::open_with_flags(path, mode | OpenFlags::SQLITE_OPEN_NO_MUTEX)
         .map_err(StoreError::database)?;
-    c.busy_timeout(Duration::from_millis(500))
+    c.busy_timeout(Duration::from_millis(BUSY_TIMEOUT_MS))
         .map_err(StoreError::database)?;
-    c.set_db_config(DbConfig::SQLITE_DBCONFIG_DEFENSIVE, true)
+    c.set_db_config(DbConfig::SQLITE_DBCONFIG_DEFENSIVE, DEFENSIVE)
         .map_err(StoreError::database)?;
-    c.set_db_config(DbConfig::SQLITE_DBCONFIG_ENABLE_TRIGGER, false)
+    c.set_db_config(DbConfig::SQLITE_DBCONFIG_ENABLE_TRIGGER, ENABLE_TRIGGERS)
         .map_err(StoreError::database)?;
-    c.execute_batch("PRAGMA trusted_schema=OFF; PRAGMA foreign_keys=ON;")
+    c.execute_batch(CONNECT_POLICY)
         .map_err(StoreError::database)?;
     if readonly {
-        c.execute_batch("PRAGMA query_only=ON")
-            .map_err(StoreError::database)?;
+        c.execute_batch(READ_POLICY).map_err(StoreError::database)?;
     }
     Ok(c)
 }
@@ -510,7 +583,7 @@ pub(super) fn enable_writer(c: &Connection) -> StoreResult<()> {
     if mode != "wal" {
         return Err(failure(StoreErrorCode::ConfigurationInvalid));
     }
-    c.execute_batch("PRAGMA synchronous=FULL; PRAGMA wal_autocheckpoint=256; PRAGMA journal_size_limit=8388608; PRAGMA max_page_count=262144;")
+    c.execute_batch(WRITER_POLICY)
         .map_err(StoreError::database)?;
     let sync: i64 = c
         .query_row("PRAGMA synchronous", [], |r| r.get(0))

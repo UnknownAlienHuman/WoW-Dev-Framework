@@ -77,8 +77,9 @@ it, so `into_update_publisher` refuses a platform archive with `DeferredCapabili
 
 ## Not claimed
 
-Stable logical store namespace for publication of differing source snapshots,
-independently owned platform graph
-partitions and structural fingerprints, SkeletonInputView, and service and CLI transport
-for an explicit platform request remain open. Real mirror, performance and runtime
+Stable logical namespace publication across differing source snapshots is now a
+separate focused owner slice; see [PLATFORM_STORE_NAMESPACE.md](PLATFORM_STORE_NAMESPACE.md).
+Independently owned platform graph partitions and structural fingerprints,
+SkeletonInputView, and source service and CLI transport for an explicit platform
+request remain open. Real mirror, performance and runtime
 acceptance and full W17, E3, E0 and E2 acceptance remain open.
