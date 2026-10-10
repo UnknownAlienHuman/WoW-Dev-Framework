@@ -863,3 +863,26 @@ authority, all-generation domain validation or full W16/E2 acceptance follows.
 Cross-epoch activation with mapped retention, domain quarantine, payload/runtime
 migration and platform/source/runtime gates remain open. See
 [PROJECT_CURRENT_RECOVERY.md](../crates/wow-service/PROJECT_CURRENT_RECOVERY.md).
+
+## W16 guarded inactive staging and immutable target export (2026-10-09)
+
+Store/service live staging now checks the exact source epoch, selector, optional
+Current and complete fresh SQL/pin/hold closure against its verified backup before
+and after native physical staging. A pin-only stale source rejects before target
+creation. Native owner validation follows; the target remains inactive.
+
+A completed migration can independently export its frozen target through the native
+SQLite backup owner. Exact baseline receipt, inventory, source archive and manifests
+are revalidated before export; the returned backup must match the target epoch and
+snapshot. The service replays every exported Project/Graph pair. The separate source
+history/holds and migration metadata remain in the original baseline, outside this
+target-only export.
+
+Six store migration cases and the extended native service lifecycle pass, including
+independent reopen and owner-checked private copy mutation with old readers and
+baseline evidence preserved. Workspace policy, fmt, check, strict Clippy, tests
+(911 passed, 1 ignored, 107 targets), strict rustdoc and build pass. Automatic mapped
+retention/activation-ready preparation, exact cross-epoch registry selection/retry,
+portable full migration history, interrupted-copy/power-loss and full W16/E2 or
+source/runtime acceptance remain open. See
+[PROJECT_MIGRATION.md](../crates/wow-store/PROJECT_MIGRATION.md).

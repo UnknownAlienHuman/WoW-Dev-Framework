@@ -1,8 +1,8 @@
-# Cross-epoch ProjectStore migration
+﻿# Cross-epoch ProjectStore migration
 
-**Status:** executable physical v1/v2 to v3 migration, stopping at a validated
-inactive target epoch. The scoped checks below pass; full W16/E2 acceptance remains
-open.
+**Status:** executable physical v1/v2 to v3 migration, exact live guarded staging
+and independently verified target export. The migration baseline remains inactive;
+full W16/E2 acceptance remains open.
 
 Migration moves a physical v1 or v2 snapshot into a new physical v3 root and stops
 there. The target has no current publication and no root registry, so it stays inert
@@ -128,6 +128,53 @@ cleanup: progress resumes only through `open` under the identical original reque
 and the receipt carries an unknown acknowledgment, so response loss is an unknown
 outcome rather than proof of failure.
 
+## Live guarded staging
+
+Besides the offline `MigrationCandidate::stage`, which independently verifies the
+snapshot it is handed, there is an exact live guarded path:
+`ProjectStore::stage_migration_to_new` ([live.rs](src/project/migration/live.rs)) and
+`LiveProjectStore::migrate_to_new`
+([migration.rs](../wow-service/src/live_project/migration.rs)). The live entry takes
+the same expected selector and expected current as same-epoch replacement, so a live
+migration states its guards explicitly instead of inferring them.
+
+`require_migration_source` binds the guarded live closure to the supplied backup. It
+requires an admitted non-quarantined selector equal to `expected`, the store's own
+selection equal to `expected`, the admitted epoch equal to the store epoch, and the
+backup's epoch equal to the store epoch. It then reads the live closure and requires
+its current record to equal `expected_current` and its snapshot digest, taken with the
+root's admitted quarantine references, to equal the backup's snapshot digest.
+
+The guard runs twice: before `MigrationCandidate::stage`, so a stale guard rejects
+before any destination exists, and again after staging against the candidate's own
+source, so the guarded closure is the closure that was staged. A source pin-only change
+therefore rejects with `CurrentConflict` before destination creation, because the pin
+changes the closure snapshot digest while selector and current stay identical.
+Cancellation in the initial guard creates no destination. Cancellation during or
+after staging retains the inactive artifacts for explicit reconciliation.
+The live store's leases, history, roots and the supplied backup are untouched.
+
+Staging grants no new authority. The target still has no epoch selection and no
+activation capability, target current stays absent, and the offline
+`MigrationCandidate::stage` remains available for a snapshot not taken from this store.
+
+## Target export
+
+`ValidatedMigration::export_target` ([migration.rs](src/project/migration.rs)) and
+`export_live_project_migration`
+([migration.rs](../wow-service/src/live_project/migration.rs)) write the frozen
+inactive target into a new independently verified backup, reusing the ordinary native
+backup route. The original baseline and the source archive are not mutated, and the
+migration directory keeps the migration intent, record and source archive.
+
+The exported manifest describes the target only: the target epoch, its generations and
+partition versions, its validated-inactive operations, and its absent current. It
+carries no migration metadata and no source archive metadata, and no retained
+quarantine references, because the target has none. Current, retention and epoch
+selection remain unchanged by exporting, and a source hold is never turned into a
+target reference. The service wrapper replays every exported generation through native
+Project/Graph owners before returning the backup.
+
 ## Not implemented
 
 Cross-epoch activation, mapped target retention roots, payload upgrade, source
@@ -136,7 +183,7 @@ background migration, and selective or partial migration are out of scope.
 Interruption inside writes, power loss, old-runtime transformation and broader
 platform/deletion faults remain NotEvaluated.
 
-## Verified scope (2026-10-09, Windows)
+## Initial inactive checkpoint (2026-10-09, Windows)
 
 Four store regressions cover v1 aliases and original history, v2 pins and exact
 reopening, canceled/omitted owner checks, corrupt seals, missing target manifests,
@@ -147,3 +194,21 @@ semantic IDs, old Current/readers and identical completion after fresh replay.
 Repository policy, fmt, workspace check, strict Clippy, tests (906 passed,
 1 ignored, 107 targets), strict rustdoc and workspace build passed. The ignored
 external-consumer gate, source/runtime gates and full W16/E2 acceptance remain open.
+
+## Guarded staging and export checkpoint (2026-10-09, Windows)
+
+Six store migration regressions pass. The added cases reject a pin-only stale live
+snapshot before destination creation and independently reopen the exact target
+export. Genuine owner-checked restoration, mapped pin/Current mutation of a private
+copy and baseline reopen preserve the original migration receipt, source pins and
+old readers. Initial cancellation and a missing baseline manifest reject without
+creating an export directory.
+
+The native service lifecycle checks guarded staging, every exported Project/Graph
+pair, exact independent reopen and target-local Current activation of a separate
+private owner while preserving the original source and inactive baseline.
+Workspace policy, fmt, check, strict Clippy, tests (911 passed, 1 ignored,
+107 targets), strict rustdoc and build pass. Automatic mapped-retention preparation,
+cross-epoch registry activation/retry and portable full migration/source-history
+authority remain separate open responsibilities. Copy interruption, power loss and
+full W16/E2/source/runtime gates remain NotEvaluated.

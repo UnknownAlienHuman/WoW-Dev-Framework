@@ -1,12 +1,15 @@
 //! Native identities survive physical migration into a validated inactive target.
 use super::super::{
-    LiveProjectStore, catalog, migrate_live_project_to_new, resume_live_project_migration,
+    LiveProjectStore, catalog, export_live_project_migration, resume_live_project_migration,
 };
 use super::{owners, root};
 use std::sync::atomic::AtomicBool;
+use wow_graph::GraphPartitionSnapshot;
 use wow_project::replay::publication::AcquiredProjectPair;
+use wow_store::OperationId;
 use wow_store::project::{
     GC_PHYSICAL_PROFILE, PHYSICAL_PROFILE, ProjectStore, PublicationState, ReadSelector,
+    VerifiedBackup,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -19,6 +22,7 @@ fn native_v1_migration_preserves_pairs_current_and_exact_resumed_receipt() -> Te
     let source_root = root("migration-native-source")?;
     let backup_root = root("migration-native-backup")?;
     let target_root = root("migration-native-target")?;
+    let export_root = root("migration-native-export")?;
     let mut live = LiveProjectStore {
         store: ProjectStore::create(
             &source_root,
@@ -69,7 +73,15 @@ fn native_v1_migration_preserves_pairs_current_and_exact_resumed_receipt() -> Te
     assert_eq!(backup.manifest().current(), Some(second_current));
     let source_snapshot = backup.manifest().snapshot_digest().to_owned();
     let operation = "fixture:migration-native";
-    let target = migrate_live_project_to_new(&backup, &target_root, operation, &stop)?;
+    let expected = live.registry_selection()?;
+    let target = live.migrate_to_new(
+        &backup,
+        &target_root,
+        operation,
+        &expected,
+        Some(&second_current.record_id),
+        &stop,
+    )?;
     let receipt = target.receipt().clone();
     assert_eq!(receipt.state(), PublicationState::ValidatedInactive);
     assert_eq!(receipt.source_epoch(), backup.manifest().epoch());
@@ -149,11 +161,81 @@ fn native_v1_migration_preserves_pairs_current_and_exact_resumed_receipt() -> Te
     assert_eq!(held_first.publication_set_id(), first_ids.2);
     assert_eq!(held_first.store_generation_id(), &one.generation_id);
     assert_eq!(held_first.graph(), &first_graph);
+
+    let exported = export_live_project_migration(
+        &resumed,
+        &export_root,
+        "fixture:migration-native-export",
+        &stop,
+    )?;
+    let exported_manifest = exported.manifest().clone();
+    assert_eq!(exported_manifest.epoch(), receipt.target_epoch());
+    assert_eq!(
+        exported_manifest.snapshot_digest(),
+        receipt.target_snapshot_digest()
+    );
+    assert!(exported_manifest.current().is_none());
+    assert!(exported_manifest.retained_quarantines().is_empty());
+    drop(exported);
+    let independent = VerifiedBackup::open(
+        &export_root,
+        &catalog()?,
+        &OperationId::new("fixture:migration-native-export")?,
+        receipt.target_snapshot_digest(),
+        &stop,
+    )?;
+    assert_eq!(independent.manifest(), &exported_manifest);
+    let mut checks = Vec::new();
+    for generation in independent.manifest().generations() {
+        let read = independent.read(&ReadSelector::Exact(generation.clone()), &stop)?;
+        AcquiredProjectPair::read(&read, &stop)?;
+        checks.push(read.owner_validation(&[
+            GraphPartitionSnapshot::STORAGE_CHECK,
+            wow_project::replay::publication::STORAGE_CHECK,
+        ])?);
+    }
+    // Consuming immutable backup authority creates only this new private owner.
+    let mut private = independent.finish_restore(checks, &stop)?;
+    let activated = private.activate(
+        mapped_second.operation_id(),
+        mapped_second.request_digest(),
+        &stop,
+    )?;
+    assert_eq!(activated.generation_id, *mapped_second.target_generation());
+    assert!(
+        activated
+            .activation
+            .as_ref()
+            .ok_or("missing private Current")?
+            .predecessor
+            .is_none()
+    );
+    let private = LiveProjectStore { store: private };
+    let private_read = private.read(&ReadSelector::Current, &stop)?;
+    assert_eq!(private_read.project().snapshot_id(), second_ids.0);
+    assert_eq!(private_read.project().analyzer_snapshot_id(), second_ids.1);
+    assert_eq!(private_read.publication_set_id(), second_ids.2);
+    assert_eq!(private_read.graph(), &second_graph);
+    assert_eq!(live.current()?.as_ref(), Some(second_current));
+    assert_eq!(held_first.graph(), &first_graph);
+    assert!(
+        resumed
+            .read_generation(mapped_second.target_generation(), &stop)?
+            .current_at_acquisition()
+            .is_none()
+    );
+    assert!(!target_root.join("project-store-registry.json").exists());
+    drop(private_read);
+    drop(private);
     drop(resumed);
+    let unchanged =
+        resume_live_project_migration(&target_root, operation, &source_snapshot, &stop)?;
+    assert_eq!(unchanged.receipt(), &receipt);
+    drop(unchanged);
     drop(backup);
     drop(live);
     drop(held_first);
-    for path in [source_root, backup_root, target_root] {
+    for path in [source_root, backup_root, target_root, export_root] {
         std::fs::remove_dir_all(path)?;
     }
     Ok(())

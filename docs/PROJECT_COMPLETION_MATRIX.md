@@ -1,7 +1,7 @@
 # Project completion matrix
 
 **Audited:** 2026-09-19 America/New_York. Execution inventory refreshed 2026-10-09
-through the scoped W16 Current-domain recovery checkpoint below.
+through the scoped W16 guarded staging and target-export checkpoint below.
 
 This is the current execution ledger. [IMPLEMENTATION_HANDOFF.md](IMPLEMENTATION_HANDOFF.md)
 remains the normative I0–I7 plan; do not restart its historical bootstrap steps.
@@ -30,7 +30,7 @@ The root [Cargo.toml](../Cargo.toml) activates **16 members**, including the int
 | `wow-project` | Explicit inventories, bounded TOC/XML/package receipts, analyzer bindings, immutable generations, exact source artifacts/handles, guarded updates, publication and physical/standalone/package native replay | E0-D fixture identity closure; effective XML receiver/load semantics, full load acceptance, overlays and full durable project publication |
 | `wow-rules` | `wow.api.exists@1` over physical Main and exact-static XML inline facts; `wow.secret.local_operation@1` over its bounded physical flow slice | E0-E normative fixtures, exact prerequisite identities and complete capability/negative-authority cases; no inferred XML receiver/runtime authority |
 | `wow-service` | E0 status/check over immutable normalized contexts, mixed physical/XML rule scopes and exact XML finding projection; separate ReferenceView administration/publication | E0-F end-to-end fixture/CLI closure; full E1 Reference Pack and later public operation families |
-| `wow-store` | Typed SQLite objects, catalogs/CAS, journal, leases, GC and integrity; manifested recovery, native backup, isolated restore, same-epoch replacement, whole-instance quarantine/guarded restore, portable holds and verified inactive physical v1/v2 to v3 migration | Full E1-A/E2-D acceptance; cross-epoch activation/mapped retention, payload/runtime migration, domain quarantine, interrupted-write/power-loss and cleanup faults remain open |
+| `wow-store` | Typed SQLite objects, catalogs/CAS, journal, leases, GC and integrity; manifested recovery, native backup, isolated restore, same-epoch replacement, whole-instance quarantine/guarded restore, portable holds and inactive physical v1/v2 to v3 migration with guarded live staging and immutable target export | Full E1-A/E2-D acceptance; cross-epoch activation/mapped retention, payload/runtime migration, domain quarantine, interrupted-write/power-loss and cleanup faults remain open |
 | `wow-reference` | Native source/model/corrections/aliases, compatibility imports, persistent ReferenceView and publication | E0-B/E1-B normative fixture and full Reference Pack/coverage acceptance |
 | `wow-annotations` | Native Ketho-derived library projection, alias/type/catalog/inheritance/navigation slices and consumer tests | Full E1-C contract/corpus parity; scoped passing consumers are not universal semantic certification |
 | `wow-graph` | Immutable snapshots, proposals/registries, neighbors, producer partitions, bounded queries, exact retained derivation/conflict records, evidence resolution and v1/v2 persistence | Complete producer-chain coverage and automatic conflict assessment, normative fixtures and coherent E2-D publication |
@@ -380,3 +380,14 @@ CLI help/strict-option/missing-root checks pass; positive published-root CLI smo
 injected availability/late cancellation and full W16/E2/source/runtime acceptance
 remain separate open gates. See
 [PROJECT_CURRENT_RECOVERY.md](../crates/wow-service/PROJECT_CURRENT_RECOVERY.md).
+
+Guarded inactive staging now binds the complete live source snapshot, including pins
+and freshly admitted holds, alongside exact selector/Current/epoch guards. Completed
+migrations can export an independently verified target-only backup without changing
+the baseline or its source archive. Native service replay validates every exported
+pair. Six store migration cases and an extended native service lifecycle pass;
+workspace policy, fmt, check, strict Clippy, tests (911 passed, 1 ignored,
+107 targets), strict rustdoc and build pass on 2026-10-09. Automatic mapped roots and
+activation-ready preparation, exact cross-epoch selection/retry and portable entire
+migration history remain open; full W16/E2 acceptance is not advanced. See
+[PROJECT_MIGRATION.md](../crates/wow-store/PROJECT_MIGRATION.md).

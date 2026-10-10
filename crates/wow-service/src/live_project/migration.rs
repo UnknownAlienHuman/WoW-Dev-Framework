@@ -1,10 +1,59 @@
-use super::{catalog_for, project_error, store_error};
+use super::{LiveProjectStore, catalog_for, project_error, store_error};
 use crate::{ServiceErrorCode, ServiceResult};
 use std::{path::Path, sync::atomic::AtomicBool};
 use wow_graph::GraphPartitionSnapshot;
 use wow_project::replay::publication::{self, AcquiredProjectPair};
-use wow_store::project::{MigrationCandidate, ValidatedMigration, VerifiedBackup};
+use wow_store::project::{
+    CurrentRecordId, MigrationCandidate, RegistrySelection, ValidatedMigration, VerifiedBackup,
+};
 use wow_store::{OperationId, StoreErrorCode};
+
+impl LiveProjectStore {
+    /// Build an inactive migration only from the exact guarded live snapshot.
+    /// The complete live closure is checked before and after physical staging;
+    /// native owner validation follows without selecting the target epoch.
+    pub fn migrate_to_new(
+        &self,
+        source: &VerifiedBackup,
+        root: &Path,
+        operation_id: &str,
+        expected: &RegistrySelection,
+        expected_current: Option<&CurrentRecordId>,
+        stop: &AtomicBool,
+    ) -> ServiceResult<ValidatedMigration> {
+        let id = OperationId::new(operation_id).map_err(store_error)?;
+        let candidate = self
+            .store
+            .stage_migration_to_new(source, root, &id, expected, expected_current, stop)
+            .map_err(store_error)?;
+        validate_candidate(candidate, stop)
+    }
+}
+
+/// Independently export a completed inactive target without changing its baseline.
+/// Native owners replay every exported generation; original migration/source
+/// metadata remains in the separately retained migration directory.
+pub fn export_live_project_migration(
+    migration: &ValidatedMigration,
+    root: &Path,
+    operation_id: &str,
+    stop: &AtomicBool,
+) -> ServiceResult<VerifiedBackup> {
+    let id = OperationId::new(operation_id).map_err(store_error)?;
+    let backup = migration
+        .export_target(root, &id, stop)
+        .map_err(store_error)?;
+    for generation in backup.manifest().generations() {
+        let read = backup
+            .read(
+                &wow_store::project::ReadSelector::Exact(generation.clone()),
+                stop,
+            )
+            .map_err(store_error)?;
+        AcquiredProjectPair::read(&read, stop).map_err(project_error)?;
+    }
+    Ok(backup)
+}
 
 /// Migrate a verified v1/v2 physical snapshot to an unselected v3 target with
 /// the original record catalog, then validate every retained native pair.

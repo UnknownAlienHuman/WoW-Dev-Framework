@@ -1,4 +1,5 @@
 //! Explicit supported physical migration, stopping at a validated inactive epoch.
+mod live;
 mod model;
 mod plan;
 #[cfg(test)]
@@ -8,6 +9,7 @@ use super::{
     backup::{self, identity::BackupState},
     database::{self, Database},
     model::*,
+    quarantine::archives,
     registry,
 };
 use crate::{OperationId, StoreErrorCode, StoreResult};
@@ -413,6 +415,43 @@ impl MigrationCandidate {
     }
 }
 impl ValidatedMigration {
+    /// Export the frozen inactive target into a new independently verified backup.
+    /// The migration baseline and its source remain unchanged.
+    pub fn export_target(
+        &self,
+        root: &Path,
+        operation: &OperationId,
+        stop: &AtomicBool,
+    ) -> StoreResult<VerifiedBackup> {
+        checkpoint(stop)?;
+        ensure_unselected(&self.candidate.root)?;
+        self.candidate.verify(stop)?;
+        if registry::read_file(
+            &self.candidate.root.join("migration-record.json"),
+            MAX_METADATA,
+        )? != self.receipt.bytes()?
+        {
+            return Err(failure(StoreErrorCode::OperationConflict));
+        }
+        let archives = archives::read(
+            &self.candidate.root,
+            &self.candidate.intent.target_epoch.catalog,
+            &[],
+            stop,
+        )?;
+        checkpoint(stop)?;
+        let backup = self
+            .candidate
+            .store
+            .backup_to_new_with_archives(root, operation, &archives, stop)?;
+        if backup.manifest().epoch() != self.receipt.target_epoch()
+            || backup.manifest().snapshot_digest() != self.receipt.target_snapshot_digest()
+        {
+            return Err(invalid());
+        }
+        checkpoint(stop)?;
+        Ok(backup)
+    }
     pub fn receipt(&self) -> &MigrationReceipt {
         &self.receipt
     }

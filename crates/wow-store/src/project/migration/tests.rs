@@ -1,10 +1,12 @@
 //! Native inactive-epoch migration preserves opaque owner records and source history.
+#[path = "live_tests.rs"]
+mod live;
 use super::{MigrationCandidate, MigrationMapping};
 use crate::project::{
     CurrentPublication, GC_PHYSICAL_PROFILE, PHYSICAL_PROFILE, PartitionRecord, ProjectStore,
     PublicationRequest, PublicationState, RETAINED_PHYSICAL_PROFILE, ReadSelector, ReadSnapshot,
     RecordCatalog, RetentionRoot, RetentionRootId, RetentionRootKind, StoreGenerationId,
-    ValidatedRead,
+    ValidatedRead, VerifiedBackup,
 };
 use crate::{OperationId, StoreErrorCode, StoreResult};
 use std::{
@@ -863,6 +865,232 @@ fn missing_declared_work_resumes_but_foreign_prepared_work_rejects_before_any_re
     backup.verify(&stop)?;
     assert_eq!(store.current()?.as_ref(), Some(&current));
     drop(backup);
+    drop(store);
+    fs::remove_dir_all(root)?;
+    Ok(())
+}
+
+#[test]
+fn exported_validated_target_restores_to_a_mutable_copy_without_changing_the_baseline() -> TestResult
+{
+    let stop = AtomicBool::new(false);
+    let (root, mut store, catalog) = at("create export source", fixture("export-target", true))?;
+    let first = request(&store, "fixture:export-first", "fixture:export-first", 81)?;
+    let first_current = activate(&mut store, &first, 81, &stop)?;
+    let held_first = store.read(&ReadSelector::Current, &stop)?;
+    let second = request(&store, "fixture:export-second", "fixture:export-second", 82)?;
+    let source_current = activate(&mut store, &second, 82, &stop)?;
+    let held_current = store.read(&ReadSelector::Current, &stop)?;
+    let source_pin = RetentionRoot::new(
+        store.epoch().epoch_id().clone(),
+        RetentionRootId::new("fixture:export-rollback")?,
+        RetentionRootKind::Rollback,
+        first.generation().generation_id.clone(),
+        "fixture:policy",
+    )?;
+    store.put_retention_root(&source_pin, &stop)?;
+    let backup = store.backup_to_new(
+        root.join("source-backup"),
+        &OperationId::new("fixture:export-source-backup")?,
+        &stop,
+    )?;
+    let source_snapshot = backup.manifest().snapshot_digest().to_owned();
+    let migration_root = root.join("migration");
+    let migration_operation = OperationId::new("fixture:export-migration")?;
+    let candidate = at(
+        "stage export baseline",
+        MigrationCandidate::stage(&backup, &migration_root, &migration_operation, &stop),
+    )?;
+    let checks = target_checks(&candidate, &[(&first, 81), (&second, 82)], &stop)?;
+    let validated = at("finish export baseline", candidate.finish(checks, &stop))?;
+    let receipt = validated.receipt().clone();
+    let target_epoch = validated.target_epoch().clone();
+    let target_snapshot = receipt.target_snapshot_digest().to_owned();
+    let baseline_inventory = sql_inventory(&validated.candidate.store.db.connection)?;
+    let first_mapping = validated
+        .mappings()
+        .iter()
+        .find(|mapping| mapping.source_generation() == &first.generation().generation_id)
+        .ok_or("missing pinned generation mapping")?
+        .clone();
+    let second_mapping = validated
+        .mappings()
+        .iter()
+        .find(|mapping| mapping.source_generation() == &second.generation().generation_id)
+        .ok_or("missing Current generation mapping")?
+        .clone();
+    let current_mapping = receipt
+        .current_mapping()
+        .ok_or("missing source Current mapping")?;
+    assert_eq!(current_mapping.source(), &source_current);
+    assert_eq!(
+        current_mapping.target_generation(),
+        second_mapping.target_generation()
+    );
+    let mut expected = BTreeMap::new();
+    for (mapping, request, value) in [(&first_mapping, &first, 81), (&second_mapping, &second, 82)]
+    {
+        let read = validated.read_generation(mapping.target_generation(), &stop)?;
+        assert_eq!(read.manifest().members, request.generation().members);
+        assert_eq!(read.manifest().bindings, request.generation().bindings);
+        expected.insert(
+            mapping.target_generation().clone(),
+            (read.manifest().clone(), value),
+        );
+    }
+
+    let cancelled_root = root.join("cancelled-export");
+    rejected(
+        validated.export_target(
+            &cancelled_root,
+            &OperationId::new("fixture:export-cancelled")?,
+            &AtomicBool::new(true),
+        ),
+        StoreErrorCode::Cancelled,
+    )?;
+    assert!(!cancelled_root.exists());
+    let epoch_path = migration_root.join("epoch-manifest.json");
+    let epoch_bytes = fs::read(&epoch_path)?;
+    fs::remove_file(&epoch_path)?;
+    let refused_root = root.join("refused-export");
+    rejected(
+        validated.export_target(
+            &refused_root,
+            &OperationId::new("fixture:export-corrupt-baseline")?,
+            &stop,
+        ),
+        StoreErrorCode::DatabaseUnavailable,
+    )?;
+    assert!(!refused_root.exists());
+    fs::write(&epoch_path, &epoch_bytes)?;
+
+    let export_root = root.join("export");
+    let export_operation = OperationId::new("fixture:export-target")?;
+    let exported = at(
+        "export immutable validated target",
+        validated.export_target(&export_root, &export_operation, &stop),
+    )?;
+    assert_eq!(exported.manifest().epoch(), &target_epoch);
+    assert_eq!(exported.manifest().snapshot_digest(), target_snapshot);
+    assert_eq!(
+        exported.manifest().generations(),
+        validated.target_generations()
+    );
+    assert!(exported.manifest().current().is_none());
+    let export_manifest = exported.manifest().clone();
+    assert_eq!(
+        sql_inventory(&validated.candidate.store.db.connection)?,
+        baseline_inventory
+    );
+    drop(exported);
+    let exported = at(
+        "independently reopen exact target export",
+        VerifiedBackup::open(
+            &export_root,
+            &catalog,
+            &export_operation,
+            &target_snapshot,
+            &stop,
+        ),
+    )?;
+    assert_eq!(exported.manifest(), &export_manifest);
+    let copy_root = root.join("mutable-copy");
+    let copy = exported.restore_to_new(
+        &copy_root,
+        &OperationId::new("fixture:export-mutable-copy")?,
+        &stop,
+    )?;
+    assert_eq!(copy.manifest().epoch(), &target_epoch);
+    assert_eq!(copy.manifest().snapshot_digest(), target_snapshot);
+    let mut copy_checks = Vec::new();
+    for (generation, (manifest, value)) in &expected {
+        let exported_read = exported.read(&ReadSelector::Exact(generation.clone()), &stop)?;
+        assert_eq!(exported_read.manifest(), manifest);
+        let read = copy.read(&ReadSelector::Exact(generation.clone()), &stop)?;
+        assert_eq!(read.manifest(), manifest);
+        copy_checks.push(check(&read, *value, &stop)?);
+    }
+    let mut copy = at(
+        "finish genuine owner-checked mutable restore",
+        copy.finish_restore(copy_checks, &stop),
+    )?;
+    assert_eq!(copy.epoch(), &target_epoch);
+    assert!(copy.current()?.is_none());
+    let mapped_pin = RetentionRoot::new(
+        target_epoch.epoch_id().clone(),
+        source_pin.root_id().clone(),
+        source_pin.kind(),
+        first_mapping.target_generation().clone(),
+        source_pin.held_by(),
+    )?;
+    assert_ne!(mapped_pin.pin_digest(), source_pin.pin_digest());
+    assert_eq!(copy.put_retention_root(&mapped_pin, &stop)?, mapped_pin);
+    let activated = copy.activate(
+        second_mapping.operation_id(),
+        second_mapping.request_digest(),
+        &stop,
+    )?;
+    let copy_current = copy.current()?.ok_or("missing mapped copy Current")?;
+    assert_eq!(activated.activation.as_ref(), Some(&copy_current));
+    assert_eq!(
+        &copy_current.generation_id,
+        second_mapping.target_generation()
+    );
+    assert_eq!(
+        &copy_current.validation_id,
+        current_mapping.target_validation()
+    );
+    assert!(copy_current.predecessor.is_none());
+    assert_eq!(copy.retention_roots(&stop)?, vec![mapped_pin]);
+    {
+        let read = copy.read(&ReadSelector::Current, &stop)?;
+        assert_eq!(
+            read.manifest(),
+            &expected[second_mapping.target_generation()].0
+        );
+        check(&read, 82, &stop)?;
+    }
+    exported.verify(&stop)?;
+    assert_eq!(exported.manifest(), &export_manifest);
+    drop(validated);
+    let baseline = at(
+        "reopen original immutable baseline after copy mutation",
+        MigrationCandidate::open(
+            &migration_root,
+            &catalog,
+            &migration_operation,
+            &source_snapshot,
+            &stop,
+        ),
+    )?;
+    assert_eq!(
+        sql_inventory(&baseline.store.db.connection)?,
+        baseline_inventory
+    );
+    assert!(baseline.store.current()?.is_none());
+    assert!(baseline.store.retention_roots(&stop)?.is_empty());
+    let checks = target_checks(&baseline, &[(&first, 81), (&second, 82)], &stop)?;
+    let baseline = baseline.finish(checks, &stop)?;
+    assert_eq!(baseline.receipt(), &receipt);
+    assert_eq!(
+        baseline.source().store.retention_roots(&stop)?,
+        vec![source_pin.clone()]
+    );
+    assert_eq!(store.retention_roots(&stop)?, vec![source_pin]);
+    assert_eq!(store.current()?, Some(source_current.clone()));
+    assert_eq!(held_first.manifest(), first.generation());
+    assert_eq!(held_first.current_at_acquisition(), Some(&first_current));
+    check(&held_first, 81, &stop)?;
+    assert_eq!(held_current.manifest(), second.generation());
+    assert_eq!(held_current.current_at_acquisition(), Some(&source_current));
+    check(&held_current, 82, &stop)?;
+    backup.verify(&stop)?;
+    drop(baseline);
+    drop(copy);
+    drop(exported);
+    drop(backup);
+    drop(held_current);
+    drop(held_first);
     drop(store);
     fs::remove_dir_all(root)?;
     Ok(())

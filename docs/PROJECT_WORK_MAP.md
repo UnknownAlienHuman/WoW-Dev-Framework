@@ -135,6 +135,22 @@ Actual CLI help, strict flag rejection and missing-root routing pass; positive
 published-root CLI recovery and injected late cancellation/availability remain
 NotEvaluated. Cross-epoch activation/mapped roots and full W16/E2 acceptance stay open.
 
+The guarded migration/export checkpoint binds an explicit live selector, Current and
+the complete freshly admitted SQL/pin/hold snapshot to its supplied verified backup
+before and after physical staging. Pin-only changes reject before creating a target.
+The completed inactive target now exports through the existing native SQLite backup
+owner, with exact epoch/snapshot equality and independent native Project/Graph replay.
+The original migration receipt and source archive remain unchanged; the exported
+backup contains target state only. See
+[PROJECT_MIGRATION.md](../crates/wow-store/PROJECT_MIGRATION.md).
+
+Six store migration cases and the extended native service lifecycle pass. Workspace
+policy, fmt, check, strict Clippy, tests (911 passed, 1 ignored, 107 targets), strict
+rustdoc and build pass on 2026-10-09. The next functional owner prepares a separate
+immutable activation-ready copy with complete mapped roots and target-local Current;
+exact cross-epoch selection follows. Neither automatic preparation nor live epoch
+activation, portable entire migration history or full W16/E2 acceptance is claimed.
+
 Fresh W16 policy, fmt, workspace check, strict Clippy, tests (877 passed,
 1 ignored, 106 targets), rustdoc and build passed on 2026-10-09. The ignored consumer and source/runtime gates stay
 open; this does not complete W16/E2 acceptance.

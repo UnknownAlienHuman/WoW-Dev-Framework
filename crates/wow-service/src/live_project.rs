@@ -7,7 +7,9 @@ pub use current_recovery::{
     LiveProjectRecoveryObservation, recover_current_live_project,
 };
 mod migration;
-pub use migration::{migrate_live_project_to_new, resume_live_project_migration};
+pub use migration::{
+    export_live_project_migration, migrate_live_project_to_new, resume_live_project_migration,
+};
 mod operations;
 mod quarantine;
 pub use quarantine::{LiveProjectQuarantineInspection, QuarantinedLiveProject};

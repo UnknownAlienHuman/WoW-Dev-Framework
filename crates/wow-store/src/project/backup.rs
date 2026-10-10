@@ -64,7 +64,7 @@ impl ProjectStore {
         self.backup_to_new_with_archives(root.as_ref(), operation_id, &archives, stop)
     }
 
-    fn backup_to_new_with_archives(
+    pub(super) fn backup_to_new_with_archives(
         &self,
         root: &Path,
         operation_id: &OperationId,
