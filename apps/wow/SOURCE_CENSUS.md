@@ -161,5 +161,10 @@ memory, full-corpus capacity and runtime remain NotEvaluated. The lexical census
 still lists expanded loads/dependency closure as unevaluated in its own scope;
 only the separate `package_loads` receipt evaluates those stages.
 
+An aborted owner stage retains the native project's fixed failure explanation
+in the CLI error. Existing service error classes and exits are unchanged;
+source text, host paths and raw OS errors are never forwarded. A failed operation
+has no measurement receipt, even when an earlier stage completed internally.
+
 These operations are measurement prerequisites in Issue #113; they do not close
 the measured-profile or W17 application/candidate/Skeleton acceptance gates.

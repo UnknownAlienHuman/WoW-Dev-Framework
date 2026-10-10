@@ -186,14 +186,17 @@ pub fn census_local_source(config: &Path, stop: &AtomicBool) -> ServiceResult<So
 }
 
 fn owner_error(error: ProjectError) -> ServiceError {
-    failure(match error.code() {
+    let code = match error.code() {
         ProjectErrorCode::SourceReadCancelled | ProjectErrorCode::AnalysisCancelled => {
             ServiceErrorCode::Cancelled
         }
         ProjectErrorCode::SourceBudgetExceeded => ServiceErrorCode::BudgetExceeded,
         ProjectErrorCode::SourceReadFailed => ServiceErrorCode::ComponentUnavailable,
         _ => ServiceErrorCode::IdentityMismatch,
-    })
+    };
+    // Project acquisition/load errors contain fixed owner explanations, never
+    // source text, host paths or raw OS errors, as in the local disk adapter.
+    ServiceError::new(code, error.message())
 }
 fn checkpoint(stop: &AtomicBool) -> ServiceResult<()> {
     if stop.load(Ordering::Acquire) {
