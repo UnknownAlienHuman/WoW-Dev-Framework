@@ -6,6 +6,7 @@ mod packages;
 mod profile;
 mod raw_inventory;
 mod retained;
+mod retention;
 
 pub(crate) use packages::PlatformPackageRequest;
 pub(crate) use retained::RetainedPlatformFile;
@@ -13,6 +14,7 @@ pub(crate) use retained::RetainedPlatformFile;
 pub use package_binding::PlatformPackageBinding;
 pub use packages::PlatformPackageSpecialization;
 pub use raw_inventory::{PlatformRawInventory, PlatformRawMember};
+pub use retention::PlatformPackageRetentionLimits;
 
 pub use model::{
     PlatformEntryDisposition, PlatformFileKind, PlatformInventoryEntry, PlatformInventoryScope,

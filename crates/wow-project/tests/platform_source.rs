@@ -192,6 +192,154 @@ fn fixture_packages(name: &str) -> Vec<ProjectPackageInput> {
 }
 
 #[test]
+fn retained_package_profile_admits_65_members_under_exact_encoding_budget() -> TestResult {
+    use wow_project::disk::ProjectDiskFile;
+    use wow_project::platform_source::PlatformPackageRetentionLimits as Limits;
+
+    let root = FixtureRoot::new()?;
+    let mut request = profile_request()?;
+    request.limits.max_entries = 128;
+    let mut packages = fixture_packages("Fixture");
+    let mut extra = Vec::new();
+    for index in 0..64 {
+        let name = format!("Metadata{index:02}");
+        let package_root = format!("UI/{name}");
+        std::fs::create_dir(root.0.join(&package_root))?;
+        let path = format!("{package_root}/Metadata.toc");
+        let text = "## SavedVariables: MetadataState\n";
+        std::fs::write(root.0.join(&path), text)?;
+        request.roots[0].selected_tocs.push(path.clone());
+        extra.push(PlatformInventoryEntry {
+            path,
+            kind: PlatformFileKind::Toc,
+            disposition: PlatformEntryDisposition::Included {
+                digest: raw_digest(text.as_bytes()),
+                byte_length: text.len() as u64,
+                object_id: None,
+            },
+        });
+        packages.push(ProjectPackageInput::new(
+            name,
+            package_root,
+            true,
+            vec![ProjectPackageVariantInput::new(
+                ProjectDiskFile::new("Metadata.toc"),
+                true,
+            )],
+        ));
+    }
+    let profile = BlizzardUiSourceProfile::new(request)?;
+    let mut declared = inventory(&root, &profile)?;
+    declared.entries.extend(extra);
+    declared.roots[0].declared_entries = declared.entries.len() as u64;
+    let stop = AtomicBool::new(false);
+    let source = Arc::new(
+        root.directory()?
+            .admit_platform_source(&profile, declared, &stop)?,
+    );
+    assert_eq!(
+        source
+            .specialize_packages(&packages, None, &stop)
+            .err()
+            .ok_or("ordinary package65 admitted")?
+            .message(),
+        "invalid declared package count"
+    );
+    let admitted = source.specialize_packages_with_retention(
+        &packages,
+        None,
+        Limits::new(65, 256 * 1024 * 1024)?,
+        &stop,
+    )?;
+    assert_eq!(admitted.load_plan().packages().len(), 65);
+    assert_eq!(admitted.files().len(), 1);
+    let encoded = admitted.load_plan().packages().iter().try_fold(
+        0u64,
+        |sum, node| -> Result<u64, Box<dyn Error>> {
+            let bytes = serde_json::to_vec(
+                admitted
+                    .load_plan()
+                    .package_plan(&node.package)
+                    .ok_or("retained member plan")?,
+            )?
+            .len() as u64;
+            sum.checked_add(bytes).ok_or("encoding overflow".into())
+        },
+    )?;
+    let exact = source.specialize_packages_with_retention(
+        &packages,
+        None,
+        Limits::new(65, encoded)?,
+        &stop,
+    )?;
+    assert_eq!(exact.load_plan(), admitted.load_plan());
+    assert_eq!(exact.files(), admitted.files());
+    assert_ne!(
+        exact.binding().binding_digest(),
+        admitted.binding().binding_digest()
+    );
+    assert_eq!(
+        source
+            .specialize_packages_with_retention(
+                &packages,
+                None,
+                Limits::new(65, encoded - 1)?,
+                &stop
+            )
+            .err()
+            .ok_or("encoding limit+1 admitted")?
+            .message(),
+        "native package retained-plan encoding limit exceeded"
+    );
+    assert_eq!(
+        source
+            .specialize_packages_with_retention(&packages, None, Limits::new(64, encoded)?, &stop)
+            .err()
+            .ok_or("package limit+1 admitted")?
+            .message(),
+        "invalid declared package count"
+    );
+    for (count, bytes) in [
+        (0, encoded),
+        (1025, encoded),
+        (usize::MAX, encoded),
+        (65, 0),
+        (65, 256 * 1024 * 1024 + 1),
+        (65, u64::MAX),
+    ] {
+        assert!(Limits::new(count, bytes).is_err());
+        let decoded: Limits = serde_json::from_value(serde_json::json!({
+            "profile":"wow-project/platform-package-retention/1",
+            "max_packages":count,"max_total_plan_encoding_bytes":bytes
+        }))?;
+        assert!(
+            source
+                .specialize_packages_with_retention(&packages, None, decoded, &stop)
+                .is_err()
+        );
+    }
+    assert!(
+        source
+            .specialize_packages_with_retention(
+                &packages,
+                None,
+                Limits::new(65, encoded)?,
+                &AtomicBool::new(true)
+            )
+            .is_err()
+    );
+    let mut duplicated = packages.clone();
+    duplicated.push(packages[0].clone());
+    assert!(
+        source
+            .specialize_packages_with_retention(&duplicated, None, Limits::new(66, encoded)?, &stop)
+            .is_err()
+    );
+    assert!(Limits::new(1024, 256 * 1024 * 1024).is_ok());
+    Ok(())
+}
+
+#[test]
 fn package_census_retains_empty_and_inline_only_closures_without_main() -> TestResult {
     use wow_project::load::census::census_platform_packages;
     let stop = AtomicBool::new(false);

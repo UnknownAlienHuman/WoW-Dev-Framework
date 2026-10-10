@@ -750,24 +750,7 @@ pub(crate) fn read_retained_packages(
 }
 
 /// Expand explicit packages from admitted owner-held bytes using the native loader.
-pub(crate) fn read_admitted_packages(
-    source: &AdmittedPlatformSource,
-    packages: &[ProjectPackageInput],
-    profile: &ProfileIdentity,
-    context: Option<&TocLoadContext>,
-    stop: &AtomicBool,
-) -> ProjectResult<ProjectPackageLoadInput> {
-    read_admitted_packages_with_capacity(
-        source,
-        packages,
-        profile,
-        context,
-        stop,
-        PackageLoadCapacity::ordinary(),
-    )
-}
-
-fn read_admitted_packages_with_capacity(
+pub(crate) fn read_admitted_packages_with_capacity(
     source: &AdmittedPlatformSource,
     packages: &[ProjectPackageInput],
     profile: &ProfileIdentity,
@@ -817,10 +800,14 @@ fn read_package_sources(
     let mut variants = BTreeMap::new();
     let mut variant_sources = BTreeMap::new();
     let mut source_budget = acquisition::PackageSourceBudget::default();
+    let mut retention = CensusRetention::default();
     for package in declarations {
         let selection =
             acquisition::read_selected(&sources, package, profile, context, stop, capacity)?;
         source_budget.charge(&selection)?;
+        if let Some(limits) = capacity.retention_limits() {
+            retention.charge_retained(&selection.loaded.plan, limits, stop)?;
+        }
         variant_sources.insert(package.name.clone(), selection.texts);
         variants.insert(package.name.clone(), selection.variants);
         loaded.push(selection.loaded);

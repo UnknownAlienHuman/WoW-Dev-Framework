@@ -7,7 +7,9 @@ use wow_project::{
     PlatformGraphProfile, ProjectFileRole, ProjectId, ProjectSourceOriginId, ProjectWorkspaceId,
     disk::{ManifestedPlatformInput, ProjectDiskFile, ProjectInputDirectory},
     load::{ProjectPackageInput, TocLoadContext},
-    platform_source::{BlizzardUiSourceProfile, BlizzardUiSourceProfileRequest},
+    platform_source::{
+        BlizzardUiSourceProfile, BlizzardUiSourceProfileRequest, PlatformPackageRetentionLimits,
+    },
 };
 use wow_reference::ReferenceView;
 
@@ -42,6 +44,8 @@ struct PlatformInput {
     native_reference: Option<NativeReferenceInput>,
     analyzer: DiskAnalyzer,
     packages: Vec<ProjectPackageInput>,
+    #[serde(default, deserialize_with = "present")]
+    retained_package_limits: Option<PlatformPackageRetentionLimits>,
     #[serde(default)]
     load_context: Option<TocLoadContext>,
     graph_profile: PlatformGraphProfile,
@@ -148,9 +152,18 @@ impl LocalProjectInput {
                 .0,
         );
         let packages = Arc::new(
-            source
-                .specialize_packages(&input.packages, input.load_context.as_ref(), stop)
-                .map_err(acquisition_error)?,
+            match input.retained_package_limits {
+                Some(limits) => source.specialize_packages_with_retention(
+                    &input.packages,
+                    input.load_context.as_ref(),
+                    limits,
+                    stop,
+                ),
+                None => {
+                    source.specialize_packages(&input.packages, input.load_context.as_ref(), stop)
+                }
+            }
+            .map_err(acquisition_error)?,
         );
         let reference = reference_input.read(directory, &input.source, &profile, stop)?;
         let analyzer = input.analyzer.read(directory, stop)?;

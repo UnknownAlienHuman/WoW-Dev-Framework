@@ -83,6 +83,12 @@ Metadata-only and inline-only package members now reach the same retained native
 graph/replay path alongside physical Main; standalone TOC and aggregate Main still
 require real physical Lua. The focused mixed-member lifecycle and affected owner
 check/strict Clippy pass; package64 and source/syntax/graph/map limits remain.
+An explicit native retained-package profile now admits beyond ordinary64 under
+checked cumulative encoded-plan and syntax-work budgets. Limits bind the original
+request, sealed package identity and genuine replay11; ordinary routes and replay1-10
+retain their shape. The65-member capacity/refusal case, selected native graph/replay
+limit-mutation lifecycle, affected check/strict Clippy and CLI build pass. Real full
+pipeline populations and persistence capacity remain unqualified under #113.
 Explicit retained XSD component admission is now executable through the existing
 XML owner, with root-only global symbols and final unsupported context propagation.
 See [schema components](PLATFORM_XML_SCHEMA_COMPONENTS.md) for its bounded scope.

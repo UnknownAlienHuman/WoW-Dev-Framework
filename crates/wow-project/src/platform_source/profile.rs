@@ -11,7 +11,7 @@ use wow_core::{
 const SCHEMA: &str = "wow-project/platform-source-profile/1";
 const MAX_PROFILE_BYTES: usize = 256 * 1024;
 const MAX_ROOTS: usize = 64;
-const MAX_TOCS: usize = 1024;
+pub(super) const MAX_TOCS: usize = 1024;
 const MAX_EXCLUSIONS: usize = 1024;
 const MAX_ENTRIES: usize = 200_000;
 const MAX_TOTAL_BYTES: u64 = 256 * 1024 * 1024;

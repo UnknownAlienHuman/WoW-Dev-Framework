@@ -3,7 +3,7 @@
 use serde::Serialize;
 use wow_core::{CanonicalResult, ContentDigest};
 
-use super::{AdmittedPlatformSource, PlatformTarget, invalid};
+use super::{AdmittedPlatformSource, PlatformPackageRetentionLimits, PlatformTarget, invalid};
 use crate::{
     ProjectPhase, ProjectResult,
     identity::canonical_digest,
@@ -25,6 +25,8 @@ pub struct PlatformPackageBinding {
     target: PlatformTarget,
     load_digest: ContentDigest<CanonicalResult>,
     main_digest: ContentDigest<CanonicalResult>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    retention_limits: Option<PlatformPackageRetentionLimits>,
     binding_digest: ContentDigest<CanonicalResult>,
 }
 
@@ -33,7 +35,11 @@ impl PlatformPackageBinding {
         source: &AdmittedPlatformSource,
         load: &ProjectPackageLoadPlan,
         main: &ProjectPackageMainPlan,
+        retention_limits: Option<PlatformPackageRetentionLimits>,
     ) -> ProjectResult<Self> {
+        if let Some(limits) = retention_limits {
+            limits.validate()?;
+        }
         let profile = source.profile();
         profile.validate()?;
         let receipt = source.receipt();
@@ -68,6 +74,7 @@ impl PlatformPackageBinding {
                 target: &target,
                 load_digest,
                 main_digest,
+                retention_limits,
             },
             ProjectPhase::Inventory,
         )?;
@@ -81,6 +88,7 @@ impl PlatformPackageBinding {
             target,
             load_digest,
             main_digest,
+            retention_limits,
             binding_digest,
         })
     }
@@ -92,7 +100,7 @@ impl PlatformPackageBinding {
         load: &ProjectPackageLoadPlan,
         main: &ProjectPackageMainPlan,
     ) -> ProjectResult<()> {
-        if self != &Self::new(source, load, main)? {
+        if self != &Self::new(source, load, main, self.retention_limits)? {
             return Err(invalid(
                 "platform package binding does not match its owners",
             ));
@@ -157,4 +165,6 @@ struct BindingIdentity<'a> {
     target: &'a PlatformTarget,
     load_digest: ContentDigest<CanonicalResult>,
     main_digest: ContentDigest<CanonicalResult>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    retention_limits: Option<PlatformPackageRetentionLimits>,
 }

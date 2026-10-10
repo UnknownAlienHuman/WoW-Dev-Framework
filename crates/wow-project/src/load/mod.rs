@@ -7,7 +7,6 @@ mod metadata;
 mod package;
 pub(crate) mod package_capacity;
 pub(crate) mod package_closure;
-pub(crate) use package_closure::read_admitted_packages;
 mod saved_variables;
 pub mod schema;
 mod toc;

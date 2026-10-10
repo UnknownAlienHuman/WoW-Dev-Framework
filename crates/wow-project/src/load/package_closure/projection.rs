@@ -296,7 +296,7 @@ pub(crate) fn build_records(
         issues: &issues,
         coverage,
     };
-    if capacity.is_census() {
+    if capacity.is_census() || capacity.retention_limits().is_some() {
         census::bounded_encoded_size(&identity, stop)?;
     }
     let digest = crate::identity::canonical_digest(

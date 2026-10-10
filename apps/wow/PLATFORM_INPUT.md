@@ -99,6 +99,39 @@ coverage remains Partial or a refusal. No full-corpus or runtime authority follo
 from this entry point. Partial graphs exit `2`; existing CLI configuration,
 operation and output failure behavior is preserved.
 
+An explicit `retained_package_limits` selects the native retention profile:
+
+```json
+{
+  "profile": "wow-project/platform-package-retention/1",
+  "max_packages": 320,
+  "max_total_plan_encoding_bytes": 268435456
+}
+```
+
+Omission keeps ordinary package64; explicit `null` refuses. The retained profile
+admits only the original exact source/package requests through the same owners.
+Its package ceiling is the source owner's existing 1024 selected-TOC ceiling.
+It charges every complete load-plan encoding before retaining that member, with a
+256-MiB hard ceiling and the existing cumulative 64-package syntax-work fanout.
+Individual plans retain their 64-MiB encoding bound; source4096/64MiB, physical
+Main, analyzer, graph/map/output and storage bounds apply independently.
+
+These example limits are an explicit operation budget, not source discovery or a
+default. The inspected selected corpus measured273 packages and234,131,914 summed
+plan-encoding bytes; 320 leaves47 package slots and256MiB leaves34,303,542 bytes
+(14.65%) of encoding headroom. Exact source evidence belongs to
+[#113](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/113).
+Encoded bytes are an accounting unit, not an allocator or resident-memory ceiling.
+Different populations must still pass every independent owner budget.
+
+The selected limits enter the sealed package binding and original replay request.
+Retained-profile archives use `wow-project/native-project-replay/11`; ordinary
+replay1-10 retain their bytes and selection. Hydration re-admits the exact source
+and package owners under the captured limits. Changed limits or schema downgrade
+refuse. A successful retained Main is not full graph or persistence acceptance:
+the existing raw replay and record32MiB limits can still refuse a larger corpus.
+
 ## Scope
 
 Shared acquisition also makes this input available to ordinary local

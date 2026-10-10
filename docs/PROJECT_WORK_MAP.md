@@ -7,9 +7,9 @@ the work queue. Follow [the execution model](EXECUTION_MODEL.md).
 
 ## Verified routing base
 
-`main` checkpoint `0cfbb89e46d9cb1b25ca67675ce9f2767d2c3114`, tree
-`58de6c2b42d4f2b6d2f373d025ba572a6a61e1cd`, was published and read back with all
-changed blobs. [Quick 38088630874](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/38088630874)
+`main` checkpoint `14d5e7fbb2b2f81ae020054d16492e75354ac2d0`, tree
+`7f1a30f39ef4d50686bad90ecb19973d46c48699`, was published and read back with all
+changed blobs. [Quick 38089713963](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/38089713963)
 passed on that exact head. This is the verified base of this routing update;
 subsequent publication and gate evidence belong in the canonical Issue.
 
@@ -74,8 +74,9 @@ historical freeze are reconciled honestly. Code presence is not accepted freeze.
   artifact or native callable composition from the same exact source manifest.
   Release Library snapshots use the existing Library universe. Metadata-only and
   inline-only package members retain their facts under a nonempty aggregate Main.
-  Ordinary retained
-  package64 and graph/map budgets remain; this route is not full-corpus qualification.
+  Ordinary package64 remains. An explicit native retention profile adds bounded
+  package/plan retention and identity-bound replay11; graph/map/analyzer/output/
+  storage bounds remain independent. This route is not full-corpus qualification.
 - [Source admission](PLATFORM_SOURCE_ADMISSION.md),
   [package specialization](PLATFORM_SOURCE_PACKAGES.md),
   [configuration](PLATFORM_SOURCE_CONFIGURATION.md),

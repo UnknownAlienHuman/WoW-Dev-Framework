@@ -1,19 +1,26 @@
-//! Internal measurement capacity. It cannot be supplied by wire or exported as
-//! a Main/graph/replay capability. Other load entry points retain package64.
+//! Internal load capacity. Census and explicitly selected native retention are
+//! separate purposes; neither constructs an owner. Ordinary loads keep package64.
 use super::{ProjectLoadPlan, budget, budget_at, census::bounded_encoded_size};
+use crate::platform_source::PlatformPackageRetentionLimits;
 use crate::{ProjectResult, disk::checkpoint, platform_source::AdmittedPlatformSource};
 use std::sync::atomic::AtomicBool;
 
 #[derive(Clone, Copy)]
 pub(crate) struct PackageLoadCapacity {
     packages: usize,
-    census: bool,
+    purpose: Purpose,
+}
+#[derive(Clone, Copy)]
+enum Purpose {
+    Main,
+    Census,
+    Retained(PlatformPackageRetentionLimits),
 }
 impl PackageLoadCapacity {
     pub(crate) const fn ordinary() -> Self {
         Self {
             packages: super::package_closure::MAX_PACKAGES,
-            census: false,
+            purpose: Purpose::Main,
         }
     }
 
@@ -28,7 +35,7 @@ impl PackageLoadCapacity {
             })?;
         Ok(Self {
             packages,
-            census: true,
+            purpose: Purpose::Census,
         })
     }
 
@@ -36,7 +43,20 @@ impl PackageLoadCapacity {
         self.packages
     }
     pub(crate) const fn is_census(self) -> bool {
-        self.census
+        matches!(self.purpose, Purpose::Census)
+    }
+    pub(crate) fn retained(limits: PlatformPackageRetentionLimits) -> ProjectResult<Self> {
+        limits.validate()?;
+        Ok(Self {
+            packages: limits.max_packages(),
+            purpose: Purpose::Retained(limits),
+        })
+    }
+    pub(crate) const fn retention_limits(self) -> Option<PlatformPackageRetentionLimits> {
+        match self.purpose {
+            Purpose::Retained(limits) => Some(limits),
+            _ => None,
+        }
     }
 }
 
@@ -48,8 +68,23 @@ pub(crate) struct CensusRetention {
     elements: usize,
     attributes: usize,
     segments: usize,
+    retained_plan_bytes: u64,
 }
 impl CensusRetention {
+    pub(crate) fn charge_retained(
+        &mut self,
+        plan: &ProjectLoadPlan,
+        limits: PlatformPackageRetentionLimits,
+        stop: &AtomicBool,
+    ) -> ProjectResult<()> {
+        let encoded = self.charge(plan, stop)?;
+        self.retained_plan_bytes = self
+            .retained_plan_bytes
+            .checked_add(encoded)
+            .filter(|bytes| *bytes <= limits.max_total_plan_encoding_bytes())
+            .ok_or_else(|| budget_at("native package retained-plan encoding limit exceeded"))?;
+        Ok(())
+    }
     pub(crate) fn charge(
         &mut self,
         plan: &ProjectLoadPlan,

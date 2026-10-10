@@ -2,6 +2,127 @@ use super::*;
 
 const INLINE_XML: &str = "<Ui xmlns=\"http://www.blizzard.com/wow/ui/\"><Frame name=\"InlineFrame\"><Scripts><OnLoad>local inlineLoaded = true</OnLoad></Scripts></Frame></Ui>";
 
+#[test]
+fn retained_package_profile_binds_native_graph_and_replay_limits() -> TestResult {
+    let (root, mut config) = mixed_fixture()?;
+    let stop = AtomicBool::new(false);
+    let path = root.0.join("project.json");
+    let ordinary = LocalProjectInput::from_config_path(&path, &stop)?;
+    let limits = wow_project::platform_source::PlatformPackageRetentionLimits::new(3, 1024 * 1024)?;
+    config["retained_package_limits"] = serde_json::to_value(limits)?;
+    write_json(&root, "project.json", &config)?;
+    let input = LocalProjectInput::from_config_path(&path, &stop)?;
+    let native = input
+        .project_bundle()
+        .configuration()
+        .platform_packages()
+        .ok_or("native owner")?;
+    assert_eq!(native.retention_limits(), Some(limits));
+    assert_eq!(
+        input.project_bundle().inventory(),
+        ordinary.project_bundle().inventory()
+    );
+    assert_eq!(
+        native.load_plan(),
+        ordinary
+            .project_bundle()
+            .configuration()
+            .package_load_plan()
+            .ok_or("ordinary load")?
+    );
+    assert_ne!(
+        native.binding().binding_digest(),
+        ordinary
+            .project_bundle()
+            .configuration()
+            .platform_packages()
+            .ok_or("ordinary owner")?
+            .binding()
+            .binding_digest()
+    );
+    let request = crate::graph::GraphBuildRequest::new(
+        "fixture-platform-transport".into(),
+        "current".into(),
+    )?
+    .with_input_profile(&input);
+    std::fs::remove_file(root.0.join("Inline/frames.xml"))?;
+    let (publication, _) = crate::graph::live_publication(input, &request, &stop)?;
+    let (records, bindings) = publication.into_parts();
+    let replay: wow_project::replay::ProjectReplay = records
+        .iter()
+        .find(|record| record.key() == "live.project.replay")
+        .ok_or("replay record")?
+        .decode()?;
+    let wire = serde_json::to_value(&replay)?;
+    assert_eq!(wire["schema"], "wow-project/native-project-replay/11");
+    assert_eq!(
+        wire["platform"]["package_request"]["retention_limits"],
+        serde_json::to_value(limits)?
+    );
+    let reopened = replay.hydrate(&stop)?;
+    assert_eq!(
+        Some(reopened.snapshot_id()),
+        bindings.get("project_snapshot_id").map(String::as_str)
+    );
+    assert_eq!(
+        Some(reopened.analyzer_snapshot_id()),
+        bindings.get("analyzer_snapshot_id").map(String::as_str)
+    );
+    assert_eq!(
+        reopened
+            .configuration()
+            .platform_packages()
+            .ok_or("replayed owner")?
+            .retention_limits(),
+        Some(limits)
+    );
+    assert_eq!(
+        reopened
+            .snapshot()
+            .analyzer_binding()
+            .xml_lua_analysis()
+            .ok_or("replayed XML")?
+            .units()
+            .len(),
+        2
+    );
+    let mut changed_limits = wire.clone();
+    changed_limits["platform"]["package_request"]["retention_limits"]["max_packages"] = json!(4);
+    let changed = wow_project::replay::ProjectReplay::from_json(
+        &serde_json::to_vec(&changed_limits)?,
+        &stop,
+    )?;
+    assert!(changed.hydrate(&stop).is_err());
+    let mut downgraded = wire.clone();
+    downgraded["schema"] = json!("wow-project/native-project-replay/10");
+    assert!(
+        wow_project::replay::ProjectReplay::from_json(&serde_json::to_vec(&downgraded)?, &stop)
+            .is_err()
+    );
+    let mut missing_limits = wire;
+    missing_limits["platform"]["package_request"]
+        .as_object_mut()
+        .ok_or("package request")?
+        .remove("retention_limits");
+    assert!(
+        wow_project::replay::ProjectReplay::from_json(&serde_json::to_vec(&missing_limits)?, &stop)
+            .is_err()
+    );
+    assert!(replay.hydrate(&AtomicBool::new(true)).is_err());
+    std::fs::write(root.0.join("Inline/frames.xml"), INLINE_XML)?;
+    for value in [
+        Value::Null,
+        json!({"profile":"wow-project/platform-package-retention/1",
+        "max_packages":3,"max_total_plan_encoding_bytes":1}),
+    ] {
+        let mut bad = config.clone();
+        bad["retained_package_limits"] = value;
+        write_json(&root, "project.json", &bad)?;
+        assert!(LocalProjectInput::from_config_path(&path, &stop).is_err());
+    }
+    Ok(())
+}
+
 fn mixed_fixture() -> TestResult<(FixtureRoot, Value)> {
     let (root, mut config) = fixture()?;
     let mut manifest: Value =

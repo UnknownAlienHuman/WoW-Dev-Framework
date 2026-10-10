@@ -8,8 +8,8 @@ use std::{
 use serde::{Deserialize, Serialize};
 
 use super::{
-    AdmittedPlatformSource, PlatformEntryDisposition, PlatformFileKind, invalid,
-    package_binding::PlatformPackageBinding, path, under,
+    AdmittedPlatformSource, PlatformEntryDisposition, PlatformFileKind,
+    PlatformPackageRetentionLimits, invalid, package_binding::PlatformPackageBinding, path, under,
 };
 use crate::{
     ProjectError, ProjectErrorCode, ProjectInputFile, ProjectPhase, ProjectResult,
@@ -18,7 +18,9 @@ use crate::{
         ProjectPackageInput, ProjectPackageLoadPlan, ProjectPackageMainInput,
         ProjectPackageMainPlan, ProjectPackageVariantInput, TocLoadContext,
         package_capacity::PackageLoadCapacity,
-        package_closure::validate_declarations_with_capacity, read_admitted_packages,
+        package_closure::{
+            read_admitted_packages_with_capacity, validate_declarations_with_capacity,
+        },
     },
 };
 
@@ -29,6 +31,8 @@ pub(crate) struct PlatformPackageRequest {
     packages: Vec<ProjectPackageInput>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     context: Option<TocLoadContext>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    retention_limits: Option<PlatformPackageRetentionLimits>,
 }
 
 impl PlatformPackageRequest {
@@ -38,7 +42,16 @@ impl PlatformPackageRequest {
         source: &Arc<AdmittedPlatformSource>,
         stop: &AtomicBool,
     ) -> ProjectResult<PlatformPackageSpecialization> {
-        source.specialize_packages(&self.packages, self.context.as_ref(), stop)
+        source.specialize_packages_with_limits(
+            &self.packages,
+            self.context.as_ref(),
+            self.retention_limits,
+            stop,
+        )
+    }
+
+    pub(crate) const fn has_retention_limits(&self) -> bool {
+        self.retention_limits.is_some()
     }
 }
 
@@ -72,6 +85,10 @@ impl PlatformPackageSpecialization {
         self.main.main_plan()
     }
     #[must_use]
+    pub const fn retention_limits(&self) -> Option<PlatformPackageRetentionLimits> {
+        self.request.retention_limits
+    }
+    #[must_use]
     pub(crate) const fn request(&self) -> &PlatformPackageRequest {
         &self.request
     }
@@ -92,20 +109,50 @@ impl AdmittedPlatformSource {
         context: Option<&TocLoadContext>,
         stop: &AtomicBool,
     ) -> ProjectResult<PlatformPackageSpecialization> {
-        let pinned = self.pin_packages(packages, context, PackageLoadCapacity::ordinary(), stop)?;
-        let loaded = read_admitted_packages(
+        self.specialize_packages_with_limits(packages, context, None, stop)
+    }
+
+    /// Admit one native package universe under explicitly selected finite
+    /// retention. Every source, parser, Main and downstream bound still applies.
+    pub fn specialize_packages_with_retention(
+        self: &Arc<Self>,
+        packages: &[ProjectPackageInput],
+        context: Option<&TocLoadContext>,
+        limits: PlatformPackageRetentionLimits,
+        stop: &AtomicBool,
+    ) -> ProjectResult<PlatformPackageSpecialization> {
+        self.specialize_packages_with_limits(packages, context, Some(limits), stop)
+    }
+
+    fn specialize_packages_with_limits(
+        self: &Arc<Self>,
+        packages: &[ProjectPackageInput],
+        context: Option<&TocLoadContext>,
+        limits: Option<PlatformPackageRetentionLimits>,
+        stop: &AtomicBool,
+    ) -> ProjectResult<PlatformPackageSpecialization> {
+        disk::checkpoint(stop)?;
+        let capacity = match limits {
+            Some(limits) => PackageLoadCapacity::retained(limits)?,
+            None => PackageLoadCapacity::ordinary(),
+        };
+        let pinned = self.pin_packages(packages, context, capacity, stop)?;
+        let loaded = read_admitted_packages_with_capacity(
             self,
             &pinned,
             &self.profile().target().reference_profile,
             context,
             stop,
+            capacity,
         )?;
         let main = loaded.into_namespaced_main()?;
-        let binding = PlatformPackageBinding::new(self, main.load_plan(), main.main_plan())?;
+        let binding =
+            PlatformPackageBinding::new(self, main.load_plan(), main.main_plan(), limits)?;
         binding.validate(self, main.load_plan(), main.main_plan())?;
         let request = PlatformPackageRequest {
             packages: packages.to_vec(),
             context: context.cloned(),
+            retention_limits: limits,
         };
         disk::checkpoint(stop)?;
         Ok(PlatformPackageSpecialization {
