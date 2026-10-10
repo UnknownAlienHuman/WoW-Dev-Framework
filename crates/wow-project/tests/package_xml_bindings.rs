@@ -244,6 +244,49 @@ fn retained_native_bindings_use_the_fact_budget_and_replay_exactly() -> TestResu
             .package_xml_bindings(),
         Some(bindings)
     );
+
+    // Repeated package-local rows still share one distinct native query union.
+    // The handwritten absent names exercise capacity, not WoW negative authority.
+    let root = FixtureRoot::new()?;
+    let mut xml = String::from("<Ui xmlns=\"http://www.blizzard.com/wow/ui/\">");
+    for index in 0..4096 {
+        xml.push_str(&format!("<Frame mixin=\"FixtureQuery_{index:04}\"/>"));
+    }
+    xml.push_str("<Frame mixin=\"KnownMixin\"/></Ui>\n");
+    for package in ["Alpha", "Beta"] {
+        std::fs::write(root.0.join("UI").join(package).join("frames.xml"), &xml)?;
+    }
+    let native = specialize_native(&root.packages(&stop)?)?;
+    let mut publisher = ProjectPublisher::with_function_call_facts();
+    publisher.publish_initial_cancellable(input(&native, 32_768)?, &stop)?;
+    assert_eq!(row_count(&publisher)?, 8194);
+    let view = publisher.open_current()?;
+    let bindings = view
+        .snapshot()
+        .analyzer_binding()
+        .package_xml_bindings()
+        .ok_or("distinct native query bindings missing")?;
+    let lookup = bindings
+        .symbol_lookup()
+        .ok_or("native query lookup missing")?;
+    assert_eq!(lookup.lookups().len(), 4097);
+    assert_eq!(
+        lookup.lookups()["KnownMixin"].state,
+        SymbolLookupState::UniqueAnalyzerDeclaration
+    );
+    let replay = ProjectReplay::capture(&publisher, &stop)?;
+    let restored =
+        ProjectReplay::from_json(&serde_json::to_vec(&replay)?, &stop)?.hydrate(&stop)?;
+    assert_eq!(restored.snapshot_id(), view.snapshot_id());
+    assert_eq!(restored.project_generation(), view.project_generation());
+    assert_eq!(restored.analyzer_snapshot_id(), view.analyzer_snapshot_id());
+    assert_eq!(
+        restored
+            .snapshot()
+            .analyzer_binding()
+            .package_xml_bindings(),
+        Some(bindings)
+    );
     Ok(())
 }
 

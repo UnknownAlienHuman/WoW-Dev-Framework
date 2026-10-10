@@ -7,9 +7,9 @@ the work queue. Follow [the execution model](EXECUTION_MODEL.md).
 
 ## Verified routing base
 
-`main` checkpoint `d0c13b9b1dad997eaaea68156f2f722555bd60fe`, tree
-`ea65547096cd4206fcefe871ca1b069125054855`, was published and read back with all
-changed blobs. [Quick 38092855375](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/38092855375)
+`main` checkpoint `fb35fc4ef3f928996a869b4d11290b6092e72a71`, tree
+`51920ba80bff0571f057869d761bffacca81747e`, was published and read back with all
+changed blobs. [Quick 38094000907](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/38094000907)
 passed on that exact head. This is the verified base of this routing update;
 subsequent publication and gate evidence belong in the canonical Issue.
 
@@ -38,10 +38,13 @@ supplies the existing analyzer input without fixture report fabrication. Real
 273-package operations identified separate 4096 binding-row and receiver-owner
 refusals. Explicit native retention now uses the existing configured fact ceiling
 as an upper bound on each of those distinct populations, preserving full combined
-admission, ordinary limits and exact replay. The latest operation next refuses
-the distinct package query union at 4097 against 4096. Native Emmy query capacity
-must be inspected before selecting a larger finite union; graph construction was
-not reached. Existing guards report their own counts and limits. Actual whole
+admission, ordinary limits and exact replay. Selected native XML query union and
+both original Emmy query input lanes now use that same finite ceiling in one
+session. A focused fixture retains4097 distinct names and exact replay; separate
+input-text, query-reference, native target/output and work guards remain. The
+latest real operation next refuses inherited script sources before the next
+record at4096. Native Emmy and graph construction were not reached. Existing
+guards report their own counts and limits. Actual whole
 Main/analysis, full graph/map population and persistence remain unqualified.
 Do not infer the actual
 map-owner population from lexical script counts or compare XML-index JSON bytes

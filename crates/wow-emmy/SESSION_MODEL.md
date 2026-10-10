@@ -403,3 +403,18 @@ snapshot: one-file-updated
 ```
 
 Exact expected facts/findings are in `examples/` and `TEST_MATRIX.md`.
+
+## 18. Bounded native query inputs
+
+`MemberCallSessionQueryProfile::new` keeps the existing 4096-name ceiling for
+each symbol/callable input lane. `with_query_limit` explicitly selects a positive
+finite count for both lanes, including repeated requests. Physical, virtual and
+retained-update routes carry that selection into the same registered analysis.
+Each lane checks cancellation, cumulative input text up to 16 MiB with checked
+arithmetic, and each individual name up to 4096 bytes before extraction.
+
+This changes admission only. Successful reports keep their original profiles,
+lookup IDs, Main/Library identities, ambiguity and coverage semantics. Candidate,
+target, retained-text, callable named-target and other report/work guards remain
+independent. A larger input count does not certify that its output fits those
+guards, and no reports or independent analyzer sessions are combined.

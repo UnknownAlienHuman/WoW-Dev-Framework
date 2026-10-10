@@ -384,8 +384,7 @@ pub fn analyze_member_call_session(
         libraries,
         None,
         None,
-        queries,
-        &[],
+        MemberCallSessionQueryProfile::new(queries, &[]),
         include_function_calls,
         stop,
     )
@@ -396,6 +395,7 @@ pub fn analyze_member_call_session(
 pub struct MemberCallSessionQueryProfile<'a> {
     symbol_queries: &'a [String],
     callable_queries: &'a [String],
+    query_limit: usize,
 }
 
 impl<'a> MemberCallSessionQueryProfile<'a> {
@@ -404,6 +404,28 @@ impl<'a> MemberCallSessionQueryProfile<'a> {
         Self {
             symbol_queries,
             callable_queries,
+            query_limit: crate::bindings::MAX_QUERIES,
+        }
+    }
+
+    /// Select a finite input count for each lane, counting repeated requests.
+    /// The default is 4096; path, text, target and report guards still apply.
+    pub fn with_query_limit(mut self, limit: usize) -> EmmyMemberCallResult<Self> {
+        if limit == 0 {
+            return Err(EmmyMemberCallError::new(
+                EmmyMemberCallErrorCode::FactBudgetExceeded,
+                "query count limit must be positive",
+                None,
+            ));
+        }
+        self.query_limit = limit;
+        Ok(self)
+    }
+
+    fn input(self, names: &'a [String]) -> crate::bindings::QueryInput<'a> {
+        crate::bindings::QueryInput {
+            names,
+            limit: self.query_limit,
         }
     }
 }
@@ -423,8 +445,7 @@ pub fn analyze_member_call_session_with_callable_queries(
         libraries,
         None,
         None,
-        query_profile.symbol_queries,
-        query_profile.callable_queries,
+        query_profile,
         include_function_calls,
         stop,
     )
@@ -447,8 +468,7 @@ pub fn analyze_member_call_session_with_virtual(
         libraries,
         Some(virtual_units),
         Some(project_generation),
-        queries,
-        &[],
+        MemberCallSessionQueryProfile::new(queries, &[]),
         include_function_calls,
         stop,
     )
@@ -470,8 +490,7 @@ pub fn analyze_member_call_session_with_virtual_and_callable_queries(
         libraries,
         Some(virtual_units),
         Some(project_generation),
-        query_profile.symbol_queries,
-        query_profile.callable_queries,
+        query_profile,
         include_function_calls,
         stop,
     )
@@ -483,15 +502,14 @@ fn analyze_member_call_session_impl(
     libraries: &[&LuaWorkspaceSnapshot],
     virtual_units: Option<&LuaWorkspaceSnapshot>,
     project_generation: Option<ProjectGenerationId>,
-    queries: &[String],
-    callable_queries: &[String],
+    query_profile: MemberCallSessionQueryProfile<'_>,
     include_function_calls: bool,
     stop: &std::sync::atomic::AtomicBool,
 ) -> EmmyMemberCallResult<MemberCallSession> {
     crate::bindings::checkpoint(stop)?;
-    crate::bindings::validate_queries(queries)?;
-    crate::bindings::validate_queries(callable_queries)?;
-    if !include_function_calls && !callable_queries.is_empty() {
+    crate::bindings::validate_queries(query_profile.input(query_profile.symbol_queries), stop)?;
+    crate::bindings::validate_queries(query_profile.input(query_profile.callable_queries), stop)?;
+    if !include_function_calls && !query_profile.callable_queries.is_empty() {
         return Err(EmmyMemberCallError::new(
             EmmyMemberCallErrorCode::InvalidMainWorkspace,
             "callable-only queries require the function-call sidecar",
@@ -510,7 +528,7 @@ fn analyze_member_call_session_impl(
         main,
         virtual_units,
         project_generation,
-        MemberCallSessionQueryProfile::new(queries, callable_queries),
+        query_profile,
         include_function_calls,
         stop,
     )
@@ -705,8 +723,8 @@ impl RegisteredMemberAnalysis {
         stop: &std::sync::atomic::AtomicBool,
     ) -> EmmyMemberCallResult<MemberCallSession> {
         crate::bindings::checkpoint(stop)?;
-        crate::bindings::validate_queries(profile.symbol_queries)?;
-        crate::bindings::validate_queries(profile.callable_queries)?;
+        crate::bindings::validate_queries(profile.input(profile.symbol_queries), stop)?;
+        crate::bindings::validate_queries(profile.input(profile.callable_queries), stop)?;
         if !include_function_calls && !profile.callable_queries.is_empty() {
             return Err(EmmyMemberCallError::new(
                 EmmyMemberCallErrorCode::InvalidMainWorkspace,
@@ -792,7 +810,7 @@ impl RegisteredMemberAnalysis {
                 main,
                 main_root,
                 &library_roots,
-                queries,
+                profile.input(queries),
                 include_function_calls.then_some(&mut callable_signatures),
                 stop,
             )?)
@@ -803,7 +821,7 @@ impl RegisteredMemberAnalysis {
                 main,
                 main_root,
                 &library_roots,
-                callable_queries,
+                profile.input(callable_queries),
                 Some(&mut callable_signatures),
                 stop,
             )?)

@@ -157,6 +157,7 @@ impl PreparedBindings {
 struct PreparationBudget {
     bindings: usize,
     binding_limit: Option<usize>,
+    query_limit: Option<usize>,
     query_refs: usize,
     query_visits: usize,
     text_bytes: usize,
@@ -453,11 +454,12 @@ fn prepare_with_budget(
             // existing error lowering includes the candidate generation.
             if budget.limit_query_union {
                 budget.queries.extend(queries.iter().cloned());
-                if budget.queries.len() > 4096 {
+                let query_limit = budget.query_limit.unwrap_or(4096);
+                if budget.queries.len() > query_limit {
                     return Err(budget_exhausted(
                         "package query union",
                         budget.queries.len(),
-                        4096,
+                        query_limit,
                     ));
                 }
             }

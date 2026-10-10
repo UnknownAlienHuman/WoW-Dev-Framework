@@ -18,7 +18,7 @@ use crate::references::{
 use crate::{LuaWorkspaceFile, LuaWorkspaceSnapshot};
 
 pub const SYMBOL_LOOKUP_PROFILE: &str = "wow-emmy/symbol-lookup/1";
-const MAX_QUERIES: usize = 4096;
+pub(crate) const MAX_QUERIES: usize = 4096;
 const MAX_CANDIDATES: usize = 256;
 const MAX_TOTAL_TARGETS: usize = 65_536;
 const MAX_RETAINED_TEXT_BYTES: usize = 16 * 1024 * 1024;
@@ -92,9 +92,30 @@ pub fn supported_path(path: &str) -> bool {
     })
 }
 
-pub(crate) fn validate_queries(queries: &[String]) -> EmmyMemberCallResult<()> {
-    if queries.len() > MAX_QUERIES || queries.iter().any(|q| q.len() > 4096) {
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct QueryInput<'a> {
+    pub names: &'a [String],
+    pub limit: usize,
+}
+
+pub(crate) fn validate_queries(
+    input: QueryInput<'_>,
+    stop: &AtomicBool,
+) -> EmmyMemberCallResult<()> {
+    checkpoint(stop)?;
+    if input.limit == 0 || input.names.len() > input.limit {
         return Err(error(EmmyMemberCallErrorCode::FactBudgetExceeded));
+    }
+    let mut bytes = 0usize;
+    for query in input.names {
+        checkpoint(stop)?;
+        bytes = bytes
+            .checked_add(query.len())
+            .filter(|bytes| *bytes <= MAX_RETAINED_TEXT_BYTES)
+            .ok_or_else(|| error(EmmyMemberCallErrorCode::FactBudgetExceeded))?;
+        if query.len() > 4096 {
+            return Err(error(EmmyMemberCallErrorCode::FactBudgetExceeded));
+        }
     }
     Ok(())
 }
@@ -129,12 +150,13 @@ pub(crate) fn resolve(
     main: &LuaWorkspaceSnapshot,
     main_root: &Path,
     libraries: &[(&LuaWorkspaceSnapshot, PathBuf)],
-    queries: &[String],
+    input: QueryInput<'_>,
     mut callable_signatures: Option<&mut BTreeMap<String, LuaSignatureId>>,
     stop: &AtomicBool,
 ) -> EmmyMemberCallResult<SymbolLookupReport> {
     checkpoint(stop)?;
-    validate_queries(queries)?;
+    validate_queries(input, stop)?;
+    let queries = input.names;
     let mut sources = HashMap::new();
     let mut healthy = true;
     for (workspace, root, role) in std::iter::once((main, main_root, "main"))
@@ -173,7 +195,12 @@ pub(crate) fn resolve(
     let mut lookups = BTreeMap::new();
     let mut target_count = 0usize;
     let mut text_bytes = 0usize;
-    for query in queries.iter().collect::<BTreeSet<_>>() {
+    let mut distinct_queries = BTreeSet::new();
+    for query in queries {
+        checkpoint(stop)?;
+        distinct_queries.insert(query);
+    }
+    for query in distinct_queries {
         checkpoint(stop)?;
         let (lookup, signature) = if supported_path(query) {
             resolve_one(analysis, model.get_db(), &sources, query, stop)?

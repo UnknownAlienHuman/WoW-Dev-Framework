@@ -375,6 +375,7 @@ pub(crate) fn prepare_packages(
     let mut budget = PreparationBudget {
         limit_query_union: true,
         binding_limit: fact_limit,
+        query_limit: fact_limit,
         receivers: super::receivers::Budget::with_owner_limit(fact_limit),
         ..PreparationBudget::default()
     };

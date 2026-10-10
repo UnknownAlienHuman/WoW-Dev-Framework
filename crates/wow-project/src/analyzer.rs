@@ -331,6 +331,15 @@ pub(crate) fn build_analyzer_binding(
     checkpoint(stop)?;
 
     let library_refs = ordered_libraries.iter().collect::<Vec<_>>();
+    // Only explicitly retained native package universes use the configured
+    // fact ceiling for separate input counters. Combined admission remains.
+    let native_fact_limit = configuration
+        .platform_packages()
+        .and_then(|packages| packages.retention_limits())
+        .map(|_| {
+            usize::try_from(configuration.budget_policy().max_analyzer_facts())
+                .unwrap_or(usize::MAX)
+        });
     let pending_bindings = match configuration.package_xml_binding_profile() {
         Some(crate::PackageXmlBindingProfile::SameSessionV1) => {
             let load = configuration
@@ -339,18 +348,11 @@ pub(crate) fn build_analyzer_binding(
             let main = configuration
                 .package_main_plan()
                 .ok_or_else(binding_inputs_invalid)?;
-            // Only explicitly retained native package universes use the
-            // configured finite fact budget as an upper bound on separate
-            // binding/receiver-owner counters. Full combined admission remains.
-            let fact_limit = configuration
-                .platform_packages()
-                .and_then(|packages| packages.retention_limits())
-                .map(|_| {
-                    usize::try_from(configuration.budget_policy().max_analyzer_facts())
-                        .unwrap_or(usize::MAX)
-                });
             PendingXmlBindings::Packages(crate::xml_bindings::prepare_packages(
-                load, main, fact_limit, stop,
+                load,
+                main,
+                native_fact_limit,
+                stop,
             )?)
         }
         None => match configuration.load_plan() {
@@ -374,6 +376,12 @@ pub(crate) fn build_analyzer_binding(
         Vec::new()
     };
     let query_profile = wow_emmy::MemberCallSessionQueryProfile::new(queries, &callable_queries);
+    let query_profile = match native_fact_limit {
+        Some(limit) => query_profile
+            .with_query_limit(limit)
+            .map_err(|_| binding_inputs_invalid())?,
+        None => query_profile,
+    };
     let (syntax_report, session, local_flow_report) =
         if configuration.load_plan().is_none() && configuration.package_load_plan().is_none() {
             if !cache

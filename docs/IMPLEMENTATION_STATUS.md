@@ -101,9 +101,13 @@ Explicit native package retention uses the existing configured fact budget as
 the separate row/owner preparation ceilings, retaining combined fact/output
 admission, all other independent guards, ordinary limits and replay identities.
 The focused ordinary/native/limit+1/combined-refusal/cancellation/replay lifecycle
-and affected Tier S pass. The latest native operation next refuses the distinct
-package query union at 4097 against 4096; native Emmy query capacity and full
-analysis/graph/maps/persistence remain unqualified under #113.
+and affected Tier S pass. Selected native query preparation and both original
+Emmy input lanes now use the same finite configured fact ceiling, preserving one
+session, ordinary4096, input text/name bounds and all independent output guards.
+The project lifecycle retains8194 rows/4097 distinct names and exact disk-absent
+replay. The later native273 operation next refuses inherited script sources at
+4096 before the next record; native Emmy and graph execution are still not reached.
+Full analysis/graph/maps/persistence remain unqualified under #113.
 Explicit retained XSD component admission is now executable through the existing
 XML owner, with root-only global symbols and final unsupported context propagation.
 See [schema components](PLATFORM_XML_SCHEMA_COMPONENTS.md) for its bounded scope.
