@@ -15,6 +15,9 @@ use super::{
     LocalProjectInput,
     disk_input::{DiskAnalyzer, DiskInventory, acquisition_error},
     input::{LocalProjectLoad, ProjectMetadata, invalid},
+    native_reference::{NativeProfile, project_native_reference},
+    native_resources::present,
+    native_source::NativeSourceInput,
 };
 use crate::ServiceResult;
 
@@ -33,7 +36,10 @@ struct PlatformInput {
     logical_root: String,
     source_profile: BlizzardUiSourceProfileRequest,
     source: ManifestedPlatformInput,
-    reference_view: ProjectDiskFile,
+    #[serde(default, deserialize_with = "present")]
+    reference_view: Option<ProjectDiskFile>,
+    #[serde(default, deserialize_with = "present")]
+    native_reference: Option<NativeReferenceInput>,
     analyzer: DiskAnalyzer,
     packages: Vec<ProjectPackageInput>,
     #[serde(default)]
@@ -41,6 +47,74 @@ struct PlatformInput {
     graph_profile: PlatformGraphProfile,
     #[serde(default)]
     library: Option<DiskInventory>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct NativeReferenceInput {
+    profile: NativeProfile,
+    native_source: NativeSourceInput,
+}
+
+enum ReferenceInput {
+    Artifact(ProjectDiskFile),
+    Native(Box<NativeReferenceInput>),
+}
+impl ReferenceInput {
+    fn read(
+        self,
+        directory: &ProjectInputDirectory,
+        source: &ManifestedPlatformInput,
+        profile: &BlizzardUiSourceProfile,
+        stop: &AtomicBool,
+    ) -> ServiceResult<ReferenceView> {
+        match self {
+            Self::Artifact(file) => serde_json::from_slice(
+                &directory
+                    .read_json_artifact(&file, stop)
+                    .map_err(acquisition_error)?,
+            )
+            .map_err(|_| invalid("reference artifact was rejected")),
+            Self::Native(input) => {
+                input.profile.validate_selector()?;
+                input.native_source.validate_platform_manifest(source)?;
+                let version = format!(
+                    "{}.{}",
+                    input.profile.client_version, input.profile.client_build
+                );
+                if input.profile.revision != source.source_revision
+                    || version != source.source_version
+                {
+                    return Err(invalid(
+                        "native Reference and platform source revision/version differ",
+                    ));
+                }
+                let (captured, receipt) = input.native_source.read(
+                    directory,
+                    &input.profile.revision,
+                    &version,
+                    input.profile.interface,
+                    stop,
+                )?;
+                let built = project_native_reference(
+                    &input.profile,
+                    &captured,
+                    receipt.as_ref(),
+                    None,
+                    stop,
+                )?;
+                if built.profile != profile.target().reference_profile
+                    || built.reference.view.generation_id()
+                        != profile.target().reference_generation.to_string()
+                {
+                    return Err(invalid(
+                        "native Reference differs from the exact platform target",
+                    ));
+                }
+                Ok(built.reference.view)
+            }
+        }
+    }
 }
 
 impl LocalProjectInput {
@@ -55,6 +129,15 @@ impl LocalProjectInput {
         if input.schema != LOCAL_PLATFORM_SCHEMA {
             return Err(invalid("unsupported platform source input schema"));
         }
+        let reference_input = match (input.reference_view, input.native_reference) {
+            (Some(file), None) => ReferenceInput::Artifact(file),
+            (None, Some(native)) => ReferenceInput::Native(Box::new(native)),
+            _ => {
+                return Err(invalid(
+                    "platform input requires exactly one Reference choice",
+                ));
+            }
+        };
         let profile =
             BlizzardUiSourceProfile::new(input.source_profile).map_err(acquisition_error)?;
         let source = Arc::new(
@@ -69,12 +152,7 @@ impl LocalProjectInput {
                 .specialize_packages(&input.packages, input.load_context.as_ref(), stop)
                 .map_err(acquisition_error)?,
         );
-        let reference: ReferenceView = serde_json::from_slice(
-            &directory
-                .read_json_artifact(&input.reference_view, stop)
-                .map_err(acquisition_error)?,
-        )
-        .map_err(|_| invalid("reference artifact was rejected"))?;
+        let reference = reference_input.read(directory, &input.source, &profile, stop)?;
         let analyzer = input.analyzer.read(directory, stop)?;
         let libraries = match input.library {
             Some(library) => directory

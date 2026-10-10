@@ -1,7 +1,11 @@
 use super::*;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
-use std::{error::Error, path::PathBuf};
+use std::{
+    error::Error,
+    path::PathBuf,
+    time::{SystemTime, UNIX_EPOCH},
+};
 use wow_core::{
     CanonicalResult, ContentDigest, ProfileIdentityBuilder, ProfileKind, ReferenceGenerationId,
     SchemaVersionEntry, SourceContent, SourceKind, SourceLogicalSnapshot,
@@ -38,7 +42,11 @@ fn write_json(
 }
 
 fn fixture() -> TestResult<(FixtureRoot, Value)> {
-    let path = std::env::temp_dir().join(format!("wow-platform-transport-{}", std::process::id()));
+    let path = std::env::temp_dir().join(format!(
+        "wow-platform-transport-{}-{}",
+        std::process::id(),
+        SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
+    ));
     std::fs::create_dir(&path)?;
     let root = FixtureRoot(path);
     std::fs::create_dir(root.0.join("UI"))?;
@@ -169,6 +177,239 @@ fn fixture() -> TestResult<(FixtureRoot, Value)> {
         "graph_profile":PlatformGraphProfile::DirectCapabilitiesV1(capabilities)});
     write_json(&root, "project.json", &config)?;
     Ok((root, config))
+}
+
+fn native_fixture() -> TestResult<(FixtureRoot, Value)> {
+    let (root, mut config) = fixture()?;
+    let mut manifest: Value =
+        serde_json::from_slice(&std::fs::read(root.0.join("manifest.json"))?)?;
+    let api_root = "Blizzard_APIDocumentationGenerated";
+    std::fs::create_dir(root.0.join(api_root))?;
+    std::fs::write(root.0.join("version.txt"), "1.0.0.1\n")?;
+    let files = manifest["files"].as_array_mut().ok_or("manifest files")?;
+    files.retain(|file| file["path"] != "version.txt");
+    for (path, kind, text) in [
+        (
+            "Blizzard_APIDocumentationGenerated/API.lua",
+            "generated_api",
+            "APIDocumentation:AddDocumentationTable({Name=\"Transport\",Type=\"System\",Namespace=\"C_Transport\",Environment=\"All\",Functions={{Name=\"Read\",Type=\"Function\"}}})",
+        ),
+        (
+            "Blizzard_APIDocumentationGenerated/Bad.lua",
+            "generated_api",
+            "return unknown()",
+        ),
+        (
+            "Blizzard_APIDocumentationGenerated/Generated.toc",
+            "toc",
+            "## Interface: 1\nAPI.lua\nBad.lua\n",
+        ),
+        ("version.txt", "version", "1.0.0.1\n"),
+    ] {
+        std::fs::write(root.0.join(path), text)?;
+        files.push(json!({"path":path,"kind":kind,"bytes":text.len(),
+            "git_blob_algorithm":"sha1","git_blob_id":"2".repeat(40),
+            "content_sha256":format!("{:x}",Sha256::digest(text.as_bytes()))}));
+    }
+    files.sort_by(|a, b| a["path"].as_str().cmp(&b["path"].as_str()));
+    let bytes: u64 = files
+        .iter()
+        .map(|file| file["bytes"].as_u64().unwrap_or(0))
+        .sum();
+    let count = files.len();
+    manifest["source"]["version"] = json!("1.0.0.1");
+    manifest["coverage"] = json!({"tracked_files":count,"included_files":count,
+        "excluded_files":0,"included_bytes":bytes,"kind_version":1,"kind_lua":1,
+        "kind_toc":2,"kind_xml":1,"kind_generated_api":2});
+    manifest
+        .as_object_mut()
+        .ok_or("manifest object")?
+        .remove("manifest_sha256");
+    manifest["manifest_sha256"] = json!(format!(
+        "{:x}",
+        Sha256::digest(wow_core::canonical_json_bytes(&manifest)?)
+    ));
+    let manifest_file = write_json(&root, "manifest.json", &manifest)?;
+    let native = json!({"profile":{"profile_id":"profile:wow:platform-transport-native",
+        "flavor":"retail","interface":1,"client_version":"1.0.0","client_build":1,
+        "revision":"1".repeat(40),"environment":"Mainline"},
+        "native_source":{"root":".","manifest":manifest_file,
+            "toc":"Blizzard_APIDocumentationGenerated/Generated.toc"}});
+    let mut reference_config = native.clone();
+    reference_config["schema"] = json!(super::super::SOURCE_REFERENCE_INPUT_SCHEMA);
+    write_json(&root, "source-reference.json", &reference_config)?;
+    let expected = super::super::read_local_source_reference(
+        &root.0.join("source-reference.json"),
+        &AtomicBool::new(false),
+    )?;
+    // This fixture asserts mirror metadata solely to exercise the real Release
+    // owner path. It does not attest Git membership or a current Blizzard source.
+    config["source_profile"]["profile_id"] = json!("profile:wow:platform-transport-source");
+    config["source_profile"]["source_class"] = json!("vendor_ui_source_mirror");
+    config["source_profile"]["target"]["reference_profile"] =
+        serde_json::to_value(expected.profile())?;
+    config["source_profile"]["target"]["reference_generation"] =
+        serde_json::to_value(expected.reference_generation())?;
+    config["source"]["manifest"] = serde_json::to_value(manifest_file)?;
+    config["source"]["source_version"] = json!("1.0.0.1");
+    config["source"]["origin"]["revision"] = json!({"kind":"git","object_format":"sha1",
+        "commit":"1".repeat(40),"tree":"3".repeat(40)});
+    config
+        .as_object_mut()
+        .ok_or("configuration object")?
+        .remove("reference_view");
+    config["native_reference"] = native;
+    write_json(&root, "reference.json", &expected.reference().view)?;
+    write_json(&root, "project.json", &config)?;
+    Ok((root, config))
+}
+
+#[test]
+fn native_reference_composes_exact_platform_input_without_losing_partial_coverage() -> TestResult {
+    use crate::graph::{GraphBuildRequest, GraphReadStatus, execute_graph_build};
+    let (root, config) = native_fixture()?;
+    let stop = AtomicBool::new(false);
+    let path = root.0.join("project.json");
+    let expected =
+        super::super::read_local_source_reference(&root.0.join("source-reference.json"), &stop)?;
+    assert!(expected.is_partial());
+    assert!(!expected.reference().negative_authority);
+    assert!(matches!(
+        expected.reference().view.lookup(
+            wow_reference::native_view::NATIVE_API_PARTITION,
+            "function:C_Transport.Read"
+        ),
+        wow_reference::LookupResult::Found(_)
+    ));
+    let input = LocalProjectInput::from_config_path(&path, &stop)?;
+    assert_eq!(input.reference_view(), &expected.reference().view);
+    assert_eq!(
+        input.project_bundle().configuration().selected_profile(),
+        expected.profile()
+    );
+    assert_eq!(
+        input.project_bundle().libraries()[0].universe(),
+        wow_emmy::LuaWorkspaceUniverse::BlizzardUi
+    );
+    let request = GraphBuildRequest::new("fixture-platform-transport".into(), "current".into())?
+        .with_input_profile(&input);
+    // The positive graph consumes the retained project bytes. Failed generated
+    // documentation remains Partial in the exact Reference view handed to it.
+    let result = execute_graph_build(input, &request, &stop)?;
+    assert_eq!(
+        result.status(),
+        GraphReadStatus::Partial,
+        "{}",
+        serde_json::to_string(&result)?
+    );
+    assert!(result.snapshot_bytes()?.is_some());
+
+    let reference_file = write_json(&root, "reference.json", &expected.reference().view)?;
+    let mut artifact = config.clone();
+    artifact
+        .as_object_mut()
+        .ok_or("configuration object")?
+        .remove("native_reference");
+    artifact["reference_view"] = serde_json::to_value(&reference_file)?;
+    write_json(&root, "project.json", &artifact)?;
+    assert_eq!(
+        LocalProjectInput::from_config_path(&path, &stop)?.reference_view(),
+        &expected.reference().view
+    );
+
+    let alias = write_json(
+        &root,
+        "alias-manifest.json",
+        &serde_json::from_slice::<Value>(&std::fs::read(root.0.join("manifest.json"))?)?,
+    )?;
+    let wrong_generation = serde_json::to_value(ReferenceGenerationId::derive(
+        &"different-native-reference",
+    )?)?;
+    for (pointer, value) in [
+        ("/reference_view", serde_json::to_value(&reference_file)?),
+        ("/reference_view", Value::Null),
+        ("/native_reference", Value::Null),
+        ("/native_reference/native_source/root", json!("UI")),
+        (
+            "/native_reference/native_source/manifest",
+            serde_json::to_value(alias)?,
+        ),
+        ("/native_reference/native_source/files", json!([])),
+        ("/native_reference/profile/revision", json!("4".repeat(40))),
+        ("/native_reference/profile/client_build", json!(2)),
+        ("/native_reference/profile/interface", json!(2)),
+        ("/native_reference/profile/environment", json!("Glue")),
+        (
+            "/source_profile/target/reference_profile/profile_id",
+            json!("profile:wow:different-native-profile"),
+        ),
+        (
+            "/source_profile/target/reference_generation",
+            wrong_generation,
+        ),
+    ] {
+        let mut changed = config.clone();
+        if pointer == "/reference_view" {
+            changed["reference_view"] = value;
+        } else if pointer.ends_with("/files") {
+            changed["native_reference"]["native_source"]["files"] = value;
+        } else {
+            *changed.pointer_mut(pointer).ok_or("mutation pointer")? = value;
+        }
+        write_json(&root, "project.json", &changed)?;
+        assert_eq!(
+            LocalProjectInput::from_config_path(&path, &stop)
+                .err()
+                .ok_or("native mismatch admitted")?
+                .code(),
+            crate::ServiceErrorCode::InvalidConfiguration,
+            "{pointer}"
+        );
+    }
+    for remove_toc in [false, true] {
+        let mut changed = config.clone();
+        let object = if remove_toc {
+            changed["native_reference"]["native_source"]
+                .as_object_mut()
+                .ok_or("native source object")?
+        } else {
+            changed.as_object_mut().ok_or("configuration object")?
+        };
+        object.remove(if remove_toc {
+            "toc"
+        } else {
+            "native_reference"
+        });
+        write_json(&root, "project.json", &changed)?;
+        assert_eq!(
+            LocalProjectInput::from_config_path(&path, &stop)
+                .err()
+                .ok_or("missing native selection admitted")?
+                .code(),
+            crate::ServiceErrorCode::InvalidConfiguration
+        );
+    }
+    write_json(&root, "project.json", &config)?;
+    let cancelled = AtomicBool::new(true);
+    assert_eq!(
+        LocalProjectInput::from_config_path(&path, &cancelled)
+            .err()
+            .ok_or("cancelled native input admitted")?
+            .code(),
+        crate::ServiceErrorCode::Cancelled
+    );
+    std::fs::write(
+        root.0.join("Blizzard_APIDocumentationGenerated/API.lua"),
+        "changed",
+    )?;
+    assert_eq!(
+        LocalProjectInput::from_config_path(&path, &stop)
+            .err()
+            .ok_or("changed API bytes admitted")?
+            .code(),
+        crate::ServiceErrorCode::InvalidConfiguration
+    );
+    Ok(())
 }
 
 #[test]

@@ -271,9 +271,9 @@ impl LocalProjectInput {
             backend.clone(),
         )
         .map_err(|_| invalid("analyzer declaration does not match the compiled backend"))?;
-        let (kind, universe) = match input.profile.profile_kind() {
+        let (kind, library_universe) = match input.profile.profile_kind() {
             ProfileKind::Fixture => (ProjectKind::Fixture, LuaWorkspaceUniverse::Fixture),
-            ProfileKind::Release => (ProjectKind::Repository, LuaWorkspaceUniverse::Project),
+            ProfileKind::Release => (ProjectKind::Repository, LuaWorkspaceUniverse::BlizzardUi),
         };
         let kind = if platform.is_some() {
             ProjectKind::BlizzardUiPlatformSource
@@ -337,7 +337,7 @@ impl LocalProjectInput {
             .map_err(|_| invalid("project configuration was rejected"))?;
         let libraries = LuaWorkspaceSnapshot::build(
             backend,
-            universe,
+            library_universe,
             libraries
                 .into_iter()
                 .map(ProjectInputFile::into_workspace_input)

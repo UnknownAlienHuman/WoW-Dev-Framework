@@ -15,10 +15,32 @@ The JSON object rejects unknown and duplicate fields. Required fields are:
 | `project_id`, `workspace_id`, `source_origin_id`, `logical_root` | Existing validated project identities and logical root |
 | `source_profile` | Existing `BlizzardUiSourceProfileRequest`: exact target Reference profile/generation, admitted roots, selected TOCs, exclusions and finite source limits |
 | `source` | Existing `ManifestedPlatformInput`: confined source root, pinned xtask manifest, exact revision/version, origin/materializer/license assertions and compatibility evidence |
-| `reference_view` | `ProjectDiskFile` naming the native `ReferenceView` JSON artifact |
 | `analyzer` | Existing disk declaration: compatibility report artifact, accepted pin, configuration digest, contract, fixture contract and Library contract |
 | `packages` | Native `ProjectPackageInput` declarations with physical root, selected root and selected/unselected variants |
 | `graph_profile` | Existing `PlatformGraphProfile`, including the canonical capability set below |
+
+Select exactly one Reference input; neither, both and explicit `null` refuse:
+
+- `reference_view`: `ProjectDiskFile` naming a native `ReferenceView` JSON artifact,
+  read through the ordinary 8-MiB artifact port.
+- `native_reference`: the existing native Generated API profile and manifested
+  source request, composed in memory through the native callable owner. Its
+  required `profile` object has the same shape as the source-reference profile;
+  its `native_source` object requires `root`, `manifest` and `toc`.
+
+See [source-reference](SOURCE_REFERENCE.md) for the profile and source shapes.
+Native composition requires the same source root and exact manifest descriptor,
+revision and client version/build as `source`. Pinned-file lists refuse. The
+derived whole Reference profile and final generation must equal `source_profile`'s
+target. Derive these identities with the source-reference operation first; do not
+invent IDs or substitute a partial selection with another generation.
+
+This choice avoids serializing and rereading an intermediate Reference artifact;
+it does not widen any acquisition or semantic bound. Native Generated API
+acquisition currently admits local Git manifests, so checkout-free API snapshots
+remain unsupported by this choice. The callable owner preserves Partial coverage,
+projection losses and conflicts; successful composition grants no runtime or
+full-platform negative authority.
 
 `load_context` is optional and uses the existing validated TOC context. Optional
 `library` has the existing disk inventory shape

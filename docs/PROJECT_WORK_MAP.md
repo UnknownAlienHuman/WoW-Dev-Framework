@@ -7,9 +7,9 @@ the work queue. Follow [the execution model](EXECUTION_MODEL.md).
 
 ## Verified routing base
 
-`main` checkpoint `f783e0094b99e336e8c6b0dcc2ab562b793702a0`, tree
-`1b2d34e0c25876825ee65abeac122d0b7e08a0b2`, was published and read back with all
-changed blobs. [Quick 38084059741](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/38084059741)
+`main` checkpoint `9ce07b51e2ca2f4100c4663c5442d83adce61f87`, tree
+`a0fc1b5a844db345717054b5e63072498b4d691f`, was published and read back with all
+changed blobs. [Quick 38087208405](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/38087208405)
 passed on that exact head. This is the verified base of this routing update;
 subsequent publication and gate evidence belong in the canonical Issue.
 
@@ -68,8 +68,10 @@ historical freeze are reconciled honestly. Code presence is not accepted freeze.
   package loading remains strict.
 - [Manifest-bound platform input](../apps/wow/PLATFORM_INPUT.md) connects exact
   source/package/Main admission and same-session XML bindings to the CLI's
-  configuration-selected native graph. Ordinary retained package64 and existing
-  graph/map budgets remain; this entry point is not full-corpus qualification.
+  configuration-selected native graph. It selects either a bounded Reference
+  artifact or native callable composition from the same exact source manifest.
+  Release Library snapshots use the existing Library universe. Ordinary retained
+  package64 and graph/map budgets remain; this route is not full-corpus qualification.
 - [Source admission](PLATFORM_SOURCE_ADMISSION.md),
   [package specialization](PLATFORM_SOURCE_PACKAGES.md),
   [configuration](PLATFORM_SOURCE_CONFIGURATION.md),

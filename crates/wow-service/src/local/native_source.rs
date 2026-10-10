@@ -4,8 +4,8 @@ use std::sync::atomic::AtomicBool;
 
 use serde::Deserialize;
 use wow_project::disk::{
-    ManifestedLuaRequest, PinnedLuaSource, ProjectDiskFile, ProjectInputDirectory,
-    SourceManifestReceipt,
+    ManifestedLuaRequest, ManifestedPlatformInput, PinnedLuaSource, ProjectDiskFile,
+    ProjectInputDirectory, SourceManifestReceipt,
 };
 use wow_project::load::TocLoadContext;
 
@@ -28,6 +28,24 @@ pub(super) struct NativeSourceInput {
 }
 
 impl NativeSourceInput {
+    /// Require the native callable input to acquire the platform request's
+    /// exact manifested source. Pinned-file lists are not this capability.
+    pub(super) fn validate_platform_manifest(
+        &self,
+        source: &ManifestedPlatformInput,
+    ) -> ServiceResult<()> {
+        if self.root != source.source_root
+            || self.manifest.as_ref() != Some(&source.manifest)
+            || self.files.is_some()
+            || self.toc.is_none()
+        {
+            return Err(invalid(
+                "native Reference must use the exact platform source manifest",
+            ));
+        }
+        Ok(())
+    }
+
     pub(super) fn read(
         &self,
         directory: &ProjectInputDirectory,
