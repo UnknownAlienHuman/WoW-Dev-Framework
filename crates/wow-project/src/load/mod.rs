@@ -317,6 +317,27 @@ impl ProjectInputDirectory {
             stop,
         )
     }
+
+    /// A package member may contribute only metadata or XML. Physical Main is
+    /// required by the complete package universe, not by every member TOC.
+    pub(crate) fn read_package_toc_with_context(
+        &self,
+        root: &str,
+        selected_toc: &ProjectDiskFile,
+        profile: &ProfileIdentity,
+        context: Option<&TocLoadContext>,
+        stop: &AtomicBool,
+    ) -> ProjectResult<ProjectLoadInput> {
+        checkpoint(stop)?;
+        read_toc_source(
+            LoaderSource::Disk(self.subdirectory(root)?),
+            selected_toc,
+            profile,
+            context,
+            TocLoadPurpose::PackageMember,
+            stop,
+        )
+    }
 }
 
 /// Replays only the captured closure through the same loader. Missing entries
@@ -326,6 +347,41 @@ pub(crate) fn read_retained_toc(
     selected_toc: &ProjectDiskFile,
     profile: &ProfileIdentity,
     context: Option<&TocLoadContext>,
+    stop: &AtomicBool,
+) -> ProjectResult<ProjectLoadInput> {
+    read_retained_toc_with_purpose(
+        sources,
+        selected_toc,
+        profile,
+        context,
+        TocLoadPurpose::Main,
+        stop,
+    )
+}
+
+pub(crate) fn read_retained_package_toc(
+    sources: BTreeMap<&str, &str>,
+    selected_toc: &ProjectDiskFile,
+    profile: &ProfileIdentity,
+    context: Option<&TocLoadContext>,
+    stop: &AtomicBool,
+) -> ProjectResult<ProjectLoadInput> {
+    read_retained_toc_with_purpose(
+        sources,
+        selected_toc,
+        profile,
+        context,
+        TocLoadPurpose::PackageMember,
+        stop,
+    )
+}
+
+fn read_retained_toc_with_purpose(
+    sources: BTreeMap<&str, &str>,
+    selected_toc: &ProjectDiskFile,
+    profile: &ProfileIdentity,
+    context: Option<&TocLoadContext>,
+    purpose: TocLoadPurpose,
     stop: &AtomicBool,
 ) -> ProjectResult<ProjectLoadInput> {
     if sources.len() > DISK_INVENTORY_MAX_FILES {
@@ -348,13 +404,14 @@ pub(crate) fn read_retained_toc(
         selected_toc,
         profile,
         context,
-        TocLoadPurpose::Main,
+        purpose,
         stop,
     )
 }
 
-/// Expand a selected TOC from owner-held bytes through the existing Main loader.
-pub(crate) fn read_admitted_toc(
+/// Expand a package member from owner-held bytes. The aggregate package Main
+/// owner requires physical Lua after every selected member has been admitted.
+pub(crate) fn read_admitted_package_toc(
     source: &AdmittedPlatformSource,
     root: &str,
     selected_toc: &ProjectDiskFile,
@@ -373,7 +430,7 @@ pub(crate) fn read_admitted_toc(
         selected_toc,
         profile,
         context,
-        TocLoadPurpose::Main,
+        TocLoadPurpose::PackageMember,
         stop,
     )
 }
@@ -399,6 +456,7 @@ pub(crate) fn read_admitted_toc_for_census(
 
 enum TocLoadPurpose {
     Main,
+    PackageMember,
     Census,
 }
 

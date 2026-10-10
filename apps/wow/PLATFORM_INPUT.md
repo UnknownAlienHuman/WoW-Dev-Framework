@@ -74,6 +74,13 @@ package TOCs agree exactly with the source profile selection. The native source
 target agrees with the admitted project Reference profile and generation.
 Decoded receipts cannot construct these owners.
 
+A package member may contain only metadata or XML, including inline Lua. It
+retains its actual TOC/XML/load facts without inventing a physical Lua file.
+The aggregate namespaced Main still requires at least one physical Lua file
+across its reachable packages. Standalone TOC Main selection retains the same
+nonempty physical-Lua requirement. Disk acquisition, native admission and retained
+package replay use the same member semantics and exact load-plan identities.
+
 Shared local assembly validates the real analyzer backend and Reference, retains
 the source/package owner in configuration, and selects existing same-session XML
 bindings. Graph execution uses those retained owners without reopening source or

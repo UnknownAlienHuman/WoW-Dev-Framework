@@ -230,7 +230,7 @@ fn package_census_retains_empty_and_inline_only_closures_without_main() -> TestR
                 .err()
                 .ok_or("ordinary specialization admitted empty Main")?
                 .message(),
-            "selected TOC closure contains no analyzable Lua files"
+            "package Main namespace contains no Lua files"
         );
         assert_eq!(
             root.directory()?

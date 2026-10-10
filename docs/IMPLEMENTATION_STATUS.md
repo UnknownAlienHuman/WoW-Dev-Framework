@@ -79,6 +79,10 @@ object/region classification, fingerprints and SkeletonInputView follow. The
 [manifest-bound platform input](../apps/wow/PLATFORM_INPUT.md) reaches the selected
 native CLI graph with either a Reference artifact or same-manifest native callable
 composition; full-source capacity and publication handoff remain open.
+Metadata-only and inline-only package members now reach the same retained native
+graph/replay path alongside physical Main; standalone TOC and aggregate Main still
+require real physical Lua. The focused mixed-member lifecycle and affected owner
+check/strict Clippy pass; package64 and source/syntax/graph/map limits remain.
 Explicit retained XSD component admission is now executable through the existing
 XML owner, with root-only global symbols and final unsupported context propagation.
 See [schema components](PLATFORM_XML_SCHEMA_COMPONENTS.md) for its bounded scope.

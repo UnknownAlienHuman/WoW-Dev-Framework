@@ -1,6 +1,8 @@
 //! Shared native acquisition of one selected package; no source execution.
 use super::*;
-use crate::load::{budget_at, read_admitted_toc, read_admitted_toc_for_census, read_retained_toc};
+use crate::load::{
+    budget_at, read_admitted_package_toc, read_admitted_toc_for_census, read_retained_package_toc,
+};
 
 pub(super) struct LoadedSelection {
     pub(super) loaded: ProjectLoadedPackage,
@@ -23,7 +25,7 @@ pub(super) fn read_selected(
         .find(|variant| variant.selected)
         .ok_or_else(|| invalid("package has no selected TOC variant"))?;
     let input = match sources {
-        PackageSources::Disk(directory) => directory.read_toc_project_with_context(
+        PackageSources::Disk(directory) => directory.read_package_toc_with_context(
             &package.root,
             &selected.toc,
             profile,
@@ -37,13 +39,13 @@ pub(super) fn read_selected(
                 .filter(|(path, _)| !path.ends_with(".toc") || **path == selected.toc.path())
                 .map(|(path, text)| (*path, *text))
                 .collect();
-            read_retained_toc(selected_sources, &selected.toc, profile, context, stop)?
+            read_retained_package_toc(selected_sources, &selected.toc, profile, context, stop)?
         }
         PackageSources::Admitted(source) if capacity.is_census() => {
             read_admitted_toc_for_census(source, &package.root, &selected.toc, context, stop)?
         }
         PackageSources::Admitted(source) => {
-            read_admitted_toc(source, &package.root, &selected.toc, profile, context, stop)?
+            read_admitted_package_toc(source, &package.root, &selected.toc, profile, context, stop)?
         }
     };
     let (files, plan) = input.into_parts();

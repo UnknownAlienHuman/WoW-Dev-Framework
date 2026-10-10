@@ -7,9 +7,9 @@ the work queue. Follow [the execution model](EXECUTION_MODEL.md).
 
 ## Verified routing base
 
-`main` checkpoint `9ce07b51e2ca2f4100c4663c5442d83adce61f87`, tree
-`a0fc1b5a844db345717054b5e63072498b4d691f`, was published and read back with all
-changed blobs. [Quick 38087208405](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/38087208405)
+`main` checkpoint `0cfbb89e46d9cb1b25ca67675ce9f2767d2c3114`, tree
+`58de6c2b42d4f2b6d2f373d025ba572a6a61e1cd`, was published and read back with all
+changed blobs. [Quick 38088630874](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/38088630874)
 passed on that exact head. This is the verified base of this routing update;
 subsequent publication and gate evidence belong in the canonical Issue.
 
@@ -25,8 +25,10 @@ They describe one selected operation, not permanent client/source defaults.
 [#113](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/113) blocks
 full-corpus qualification. Lexical source measurement returns honest Partial
 coverage. Original-byte BOM positions are corrected: all 1091 XML documents in
-the re-resolved corpus parse. Empty physical-Lua closures are measurable without
-Main capability. The cumulative 64-MiB syntax-plan encoding guard was identified
+the re-resolved corpus parse. Empty physical-Lua package members now compose
+metadata and inline XML with a genuine nonempty aggregate Main through the native
+graph/replay path; standalone and aggregate empty Main still refuse. The cumulative
+64-MiB census syntax-plan encoding guard was identified
 and replaced by one-package streaming with bounded compact retention. The newly
 re-resolved 273-package native census now returns its exact measurements and
 Partial dependency/file-closure coverage. Ordinary retained Main, full graph/map
@@ -70,7 +72,9 @@ historical freeze are reconciled honestly. Code presence is not accepted freeze.
   source/package/Main admission and same-session XML bindings to the CLI's
   configuration-selected native graph. It selects either a bounded Reference
   artifact or native callable composition from the same exact source manifest.
-  Release Library snapshots use the existing Library universe. Ordinary retained
+  Release Library snapshots use the existing Library universe. Metadata-only and
+  inline-only package members retain their facts under a nonempty aggregate Main.
+  Ordinary retained
   package64 and graph/map budgets remain; this route is not full-corpus qualification.
 - [Source admission](PLATFORM_SOURCE_ADMISSION.md),
   [package specialization](PLATFORM_SOURCE_PACKAGES.md),
