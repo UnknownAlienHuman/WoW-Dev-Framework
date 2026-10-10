@@ -313,6 +313,7 @@ impl ProjectInputDirectory {
             selected_toc,
             profile,
             context,
+            TocLoadPurpose::Main,
             stop,
         )
     }
@@ -347,6 +348,7 @@ pub(crate) fn read_retained_toc(
         selected_toc,
         profile,
         context,
+        TocLoadPurpose::Main,
         stop,
     )
 }
@@ -371,8 +373,33 @@ pub(crate) fn read_admitted_toc(
         selected_toc,
         profile,
         context,
+        TocLoadPurpose::Main,
         stop,
     )
+}
+
+/// The measurement owner retains empty or inline-only closures without
+/// exporting physical Main capability. Parsing and source checks are shared.
+pub(crate) fn read_admitted_toc_for_census(
+    source: &AdmittedPlatformSource,
+    root: &str,
+    selected_toc: &ProjectDiskFile,
+    context: Option<&TocLoadContext>,
+    stop: &AtomicBool,
+) -> ProjectResult<ProjectLoadInput> {
+    read_toc_source(
+        LoaderSource::Admitted { source, root },
+        selected_toc,
+        &source.profile().target().reference_profile,
+        context,
+        TocLoadPurpose::Census,
+        stop,
+    )
+}
+
+enum TocLoadPurpose {
+    Main,
+    Census,
 }
 
 enum LoaderSource<'a> {
@@ -389,6 +416,7 @@ fn read_toc_source(
     selected_toc: &ProjectDiskFile,
     profile: &ProfileIdentity,
     context: Option<&TocLoadContext>,
+    purpose: TocLoadPurpose,
     stop: &AtomicBool,
 ) -> ProjectResult<ProjectLoadInput> {
     checkpoint(stop)?;
@@ -430,7 +458,7 @@ fn read_toc_source(
             "retained load sources differ from the consumed closure",
         ));
     }
-    if loader.files.is_empty() {
+    if matches!(purpose, TocLoadPurpose::Main) && loader.files.is_empty() {
         return Err(invalid(
             "selected TOC closure contains no analyzable Lua files",
         ));

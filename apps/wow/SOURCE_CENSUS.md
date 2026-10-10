@@ -133,6 +133,12 @@ unchanged lexical `census` and manifest receipt. Both input/result contracts and
 `wow-project/platform-package-census/1` are transient unreleased contracts.
 Legacy requests/results retain their serialization and reject the new field.
 
+Empty or inline-only selected closures are measured through the same native
+loader with a private census purpose. Their physical `main_lua_files` count is
+zero; they acquire no Main/analyzer capability. Ordinary disk, retained replay
+and admitted Main loading still require physical Lua. Missing or unresolved
+targets retain the existing load coverage and issues; no dummy file is inserted.
+
 Measurement capacity equals the validated selected-TOC count, whose existing
 profile ceiling is 1024. Ordinary Main specialization, graph and replay retain
 their 64-package limit. The internal expanded measurement plan cannot be exported

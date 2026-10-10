@@ -192,6 +192,71 @@ fn fixture_packages(name: &str) -> Vec<ProjectPackageInput> {
 }
 
 #[test]
+fn package_census_retains_empty_and_inline_only_closures_without_main() -> TestResult {
+    use wow_project::load::census::census_platform_packages;
+    let stop = AtomicBool::new(false);
+    for (entry, xml_count) in [("", 0u64), ("frames.xml\n", 1)] {
+        let root = FixtureRoot::new()?;
+        let profile = BlizzardUiSourceProfile::new(profile_request()?)?;
+        std::fs::write(
+            root.0.join("UI/Fixture.toc"),
+            format!(
+                "## Interface: {}\n{entry}",
+                profile.target().reference_profile.interface()
+            ),
+        )?;
+        std::fs::write(
+            root.0.join("UI/frames.xml"),
+            "<Ui><Frame><Scripts><OnLoad>local value = 1</OnLoad></Scripts></Frame></Ui>",
+        )?;
+        let source = Arc::new(root.directory()?.admit_platform_source(
+            &profile,
+            inventory(&root, &profile)?,
+            &stop,
+        )?);
+        let packages = fixture_packages("Pkg");
+        let census = census_platform_packages(&source, &packages, None, &stop)?;
+        assert_eq!(census.packages().len(), 1);
+        assert_eq!(census.loads().main_lua_files, 0);
+        assert_eq!(census.loads().selected_sources, 1 + xml_count);
+        assert_eq!(census.loads().xml_documents, xml_count);
+        assert_eq!(census.loads().xml_script_sites, xml_count);
+        assert_eq!(census.loads().xml_inline_units, xml_count);
+        assert_eq!(census.loads().xml_map_segments, xml_count);
+        assert_eq!(census.loads().load_units, xml_count);
+        assert_eq!(
+            source
+                .specialize_packages(&packages, None, &stop)
+                .err()
+                .ok_or("ordinary specialization admitted empty Main")?
+                .message(),
+            "selected TOC closure contains no analyzable Lua files"
+        );
+        assert_eq!(
+            root.directory()?
+                .read_toc_project(
+                    "UI",
+                    &wow_project::disk::ProjectDiskFile::new("Fixture.toc"),
+                    &profile.target().reference_profile,
+                    &stop,
+                )
+                .err()
+                .ok_or("ordinary disk loader admitted empty Main")?
+                .message(),
+            "selected TOC closure contains no analyzable Lua files"
+        );
+        assert_eq!(
+            census_platform_packages(&source, &packages, None, &AtomicBool::new(true))
+                .err()
+                .ok_or("census ignored cancellation")?
+                .code(),
+            ProjectErrorCode::SourceReadCancelled
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn package_census_measures_more_than_ordinary_capacity_without_exporting_it() -> TestResult {
     use wow_project::load::census::{CensusCoverage, census_platform_packages};
     let root = FixtureRoot::new()?;

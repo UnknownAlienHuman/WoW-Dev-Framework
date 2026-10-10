@@ -848,6 +848,15 @@ fn read_package_sources(
                     .collect();
                 super::read_retained_toc(selected_sources, &selected.toc, profile, context, stop)?
             }
+            PackageSources::Admitted(source) if capacity.is_census() => {
+                super::read_admitted_toc_for_census(
+                    source,
+                    &package.root,
+                    &selected.toc,
+                    context,
+                    stop,
+                )?
+            }
             PackageSources::Admitted(source) => super::read_admitted_toc(
                 source,
                 &package.root,
