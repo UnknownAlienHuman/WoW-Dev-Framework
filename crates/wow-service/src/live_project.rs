@@ -8,7 +8,8 @@ pub use current_recovery::{
 };
 mod migration;
 pub use migration::{
-    export_live_project_migration, migrate_live_project_to_new, resume_live_project_migration,
+    export_live_project_migration, migrate_live_project_to_new, prepare_live_project_migration,
+    resume_live_project_migration, resume_live_project_migration_preparation,
 };
 mod operations;
 mod quarantine;

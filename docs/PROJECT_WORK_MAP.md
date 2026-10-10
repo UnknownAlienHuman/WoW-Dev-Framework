@@ -28,8 +28,9 @@ reopen. W16 now adds read-only recovery, verified native SQLite backup and
 owner-validated isolated restore, guarded live physical-instance replacement and
 explicit whole-instance quarantine with typed read-only observation.
 Guarded recovery from quarantine, portable hold authority and supported inactive
-physical v1/v2 to v3 migration are now executable. Cross-epoch activation, mapped
-retention and object/epoch/platform gates remain next; full W14/E2,
+physical v1/v2 to v3 migration are now executable. Private immutable preparation now
+reconstructs mapped roots and target-local Current. Cross-epoch selection, portable
+original-epoch authority and object/epoch/platform gates remain next; full W14/E2,
 W15 and W16 acceptance remain open. See
 [PROJECT_GC.md](../crates/wow-store/PROJECT_GC.md).
 
@@ -146,10 +147,30 @@ backup contains target state only. See
 
 Six store migration cases and the extended native service lifecycle pass. Workspace
 policy, fmt, check, strict Clippy, tests (911 passed, 1 ignored, 107 targets), strict
-rustdoc and build pass on 2026-10-09. The next functional owner prepares a separate
-immutable activation-ready copy with complete mapped roots and target-local Current;
-exact cross-epoch selection follows. Neither automatic preparation nor live epoch
-activation, portable entire migration history or full W16/E2 acceptance is claimed.
+rustdoc and build pass on 2026-10-09. The subsequent private preparation checkpoint
+below implements the separate ready copy. Live epoch activation, portable entire
+migration history and full W16/E2 acceptance remain open.
+
+The immutable preparation owner persists a bounded exact intent before handing off
+the completed target copy. It reconstructs every source pin through the migration
+map and activates only the planned target-local Current, with no SQL predecessor.
+Closed inventory admits only declared partial pins and that operation transition;
+all generations, partitions, validations and other operations must equal the frozen
+baseline. Fresh native Project/Graph owners validate every generation.
+
+Exact resume reconciles private handoff, partial pins, activated Current and completed
+final backup without recopy. Missing Working epoch metadata, foreign final records
+and incomplete existing output reject before effects. Original migration/source
+evidence, live Current/registry and old readers stay unchanged. See
+[PROJECT_MIGRATION_READY.md](../crates/wow-store/PROJECT_MIGRATION_READY.md).
+
+Three new store cases and the extended native service lifecycle pass. Workspace
+policy, fmt, check, strict Clippy, tests (914 passed, 1 ignored, 107 targets), strict
+rustdoc and build pass on 2026-10-09. The next native responsibility is portable
+original-epoch selector/hold authority, then exact guarded cross-epoch selection.
+Incomplete native-copy recovery, power loss, payload/runtime migration, domain
+quarantine and full W16/E2/source/runtime gates remain open. Gethe preparation stays
+deferred until product implementation/build is complete.
 
 Fresh W16 policy, fmt, workspace check, strict Clippy, tests (877 passed,
 1 ignored, 106 targets), rustdoc and build passed on 2026-10-09. The ignored consumer and source/runtime gates stay

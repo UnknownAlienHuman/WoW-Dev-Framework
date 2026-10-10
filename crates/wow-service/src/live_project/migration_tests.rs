@@ -1,6 +1,7 @@
 //! Native identities survive physical migration into a validated inactive target.
 use super::super::{
-    LiveProjectStore, catalog, export_live_project_migration, resume_live_project_migration,
+    LiveProjectStore, catalog, export_live_project_migration, prepare_live_project_migration,
+    resume_live_project_migration, resume_live_project_migration_preparation,
 };
 use super::{owners, root};
 use std::sync::atomic::AtomicBool;
@@ -23,6 +24,7 @@ fn native_v1_migration_preserves_pairs_current_and_exact_resumed_receipt() -> Te
     let backup_root = root("migration-native-backup")?;
     let target_root = root("migration-native-target")?;
     let export_root = root("migration-native-export")?;
+    let preparation_root = root("migration-native-preparation")?;
     let mut live = LiveProjectStore {
         store: ProjectStore::create(
             &source_root,
@@ -227,6 +229,49 @@ fn native_v1_migration_preserves_pairs_current_and_exact_resumed_receipt() -> Te
     assert!(!target_root.join("project-store-registry.json").exists());
     drop(private_read);
     drop(private);
+    let ready =
+        prepare_live_project_migration(&resumed, &preparation_root, "fixture:native-ready", &stop)?;
+    let ready_receipt = ready.receipt().clone();
+    assert_eq!(
+        ready_receipt.baseline_snapshot_digest(),
+        receipt.target_snapshot_digest()
+    );
+    assert!(ready_receipt.mapped_roots().is_empty());
+    assert_eq!(
+        ready.artifact().manifest().current(),
+        ready_receipt.target_current()
+    );
+    assert_eq!(
+        ready.artifact().manifest().snapshot_digest(),
+        ready_receipt.artifact_snapshot_digest()
+    );
+    let read = ready.artifact().read(&ReadSelector::Current, &stop)?;
+    let pair = AcquiredProjectPair::read(&read, &stop)?;
+    assert_eq!(pair.project().snapshot_id(), second_ids.0);
+    assert_eq!(pair.project().analyzer_snapshot_id(), second_ids.1);
+    assert_eq!(pair.publication_set_id(), second_ids.2);
+    assert_eq!(pair.graph(), &second_graph);
+    assert!(
+        ready_receipt
+            .target_current()
+            .ok_or("missing ready Current")?
+            .predecessor
+            .is_none()
+    );
+    drop(pair);
+    drop(read);
+    drop(ready);
+    let reconciled = resume_live_project_migration_preparation(
+        &resumed,
+        &preparation_root,
+        "fixture:native-ready",
+        ready_receipt.request_digest(),
+        &stop,
+    )?;
+    assert_eq!(reconciled.receipt(), &ready_receipt);
+    assert_eq!(live.current()?.as_ref(), Some(second_current));
+    assert_eq!(held_first.graph(), &first_graph);
+    drop(reconciled);
     drop(resumed);
     let unchanged =
         resume_live_project_migration(&target_root, operation, &source_snapshot, &stop)?;
@@ -235,7 +280,13 @@ fn native_v1_migration_preserves_pairs_current_and_exact_resumed_receipt() -> Te
     drop(backup);
     drop(live);
     drop(held_first);
-    for path in [source_root, backup_root, target_root, export_root] {
+    for path in [
+        source_root,
+        backup_root,
+        target_root,
+        export_root,
+        preparation_root,
+    ] {
         std::fs::remove_dir_all(path)?;
     }
     Ok(())

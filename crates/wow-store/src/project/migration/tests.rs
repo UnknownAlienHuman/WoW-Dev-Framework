@@ -1,6 +1,8 @@
 //! Native inactive-epoch migration preserves opaque owner records and source history.
 #[path = "live_tests.rs"]
 mod live;
+#[path = "ready_tests.rs"]
+mod ready;
 use super::{MigrationCandidate, MigrationMapping};
 use crate::project::{
     CurrentPublication, GC_PHYSICAL_PROFILE, PHYSICAL_PROFILE, PartitionRecord, ProjectStore,

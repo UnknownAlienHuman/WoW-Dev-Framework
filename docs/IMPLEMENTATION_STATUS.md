@@ -886,3 +886,26 @@ retention/activation-ready preparation, exact cross-epoch registry selection/ret
 portable full migration history, interrupted-copy/power-loss and full W16/E2 or
 source/runtime acceptance remain open. See
 [PROJECT_MIGRATION.md](../crates/wow-store/PROJECT_MIGRATION.md).
+
+## W16 immutable migration-ready preparation (2026-10-09)
+
+Store/service now prepare a separate private native copy with every mapped source
+pin and the exact target-local Current, then freeze it into an independently
+verified immutable artifact. Source pin IDs, kinds and holders stay unchanged;
+epoch/generation and pin digests are reconstructed. The target Current has no SQL
+predecessor, while original source history remains archived.
+
+A bounded digest-bound intent precedes mutable handoff. Exact reopen admits only
+planned root subsets, the selected operation's exact activation and complete
+baseline generation/partition/validation/operation equality. Fresh compiled owners
+replay every retained Project/Graph pair. Missing Working epoch metadata or
+foreign/incomplete final output refuses before effects. Completed artifact/receipt
+retry verifies and reconciles the same output without recopy.
+
+Three new store cases and the extended native service lifecycle preserve original
+source Current, old readers and immutable migration evidence. Workspace policy,
+fmt, check, strict Clippy, tests (914 passed, 1 ignored, 107 targets), strict rustdoc
+and build pass. Live cross-epoch selection, portable full migration history,
+arbitrary interrupted-copy recovery, power loss, domain quarantine and full W16/E2
+or Gethe/Ketho/runtime acceptance remain separate open gates. See
+[PROJECT_MIGRATION_READY.md](../crates/wow-store/PROJECT_MIGRATION_READY.md).

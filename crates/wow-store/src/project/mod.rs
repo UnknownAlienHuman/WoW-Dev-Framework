@@ -19,7 +19,8 @@ pub use backup::{BackupManifest, VerifiedBackup};
 use database::Database;
 pub use gc::{ProjectGcPlan, ProjectGcPolicy, ProjectGcReceipt, ProjectGcReport};
 pub use migration::{
-    MigrationCandidate, MigrationCurrentMapping, MigrationMapping, MigrationReceipt,
+    MappedMigrationRoot, MigrationCandidate, MigrationCurrentMapping, MigrationMapping,
+    MigrationPreparation, MigrationReadyReceipt, MigrationReceipt, ReadyMigration,
     ValidatedMigration,
 };
 pub use model::{

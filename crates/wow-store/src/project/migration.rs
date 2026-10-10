@@ -2,6 +2,8 @@
 mod live;
 mod model;
 mod plan;
+mod ready;
+pub use ready::{MappedMigrationRoot, MigrationPreparation, MigrationReadyReceipt, ReadyMigration};
 #[cfg(test)]
 mod tests;
 use super::{
@@ -423,16 +425,7 @@ impl ValidatedMigration {
         operation: &OperationId,
         stop: &AtomicBool,
     ) -> StoreResult<VerifiedBackup> {
-        checkpoint(stop)?;
-        ensure_unselected(&self.candidate.root)?;
-        self.candidate.verify(stop)?;
-        if registry::read_file(
-            &self.candidate.root.join("migration-record.json"),
-            MAX_METADATA,
-        )? != self.receipt.bytes()?
-        {
-            return Err(failure(StoreErrorCode::OperationConflict));
-        }
+        self.verify_completed(stop)?;
         let archives = archives::read(
             &self.candidate.root,
             &self.candidate.intent.target_epoch.catalog,
@@ -451,6 +444,19 @@ impl ValidatedMigration {
         }
         checkpoint(stop)?;
         Ok(backup)
+    }
+    fn verify_completed(&self, stop: &AtomicBool) -> StoreResult<()> {
+        checkpoint(stop)?;
+        ensure_unselected(&self.candidate.root)?;
+        self.candidate.verify(stop)?;
+        if registry::read_file(
+            &self.candidate.root.join("migration-record.json"),
+            MAX_METADATA,
+        )? != self.receipt.bytes()?
+        {
+            return Err(failure(StoreErrorCode::OperationConflict));
+        }
+        Ok(())
     }
     pub fn receipt(&self) -> &MigrationReceipt {
         &self.receipt

@@ -177,7 +177,12 @@ Project/Graph owners before returning the backup.
 
 ## Not implemented
 
-Cross-epoch activation, mapped target retention roots, payload upgrade, source
+Mapped target retention and target-local Current preparation now have a separate
+private owner: [PROJECT_MIGRATION_READY.md](PROJECT_MIGRATION_READY.md). It freezes a
+separate ready artifact while preserving this inactive baseline and source archive.
+It does not select the live root.
+
+Cross-epoch activation, payload upgrade, source
 truncation, GC eligibility of migrated data, target-side quarantine, scheduled or
 background migration, and selective or partial migration are out of scope.
 Interruption inside writes, power loss, old-runtime transformation and broader

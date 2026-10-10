@@ -4,9 +4,61 @@ use std::{path::Path, sync::atomic::AtomicBool};
 use wow_graph::GraphPartitionSnapshot;
 use wow_project::replay::publication::{self, AcquiredProjectPair};
 use wow_store::project::{
-    CurrentRecordId, MigrationCandidate, RegistrySelection, ValidatedMigration, VerifiedBackup,
+    CurrentRecordId, MigrationCandidate, MigrationPreparation, ReadyMigration, RegistrySelection,
+    ValidatedMigration, VerifiedBackup,
 };
 use wow_store::{OperationId, StoreErrorCode};
+
+/// Prepare a separate immutable target with complete mapped pins and local Current.
+/// No live registry is switched; the original migration/source archive stays exact.
+pub fn prepare_live_project_migration(
+    migration: &ValidatedMigration,
+    root: &Path,
+    operation_id: &str,
+    stop: &AtomicBool,
+) -> ServiceResult<ReadyMigration> {
+    let id = OperationId::new(operation_id).map_err(store_error)?;
+    let preparation =
+        MigrationPreparation::create(migration, root, &id, stop).map_err(store_error)?;
+    finish_preparation(migration, preparation, stop)
+}
+
+/// Resume one exact durable preparation request with fresh native owner checks.
+pub fn resume_live_project_migration_preparation(
+    migration: &ValidatedMigration,
+    root: &Path,
+    operation_id: &str,
+    expected_request: &str,
+    stop: &AtomicBool,
+) -> ServiceResult<ReadyMigration> {
+    let id = OperationId::new(operation_id).map_err(store_error)?;
+    let preparation = MigrationPreparation::open(migration, root, &id, expected_request, stop)
+        .map_err(store_error)?;
+    finish_preparation(migration, preparation, stop)
+}
+fn finish_preparation(
+    migration: &ValidatedMigration,
+    preparation: MigrationPreparation,
+    stop: &AtomicBool,
+) -> ServiceResult<ReadyMigration> {
+    let mut checks = Vec::new();
+    for generation in preparation.target_generations() {
+        let read = preparation
+            .read_generation(&generation, stop)
+            .map_err(store_error)?;
+        AcquiredProjectPair::read(&read, stop).map_err(project_error)?;
+        checks.push(
+            read.owner_validation(&[
+                GraphPartitionSnapshot::STORAGE_CHECK,
+                publication::STORAGE_CHECK,
+            ])
+            .map_err(store_error)?,
+        );
+    }
+    preparation
+        .finish(migration, checks, stop)
+        .map_err(store_error)
+}
 
 impl LiveProjectStore {
     /// Build an inactive migration only from the exact guarded live snapshot.
