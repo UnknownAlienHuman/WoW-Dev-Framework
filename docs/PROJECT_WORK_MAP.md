@@ -24,14 +24,15 @@ They describe one selected operation, not permanent client/source defaults.
 
 [#113](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/113) blocks
 full-corpus qualification. Lexical source measurement returns honest Partial
-coverage. The selected native package measurement still refuses; its latest
-owner explanation is `unterminated XML attribute span`. Its package/graph counts
-remain unmeasured. Do not infer the selected map population from a whole-inventory
+coverage. Original-byte BOM positions are corrected: all 1091 XML documents in
+the re-resolved corpus parse. The selected native package measurement now refuses
+with `selected TOC closure contains no analyzable Lua files`; its package/graph
+counts remain unmeasured. Do not infer the selected map population from a whole-inventory
 lexical script count or compare XML-index JSON bytes with graph metadata bytes.
 
 | Order | Bounded functional responsibility | Required boundary |
 |---|---|---|
-| 1 — #113 | Diagnose the exact XML/native package refusal using the existing owners | Retain malformed/unsupported input; no relaxed parser, guessed selectors or second parser |
+| 1 — #113 | Separate package measurement from Main's requirement for physical Lua files | Reuse existing loaders; retain empty physical-Lua counts without fabricating analyzer capability |
 | 2 — #113 | Measure the actual selected load/map/graph scopes and choose finite capacity or an explicit partition strategy | Owner-produced counts, checked arithmetic, cancellation and exact identities; no arbitrary cap increase or clipping |
 | 3 — [#114](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/114) | Make graph axes bind exact relation definitions | Stop overloading Owns/Loads; preserve actual registry/support meaning |
 | 4 — [#115](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/115) | Select coherent capability composition and reconcile transient variants | Name real application, persistence and replay consumers; no cumulative producer ladder |

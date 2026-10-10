@@ -80,6 +80,9 @@ XML and schema counts are separate. Elements, attributes, script source kinds,
 inline units/bytes and mapping segments are exact observations of successfully
 parsed unique documents, independent of how often a load path might reach them.
 The XSD count is lexical XML measurement, not schema-component admission.
+An initial UTF-8 BOM stays in the source identity; XML positions compensate for
+the tokenizer's removed prefix so attribute, element and inline-Lua maps address
+the original bytes. Syntax, entity, DTD and namespace checks remain in force.
 
 Processing retains one syntax index at a time. The inherited parser bounds remain
 in force, including 1 MiB per document and 32,768 lexical records. Invalid UTF-8,

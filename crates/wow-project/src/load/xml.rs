@@ -20,6 +20,9 @@ pub(super) fn parse(
 ) -> ProjectResult<(Vec<Record>, XmlDocumentIndex)> {
     let mut index = Builder::new(document, text);
     let mut reader = Reader::from_str(text);
+    // The slice reader removes an initial UTF-8 BOM without counting it in
+    // buffer_position. Every retained span addresses the original source bytes.
+    let bom_bytes = usize::from(text.starts_with('\u{feff}')) * '\u{feff}'.len_utf8();
     reader.config_mut().check_comments = true;
     reader.config_mut().check_end_names = true;
     let mut stack: Vec<Frame> = Vec::new();
@@ -28,11 +31,15 @@ pub(super) fn parse(
     let mut declaration_seen = false;
     loop {
         checkpoint(stop)?;
-        let start = reader.buffer_position() as usize;
+        let start = (reader.buffer_position() as usize)
+            .checked_add(bom_bytes)
+            .ok_or_else(budget)?;
         let event = reader
             .read_event()
             .map_err(|_| invalid("XML source is malformed"))?;
-        let end = reader.buffer_position() as usize;
+        let end = (reader.buffer_position() as usize)
+            .checked_add(bom_bytes)
+            .ok_or_else(budget)?;
         if matches!(&event, Event::Eof) {
             if !root_seen || !stack.is_empty() {
                 return Err(invalid("XML document is incomplete"));
@@ -59,7 +66,7 @@ pub(super) fn parse(
                 let mut ui_namespace = stack.last().is_none_or(|parent| parent.ui_namespace);
                 let name = element.name();
                 let name = name.as_ref();
-                // quick-xml may consume the initial UTF-8 BOM with the first tag.
+                // Locate the tag in the original, position-corrected event range.
                 let tag_start = start
                     + text
                         .get(start..end)
@@ -225,4 +232,90 @@ pub(super) fn parse(
         records.push(record);
     }
     Ok((records, index.finish()?))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ProjectErrorCode;
+
+    #[test]
+    fn bom_positions_retain_original_attribute_and_inline_source_ranges() -> ProjectResult<()> {
+        for (prefix, newline) in [("", "\n"), ("\u{feff}", "\n"), ("\u{feff}", "\r\n")] {
+            let attribute_value = format!("a{newline}λ");
+            let inline_xml = "local x = \"λ&amp;\"";
+            let text = format!(
+                "{prefix}<?xml version=\"1.0\"?>{newline}<Ui xmlns=\"{UI_NAMESPACE}\" path='{attribute_value}'><Frame><Scripts><OnLoad>{inline_xml}</OnLoad></Scripts></Frame></Ui>"
+            );
+            let (records, index) = parse("frames.xml", &text, &AtomicBool::new(false))?;
+            let root = &index.elements()[0];
+            assert_eq!(
+                root.start_tag_span.byte_start as usize,
+                text.find("<Ui")
+                    .ok_or_else(|| invalid("missing test root"))?
+            );
+            let attribute = &root.attributes[1];
+            assert_eq!(
+                &text[attribute.value_span.byte_start as usize
+                    ..attribute.value_span.byte_end as usize],
+                attribute_value
+            );
+            assert_eq!(
+                &text[attribute.span.byte_start as usize..attribute.span.byte_end as usize],
+                format!("path='{attribute_value}'")
+            );
+            assert_eq!(attribute.value_span.start_line, 2);
+            assert_eq!(attribute.value_span.end_line, 3);
+            let handler = index
+                .scripts()
+                .next()
+                .ok_or_else(|| invalid("missing test handler"))?;
+            let script = handler
+                .script
+                .as_ref()
+                .ok_or_else(|| invalid("missing test script"))?;
+            assert_eq!(
+                &text[script.body_span.byte_start as usize..script.body_span.byte_end as usize],
+                inline_xml
+            );
+            let body = script
+                .inline_lua
+                .as_ref()
+                .ok_or_else(|| invalid("missing test inline body"))?;
+            assert_eq!(body.text(), "local x = \"λ&\"");
+            let start = body
+                .text()
+                .find("λ&")
+                .ok_or_else(|| invalid("missing test expression"))?;
+            let pieces = body.map_range(start, start + "λ&".len())?;
+            let original = pieces
+                .iter()
+                .map(|piece| &text[piece.byte_start as usize..piece.byte_end as usize])
+                .collect::<String>();
+            assert_eq!(original, "λ&amp;");
+            assert_eq!(records[0].start, prefix.len());
+            assert_eq!(
+                records
+                    .last()
+                    .ok_or_else(|| invalid("missing test end record"))?
+                    .end,
+                text.len()
+            );
+        }
+        for invalid in [
+            "\u{feff}<Ui name='a' name='b'/>",
+            "\u{feff}<!DOCTYPE Ui [<!ENTITY x 'y'>]><Ui/>",
+            "\u{feff}<Ui><Frame></Ui>",
+        ] {
+            assert!(parse("frames.xml", invalid, &AtomicBool::new(false)).is_err());
+        }
+        assert_eq!(
+            parse("frames.xml", "\u{feff}<Ui/>", &AtomicBool::new(true))
+                .err()
+                .ok_or_else(|| invalid("missing test cancellation"))?
+                .code(),
+            ProjectErrorCode::SourceReadCancelled
+        );
+        Ok(())
+    }
 }
