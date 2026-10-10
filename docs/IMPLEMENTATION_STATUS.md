@@ -934,4 +934,33 @@ pass. Workspace policy, fmt, all-target/all-feature check, strict Clippy, tests
 cross-epoch selection/reconciliation remains next. Original source SQL/history
 hydration, portable full migration history, payload/runtime transformation, domain
 quarantine, arbitrary interrupted-copy recovery, inside-write/power-loss/deletion/
-platform and full W16/E2/Gethe/Ketho/runtime acceptance remain open. W17-W26 are unchanged.
+platform and full W16/E2/Gethe/Ketho/runtime acceptance remain open. The following
+checkpoint supplies guarded cross-epoch selection.
+
+## W16 guarded cross-epoch selection (2026-10-09)
+
+Store/service APIs `stage_ready_selection`, `reopen_ready_selection`,
+`activate_ready_selection` and `migration_selection_receipt` install one verified
+READY target under exact original selector, optional Current and complete source
+snapshot guards. A separately bound intent/evidence ledger precedes the native
+copy. Exact epoch metadata and a durable Working marker precede writable handoff;
+reopen verifies the complete SQL snapshot before writer configuration.
+
+Fresh native Project/Graph owners validate every actual target generation before
+one outer schema-6 selector rename. Selected retries use the held target owner and
+dispatch no second selector or SQL activation. Adoption preserves the entire target
+lifetime, staged leases, inherited locks and shared reader admissions. Original
+source selectors/holds remain archival authority under their own epochs. Independent
+readback reconciles a lost response without promoting Unknown acknowledgment.
+Historical installation receipts survive later legitimate publication; quarantine
+rejects their lookup. See
+[PROJECT_MIGRATION_SELECTION.md](PROJECT_MIGRATION_SELECTION.md).
+
+Two native store cases and the extended native service lifecycle pass. Workspace
+policy, fmt, all-target/all-feature check, strict Clippy, tests (919 passed,
+1 ignored, 107 targets), strict rustdoc and build pass. Portable full migration
+history, payload/runtime transformation, domain quarantine, arbitrary partial-copy/
+inside-write/power-loss/deletion/platform and full W16/E2/Gethe/Ketho/runtime
+acceptance remain open. Next functional work is W17 exact materialized source
+profile/inventory admission. W18-W26 remain open; Gethe materialization follows
+product implementation/build.

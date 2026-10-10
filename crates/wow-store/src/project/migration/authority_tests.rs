@@ -1,4 +1,6 @@
 //! Native source holds remain portable across migration and target recovery.
+#[path = "selection_tests.rs"]
+mod selection;
 use super::*;
 use crate::project::{MigrationPreparation, ReadyMigration, SourceAuthorityReference, registry};
 use std::path::Path;

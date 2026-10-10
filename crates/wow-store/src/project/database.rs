@@ -228,8 +228,8 @@ impl Database {
         }
         let epoch = admitted.epoch;
         let dir = admitted.selection.directory(&root, &epoch)?;
-        let instance_lock = if let Some(record) = admitted.record {
-            let path = record.instance_root(&root).join("writer.lock");
+        let instance_lock = if let Some(instance) = admitted.selection.instance_root(&root) {
+            let path = instance.join("writer.lock");
             regular(&path, 0)?;
             let file = OpenOptions::new()
                 .read(true)

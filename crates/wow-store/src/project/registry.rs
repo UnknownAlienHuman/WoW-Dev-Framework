@@ -2,6 +2,7 @@
 use super::quarantine::archives::{self, QuarantineReference};
 use super::{
     database,
+    migration::selection,
     model::*,
     source_authority::{self, SourceAuthorityReference},
 };
@@ -347,6 +348,7 @@ pub(super) struct AdmittedRegistry {
     pub epoch: EpochManifest,
     pub selection: RegistrySelection,
     pub record: Option<RegistryRecord>,
+    pub migration: Option<selection::model::SelectionRecord>,
     pub quarantine: Option<super::quarantine::model::QuarantineRecord>,
     pub retained_quarantines: Vec<QuarantineReference>,
     pub source_authorities: Vec<SourceAuthorityReference>,
@@ -381,7 +383,9 @@ pub(super) fn read(root: &Path, catalog: &RecordCatalog) -> StoreResult<Admitted
         require_source_authorities_marker(
             root,
             &previous.source_authorities,
-            previous.record.is_none() && !previous.source_authorities.is_empty(),
+            previous.record.is_none()
+                && previous.migration.is_none()
+                && !previous.source_authorities.is_empty(),
         )?;
         let mut refs = previous.retained_quarantines;
         refs.push(QuarantineReference::from_record(&record)?);
@@ -399,10 +403,14 @@ pub(super) fn read(root: &Path, catalog: &RecordCatalog) -> StoreResult<Admitted
             &std::sync::atomic::AtomicBool::new(false),
         )?;
         authorities.admit_selected(&closure)?;
+        if let Some(migration) = &previous.migration {
+            require_migration_record(root, migration, &authorities)?;
+        }
         return Ok(AdmittedRegistry {
             epoch: record.epoch.clone(),
             selection: record.selection()?,
             record: previous.record,
+            migration: previous.migration,
             quarantine: Some(record),
             retained_quarantines: refs,
             source_authorities: previous.source_authorities,
@@ -419,7 +427,9 @@ pub(super) fn read_normal(
     require_source_authorities_marker(
         root,
         &admitted.source_authorities,
-        admitted.record.is_none() && !admitted.source_authorities.is_empty(),
+        admitted.record.is_none()
+            && admitted.migration.is_none()
+            && !admitted.source_authorities.is_empty(),
     )?;
     let holds = archives::read(
         root,
@@ -434,6 +444,9 @@ pub(super) fn read_normal(
         &std::sync::atomic::AtomicBool::new(false),
     )?;
     authorities.admit_selected(&holds)?;
+    if let Some(migration) = &admitted.migration {
+        require_migration_record(root, migration, &authorities)?;
+    }
     if holds.max_revision() >= admitted.selection.revision()
         && !admitted.retained_quarantines.is_empty()
     {
@@ -479,16 +492,60 @@ pub(super) fn read_normal(
     }
     Ok(admitted)
 }
+fn require_migration_record(
+    root: &Path,
+    record: &selection::model::SelectionRecord,
+    authorities: &source_authority::AuthoritySet,
+) -> StoreResult<()> {
+    record.selection()?.directory(root, &record.epoch)?;
+    let base = record.instance_root(root);
+    if read_file(&base.join("migration-selection-record.json"), MAX_REGISTRY)? != record.bytes()? {
+        return Err(invalid());
+    }
+    selection::io::read(&base, &record.intent)?;
+    authorities.require_origin(
+        &record.intent.original_authority,
+        &record.intent.source_epoch,
+        &record.intent.expected,
+        &record.intent.source_snapshot,
+    )
+}
 pub(super) fn read_normal_shallow(
     catalog: &RecordCatalog,
     bytes: &[u8],
 ) -> StoreResult<AdmittedRegistry> {
     // Each branch reconstructs canonical bytes; legacy manifests are unchanged.
+    #[derive(Deserialize)]
+    struct SchemaTag {
+        schema: String,
+    }
+    if serde_json::from_slice::<SchemaTag>(bytes)
+        .is_ok_and(|tag| tag.schema == "wow-store/project-registry/6")
+    {
+        // Once tagged /6, malformed or noncanonical data must not fall through.
+        let record: selection::model::SelectionRecord =
+            serde_json::from_slice(bytes).map_err(|_| invalid())?;
+        record.validate()?;
+        database::admit_epoch(&encode(&record.epoch, 65536)?, catalog)?;
+        if record.bytes()? != bytes {
+            return Err(invalid());
+        }
+        return Ok(AdmittedRegistry {
+            epoch: record.epoch.clone(),
+            selection: record.selection()?,
+            record: None,
+            source_authorities: record.intent.source_authorities.clone(),
+            migration: Some(record),
+            quarantine: None,
+            retained_quarantines: Vec::new(),
+        });
+    }
     if let Ok(epoch) = database::admit_epoch(bytes, catalog) {
         return Ok(AdmittedRegistry {
             selection: RegistrySelection::from_bytes(bytes, &epoch, 0, None),
             epoch,
             record: None,
+            migration: None,
             quarantine: None,
             retained_quarantines: Vec::new(),
             source_authorities: Vec::new(),
@@ -504,6 +561,7 @@ pub(super) fn read_normal_shallow(
             selection: RegistrySelection::from_bytes(bytes, &record.epoch, record.revision, None),
             epoch: record.epoch,
             record: None,
+            migration: None,
             quarantine: None,
             retained_quarantines: record.retained_quarantines,
             source_authorities: record.source_authorities,
@@ -522,6 +580,7 @@ pub(super) fn read_normal_shallow(
         retained_quarantines: record.retained_quarantines.clone(),
         source_authorities: record.source_authorities.clone(),
         record: Some(record),
+        migration: None,
         quarantine: None,
     })
 }

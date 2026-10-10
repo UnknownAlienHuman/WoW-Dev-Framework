@@ -1,7 +1,7 @@
 # Project completion matrix
 
 **Audited:** 2026-09-19 America/New_York. Execution inventory refreshed 2026-10-09
-through the scoped W16 portable original-source selector/hold checkpoint below.
+through the scoped W16 guarded cross-epoch selection checkpoint below.
 
 This is the current execution ledger. [IMPLEMENTATION_HANDOFF.md](IMPLEMENTATION_HANDOFF.md)
 remains the normative I0–I7 plan; do not restart its historical bootstrap steps.
@@ -418,3 +418,21 @@ Live cross-epoch selection/reconciliation, original source SQL/history hydration
 portable full migration history, payload/runtime transformation, domain quarantine,
 arbitrary interrupted-copy/inside-write/power-loss/deletion/platform and full
 W16/E2/source/runtime acceptance remain open. W17-W26 are unchanged.
+
+Guarded cross-epoch selection now installs the independently admitted READY target
+under the original selector, optional Current and full source snapshot guards.
+A durable ledger, complete native copy and exact Working handoff precede compiled
+owner replay of every target generation and one outer schema-6 selector rename.
+Exact staged/selected reconciliation preserves old readers, staged target leases,
+writer locks and shared reader admissions. Source holds remain original-epoch
+archives; lost-response acknowledgment remains Unknown. Historical receipts survive
+later legitimate publication and reject quarantined roots.
+
+Two native store cases and the extended native service lifecycle pass. Workspace
+policy, fmt, check, strict Clippy, tests (919 passed, 1 ignored, 107 targets), strict
+rustdoc and build pass on 2026-10-09. See
+[PROJECT_MIGRATION_SELECTION.md](PROJECT_MIGRATION_SELECTION.md).
+Portable entire migration history, arbitrary partial-copy/inside-write/power-loss/
+deletion/platform, payload/runtime transformation, domain quarantine and full
+W16/E2/source/runtime acceptance remain open. W17 source profile/inventory admission
+is the next functional owner; W18-W26 remain open.

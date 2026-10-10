@@ -458,40 +458,54 @@ impl VerifiedBackup {
         checks: Vec<ValidatedRead>,
         stop: &AtomicBool,
     ) -> StoreResult<String> {
-        let mut verified = BTreeSet::new();
-        let mut validations = BTreeMap::new();
-        for check in checks {
-            checkpoint(stop)?;
-            if check.epoch != self.store.db.epoch.epoch_id
-                || &check.validation.checks != self.store.db.epoch.catalog.checks()
-                || !verified.insert(check.validation.generation_id.clone())
-            {
-                return Err(invalid());
-            }
-            let read = self.read(
-                &ReadSelector::Exact(check.validation.generation_id.clone()),
-                stop,
-            )?;
-            if ValidationRecord::new(
-                read.manifest(),
-                self.store.db.epoch.catalog.checks().clone(),
-            )? != check.validation
-            {
-                return Err(invalid());
-            }
-            validations.insert(
-                check.validation.generation_id,
-                check.validation.validation_id,
-            );
-        }
-        if verified != self.manifest.generations.iter().cloned().collect() {
+        self.verify(stop)?;
+        owner_validation_digest(
+            &self.store,
+            self.manifest.generations(),
+            self.manifest.snapshot_digest(),
+            checks,
+            stop,
+        )
+    }
+}
+pub(in crate::project) fn owner_validation_digest(
+    store: &ProjectStore,
+    generations: &[StoreGenerationId],
+    snapshot: &str,
+    checks: Vec<ValidatedRead>,
+    stop: &AtomicBool,
+) -> StoreResult<String> {
+    let mut verified = BTreeSet::new();
+    let mut validations = BTreeMap::new();
+    for check in checks {
+        checkpoint(stop)?;
+        if check.epoch != store.db.epoch.epoch_id
+            || &check.validation.checks != store.db.epoch.catalog.checks()
+            || !verified.insert(check.validation.generation_id.clone())
+        {
             return Err(invalid());
         }
-        Ok(digest(
-            "project-replacement-owners",
-            &encode(&(self.manifest.snapshot_digest(), validations), 262144)?,
-        ))
+        let read = store.read(
+            &ReadSelector::Exact(check.validation.generation_id.clone()),
+            stop,
+        )?;
+        if ValidationRecord::new(read.manifest(), store.db.epoch.catalog.checks().clone())?
+            != check.validation
+        {
+            return Err(invalid());
+        }
+        validations.insert(
+            check.validation.generation_id,
+            check.validation.validation_id,
+        );
     }
+    if verified != generations.iter().cloned().collect() {
+        return Err(invalid());
+    }
+    Ok(digest(
+        "project-replacement-owners",
+        &encode(&(snapshot, validations), 262144)?,
+    ))
 }
 fn manifest(
     operation_id: &OperationId,

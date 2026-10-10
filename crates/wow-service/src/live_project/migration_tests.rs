@@ -317,6 +317,37 @@ fn native_v1_migration_preserves_pairs_current_and_exact_resumed_receipt() -> Te
     assert_eq!(restored.current()?.as_ref(), ready_receipt.target_current());
     drop(restored);
     drop(portable);
+    let candidate = live.stage_ready_selection(
+        &resumed,
+        &ready,
+        "fixture:native-selection",
+        &expected,
+        Some(&second_current.record_id),
+        &stop,
+    )?;
+    let selection_request = candidate.request_digest()?;
+    let selection_receipt = live.activate_ready_selection(&resumed, &ready, candidate, &stop)?;
+    assert_eq!(selection_receipt.previous(), &expected);
+    assert_eq!(
+        selection_receipt.target_epoch(),
+        ready.artifact().manifest().epoch()
+    );
+    assert_eq!(live.current()?.as_ref(), ready_receipt.target_current());
+    let candidate = live.reopen_ready_selection(
+        &resumed,
+        &ready,
+        "fixture:native-selection",
+        &selection_request,
+        &stop,
+    )?;
+    assert_eq!(
+        live.activate_ready_selection(&resumed, &ready, candidate, &stop)?,
+        selection_receipt
+    );
+    assert_eq!(
+        live.migration_selection_receipt("fixture:native-selection", &selection_request)?,
+        Some(selection_receipt)
+    );
     drop(ready);
     let reconciled = resume_live_project_migration_preparation(
         &resumed,
@@ -326,7 +357,7 @@ fn native_v1_migration_preserves_pairs_current_and_exact_resumed_receipt() -> Te
         &stop,
     )?;
     assert_eq!(reconciled.receipt(), &ready_receipt);
-    assert_eq!(live.current()?.as_ref(), Some(second_current));
+    assert_eq!(live.current()?.as_ref(), ready_receipt.target_current());
     assert_eq!(held_first.graph(), &first_graph);
     drop(reconciled);
     drop(resumed);

@@ -33,6 +33,34 @@ pub(in crate::project) struct AuthoritySet {
     entries: Vec<AuthorityEntry>,
 }
 impl AuthoritySet {
+    pub fn origin_reference(
+        &self,
+        epoch: &super::EpochManifest,
+        selection: &registry::RegistrySelection,
+        snapshot: &str,
+    ) -> StoreResult<SourceAuthorityReference> {
+        self.entries
+            .iter()
+            .find(|entry| {
+                &entry.manifest.epoch == epoch
+                    && &entry.manifest.selection == selection
+                    && entry.manifest.source_snapshot == snapshot
+            })
+            .map(|entry| entry.reference.clone())
+            .ok_or_else(invalid)
+    }
+    pub fn require_origin(
+        &self,
+        reference: &SourceAuthorityReference,
+        epoch: &super::EpochManifest,
+        selection: &registry::RegistrySelection,
+        snapshot: &str,
+    ) -> StoreResult<()> {
+        if self.origin_reference(epoch, selection, snapshot)? != *reference {
+            return Err(invalid());
+        }
+        Ok(())
+    }
     pub fn empty() -> Self {
         Self {
             references: Vec::new(),

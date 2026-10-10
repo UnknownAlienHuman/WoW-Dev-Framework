@@ -21,8 +21,8 @@ use database::Database;
 pub use gc::{ProjectGcPlan, ProjectGcPolicy, ProjectGcReceipt, ProjectGcReport};
 pub use migration::{
     MappedMigrationRoot, MigrationCandidate, MigrationCurrentMapping, MigrationMapping,
-    MigrationPreparation, MigrationReadyReceipt, MigrationReceipt, ReadyMigration,
-    ValidatedMigration,
+    MigrationPreparation, MigrationReadyReceipt, MigrationReceipt, MigrationSelectionCandidate,
+    MigrationSelectionReceipt, ReadyMigration, ValidatedMigration,
 };
 pub use model::{
     CurrentPublication, CurrentRecordId, EpochId, EpochManifest, GC_PHYSICAL_PROFILE,

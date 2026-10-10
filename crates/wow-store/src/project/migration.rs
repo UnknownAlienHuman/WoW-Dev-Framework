@@ -4,7 +4,9 @@ mod live;
 mod model;
 mod plan;
 mod ready;
+pub(in crate::project) mod selection;
 pub use ready::{MappedMigrationRoot, MigrationPreparation, MigrationReadyReceipt, ReadyMigration};
+pub use selection::{MigrationSelectionCandidate, MigrationSelectionReceipt};
 #[cfg(test)]
 mod tests;
 use super::{

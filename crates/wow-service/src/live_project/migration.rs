@@ -4,8 +4,9 @@ use std::{path::Path, sync::atomic::AtomicBool};
 use wow_graph::GraphPartitionSnapshot;
 use wow_project::replay::publication::{self, AcquiredProjectPair};
 use wow_store::project::{
-    CurrentRecordId, MigrationCandidate, MigrationPreparation, ReadyMigration, RegistrySelection,
-    ValidatedMigration, VerifiedBackup,
+    CurrentRecordId, MigrationCandidate, MigrationPreparation, MigrationSelectionCandidate,
+    MigrationSelectionReceipt, ReadyMigration, RegistrySelection, ValidatedMigration,
+    VerifiedBackup,
 };
 use wow_store::{OperationId, StoreErrorCode};
 
@@ -61,6 +62,72 @@ fn finish_preparation(
 }
 
 impl LiveProjectStore {
+    /// Stage one exact READY installation without selecting its epoch.
+    #[allow(clippy::too_many_arguments)]
+    pub fn stage_ready_selection(
+        &self,
+        migration: &ValidatedMigration,
+        ready: &ReadyMigration,
+        operation_id: &str,
+        expected: &RegistrySelection,
+        expected_current: Option<&CurrentRecordId>,
+        stop: &AtomicBool,
+    ) -> ServiceResult<MigrationSelectionCandidate> {
+        let id = OperationId::new(operation_id).map_err(store_error)?;
+        self.store
+            .stage_ready_selection(migration, ready, &id, expected, expected_current, stop)
+            .map_err(store_error)
+    }
+    /// Reopen the complete original request or its already selected installation.
+    pub fn reopen_ready_selection(
+        &self,
+        migration: &ValidatedMigration,
+        ready: &ReadyMigration,
+        operation_id: &str,
+        expected_request: &str,
+        stop: &AtomicBool,
+    ) -> ServiceResult<MigrationSelectionCandidate> {
+        let id = OperationId::new(operation_id).map_err(store_error)?;
+        self.store
+            .reopen_ready_selection(migration, ready, &id, expected_request, stop)
+            .map_err(store_error)
+    }
+    /// Replay every native Project/Graph target before selecting or adopting it.
+    pub fn activate_ready_selection(
+        &mut self,
+        migration: &ValidatedMigration,
+        ready: &ReadyMigration,
+        candidate: MigrationSelectionCandidate,
+        stop: &AtomicBool,
+    ) -> ServiceResult<MigrationSelectionReceipt> {
+        let mut checks = Vec::new();
+        for generation in candidate.target_generations() {
+            let read = candidate
+                .read_generation(&generation, stop)
+                .map_err(store_error)?;
+            AcquiredProjectPair::read(&read, stop).map_err(project_error)?;
+            checks.push(
+                read.owner_validation(&[
+                    GraphPartitionSnapshot::STORAGE_CHECK,
+                    publication::STORAGE_CHECK,
+                ])
+                .map_err(store_error)?,
+            );
+        }
+        self.store
+            .activate_ready_selection(migration, ready, candidate, checks, stop)
+            .map_err(store_error)
+    }
+    pub fn migration_selection_receipt(
+        &self,
+        operation_id: &str,
+        expected_request: &str,
+    ) -> ServiceResult<Option<MigrationSelectionReceipt>> {
+        let id = OperationId::new(operation_id).map_err(store_error)?;
+        self.store
+            .migration_selection_receipt(&id, expected_request)
+            .map_err(store_error)
+    }
     /// Export a ready target with exact guarded portable source selector/hold authority.
     #[allow(clippy::too_many_arguments)]
     pub fn export_ready_migration_to_new(

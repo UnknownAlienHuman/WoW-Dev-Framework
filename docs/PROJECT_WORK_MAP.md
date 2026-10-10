@@ -31,8 +31,9 @@ Guarded recovery from quarantine, portable hold authority and supported inactive
 physical v1/v2 to v3 migration are now executable. Private immutable preparation now
 reconstructs mapped roots and target-local Current. Guarded READY-target export
 retains original-epoch selector/hold evidence through backup, isolated restore,
-replacement and quarantine. Cross-epoch selection, portable full migration history
-and object/epoch/platform gates remain next; full W14/E2,
+replacement and quarantine. Guarded cross-epoch selection and exact reconciliation
+are now executable. Portable full migration history and object/epoch/platform
+gates remain open; full W14/E2,
 W15 and W16 acceptance remain open. See
 [PROJECT_GC.md](../crates/wow-store/PROJECT_GC.md).
 
@@ -190,7 +191,27 @@ and workspace policy, fmt, check, strict Clippy, tests (917 passed, 1 ignored,
 107 targets), strict rustdoc and build pass on 2026-10-09. Source SQL/history
 hydration, live cross-epoch selection/reconciliation, portable entire migration
 history, interrupted-copy/power-loss/platform and full W16/E2/source/runtime
-acceptance remain open. W17-W26 are unchanged.
+acceptance remain open. The following checkpoint supplies cross-epoch selection.
+
+The selection owner installs the independently verified READY target under exact
+original selector, optional Current and complete source-snapshot guards. A separate
+durable ledger and one native copy precede an explicit Working handoff; fresh native
+Project/Graph owners replay every target generation before one outer schema-6
+selector rename. Original epochs/holds remain archival source authority. The held
+target lifetime preserves staged leases, inherited writer locks and shared reader
+admission; old readers retain their source. Exact staged/selected reconciliation
+does not recopy or reactivate SQL, and acknowledgment remains Unknown.
+
+Two native store cases and the extended native service lifecycle pass, including
+obsolete-source-owner adoption, later legitimate publication/historical receipts,
+backup/restore and fresh root reopen. Workspace policy, fmt, check, strict Clippy,
+tests (919 passed, 1 ignored, 107 targets), strict rustdoc and build pass on
+2026-10-09. See [PROJECT_MIGRATION_SELECTION.md](PROJECT_MIGRATION_SELECTION.md).
+Full W16/E2, portable entire migration history, payload/runtime transformation,
+arbitrary partial-copy/inside-write/power-loss/deletion/platform and source/runtime
+acceptance remain open. The next functional owner is W17 exact materialized source
+profile/inventory admission; W18-W26 remain open. Gethe preparation stays deferred
+until product implementation/build is complete.
 
 Fresh W16 policy, fmt, workspace check, strict Clippy, tests (877 passed,
 1 ignored, 106 targets), rustdoc and build passed on 2026-10-09. The ignored consumer and source/runtime gates stay
@@ -272,7 +293,7 @@ full graph acceptance and the checkpoint's CI conclusions remain open.
 | [Issue 103](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/103) | Executable structural mutations and admitted per-rule fixtures | After functional implementation; frozen fixtures are not rewritten by tests |
 | [W12 / PR 80](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/80) | Extend real producer chains and conflict assessment | Exact retained records, publication validation and bounded explanations are executable; full acceptance remains open |
 | [W13 / PR 81](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/81) | Full live-pair acceptance | Physical Lua, standalone TOC/XML and declared-package native replay plus coherent leased acquisition are executable; full acceptance remains open |
-| [W14 / PR 82](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/82), [W15 / PR 83](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/83), [W16 / PR 84](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/84) | Incremental invalidation, retained roots/GC, backup/recovery | Exact generation/durable reconciliation gates; source selector/hold portability is executable, live cross-epoch selection/retry and full W16/E2 remain open |
+| [W14 / PR 82](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/82), [W15 / PR 83](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/83), [W16 / PR 84](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/84) | Incremental invalidation, retained roots/GC, backup/recovery | Source selector/hold portability and guarded live cross-epoch selection/retry are executable; portable full history and full W16/E2 acceptance remain open |
 | [W17 / PR 85](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/85), [W18 / PR 86](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/86), [W19 / PR 87](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/87) | Blizzard source universe, Project Map/skeletons, context packs | Real prerequisite views before context |
 | [W20 / PR 88](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/88), [W21 / PR 89](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/89) | Search, lineage and static impact | Exact immutable generation inputs |
 | [W22 / PR 90](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/90), [W23 / PR 91](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/91) | Sessions/MCP and private LSP overlays | Implemented capabilities only |
