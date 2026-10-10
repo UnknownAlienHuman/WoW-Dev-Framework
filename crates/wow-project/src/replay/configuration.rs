@@ -146,6 +146,8 @@ pub(super) struct ReplayConfiguration {
     expected_configuration_digest: ContentDigest<CanonicalResult>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     package_xml_binding_profile: Option<PackageXmlBindingProfile>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    platform_graph_profile: Option<crate::PlatformGraphProfile>,
 }
 impl ReplayConfiguration {
     pub(super) fn from_configuration(config: &ProjectConfiguration) -> ProjectResult<Self> {
@@ -173,6 +175,7 @@ impl ReplayConfiguration {
             budgets: ReplayBudgets::capture(config.budget_policy()),
             expected_configuration_digest: config.configuration_digest(),
             package_xml_binding_profile: config.package_xml_binding_profile(),
+            platform_graph_profile: config.platform_graph_profile(),
         })
     }
     pub(super) fn profile(&self) -> &ProfileIdentity {
@@ -183,6 +186,9 @@ impl ReplayConfiguration {
     }
     pub(super) fn package_xml_binding_profile(&self) -> Option<PackageXmlBindingProfile> {
         self.package_xml_binding_profile
+    }
+    pub(super) fn platform_graph_profile(&self) -> Option<crate::PlatformGraphProfile> {
+        self.platform_graph_profile
     }
     pub(super) fn rebuild(
         &self,
@@ -232,6 +238,10 @@ impl ReplayConfiguration {
         };
         let builder = match self.package_xml_binding_profile {
             Some(profile) => builder.with_package_xml_bindings(profile),
+            None => builder,
+        };
+        let builder = match self.platform_graph_profile {
+            Some(profile) => builder.with_platform_graph_profile(profile),
             None => builder,
         };
         let config = builder.build()?;

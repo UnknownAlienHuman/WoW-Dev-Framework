@@ -4,6 +4,7 @@ use crate::load::xml_references::{
     XmlReferenceKind, XmlReferenceOrder, XmlReferenceRecord, XmlReferenceResolution,
 };
 use crate::load::{ProjectLoadPlan, XmlSourceSpan};
+use wow_core::{CanonicalResult, ContentDigest};
 
 pub(super) const MAX_DECLARATIONS: usize = 4096;
 pub(super) const MAX_INHERITANCE_REFERENCES: usize = 8192;
@@ -37,6 +38,14 @@ pub enum ProjectGraphXmlReferenceOutcome {
 pub struct ProjectGraphXmlReference {
     pub reference_id: String,
     pub outcome: ProjectGraphXmlReferenceOutcome,
+    /// Owning retained package and selected-plan digest; absent on legacy rows.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub package: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub load_plan_digest: Option<ContentDigest<CanonicalResult>>,
+    /// Qualified source document within that exact package plan.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub document: Option<String>,
 }
 
 pub(super) struct XmlProposals {
@@ -112,142 +121,188 @@ pub(super) fn project(
         entities: Vec::new(),
         relations: Vec::new(),
     };
-    let Some(plan) = project.configuration().load_plan() else {
+    let scopes = super::load_inputs::scopes(project, stop)?;
+    if scopes.is_empty() {
         return Ok(output);
-    };
-    let report = plan.xml_references();
-    if report.declarations().len() > MAX_DECLARATIONS
-        || report
+    }
+    // Bound the complete operation before retaining any package's proposals.
+    let mut declaration_count = 0usize;
+    let mut inheritance_count = 0usize;
+    for scope in &scopes {
+        crate::analyzer::checkpoint(stop)?;
+        let report = scope.plan().xml_references();
+        declaration_count = declaration_count
+            .checked_add(report.declarations().len())
+            .ok_or_else(exhausted)?;
+        for reference in report.references() {
+            crate::analyzer::checkpoint(stop)?;
+            if reference.kind == XmlReferenceKind::Inherits {
+                inheritance_count = inheritance_count.checked_add(1).ok_or_else(exhausted)?;
+            }
+        }
+        if declaration_count > MAX_DECLARATIONS || inheritance_count > MAX_INHERITANCE_REFERENCES {
+            return Err(exhausted());
+        }
+    }
+    for scope in scopes {
+        let plan = scope.plan();
+        let report = plan.xml_references();
+        let sources: BTreeMap<_, _> = plan
+            .sources()
+            .iter()
+            .map(|s| (s.path.as_str(), s))
+            .collect();
+        let mut declaration_ids = BTreeMap::new();
+        for (id, declaration) in report.declarations() {
+            crate::analyzer::checkpoint(stop)?;
+            let local_source = sources
+                .get(declaration.document.as_str())
+                .ok_or_else(invalid)?;
+            if local_source.content_digest != declaration.content_digest
+                || id != &declaration.occurrence_id
+            {
+                return Err(invalid());
+            }
+            let source = scope.mapped_source(&declaration.document)?;
+            let file_id = file_ids.get(source.path.as_str()).ok_or_else(invalid)?;
+            charge(
+                text_bytes,
+                source.path.len().saturating_mul(4) + id.len().saturating_mul(8) + 256,
+            )?;
+            let span = source_span(plan, &declaration.document, &declaration.span)?;
+            let (handle, evidence) = support(project, &source, span, provenance)?;
+            let proposal_id = scope.proposal_id("xml", &declaration.document, id)?;
+            let ownership_proposal_id =
+                scope.proposal_id("xml-owner", &declaration.document, id)?;
+            output.entities.push(
+                GraphEntityProposal::new(
+                    proposal_id.as_str(),
+                    "xml_source_declaration",
+                    BTreeMap::from([
+                        (
+                            "document".into(),
+                            GraphProposalValue::String(source.path.clone().into()),
+                        ),
+                        (
+                            "occurrence".into(),
+                            GraphProposalValue::Identifier(id.clone().into()),
+                        ),
+                    ]),
+                    GraphConfidence::Proven,
+                    vec![handle],
+                    vec![evidence],
+                    Vec::new(),
+                )
+                .map_err(|_| invalid())?,
+            );
+            output.relations.push(
+                GraphRelationProposal::new(
+                    ownership_proposal_id.as_str(),
+                    "source_declaration_owns",
+                    GraphRelationProposalInput {
+                        source: GraphProposalEndpoint::Proposed(file_id.clone().into()),
+                        target: GraphProposalEndpoint::Proposed(proposal_id.clone().into()),
+                        confidence: GraphConfidence::Proven,
+                        source_handle_ids: vec![handle],
+                        evidence_ids: vec![evidence],
+                        coverage_ids: Vec::new(),
+                    },
+                )
+                .map_err(|_| invalid())?,
+            );
+            declaration_ids.insert(id.as_str(), (proposal_id.clone(), handle, evidence));
+            provenance
+                .xml_declarations
+                .push(ProjectGraphXmlDeclaration {
+                    occurrence_id: id.clone(),
+                    path: source.path,
+                    proposal_id,
+                    ownership_proposal_id,
+                    source_handle_id: handle,
+                    evidence_id: evidence,
+                });
+        }
+        for reference in report
             .references()
             .iter()
             .filter(|r| r.kind == XmlReferenceKind::Inherits)
-            .count()
-            > MAX_INHERITANCE_REFERENCES
-    {
-        return Err(exhausted());
-    }
-    let sources: BTreeMap<_, _> = plan
-        .sources()
-        .iter()
-        .map(|s| (s.path.as_str(), s))
-        .collect();
-    let mut declaration_ids = BTreeMap::new();
-    for (id, declaration) in report.declarations() {
-        crate::analyzer::checkpoint(stop)?;
-        let source = sources
-            .get(declaration.document.as_str())
-            .ok_or_else(invalid)?;
-        if source.content_digest != declaration.content_digest || id != &declaration.occurrence_id {
-            return Err(invalid());
-        }
-        let file_id = file_ids
-            .get(declaration.document.as_str())
-            .ok_or_else(invalid)?;
-        charge(
-            text_bytes,
-            declaration.document.len().saturating_mul(4) + id.len().saturating_mul(8) + 256,
-        )?;
-        let span = source_span(plan, &declaration.document, &declaration.span)?;
-        let (handle, evidence) = support(project, source, span, provenance)?;
-        let proposal_id = format!("xml:{id}");
-        let ownership_proposal_id = format!("xml-owner:{id}");
-        output.entities.push(
-            GraphEntityProposal::new(
-                proposal_id.as_str(),
-                "xml_source_declaration",
-                BTreeMap::from([
-                    (
-                        "document".into(),
-                        GraphProposalValue::String(declaration.document.clone().into()),
-                    ),
-                    (
-                        "occurrence".into(),
-                        GraphProposalValue::Identifier(id.clone().into()),
-                    ),
-                ]),
-                GraphConfidence::Proven,
-                vec![handle],
-                vec![evidence],
-                Vec::new(),
-            )
-            .map_err(|_| invalid())?,
-        );
-        output.relations.push(
-            GraphRelationProposal::new(
-                ownership_proposal_id.as_str(),
-                "source_declaration_owns",
-                GraphRelationProposalInput {
-                    source: GraphProposalEndpoint::Proposed(file_id.clone().into()),
-                    target: GraphProposalEndpoint::Proposed(proposal_id.clone().into()),
-                    confidence: GraphConfidence::Proven,
-                    source_handle_ids: vec![handle],
-                    evidence_ids: vec![evidence],
-                    coverage_ids: Vec::new(),
-                },
-            )
-            .map_err(|_| invalid())?,
-        );
-        declaration_ids.insert(id.as_str(), (proposal_id.clone(), handle, evidence));
-        provenance
-            .xml_declarations
-            .push(ProjectGraphXmlDeclaration {
-                occurrence_id: id.clone(),
-                path: declaration.document.clone(),
-                proposal_id,
-                ownership_proposal_id,
-                source_handle_id: handle,
-                evidence_id: evidence,
-            });
-    }
-    for reference in report
-        .references()
-        .iter()
-        .filter(|r| r.kind == XmlReferenceKind::Inherits)
-    {
-        crate::analyzer::checkpoint(stop)?;
-        charge(
-            text_bytes,
-            reference.reference_id.len().saturating_mul(4) + 128,
-        )?;
-        let outcome = match target(plan, reference)? {
-            Err(outcome) => outcome,
-            Ok(target_id) => {
+        {
+            crate::analyzer::checkpoint(stop)?;
+            let scoped_document = if scope.package().is_some() {
                 let declaration = report
                     .declarations()
                     .get(&reference.source_id)
                     .ok_or_else(invalid)?;
-                let source = sources
-                    .get(declaration.document.as_str())
-                    .ok_or_else(invalid)?;
-                let span = source_span(plan, &declaration.document, &reference.attribute_span)?;
-                let (handle, evidence) = support(project, source, span, provenance)?;
-                let proposal_id = format!("xml-inherits:{}", reference.reference_id);
-                let source_node = declaration_ids
-                    .get(reference.source_id.as_str())
-                    .ok_or_else(invalid)?;
-                let target_node = declaration_ids.get(target_id).ok_or_else(invalid)?;
-                output.relations.push(
-                    GraphRelationProposal::new(
-                        proposal_id.as_str(),
-                        "source_xml_inherits",
-                        GraphRelationProposalInput {
-                            source: GraphProposalEndpoint::Proposed(source_node.0.clone().into()),
-                            target: GraphProposalEndpoint::Proposed(target_node.0.clone().into()),
-                            confidence: GraphConfidence::Derived,
-                            source_handle_ids: vec![handle, target_node.1],
-                            evidence_ids: vec![evidence, target_node.2],
-                            coverage_ids: Vec::new(),
-                        },
-                    )
-                    .map_err(|_| invalid())?,
-                );
-                ProjectGraphXmlReferenceOutcome::Projected { proposal_id }
-            }
-        };
-        provenance.xml_inheritance.push(ProjectGraphXmlReference {
-            reference_id: reference.reference_id.clone(),
-            outcome,
-        });
+                Some(scope.qualified_path(&declaration.document)?)
+            } else {
+                None
+            };
+            charge(
+                text_bytes,
+                reference.reference_id.len().saturating_mul(4)
+                    + 128
+                    + scope
+                        .package()
+                        .map_or(0, |package| package.len().saturating_mul(2) + 128)
+                    + scoped_document
+                        .as_ref()
+                        .map_or(0, |document| document.len().saturating_mul(2)),
+            )?;
+            let outcome = match target(plan, reference)? {
+                Err(outcome) => outcome,
+                Ok(target_id) => {
+                    let declaration = report
+                        .declarations()
+                        .get(&reference.source_id)
+                        .ok_or_else(invalid)?;
+                    let local_source = sources
+                        .get(declaration.document.as_str())
+                        .ok_or_else(invalid)?;
+                    if local_source.content_digest != declaration.content_digest {
+                        return Err(invalid());
+                    }
+                    let source = scope.mapped_source(&declaration.document)?;
+                    let span = source_span(plan, &declaration.document, &reference.attribute_span)?;
+                    let (handle, evidence) = support(project, &source, span, provenance)?;
+                    let proposal_id = scope.proposal_id(
+                        "xml-inherits",
+                        &declaration.document,
+                        &reference.reference_id,
+                    )?;
+                    let source_node = declaration_ids
+                        .get(reference.source_id.as_str())
+                        .ok_or_else(invalid)?;
+                    let target_node = declaration_ids.get(target_id).ok_or_else(invalid)?;
+                    output.relations.push(
+                        GraphRelationProposal::new(
+                            proposal_id.as_str(),
+                            "source_xml_inherits",
+                            GraphRelationProposalInput {
+                                source: GraphProposalEndpoint::Proposed(
+                                    source_node.0.clone().into(),
+                                ),
+                                target: GraphProposalEndpoint::Proposed(
+                                    target_node.0.clone().into(),
+                                ),
+                                confidence: GraphConfidence::Derived,
+                                source_handle_ids: vec![handle, target_node.1],
+                                evidence_ids: vec![evidence, target_node.2],
+                                coverage_ids: Vec::new(),
+                            },
+                        )
+                        .map_err(|_| invalid())?,
+                    );
+                    ProjectGraphXmlReferenceOutcome::Projected { proposal_id }
+                }
+            };
+            provenance.xml_inheritance.push(ProjectGraphXmlReference {
+                reference_id: reference.reference_id.clone(),
+                outcome,
+                package: scope.package().map(str::to_owned),
+                load_plan_digest: scope.package().map(|_| plan.digest()),
+                document: scoped_document,
+            });
+        }
     }
     crate::analyzer::checkpoint(stop)?;
     Ok(output)

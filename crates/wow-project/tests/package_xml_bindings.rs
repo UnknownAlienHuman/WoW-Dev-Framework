@@ -95,6 +95,14 @@ impl FixtureRoot {
         &self,
         stop: &AtomicBool,
     ) -> Result<Arc<PlatformPackageSpecialization>, Box<dyn Error>> {
+        self.packages_with_selection(None, stop)
+    }
+
+    fn packages_with_selection(
+        &self,
+        unselected_root: Option<&str>,
+        stop: &AtomicBool,
+    ) -> Result<Arc<PlatformPackageSpecialization>, Box<dyn Error>> {
         let profile = BlizzardUiSourceProfile::new(BlizzardUiSourceProfileRequest {
             profile_id: "profile:fixture:package-xml-bindings-v1".parse()?,
             source_class: PlatformSourceClass::SyntheticFixture,
@@ -181,7 +189,7 @@ impl FixtureRoot {
                 ProjectPackageInput::new(
                     *package,
                     format!("UI/{package}"),
-                    true,
+                    Some(*package) != unselected_root,
                     vec![ProjectPackageVariantInput::new(
                         ProjectDiskFile::new("Fixture.toc"),
                         true,
@@ -274,14 +282,28 @@ fn publish(
     selected: Option<PackageXmlBindingProfile>,
     stop: &AtomicBool,
 ) -> Result<ProjectPublisher, Box<dyn Error>> {
+    publish_graph(packages, selected, false, stop)
+}
+
+fn publish_graph(
+    packages: &Arc<PlatformPackageSpecialization>,
+    selected: Option<PackageXmlBindingProfile>,
+    graph: bool,
+    stop: &AtomicBool,
+) -> Result<ProjectPublisher, Box<dyn Error>> {
     let builder = configuration_builder(
         ProjectKind::BlizzardUiPlatformSource,
         packages.source().profile().target(),
     )?
     .platform_packages(Arc::clone(packages))?;
-    let configuration = match selected {
+    let builder = match selected {
         Some(profile) => builder.with_package_xml_bindings(profile),
         None => builder,
+    };
+    let configuration = if graph {
+        builder.with_platform_graph_profile(wow_project::PlatformGraphProfile::PackageProjectionV1)
+    } else {
+        builder
     }
     .build()?;
     let library = LuaWorkspaceSnapshot::build(
@@ -299,6 +321,242 @@ fn publish(
         stop,
     )?;
     Ok(publisher)
+}
+
+#[test]
+fn selected_package_graph_preserves_local_ids_shared_globals_and_native_replay() -> TestResult {
+    use wow_project::graph::{
+        ProjectGraphMixinOutcome, ProjectGraphScriptQueryOutcome, ProjectGraphStateOutcome,
+        build_source_graph_proposals,
+    };
+    let stop = AtomicBool::new(false);
+    let root = FixtureRoot::new()?;
+    let xml = SHARED_XML
+        .replace(
+            "name=\"Receiver\"",
+            "name=\"Receiver\" mixin=\"UniqueMixin\"",
+        )
+        .replace(
+            "<OnClick function=\"UniqueHandler\"/>",
+            "<OnClick function=\"UniqueHandler\"/><OnHide>self:Hide()</OnHide>",
+        );
+    for package in ["Alpha", "Beta"] {
+        let directory = root.0.join("UI").join(package);
+        std::fs::write(directory.join("frames.xml"), &xml)?;
+        let declarations = if package == "Alpha" {
+            "## SavedVariables: SharedState, AlphaState\n"
+        } else {
+            "## SavedVariables: SharedState\n"
+        };
+        let partial_toc = TOC.replace("defs.lua\n", "defs.lua\nmissing.lua\n");
+        std::fs::write(
+            directory.join("Fixture.toc"),
+            format!("{declarations}{partial_toc}"),
+        )?;
+    }
+    let lua = root.0.join("UI/Alpha/defs.lua");
+    let mut text = std::fs::read_to_string(&lua)?;
+    text.push_str("UniqueMixin = {}\nAlphaState = {}\nSharedState = {}\nfunction ReadState() return AlphaState.value, SharedState.value end\n");
+    std::fs::write(lua, text)?;
+    std::fs::write(
+        root.0.join("UI/Empty/frames.xml"),
+        "<Ui xmlns=\"http://www.blizzard.com/wow/ui/\"><Script>local captured_chunk = true</Script><Frame name=\"UnreachableReceiver\"><Scripts><OnShow>self:Show()</OnShow></Scripts></Frame></Ui>\n",
+    )?;
+    let packages = root.packages_with_selection(Some("Empty"), &stop)?;
+    assert!(!root.0.exists());
+    assert!(publish_graph(&packages, None, true, &stop).is_err());
+    let old = publish(
+        &packages,
+        Some(PackageXmlBindingProfile::SameSessionV1),
+        &stop,
+    )?;
+    let selected = publish_graph(
+        &packages,
+        Some(PackageXmlBindingProfile::SameSessionV1),
+        true,
+        &stop,
+    )?;
+    let old_view = old.open_current()?;
+    let view = selected.open_current()?;
+    assert_ne!(view.snapshot_id(), old_view.snapshot_id());
+    let old_graph = build_source_graph_proposals(&old_view, &stop)?;
+    let (_, _, _, old_provenance, _) = old_graph.into_parts();
+    assert_eq!(
+        serde_json::to_value(&old_provenance)?["profile"],
+        wow_project::graph::SOURCE_GRAPH_PROFILE
+    );
+    assert!(old_provenance.xml_declarations().is_empty());
+    let (registry, batch, coverage, provenance, limits) =
+        build_source_graph_proposals(&view, &stop)?.into_parts();
+    let wire = serde_json::to_value(&provenance)?;
+    assert_eq!(
+        wire["profile"],
+        wow_project::graph::PACKAGE_SOURCE_GRAPH_PROFILE
+    );
+    assert!(wire.get("xml_binding_report").is_none());
+    assert!(wire.get("package_xml_binding_report").is_some());
+    assert!(provenance.script_sites().iter().any(|site| {
+        site.package.as_deref() == Some("Empty")
+            && site.consumer_id.is_none()
+            && site.blockers.contains(&"package_unreachable")
+            && site.blockers.contains(&"owner_not_captured")
+    }));
+    assert!(provenance.script_sites().iter().any(|site| {
+        site.package.as_deref() == Some("Empty")
+            && site.consumer_id.is_some()
+            && site.blockers.contains(&"package_unreachable")
+            && !site.blockers.contains(&"inline_parse_failed")
+    }));
+    assert!(provenance.package_loads().iter().any(|load| load.outcome
+        == wow_project::graph::ProjectGraphPackageLoadOutcome::SourceNotRegistered));
+    let alpha_plan = packages
+        .load_plan()
+        .package_plan("Alpha")
+        .ok_or("alpha plan missing")?;
+    let receiver = alpha_plan
+        .xml_references()
+        .declarations()
+        .values()
+        .find(|row| row.name.as_deref() == Some("Receiver"))
+        .ok_or("receiver missing")?;
+    let matching = provenance
+        .xml_declarations()
+        .iter()
+        .filter(|row| row.occurrence_id == receiver.occurrence_id)
+        .collect::<Vec<_>>();
+    assert_eq!(matching.len(), 2);
+    assert_eq!(matching[0].occurrence_id, matching[1].occurrence_id);
+    assert_ne!(matching[0].path, matching[1].path);
+    assert_ne!(matching[0].proposal_id, matching[1].proposal_id);
+    assert_eq!(provenance.inline_handlers().len(), 2);
+    assert_ne!(
+        provenance.inline_handlers()[0].unit_id,
+        provenance.inline_handlers()[1].unit_id
+    );
+    assert_eq!(provenance.xml_mixins().len(), 2);
+    assert!(
+        provenance
+            .xml_mixins()
+            .iter()
+            .any(|row| matches!(row.outcome, ProjectGraphMixinOutcome::Projected { .. }))
+    );
+    assert!(
+        provenance
+            .xml_mixins()
+            .iter()
+            .any(|row| row.outcome == ProjectGraphMixinOutcome::LoadOrderUnresolved)
+    );
+    let bindings = view
+        .snapshot()
+        .analyzer_binding()
+        .package_xml_bindings()
+        .ok_or("package bindings missing")?;
+    for reference in provenance.xml_mixins() {
+        let address = reference
+            .package_binding_address
+            .as_ref()
+            .ok_or("native binding address missing")?;
+        assert_eq!(
+            bindings.resolve_binding(address)?.kind,
+            XmlLuaBindingKind::Mixin
+        );
+    }
+    assert!(
+        provenance
+            .script_sites()
+            .iter()
+            .flat_map(|site| &site.queries)
+            .any(|query| query.outcome == ProjectGraphScriptQueryOutcome::LoadOrderUnresolved)
+    );
+    let shared = provenance
+        .state_roots()
+        .iter()
+        .filter(|row| row.name == "SharedState")
+        .collect::<Vec<_>>();
+    assert_eq!(shared.len(), 2);
+    assert!(shared.iter().all(|row| row.ambiguous));
+    assert_ne!(shared[0].root_id, shared[1].root_id);
+    assert!(
+        provenance
+            .state_sites()
+            .iter()
+            .any(|row| row.outcome == ProjectGraphStateOutcome::AmbiguousDeclaration)
+    );
+    let unique = provenance
+        .state_roots()
+        .iter()
+        .find(|row| row.name == "AlphaState")
+        .ok_or("unique state root missing")?;
+    assert!(!unique.ambiguous);
+    assert!(
+        provenance
+            .state_bindings()
+            .iter()
+            .any(|row| row.root_id == unique.root_id)
+    );
+    let foundation = wow_graph::GraphSnapshot::build(
+        batch.universe().clone(),
+        batch.generation().clone(),
+        limits,
+        Vec::new(),
+        Vec::new(),
+        coverage.clone(),
+    )?;
+    let graph = wow_graph::GraphPartitionSnapshot::new(
+        registry,
+        foundation,
+        batch.source_context_id(),
+        &stop,
+    )?;
+    let prepared = graph.prepare_replacement(
+        wow_graph::GraphPartitionReplacement {
+            expected_snapshot_id: graph.snapshot().snapshot_id().clone(),
+            expected_partition_digest: None,
+            producer_version: env!("CARGO_PKG_VERSION").into(),
+            batch: batch.clone(),
+            coverage: coverage.clone(),
+        },
+        &stop,
+    )?;
+    let graph = prepared.candidate();
+    let decode =
+        || serde_json::from_value::<wow_project::graph::RetainedProjectGraphEvidence>(wire.clone());
+    assert!(decode()?.admit(graph, &stop).is_err());
+    let (catalog, _) = decode()?.admit_with_platform_profile(
+        graph,
+        wow_project::PlatformGraphProfile::PackageProjectionV1,
+        &stop,
+    )?;
+    assert_eq!(
+        catalog.context().project_generation(),
+        Some(view.project_generation())
+    );
+    assert!(wow_project::graph::persistence::records(&wire, graph, &stop).is_err());
+    assert!(
+        !wow_project::graph::persistence::records_with_platform_profile(
+            &wire,
+            graph,
+            wow_project::PlatformGraphProfile::PackageProjectionV1,
+            &stop,
+        )?
+        .is_empty()
+    );
+    let archive = ProjectReplay::capture(&selected, &stop)?;
+    let replay_wire = serde_json::to_value(&archive)?;
+    assert_eq!(replay_wire["schema"], "wow-project/native-project-replay/7");
+    let restored =
+        ProjectReplay::from_json(&serde_json::to_vec(&archive)?, &stop)?.hydrate(&stop)?;
+    let (_, restored_batch, restored_coverage, restored_provenance, _) =
+        build_source_graph_proposals(&restored, &stop)?.into_parts();
+    assert_eq!(restored_batch, batch);
+    assert_eq!(restored_coverage, coverage);
+    assert_eq!(restored_provenance, provenance);
+    let mut wrong_recipe = replay_wire;
+    wrong_recipe["schema"] = serde_json::json!("wow-project/native-project-replay/6");
+    assert!(ProjectReplay::from_json(&serde_json::to_vec(&wrong_recipe)?, &stop).is_err());
+    let cancelled = AtomicBool::new(true);
+    assert!(build_source_graph_proposals(&view, &cancelled).is_err());
+    Ok(())
 }
 
 #[test]

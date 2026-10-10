@@ -34,7 +34,7 @@ pub use analyzer::{
 pub use configuration::{
     AnalyzerBindingDeclaration, PROJECT_CONFIGURATION_SCHEMA_VERSION, PROJECT_CONTRACT_ID,
     PROJECT_GENERATION_SCHEMA_VERSION, PROJECT_SNAPSHOT_SCHEMA_VERSION, PackageXmlBindingProfile,
-    ProjectBudgetPolicy, ProjectCapabilityPolicy, ProjectConfiguration,
+    PlatformGraphProfile, ProjectBudgetPolicy, ProjectCapabilityPolicy, ProjectConfiguration,
     ProjectConfigurationBuilder, ProjectKind,
 };
 pub use error::{ProjectError, ProjectErrorCode, ProjectPhase, ProjectResult};

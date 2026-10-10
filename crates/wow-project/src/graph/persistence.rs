@@ -21,7 +21,24 @@ pub fn records(
     graph: &GraphPartitionSnapshot,
     stop: &AtomicBool,
 ) -> ProjectResult<Vec<PartitionRecord>> {
-    validate(provenance, graph, stop)?;
+    records_profile(provenance, graph, None, stop)
+}
+/// Native package recipe, selected separately from the legacy transport route.
+pub fn records_with_platform_profile(
+    provenance: &Value,
+    graph: &GraphPartitionSnapshot,
+    profile: crate::PlatformGraphProfile,
+    stop: &AtomicBool,
+) -> ProjectResult<Vec<PartitionRecord>> {
+    records_profile(provenance, graph, Some(profile), stop)
+}
+fn records_profile(
+    provenance: &Value,
+    graph: &GraphPartitionSnapshot,
+    profile: Option<crate::PlatformGraphProfile>,
+    stop: &AtomicBool,
+) -> ProjectResult<Vec<PartitionRecord>> {
+    validate(provenance, graph, profile, stop)?;
     let root = provenance.as_object().ok_or_else(invalid)?;
     if root.is_empty() || root.len() > 64 {
         return Err(invalid());
@@ -53,6 +70,23 @@ pub fn records(
 pub fn read_provenance(
     read: &ReadSnapshot,
     graph: &GraphPartitionSnapshot,
+    stop: &AtomicBool,
+) -> ProjectResult<Value> {
+    read_profile(read, graph, None, stop)
+}
+/// Reopen only the explicitly selected native package evidence recipe.
+pub fn read_provenance_with_platform_profile(
+    read: &ReadSnapshot,
+    graph: &GraphPartitionSnapshot,
+    profile: crate::PlatformGraphProfile,
+    stop: &AtomicBool,
+) -> ProjectResult<Value> {
+    read_profile(read, graph, Some(profile), stop)
+}
+fn read_profile(
+    read: &ReadSnapshot,
+    graph: &GraphPartitionSnapshot,
+    profile: Option<crate::PlatformGraphProfile>,
     stop: &AtomicBool,
 ) -> ProjectResult<Value> {
     let keys: Vec<String> = load(
@@ -88,7 +122,7 @@ pub fn read_provenance(
         return Err(invalid());
     }
     let value = Value::Object(object);
-    validate(&value, graph, stop)?;
+    validate(&value, graph, profile, stop)?;
     Ok(value)
 }
 /// Exact source/analyzer/graph identity labels, never storage row IDs. These
@@ -122,13 +156,31 @@ pub fn bindings(
     );
     Ok(result)
 }
-fn validate(value: &Value, graph: &GraphPartitionSnapshot, stop: &AtomicBool) -> ProjectResult<()> {
-    if value.get("profile").and_then(Value::as_str) != Some(SOURCE_GRAPH_PROFILE) {
+fn validate(
+    value: &Value,
+    graph: &GraphPartitionSnapshot,
+    profile: Option<crate::PlatformGraphProfile>,
+    stop: &AtomicBool,
+) -> ProjectResult<()> {
+    let expected = match profile {
+        None => SOURCE_GRAPH_PROFILE,
+        Some(crate::PlatformGraphProfile::PackageProjectionV1) => {
+            super::PACKAGE_SOURCE_GRAPH_PROFILE
+        }
+    };
+    if value.get("profile").and_then(Value::as_str) != Some(expected) {
         return Err(invalid());
     }
     let retained: RetainedProjectGraphEvidence =
         serde_json::from_value(value.clone()).map_err(|_| invalid())?;
-    retained.admit(graph, stop)?;
+    match profile {
+        None => {
+            retained.admit(graph, stop)?;
+        }
+        Some(profile) => {
+            retained.admit_with_platform_profile(graph, profile, stop)?;
+        }
+    }
     Ok(())
 }
 fn field(key: &str) -> bool {

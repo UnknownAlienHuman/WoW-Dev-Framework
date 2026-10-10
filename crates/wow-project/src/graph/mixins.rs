@@ -2,8 +2,10 @@
 //! No table construction, method precedence, runtime binding or Library merging.
 use super::*;
 use crate::load::ProjectLoadPlan;
-use crate::xml_bindings::{XmlLuaBinding, XmlLuaBindingKind, XmlLuaBindingState};
-use wow_emmy::bindings::{SymbolLookupState, SymbolTarget};
+use crate::xml_bindings::{
+    ProjectPackageXmlLuaBindingAddress, XmlLuaBinding, XmlLuaBindingKind, XmlLuaBindingState,
+};
+use wow_emmy::bindings::{SymbolLookupReport, SymbolLookupState, SymbolTarget};
 
 pub(super) const MAX_DECLARATIONS: usize = 4096;
 pub(super) const MAX_REFERENCES: usize = 4096;
@@ -36,11 +38,13 @@ pub enum ProjectGraphMixinOutcome {
     LoadOrderUnresolved,
 }
 
-/// `binding_index` addresses the complete retained XML binding report, including
-/// the original attribute span, ordered spelling and shared lookup candidates.
+/// `binding_index` stays local to the retained binding owner. Package references
+/// also carry its native address; standalone references retain their old index.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ProjectGraphMixinReference {
     pub binding_index: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub package_binding_address: Option<ProjectPackageXmlLuaBindingAddress>,
     pub element_id: String,
     pub ordinal: usize,
     pub outcome: ProjectGraphMixinOutcome,
@@ -57,7 +61,8 @@ fn target<'a>(
     project: &'a ProjectView,
     plan: &ProjectLoadPlan,
     binding: &XmlLuaBinding,
-    loads: &BTreeMap<&str, (u64, usize)>,
+    loads: &BTreeMap<String, (u64, usize)>,
+    lookup: Option<&'a SymbolLookupReport>,
 ) -> ProjectResult<Result<&'a SymbolTarget, ProjectGraphMixinOutcome>> {
     if binding.consumer_id.is_some() || binding.receiver_source_id.is_some() {
         return Err(invalid());
@@ -84,10 +89,7 @@ fn target<'a>(
         return Err(invalid());
     };
     let analyzer = project.snapshot().analyzer_binding();
-    let lookup = analyzer
-        .xml_bindings()
-        .and_then(|r| r.symbol_lookup())
-        .ok_or_else(invalid)?;
+    let lookup = lookup.ok_or_else(invalid)?;
     let resolved = lookup.lookups().get(query).ok_or_else(invalid)?;
     if !lookup.source_health_complete()
         || resolved.state != SymbolLookupState::UniqueAnalyzerDeclaration
@@ -262,119 +264,163 @@ pub(super) fn project(
         entities: Vec::new(),
         relations: Vec::new(),
     };
-    let Some(plan) = project.configuration().load_plan() else {
-        return Ok(output);
-    };
-    let report = project
-        .snapshot()
-        .analyzer_binding()
-        .xml_bindings()
-        .ok_or_else(invalid)?;
-    let count = report
-        .bindings()
-        .iter()
-        .filter(|b| b.kind == XmlLuaBindingKind::Mixin)
-        .count();
-    if count == 0 {
-        return Ok(output);
-    }
+    let scopes = load_inputs::scopes(project, stop)?;
+    // Count the whole operation before retaining any proposals or references.
+    let mut count = provenance.xml_mixins.len();
     if count > MAX_REFERENCES {
         return Err(exhausted());
     }
-    let mut loads = BTreeMap::new();
-    for record in plan.records() {
+    for scope in &scopes {
         crate::analyzer::checkpoint(stop)?;
-        if record.kind == LoadRecordKind::LuaFile
-            && record.selection == LoadSelection::Included
-            && let Some(path) = record.target.as_deref()
-        {
-            let load = loads.entry(path).or_insert((record.ordinal, 0usize));
-            load.1 += 1;
-        }
-    }
-    let sources: BTreeMap<_, _> = plan
-        .sources()
-        .iter()
-        .map(|s| (s.path.as_str(), s))
-        .collect();
-    let xml_ids: BTreeMap<_, _> = provenance
-        .xml_declarations
-        .iter()
-        .map(|d| (d.occurrence_id.clone(), d.proposal_id.clone()))
-        .collect();
-    let mut lua_ids = BTreeMap::new();
-    for (binding_index, binding) in report.bindings().iter().enumerate() {
-        crate::analyzer::checkpoint(stop)?;
-        if binding.kind != XmlLuaBindingKind::Mixin {
-            continue;
-        }
-        charge(
-            text_bytes,
-            binding.document.len().saturating_mul(4)
-                + binding.element_id.len().saturating_mul(6)
-                + 512,
-        )?;
-        let outcome = match target(project, plan, binding, &loads)? {
-            Err(outcome) => outcome,
-            Ok(target) => {
-                let key = (target.path.clone(), target.span);
-                let target_index = match lua_ids.get(&key) {
-                    Some(index) => *index,
-                    None => {
-                        let index = add_declaration(
-                            project,
-                            target,
-                            file_ids,
-                            provenance,
-                            text_bytes,
-                            &mut output.entities,
-                            &mut output.relations,
-                        )?;
-                        lua_ids.insert(key, index);
-                        index
-                    }
-                };
-                let source = sources.get(binding.document.as_str()).ok_or_else(invalid)?;
-                let span = xml::source_span(plan, &binding.document, &binding.attribute_span)?;
-                let (handle, evidence) = support(project, source, span, provenance)?;
-                let lua = provenance
-                    .lua_declarations
-                    .get(target_index)
-                    .ok_or_else(invalid)?;
-                let source_id = xml_ids.get(&binding.element_id).ok_or_else(invalid)?;
-                let proposal_id = format!("xml-mixin:{}:{}", binding.element_id, binding.ordinal);
-                output.relations.push(
-                    GraphRelationProposal::new(
-                        proposal_id.as_str(),
-                        "source_mixes_in",
-                        GraphRelationProposalInput {
-                            source: GraphProposalEndpoint::Proposed(source_id.clone().into()),
-                            target: GraphProposalEndpoint::Proposed(lua.proposal_id.clone().into()),
-                            confidence: GraphConfidence::Derived,
-                            source_handle_ids: vec![handle, lua.source_handle_id],
-                            evidence_ids: vec![evidence, lua.evidence_id],
-                            coverage_ids: Vec::new(),
-                        },
-                    )
-                    .map_err(|_| invalid())?,
-                );
-                ProjectGraphMixinOutcome::Projected {
-                    proposal_id,
-                    lua_declaration_id: lua.declaration_id.clone(),
+        let report = scope.bindings()?.ok_or_else(invalid)?;
+        for binding in report.bindings {
+            crate::analyzer::checkpoint(stop)?;
+            if binding.kind == XmlLuaBindingKind::Mixin {
+                count = count.checked_add(1).ok_or_else(exhausted)?;
+                if count > MAX_REFERENCES {
+                    return Err(exhausted());
                 }
             }
-        };
-        provenance.xml_mixins.push(ProjectGraphMixinReference {
-            binding_index,
-            element_id: binding.element_id.clone(),
-            ordinal: binding.ordinal,
-            outcome,
-        });
+        }
     }
-    // Keep the original owner receipt, not a fabricated "complete" subset of it.
-    // It includes shared lookup candidates and exact analyzer/source identities.
+    if count == provenance.xml_mixins.len() {
+        return Ok(output);
+    }
+    // Occurrence IDs are native and local: identical XML in different packages
+    // may share one raw ID while resolving to distinct mapped documents.
+    let mut xml_ids: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
+    for declaration in &provenance.xml_declarations {
+        crate::analyzer::checkpoint(stop)?;
+        if xml_ids
+            .entry(declaration.path.clone())
+            .or_default()
+            .insert(
+                declaration.occurrence_id.clone(),
+                declaration.proposal_id.clone(),
+            )
+            .is_some()
+        {
+            return Err(invalid());
+        }
+    }
+    let mut lua_ids = BTreeMap::new();
+    let mut retain_standalone_report = false;
+    for scope in &scopes {
+        crate::analyzer::checkpoint(stop)?;
+        let report = scope.bindings()?.ok_or_else(invalid)?;
+        let plan = scope.plan();
+        let loads = scope.lua_loads(stop)?;
+        for (binding_index, binding) in report.bindings.iter().enumerate() {
+            crate::analyzer::checkpoint(stop)?;
+            if binding.kind != XmlLuaBindingKind::Mixin {
+                continue;
+            }
+            charge(
+                text_bytes,
+                binding.document.len().saturating_mul(4)
+                    + binding.element_id.len().saturating_mul(6)
+                    + 512,
+            )?;
+            let package_binding_address = report.binding_address(binding_index)?;
+            if let Some(address) = &package_binding_address {
+                charge(
+                    text_bytes,
+                    address
+                        .analysis_id()
+                        .len()
+                        .saturating_add(address.package().len())
+                        .saturating_add(256),
+                )?;
+            } else {
+                retain_standalone_report = true;
+            }
+            let outcome = match target(project, plan, binding, &loads, report.symbol_lookup)? {
+                Err(outcome) => outcome,
+                Ok(target) => {
+                    let key = (target.path.clone(), target.span);
+                    let target_index = match lua_ids.get(&key) {
+                        Some(index) => *index,
+                        None => {
+                            let index = add_declaration(
+                                project,
+                                target,
+                                file_ids,
+                                provenance,
+                                text_bytes,
+                                &mut output.entities,
+                                &mut output.relations,
+                            )?;
+                            lua_ids.insert(key, index);
+                            index
+                        }
+                    };
+                    let source = scope.mapped_source(&binding.document)?;
+                    if source.content_digest != binding.content_digest {
+                        return Err(invalid());
+                    }
+                    let span = xml::source_span(plan, &binding.document, &binding.attribute_span)?;
+                    let (handle, evidence) = support(project, &source, span, provenance)?;
+                    let lua = provenance
+                        .lua_declarations
+                        .get(target_index)
+                        .ok_or_else(invalid)?;
+                    let source_id = xml_ids
+                        .get(source.path.as_str())
+                        .and_then(|declarations| declarations.get(binding.element_id.as_str()))
+                        .ok_or_else(invalid)?;
+                    let proposal_id = scope.proposal_id(
+                        "xml-mixin",
+                        &binding.document,
+                        &format!("{}:{}", binding.element_id, binding.ordinal),
+                    )?;
+                    if package_binding_address.is_some() {
+                        charge(text_bytes, proposal_id.len())?;
+                    }
+                    output.relations.push(
+                        GraphRelationProposal::new(
+                            proposal_id.as_str(),
+                            "source_mixes_in",
+                            GraphRelationProposalInput {
+                                source: GraphProposalEndpoint::Proposed(source_id.clone().into()),
+                                target: GraphProposalEndpoint::Proposed(
+                                    lua.proposal_id.clone().into(),
+                                ),
+                                confidence: GraphConfidence::Derived,
+                                source_handle_ids: vec![handle, lua.source_handle_id],
+                                evidence_ids: vec![evidence, lua.evidence_id],
+                                coverage_ids: Vec::new(),
+                            },
+                        )
+                        .map_err(|_| invalid())?,
+                    );
+                    ProjectGraphMixinOutcome::Projected {
+                        proposal_id,
+                        lua_declaration_id: lua.declaration_id.clone(),
+                    }
+                }
+            };
+            provenance.xml_mixins.push(ProjectGraphMixinReference {
+                binding_index,
+                package_binding_address,
+                element_id: binding.element_id.clone(),
+                ordinal: binding.ordinal,
+                outcome,
+            });
+        }
+    }
+    // Preserve the old standalone receipt. The package aggregate and its one
+    // original lookup are retained by the enclosing platform provenance owner.
     crate::analyzer::checkpoint(stop)?;
-    provenance.xml_binding_report = Some(report.clone());
+    if retain_standalone_report {
+        provenance.xml_binding_report = Some(
+            project
+                .snapshot()
+                .analyzer_binding()
+                .xml_bindings()
+                .ok_or_else(invalid)?
+                .clone(),
+        );
+    }
     crate::analyzer::checkpoint(stop)?;
     Ok(output)
 }

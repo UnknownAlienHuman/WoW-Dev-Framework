@@ -59,9 +59,11 @@ rustdoc and build pass on 2026-10-10. Exact native producer assertion lookup now
 serves callable/declaration joins; see the scoped checkpoint below and
 [usage](../crates/wow-graph/PARTITION_USAGE.md). Native borrowed raw-member
 traversal is also executable; see [source admission](PLATFORM_SOURCE_ADMISSION.md).
-Package XML/state projection, complete raw-member graph projection,
-platform partitions/fingerprints, SkeletonInputView
-and source service/CLI transport follow. Broad package acceptance remains open.
+Explicit native package XML/script/state graph inputs are now executable through
+the selected route below; two native cases and final workspace gates/build pass
+(938 passed, 0 failed, 1 ignored, 111 targets). Complete raw-member graph/read binding, independent platform direct
+producers/fingerprints, SkeletonInputView and source service/CLI transport follow.
+Broad package acceptance remains open.
 
 ## W14 retained physical native analysis (2026-10-09)
 
@@ -165,7 +167,7 @@ omissions; repeated files do not manufacture an ordering DAG or runtime loading
 claims. Package ownership deduplicates support when the package and TOC file
 share the same whole-file observation.
 
-The source projection profile is `wow-project/source-load-proposals/19`, registry
+The default source projection profile is `wow-project/source-load-proposals/19`, registry
 version 15; the build result is `wow-service/graph-build-result/16` and request
 shape remains `/9`. A named-package fixture verifies all five TOC families through
 real project publication, matcher, partition replacement and final crosswalk.
@@ -1150,8 +1152,51 @@ operation or advancing Current. Two project cases and one native namespace/store
 case pass. Policy, fmt, all-target/all-feature check, strict Clippy, tests
 (936 passed, 1 ignored, 111 targets), strict rustdoc and build pass.
 
-The direct source graph remains monolithic /19. Package XML/state graph inputs,
-raw graph/read binding, independently owned platform producers, fingerprints,
+At that binding checkpoint, the direct source graph remained monolithic /19 and
+package XML/state graph inputs were still next. Raw graph/read binding,
+independently owned platform producers, fingerprints,
 SkeletonInputView and source service/CLI remain open. Native package fault-limit
 cases, full W17/E3/package and real Gethe/Ketho corpus/performance/runtime
 acceptance remain NotEvaluated. Gethe preparation still follows implementation.
+
+## W17 selected native package graph inputs (2026-10-10)
+
+`PlatformGraphProfile::PackageProjectionV1` requires genuine retained platform
+packages and `PackageXmlBindingProfile::SameSessionV1`. Configuration validation
+rejects other kinds or competing owners. Selected scopes borrow original native
+TOC/XML plans, package nodes, Main receipts and the original binding aggregate.
+Qualified paths and proposal addresses preserve local occurrence IDs across
+packages; no second parser/analyzer or temporary ProjectView is introduced.
+
+Package XML, source-only named/inline handler associations and SavedVariables
+feed the existing producer chain. Callable/script and state-access facts require
+the existing function-call-facts option. Shared global ambiguity, unreachable and
+partial inputs remain explicit; same-plan ordinals cannot prove cross-package
+order. Bounds and cancellation apply across all selected scopes, and the binding
+aggregate is charged once before retention against the shared graph text budget.
+
+Selection participates in configuration/project-generation identity and dispatches source `/20`,
+native replay `/7` and storage v7. Absent selection keeps default `/19` and
+binding-only replay `/6`; frozen v1-v6 catalogs are not widened. Service request
+`/10` must match the held native configuration and returns artifact `/17`.
+Legacy request `/9`/result `/16` transport and default evidence/persistence
+entry points continue to require the original `/19` projection and refuse `/20`.
+The selected native route uses separate typed admission. See
+[PLATFORM_PACKAGE_GRAPH.md](PLATFORM_PACKAGE_GRAPH.md).
+
+Two native synthetic cases pass on 2026-10-10: disk-absent project hydration and
+exact graph evidence, plus full source/recognizer composition, namespace Current
+reopen and frozen V6 refusal without effects. Unreachable top-level chunks now
+retain both reachability and missing-owner blockers; the revised regression also
+passes unreachable inline omission checks. Final workspace policy, fmt,
+all-target/all-feature check, strict Clippy, tests (938 passed, 0 failed, 1 ignored,
+111 targets), strict rustdoc with `RUSTDOCFLAGS=-D warnings` and all-target/all-feature
+build pass, completed 2026-10-10 07:18:40 UTC. This records local verification;
+remote checkpoint publication is not asserted here.
+
+The direct source producer remains monolithic. Complete raw-member graph/read
+binding, independent platform direct producers/fingerprints, bounded
+SkeletonInputView and source service/CLI transport remain open. Full W17/E3/package,
+real Gethe/Ketho corpus, performance, native fault/exhaustion and WoW runtime
+acceptance remain NotEvaluated. W18-W26 are unchanged; Gethe materialization remains
+deferred.

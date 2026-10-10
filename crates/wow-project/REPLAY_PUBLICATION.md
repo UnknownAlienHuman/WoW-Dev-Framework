@@ -35,7 +35,8 @@ existing freshly recomputed report capabilities; no additional semantic operatio
 or target-client runtime capability follows.
 
 `ProjectPublicationBundle::build` validates the live project and graph, recomputes
-source19 proposals through the existing source owner and requires the exact source
+the configured source proposals through the existing source owner (`/19` by default,
+`/20` for explicit package graph selection) and requires the exact source
 batch, registry, canonically ordered coverage and empty source foundation. Other
 producer partitions remain graph-owner validated data; this does not independently
 replay every recognizer or establish complete conflict assessment.
@@ -144,7 +145,8 @@ analyzer owners rebuild the pair without disk; exact IDs and full recapture must
 match. Main remains separate from Library, and this channel grants no physical
 update capability. See [PLATFORM_SOURCE_REPLAY.md](../../docs/PLATFORM_SOURCE_REPLAY.md).
 
-New epochs admit v1-v5. The complete old V4 catalog is frozen and participates
+At the platform raw-replay checkpoint, new epochs admitted v1-v5. The complete old
+V4 catalog is frozen and participates
 in exact legacy open, quarantine and migration fallback before V3/V2/V1.
 V4 reopening preserves epoch/Current/native pair identities; a v5 write refuses
 without changing Current. No existing catalog is widened. Native durable tests
@@ -153,6 +155,45 @@ Stable store namespace across differing source snapshots now uses an explicit
 new-only epoch and reconstructed native bindings; see
 [PLATFORM_STORE_NAMESPACE](../../docs/PLATFORM_STORE_NAMESPACE.md).
 Independent platform producer partitions and full W17/E3 acceptance remain open.
+
+## Explicit package binding and graph replay
+
+`PackageXmlBindingProfile::SameSessionV1` adds native replay
+`wow-project/native-project-replay/6` and storage `wow-project.live-replay.v6`.
+It retains the selector and rebuilds the genuine same-session package binding
+aggregate; it does not opt into package graph projection. See
+[PLATFORM_PACKAGE_XML_BINDINGS.md](../../docs/PLATFORM_PACKAGE_XML_BINDINGS.md).
+
+The separate `PlatformGraphProfile::PackageProjectionV1` requires that binding
+selection and genuine retained platform owners. It adds native replay
+`wow-project/native-project-replay/7`, storage `wow-project.live-replay.v7` and
+source graph recipe `wow-project/source-load-proposals/20`. Both selectors are
+omitted when absent, preserving old configuration/replay bytes. A graph selector
+without the required binding profile, or a mismatched schema/profile, rejects.
+See [PLATFORM_PACKAGE_GRAPH.md](../../docs/PLATFORM_PACKAGE_GRAPH.md).
+
+Hydration rebuilds real source/package/configuration/analyzer owners without
+source disk, checks original project/analyzer IDs and exact canonical recapture.
+Pair acquisition then rebuilds the configured source batch, registry, coverage
+and foundation and validates the complete native graph/publication membership
+under the held read. No decoded binding report replaces these owners. Source and
+Library share the existing aggregate archive limits; borrowed encoded-envelope
+counting enforces the 32 MiB record cap before raw copying.
+
+New epochs admit v1-v7. Complete V1-V6 catalogs remain frozen and reopen only
+against their exact catalog, including native live, migration and quarantine
+routes. An existing V6 epoch refuses v7 publication without retaining an operation
+or changing Current/epoch; no catalog widening or migration is performed.
+
+Two native synthetic project/service cases pass on 2026-10-10, covering disk-absent
+graph evidence reproduction, composed namespace Current reopen and frozen V6
+refusal without effects. The final unreachable chunk/inline omission regression
+also passes. Final workspace policy, fmt, all-target/all-feature check, strict
+Clippy, tests (938 passed, 0 failed, 1 ignored, 111 targets), strict rustdoc with
+`RUSTDOCFLAGS=-D warnings` and all-target/all-feature build pass, completed
+2026-10-10 07:18:40 UTC. This is local verification, not remote publication evidence.
+Full W17/E3, corpus/performance/runtime and complete raw-member graph
+projection remain open; the direct source producer remains monolithic.
 
 ## Retained owner updates
 

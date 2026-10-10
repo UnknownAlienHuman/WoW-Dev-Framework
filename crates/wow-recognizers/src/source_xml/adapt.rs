@@ -319,7 +319,9 @@ pub(super) fn validate(input: &SourceXmlInput<'_>, stop: &AtomicBool) -> Recogni
         }
         validate_support(input, &[fact.source_handle_id], &[fact.evidence_id])?;
         if matches!(fact.kind, SourceXmlFactKind::Declaration { .. })
-            && declarations.insert(fact.occurrence_id, fact).is_some()
+            && declarations
+                .insert(occurrence_key(fact, fact.occurrence_id), fact)
+                .is_some()
         {
             return Err(failure(RecognizerErrorCode::AdapterBindingDuplicate));
         }
@@ -335,13 +337,13 @@ pub(super) fn validate(input: &SourceXmlInput<'_>, stop: &AtomicBool) -> Recogni
             _ => Some(fact.occurrence_id),
         };
         if let Some(occurrence) = occurrence {
-            let Some(declaration) = declarations.get(occurrence) else {
+            let Some(declaration) = declarations.get(&occurrence_key(fact, occurrence)) else {
                 // Script lexical owners include Ui; only captured declaration
                 // owners can produce semantic ownership or callback edges.
                 if matches!(fact.kind, SourceXmlFactKind::Script { .. }) {
                     continue;
                 }
-                return Err(failure(RecognizerErrorCode::AdapterBindingMissing));
+                return Err(missing_occurrence(&declarations, occurrence));
             };
             if !same_scope(fact, declaration) {
                 return Err(failure(RecognizerErrorCode::AdapterIdentityMismatch));
@@ -357,8 +359,8 @@ pub(super) fn validate(input: &SourceXmlInput<'_>, stop: &AtomicBool) -> Recogni
         };
         if let Some(target) = target {
             let declaration = declarations
-                .get(target)
-                .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
+                .get(&occurrence_key(fact, target))
+                .ok_or_else(|| missing_occurrence(&declarations, target))?;
             if !same_scope(fact, declaration) {
                 return Err(failure(RecognizerErrorCode::AdapterIdentityMismatch));
             }
@@ -441,6 +443,20 @@ fn same_scope(left: &SourceXmlFact<'_>, right: &SourceXmlFact<'_>) -> bool {
         && left.flavor == right.flavor
         && left.package == right.package
 }
+type OccurrenceKey<'a> = (&'a str, &'a str, Option<&'a str>, &'a str);
+fn occurrence_key<'a>(fact: &SourceXmlFact<'a>, occurrence: &'a str) -> OccurrenceKey<'a> {
+    (fact.selected_toc, fact.flavor, fact.package, occurrence)
+}
+fn missing_occurrence(
+    declarations: &BTreeMap<OccurrenceKey<'_>, &SourceXmlFact<'_>>,
+    occurrence: &str,
+) -> RecognizerError {
+    failure(if declarations.keys().any(|key| key.3 == occurrence) {
+        RecognizerErrorCode::AdapterIdentityMismatch
+    } else {
+        RecognizerErrorCode::AdapterBindingMissing
+    })
+}
 fn is_template(fact: &SourceXmlFact<'_>) -> bool {
     matches!(
         fact.kind,
@@ -482,14 +498,26 @@ pub(super) fn seeds(
         .facts
         .iter()
         .filter(|f| matches!(f.kind, SourceXmlFactKind::Declaration { .. }))
-        .map(|f| (f.occurrence_id, f))
+        .map(|f| (occurrence_key(f, f.occurrence_id), f))
         .collect::<BTreeMap<_, _>>();
     let scripts = input
         .facts
         .iter()
         .filter(|f| matches!(f.kind, SourceXmlFactKind::Script { .. }))
-        .map(|f| (f.occurrence_id, f))
+        .map(|f| (occurrence_key(f, f.occurrence_id), f))
         .collect::<BTreeMap<_, _>>();
+    // A binding's native scope comes from its actual accepted receiver endpoint,
+    // whose qualified document and local occurrence are both owner-validated.
+    let mut declaration_endpoints = BTreeMap::new();
+    for fact in declarations.values() {
+        checkpoint(stop)?;
+        if declaration_endpoints
+            .insert((fact.document, fact.occurrence_id), *fact)
+            .is_some()
+        {
+            return Err(failure(RecognizerErrorCode::AdapterBindingDuplicate));
+        }
+    }
     let mut result = Seeds {
         values: Vec::new(),
         omissions: Vec::new(),
@@ -570,8 +598,8 @@ pub(super) fn seeds(
                     result.omit(&[fact], "xml.parent_reference_unresolved");
                     continue;
                 };
-                let child = declarations[fact.occurrence_id];
-                let parent = declarations[target_occurrence_id];
+                let child = declarations[&occurrence_key(fact, fact.occurrence_id)];
+                let parent = declarations[&occurrence_key(fact, target_occurrence_id)];
                 if !valid_element(child)
                     || !valid_element(parent)
                     || is_template(child)
@@ -614,8 +642,8 @@ pub(super) fn seeds(
                 order,
                 cycle_id,
             } if family == SourceXmlFamily::Inherits => {
-                let source_fact = declarations[fact.occurrence_id];
-                let target_fact = declarations[target_occurrence_id];
+                let source_fact = declarations[&occurrence_key(fact, fact.occurrence_id)];
+                let target_fact = declarations[&occurrence_key(fact, target_occurrence_id)];
                 if !valid_element(source_fact)
                     || !valid_element(target_fact)
                     || !is_template(target_fact)
@@ -668,8 +696,8 @@ pub(super) fn seeds(
                 method_reference,
                 ..
             } if family == SourceXmlFamily::Script => {
-                let Some(owner_fact) =
-                    owner_occurrence_id.and_then(|owner| declarations.get(owner).copied())
+                let Some(owner_fact) = owner_occurrence_id
+                    .and_then(|owner| declarations.get(&occurrence_key(fact, owner)).copied())
                 else {
                     result.omit(&[fact], "xml.script_owner_not_captured");
                     continue;
@@ -699,6 +727,13 @@ pub(super) fn seeds(
                 if !input.script_bindings.iter().any(|binding| {
                     binding.script_id == fact.occurrence_id
                         && binding.consumer_occurrence_id == Some(owner_fact.occurrence_id)
+                        && nodes
+                            .source_proposals
+                            .get(binding.receiver_proposal_id)
+                            .is_some_and(|receiver| {
+                                receiver.key.get("document")
+                                    == Some(&GraphProposalValue::String(owner_fact.document.into()))
+                            })
                 }) {
                     result.omit(&[fact, owner_fact], "xml.script_handler_not_admitted");
                 }
@@ -709,22 +744,25 @@ pub(super) fn seeds(
     if family == SourceXmlFamily::Script {
         for binding in input.script_bindings {
             checkpoint(stop)?;
-            let fact = scripts
-                .get(binding.script_id)
-                .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
             let owner_id = binding
                 .consumer_occurrence_id
                 .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
-            let owner_fact = declarations
-                .get(owner_id)
-                .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
-            if !same_scope(fact, owner_fact) {
-                return Err(failure(RecognizerErrorCode::AdapterIdentityMismatch));
-            }
             let receiver = nodes
                 .source_proposals
                 .get(binding.receiver_proposal_id)
                 .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
+            let Some(GraphProposalValue::String(document)) = receiver.key.get("document") else {
+                return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
+            };
+            let owner_fact = declaration_endpoints
+                .get(&(document.as_ref(), owner_id))
+                .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
+            let fact = scripts
+                .get(&occurrence_key(owner_fact, binding.script_id))
+                .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
+            if !same_scope(fact, owner_fact) {
+                return Err(failure(RecognizerErrorCode::AdapterIdentityMismatch));
+            }
             let handler = nodes
                 .source_proposals
                 .get(binding.handler_proposal_id)

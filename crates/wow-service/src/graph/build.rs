@@ -44,6 +44,7 @@ use wow_recognizers::source_state::SourceStateRecognition;
 
 const MAX_BUNDLE_BYTES: usize = 32 * 1024 * 1024;
 pub(super) const GRAPH_BUILD_RESULT_SCHEMA: &str = "wow-service/graph-build-result/16";
+const PACKAGE_GRAPH_BUILD_RESULT_SCHEMA: &str = "wow-service/graph-build-result/17";
 
 struct BuiltGraph {
     snapshot: GraphPartitionSnapshot,
@@ -119,6 +120,22 @@ impl GraphBuildRequest {
         })
     }
 
+    /// Select the native package graph route. Its artifact receipt is distinct
+    /// from the legacy v16 transport bundle and does not widen that reader.
+    #[must_use]
+    pub fn with_platform_graph_profile(
+        mut self,
+        profile: wow_project::PlatformGraphProfile,
+    ) -> Self {
+        match profile {
+            wow_project::PlatformGraphProfile::PackageProjectionV1 => {
+                self.schema = "wow-service/graph-build-request/10";
+                self.projection = wow_project::graph::PACKAGE_SOURCE_GRAPH_PROFILE;
+            }
+        }
+        self
+    }
+
     pub(crate) fn acquire_project(
         &self,
         backend: &LocalProjectBackend,
@@ -128,7 +145,11 @@ impl GraphBuildRequest {
         if backend.configuration().project_id() != self.project_id {
             return Err(error(ServiceErrorCode::IdentityMismatch));
         }
-        backend.acquire_project(&self.selector, stop)
+        let project = backend.acquire_project(&self.selector, stop)?;
+        if self.projection != wow_project::graph::source_graph_profile(project.configuration()) {
+            return Err(error(ServiceErrorCode::IdentityMismatch));
+        }
+        Ok(project)
     }
 
     pub(crate) fn live_publication_in_namespace(
@@ -380,7 +401,11 @@ pub fn execute_graph_build(
 ) -> ServiceResult<GraphBuildResult> {
     let request_digest = super::hash(&bounded(request, super::GRAPH_REQUEST_MAX_BYTES)?);
     let mut result = GraphBuildResult {
-        schema: GRAPH_BUILD_RESULT_SCHEMA,
+        schema: if request.projection == wow_project::graph::PACKAGE_SOURCE_GRAPH_PROFILE {
+            PACKAGE_GRAPH_BUILD_RESULT_SCHEMA
+        } else {
+            GRAPH_BUILD_RESULT_SCHEMA
+        },
         request: request.clone(),
         request_digest,
         status: GraphReadStatus::Partial,

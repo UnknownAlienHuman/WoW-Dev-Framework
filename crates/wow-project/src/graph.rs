@@ -1,6 +1,7 @@
 //! Direct source/load/XML proposals. No recognizer inference or graph publication.
 mod derivations;
 mod functions;
+mod load_inputs;
 mod packages;
 pub mod persistence;
 mod retained_evidence;
@@ -65,7 +66,18 @@ use crate::{
 };
 
 pub const SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/19";
+pub const PACKAGE_SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/20";
 pub const SOURCE_GRAPH_PARTITION: &str = "wow-project.source-load";
+
+/// Select the graph identity from the admitted configuration, never from source
+/// class alone. Missing selection retains the published /19 recipe.
+#[must_use]
+pub fn source_graph_profile(configuration: &crate::ProjectConfiguration) -> &'static str {
+    match configuration.platform_graph_profile() {
+        None => SOURCE_GRAPH_PROFILE,
+        Some(crate::PlatformGraphProfile::PackageProjectionV1) => PACKAGE_SOURCE_GRAPH_PROFILE,
+    }
+}
 const MAX_FILES: usize = 4096;
 const MAX_LOADS: usize = 8192;
 const MAX_RECOGNIZER_NODES: usize = functions::MAX_CALLS * 2;
@@ -157,6 +169,8 @@ pub struct ProjectGraphProvenance {
     function_call_report: Option<wow_emmy::function_calls::FunctionCallReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
     xml_binding_report: Option<crate::xml_bindings::ProjectXmlLuaBindings>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    package_xml_binding_report: Option<crate::xml_bindings::ProjectPackageXmlLuaBindings>,
     source_handles: BTreeMap<StableHandleId, SourceHandle>,
     evidence: BTreeMap<EvidenceId, EvidenceRecord>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -737,6 +751,9 @@ pub fn build_source_graph_proposals(
     project.snapshot().validate()?;
     crate::analyzer::checkpoint(stop)?;
     let config = project.configuration();
+    let profile = source_graph_profile(config);
+    // Fail selected-route owner mismatches before any source graph output.
+    let load_scopes = load_inputs::scopes(project, stop)?;
     let plan = config.load_plan();
     let package_plan = config.package_load_plan();
     let package_main_plan = config.package_main_plan();
@@ -789,12 +806,9 @@ pub fn build_source_graph_proposals(
                 let Some(text) = selected.document_text(&source.path) else {
                     continue;
                 };
-                let path = format!(
-                    "{}/{}/{}",
-                    crate::load::PACKAGE_MAIN_NAMESPACE_ROOT,
-                    package.package,
-                    source.path
-                );
+                let path = package_plan
+                    .source_path(&package.package, &source.path)
+                    .ok_or_else(invalid)?;
                 let projected = LoadSource {
                     path: path.clone(),
                     content_digest: source.content_digest,
@@ -883,11 +897,7 @@ pub fn build_source_graph_proposals(
     // materialized generation from the exact registry and accepted partition.
     let seed = crate::identity::canonical_digest(
         "wow-project/source-graph-input/1",
-        &(
-            SOURCE_GRAPH_PROFILE,
-            registry.registry_digest(),
-            project.snapshot_id(),
-        ),
+        &(profile, registry.registry_digest(), project.snapshot_id()),
         ProjectPhase::View,
     )?;
     let generation =
@@ -901,7 +911,7 @@ pub fn build_source_graph_proposals(
     )
     .map_err(|_| invalid())?;
     let mut provenance = ProjectGraphProvenance {
-        profile: SOURCE_GRAPH_PROFILE,
+        profile,
         project_snapshot_id: project.snapshot_id().into(),
         analyzer_snapshot_id: project.analyzer_snapshot_id().into(),
         context: project.snapshot().generation_context().clone(),
@@ -931,6 +941,7 @@ pub fn build_source_graph_proposals(
         xml_lua_analysis: None,
         function_call_report: None,
         xml_binding_report: None,
+        package_xml_binding_report: None,
         source_handles: BTreeMap::new(),
         evidence: BTreeMap::new(),
         load_plan: plan.cloned(),
@@ -939,6 +950,15 @@ pub fn build_source_graph_proposals(
         skipped_missing_targets: 0,
         skipped_self_loads: 0,
     };
+    if config.platform_graph_profile().is_some() {
+        let bindings = project
+            .snapshot()
+            .analyzer_binding()
+            .package_xml_bindings()
+            .ok_or_else(invalid)?;
+        charge(&mut text_bytes, bindings.serialized_byte_length())?;
+        provenance.package_xml_binding_report = Some(bindings.clone());
+    }
     let mut entities = Vec::new();
     let mut ids = BTreeMap::new();
     for source in source_by_path.values() {
@@ -1075,7 +1095,10 @@ pub fn build_source_graph_proposals(
     if entities.len() > MAX_NODES || relations.len() > MAX_EDGES {
         return Err(exhausted());
     }
-    let xml_state = if plan.is_some_and(|p| !p.xml_documents().is_empty()) {
+    let xml_state = if load_scopes
+        .iter()
+        .any(|input| !input.plan().xml_documents().is_empty())
+    {
         GraphCoverageState::Partial
     } else {
         GraphCoverageState::NotEvaluated

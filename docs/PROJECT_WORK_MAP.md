@@ -87,13 +87,29 @@ receiver/inherited sources and one original union lookup. The opt-in configurati
 binds the recipe; selected native /6 replay reconstructs it exactly, while old
 v1-v5 routes/catalogs stay frozen. Native package and namespace compatibility
 cases pass, with workspace policy, fmt, check, strict Clippy, tests (936 passed,
-1 ignored, 111 targets), strict rustdoc and build on 2026-10-10. This adds no
-package graph relation or runtime dispatch; see
+1 ignored, 111 targets), strict rustdoc and build on 2026-10-10. That checkpoint
+added no package graph relation or runtime dispatch; see
 [package XML bindings](PLATFORM_PACKAGE_XML_BINDINGS.md).
 
-Next: package XML/state graph projection through retained native inputs, complete
-raw-member graph projection and independently owned platform graph partitions/fingerprints, bounded
-SkeletonInputView and source service/CLI transport. Full W17, E0/E2, real
+The explicitly selected `PlatformGraphProfile::PackageProjectionV1` now projects
+package XML, handler bindings and SavedVariables through borrowed native plans and
+same-session bindings. Qualified paths and scoped proposal addresses preserve
+local XML IDs; shared Lua ambiguity and cross-package order remain unresolved.
+The selection uses source `/20` and native replay `/7`/storage v7, with absent
+selection preserving `/19` and published `/6`. The native service request must
+match the held configuration; frozen V6 epochs refuse v7 without effects.
+Two native synthetic cases pass: project hydration/evidence equality without disk,
+and full source/recognizer composition plus namespace Current reopen and V6 refusal.
+Unreachable top-level chunks now retain both reachability and missing-owner
+blockers; the final omission regression passes. Final workspace policy, fmt,
+all-target/all-feature check, strict Clippy, tests (938 passed, 0 failed, 1 ignored,
+111 targets), strict rustdoc and all-target/all-feature build pass, completed
+2026-10-10 07:18:40 UTC. Full acceptance and remote publication are not inferred. See
+[selected package graph](PLATFORM_PACKAGE_GRAPH.md).
+
+Next: complete raw-member graph/read binding and independently owned platform
+direct producers/fingerprints, bounded SkeletonInputView and source service/CLI
+transport. Full W17, E0/E2, real
 mirror/performance/runtime and W18-W26 remain open. Gethe preparation follows
 product implementation/build.
 
@@ -416,12 +432,15 @@ The XML pipeline additionally verifies explicit versus lexical parentage, Object
 traversal confidence filtering, inheritance/template references, exact named and
 inline handler bindings, unresolved/ambiguous omissions and source-only chunks.
 
-The source-graph projection profile is `wow-project/source-load-proposals/19`
+The default source-graph projection profile is `wow-project/source-load-proposals/19`
 (registry version 15),
 the graph-build result is `wow-service/graph-build-result/16`, and the unchanged
 request shape is `wow-service/graph-build-request/9`. Legacy record-free batches
 and snapshots retain v1 identities; record-bearing ones use explicit v2 schemas.
 Explanation payloads use v2; graph-read request shapes remain compatible.
+The explicit native package graph route separately selects source `/20`, request
+`/10` and result `/17`; the old `/16` transport remains exact. See
+[PLATFORM_PACKAGE_GRAPH.md](PLATFORM_PACKAGE_GRAPH.md).
 
 The state checkpoint publishes `core.state.saved_variable_root`,
 `core.state.literal_path_read` and `core.state.literal_path_write`. Root facts

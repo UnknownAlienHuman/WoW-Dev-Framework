@@ -5,9 +5,7 @@
 //! or load outcome is inferred.
 use super::*;
 use crate::load::xml_references::{XmlReferenceKind, XmlReferenceOrder, XmlReferenceResolution};
-use crate::load::{
-    LoadSource, ProjectLoadPlan, XmlDeclaration, XmlElementRole, XmlScriptRecord, XmlScriptSource,
-};
+use crate::load::{LoadSource, XmlDeclaration, XmlElementRole, XmlScriptRecord, XmlScriptSource};
 use std::collections::BTreeSet;
 use wow_core::{
     CanonicalResult, ContentDigest, GenerationContextId, ProfileIdentity, SourceContent,
@@ -41,7 +39,7 @@ pub struct ProjectXmlFact {
 }
 
 /// Scope retained from the owner plan, never inferred from a path spelling.
-/// `package` stays `None` for the standalone selected-TOC plan this reads.
+/// `package` stays `None` for the standalone selected-TOC plan.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ProjectXmlFactScope {
     pub selected_toc: String,
@@ -185,7 +183,14 @@ impl XmlFactInputs<'_> {
                 .saturating_mul(4)
                 .saturating_add(self.occurrence_id.len().saturating_mul(6))
                 .saturating_add(self.element_name.len().saturating_mul(3))
-                .saturating_add(512),
+                .saturating_add(512)
+                .saturating_add(self.scope.package.as_ref().map_or(0, |package| {
+                    self.scope
+                        .selected_toc
+                        .len()
+                        .saturating_mul(2)
+                        .saturating_add(package.len().saturating_mul(2))
+                })),
         )
     }
     fn context_id(&self) -> GenerationContextId {
@@ -303,14 +308,16 @@ fn declaration_state(
     }
 }
 
-/// One shared scope builder. Every document is read from the same retained
-/// standalone plan, so selected TOC and flavor are identical across a run and
-/// package stays absent rather than guessed from a path spelling.
-fn scope(plan: &ProjectLoadPlan, profile: &ProfileIdentity) -> ProjectXmlFactScope {
+/// Package and qualified TOC come from the retained owner, never a path spelling.
+fn scope(
+    selected_toc: String,
+    profile: &ProfileIdentity,
+    package: Option<&str>,
+) -> ProjectXmlFactScope {
     ProjectXmlFactScope {
-        selected_toc: plan.selected_toc().to_owned(),
+        selected_toc,
         flavor: profile.flavor_id().to_owned(),
-        package: None,
+        package: package.map(str::to_owned),
     }
 }
 
@@ -329,7 +336,7 @@ fn script_state(script: &XmlScriptRecord, element_name: &str) -> ProjectXmlFactK
     }
 }
 
-/// Project one retained standalone closure. Name resolution and load order come
+/// Project retained scoped closures. Name resolution and load order come
 /// from the load owner; lexical containment remains a separate record stream.
 pub(super) fn project(
     project: &ProjectView,
@@ -341,198 +348,218 @@ pub(super) fn project(
     let mut facts = Vec::new();
     let mut containment = Vec::new();
     let configuration = project.configuration();
-    let Some(plan) = configuration.load_plan() else {
+    let scopes = super::load_inputs::scopes(project, stop)?;
+    if scopes.is_empty() {
         return Ok((facts, containment));
-    };
-    plan.validate_profile(configuration.selected_profile())?;
-    let selected_scope = scope(plan, configuration.selected_profile());
-    let report = plan.xml_references();
-    if report.declarations().len() > MAX_DECLARATION_FACTS {
-        return Err(exhausted());
     }
-    let sources = plan
-        .sources()
-        .iter()
-        .map(|source| (source.path.as_str(), source))
-        .collect::<BTreeMap<_, _>>();
-    let mut occurrences = BTreeSet::new();
-    let mut declaration_count = 0usize;
-    let mut script_count = 0usize;
-    for (document, index) in plan.xml_documents() {
+    let mut reported_declarations = 0usize;
+    for input in &scopes {
         crate::analyzer::checkpoint(stop)?;
-        let source = *sources.get(document.as_str()).ok_or_else(invalid)?;
-        let text = plan.document_text(document).ok_or_else(invalid)?;
-        if index.document() != document
-            || source.byte_length != text.len() as u64
-            || crate::identity::source_digest(text.as_bytes()) != index.source_digest()
-            || source.content_digest != index.source_digest()
-        {
-            return Err(invalid());
-        }
-        for element in index.elements() {
-            crate::analyzer::checkpoint(stop)?;
-            if containment.len() >= MAX_CONTAINMENT_FACTS {
-                return Err(exhausted());
-            }
-            if !occurrences.insert(element.occurrence_id.as_str()) {
-                return Err(invalid());
-            }
-            if let Some(parent) = element.parent_occurrence_id.as_deref()
-                && index.element(parent).is_none()
-            {
-                return Err(invalid());
-            }
-            let span = super::xml::source_span(plan, document, &element.span)?;
-            let (source_handle_id, evidence_id) = support(project, source, span, provenance)?;
-            let inputs = || XmlFactInputs {
-                project,
-                scope: selected_scope.clone(),
-                document,
-                source,
-                element_name: &element.qualified_name,
-                occurrence_id: &element.occurrence_id,
-                span,
-                source_handle_id,
-                evidence_id,
-                document_digest: index.digest(),
-            };
-            inputs().charge(text_bytes)?;
-            containment.push(inputs().containment(element.parent_occurrence_id.clone())?);
-            if let Some(declaration) = &element.declaration {
-                if declaration_count >= MAX_DECLARATION_FACTS || facts.len() >= MAX_FACTS {
-                    return Err(exhausted());
-                }
-                facts.push(inputs().finish(
-                    index.digest(),
-                    ProjectXmlFactKind::Declaration {
-                        role: element.role,
-                        declaration: declaration_state(
-                            declaration,
-                            element.parent_occurrence_id.clone(),
-                            element.issues.is_empty(),
-                        ),
-                    },
-                    text_bytes,
-                )?);
-                declaration_count += 1;
-            }
-            if let Some(script) = &element.script {
-                if script_count >= MAX_SCRIPT_FACTS || facts.len() >= MAX_FACTS {
-                    return Err(exhausted());
-                }
-                facts.push(inputs().finish(
-                    index.digest(),
-                    script_state(script, &element.qualified_name),
-                    text_bytes,
-                )?);
-                script_count += 1;
-            }
-        }
-    }
-    let mut parent_count = 0usize;
-    let mut inheritance_count = 0usize;
-    for reference in report.references() {
-        crate::analyzer::checkpoint(stop)?;
-        if facts.len() >= MAX_FACTS {
+        input
+            .plan()
+            .validate_profile(configuration.selected_profile())?;
+        reported_declarations = reported_declarations
+            .checked_add(input.plan().xml_references().declarations().len())
+            .ok_or_else(exhausted)?;
+        if reported_declarations > MAX_DECLARATION_FACTS {
             return Err(exhausted());
         }
-        match reference.kind {
-            XmlReferenceKind::Parent => {
-                if parent_count >= MAX_PARENT_FACTS {
-                    return Err(exhausted());
-                }
-                parent_count += 1;
-            }
-            XmlReferenceKind::Inherits => {
-                if inheritance_count >= MAX_INHERITANCE_FACTS {
-                    return Err(exhausted());
-                }
-                inheritance_count += 1;
-            }
-        }
-        let site = report
-            .declarations()
-            .get(&reference.source_id)
-            .ok_or_else(invalid)?;
-        if site.occurrence_id != reference.source_id {
-            return Err(invalid());
-        }
-        let document = site.document.as_str();
-        let source = *sources.get(document).ok_or_else(invalid)?;
-        let index = plan.xml_documents().get(document).ok_or_else(invalid)?;
-        let element = index.element(&site.occurrence_id).ok_or_else(invalid)?;
-        if index.source_digest() != source.content_digest
-            || site.content_digest != source.content_digest
-        {
-            return Err(invalid());
-        }
-        let target = if let XmlReferenceResolution::UniqueLocalDeclaration { declaration_id } =
-            &reference.resolution
-        {
-            let target = report
-                .declarations()
-                .get(declaration_id)
-                .ok_or_else(invalid)?;
-            let target_index = plan
-                .xml_documents()
-                .get(&target.document)
-                .ok_or_else(invalid)?;
-            let target_source = *sources.get(target.document.as_str()).ok_or_else(invalid)?;
-            if target.occurrence_id != *declaration_id
-                || target_index.element(declaration_id).is_none()
-                || target_index.source_digest() != target.content_digest
-                || target_source.content_digest != target.content_digest
+    }
+    let mut declaration_count = 0usize;
+    let mut script_count = 0usize;
+    let mut parent_count = 0usize;
+    let mut inheritance_count = 0usize;
+    for input in scopes {
+        let plan = input.plan();
+        let selected_scope = scope(
+            input.qualified_path(plan.selected_toc())?,
+            configuration.selected_profile(),
+            input.package(),
+        );
+        let report = plan.xml_references();
+        let sources = plan
+            .sources()
+            .iter()
+            .map(|source| (source.path.as_str(), source))
+            .collect::<BTreeMap<_, _>>();
+        let mut occurrences = BTreeSet::new();
+        for (document, index) in plan.xml_documents() {
+            crate::analyzer::checkpoint(stop)?;
+            let local_source = *sources.get(document.as_str()).ok_or_else(invalid)?;
+            let text = plan.document_text(document).ok_or_else(invalid)?;
+            if index.document() != document
+                || local_source.byte_length != text.len() as u64
+                || crate::identity::source_digest(text.as_bytes()) != index.source_digest()
+                || local_source.content_digest != index.source_digest()
             {
                 return Err(invalid());
             }
-            Some(target.occurrence_id.clone())
-        } else {
-            None
-        };
-        let kind = match reference.kind {
-            XmlReferenceKind::Parent => ProjectXmlFactKind::Parent {
-                reference_id: reference.reference_id.clone(),
-                name: reference.name.clone(),
-                target_occurrence_id: target,
-                resolution: reference.resolution.clone(),
-                order: reference.order,
-                cycle_id: reference.cycle_id.clone(),
-            },
-            XmlReferenceKind::Inherits => match target {
-                Some(target_occurrence_id) => ProjectXmlFactKind::Inheritance {
+            let source = input.mapped_source(document)?;
+            for element in index.elements() {
+                crate::analyzer::checkpoint(stop)?;
+                if containment.len() >= MAX_CONTAINMENT_FACTS {
+                    return Err(exhausted());
+                }
+                if !occurrences.insert(element.occurrence_id.as_str()) {
+                    return Err(invalid());
+                }
+                if let Some(parent) = element.parent_occurrence_id.as_deref()
+                    && index.element(parent).is_none()
+                {
+                    return Err(invalid());
+                }
+                let span = super::xml::source_span(plan, document, &element.span)?;
+                let (source_handle_id, evidence_id) = support(project, &source, span, provenance)?;
+                let inputs = || XmlFactInputs {
+                    project,
+                    scope: selected_scope.clone(),
+                    document: &source.path,
+                    source: &source,
+                    element_name: &element.qualified_name,
+                    occurrence_id: &element.occurrence_id,
+                    span,
+                    source_handle_id,
+                    evidence_id,
+                    document_digest: index.digest(),
+                };
+                inputs().charge(text_bytes)?;
+                containment.push(inputs().containment(element.parent_occurrence_id.clone())?);
+                if let Some(declaration) = &element.declaration {
+                    if declaration_count >= MAX_DECLARATION_FACTS || facts.len() >= MAX_FACTS {
+                        return Err(exhausted());
+                    }
+                    facts.push(inputs().finish(
+                        index.digest(),
+                        ProjectXmlFactKind::Declaration {
+                            role: element.role,
+                            declaration: declaration_state(
+                                declaration,
+                                element.parent_occurrence_id.clone(),
+                                element.issues.is_empty(),
+                            ),
+                        },
+                        text_bytes,
+                    )?);
+                    declaration_count += 1;
+                }
+                if let Some(script) = &element.script {
+                    if script_count >= MAX_SCRIPT_FACTS || facts.len() >= MAX_FACTS {
+                        return Err(exhausted());
+                    }
+                    facts.push(inputs().finish(
+                        index.digest(),
+                        script_state(script, &element.qualified_name),
+                        text_bytes,
+                    )?);
+                    script_count += 1;
+                }
+            }
+        }
+        for reference in report.references() {
+            crate::analyzer::checkpoint(stop)?;
+            if facts.len() >= MAX_FACTS {
+                return Err(exhausted());
+            }
+            match reference.kind {
+                XmlReferenceKind::Parent => {
+                    if parent_count >= MAX_PARENT_FACTS {
+                        return Err(exhausted());
+                    }
+                    parent_count += 1;
+                }
+                XmlReferenceKind::Inherits => {
+                    if inheritance_count >= MAX_INHERITANCE_FACTS {
+                        return Err(exhausted());
+                    }
+                    inheritance_count += 1;
+                }
+            }
+            let site = report
+                .declarations()
+                .get(&reference.source_id)
+                .ok_or_else(invalid)?;
+            if site.occurrence_id != reference.source_id {
+                return Err(invalid());
+            }
+            let document = site.document.as_str();
+            let source = *sources.get(document).ok_or_else(invalid)?;
+            let index = plan.xml_documents().get(document).ok_or_else(invalid)?;
+            let element = index.element(&site.occurrence_id).ok_or_else(invalid)?;
+            if index.source_digest() != source.content_digest
+                || site.content_digest != source.content_digest
+            {
+                return Err(invalid());
+            }
+            let target = if let XmlReferenceResolution::UniqueLocalDeclaration { declaration_id } =
+                &reference.resolution
+            {
+                let target = report
+                    .declarations()
+                    .get(declaration_id)
+                    .ok_or_else(invalid)?;
+                let target_index = plan
+                    .xml_documents()
+                    .get(&target.document)
+                    .ok_or_else(invalid)?;
+                let target_source = *sources.get(target.document.as_str()).ok_or_else(invalid)?;
+                if target.occurrence_id != *declaration_id
+                    || target_index.element(declaration_id).is_none()
+                    || target_index.source_digest() != target.content_digest
+                    || target_source.content_digest != target.content_digest
+                {
+                    return Err(invalid());
+                }
+                Some(target.occurrence_id.clone())
+            } else {
+                None
+            };
+            let kind = match reference.kind {
+                XmlReferenceKind::Parent => ProjectXmlFactKind::Parent {
                     reference_id: reference.reference_id.clone(),
-                    target_occurrence_id,
-                    ordinal: reference.ordinal,
-                    order: reference.order,
-                    cycle_id: reference.cycle_id.clone(),
-                },
-                None => ProjectXmlFactKind::InheritanceUnresolved {
-                    reference_id: reference.reference_id.clone(),
-                    ordinal: reference.ordinal,
                     name: reference.name.clone(),
+                    target_occurrence_id: target,
                     resolution: reference.resolution.clone(),
                     order: reference.order,
                     cycle_id: reference.cycle_id.clone(),
                 },
-            },
-        };
-        let span = super::xml::source_span(plan, document, &reference.attribute_span)?;
-        let (source_handle_id, evidence_id) = support(project, source, span, provenance)?;
-        facts.push(
-            XmlFactInputs {
-                project,
-                scope: selected_scope.clone(),
-                document,
-                source,
-                element_name: &element.qualified_name,
-                occurrence_id: &element.occurrence_id,
-                span,
-                source_handle_id,
-                evidence_id,
-                document_digest: index.digest(),
-            }
-            .finish(index.digest(), kind, text_bytes)?,
-        );
+                XmlReferenceKind::Inherits => match target {
+                    Some(target_occurrence_id) => ProjectXmlFactKind::Inheritance {
+                        reference_id: reference.reference_id.clone(),
+                        target_occurrence_id,
+                        ordinal: reference.ordinal,
+                        order: reference.order,
+                        cycle_id: reference.cycle_id.clone(),
+                    },
+                    None => ProjectXmlFactKind::InheritanceUnresolved {
+                        reference_id: reference.reference_id.clone(),
+                        ordinal: reference.ordinal,
+                        name: reference.name.clone(),
+                        resolution: reference.resolution.clone(),
+                        order: reference.order,
+                        cycle_id: reference.cycle_id.clone(),
+                    },
+                },
+            };
+            let span = super::xml::source_span(plan, document, &reference.attribute_span)?;
+            let mapped_source = input.mapped_source(document)?;
+            let (source_handle_id, evidence_id) =
+                support(project, &mapped_source, span, provenance)?;
+            facts.push(
+                XmlFactInputs {
+                    project,
+                    scope: selected_scope.clone(),
+                    document: &mapped_source.path,
+                    source: &mapped_source,
+                    element_name: &element.qualified_name,
+                    occurrence_id: &element.occurrence_id,
+                    span,
+                    source_handle_id,
+                    evidence_id,
+                    document_digest: index.digest(),
+                }
+                .finish(index.digest(), kind, text_bytes)?,
+            );
+        }
     }
     crate::analyzer::checkpoint(stop)?;
     facts.sort_by(|a, b| a.fact_id.cmp(&b.fact_id));

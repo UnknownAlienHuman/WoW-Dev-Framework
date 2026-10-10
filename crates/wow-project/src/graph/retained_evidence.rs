@@ -43,8 +43,31 @@ impl RetainedProjectGraphEvidence {
         owner: &GraphPartitionSnapshot,
         stop: &AtomicBool,
     ) -> ProjectResult<(GraphEvidenceCatalog, super::RetainedProjectSourceManifest)> {
+        self.admit_profile(owner, SOURCE_GRAPH_PROFILE, stop)
+    }
+
+    /// Explicit native package projection admission. The legacy transport
+    /// entry points retain their exact /19 profile boundary.
+    pub fn admit_with_platform_profile(
+        self,
+        owner: &GraphPartitionSnapshot,
+        profile: crate::PlatformGraphProfile,
+        stop: &AtomicBool,
+    ) -> ProjectResult<(GraphEvidenceCatalog, super::RetainedProjectSourceManifest)> {
+        let expected = match profile {
+            crate::PlatformGraphProfile::PackageProjectionV1 => super::PACKAGE_SOURCE_GRAPH_PROFILE,
+        };
+        self.admit_profile(owner, expected, stop)
+    }
+
+    fn admit_profile(
+        self,
+        owner: &GraphPartitionSnapshot,
+        expected: &str,
+        stop: &AtomicBool,
+    ) -> ProjectResult<(GraphEvidenceCatalog, super::RetainedProjectSourceManifest)> {
         crate::analyzer::checkpoint(stop)?;
-        if self.profile != SOURCE_GRAPH_PROFILE
+        if self.profile != expected
             || self.files.is_empty()
             || self.files.len() > MAX_FILES
             || self.context.context_id() != owner.source_context_id()

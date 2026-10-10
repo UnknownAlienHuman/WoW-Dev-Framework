@@ -26,6 +26,7 @@ const PACKAGE_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/3";
 const LIBRARY_BOUND_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/4";
 const PLATFORM_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/5";
 const PACKAGE_XML_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/6";
+const PACKAGE_GRAPH_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/7";
 const MAX_FILES: usize = 8192;
 const MAX_LIBRARIES: usize = 64;
 const MAX_FILE_BYTES: usize = 16 * 1024 * 1024;
@@ -232,9 +233,15 @@ impl ProjectReplay {
             2 => Some(2),
             _ => return Err(invalid()),
         };
-        let platform_schema = match configuration.package_xml_binding_profile() {
-            Some(PackageXmlBindingProfile::SameSessionV1) => PACKAGE_XML_REPLAY_SCHEMA,
-            None => PLATFORM_REPLAY_SCHEMA,
+        // The package graph projection is selected only together with the
+        // genuine platform owner, the same-session XML binding profile, the
+        // library-bound generation and the explicit platform graph selector.
+        let package_graph = configuration.platform_graph_profile().is_some();
+        let platform_schema = match (configuration.package_xml_binding_profile(), package_graph) {
+            (Some(PackageXmlBindingProfile::SameSessionV1), true) => PACKAGE_GRAPH_REPLAY_SCHEMA,
+            (Some(PackageXmlBindingProfile::SameSessionV1), false) => PACKAGE_XML_REPLAY_SCHEMA,
+            (None, false) => PLATFORM_REPLAY_SCHEMA,
+            (None, true) => return Err(invalid()),
         };
         let platform = if let Some(owner) = platform_owner {
             if generation_schema_version != Some(2) {
@@ -293,6 +300,18 @@ impl ProjectReplay {
         Ok(replay)
     }
     fn expected_schema(&self) -> ProjectResult<&'static str> {
+        if self.configuration.platform_graph_profile().is_some() {
+            return if self.generation_schema_version == Some(2)
+                && self.configuration.package_xml_binding_profile()
+                    == Some(PackageXmlBindingProfile::SameSessionV1)
+                && self.configuration.is_platform()
+                && self.platform.is_some()
+            {
+                Ok(PACKAGE_GRAPH_REPLAY_SCHEMA)
+            } else {
+                Err(invalid())
+            };
+        }
         match (
             self.generation_schema_version,
             self.configuration.package_xml_binding_profile(),
@@ -499,6 +518,7 @@ impl ProjectReplay {
             LIBRARY_BOUND_REPLAY_SCHEMA => Ok("wow-project.live-replay.v4"),
             PLATFORM_REPLAY_SCHEMA => Ok("wow-project.live-replay.v5"),
             PACKAGE_XML_REPLAY_SCHEMA => Ok("wow-project.live-replay.v6"),
+            PACKAGE_GRAPH_REPLAY_SCHEMA => Ok("wow-project.live-replay.v7"),
             _ => Err(invalid()),
         }
     }

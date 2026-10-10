@@ -18,6 +18,10 @@ pub struct ProjectGraphStateDeclaration {
     pub state: TocSavedVariableState,
     pub source_handle_id: StableHandleId,
     pub evidence_id: EvidenceId,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub package: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub document: Option<String>,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ProjectGraphStateRoot {
@@ -70,8 +74,10 @@ pub struct ProjectGraphStateBinding {
 }
 
 type Output = functions::FunctionProposals;
-type RootGroups =
-    BTreeMap<(String, TocSavedVariableScope), (BTreeSet<StableHandleId>, BTreeSet<EvidenceId>)>;
+type RootGroups = BTreeMap<
+    (String, String, TocSavedVariableScope),
+    (BTreeSet<StableHandleId>, BTreeSet<EvidenceId>),
+>;
 
 pub(super) fn project(
     project: &ProjectView,
@@ -84,70 +90,108 @@ pub(super) fn project(
         entities: Vec::new(),
         relations: Vec::new(),
     };
-    let Some(plan) = project.configuration().load_plan() else {
+    let inputs = super::load_inputs::scopes(project, stop)?;
+    if inputs.is_empty() {
         return Ok(output);
-    };
-    let toc = plan
-        .sources()
-        .iter()
-        .find(|s| s.path == plan.selected_toc())
-        .ok_or_else(invalid)?;
+    }
     let mut groups = RootGroups::new();
     let mut counts = BTreeMap::<String, usize>::new();
-    for record in plan.records() {
+    let mut unresolved_tocs = BTreeSet::new();
+    for input in inputs {
         crate::analyzer::checkpoint(stop)?;
-        if record.document != toc.path || record.selection != LoadSelection::Included {
-            continue;
+        let plan = input.plan();
+        let local_toc = plan
+            .sources()
+            .iter()
+            .find(|source| source.path == plan.selected_toc())
+            .ok_or_else(invalid)?;
+        let toc = input.mapped_source(&local_toc.path)?;
+        let mut unresolved_selection = false;
+        for record in plan.records() {
+            crate::analyzer::checkpoint(stop)?;
+            if record.document == local_toc.path
+                && record.kind == LoadRecordKind::Metadata
+                && record.selection == LoadSelection::Unresolved
+            {
+                unresolved_selection = true;
+                break;
+            }
         }
-        for entry in &record.saved_variables {
-            if provenance.state_declarations.len() >= MAX_ROOTS {
-                return Err(exhausted());
-            }
-            charge(text_bytes, entry.name.len() + 256)?;
-            let text = plan.document_text(&toc.path).ok_or_else(invalid)?;
-            let (start, end) = (
-                usize::try_from(record.byte_start).map_err(|_| invalid())?,
-                usize::try_from(record.byte_end).map_err(|_| invalid())?,
-            );
-            if text.get(start..end).is_none() {
-                return Err(invalid());
-            }
-            let span = SourceSpan::byte_range(record.byte_start, record.byte_end)
-                .map_err(|_| invalid())?;
-            let (handle, evidence) = support(project, toc, span, provenance)?;
-            provenance
-                .state_declarations
-                .push(ProjectGraphStateDeclaration {
-                    record_ordinal: record.ordinal,
-                    entry_ordinal: entry.ordinal,
-                    name: entry.name.clone(),
-                    scope: entry.scope,
-                    state: entry.state,
-                    source_handle_id: handle,
-                    evidence_id: evidence,
-                });
-            if entry.state != TocSavedVariableState::Declared {
+        for record in plan.records() {
+            crate::analyzer::checkpoint(stop)?;
+            if record.document != local_toc.path || record.selection != LoadSelection::Included {
                 continue;
             }
-            *counts.entry(entry.name.clone()).or_default() += 1;
-            let group = groups.entry((entry.name.clone(), entry.scope)).or_default();
-            group.0.insert(handle);
-            group.1.insert(evidence);
-            if group.0.len() > 32 || group.1.len() > 32 {
-                return Err(exhausted());
+            for entry in &record.saved_variables {
+                crate::analyzer::checkpoint(stop)?;
+                if provenance.state_declarations.len() >= MAX_ROOTS {
+                    return Err(exhausted());
+                }
+                let package = input.package();
+                let document = package.map(|_| toc.path.as_str());
+                charge(
+                    text_bytes,
+                    entry.name.len()
+                        + 256
+                        + package.map_or(0, str::len)
+                        + document.map_or(0, str::len),
+                )?;
+                let text = plan.document_text(&local_toc.path).ok_or_else(invalid)?;
+                let (start, end) = (
+                    usize::try_from(record.byte_start).map_err(|_| invalid())?,
+                    usize::try_from(record.byte_end).map_err(|_| invalid())?,
+                );
+                if text.get(start..end).is_none() {
+                    return Err(invalid());
+                }
+                let span = SourceSpan::byte_range(record.byte_start, record.byte_end)
+                    .map_err(|_| invalid())?;
+                let (handle, evidence) = support(project, &toc, span, provenance)?;
+                provenance
+                    .state_declarations
+                    .push(ProjectGraphStateDeclaration {
+                        record_ordinal: record.ordinal,
+                        entry_ordinal: entry.ordinal,
+                        name: entry.name.clone(),
+                        scope: entry.scope,
+                        state: entry.state,
+                        source_handle_id: handle,
+                        evidence_id: evidence,
+                        package: package.map(str::to_owned),
+                        document: document.map(str::to_owned),
+                    });
+                if entry.state != TocSavedVariableState::Declared {
+                    continue;
+                }
+                if unresolved_selection {
+                    unresolved_tocs.insert(toc.path.clone());
+                }
+                // All scopes share Lua globals; file ownership does not choose
+                // between identically named SavedVariables declarations.
+                *counts.entry(entry.name.clone()).or_default() += 1;
+                let group = groups
+                    .entry((toc.path.clone(), entry.name.clone(), entry.scope))
+                    .or_default();
+                if (!group.0.contains(&handle) && group.0.len() >= 32)
+                    || (!group.1.contains(&evidence) && group.1.len() >= 32)
+                {
+                    return Err(exhausted());
+                }
+                group.0.insert(handle);
+                group.1.insert(evidence);
             }
         }
     }
     let mut by_name = BTreeMap::<String, Vec<ProjectGraphStateRoot>>::new();
-    for ((name, scope), (handles, evidence)) in groups {
+    for ((document, name, scope), (handles, evidence)) in groups {
         crate::analyzer::checkpoint(stop)?;
-        let root_id = id("saved-root", &(&toc.path, &name, scope))?;
+        let root_id = id("saved-root", &(&document, &name, scope))?;
         let root = ProjectGraphStateRoot {
             proposal_id: root_id.clone(),
             root_id,
             name: name.clone(),
             scope,
-            document: toc.path.clone(),
+            document: document.clone(),
             ambiguous: counts.get(&name) != Some(&1),
             source_handle_ids: handles.into_iter().collect(),
             evidence_ids: evidence.into_iter().collect(),
@@ -159,7 +203,7 @@ pub(super) fn project(
                 BTreeMap::from([
                     (
                         "document".into(),
-                        GraphProposalValue::String(toc.path.clone().into()),
+                        GraphProposalValue::String(document.clone().into()),
                     ),
                     (
                         "name".into(),
@@ -185,7 +229,7 @@ pub(super) fn project(
         );
         output.relations.push(ownership(
             &format!("owner:{}", root.root_id),
-            file_ids.get(toc.path.as_str()).ok_or_else(invalid)?,
+            file_ids.get(document.as_str()).ok_or_else(invalid)?,
             &root.proposal_id,
             &root.source_handle_ids,
             &root.evidence_ids,
@@ -207,11 +251,6 @@ pub(super) fn project(
         .iter()
         .map(|f| (f.path.as_str(), f.parse_error_count == 0))
         .collect::<BTreeMap<_, _>>();
-    let unresolved_selection = plan.records().iter().any(|r| {
-        r.document == toc.path
-            && r.kind == LoadRecordKind::Metadata
-            && r.selection == LoadSelection::Unresolved
-    });
     let mut paths = BTreeMap::<String, ProjectGraphStatePath>::new();
     for access in report.global_accesses() {
         crate::analyzer::checkpoint(stop)?;
@@ -231,7 +270,10 @@ pub(super) fn project(
                     .sum::<usize>()
                 + 512,
         )?;
-        let outcome = if unresolved_selection {
+        let outcome = if roots
+            .iter()
+            .any(|root| unresolved_tocs.contains(&root.document))
+        {
             Some(ProjectGraphStateOutcome::UnresolvedTocSelection)
         } else if roots.len() != 1 || roots[0].ambiguous {
             Some(ProjectGraphStateOutcome::AmbiguousDeclaration)

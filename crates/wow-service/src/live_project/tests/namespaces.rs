@@ -1,7 +1,12 @@
 use super::*;
 use sha2::{Digest, Sha256};
-use std::{path::Path, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    path::Path,
+    sync::Arc,
+};
 use wow_core::{ProfileId, SourceContent};
+use wow_project::PlatformGraphProfile;
 use wow_project::disk::{ProjectDiskFile, ProjectInputDirectory};
 use wow_project::load::{ProjectPackageInput, ProjectPackageVariantInput};
 use wow_project::platform_source::{
@@ -28,6 +33,23 @@ fn platform_bundle_with_bindings(
     selected_bindings: bool,
     stop: &AtomicBool,
 ) -> TestResult<ProjectInputBundle> {
+    platform_bundle_with_profiles(path, opaque_revision, selected_bindings, None, stop)
+}
+
+fn platform_bundle_with_profiles(
+    path: &Path,
+    opaque_revision: u8,
+    selected_bindings: bool,
+    graph_profile: Option<PlatformGraphProfile>,
+    stop: &AtomicBool,
+) -> TestResult<ProjectInputBundle> {
+    // The new graph fixture admits both roots before specialization. Existing
+    // callers retain the exact single-root profile, inventory and declarations.
+    let package_roots: &[(&str, &str)] = if graph_profile.is_some() {
+        &[("UI", "Fixture"), ("UISecond", "Twin")]
+    } else {
+        &[("UI", "Fixture")]
+    };
     let ordinary = input_bundle("return External()")?;
     let metadata = ordinary.configuration();
     let target = PlatformTarget {
@@ -40,13 +62,19 @@ fn platform_bundle_with_bindings(
         profile_id: SOURCE_PROFILE.parse()?,
         source_class: PlatformSourceClass::SyntheticFixture,
         target: target.clone(),
-        roots: vec![PlatformRootSpec {
-            root: "UI".into(),
-            selected_tocs: vec!["UI/Fixture.toc".into()],
-        }],
-        exclusions: vec![ProfileExclusion {
-            path: "UI/omitted.txt".into(),
-        }],
+        roots: package_roots
+            .iter()
+            .map(|(source_root, _)| PlatformRootSpec {
+                root: (*source_root).into(),
+                selected_tocs: vec![format!("{source_root}/Fixture.toc")],
+            })
+            .collect(),
+        exclusions: package_roots
+            .iter()
+            .map(|(source_root, _)| ProfileExclusion {
+                path: format!("{source_root}/omitted.txt"),
+            })
+            .collect(),
         limits: SourceAdmissionLimits::new(16, 1024 * 1024, 1024 * 1024, 32 * 1024)?,
     })?;
     let raw_digest =
@@ -70,27 +98,29 @@ fn platform_bundle_with_bindings(
         ),
         ("opaque.bin", PlatformFileKind::Unknown, &opaque),
     ];
-    std::fs::create_dir_all(path.join("UI"))?;
     let mut entries = Vec::new();
-    for (name, kind, bytes) in members {
-        std::fs::write(path.join("UI").join(name), bytes)?;
+    for (source_root, _) in package_roots {
+        std::fs::create_dir_all(path.join(source_root))?;
+        for &(name, kind, bytes) in &members {
+            std::fs::write(path.join(source_root).join(name), bytes)?;
+            entries.push(PlatformInventoryEntry {
+                path: format!("{source_root}/{name}"),
+                kind,
+                disposition: PlatformEntryDisposition::Included {
+                    digest: raw_digest(bytes),
+                    byte_length: bytes.len() as u64,
+                    object_id: None,
+                },
+            });
+        }
         entries.push(PlatformInventoryEntry {
-            path: format!("UI/{name}"),
-            kind,
-            disposition: PlatformEntryDisposition::Included {
-                digest: raw_digest(bytes),
-                byte_length: bytes.len() as u64,
-                object_id: None,
+            path: format!("{source_root}/omitted.txt"),
+            kind: PlatformFileKind::Unknown,
+            disposition: PlatformEntryDisposition::Excluded {
+                rule_path: format!("{source_root}/omitted.txt"),
             },
         });
     }
-    entries.push(PlatformInventoryEntry {
-        path: "UI/omitted.txt".into(),
-        kind: PlatformFileKind::Unknown,
-        disposition: PlatformEntryDisposition::Excluded {
-            rule_path: "UI/omitted.txt".into(),
-        },
-    });
     let inventory = PlatformSourceInventory {
         schema: "wow-project/platform-source-inventory/1".into(),
         profile_digest: profile.digest(),
@@ -108,12 +138,15 @@ fn platform_bundle_with_bindings(
             configuration_digest: ContentDigest::<CanonicalResult>::from_bytes([4; 32]),
             report_digest: raw_digest(b"local handwritten source declaration"),
         },
-        roots: vec![PlatformRootInventory {
-            root: "UI".into(),
-            declared_entries: entries.len() as u64,
-            scope: PlatformInventoryScope::DeclaredPartial,
-            evidence_digest: raw_digest(b"explicit partial inventory fixture"),
-        }],
+        roots: package_roots
+            .iter()
+            .map(|(source_root, _)| PlatformRootInventory {
+                root: (*source_root).into(),
+                declared_entries: (members.len() + 1) as u64,
+                scope: PlatformInventoryScope::DeclaredPartial,
+                evidence_digest: raw_digest(b"explicit partial inventory fixture"),
+            })
+            .collect(),
         entries,
         license: PlatformLicenseRecord {
             state: PlatformLicenseState::Unknown,
@@ -126,19 +159,26 @@ fn platform_bundle_with_bindings(
         ProjectInputDirectory::open(path)?.admit_platform_source(&profile, inventory, stop)?,
     );
     std::fs::remove_dir_all(path)?;
-    let packages = Arc::new(source.specialize_packages(
-        &[ProjectPackageInput::new(
-            "Fixture",
-            "UI",
-            true,
-            vec![ProjectPackageVariantInput::new(
-                ProjectDiskFile::new("Fixture.toc"),
-                true,
-            )],
-        )],
-        None,
-        stop,
-    )?);
+    let packages = Arc::new(
+        source.specialize_packages(
+            &package_roots
+                .iter()
+                .map(|(source_root, package)| {
+                    ProjectPackageInput::new(
+                        *package,
+                        *source_root,
+                        true,
+                        vec![ProjectPackageVariantInput::new(
+                            ProjectDiskFile::new("Fixture.toc"),
+                            true,
+                        )],
+                    )
+                })
+                .collect::<Vec<_>>(),
+            None,
+            stop,
+        )?,
+    );
     let builder = ProjectConfigurationBuilder::new(
         metadata.project_id().clone(),
         ProjectKind::BlizzardUiPlatformSource,
@@ -152,10 +192,14 @@ fn platform_bundle_with_bindings(
     .capability_policy(metadata.capability_policy().clone())
     .budget_policy(metadata.budget_policy())
     .platform_packages(packages.clone())?;
-    let configuration = if selected_bindings {
+    let builder = if selected_bindings {
         builder.with_package_xml_bindings(wow_project::PackageXmlBindingProfile::SameSessionV1)
     } else {
         builder
+    };
+    let configuration = match graph_profile {
+        Some(profile) => builder.with_platform_graph_profile(profile),
+        None => builder,
     }
     .build()?;
     Ok(ProjectInputBundle::closed(
@@ -283,6 +327,301 @@ fn selected_package_bindings_reopen_exactly_and_frozen_v5_refuses_without_effect
     );
     assert_eq!(old_read.graph(), &legacy_graph);
     drop(old_read);
+    drop(legacy);
+    std::fs::remove_dir_all(path)?;
+    Ok(())
+}
+
+#[test]
+fn selected_package_graph_reopens_and_frozen_v6_refuses_without_effects() -> TestResult {
+    use wow_project::replay::ProjectReplay;
+    use wow_recognizers::source_xml::SourceXmlFamily;
+
+    let stop = AtomicBool::new(false);
+    let path = root("platform-package-graph-v7")?;
+    let legacy_bundle = platform_bundle_with_bindings(&path.join("legacy-input"), 1, true, &stop)?;
+    let selected_bundle = platform_bundle_with_profiles(
+        &path.join("selected-input"),
+        1,
+        true,
+        Some(PlatformGraphProfile::PackageProjectionV1),
+        &stop,
+    )?;
+    assert!(!path.join("legacy-input").exists());
+    assert!(!path.join("selected-input").exists());
+    let packages = selected_bundle
+        .configuration()
+        .platform_packages()
+        .ok_or("selected platform plans missing")?;
+    assert_eq!(packages.load_plan().packages().len(), 2);
+    assert_eq!(
+        packages.source().source_bytes("UI/frames.xml")?,
+        packages.source().source_bytes("UISecond/frames.xml")?
+    );
+    let first_xml = packages
+        .load_plan()
+        .package_plan("Fixture")
+        .ok_or("first package missing")?
+        .xml_documents()
+        .get("frames.xml")
+        .ok_or("first XML index missing")?;
+    let second_xml = packages
+        .load_plan()
+        .package_plan("Twin")
+        .ok_or("second package missing")?
+        .xml_documents()
+        .get("frames.xml")
+        .ok_or("second XML index missing")?;
+    assert_eq!(first_xml.source_digest(), second_xml.source_digest());
+    assert_eq!(
+        first_xml
+            .elements()
+            .iter()
+            .map(|element| element.occurrence_id.as_str())
+            .collect::<Vec<_>>(),
+        second_xml
+            .elements()
+            .iter()
+            .map(|element| element.occurrence_id.as_str())
+            .collect::<Vec<_>>()
+    );
+    let selection = PlatformStoreSelection::new(
+        selected_bundle.configuration().project_id().clone(),
+        packages.source().profile().profile_id().clone(),
+    )?;
+    let (selected, selected_graph) = owners_from_bundle(selected_bundle.clone())?;
+    let selected_view = selected.open_current()?;
+    assert_eq!(
+        wow_project::graph::source_graph_profile(selected_view.configuration()),
+        "wow-project/source-load-proposals/20"
+    );
+    assert_eq!(
+        serde_json::to_value(ProjectReplay::capture(&selected, &stop)?)?["schema"],
+        "wow-project/native-project-replay/7"
+    );
+    let (legacy_owner, legacy_graph) = owners_from_bundle(legacy_bundle)?;
+    let legacy_view = legacy_owner.open_current()?;
+    assert!(
+        legacy_view
+            .configuration()
+            .platform_graph_profile()
+            .is_none()
+    );
+    assert_eq!(
+        wow_project::graph::source_graph_profile(legacy_view.configuration()),
+        "wow-project/source-load-proposals/19"
+    );
+    assert_eq!(
+        serde_json::to_value(ProjectReplay::capture(&legacy_owner, &stop)?)?["schema"],
+        "wow-project/native-project-replay/6"
+    );
+
+    let input = || -> TestResult<crate::LocalProjectInput> {
+        let reference = wow_reference::ReferenceView::new(
+            selected_bundle
+                .configuration()
+                .reference_generation()
+                .to_string(),
+            Vec::new(),
+            Vec::new(),
+        )?;
+        Ok(crate::LocalProjectInput::new_with_package_plans(
+            selected_bundle.clone(),
+            reference,
+            packages.load_plan().clone(),
+            packages.main_plan().clone(),
+        )?)
+    };
+    let old_request = crate::graph::GraphBuildRequest::new(
+        selected_bundle.configuration().project_id().as_str().into(),
+        "current".into(),
+    )?;
+    let refused_root = path.join("wrong-graph-request");
+    let refused =
+        LiveProjectPublishRequest::new("fixture:graph-v19-refused", "absent", true, true)?;
+    assert_eq!(
+        publish_input_in_namespace(
+            input()?,
+            &old_request,
+            &refused_root,
+            &selection,
+            &refused,
+            &stop,
+        )
+        .err()
+        .ok_or("unselected graph request admitted the /20 owner")?
+        .code(),
+        ServiceErrorCode::IdentityMismatch
+    );
+    assert!(!refused_root.exists());
+
+    let graph_request =
+        old_request.with_platform_graph_profile(PlatformGraphProfile::PackageProjectionV1);
+    let store_path = path.join("selected");
+    let request = LiveProjectPublishRequest::new("fixture:package-graph-v7", "absent", true, true)?;
+    let published = publish_input_in_namespace(
+        input()?,
+        &graph_request,
+        &store_path,
+        &selection,
+        &request,
+        &stop,
+    )?;
+    assert_eq!(published.exit_code(), 2);
+    let store = LiveProjectStore::open_in_namespace(&store_path, &selection)?;
+    let current = store.current()?.ok_or("selected graph Current missing")?;
+    let epoch = store.store.epoch().clone();
+    let read = store.read_in_namespace(&selection, &ReadSelector::Current, &stop)?;
+    assert_eq!(read.project().snapshot_id(), selected_view.snapshot_id());
+    assert_eq!(
+        read.project().configuration(),
+        selected_bundle.configuration()
+    );
+    assert!(read.read.manifest().members.iter().any(|member| {
+        member.key == "live.project.replay" && member.schema == "wow-project.live-replay.v7"
+    }));
+    assert_eq!(
+        read.graph()
+            .partition(wow_project::graph::SOURCE_GRAPH_PARTITION)
+            .ok_or("composed source partition missing")?
+            .batch(),
+        selected_graph
+            .partition(wow_project::graph::SOURCE_GRAPH_PARTITION)
+            .ok_or("native source partition missing")?
+            .batch()
+    );
+
+    // Resolve original accepted object keys to final native nodes. Input receipt
+    // IDs are generation-local and must not stand in for materialized IDs.
+    let objects = read
+        .graph()
+        .partition(SourceXmlFamily::Object.partition_id())
+        .ok_or("XML object matcher partition missing")?;
+    let mut object_documents = BTreeMap::new();
+    for proposal in objects.batch().entity_proposals() {
+        if proposal.entity_kind_id() != "xml_object" {
+            continue;
+        }
+        let Some(wow_graph::GraphProposalValue::String(document)) =
+            proposal.semantic_key().get("document")
+        else {
+            return Err("XML object has no native document key".into());
+        };
+        let accepted = objects
+            .report()
+            .accepted_entities()
+            .iter()
+            .find(|accepted| accepted.proposal_id() == proposal.proposal_id())
+            .ok_or("XML object proposal was not accepted")?;
+        let node = read
+            .graph()
+            .snapshot()
+            .nodes()
+            .iter()
+            .find(|node| {
+                node.kind() == accepted.node().kind()
+                    && node.owner_key() == accepted.node().owner_key()
+            })
+            .ok_or("accepted XML object is absent from the final graph")?;
+        assert!(
+            object_documents
+                .insert(node.node_id().clone(), document.to_string())
+                .is_none()
+        );
+    }
+    let documents = BTreeSet::from([
+        "packages/Fixture/frames.xml".to_owned(),
+        "packages/Twin/frames.xml".to_owned(),
+    ]);
+    assert_eq!(
+        object_documents.values().cloned().collect::<BTreeSet<_>>(),
+        documents
+    );
+    let parents = read
+        .graph()
+        .snapshot()
+        .edges()
+        .iter()
+        .filter(|edge| edge.relation() == wow_graph::GraphRelationKind::ParentOf)
+        .collect::<Vec<_>>();
+    assert_eq!(parents.len(), 2);
+    let mut parent_documents = BTreeSet::new();
+    for edge in parents {
+        let source = object_documents
+            .get(edge.from())
+            .ok_or("ParentOf source is not a final XML object")?;
+        let target = object_documents
+            .get(edge.to())
+            .ok_or("ParentOf target is not a final XML object")?;
+        assert_eq!(source, target, "ParentOf crossed native package scopes");
+        parent_documents.insert(source.clone());
+    }
+    assert_eq!(parent_documents, documents);
+    let graph = read.graph().clone();
+    let publication_set = read.publication_set_id().to_owned();
+    drop(read);
+    drop(store);
+    let store = LiveProjectStore::open_in_namespace(&store_path, &selection)?;
+    assert_eq!(store.store.epoch(), &epoch);
+    assert_eq!(store.current()?, Some(current));
+    let read = store.read_in_namespace(&selection, &ReadSelector::Current, &stop)?;
+    assert_eq!(read.project().snapshot_id(), selected_view.snapshot_id());
+    assert_eq!(read.graph(), &graph);
+    assert_eq!(read.publication_set_id(), publication_set);
+    assert_eq!(
+        read.project().configuration().platform_graph_profile(),
+        Some(PlatformGraphProfile::PackageProjectionV1)
+    );
+    drop(read);
+    drop(store);
+
+    let legacy_path = path.join("frozen-v6");
+    let mut legacy = LiveProjectStore {
+        store: ProjectStore::create_with_namespace(
+            &legacy_path,
+            selection.namespace(),
+            catalog_for(publication::STORAGE_SCHEMAS_V6)?,
+        )?,
+    };
+    legacy.publish_in_namespace(
+        &selection,
+        &legacy_owner,
+        &legacy_graph,
+        "fixture:before-graph-v7",
+        None,
+        &stop,
+    )?;
+    let old_current = legacy.current()?.ok_or("frozen v6 Current missing")?;
+    let old_epoch = legacy.store.epoch().clone();
+    assert!(
+        legacy
+            .publish_in_namespace(
+                &selection,
+                &selected,
+                &selected_graph,
+                "fixture:graph-v7-to-v6",
+                Some(old_current.record_id.clone()),
+                &stop,
+            )
+            .is_err()
+    );
+    assert_eq!(legacy.current()?, Some(old_current.clone()));
+    assert_eq!(legacy.store.epoch(), &old_epoch);
+    assert!(legacy.reconcile("fixture:graph-v7-to-v6")?.is_none());
+    drop(legacy);
+    let legacy = LiveProjectStore::open_in_namespace(&legacy_path, &selection)?;
+    assert_eq!(legacy.store.epoch(), &old_epoch);
+    assert_eq!(legacy.current()?, Some(old_current));
+    let read = legacy.read_in_namespace(&selection, &ReadSelector::Current, &stop)?;
+    assert_eq!(read.project().snapshot_id(), legacy_view.snapshot_id());
+    assert_eq!(read.graph(), &legacy_graph);
+    assert!(
+        read.project()
+            .configuration()
+            .platform_graph_profile()
+            .is_none()
+    );
+    drop(read);
     drop(legacy);
     std::fs::remove_dir_all(path)?;
     Ok(())

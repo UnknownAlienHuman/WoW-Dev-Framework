@@ -4,6 +4,7 @@ use super::*;
 use crate::load::{ProjectLoadPlan, XmlElementRecord, XmlElementRole, XmlScriptSource};
 use crate::xml_bindings::{XmlLuaBindingKind, XmlLuaBindingState};
 use std::collections::{BTreeMap, BTreeSet};
+use wow_core::{CanonicalResult, ContentDigest};
 use wow_emmy::bindings::SymbolLookupState;
 use wow_emmy::function_calls::SourceCallTarget;
 
@@ -69,6 +70,12 @@ pub struct ProjectGraphScriptSite {
     pub semantic_context_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub binding_index: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub package_binding_address: Option<crate::xml_bindings::ProjectPackageXmlLuaBindingAddress>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub package: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub document: Option<String>,
     pub queries: Vec<ProjectGraphScriptQuery>,
     pub binding_ids: Vec<String>,
     pub blockers: Vec<&'static str>,
@@ -110,12 +117,14 @@ struct Site<'a> {
 struct Inputs<'a> {
     project: &'a ProjectView,
     plan: &'a ProjectLoadPlan,
-    receivers: BTreeMap<String, Endpoint>,
-    functions: BTreeMap<String, Endpoint>,
-    function_facts: BTreeMap<&'a str, &'a wow_emmy::function_calls::SourceFunctionFact>,
+    scope: &'a load_inputs::LoadPlanGraphInput<'a>,
+    xml_bindings: Option<load_inputs::ScopedXmlBindings<'a>>,
+    receivers: BTreeMap<&'a str, &'a Endpoint>,
+    functions: &'a BTreeMap<String, Endpoint>,
+    function_facts: &'a BTreeMap<&'a str, &'a wow_emmy::function_calls::SourceFunctionFact>,
     inline: BTreeMap<String, Endpoint>,
     bindings: BTreeMap<(&'a str, Option<&'a str>), usize>,
-    loads: BTreeMap<&'a str, (u64, usize)>,
+    loads: BTreeMap<String, (u64, usize)>,
 }
 
 pub(super) fn project(
@@ -129,317 +138,323 @@ pub(super) fn project(
         entities: Vec::new(),
         relations: Vec::new(),
     };
-    let Some(plan) = project.configuration().load_plan() else {
+    let scopes = load_inputs::scopes(project, stop)?;
+    if scopes.is_empty() {
         return Ok(output);
-    };
+    }
     let analyzer = project.snapshot().analyzer_binding();
     let Some(functions) = analyzer.function_call_report() else {
         return Ok(output);
     };
-    let xml_bindings = analyzer.xml_bindings();
-    if xml_bindings
-        .and_then(|b| b.symbol_lookup())
-        .is_some_and(|report| {
-            !functions
-                .symbol_lookup_analysis_ids()
-                .iter()
-                .any(|id| id == report.analysis_id())
-        })
-    {
-        return Err(invalid());
-    }
-    let mut loads = BTreeMap::new();
-    for record in plan.records() {
+    let mut receiver_catalog: BTreeMap<String, BTreeMap<String, Endpoint>> = BTreeMap::new();
+    for declaration in &provenance.xml_declarations {
         crate::analyzer::checkpoint(stop)?;
-        if record.kind == LoadRecordKind::LuaFile
-            && record.selection == LoadSelection::Included
-            && let Some(path) = record.target.as_deref()
-        {
-            let entry = loads.entry(path).or_insert((record.ordinal, 0usize));
-            entry.1 += 1;
-        }
-    }
-    let mut bindings = BTreeMap::new();
-    if let Some(report) = xml_bindings {
-        for (index, binding) in report.bindings().iter().enumerate() {
-            crate::analyzer::checkpoint(stop)?;
-            if binding.kind != XmlLuaBindingKind::Mixin
-                && bindings
-                    .insert(
-                        (binding.element_id.as_str(), binding.consumer_id.as_deref()),
-                        index,
-                    )
-                    .is_some()
-            {
-                // Invalid mixed function/method attributes already have an
-                // InvalidSource receipt; they must not select an arbitrary row.
-                let element = plan
-                    .xml_documents()
-                    .get(&binding.document)
-                    .and_then(|d| d.element(&binding.element_id))
-                    .ok_or_else(invalid)?;
-                if element
-                    .script
-                    .as_ref()
-                    .is_none_or(|s| s.source_kind != XmlScriptSource::Unresolved)
-                {
-                    return Err(invalid());
-                }
-            }
-        }
-    }
-    // These small crosswalks borrow project-owned immutable facts rather than
-    // trusting spelling or copying source bodies into graph nodes.
-    let receivers = provenance
-        .xml_declarations
-        .iter()
-        .map(|d| {
-            (
-                d.occurrence_id.clone(),
+        if receiver_catalog
+            .entry(declaration.path.clone())
+            .or_default()
+            .insert(
+                declaration.occurrence_id.clone(),
                 Endpoint {
-                    proposal: d.proposal_id.clone(),
+                    proposal: declaration.proposal_id.clone(),
                     kind: "xml_source_declaration",
                     semantic_context: None,
-                    handle: d.source_handle_id,
-                    evidence: d.evidence_id,
+                    handle: declaration.source_handle_id,
+                    evidence: declaration.evidence_id,
                 },
             )
-        })
-        .collect::<BTreeMap<_, _>>();
+            .is_some()
+        {
+            return Err(invalid());
+        }
+    }
     let functions_by_id = provenance
         .functions
         .iter()
-        .map(|f| {
+        .map(|function| {
             (
-                f.function_id.clone(),
+                function.function_id.clone(),
                 Endpoint {
-                    proposal: f.proposal_id.clone(),
+                    proposal: function.proposal_id.clone(),
                     kind: "lua_source_function",
                     semantic_context: None,
-                    handle: f.source_handle_id,
-                    evidence: f.evidence_id,
+                    handle: function.source_handle_id,
+                    evidence: function.evidence_id,
                 },
             )
         })
         .collect::<BTreeMap<_, _>>();
-    let mut inline = BTreeMap::new();
-    let mut sources = Vec::new();
-    let mut elements = BTreeMap::new();
-    let parsed = analyzer
-        .xml_lua_analysis()
-        .map(|r| {
-            r.units()
-                .iter()
-                .map(|u| (u.script_occurrence_id.as_str(), u))
-                .collect::<BTreeMap<_, _>>()
-        })
-        .unwrap_or_default();
-    let source_files = plan
-        .sources()
+    let function_facts = functions
+        .functions()
         .iter()
-        .map(|f| (f.path.as_str(), f))
+        .map(|function| (function.fact_id(), function))
         .collect::<BTreeMap<_, _>>();
-    for (document, index) in plan.xml_documents() {
-        for element in index.scripts().filter(|e| {
-            e.ui_namespace
-                && matches!(
-                    e.role,
-                    XmlElementRole::ScriptBinding | XmlElementRole::Script
-                )
-        }) {
+    let mut parsed = BTreeMap::new();
+    if let Some(analysis) = analyzer.xml_lua_analysis() {
+        for unit in analysis.units() {
             crate::analyzer::checkpoint(stop)?;
-            if sources.len() >= MAX_HANDLERS {
-                return Err(exhausted());
-            }
-            let script = element.script.as_ref().ok_or_else(invalid)?;
-            let file = *source_files.get(document.as_str()).ok_or_else(invalid)?;
-            let span = xml::source_span(plan, document, &element.span)?;
-            let (handle, evidence) = support(project, file, span, provenance)?;
-            charge(
-                text_bytes,
-                document.len().saturating_mul(6)
-                    + element.occurrence_id.len().saturating_mul(6)
-                    + element.qualified_name.len().saturating_mul(3)
-                    + script
-                        .inherit
-                        .as_ref()
-                        .map_or(0, String::len)
-                        .saturating_mul(3)
-                    + script
-                        .intrinsic_order
-                        .as_ref()
-                        .map_or(0, String::len)
-                        .saturating_mul(3)
-                    + 768,
-            )?;
-            sources.push(ProjectGraphScriptSource {
-                script_id: element.occurrence_id.clone(),
-                document: document.clone(),
-                script_name: element.qualified_name.clone(),
-                source_kind: script.source_kind,
-                declaring_owner_id: script.owner_occurrence_id.clone(),
-                inherit: script.inherit.clone(),
-                intrinsic_order: script.intrinsic_order.clone(),
-                span,
-                source_handle_id: handle,
-                evidence_id: evidence,
-            });
-            if elements
-                .insert(element.occurrence_id.as_str(), element)
+            if parsed
+                .insert(
+                    (
+                        unit.package.as_deref(),
+                        unit.document.as_str(),
+                        unit.script_occurrence_id.as_str(),
+                    ),
+                    unit,
+                )
                 .is_some()
             {
                 return Err(invalid());
             }
-            if element.role == XmlElementRole::ScriptBinding
-                && script.source_kind == XmlScriptSource::InlineBody
-                && element.issues.is_empty()
-            {
-                let unit = parsed
-                    .get(element.occurrence_id.as_str())
-                    .ok_or_else(invalid)?;
-                let body = script.inline_lua.as_ref().ok_or_else(invalid)?;
-                if unit.document != *document
-                    || unit.document_digest != index.source_digest()
-                    || unit.extracted_unit_id != body.unit_id
-                    || unit.content_digest != body.content_digest
-                    || unit.byte_length != body.byte_length
-                    || !unit.context.admits_static_source_association()
+        }
+    }
+    let mut all_sources = Vec::new();
+    let mut query_visits = 0;
+    for scope in &scopes {
+        crate::analyzer::checkpoint(stop)?;
+        let plan = scope.plan();
+        let xml_bindings = scope.bindings()?;
+        if xml_bindings
+            .as_ref()
+            .and_then(|b| b.symbol_lookup)
+            .is_some_and(|report| {
+                !functions
+                    .symbol_lookup_analysis_ids()
+                    .iter()
+                    .any(|id| id == report.analysis_id())
+            })
+        {
+            return Err(invalid());
+        }
+        let loads = scope.lua_loads(stop)?;
+        let mut bindings = BTreeMap::new();
+        if let Some(report) = &xml_bindings {
+            for (index, binding) in report.bindings.iter().enumerate() {
+                crate::analyzer::checkpoint(stop)?;
+                if binding.kind != XmlLuaBindingKind::Mixin
+                    && bindings
+                        .insert(
+                            (binding.element_id.as_str(), binding.consumer_id.as_deref()),
+                            index,
+                        )
+                        .is_some()
                 {
-                    return Err(invalid());
+                    // Invalid mixed function/method attributes already have an
+                    // InvalidSource receipt; they must not select an arbitrary row.
+                    let element = plan
+                        .xml_documents()
+                        .get(&binding.document)
+                        .and_then(|d| d.element(&binding.element_id))
+                        .ok_or_else(invalid)?;
+                    if element
+                        .script
+                        .as_ref()
+                        .is_none_or(|s| s.source_kind != XmlScriptSource::Unresolved)
+                    {
+                        return Err(invalid());
+                    }
                 }
-                if !unit.diagnostics.is_empty() {
-                    continue;
+            }
+        }
+        // These small crosswalks borrow project-owned immutable facts rather than
+        // trusting spelling or copying source bodies into graph nodes.
+        let mut receivers = BTreeMap::new();
+        for declaration in plan.xml_references().declarations().values() {
+            crate::analyzer::checkpoint(stop)?;
+            let document = scope.qualified_path(&declaration.document)?;
+            if let Some(endpoint) = receiver_catalog
+                .get(document.as_str())
+                .and_then(|rows| rows.get(declaration.occurrence_id.as_str()))
+            {
+                receivers.insert(declaration.occurrence_id.as_str(), endpoint);
+            }
+        }
+        let mut inline = BTreeMap::new();
+        let mut sources = Vec::new();
+        let mut elements = BTreeMap::new();
+        for (document, index) in plan.xml_documents() {
+            for element in index.scripts().filter(|e| {
+                e.ui_namespace
+                    && matches!(
+                        e.role,
+                        XmlElementRole::ScriptBinding | XmlElementRole::Script
+                    )
+            }) {
+                crate::analyzer::checkpoint(stop)?;
+                if all_sources.len().saturating_add(sources.len()) >= MAX_HANDLERS {
+                    return Err(exhausted());
                 }
-                let proposal_id = format!("xml-handler:{}", element.occurrence_id);
-                output.entities.push(
-                    GraphEntityProposal::new(
-                        proposal_id.as_str(),
-                        "xml_source_handler",
-                        BTreeMap::from([
-                            (
-                                "document".into(),
-                                GraphProposalValue::String(document.clone().into()),
-                            ),
-                            (
-                                "occurrence".into(),
-                                GraphProposalValue::Identifier(
-                                    element.occurrence_id.clone().into(),
-                                ),
-                            ),
-                            (
-                                "semantic_context_id".into(),
-                                GraphProposalValue::String(
-                                    unit.context.context_id().to_owned().into(),
-                                ),
-                            ),
-                        ]),
-                        GraphConfidence::Derived,
-                        vec![handle],
-                        vec![evidence],
-                        Vec::new(),
-                    )
-                    .map_err(|_| invalid())?,
-                );
-                output.relations.push(
-                    GraphRelationProposal::new(
-                        format!("xml-handler-owner:{}", element.occurrence_id),
-                        "source_declaration_owns",
-                        GraphRelationProposalInput {
-                            source: GraphProposalEndpoint::Proposed(
-                                file_ids
-                                    .get(document.as_str())
-                                    .ok_or_else(invalid)?
-                                    .clone()
-                                    .into(),
-                            ),
-                            target: GraphProposalEndpoint::Proposed(proposal_id.clone().into()),
-                            confidence: GraphConfidence::Derived,
-                            source_handle_ids: vec![handle],
-                            evidence_ids: vec![evidence],
-                            coverage_ids: Vec::new(),
-                        },
-                    )
-                    .map_err(|_| invalid())?,
-                );
-                inline.insert(
-                    element.occurrence_id.clone(),
-                    Endpoint {
-                        proposal: proposal_id.clone(),
-                        kind: "xml_source_handler",
-                        semantic_context: Some(unit.context.clone()),
-                        handle,
-                        evidence,
-                    },
-                );
-                provenance.inline_handlers.push(ProjectGraphInlineHandler {
+                let script = element.script.as_ref().ok_or_else(invalid)?;
+                let file = scope.mapped_source(document)?;
+                let span = xml::source_span(plan, document, &element.span)?;
+                let (handle, evidence) = support(project, &file, span, provenance)?;
+                charge(
+                    text_bytes,
+                    file.path.len().saturating_mul(6)
+                        + element.occurrence_id.len().saturating_mul(6)
+                        + element.qualified_name.len().saturating_mul(3)
+                        + script
+                            .inherit
+                            .as_ref()
+                            .map_or(0, String::len)
+                            .saturating_mul(3)
+                        + script
+                            .intrinsic_order
+                            .as_ref()
+                            .map_or(0, String::len)
+                            .saturating_mul(3)
+                        + 768,
+                )?;
+                sources.push(ProjectGraphScriptSource {
                     script_id: element.occurrence_id.clone(),
-                    unit_id: unit.unit_id.to_string(),
-                    document: document.clone(),
-                    semantic_context: unit.context.clone(),
-                    proposal_id,
+                    document: file.path.clone(),
+                    script_name: element.qualified_name.clone(),
+                    source_kind: script.source_kind,
+                    declaring_owner_id: script.owner_occurrence_id.clone(),
+                    inherit: script.inherit.clone(),
+                    intrinsic_order: script.intrinsic_order.clone(),
+                    span,
                     source_handle_id: handle,
                     evidence_id: evidence,
                 });
+                if elements
+                    .insert(element.occurrence_id.as_str(), element)
+                    .is_some()
+                {
+                    return Err(invalid());
+                }
+                if element.role == XmlElementRole::ScriptBinding
+                    && script.source_kind == XmlScriptSource::InlineBody
+                    && element.issues.is_empty()
+                {
+                    if scope.node().is_some_and(|node| {
+                        node.reachability == crate::load::ProjectPackageReachability::Unreachable
+                    }) {
+                        continue;
+                    }
+                    let unit = parsed
+                        .get(&(
+                            scope.package(),
+                            file.path.as_str(),
+                            element.occurrence_id.as_str(),
+                        ))
+                        .ok_or_else(invalid)?;
+                    let body = script.inline_lua.as_ref().ok_or_else(invalid)?;
+                    if unit.document != file.path
+                        || unit.package.as_deref() != scope.package()
+                        || unit.document_digest != index.source_digest()
+                        || unit.extracted_unit_id != body.unit_id
+                        || unit.content_digest != body.content_digest
+                        || unit.byte_length != body.byte_length
+                        || !unit.context.admits_static_source_association()
+                    {
+                        return Err(invalid());
+                    }
+                    if !unit.diagnostics.is_empty() {
+                        continue;
+                    }
+                    let proposal_id =
+                        scope.proposal_id("xml-handler", document, &element.occurrence_id)?;
+                    output.entities.push(
+                        GraphEntityProposal::new(
+                            proposal_id.as_str(),
+                            "xml_source_handler",
+                            BTreeMap::from([
+                                (
+                                    "document".into(),
+                                    GraphProposalValue::String(file.path.clone().into()),
+                                ),
+                                (
+                                    "occurrence".into(),
+                                    GraphProposalValue::Identifier(
+                                        element.occurrence_id.clone().into(),
+                                    ),
+                                ),
+                                (
+                                    "semantic_context_id".into(),
+                                    GraphProposalValue::String(
+                                        unit.context.context_id().to_owned().into(),
+                                    ),
+                                ),
+                            ]),
+                            GraphConfidence::Derived,
+                            vec![handle],
+                            vec![evidence],
+                            Vec::new(),
+                        )
+                        .map_err(|_| invalid())?,
+                    );
+                    output.relations.push(
+                        GraphRelationProposal::new(
+                            scope.proposal_id(
+                                "xml-handler-owner",
+                                document,
+                                &element.occurrence_id,
+                            )?,
+                            "source_declaration_owns",
+                            GraphRelationProposalInput {
+                                source: GraphProposalEndpoint::Proposed(
+                                    file_ids
+                                        .get(file.path.as_str())
+                                        .ok_or_else(invalid)?
+                                        .clone()
+                                        .into(),
+                                ),
+                                target: GraphProposalEndpoint::Proposed(proposal_id.clone().into()),
+                                confidence: GraphConfidence::Derived,
+                                source_handle_ids: vec![handle],
+                                evidence_ids: vec![evidence],
+                                coverage_ids: Vec::new(),
+                            },
+                        )
+                        .map_err(|_| invalid())?,
+                    );
+                    inline.insert(
+                        element.occurrence_id.clone(),
+                        Endpoint {
+                            proposal: proposal_id.clone(),
+                            kind: "xml_source_handler",
+                            semantic_context: Some(unit.context.clone()),
+                            handle,
+                            evidence,
+                        },
+                    );
+                    provenance.inline_handlers.push(ProjectGraphInlineHandler {
+                        script_id: element.occurrence_id.clone(),
+                        unit_id: unit.unit_id.to_string(),
+                        document: file.path.clone(),
+                        semantic_context: unit.context.clone(),
+                        proposal_id,
+                        source_handle_id: handle,
+                        evidence_id: evidence,
+                    });
+                }
             }
         }
-    }
-    let inputs = Inputs {
-        project,
-        plan,
-        receivers,
-        functions: functions_by_id,
-        function_facts: functions
-            .functions()
-            .iter()
-            .map(|f| (f.fact_id(), f))
-            .collect(),
-        inline,
-        bindings,
-        loads,
-    };
-    let mut query_visits = 0;
-    for source in &sources {
-        collect_site(
-            &inputs,
-            Site {
-                source,
-                element: elements[source.script_id.as_str()],
-                // Script chunks have lexical owners but no callback receiver.
-                // Keep raw ownership and the parsed unit in their source reports.
-                consumer: source
-                    .declaring_owner_id
-                    .as_deref()
-                    .filter(|_| elements[source.script_id.as_str()].role != XmlElementRole::Script),
-                inherited: false,
-                complete: true,
-            },
-            provenance,
-            text_bytes,
-            &mut query_visits,
-            stop,
-        )?;
-    }
-    let source_by_id = sources
-        .iter()
-        .map(|s| (s.script_id.as_str(), s))
-        .collect::<BTreeMap<_, _>>();
-    if let Some(report) = xml_bindings {
-        for inherited in report.inherited_script_sources() {
-            crate::analyzer::checkpoint(stop)?;
-            let source = *source_by_id
-                .get(inherited.script_id.as_str())
-                .ok_or_else(invalid)?;
-            if source.declaring_owner_id.as_deref() != Some(inherited.declaring_owner_id.as_str()) {
-                return Err(invalid());
-            }
+        let inputs = Inputs {
+            project,
+            plan,
+            scope,
+            xml_bindings,
+            receivers,
+            functions: &functions_by_id,
+            function_facts: &function_facts,
+            inline,
+            bindings,
+            loads,
+        };
+        for source in &sources {
             collect_site(
                 &inputs,
                 Site {
                     source,
                     element: elements[source.script_id.as_str()],
-                    consumer: Some(&inherited.consumer_id),
-                    inherited: true,
-                    complete: inherited.source_complete,
+                    // Script chunks have lexical owners but no callback receiver.
+                    // Keep raw ownership and the parsed unit in their source reports.
+                    consumer: source.declaring_owner_id.as_deref().filter(|_| {
+                        elements[source.script_id.as_str()].role != XmlElementRole::Script
+                    }),
+                    inherited: false,
+                    complete: true,
                 },
                 provenance,
                 text_bytes,
@@ -447,12 +462,46 @@ pub(super) fn project(
                 stop,
             )?;
         }
+        let source_by_id = sources
+            .iter()
+            .map(|s| (s.script_id.as_str(), s))
+            .collect::<BTreeMap<_, _>>();
+        if let Some(report) = &inputs.xml_bindings {
+            for inherited in report.inherited_script_sources {
+                crate::analyzer::checkpoint(stop)?;
+                let source = *source_by_id
+                    .get(inherited.script_id.as_str())
+                    .ok_or_else(invalid)?;
+                if source.declaring_owner_id.as_deref()
+                    != Some(inherited.declaring_owner_id.as_str())
+                {
+                    return Err(invalid());
+                }
+                collect_site(
+                    &inputs,
+                    Site {
+                        source,
+                        element: elements[source.script_id.as_str()],
+                        consumer: Some(&inherited.consumer_id),
+                        inherited: true,
+                        complete: inherited.source_complete,
+                    },
+                    provenance,
+                    text_bytes,
+                    &mut query_visits,
+                    stop,
+                )?;
+            }
+        }
+        all_sources.extend(sources);
     }
-    provenance.script_sources = sources;
+    provenance.script_sources = all_sources;
     provenance.xml_lua_analysis = analyzer.xml_lua_analysis().cloned();
     // The mixin stage may have no entries; script receipts still need the entire
     // original binding and inherited-source graph, not a synthetic subset.
-    provenance.xml_binding_report = xml_bindings.cloned();
+    if project.configuration().platform_graph_profile().is_none() {
+        provenance.xml_binding_report = analyzer.xml_bindings().cloned();
+    }
     Ok(output)
 }
 
@@ -474,13 +523,32 @@ fn collect_site(
         #[serde(skip_serializing_if = "Option::is_none")]
         consumer: Option<&'a str>,
         inherited: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        package: Option<&'a str>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        document: Option<&'a str>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        load_plan_digest: Option<ContentDigest<CanonicalResult>>,
     }
+    let package = inputs.scope.package();
+    let document = package.map(|_| site.source.document.as_str());
+    charge(
+        text_bytes,
+        site.source.script_id.len().saturating_mul(3)
+            + site.consumer.map_or(0, str::len).saturating_mul(3)
+            + package.map_or(0, str::len)
+            + document.map_or(0, str::len)
+            + 512,
+    )?;
     let digest = crate::identity::canonical_digest(
         "wow-project/xml-script-site/2",
         &SiteIdentity {
             script_id: &site.source.script_id,
             consumer: site.consumer,
             inherited: site.inherited,
+            package,
+            document,
+            load_plan_digest: package.map(|_| inputs.plan.digest()),
         },
         ProjectPhase::View,
     )?;
@@ -491,21 +559,28 @@ fn collect_site(
         inherited: site.inherited,
         semantic_context_id: None,
         binding_index: None,
+        package_binding_address: None,
+        package: package.map(str::to_owned),
+        document: document.map(str::to_owned),
         queries: Vec::new(),
         binding_ids: Vec::new(),
         blockers: Vec::new(),
     };
-    charge(
-        text_bytes,
-        site.source.script_id.len().saturating_mul(3)
-            + site.consumer.map_or(0, str::len).saturating_mul(3)
-            + 512,
-    )?;
+    let unreachable = inputs.scope.node().is_some_and(|node| {
+        node.reachability == crate::load::ProjectPackageReachability::Unreachable
+    });
+    if unreachable {
+        receipt.blockers.push("package_unreachable");
+    }
     let Some(consumer) = site.consumer else {
         receipt.blockers.push("owner_not_captured");
         provenance.script_sites.push(receipt);
         return Ok(());
     };
+    if unreachable {
+        provenance.script_sites.push(receipt);
+        return Ok(());
+    }
     let declaration = inputs
         .plan
         .xml_references()
@@ -552,7 +627,7 @@ fn collect_site(
         }
         XmlScriptSource::ReferenceOnly => {
             let analyzer = inputs.project.snapshot().analyzer_binding();
-            let report = analyzer.xml_bindings().ok_or_else(invalid)?;
+            let report = inputs.xml_bindings.as_ref().ok_or_else(invalid)?;
             let index = *inputs
                 .bindings
                 .get(&(
@@ -561,8 +636,28 @@ fn collect_site(
                 ))
                 .ok_or_else(invalid)?;
             receipt.binding_index = Some(index);
-            let binding = report.bindings().get(index).ok_or_else(invalid)?;
+            let package_binding_address = report.binding_address(index)?;
+            if let Some(address) = &package_binding_address {
+                charge(
+                    text_bytes,
+                    address
+                        .analysis_id()
+                        .len()
+                        .saturating_add(address.package().len())
+                        .saturating_add(256),
+                )?;
+            }
+            receipt.package_binding_address = package_binding_address;
+            let binding = report.bindings.get(index).ok_or_else(invalid)?;
             let is_method = binding.kind == XmlLuaBindingKind::Method;
+            if let Some(id) = &binding.receiver_source_id
+                && report
+                    .receiver_sources
+                    .get(id)
+                    .is_none_or(|sources| sources.owner_id != consumer)
+            {
+                return Err(invalid());
+            }
             if matches!(
                 binding.state,
                 XmlLuaBindingState::InvalidSource
@@ -572,7 +667,7 @@ fn collect_site(
             ) {
                 receipt.blockers.push("binding_not_resolved");
             } else {
-                let lookup = report.symbol_lookup().ok_or_else(invalid)?;
+                let lookup = report.symbol_lookup.ok_or_else(invalid)?;
                 let functions = analyzer.function_call_report().ok_or_else(invalid)?;
                 let mut targets = BTreeSet::new();
                 for query in &binding.queries {

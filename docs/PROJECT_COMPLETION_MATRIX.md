@@ -1,7 +1,8 @@
 # Project completion matrix
 
 **Audited:** 2026-09-19 America/New_York. Execution inventory refreshed 2026-10-10
-through the scoped W17 replay/stable namespace, native lookup and raw traversal checkpoints below.
+through the scoped W17 replay/stable namespace, native lookup, raw traversal and
+selected package graph checkpoints below, including its final workspace gate census.
 
 This is the current execution ledger. [IMPLEMENTATION_HANDOFF.md](IMPLEMENTATION_HANDOFF.md)
 remains the normative I0–I7 plan; do not restart its historical bootstrap steps.
@@ -62,7 +63,7 @@ no Rust implementation in the audited source. Their documentation is not a binar
 | E1-D | Partial executable Reference Pack service and active internal builder with durable materialization/finalization | Close external parity/license/rebuild evidence, Windows/process-loss acceptance and complete package gates; code presence is not `ValidatedLocal` |
 | E2-A–E2-B | Partial executable | All 26 active E2-B rule IDs are service-published after the W11 semantic repair, TOC, XML and state slices; close public CLI/full-pipeline fixtures and package acceptance |
 | E2-C–E2-D | Partial source index, manifested store, native live pair service/CLI, cancellable updates, exact Library/fact-profile binding, retained physical parser updates and durable physical update/removal publication; bounded retention/GC, recovery/replacement, inactive migration/READY preparation, portable source authority and guarded cross-epoch selection/reconciliation | Dependency-specific fact reuse, standalone/package durable updates, portable full migration history and complete E2 acceptance remain open; see [REPLAY_PUBLICATION.md](../crates/wow-project/REPLAY_PUBLICATION.md) |
-| E3-A | Partial exact raw/package admission, owner-bound platform configuration, native physical/XML Main/source graph, opt-in same-session package XML bindings, genuine replay and selected stable namespace publication/readback across source snapshots | Package XML/state and raw-member graph projection, independent partitions/fingerprints, bounded SkeletonInputView and service/CLI source transport; full source-universe acceptance remains open |
+| E3-A | Partial exact raw/package admission, owner-bound platform configuration, native physical/XML Main/source graph, opt-in same-session package XML bindings and package XML/script/state graph inputs, genuine replay and selected stable namespace publication/readback across source snapshots | Complete raw-member graph/read binding, independent direct producers/fingerprints, bounded SkeletonInputView and service/CLI source transport; full source-universe acceptance remains open |
 | E3-B–E3-C | Not started | Context owners and service/CLI after their actual producer inputs |
 | E4-A–E4-C | Not started | Search, lineage/migration/static impact and routing after A0 prerequisites |
 | E5-A–E5-C | Not started | Calibration, independent review/holdout and governed publication lifecycle |
@@ -561,6 +562,29 @@ See [package XML bindings](PLATFORM_PACKAGE_XML_BINDINGS.md).
 
 Two project cases and one native namespace/store case pass. Workspace policy,
 fmt, check, strict Clippy, tests (936 passed, 1 ignored, 111 targets), strict
-rustdoc and build pass on 2026-10-10. This does not add package graph projection
+rustdoc and build pass on 2026-10-10. That binding checkpoint did not add package graph projection
 or runtime authority; full W17/E3, corpus/performance/runtime and later W18-W26
 acceptance remain open.
+
+The selected package graph route now requires
+`PlatformGraphProfile::PackageProjectionV1` plus genuine same-session package XML
+bindings. It borrows exact native plans/Main receipts, preserves local XML IDs
+through scoped proposal addresses, and projects XML, source-only handlers and
+SavedVariables with shared ambiguity and aggregate bounds. Cross-package local
+ordinals do not prove Lua load order. Source `/20`, native replay `/7` and storage
+v7 are explicit new channels; default `/19`, published `/6` and frozen catalogs
+remain exact. See [selected package graph](PLATFORM_PACKAGE_GRAPH.md).
+
+Two native synthetic cases pass: disk-absent project hydration with exact graph
+evidence, and composed service namespace publication/Current reopen plus frozen
+V6 refusal without effects. Unreachable top-level chunk receipts now preserve
+reachability and missing-owner blockers together, with the final omission regression
+passing. Final workspace policy, fmt, all-target/all-feature check, strict Clippy,
+tests (938 passed, 0 failed, 1 ignored, 111 targets), strict rustdoc and
+all-target/all-feature build pass, completed 2026-10-10 07:18:40 UTC. This records
+local verification without advancing full acceptance or asserting remote publication.
+The direct source producer remains
+monolithic. Complete raw-member graph/read binding, independent platform direct
+producers/fingerprints, SkeletonInputView and source service/CLI transport remain
+open. Full W17/E3, real corpus/performance/runtime and W18-W26 acceptance remain
+NotEvaluated.
