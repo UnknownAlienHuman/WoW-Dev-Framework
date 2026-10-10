@@ -117,7 +117,7 @@ pub fn restore_live_project_to_new(
     Ok(LiveProjectStore { store })
 }
 
-fn validate_owners(
+pub(super) fn validate_owners(
     backup: &VerifiedBackup,
     stop: &AtomicBool,
 ) -> ServiceResult<Vec<ValidatedRead>> {

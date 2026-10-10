@@ -21,8 +21,8 @@ use std::{
 /// An immutable native copy with exact source guards and durable intent. A
 /// serialized report cannot manufacture this held candidate or owner checks.
 pub struct ReplacementCandidate {
-    backup: VerifiedBackup,
-    intent: ReplacementIntent,
+    pub(super) backup: VerifiedBackup,
+    pub(super) intent: ReplacementIntent,
 }
 impl ReplacementCandidate {
     pub fn backup(&self) -> &VerifiedBackup {
@@ -61,7 +61,7 @@ impl ReplacementReceipt {
     pub fn activated_current(&self) -> Option<&CurrentPublication> {
         self.activated_current.as_ref()
     }
-    fn from_record(record: &RegistryRecord) -> StoreResult<Self> {
+    pub(super) fn from_record(record: &RegistryRecord) -> StoreResult<Self> {
         Ok(Self {
             operation_id: record.intent.operation_id.clone(),
             request_digest: record.request_digest.clone(),
@@ -116,6 +116,13 @@ impl ProjectStore {
         stop: &AtomicBool,
     ) -> StoreResult<ReplacementCandidate> {
         self.require_replacement_base(expected, expected_current.as_ref())?;
+        let source_bytes = registry::read_file(
+            &self.db.root.join(registry::REGISTRY_FILE),
+            registry::MAX_REGISTRY,
+        )?;
+        if digest("project-registry", &source_bytes) != expected.digest() {
+            return Err(failure(StoreErrorCode::CurrentConflict));
+        }
         checkpoint(stop)?;
         backup.verify(stop)?;
         if backup.manifest().epoch() != self.epoch() {
@@ -145,6 +152,7 @@ impl ProjectStore {
         }
         let mut candidate = backup.restore_to_new(&root, operation, stop)?;
         share_admission(&mut candidate, &self.db.life);
+        backup::write_new(&root.join("replacement-source.json"), &source_bytes)?;
         backup::write_new(&root.join("replacement-intent.json"), &intent.bytes()?)?;
         checkpoint(stop)?;
         Ok(ReplacementCandidate {
@@ -215,11 +223,37 @@ impl ProjectStore {
             return Err(invalid());
         }
         let owners = candidate.backup.restore_validation_digest(checks, stop)?;
-        let record = RegistryRecord::new(
+        let source = registry::read_normal_shallow(
+            &self.db.epoch.catalog,
+            &registry::read_file(
+                &candidate.backup.root.join("replacement-source.json"),
+                registry::MAX_REGISTRY,
+            )?,
+        )?;
+        if source.selection != candidate.intent.expected || source.epoch != self.db.epoch {
+            return Err(failure(StoreErrorCode::OperationConflict));
+        }
+        let held = super::quarantine::archives::read(
+            &self.db.root,
+            &self.db.epoch.catalog,
+            &source.retained_quarantines,
+            stop,
+        )?;
+        let target = super::quarantine::archives::read(
+            &candidate.backup.root,
+            &self.db.epoch.catalog,
+            candidate.backup.manifest().retained_quarantines(),
+            stop,
+        )?;
+        let archives = held.merge(target)?;
+        super::quarantine::archives::write(&self.db.root, &archives, stop)?;
+        let record = RegistryRecord::with_quarantines(
             self.db.epoch.clone(),
             candidate.intent.clone(),
             owners,
             candidate.backup.manifest().current().cloned(),
+            archives.references().to_vec(),
+            archives.max_revision(),
         )?;
         let bytes = record.bytes()?;
         let selection = record.selection()?;
@@ -283,7 +317,9 @@ impl ProjectStore {
             .read_connection()
             .map_err(|_| failure(StoreErrorCode::OutcomeUnknown))?;
         let actual = backup::identity::capture(&fresh, &db.epoch, &AtomicBool::new(false))
-            .and_then(|state| state.digest())
+            .and_then(|state| {
+                state.digest_with_quarantines(candidate.backup.manifest().retained_quarantines())
+            })
             .map_err(|_| failure(StoreErrorCode::OutcomeUnknown))?;
         if actual != record.intent.snapshot_digest {
             return Err(failure(StoreErrorCode::OutcomeUnknown));
@@ -336,7 +372,7 @@ impl ProjectStore {
         Err(failure(StoreErrorCode::CurrentConflict))
     }
 }
-fn share_admission(backup: &mut VerifiedBackup, source: &Rc<Lifetime>) {
+pub(super) fn share_admission(backup: &mut VerifiedBackup, source: &Rc<Lifetime>) {
     backup.store.db.life = Rc::new(Lifetime {
         _lock: Rc::clone(&backup.store.db.life._lock),
         _instance_lock: Some(Rc::clone(&source._lock)),

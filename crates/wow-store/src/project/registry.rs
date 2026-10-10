@@ -1,4 +1,5 @@
 //! Versioned physical selection, independent of semantic epoch identities.
+use super::quarantine::archives::{self, QuarantineReference};
 use super::{database, model::*};
 use crate::{OperationId, StoreErrorCode, StoreResult};
 use serde::{Deserialize, Serialize};
@@ -54,7 +55,7 @@ impl RegistrySelection {
                 .as_ref()
                 .is_some_and(|id| !instance_valid(id) || self.revision == 0)
             || match &self.instance {
-                None => self.revision != 0 && self.quarantine.is_none(),
+                None => false,
                 Some(id) => self.revision == 0 || !instance_valid(id),
             }
         {
@@ -109,6 +110,8 @@ pub(super) struct ReplacementIntent {
     pub expected: RegistrySelection,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub expected_current: Option<CurrentRecordId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quarantine_guard: Option<QuarantineReference>,
     pub epoch: EpochId,
     pub snapshot_digest: String,
 }
@@ -125,6 +128,7 @@ impl ReplacementIntent {
             operation_id,
             expected,
             expected_current,
+            quarantine_guard: None,
             epoch,
             snapshot_digest,
         };
@@ -134,14 +138,44 @@ impl ReplacementIntent {
     pub fn validate(&self) -> StoreResult<()> {
         self.expected.validate()?;
         OperationId::new(self.operation_id.as_str())?;
-        if self.schema != "wow-store/project-replacement-intent/1"
-            || self.expected.is_quarantined()
+        let held = self.schema == "wow-store/project-replacement-intent/2";
+        if (!held && self.schema != "wow-store/project-replacement-intent/1")
+            || self.expected.is_quarantined() != held
+            || self.quarantine_guard.is_some() != held
+            || (held && self.expected_current.is_some())
             || self.epoch != self.expected.epoch
             || !hashed(&self.snapshot_digest, "project-backup-snapshot")
         {
             return Err(invalid());
         }
+        if let Some(reference) = &self.quarantine_guard {
+            archives::validate_references(std::slice::from_ref(reference))?;
+            if reference.record_digest() != self.expected.digest()
+                || self.expected.quarantine.as_ref()
+                    != Some(&instance_id(reference.operation_id())?)
+            {
+                return Err(invalid());
+            }
+        }
         Ok(())
+    }
+    pub fn restore(
+        operation: OperationId,
+        expected: RegistrySelection,
+        guard: QuarantineReference,
+        snapshot: String,
+    ) -> StoreResult<Self> {
+        let result = Self {
+            schema: "wow-store/project-replacement-intent/2".into(),
+            operation_id: operation,
+            epoch: expected.epoch.clone(),
+            expected,
+            expected_current: None,
+            quarantine_guard: Some(guard),
+            snapshot_digest: snapshot,
+        };
+        result.validate()?;
+        Ok(result)
     }
     pub fn bytes(&self) -> StoreResult<Vec<u8>> {
         encode(self, MAX_REGISTRY)
@@ -166,6 +200,8 @@ pub(super) struct RegistryRecord {
     pub owner_validation_digest: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub activated_current: Option<CurrentPublication>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub retained_quarantines: Vec<QuarantineReference>,
 }
 impl RegistryRecord {
     pub fn new(
@@ -188,18 +224,31 @@ impl RegistryRecord {
             revision,
             owner_validation_digest: owners,
             activated_current: current,
+            retained_quarantines: Vec::new(),
         };
         result.validate()?;
         Ok(result)
     }
     pub fn validate(&self) -> StoreResult<()> {
         self.intent.validate()?;
-        if self.schema != "wow-store/project-registry/2"
+        archives::validate_references(&self.retained_quarantines)?;
+        let retained = self.schema == "wow-store/project-registry/4";
+        if (!retained && self.schema != "wow-store/project-registry/2")
+            || retained != !self.retained_quarantines.is_empty()
             || self.epoch.epoch_id != self.intent.epoch
-            || self.intent.expected.revision.checked_add(1) != Some(self.revision)
+            || self.revision <= self.intent.expected.revision
+            || (!retained && self.intent.expected.revision.checked_add(1) != Some(self.revision))
             || self.instance != self.intent.instance()?
             || self.request_digest != self.intent.digest()?
             || !hashed(&self.owner_validation_digest, "project-replacement-owners")
+        {
+            return Err(invalid());
+        }
+        if self
+            .intent
+            .quarantine_guard
+            .as_ref()
+            .is_some_and(|r| self.retained_quarantines.binary_search(r).is_err())
         {
             return Err(invalid());
         }
@@ -220,6 +269,36 @@ impl RegistryRecord {
             }
         }
         Ok(())
+    }
+    pub fn with_quarantines(
+        epoch: EpochManifest,
+        intent: ReplacementIntent,
+        owners: String,
+        current: Option<CurrentPublication>,
+        refs: Vec<QuarantineReference>,
+        max_hold_revision: u64,
+    ) -> StoreResult<Self> {
+        if refs.is_empty() {
+            return Self::new(epoch, intent, owners, current);
+        }
+        let result = Self {
+            schema: "wow-store/project-registry/4".into(),
+            revision: intent
+                .expected
+                .revision
+                .max(max_hold_revision)
+                .checked_add(1)
+                .ok_or_else(invalid)?,
+            instance: intent.instance()?,
+            request_digest: intent.digest()?,
+            epoch,
+            intent,
+            owner_validation_digest: owners,
+            activated_current: current,
+            retained_quarantines: refs,
+        };
+        result.validate()?;
+        Ok(result)
     }
     pub fn bytes(&self) -> StoreResult<Vec<u8>> {
         encode(self, MAX_REGISTRY)
@@ -242,6 +321,7 @@ pub(super) struct AdmittedRegistry {
     pub selection: RegistrySelection,
     pub record: Option<RegistryRecord>,
     pub quarantine: Option<super::quarantine::model::QuarantineRecord>,
+    pub retained_quarantines: Vec<QuarantineReference>,
 }
 pub(super) fn read(root: &Path, catalog: &RecordCatalog) -> StoreResult<AdmittedRegistry> {
     let bytes = read_file(&root.join(REGISTRY_FILE), MAX_REGISTRY)?;
@@ -257,7 +337,7 @@ pub(super) fn read(root: &Path, catalog: &RecordCatalog) -> StoreResult<Admitted
         database::directory(&archive)?;
         let previous_bytes = read_file(&archive.join("selection.json"), MAX_REGISTRY)?;
         // Archived authority is a normal selector only: no recursive history decoder.
-        let previous = read_normal(root, catalog, &previous_bytes)?;
+        let previous = read_normal_shallow(catalog, &previous_bytes)?;
         let evidence = read_file(
             &archive.join("evidence.json"),
             super::quarantine::model::MAX_EVIDENCE,
@@ -270,17 +350,79 @@ pub(super) fn read(root: &Path, catalog: &RecordCatalog) -> StoreResult<Admitted
         {
             return Err(invalid());
         }
+        let mut refs = previous.retained_quarantines;
+        refs.push(QuarantineReference::from_record(&record)?);
+        refs.sort();
+        let closure = archives::read(
+            root,
+            catalog,
+            &refs,
+            &std::sync::atomic::AtomicBool::new(false),
+        )?;
+        closure.validate_epoch(&record.epoch)?;
         return Ok(AdmittedRegistry {
             epoch: record.epoch.clone(),
             selection: record.selection()?,
             record: previous.record,
             quarantine: Some(record),
+            retained_quarantines: refs,
         });
     }
     read_normal(root, catalog, &bytes)
 }
 pub(super) fn read_normal(
     root: &Path,
+    catalog: &RecordCatalog,
+    bytes: &[u8],
+) -> StoreResult<AdmittedRegistry> {
+    let admitted = read_normal_shallow(catalog, bytes)?;
+    let holds = archives::read(
+        root,
+        catalog,
+        &admitted.retained_quarantines,
+        &std::sync::atomic::AtomicBool::new(false),
+    )?;
+    holds.validate_epoch(&admitted.epoch)?;
+    if holds.max_revision() >= admitted.selection.revision()
+        && !admitted.retained_quarantines.is_empty()
+    {
+        return Err(invalid());
+    }
+    if let Some(record) = &admitted.record {
+        admitted.selection.directory(root, &record.epoch)?;
+        let base = record.instance_root(root);
+        if read_file(&base.join("replacement-intent.json"), MAX_REGISTRY)?
+            != record.intent.bytes()?
+            || read_file(&base.join("replacement-record.json"), MAX_REGISTRY)? != bytes
+        {
+            return Err(invalid());
+        }
+        let source_exists = match std::fs::symlink_metadata(base.join("replacement-source.json")) {
+            Ok(_) => true,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => false,
+            Err(_) => return Err(invalid()),
+        };
+        if record.intent.quarantine_guard.is_none()
+            && (source_exists || !record.retained_quarantines.is_empty())
+        {
+            let source = read_normal_shallow(
+                catalog,
+                &read_file(&base.join("replacement-source.json"), MAX_REGISTRY)?,
+            )?;
+            if source.selection != record.intent.expected
+                || source.epoch != record.epoch
+                || source
+                    .retained_quarantines
+                    .iter()
+                    .any(|r| record.retained_quarantines.binary_search(r).is_err())
+            {
+                return Err(invalid());
+            }
+        }
+    }
+    Ok(admitted)
+}
+pub(super) fn read_normal_shallow(
     catalog: &RecordCatalog,
     bytes: &[u8],
 ) -> StoreResult<AdmittedRegistry> {
@@ -291,6 +433,21 @@ pub(super) fn read_normal(
             epoch,
             record: None,
             quarantine: None,
+            retained_quarantines: Vec::new(),
+        });
+    }
+    if let Ok(record) = serde_json::from_slice::<RestoredRegistry>(bytes) {
+        record.validate()?;
+        database::admit_epoch(&encode(&record.epoch, 65536)?, catalog)?;
+        if encode(&record, MAX_REGISTRY)? != bytes {
+            return Err(invalid());
+        }
+        return Ok(AdmittedRegistry {
+            selection: RegistrySelection::from_bytes(bytes, &record.epoch, record.revision, None),
+            epoch: record.epoch,
+            record: None,
+            quarantine: None,
+            retained_quarantines: record.retained_quarantines,
         });
     }
     let record: RegistryRecord = serde_json::from_slice(bytes).map_err(|_| invalid())?;
@@ -300,19 +457,83 @@ pub(super) fn read_normal(
         return Err(invalid());
     }
     let selection = record.selection()?;
-    selection.directory(root, &record.epoch)?;
-    let base = record.instance_root(root);
-    if read_file(&base.join("replacement-intent.json"), MAX_REGISTRY)? != record.intent.bytes()?
-        || read_file(&base.join("replacement-record.json"), MAX_REGISTRY)? != bytes
-    {
-        return Err(invalid());
-    }
     Ok(AdmittedRegistry {
         epoch: record.epoch.clone(),
         selection,
+        retained_quarantines: record.retained_quarantines.clone(),
         record: Some(record),
         quarantine: None,
     })
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RestoredRegistry {
+    schema: String,
+    epoch: EpochManifest,
+    operation_id: OperationId,
+    snapshot_digest: String,
+    owner_validation_digest: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    activated_current: Option<CurrentPublication>,
+    revision: u64,
+    retained_quarantines: Vec<QuarantineReference>,
+}
+impl RestoredRegistry {
+    fn validate(&self) -> StoreResult<()> {
+        OperationId::new(self.operation_id.as_str())?;
+        archives::validate_references(&self.retained_quarantines)?;
+        if self.schema != "wow-store/project-registry/5"
+            || self.retained_quarantines.is_empty()
+            || self.revision == 0
+            || !hashed(&self.snapshot_digest, "project-backup-snapshot")
+            || !hashed(&self.owner_validation_digest, "project-replacement-owners")
+        {
+            return Err(invalid());
+        }
+        if let Some(current) = &self.activated_current {
+            let bytes = encode(
+                &(
+                    &current.epoch_id,
+                    &current.generation_id,
+                    &current.validation_id,
+                    current.predecessor.iter().collect::<Vec<_>>(),
+                ),
+                4096,
+            )?;
+            if current.epoch_id != self.epoch.epoch_id
+                || current.record_id != CurrentRecordId::derive(&bytes)
+            {
+                return Err(invalid());
+            }
+        }
+        Ok(())
+    }
+}
+pub(super) fn restored_bytes(
+    epoch: &EpochManifest,
+    operation: &OperationId,
+    snapshot: &str,
+    owners: &str,
+    current: Option<CurrentPublication>,
+    refs: Vec<QuarantineReference>,
+    max_hold_revision: u64,
+) -> StoreResult<Vec<u8>> {
+    if refs.is_empty() {
+        return encode(epoch, 65536);
+    }
+    let record = RestoredRegistry {
+        schema: "wow-store/project-registry/5".into(),
+        epoch: epoch.clone(),
+        operation_id: operation.clone(),
+        snapshot_digest: snapshot.into(),
+        owner_validation_digest: owners.into(),
+        activated_current: current,
+        revision: max_hold_revision.checked_add(1).ok_or_else(invalid)?,
+        retained_quarantines: refs,
+    };
+    record.validate()?;
+    encode(&record, MAX_REGISTRY)
 }
 pub(super) fn read_file(path: &Path, max: usize) -> StoreResult<Vec<u8>> {
     database::regular(path, max as u64)?;

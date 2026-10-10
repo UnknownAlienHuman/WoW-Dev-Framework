@@ -4,7 +4,7 @@ use std::{path::Path, sync::atomic::AtomicBool};
 use wow_project::replay::publication;
 use wow_store::project::{
     CurrentObservation, QuarantineInspection, QuarantineReceipt, QuarantinedStore, RecoveryReport,
-    RegistrySelection,
+    RegistrySelection, ReplacementReceipt, VerifiedBackup,
 };
 use wow_store::{OperationId, StoreErrorCode};
 
@@ -58,6 +58,49 @@ pub struct QuarantinedLiveProject {
 }
 
 impl QuarantinedLiveProject {
+    /// Recover a held instance from an explicit verified target, replaying all
+    /// native Project/Graph generations before the guarded registry switch.
+    pub fn restore_replace(
+        &self,
+        backup: &VerifiedBackup,
+        operation_id: &str,
+        expected: &RegistrySelection,
+        stop: &AtomicBool,
+    ) -> ServiceResult<(LiveProjectStore, ReplacementReceipt)> {
+        let id = OperationId::new(operation_id).map_err(store_error)?;
+        let candidate = self
+            .store
+            .stage_restore(backup, &id, expected, stop)
+            .map_err(store_error)?;
+        let checks = super::recovery::validate_owners(candidate.backup(), stop)?;
+        let (store, receipt) = self
+            .store
+            .activate_restore(candidate, checks, stop)
+            .map_err(store_error)?;
+        Ok((LiveProjectStore { store }, receipt))
+    }
+
+    /// Revalidate and adopt only the exact original staged or selected restore.
+    pub fn resume_restore(
+        &self,
+        operation_id: &str,
+        expected: &RegistrySelection,
+        snapshot_digest: &str,
+        stop: &AtomicBool,
+    ) -> ServiceResult<(LiveProjectStore, ReplacementReceipt)> {
+        let id = OperationId::new(operation_id).map_err(store_error)?;
+        let candidate = self
+            .store
+            .reopen_restore(&id, expected, snapshot_digest, stop)
+            .map_err(store_error)?;
+        let checks = super::recovery::validate_owners(candidate.backup(), stop)?;
+        let (store, receipt) = self
+            .store
+            .activate_restore(candidate, checks, stop)
+            .map_err(store_error)?;
+        Ok((LiveProjectStore { store }, receipt))
+    }
+
     pub fn open(root: &Path, stop: &AtomicBool) -> ServiceResult<Self> {
         for schemas in [
             publication::STORAGE_SCHEMAS,

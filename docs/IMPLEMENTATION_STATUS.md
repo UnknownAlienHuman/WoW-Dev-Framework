@@ -785,7 +785,39 @@ shape/budgets, old leases, absent Current in a selected instance and real Window
 sharing refusal with exact reconciliation. The nullable-field repair preserves
 all valid legacy/Some encodings. Workspace policy, fmt, check, strict Clippy,
 tests (895 passed, 1 ignored, 107 targets), strict rustdoc and build pass; final CLI
-diagnostics passed focused strict Clippy/build. Guarded restore from quarantine,
-fine-grained/domain quarantine, incompatible-epoch migrations, interruption inside
+diagnostics passed focused strict Clippy/build. This initial hold checkpoint left
+guarded restore to the follow-up below. Fine-grained/domain quarantine,
+incompatible-epoch migrations, interruption inside
 writes/OS calls, power loss, cleanup and full W16/E2/source/runtime acceptance
 remain open. See [PROJECT_QUARANTINE.md](../crates/wow-store/PROJECT_QUARANTINE.md).
+
+## W16 guarded quarantine restore and portable hold authority (2026-10-09)
+
+`QuarantinedStore` stages/reopens an explicit independently verified backup and
+activates only after compiled owners validate every included generation. A
+versioned held-source intent binds the exact schema-3 selector/archive and raw
+Current/evidence observations. Unreadable and malformed Pointer never become
+absence; observational equality does not certify unchanged corrupt SQL bytes.
+The native service replays actual Project/Graph pairs before selection.
+
+Registry schemas 4/5 bind a sorted flat hold closure with exact archive records,
+dependency subsets/revisions and finite count/byte admission. Shallow historical
+selectors avoid recursion and historical SQL dependencies. Backup manifest 2
+binds and transports the closure through independent reopen, re-copy and isolated
+restore; empty-reference v1 encodings and original semantic IDs stay unchanged.
+Normal replacement persists its original selector as `replacement-source.json`
+and reconstructs inherited authority from it during exact adoption. Admission
+rejects removed source refs, including an empty/schema2 rewrite. Archive capacity
+is checked before writing a new hold or dispatching its selector.
+
+Five new store regressions and one native service regression cover explicit
+pre-incident targets, damaged pointer/header, omitted owner checks, archive/source
+substitution, successive holds, source-independent portable backup, old readers
+and real Windows sharing refusal with staged/selected reconciliation. Workspace
+policy, fmt, check, strict Clippy, 901 tests (1 ignored, 107 targets), rustdoc and
+build passed. Final capacity preflight passed 40 store tests and refreshed
+workspace gates; the broad suite was not repeated.
+Budget-exhaustion fault fixtures, supported inactive epoch migration, current-domain
+recovery observation, domain quarantine, inside-write interruption, power loss,
+deletion and full W16/E2/Gethe/Ketho/runtime acceptance remain open. See
+[PROJECT_QUARANTINE_RESTORE.md](../crates/wow-store/PROJECT_QUARANTINE_RESTORE.md).

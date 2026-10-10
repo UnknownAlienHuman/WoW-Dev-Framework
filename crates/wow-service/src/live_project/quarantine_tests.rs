@@ -124,3 +124,102 @@ fn native_quarantine_rejects_stale_inspection_preserves_pairs_and_reopens_readon
     std::fs::remove_dir_all(source)?;
     Ok(())
 }
+
+#[test]
+fn native_restore_replays_every_target_generation_and_retains_old_pairs() -> TestResult {
+    let stop = AtomicBool::new(false);
+    let (first, first_graph) = owners("local value = External() + 11\nreturn value\n")?;
+    let (second, second_graph) = owners("local value = External() + 22\nreturn value\n")?;
+    let (third, third_graph) = owners("local value = External() + 33\nreturn value\n")?;
+    let source = root("quarantine-native-restore")?;
+    let backup_root = root("quarantine-native-before")?;
+    let transport_root = root("quarantine-native-transport")?;
+    let mut live = LiveProjectStore::create(&source, first_graph.snapshot().universe().as_str())?;
+    let one = live.publish(
+        &first,
+        &first_graph,
+        "fixture:native-restore-one",
+        None,
+        &stop,
+    )?;
+    let two = live.publish(
+        &second,
+        &second_graph,
+        "fixture:native-restore-two",
+        Some(
+            one.activation
+                .as_ref()
+                .ok_or("missing first current")?
+                .record_id
+                .clone(),
+        ),
+        &stop,
+    )?;
+    let backup = live.backup_to_new(&backup_root, "fixture:native-before", &stop)?;
+    assert_eq!(backup.manifest().generations().len(), 2);
+    let three = live.publish(
+        &third,
+        &third_graph,
+        "fixture:native-restore-three",
+        Some(
+            two.activation
+                .as_ref()
+                .ok_or("missing second current")?
+                .record_id
+                .clone(),
+        ),
+        &stop,
+    )?;
+    let old_pair = live.read(&ReadSelector::Current, &stop)?;
+    let inspection = live.quarantine_inspection(&stop)?;
+    let hold = live.quarantine("fixture:native-restore-hold", &inspection, &stop)?;
+    let held = live.quarantined(&stop)?;
+    drop(inspection);
+    drop(live);
+    let (restored, receipt) = held.restore_replace(
+        &backup,
+        "fixture:native-restore-select",
+        hold.selected(),
+        &stop,
+    )?;
+    assert_eq!(receipt.previous(), hold.selected());
+    assert_eq!(restored.current()?, two.activation);
+    for (generation, project, graph) in [
+        (&one.generation_id, &first, &first_graph),
+        (&two.generation_id, &second, &second_graph),
+    ] {
+        let pair = restored.read(&ReadSelector::Exact(generation.clone()), &stop)?;
+        assert_eq!(
+            pair.project().snapshot_id(),
+            project
+                .current_snapshot()
+                .ok_or("missing published project")?
+                .snapshot_id()
+        );
+        assert_eq!(pair.graph(), graph);
+    }
+    assert_eq!(old_pair.store_generation_id(), &three.generation_id);
+    assert_eq!(old_pair.graph(), &third_graph);
+    let transported =
+        restored.backup_to_new(&transport_root, "fixture:native-restore-transport", &stop)?;
+    assert_eq!(transported.manifest().retained_quarantines().len(), 1);
+    assert_eq!(
+        transported.manifest().retained_quarantines()[0]
+            .operation_id()
+            .as_str(),
+        "fixture:native-restore-hold"
+    );
+    drop(transported);
+    drop(restored);
+    drop(held);
+    assert_eq!(old_pair.graph(), &third_graph);
+    drop(old_pair);
+    let reopened = LiveProjectStore::open(&source)?;
+    assert_eq!(reopened.current()?, two.activation);
+    drop(reopened);
+    drop(backup);
+    for path in [source, backup_root, transport_root] {
+        std::fs::remove_dir_all(path)?;
+    }
+    Ok(())
+}

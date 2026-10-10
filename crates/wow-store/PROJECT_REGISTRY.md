@@ -1,7 +1,7 @@
-# Project registry v2: guarded physical-instance replacement
+# Project registry: guarded physical-instance replacement
 
 **Status:** executable bounded W16 slice, verified with native Windows fixtures.
-Full W16/E2 acceptance, guarded recovery from quarantine, incompatible-epoch migration and actual
+Full W16/E2 acceptance, incompatible-epoch migration and actual
 power-loss durability remain open.
 
 ## Scope and E2 exception
@@ -47,8 +47,9 @@ overflow; its unchanged epoch remains independently admitted under the catalog.
 The separate [quarantine schema 3](PROJECT_QUARANTINE.md) holds the preceding
 selected physical instance. `RegistrySelection` then includes an operation-derived
 quarantine marker. An absent marker is omitted, preserving all valid legacy/v2
-bytes. Normal replacement intents reject a quarantine selector; recovery from
-that state requires a separately versioned guard and remains follow-up work.
+bytes. Normal replacement intents reject a quarantine selector. The separate
+[held-instance restore](PROJECT_QUARANTINE_RESTORE.md) uses intent schema 2,
+normal registry schemas 4/5 and backup manifest 2 to preserve portable hold authority.
 Absent expected/activated Current fields are omitted under strict canonical JSON;
 existing valid `Some` encodings remain unchanged.
 
@@ -103,6 +104,10 @@ semantic IDs, or infer domain approval from physical recovery observations.
 
 ## Publication, readers, and reconciliation
 
+New staging also persists the exact original normal selector as
+`replacement-source.json`; activation and exact adoption use its inherited refs,
+and admission verifies an existing source even when selected refs are empty.
+Retained normal replacements require it; source-less legacy v2 stays readable.
 Persist `replacement-intent.json` and `replacement-record.json` at the instance
 root. Registry admission requires their canonical bytes to match the selected
 record. For first activation, write and file-sync the main-root

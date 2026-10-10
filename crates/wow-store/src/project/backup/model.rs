@@ -4,6 +4,7 @@ use serde::Serialize;
 use super::super::{
     RecoveryReport,
     model::{CurrentPublication, EpochManifest, PartitionVersionId, StoreGenerationId, encode},
+    quarantine::archives::QuarantineReference,
 };
 use crate::{OperationId, StoreResult};
 
@@ -22,6 +23,8 @@ pub struct BackupManifest {
     pub(super) payload_bytes: u64,
     pub(super) recovery: RecoveryReport,
     pub(super) object_closure: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(super) retained_quarantines: Vec<QuarantineReference>,
 }
 
 impl BackupManifest {
@@ -57,6 +60,9 @@ impl BackupManifest {
     }
     pub fn object_closure(&self) -> &str {
         &self.object_closure
+    }
+    pub fn retained_quarantines(&self) -> &[QuarantineReference] {
+        &self.retained_quarantines
     }
     pub fn canonical_bytes(&self) -> StoreResult<Vec<u8>> {
         encode(self, 16 * 1024 * 1024)

@@ -1,9 +1,15 @@
 //! Explicit physical-instance hold. No SQL mutation, cleanup or automatic repair.
+pub(super) mod archives;
 mod current;
 #[cfg(all(test, windows))]
 mod fault_tests;
 pub(super) mod model;
 mod owner;
+mod restore;
+#[cfg(all(test, windows))]
+mod restore_fault_tests;
+#[cfg(test)]
+mod restore_tests;
 #[cfg(test)]
 mod selected_tests;
 #[cfg(test)]
@@ -15,6 +21,7 @@ use super::{
     registry, replacement,
 };
 use crate::{OperationId, StoreErrorCode, StoreResult};
+pub use archives::QuarantineReference;
 use model::QuarantineRecord;
 pub use model::{CurrentObservation, PointerReadFailure, QuarantineReceipt};
 pub use owner::QuarantinedStore;
@@ -106,6 +113,21 @@ impl QuarantineInspection {
             return Err(failure(StoreErrorCode::CurrentConflict));
         }
         self.recheck(stop)?;
+        let previous = registry::read_file(
+            &self.root.join(registry::REGISTRY_FILE),
+            registry::MAX_REGISTRY,
+        )?;
+        if digest("project-registry", &previous) != self.selection.digest() {
+            return Err(failure(StoreErrorCode::CurrentConflict));
+        }
+        let inherited = archives::read(
+            &self.root,
+            &self.epoch.catalog,
+            &observed.retained_quarantines,
+            stop,
+        )?;
+        // Refuse an unadmittable next hold before any archive or selector effect.
+        inherited.admit_hold(&record, previous.len(), self.evidence.len())?;
         let parent = self.root.join("quarantines");
         match fs::symlink_metadata(&parent) {
             Ok(_) => database::directory(&parent)?,
@@ -123,13 +145,6 @@ impl QuarantineInspection {
                     .map_err(|_| failure(StoreErrorCode::DatabaseUnavailable))?;
             }
             Err(_) => return Err(invalid()),
-        }
-        let previous = registry::read_file(
-            &self.root.join(registry::REGISTRY_FILE),
-            registry::MAX_REGISTRY,
-        )?;
-        if digest("project-registry", &previous) != self.selection.digest() {
-            return Err(failure(StoreErrorCode::CurrentConflict));
         }
         replacement::write_exact_or_new(&archive.join("selection.json"), &previous)?;
         // Evidence has a distinct finite budget; never feed it to registry's smaller reader.

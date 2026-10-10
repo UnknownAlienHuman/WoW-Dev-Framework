@@ -1,6 +1,7 @@
 use crate::project::{
     gc,
     model::*,
+    quarantine::archives::{self, QuarantineReference},
     recovery::{self, RecoveryReport, ScopeState},
     retention,
 };
@@ -29,6 +30,19 @@ impl BackupState {
         Ok(digest(
             "project-backup-snapshot",
             &encode(self, 16 * 1024 * 1024)?,
+        ))
+    }
+    pub fn digest_with_quarantines(&self, refs: &[QuarantineReference]) -> StoreResult<String> {
+        if refs.is_empty() {
+            return self.digest();
+        }
+        archives::validate_references(refs)?;
+        Ok(digest(
+            "project-backup-snapshot",
+            &encode(
+                &("wow-store/project-backup/2", self.digest()?, refs),
+                16 * 1024 * 1024,
+            )?,
         ))
     }
 }

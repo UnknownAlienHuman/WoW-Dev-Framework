@@ -2,7 +2,8 @@
 
 Updated 2026-10-09. This W16 slice implements read-only physical reconciliation,
 native verified backup, isolated restore and guarded same-epoch physical-instance
-replacement. Store fixtures and native Project/Graph replay pass. Quarantine,
+replacement, explicit quarantine and guarded restore retaining portable hold
+authority. Store fixtures and native Project/Graph replay pass. Fine-grained quarantine,
 incompatible-epoch migration, power loss and full platform acceptance remain open.
 
 ## Recovery observation
@@ -109,5 +110,7 @@ targets, shared admission/locks across successive instances, explicit unknown
 result reconciliation and Windows selector-sharing failure. Four native child
 termination probes cover completed prepare/stage/validate/activate boundaries.
 They do not establish interruption inside a write/OS call, power loss, hostile OS
-access, cleanup faults, full W16/E2 or Gethe/Ketho/runtime acceptance. Quarantine,
-supported migrations and object/epoch reclamation remain separate requirements.
+access, cleanup faults, full W16/E2 or Gethe/Ketho/runtime acceptance. The separate
+[held-instance restore](PROJECT_QUARANTINE_RESTORE.md) covers whole-instance
+quarantine and portable archive authority. Supported migrations, domain quarantine
+and object/epoch reclamation remain separate requirements.

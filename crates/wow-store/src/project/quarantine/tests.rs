@@ -13,13 +13,13 @@ use std::{
     sync::atomic::{AtomicBool, Ordering},
 };
 
-type TestResult<T = ()> = Result<T, Box<dyn Error>>;
+pub(super) type TestResult<T = ()> = Result<T, Box<dyn Error>>;
 
-fn at<T, E: std::fmt::Debug>(stage: &str, result: Result<T, E>) -> TestResult<T> {
+pub(super) fn at<T, E: std::fmt::Debug>(stage: &str, result: Result<T, E>) -> TestResult<T> {
     result.map_err(|error| format!("{stage}: {error:?}").into())
 }
 
-fn new_store(name: &str) -> TestResult<(PathBuf, ProjectStore, RecordCatalog)> {
+pub(super) fn new_store(name: &str) -> TestResult<(PathBuf, ProjectStore, RecordCatalog)> {
     let root = std::env::temp_dir().join(format!(
         "wow-project-quarantine-{name}-{}-{}",
         std::process::id(),
@@ -34,7 +34,11 @@ fn new_store(name: &str) -> TestResult<(PathBuf, ProjectStore, RecordCatalog)> {
     Ok((root, store, catalog))
 }
 
-fn request(store: &ProjectStore, name: &str, value: u32) -> TestResult<PublicationRequest> {
+pub(super) fn request(
+    store: &ProjectStore,
+    name: &str,
+    value: u32,
+) -> TestResult<PublicationRequest> {
     Ok(PublicationRequest::new(
         store.epoch(),
         OperationId::new(format!("fixture:{name}"))?,
@@ -48,7 +52,7 @@ fn request(store: &ProjectStore, name: &str, value: u32) -> TestResult<Publicati
     )?)
 }
 
-fn check_fixture(
+pub(super) fn check_fixture(
     read: &ReadSnapshot,
     expected: u32,
     stop: &AtomicBool,
@@ -63,7 +67,7 @@ fn check_fixture(
     Ok(read.owner_validation(&["fixture.owner.v1"])?)
 }
 
-fn publish(
+pub(super) fn publish(
     store: &mut ProjectStore,
     name: &str,
     value: u32,
@@ -90,7 +94,7 @@ fn publish(
     Ok((request, current))
 }
 
-fn rejected<T>(result: StoreResult<T>, expected: StoreErrorCode) -> TestResult {
+pub(super) fn rejected<T>(result: StoreResult<T>, expected: StoreErrorCode) -> TestResult {
     assert_eq!(
         result
             .err()

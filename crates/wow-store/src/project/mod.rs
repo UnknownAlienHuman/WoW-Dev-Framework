@@ -25,7 +25,7 @@ pub use model::{
 };
 pub use quarantine::{
     CurrentObservation, PointerReadFailure, QuarantineInspection, QuarantineReceipt,
-    QuarantinedStore,
+    QuarantineReference, QuarantinedStore,
 };
 pub use read::{ReadSelector, ReadSnapshot, ValidatedRead};
 pub use recovery::{

@@ -10,10 +10,13 @@ use super::{
     ProjectStore, ReadSelector, ReadSnapshot, ValidatedRead,
     database::{self, Database, Lifetime},
     model::*,
+    quarantine::archives::{self, ArchiveSet, QuarantineReference},
+    registry,
 };
 use crate::{OperationId, StoreErrorCode, StoreResult};
 use identity::{BackupState, capture};
 pub use model::BackupManifest;
+use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::{
     cell::{Cell, RefCell},
@@ -45,11 +48,37 @@ impl ProjectStore {
     ) -> StoreResult<VerifiedBackup> {
         self.db.ensure_idle()?;
         checkpoint(stop)?;
+        let admitted = registry::read(&self.db.root, &self.db.epoch.catalog)?;
+        if admitted.epoch != self.db.epoch
+            || self.db.selection.as_ref() != Some(&admitted.selection)
+        {
+            return Err(failure(StoreErrorCode::CurrentConflict));
+        }
+        let archives = archives::read(
+            &self.db.root,
+            &self.db.epoch.catalog,
+            &admitted.retained_quarantines,
+            stop,
+        )?;
+        archives.validate_epoch(&self.db.epoch)?;
+        self.backup_to_new_with_archives(root.as_ref(), operation_id, &archives, stop)
+    }
+
+    fn backup_to_new_with_archives(
+        &self,
+        root: &Path,
+        operation_id: &OperationId,
+        archives: &ArchiveSet,
+        stop: &AtomicBool,
+    ) -> StoreResult<VerifiedBackup> {
+        self.db.ensure_idle()?;
+        checkpoint(stop)?;
+        archives.validate_epoch(&self.db.epoch)?;
         OperationId::new(operation_id.as_str())?;
         let source = self.db.read_connection()?;
         let state = capture(&source, &self.db.epoch, stop)?;
-        let snapshot_digest = state.digest()?;
-        let root = root.as_ref();
+        let refs = archives.references();
+        let snapshot_digest = state.digest_with_quarantines(refs)?;
         database::create_private_directory(root)
             .map_err(|_| failure(StoreErrorCode::DatabaseUnavailable))?;
         let root = database::admitted_root(root)?;
@@ -58,12 +87,12 @@ impl ProjectStore {
             &root.join("epoch-manifest.json"),
             &encode(&state.epoch, 65536)?,
         )?;
-        let request_digest = request_digest(operation_id, &state.epoch, &snapshot_digest)?;
+        let request_digest = request_digest(operation_id, &state.epoch, &snapshot_digest, refs)?;
         // Durable intent precedes the first destination database write. A missing
         // final manifest never constitutes an accepted backup.
         write_new(
             &root.join("backup-intent.json"),
-            &intent(operation_id, &request_digest, &snapshot_digest)?,
+            &intent(operation_id, &request_digest, &snapshot_digest, refs)?,
         )?;
         fs::create_dir(root.join("epochs"))
             .map_err(|_| failure(StoreErrorCode::DatabaseUnavailable))?;
@@ -76,15 +105,26 @@ impl ProjectStore {
             .map_err(|_| failure(StoreErrorCode::OutcomeUnknown))?;
         drop(file);
         copy::copy(&source, &path, &state.epoch, stop)?;
+        archives::write(&root, archives, stop)?;
         let db = open_artifact(&root, state.epoch.clone(), lock)?;
+        let independent_archives = archives::read(&root, &db.epoch.catalog, refs, stop)?;
+        independent_archives.validate_epoch(&db.epoch)?;
         let fresh = db.read_connection()?;
         let independent = capture(&fresh, &db.epoch, stop)?;
-        if independent.digest()? != snapshot_digest {
+        if independent.digest_with_quarantines(independent_archives.references())?
+            != snapshot_digest
+        {
             return Err(invalid());
         }
         drop(fresh);
         let (payload_digest, payload_bytes) = payload(&path, stop)?;
-        let manifest = manifest(operation_id, state, payload_digest, payload_bytes)?;
+        let manifest = manifest(
+            operation_id,
+            state,
+            payload_digest,
+            payload_bytes,
+            refs.to_vec(),
+        )?;
         checkpoint(stop)?;
         write_new(
             &root.join("backup-manifest.json"),
@@ -135,22 +175,24 @@ impl VerifiedBackup {
             .map_err(|_| failure(StoreErrorCode::DatabaseUnavailable))?;
         lock.try_lock()
             .map_err(|_| failure(StoreErrorCode::WriterBusy))?;
+        let manifest_bytes = read_file(&root.join("backup-manifest.json"), 16 * 1024 * 1024)?;
+        let refs = manifest_references(&manifest_bytes)?;
         let epoch = database::admit_epoch(
             &read_file(&root.join("epoch-manifest.json"), 65536)?,
             catalog,
         )?;
         let db = open_artifact(&root, epoch, lock)?;
+        let archives = archives::read(&root, &db.epoch.catalog, &refs, stop)?;
+        archives.validate_epoch(&db.epoch)?;
         let snapshot = db.read_connection()?;
         let state = capture(&snapshot, &db.epoch, stop)?;
-        if state.digest()? != expected_snapshot_digest {
+        if state.digest_with_quarantines(archives.references())? != expected_snapshot_digest {
             return Err(failure(StoreErrorCode::OperationConflict));
         }
         drop(snapshot);
         let (payload_digest, payload_bytes) = payload(&db.path, stop)?;
-        let expected = manifest(operation_id, state, payload_digest, payload_bytes)?;
-        if read_file(&root.join("backup-manifest.json"), 16 * 1024 * 1024)?
-            != expected.canonical_bytes()?
-        {
+        let expected = manifest(operation_id, state, payload_digest, payload_bytes, refs)?;
+        if manifest_bytes != expected.canonical_bytes()? {
             return Err(invalid());
         }
         let backup = Self {
@@ -174,26 +216,33 @@ impl VerifiedBackup {
             return Err(invalid());
         }
         check_sidecars(self.store.db.path.parent().ok_or_else(invalid)?)?;
-        let (digest, bytes) = payload(&self.store.db.path, stop)?;
-        if digest != self.manifest.payload_digest || bytes != self.manifest.payload_bytes {
+        let manifest_bytes = read_file(&self.root.join("backup-manifest.json"), 16 * 1024 * 1024)?;
+        let refs = manifest_references(&manifest_bytes)?;
+        let archives = archives::read(&self.root, &self.store.db.epoch.catalog, &refs, stop)?;
+        archives.validate_epoch(&self.store.db.epoch)?;
+        let (payload_digest, payload_bytes) = payload(&self.store.db.path, stop)?;
+        let source = self.store.db.read_connection()?;
+        let actual = capture(&source, &self.store.db.epoch, stop)?;
+        let expected = manifest(
+            &self.manifest.operation_id,
+            actual,
+            payload_digest,
+            payload_bytes,
+            archives.references().to_vec(),
+        )?;
+        if expected != self.manifest || manifest_bytes != expected.canonical_bytes()? {
             return Err(invalid());
         }
         if read_file(&self.root.join("backup-intent.json"), 65536)?
             != intent(
-                &self.manifest.operation_id,
-                &self.manifest.request_digest,
-                &self.manifest.snapshot_digest,
+                &expected.operation_id,
+                &expected.request_digest,
+                &expected.snapshot_digest,
+                &expected.retained_quarantines,
             )?
             || read_file(&self.root.join("epoch-manifest.json"), 65536)?
                 != encode(&self.store.db.epoch, 65536)?
-            || read_file(&self.root.join("backup-manifest.json"), 16 * 1024 * 1024)?
-                != self.manifest.canonical_bytes()?
         {
-            return Err(invalid());
-        }
-        let source = self.store.db.read_connection()?;
-        let actual = capture(&source, &self.store.db.epoch, stop)?;
-        if actual.digest()? != self.manifest.snapshot_digest {
             return Err(invalid());
         }
         checkpoint(stop)
@@ -214,7 +263,15 @@ impl VerifiedBackup {
         stop: &AtomicBool,
     ) -> StoreResult<Self> {
         self.verify(stop)?;
-        self.store.backup_to_new(root, operation_id, stop)
+        let archives = archives::read(
+            &self.root,
+            &self.store.db.epoch.catalog,
+            self.manifest.retained_quarantines(),
+            stop,
+        )?;
+        archives.validate_epoch(&self.store.db.epoch)?;
+        self.store
+            .backup_to_new_with_archives(root.as_ref(), operation_id, &archives, stop)
     }
 
     /// Finish a new private candidate only after compiled adapters independently
@@ -226,7 +283,14 @@ impl VerifiedBackup {
         stop: &AtomicBool,
     ) -> StoreResult<ProjectStore> {
         self.verify(stop)?;
-        self.restore_validation_digest(checks, stop)?;
+        let owners = self.restore_validation_digest(checks, stop)?;
+        let archives = archives::read(
+            &self.root,
+            &self.store.db.epoch.catalog,
+            self.manifest.retained_quarantines(),
+            stop,
+        )?;
+        archives.validate_epoch(&self.store.db.epoch)?;
         let dir = database::epoch_directory(&self.root, &self.store.db.epoch)?;
         // A previous failed finish may have written this exact confined file.
         // Reconcile its bytes rather than deleting or silently substituting it.
@@ -242,12 +306,30 @@ impl VerifiedBackup {
         let connection = database::connect(&self.store.db.path, false)?;
         database::enable_writer(&connection)?;
         database::validate_header(&connection, &self.store.db.epoch)?;
+        let registry_bytes = registry::restored_bytes(
+            &self.store.db.epoch,
+            &self.manifest.operation_id,
+            self.manifest.snapshot_digest(),
+            &owners,
+            self.manifest.current().cloned(),
+            self.manifest.retained_quarantines().to_vec(),
+            archives.max_revision(),
+        )?;
         checkpoint(stop)?;
         // This is a new private registry after both physical and owner checks.
         write_new(
             &self.root.join("project-store-registry.json"),
-            &encode(&self.store.db.epoch, 65536)?,
+            &registry_bytes,
         )?;
+        let admitted = registry::read(&self.root, &self.store.db.epoch.catalog)
+            .map_err(|_| failure(StoreErrorCode::OutcomeUnknown))?;
+        if admitted.epoch != self.store.db.epoch
+            || admitted.quarantine.is_some()
+            || admitted.retained_quarantines != self.manifest.retained_quarantines
+            || admitted.selection.digest() != digest("project-registry", &registry_bytes)
+        {
+            return Err(failure(StoreErrorCode::OutcomeUnknown));
+        }
         Ok(ProjectStore {
             db: Database {
                 connection,
@@ -255,12 +337,7 @@ impl VerifiedBackup {
                 epoch: self.store.db.epoch.clone(),
                 life: Rc::clone(&self.store.db.life),
                 root: self.root.clone(),
-                selection: Some(super::registry::RegistrySelection::from_bytes(
-                    &epoch_bytes,
-                    &self.store.db.epoch,
-                    0,
-                    None,
-                )),
+                selection: Some(admitted.selection),
             },
         })
     }
@@ -309,12 +386,14 @@ fn manifest(
     state: BackupState,
     payload_digest: String,
     payload_bytes: u64,
+    mut refs: Vec<QuarantineReference>,
 ) -> StoreResult<BackupManifest> {
-    let snapshot_digest = state.digest()?;
+    refs.sort_unstable();
+    let snapshot_digest = state.digest_with_quarantines(&refs)?;
     Ok(BackupManifest {
-        schema: "wow-store/project-backup/1".into(),
+        schema: backup_schema(&refs).into(),
         operation_id: operation_id.clone(),
-        request_digest: request_digest(operation_id, &state.epoch, &snapshot_digest)?,
+        request_digest: request_digest(operation_id, &state.epoch, &snapshot_digest, &refs)?,
         epoch: state.epoch,
         snapshot_digest,
         generations: state.generations,
@@ -324,18 +403,20 @@ fn manifest(
         payload_bytes,
         recovery: state.recovery,
         object_closure: "self-contained-inline-partitions".into(),
+        retained_quarantines: refs,
     })
 }
 fn request_digest(
     operation_id: &OperationId,
     epoch: &EpochManifest,
     snapshot_digest: &str,
+    refs: &[QuarantineReference],
 ) -> StoreResult<String> {
     Ok(digest(
         "project-backup-request",
         &encode(
             &(
-                "wow-store/project-backup/1",
+                backup_schema(refs),
                 operation_id,
                 &epoch.epoch_id,
                 snapshot_digest,
@@ -343,6 +424,31 @@ fn request_digest(
             65536,
         )?,
     ))
+}
+
+fn backup_schema(refs: &[QuarantineReference]) -> &'static str {
+    if refs.is_empty() {
+        "wow-store/project-backup/1"
+    } else {
+        "wow-store/project-backup/2"
+    }
+}
+
+fn manifest_references(bytes: &[u8]) -> StoreResult<Vec<QuarantineReference>> {
+    // Only the archive descriptors are imported. Every other manifest field is
+    // independently reconstructed from the database, body and archive files.
+    #[derive(Deserialize)]
+    struct Header {
+        schema: String,
+        #[serde(default)]
+        retained_quarantines: Vec<QuarantineReference>,
+    }
+    let header: Header = serde_json::from_slice(bytes).map_err(|_| invalid())?;
+    archives::validate_references(&header.retained_quarantines)?;
+    if header.schema != backup_schema(&header.retained_quarantines) {
+        return Err(invalid());
+    }
+    Ok(header.retained_quarantines)
 }
 fn open_artifact(root: &Path, epoch: EpochManifest, lock: File) -> StoreResult<Database> {
     database::directory(&root.join("epochs"))?;
@@ -386,10 +492,19 @@ fn check_sidecars(dir: &Path) -> StoreResult<()> {
     }
     Ok(())
 }
-fn intent(operation: &OperationId, request: &str, snapshot: &str) -> StoreResult<Vec<u8>> {
+fn intent(
+    operation: &OperationId,
+    request: &str,
+    snapshot: &str,
+    refs: &[QuarantineReference],
+) -> StoreResult<Vec<u8>> {
     encode(
         &(
-            "wow-store/project-backup-intent/1",
+            if refs.is_empty() {
+                "wow-store/project-backup-intent/1"
+            } else {
+                "wow-store/project-backup-intent/2"
+            },
             operation,
             request,
             snapshot,

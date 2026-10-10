@@ -27,7 +27,8 @@ data survives; released operation evidence and GC receipts survive collection an
 reopen. W16 now adds read-only recovery, verified native SQLite backup and
 owner-validated isolated restore, guarded live physical-instance replacement and
 explicit whole-instance quarantine with typed read-only observation.
-Guarded recovery from quarantine, incompatible-epoch migration and object/epoch/platform gates remain next; full W14/E2,
+Guarded recovery from quarantine and portable hold authority are now executable.
+Supported inactive epoch migration and object/epoch/platform gates remain next; full W14/E2,
 W15 and W16 acceptance remain open. See
 [PROJECT_GC.md](../crates/wow-store/PROJECT_GC.md).
 
@@ -68,9 +69,33 @@ pass, including physical-instance scope, old readers, damaged pointer/header,
 archive substitution, stale evidence and real Windows sharing refusal. Workspace
 policy, fmt, check, strict Clippy, tests (895 passed, 1 ignored, 107 targets),
 rustdoc and build pass on 2026-10-09; final CLI diagnostics passed focused strict
-Clippy/build. Next functional work is owner-validated guarded recovery from an
-explicit verified backup while preserving archived hold authority through later
-selection/backup, then supported inactive migration. Full W16/E2 stays open.
+Clippy/build. Its guarded recovery follow-up is now executable, as recorded below.
+Full W16/E2 stays open.
+
+The guarded restore checkpoint consumes an explicit independently verified backup
+under a separate held-instance guard. Malformed Pointer and Unreadable source
+observations stay distinct from absence. Every target generation requires compiled
+owner validation before one selector replacement and independent readback. Registry
+schemas 4/5 retain a finite flat archive closure; manifest 2 preserves exact archive
+bytes through independent reopen and isolated restore without historical databases.
+Normal replacement also binds its original selector in `replacement-source.json`,
+preserving inherited holds on admission and exact adoption. New holds preflight
+archive capacity before effects. Existing semantic IDs, old files, leases, root
+locks and aggregate reader admission survive. See
+[PROJECT_QUARANTINE_RESTORE.md](../crates/wow-store/PROJECT_QUARANTINE_RESTORE.md).
+
+Five new store cases and one native service case cover malformed/unreadable
+source, incomplete owners, altered authority, repeated holds, independent portable
+backup, normal publication/replacement and Windows sharing refusal/exact adoption.
+The workspace suite passed 901 tests, with 1 ignored across 107 targets. Policy,
+fmt, check, strict Clippy, rustdoc and build passed on 2026-10-09. The subsequent
+capacity preflight passed 40 store tests and refreshed workspace gates;
+budget-exhaustion fault fixtures remain NotEvaluated. Next functional work is
+an explicit supported source-to-target epoch migration ending at validated inactive
+state, with fresh IDs/maps and original source history retained as evidence.
+Current-domain recovery observation and broader W16/E2, source/runtime, power-loss,
+inside-write and deletion acceptance remain open. Gethe materialization still
+follows product implementation/build, before its external comparative checks.
 
 Fresh W16 policy, fmt, workspace check, strict Clippy, tests (877 passed,
 1 ignored, 106 targets), rustdoc and build passed on 2026-10-09. The ignored consumer and source/runtime gates stay

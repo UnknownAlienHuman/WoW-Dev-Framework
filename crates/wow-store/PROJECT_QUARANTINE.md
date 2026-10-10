@@ -6,6 +6,10 @@ typed inspection, and read-only observation. Guarded restore, cleanup, and
 migration are not implemented by this checkpoint; platform durability remains
 unaccepted.
 
+The subsequent [guarded restore contract](PROJECT_QUARANTINE_RESTORE.md) now
+provides explicit backup recovery and portable retained archive authority. It
+extends this initial checkpoint; migration and broader acceptance remain open.
+
 ## Authority and scope
 
 A schema-3 outer root-registry quarantine record holds the entire selected
