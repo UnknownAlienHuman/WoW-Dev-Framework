@@ -6,7 +6,7 @@ Status: active audit record. This document supplements, but does not replace,
 ## Exact inspected heads
 
 ```text
-WoW-Dev-Framework main: e144ea0f0968d45c6d5c1f2fdd054ccdd0c98594
+WoW-Dev-Framework process head: ba3ccfa83d9dfc80fe97255f64692464f6f11b14
 latest W17 product predecessor: 747ec584964ee812ea256d0ddf6186094c56937d
 Gethe/wow-ui-source live: 09b9db7948abc9b9648dedaab51eb0cf3ee67b31
 Gethe version evidence: 12.1.0 (69933)
@@ -20,14 +20,22 @@ operation.
 The repository now has:
 
 - one canonical Issue per active/acceptance work package;
-- one-manager/one-worktree/one-write-lease policy;
+- one-manager/one-worktree/one-write-lease policy with finite expiry/heartbeat and
+  crash/takeover rules;
 - Tier S functional checks, Tier M exact-head checks, Tier A acceptance and Tier X
   external/runtime qualification;
 - a push/PR `Quick exact-head gate` without the full test/rustdoc/release matrix;
+- no-product-stacking rule while the current quick gate is pending or failed;
+- a two-failed-attempt audit/change-route rule;
+- Gethe/Ketho routing limited to tasks whose correctness actually depends on it;
 - safe manual branch classification with exact-main input and dry-run default;
 - obsolete W11-W17 tracking/specification PRs closed without merging stale heads.
 
-The remaining process risks are tracked in Issues #104, #105 and #112.
+The exact process head above passed Quick run `38059947722`; artifact
+`11673330491`, digest
+`sha256:0374c12337f136f32c5955617ce495842a4c074f5c64ab352f80df1e91565633`,
+retained for 14 days. Remaining process risks are tracked in Issues #104, #105
+and #112.
 
 ## Hard product blocker: current corpus exceeds the XML site profile
 
@@ -118,6 +126,46 @@ redundant semantic edges. In particular, `xml_map_piece_source_span` is currentl
 classified as `Owns`, although a map piece maps/references an admitted span and
 already carries exact source support. See Issue #114.
 
+## Hard architecture blocker: native-only profile ladder
+
+The actual service and replay path reconstructs
+`build_platform_graph_proposal_plan()` and therefore selects
+`wow-project/platform-direct-producers/1`. Inventory spans `/2`, structural roles
+`/3` and XML source maps `/4` are separate native-library-only entries. The W17
+documentation explicitly says service/replay remain on `/1`.
+
+Adding object classification, fingerprints and later stages as `/5`, `/6`, and so
+on would create an expanding compatibility surface without one application
+consumer. Before another aggregate recipe, select either one composed W17 profile
+or explicit independently versioned capability composition. Classify `/1`–`/4`
+as released/external, persisted/admitted, frozen fixture, or transient unreleased
+and name every actual selector/replay/store/fixture consumer. See Issue #115.
+
+## Hard architecture blocker: missing E3-A candidate boundary
+
+Normative E3-A documents require:
+
+```text
+validated owner inputs and graph proposals
+-> one immutable BlizzardUiIndexCandidate
+-> exact GraphPublicationPlan / BlizzardUiPublicationBundle
+-> fresh inactive read-back and current activation
+-> BlizzardUiProjectView
+-> bounded SkeletonInputView
+```
+
+Current Rust has no `BlizzardUiIndexCandidate` or complete equivalent owner.
+`ProjectPublicationBundle` stores graph records plus replay/header bindings and
+validates an existing pair. It does not own the complete E3-A candidate contract:
+source/package/load/analyzer/recognizer manifests, proposal validation/rejection,
+fingerprints, skeleton-input manifest, and capability/coverage/conflict/truncation
+summary. Its direct validator reconstructs only producer `/1`.
+
+Do not expose `SkeletonInputView` directly over raw ProjectView/graph/store
+internals. Implement or extend one immutable store-independent candidate
+capability, then make publication and Skeleton construction consume it. See Issue
+#116.
+
 ## Identity audit observation
 
 Native XML source-map `/4` starts from source graph profile
@@ -125,8 +173,8 @@ Native XML source-map `/4` starts from source graph profile
 `ProjectGraphProvenance.profile` as
 `wow-project/platform-direct-producers/4` before admitting new piece support.
 The current documentation describes this as an augmented `/4` source report, so
-this is not yet classified as a defect. Before persistence or Skeleton handoff,
-verify explicitly that:
+this is not yet classified as a separate defect. Before persistence or Skeleton
+handoff, verify explicitly that:
 
 - source graph profile and direct-recipe profile are separately recoverable where
   downstream compatibility needs both;
@@ -135,21 +183,21 @@ verify explicitly that:
 - serialized identity tests cover both meanings and old profiles.
 
 If one field is serving both identities, split it before acceptance rather than
-adding more relabeling exceptions.
+adding more relabeling exceptions. This audit belongs in the #115/#116 design.
 
 ## Required operating improvements
 
 Before the next W17 product write:
 
 1. The manager posts an exact writer claim in Issue #106: manager/session label,
-   worktree, exact base, owned paths/contracts, slice, Tier S chain and blockers.
-2. A claim has a finite lease and heartbeat. On chat/host loss, the next manager
-   must reconcile remote `main`, the Issue log and any published artifact; no
-   unpublished local state is assumed to exist.
+   one worktree, exact base, owned paths/contracts, slice, Tier S chain, blockers,
+   finite lease and heartbeat.
+2. On chat/host loss, the next manager reconciles remote `main`, the Issue log and
+   named retained artifacts; unpublished local state is presumed lost.
 3. Tier S passes before publication. Do not stack another product commit while the
    current `main` quick gate is pending or failed.
 4. After two failed attempts at the same approach, write a short failure audit and
-   change the route instead of repeating patches.
+   change route instead of repeating patches.
 5. The agent reads only: `AGENTS.md`, `docs/EXECUTION_MODEL.md`, the canonical
    active Issue, target owner contracts and exact source evidence needed for the
    slice. Historical checkpoint diaries are not hot context.
@@ -158,18 +206,16 @@ Before the next W17 product write:
    source/Ketho operations.
 7. Native Ketho annotation execution belongs to annotation/source-normalization
    work or Tier X parity, not every task containing the word “source”.
-8. Definition of functional completion includes a reachable positive path,
-   conservative incomplete/dynamic behavior, Tier S pass, exact-head publication,
-   read-back and one concise Issue update.
+8. Functional completion includes a reachable application positive path,
+   conservative incomplete/dynamic/budget/cancellation behavior, Tier S pass,
+   exact-head publication/read-back and one concise Issue update.
 
 ## Evidence durability and supply-chain follow-up
 
-The quick gate currently retains its exact-source artifact for only three days and
-uses mutable first-party action tags. Before relying on it as durable milestone
-evidence:
+Quick exact-head evidence is now retained for 14 days and immutable
+commit/tree/toolchain/artifact identity is recorded in the relevant Issue. Before
+using CI configuration as a hardened supply-chain boundary:
 
-- retain milestone evidence longer or copy the immutable commit/tree/toolchain and
-  artifact digest into the canonical Issue/checkpoint record;
 - pin first-party GitHub Actions to reviewed commit SHAs and update them through a
   controlled dependency process;
 - keep PR runs read-only and free of credentials/secrets;
@@ -179,15 +225,18 @@ evidence:
 ## W17 dependency order after blockers
 
 ```text
-1. Resolve Issues #113 and #114.
-2. XML object/region classification over reviewed exact owner facts.
-3. Stable fingerprints with collision and compatibility policy.
-4. Bounded SkeletonInputView over one exact coherent generation.
-5. Source service/CLI transport.
-6. Tier M exact-head milestone.
-7. Tier A package acceptance.
-8. Tier X Gethe/Ketho/WoW API Ketho MCP discrepancy matrix and named runtime probes.
+1. Resolve #113: exact corpus census and reviewed bounded profile/sharding.
+2. Resolve #114: definition-aware axes/relation semantics.
+3. Resolve #115: one selected composed profile or explicit capability composition.
+4. XML object/region classification over reviewed exact owner facts.
+5. Stable fingerprints with collision and compatibility policy.
+6. Resolve #116: one validated BlizzardUiIndexCandidate consumed by publication.
+7. Bounded SkeletonInputView from the acquired candidate capability.
+8. Source service/CLI transport.
+9. Tier M exact-head milestone.
+10. Tier A package acceptance.
+11. Tier X Gethe/Ketho/WoW API Ketho MCP discrepancy matrix and named runtime probes.
 ```
 
 No downstream context owner should reconstruct W17 internals or work around a
-failed axis/budget contract.
+failed budget, axis, selected-profile, or candidate contract.
