@@ -10,6 +10,8 @@ const REPORT_SCHEMA: &str = "wow-dev-framework/emmylua-compatibility-report";
 const REPORT_SCHEMA_VERSION: u64 = 1;
 const MAX_REPORT_BYTES: usize = 64 * 1024 * 1024;
 
+pub mod compiled_probe;
+
 /// Stable compatibility-report failure class.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum EmmyCompatibilityErrorCode {
@@ -21,6 +23,8 @@ pub enum EmmyCompatibilityErrorCode {
     InvalidSurface,
     Incompatible,
     InvalidBackendIdentity,
+    ProbeFailed,
+    Cancelled,
 }
 
 /// One bounded compatibility-report import failure.

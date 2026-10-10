@@ -8,6 +8,9 @@ use std::process::ExitCode;
 use serde_json::json;
 use wow_emmy::compatibility::backend_identity_from_report;
 
+#[path = "wow-emmy-probe/source.rs"]
+mod source;
+
 fn main() -> ExitCode {
     match run(env::args_os().skip(1).collect()) {
         Ok(()) => ExitCode::SUCCESS,
@@ -23,6 +26,13 @@ fn run(arguments: Vec<OsString>) -> Result<(), String> {
         return Err(usage());
     };
     match command {
+        "produce-backend" if arguments.len() == 2 => {
+            let bytes = source::produce(Path::new(&arguments[1]))?;
+            io::stdout()
+                .lock()
+                .write_all(&bytes)
+                .map_err(|_| "cannot write probe report".to_owned())
+        }
         "verify-backend" if arguments.len() == 2 => {
             let path = Path::new(&arguments[1]);
             let bytes = fs::read(path)
@@ -56,6 +66,7 @@ fn run(arguments: Vec<OsString>) -> Result<(), String> {
 fn usage() -> String {
     [
         "usage:",
+        "  wow-emmy-probe produce-backend <exact-compiled-upstream-checkout>",
         "  wow-emmy-probe verify-backend <compatibility-report.json>",
     ]
     .join("\n")

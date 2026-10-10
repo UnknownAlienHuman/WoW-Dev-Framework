@@ -29,6 +29,11 @@ No LSP, MCP, editor extension, full Blizzard source library, or WoW diagnostic p
 
 ## Owned responsibilities
 
+The native `wow-emmy-probe produce-backend` command produces a scoped report for
+the already compiled dependency through exact Git-member fingerprints and real
+native session observations. See [upstream compatibility](../../docs/EMMYLUA_UPSTREAM.md).
+It does not close E0-C pin/fixture or P1-P12 acceptance.
+
 - one upstream dependency pin behind one adapter;
 - compatibility-probe execution and report;
 - analyzer configuration derived from explicit inputs;

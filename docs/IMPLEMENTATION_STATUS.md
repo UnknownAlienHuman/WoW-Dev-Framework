@@ -89,6 +89,11 @@ request, sealed package identity and genuine replay11; ordinary routes and repla
 retain their shape. The65-member capacity/refusal case, selected native graph/replay
 limit-mutation lifecycle, affected check/strict Clippy and CLI build pass. Real full
 pipeline populations and persistence capacity remain unqualified under #113.
+The native [compiled backend report producer](EMMYLUA_UPSTREAM.md) fingerprints
+the exact pinned Git members and executes real diagnostic/member/local-flow and
+incremental session observations. Generated report import and deterministic CLI
+output pass; fabricated/missing/oversized source, cancellation and a wrong Git
+root refuse. The existing report wire remains; E0-C P1-P12 and pin acceptance stay open.
 Explicit retained XSD component admission is now executable through the existing
 XML owner, with root-only global symbols and final unsupported context propagation.
 See [schema components](PLATFORM_XML_SCHEMA_COMPONENTS.md) for its bounded scope.

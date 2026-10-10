@@ -7,9 +7,9 @@ the work queue. Follow [the execution model](EXECUTION_MODEL.md).
 
 ## Verified routing base
 
-`main` checkpoint `14d5e7fbb2b2f81ae020054d16492e75354ac2d0`, tree
-`7f1a30f39ef4d50686bad90ecb19973d46c48699`, was published and read back with all
-changed blobs. [Quick 38089713963](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/38089713963)
+`main` checkpoint `29c50ff5e0fccb4ee0dd04554ec09088e207266a`, tree
+`3081a5fee48fde3ec34da65cbf408bfe0c5778ab`, was published and read back with all
+changed blobs. [Quick 38090768194](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/38090768194)
 passed on that exact head. This is the verified base of this routing update;
 subsequent publication and gate evidence belong in the canonical Issue.
 
@@ -31,8 +31,12 @@ graph/replay path; standalone and aggregate empty Main still refuse. The cumulat
 64-MiB census syntax-plan encoding guard was identified
 and replaced by one-package streaming with bounded compact retention. The newly
 re-resolved 273-package native census now returns its exact measurements and
-Partial dependency/file-closure coverage. Ordinary retained Main, full graph/map
-population and their finite capacity remain unqualified. Do not infer the actual
+Partial dependency/file-closure coverage. Explicit finite native package retention
+is executable beyond ordinary64 through the same Main owner and captured replay11
+limits. A genuine [compiled backend report producer](EMMYLUA_UPSTREAM.md) now
+supplies the existing analyzer input without fixture report fabrication. Actual
+whole Main/analysis, full graph/map population and persistence remain unqualified.
+Do not infer the actual
 map-owner population from lexical script counts or compare XML-index JSON bytes
 with graph metadata bytes. Operation details belong in #113.
 
