@@ -192,6 +192,9 @@ and holds exact schema/source witnesses; see [schema components](PLATFORM_XML_SC
 It does not complete application classification or change graph/service/replay selection.
 
 Canonical W17 work: [Issue #106](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/106).
+The #113 [manifest census command](../apps/wow/SOURCE_CENSUS.md) now connects
+native source admission and streamed TOC/XML measurements through service/CLI;
+measured full-corpus limits and graph-stage counts remain open.
 Next: #113 corpus/profile limits, #114 definition-aware axes, #115 selected
 composition, #117 classification, #118 fingerprints, then #116 validated candidate,
 SkeletonInputView and source service/CLI. [Execution policy](EXECUTION_MODEL.md)

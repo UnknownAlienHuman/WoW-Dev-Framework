@@ -81,6 +81,9 @@ XML owner, with root-only global symbols and final unsupported context propagati
 See [schema components](PLATFORM_XML_SCHEMA_COMPONENTS.md) for its bounded scope.
 Application classification, the #113-#116 blockers and full W17 acceptance remain open;
 the current work and exact-head evidence live in canonical Issue #106.
+The [source census application](../apps/wow/SOURCE_CENSUS.md) exposes bounded
+manifest/selected-TOC/XML counts and explicit refusals. Full-corpus capacity and
+unexecuted graph/closure measurements remain #113 debt.
 Broad package acceptance remains open.
 
 ## W14 retained physical native analysis (2026-10-09)

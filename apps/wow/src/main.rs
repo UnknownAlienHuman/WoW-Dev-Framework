@@ -6,6 +6,7 @@ mod graph_store;
 mod native;
 mod output;
 mod project;
+mod source;
 
 use std::io::Write;
 use std::process::ExitCode;
@@ -40,6 +41,9 @@ fn run() -> u8 {
     }
     if arguments.first().is_some_and(|value| value == "project") {
         return project::run(arguments);
+    }
+    if arguments.first().is_some_and(|value| value == "source") {
+        return source::run(arguments);
     }
     let arguments = match args::parse(arguments) {
         Ok(value) => value,

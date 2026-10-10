@@ -191,6 +191,90 @@ fn fixture_packages(name: &str) -> Vec<ProjectPackageInput> {
     )]
 }
 
+#[test]
+fn native_manifest_census_retains_omissions_and_counts_unique_documents() -> TestResult {
+    use wow_project::load::census::{
+        CensusCoverage, PlatformCensusSelection, census_platform_source,
+    };
+    let root = FixtureRoot::new()?;
+    let profile = BlizzardUiSourceProfile::new(profile_request()?)?;
+    let stop = AtomicBool::new(false);
+    let source =
+        root.directory()?
+            .admit_platform_source(&profile, inventory(&root, &profile)?, &stop)?;
+    let selection = PlatformCensusSelection {
+        package_root: "UI".into(),
+        load_context: None,
+    };
+    let census = census_platform_source(&source, &selection, &stop)?;
+    assert_eq!(census.coverage(), CensusCoverage::Partial);
+    assert_eq!(census.file_counts().included.xml, 1);
+    assert_eq!(census.file_counts().excluded, 1);
+    assert_eq!(census.file_counts().unsupported, 1);
+    assert_eq!(census.selected_tocs().included_file_records, 2);
+    assert_eq!(census.xml().documents, 1);
+    assert_eq!(census.xml().elements, 10);
+    assert_eq!(census.xml().script_sites, 2);
+    assert_eq!(census.xml().reference_scripts, 1);
+    assert_eq!(census.xml().inline_units, 1);
+    assert_eq!(census.xml().map_segments, 1);
+    assert_eq!(
+        census.digest(),
+        census_platform_source(&source, &selection, &stop)?.digest()
+    );
+    let bytes = serde_json::to_string(&census)?;
+    assert!(bytes.contains("UI/omitted.txt"));
+    assert!(!bytes.contains("local source_only"));
+    assert!(!bytes.contains("graph_nodes\":0"));
+    stop.store(true, Ordering::Release);
+    assert_eq!(
+        census_platform_source(&source, &selection, &stop)
+            .err()
+            .ok_or("census ignored cancellation")?
+            .code(),
+        ProjectErrorCode::SourceReadCancelled
+    );
+    Ok(())
+}
+
+#[test]
+fn native_manifest_census_does_not_promote_refused_or_missing_documents() -> TestResult {
+    use wow_project::load::census::{
+        CensusCoverage, CensusDocumentOutcome, CensusRefusal, PlatformCensusSelection,
+        census_platform_source,
+    };
+    let root = FixtureRoot::new()?;
+    std::fs::write(root.0.join("UI/frames.xml"), "<Ui><Frame></Ui>")?;
+    let profile = BlizzardUiSourceProfile::new(profile_request()?)?;
+    let stop = AtomicBool::new(false);
+    let mut supplied = inventory(&root, &profile)?;
+    supplied
+        .entries
+        .retain(|entry| entry.path != "UI/Fixture.toc");
+    supplied.roots[0].declared_entries = supplied.entries.len() as u64;
+    let source = root
+        .directory()?
+        .admit_platform_source(&profile, supplied, &stop)?;
+    let census = census_platform_source(
+        &source,
+        &PlatformCensusSelection {
+            package_root: "UI".into(),
+            load_context: None,
+        },
+        &stop,
+    )?;
+    assert_eq!(census.coverage(), CensusCoverage::Partial);
+    assert_eq!(census.xml().documents, 0);
+    assert!(
+        census.documents().iter().any(|document| document.outcome
+            == CensusDocumentOutcome::Refused(CensusRefusal::ParserInvalid))
+    );
+    let value = serde_json::to_value(&census)?;
+    assert_eq!(value["selection_issues"][0]["kind"], "missing_selected_toc");
+    assert_eq!(value["refused_documents"], 1);
+    Ok(())
+}
+
 fn configuration_builder(
     kind: ProjectKind,
     target: &PlatformTarget,

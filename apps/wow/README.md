@@ -2,6 +2,7 @@
 
 Executable one-shot `status` / `check`: [LOCAL_INPUT.md](LOCAL_INPUT.md).
 Native live project commands: [LIVE_PROJECT.md](LIVE_PROJECT.md).
+Manifest-bound source measurements: [SOURCE_CENSUS.md](SOURCE_CENSUS.md).
 Full roadmap/transport acceptance is not implied.
 
 **Status:** partial executable Rust transport; later product modes remain planned.

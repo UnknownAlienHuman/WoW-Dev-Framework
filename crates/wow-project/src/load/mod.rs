@@ -1,5 +1,6 @@
 //! Selected-TOC acquisition and source-backed XML syntax/inline-body indexing.
 //! Not a client emulator, complete semantic graph, or persistent E2 candidate.
+pub mod census;
 mod conditions;
 pub(crate) mod document_toc;
 mod metadata;
