@@ -33,6 +33,8 @@ pub enum CensusRefusal {
     InvalidEncoding,
     ParserBudget,
     ParserInvalid,
+    TocTargetExcluded,
+    TocTargetUnresolved,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]

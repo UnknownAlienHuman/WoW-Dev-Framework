@@ -552,6 +552,116 @@ fn native_manifest_census_does_not_promote_refused_or_missing_documents() -> Tes
     Ok(())
 }
 
+#[test]
+fn native_census_retains_target_refusals_without_losing_other_documents() -> TestResult {
+    use wow_project::load::{
+        TocLoadContext, TocLoadLocation,
+        census::{
+            CensusCoverage, CensusDocumentOutcome, CensusRefusal, PlatformCensusSelection,
+            census_platform_source,
+        },
+    };
+    let root = FixtureRoot::new()?;
+    for (name, gate) in [
+        ("Excluded.toc", "AllowLoad: Glue"),
+        ("Unresolved.toc", "AllowLoadGameType: unlisted"),
+    ] {
+        std::fs::write(
+            root.0.join("UI").join(name),
+            format!("## Interface: 120100\n## {gate}\ndefs.lua\n"),
+        )?;
+    }
+    let mut request = profile_request()?;
+    request.roots[0]
+        .selected_tocs
+        .extend(["UI/Excluded.toc".into(), "UI/Unresolved.toc".into()]);
+    let profile = BlizzardUiSourceProfile::new(request)?;
+    let mut declared = inventory(&root, &profile)?;
+    for name in ["Excluded.toc", "Unresolved.toc"] {
+        let bytes = std::fs::read(root.0.join("UI").join(name))?;
+        declared.entries.push(PlatformInventoryEntry {
+            path: format!("UI/{name}"),
+            kind: PlatformFileKind::Toc,
+            disposition: PlatformEntryDisposition::Included {
+                digest: raw_digest(&bytes),
+                byte_length: bytes.len() as u64,
+                object_id: None,
+            },
+        });
+    }
+    declared.roots[0].declared_entries = declared.entries.len() as u64;
+    let stop = AtomicBool::new(false);
+    let directory = root.directory()?;
+    let source = directory.admit_platform_source(&profile, declared, &stop)?;
+    let context = TocLoadContext {
+        game_types: std::collections::BTreeMap::new(),
+        family: None,
+        game: None,
+        text_locale: None,
+        location: Some(TocLoadLocation::Game),
+        environment: None,
+    };
+    let selection = PlatformCensusSelection {
+        package_root: "UI".into(),
+        load_context: Some(context.clone()),
+    };
+    let census = census_platform_source(&source, &selection, &stop)?;
+    assert_eq!(census.coverage(), CensusCoverage::Partial);
+    assert_eq!(census.selected_tocs().documents, 1);
+    assert_eq!(census.selected_tocs().included_file_records, 2);
+    assert_eq!(census.xml().documents, 1);
+    for (name, refusal, code) in [
+        (
+            "Excluded.toc",
+            CensusRefusal::TocTargetExcluded,
+            ProjectErrorCode::PackageTargetExcluded,
+        ),
+        (
+            "Unresolved.toc",
+            CensusRefusal::TocTargetUnresolved,
+            ProjectErrorCode::PackageTargetUnresolved,
+        ),
+    ] {
+        let document = census
+            .documents()
+            .iter()
+            .find(|document| document.path == format!("UI/{name}"))
+            .ok_or("refused TOC lost its identity")?;
+        assert_eq!(document.outcome, CensusDocumentOutcome::Refused(refusal));
+        let bytes = std::fs::read(root.0.join("UI").join(name))?;
+        assert_eq!(document.content_digest, raw_digest(&bytes));
+        assert_eq!(document.byte_length, bytes.len() as u64);
+        let strict = directory.read_toc_project_with_context(
+            "UI",
+            &wow_project::disk::ProjectDiskFile::new(name),
+            &profile.target().reference_profile,
+            Some(&context),
+            &stop,
+        );
+        assert_eq!(
+            strict
+                .err()
+                .ok_or("native loader admitted refused TOC")?
+                .code(),
+            code
+        );
+    }
+    let encoded = serde_json::to_value(&census)?;
+    assert_eq!(encoded["refused_documents"], 2);
+    let wire = serde_json::to_string(&census)?;
+    assert!(wire.contains("toc_target_excluded"));
+    assert!(wire.contains("toc_target_unresolved"));
+    stop.store(true, Ordering::Release);
+    assert_eq!(
+        census_platform_source(&source, &selection, &stop)
+            .err()
+            .ok_or("census swallowed cancellation")?
+            .code(),
+        ProjectErrorCode::SourceReadCancelled
+    );
+    Ok(())
+}
+
 fn configuration_builder(
     kind: ProjectKind,
     target: &PlatformTarget,

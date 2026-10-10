@@ -88,6 +88,14 @@ explicit; refused documents do not contribute invented syntax counts. Integer
 counts use checked arithmetic. Configuration is bounded by the existing 32 MiB
 disk port; result/index encoding is bounded by the 64 MiB native-artifact ceiling.
 
+Selected TOCs excluded by their explicit target filters receive
+`toc_target_excluded`; ambiguous filters or missing target context receive
+`toc_target_unresolved`. These per-document refusals retain path/digest/length,
+contribute no syntax counts and keep the census Partial while other documents
+are measured. Cancellation and acquisition/identity errors still abort. Ordinary
+package loading continues to reject these TOCs. The census `/1` contracts are
+transient and unreleased; existing document outcome bytes remain unchanged.
+
 `index_json_bytes` measures serialized XML indexes through a counting sink,
 without allocating their JSON. Skipped decoded attribute values and inline text
 have separate byte counts. `max_measured_document_*` records the largest successful

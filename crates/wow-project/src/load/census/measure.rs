@@ -99,6 +99,12 @@ pub(super) fn document(
         Err(error) if error.code() == ProjectErrorCode::InvalidInputInventory => {
             Ok(CensusDocumentOutcome::Refused(CensusRefusal::ParserInvalid))
         }
+        Err(error) if error.code() == ProjectErrorCode::PackageTargetExcluded => Ok(
+            CensusDocumentOutcome::Refused(CensusRefusal::TocTargetExcluded),
+        ),
+        Err(error) if error.code() == ProjectErrorCode::PackageTargetUnresolved => Ok(
+            CensusDocumentOutcome::Refused(CensusRefusal::TocTargetUnresolved),
+        ),
         Err(error) => Err(error),
     }
 }
