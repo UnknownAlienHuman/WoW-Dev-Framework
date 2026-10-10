@@ -119,6 +119,9 @@ impl LocalProjectInput {
                 Self::from_disk_manifest(&bytes, &directory, stop)
             }
             LOCAL_PACKAGES_SCHEMA => Self::from_package_manifest(&bytes, &directory, stop),
+            super::platform_input::LOCAL_PLATFORM_SCHEMA => {
+                Self::from_platform_manifest(&bytes, &directory, stop)
+            }
             _ => Err(invalid("unsupported local input schema")),
         }?;
         super::cancelled(stop)?;

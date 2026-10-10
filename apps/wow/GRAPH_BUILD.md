@@ -13,6 +13,9 @@ Use a fresh output path: redirection can truncate an existing file even on failu
 
 Configuration is the same inline, explicit-files or selected-TOC input accepted
 by `wow check`; existing profile/reference/Library requirements still apply.
+The [manifest-bound platform input](PLATFORM_INPUT.md) additionally selects real
+retained source/package owners and the configuration's exact graph capability set
+through this command. Its ordinary package/Main/graph limits remain in force.
 `--generation current` (default) derives the generation from this explicit input,
 not a disk current pointer. An exact generation must match that derivation.
 

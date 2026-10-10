@@ -211,6 +211,20 @@ impl LocalProjectInput {
         libraries: Vec<ProjectInputFile>,
         load: LocalProjectLoad,
     ) -> ServiceResult<Self> {
+        Self::assemble_with_platform(input, reference, main, libraries, load, None)
+    }
+
+    pub(super) fn assemble_with_platform(
+        input: ProjectMetadata,
+        reference: ReferenceView,
+        main: Vec<ProjectInputFile>,
+        libraries: Vec<ProjectInputFile>,
+        load: LocalProjectLoad,
+        platform: Option<(
+            std::sync::Arc<wow_project::platform_source::PlatformPackageSpecialization>,
+            wow_project::PlatformGraphProfile,
+        )>,
+    ) -> ServiceResult<Self> {
         match &load {
             LocalProjectLoad::Explicit => {}
             LocalProjectLoad::SelectedToc(plan) => {
@@ -261,6 +275,11 @@ impl LocalProjectInput {
             ProfileKind::Fixture => (ProjectKind::Fixture, LuaWorkspaceUniverse::Fixture),
             ProfileKind::Release => (ProjectKind::Repository, LuaWorkspaceUniverse::Project),
         };
+        let kind = if platform.is_some() {
+            ProjectKind::BlizzardUiPlatformSource
+        } else {
+            kind
+        };
         let (max_files, max_total_source_bytes) = match &load {
             LocalProjectLoad::PackageUniverse { .. } => (4096, 64 * 1024 * 1024),
             LocalProjectLoad::Explicit | LocalProjectLoad::SelectedToc(_) => {
@@ -303,6 +322,15 @@ impl LocalProjectInput {
             } => configuration
                 .package_load_plan(load_plan, main_plan)
                 .map_err(|_| invalid("package load plan target mismatch"))?,
+        };
+        let configuration = if let Some((packages, graph_profile)) = platform {
+            configuration
+                .platform_packages(packages)
+                .map_err(|_| invalid("platform package target mismatch"))?
+                .with_package_xml_bindings(wow_project::PackageXmlBindingProfile::SameSessionV1)
+                .with_platform_graph_profile(graph_profile)
+        } else {
+            configuration
         };
         let configuration = configuration
             .build()

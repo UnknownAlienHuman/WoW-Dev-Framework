@@ -45,7 +45,8 @@ pub fn run(values: Vec<OsString>) -> u8 {
             };
         }
     };
-    let result = execute_graph_build(input, &args.request, &stop).and_then(|r| {
+    let request = args.request.with_input_profile(&input);
+    let result = execute_graph_build(input, &request, &stop).and_then(|r| {
         if stop.load(Ordering::Acquire) {
             r.into_cancelled()
         } else {

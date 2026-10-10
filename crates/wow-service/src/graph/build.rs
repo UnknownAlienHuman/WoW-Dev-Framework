@@ -162,6 +162,21 @@ impl GraphBuildRequest {
         self
     }
 
+    /// Bind a frontend request to the graph recipe in its already admitted
+    /// local input. Explicitly constructed requests still undergo exact-match
+    /// admission; execution never changes their selected capabilities.
+    #[must_use]
+    pub fn with_input_profile(self, input: &LocalProjectInput) -> Self {
+        match input
+            .project_bundle()
+            .configuration()
+            .platform_graph_profile()
+        {
+            Some(profile) => self.with_platform_graph_profile(profile),
+            None => self,
+        }
+    }
+
     pub(crate) fn acquire_project(
         &self,
         backend: &LocalProjectBackend,

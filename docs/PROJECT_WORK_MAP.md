@@ -66,6 +66,10 @@ historical freeze are reconciled honestly. Code presence is not accepted freeze.
   manifest admission and native lexical/package measurement. Target-excluded and
   unresolved selected TOCs retain per-document Partial refusals; ordinary native
   package loading remains strict.
+- [Manifest-bound platform input](../apps/wow/PLATFORM_INPUT.md) connects exact
+  source/package/Main admission and same-session XML bindings to the CLI's
+  configuration-selected native graph. Ordinary retained package64 and existing
+  graph/map budgets remain; this entry point is not full-corpus qualification.
 - [Source admission](PLATFORM_SOURCE_ADMISSION.md),
   [package specialization](PLATFORM_SOURCE_PACKAGES.md),
   [configuration](PLATFORM_SOURCE_CONFIGURATION.md),
