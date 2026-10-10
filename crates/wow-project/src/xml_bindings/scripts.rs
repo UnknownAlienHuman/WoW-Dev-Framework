@@ -6,7 +6,7 @@ use std::sync::atomic::AtomicBool;
 use serde::Serialize;
 use wow_core::{ContentDigest, SourceContent};
 
-use super::{MAX_BINDINGS, exhausted, invalid, receivers};
+use super::{MAX_BINDINGS, budget_exhausted, exhausted, invalid, receivers};
 use crate::ProjectResult;
 use crate::load::{ProjectLoadPlan, XmlElementRecord, XmlElementRole, XmlScriptSource};
 
@@ -120,7 +120,11 @@ pub(super) fn collect<'a>(
                 crate::analyzer::checkpoint(stop)?;
                 budget.visits = budget.visits.checked_add(1).ok_or_else(exhausted)?;
                 if budget.visits > 262_144 {
-                    return Err(exhausted());
+                    return Err(budget_exhausted(
+                        "inherited script declaration visits",
+                        budget.visits,
+                        262_144,
+                    ));
                 }
                 if declaration_id == &consumer.occurrence_id {
                     continue;
@@ -131,7 +135,11 @@ pub(super) fn collect<'a>(
                 for source in scripts {
                     crate::analyzer::checkpoint(stop)?;
                     if budget.inherited >= MAX_BINDINGS {
-                        return Err(exhausted());
+                        return Err(budget_exhausted(
+                            "inherited script sources before next record",
+                            budget.inherited,
+                            MAX_BINDINGS,
+                        ));
                     }
                     budget.inherited += 1;
                     let script = source.element.script.as_ref().ok_or_else(invalid)?;
@@ -144,7 +152,11 @@ pub(super) fn collect<'a>(
                         )
                         .ok_or_else(exhausted)?;
                     if budget.text_bytes > 16 * 1024 * 1024 {
-                        return Err(exhausted());
+                        return Err(budget_exhausted(
+                            "inherited script text bytes",
+                            budget.text_bytes,
+                            16 * 1024 * 1024,
+                        ));
                     }
                     let inherited_index = inherited.len();
                     inherited.push(XmlInheritedScriptSource {

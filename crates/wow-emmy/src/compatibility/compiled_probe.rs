@@ -10,7 +10,7 @@ use crate::{
     EMMYLUA_CODE_ANALYSIS_VERSION, EMMYLUA_REVISION, EMMYLUA_TREE, EmmyBackendIdentity,
     EmmyReferenceResolution, EmmySyntaxDiagnosticKind, LuaWorkspaceFileInput, LuaWorkspaceLimits,
     LuaWorkspaceSnapshot, LuaWorkspaceUniverse, MemberCallSessionQueryProfile,
-    session::{AnalyzerSession, AnalyzerUpdateBatch},
+    session::{AnalyzerSession, AnalyzerSessionErrorCode, AnalyzerUpdateBatch},
 };
 
 pub const COMPILED_PROBE_PROFILE: &str = "wow-emmy/compiled-backend-probe/1";
@@ -129,11 +129,11 @@ pub fn probe_compiled_backend(
     )?;
     checkpoint(stop)?;
     let mut session = AnalyzerSession::open(main.clone(), std::slice::from_ref(&library), stop)
-        .map_err(|_| failed("native probe session failed"))?;
+        .map_err(|error| session_failure(error.code(), "native probe session failed"))?;
     let queries = MemberCallSessionQueryProfile::new(&[], &[]);
     let reports = session
         .reports(queries, false, stop)
-        .map_err(|_| failed("native probe collection failed"))?;
+        .map_err(|error| session_failure(error.code(), "native probe collection failed"))?;
     checkpoint(stop)?;
     if reports.syntax.files().len() != 4
         || !reports.syntax.diagnostics().iter().any(|d| {
@@ -184,7 +184,7 @@ pub fn probe_compiled_backend(
         .map_err(|_| failed("probe update was rejected"))?;
     let changed = session
         .apply_update(batch, queries, false, stop)
-        .map_err(|_| failed("native probe update failed"))?;
+        .map_err(|error| session_failure(error.code(), "native probe update failed"))?;
     checkpoint(stop)?;
     if session.main().snapshot_id() != target.snapshot_id()
         || changed.syntax.files().len() != 3
@@ -224,6 +224,16 @@ fn digest(value: &Value) -> EmmyCompatibilityResult<String> {
 }
 fn failed(message: &str) -> super::EmmyCompatibilityError {
     report_error(EmmyCompatibilityErrorCode::ProbeFailed, message)
+}
+fn session_failure(code: AnalyzerSessionErrorCode, message: &str) -> super::EmmyCompatibilityError {
+    if code == AnalyzerSessionErrorCode::Cancelled {
+        report_error(
+            EmmyCompatibilityErrorCode::Cancelled,
+            "compiled probe was cancelled",
+        )
+    } else {
+        failed(message)
+    }
 }
 fn checkpoint(stop: &AtomicBool) -> EmmyCompatibilityResult<()> {
     if stop.load(Ordering::Relaxed) {

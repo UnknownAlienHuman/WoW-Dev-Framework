@@ -94,6 +94,12 @@ the exact pinned Git members and executes real diagnostic/member/local-flow and
 incremental session observations. Generated report import and deterministic CLI
 output pass; fabricated/missing/oversized source, cancellation and a wrong Git
 root refuse. The existing report wire remains; E0-C P1-P12 and pin acceptance stay open.
+Native session cancellation now retains its cancellation class through the producer.
+The real 273-package operation first refuses the next XML Lua binding after
+retaining 4096 rows. Existing XML binding guards now name their resource,
+observed count and original limit without changing error codes, phase, identities
+or ceilings. Affected Tier S, the focused producer refusals and CLI build pass;
+full analysis/graph/maps/persistence capacity remains unqualified under #113.
 Explicit retained XSD component admission is now executable through the existing
 XML owner, with root-only global symbols and final unsupported context propagation.
 See [schema components](PLATFORM_XML_SCHEMA_COMPONENTS.md) for its bounded scope.

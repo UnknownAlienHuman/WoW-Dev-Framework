@@ -5,7 +5,7 @@ use std::sync::atomic::AtomicBool;
 
 use serde::Serialize;
 
-use super::{MAX_BINDINGS, attribute_span, exhausted, invalid};
+use super::{MAX_BINDINGS, attribute_span, budget_exhausted, exhausted, invalid};
 use crate::ProjectResult;
 use crate::load::xml_references::{
     XmlDeclarationSite, XmlReferenceKind, XmlReferenceOrder, XmlReferenceRecord,
@@ -74,7 +74,11 @@ impl Budget {
     fn step(&mut self) -> ProjectResult<()> {
         self.steps = self.steps.checked_add(1).ok_or_else(exhausted)?;
         if self.steps > MAX_EXPANSION_STEPS {
-            return Err(exhausted());
+            return Err(budget_exhausted(
+                "receiver expansion steps",
+                self.steps,
+                MAX_EXPANSION_STEPS,
+            ));
         }
         Ok(())
     }
@@ -82,8 +86,19 @@ impl Budget {
     fn retain(&mut self, bytes: usize) -> ProjectResult<()> {
         self.records = self.records.checked_add(1).ok_or_else(exhausted)?;
         self.text_bytes = self.text_bytes.checked_add(bytes).ok_or_else(exhausted)?;
-        if self.records > MAX_RECEIVER_RECORDS || self.text_bytes > MAX_RECEIVER_TEXT_BYTES {
-            return Err(exhausted());
+        if self.records > MAX_RECEIVER_RECORDS {
+            return Err(budget_exhausted(
+                "receiver records",
+                self.records,
+                MAX_RECEIVER_RECORDS,
+            ));
+        }
+        if self.text_bytes > MAX_RECEIVER_TEXT_BYTES {
+            return Err(budget_exhausted(
+                "receiver text bytes",
+                self.text_bytes,
+                MAX_RECEIVER_TEXT_BYTES,
+            ));
         }
         Ok(())
     }
@@ -167,7 +182,11 @@ impl<'a, 'b> Resolver<'a, 'b> {
         crate::analyzer::checkpoint(stop)?;
         if !self.receivers.contains_key(owner_id) {
             if self.budget.owners >= MAX_BINDINGS {
-                return Err(exhausted());
+                return Err(budget_exhausted(
+                    "receiver owners before next record",
+                    self.budget.owners,
+                    MAX_BINDINGS,
+                ));
             }
             self.budget.owners += 1;
             // Charge both the shared-table key and the explicit owner ID.

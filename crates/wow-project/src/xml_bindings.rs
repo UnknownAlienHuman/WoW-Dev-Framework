@@ -175,7 +175,14 @@ fn exhausted() -> ProjectError {
     ProjectError::new(
         ProjectErrorCode::SourceBudgetExceeded,
         ProjectPhase::Analyzer,
-        "XML Lua binding budget exceeded",
+        "XML Lua binding budget counter overflow",
+    )
+}
+fn budget_exhausted(resource: &str, observed: usize, limit: usize) -> ProjectError {
+    ProjectError::new(
+        ProjectErrorCode::SourceBudgetExceeded,
+        ProjectPhase::Analyzer,
+        format!("XML Lua binding budget exhausted: {resource}={observed}, limit={limit}"),
     )
 }
 type PendingBinding = (
@@ -310,7 +317,11 @@ fn prepare_with_budget(
                         budget.query_visits =
                             budget.query_visits.checked_add(1).ok_or_else(exhausted)?;
                         if budget.query_visits > 262_144 {
-                            return Err(exhausted());
+                            return Err(budget_exhausted(
+                                "method query visits",
+                                budget.query_visits,
+                                262_144,
+                            ));
                         }
                         let length = mixin
                             .name
@@ -339,11 +350,26 @@ fn prepare_with_budget(
                                 .text_bytes
                                 .checked_add(query_bytes)
                                 .ok_or_else(exhausted)?;
-                            if total_refs > MAX_QUERY_REFS
-                                || distinct.len() > 4096
-                                || total_bytes > 16 * 1024 * 1024
-                            {
-                                return Err(exhausted());
+                            if total_refs > MAX_QUERY_REFS {
+                                return Err(budget_exhausted(
+                                    "expanded query references",
+                                    total_refs,
+                                    MAX_QUERY_REFS,
+                                ));
+                            }
+                            if distinct.len() > 4096 {
+                                return Err(budget_exhausted(
+                                    "distinct method queries",
+                                    distinct.len(),
+                                    4096,
+                                ));
+                            }
+                            if total_bytes > 16 * 1024 * 1024 {
+                                return Err(budget_exhausted(
+                                    "expanded query text bytes",
+                                    total_bytes,
+                                    16 * 1024 * 1024,
+                                ));
                             }
                         }
                     }
@@ -374,7 +400,11 @@ fn prepare_with_budget(
         for (kind, ordinal, span, mut queries, mut state, receiver_source_id) in pending {
             crate::analyzer::checkpoint(stop)?;
             if budget.bindings >= MAX_BINDINGS {
-                return Err(exhausted());
+                return Err(budget_exhausted(
+                    "retained bindings before next record",
+                    budget.bindings,
+                    MAX_BINDINGS,
+                ));
             }
             budget.bindings += 1;
             if !element.issues.is_empty() {
@@ -402,8 +432,19 @@ fn prepare_with_budget(
                         + queries.iter().map(String::len).sum::<usize>(),
                 )
                 .ok_or_else(exhausted)?;
-            if budget.query_refs > MAX_QUERY_REFS || budget.text_bytes > 16 * 1024 * 1024 {
-                return Err(exhausted());
+            if budget.query_refs > MAX_QUERY_REFS {
+                return Err(budget_exhausted(
+                    "retained query references",
+                    budget.query_refs,
+                    MAX_QUERY_REFS,
+                ));
+            }
+            if budget.text_bytes > 16 * 1024 * 1024 {
+                return Err(budget_exhausted(
+                    "retained binding text bytes",
+                    budget.text_bytes,
+                    16 * 1024 * 1024,
+                ));
             }
             all_queries.extend(queries.iter().cloned());
             // Standalone /3 delegates an oversized union to native Emmy, whose
@@ -411,7 +452,11 @@ fn prepare_with_budget(
             if budget.limit_query_union {
                 budget.queries.extend(queries.iter().cloned());
                 if budget.queries.len() > 4096 {
-                    return Err(exhausted());
+                    return Err(budget_exhausted(
+                        "package query union",
+                        budget.queries.len(),
+                        4096,
+                    ));
                 }
             }
             bindings.push(XmlLuaBinding {
@@ -464,8 +509,19 @@ fn classify(
             .query_refs
             .checked_add(binding.queries.len())
             .ok_or_else(exhausted)?;
-        if budget.bindings > MAX_BINDINGS || budget.query_refs > MAX_QUERY_REFS {
-            return Err(exhausted());
+        if budget.bindings > MAX_BINDINGS {
+            return Err(budget_exhausted(
+                "classified bindings",
+                budget.bindings,
+                MAX_BINDINGS,
+            ));
+        }
+        if budget.query_refs > MAX_QUERY_REFS {
+            return Err(budget_exhausted(
+                "classified query references",
+                budget.query_refs,
+                MAX_QUERY_REFS,
+            ));
         }
         if binding.queries.is_empty() {
             continue;

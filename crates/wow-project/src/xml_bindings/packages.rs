@@ -11,7 +11,7 @@ use wow_emmy::bindings::SymbolLookupReport;
 use super::{
     ClassificationBudget, PreparationBudget, PreparedBindings, XmlInheritedScriptSource,
     XmlLuaBinding, XmlLuaBindingKind, XmlLuaBindingState, XmlReceiverSources, attribute_span,
-    classify, exhausted, invalid, prepare_with_budget,
+    budget_exhausted, classify, exhausted, invalid, prepare_with_budget,
 };
 use crate::load::{
     ProjectLoadPlan, ProjectPackageLoadPhase, ProjectPackageLoadPlan, ProjectPackageMainPlan,
@@ -290,7 +290,11 @@ impl ScopeBudget {
     fn text(&mut self, bytes: usize) -> ProjectResult<()> {
         self.text_bytes = self.text_bytes.checked_add(bytes).ok_or_else(exhausted)?;
         if self.text_bytes > MAX_SCOPE_TEXT_BYTES {
-            return Err(exhausted());
+            return Err(budget_exhausted(
+                "package scope text bytes",
+                self.text_bytes,
+                MAX_SCOPE_TEXT_BYTES,
+            ));
         }
         Ok(())
     }
@@ -390,7 +394,11 @@ pub(crate) fn prepare_packages(
         for (local, index) in plan.xml_documents() {
             crate::analyzer::checkpoint(stop)?;
             if scopes.documents >= MAX_DOCUMENTS {
-                return Err(exhausted());
+                return Err(budget_exhausted(
+                    "package documents before next record",
+                    scopes.documents,
+                    MAX_DOCUMENTS,
+                ));
             }
             let source = sources.get(local.as_str()).ok_or_else(invalid)?;
             if index.document() != local || index.source_digest() != source.content_digest {
@@ -727,6 +735,12 @@ fn serialized_size<T: Serialize>(value: &T, stop: &AtomicBool) -> ProjectResult<
     let mut counter = Counter { bytes: 0, stop };
     let result = serde_json::to_writer(&mut counter, value);
     crate::analyzer::checkpoint(stop)?;
-    result.map_err(|_| exhausted())?;
+    result.map_err(|_| {
+        budget_exhausted(
+            "serialized bytes retained before refused write",
+            counter.bytes,
+            MAX_SERIALIZED_BYTES,
+        )
+    })?;
     Ok(counter.bytes)
 }
