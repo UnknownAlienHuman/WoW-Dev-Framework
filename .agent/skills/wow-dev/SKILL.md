@@ -6,9 +6,10 @@ description: Research, implement, debug and review World of Warcraft addons usin
 # WoW development workflow
 
 Read the actual project and its local instructions before changing code. Read
-`docs/IMPLEMENTATION_STATUS.md` in the framework to distinguish executable tools
-from planned features. This skill is a contributor protocol, not an enforcement
-or security boundary for an arbitrary agent host.
+`docs/IMPLEMENTATION_STATUS.md` to distinguish executable tools from planned
+features, and `docs/EXECUTION_MODEL.md` for writer ownership, validation tiers,
+Issue/PR lifecycle and completion states. This skill is a contributor protocol,
+not an enforcement or security boundary for an arbitrary agent host.
 
 ## Current source first
 
@@ -21,13 +22,13 @@ moving selector on the next task. Never infer the current build from this skill.
 
 For local source, use `git ls-remote` or fetch to check the configured remote
 branch. Offer an update when behind; only fast-forward a clean, matching,
-non-divergent checkout with owner authorization. Do not reset, stash, switch an
+nondivergent checkout with owner authorization. Do not reset, stash, switch an
 unexpected branch, or silently use stale data. Offline freshness is unverified.
 For an explicitly authorized fast-forward of an exclusively owned standalone
 checkout, run `cargo xtask update-source <checkout> <branch> --expected-head <observed-local-SHA>`.
 Read `docs/SOURCE_CHECKOUT_UPDATES.md`. Dirty/unexpected/divergent state rejects.
 An interrupted apply retains a lock that requires reconciliation, not deletion
-and blind retry. Managed cloning and background update scheduling remain unfinished.
+and blind retry.
 
 ## Native annotation path
 
@@ -42,12 +43,13 @@ cargo run -p wow-annotations --example native_library -- <checkout> <ref> <TOC> 
 
 For explicit replaceable literal algorithms, use the `source_library` host
 composition documented in `docs/WASM_BRIDGES.md`. Require its approved module
-digest, retain one snapshot for the entire operation and verify the v6 report
-with `--literal-module`. A rejected/trapped module must not fall back to native.
+digest, retain one snapshot for the entire operation and verify the selected
+report with `--literal-module`. A rejected or trapped module must not fall back
+to native silently.
 
 Inspect `source-report.json`: exit 3 means partial, not success without omissions.
 Raw metadata and declaration source maps are retained. No reference completeness,
-run-time safety, or EmmyLua/LuaLS semantic compatibility follows from rendering.
+runtime safety, or EmmyLua/LuaLS semantic compatibility follows from rendering.
 
 ## Repository and source checks
 
@@ -64,15 +66,17 @@ cargo xtask verify-manifest <manifest.json> <checkout> <current-local-ref>
 Exit 3 reports a differing remote head; 4 means network freshness is unverified.
 It offers review/update rather than overwriting dirty or divergent checkouts.
 Use `sync-skill --write` explicitly to synchronize discovery copies.
-The old JSON producer commands have been retired. Retained API/topology importers
-validate existing v1 artifacts only; a native XML/TOC topology producer is still
-incomplete. Do not invent a replacement command or route native annotations
-through a legacy wire artifact.
+
+The old JSON producer commands have been retired. Native source, TOC, XML, graph,
+replay and direct-producer routes now exist in selected profiles; read the current
+implementation ledger and reuse their owners. Do not invent a parallel parser,
+legacy wire shortcut or source-text heuristic merely because later acceptance or
+application routing remains incomplete.
 
 Missing, partial, conflicted, failed or unsupported input never proves absence.
 Exact source signatures do not prove in-client behavior. For protected state,
 secret values, lifecycle, hotfixes or game data, require a named-client probe and
-retain its unresolved status until actually run.
+retain unresolved status until it is actually run.
 
 ## Optional operator context
 
@@ -87,9 +91,38 @@ of anonymity; do not publish confidential text merely because URLs were removed.
 
 ## Implement and verify
 
-Keep one owned task, narrow boundaries and updateable dependencies. Run fresh
-formatting, lint, tests and documentation checks; record the tested commit and
-actual outcomes. Missing tools or runtime are NotEvaluated, never pass. Preserve
-reproduction cases. Report source-confirmed, project-confirmed, runtime-confirmed,
-advisory and unverified claims separately. Publish completed work to main; do
-not multiply working branches. Check the actual remote commit and CI afterward.
+Keep one canonical Issue and one owned task. One integration manager owns one
+worktree and the write lease; other agents research, audit, review or prepare
+patches without racing overlapping writes. Record the exact base SHA and affected
+owners before editing, and reconcile a moved remote head without force-pushing.
+
+During functional implementation run the bounded slice gate:
+
+```text
+cargo xtask check
+cargo fmt --all --check
+cargo check --locked -p <affected crates> --all-targets --all-features
+cargo clippy --locked -p <affected crates> --all-targets --all-features -- -D warnings
+```
+
+Widen only for a shared public type, wire/schema, graph registry, persistence,
+migration or service/application boundary. Do not repeat workspace tests, release
+tests, rustdoc and a second full build after every micro-slice.
+
+At a coherent milestone, require the remote exact-head quick gate over workspace
+check and strict Clippy. Run the heavyweight test/platform/runtime/parity campaign
+only when the selected product scope is functionally ready or the operator requests
+it. Missing tools or runtime are `NotEvaluated`, never pass.
+
+Distinguish source-confirmed, project-confirmed, runtime-confirmed, advisory and
+unverified claims. Preserve reproduction cases and exact support. A published
+commit is not verified until its named gate passes, and verified is not accepted.
+
+Use Issues as canonical trackers. PRs represent mergeable code; close obsolete
+specification/tracking PRs after preserving acceptance debt in Issues/docs. Check
+the actual remote commit, tree, changed blobs and workflow result after publication.
+
+For final WoW semantic acceptance, compare against the current exact Gethe source
+and the required WoW API Ketho MCP lane using the same flavor, revision, corpus and
+normalization profile. Preserve a discrepancy matrix; do not auto-bless fixtures
+from donor or MCP output.

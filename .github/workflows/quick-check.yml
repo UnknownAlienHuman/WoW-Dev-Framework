@@ -1,0 +1,74 @@
+name: Quick exact-head gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quick-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quick:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Install current stable Rust
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+
+      - name: Record exact tested inputs
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD | tee "$RUNNER_TEMP/COMMIT_SHA"
+          git rev-parse 'HEAD^{tree}' | tee "$RUNNER_TEMP/TREE_SHA"
+          rustc +stable -Vv | tee "$RUNNER_TEMP/RUST_VERSION"
+
+      - name: Native repository policy
+        run: cargo +stable xtask check
+
+      - name: Formatting
+        run: cargo +stable fmt --all --check
+
+      - name: Workspace compilation
+        run: cargo +stable check --locked --workspace --all-targets --all-features
+
+      - name: Strict workspace Clippy
+        run: cargo +stable clippy --locked --workspace --all-targets --all-features -- -D warnings
+
+      - name: Verify checks did not rewrite tracked files
+        run: git diff --exit-code
+
+      - name: Retain exact checked source
+        if: success()
+        run: |
+          set -euo pipefail
+          git archive --format=tar --output="$RUNNER_TEMP/checked-source.tar" HEAD
+          sha256sum "$RUNNER_TEMP/checked-source.tar" > "$RUNNER_TEMP/SHA256SUMS"
+
+      - name: Upload exact-head evidence
+        if: success()
+        uses: actions/upload-artifact@v7
+        with:
+          name: quick-exact-head-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/checked-source.tar
+            ${{ runner.temp }}/COMMIT_SHA
+            ${{ runner.temp }}/TREE_SHA
+            ${{ runner.temp }}/RUST_VERSION
+            ${{ runner.temp }}/SHA256SUMS
+          retention-days: 3
+          if-no-files-found: error

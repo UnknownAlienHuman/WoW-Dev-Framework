@@ -8,6 +8,10 @@ Implement missing functional code first, then build it. Do not turn expanding
 unit-test matrices or fixture acceptance into a prerequisite for writing missing
 owners/apps. Preserve existing tests and report unexecuted acceptance separately.
 
+Read and follow [`docs/EXECUTION_MODEL.md`](docs/EXECUTION_MODEL.md). It defines
+single-writer ownership, work-item states, validation tiers, Issue/PR lifecycle,
+version discipline and the distinction between functional, verified and accepted.
+
 ## Current implementation frontier
 
 - Read `docs/PROJECT_COMPLETION_MATRIX.md` for the audited code/acceptance census
@@ -27,8 +31,11 @@ owners/apps. Preserve existing tests and report unexecuted acceptance separately
 - `apps/wow-reference-builder` is an active service-only workspace frontend with
   confined staging/finalization and durable effect reconciliation. Do not widen
   that focused checkpoint into full E1 or release acceptance.
-- Work sequentially in `main`; no new task branches or worktrees. Publish and
-  read back each coherent checkpoint without force-pushing.
+- One integration manager owns one worktree and one write lease. Worker agents
+  research, audit, review or prepare patches; they do not independently publish
+  overlapping owner changes. Do not create a worktree or branch per subtask.
+  Until protected PR publication is enabled, direct-to-main work is transitional
+  single-writer mode and every publish uses exact expected-head/CAS read-back.
 - Current commands, source-update policy and nonclaims:
   `docs/IMPLEMENTATION_STATUS.md`. I0–I7 remains the normative implementation plan.
 
@@ -80,20 +87,62 @@ Preserve conflicts. Partial, stale, conflicted, truncated, failed, or unsupporte
 
 ## Discipline
 
-Implement the smallest coherent owner responsibility in dependency order. No placeholder crates, fake adapters, fake success, broad speculative traits, or `todo!()` surfaces. Keep parsers bounded and non-executing. One operation uses one source revision. Tests verify fixtures and never silently rewrite them. Update status docs only after executable checks pass. Merge completed work into `main` and delete temporary branches immediately.
+Implement the smallest coherent owner responsibility in dependency order. No placeholder crates, fake adapters, fake success, broad speculative traits, or `todo!()` surfaces. Keep parsers bounded and non-executing. One operation uses one source revision. Tests verify fixtures and never silently rewrite them.
 
-Run applicable checks and report pass/fail/skipped/NotEvaluated:
+Use one canonical GitHub Issue per work package. Record the exact base SHA, owned
+boundaries, hard blockers and required validation tier before writing. A PR is a
+mergeable code-review object, not a permanent ledger for code already published
+to `main`; transfer remaining acceptance debt to Issues and close stale PRs without
+merging their obsolete branches.
+
+Distinguish hard blockers from acceptance debt. Contradictory owner/wire semantics,
+missing downstream identity or support, broken admitted migration/replay, false
+negative authority and unreachable positive paths block dependent work. Deferred
+Windows/runtime/performance/broad-corpus evidence may remain open only when it
+cannot change the consumed contract and is tracked explicitly.
+
+Mint a schema/profile/storage/replay version only when bytes, identity inputs,
+interpretation, persistence or compatibility behavior change. Do not version a
+commit. Consolidate transient internal development variants before acceptance
+when no released, frozen or durable consumer requires them.
+
+### Functional slice gate
+
+Run after each coherent implementation slice, using the smallest complete affected
+owner chain:
 
 ```text
 cargo xtask check
 cargo fmt --all --check
-cargo check --workspace --all-targets --all-features
-cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo test --workspace --all-targets --all-features
-RUSTDOCFLAGS="-D warnings" cargo doc --workspace --all-features --no-deps
+cargo check --locked -p <affected crates> --all-targets --all-features
+cargo clippy --locked -p <affected crates> --all-targets --all-features -- -D warnings
 ```
 
-For source work, build and verify a source manifest with `cargo xtask`, then run the native Ketho annotation driver against the same current local revision. Missing tooling, credentials, network, or WoW runtime is a skip, never a pass.
+Widen the affected chain for shared public types, wire schemas, graph registries,
+persistence layouts, migration boundaries or service/app composition. Do not run
+workspace tests, release tests, strict rustdoc and a second full build after every
+micro-slice.
+
+### Milestone exact-head gate
+
+At a coherent functional milestone, require the lightweight remote exact-head gate:
+
+```text
+cargo xtask check
+cargo fmt --all --check
+cargo check --locked --workspace --all-targets --all-features
+cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+```
+
+### Acceptance gates
+
+Run the full debug/release tests, rustdoc, platform matrix, fixture/checksum freeze,
+fault cases and external/runtime qualification only when the selected product scope
+is functionally ready or the operator explicitly requests it. Record actual
+pass/fail/skipped/NotEvaluated outcomes and the exact tested commit. Missing tools,
+credentials, network or WoW runtime are skips, never passes.
+
+For source work, build and verify a source manifest with `cargo xtask`, then run the native Ketho annotation driver against the same current local revision. Required final parity uses the same flavor, exact Gethe revision, admitted corpus and normalization profile, including the WoW API Ketho MCP discrepancy matrix where specified.
 
 ## Micromodular update boundary
 
@@ -105,9 +154,9 @@ add a generic plugin capability. Full driver/service routing remains explicit.
 
 ## Publication checkpoint
 
-Publish each coherent authorized checkpoint to `main` without force-pushing;
-never leave its only copy in a temporary VM. A local commit, detached GitHub
-object or downloadable patch is not remote branch publication.
+Publish each coherent authorized checkpoint without force-pushing; never leave its
+only copy in a temporary VM. A local commit, detached GitHub object or downloadable
+patch is not remote branch publication.
 
 When local Git transport is unavailable, use authorized GitHub API write actions.
 Do not infer read-only access from missing VM network or credentials. Re-read
