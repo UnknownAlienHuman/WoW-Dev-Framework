@@ -5,6 +5,9 @@ pub(crate) mod document_toc;
 mod metadata;
 mod package;
 mod package_closure;
+pub(crate) use package_closure::{
+    read_admitted_packages, validate_declarations as validate_package_declarations,
+};
 mod saved_variables;
 mod toc;
 pub use document_toc::DocumentTocSelection;
@@ -51,6 +54,7 @@ use crate::disk::{
     DISK_INVENTORY_MAX_BYTES, DISK_INVENTORY_MAX_FILES, DISK_SOURCE_MAX_BYTES, ProjectDiskFile,
     ProjectInputDirectory, checkpoint, validate_path,
 };
+use crate::platform_source::AdmittedPlatformSource;
 use crate::{ProjectError, ProjectErrorCode, ProjectInputFile, ProjectPhase, ProjectResult};
 
 /// Versioned, deliberately restricted acquisition semantics; never a WoW build.
@@ -346,9 +350,37 @@ pub(crate) fn read_retained_toc(
     )
 }
 
+/// Expand a selected TOC from owner-held bytes through the existing Main loader.
+pub(crate) fn read_admitted_toc(
+    source: &AdmittedPlatformSource,
+    root: &str,
+    selected_toc: &ProjectDiskFile,
+    profile: &ProfileIdentity,
+    context: Option<&TocLoadContext>,
+    stop: &AtomicBool,
+) -> ProjectResult<ProjectLoadInput> {
+    checkpoint(stop)?;
+    if profile != &source.profile().target().reference_profile {
+        return Err(invalid(
+            "admitted load profile differs from the source target",
+        ));
+    }
+    read_toc_source(
+        LoaderSource::Admitted { source, root },
+        selected_toc,
+        profile,
+        context,
+        stop,
+    )
+}
+
 enum LoaderSource<'a> {
     Disk(ProjectInputDirectory),
     Retained(BTreeMap<&'a str, &'a str>),
+    Admitted {
+        source: &'a AdmittedPlatformSource,
+        root: &'a str,
+    },
 }
 
 fn read_toc_source(
@@ -531,6 +563,19 @@ impl Loader<'_> {
                 }
                 selected.verify(text.as_bytes())?;
                 Arc::from(*text)
+            }
+            LoaderSource::Admitted { source, root } => {
+                let bytes = source.load_member(root, selected, limit, self.stop)?;
+                let text = std::str::from_utf8(bytes).map_err(|_| {
+                    ProjectError::new(
+                        ProjectErrorCode::InvalidEncoding,
+                        ProjectPhase::Inventory,
+                        "admitted load source must contain UTF-8",
+                    )
+                    .with_relative_path(path)
+                })?;
+                checkpoint(self.stop)?;
+                Arc::from(text)
             }
         };
         self.total_bytes += text.len();

@@ -45,8 +45,9 @@ The physical update path retains native parser state and publishes exact final
 Main deltas through the complete graph producer chain. Bounded retention/GC,
 recovery, portable original-source authority and guarded cross-epoch selection
 are executable. The current functional frontier is W17: exact local platform-source
-byte admission is implemented; retained-byte package/load and exact platform
-project/analyzer/graph binding follow. Broad package acceptance remains open.
+byte admission and retained-byte package/TOC/XML/Main specialization are implemented;
+exact platform configuration/project/analyzer/graph binding follows. Broad package
+acceptance remains open.
 
 ## W14 retained physical native analysis (2026-10-09)
 
@@ -992,3 +993,30 @@ The next owner consumes retained bytes through existing package/TOC/XML loaders
 and binds the exact platform source generation. Full W17 project/graph/publication,
 SkeletonInputView, real mirror/performance/runtime and E0/E2 acceptance remain open.
 Gethe materialization remains deferred until product implementation/build is complete.
+
+## W17 retained-byte package/load specialization (2026-10-10)
+
+`AdmittedPlatformSource::specialize_packages` consumes explicit native package,
+root and variant declarations from its held source Arc. Full native declaration
+preflight, configured-root admission, exact equality with profile-selected TOCs
+and observed variant digest/length pinning precede parsing. New private Admitted
+branches reuse the existing TOC/XML/package loaders, dependency closure and Main
+namespace. Only requested bytes are decoded with native UTF-8/NUL/size/cancellation
+checks; unrelated binary inventory is retained untouched.
+
+Requested Excluded, Unsupported and External/Conflict/Failed records yield distinct
+typed refusal and logical paths. No member is reacquired from disk. Strict Retained
+replay surplus rejection and frozen native load/package recipes remain unchanged.
+`PlatformPackageSpecialization` holds the actual source, load/Main owners and a
+serialize-only `PlatformPackageBinding` linking exact source/profile/target/evidence
+and native plan identities. Original Partial inventory and unevaluated authority
+survive. See [PLATFORM_SOURCE_PACKAGES.md](PLATFORM_SOURCE_PACKAGES.md).
+
+Three focused native cases and workspace policy, fmt, all-target/all-feature check,
+strict Clippy, tests (922 passed, 1 ignored, 108 targets), strict rustdoc and build
+pass. The new case loads after source-directory removal and checks exact caller pin,
+cancellation and excluded/unsupported demands. Platform configuration/project kind,
+additive Main universe, native replay, graph/publication/SkeletonInputView and full
+W17 or real mirror/performance/runtime acceptance remain open. The existing
+`BlizzardUi` workspace remains Library-only; platform implementation is Main.
+Gethe materialization follows product implementation/build.

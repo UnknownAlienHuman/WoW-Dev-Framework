@@ -17,7 +17,8 @@ use super::{
 use crate::disk::{
     DISK_SOURCE_MAX_BYTES, ProjectDiskFile, ProjectInputDirectory, checkpoint, validate_path,
 };
-use crate::{ProjectInputFile, ProjectPhase, ProjectResult};
+use crate::platform_source::AdmittedPlatformSource;
+use crate::{ProjectError, ProjectErrorCode, ProjectInputFile, ProjectPhase, ProjectResult};
 
 /// Versioned multi-package static load closure. This is not runtime evidence.
 pub const PACKAGE_LOAD_PROFILE: &str = "wow-project/package-load-closure/2";
@@ -743,9 +744,33 @@ pub(crate) fn read_retained_packages(
     )
 }
 
+/// Expand explicit packages from admitted owner-held bytes using the native loader.
+pub(crate) fn read_admitted_packages(
+    source: &AdmittedPlatformSource,
+    packages: &[ProjectPackageInput],
+    profile: &ProfileIdentity,
+    context: Option<&TocLoadContext>,
+    stop: &AtomicBool,
+) -> ProjectResult<ProjectPackageLoadInput> {
+    checkpoint(stop)?;
+    if profile != &source.profile().target().reference_profile {
+        return Err(invalid(
+            "admitted package load profile differs from the source target",
+        ));
+    }
+    read_package_sources(
+        PackageSources::Admitted(source),
+        packages,
+        profile,
+        context,
+        stop,
+    )
+}
+
 enum PackageSources<'a> {
     Disk(&'a ProjectInputDirectory),
     Retained(BTreeMap<&'a str, BTreeMap<&'a str, &'a str>>),
+    Admitted(&'a AdmittedPlatformSource),
 }
 
 fn read_package_sources(
@@ -793,6 +818,14 @@ fn read_package_sources(
                     .collect();
                 super::read_retained_toc(selected_sources, &selected.toc, profile, context, stop)?
             }
+            PackageSources::Admitted(source) => super::read_admitted_toc(
+                source,
+                &package.root,
+                &selected.toc,
+                profile,
+                context,
+                stop,
+            )?,
         };
         let (files, plan) = input.into_parts();
         let selected_source = plan
@@ -833,6 +866,22 @@ fn read_package_sources(
                         .ok_or_else(|| invalid("unselected TOC variant source is missing"))?;
                     variant.toc.verify(text.as_bytes())?;
                     Arc::from(*text)
+                }
+                PackageSources::Admitted(source) => {
+                    let bytes = source.load_member(
+                        &package.root,
+                        &variant.toc,
+                        DISK_SOURCE_MAX_BYTES,
+                        stop,
+                    )?;
+                    let text = std::str::from_utf8(bytes).map_err(|_| {
+                        ProjectError::new(
+                            ProjectErrorCode::InvalidEncoding,
+                            ProjectPhase::Inventory,
+                            "unselected TOC variant must contain UTF-8",
+                        )
+                    })?;
+                    Arc::from(text)
                 }
             };
             if text.contains('\0') {
@@ -884,7 +933,7 @@ fn read_package_sources(
     })
 }
 
-fn validate_declarations(
+pub(crate) fn validate_declarations(
     packages: &[ProjectPackageInput],
 ) -> ProjectResult<Vec<&ProjectPackageInput>> {
     if packages.is_empty() || packages.len() > MAX_PACKAGES {

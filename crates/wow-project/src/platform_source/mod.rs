@@ -1,7 +1,12 @@
 //! Admission of explicit local platform-source bytes, before package or semantic
 //! indexing. Materializer assertions remain separate from owner-observed bytes.
 mod model;
+mod package_binding;
+mod packages;
 mod profile;
+
+pub use package_binding::PlatformPackageBinding;
+pub use packages::PlatformPackageSpecialization;
 
 pub use model::{
     PlatformEntryDisposition, PlatformFileKind, PlatformInventoryEntry, PlatformInventoryScope,

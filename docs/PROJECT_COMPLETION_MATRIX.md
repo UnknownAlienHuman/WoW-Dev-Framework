@@ -1,7 +1,7 @@
 # Project completion matrix
 
-**Audited:** 2026-09-19 America/New_York. Execution inventory refreshed 2026-10-09
-through the scoped W17 explicit platform-source byte admission checkpoint below.
+**Audited:** 2026-09-19 America/New_York. Execution inventory refreshed 2026-10-10
+through the scoped W17 retained-byte package/load checkpoint below.
 
 This is the current execution ledger. [IMPLEMENTATION_HANDOFF.md](IMPLEMENTATION_HANDOFF.md)
 remains the normative I0–I7 plan; do not restart its historical bootstrap steps.
@@ -62,7 +62,7 @@ no Rust implementation in the audited source. Their documentation is not a binar
 | E1-D | Partial executable Reference Pack service and active internal builder with durable materialization/finalization | Close external parity/license/rebuild evidence, Windows/process-loss acceptance and complete package gates; code presence is not `ValidatedLocal` |
 | E2-A–E2-B | Partial executable | All 26 active E2-B rule IDs are service-published after the W11 semantic repair, TOC, XML and state slices; close public CLI/full-pipeline fixtures and package acceptance |
 | E2-C–E2-D | Partial source index, manifested store, native live pair service/CLI, cancellable updates, exact Library/fact-profile binding, retained physical parser updates and durable physical update/removal publication; bounded retention/GC, recovery/replacement, inactive migration/READY preparation, portable source authority and guarded cross-epoch selection/reconciliation | Dependency-specific fact reuse, standalone/package durable updates, portable full migration history and complete E2 acceptance remain open; see [REPLAY_PUBLICATION.md](../crates/wow-project/REPLAY_PUBLICATION.md) |
-| E3-A | Partial explicit local platform-source byte admission | Exact platform project/package/load/analyzer/graph binding and bounded SkeletonInputView; raw admission is not a complete source universe |
+| E3-A | Partial explicit local platform-source byte admission and retained-byte package/TOC/XML/Main specialization with sealed source/load binding | Exact platform configuration/project/analyzer/graph, native replay/publication and bounded SkeletonInputView; package specialization is not a complete source universe |
 | E3-B–E3-C | Not started | Context owners and service/CLI after their actual producer inputs |
 | E4-A–E4-C | Not started | Search, lineage/migration/static impact and routing after A0 prerequisites |
 | E5-A–E5-C | Not started | Calibration, independent review/holdout and governed publication lifecycle |
@@ -456,3 +456,20 @@ and cancellation. Workspace policy, fmt, check, strict Clippy, tests (921 passed
 Platform package/load/project/analyzer/graph/publication and SkeletonInputView,
 real mirror/performance/runtime and full W17 acceptance remain open. Next is a
 retained-byte package/load adapter with exact source binding; W18-W26 remain open.
+
+The retained-byte package adapter now reuses the existing TOC/XML/package owners
+and Main namespace without a second parser or disk fallback. Native declaration
+preflight and exact selected-TOC equality precede parsing; every variant is pinned
+to observed admitted content. Only demanded bytes are decoded. Requested inventory
+omissions retain typed refusal/logical paths; unrelated unknown/binary records remain
+on the held source. A sealed exact source/load/Main binding and original source Arc
+survive. Existing native bounds and strict replay closure remain unchanged.
+
+Three focused native cases and workspace policy, fmt, check, strict Clippy, tests
+(922 passed, 1 ignored, 108 targets), strict rustdoc and build pass on 2026-10-10.
+The new lifecycle loads TOC/XML/Main after physical source removal and checks pin,
+cancel and declared omission refusal. See
+[PLATFORM_SOURCE_PACKAGES.md](PLATFORM_SOURCE_PACKAGES.md).
+Exact platform configuration/project/analyzer/graph, native replay/publication,
+SkeletonInputView, real mirror/performance/runtime and full W17 acceptance remain
+open. W18-W26 remain open; Gethe materialization stays deferred.

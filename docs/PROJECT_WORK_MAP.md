@@ -1,6 +1,6 @@
 # Current project work map
 
-Updated 2026-10-09, America/New_York. This map routes implementation work; it
+Updated 2026-10-10, America/New_York. This map routes implementation work; it
 does not replace the package contracts or certify their acceptance.
 
 The verified W11 predecessor is `342359b41ba3b6ad6ec3b6ee7654408c0fe01a78`,
@@ -24,10 +24,31 @@ and downstream semantic/runtime authority unevaluated.
 Two native cases and workspace policy, fmt, check, strict Clippy, tests (921 passed,
 1 ignored, 108 targets), strict rustdoc and build pass on 2026-10-09. See
 [PLATFORM_SOURCE_ADMISSION.md](PLATFORM_SOURCE_ADMISSION.md).
-Next: consume retained bytes through existing package/TOC/XML loaders, then bind
-the exact platform project/analyzer/graph and bounded SkeletonInputView. Full W17,
+The retained-byte package/TOC/XML/Main adapter is now executable as recorded below.
+Next: bind the exact platform configuration/project/analyzer/graph and bounded
+SkeletonInputView. Full W17,
 E0/E2, real mirror/performance/runtime and W18-W26 remain open. Gethe preparation
 stays deferred until product implementation/build is complete.
+
+`AdmittedPlatformSource::specialize_packages` now validates explicit native package
+declarations, requires the complete selected TOC set to equal the admitted profile,
+and pins every variant to observed retained bytes. New private Admitted load branches
+reuse the existing TOC/XML/package parsers, dependency closure and Main namespacing.
+Only demanded members are decoded; unrelated binary inventory remains retained.
+Requested exclusions/special/external/conflict/failed targets refuse with typed errors
+and logical paths. Strict Retained replay closure and existing native caps/recipes
+remain unchanged. A sealed source/load/Main binding and the original source Arc
+survive; no project/analyzer/graph/store publication capability is supplied.
+
+Three focused native cases and workspace policy, fmt, check, strict Clippy, tests
+(922 passed, 1 ignored, 108 targets), strict rustdoc and build pass on 2026-10-10.
+The new lifecycle loads after the physical source directory is removed and verifies
+caller-pin/cancel/excluded/unsupported refusal. See
+[PLATFORM_SOURCE_PACKAGES.md](PLATFORM_SOURCE_PACKAGES.md).
+Next is an owner-bound platform configuration/project kind and additive Main
+universe; current `BlizzardUi` remains Library-only. Native platform replay,
+graph/publication/SkeletonInputView, real mirror/performance/runtime and full W17
+acceptance remain open. W18-W26 are unchanged.
 
 W14 now publishes explicit final physical Main deltas through the retained native
 owner and the complete graph producer chain. It reuses unchanged parsed trees
@@ -311,7 +332,7 @@ full graph acceptance and the checkpoint's CI conclusions remain open.
 | [W12 / PR 80](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/80) | Extend real producer chains and conflict assessment | Exact retained records, publication validation and bounded explanations are executable; full acceptance remains open |
 | [W13 / PR 81](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/81) | Full live-pair acceptance | Physical Lua, standalone TOC/XML and declared-package native replay plus coherent leased acquisition are executable; full acceptance remains open |
 | [W14 / PR 82](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/82), [W15 / PR 83](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/83), [W16 / PR 84](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/84) | Incremental invalidation, retained roots/GC, backup/recovery | Source selector/hold portability and guarded live cross-epoch selection/retry are executable; portable full history and full W16/E2 acceptance remain open |
-| [W17 / PR 85](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/85), [W18 / PR 86](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/86), [W19 / PR 87](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/87) | Blizzard source universe, Project Map/skeletons, context packs | W17 raw local source admission is executable; retained-byte package/load, exact platform binding and bounded producer views precede context |
+| [W17 / PR 85](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/85), [W18 / PR 86](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/86), [W19 / PR 87](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/87) | Blizzard source universe, Project Map/skeletons, context packs | W17 raw admission and retained-byte package/TOC/XML/Main specialization are executable; exact platform project/analyzer/graph and bounded producer views precede context |
 | [W20 / PR 88](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/88), [W21 / PR 89](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/89) | Search, lineage and static impact | Exact immutable generation inputs |
 | [W22 / PR 90](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/90), [W23 / PR 91](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/91) | Sessions/MCP and private LSP overlays | Implemented capabilities only |
 | [W24 / PR 92](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/92), [W25 / PR 93](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/93) | Calibration governance and selected Windows build/release tooling | No inferred review, signing or installed state |

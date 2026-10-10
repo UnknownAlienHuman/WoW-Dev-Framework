@@ -58,7 +58,7 @@ fn target() -> Result<PlatformTarget, Box<dyn Error>> {
         "profile:fixture:platform-source-native-v1".parse()?,
         ProfileKind::Fixture,
         "retail",
-        100_000,
+        120_100,
         SourceKind::SyntheticFixture,
         "platform-source-handwritten-native-fixture-v1",
         ContentDigest::<SourceLogicalSnapshot>::from_bytes([2; 32]),
@@ -334,6 +334,134 @@ fn native_admission_refuses_stale_binding_invalid_inventory_and_unresolved_conte
             .err()
             .map(|error| error.code()),
         Some(ProjectErrorCode::InvalidInputInventory)
+    );
+    Ok(())
+}
+
+#[test]
+fn platform_packages_reuse_native_load_from_retained_bytes_and_refuse_declared_omissions()
+-> TestResult {
+    use std::sync::Arc;
+    use wow_project::load::{ProjectPackageInput, ProjectPackageVariantInput};
+
+    let root = FixtureRoot::new()?;
+    let stop = AtomicBool::new(false);
+    let profile = BlizzardUiSourceProfile::new(profile_request()?)?;
+    let declared = inventory(&root, &profile)?;
+    let source = Arc::new(
+        root.directory()?
+            .admit_platform_source(&profile, declared, &stop)?,
+    );
+    let packages = vec![ProjectPackageInput::new(
+        "Fixture",
+        "UI",
+        true,
+        vec![ProjectPackageVariantInput::new(
+            wow_project::disk::ProjectDiskFile::new("Fixture.toc"),
+            true,
+        )],
+    )];
+    // No filesystem input remains for the native TOC/XML/package owners to reread.
+    std::fs::remove_dir_all(&root.0)?;
+    let loaded = source.specialize_packages(&packages, None, &stop)?;
+    assert!(Arc::ptr_eq(loaded.source(), &source));
+    assert_eq!(loaded.files().len(), 1);
+    assert_eq!(
+        loaded.files()[0].relative_path().as_str(),
+        "packages/Fixture/defs.lua"
+    );
+    assert_eq!(
+        loaded.binding().source_snapshot_id(),
+        source.receipt().source_snapshot_id()
+    );
+    assert_eq!(loaded.binding().load_digest(), loaded.load_plan().digest());
+    assert_eq!(loaded.binding().main_digest(), loaded.main_plan().digest());
+    assert_eq!(
+        loaded.source().source_bytes("UI/opaque.bin")?,
+        &[0xff, 0xfe, 0, 1]
+    );
+    assert_eq!(
+        loaded.source().receipt().coverage().inventory(),
+        CoverageStatus::Partial
+    );
+    assert!(
+        loaded
+            .binding()
+            .universe_id()
+            .starts_with("blizzard_ui_source:")
+    );
+
+    let wrong_pin = vec![ProjectPackageInput::new(
+        "Fixture",
+        "UI",
+        true,
+        vec![ProjectPackageVariantInput::new(
+            wow_project::disk::ProjectDiskFile::new("Fixture.toc").with_identity(
+                ContentDigest::from_bytes([9; 32]),
+                source.source_bytes("UI/Fixture.toc")?.len() as u64,
+            ),
+            true,
+        )],
+    )];
+    assert_eq!(
+        source
+            .specialize_packages(&wrong_pin, None, &stop)
+            .err()
+            .map(|error| error.code()),
+        Some(ProjectErrorCode::FileDigestMismatch)
+    );
+    assert_eq!(
+        source
+            .specialize_packages(&packages, None, &AtomicBool::new(true))
+            .err()
+            .map(|error| error.code()),
+        Some(ProjectErrorCode::SourceReadCancelled)
+    );
+
+    let excluded_root = FixtureRoot::new()?;
+    let mut exclusion_request = profile_request()?;
+    exclusion_request.exclusions.push(ProfileExclusion {
+        path: "UI/defs.lua".into(),
+    });
+    let exclusion_profile = BlizzardUiSourceProfile::new(exclusion_request)?;
+    let mut excluded_inventory = inventory(&excluded_root, &exclusion_profile)?;
+    let entry = excluded_inventory
+        .entries
+        .iter_mut()
+        .find(|entry| entry.path == "UI/defs.lua")
+        .ok_or_else(|| std::io::Error::other("fixture Lua record missing"))?;
+    entry.disposition = PlatformEntryDisposition::Excluded {
+        rule_path: "UI/defs.lua".into(),
+    };
+    let excluded = Arc::new(excluded_root.directory()?.admit_platform_source(
+        &exclusion_profile,
+        excluded_inventory,
+        &stop,
+    )?);
+    let refused = excluded
+        .specialize_packages(&packages, None, &stop)
+        .err()
+        .ok_or_else(|| std::io::Error::other("excluded load target was accepted"))?;
+    assert_eq!(refused.code(), ProjectErrorCode::PackageTargetExcluded);
+    assert_eq!(refused.relative_path(), Some("UI/defs.lua"));
+
+    let unsupported_root = FixtureRoot::new()?;
+    let toc_path = unsupported_root.0.join("UI/Fixture.toc");
+    let mut toc = std::fs::read(&toc_path)?;
+    toc.extend_from_slice(b"\nlinked.lua\n");
+    std::fs::write(&toc_path, toc)?;
+    let unsupported_inventory = inventory(&unsupported_root, &profile)?;
+    let unsupported = Arc::new(unsupported_root.directory()?.admit_platform_source(
+        &profile,
+        unsupported_inventory,
+        &stop,
+    )?);
+    assert_eq!(
+        unsupported
+            .specialize_packages(&packages, None, &stop)
+            .err()
+            .map(|error| error.code()),
+        Some(ProjectErrorCode::InvalidFileLanguage)
     );
     Ok(())
 }
