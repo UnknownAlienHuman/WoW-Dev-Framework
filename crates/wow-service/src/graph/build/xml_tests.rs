@@ -139,6 +139,7 @@ fn xml_pipeline_publishes_object_parentage_and_template_references() -> Result<(
     let (snapshot, recognition) = xml::publish(&after_toc, &provenance, &stop)
         .map_err(|error| std::io::Error::other(format!("XML publication: {error}")))?;
     snapshot.validate(&stop)?;
+    verify_source_axes_through_service(&snapshot, &stop)?;
     let addresses = SourceGraphAddressCrosswalk::legacy(&provenance, source.candidate(), &stop)?;
     let topology = xml::maps(&snapshot, &addresses, &recognition, &stop)
         .map_err(|error| std::io::Error::other(format!("XML crosswalk: {error}")))?;
@@ -386,6 +387,56 @@ fn xml_pipeline_publishes_object_parentage_and_template_references() -> Result<(
     }
     for edge in &topology.edges {
         assert!(snapshot.snapshot().edge(&edge.edge_id).is_some());
+    }
+    Ok(())
+}
+
+fn verify_source_axes_through_service(
+    owner: &GraphPartitionSnapshot,
+    stop: &AtomicBool,
+) -> Result<(), Box<dyn Error>> {
+    use crate::graph::{GraphReadOperation, GraphReadQuery, GraphReadRequest, execute_graph_read};
+    use wow_graph::{
+        GraphAxis, GraphAxisQuery, GraphAxisTraversal, GraphRelationKind, GraphSubgraphLimits,
+    };
+    let snapshot_bytes = serde_json::to_vec(owner)?;
+    for (axis, kind) in [
+        (GraphAxis::Ownership, GraphRelationKind::Owns),
+        (GraphAxis::Load, GraphRelationKind::Loads),
+    ] {
+        let profile = wow_project::graph::source_graph_axis_profile(owner.registry(), axis)?;
+        let edge = owner
+            .snapshot()
+            .edges()
+            .iter()
+            .find(|edge| edge.relation() == kind)
+            .ok_or("axis root edge")?;
+        let query = GraphAxisQuery::new(
+            owner.snapshot().snapshot_id().clone(),
+            &profile,
+            vec![edge.from().clone()],
+            GraphAxisTraversal::Forward,
+            GraphSubgraphLimits::default(),
+        )?;
+        let query = query.with_confidence(wow_graph::GraphPathConfidence::IncludePossible);
+        let direct = query.execute(owner, &profile, stop)?;
+        assert!(!direct.projection().edges().is_empty());
+        assert!(!direct.edge_definitions().is_empty());
+        let request = GraphReadRequest::new(GraphReadQuery::Axis(query));
+        let result = execute_graph_read(
+            GraphReadOperation::Axis,
+            &snapshot_bytes,
+            &serde_json::to_vec(&request)?,
+            stop,
+        )?;
+        assert!(result.failure().is_none());
+        let value = serde_json::to_value(&result)?;
+        assert_eq!(value["payload"], serde_json::to_value(&direct)?);
+        assert_eq!(value["payload"]["schema"], "wow-graph/axis-query/e2-a/2");
+        assert_eq!(
+            value["payload"]["projection"]["schema"],
+            "wow-graph/project-subgraph/e2-a/3"
+        );
     }
     Ok(())
 }

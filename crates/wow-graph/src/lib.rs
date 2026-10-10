@@ -63,9 +63,10 @@ pub use registry::{
 };
 
 pub use subgraph::{
-    GRAPH_DIRECTED_SUBGRAPH_QUERY_SCHEMA, GRAPH_SUBGRAPH_QUERY_SCHEMA, GraphRelationDirection,
-    GraphSubgraphConfidence, GraphSubgraphLimits, GraphSubgraphNode, GraphSubgraphQuery,
-    GraphSubgraphResult, GraphSubgraphTruncation,
+    GRAPH_DEFINITION_SUBGRAPH_QUERY_SCHEMA, GRAPH_DIRECTED_SUBGRAPH_QUERY_SCHEMA,
+    GRAPH_SUBGRAPH_QUERY_SCHEMA, GraphRelationDirection, GraphSubgraphConfidence,
+    GraphSubgraphLimits, GraphSubgraphNode, GraphSubgraphQuery, GraphSubgraphResult,
+    GraphSubgraphTruncation,
 };
 
 pub use explain::{
@@ -78,7 +79,8 @@ pub use explain::{
 
 pub use axes::{
     GRAPH_AXIS_PROFILE_SCHEMA, GRAPH_AXIS_PROFILE_SCHEMA_V2, GRAPH_AXIS_PROFILE_SCHEMA_V3,
-    GRAPH_AXIS_QUERY_SCHEMA, GraphAxis, GraphAxisBoundary, GraphAxisProfile, GraphAxisQuery,
+    GRAPH_AXIS_PROFILE_SCHEMA_V4, GRAPH_AXIS_QUERY_SCHEMA, GRAPH_DEFINITION_AXIS_QUERY_SCHEMA,
+    GraphAxis, GraphAxisBoundary, GraphAxisEdgeDefinition, GraphAxisProfile, GraphAxisQuery,
     GraphAxisRelation, GraphAxisResult, GraphAxisShape, GraphAxisTraversal,
 };
 

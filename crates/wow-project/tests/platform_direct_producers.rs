@@ -2057,6 +2057,7 @@ fn xml_source_maps(
         finished.profile(),
         PLATFORM_DIRECT_GRAPH_WITH_XML_SOURCE_MAPS_PROFILE
     );
+    verify_definition_axes(&owner, stop)?;
     assert_eq!(finished.xml_source_maps(), Some(&summary));
     let augmented = finished.source();
     assert_eq!(
@@ -2886,6 +2887,70 @@ fn xml_source_maps(
     Ok(())
 }
 
+fn verify_definition_axes(owner: &GraphPartitionSnapshot, stop: &AtomicBool) -> ResultOf {
+    use wow_graph::{
+        GraphAxis, GraphAxisQuery, GraphAxisTraversal, GraphPathConfidence, GraphSubgraphLimits,
+    };
+    let restored: GraphPartitionSnapshot = serde_json::from_slice(&serde_json::to_vec(owner)?)?;
+    restored.validate(stop)?;
+    for axis in [GraphAxis::Ownership, GraphAxis::Load] {
+        let profile = wow_project::graph::source_graph_axis_profile(owner.registry(), axis)?;
+        let roots = owner
+            .snapshot()
+            .nodes()
+            .iter()
+            .filter(|node| node.kind() == "source_package")
+            .map(|node| node.node_id().clone())
+            .collect::<Vec<_>>();
+        let query = GraphAxisQuery::new(
+            owner.snapshot().snapshot_id().clone(),
+            &profile,
+            roots,
+            GraphAxisTraversal::Forward,
+            GraphSubgraphLimits::default(),
+        )?
+        .with_confidence(GraphPathConfidence::IncludePossible);
+        let result = query.execute(owner, &profile, stop)?;
+        assert!(!result.projection().edges().is_empty());
+        assert_eq!(
+            serde_json::to_vec(&result)?,
+            serde_json::to_vec(&query.execute(&restored, &profile, stop)?)?
+        );
+        for binding in result.edge_definitions() {
+            assert!(
+                profile
+                    .relations()
+                    .iter()
+                    .any(|step| step.relation_id() == binding.relation_id())
+            );
+            assert!(!matches!(
+                binding.relation_id(),
+                "xml_occurrence_source_span" | "xml_map_piece_source_span"
+            ));
+            let edge = result
+                .projection()
+                .edges()
+                .iter()
+                .find(|edge| edge.edge_id() == binding.edge_id())
+                .ok_or("binding edge")?;
+            let definition = owner
+                .registry()
+                .relation_kind(binding.relation_id())
+                .ok_or("binding definition")?;
+            assert_eq!(edge.relation(), definition.relation());
+            let source = owner
+                .snapshot()
+                .node(edge.from())
+                .ok_or("source endpoint")?;
+            let target = owner.snapshot().node(edge.to()).ok_or("target endpoint")?;
+            assert!(definition.allows_source_kind(source.kind()));
+            assert!(definition.allows_target_kind(target.kind()));
+            assert!(definition.allows_confidence(edge.confidence()));
+        }
+    }
+    Ok(())
+}
+
 #[test]
 fn direct_package_stages_bind_native_predecessors_and_preserve_replay() -> ResultOf {
     let stop = AtomicBool::new(false);
@@ -3307,6 +3372,7 @@ fn direct_package_stages_bind_native_predecessors_and_preserve_replay() -> Resul
     }
     let spans_owner = inventory_spans(&raw_view, &raw_owner, &raw_source, &stop)?;
     let roles_owner = structural_roles(&raw_view, &raw_owner, &spans_owner, &raw_source, &stop)?;
+    verify_definition_axes(&roles_owner, &stop)?;
     xml_source_maps(
         &raw_view,
         [&raw_owner, &spans_owner, &roles_owner],

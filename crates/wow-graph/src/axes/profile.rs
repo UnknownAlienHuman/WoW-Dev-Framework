@@ -11,6 +11,10 @@ pub const GRAPH_AXIS_PROFILE_SCHEMA_V2: &str = "wow-graph/axis-profile/e2-a/2";
 /// Object parentage has its own recipe; it never aliases lexical containment.
 pub const GRAPH_AXIS_PROFILE_SCHEMA_V3: &str = "wow-graph/axis-profile/e2-a/3";
 
+/// Explicit definition selection over retained native assertions. Stored graph
+/// records and the three legacy single-definition recipes remain unchanged.
+pub const GRAPH_AXIS_PROFILE_SCHEMA_V4: &str = "wow-graph/axis-profile/e2-a/4";
+
 /// Repository-owned query meanings, not executable or source-defined predicates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -134,13 +138,94 @@ impl GraphAxisProfile {
         })
     }
 
-    /// Rebuild from the reviewed recipe, not merely from a self-consistent hash
-    /// on deserialized fields. A recomputed digest cannot redefine an axis.
+    /// Bind a caller-owned reviewed set of exact registry definitions. Families
+    /// supply direction/shape only; they never choose an assertion by enum or
+    /// endpoints. The service must reconstruct its own recipe before execution.
+    pub fn bind_definitions(
+        registry: &GraphRegistryBundle,
+        axis: GraphAxis,
+        relation_ids: &[&str],
+    ) -> GraphResult<Self> {
+        registry.validate()?;
+        let (shape, families) = families(axis, registry)?;
+        if relation_ids.is_empty() || relation_ids.len() > 512 {
+            return Err(error(GraphErrorCode::AxisProfileInvalid));
+        }
+        let mut relations = Vec::with_capacity(relation_ids.len());
+        for id in relation_ids {
+            let definition = registry
+                .relation_kind(id)
+                .ok_or_else(|| error(GraphErrorCode::AxisUnsupported))?;
+            let (_, direction) = families
+                .iter()
+                .find(|(kind, _)| *kind == definition.relation())
+                .ok_or_else(|| error(GraphErrorCode::AxisProfileInvalid))?;
+            relations.push(GraphAxisRelation {
+                relation_id: (*id).into(),
+                relation: definition.relation(),
+                forward_direction: *direction,
+            });
+        }
+        relations.sort_by(|a, b| a.relation_id.cmp(&b.relation_id));
+        if relations
+            .windows(2)
+            .any(|pair| pair[0].relation_id == pair[1].relation_id)
+            || families
+                .iter()
+                .any(|(kind, _)| !relations.iter().any(|step| step.relation == *kind))
+        {
+            return Err(error(GraphErrorCode::AxisProfileInvalid));
+        }
+        let cycle_policy: Box<str> = "preserve_edges_with_visited_nodes".into();
+        let ordering: Box<str> = "multi_root_bfs_node_then_edge_id/1".into();
+        let schema = GRAPH_AXIS_PROFILE_SCHEMA_V4;
+        let digest = digest(
+            "graph-axis-profile:sha256:",
+            &(
+                schema,
+                axis,
+                registry.registry_digest(),
+                shape,
+                &cycle_policy,
+                &ordering,
+                &relations,
+            ),
+        )?;
+        Ok(Self {
+            schema: schema.into(),
+            axis,
+            registry_digest: registry.registry_digest().into(),
+            shape,
+            cycle_policy,
+            ordering,
+            relations,
+            digest,
+        })
+    }
+
+    #[must_use]
+    pub fn definition_selected(&self) -> bool {
+        self.schema.as_ref() == GRAPH_AXIS_PROFILE_SCHEMA_V4
+    }
+
+    /// Rebuild canonical families, directions and identity. For /4 the caller
+    /// owns the reviewed definition set; service execution independently binds
+    /// its canonical recipe and requires the query's identical profile digest.
     pub fn validate(&self, registry: &GraphRegistryBundle) -> GraphResult<()> {
         if self.registry_digest.as_ref() != registry.registry_digest() {
             return Err(error(GraphErrorCode::RegistryIdentityMismatch));
         }
-        if *self != Self::bind(registry, self.axis)? {
+        let expected = if self.definition_selected() {
+            let ids = self
+                .relations
+                .iter()
+                .map(GraphAxisRelation::relation_id)
+                .collect::<Vec<_>>();
+            Self::bind_definitions(registry, self.axis, &ids)?
+        } else {
+            Self::bind(registry, self.axis)?
+        };
+        if *self != expected {
             return Err(error(GraphErrorCode::AxisProfileIdentityMismatch));
         }
         Ok(())

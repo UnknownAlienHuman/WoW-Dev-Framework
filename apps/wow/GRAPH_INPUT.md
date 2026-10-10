@@ -62,10 +62,16 @@ serialized owner query; duplicate/noncanonical collections reject at execution.
 
 For `axis`, parameters are a `GraphAxisQuery`: `snapshot_id`, `axis`, exact
 `profile_digest`, `roots`, `traversal`, `confidence`, and subgraph `limits`.
-Obtain the profile with `GraphAxisProfile::bind` against that artifact's exact
-registry when preparing the request. Execution rebinds the reviewed recipe and
+For source graphs, obtain the profile with the service reexport
+`source_graph_axis_profile` against that artifact's exact registry when preparing
+the request. Foreign single-definition registries use `GraphAxisProfile::bind`.
+Execution rebinds the reviewed recipe and
 requires the identical digest; no arbitrary profile is selected from a name.
 See [AXIS_USAGE.md](../../crates/wow-graph/AXIS_USAGE.md).
+
+Definition-selected axis payloads retain many-valued `edge_definitions` alongside
+original materialized edges. Their nested subgraph query carries the exact profile
+digest and executes only through the axis owner, not as an ordinary subgraph read.
 
 For `explain`, parameters are a `GraphExplainQuery`:
 

@@ -1,5 +1,8 @@
 //! Direct source/load/XML proposals. No recognizer inference or graph publication.
+mod axes;
 mod derivations;
+pub use axes::source_graph_axis_profile;
+pub const SOURCE_GRAPH_REGISTRY_ID: &str = "wow-project.source-load";
 mod functions;
 mod inventory_project;
 mod inventory_roles;
@@ -781,7 +784,7 @@ fn registry_for_recipe(
         xml_source_map_registry::extend(&mut entities, &mut relations)?;
     }
     GraphRegistryBundle::build(
-        "wow-project.source-load",
+        SOURCE_GRAPH_REGISTRY_ID,
         if recipe.xml_source_maps() {
             "19"
         } else if recipe.structural_roles() {

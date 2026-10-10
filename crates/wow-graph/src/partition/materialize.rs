@@ -2,8 +2,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::AtomicBool;
 
 use crate::{
-    GraphCoverageRecord, GraphCoverageState, GraphEdge, GraphGenerationId, GraphNode, GraphNodeId,
-    GraphResult, GraphSnapshot,
+    GraphCoverageRecord, GraphCoverageState, GraphEdge, GraphGenerationId, GraphLimits, GraphNode,
+    GraphNodeId, GraphResult, GraphSnapshot,
 };
 
 use super::{GraphProducerPartition, check_cancelled, invalid};
@@ -180,20 +180,7 @@ pub(super) fn rebind(
     let mut edges = Vec::with_capacity(input.edges().len());
     for edge in input.edges() {
         check_cancelled(cancelled)?;
-        edges.push(GraphEdge::new(
-            remap
-                .get(edge.from())
-                .ok_or_else(|| invalid("missing source during graph rebind"))?
-                .clone(),
-            remap
-                .get(edge.to())
-                .ok_or_else(|| invalid("missing target during graph rebind"))?
-                .clone(),
-            edge.relation(),
-            edge.confidence(),
-            edge.evidence_ids().to_vec(),
-            input.limits(),
-        )?);
+        edges.push(remap_edge(edge, &remap, input.limits())?);
     }
     GraphSnapshot::build(
         input.universe().clone(),
@@ -203,4 +190,42 @@ pub(super) fn rebind(
         edges,
         input.coverage().to_vec(),
     )
+}
+
+/// Publication and exact assertion projections share the same identity rule.
+pub(crate) fn remap_edge(
+    edge: &GraphEdge,
+    remap: &BTreeMap<GraphNodeId, GraphNodeId>,
+    limits: GraphLimits,
+) -> GraphResult<GraphEdge> {
+    GraphEdge::new(
+        remap
+            .get(edge.from())
+            .ok_or_else(|| invalid("missing source during graph rebind"))?
+            .clone(),
+        remap
+            .get(edge.to())
+            .ok_or_else(|| invalid("missing target during graph rebind"))?
+            .clone(),
+        edge.relation(),
+        edge.confidence(),
+        edge.evidence_ids().to_vec(),
+        limits,
+    )
+}
+
+pub(crate) fn input_node_id(
+    node: &GraphNode,
+    foundation: &GraphSnapshot,
+) -> GraphResult<GraphNodeId> {
+    Ok(GraphNode::new(
+        foundation.universe().clone(),
+        foundation.generation().clone(),
+        node.kind(),
+        node.owner_key(),
+        Vec::new(),
+        foundation.limits(),
+    )?
+    .node_id()
+    .clone())
 }

@@ -18,6 +18,7 @@ pub const GRAPH_SUBGRAPH_QUERY_SCHEMA: &str = "wow-graph/project-subgraph/e2-a/1
 /// Per-relation traversal directions require a distinct query/result profile.
 /// Uniform-direction requests retain their original v1 bytes and identities.
 pub const GRAPH_DIRECTED_SUBGRAPH_QUERY_SCHEMA: &str = "wow-graph/project-subgraph/e2-a/2";
+pub const GRAPH_DEFINITION_SUBGRAPH_QUERY_SCHEMA: &str = "wow-graph/project-subgraph/e2-a/3";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -81,6 +82,8 @@ pub struct GraphSubgraphQuery {
     direction: GraphDirection,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     relation_directions: Vec<GraphRelationDirection>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    definition_profile: Option<Box<str>>,
     relations: Vec<GraphRelationKind>,
     confidence: GraphSubgraphConfidence,
     limits: GraphSubgraphLimits,
@@ -101,6 +104,7 @@ impl GraphSubgraphQuery {
             roots,
             direction,
             relation_directions: Vec::new(),
+            definition_profile: None,
             relations,
             confidence: GraphSubgraphConfidence::default(),
             limits,
@@ -128,6 +132,7 @@ impl GraphSubgraphQuery {
                 .map(|step| step.relation)
                 .collect(),
             relation_directions,
+            definition_profile: None,
             confidence: GraphSubgraphConfidence::default(),
             limits,
         };
@@ -137,7 +142,9 @@ impl GraphSubgraphQuery {
 
     #[must_use]
     pub const fn schema(&self) -> &'static str {
-        if self.relation_directions.is_empty() {
+        if self.definition_profile.is_some() {
+            GRAPH_DEFINITION_SUBGRAPH_QUERY_SCHEMA
+        } else if self.relation_directions.is_empty() {
             GRAPH_SUBGRAPH_QUERY_SCHEMA
         } else {
             GRAPH_DIRECTED_SUBGRAPH_QUERY_SCHEMA
@@ -233,6 +240,34 @@ impl GraphSubgraphQuery {
         snapshot: &GraphSnapshot,
         cancelled: &AtomicBool,
     ) -> GraphResult<GraphSubgraphResult> {
+        if self.definition_profile.is_some() {
+            return Err(invalid(
+                "definition-scoped subgraphs require the retained axis owner",
+            ));
+        }
+        self.execute_inner(snapshot, None, cancelled)
+    }
+
+    pub(crate) fn execute_selected(
+        mut self,
+        snapshot: &GraphSnapshot,
+        selection: &crate::axes::selection::GraphAxisSelection,
+        traversal: crate::GraphAxisTraversal,
+        cancelled: &AtomicBool,
+    ) -> GraphResult<GraphSubgraphResult> {
+        self.definition_profile = Some(selection.profile_digest.clone());
+        self.execute_inner(snapshot, Some((selection, traversal)), cancelled)
+    }
+
+    fn execute_inner(
+        &self,
+        snapshot: &GraphSnapshot,
+        selection: Option<(
+            &crate::axes::selection::GraphAxisSelection,
+            crate::GraphAxisTraversal,
+        )>,
+        cancelled: &AtomicBool,
+    ) -> GraphResult<GraphSubgraphResult> {
         checkpoint(cancelled)?;
         self.validate()?;
         if self.snapshot_id != *snapshot.snapshot_id() {
@@ -268,7 +303,7 @@ impl GraphSubgraphQuery {
             .collect::<String>();
         let query_digest = format!("graph-subgraph-query:sha256:{hex}").into_boxed_str();
         checkpoint(cancelled)?;
-        walk::execute(self, snapshot, query_digest, cancelled)
+        walk::execute(self, snapshot, query_digest, selection, cancelled)
     }
 }
 

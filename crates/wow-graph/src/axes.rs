@@ -1,10 +1,12 @@
 //! Named read-only projections over a registry-pinned materialized graph.
 //! Axis direction is presentation policy; original assertions never change.
 mod profile;
+pub(crate) mod selection;
+pub use selection::GraphAxisEdgeDefinition;
 
 pub use profile::{
     GRAPH_AXIS_PROFILE_SCHEMA, GRAPH_AXIS_PROFILE_SCHEMA_V2, GRAPH_AXIS_PROFILE_SCHEMA_V3,
-    GraphAxis, GraphAxisProfile, GraphAxisRelation, GraphAxisShape,
+    GRAPH_AXIS_PROFILE_SCHEMA_V4, GraphAxis, GraphAxisProfile, GraphAxisRelation, GraphAxisShape,
 };
 
 use crate::{
@@ -18,6 +20,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use wow_core::canonical_json_bytes;
 
 pub const GRAPH_AXIS_QUERY_SCHEMA: &str = "wow-graph/axis-query/e2-a/1";
+pub const GRAPH_DEFINITION_AXIS_QUERY_SCHEMA: &str = "wow-graph/axis-query/e2-a/2";
 
 /// Forward means the direction declared independently for each relation by the
 /// axis profile, not necessarily the physical direction of every stored edge.
@@ -142,13 +145,44 @@ impl GraphAxisQuery {
             return Err(error(GraphErrorCode::SnapshotIdentityMismatch));
         }
         // Bound adjacency work before the existing owner validation rebuild.
-        if owner.snapshot().edges().len() > self.limits.max_scanned_edges as usize / 2 {
+        let association_count = if profile.definition_selected() {
+            owner
+                .partitions()
+                .iter()
+                .try_fold(owner.foundation().edges().len(), |count, partition| {
+                    count.checked_add(partition.report().accepted_relations().len())
+                })
+                .ok_or_else(|| error(GraphErrorCode::BudgetExceeded))?
+        } else {
+            owner.snapshot().edges().len()
+        };
+        if association_count
+            .checked_add(owner.snapshot().edges().len())
+            .is_none_or(|count| count > self.limits.max_scanned_edges as usize)
+        {
             return Err(error(GraphErrorCode::BudgetExceeded));
         }
         profile.validate(owner.registry())?;
         checkpoint(cancelled)?;
         owner.validate(cancelled)?;
         let snapshot = owner.snapshot();
+        let selection = if profile.definition_selected() {
+            let edges = u32::try_from(snapshot.edges().len())
+                .map_err(|_| error(GraphErrorCode::BudgetExceeded))?;
+            let scan_budget = self
+                .limits
+                .max_scanned_edges
+                .checked_sub(edges)
+                .ok_or_else(|| error(GraphErrorCode::BudgetExceeded))?;
+            Some(selection::GraphAxisSelection::build(
+                owner,
+                profile,
+                scan_budget,
+                cancelled,
+            )?)
+        } else {
+            None
+        };
         for root in &self.roots {
             checkpoint(cancelled)?;
             let node = snapshot
@@ -163,6 +197,9 @@ impl GraphAxisQuery {
         // rather than trusting an enum match to certify their endpoint semantics.
         for edge in snapshot.edges() {
             checkpoint(cancelled)?;
+            if selection.is_some() {
+                break;
+            }
             let Some(step) = profile
                 .relations()
                 .iter()
@@ -187,7 +224,7 @@ impl GraphAxisQuery {
                 return Err(error(GraphErrorCode::RegistryInvalid));
             }
         }
-        let directions = profile
+        let mut directions: Vec<_> = profile
             .relations()
             .iter()
             .map(|step| GraphRelationDirection {
@@ -203,12 +240,21 @@ impl GraphAxisQuery {
                 },
             })
             .collect();
+        directions.sort();
+        directions.dedup();
+        let schema = if selection.is_some() {
+            GRAPH_DEFINITION_AXIS_QUERY_SCHEMA
+        } else {
+            GRAPH_AXIS_QUERY_SCHEMA
+        };
         let header = AxisHeader {
-            schema: GRAPH_AXIS_QUERY_SCHEMA,
+            schema,
             query: self.clone(),
-            query_digest: digest("graph-axis-query:sha256:", &(GRAPH_AXIS_QUERY_SCHEMA, self))?,
+            query_digest: digest("graph-axis-query:sha256:", &(schema, self))?,
             profile: profile.clone(),
-            registry_scanned_edges: snapshot.edges().len() as u32,
+            registry_scanned_edges: selection
+                .as_ref()
+                .map_or(snapshot.edges().len() as u32, |selection| selection.scanned),
             boundaries: vec![
                 GraphAxisBoundary::StoredRelationFamiliesOnly,
                 GraphAxisBoundary::ConflictAssessmentNotEvaluated,
@@ -219,7 +265,13 @@ impl GraphAxisQuery {
         // The nested subgraph budget includes its own request and complete records.
         // Reserve the *entire* axis header as well; axes cannot escape byte limits
         // merely by wrapping a result that fit its original budget.
-        let overhead = encoded(&header)?.len() + b",\"projection\":".len();
+        let overhead = encoded(&header)?.len()
+            + b",\"projection\":".len()
+            + if selection.is_some() {
+                b",\"edge_definitions\":[]".len()
+            } else {
+                0
+            };
         let remaining = (self.limits.max_output_bytes as usize)
             .checked_sub(overhead)
             .ok_or_else(|| error(GraphErrorCode::BudgetExceeded))?;
@@ -228,19 +280,36 @@ impl GraphAxisQuery {
         }
         let limits = GraphSubgraphLimits {
             max_output_bytes: remaining as u32,
-            max_scanned_edges: self.limits.max_scanned_edges - header.registry_scanned_edges,
+            max_scanned_edges: self
+                .limits
+                .max_scanned_edges
+                .checked_sub(header.registry_scanned_edges)
+                .ok_or_else(|| error(GraphErrorCode::BudgetExceeded))?,
             ..self.limits
         };
         checkpoint(cancelled)?;
-        let projection = GraphSubgraphQuery::new_directed(
+        let projection_query = GraphSubgraphQuery::new_directed(
             self.snapshot_id.clone(),
             self.roots.clone(),
             directions,
             limits,
         )?
-        .with_confidence(self.confidence)
-        .execute(snapshot, cancelled)?;
-        let result = GraphAxisResult { header, projection };
+        .with_confidence(self.confidence);
+        let projection = if let Some(selection) = &selection {
+            projection_query.execute_selected(snapshot, selection, self.traversal, cancelled)?
+        } else {
+            projection_query.execute(snapshot, cancelled)?
+        };
+        let edge_definitions = if let Some(selection) = &selection {
+            selection.project(projection.edges(), cancelled)?
+        } else {
+            Vec::new()
+        };
+        let result = GraphAxisResult {
+            header,
+            projection,
+            edge_definitions,
+        };
         if encoded(&result)?.len() > self.limits.max_output_bytes as usize {
             return Err(error(GraphErrorCode::BudgetExceeded));
         }
@@ -275,6 +344,8 @@ pub struct GraphAxisResult {
     #[serde(flatten)]
     header: AxisHeader,
     projection: GraphSubgraphResult,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    edge_definitions: Vec<GraphAxisEdgeDefinition>,
 }
 impl GraphAxisResult {
     #[must_use]
@@ -292,6 +363,10 @@ impl GraphAxisResult {
     #[must_use]
     pub const fn projection(&self) -> &GraphSubgraphResult {
         &self.projection
+    }
+    #[must_use]
+    pub fn edge_definitions(&self) -> &[GraphAxisEdgeDefinition] {
+        &self.edge_definitions
     }
     /// Counts the registry-admission and adjacency-indexing passes together.
     #[must_use]

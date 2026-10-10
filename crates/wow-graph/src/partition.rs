@@ -2,7 +2,7 @@
 //!
 //! Proposal endpoints use the exact input-generation view, not the materialized
 //! publication IDs. A new input generation requires a new foundation.
-mod materialize;
+pub(crate) mod materialize;
 mod storage;
 mod transaction;
 

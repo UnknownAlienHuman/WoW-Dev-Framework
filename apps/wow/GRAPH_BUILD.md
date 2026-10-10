@@ -44,8 +44,11 @@ static file-reference topology, not proof of client execution or global load ord
 For explicit-file/inline input without a TOC, captured Lua nodes are still exported
 but load coverage is NotEvaluated. With a TOC, Loads coverage is Partial. An explicit
 package universe supplies resolved required/optional dependency targets; missing
-targets remain omissions. Axis recipes still reject ambiguous registered relation
-definitions rather than silently combining meanings. XML runtime objects and
+targets remain omissions. Source axis recipes select reviewed exact definition
+IDs through retained producer assertions, preserving several meanings on one
+materialized edge without combining them. Ambiguous foundation edges without
+producer provenance still reject. See [axis usage](../../crates/wow-graph/AXIS_USAGE.md).
+XML runtime objects and
 runtime relationships are not generated.
 Captured Lua functions and direct calls are projected as described below. Source XML declarations and explicit inheritance are projected below. Negative authority is false throughout this route.
 

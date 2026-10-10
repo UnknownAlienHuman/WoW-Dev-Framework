@@ -14,6 +14,7 @@ pub use persistence::{
     publish_graph_bundle, reconcile_graph_publication,
 };
 pub use wow_project::graph::ProjectSourceReadLimits;
+pub use wow_project::graph::source_graph_axis_profile;
 
 use crate::{ServiceError, ServiceErrorCode, ServiceResult};
 use serde::{Deserialize, Serialize};
@@ -616,8 +617,25 @@ fn run_query(
         GraphReadQuery::Axis(query) => {
             // No "latest" profile or first registry match. The owner binds its
             // reviewed recipe; the query's exact digest must match that binding.
-            let profile = GraphAxisProfile::bind(owner.registry(), query.axis())
-                .map_err(|e| GraphReadFailure::owner(GraphReadStage::Query, e))?;
+            let profile = if owner.registry().bundle_id()
+                == wow_project::graph::SOURCE_GRAPH_REGISTRY_ID
+                && matches!(
+                    query.axis(),
+                    GraphAxis::Ownership
+                        | GraphAxis::Load
+                        | GraphAxis::Inheritance
+                        | GraphAxis::Registration
+                ) {
+                source_graph_axis_profile(owner.registry(), query.axis()).map_err(|_| {
+                    GraphReadFailure::service(
+                        GraphReadStage::Query,
+                        ServiceErrorCode::InvalidRequest,
+                    )
+                })?
+            } else {
+                GraphAxisProfile::bind(owner.registry(), query.axis())
+                    .map_err(|e| GraphReadFailure::owner(GraphReadStage::Query, e))?
+            };
             let result = query
                 .execute(owner, &profile, stop)
                 .map_err(|e| GraphReadFailure::owner(GraphReadStage::Query, e))?;

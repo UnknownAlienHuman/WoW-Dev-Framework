@@ -7,9 +7,9 @@ the work queue. Follow [the execution model](EXECUTION_MODEL.md).
 
 ## Verified routing base
 
-`main` checkpoint `4a55c2c0f79ff99db84bbb1002f1a716de7f1dc9`, tree
-`00fe0ca02e9d9f41c4fc3b9a482c309f11e54172`, was published and read back with all
-changed blobs. [Quick 38079270175](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/38079270175)
+`main` checkpoint `b644ddaeca0bfd0a84aeab97a820f15e06178a2d`, tree
+`06279d91219bdea945491d0730ffd69cfc09014f`, was published and read back with all
+changed blobs. [Quick 38081733016](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/38081733016)
 passed on that exact head. This is the verified base of this routing update;
 subsequent publication and gate evidence belong in the canonical Issue.
 
@@ -37,9 +37,16 @@ with graph metadata bytes. Operation details belong in #113.
 | Order | Bounded functional responsibility | Required boundary |
 |---|---|---|
 | 1 — #113 | Qualify remaining actual map/graph/Main scopes and choose finite capacity or an explicit partition strategy | Selected native load measurements exist; use actual downstream owner counts, checked arithmetic, cancellation and exact identities; no arbitrary cap increase or clipping |
-| 3 — [#114](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/114) | Make graph axes bind exact relation definitions | Stop overloading Owns/Loads; preserve actual registry/support meaning |
+| 3 — [#114](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/114) | Exact definition-selected axes are functional; finish qualification with #115's selected composed service recipe | Native registry18/19 and current composed service execute Ownership/Load; retain distinct bindings on colliding edges, exclude span mappings from Ownership, refuse ambiguous foundation authority |
 | 4 — [#115](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/115) | Select coherent capability composition and reconcile transient variants | Name real application, persistence and replay consumers; no cumulative producer ladder |
 | 5 — [#117](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/117) | Freeze XML object/region classification authority | Current exact source/schema evidence, conservative unknowns; no runtime inference |
+
+The [axis query contract](../crates/wow-graph/AXIS_USAGE.md) names the read-only
+profile/query versions and exact service recipe. GraphEdge, report, registry and
+stored partition identities remain unchanged; retained proposals reconstruct
+definition associations on reopen. Rich `/2`–`/4` producer recipes still need the
+real configuration/service/replay composition selected in #115. Library-level
+qualification does not close that application handoff or W17 acceptance.
 
 Then freeze structural fingerprint semantics in
 [#118](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/118), validate

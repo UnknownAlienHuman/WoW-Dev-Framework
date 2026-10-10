@@ -4,15 +4,7 @@ use crate::{GraphProducerPartition, GraphRelationKind, GraphSnapshot};
 /// The projection deliberately rebinds node and edge IDs. Reverse that binding
 /// with the very same constructors, never by display names or evidence equality.
 fn input_node(node: &GraphNode, owner: &GraphPartitionSnapshot) -> GraphResult<GraphNodeId> {
-    let original = GraphNode::new(
-        owner.foundation().universe().clone(),
-        owner.foundation().generation().clone(),
-        node.kind(),
-        node.owner_key(),
-        Vec::new(),
-        owner.foundation().limits(),
-    )?;
-    Ok(original.node_id().clone())
+    crate::partition::materialize::input_node_id(node, owner.foundation())
 }
 
 fn select<'a>(

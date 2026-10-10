@@ -14,6 +14,10 @@ pub(super) fn execute(
     query: &GraphSubgraphQuery,
     snapshot: &GraphSnapshot,
     query_digest: Box<str>,
+    selection: Option<(
+        &crate::axes::selection::GraphAxisSelection,
+        crate::GraphAxisTraversal,
+    )>,
     cancelled: &AtomicBool,
 ) -> GraphResult<GraphSubgraphResult> {
     let mut coverage = Vec::new();
@@ -70,7 +74,26 @@ pub(super) fn execute(
     for edge in snapshot.edges() {
         checkpoint(cancelled)?;
         result.scanned_edges += 1;
-        let Some(direction) = query.direction_for(edge.relation()) else {
+        let direction = if let Some((selection, traversal)) = selection {
+            selection
+                .direction(edge.edge_id())
+                .map(|direction| match traversal {
+                    crate::GraphAxisTraversal::Forward | crate::GraphAxisTraversal::Children => {
+                        direction
+                    }
+                    crate::GraphAxisTraversal::Reverse | crate::GraphAxisTraversal::Parents => {
+                        match direction {
+                            GraphDirection::Incoming => GraphDirection::Outgoing,
+                            GraphDirection::Outgoing => GraphDirection::Incoming,
+                            GraphDirection::Both => GraphDirection::Both,
+                        }
+                    }
+                    crate::GraphAxisTraversal::Both => GraphDirection::Both,
+                })
+        } else {
+            query.direction_for(edge.relation())
+        };
+        let Some(direction) = direction else {
             continue;
         };
         if !query.confidence.admits(edge.confidence()) {
@@ -137,7 +160,14 @@ pub(super) fn execute(
                 .map(|node| encoded(node).map(|b| b.len() + 1))
                 .transpose()?
                 .unwrap_or(0);
-            let item_bytes = encoded(edge)?.len() + 1 + node_bytes;
+            let binding_bytes =
+                selection.map_or(0, |(selection, _)| selection.output_cost(edge.edge_id()));
+            let item_bytes = encoded(edge)?
+                .len()
+                .checked_add(1)
+                .and_then(|bytes| bytes.checked_add(node_bytes))
+                .and_then(|bytes| bytes.checked_add(binding_bytes))
+                .ok_or_else(|| budget("subgraph output size overflow"))?;
             if item_bytes > output_limit - bytes {
                 truncations.insert(GraphSubgraphTruncation::OutputBytes);
                 break 'traversal;
@@ -177,6 +207,7 @@ pub(super) fn execute(
     };
     result.no_new_evidence = result.edges.is_empty();
     result.absence_authoritative = result.no_new_evidence
+        && selection.is_none()
         && result.state == GraphQueryState::Complete
         && query.confidence != GraphSubgraphConfidence::IncludeCandidate
         && result
