@@ -398,6 +398,52 @@ fn xtask_manifest_bridge_verifies_bytes_and_preserves_selected_scope() -> TestRe
     assert_eq!(census.xml().documents, 1);
     assert_eq!(census.file_counts().included.lua, 1);
 
+    // Both existing xtask acquisitions use the same strict manifest and byte
+    // admission. This synthetic fixture asserts a label; it cannot attest that
+    // a materializer ran or that its declared Git blobs belong to the commit.
+    for (acquisition, admitted) in [
+        ("github_api_exact_blob_snapshot", true),
+        ("unregistered_source_adapter", false),
+    ] {
+        let mut candidate = manifest.clone();
+        candidate
+            .as_object_mut()
+            .ok_or("manifest is not an object")?
+            .remove("manifest_sha256");
+        candidate["source"]["acquisition"] = serde_json::json!(acquisition);
+        candidate["manifest_sha256"] = serde_json::json!(format!(
+            "{:x}",
+            Sha256::digest(wow_core::canonical_json_bytes(&candidate)?)
+        ));
+        let candidate_bytes = serde_json::to_vec(&candidate)?;
+        std::fs::write(root.0.join("acquisition-manifest.json"), &candidate_bytes)?;
+        let candidate_input = ManifestedPlatformInput {
+            manifest: ProjectDiskFile::new("acquisition-manifest.json")
+                .with_identity(raw_digest(&candidate_bytes), candidate_bytes.len() as u64),
+            origin: PlatformSourceOrigin {
+                revision: PlatformSourceRevision::Fixture {
+                    digest: raw_digest(&candidate_bytes),
+                },
+                ..input.origin.clone()
+            },
+            ..input.clone()
+        };
+        let result = directory.admit_platform_source_manifest(&profile, &candidate_input, &stop);
+        if admitted {
+            let (source, receipt) = result?.into_parts();
+            let receipt = serde_json::to_value(receipt)?;
+            assert_eq!(receipt["acquisition"], acquisition);
+            assert_eq!(receipt["git_membership"], "not_attested");
+            assert_eq!(receipt["root_completeness"], "not_attested");
+            assert_eq!(source.receipt().coverage().verified_files(), 3);
+        } else {
+            assert_eq!(
+                result.err().ok_or("unknown acquisition admitted")?.code(),
+                ProjectErrorCode::InvalidInputInventory
+            );
+        }
+    }
+
     let mut changed = std::fs::read(root.0.join("UI/defs.lua"))?;
     let last = changed.last_mut().ok_or("empty fixture source")?;
     *last ^= 1;

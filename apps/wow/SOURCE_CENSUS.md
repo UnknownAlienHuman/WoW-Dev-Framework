@@ -41,7 +41,13 @@ a second inventory or profile digest.
 | `origin` | Existing platform origin; Git commit/object format must match the manifest, or a synthetic fixture digest must equal the manifest bytes |
 | `materializer`, `license`, `compatibility_evidence` | Existing platform caller assertions, validated without attestation |
 
-Only the current `local_git_object_database` xtask v1 acquisition is accepted.
+The platform census accepts the two existing xtask v1 acquisition labels:
+`local_git_object_database` and `github_api_exact_blob_snapshot`. The latter
+consumes an already materialized immutable [API snapshot](../../docs/SOURCE_API_MATERIALIZATION.md);
+the census does not make network requests or verify the materializer's durable
+operation records. Both labels remain manifest assertions. Unknown labels are
+refused. The generated-API Lua closure's separate admission route still accepts
+only `local_git_object_database`.
 The project owner verifies the manifest wire, self-digest, every member and kind
 count, and pinned version.txt bytes before census. Selected roots and TOCs remain
 explicit. Included members inside those roots are verified through the existing

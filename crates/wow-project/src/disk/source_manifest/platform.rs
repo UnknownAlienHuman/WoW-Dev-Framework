@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::atomic::AtomicBool;
 use wow_core::{ContentDigest, SourceContent};
 
-use super::{MAX_MANIFEST_BYTES, budget, invalid, read_manifest};
+use super::{MAX_MANIFEST_BYTES, ManifestRoute, budget, invalid, read_manifest};
 use crate::{
     ProjectResult,
     disk::{DISK_SOURCE_MAX_BYTES, ProjectDiskFile, ProjectInputDirectory, checkpoint},
@@ -83,6 +83,7 @@ impl ProjectInputDirectory {
             &input.manifest,
             &input.source_revision,
             &input.source_version,
+            ManifestRoute::Platform,
             stop,
         )?;
         let manifest_digest = source_digest(&bytes);

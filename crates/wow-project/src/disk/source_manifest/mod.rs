@@ -26,6 +26,22 @@ const MAX_MANIFEST_FILES: u64 = 200_000;
 const MAX_MEMBER_BYTES: u64 = 32 * 1024 * 1024;
 const MAX_SELECTED_BYTES: u64 = 256 * 1024 * 1024;
 
+/// One decoder, with a closed admission policy selected by the native consumer.
+/// Acquisition labels are manifest assertions, never materializer attestations.
+#[derive(Clone, Copy)]
+enum ManifestRoute {
+    GeneratedApi,
+    Platform,
+}
+impl ManifestRoute {
+    fn accepts(self, acquisition: &str) -> bool {
+        matches!(
+            (self, acquisition),
+            (_, "local_git_object_database") | (Self::Platform, "github_api_exact_blob_snapshot")
+        )
+    }
+}
+
 /// One caller-selected manifest and TOC; no floating source selector is resolved here.
 pub struct ManifestedLuaRequest<'a> {
     pub root: &'a str,
@@ -108,6 +124,7 @@ impl ProjectInputDirectory {
             request.manifest,
             request.revision,
             request.version,
+            ManifestRoute::GeneratedApi,
             stop,
         )?;
         let selected_toc = manifest.member(request.toc)?;
@@ -218,6 +235,7 @@ fn read_manifest(
     selected: &ProjectDiskFile,
     revision: &str,
     version: &str,
+    route: ManifestRoute,
     stop: &AtomicBool,
 ) -> ProjectResult<(SourceManifest, Vec<u8>)> {
     checkpoint(stop)?;
@@ -226,7 +244,7 @@ fn read_manifest(
         return Err(invalid("source manifest requires pinned JSON bytes"));
     }
     let bytes = directory.read(selected, MAX_MANIFEST_BYTES, stop)?;
-    let manifest = SourceManifest::admit(&bytes, revision, version, stop)?;
+    let manifest = SourceManifest::admit(&bytes, revision, version, route, stop)?;
     Ok((manifest, bytes))
 }
 
@@ -235,6 +253,7 @@ impl SourceManifest {
         bytes: &[u8],
         revision: &str,
         version: &str,
+        route: ManifestRoute,
         stop: &AtomicBool,
     ) -> ProjectResult<Self> {
         checkpoint(stop)?;
@@ -243,7 +262,7 @@ impl SourceManifest {
             .map_err(|_| invalid("invalid or ambiguous source manifest"))?;
         if manifest.schema_version != 1
             || manifest.source.source_id != "blizzard-ui"
-            || manifest.source.acquisition != "local_git_object_database"
+            || !route.accepts(&manifest.source.acquisition)
             || manifest.source.revision != revision
             || manifest.source.version != version
             || !label(&manifest.source.version)
