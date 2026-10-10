@@ -6,7 +6,7 @@ use wow_service::{
     source_census::{CensusCoverage, census_local_source},
 };
 
-const HELP: &str = "wow source census --config <source-census.json> [--format json|text]\n\nMeasures one explicit admitted local manifest with native TOC/XML owners. Partial input or parser refusals exit 2; no source acquisition or graph/publication is performed. See apps/wow/SOURCE_CENSUS.md.\n";
+const HELP: &str = "wow source census --config <source-census.json> [--format json|text]\n\nMeasures one explicit admitted local manifest with native TOC/XML owners and optional explicit package-load census. Partial coverage exits 2; acquisition/identity/budget failures exit 4. See apps/wow/SOURCE_CENSUS.md.\n";
 
 pub fn run(values: Vec<OsString>) -> u8 {
     if (values.len() == 2 || (values.len() == 3 && values[1] == "census"))
@@ -38,7 +38,7 @@ pub fn run(values: Vec<OsString>) -> u8 {
             };
         }
     };
-    let exit = match result.census().coverage() {
+    let exit = match result.coverage() {
         CensusCoverage::DeclaredMembersMeasured => 0,
         CensusCoverage::Partial => 2,
     };
@@ -53,10 +53,12 @@ pub fn run(values: Vec<OsString>) -> u8 {
         return 130;
     }
     if format == Format::Text {
-        bytes.splice(
-            0..0,
-            b"Manifest-bound lexical source census\n".iter().copied(),
-        );
+        let label: &[u8] = if result.package_loads().is_some() {
+            b"Manifest-bound source/package load census\n"
+        } else {
+            b"Manifest-bound lexical source census\n"
+        };
+        bytes.splice(0..0, label.iter().copied());
     }
     bytes.push(b'\n');
     let mut out = std::io::stdout().lock();

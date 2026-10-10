@@ -10,6 +10,7 @@ use std::sync::atomic::AtomicBool;
 use serde::{Deserialize, Serialize};
 use wow_core::{CanonicalResult, ContentDigest, ProfileIdentity, SourceContent};
 
+use super::package_capacity::{CensusRetention, PackageLoadCapacity};
 use super::{
     LoadIssueKind, LoadRecordKind, LoadSelection, ProjectLoadPlan, TocLoadContext, budget, invalid,
     profile_digest,
@@ -26,7 +27,7 @@ pub const PACKAGE_LOAD_PROFILE: &str = "wow-project/package-load-closure/2";
 pub const PACKAGE_MAIN_NAMESPACE_PROFILE: &str = "wow-project/package-main-namespace/1";
 /// Public logical root used only inside the project/analyzer source universe.
 pub const PACKAGE_MAIN_NAMESPACE_ROOT: &str = "packages";
-const MAX_PACKAGES: usize = 64;
+pub(super) const MAX_PACKAGES: usize = 64;
 const MAX_VARIANTS_PER_PACKAGE: usize = 32;
 const MAX_DEPENDENCIES: usize = 4_096;
 const MAX_PACKAGE_SOURCES: usize = 4_096;
@@ -695,7 +696,14 @@ impl ProjectInputDirectory {
         context: Option<&TocLoadContext>,
         stop: &AtomicBool,
     ) -> ProjectResult<ProjectPackageLoadInput> {
-        read_package_sources(PackageSources::Disk(self), packages, profile, context, stop)
+        read_package_sources(
+            PackageSources::Disk(self),
+            packages,
+            profile,
+            context,
+            stop,
+            PackageLoadCapacity::ordinary(),
+        )
     }
 }
 
@@ -741,6 +749,7 @@ pub(crate) fn read_retained_packages(
         profile,
         context,
         stop,
+        PackageLoadCapacity::ordinary(),
     )
 }
 
@@ -751,6 +760,24 @@ pub(crate) fn read_admitted_packages(
     profile: &ProfileIdentity,
     context: Option<&TocLoadContext>,
     stop: &AtomicBool,
+) -> ProjectResult<ProjectPackageLoadInput> {
+    read_admitted_packages_with_capacity(
+        source,
+        packages,
+        profile,
+        context,
+        stop,
+        PackageLoadCapacity::ordinary(),
+    )
+}
+
+pub(crate) fn read_admitted_packages_with_capacity(
+    source: &AdmittedPlatformSource,
+    packages: &[ProjectPackageInput],
+    profile: &ProfileIdentity,
+    context: Option<&TocLoadContext>,
+    stop: &AtomicBool,
+    capacity: PackageLoadCapacity,
 ) -> ProjectResult<ProjectPackageLoadInput> {
     checkpoint(stop)?;
     if profile != &source.profile().target().reference_profile {
@@ -764,6 +791,7 @@ pub(crate) fn read_admitted_packages(
         profile,
         context,
         stop,
+        capacity,
     )
 }
 
@@ -779,6 +807,7 @@ fn read_package_sources(
     profile: &ProfileIdentity,
     context: Option<&TocLoadContext>,
     stop: &AtomicBool,
+    capacity: PackageLoadCapacity,
 ) -> ProjectResult<ProjectPackageLoadInput> {
     checkpoint(stop)?;
     profile
@@ -787,12 +816,13 @@ fn read_package_sources(
     if let Some(context) = context {
         context.validate()?;
     }
-    let declarations = validate_declarations(packages)?;
+    let declarations = validate_declarations_with_capacity(packages, capacity)?;
     let mut loaded = Vec::with_capacity(declarations.len());
     let mut variants = BTreeMap::<String, Vec<ProjectPackageVariantReceipt>>::new();
     let mut variant_sources = BTreeMap::<String, BTreeMap<String, Arc<str>>>::new();
     let mut total_sources = 0usize;
     let mut total_bytes = 0usize;
+    let mut retention = CensusRetention::default();
 
     for package in declarations {
         checkpoint(stop)?;
@@ -828,6 +858,9 @@ fn read_package_sources(
             )?,
         };
         let (files, plan) = input.into_parts();
+        if capacity.is_census() {
+            retention.charge(&plan, stop)?;
+        }
         let selected_source = plan
             .sources()
             .iter()
@@ -926,7 +959,15 @@ fn read_package_sources(
     }
 
     loaded.sort_by(|left, right| left.package.cmp(&right.package));
-    let plan = build_plan(packages, &loaded, variants, variant_sources, profile, stop)?;
+    let plan = build_plan(
+        packages,
+        &loaded,
+        variants,
+        variant_sources,
+        profile,
+        stop,
+        capacity,
+    )?;
     Ok(ProjectPackageLoadInput {
         packages: loaded,
         plan,
@@ -936,7 +977,14 @@ fn read_package_sources(
 pub(crate) fn validate_declarations(
     packages: &[ProjectPackageInput],
 ) -> ProjectResult<Vec<&ProjectPackageInput>> {
-    if packages.is_empty() || packages.len() > MAX_PACKAGES {
+    validate_declarations_with_capacity(packages, PackageLoadCapacity::ordinary())
+}
+
+pub(crate) fn validate_declarations_with_capacity(
+    packages: &[ProjectPackageInput],
+    capacity: PackageLoadCapacity,
+) -> ProjectResult<Vec<&ProjectPackageInput>> {
+    if packages.is_empty() || packages.len() > capacity.packages() {
         return Err(invalid("invalid declared package count"));
     }
     let mut names = BTreeMap::<String, String>::new();
@@ -1088,6 +1136,7 @@ fn build_plan(
     retained_variants: BTreeMap<String, BTreeMap<String, Arc<str>>>,
     profile: &ProfileIdentity,
     stop: &AtomicBool,
+    capacity: PackageLoadCapacity,
 ) -> ProjectResult<ProjectPackageLoadPlan> {
     let declaration_by_name = declarations
         .iter()
@@ -1120,6 +1169,10 @@ fn build_plan(
             ));
         }
         for mut dependency in projection.dependencies {
+            checkpoint(stop)?;
+            if capacity.is_census() && dependencies.len() >= MAX_PACKAGES * MAX_DEPENDENCIES {
+                return Err(budget());
+            }
             let active = dependency.selection == LoadSelection::Included;
             if dependency.selection == LoadSelection::Unresolved {
                 issues.push(issue_from_dependency(
@@ -1190,15 +1243,19 @@ fn build_plan(
     }
 
     let adjacency = resolved_adjacency(declarations, &dependencies);
-    let components =
-        strongly_connected_components(declaration_by_name.keys().cloned().collect(), &adjacency);
+    let components = strongly_connected_components(
+        declaration_by_name.keys().cloned().collect(),
+        &adjacency,
+        stop,
+    )?;
     let (order_groups, group_by_package, cycle_issues) =
-        order_components(&components, &dependencies, &adjacency)?;
+        order_components(&components, &dependencies, &adjacency, stop)?;
     issues.extend(cycle_issues);
 
-    let reachability = classify_reachability(declarations, &dependencies);
+    let reachability = classify_reachability(declarations, &dependencies, stop)?;
     let mut nodes = Vec::with_capacity(declarations.len());
     for declaration in declaration_by_name.values() {
+        checkpoint(stop)?;
         let plan = plan_by_name
             .get(&declaration.name)
             .ok_or_else(|| invalid("loaded package plan is missing"))?;
@@ -1231,6 +1288,7 @@ fn build_plan(
     let mut units = Vec::new();
     for group in &order_groups {
         for package in &group.packages {
+            checkpoint(stop)?;
             let node = node_by_name
                 .get(package.as_str())
                 .ok_or_else(|| invalid("package order references an unknown node"))?;
@@ -1245,6 +1303,7 @@ fn build_plan(
                     )
                     && record.target.is_some()
             }) {
+                checkpoint(stop)?;
                 let target = record
                     .target
                     .as_ref()
@@ -1350,18 +1409,22 @@ fn build_plan(
         issues: &'a [ProjectPackageLoadIssue],
         coverage: ProjectPackageLoadCoverage,
     }
+    let identity = Identity {
+        profile: PACKAGE_LOAD_PROFILE,
+        target_profile_digest,
+        packages: &nodes,
+        dependencies: &dependencies,
+        order_groups: &order_groups,
+        units: &units,
+        issues: &issues,
+        coverage,
+    };
+    if capacity.is_census() {
+        super::census::bounded_encoded_size(&identity, stop)?;
+    }
     let digest = crate::identity::canonical_digest(
         "wow-project/package-load-plan/1",
-        &Identity {
-            profile: PACKAGE_LOAD_PROFILE,
-            target_profile_digest,
-            packages: &nodes,
-            dependencies: &dependencies,
-            order_groups: &order_groups,
-            units: &units,
-            issues: &issues,
-            coverage,
-        },
+        &identity,
         ProjectPhase::Inventory,
     )?;
     let retained_plans = loaded
@@ -1460,63 +1523,61 @@ fn resolved_adjacency(
 fn strongly_connected_components(
     nodes: Vec<String>,
     adjacency: &BTreeMap<String, BTreeSet<String>>,
-) -> Vec<Vec<String>> {
-    struct State {
-        next_index: usize,
-        indexes: BTreeMap<String, usize>,
-        lowlinks: BTreeMap<String, usize>,
-        stack: Vec<String>,
-        on_stack: BTreeSet<String>,
-        components: Vec<Vec<String>>,
-    }
-    fn visit(node: &str, adjacency: &BTreeMap<String, BTreeSet<String>>, state: &mut State) {
-        let index = state.next_index;
-        state.next_index += 1;
-        state.indexes.insert(node.to_owned(), index);
-        state.lowlinks.insert(node.to_owned(), index);
-        state.stack.push(node.to_owned());
-        state.on_stack.insert(node.to_owned());
-        if let Some(neighbors) = adjacency.get(node) {
-            for neighbor in neighbors {
-                if !state.indexes.contains_key(neighbor) {
-                    visit(neighbor, adjacency, state);
-                    let low = state.lowlinks[node].min(state.lowlinks[neighbor]);
-                    state.lowlinks.insert(node.to_owned(), low);
-                } else if state.on_stack.contains(neighbor) {
-                    let low = state.lowlinks[node].min(state.indexes[neighbor]);
-                    state.lowlinks.insert(node.to_owned(), low);
-                }
-            }
-        }
-        if state.lowlinks[node] == state.indexes[node] {
-            let mut component = Vec::new();
-            while let Some(member) = state.stack.pop() {
-                state.on_stack.remove(&member);
-                let root = member == node;
-                component.push(member);
-                if root {
-                    break;
-                }
-            }
-            component.sort();
-            state.components.push(component);
-        }
-    }
-
-    let mut state = State {
-        next_index: 0,
-        indexes: BTreeMap::new(),
-        lowlinks: BTreeMap::new(),
-        stack: Vec::new(),
-        on_stack: BTreeSet::new(),
-        components: Vec::new(),
-    };
+    stop: &AtomicBool,
+) -> ProjectResult<Vec<Vec<String>>> {
+    // Iterative two-pass SCC traversal. Native ordering below is canonical by
+    // component members, so DFS discovery order is not an identity input.
+    let mut visited = BTreeSet::new();
+    let mut finished = Vec::with_capacity(nodes.len());
     for node in nodes {
-        if !state.indexes.contains_key(&node) {
-            visit(&node, adjacency, &mut state);
+        let mut pending = vec![(node, false)];
+        while let Some((node, exiting)) = pending.pop() {
+            checkpoint(stop)?;
+            if exiting {
+                finished.push(node);
+            } else if visited.insert(node.clone()) {
+                pending.push((node.clone(), true));
+                if let Some(neighbors) = adjacency.get(&node) {
+                    for neighbor in neighbors.iter().rev() {
+                        checkpoint(stop)?;
+                        if !visited.contains(neighbor) {
+                            pending.push((neighbor.clone(), false));
+                        }
+                    }
+                }
+            }
         }
     }
-    state.components
+    let mut reverse = BTreeMap::<String, Vec<String>>::new();
+    for (node, neighbors) in adjacency {
+        for neighbor in neighbors {
+            checkpoint(stop)?;
+            reverse
+                .entry(neighbor.clone())
+                .or_default()
+                .push(node.clone());
+        }
+    }
+    visited.clear();
+    let mut components = Vec::new();
+    for node in finished.into_iter().rev() {
+        let mut pending = vec![node];
+        let mut component = Vec::new();
+        while let Some(node) = pending.pop() {
+            checkpoint(stop)?;
+            if visited.insert(node.clone()) {
+                if let Some(neighbors) = reverse.get(&node) {
+                    pending.extend(neighbors.iter().cloned());
+                }
+                component.push(node);
+            }
+        }
+        if !component.is_empty() {
+            component.sort();
+            components.push(component);
+        }
+    }
+    Ok(components)
 }
 
 type OrderedComponents = (
@@ -1529,9 +1590,11 @@ fn order_components(
     components: &[Vec<String>],
     dependencies: &[TocDependencyDeclaration],
     adjacency: &BTreeMap<String, BTreeSet<String>>,
+    stop: &AtomicBool,
 ) -> ProjectResult<OrderedComponents> {
     let mut component_by_package = BTreeMap::new();
     for (index, component) in components.iter().enumerate() {
+        checkpoint(stop)?;
         for package in component {
             component_by_package.insert(package.clone(), index);
         }
@@ -1539,6 +1602,7 @@ fn order_components(
     let mut successors = vec![BTreeSet::<usize>::new(); components.len()];
     let mut indegree = vec![0usize; components.len()];
     for (dependent, prerequisites) in adjacency {
+        checkpoint(stop)?;
         let dependent_component = component_by_package[dependent];
         for prerequisite in prerequisites {
             let prerequisite_component = component_by_package[prerequisite];
@@ -1557,6 +1621,7 @@ fn order_components(
     }
     let mut ordered_components = Vec::with_capacity(components.len());
     while let Some((_key, index)) = ready.pop_first() {
+        checkpoint(stop)?;
         ordered_components.push(index);
         for successor in successors[index].clone() {
             indegree[successor] -= 1;
@@ -1573,6 +1638,7 @@ fn order_components(
     let mut group_by_package = BTreeMap::new();
     let mut cycle_issues = Vec::new();
     for component_index in ordered_components {
+        checkpoint(stop)?;
         let members = components[component_index].clone();
         let self_cycle = members.len() == 1
             && adjacency
@@ -1592,6 +1658,7 @@ fn order_components(
                         .as_ref()
                         .is_some_and(|target| member_set.contains(target))
             }) {
+                checkpoint(stop)?;
                 match dependency.kind {
                     TocDependencyKind::Required => required = true,
                     TocDependencyKind::Optional => optional = true,
@@ -1640,7 +1707,8 @@ fn order_components(
 fn classify_reachability(
     declarations: &[ProjectPackageInput],
     dependencies: &[TocDependencyDeclaration],
-) -> BTreeMap<String, ProjectPackageReachability> {
+    stop: &AtomicBool,
+) -> ProjectResult<BTreeMap<String, ProjectPackageReachability>> {
     let mut states = declarations
         .iter()
         .map(|package| {
@@ -1655,11 +1723,13 @@ fn classify_reachability(
         })
         .collect::<BTreeMap<_, _>>();
     loop {
+        checkpoint(stop)?;
         let mut changed = false;
         for dependency in dependencies.iter().filter(|dependency| {
             dependency.selection == LoadSelection::Included
                 && dependency.resolution == TocDependencyResolution::Resolved
         }) {
+            checkpoint(stop)?;
             let Some(target) = &dependency.resolved_package else {
                 continue;
             };
@@ -1684,7 +1754,7 @@ fn classify_reachability(
             break;
         }
     }
-    states
+    Ok(states)
 }
 
 fn package_phase(

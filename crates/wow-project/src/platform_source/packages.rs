@@ -16,8 +16,9 @@ use crate::{
     disk::{self, ProjectDiskFile},
     load::{
         ProjectPackageInput, ProjectPackageLoadPlan, ProjectPackageMainInput,
-        ProjectPackageMainPlan, ProjectPackageVariantInput, TocLoadContext, read_admitted_packages,
-        validate_package_declarations,
+        ProjectPackageMainPlan, ProjectPackageVariantInput, TocLoadContext,
+        package_capacity::PackageLoadCapacity,
+        package_closure::validate_declarations_with_capacity, read_admitted_packages,
     },
 };
 
@@ -91,8 +92,41 @@ impl AdmittedPlatformSource {
         context: Option<&TocLoadContext>,
         stop: &AtomicBool,
     ) -> ProjectResult<PlatformPackageSpecialization> {
+        let pinned = self.pin_packages(packages, context, PackageLoadCapacity::ordinary(), stop)?;
+        let loaded = read_admitted_packages(
+            self,
+            &pinned,
+            &self.profile().target().reference_profile,
+            context,
+            stop,
+        )?;
+        let main = loaded.into_namespaced_main()?;
+        let binding = PlatformPackageBinding::new(self, main.load_plan(), main.main_plan())?;
+        binding.validate(self, main.load_plan(), main.main_plan())?;
+        let request = PlatformPackageRequest {
+            packages: packages.to_vec(),
+            context: context.cloned(),
+        };
         disk::checkpoint(stop)?;
-        validate_package_declarations(packages)?;
+        Ok(PlatformPackageSpecialization {
+            source: Arc::clone(self),
+            binding,
+            main,
+            request,
+        })
+    }
+
+    /// Shared native pinning. A census capacity never grants Main/graph/replay
+    /// specialization; only this internal port accepts it.
+    pub(crate) fn pin_packages(
+        &self,
+        packages: &[ProjectPackageInput],
+        context: Option<&TocLoadContext>,
+        capacity: PackageLoadCapacity,
+        stop: &AtomicBool,
+    ) -> ProjectResult<Vec<ProjectPackageInput>> {
+        disk::checkpoint(stop)?;
+        validate_declarations_with_capacity(packages, capacity)?;
         if !packages.iter().any(ProjectPackageInput::selected_root) {
             return Err(invalid(
                 "platform packages require an explicit selected root",
@@ -180,27 +214,7 @@ impl AdmittedPlatformSource {
             return Err(invalid("platform package set omits a selected profile TOC"));
         }
         disk::checkpoint(stop)?;
-        let loaded = read_admitted_packages(
-            self,
-            &pinned,
-            &self.profile().target().reference_profile,
-            context,
-            stop,
-        )?;
-        let main = loaded.into_namespaced_main()?;
-        let binding = PlatformPackageBinding::new(self, main.load_plan(), main.main_plan())?;
-        binding.validate(self, main.load_plan(), main.main_plan())?;
-        let request = PlatformPackageRequest {
-            packages: packages.to_vec(),
-            context: context.cloned(),
-        };
-        disk::checkpoint(stop)?;
-        Ok(PlatformPackageSpecialization {
-            source: Arc::clone(self),
-            binding,
-            main,
-            request,
-        })
+        Ok(pinned)
     }
 
     /// Crate-private demand port used by the native loader. Returned bytes are

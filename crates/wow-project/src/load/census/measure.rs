@@ -129,7 +129,7 @@ fn records(
     Ok(())
 }
 
-pub(super) fn encoded_size<T: Serialize + ?Sized>(
+pub(crate) fn encoded_size<T: Serialize + ?Sized>(
     value: &T,
     stop: &AtomicBool,
 ) -> ProjectResult<u64> {

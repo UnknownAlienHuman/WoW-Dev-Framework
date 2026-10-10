@@ -8,7 +8,8 @@ This read-only command calls `wow-service::source_census::census_local_source`
 once. The configuration parent is the explicit source snapshot root. The project
 disk owner reads only manifest-declared members through the retained directory
 handle, checks lengths/digests and refuses symlinks or changed content. No source
-download, directory scan, include expansion, Lua execution or store write occurs.
+download, directory scan, Lua execution or store write occurs. The ordinary
+inventory/manifest census measures unique documents without include expansion.
 
 The strict configuration has four fields:
 
@@ -92,7 +93,56 @@ selection issues or refusals; `4` is acquisition/identity/budget/output failure;
 `64` is invalid transport/configuration input; `130` is cancellation. Root
 completeness is unverified even at exit `0`.
 
-Expanded loads, dependency closure/SCCs, source handles/evidence, graph nodes/edges
-and graph metadata, peak memory and full-corpus capacity are `NotEvaluated`, not
-zero. This operation is the measurement prerequisite in Issue #113; it does not
-close the measured-profile or W17 application/candidate/Skeleton acceptance gates.
+## Explicit package load measurements
+
+The same command accepts `wow-service/source-package-census-input/1`, containing
+`profile`, `source`, `selection` as above and a required `packages` array. Each
+package declares `name`, logical `root`, `selected_root`, and `variants`; a variant
+contains a `ProjectDiskFile` named `toc` and a `selected` boolean. Exactly one TOC
+per package and at least one root package must be selected. The selected TOC set
+must equal the exact source profile's set. Names/roots/variants use the existing
+native package validation and TOC identity-pinning owner, with no discovery or
+flavor inference.
+
+This route expands selected closures through the existing native loader, projects
+already-normalized dependency metadata, and uses the native dependency/SCC/order
+owner. Iterative SCC traversal avoids package-depth recursion and checks
+cancellation. It does not execute includes or Lua. Its named result contract is
+`wow-service/source-package-census-result/1`; `package_loads` accompanies the
+unchanged lexical `census` and manifest receipt. Both input/result contracts and
+`wow-project/platform-package-census/1` are transient unreleased contracts.
+Legacy requests/results retain their serialization and reject the new field.
+
+Measurement capacity equals the validated selected-TOC count, whose existing
+profile ceiling is 1024. Ordinary Main specialization, graph and replay retain
+their 64-package limit. The internal expanded measurement plan cannot be exported
+to those owners. Aggregate source limits remain 4096 package-qualified sources
+and 64 MiB, including unselected TOC variants. Per-package parser/load bounds also
+remain in force. Retained records/elements/attributes/map segments/dependencies
+cannot exceed the prior maximum fanout of 64 ordinary packages. The sum of
+serialized individual plans and the serialized package plan are separately
+bounded by the existing 64-MiB artifact envelope before census identity encoding.
+These finite measurement limits are not a qualified full-corpus graph profile.
+
+The receipt binds admitted source/profile/manifest identities, explicit physical
+package roots, context, selected TOCs and native load/package-plan digests. It
+reports per-package and aggregate retained source counts/bytes, unselected TOCs,
+Main Lua files, expanded records and native load units, XML script/inline/map
+counts, dependencies by kind/resolution and exact SCC/order groups. Dependency
+declarations, native package issues and per-package load issues preserve their
+source identity/spans and coverage. Native units can refer to a missing target;
+`units_without_retained_target` exposes that distinction. Counts include repeated
+load records but count each retained document once within each package; they are
+not a deduplicated physical-file census or runtime load evidence.
+
+The command exits `2` when either lexical or package coverage is Partial. Invalid
+package declarations, identity/acquisition refusals and budgets abort with the
+existing service error/exit contract; no package is silently clipped and no
+failed stage is reported as measured zero. Cancellation discards the whole
+operation. Source handles/evidence, graph nodes/edges and metadata, allocator/peak
+memory, full-corpus capacity and runtime remain NotEvaluated. The lexical census
+still lists expanded loads/dependency closure as unevaluated in its own scope;
+only the separate `package_loads` receipt evaluates those stages.
+
+These operations are measurement prerequisites in Issue #113; they do not close
+the measured-profile or W17 application/candidate/Skeleton acceptance gates.

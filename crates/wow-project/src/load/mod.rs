@@ -5,10 +5,9 @@ mod conditions;
 pub(crate) mod document_toc;
 mod metadata;
 mod package;
-mod package_closure;
-pub(crate) use package_closure::{
-    read_admitted_packages, validate_declarations as validate_package_declarations,
-};
+pub(crate) mod package_capacity;
+pub(crate) mod package_closure;
+pub(crate) use package_closure::read_admitted_packages;
 mod saved_variables;
 pub mod schema;
 mod toc;

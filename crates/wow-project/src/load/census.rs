@@ -2,7 +2,10 @@
 //! Counts are not package closure, graph acceptance, or current-source proof.
 mod measure;
 mod model;
+mod packages;
+pub(crate) use measure::encoded_size as bounded_encoded_size;
 pub use model::*;
+pub use packages::*;
 
 use super::invalid;
 use crate::platform_source::{AdmittedPlatformSource, PlatformEntryDisposition, PlatformFileKind};

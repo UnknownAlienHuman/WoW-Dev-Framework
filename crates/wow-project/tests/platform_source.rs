@@ -192,6 +192,109 @@ fn fixture_packages(name: &str) -> Vec<ProjectPackageInput> {
 }
 
 #[test]
+fn package_census_measures_more_than_ordinary_capacity_without_exporting_it() -> TestResult {
+    use wow_project::load::census::{CensusCoverage, census_platform_packages};
+    let root = FixtureRoot::new()?;
+    let mut request = profile_request()?;
+    request.exclusions.clear();
+    request.roots[0].selected_tocs.clear();
+    request.limits.max_entries = 130;
+    request.limits.max_manifest_bytes = 128 * 1024;
+    let mut packages = Vec::new();
+    let mut entries = Vec::new();
+    for index in 0..65 {
+        let name = format!("Pkg{index:02}");
+        let package_root = format!("UI/{name}");
+        std::fs::create_dir(root.0.join(&package_root))?;
+        let dependencies = match index {
+            0 => "## Dependencies: Pkg01\n",
+            1 => "## Dependencies: Pkg00\n",
+            _ => "",
+        };
+        let toc = format!(
+            "## Interface: {}\n{dependencies}main.lua\n",
+            request.target.reference_profile.interface()
+        );
+        for (path, kind, text) in [
+            (
+                format!("{package_root}/{name}.toc"),
+                PlatformFileKind::Toc,
+                toc,
+            ),
+            (
+                format!("{package_root}/main.lua"),
+                PlatformFileKind::Lua,
+                "local value = 1\n".to_owned(),
+            ),
+        ] {
+            std::fs::write(root.0.join(&path), text.as_bytes())?;
+            entries.push(PlatformInventoryEntry {
+                path,
+                kind,
+                disposition: PlatformEntryDisposition::Included {
+                    digest: raw_digest(text.as_bytes()),
+                    byte_length: text.len() as u64,
+                    object_id: None,
+                },
+            });
+        }
+        request.roots[0]
+            .selected_tocs
+            .push(format!("{package_root}/{name}.toc"));
+        packages.push(ProjectPackageInput::new(
+            &name,
+            &package_root,
+            index == 0,
+            vec![ProjectPackageVariantInput::new(
+                wow_project::disk::ProjectDiskFile::new(format!("{name}.toc")),
+                true,
+            )],
+        ));
+    }
+    let profile = BlizzardUiSourceProfile::new(request)?;
+    let mut declared = inventory(&root, &profile)?;
+    declared.entries = entries;
+    declared.roots[0].declared_entries = 130;
+    let stop = AtomicBool::new(false);
+    let source = Arc::new(
+        root.directory()?
+            .admit_platform_source(&profile, declared, &stop)?,
+    );
+    assert!(source.specialize_packages(&packages, None, &stop).is_err());
+    let census = census_platform_packages(&source, &packages, None, &stop)?;
+    assert_eq!(census.packages().len(), 65);
+    assert_eq!(census.loads().selected_sources, 130);
+    assert_eq!(census.loads().main_lua_files, 65);
+    assert_eq!(census.loads().load_units, 65);
+    assert_eq!(census.loads().units_without_retained_target, 0);
+    assert_eq!(census.dependencies().resolved, 2);
+    assert_eq!(
+        census
+            .order_groups()
+            .iter()
+            .filter(|group| group.cyclic)
+            .count(),
+        1
+    );
+    assert_eq!(census.coverage(), CensusCoverage::Partial);
+    packages.reverse();
+    assert_eq!(
+        census.digest(),
+        census_platform_packages(&source, &packages, None, &stop)?.digest()
+    );
+    packages.pop();
+    assert!(census_platform_packages(&source, &packages, None, &stop).is_err());
+    assert_eq!(
+        census_platform_packages(&source, &packages, None, &AtomicBool::new(true))
+            .err()
+            .ok_or("package census ignored cancellation")?
+            .code(),
+        ProjectErrorCode::SourceReadCancelled
+    );
+    Ok(())
+}
+
+#[test]
 fn xtask_manifest_bridge_verifies_bytes_and_preserves_selected_scope() -> TestResult {
     use wow_project::disk::{ManifestedPlatformInput, ProjectDiskFile};
     use wow_project::load::census::{
