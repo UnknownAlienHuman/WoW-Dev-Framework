@@ -129,7 +129,8 @@ fn named_toc_families_publish_through_matcher_with_exact_graph_readback()
     let (snapshot, recognition) = toc::publish(source.candidate(), &provenance, &stop)
         .map_err(|error| std::io::Error::other(format!("TOC publication: {error}")))?;
     snapshot.validate(&stop)?;
-    let topology = toc::maps(&snapshot, &recognition, &stop)
+    let addresses = SourceGraphAddressCrosswalk::legacy(&provenance, source.candidate(), &stop)?;
+    let topology = toc::maps(&snapshot, &addresses, &recognition, &stop)
         .map_err(|error| std::io::Error::other(format!("TOC crosswalk: {error}")))?;
     assert_eq!(recognition.len(), 5);
     for family in wow_recognizers::source_toc::SourceTocFamily::ALL {

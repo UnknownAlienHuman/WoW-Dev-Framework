@@ -4,6 +4,7 @@
 //! it. Nodes and edges are bound only after every producer has published.
 use std::collections::BTreeMap;
 
+use super::source_addresses::SourceGraphAddressCrosswalk;
 use super::*;
 
 pub use wow_recognizers::source_bridge::{
@@ -76,7 +77,7 @@ fn replacement(
 
 pub(super) fn publish_signals(
     source: &GraphPartitionSnapshot,
-    provenance: &ProjectGraphProvenance,
+    crosswalk: &SourceGraphAddressCrosswalk<'_, '_>,
     stop: &AtomicBool,
 ) -> ServiceResult<(
     GraphPartitionSnapshot,
@@ -87,6 +88,7 @@ pub(super) fn publish_signals(
     W5HookRecognition,
     SourceLibraryRecognition,
 )> {
+    let provenance = crosswalk.source();
     let report = provenance
         .function_call_report()
         .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?;
@@ -126,7 +128,7 @@ pub(super) fn publish_signals(
     let frame = w1_recognize_native_frame_events(
         W1Input {
             owner: source,
-            source_partition: wow_project::graph::SOURCE_GRAPH_PARTITION,
+            source_partition: crosswalk.analyzer_partition(source, stop)?,
             report,
             context: provenance.context(),
             function_proposals: function_proposals.clone(),
@@ -142,6 +144,7 @@ pub(super) fn publish_signals(
     )
     .map_err(|e| recognizer_error("native_frame_event", e))?;
     checkpoint(stop)?;
+    crosswalk.reserve("signal_recognition", &frame.recognition, stop)?;
     let frame_snapshot = replacement(source, frame.batch, frame.coverage, stop)?;
     let owner_view = &frame_snapshot;
 
@@ -161,7 +164,7 @@ pub(super) fn publish_signals(
     let bridge = w2_recognize_native_event_bridges(
         W2Input {
             owner: owner_view,
-            source_partition: wow_project::graph::SOURCE_GRAPH_PARTITION,
+            source_partition: crosswalk.analyzer_partition(owner_view, stop)?,
             report,
             context: provenance.context(),
             function_proposals: function_proposals.clone(),
@@ -174,6 +177,7 @@ pub(super) fn publish_signals(
     )
     .map_err(|e| recognizer_error("native_event_bridge", e))?;
     checkpoint(stop)?;
+    crosswalk.reserve("bridge_recognition", &bridge.recognition, stop)?;
     let bridge_snapshot = replacement(owner_view, bridge.batch, bridge.coverage, stop)?;
     let owner_view = &bridge_snapshot;
 
@@ -181,7 +185,7 @@ pub(super) fn publish_signals(
     let custom = w3_recognize_signals(
         W3Input {
             owner: owner_view,
-            source_partition: wow_project::graph::SOURCE_GRAPH_PARTITION,
+            source_partition: crosswalk.analyzer_partition(owner_view, stop)?,
             report,
             context: provenance.context(),
             function_proposals: function_proposals.clone(),
@@ -194,6 +198,7 @@ pub(super) fn publish_signals(
     )
     .map_err(|e| recognizer_error("custom_registry", e))?;
     checkpoint(stop)?;
+    crosswalk.reserve("custom_recognition", &custom.recognition, stop)?;
     let custom_snapshot = replacement(owner_view, custom.batch, custom.coverage, stop)?;
     let owner_view = &custom_snapshot;
 
@@ -201,7 +206,7 @@ pub(super) fn publish_signals(
     let cvar = recognize_source_cvar_callbacks(
         W3Input {
             owner: owner_view,
-            source_partition: wow_project::graph::SOURCE_GRAPH_PARTITION,
+            source_partition: crosswalk.analyzer_partition(owner_view, stop)?,
             report,
             context: provenance.context(),
             function_proposals,
@@ -214,12 +219,13 @@ pub(super) fn publish_signals(
     )
     .map_err(|e| recognizer_error("cvar_callback", e))?;
     checkpoint(stop)?;
+    crosswalk.reserve("cvar_recognition", &cvar.recognition, stop)?;
     let cvar_snapshot = replacement(owner_view, cvar.batch, cvar.coverage, stop)?;
 
     // core.hook.set_script@1 / core.hook.hook_script@1 / core.hook.secure_posthook@1
     let hooks_input = W5HookInput {
         owner: &cvar_snapshot,
-        source_partition: wow_project::graph::SOURCE_GRAPH_PARTITION,
+        source_partition: crosswalk.analyzer_partition(&cvar_snapshot, stop)?,
         report,
         context: provenance.context(),
         function_proposals: hook_function_proposals.clone(),
@@ -231,12 +237,13 @@ pub(super) fn publish_signals(
     let hooks =
         recognize_source_hooks(hooks_input, stop).map_err(|e| recognizer_error("hooks", e))?;
     checkpoint(stop)?;
+    crosswalk.reserve("hook_recognition", &hooks.recognition, stop)?;
     let hooks_snapshot = replacement(&cvar_snapshot, hooks.batch, hooks.coverage, stop)?;
 
     // core.library.libstub_require@1 / core.library.libstub_new@1 / core.library.embed@1
     let library_input = SourceLibraryInput {
         owner: &hooks_snapshot,
-        source_partition: wow_project::graph::SOURCE_GRAPH_PARTITION,
+        source_partition: crosswalk.analyzer_partition(&hooks_snapshot, stop)?,
         report,
         context: provenance.context(),
         function_proposals: hook_function_proposals,
@@ -247,6 +254,7 @@ pub(super) fn publish_signals(
     let library = recognize_source_library(library_input, stop)
         .map_err(|e| recognizer_error("library", e))?;
     checkpoint(stop)?;
+    crosswalk.reserve("library_recognition", &library.recognition, stop)?;
     let library_snapshot = replacement(&hooks_snapshot, library.batch, library.coverage, stop)?;
 
     Ok((
@@ -263,24 +271,26 @@ pub(super) fn publish_signals(
 #[allow(clippy::too_many_arguments)]
 pub(super) fn maps(
     snapshot: &GraphPartitionSnapshot,
-    provenance: &ProjectGraphProvenance,
+    crosswalk: &SourceGraphAddressCrosswalk<'_, '_>,
     signal_recognition: &W1Recognition,
     bridge_recognition: &W2BridgeRecognition,
     custom_recognition: &W3Recognition,
     cvar_recognition: &W4Recognition,
     stop: &AtomicBool,
 ) -> ServiceResult<SignalTopology> {
+    let provenance = crosswalk.source();
+    let lookup = snapshot.producer_lookup(stop).map_err(graph_error)?;
+    let materialized_nodes = super::materialized::nodes(snapshot, stop)?;
     let _ = (
         signal_recognition,
         bridge_recognition,
         custom_recognition,
         cvar_recognition,
     );
-    let bounds = snapshot.snapshot().limits();
     let mut function_nodes = BTreeMap::new();
     for function in provenance.functions() {
         checkpoint(stop)?;
-        let node_id = materialized_node_id(snapshot, &function.proposal_id, bounds)?;
+        let node_id = crosswalk.node_id(snapshot, &lookup, &function.proposal_id, stop)?;
         function_nodes.insert(function.function_id.as_str(), node_id);
     }
 
@@ -320,23 +330,54 @@ pub(super) fn maps(
             .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?;
         for accepted in partition.report().accepted_entities() {
             checkpoint(stop)?;
-            nodes.push(SignalNode {
-                call_id: String::new(),
-                kind: kind.to_owned(),
-                key: accepted.proposal_id().to_string(),
-                node_id: accepted.node().node_id().clone(),
-            });
+            crosswalk.append(
+                "signal_nodes",
+                &mut nodes,
+                SignalNode {
+                    call_id: String::new(),
+                    kind: kind.to_owned(),
+                    key: accepted.proposal_id().to_string(),
+                    node_id: materialized_partition_node_id(
+                        snapshot,
+                        partition_id,
+                        accepted.proposal_id(),
+                        snapshot.snapshot().limits(),
+                    )?,
+                },
+                stop,
+            )?;
         }
         for accepted in partition.report().accepted_relations() {
             checkpoint(stop)?;
-            edges.push(SignalEdge {
-                call_id: String::new(),
-                relation: accepted.edge().relation(),
-                confidence: accepted.edge().confidence(),
-                function_node_id: accepted.edge().from().clone(),
-                target_node_id: accepted.edge().to().clone(),
-                edge_id: accepted.edge().edge_id().clone(),
-            });
+            let edge_id = super::materialized::edge_id(
+                snapshot,
+                partition_id,
+                accepted.proposal_id(),
+                &materialized_nodes,
+            )?;
+            let edge = snapshot
+                .snapshot()
+                .edge(&edge_id)
+                .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?;
+            if edge.relation() != accepted.edge().relation()
+                || edge.confidence() != accepted.edge().confidence()
+                || edge.evidence_ids() != accepted.edge().evidence_ids()
+            {
+                return Err(error(ServiceErrorCode::InternalContractViolation));
+            }
+            crosswalk.append(
+                "signal_edges",
+                &mut edges,
+                SignalEdge {
+                    call_id: String::new(),
+                    relation: edge.relation(),
+                    confidence: edge.confidence(),
+                    function_node_id: edge.from().clone(),
+                    target_node_id: edge.to().clone(),
+                    edge_id,
+                },
+                stop,
+            )?;
         }
     }
 
@@ -347,5 +388,6 @@ pub(super) fn maps(
         cvar_recognition,
         &function_nodes,
     );
+    checkpoint(stop)?;
     Ok(SignalTopology { nodes, edges })
 }

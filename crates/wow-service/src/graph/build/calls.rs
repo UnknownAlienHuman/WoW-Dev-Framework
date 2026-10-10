@@ -1,4 +1,5 @@
 //! Glue for the source-function and recognizer producer partitions.
+use super::source_addresses::SourceGraphAddressCrosswalk;
 use super::*;
 use std::collections::BTreeMap;
 use wow_recognizers::source_calls::{
@@ -22,16 +23,17 @@ pub(super) struct CallEdge {
 
 pub(super) fn publish(
     source: &GraphPartitionSnapshot,
-    provenance: &ProjectGraphProvenance,
+    crosswalk: &SourceGraphAddressCrosswalk<'_, '_>,
     stop: &AtomicBool,
 ) -> ServiceResult<(GraphPartitionSnapshot, SourceCallRecognition)> {
+    let provenance = crosswalk.source();
     let report = provenance
         .function_call_report()
         .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?;
     let result = recognize_source_calls(
         SourceCallInput {
             owner: source,
-            source_partition: wow_project::graph::SOURCE_GRAPH_PARTITION,
+            source_partition: crosswalk.analyzer_partition(source, stop)?,
             report,
             context: provenance.context(),
             function_proposals: provenance
@@ -66,6 +68,7 @@ pub(super) fn publish(
             ),
         )
     })?;
+    crosswalk.reserve("call_recognition", &result.recognition, stop)?;
     checkpoint(stop)?;
     let candidate = source
         .prepare_replacement(
@@ -84,27 +87,30 @@ pub(super) fn publish(
 
 pub(super) fn maps(
     snapshot: &GraphPartitionSnapshot,
-    provenance: &ProjectGraphProvenance,
+    crosswalk: &SourceGraphAddressCrosswalk<'_, '_>,
     recognition: &SourceCallRecognition,
     stop: &AtomicBool,
 ) -> ServiceResult<(Vec<FunctionNode>, Vec<CallEdge>)> {
+    let provenance = crosswalk.source();
+    let lookup = snapshot.producer_lookup(stop).map_err(graph_error)?;
     let mut functions = Vec::new();
     let mut node_ids = BTreeMap::new();
     for function in provenance.functions() {
         checkpoint(stop)?;
-        let node_id = materialized_node_id(
-            snapshot,
-            &function.proposal_id,
-            snapshot.snapshot().limits(),
-        )?;
+        let node_id = crosswalk.node_id(snapshot, &lookup, &function.proposal_id, stop)?;
         node_ids.insert(function.function_id.as_str(), node_id.clone());
-        functions.push(FunctionNode {
-            function_id: function.function_id.clone(),
-            path: function.path.clone(),
-            span: function.span,
-            kind: function.kind,
-            node_id,
-        });
+        crosswalk.append(
+            "function_nodes",
+            &mut functions,
+            FunctionNode {
+                function_id: function.function_id.clone(),
+                path: function.path.clone(),
+                span: function.span,
+                kind: function.kind,
+                node_id,
+            },
+            stop,
+        )?;
     }
     let partition = snapshot
         .partition(SOURCE_CALL_PARTITION)
@@ -151,10 +157,15 @@ pub(super) fn maps(
         if snapshot.snapshot().edge(final_edge.edge_id()).is_none() {
             return Err(error(ServiceErrorCode::InternalContractViolation));
         }
-        edges.push(CallEdge {
-            call_id: receipt.call_id.clone(),
-            edge_id: final_edge.edge_id().clone(),
-        });
+        crosswalk.append(
+            "call_edges",
+            &mut edges,
+            CallEdge {
+                call_id: receipt.call_id.clone(),
+                edge_id: final_edge.edge_id().clone(),
+            },
+            stop,
+        )?;
     }
     Ok((functions, edges))
 }

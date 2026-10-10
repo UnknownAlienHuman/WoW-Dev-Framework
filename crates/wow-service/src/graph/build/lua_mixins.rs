@@ -1,4 +1,5 @@
 //! Glue for the W11 declarative CreateFromMixins and Mixin producer partitions.
+use super::source_addresses::SourceGraphAddressCrosswalk;
 use super::*;
 use std::collections::BTreeMap;
 use wow_recognizers::source_mixins::{
@@ -45,20 +46,21 @@ type MixinMaps = (
 
 pub(super) fn publish(
     source: &GraphPartitionSnapshot,
-    provenance: &ProjectGraphProvenance,
+    crosswalk: &SourceGraphAddressCrosswalk<'_, '_>,
     stop: &AtomicBool,
 ) -> ServiceResult<(
     GraphPartitionSnapshot,
     SourceMixinRecognition,
     SourceMixinAssignmentRecognition,
 )> {
+    let provenance = crosswalk.source();
     let report = provenance
         .function_call_report()
         .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?;
     let construction = recognize_source_mixins(
         SourceMixinInput {
             owner: source,
-            source_partition: wow_project::graph::SOURCE_GRAPH_PARTITION,
+            source_partition: crosswalk.analyzer_partition(source, stop)?,
             report,
             context: provenance.context(),
             function_proposals: provenance
@@ -92,6 +94,7 @@ pub(super) fn publish(
         stop,
     )
     .map_err(recognizer_error)?;
+    crosswalk.reserve("mixin_recognition", &construction.recognition, stop)?;
     checkpoint(stop)?;
     let construction_candidate = source
         .prepare_replacement(
@@ -109,7 +112,8 @@ pub(super) fn publish(
     let assignment = recognize_source_mixin_assignments(
         SourceMixinInput {
             owner: construction_candidate.candidate(),
-            source_partition: wow_project::graph::SOURCE_GRAPH_PARTITION,
+            source_partition: crosswalk
+                .analyzer_partition(construction_candidate.candidate(), stop)?,
             report,
             context: provenance.context(),
             function_proposals: provenance
@@ -143,6 +147,11 @@ pub(super) fn publish(
         stop,
     )
     .map_err(recognizer_error)?;
+    crosswalk.reserve(
+        "mixin_assignment_recognition",
+        &assignment.recognition,
+        stop,
+    )?;
     checkpoint(stop)?;
     let assignment_candidate = construction_candidate
         .candidate()
@@ -170,11 +179,13 @@ pub(super) fn publish(
 
 pub(super) fn maps(
     snapshot: &GraphPartitionSnapshot,
-    provenance: &ProjectGraphProvenance,
+    crosswalk: &SourceGraphAddressCrosswalk<'_, '_>,
     recognition: &SourceMixinRecognition,
     assignment_recognition: &SourceMixinAssignmentRecognition,
     stop: &AtomicBool,
 ) -> ServiceResult<MixinMaps> {
+    let provenance = crosswalk.source();
+    let lookup = snapshot.producer_lookup(stop).map_err(graph_error)?;
     let partition = snapshot
         .partition(SOURCE_MIXIN_PARTITION)
         .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?;
@@ -220,7 +231,7 @@ pub(super) fn maps(
         let caller_proposal = function_proposals
             .get(call.caller_function_id())
             .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?;
-        let caller = materialized_node_id(snapshot, caller_proposal, snapshot.snapshot().limits())?;
+        let caller = crosswalk.node_id(snapshot, &lookup, caller_proposal, stop)?;
         let relation_index = accepted_relations
             .binary_search_by(|accepted| {
                 accepted
@@ -244,14 +255,24 @@ pub(super) fn maps(
             return Err(error(ServiceErrorCode::InternalContractViolation));
         }
 
-        instances.push(MixinInstanceNode {
-            call_id: receipt.call_id.clone(),
-            node_id: instance.clone(),
-        });
-        instantiations.push(InstantiationEdge {
-            call_id: receipt.call_id.clone(),
-            edge_id: final_edge.edge_id().clone(),
-        });
+        crosswalk.append(
+            "mixin_instance_nodes",
+            &mut instances,
+            MixinInstanceNode {
+                call_id: receipt.call_id.clone(),
+                node_id: instance.clone(),
+            },
+            stop,
+        )?;
+        crosswalk.append(
+            "instantiation_edges",
+            &mut instantiations,
+            InstantiationEdge {
+                call_id: receipt.call_id.clone(),
+                edge_id: final_edge.edge_id().clone(),
+            },
+            stop,
+        )?;
 
         for mixin in &receipt.mixins {
             checkpoint(stop)?;
@@ -261,11 +282,8 @@ pub(super) fn maps(
                 })
                 .map_err(|_| error(ServiceErrorCode::InternalContractViolation))?;
             let relation = accepted_relations[relation_index].edge();
-            let declaration = materialized_node_id(
-                snapshot,
-                &mixin.declaration_proposal_id,
-                snapshot.snapshot().limits(),
-            )?;
+            let declaration =
+                crosswalk.node_id(snapshot, &lookup, &mixin.declaration_proposal_id, stop)?;
             let final_edge = wow_graph::GraphEdge::new(
                 instance.clone(),
                 declaration,
@@ -280,22 +298,28 @@ pub(super) fn maps(
             {
                 return Err(error(ServiceErrorCode::InternalContractViolation));
             }
-            mixins.push(ConstructionMixinEdge {
-                call_id: receipt.call_id.clone(),
-                declaration_proposal_id: mixin.declaration_proposal_id.clone(),
-                argument_ordinals: mixin.argument_ordinals.clone(),
-                edge_id: final_edge.edge_id().clone(),
-            });
+            crosswalk.append(
+                "construction_mixin_edges",
+                &mut mixins,
+                ConstructionMixinEdge {
+                    call_id: receipt.call_id.clone(),
+                    declaration_proposal_id: mixin.declaration_proposal_id.clone(),
+                    argument_ordinals: mixin.argument_ordinals.clone(),
+                    edge_id: final_edge.edge_id().clone(),
+                },
+                stop,
+            )?;
         }
     }
 
     let mut assignments = Vec::new();
     for receipt in assignment_recognition.matches() {
         checkpoint(stop)?;
-        let target = materialized_node_id(
+        let target = crosswalk.node_id(
             snapshot,
+            &lookup,
             &receipt.target_declaration_proposal_id,
-            snapshot.snapshot().limits(),
+            stop,
         )?;
         for mixin in &receipt.mixins {
             checkpoint(stop)?;
@@ -305,11 +329,8 @@ pub(super) fn maps(
                 })
                 .map_err(|_| error(ServiceErrorCode::InternalContractViolation))?;
             let relation = accepted_assignment_relations[relation_index].edge();
-            let declaration = materialized_node_id(
-                snapshot,
-                &mixin.declaration_proposal_id,
-                snapshot.snapshot().limits(),
-            )?;
+            let declaration =
+                crosswalk.node_id(snapshot, &lookup, &mixin.declaration_proposal_id, stop)?;
             let final_edge = wow_graph::GraphEdge::new(
                 target.clone(),
                 declaration,
@@ -324,13 +345,18 @@ pub(super) fn maps(
             {
                 return Err(error(ServiceErrorCode::InternalContractViolation));
             }
-            assignments.push(AssignmentMixinEdge {
-                call_id: receipt.call_id.clone(),
-                target_declaration_proposal_id: receipt.target_declaration_proposal_id.clone(),
-                declaration_proposal_id: mixin.declaration_proposal_id.clone(),
-                argument_ordinals: mixin.argument_ordinals.clone(),
-                edge_id: final_edge.edge_id().clone(),
-            });
+            crosswalk.append(
+                "assignment_mixin_edges",
+                &mut assignments,
+                AssignmentMixinEdge {
+                    call_id: receipt.call_id.clone(),
+                    target_declaration_proposal_id: receipt.target_declaration_proposal_id.clone(),
+                    declaration_proposal_id: mixin.declaration_proposal_id.clone(),
+                    argument_ordinals: mixin.argument_ordinals.clone(),
+                    edge_id: final_edge.edge_id().clone(),
+                },
+                stop,
+            )?;
         }
     }
 

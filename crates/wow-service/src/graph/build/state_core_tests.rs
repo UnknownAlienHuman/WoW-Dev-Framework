@@ -169,13 +169,15 @@ fn state_core_pipeline_publishes_roots_and_literal_paths() -> Result<(), Box<dyn
         state_core::publish(&after_root, &provenance, &legacy, &stop)
             .map_err(|error| std::io::Error::other(format!("core state: {error}")))?;
     final_snapshot.validate(&stop)?;
+    let addresses = SourceGraphAddressCrosswalk::legacy(&provenance, source.candidate(), &stop)?;
     let root_topology = toc::maps(
         &final_snapshot,
+        &addresses,
         std::slice::from_ref(&root_recognition),
         &stop,
     )
     .map_err(|error| std::io::Error::other(format!("TOC crosswalk: {error}")))?;
-    let topology = state_core::maps(&final_snapshot, &core_recognition, &stop)
+    let topology = state_core::maps(&final_snapshot, &addresses, &core_recognition, &stop)
         .map_err(|error| std::io::Error::other(format!("core crosswalk: {error}")))?;
     // Three core rule phases: saved_variable_root plus literal read and write.
     assert_eq!(core_recognition.len(), 2);

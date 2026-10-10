@@ -2,8 +2,9 @@
 
 Additive `wow-recognizers` APIs compose retained TOC/XML/script/state facts over
 exact Producer addresses from the held native direct graph. This checkpoint
-adds native caller composition; configuration, service publication, replay and
-CLI routes retain their existing layouts. The focused native scenario and all
+adds native caller composition. The later explicit
+[direct service selection](PLATFORM_DIRECT_SERVICE.md) uses these bridges in
+native publication/replay while older routes keep their layouts. The focused native scenario and all
 workspace gates/build pass on 2026-10-10. Full W17/E3 acceptance remains open.
 
 ## APIs and native inputs
@@ -69,8 +70,8 @@ check, strict Clippy, tests (**941 passed, 0 failed, 1 ignored, 112 targets**),
 strict rustdoc under `RUSTDOCFLAGS=-D warnings`, and workspace
 all-target/all-feature build all passed. Publication and CI are not asserted.
 
-Configuration/service/replay selection of the split and other recognizer
-routes remain open. Existing source `/19`-`/21`, ordinary replay v1-v4,
+The explicit source /22 service chain and native replay v9 now select the split;
+see [selected direct service](PLATFORM_DIRECT_SERVICE.md). Existing source `/19`-`/21`, ordinary replay v1-v4,
 platform replay v5-v8 and storage/catalog/epoch channels remain unchanged.
 Missing direct roles, fingerprints, bounded `SkeletonInputView`, source
 transport, native fault/exhaustion and real Gethe/Ketho corpus/performance/WoW

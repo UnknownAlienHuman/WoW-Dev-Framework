@@ -167,7 +167,10 @@ fn validate(
         Some(crate::PlatformGraphProfile::PackageProjectionV1) => {
             super::PACKAGE_SOURCE_GRAPH_PROFILE
         }
-        Some(crate::PlatformGraphProfile::PackageProjectionWithRawInventoryV1) => {
+        Some(
+            crate::PlatformGraphProfile::PackageProjectionWithRawInventoryV1
+            | crate::PlatformGraphProfile::DirectPlatformProducersWithRawInventoryV1,
+        ) => {
             return Err(ProjectError::new(
                 ProjectErrorCode::DeferredCapability,
                 ProjectPhase::View,

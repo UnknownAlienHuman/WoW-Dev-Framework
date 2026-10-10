@@ -84,6 +84,7 @@ use crate::{
 pub const SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/19";
 pub const PACKAGE_SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/20";
 pub const PACKAGE_RAW_SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/21";
+pub const DIRECT_PLATFORM_SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/22";
 pub const SOURCE_GRAPH_PARTITION: &str = "wow-project.source-load";
 
 /// Select the graph identity from the admitted configuration, never from source
@@ -95,6 +96,9 @@ pub fn source_graph_profile(configuration: &crate::ProjectConfiguration) -> &'st
         Some(crate::PlatformGraphProfile::PackageProjectionV1) => PACKAGE_SOURCE_GRAPH_PROFILE,
         Some(crate::PlatformGraphProfile::PackageProjectionWithRawInventoryV1) => {
             PACKAGE_RAW_SOURCE_GRAPH_PROFILE
+        }
+        Some(crate::PlatformGraphProfile::DirectPlatformProducersWithRawInventoryV1) => {
+            DIRECT_PLATFORM_SOURCE_GRAPH_PROFILE
         }
     }
 }
@@ -787,6 +791,16 @@ pub fn build_source_graph_proposals(
     project: &ProjectView,
     stop: &AtomicBool,
 ) -> ProjectResult<ProjectSourceGraphProposals> {
+    crate::analyzer::checkpoint(stop)?;
+    if project.configuration().platform_graph_profile()
+        == Some(crate::PlatformGraphProfile::DirectPlatformProducersWithRawInventoryV1)
+    {
+        return Err(ProjectError::new(
+            ProjectErrorCode::DeferredCapability,
+            ProjectPhase::View,
+            "selected direct layout requires native ordered producer admission",
+        ));
+    }
     let CollectedSourceGraph {
         registry,
         universe,

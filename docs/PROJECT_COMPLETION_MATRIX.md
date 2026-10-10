@@ -2,7 +2,7 @@
 
 **Audited:** 2026-09-19 America/New_York. Execution inventory refreshed 2026-10-10
 through the scoped W17 replay/stable namespace, native lookup, raw traversal,
-selected package/raw graph, native direct-plan and assertion-adapter checkpoints
+selected package/raw graph, native direct-plan, assertion-adapter and selected direct-service checkpoints
 below, including their final workspace gate census.
 
 This is the current execution ledger. [IMPLEMENTATION_HANDOFF.md](IMPLEMENTATION_HANDOFF.md)
@@ -29,7 +29,7 @@ The root [Cargo.toml](../Cargo.toml) activates **16 members**, including the int
 |---|---|---|
 | `wow-core` | Typed identities, canonical JSON, evidence, coverage, results and operation primitives | Reconcile the complete E0-A contract/test matrix; compilation is not the acceptance ledger |
 | `wow-emmy` | Real pinned analyzer adapter, explicit Main/Library workspaces, same-session XML virtual units, syntax/semantic diagnostics, direct member calls and scoped local-flow facts | E0-C fixture/pin/checksum closure; additional semantic operations and update probes are not inferred from parser compatibility |
-| `wow-project` | Explicit inventories, bounded TOC/XML/package receipts, analyzer bindings, immutable generations, exact source artifacts/handles, guarded updates, publication, native replay and a separate native four-stage platform direct plan with exact evidence closure | E0-D fixture identity closure; effective XML receiver/load semantics, full load acceptance, overlays, split application integration and full durable project publication |
+| `wow-project` | Explicit inventories, bounded TOC/XML/package receipts, analyzer bindings, immutable generations, exact source artifacts/handles, guarded updates, publication, native replay and a separate native four-stage platform direct plan with exact evidence closure | E0-D fixture identity closure; effective XML receiver/load semantics, full load acceptance, overlays, missing direct roles and full durable project publication |
 | `wow-rules` | `wow.api.exists@1` over physical Main and exact-static XML inline facts; `wow.secret.local_operation@1` over its bounded physical flow slice | E0-E normative fixtures, exact prerequisite identities and complete capability/negative-authority cases; no inferred XML receiver/runtime authority |
 | `wow-service` | E0 status/check over immutable normalized contexts, mixed physical/XML rule scopes and exact XML finding projection; separate ReferenceView administration/publication; native Project/Graph replay for guarded READY-target source-authority export | E0-F end-to-end fixture/CLI closure; full E1 Reference Pack and later public operation families |
 | `wow-store` | Typed SQLite objects, catalogs/CAS, journal, leases, GC and integrity; manifested recovery, native backup, isolated restore, same-epoch replacement, whole-instance quarantine/guarded restore, portable holds and inactive physical v1/v2 to v3 migration with guarded staging, target export, private immutable mapped-root/Current preparation and portable original-epoch selector/hold authority | Full E1-A/E2-D acceptance; live cross-epoch selection/reconciliation, original source SQL/history hydration, portable full migration history, payload/runtime migration, domain quarantine, interrupted-write/power-loss and cleanup faults remain open |
@@ -64,7 +64,7 @@ no Rust implementation in the audited source. Their documentation is not a binar
 | E1-D | Partial executable Reference Pack service and active internal builder with durable materialization/finalization | Close external parity/license/rebuild evidence, Windows/process-loss acceptance and complete package gates; code presence is not `ValidatedLocal` |
 | E2-A–E2-B | Partial executable | All 26 active E2-B rule IDs are service-published after the W11 semantic repair, TOC, XML and state slices; close public CLI/full-pipeline fixtures and package acceptance |
 | E2-C–E2-D | Partial source index, manifested store, native live pair service/CLI, cancellable updates, exact Library/fact-profile binding, retained physical parser updates and durable physical update/removal publication; bounded retention/GC, recovery/replacement, inactive migration/READY preparation, portable source authority and guarded cross-epoch selection/reconciliation | Dependency-specific fact reuse, standalone/package durable updates, portable full migration history and complete E2 acceptance remain open; see [REPLAY_PUBLICATION.md](../crates/wow-project/REPLAY_PUBLICATION.md) |
-| E3-A | Partial exact raw/package admission, owner-bound configuration, native Main/package graph, Included-member graph/native reads, genuine replay/stable namespace publication and a separate native four-stage direct plan with exact assertion/evidence capability | Split service/recognizer/replay integration, missing direct roles, fingerprints, bounded SkeletonInputView and source service/CLI transport; full source-universe acceptance remains open |
+| E3-A | Partial exact raw/package admission, owner-bound configuration, native Main/package graph, Included-member graph/native reads, genuine replay/stable namespace publication and selected native four-stage direct service/replay with exact assertion/evidence capability | Missing direct roles, fingerprints, bounded SkeletonInputView and source service/CLI transport; full source-universe acceptance remains open |
 | E3-B–E3-C | Not started | Context owners and service/CLI after their actual producer inputs |
 | E4-A–E4-C | Not started | Search, lineage/migration/static impact and routing after A0 prerequisites |
 | E5-A–E5-C | Not started | Calibration, independent review/holdout and governed publication lifecycle |
@@ -653,3 +653,21 @@ remain open. Missing direct roles, fingerprints, SkeletonInputView, source
 transport, full W17/E3, real Gethe/Ketho corpus/performance/runtime and native
 fault/exhaustion acceptance remain open. Gethe materialization stays deferred;
 W18-W26 are unchanged.
+
+The selected direct service/replay checkpoint now admits raw inventory and
+four native source stages before the existing recognizer chain. Source /22,
+request12/result19 and native replay/storage v9 are explicit; older recipes and
+exact catalogs remain selected separately. The disk-absent lifecycle verifies
+complete selected partition membership, nonempty scripts/state/core/library,
+actual final topology IDs, exact v9 reopen and frozen v8 refusal with unchanged
+Current/epoch/members. Shared metadata accounting and final cancellation checks
+apply to native publication and artifact paths; two helper regressions pass.
+
+Final workspace policy, fmt, all-target/all-feature check, strict Clippy, tests
+(944 passed, 0 failed, 1 ignored, 112 targets), strict rustdoc and build pass,
+completed 2026-10-10 10:08:49 UTC. See
+[selected direct service](PLATFORM_DIRECT_SERVICE.md). Missing direct roles,
+fingerprints, SkeletonInputView and source transport still precede full W17/E3
+and later context work. Real corpus/performance/runtime and native fault timing
+remain NotEvaluated; Gethe materialization stays deferred. No full package gate
+advances from this scoped checkpoint.

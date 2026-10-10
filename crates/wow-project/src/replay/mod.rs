@@ -29,6 +29,7 @@ const PLATFORM_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/5";
 const PACKAGE_XML_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/6";
 const PACKAGE_GRAPH_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/7";
 const RAW_INVENTORY_GRAPH_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/8";
+const DIRECT_PLATFORM_GRAPH_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/9";
 const MAX_FILES: usize = 8192;
 const MAX_LIBRARIES: usize = 64;
 const MAX_FILE_BYTES: usize = 16 * 1024 * 1024;
@@ -251,6 +252,10 @@ impl ProjectReplay {
                 Some(PackageXmlBindingProfile::SameSessionV1),
                 Some(PlatformGraphProfile::PackageProjectionWithRawInventoryV1),
             ) => RAW_INVENTORY_GRAPH_REPLAY_SCHEMA,
+            (
+                Some(PackageXmlBindingProfile::SameSessionV1),
+                Some(PlatformGraphProfile::DirectPlatformProducersWithRawInventoryV1),
+            ) => DIRECT_PLATFORM_GRAPH_REPLAY_SCHEMA,
             (Some(PackageXmlBindingProfile::SameSessionV1), None) => PACKAGE_XML_REPLAY_SCHEMA,
             (None, None) => PLATFORM_REPLAY_SCHEMA,
             (None, Some(_)) => return Err(invalid()),
@@ -323,6 +328,9 @@ impl ProjectReplay {
                     PlatformGraphProfile::PackageProjectionV1 => PACKAGE_GRAPH_REPLAY_SCHEMA,
                     PlatformGraphProfile::PackageProjectionWithRawInventoryV1 => {
                         RAW_INVENTORY_GRAPH_REPLAY_SCHEMA
+                    }
+                    PlatformGraphProfile::DirectPlatformProducersWithRawInventoryV1 => {
+                        DIRECT_PLATFORM_GRAPH_REPLAY_SCHEMA
                     }
                 })
             } else {
@@ -537,6 +545,7 @@ impl ProjectReplay {
             PACKAGE_XML_REPLAY_SCHEMA => Ok("wow-project.live-replay.v6"),
             PACKAGE_GRAPH_REPLAY_SCHEMA => Ok("wow-project.live-replay.v7"),
             RAW_INVENTORY_GRAPH_REPLAY_SCHEMA => Ok("wow-project.live-replay.v8"),
+            DIRECT_PLATFORM_GRAPH_REPLAY_SCHEMA => Ok("wow-project.live-replay.v9"),
             _ => Err(invalid()),
         }
     }

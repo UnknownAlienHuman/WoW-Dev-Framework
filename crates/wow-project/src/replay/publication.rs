@@ -1,5 +1,6 @@
 //! Project-owned coherent handoff to the manifested store. Semantic identities
 //! precede logical membership, publication-set identity and store generation.
+mod direct;
 mod namespace;
 use super::{ProjectReplay, invalid};
 use crate::graph::{
@@ -20,6 +21,7 @@ pub const STORAGE_SCHEMAS: &[&str] = &[
     "wow-project.live-replay.v6",
     "wow-project.live-replay.v7",
     "wow-project.live-replay.v8",
+    "wow-project.live-replay.v9",
     "wow-project.live-pair.v1",
 ];
 /// Exact catalog of already published physical-input epochs. It is never widened
@@ -72,6 +74,18 @@ pub const STORAGE_SCHEMAS_V7: &[&str] = &[
     "wow-project.live-replay.v5",
     "wow-project.live-replay.v6",
     "wow-project.live-replay.v7",
+    "wow-project.live-pair.v1",
+];
+/// Exact catalog before explicitly selected native direct platform producers.
+pub const STORAGE_SCHEMAS_V8: &[&str] = &[
+    "wow-project.live-replay.v1",
+    "wow-project.live-replay.v2",
+    "wow-project.live-replay.v3",
+    "wow-project.live-replay.v4",
+    "wow-project.live-replay.v5",
+    "wow-project.live-replay.v6",
+    "wow-project.live-replay.v7",
+    "wow-project.live-replay.v8",
     "wow-project.live-pair.v1",
 ];
 pub const STORAGE_CHECK: &str = "wow-project.live-pair-native-replay.v1";
@@ -207,6 +221,7 @@ impl AcquiredProjectPair {
                 | "wow-project.live-replay.v6"
                 | "wow-project.live-replay.v7"
                 | "wow-project.live-replay.v8"
+                | "wow-project.live-replay.v9"
         ) {
             return Err(invalid());
         }
@@ -267,6 +282,14 @@ fn validate_pair(
     crate::analyzer::checkpoint(stop)?;
     project.snapshot().validate()?;
     graph.validate(stop).map_err(graph_error)?;
+    if project.configuration().platform_graph_profile()
+        == Some(crate::PlatformGraphProfile::DirectPlatformProducersWithRawInventoryV1)
+    {
+        return direct::validate(project, graph, stop);
+    }
+    if direct::has_direct_partitions(graph) {
+        return Err(invalid());
+    }
     // Reuse the source owner over the real replayed session. No metadata receipt
     // is relabeled as a live project or treated as an executable analyzer.
     let proposals = build_source_graph_proposals(project, stop)?;

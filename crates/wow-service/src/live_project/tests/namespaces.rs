@@ -17,6 +17,7 @@ use wow_project::platform_source::{
     PlatformTarget, ProfileExclusion, SourceAdmissionLimits,
 };
 
+mod direct_service;
 mod native_assertions;
 
 const SOURCE_PROFILE: &str = "profile:fixture:service-platform-namespace-v1";
@@ -130,7 +131,13 @@ fn platform_bundle_with_profile_source(
         ),
         ("opaque.bin", PlatformFileKind::Unknown, &opaque),
     ];
-    if graph_profile == Some(PlatformGraphProfile::PackageProjectionWithRawInventoryV1) {
+    if matches!(
+        graph_profile,
+        Some(
+            PlatformGraphProfile::PackageProjectionWithRawInventoryV1
+                | PlatformGraphProfile::DirectPlatformProducersWithRawInventoryV1
+        )
+    ) {
         members.extend([
             (
                 "unloaded.lua",

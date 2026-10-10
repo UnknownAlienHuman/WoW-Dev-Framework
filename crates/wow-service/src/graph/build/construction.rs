@@ -1,4 +1,5 @@
 //! Glue for the W11 declarative CreateFrame producer partition.
+use super::source_addresses::SourceGraphAddressCrosswalk;
 use super::*;
 use std::collections::BTreeMap;
 use wow_recognizers::source_construction::{
@@ -20,16 +21,17 @@ pub(super) struct CreationEdge {
 
 pub(super) fn publish(
     source: &GraphPartitionSnapshot,
-    provenance: &ProjectGraphProvenance,
+    crosswalk: &SourceGraphAddressCrosswalk<'_, '_>,
     stop: &AtomicBool,
 ) -> ServiceResult<(GraphPartitionSnapshot, SourceConstructionRecognition)> {
+    let provenance = crosswalk.source();
     let report = provenance
         .function_call_report()
         .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?;
     let result = recognize_source_construction(
         SourceConstructionInput {
             owner: source,
-            source_partition: wow_project::graph::SOURCE_GRAPH_PARTITION,
+            source_partition: crosswalk.analyzer_partition(source, stop)?,
             report,
             context: provenance.context(),
             function_proposals: provenance
@@ -56,6 +58,7 @@ pub(super) fn publish(
             _ => ServiceErrorCode::InternalContractViolation,
         })
     })?;
+    crosswalk.reserve("construction_recognition", &result.recognition, stop)?;
     checkpoint(stop)?;
     let candidate = source
         .prepare_replacement(
@@ -74,10 +77,12 @@ pub(super) fn publish(
 
 pub(super) fn maps(
     snapshot: &GraphPartitionSnapshot,
-    provenance: &ProjectGraphProvenance,
+    crosswalk: &SourceGraphAddressCrosswalk<'_, '_>,
     recognition: &SourceConstructionRecognition,
     stop: &AtomicBool,
 ) -> ServiceResult<(Vec<FrameNode>, Vec<CreationEdge>)> {
+    let provenance = crosswalk.source();
+    let lookup = snapshot.producer_lookup(stop).map_err(graph_error)?;
     let partition = snapshot
         .partition(SOURCE_CONSTRUCTION_PARTITION)
         .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?;
@@ -113,7 +118,7 @@ pub(super) fn maps(
         let caller_proposal = function_proposals
             .get(call.caller_function_id())
             .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?;
-        let caller = materialized_node_id(snapshot, caller_proposal, snapshot.snapshot().limits())?;
+        let caller = crosswalk.node_id(snapshot, &lookup, caller_proposal, stop)?;
         let frame = materialized_partition_node_id(
             snapshot,
             SOURCE_CONSTRUCTION_PARTITION,
@@ -138,14 +143,24 @@ pub(super) fn maps(
         {
             return Err(error(ServiceErrorCode::InternalContractViolation));
         }
-        frames.push(FrameNode {
-            call_id: receipt.call_id.clone(),
-            node_id: frame,
-        });
-        edges.push(CreationEdge {
-            call_id: receipt.call_id.clone(),
-            edge_id: final_edge.edge_id().clone(),
-        });
+        crosswalk.append(
+            "frame_nodes",
+            &mut frames,
+            FrameNode {
+                call_id: receipt.call_id.clone(),
+                node_id: frame,
+            },
+            stop,
+        )?;
+        crosswalk.append(
+            "creation_edges",
+            &mut edges,
+            CreationEdge {
+                call_id: receipt.call_id.clone(),
+                edge_id: final_edge.edge_id().clone(),
+            },
+            stop,
+        )?;
     }
     Ok((frames, edges))
 }

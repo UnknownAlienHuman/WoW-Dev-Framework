@@ -1,9 +1,12 @@
-//! Declarative state access producers consume the already admitted legacy
+//! Declarative state access producers consume the already admitted access
 //! partition. Source parsing and exact analyzer/support validation run once.
+use super::source_addresses::SourceGraphAddressCrosswalk;
+use super::state::StateRecognition;
 use super::*;
 use wow_recognizers::source_state_core::{
-    SourceStateCoreFamily, SourceStateCoreInput, SourceStateCoreRecognition,
-    recognize_source_state_core,
+    SourceStateCoreAssertionInput, SourceStateCoreFamily, SourceStateCoreInput,
+    SourceStateCoreRecognition, recognize_source_state_core,
+    recognize_source_state_core_assertions,
 };
 
 #[derive(Debug, Default, Serialize)]
@@ -102,6 +105,7 @@ pub(super) fn publish(
 
 pub(super) fn maps(
     snapshot: &GraphPartitionSnapshot,
+    addresses: &SourceGraphAddressCrosswalk<'_, '_>,
     recognitions: &[SourceStateCoreRecognition],
     stop: &AtomicBool,
 ) -> ServiceResult<StateCoreTopology> {
@@ -115,17 +119,22 @@ pub(super) fn maps(
             checkpoint(stop)?;
             for proposal_id in &receipt.entity_proposal_ids {
                 checkpoint(stop)?;
-                topology.nodes.push(StateCoreNode {
-                    rule_id: rule_id.into(),
-                    fact_ids: receipt.fact_ids.clone(),
-                    proposal_id: proposal_id.clone(),
-                    node_id: materialized_partition_node_id(
-                        snapshot,
-                        partition_id,
-                        proposal_id,
-                        limits,
-                    )?,
-                });
+                addresses.append(
+                    "state_core_topology.nodes",
+                    &mut topology.nodes,
+                    StateCoreNode {
+                        rule_id: rule_id.into(),
+                        fact_ids: receipt.fact_ids.clone(),
+                        proposal_id: proposal_id.clone(),
+                        node_id: materialized_partition_node_id(
+                            snapshot,
+                            partition_id,
+                            proposal_id,
+                            limits,
+                        )?,
+                    },
+                    stop,
+                )?;
             }
             for proposal_id in &receipt.relation_proposal_ids {
                 checkpoint(stop)?;
@@ -135,16 +144,21 @@ pub(super) fn maps(
                     .snapshot()
                     .edge(&edge_id)
                     .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?;
-                topology.edges.push(StateCoreEdge {
-                    rule_id: rule_id.into(),
-                    fact_ids: receipt.fact_ids.clone(),
-                    proposal_id: proposal_id.clone(),
-                    edge_id,
-                    from_node_id: edge.from().clone(),
-                    to_node_id: edge.to().clone(),
-                    relation: edge.relation(),
-                    confidence: edge.confidence(),
-                });
+                addresses.append(
+                    "state_core_topology.edges",
+                    &mut topology.edges,
+                    StateCoreEdge {
+                        rule_id: rule_id.into(),
+                        fact_ids: receipt.fact_ids.clone(),
+                        proposal_id: proposal_id.clone(),
+                        edge_id,
+                        from_node_id: edge.from().clone(),
+                        to_node_id: edge.to().clone(),
+                        relation: edge.relation(),
+                        confidence: edge.confidence(),
+                    },
+                    stop,
+                )?;
             }
         }
     }
@@ -155,4 +169,83 @@ pub(super) fn maps(
         .edges
         .sort_by(|a, b| (&a.rule_id, &a.proposal_id).cmp(&(&b.rule_id, &b.proposal_id)));
     Ok(topology)
+}
+
+pub(super) fn publish_bound(
+    current: &GraphPartitionSnapshot,
+    addresses: &SourceGraphAddressCrosswalk<'_, '_>,
+    recognition: &StateRecognition,
+    stop: &AtomicBool,
+) -> ServiceResult<(GraphPartitionSnapshot, Vec<SourceStateCoreRecognition>)> {
+    checkpoint(stop)?;
+    let recognition = match (recognition, addresses.direct_provenance()) {
+        (StateRecognition::Legacy(recognition), None) => {
+            return publish(current, addresses.source(), recognition, stop);
+        }
+        (StateRecognition::Assertions(recognition), Some(_)) => recognition,
+        _ => return Err(error(ServiceErrorCode::IdentityMismatch)),
+    };
+    state::validate_assertion_bindings(addresses, recognition, stop)?;
+    addresses.analyzer_partition(current, stop)?;
+    let mut snapshot = current.clone();
+    checkpoint(stop)?;
+    let mut recognitions = Vec::new();
+    for family in SourceStateCoreFamily::ALL {
+        checkpoint(stop)?;
+        let proposals = recognize_source_state_core_assertions(
+            SourceStateCoreAssertionInput {
+                owner: &snapshot,
+                context: addresses.source().context(),
+                recognition,
+            },
+            family,
+            stop,
+        )
+        .map_err(|failure| {
+            ServiceError::new(
+                match failure.code() {
+                    wow_recognizers::RecognizerErrorCode::Cancelled => ServiceErrorCode::Cancelled,
+                    wow_recognizers::RecognizerErrorCode::BudgetExceeded => {
+                        ServiceErrorCode::BudgetExceeded
+                    }
+                    _ => ServiceErrorCode::InternalContractViolation,
+                },
+                format!(
+                    "{} recognition rejected ({:?})",
+                    family.rule_id(),
+                    failure.code()
+                ),
+            )
+        })?;
+        checkpoint(stop)?;
+        addresses.reserve("state_core_recognition", &proposals.recognition, stop)?;
+        let prepared = snapshot
+            .prepare_replacement(
+                GraphPartitionReplacement {
+                    expected_snapshot_id: snapshot.snapshot().snapshot_id().clone(),
+                    expected_partition_digest: snapshot
+                        .partition(family.partition_id())
+                        .map(|partition| partition.partition_digest().into()),
+                    producer_version: env!("CARGO_PKG_VERSION").into(),
+                    batch: proposals.batch,
+                    coverage: proposals.coverage,
+                },
+                stop,
+            )
+            .map_err(|failure| {
+                ServiceError::new(
+                    graph_error(failure.clone()).code(),
+                    format!(
+                        "{} graph publication rejected ({:?})",
+                        family.rule_id(),
+                        failure.code()
+                    ),
+                )
+            })?;
+        snapshot = prepared.candidate().clone();
+        checkpoint(stop)?;
+        recognitions.push(proposals.recognition);
+    }
+    checkpoint(stop)?;
+    Ok((snapshot, recognitions))
 }

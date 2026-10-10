@@ -13,12 +13,15 @@ use wow_project::graph::{
     SOURCE_GRAPH_PROFILE, build_source_graph_proposals,
 };
 
+mod assembly_budget;
 mod calls;
 mod construction;
 mod lua_mixins;
 mod materialized;
 mod scripts;
 mod signals;
+mod source_addresses;
+mod source_prefix;
 mod state;
 mod state_core;
 #[cfg(test)]
@@ -34,18 +37,20 @@ use construction::{CreationEdge, FrameNode};
 use lua_mixins::{
     AssignmentMixinEdge, ConstructionMixinEdge, InstantiationEdge, MixinInstanceNode,
 };
-use scripts::{HandlerNode, ScriptEdge};
-use state::{StateEdge, StateNodes};
+use scripts::{HandlerNode, ScriptEdge, ScriptRecognition};
+use source_addresses::SourceGraphAddressCrosswalk;
+use state::{StateEdge, StateNodes, StateRecognition};
 use wow_recognizers::source_calls::SourceCallRecognition;
 use wow_recognizers::source_construction::SourceConstructionRecognition;
 use wow_recognizers::source_mixins::{SourceMixinAssignmentRecognition, SourceMixinRecognition};
-use wow_recognizers::source_scripts::SourceScriptRecognition;
-use wow_recognizers::source_state::SourceStateRecognition;
+use wow_recognizers::source_scripts::{SourceScriptAssertionRecognition, SourceScriptRecognition};
+use wow_recognizers::source_state::{SourceStateAssertionRecognition, SourceStateRecognition};
 
 const MAX_BUNDLE_BYTES: usize = 32 * 1024 * 1024;
 pub(super) const GRAPH_BUILD_RESULT_SCHEMA: &str = "wow-service/graph-build-result/16";
 const PACKAGE_GRAPH_BUILD_RESULT_SCHEMA: &str = "wow-service/graph-build-result/17";
 const PACKAGE_RAW_GRAPH_BUILD_RESULT_SCHEMA: &str = "wow-service/graph-build-result/18";
+const DIRECT_PLATFORM_GRAPH_BUILD_RESULT_SCHEMA: &str = "wow-service/graph-build-result/19";
 
 struct BuiltGraph {
     snapshot: GraphPartitionSnapshot,
@@ -54,8 +59,8 @@ struct BuiltGraph {
     construction_recognition: SourceConstructionRecognition,
     mixin_recognition: SourceMixinRecognition,
     mixin_assignment_recognition: SourceMixinAssignmentRecognition,
-    script_recognition: SourceScriptRecognition,
-    state_recognition: SourceStateRecognition,
+    script_recognition: ScriptRecognition,
+    state_recognition: StateRecognition,
     state_nodes: StateNodes,
     state_edges: Vec<StateEdge>,
     handler_nodes: Vec<HandlerNode>,
@@ -136,6 +141,10 @@ impl GraphBuildRequest {
             wow_project::PlatformGraphProfile::PackageProjectionWithRawInventoryV1 => {
                 self.schema = "wow-service/graph-build-request/11";
                 self.projection = wow_project::graph::PACKAGE_RAW_SOURCE_GRAPH_PROFILE;
+            }
+            wow_project::PlatformGraphProfile::DirectPlatformProducersWithRawInventoryV1 => {
+                self.schema = "wow-service/graph-build-request/12";
+                self.projection = wow_project::graph::DIRECT_PLATFORM_SOURCE_GRAPH_PROFILE;
             }
         }
         self
@@ -265,6 +274,10 @@ pub struct GraphBuildResult {
     script_recognition: Option<SourceScriptRecognition>,
     #[serde(skip_serializing_if = "Option::is_none")]
     state_recognition: Option<SourceStateRecognition>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    script_assertion_recognition: Option<SourceScriptAssertionRecognition>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    state_assertion_recognition: Option<SourceStateAssertionRecognition>,
     state_nodes: StateNodes,
     state_edges: Vec<StateEdge>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -357,6 +370,8 @@ impl GraphBuildResult {
         self.mixin_assignment_recognition = None;
         self.script_recognition = None;
         self.state_recognition = None;
+        self.script_assertion_recognition = None;
+        self.state_assertion_recognition = None;
         self.state_nodes = StateNodes::empty();
         self.state_edges.clear();
         self.toc_recognition.clear();
@@ -390,10 +405,17 @@ impl GraphBuildResult {
     }
 
     fn seal(&mut self) -> ServiceResult<()> {
+        self.seal_cancellable(&AtomicBool::new(false))
+    }
+
+    fn seal_cancellable(&mut self, stop: &AtomicBool) -> ServiceResult<()> {
         self.result_digest = None;
-        self.result_digest = Some(super::hash(&self.canonical_bytes()?));
-        self.canonical_bytes()?;
-        Ok(())
+        let bytes = bounded_cancellable(self, MAX_BUNDLE_BYTES, stop)?;
+        let digest = super::hash(&bytes);
+        checkpoint(stop)?;
+        self.result_digest = Some(digest);
+        bounded_cancellable(self, MAX_BUNDLE_BYTES, stop)?;
+        checkpoint(stop)
     }
 }
 
@@ -406,7 +428,9 @@ pub fn execute_graph_build(
 ) -> ServiceResult<GraphBuildResult> {
     let request_digest = super::hash(&bounded(request, super::GRAPH_REQUEST_MAX_BYTES)?);
     let mut result = GraphBuildResult {
-        schema: if request.projection == wow_project::graph::PACKAGE_RAW_SOURCE_GRAPH_PROFILE {
+        schema: if request.projection == wow_project::graph::DIRECT_PLATFORM_SOURCE_GRAPH_PROFILE {
+            DIRECT_PLATFORM_GRAPH_BUILD_RESULT_SCHEMA
+        } else if request.projection == wow_project::graph::PACKAGE_RAW_SOURCE_GRAPH_PROFILE {
             PACKAGE_RAW_GRAPH_BUILD_RESULT_SCHEMA
         } else if request.projection == wow_project::graph::PACKAGE_SOURCE_GRAPH_PROFILE {
             PACKAGE_GRAPH_BUILD_RESULT_SCHEMA
@@ -437,6 +461,8 @@ pub fn execute_graph_build(
         mixin_assignment_recognition: None,
         script_recognition: None,
         state_recognition: None,
+        script_assertion_recognition: None,
+        state_assertion_recognition: None,
         signal_recognition: None,
         bridge_recognition: None,
         custom_recognition: None,
@@ -551,8 +577,12 @@ pub fn execute_graph_build(
             result.construction_recognition = Some(construction_recognition);
             result.mixin_recognition = Some(mixin_recognition);
             result.mixin_assignment_recognition = Some(mixin_assignment_recognition);
-            result.script_recognition = Some(script_recognition);
-            result.state_recognition = Some(state_recognition);
+            (
+                result.script_recognition,
+                result.script_assertion_recognition,
+            ) = script_recognition.into_parts();
+            (result.state_recognition, result.state_assertion_recognition) =
+                state_recognition.into_parts();
             result.state_nodes = state_nodes;
             result.state_edges = state_edges;
             result.signal_recognition = Some(signal_recognition);
@@ -582,8 +612,12 @@ pub fn execute_graph_build(
     if stop.load(Ordering::Acquire) {
         result.fail(ServiceErrorCode::Cancelled);
     }
-    if let Err(failure) = result.seal() {
+    if let Err(failure) = result.seal_cancellable(stop) {
         result.fail(failure.code());
+        result.seal()?;
+    }
+    if stop.load(Ordering::Acquire) && result.status != GraphReadStatus::Cancelled {
+        result.fail(ServiceErrorCode::Cancelled);
         result.seal()?;
     }
     Ok(result)
@@ -666,83 +700,36 @@ fn compose_backend(
 ) -> ServiceResult<BuiltGraph> {
     checkpoint(stop)?;
     let project = request.acquire_project(backend, stop)?;
-    let proposals = build_source_graph_proposals(&project, stop).map_err(|e| {
-        ServiceError::new(
-            match e.code() {
-                wow_project::ProjectErrorCode::AnalysisCancelled
-                | wow_project::ProjectErrorCode::SourceReadCancelled => ServiceErrorCode::Cancelled,
-                wow_project::ProjectErrorCode::SourceBudgetExceeded => {
-                    ServiceErrorCode::BudgetExceeded
-                }
-                _ => ServiceErrorCode::InternalContractViolation,
-            },
-            format!("native source graph projection rejected ({:?})", e.code()),
-        )
-    })?;
-    let inventory_batch = proposals.inventory_batch().cloned();
-    if inventory_batch.is_some()
-        != (request.projection == wow_project::graph::PACKAGE_RAW_SOURCE_GRAPH_PROFILE)
-    {
-        return Err(error(ServiceErrorCode::InternalContractViolation));
-    }
-    let (registry, batch, coverage, provenance, limits) = proposals.into_parts();
-    checkpoint(stop)?;
-    // The empty foundation makes no semantic absence claim. Preserve the same
-    // narrow partial/unevaluated coverage instead of inventing complete coverage.
-    let foundation = GraphSnapshot::build(
-        batch.universe().clone(),
-        batch.generation().clone(),
-        limits,
-        Vec::new(),
-        Vec::new(),
-        coverage.clone(),
-    )
-    .map_err(graph_error)?;
-    let owner = GraphPartitionSnapshot::new(registry, foundation, batch.source_context_id(), stop)
-        .map_err(graph_error)?;
-    let owner = if let Some(inventory_batch) = inventory_batch {
-        let inventory = owner
-            .prepare_replacement(
-                GraphPartitionReplacement {
-                    expected_snapshot_id: owner.snapshot().snapshot_id().clone(),
-                    expected_partition_digest: None,
-                    producer_version: env!("CARGO_PKG_VERSION").into(),
-                    batch: inventory_batch,
-                    coverage: Vec::new(),
-                },
-                stop,
-            )
-            .map_err(graph_error)?;
-        checkpoint(stop)?;
-        inventory.candidate().clone()
-    } else {
-        owner
+    let source_prefix::SourcePrefix {
+        owner: source_owner,
+        projection,
+    } = source_prefix::prepare(&project, stop)?;
+    let (legacy_provenance, direct) = match projection {
+        source_prefix::SourceProjection::Legacy(provenance) => (Some(*provenance), None),
+        source_prefix::SourceProjection::Direct(plan) => {
+            let direct = (*plan).finish(&source_owner, stop).map_err(project_error)?;
+            (None, Some(direct))
+        }
     };
-    let replacement = owner
-        .prepare_replacement(
-            GraphPartitionReplacement {
-                expected_snapshot_id: owner.snapshot().snapshot_id().clone(),
-                expected_partition_digest: None,
-                producer_version: env!("CARGO_PKG_VERSION").into(),
-                batch,
-                coverage,
-            },
-            stop,
-        )
-        .map_err(graph_error)?;
+    let addresses = match (&legacy_provenance, &direct) {
+        (Some(source), None) => SourceGraphAddressCrosswalk::legacy(source, &source_owner, stop)?,
+        (None, Some(direct)) => SourceGraphAddressCrosswalk::direct(direct, stop)?,
+        _ => return Err(error(ServiceErrorCode::InternalContractViolation)),
+    };
+    addresses.reserve("request", request, stop)?;
+    let provenance = addresses.source();
     let (calls_snapshot, call_recognition) =
-        calls::publish(replacement.candidate(), &provenance, stop)
-            .map_err(|e| stage_error("calls", e))?;
+        calls::publish(&source_owner, &addresses, stop).map_err(|e| stage_error("calls", e))?;
     let (construction_snapshot, construction_recognition) =
-        construction::publish(&calls_snapshot, &provenance, stop)
+        construction::publish(&calls_snapshot, &addresses, stop)
             .map_err(|e| stage_error("construction", e))?;
     let (mixin_snapshot, mixin_recognition, mixin_assignment_recognition) =
-        lua_mixins::publish(&construction_snapshot, &provenance, stop)
+        lua_mixins::publish(&construction_snapshot, &addresses, stop)
             .map_err(|e| stage_error("mixins", e))?;
     let (scripts_snapshot, script_recognition) =
-        scripts::publish(&mixin_snapshot, &provenance, stop)
+        scripts::publish_bound(&mixin_snapshot, &addresses, stop)
             .map_err(|e| stage_error("scripts", e))?;
-    let (snapshot, state_recognition) = state::publish(&scripts_snapshot, &provenance, stop)
+    let (snapshot, state_recognition) = state::publish_bound(&scripts_snapshot, &addresses, stop)
         .map_err(|e| stage_error("state", e))?;
     // W11 signal and hook families publish after every earlier owner, so each
     // adapter crosswalks against the accepted source graph that precedes it.
@@ -754,45 +741,55 @@ fn compose_backend(
         cvar_recognition,
         hook_recognition,
         library_recognition,
-    ) = signals::publish_signals(&snapshot, &provenance, stop)
+    ) = signals::publish_signals(&snapshot, &addresses, stop)
         .map_err(|e| stage_error("signals", e))?;
     let (snapshot, toc_recognition) =
-        toc::publish(&snapshot, &provenance, stop).map_err(|e| stage_error("toc", e))?;
+        toc::publish_bound(&snapshot, &addresses, stop).map_err(|e| stage_error("toc", e))?;
     let (snapshot, xml_recognition) =
-        xml::publish(&snapshot, &provenance, stop).map_err(|e| stage_error("xml", e))?;
-    let (snapshot, state_root_recognition) = toc::publish_state_root(&snapshot, &provenance, stop)
-        .map_err(|e| stage_error("state-roots", e))?;
+        xml::publish_bound(&snapshot, &addresses, stop).map_err(|e| stage_error("xml", e))?;
+    let (snapshot, state_root_recognition) =
+        toc::publish_state_root_bound(&snapshot, &addresses, stop)
+            .map_err(|e| stage_error("state-roots", e))?;
     let (snapshot, state_core_recognition) =
-        state_core::publish(&snapshot, &provenance, &state_recognition, stop)
+        state_core::publish_bound(&snapshot, &addresses, &state_recognition, stop)
             .map_err(|e| stage_error("state-core", e))?;
-    let toc_topology = toc::maps(&snapshot, &toc_recognition, stop)
+    let toc_topology = toc::maps(&snapshot, &addresses, &toc_recognition, stop)
         .map_err(|e| stage_error("toc-crosswalk", e))?;
-    let xml_topology = xml::maps(&snapshot, &xml_recognition, stop)
+    let xml_topology = xml::maps(&snapshot, &addresses, &xml_recognition, stop)
         .map_err(|e| stage_error("xml-crosswalk", e))?;
     let state_root_topology = toc::maps(
         &snapshot,
+        &addresses,
         std::slice::from_ref(&state_root_recognition),
         stop,
-    )?;
-    let state_core_topology = state_core::maps(&snapshot, &state_core_recognition, stop)?;
-    let (state_nodes, state_edges) = state::maps(&snapshot, &provenance, &state_recognition, stop)?;
+    )
+    .map_err(|e| stage_error("state-root-crosswalk", e))?;
+    let state_core_topology =
+        state_core::maps(&snapshot, &addresses, &state_core_recognition, stop)
+            .map_err(|e| stage_error("state-core-crosswalk", e))?;
+    let (state_nodes, state_edges) =
+        state::maps_bound(&snapshot, &addresses, &state_recognition, stop)
+            .map_err(|e| stage_error("state-crosswalk", e))?;
     let signal_topology = signals::maps(
         &snapshot,
-        &provenance,
+        &addresses,
         &signal_recognition,
         &bridge_recognition,
         &custom_recognition,
         &cvar_recognition,
         stop,
-    )?;
+    )
+    .map_err(|e| stage_error("signal-crosswalk", e))?;
     let signal_nodes = signal_topology.nodes;
     let signal_edges = signal_topology.edges;
     let (handler_nodes, script_edges) =
-        scripts::maps(&snapshot, &provenance, &script_recognition, stop)?;
-    let (function_nodes, call_edges) =
-        calls::maps(&snapshot, &provenance, &call_recognition, stop)?;
+        scripts::maps_bound(&snapshot, &addresses, &script_recognition, stop)
+            .map_err(|e| stage_error("script-crosswalk", e))?;
+    let (function_nodes, call_edges) = calls::maps(&snapshot, &addresses, &call_recognition, stop)
+        .map_err(|e| stage_error("call-crosswalk", e))?;
     let (frame_nodes, creation_edges) =
-        construction::maps(&snapshot, &provenance, &construction_recognition, stop)?;
+        construction::maps(&snapshot, &addresses, &construction_recognition, stop)
+            .map_err(|e| stage_error("construction-crosswalk", e))?;
     let (
         mixin_instance_nodes,
         instantiation_edges,
@@ -800,40 +797,68 @@ fn compose_backend(
         assignment_mixin_edges,
     ) = lua_mixins::maps(
         &snapshot,
-        &provenance,
+        &addresses,
         &mixin_recognition,
         &mixin_assignment_recognition,
         stop,
-    )?;
+    )
+    .map_err(|e| stage_error("mixin-crosswalk", e))?;
     checkpoint(stop)?;
     let source_nodes = materialized::nodes(&snapshot, stop)?;
+    let source_lookup = snapshot.producer_lookup(stop).map_err(graph_error)?;
     let mut file_nodes = Vec::new();
     for file in provenance.files() {
         checkpoint(stop)?;
-        file_nodes.push(FileNode {
-            path: file.path.clone(),
-            node_id: materialized_node_id(&snapshot, &file.proposal_id, limits)?,
-        });
+        addresses.append(
+            "file_nodes",
+            &mut file_nodes,
+            FileNode {
+                path: file.path.clone(),
+                node_id: addresses.node_id(&snapshot, &source_lookup, &file.proposal_id, stop)?,
+            },
+            stop,
+        )?;
     }
     let mut package_nodes = Vec::new();
     for package in provenance.packages() {
         checkpoint(stop)?;
-        package_nodes.push(PackageNode {
-            package: package.package.clone(),
-            order_group: package.order_group,
-            reachability: package.reachability,
-            phase: package.phase,
-            node_id: materialized_node_id(&snapshot, &package.proposal_id, limits)?,
-        });
+        addresses.append(
+            "package_nodes",
+            &mut package_nodes,
+            PackageNode {
+                package: package.package.clone(),
+                order_group: package.order_group,
+                reachability: package.reachability,
+                phase: package.phase,
+                node_id: addresses.node_id(
+                    &snapshot,
+                    &source_lookup,
+                    &package.proposal_id,
+                    stop,
+                )?,
+            },
+            stop,
+        )?;
     }
     let mut package_file_edges = Vec::new();
     for receipt in provenance.package_files() {
         checkpoint(stop)?;
-        package_file_edges.push(PackageFileEdge {
-            package: receipt.package.clone(),
-            path: receipt.path.clone(),
-            edge_id: materialized_edge_id(&snapshot, &receipt.proposal_id, &source_nodes)?,
-        });
+        addresses.append(
+            "package_file_edges",
+            &mut package_file_edges,
+            PackageFileEdge {
+                package: receipt.package.clone(),
+                path: receipt.path.clone(),
+                edge_id: addresses.edge_id(
+                    &snapshot,
+                    &source_lookup,
+                    &receipt.proposal_id,
+                    &source_nodes,
+                    stop,
+                )?,
+            },
+            stop,
+        )?;
     }
     let mut package_dependency_edges = Vec::new();
     for dependency in provenance.package_dependencies() {
@@ -845,14 +870,25 @@ fn compose_backend(
         else {
             continue;
         };
-        package_dependency_edges.push(PackageDependencyEdge {
-            ordinal: dependency.ordinal,
-            package: dependency.package.clone(),
-            dependency: dependency.dependency.clone(),
-            kind: dependency.kind,
-            confidence: *confidence,
-            edge_id: materialized_edge_id(&snapshot, proposal_id, &source_nodes)?,
-        });
+        addresses.append(
+            "package_dependency_edges",
+            &mut package_dependency_edges,
+            PackageDependencyEdge {
+                ordinal: dependency.ordinal,
+                package: dependency.package.clone(),
+                dependency: dependency.dependency.clone(),
+                kind: dependency.kind,
+                confidence: *confidence,
+                edge_id: addresses.edge_id(
+                    &snapshot,
+                    &source_lookup,
+                    proposal_id,
+                    &source_nodes,
+                    stop,
+                )?,
+            },
+            stop,
+        )?;
     }
     let mut package_load_edges = Vec::new();
     for load in provenance.package_loads() {
@@ -864,34 +900,66 @@ fn compose_backend(
         else {
             continue;
         };
-        package_load_edges.push(PackageLoadEdge {
-            unit_digest: load.unit_digest,
-            package: load.package.clone(),
-            target: load.target.clone(),
-            confidence: *confidence,
-            edge_id: materialized_edge_id(&snapshot, proposal_id, &source_nodes)?,
-        });
+        addresses.append(
+            "package_load_edges",
+            &mut package_load_edges,
+            PackageLoadEdge {
+                unit_digest: load.unit_digest,
+                package: load.package.clone(),
+                target: load.target.clone(),
+                confidence: *confidence,
+                edge_id: addresses.edge_id(
+                    &snapshot,
+                    &source_lookup,
+                    proposal_id,
+                    &source_nodes,
+                    stop,
+                )?,
+            },
+            stop,
+        )?;
     }
     let mut xml_nodes = Vec::new();
     for declaration in provenance.xml_declarations() {
         checkpoint(stop)?;
-        xml_nodes.push(XmlNode {
-            occurrence_id: declaration.occurrence_id.clone(),
-            path: declaration.path.clone(),
-            node_id: materialized_node_id(&snapshot, &declaration.proposal_id, limits)?,
-        });
+        addresses.append(
+            "xml_nodes",
+            &mut xml_nodes,
+            XmlNode {
+                occurrence_id: declaration.occurrence_id.clone(),
+                path: declaration.path.clone(),
+                node_id: addresses.node_id(
+                    &snapshot,
+                    &source_lookup,
+                    &declaration.proposal_id,
+                    stop,
+                )?,
+            },
+            stop,
+        )?;
     }
     let mut lua_nodes = Vec::new();
     for declaration in provenance.lua_declarations() {
         checkpoint(stop)?;
-        lua_nodes.push(LuaNode {
-            declaration_id: declaration.declaration_id.clone(),
-            path: declaration.path.clone(),
-            span: declaration.span,
-            node_id: materialized_node_id(&snapshot, &declaration.proposal_id, limits)?,
-        });
+        addresses.append(
+            "lua_nodes",
+            &mut lua_nodes,
+            LuaNode {
+                declaration_id: declaration.declaration_id.clone(),
+                path: declaration.path.clone(),
+                span: declaration.span,
+                node_id: addresses.node_id(
+                    &snapshot,
+                    &source_lookup,
+                    &declaration.proposal_id,
+                    stop,
+                )?,
+            },
+            stop,
+        )?;
     }
-    let bytes = bounded(&snapshot, GRAPH_INPUT_MAX_BYTES)?;
+    addresses.reserve("snapshot", &snapshot, stop)?;
+    let bytes = bounded_cancellable(&snapshot, GRAPH_INPUT_MAX_BYTES, stop)?;
     // Ensure export and existing import share byte/token/depth/string limits.
     // This is runtime admission, not a test or a second project/analyzer pass.
     let admitted: GraphPartitionSnapshot = super::input::decode(
@@ -909,10 +977,20 @@ fn compose_backend(
         ));
     }
     checkpoint(stop)?;
+    let provenance = if let Some(value) = legacy_provenance {
+        value
+    } else {
+        // The shared assembly budget reserved both copies before recognizers.
+        let value = provenance.clone();
+        checkpoint(stop)?;
+        value
+    };
+    let digest = super::hash(&bytes);
+    checkpoint(stop)?;
     Ok(BuiltGraph {
         snapshot,
         provenance,
-        digest: super::hash(&bytes),
+        digest,
         file_nodes,
         package_nodes,
         package_file_edges,
@@ -1008,20 +1086,6 @@ pub(super) fn materialized_partition_node_id(
     Ok(node.node_id().clone())
 }
 
-/// Rebind an accepted source-partition proposal to its exact materialized edge.
-fn materialized_edge_id(
-    snapshot: &GraphPartitionSnapshot,
-    proposal_id: &str,
-    nodes: &std::collections::BTreeMap<wow_graph::GraphNodeId, wow_graph::GraphNodeId>,
-) -> ServiceResult<wow_graph::GraphEdgeId> {
-    materialized::edge_id(
-        snapshot,
-        wow_project::graph::SOURCE_GRAPH_PARTITION,
-        proposal_id,
-        nodes,
-    )
-}
-
 fn checkpoint(stop: &AtomicBool) -> ServiceResult<()> {
     if stop.load(Ordering::Acquire) {
         Err(error(ServiceErrorCode::Cancelled))
@@ -1055,6 +1119,67 @@ fn graph_error(e: wow_graph::GraphError) -> ServiceError {
     )
 }
 
+fn project_error(e: wow_project::ProjectError) -> ServiceError {
+    ServiceError::new(
+        match e.code() {
+            wow_project::ProjectErrorCode::AnalysisCancelled
+            | wow_project::ProjectErrorCode::SourceReadCancelled => ServiceErrorCode::Cancelled,
+            wow_project::ProjectErrorCode::SourceBudgetExceeded => ServiceErrorCode::BudgetExceeded,
+            _ => ServiceErrorCode::InternalContractViolation,
+        },
+        format!("native source graph projection rejected ({:?})", e.code()),
+    )
+}
+
+fn preflight_cancellable(
+    value: &impl Serialize,
+    limit: usize,
+    stop: &AtomicBool,
+) -> ServiceResult<()> {
+    struct Counter<'a> {
+        used: usize,
+        limit: usize,
+        stop: &'a AtomicBool,
+        failure: Option<ServiceErrorCode>,
+    }
+    impl std::io::Write for Counter<'_> {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            if self.stop.load(Ordering::Acquire) {
+                self.failure = Some(ServiceErrorCode::Cancelled);
+                return Err(std::io::Error::other("source graph metadata cancelled"));
+            }
+            if bytes.len() > self.limit.saturating_sub(self.used) {
+                self.failure = Some(ServiceErrorCode::BudgetExceeded);
+                return Err(std::io::Error::other(
+                    "source graph metadata exceeds its limit",
+                ));
+            }
+            self.used += bytes.len();
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    checkpoint(stop)?;
+    let mut counter = Counter {
+        used: 0,
+        limit,
+        stop,
+        failure: None,
+    };
+    let encoded = serde_json::to_writer(&mut counter, value);
+    checkpoint(stop)?;
+    if encoded.is_err() {
+        return Err(error(
+            counter
+                .failure
+                .unwrap_or(ServiceErrorCode::CanonicalizationFailed),
+        ));
+    }
+    checkpoint(stop)
+}
+
 fn bounded(value: &impl Serialize, limit: usize) -> ServiceResult<Vec<u8>> {
     struct Count {
         used: usize,
@@ -1077,6 +1202,22 @@ fn bounded(value: &impl Serialize, limit: usize) -> ServiceResult<Vec<u8>> {
         .map_err(|_| error(ServiceErrorCode::BudgetExceeded))?;
     let bytes = wow_core::canonical_json_bytes(value)
         .map_err(|_| error(ServiceErrorCode::CanonicalizationFailed))?;
+    if bytes.len() > limit {
+        return Err(error(ServiceErrorCode::BudgetExceeded));
+    }
+    Ok(bytes)
+}
+
+fn bounded_cancellable(
+    value: &impl Serialize,
+    limit: usize,
+    stop: &AtomicBool,
+) -> ServiceResult<Vec<u8>> {
+    preflight_cancellable(value, limit, stop)?;
+    let bytes = wow_core::canonical_json_bytes(value)
+        .map_err(|_| error(ServiceErrorCode::CanonicalizationFailed));
+    checkpoint(stop)?;
+    let bytes = bytes?;
     if bytes.len() > limit {
         return Err(error(ServiceErrorCode::BudgetExceeded));
     }

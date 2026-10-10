@@ -4,7 +4,8 @@
 into four ordered captured-direct stages and, when selected, the existing raw
 inventory prelude. It finishes against the exact admitted native graph owner.
 This is a library API; additive native recognizer adapters consume its exact
-addresses while service and replay publication retain their existing layouts.
+addresses. The explicit [direct service selection](PLATFORM_DIRECT_SERVICE.md)
+uses it for source /22 and native replay /9; older selections keep their layouts.
 The native cases and final workspace gates/build pass on
 2026-10-10. Full W17/E3 acceptance remains open.
 

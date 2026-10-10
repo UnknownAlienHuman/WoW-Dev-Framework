@@ -71,9 +71,11 @@ four-stage direct plan now also passes its scoped case and workspace gates/build
 now also pass one composed scenario and final workspace gates/build
 (941 passed, 0 failed, 1 ignored, 112 targets); see
 [native recognizer assertions](PLATFORM_RECOGNIZER_ASSERTIONS.md).
-Configuration/service/replay selection of the split, remaining recognizer routes,
-missing direct roles, fingerprints, SkeletonInputView and source
-service/CLI transport follow.
+Explicit direct configuration/service/replay selection and the existing
+recognizer chain now pass the native lifecycle and final workspace gates/build
+(944 passed, 0 failed, 1 ignored, 112 targets); see
+[selected direct service](PLATFORM_DIRECT_SERVICE.md). Missing direct roles,
+fingerprints, SkeletonInputView and source service/CLI transport follow.
 Broad package acceptance remains open.
 
 ## W14 retained physical native analysis (2026-10-09)
@@ -1316,3 +1318,26 @@ Selection of the split and remaining recognizer routes, missing direct roles,
 fingerprints, SkeletonInputView and source transport remain open. Full W17/E3,
 real Gethe/Ketho corpus/performance/runtime and native fault/exhaustion acceptance
 remain NotEvaluated; Gethe materialization is deferred and W18-W26 unchanged.
+
+## W17 selected native direct service and replay (2026-10-10)
+
+`DirectPlatformProducersWithRawInventoryV1` explicitly selects source /22,
+service request12/result19 and native replay/storage v9. The service finishes
+the native source-only owner, then admits the existing recognizer chain using
+exact Producer references. Truthful state/script metadata and every returned
+topology row remain bound to native source support and final graph membership.
+One shared conservative metadata allowance covers both service paths; final
+canonicalization/hashing observes cancellation. The common signal mapper also
+repairs final IDs on older service routes.
+
+The disk-absent lifecycle publishes/reopens the exact v9 pair, verifies nonempty
+state/script/core/library output and preserves Current/epoch/members after
+frozen v8 refusal. Two helper regressions cover cumulative metadata exhaustion
+and cancellation during canonical serialization. All required workspace gates
+and build pass, completed 2026-10-10 10:08:49 UTC: 944 passed, 0 failed,
+1 ignored, 112 targets. See [direct service](PLATFORM_DIRECT_SERVICE.md).
+
+Missing direct inventory/TOC/XML roles, fingerprints, SkeletonInputView and
+source transport remain open, along with full W17/E3 and later W18-W26. Real
+Gethe/Ketho corpus/performance, native fault timing and WoW runtime remain
+NotEvaluated. Gethe materialization follows product implementation/build.

@@ -17,6 +17,7 @@ impl LiveProjectQuarantineInspection {
     pub fn open(root: &Path, stop: &AtomicBool) -> ServiceResult<Self> {
         for schemas in [
             publication::STORAGE_SCHEMAS,
+            publication::STORAGE_SCHEMAS_V8,
             publication::STORAGE_SCHEMAS_V7,
             publication::STORAGE_SCHEMAS_V6,
             publication::STORAGE_SCHEMAS_V5,
@@ -108,6 +109,7 @@ impl QuarantinedLiveProject {
     pub fn open(root: &Path, stop: &AtomicBool) -> ServiceResult<Self> {
         for schemas in [
             publication::STORAGE_SCHEMAS,
+            publication::STORAGE_SCHEMAS_V8,
             publication::STORAGE_SCHEMAS_V7,
             publication::STORAGE_SCHEMAS_V6,
             publication::STORAGE_SCHEMAS_V5,

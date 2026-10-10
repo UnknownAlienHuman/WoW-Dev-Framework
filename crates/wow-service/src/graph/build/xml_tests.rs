@@ -139,7 +139,8 @@ fn xml_pipeline_publishes_object_parentage_and_template_references() -> Result<(
     let (snapshot, recognition) = xml::publish(&after_toc, &provenance, &stop)
         .map_err(|error| std::io::Error::other(format!("XML publication: {error}")))?;
     snapshot.validate(&stop)?;
-    let topology = xml::maps(&snapshot, &recognition, &stop)
+    let addresses = SourceGraphAddressCrosswalk::legacy(&provenance, source.candidate(), &stop)?;
+    let topology = xml::maps(&snapshot, &addresses, &recognition, &stop)
         .map_err(|error| std::io::Error::other(format!("XML crosswalk: {error}")))?;
     // Five publication phases share four unique frozen rule IDs: Object and
     // ObjectParentage both publish core.xml.object@1 from distinct partitions.

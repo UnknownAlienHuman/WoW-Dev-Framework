@@ -97,8 +97,13 @@ impl ProjectRawInventoryManifest {
 }
 
 pub(super) fn selected(config: &crate::ProjectConfiguration) -> bool {
-    config.platform_graph_profile()
-        == Some(crate::PlatformGraphProfile::PackageProjectionWithRawInventoryV1)
+    matches!(
+        config.platform_graph_profile(),
+        Some(
+            crate::PlatformGraphProfile::PackageProjectionWithRawInventoryV1
+                | crate::PlatformGraphProfile::DirectPlatformProducersWithRawInventoryV1
+        )
+    )
 }
 
 pub(super) fn extend_registry(entities: &mut Vec<GraphEntityKindDefinition>) -> ProjectResult<()> {

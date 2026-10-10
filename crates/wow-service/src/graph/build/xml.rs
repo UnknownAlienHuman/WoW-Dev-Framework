@@ -2,15 +2,19 @@
 //! linking and inline-body ownership stay in the load owner. Each family reads a
 //! real preceding graph snapshot, publishes its own partition, and the final
 //! crosswalk runs only after every producer has published.
+use super::source_addresses::SourceGraphAddressCrosswalk;
 use super::*;
 
+use std::collections::{BTreeMap, BTreeSet};
+use wow_graph::GraphAssertionKind;
 use wow_project::load::xml_references::{XmlReferenceOrder, XmlReferenceResolution};
 use wow_project::load::{XmlElementRole, XmlScriptSource};
 use wow_recognizers::source_scripts::SourceScriptSemanticContext;
 use wow_recognizers::source_xml::{
-    SourceXmlElementRole, SourceXmlFact, SourceXmlFactKind, SourceXmlFamily, SourceXmlInput,
-    SourceXmlParentResolution, SourceXmlRecognition, SourceXmlReferenceOrder,
-    SourceXmlScriptBinding, SourceXmlScriptSource, SourceXmlTemplateState, recognize_source_xml,
+    SourceXmlAssertionInput, SourceXmlElementRole, SourceXmlFact, SourceXmlFactKind,
+    SourceXmlFamily, SourceXmlInput, SourceXmlParentResolution, SourceXmlRecognition,
+    SourceXmlReferenceOrder, SourceXmlScriptBinding, SourceXmlScriptSource, SourceXmlTemplateState,
+    recognize_source_xml, recognize_source_xml_assertions,
 };
 
 fn recognizer_error(
@@ -325,8 +329,109 @@ pub(super) fn publish(
     Ok((snapshot, recognitions))
 }
 
+pub(super) fn publish_bound(
+    source: &GraphPartitionSnapshot,
+    crosswalk: &SourceGraphAddressCrosswalk<'_, '_>,
+    stop: &AtomicBool,
+) -> ServiceResult<(GraphPartitionSnapshot, Vec<SourceXmlRecognition>)> {
+    if crosswalk.direct_provenance().is_none() {
+        return publish(source, crosswalk.source(), stop);
+    }
+    checkpoint(stop)?;
+    let provenance = crosswalk.source();
+    if provenance.xml_facts().len() > 32_768 || provenance.script_bindings().len() > 8192 {
+        return Err(error(ServiceErrorCode::BudgetExceeded));
+    }
+    let facts = convert(provenance.xml_facts());
+    let script_bindings = bindings(provenance)?;
+    checkpoint(stop)?;
+    let mut documents = BTreeSet::new();
+    for fact in &facts {
+        checkpoint(stop)?;
+        documents.insert(fact.document);
+    }
+    let mut source_files = BTreeMap::new();
+    for file in provenance.files() {
+        checkpoint(stop)?;
+        if documents.contains(file.path.as_str())
+            && source_files
+                .insert(
+                    file.path.as_str(),
+                    crosswalk.copied_assertion(
+                        GraphAssertionKind::Entity,
+                        &file.proposal_id,
+                        stop,
+                    )?,
+                )
+                .is_some()
+        {
+            return Err(error(ServiceErrorCode::InternalContractViolation));
+        }
+    }
+    if source_files.len() != documents.len() {
+        return Err(error(ServiceErrorCode::InternalContractViolation));
+    }
+    let mut source_entities = BTreeMap::new();
+    for binding in &script_bindings {
+        checkpoint(stop)?;
+        for proposal_id in [binding.receiver_proposal_id, binding.handler_proposal_id] {
+            if let std::collections::btree_map::Entry::Vacant(entry) =
+                source_entities.entry(proposal_id)
+            {
+                entry.insert(crosswalk.copied_assertion(
+                    GraphAssertionKind::Entity,
+                    proposal_id,
+                    stop,
+                )?);
+            }
+        }
+    }
+    let mut snapshot = source.clone();
+    let mut recognitions = Vec::new();
+    for family in SourceXmlFamily::ALL {
+        checkpoint(stop)?;
+        let proposals = recognize_source_xml_assertions(
+            SourceXmlAssertionInput {
+                owner: &snapshot,
+                scope: crosswalk.scope(),
+                context: provenance.context(),
+                facts: &facts,
+                script_bindings: &script_bindings,
+                source_files: &source_files,
+                source_entities: &source_entities,
+                source_handles: provenance.source_handles(),
+                evidence: provenance.evidence(),
+            },
+            family,
+            stop,
+        )
+        .map_err(|failure| recognizer_error(family, failure))?;
+        checkpoint(stop)?;
+        crosswalk.reserve("xml_recognition", &proposals.recognition, stop)?;
+        let prepared = snapshot
+            .prepare_replacement(
+                GraphPartitionReplacement {
+                    expected_snapshot_id: snapshot.snapshot().snapshot_id().clone(),
+                    expected_partition_digest: snapshot
+                        .partition(family.partition_id())
+                        .map(|partition| partition.partition_digest().into()),
+                    producer_version: env!("CARGO_PKG_VERSION").into(),
+                    batch: proposals.batch,
+                    coverage: proposals.coverage,
+                },
+                stop,
+            )
+            .map_err(graph_error)?;
+        snapshot = prepared.candidate().clone();
+        recognitions.push(proposals.recognition);
+        checkpoint(stop)?;
+    }
+    Ok((snapshot, recognitions))
+}
+
 pub(super) fn maps(
     snapshot: &GraphPartitionSnapshot,
+    crosswalk: &SourceGraphAddressCrosswalk<'_, '_>,
     recognitions: &[SourceXmlRecognition],
     stop: &AtomicBool,
 ) -> ServiceResult<XmlTopology> {
@@ -339,17 +444,22 @@ pub(super) fn maps(
         for receipt in &recognition.receipts {
             checkpoint(stop)?;
             for proposal_id in &receipt.entity_proposal_ids {
-                topology.nodes.push(XmlNode {
-                    rule_id: rule_id.clone(),
-                    fact_ids: receipt.fact_ids.clone(),
-                    proposal_id: proposal_id.clone(),
-                    node_id: materialized_partition_node_id(
-                        snapshot,
-                        partition_id,
-                        proposal_id,
-                        limits,
-                    )?,
-                });
+                crosswalk.append(
+                    "xml_topology.nodes",
+                    &mut topology.nodes,
+                    XmlNode {
+                        rule_id: rule_id.clone(),
+                        fact_ids: receipt.fact_ids.clone(),
+                        proposal_id: proposal_id.clone(),
+                        node_id: materialized_partition_node_id(
+                            snapshot,
+                            partition_id,
+                            proposal_id,
+                            limits,
+                        )?,
+                    },
+                    stop,
+                )?;
             }
             for proposal_id in &receipt.relation_proposal_ids {
                 let edge_id =
@@ -358,24 +468,34 @@ pub(super) fn maps(
                     .snapshot()
                     .edge(&edge_id)
                     .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?;
-                topology.edges.push(XmlEdge {
-                    rule_id: rule_id.clone(),
-                    fact_ids: receipt.fact_ids.clone(),
-                    proposal_id: proposal_id.clone(),
-                    edge_id,
-                    from_node_id: edge.from().clone(),
-                    to_node_id: edge.to().clone(),
-                    relation: edge.relation(),
-                    confidence: edge.confidence(),
-                });
+                crosswalk.append(
+                    "xml_topology.edges",
+                    &mut topology.edges,
+                    XmlEdge {
+                        rule_id: rule_id.clone(),
+                        fact_ids: receipt.fact_ids.clone(),
+                        proposal_id: proposal_id.clone(),
+                        edge_id,
+                        from_node_id: edge.from().clone(),
+                        to_node_id: edge.to().clone(),
+                        relation: edge.relation(),
+                        confidence: edge.confidence(),
+                    },
+                    stop,
+                )?;
             }
         }
         for omission in &recognition.omissions {
-            topology.omissions.push(XmlOmission {
-                rule_id: rule_id.clone(),
-                fact_ids: omission.fact_ids.clone(),
-                blocker: omission.blocker.to_owned(),
-            });
+            crosswalk.append(
+                "xml_topology.omissions",
+                &mut topology.omissions,
+                XmlOmission {
+                    rule_id: rule_id.clone(),
+                    fact_ids: omission.fact_ids.clone(),
+                    blocker: omission.blocker.to_owned(),
+                },
+                stop,
+            )?;
         }
     }
     Ok(topology)

@@ -50,6 +50,7 @@ pub enum PackageXmlBindingProfile {
 pub enum PlatformGraphProfile {
     PackageProjectionV1,
     PackageProjectionWithRawInventoryV1,
+    DirectPlatformProducersWithRawInventoryV1,
 }
 
 /// Explicit publication capability policy.
