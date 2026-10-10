@@ -377,6 +377,7 @@ pub(crate) fn prepare_packages(
         binding_limit: fact_limit,
         query_limit: fact_limit,
         receivers: super::receivers::Budget::with_owner_limit(fact_limit),
+        scripts: super::scripts::Budget::with_inherited_limit(fact_limit),
         ..PreparationBudget::default()
     };
     let mut scopes = ScopeBudget::default();

@@ -287,6 +287,79 @@ fn retained_native_bindings_use_the_fact_budget_and_replay_exactly() -> TestResu
             .package_xml_bindings(),
         Some(bindings)
     );
+
+    // A single captured inline handler can have many inherited source uses.
+    // These rows enumerate candidates; they do not prove effective dispatch.
+    let root = FixtureRoot::new()?;
+    let xml = format!(
+        "<Ui xmlns=\"http://www.blizzard.com/wow/ui/\"><Frame name=\"FixtureInheritedTemplate\" virtual=\"true\"><Scripts><OnLoad>local value = true</OnLoad></Scripts></Frame>{}</Ui>\n",
+        "<Frame inherits=\"FixtureInheritedTemplate\"/>".repeat(2049)
+    );
+    for package in ["Alpha", "Beta"] {
+        std::fs::write(root.0.join("UI").join(package).join("frames.xml"), &xml)?;
+    }
+    let packages = root.packages(&stop)?;
+    let mut ordinary = ProjectPublisher::with_function_call_facts();
+    assert_eq!(
+        ordinary
+            .publish_initial_cancellable(input(&packages, 32_768)?, &stop)
+            .err()
+            .ok_or("ordinary inherited source universe admitted")?
+            .code(),
+        ProjectErrorCode::SourceBudgetExceeded
+    );
+    assert!(ordinary.open_current().is_err());
+    let native = specialize_native(&packages)?;
+    let mut publisher = ProjectPublisher::with_function_call_facts();
+    publisher.publish_initial_cancellable(input(&native, 32_768)?, &stop)?;
+    let view = publisher.open_current()?;
+    let bindings = view
+        .snapshot()
+        .analyzer_binding()
+        .package_xml_bindings()
+        .ok_or("inherited source bindings missing")?;
+    assert_eq!(
+        bindings
+            .groups()
+            .iter()
+            .map(|group| group.inherited_script_sources().len())
+            .sum::<usize>(),
+        4098
+    );
+    let replay = ProjectReplay::capture(&publisher, &stop)?;
+    let restored =
+        ProjectReplay::from_json(&serde_json::to_vec(&replay)?, &stop)?.hydrate(&stop)?;
+    assert_eq!(restored.snapshot_id(), view.snapshot_id());
+    assert_eq!(restored.project_generation(), view.project_generation());
+    assert_eq!(restored.analyzer_snapshot_id(), view.analyzer_snapshot_id());
+    assert_eq!(
+        restored
+            .snapshot()
+            .analyzer_binding()
+            .package_xml_bindings(),
+        Some(bindings)
+    );
+    // Each population fits this ceiling individually, but their sum does not.
+    let mut combined = ProjectPublisher::with_function_call_facts();
+    assert_eq!(
+        combined
+            .publish_initial_cancellable(input(&native, 8194)?, &stop)
+            .err()
+            .ok_or("combined inherited source facts overflow admitted")?
+            .code(),
+        ProjectErrorCode::UpdateBudgetExceeded
+    );
+    assert!(combined.open_current().is_err());
+    let mut cancelled = ProjectPublisher::with_function_call_facts();
+    assert_eq!(
+        cancelled
+            .publish_initial_cancellable(input(&native, 32_768)?, &AtomicBool::new(true))
+            .err()
+            .ok_or("cancelled inherited source input admitted")?
+            .code(),
+        ProjectErrorCode::AnalysisCancelled
+    );
+    assert!(cancelled.open_current().is_err());
     Ok(())
 }
 

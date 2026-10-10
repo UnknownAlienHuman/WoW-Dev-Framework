@@ -49,6 +49,16 @@ pub(super) struct Budget {
     visits: usize,
     text_bytes: usize,
     inherited: usize,
+    inherited_limit: Option<usize>,
+}
+
+impl Budget {
+    pub(super) fn with_inherited_limit(limit: Option<usize>) -> Self {
+        Self {
+            inherited_limit: limit,
+            ..Self::default()
+        }
+    }
 }
 
 pub(super) fn collect<'a>(
@@ -134,11 +144,12 @@ pub(super) fn collect<'a>(
                 };
                 for source in scripts {
                     crate::analyzer::checkpoint(stop)?;
-                    if budget.inherited >= MAX_BINDINGS {
+                    let inherited_limit = budget.inherited_limit.unwrap_or(MAX_BINDINGS);
+                    if budget.inherited >= inherited_limit {
                         return Err(budget_exhausted(
                             "inherited script sources before next record",
                             budget.inherited,
-                            MAX_BINDINGS,
+                            inherited_limit,
                         ));
                     }
                     budget.inherited += 1;

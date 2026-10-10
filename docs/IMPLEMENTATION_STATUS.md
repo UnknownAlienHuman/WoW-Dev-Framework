@@ -105,8 +105,11 @@ and affected Tier S pass. Selected native query preparation and both original
 Emmy input lanes now use the same finite configured fact ceiling, preserving one
 session, ordinary4096, input text/name bounds and all independent output guards.
 The project lifecycle retains8194 rows/4097 distinct names and exact disk-absent
-replay. The later native273 operation next refuses inherited script sources at
-4096 before the next record; native Emmy and graph execution are still not reached.
+replay. The selected inherited-script-source counter now also uses the configured
+fact ceiling, with its original declaration-visit/text guards. A focused native
+4098-source/combined-refusal/cancellation/replay case passes. The later native273
+operation next refuses expanded query references at16385 against16384;
+native Emmy and graph execution are still not reached.
 Full analysis/graph/maps/persistence remain unqualified under #113.
 Explicit retained XSD component admission is now executable through the existing
 XML owner, with root-only global symbols and final unsupported context propagation.

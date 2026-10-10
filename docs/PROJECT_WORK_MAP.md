@@ -7,9 +7,9 @@ the work queue. Follow [the execution model](EXECUTION_MODEL.md).
 
 ## Verified routing base
 
-`main` checkpoint `fb35fc4ef3f928996a869b4d11290b6092e72a71`, tree
-`51920ba80bff0571f057869d761bffacca81747e`, was published and read back with all
-changed blobs. [Quick 38094000907](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/38094000907)
+`main` checkpoint `b9ad046d0095db7ca21b067dc2bf16b9b03b4719`, tree
+`faed730d94b1789810e4726a850f34411f866182`, was published and read back with all
+changed blobs. [Quick 38095624482](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/38095624482)
 passed on that exact head. This is the verified base of this routing update;
 subsequent publication and gate evidence belong in the canonical Issue.
 
@@ -42,12 +42,14 @@ admission, ordinary limits and exact replay. Selected native XML query union and
 both original Emmy query input lanes now use that same finite ceiling in one
 session. A focused fixture retains4097 distinct names and exact replay; separate
 input-text, query-reference, native target/output and work guards remain. The
-latest real operation next refuses inherited script sources before the next
-record at4096. Native Emmy and graph construction were not reached. Existing
-guards report their own counts and limits. Actual whole
+selected inherited-source counter now also uses the configured fact ceiling,
+preserving declaration visits/text and full combined admission. A focused fixture
+retains4098 inherited source rows and exact disk-absent replay, with conservative
+ordinary/combined/cancellation refusal. The latest real operation next refuses
+expanded query references at16385 against16384. Native Emmy and graph construction
+were not reached. Existing guards report their own counts and limits. Actual whole
 Main/analysis, full graph/map population and persistence remain unqualified.
-Do not infer the actual
-map-owner population from lexical script counts or compare XML-index JSON bytes
+Do not infer the actual map-owner population from lexical script counts or compare XML-index JSON bytes
 with graph metadata bytes. Operation details belong in #113.
 
 | Order | Bounded functional responsibility | Required boundary |

@@ -56,18 +56,19 @@ order or effective callback dispatch. Receiver semantics remain `not_evaluated`.
 
 Preparation and classification share the existing separate category bounds
 across all groups. For a genuine platform universe with explicitly selected
-native package retention, the separate binding-row, receiver-owner and distinct
-query-union ceilings
-use the configured `ProjectBudgetPolicy::max_analyzer_facts`; preparation carries
-the same binding ceiling to classification. Each counter is only one constituent
-of the final fact count: full
-combined fact and output admission still applies. Ordinary and standalone routes
-keep 4096 rows/owners/queries. The selected query ceiling reaches both native
+native package retention, the separate binding-row, receiver-owner, inherited
+script-source and distinct query-union ceilings use the configured
+`ProjectBudgetPolicy::max_analyzer_facts`; preparation carries the same binding
+ceiling to classification. Each counter bounds one constituent of the final fact
+count; combined fact and output admission still applies. Ordinary and standalone routes
+keep 4096 rows/owners/inherited sources/queries. Each inherited-source row is
+directly charged by final combined fact admission. Its declaration-visit and
+text-byte guards remain separate. The selected query ceiling reaches both native
 symbol and callable input lanes through `MemberCallSessionQueryProfile`, including
 the virtual-unit route. Input counts include repeated names; each lane retains a
 cancellable checked 16-MiB input-text bound and 4096-byte individual name bound.
-Query references/visits, receiver record/text/expansion, inherited scripts,
-native lookup targets/text, callable named targets and serialization retain their
+Query references/visits, receiver record/text/expansion, inherited declaration
+visits/text, native lookup targets/text, callable named targets and serialization retain their
 own independent limits. The existing configuration/replay records already bind
 the selected retention and budget; no additional wire selector is introduced.
 
@@ -115,9 +116,13 @@ native-session lifecycle separately checks both 4097-name lanes, ordinary and
 selected refusals, repeated inputs, input-text overflow, original lookup/sidecar
 IDs, small-report equality, retained update, virtual routing and cancellation.
 The later real
-273-package operation passes the previous query-union frontier and next refuses
-4096 inherited script sources before admitting another record. Native Emmy and
-graph execution have not yet been reached by that real operation.
+273-package operation passes the previous query-union frontier. A further native
+fixture retains 4098 inherited inline-handler source rows, refuses ordinary
+capacity and combined-fact overflow without publication, honors cancellation,
+and restores exact identities and full bindings without disk. The later real
+operation passes the inherited-source frontier and next refuses expanded query
+references at 16385 against 16384. Native Emmy and graph execution have not yet
+been reached by that real operation.
 Full real-corpus XML binding capacity remains unqualified under #113.
 
 The direct source producer remains monolithic `wow-project/source-load-proposals/19`.
