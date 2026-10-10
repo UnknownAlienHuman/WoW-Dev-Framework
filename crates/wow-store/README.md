@@ -33,6 +33,8 @@ no existing schema migrates automatically. Current owner routes:
 - [Recovery, verified native backup and isolated restore](PROJECT_RECOVERY.md)
 - [Guarded physical-instance replacement and exact reconciliation](PROJECT_REGISTRY.md)
 - [Authoritative physical-instance quarantine and read-only recovery](PROJECT_QUARANTINE.md)
+- [Guarded quarantine restore and portable hold authority](PROJECT_QUARANTINE_RESTORE.md)
+- [Verified inactive physical v1/v2 to v3 migration](PROJECT_MIGRATION.md)
 
 ### E6-B — external Candidate generic persistence
 

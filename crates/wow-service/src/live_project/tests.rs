@@ -17,6 +17,8 @@ type TestResult<T = ()> = Result<T, Box<dyn Error>>;
 mod durable;
 mod gc;
 mod library_modes;
+#[path = "migration_tests.rs"]
+mod migration;
 #[path = "quarantine_tests.rs"]
 mod quarantine;
 mod retention;

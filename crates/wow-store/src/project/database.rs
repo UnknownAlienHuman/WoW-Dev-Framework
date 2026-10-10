@@ -96,7 +96,38 @@ impl Database {
     pub fn create_with_gc(root: &Path, owner: &str, catalog: RecordCatalog) -> StoreResult<Self> {
         Self::create_profile(root, owner, catalog, GC_PHYSICAL_PROFILE)
     }
+    pub(super) fn create_inactive_with_gc(
+        root: &Path,
+        owner: &str,
+        catalog: RecordCatalog,
+    ) -> StoreResult<Self> {
+        let db = Self::create_unselected_profile(root, owner, catalog, GC_PHYSICAL_PROFILE)?;
+        write_epoch_file(
+            &db.root.join("epoch-manifest.json"),
+            &encode(&db.epoch, 65536)?,
+        )?;
+        Ok(db)
+    }
     fn create_profile(
+        root: &Path,
+        owner: &str,
+        catalog: RecordCatalog,
+        profile: &str,
+    ) -> StoreResult<Self> {
+        let mut db = Self::create_unselected_profile(root, owner, catalog, profile)?;
+        let bytes = encode(&db.epoch, 65536)?;
+        // The outer selector is published only after a valid epoch exists. An
+        // interrupted new root is not silently repaired/adopted on the next open.
+        let mut registry = File::create_new(db.root.join("project-store-registry.json"))
+            .map_err(|_| failure(StoreErrorCode::DatabaseUnavailable))?;
+        registry
+            .write_all(&bytes)
+            .and_then(|()| registry.sync_all())
+            .map_err(|_| failure(StoreErrorCode::OutcomeUnknown))?;
+        db.selection = Some(RegistrySelection::from_bytes(&bytes, &db.epoch, 0, None));
+        Ok(db)
+    }
+    fn create_unselected_profile(
         root: &Path,
         owner: &str,
         catalog: RecordCatalog,
@@ -164,24 +195,11 @@ impl Database {
             .map_err(StoreError::database)?;
         enable_writer(&connection)?;
         validate_header(&connection, &epoch)?;
-        // The outer selector is published only after a valid epoch exists. An
-        // interrupted new root is not silently repaired/adopted on the next open.
-        let mut epoch_file =
-            File::create_new(dir.join("epoch-manifest.json")).map_err(|_| invalid())?;
-        epoch_file
-            .write_all(&bytes)
-            .and_then(|()| epoch_file.sync_all())
-            .map_err(|_| failure(StoreErrorCode::OutcomeUnknown))?;
-        let mut registry = File::create_new(root.join("project-store-registry.json"))
-            .map_err(|_| failure(StoreErrorCode::DatabaseUnavailable))?;
-        registry
-            .write_all(&bytes)
-            .and_then(|()| registry.sync_all())
-            .map_err(|_| failure(StoreErrorCode::OutcomeUnknown))?;
+        write_epoch_file(&dir.join("epoch-manifest.json"), &bytes)?;
         Ok(Self {
             connection,
             path,
-            selection: Some(RegistrySelection::from_bytes(&bytes, &epoch, 0, None)),
+            selection: None,
             root,
             epoch,
             life: Rc::new(Lifetime {
@@ -209,7 +227,6 @@ impl Database {
             return Err(failure(StoreErrorCode::Quarantined));
         }
         let epoch = admitted.epoch;
-        let bytes = encode(&epoch, 65536)?;
         let dir = admitted.selection.directory(&root, &epoch)?;
         let instance_lock = if let Some(record) = admitted.record {
             let path = record.instance_root(&root).join("writer.lock");
@@ -225,15 +242,64 @@ impl Database {
         } else {
             None
         };
-        let epoch_path = dir.join("epoch-manifest.json");
-        regular(&epoch_path, 65536)?;
-        let mut epoch_bytes = Vec::new();
-        File::open(epoch_path)
-            .map_err(|_| invalid())?
-            .take(65537)
-            .read_to_end(&mut epoch_bytes)
-            .map_err(|_| invalid())?;
-        if epoch_bytes != bytes {
+        let (connection, path) = Self::open_epoch(&dir, &epoch)?;
+        Ok(Self {
+            connection,
+            path,
+            epoch,
+            root,
+            selection: Some(admitted.selection),
+            life: Rc::new(Lifetime {
+                _lock: Rc::new(lock),
+                _instance_lock: instance_lock,
+                leases: RefCell::new(BTreeMap::new()),
+                lease_revision: Cell::new(0),
+                reader_admissions: Rc::new(Cell::new(0)),
+            }),
+        })
+    }
+    pub(super) fn open_inactive(root: &Path, epoch: &EpochManifest) -> StoreResult<Self> {
+        let root = admitted_root(root)?;
+        let lock_path = root.join("writer.lock");
+        regular(&lock_path, 0)?;
+        let lock = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(lock_path)
+            .map_err(|_| failure(StoreErrorCode::DatabaseUnavailable))?;
+        lock.try_lock()
+            .map_err(|_| failure(StoreErrorCode::WriterBusy))?;
+        match fs::symlink_metadata(root.join(registry::REGISTRY_FILE)) {
+            Ok(_) => return Err(invalid()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(_) => return Err(invalid()),
+        }
+        let bytes = read_epoch_file(&root.join("epoch-manifest.json"))?;
+        let admitted = admit_epoch(&bytes, &epoch.catalog)?;
+        if &admitted != epoch {
+            return Err(invalid());
+        }
+        directory(&root.join("epochs"))?;
+        let dir = epoch_directory(&root, &admitted)?;
+        directory(&dir)?;
+        let (connection, path) = Self::open_epoch(&dir, &admitted)?;
+        Ok(Self {
+            connection,
+            path,
+            epoch: admitted,
+            root,
+            selection: None,
+            life: Rc::new(Lifetime {
+                _lock: Rc::new(lock),
+                _instance_lock: None,
+                leases: RefCell::new(BTreeMap::new()),
+                lease_revision: Cell::new(0),
+                reader_admissions: Rc::new(Cell::new(0)),
+            }),
+        })
+    }
+    fn open_epoch(dir: &Path, epoch: &EpochManifest) -> StoreResult<(Connection, PathBuf)> {
+        if read_epoch_file(&dir.join("epoch-manifest.json"))? != encode(epoch, 65536)? {
             return Err(invalid());
         }
         let path = dir.join("project.sqlite");
@@ -252,25 +318,12 @@ impl Database {
         }
         // Inspect an existing database read-only before any writable open or DDL.
         let inspect = connect(&path, true)?;
-        validate_header(&inspect, &epoch)?;
+        validate_header(&inspect, epoch)?;
         drop(inspect);
         let connection = connect(&path, false)?;
-        validate_header(&connection, &epoch)?;
+        validate_header(&connection, epoch)?;
         enable_writer(&connection)?;
-        Ok(Self {
-            connection,
-            path,
-            epoch,
-            root,
-            selection: Some(admitted.selection),
-            life: Rc::new(Lifetime {
-                _lock: Rc::new(lock),
-                _instance_lock: instance_lock,
-                leases: RefCell::new(BTreeMap::new()),
-                lease_revision: Cell::new(0),
-                reader_admissions: Rc::new(Cell::new(0)),
-            }),
-        })
+        Ok((connection, path))
     }
     pub fn read_connection(&self) -> StoreResult<Connection> {
         self.ensure_idle()?;
@@ -321,6 +374,24 @@ impl Database {
         }
         Ok(())
     }
+}
+
+fn write_epoch_file(path: &Path, bytes: &[u8]) -> StoreResult<()> {
+    let mut file = File::create_new(path).map_err(|_| invalid())?;
+    file.write_all(bytes)
+        .and_then(|()| file.sync_all())
+        .map_err(|_| failure(StoreErrorCode::OutcomeUnknown))
+}
+
+fn read_epoch_file(path: &Path) -> StoreResult<Vec<u8>> {
+    regular(path, 65536)?;
+    let mut bytes = Vec::new();
+    File::open(path)
+        .map_err(|_| invalid())?
+        .take(65537)
+        .read_to_end(&mut bytes)
+        .map_err(|_| invalid())?;
+    Ok(bytes)
 }
 
 pub(super) fn admit_epoch(bytes: &[u8], catalog: &RecordCatalog) -> StoreResult<EpochManifest> {

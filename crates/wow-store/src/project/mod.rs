@@ -4,6 +4,7 @@
 mod backup;
 mod database;
 mod gc;
+mod migration;
 mod model;
 mod publication;
 mod quarantine;
@@ -17,6 +18,10 @@ use crate::{OperationId, StoreError, StoreResult};
 pub use backup::{BackupManifest, VerifiedBackup};
 use database::Database;
 pub use gc::{ProjectGcPlan, ProjectGcPolicy, ProjectGcReceipt, ProjectGcReport};
+pub use migration::{
+    MigrationCandidate, MigrationCurrentMapping, MigrationMapping, MigrationReceipt,
+    ValidatedMigration,
+};
 pub use model::{
     CurrentPublication, CurrentRecordId, EpochId, EpochManifest, GC_PHYSICAL_PROFILE,
     GenerationManifest, PHYSICAL_PROFILE, PartitionMember, PartitionRecord, PartitionVersionId,

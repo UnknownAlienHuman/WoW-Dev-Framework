@@ -27,8 +27,9 @@ data survives; released operation evidence and GC receipts survive collection an
 reopen. W16 now adds read-only recovery, verified native SQLite backup and
 owner-validated isolated restore, guarded live physical-instance replacement and
 explicit whole-instance quarantine with typed read-only observation.
-Guarded recovery from quarantine and portable hold authority are now executable.
-Supported inactive epoch migration and object/epoch/platform gates remain next; full W14/E2,
+Guarded recovery from quarantine, portable hold authority and supported inactive
+physical v1/v2 to v3 migration are now executable. Cross-epoch activation, mapped
+retention and object/epoch/platform gates remain next; full W14/E2,
 W15 and W16 acceptance remain open. See
 [PROJECT_GC.md](../crates/wow-store/PROJECT_GC.md).
 
@@ -92,10 +93,31 @@ fmt, check, strict Clippy, rustdoc and build passed on 2026-10-09. The subsequen
 capacity preflight passed 40 store tests and refreshed workspace gates;
 budget-exhaustion fault fixtures remain NotEvaluated. Next functional work is
 an explicit supported source-to-target epoch migration ending at validated inactive
-state, with fresh IDs/maps and original source history retained as evidence.
+state, with fresh IDs/maps and original source history retained as evidence; this
+is supplied by the subsequent checkpoint below.
 Current-domain recovery observation and broader W16/E2, source/runtime, power-loss,
 inside-write and deletion acceptance remain open. Gethe materialization still
 follows product implementation/build, before its external comparative checks.
+
+The inactive migration checkpoint consumes an explicit independently verified
+physical v1/v2 backup and creates a new unselected v3 with the unchanged source
+catalog. A full independent source archive retains original history, pins and
+holds. Partition and native Project/Graph/analyzer/publication IDs stay unchanged;
+every source generation maps explicitly to new target generation/validation IDs,
+including predecessor-only aliases. Fresh compiled owners validate every unique
+target before a canonical `ValidatedInactive` record is finalized. Target Current,
+history, root registry and retention roots stay absent.
+
+Exact reopen verifies all present logical inventory on one held snapshot before
+resuming declared work. Foreign operations, altered seals/manifests and conflicting
+completed records reject without logical repair; the existing record never replaces
+fresh owner replay. Policy, fmt, workspace check, strict Clippy, 906 tests
+(1 ignored, 107 targets), strict rustdoc and build pass on 2026-10-09. See
+[PROJECT_MIGRATION.md](../crates/wow-store/PROJECT_MIGRATION.md).
+Next W16 owners are exact cross-epoch selection with mapped retention and typed
+Current-domain observation. Pre-intent staging recovery, payload/old-runtime
+transformation, domain quarantine, inside-write/power-loss/deletion/platform and
+full W16/E2 gates remain open. Gethe preparation follows product implementation.
 
 Fresh W16 policy, fmt, workspace check, strict Clippy, tests (877 passed,
 1 ignored, 106 targets), rustdoc and build passed on 2026-10-09. The ignored consumer and source/runtime gates stay

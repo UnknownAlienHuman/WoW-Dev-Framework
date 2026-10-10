@@ -1,6 +1,8 @@
 //! Coherent native project/graph publication through the existing manifested
 //! store. Current resolves once; actual replay and all owner checks hold its lease.
 mod gc;
+mod migration;
+pub use migration::{migrate_live_project_to_new, resume_live_project_migration};
 mod operations;
 mod quarantine;
 pub use quarantine::{LiveProjectQuarantineInspection, QuarantinedLiveProject};

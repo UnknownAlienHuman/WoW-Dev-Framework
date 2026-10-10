@@ -821,3 +821,26 @@ Budget-exhaustion fault fixtures, supported inactive epoch migration, current-do
 recovery observation, domain quarantine, inside-write interruption, power loss,
 deletion and full W16/E2/Gethe/Ketho/runtime acceptance remain open. See
 [PROJECT_QUARANTINE_RESTORE.md](../crates/wow-store/PROJECT_QUARANTINE_RESTORE.md).
+
+## W16 supported inactive physical epoch migration (2026-10-09)
+
+Store/service APIs now transform an explicit verified physical v1/v2 backup into
+a new unselected v3 with its original record catalog. The complete original
+history, operations, validations, pins and holds remain in an independent source
+archive. Original partition and native Project/Graph/analyzer/publication IDs are
+preserved. New epoch/generation/validation/request IDs and complete source-to-target
+maps retain aliases through one deterministic representative per target.
+
+Every unique target receives fresh compiled owner replay before completion at
+`ValidatedInactive`; no target Current, history, registry or roots are selected.
+Exact continuation admits the entire present subset before resumed writes and
+reconciles a completed canonical record without treating it as an owner verdict.
+Both target epoch manifests are rechecked before validation mutation.
+
+Four store and one native service regressions pass. Workspace policy, fmt, check,
+strict Clippy, tests (906 passed, 1 ignored, 107 targets), strict rustdoc and build
+passed. Exact cross-epoch activation, mapped target retention, typed Current-domain
+observation, payload/old-runtime transformation, domain quarantine, pre-intent
+staging recovery, inside-write/power-loss/deletion/platform and full W16/E2 or
+Gethe/Ketho/runtime acceptance remain open. See
+[PROJECT_MIGRATION.md](../crates/wow-store/PROJECT_MIGRATION.md).

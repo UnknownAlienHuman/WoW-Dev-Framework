@@ -1,7 +1,7 @@
 # Project completion matrix
 
-**Audited:** 2026-09-19 America/New_York. Execution inventory refreshed 2026-10-02
-through product checkpoint `260cf430a22fdc3f86da33a9c363946cc31aca00`.
+**Audited:** 2026-09-19 America/New_York. Execution inventory refreshed 2026-10-09
+through the scoped W16 inactive physical migration checkpoint below.
 
 This is the current execution ledger. [IMPLEMENTATION_HANDOFF.md](IMPLEMENTATION_HANDOFF.md)
 remains the normative I0–I7 plan; do not restart its historical bootstrap steps.
@@ -30,7 +30,7 @@ The root [Cargo.toml](../Cargo.toml) activates **16 members**, including the int
 | `wow-project` | Explicit inventories, bounded TOC/XML/package receipts, analyzer bindings, immutable generations, exact source artifacts/handles, guarded updates, publication and physical/standalone/package native replay | E0-D fixture identity closure; effective XML receiver/load semantics, full load acceptance, overlays and full durable project publication |
 | `wow-rules` | `wow.api.exists@1` over physical Main and exact-static XML inline facts; `wow.secret.local_operation@1` over its bounded physical flow slice | E0-E normative fixtures, exact prerequisite identities and complete capability/negative-authority cases; no inferred XML receiver/runtime authority |
 | `wow-service` | E0 status/check over immutable normalized contexts, mixed physical/XML rule scopes and exact XML finding projection; separate ReferenceView administration/publication | E0-F end-to-end fixture/CLI closure; full E1 Reference Pack and later public operation families |
-| `wow-store` | Typed SQLite objects, catalogs/CAS, operation journal, leases, GC and integrity; manifested recovery, native backup, isolated restore, guarded same-epoch physical-instance replacement and authoritative whole-instance quarantine | Full E1-A/E2-D acceptance; guarded quarantine restore, domain quarantine, incompatible-epoch migration, interrupted-write/power-loss and cleanup faults remain open |
+| `wow-store` | Typed SQLite objects, catalogs/CAS, journal, leases, GC and integrity; manifested recovery, native backup, isolated restore, same-epoch replacement, whole-instance quarantine/guarded restore, portable holds and verified inactive physical v1/v2 to v3 migration | Full E1-A/E2-D acceptance; cross-epoch activation/mapped retention, payload/runtime migration, domain quarantine, interrupted-write/power-loss and cleanup faults remain open |
 | `wow-reference` | Native source/model/corrections/aliases, compatibility imports, persistent ReferenceView and publication | E0-B/E1-B normative fixture and full Reference Pack/coverage acceptance |
 | `wow-annotations` | Native Ketho-derived library projection, alias/type/catalog/inheritance/navigation slices and consumer tests | Full E1-C contract/corpus parity; scoped passing consumers are not universal semantic certification |
 | `wow-graph` | Immutable snapshots, proposals/registries, neighbors, producer partitions, bounded queries, exact retained derivation/conflict records, evidence resolution and v1/v2 persistence | Complete producer-chain coverage and automatic conflict assessment, normative fixtures and coherent E2-D publication |
@@ -354,3 +354,16 @@ workspace policy, fmt, check, strict Clippy, tests (895 passed, 1 ignored,
 107 targets), rustdoc and build pass. Guarded restore, fine-grained/domain
 quarantine, supported migrations, interruption inside writes/OS calls, power
 loss, cleanup and Gethe/Ketho/runtime remain separate open gates.
+
+The subsequent guarded-restore and inactive-migration slices retain portable
+source hold authority and independently replay native Project/Graph owners.
+Supported physical v1/v2 to v3 migration preserves the original catalog/payload
+identities and source history in an independent archive, records all generation
+aliases, and stops at validated inactive state without target Current or registry.
+Partial-state and final-record preflight precede resume effects; both epoch
+manifests are rechecked before validation writes. Workspace policy, fmt, check,
+strict Clippy, tests (906 passed, 1 ignored, 107 targets), strict rustdoc and build
+pass on 2026-10-09. Cross-epoch selection/mapped roots, typed Current-domain recovery,
+payload/old-runtime transformation, pre-intent staging recovery and full W16/E2 or
+platform/source/runtime acceptance stay open. See
+[PROJECT_MIGRATION.md](../crates/wow-store/PROJECT_MIGRATION.md).
