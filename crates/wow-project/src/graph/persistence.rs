@@ -167,6 +167,13 @@ fn validate(
         Some(crate::PlatformGraphProfile::PackageProjectionV1) => {
             super::PACKAGE_SOURCE_GRAPH_PROFILE
         }
+        Some(crate::PlatformGraphProfile::PackageProjectionWithRawInventoryV1) => {
+            return Err(ProjectError::new(
+                ProjectErrorCode::DeferredCapability,
+                ProjectPhase::View,
+                "raw inventory requires native project and graph binding",
+            ));
+        }
     };
     if value.get("profile").and_then(Value::as_str) != Some(expected) {
         return Err(invalid());

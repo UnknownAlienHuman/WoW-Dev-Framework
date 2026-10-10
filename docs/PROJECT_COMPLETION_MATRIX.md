@@ -63,7 +63,7 @@ no Rust implementation in the audited source. Their documentation is not a binar
 | E1-D | Partial executable Reference Pack service and active internal builder with durable materialization/finalization | Close external parity/license/rebuild evidence, Windows/process-loss acceptance and complete package gates; code presence is not `ValidatedLocal` |
 | E2-A–E2-B | Partial executable | All 26 active E2-B rule IDs are service-published after the W11 semantic repair, TOC, XML and state slices; close public CLI/full-pipeline fixtures and package acceptance |
 | E2-C–E2-D | Partial source index, manifested store, native live pair service/CLI, cancellable updates, exact Library/fact-profile binding, retained physical parser updates and durable physical update/removal publication; bounded retention/GC, recovery/replacement, inactive migration/READY preparation, portable source authority and guarded cross-epoch selection/reconciliation | Dependency-specific fact reuse, standalone/package durable updates, portable full migration history and complete E2 acceptance remain open; see [REPLAY_PUBLICATION.md](../crates/wow-project/REPLAY_PUBLICATION.md) |
-| E3-A | Partial exact raw/package admission, owner-bound platform configuration, native physical/XML Main/source graph, opt-in same-session package XML bindings and package XML/script/state graph inputs, genuine replay and selected stable namespace publication/readback across source snapshots | Complete raw-member graph/read binding, independent direct producers/fingerprints, bounded SkeletonInputView and service/CLI source transport; full source-universe acceptance remains open |
+| E3-A | Partial exact raw/package admission, owner-bound platform configuration, native physical/XML Main/source graph, opt-in same-session package XML bindings and package XML/script/state graph inputs, Included-member graph/native local reads, genuine replay and selected stable namespace publication/readback across source snapshots | Remaining direct-producer split/fingerprints, bounded SkeletonInputView and service/CLI source transport; full source-universe acceptance remains open |
 | E3-B–E3-C | Not started | Context owners and service/CLI after their actual producer inputs |
 | E4-A–E4-C | Not started | Search, lineage/migration/static impact and routing after A0 prerequisites |
 | E5-A–E5-C | Not started | Calibration, independent review/holdout and governed publication lifecycle |
@@ -583,8 +583,29 @@ passing. Final workspace policy, fmt, all-target/all-feature check, strict Clipp
 tests (938 passed, 0 failed, 1 ignored, 111 targets), strict rustdoc and
 all-target/all-feature build pass, completed 2026-10-10 07:18:40 UTC. This records
 local verification without advancing full acceptance or asserting remote publication.
-The direct source producer remains
-monolithic. Complete raw-member graph/read binding, independent platform direct
-producers/fingerprints, SkeletonInputView and source service/CLI transport remain
-open. Full W17/E3, real corpus/performance/runtime and W18-W26 acceptance remain
-NotEvaluated.
+That package-only checkpoint retained the monolithic direct source producer.
+
+The separate selected raw recipe now projects every declared Included member,
+including opaque and unconsumed files, into a native inventory partition.
+Exact accepted Producer references bind local borrowed byte ranges to the held
+source. Original inventory omissions, Partial coverage and origin/license
+assertions are preserved; serialize-only metadata grants neither native read
+authority nor redistribution permission. Source `/21`, registry 16, native replay
+`/8`/storage v8 and service request `/11`/result `/18` are explicit new channels;
+`/19`, `/20` and older replay/catalog identities remain unchanged. See
+[raw inventory graph and native reads](PLATFORM_RAW_INVENTORY_GRAPH.md).
+
+The disk-absent native lifecycle passes Included-member/omission accounting,
+exact opaque byte borrowing, address/budget refusals, namespace Current reopen
+and frozen V7 refusal without effects. Workspace policy, fmt,
+all-target/all-feature check, strict Clippy, tests (939 passed, 0 failed, 1 ignored,
+111 targets), strict rustdoc and all-target/all-feature build pass, completed
+2026-10-10 07:48:26 UTC. These are local scoped results, not remote publication
+or full acceptance evidence.
+
+The remaining TOC/XML/analyzer direct producer is still shared; the new inventory
+partition does not complete the four-way E3 split or its full relation model.
+Fingerprints, bounded SkeletonInputView and source service/CLI transport remain
+open. Full W17/E3, real corpus/performance/runtime, native fault/exhaustion and
+W18-W26 acceptance remain NotEvaluated. Gethe acquisition/materialization stays
+deferred.

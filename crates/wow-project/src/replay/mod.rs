@@ -7,8 +7,9 @@ mod platform;
 pub mod publication;
 
 use crate::{
-    PackageXmlBindingProfile, ProjectError, ProjectErrorCode, ProjectInputBundle, ProjectInputFile,
-    ProjectPhase, ProjectPublisher, ProjectResult, ProjectView,
+    PackageXmlBindingProfile, PlatformGraphProfile, ProjectError, ProjectErrorCode,
+    ProjectInputBundle, ProjectInputFile, ProjectPhase, ProjectPublisher, ProjectResult,
+    ProjectView,
 };
 use configuration::ReplayConfiguration;
 use load::ReplayLoad;
@@ -27,6 +28,7 @@ const LIBRARY_BOUND_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/4";
 const PLATFORM_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/5";
 const PACKAGE_XML_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/6";
 const PACKAGE_GRAPH_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/7";
+const RAW_INVENTORY_GRAPH_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/8";
 const MAX_FILES: usize = 8192;
 const MAX_LIBRARIES: usize = 64;
 const MAX_FILE_BYTES: usize = 16 * 1024 * 1024;
@@ -76,7 +78,8 @@ struct ReplayLibrary {
 
 /// Data-only archive, distinct from the executable owner view. New publications
 /// use v4 with Library-bound generation, v5 for a genuine platform corpus, or v6
-/// for explicitly selected same-session package XML bindings. Earlier archives
+/// for explicitly selected same-session package XML bindings. Package graph
+/// projection uses v7; projection with raw inventory uses v8. Earlier archives
 /// retain their original recipe.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -236,12 +239,21 @@ impl ProjectReplay {
         // The package graph projection is selected only together with the
         // genuine platform owner, the same-session XML binding profile, the
         // library-bound generation and the explicit platform graph selector.
-        let package_graph = configuration.platform_graph_profile().is_some();
-        let platform_schema = match (configuration.package_xml_binding_profile(), package_graph) {
-            (Some(PackageXmlBindingProfile::SameSessionV1), true) => PACKAGE_GRAPH_REPLAY_SCHEMA,
-            (Some(PackageXmlBindingProfile::SameSessionV1), false) => PACKAGE_XML_REPLAY_SCHEMA,
-            (None, false) => PLATFORM_REPLAY_SCHEMA,
-            (None, true) => return Err(invalid()),
+        let platform_schema = match (
+            configuration.package_xml_binding_profile(),
+            configuration.platform_graph_profile(),
+        ) {
+            (
+                Some(PackageXmlBindingProfile::SameSessionV1),
+                Some(PlatformGraphProfile::PackageProjectionV1),
+            ) => PACKAGE_GRAPH_REPLAY_SCHEMA,
+            (
+                Some(PackageXmlBindingProfile::SameSessionV1),
+                Some(PlatformGraphProfile::PackageProjectionWithRawInventoryV1),
+            ) => RAW_INVENTORY_GRAPH_REPLAY_SCHEMA,
+            (Some(PackageXmlBindingProfile::SameSessionV1), None) => PACKAGE_XML_REPLAY_SCHEMA,
+            (None, None) => PLATFORM_REPLAY_SCHEMA,
+            (None, Some(_)) => return Err(invalid()),
         };
         let platform = if let Some(owner) = platform_owner {
             if generation_schema_version != Some(2) {
@@ -300,14 +312,19 @@ impl ProjectReplay {
         Ok(replay)
     }
     fn expected_schema(&self) -> ProjectResult<&'static str> {
-        if self.configuration.platform_graph_profile().is_some() {
+        if let Some(profile) = self.configuration.platform_graph_profile() {
             return if self.generation_schema_version == Some(2)
                 && self.configuration.package_xml_binding_profile()
                     == Some(PackageXmlBindingProfile::SameSessionV1)
                 && self.configuration.is_platform()
                 && self.platform.is_some()
             {
-                Ok(PACKAGE_GRAPH_REPLAY_SCHEMA)
+                Ok(match profile {
+                    PlatformGraphProfile::PackageProjectionV1 => PACKAGE_GRAPH_REPLAY_SCHEMA,
+                    PlatformGraphProfile::PackageProjectionWithRawInventoryV1 => {
+                        RAW_INVENTORY_GRAPH_REPLAY_SCHEMA
+                    }
+                })
             } else {
                 Err(invalid())
             };
@@ -519,6 +536,7 @@ impl ProjectReplay {
             PLATFORM_REPLAY_SCHEMA => Ok("wow-project.live-replay.v5"),
             PACKAGE_XML_REPLAY_SCHEMA => Ok("wow-project.live-replay.v6"),
             PACKAGE_GRAPH_REPLAY_SCHEMA => Ok("wow-project.live-replay.v7"),
+            RAW_INVENTORY_GRAPH_REPLAY_SCHEMA => Ok("wow-project.live-replay.v8"),
             _ => Err(invalid()),
         }
     }

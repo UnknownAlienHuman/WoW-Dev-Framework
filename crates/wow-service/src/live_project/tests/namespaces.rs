@@ -43,13 +43,13 @@ fn platform_bundle_with_profiles(
     graph_profile: Option<PlatformGraphProfile>,
     stop: &AtomicBool,
 ) -> TestResult<ProjectInputBundle> {
-    // The new graph fixture admits both roots before specialization. Existing
-    // callers retain the exact single-root profile, inventory and declarations.
-    let package_roots: &[(&str, &str)] = if graph_profile.is_some() {
-        &[("UI", "Fixture"), ("UISecond", "Twin")]
-    } else {
-        &[("UI", "Fixture")]
-    };
+    // Keep the published /20 duplicate-package fixture and older inputs exact.
+    let package_roots: &[(&str, &str)] =
+        if graph_profile == Some(PlatformGraphProfile::PackageProjectionV1) {
+            &[("UI", "Fixture"), ("UISecond", "Twin")]
+        } else {
+            &[("UI", "Fixture")]
+        };
     let ordinary = input_bundle("return External()")?;
     let metadata = ordinary.configuration();
     let target = PlatformTarget {
@@ -80,7 +80,7 @@ fn platform_bundle_with_profiles(
     let raw_digest =
         |bytes: &[u8]| ContentDigest::<SourceContent>::from_bytes(Sha256::digest(bytes).into());
     let opaque = [0xff, 0xfe, 0, opaque_revision];
-    let members: [(&str, PlatformFileKind, &[u8]); 4] = [
+    let mut members: Vec<(&str, PlatformFileKind, &[u8])> = vec![
         (
             "Fixture.toc",
             PlatformFileKind::Toc,
@@ -98,6 +98,21 @@ fn platform_bundle_with_profiles(
         ),
         ("opaque.bin", PlatformFileKind::Unknown, &opaque),
     ];
+    if graph_profile == Some(PlatformGraphProfile::PackageProjectionWithRawInventoryV1) {
+        members.extend([
+            (
+                "unloaded.lua",
+                PlatformFileKind::Lua,
+                b"function RawInventoryOnly() end\n".as_slice(),
+            ),
+            (
+                "unloaded.xml",
+                PlatformFileKind::Xml,
+                b"<Ui xmlns=\"http://www.blizzard.com/wow/ui/\"><Frame name=\"RawInventoryOnly\"/></Ui>\n"
+                    .as_slice(),
+            ),
+        ]);
+    }
     let mut entries = Vec::new();
     for (source_root, _) in package_roots {
         std::fs::create_dir_all(path.join(source_root))?;
@@ -215,6 +230,469 @@ fn platform_owners(
     stop: &AtomicBool,
 ) -> TestResult<(ProjectPublisher, GraphPartitionSnapshot)> {
     owners_from_bundle(platform_bundle(path, opaque_revision, stop)?)
+}
+
+#[test]
+fn raw_inventory_reopens_with_exact_byte_binding_and_frozen_v7_refuses() -> TestResult {
+    use wow_graph::{GraphAssertionKind, GraphAssertionRef, GraphLocalAssertion};
+    use wow_project::ProjectErrorCode;
+    use wow_project::graph::{
+        PLATFORM_RAW_INVENTORY_PARTITION, PLATFORM_RAW_MEMBER_KIND, SOURCE_GRAPH_PARTITION,
+        bind_platform_raw_member, build_source_graph_proposals,
+    };
+    use wow_project::replay::ProjectReplay;
+
+    let stop = AtomicBool::new(false);
+    let path = root("platform-raw-graph-v8")?;
+    let source_path = path.join("raw-input");
+    let bundle = platform_bundle_with_profiles(
+        &source_path,
+        1,
+        true,
+        Some(PlatformGraphProfile::PackageProjectionWithRawInventoryV1),
+        &stop,
+    )?;
+    assert!(!source_path.exists());
+    let packages = bundle
+        .configuration()
+        .platform_packages()
+        .ok_or("raw platform plans missing")?;
+    assert_eq!(packages.load_plan().packages().len(), 1);
+    assert_eq!(packages.files().len(), 1);
+    assert_eq!(
+        packages
+            .main_plan()
+            .files()
+            .iter()
+            .map(|file| file.project_path.as_str())
+            .collect::<Vec<_>>(),
+        ["packages/Fixture/defs.lua"]
+    );
+    let plan = packages
+        .load_plan()
+        .package_plan("Fixture")
+        .ok_or("selected package plan missing")?;
+    for unloaded in ["unloaded.lua", "unloaded.xml", "opaque.bin"] {
+        assert!(
+            packages
+                .main_plan()
+                .resolve_source("Fixture", unloaded)
+                .is_none()
+        );
+        assert!(plan.sources().iter().all(|source| source.path != unloaded));
+    }
+    let source = packages.source();
+    let expected_paths = BTreeSet::from([
+        "UI/Fixture.toc".to_owned(),
+        "UI/defs.lua".to_owned(),
+        "UI/frames.xml".to_owned(),
+        "UI/opaque.bin".to_owned(),
+        "UI/unloaded.lua".to_owned(),
+        "UI/unloaded.xml".to_owned(),
+    ]);
+    let mut cursor = source.raw_inventory(&stop)?;
+    let mut observed = BTreeMap::new();
+    while let Some(member) = cursor.next(&stop)? {
+        assert!(std::ptr::eq(
+            member.bytes(),
+            source.source_bytes(member.path())?
+        ));
+        assert!(
+            observed
+                .insert(
+                    member.path().to_owned(),
+                    (member.kind(), member.content_digest(), member.byte_length()),
+                )
+                .is_none()
+        );
+    }
+    assert!(cursor.next(&stop)?.is_none());
+    assert_eq!(
+        observed.keys().cloned().collect::<BTreeSet<_>>(),
+        expected_paths
+    );
+    assert!(source.receipt().inventory().entries.iter().any(|entry| {
+        entry.path == "UI/omitted.txt"
+            && matches!(
+                &entry.disposition,
+                PlatformEntryDisposition::Excluded { .. }
+            )
+    }));
+    assert_eq!(
+        source
+            .raw_member("UI/omitted.txt", &stop)
+            .err()
+            .ok_or("excluded source acquired bytes")?
+            .code(),
+        ProjectErrorCode::PackageTargetExcluded
+    );
+
+    let selection = PlatformStoreSelection::new(
+        bundle.configuration().project_id().clone(),
+        source.profile().profile_id().clone(),
+    )?;
+    let mut selected = ProjectPublisher::with_function_call_facts();
+    let view = selected.publish_initial(bundle.clone())?.open_view();
+    assert_eq!(
+        wow_project::graph::source_graph_profile(view.configuration()),
+        "wow-project/source-load-proposals/21"
+    );
+    assert_eq!(
+        serde_json::to_value(ProjectReplay::capture(&selected, &stop)?)?["schema"],
+        "wow-project/native-project-replay/8"
+    );
+    let proposals = build_source_graph_proposals(&view, &stop)?;
+    let inventory_batch = proposals
+        .inventory_batch()
+        .ok_or("native inventory batch missing")?
+        .clone();
+    let (registry, source_batch, _, provenance, _) = proposals.into_parts();
+    let manifest = provenance.raw_inventory().ok_or("raw manifest missing")?;
+    assert_eq!(registry.version(), "16");
+    assert_eq!(manifest.inventory(), source.receipt().inventory());
+    assert_eq!(
+        manifest.source_snapshot_id(),
+        source.receipt().source_snapshot_id()
+    );
+    assert_eq!(
+        manifest.admission_digest(),
+        source.receipt().admission_digest()
+    );
+    assert_eq!(
+        manifest
+            .members()
+            .iter()
+            .map(|member| {
+                (
+                    member.path.clone(),
+                    (member.kind, member.content_digest, member.byte_length),
+                )
+            })
+            .collect::<BTreeMap<_, _>>(),
+        observed
+    );
+    assert!(
+        source_batch
+            .entity_proposals()
+            .iter()
+            .all(|proposal| proposal.entity_kind_id() != PLATFORM_RAW_MEMBER_KIND)
+    );
+    assert_eq!(
+        view.snapshot()
+            .analyzer_binding()
+            .main_workspace()
+            .files()
+            .iter()
+            .map(|file| file.path())
+            .collect::<Vec<_>>(),
+        ["packages/Fixture/defs.lua"]
+    );
+    let input = || -> TestResult<crate::LocalProjectInput> {
+        let reference = wow_reference::ReferenceView::new(
+            bundle.configuration().reference_generation().to_string(),
+            Vec::new(),
+            Vec::new(),
+        )?;
+        Ok(crate::LocalProjectInput::new_with_package_plans(
+            bundle.clone(),
+            reference,
+            packages.load_plan().clone(),
+            packages.main_plan().clone(),
+        )?)
+    };
+    let old_request = crate::graph::GraphBuildRequest::new(
+        bundle.configuration().project_id().as_str().into(),
+        "current".into(),
+    )?
+    .with_platform_graph_profile(PlatformGraphProfile::PackageProjectionV1);
+    let refused_root = path.join("old-selector");
+    let refused = LiveProjectPublishRequest::new("fixture:raw-old-selector", "absent", true, true)?;
+    assert_eq!(
+        publish_input_in_namespace(
+            input()?,
+            &old_request,
+            &refused_root,
+            &selection,
+            &refused,
+            &stop,
+        )
+        .err()
+        .ok_or("old graph selector admitted raw inventory")?
+        .code(),
+        ServiceErrorCode::IdentityMismatch
+    );
+    assert!(!refused_root.exists());
+
+    let graph_request = old_request
+        .with_platform_graph_profile(PlatformGraphProfile::PackageProjectionWithRawInventoryV1);
+    assert_eq!(
+        serde_json::to_value(&graph_request)?["schema"],
+        "wow-service/graph-build-request/11"
+    );
+    let artifact = crate::graph::execute_graph_build(input()?, &graph_request, &stop)?;
+    let artifact_record: serde_json::Value = serde_json::from_slice(&artifact.canonical_bytes()?)?;
+    assert_eq!(
+        artifact_record["schema"],
+        "wow-service/graph-build-result/18"
+    );
+    let artifact_snapshot: serde_json::Value = serde_json::from_slice(
+        &artifact
+            .snapshot_bytes()?
+            .ok_or("raw graph build emitted no native snapshot")?,
+    )?;
+    let store_path = path.join("selected");
+    let request = LiveProjectPublishRequest::new("fixture:raw-graph-v8", "absent", true, true)?;
+    let published = publish_input_in_namespace(
+        input()?,
+        &graph_request,
+        &store_path,
+        &selection,
+        &request,
+        &stop,
+    )?;
+    assert_eq!(published.exit_code(), 2);
+    let store = LiveProjectStore::open_in_namespace(&store_path, &selection)?;
+    let current = store.current()?.ok_or("raw Current missing")?;
+    let epoch = store.store.epoch().clone();
+    let read = store.read_in_namespace(&selection, &ReadSelector::Current, &stop)?;
+    assert_eq!(read.project().snapshot_id(), view.snapshot_id());
+    assert_eq!(
+        read.project().analyzer_snapshot_id(),
+        view.analyzer_snapshot_id()
+    );
+    assert_eq!(serde_json::to_value(read.graph())?, artifact_snapshot);
+    assert!(read.read.manifest().members.iter().any(|member| {
+        member.key == "live.project.replay" && member.schema == "wow-project.live-replay.v8"
+    }));
+    let inventory = read
+        .graph()
+        .partition(PLATFORM_RAW_INVENTORY_PARTITION)
+        .ok_or("composed inventory partition missing")?;
+    assert_eq!(inventory.batch(), &inventory_batch);
+    assert!(
+        inventory
+            .batch()
+            .entity_proposals()
+            .iter()
+            .all(|proposal| proposal.entity_kind_id() == PLATFORM_RAW_MEMBER_KIND)
+    );
+    assert_eq!(
+        read.graph()
+            .snapshot()
+            .nodes()
+            .iter()
+            .filter(|node| node.kind() == PLATFORM_RAW_MEMBER_KIND)
+            .count(),
+        expected_paths.len()
+    );
+    assert!(inventory.coverage().is_empty());
+    assert!(inventory.report().accepted_relations().is_empty());
+    assert_eq!(
+        inventory
+            .report()
+            .accepted_entities()
+            .iter()
+            .map(|accepted| accepted.proposal_id().to_owned())
+            .collect::<BTreeSet<_>>(),
+        manifest
+            .members()
+            .iter()
+            .map(|member| member.proposal_id.clone())
+            .collect::<BTreeSet<_>>()
+    );
+    assert_eq!(
+        read.graph()
+            .partition(SOURCE_GRAPH_PARTITION)
+            .ok_or("composed source partition missing")?
+            .batch(),
+        &source_batch
+    );
+    let opaque = manifest
+        .members()
+        .iter()
+        .find(|member| member.path == "UI/opaque.bin")
+        .ok_or("opaque native proposal missing")?;
+    let assertion = GraphLocalAssertion {
+        kind: GraphAssertionKind::Entity,
+        proposal_id: opaque.proposal_id.clone().into(),
+    };
+    let reference = GraphAssertionRef::Producer {
+        partition_id: inventory.partition_id().into(),
+        batch_id: inventory.batch().batch_id().into(),
+        assertion: assertion.clone(),
+    };
+    let binding = bind_platform_raw_member(read.project(), read.graph(), &reference, &stop)?;
+    let retained_source = read
+        .project()
+        .configuration()
+        .platform_packages()
+        .ok_or("published source missing")?
+        .source();
+    assert_eq!(binding.path(), opaque.path);
+    assert_eq!(binding.kind(), PlatformFileKind::Unknown);
+    assert_eq!(binding.content_digest(), opaque.content_digest);
+    assert_eq!(binding.byte_length(), opaque.byte_length);
+    assert_eq!(binding.source_handle(), &opaque.source_handle);
+    assert_eq!(
+        binding.source_snapshot_id(),
+        source.receipt().source_snapshot_id()
+    );
+    assert_eq!(
+        binding.admission_digest(),
+        source.receipt().admission_digest()
+    );
+    assert_eq!(binding.license(), &source.receipt().inventory().license);
+    assert_eq!(binding.reference(), &reference);
+    let bytes = binding.read_bytes(0..4, 4, &stop)?;
+    assert_eq!(bytes, &[0xff, 0xfe, 0, 1]);
+    assert!(std::ptr::eq(
+        bytes,
+        retained_source.source_bytes("UI/opaque.bin")?
+    ));
+    assert_eq!(binding.read_bytes(1..3, 2, &stop)?, &[0xfe, 0]);
+    assert_eq!(
+        binding
+            .read_bytes(0..4, 3, &stop)
+            .err()
+            .ok_or("raw read exceeded its byte budget")?
+            .code(),
+        ProjectErrorCode::SourceBudgetExceeded
+    );
+    for refused_reference in [
+        GraphAssertionRef::Local {
+            assertion: assertion.clone(),
+        },
+        GraphAssertionRef::Producer {
+            partition_id: inventory.partition_id().into(),
+            batch_id: source_batch.batch_id().into(),
+            assertion,
+        },
+    ] {
+        assert_eq!(
+            bind_platform_raw_member(read.project(), read.graph(), &refused_reference, &stop)
+                .err()
+                .ok_or("nonexact raw address admitted")?
+                .code(),
+            ProjectErrorCode::SnapshotInvalid
+        );
+    }
+    let graph = read.graph().clone();
+    let publication_set = read.publication_set_id().to_owned();
+    let members = read.read.manifest().members.clone();
+    drop(read);
+    drop(store);
+
+    let store = LiveProjectStore::open_in_namespace(&store_path, &selection)?;
+    assert_eq!(store.current()?, Some(current.clone()));
+    assert_eq!(store.store.epoch(), &epoch);
+    let read = store.read_in_namespace(
+        &selection,
+        &ReadSelector::Publication(current.record_id),
+        &stop,
+    )?;
+    assert_eq!(read.project().snapshot_id(), view.snapshot_id());
+    assert_eq!(
+        read.project().analyzer_snapshot_id(),
+        view.analyzer_snapshot_id()
+    );
+    assert_eq!(read.graph(), &graph);
+    assert_eq!(read.publication_set_id(), publication_set);
+    assert_eq!(read.read.manifest().members, members);
+    let reopened = read
+        .project()
+        .configuration()
+        .platform_packages()
+        .ok_or("reopened source missing")?;
+    assert_eq!(reopened.source().receipt(), source.receipt());
+    assert_eq!(reopened.binding(), packages.binding());
+    assert_eq!(reopened.load_plan(), packages.load_plan());
+    assert_eq!(reopened.main_plan(), packages.main_plan());
+    for member in manifest.members() {
+        assert_eq!(
+            reopened.source().source_bytes(&member.path)?,
+            source.source_bytes(&member.path)?
+        );
+    }
+    let reopened_proposals = build_source_graph_proposals(read.project(), &stop)?;
+    let (_, _, _, reopened_provenance, _) = reopened_proposals.into_parts();
+    assert_eq!(reopened_provenance.raw_inventory(), Some(manifest));
+    let reopened_binding =
+        bind_platform_raw_member(read.project(), read.graph(), &reference, &stop)?;
+    let reopened_bytes = reopened_binding.read_bytes(0..4, 4, &stop)?;
+    assert_eq!(reopened_bytes, &[0xff, 0xfe, 0, 1]);
+    assert!(std::ptr::eq(
+        reopened_bytes,
+        reopened.source().source_bytes("UI/opaque.bin")?
+    ));
+    drop(read);
+    drop(store);
+
+    let legacy_bundle = platform_bundle_with_profiles(
+        &path.join("legacy-input"),
+        1,
+        true,
+        Some(PlatformGraphProfile::PackageProjectionV1),
+        &stop,
+    )?;
+    let (legacy_owner, legacy_graph) = owners_from_bundle(legacy_bundle)?;
+    let legacy_path = path.join("frozen-v7");
+    let mut legacy = LiveProjectStore {
+        store: ProjectStore::create_with_namespace(
+            &legacy_path,
+            selection.namespace(),
+            catalog_for(publication::STORAGE_SCHEMAS_V7)?,
+        )?,
+    };
+    legacy.publish_in_namespace(
+        &selection,
+        &legacy_owner,
+        &legacy_graph,
+        "fixture:raw-baseline-v7",
+        None,
+        &stop,
+    )?;
+    let old_current = legacy.current()?.ok_or("frozen v7 Current missing")?;
+    let old_epoch = legacy.store.epoch().clone();
+    let old_read = legacy.read_in_namespace(&selection, &ReadSelector::Current, &stop)?;
+    let old_members = old_read.read.manifest().members.clone();
+    let old_set = old_read.publication_set_id().to_owned();
+    drop(old_read);
+    assert!(
+        legacy
+            .publish_in_namespace(
+                &selection,
+                &selected,
+                &graph,
+                "fixture:raw-v8-refused",
+                Some(old_current.record_id.clone()),
+                &stop
+            )
+            .is_err()
+    );
+    assert_eq!(legacy.current()?, Some(old_current.clone()));
+    assert_eq!(legacy.store.epoch(), &old_epoch);
+    assert!(legacy.reconcile("fixture:raw-v8-refused")?.is_none());
+    drop(legacy);
+    let legacy = LiveProjectStore::open_in_namespace(&legacy_path, &selection)?;
+    assert_eq!(legacy.current()?, Some(old_current));
+    assert_eq!(legacy.store.epoch(), &old_epoch);
+    let read = legacy.read_in_namespace(&selection, &ReadSelector::Current, &stop)?;
+    assert_eq!(
+        read.project().snapshot_id(),
+        legacy_owner.open_current()?.snapshot_id()
+    );
+    assert_eq!(read.graph(), &legacy_graph);
+    assert_eq!(read.read.manifest().members, old_members);
+    assert_eq!(read.publication_set_id(), old_set);
+    assert!(
+        read.graph()
+            .partition(PLATFORM_RAW_INVENTORY_PARTITION)
+            .is_none()
+    );
+    drop(read);
+    drop(legacy);
+    std::fs::remove_dir_all(path)?;
+    Ok(())
 }
 
 #[test]

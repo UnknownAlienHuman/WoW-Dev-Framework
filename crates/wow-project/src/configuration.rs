@@ -49,6 +49,7 @@ pub enum PackageXmlBindingProfile {
 #[serde(rename_all = "snake_case")]
 pub enum PlatformGraphProfile {
     PackageProjectionV1,
+    PackageProjectionWithRawInventoryV1,
 }
 
 /// Explicit publication capability policy.

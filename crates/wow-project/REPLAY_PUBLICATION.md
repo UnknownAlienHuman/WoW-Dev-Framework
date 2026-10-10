@@ -36,8 +36,10 @@ or target-client runtime capability follows.
 
 `ProjectPublicationBundle::build` validates the live project and graph, recomputes
 the configured source proposals through the existing source owner (`/19` by default,
-`/20` for explicit package graph selection) and requires the exact source
-batch, registry, canonically ordered coverage and empty source foundation. Other
+`/20` for explicit package graph selection, `/21` with raw inventory) and requires
+the exact source batch, registry, canonically ordered coverage and empty source
+foundation. The raw selector also requires its exact independent inventory batch,
+complete accepted entity set, empty relation set and empty coverage. Other
 producer partitions remain graph-owner validated data; this does not independently
 replay every recognizer or establish complete conflict assessment.
 
@@ -180,7 +182,7 @@ under the held read. No decoded binding report replaces these owners. Source and
 Library share the existing aggregate archive limits; borrowed encoded-envelope
 counting enforces the 32 MiB record cap before raw copying.
 
-New epochs admit v1-v7. Complete V1-V6 catalogs remain frozen and reopen only
+At the package graph checkpoint, new epochs admitted v1-v7. Complete V1-V6 catalogs remain frozen and reopen only
 against their exact catalog, including native live, migration and quarantine
 routes. An existing V6 epoch refuses v7 publication without retaining an operation
 or changing Current/epoch; no catalog widening or migration is performed.
@@ -192,8 +194,37 @@ also passes. Final workspace policy, fmt, all-target/all-feature check, strict
 Clippy, tests (938 passed, 0 failed, 1 ignored, 111 targets), strict rustdoc with
 `RUSTDOCFLAGS=-D warnings` and all-target/all-feature build pass, completed
 2026-10-10 07:18:40 UTC. This is local verification, not remote publication evidence.
-Full W17/E3, corpus/performance/runtime and complete raw-member graph
-projection remain open; the direct source producer remains monolithic.
+Full W17/E3 and corpus/performance/runtime acceptance remain open; the direct
+source producer remains monolithic.
+
+## Explicit raw inventory graph replay
+
+`PlatformGraphProfile::PackageProjectionWithRawInventoryV1` selects source graph
+`/21`, registry 16, native `wow-project/native-project-replay/8` and storage
+`wow-project.live-replay.v8`. It retains the same genuine platform and
+SameSessionV1 prerequisites. Default `/19`, package `/20`, replay `/7` and their
+exact identity recipes remain available unchanged.
+
+Hydration re-admits every original Included member, including opaque and unloaded
+files, through the genuine source owner. Pair validation builds the source and
+independent `wow-project.platform-source-inventory` batches once and requires the
+exact accepted raw closure. Raw metadata does not construct a byte capability;
+local reads bind an exact Producer reference to held native project/graph owners.
+See [PLATFORM_RAW_INVENTORY_GRAPH.md](../../docs/PLATFORM_RAW_INVENTORY_GRAPH.md).
+
+New epochs admit v1-v8. Complete V1-V7 catalogs remain frozen. A V7 epoch reopens
+exactly and refuses v8 publication before durable effects, preserving Current,
+epoch and prior membership. Open, quarantine and migration use exact catalog
+fallbacks; no existing catalog is widened.
+
+The native service lifecycle passes on 2026-10-10, covering disk-absent inventory
+closure, borrowed binary reads, exact publication/reopen and frozen V7 refusal.
+Workspace policy, fmt, all-target/all-feature check, strict Clippy, tests
+(939 passed, 0 failed, 1 ignored, 111 targets), strict rustdoc and build pass,
+completed 2026-10-10 07:48:26 UTC. Independent direct producer ownership,
+fingerprints, SkeletonInputView and source service/CLI transport remain open;
+full W17, real corpus/performance/runtime and native fault acceptance are
+NotEvaluated.
 
 ## Retained owner updates
 

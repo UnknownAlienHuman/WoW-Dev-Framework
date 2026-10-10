@@ -178,6 +178,17 @@ Workspace policy, fmt, all-target/all-feature check, strict Clippy, tests
 (933 passed, 1 ignored, 110 targets), strict rustdoc and build pass. This qualifies
 the borrowed traversal slice, not complete raw-member graph projection or E3.
 
+`AdmittedPlatformSource::raw_member(path, stop)` also borrows one exact original
+Included member without disk reads, decoding or copying its bytes. An undeclared
+path returns `FileNotPresent`; a declared omission retains its typed refusal
+(for example, `PackageTargetExcluded`), rather than becoming missing content.
+This native lookup alone establishes no graph acceptance. The separately selected
+[raw inventory graph](PLATFORM_RAW_INVENTORY_GRAPH.md) checks exact accepted
+Producer membership before exposing a bounded local byte binding. Its new
+checkpoint passes the native lifecycle and workspace gates/build (939 passed,
+0 failed, 1 ignored, 111 targets), completed 2026-10-10 07:48:26 UTC; original
+coverage and provenance/license assertions remain unchanged.
+
 ## Refusals
 
 Admission returns an error and no owner-held result on a profile that fails validation,
@@ -200,6 +211,9 @@ Later [package specialization](PLATFORM_SOURCE_PACKAGES.md),
 [configuration/Main/source graph](PLATFORM_SOURCE_CONFIGURATION.md) and
 [genuine replay/durable publication](PLATFORM_SOURCE_REPLAY.md) now consume this
 bounded owner. [Stable logical namespace publication](PLATFORM_STORE_NAMESPACE.md)
-is also executable. Source acquisition, full mirror materialization, complete
-raw-member graph projection, platform partitions/fingerprints, SkeletonInputView, source
-service/CLI transport, runtime and full W17/E2 acceptance remain open.
+and [Included-member graph/native local reads](PLATFORM_RAW_INVENTORY_GRAPH.md)
+are also executable. Declared Included-member closure does not establish a
+complete configured-root inventory. Source acquisition, full mirror materialization,
+the remaining platform direct-producer split/fingerprints, bounded SkeletonInputView,
+source service/CLI transport, runtime and full W17/E2/E3 acceptance remain open.
+Gethe acquisition/materialization remains deferred.

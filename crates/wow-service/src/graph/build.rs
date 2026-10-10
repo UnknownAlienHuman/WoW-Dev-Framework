@@ -45,6 +45,7 @@ use wow_recognizers::source_state::SourceStateRecognition;
 const MAX_BUNDLE_BYTES: usize = 32 * 1024 * 1024;
 pub(super) const GRAPH_BUILD_RESULT_SCHEMA: &str = "wow-service/graph-build-result/16";
 const PACKAGE_GRAPH_BUILD_RESULT_SCHEMA: &str = "wow-service/graph-build-result/17";
+const PACKAGE_RAW_GRAPH_BUILD_RESULT_SCHEMA: &str = "wow-service/graph-build-result/18";
 
 struct BuiltGraph {
     snapshot: GraphPartitionSnapshot,
@@ -131,6 +132,10 @@ impl GraphBuildRequest {
             wow_project::PlatformGraphProfile::PackageProjectionV1 => {
                 self.schema = "wow-service/graph-build-request/10";
                 self.projection = wow_project::graph::PACKAGE_SOURCE_GRAPH_PROFILE;
+            }
+            wow_project::PlatformGraphProfile::PackageProjectionWithRawInventoryV1 => {
+                self.schema = "wow-service/graph-build-request/11";
+                self.projection = wow_project::graph::PACKAGE_RAW_SOURCE_GRAPH_PROFILE;
             }
         }
         self
@@ -401,7 +406,9 @@ pub fn execute_graph_build(
 ) -> ServiceResult<GraphBuildResult> {
     let request_digest = super::hash(&bounded(request, super::GRAPH_REQUEST_MAX_BYTES)?);
     let mut result = GraphBuildResult {
-        schema: if request.projection == wow_project::graph::PACKAGE_SOURCE_GRAPH_PROFILE {
+        schema: if request.projection == wow_project::graph::PACKAGE_RAW_SOURCE_GRAPH_PROFILE {
+            PACKAGE_RAW_GRAPH_BUILD_RESULT_SCHEMA
+        } else if request.projection == wow_project::graph::PACKAGE_SOURCE_GRAPH_PROFILE {
             PACKAGE_GRAPH_BUILD_RESULT_SCHEMA
         } else {
             GRAPH_BUILD_RESULT_SCHEMA
@@ -672,6 +679,12 @@ fn compose_backend(
             format!("native source graph projection rejected ({:?})", e.code()),
         )
     })?;
+    let inventory_batch = proposals.inventory_batch().cloned();
+    if inventory_batch.is_some()
+        != (request.projection == wow_project::graph::PACKAGE_RAW_SOURCE_GRAPH_PROFILE)
+    {
+        return Err(error(ServiceErrorCode::InternalContractViolation));
+    }
     let (registry, batch, coverage, provenance, limits) = proposals.into_parts();
     checkpoint(stop)?;
     // The empty foundation makes no semantic absence claim. Preserve the same
@@ -687,6 +700,24 @@ fn compose_backend(
     .map_err(graph_error)?;
     let owner = GraphPartitionSnapshot::new(registry, foundation, batch.source_context_id(), stop)
         .map_err(graph_error)?;
+    let owner = if let Some(inventory_batch) = inventory_batch {
+        let inventory = owner
+            .prepare_replacement(
+                GraphPartitionReplacement {
+                    expected_snapshot_id: owner.snapshot().snapshot_id().clone(),
+                    expected_partition_digest: None,
+                    producer_version: env!("CARGO_PKG_VERSION").into(),
+                    batch: inventory_batch,
+                    coverage: Vec::new(),
+                },
+                stop,
+            )
+            .map_err(graph_error)?;
+        checkpoint(stop)?;
+        inventory.candidate().clone()
+    } else {
+        owner
+    };
     let replacement = owner
         .prepare_replacement(
             GraphPartitionReplacement {

@@ -61,8 +61,12 @@ serves callable/declaration joins; see the scoped checkpoint below and
 traversal is also executable; see [source admission](PLATFORM_SOURCE_ADMISSION.md).
 Explicit native package XML/script/state graph inputs are now executable through
 the selected route below; two native cases and final workspace gates/build pass
-(938 passed, 0 failed, 1 ignored, 111 targets). Complete raw-member graph/read binding, independent platform direct
-producers/fingerprints, SkeletonInputView and source service/CLI transport follow.
+(938 passed, 0 failed, 1 ignored, 111 targets). The selected Included-member graph
+and held native byte binding now also pass the scoped lifecycle and workspace
+gates/build (939 passed, 0 failed, 1 ignored, 111 targets); see
+[raw inventory graph](PLATFORM_RAW_INVENTORY_GRAPH.md). The remaining platform
+direct-producer split, fingerprints, SkeletonInputView and source service/CLI
+transport follow.
 Broad package acceptance remains open.
 
 ## W14 retained physical native analysis (2026-10-09)
@@ -1194,9 +1198,55 @@ all-target/all-feature check, strict Clippy, tests (938 passed, 0 failed, 1 igno
 build pass, completed 2026-10-10 07:18:40 UTC. This records local verification;
 remote checkpoint publication is not asserted here.
 
-The direct source producer remains monolithic. Complete raw-member graph/read
-binding, independent platform direct producers/fingerprints, bounded
-SkeletonInputView and source service/CLI transport remain open. Full W17/E3/package,
+The package-only checkpoint retained the monolithic direct source producer.
+The separate Included-member partition and native read binding follow below;
+the remaining direct-producer split, fingerprints, bounded SkeletonInputView and
+source service/CLI transport remain open. Full W17/E3/package,
 real Gethe/Ketho corpus, performance, native fault/exhaustion and WoW runtime
 acceptance remain NotEvaluated. W18-W26 are unchanged; Gethe materialization remains
 deferred.
+
+## W17 Included-member graph and native read binding (2026-10-10)
+
+`PlatformGraphProfile::PackageProjectionWithRawInventoryV1` requires genuine
+retained platform packages and `PackageXmlBindingProfile::SameSessionV1`.
+It projects the canonical declared Included set into the separate
+`wow-project.platform-source-inventory` partition with `platform_raw_member`
+entities, including unknown, opaque, unloaded and otherwise unconsumed files.
+Original non-Included dispositions, admission coverage and provenance/license
+assertions remain available in serialize-only metadata. Included membership
+does not establish configured-root completeness or promote those assertions.
+
+`bind_platform_raw_member` admits the actual held project and graph, exact native
+batch and accepted Producer reference before borrowing the original member.
+`ProjectRawMemberReadBinding::read_bytes(Range<u64>, max_bytes, stop)` returns a
+bounded local borrowed slice, with a current 64 KiB per-read ceiling. It grants
+no UTF-8/analyzer coordinates, serialized excerpt/export route or redistribution
+permission. Metadata cannot deserialize this capability, and failed admission
+does not fall back to disk, Library or a newer Current.
+
+The raw selection uses source `/21`, registry 16, native replay `/8`, storage v8
+and native service request `/11`/result `/18`. Pair acquisition reconstructs the
+source and inventory batches through real owners. Default `/19`, package `/20`,
+published replay v1-v7 and complete frozen catalogs retain their identities.
+Existing retained `/19` and `/20` evidence/persistence entry points refuse the
+raw variant with `DeferredCapability`. Raw metadata and batch envelopes, member
+bodies and separators count against the shared graph budget before collection
+retention; raw and source entities share the graph node limit.
+
+The native synthetic lifecycle passes with source disk absent, exact Included
+membership and omission retention, borrowed opaque byte reads, Producer-address
+and read-budget refusals, namespace Current reopen and frozen V7 refusal without
+effects. Final workspace policy, fmt, all-target/all-feature check, strict Clippy,
+tests (939 passed, 0 failed, 1 ignored, 111 targets), strict rustdoc with
+`RUSTDOCFLAGS=-D warnings` and all-target/all-feature build pass, completed
+2026-10-10 07:48:26 UTC. This records local verification; remote publication and CI
+are not asserted. See [PLATFORM_RAW_INVENTORY_GRAPH.md](PLATFORM_RAW_INVENTORY_GRAPH.md).
+
+Remaining TOC/XML/analyzer direct assertions still share their prior source
+producer. The new inventory partition does not complete the four-way E3 split
+or its full containment/load relation model. Fingerprints, bounded
+SkeletonInputView and source service/CLI transport remain future work. Full
+W17/E3/package, real Gethe/Ketho corpus, performance, native fault/exhaustion and
+WoW runtime acceptance remain NotEvaluated. W18-W26 stay unchanged; Gethe
+acquisition/materialization remains deferred.

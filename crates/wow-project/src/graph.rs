@@ -3,6 +3,11 @@ mod derivations;
 mod functions;
 mod load_inputs;
 mod packages;
+mod raw_inventory;
+pub use raw_inventory::{
+    PLATFORM_RAW_INVENTORY_PARTITION, PLATFORM_RAW_MEMBER_KIND, ProjectRawInventoryManifest,
+    ProjectRawInventoryMember, ProjectRawMemberReadBinding, bind_platform_raw_member,
+};
 pub mod persistence;
 mod retained_evidence;
 mod source_read;
@@ -67,6 +72,7 @@ use crate::{
 
 pub const SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/19";
 pub const PACKAGE_SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/20";
+pub const PACKAGE_RAW_SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/21";
 pub const SOURCE_GRAPH_PARTITION: &str = "wow-project.source-load";
 
 /// Select the graph identity from the admitted configuration, never from source
@@ -76,6 +82,9 @@ pub fn source_graph_profile(configuration: &crate::ProjectConfiguration) -> &'st
     match configuration.platform_graph_profile() {
         None => SOURCE_GRAPH_PROFILE,
         Some(crate::PlatformGraphProfile::PackageProjectionV1) => PACKAGE_SOURCE_GRAPH_PROFILE,
+        Some(crate::PlatformGraphProfile::PackageProjectionWithRawInventoryV1) => {
+            PACKAGE_RAW_SOURCE_GRAPH_PROFILE
+        }
     }
 }
 const MAX_FILES: usize = 4096;
@@ -171,6 +180,8 @@ pub struct ProjectGraphProvenance {
     xml_binding_report: Option<crate::xml_bindings::ProjectXmlLuaBindings>,
     #[serde(skip_serializing_if = "Option::is_none")]
     package_xml_binding_report: Option<crate::xml_bindings::ProjectPackageXmlLuaBindings>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    raw_inventory: Option<ProjectRawInventoryManifest>,
     source_handles: BTreeMap<StableHandleId, SourceHandle>,
     evidence: BTreeMap<EvidenceId, EvidenceRecord>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -184,6 +195,10 @@ pub struct ProjectGraphProvenance {
 }
 
 impl ProjectGraphProvenance {
+    #[must_use]
+    pub fn raw_inventory(&self) -> Option<&ProjectRawInventoryManifest> {
+        self.raw_inventory.as_ref()
+    }
     pub fn toc_facts(&self) -> &[ProjectTocFact] {
         &self.toc_facts
     }
@@ -285,8 +300,14 @@ pub struct ProjectSourceGraphProposals {
     coverage: Vec<GraphCoverageRecord>,
     provenance: ProjectGraphProvenance,
     limits: GraphLimits,
+    inventory_batch: Option<GraphProposalBatch>,
 }
 impl ProjectSourceGraphProposals {
+    /// The separate native inventory producer exists only in the selected raw recipe.
+    #[must_use]
+    pub fn inventory_batch(&self) -> Option<&GraphProposalBatch> {
+        self.inventory_batch.as_ref()
+    }
     pub fn into_parts(
         self,
     ) -> (
@@ -328,7 +349,7 @@ fn charge(used: &mut usize, bytes: usize) -> ProjectResult<()> {
     Ok(())
 }
 
-fn registry(project_kind: ProjectKind) -> ProjectResult<GraphRegistryBundle> {
+fn registry(project_kind: ProjectKind, raw_inventory: bool) -> ProjectResult<GraphRegistryBundle> {
     let universe_class = match project_kind {
         ProjectKind::Fixture | ProjectKind::Repository => "project",
         ProjectKind::BlizzardUiPlatformSource => "blizzard_ui_source",
@@ -689,8 +710,16 @@ fn registry(project_kind: ProjectKind) -> ProjectResult<GraphRegistryBundle> {
     ];
     toc_registry::extend(universe_class, &mut entities, &mut relations)?;
     xml_registry::extend(universe_class, &mut entities, &mut relations)?;
-    GraphRegistryBundle::build("wow-project.source-load", "15", entities, relations)
-        .map_err(|_| invalid())
+    if raw_inventory {
+        raw_inventory::extend_registry(&mut entities)?;
+    }
+    GraphRegistryBundle::build(
+        "wow-project.source-load",
+        if raw_inventory { "16" } else { "15" },
+        entities,
+        relations,
+    )
+    .map_err(|_| invalid())
 }
 
 fn support(
@@ -872,7 +901,8 @@ pub fn build_source_graph_proposals(
             return Err(invalid());
         }
     }
-    let registry = registry(config.project_kind())?;
+    let raw_selected = raw_inventory::selected(config);
+    let registry = registry(config.project_kind(), raw_selected)?;
     let universe = match config.project_kind() {
         ProjectKind::BlizzardUiPlatformSource => {
             let binding = config.platform_package_binding().ok_or_else(invalid)?;
@@ -895,13 +925,7 @@ pub fn build_source_graph_proposals(
     };
     // This seed is not a published GraphGeneration. The graph owner derives the
     // materialized generation from the exact registry and accepted partition.
-    let seed = crate::identity::canonical_digest(
-        "wow-project/source-graph-input/1",
-        &(profile, registry.registry_digest(), project.snapshot_id()),
-        ProjectPhase::View,
-    )?;
-    let generation =
-        GraphGenerationId::new(format!("source-graph-input:{seed}")).map_err(|_| invalid())?;
+    let generation = input_generation(project, &registry)?;
     let limits = GraphLimits::new(
         MAX_NODES as u32,
         MAX_EDGES as u32,
@@ -942,6 +966,7 @@ pub fn build_source_graph_proposals(
         function_call_report: None,
         xml_binding_report: None,
         package_xml_binding_report: None,
+        raw_inventory: None,
         source_handles: BTreeMap::new(),
         evidence: BTreeMap::new(),
         load_plan: plan.cloned(),
@@ -959,6 +984,20 @@ pub fn build_source_graph_proposals(
         charge(&mut text_bytes, bindings.serialized_byte_length())?;
         provenance.package_xml_binding_report = Some(bindings.clone());
     }
+    let inventory_batch = if raw_selected {
+        let (batch, manifest) = raw_inventory::project(
+            project,
+            &registry,
+            &universe,
+            &generation,
+            &mut text_bytes,
+            stop,
+        )?;
+        provenance.raw_inventory = Some(manifest);
+        Some(batch)
+    } else {
+        None
+    };
     let mut entities = Vec::new();
     let mut ids = BTreeMap::new();
     for source in source_by_path.values() {
@@ -1092,7 +1131,13 @@ pub fn build_source_graph_proposals(
         xml_facts::project(project, &mut provenance, &mut text_bytes, stop)?;
     provenance.xml_facts = xml_facts;
     provenance.xml_containment = xml_containment;
-    if entities.len() > MAX_NODES || relations.len() > MAX_EDGES {
+    if entities.len().saturating_add(
+        inventory_batch
+            .as_ref()
+            .map_or(0, |batch| batch.entity_proposals().len()),
+    ) > MAX_NODES
+        || relations.len() > MAX_EDGES
+    {
         return Err(exhausted());
     }
     let xml_state = if load_scopes
@@ -1233,5 +1278,22 @@ pub fn build_source_graph_proposals(
         coverage,
         provenance,
         limits,
+        inventory_batch,
     })
+}
+
+fn input_generation(
+    project: &ProjectView,
+    registry: &GraphRegistryBundle,
+) -> ProjectResult<GraphGenerationId> {
+    let seed = crate::identity::canonical_digest(
+        "wow-project/source-graph-input/1",
+        &(
+            source_graph_profile(project.configuration()),
+            registry.registry_digest(),
+            project.snapshot_id(),
+        ),
+        ProjectPhase::View,
+    )?;
+    GraphGenerationId::new(format!("source-graph-input:{seed}")).map_err(|_| invalid())
 }

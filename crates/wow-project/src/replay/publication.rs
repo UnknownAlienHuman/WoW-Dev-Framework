@@ -2,7 +2,9 @@
 //! precede logical membership, publication-set identity and store generation.
 mod namespace;
 use super::{ProjectReplay, invalid};
-use crate::graph::{SOURCE_GRAPH_PARTITION, build_source_graph_proposals};
+use crate::graph::{
+    PLATFORM_RAW_INVENTORY_PARTITION, SOURCE_GRAPH_PARTITION, build_source_graph_proposals,
+};
 use crate::{ProjectPhase, ProjectPublisher, ProjectResult, ProjectView};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, sync::atomic::AtomicBool};
@@ -17,6 +19,7 @@ pub const STORAGE_SCHEMAS: &[&str] = &[
     "wow-project.live-replay.v5",
     "wow-project.live-replay.v6",
     "wow-project.live-replay.v7",
+    "wow-project.live-replay.v8",
     "wow-project.live-pair.v1",
 ];
 /// Exact catalog of already published physical-input epochs. It is never widened
@@ -58,6 +61,17 @@ pub const STORAGE_SCHEMAS_V6: &[&str] = &[
     "wow-project.live-replay.v4",
     "wow-project.live-replay.v5",
     "wow-project.live-replay.v6",
+    "wow-project.live-pair.v1",
+];
+/// Exact catalog before the independent platform raw inventory graph partition.
+pub const STORAGE_SCHEMAS_V7: &[&str] = &[
+    "wow-project.live-replay.v1",
+    "wow-project.live-replay.v2",
+    "wow-project.live-replay.v3",
+    "wow-project.live-replay.v4",
+    "wow-project.live-replay.v5",
+    "wow-project.live-replay.v6",
+    "wow-project.live-replay.v7",
     "wow-project.live-pair.v1",
 ];
 pub const STORAGE_CHECK: &str = "wow-project.live-pair-native-replay.v1";
@@ -192,6 +206,7 @@ impl AcquiredProjectPair {
                 | "wow-project.live-replay.v5"
                 | "wow-project.live-replay.v6"
                 | "wow-project.live-replay.v7"
+                | "wow-project.live-replay.v8"
         ) {
             return Err(invalid());
         }
@@ -254,8 +269,9 @@ fn validate_pair(
     graph.validate(stop).map_err(graph_error)?;
     // Reuse the source owner over the real replayed session. No metadata receipt
     // is relabeled as a live project or treated as an executable analyzer.
-    let (registry, batch, mut coverage, _, limits) =
-        build_source_graph_proposals(project, stop)?.into_parts();
+    let proposals = build_source_graph_proposals(project, stop)?;
+    let inventory_batch = proposals.inventory_batch().cloned();
+    let (registry, batch, mut coverage, _, limits) = proposals.into_parts();
     // Partition publication canonically orders this exact owner-provided set.
     coverage.sort_by_key(wow_graph::GraphCoverageRecord::relation);
     let source = graph
@@ -279,6 +295,19 @@ fn validate_pair(
     .map_err(graph_error)?;
     if graph.foundation() != &foundation {
         return Err(invalid());
+    }
+    match (
+        inventory_batch.as_ref(),
+        graph.partition(PLATFORM_RAW_INVENTORY_PARTITION),
+    ) {
+        (None, None) => {}
+        (Some(batch), Some(partition))
+            if partition.batch() == batch
+                && partition.coverage().is_empty()
+                && partition.report().accepted_entities().len()
+                    == batch.entity_proposals().len()
+                && partition.report().accepted_relations().is_empty() => {}
+        _ => return Err(invalid()),
     }
     Ok(())
 }

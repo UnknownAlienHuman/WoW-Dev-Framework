@@ -56,6 +56,13 @@ impl RetainedProjectGraphEvidence {
     ) -> ProjectResult<(GraphEvidenceCatalog, super::RetainedProjectSourceManifest)> {
         let expected = match profile {
             crate::PlatformGraphProfile::PackageProjectionV1 => super::PACKAGE_SOURCE_GRAPH_PROFILE,
+            crate::PlatformGraphProfile::PackageProjectionWithRawInventoryV1 => {
+                return Err(crate::ProjectError::new(
+                    crate::ProjectErrorCode::DeferredCapability,
+                    crate::ProjectPhase::View,
+                    "raw inventory requires native project and graph binding",
+                ));
+            }
         };
         self.admit_profile(owner, expected, stop)
     }
