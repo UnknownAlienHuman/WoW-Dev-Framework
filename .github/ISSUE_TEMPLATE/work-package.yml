@@ -1,0 +1,107 @@
+name: Work package or implementation slice
+description: Claim one bounded owner responsibility with an exact base and validation tier.
+title: "[work] "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        One canonical Issue owns one work package. One integration manager owns one worktree and one write lease. Worker agents may research, audit, review or prepare patches, but must not publish overlapping owner changes.
+
+  - type: input
+    id: package
+    attributes:
+      label: Work package and slice
+      description: Example: W17 / XML object and region classification.
+      placeholder: Wxx / bounded functional slice
+    validations:
+      required: true
+
+  - type: input
+    id: base
+    attributes:
+      label: Exact remote base SHA
+      description: Full 40-character main SHA observed before the claim.
+      placeholder: 0123456789abcdef0123456789abcdef01234567
+    validations:
+      required: true
+
+  - type: input
+    id: manager
+    attributes:
+      label: Integration manager
+      description: The single manager/worktree that owns publication for this slice.
+      placeholder: manager or agent identity
+    validations:
+      required: true
+
+  - type: textarea
+    id: ownership
+    attributes:
+      label: Owned boundaries
+      description: Crates, modules, schemas, profiles, migrations and service/application seams this writer may change.
+      placeholder: |
+        - crates/wow-project/...
+        - graph registry/profile ...
+        - no changes outside ...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: tier
+    attributes:
+      label: Required validation tier
+      options:
+        - Tier S — functional affected-owner slice
+        - Tier M — exact-head workspace milestone
+        - Tier A — package/platform acceptance
+        - Tier X — external/current/runtime qualification
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem and intended functional outcome
+      description: Describe the missing or incorrect executable path and the minimum coherent result.
+    validations:
+      required: true
+
+  - type: textarea
+    id: blockers
+    attributes:
+      label: Hard blockers
+      description: Contradictory contracts, missing identity/evidence/support, migration risks, concurrent ownership or other conditions that stop dependent work. Write "none known" when appropriate.
+    validations:
+      required: true
+
+  - type: textarea
+    id: done
+    attributes:
+      label: Functional completion criteria
+      description: Observable owner/application behavior required before the slice is functional.
+    validations:
+      required: true
+
+  - type: textarea
+    id: debt
+    attributes:
+      label: Acceptance debt kept open
+      description: Deferred fixtures, platforms, external parity, performance or runtime gates that cannot change the consumed contract.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: acknowledgements
+    attributes:
+      label: Writer claim
+      options:
+        - label: I read AGENTS.md, the target package instructions, docs/EXECUTION_MODEL.md and the current implementation ledger.
+          required: true
+        - label: No other manager is publishing overlapping owner or contract changes.
+          required: true
+        - label: I will re-read remote main before publication and will not force-push over a moved head.
+          required: true
+        - label: I will distinguish published, functional, verified and accepted in every status update.
+          required: true
