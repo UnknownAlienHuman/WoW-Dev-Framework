@@ -192,6 +192,134 @@ fn fixture_packages(name: &str) -> Vec<ProjectPackageInput> {
 }
 
 #[test]
+fn xtask_manifest_bridge_verifies_bytes_and_preserves_selected_scope() -> TestResult {
+    use wow_project::disk::{ManifestedPlatformInput, ProjectDiskFile};
+    use wow_project::load::census::{
+        CensusCoverage, PlatformCensusSelection, census_platform_source,
+    };
+
+    let root = FixtureRoot::new()?;
+    std::fs::create_dir(root.0.join("Outside"))?;
+    std::fs::write(root.0.join("Outside/extra.lua"), "local outside = true\n")?;
+    std::fs::write(root.0.join("version.txt"), "fixture-version\n")?;
+    let mut files = Vec::new();
+    let mut total = 0_u64;
+    for (path, kind) in [
+        ("Outside/extra.lua", "lua"),
+        ("UI/Fixture.toc", "toc"),
+        ("UI/defs.lua", "lua"),
+        ("UI/frames.xml", "xml"),
+        ("version.txt", "version"),
+    ] {
+        let bytes = std::fs::read(root.0.join(path))?;
+        total += bytes.len() as u64;
+        files.push(serde_json::json!({
+            "path": path, "kind": kind, "bytes": bytes.len(),
+            "git_blob_algorithm": "sha1", "git_blob_id": "2".repeat(40),
+            "content_sha256": format!("{:x}", Sha256::digest(bytes)),
+        }));
+    }
+    let mut manifest = serde_json::json!({
+        "schema_version": 1,
+        "source": {
+            "source_id": "blizzard-ui", "selector": "fixture",
+            "revision": "1".repeat(40), "git_object_format": "sha1",
+            "version": "fixture-version", "acquisition": "local_git_object_database",
+        },
+        "selection": {
+            "extensions": [".lua", ".toc", ".xml", ".xsd"], "version_path": "version.txt",
+            "non_regular_entries": "reject", "working_tree": "ignored",
+        },
+        "coverage": {
+            "tracked_files": 6, "included_files": 5, "excluded_files": 1,
+            "included_bytes": total, "kind_version": 1, "kind_lua": 2,
+            "kind_toc": 1, "kind_xml": 1,
+        },
+        "files": files,
+    });
+    manifest["manifest_sha256"] = serde_json::json!(format!(
+        "{:x}",
+        Sha256::digest(wow_core::canonical_json_bytes(&manifest)?)
+    ));
+    let bytes = serde_json::to_vec(&manifest)?;
+    std::fs::write(root.0.join("source-manifest.json"), &bytes)?;
+    let profile = BlizzardUiSourceProfile::new(profile_request()?)?;
+    let assertions = inventory(&root, &profile)?;
+    let input = ManifestedPlatformInput {
+        source_root: ".".into(),
+        manifest: ProjectDiskFile::new("source-manifest.json")
+            .with_identity(raw_digest(&bytes), bytes.len() as u64),
+        source_revision: "1".repeat(40),
+        source_version: "fixture-version".into(),
+        origin: PlatformSourceOrigin {
+            revision: PlatformSourceRevision::Fixture {
+                digest: raw_digest(&bytes),
+            },
+            ..assertions.origin
+        },
+        materializer: assertions.materializer,
+        license: assertions.license,
+        compatibility_evidence: assertions.compatibility_evidence,
+    };
+    let stop = AtomicBool::new(false);
+    let directory = root.directory()?;
+    let (source, receipt) = directory
+        .admit_platform_source_manifest(&profile, &input, &stop)?
+        .into_parts();
+    assert_eq!(source.receipt().coverage().verified_files(), 3);
+    assert_eq!(
+        source.receipt().inventory().roots[0].scope,
+        PlatformInventoryScope::DeclaredPartial
+    );
+    assert!(matches!(
+        source.receipt().inventory().origin.revision,
+        PlatformSourceRevision::Fixture { .. }
+    ));
+    let receipt = serde_json::to_value(receipt)?;
+    assert_eq!(
+        receipt["outside_profile_members"][0]["path"],
+        "Outside/extra.lua"
+    );
+    assert_eq!(receipt["declared_unlisted_extension_exclusions"], 1);
+    assert_eq!(receipt["git_membership"], "not_attested");
+    assert_eq!(receipt["root_completeness"], "not_attested");
+    let census = census_platform_source(
+        &source,
+        &PlatformCensusSelection {
+            package_root: "UI".into(),
+            load_context: None,
+        },
+        &stop,
+    )?;
+    assert_eq!(census.coverage(), CensusCoverage::Partial);
+    assert_eq!(census.xml().documents, 1);
+    assert_eq!(census.file_counts().included.lua, 1);
+
+    let mut changed = std::fs::read(root.0.join("UI/defs.lua"))?;
+    let last = changed.last_mut().ok_or("empty fixture source")?;
+    *last ^= 1;
+    std::fs::write(root.0.join("UI/defs.lua"), changed)?;
+    assert_eq!(
+        directory
+            .admit_platform_source_manifest(&profile, &input, &stop)
+            .err()
+            .ok_or("changed source admitted")?
+            .code(),
+        ProjectErrorCode::FileDigestMismatch
+    );
+    stop.store(true, Ordering::Release);
+    assert_eq!(
+        directory
+            .admit_platform_source_manifest(&profile, &input, &stop)
+            .err()
+            .ok_or("cancelled source admitted")?
+            .code(),
+        ProjectErrorCode::SourceReadCancelled
+    );
+    Ok(())
+}
+
+#[test]
 fn native_manifest_census_retains_omissions_and_counts_unique_documents() -> TestResult {
     use wow_project::load::census::{
         CensusCoverage, PlatformCensusSelection, census_platform_source,

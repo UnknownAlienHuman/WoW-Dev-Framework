@@ -1,6 +1,10 @@
-//! Admit a complete xtask source-manifest document, then capture only its exact
-//! version/selected-TOC/Lua closure. No Git, network, scanning or source execution.
+//! Admit the exact xtask source-manifest wire, then acquire a caller-selected
+//! Lua closure or platform inventory. No Git, network, scanning or execution.
 mod model;
+mod platform;
+pub use platform::{
+    ManifestedPlatformInput, ManifestedPlatformSource, PlatformSourceManifestReceipt,
+};
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::AtomicBool;
@@ -99,8 +103,13 @@ impl ProjectInputDirectory {
         if request.manifest.content_digest.is_none() || !request.manifest.path.ends_with(".json") {
             return Err(invalid("source manifest requires pinned JSON bytes"));
         }
-        let bytes = self.read(request.manifest, MAX_MANIFEST_BYTES, stop)?;
-        let manifest = SourceManifest::admit(&bytes, request, stop)?;
+        let (manifest, bytes) = read_manifest(
+            self,
+            request.manifest,
+            request.revision,
+            request.version,
+            stop,
+        )?;
         let selected_toc = manifest.member(request.toc)?;
         if selected_toc.kind != "toc"
             || !request
@@ -204,10 +213,28 @@ impl ProjectInputDirectory {
     }
 }
 
+fn read_manifest(
+    directory: &ProjectInputDirectory,
+    selected: &ProjectDiskFile,
+    revision: &str,
+    version: &str,
+    stop: &AtomicBool,
+) -> ProjectResult<(SourceManifest, Vec<u8>)> {
+    checkpoint(stop)?;
+    selected.validate()?;
+    if selected.content_digest.is_none() || !selected.path.ends_with(".json") {
+        return Err(invalid("source manifest requires pinned JSON bytes"));
+    }
+    let bytes = directory.read(selected, MAX_MANIFEST_BYTES, stop)?;
+    let manifest = SourceManifest::admit(&bytes, revision, version, stop)?;
+    Ok((manifest, bytes))
+}
+
 impl SourceManifest {
     fn admit(
         bytes: &[u8],
-        request: &ManifestedLuaRequest<'_>,
+        revision: &str,
+        version: &str,
         stop: &AtomicBool,
     ) -> ProjectResult<Self> {
         checkpoint(stop)?;
@@ -217,8 +244,8 @@ impl SourceManifest {
         if manifest.schema_version != 1
             || manifest.source.source_id != "blizzard-ui"
             || manifest.source.acquisition != "local_git_object_database"
-            || manifest.source.revision != request.revision
-            || manifest.source.version != request.version
+            || manifest.source.revision != revision
+            || manifest.source.version != version
             || !label(&manifest.source.version)
             || !label(&manifest.source.selector)
             || manifest.selection.extensions != [".lua", ".toc", ".xml", ".xsd"]

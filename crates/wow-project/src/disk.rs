@@ -2,7 +2,10 @@
 mod pinned;
 mod source_manifest;
 pub use pinned::PinnedLuaSource;
-pub use source_manifest::{ManifestedLuaRequest, ManifestedLuaSources, SourceManifestReceipt};
+pub use source_manifest::{
+    ManifestedLuaRequest, ManifestedLuaSources, ManifestedPlatformInput, ManifestedPlatformSource,
+    PlatformSourceManifestReceipt, SourceManifestReceipt,
+};
 use std::collections::BTreeSet;
 use std::io::{ErrorKind, Read};
 use std::path::Path;
