@@ -40,7 +40,9 @@ refusals. Explicit native retention now uses the existing configured fact ceilin
 as an upper bound on each of those distinct populations, preserving full combined
 admission, ordinary limits and exact replay. Selected native XML query union and
 both original Emmy query input lanes now use that same finite ceiling in one
-session. A focused fixture retains4097 distinct names and exact replay; separate
+session, keeping the original4096 input floor for smaller fact budgets because
+standard callable-only names are not aggregate project facts. A16-fact native
+configuration and exact replay pass. A focused fixture retains4097 distinct names and exact replay; separate
 input-text, query-reference, native target/output and work guards remain. The
 selected inherited-source counter now also uses the configured fact ceiling,
 preserving declaration visits/text and full combined admission. A focused fixture

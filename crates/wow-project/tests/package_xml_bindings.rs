@@ -42,6 +42,92 @@ use wow_project::{
 type TestResult = Result<(), Box<dyn Error>>;
 
 #[test]
+fn small_native_fact_budget_preserves_default_callable_admission_and_replay() -> TestResult {
+    use wow_project::platform_source::PlatformPackageRetentionLimits;
+
+    let stop = AtomicBool::new(false);
+    let root = FixtureRoot::new()?;
+    for package in ["Alpha", "Beta"] {
+        std::fs::write(
+            root.0.join("UI").join(package).join("frames.xml"),
+            EMPTY_XML,
+        )?;
+    }
+    let ordinary = root.packages(&stop)?;
+    let declarations = PACKAGES
+        .iter()
+        .map(|package| {
+            ProjectPackageInput::new(
+                *package,
+                format!("UI/{package}"),
+                true,
+                vec![ProjectPackageVariantInput::new(
+                    ProjectDiskFile::new("Fixture.toc"),
+                    true,
+                )],
+            )
+        })
+        .collect::<Vec<_>>();
+    let encoded = ordinary.load_plan().packages().iter().try_fold(
+        0u64,
+        |total, node| -> Result<u64, Box<dyn Error>> {
+            let plan = ordinary
+                .load_plan()
+                .package_plan(&node.package)
+                .ok_or("package plan missing")?;
+            total
+                .checked_add(u64::try_from(serde_json::to_vec(plan)?.len())?)
+                .ok_or_else(|| "fixture plan encoding overflow".into())
+        },
+    )?;
+    let native = Arc::new(ordinary.source().specialize_packages_with_retention(
+        &declarations,
+        None,
+        PlatformPackageRetentionLimits::new(3, encoded)?,
+        &stop,
+    )?);
+    let budget = ProjectBudgetPolicy::fixture_e0()?;
+    let configuration = configuration_builder(
+        ProjectKind::BlizzardUiPlatformSource,
+        native.source().profile().target(),
+    )?
+    .platform_packages(Arc::clone(&native))?
+    .with_package_xml_bindings(PackageXmlBindingProfile::SameSessionV1)
+    .budget_policy(ProjectBudgetPolicy::new(
+        budget.max_files(),
+        budget.max_total_source_bytes(),
+        budget.max_single_file_bytes(),
+        budget.max_update_operations(),
+        16,
+        budget.max_generic_findings(),
+        budget.max_output_bytes(),
+    )?)
+    .build()?;
+    let library = LuaWorkspaceSnapshot::build(
+        configuration.analyzer_binding().backend().clone(),
+        LuaWorkspaceUniverse::Fixture,
+        vec![],
+        LuaWorkspaceLimits::new(8, 16_384, 256 * 1024, 512 * 1024)?,
+    )?;
+    let input = ProjectInputBundle::closed(configuration, native.files().to_vec(), vec![library])?;
+    let mut publisher = ProjectPublisher::with_function_call_facts();
+    publisher.publish_initial_cancellable(input, &stop)?;
+    let view = publisher.open_current()?;
+    assert!(
+        view.snapshot()
+            .analyzer_binding()
+            .function_call_report()
+            .is_some()
+    );
+    let replay = ProjectReplay::capture(&publisher, &stop)?;
+    let restored =
+        ProjectReplay::from_json(&serde_json::to_vec(&replay)?, &stop)?.hydrate(&stop)?;
+    assert_eq!(restored.snapshot_id(), view.snapshot_id());
+    assert_eq!(restored.analyzer_snapshot_id(), view.analyzer_snapshot_id());
+    Ok(())
+}
+
+#[test]
 fn retained_native_bindings_use_the_fact_budget_and_replay_exactly() -> TestResult {
     use wow_project::{ProjectErrorCode, platform_source::PlatformPackageRetentionLimits};
 

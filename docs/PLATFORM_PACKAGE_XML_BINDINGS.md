@@ -65,7 +65,10 @@ keep 4096 rows/owners/inherited sources/queries. Each inherited-source row is
 directly charged by final combined fact admission. Its declaration-visit and
 text-byte guards remain separate. The selected query ceiling reaches both native
 symbol and callable input lanes through `MemberCallSessionQueryProfile`, including
-the virtual-unit route. Input counts include repeated names; each lane retains a
+the virtual-unit route. Native session inputs retain the original 4096 floor when
+the configured fact ceiling is smaller: standard callable-only names are not
+charged by that aggregate fact budget. Final combined admission remains separate.
+Input counts include repeated names; each lane retains a
 cancellable checked 16-MiB input-text bound and 4096-byte individual name bound.
 Query references/visits, receiver record/text/expansion, inherited declaration
 visits/text, native lookup targets/text, callable named targets and serialization retain their
@@ -115,6 +118,8 @@ restores exact identities and bindings without source files. A focused
 native-session lifecycle separately checks both 4097-name lanes, ordinary and
 selected refusals, repeated inputs, input-text overflow, original lookup/sidecar
 IDs, small-report equality, retained update, virtual routing and cancellation.
+A small native configuration with 16 admitted facts and the 18 standard callable
+queries also publishes and replays exactly, preserving default input admission.
 The later real
 273-package operation passes the previous query-union frontier. A further native
 fixture retains 4098 inherited inline-handler source rows, refuses ordinary

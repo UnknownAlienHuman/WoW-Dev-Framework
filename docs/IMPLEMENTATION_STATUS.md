@@ -102,8 +102,10 @@ the separate row/owner preparation ceilings, retaining combined fact/output
 admission, all other independent guards, ordinary limits and replay identities.
 The focused ordinary/native/limit+1/combined-refusal/cancellation/replay lifecycle
 and affected Tier S pass. Selected native query preparation and both original
-Emmy input lanes now use the same finite configured fact ceiling, preserving one
-session, ordinary4096, input text/name bounds and all independent output guards.
+Emmy input lanes now use the finite configured fact ceiling with the original4096
+input floor, preserving one session, ordinary4096, input text/name bounds and all
+independent output guards. The floor keeps small native fact budgets from refusing
+the standard18 callable-only queries; a16-fact configuration and exact replay pass.
 The project lifecycle retains8194 rows/4097 distinct names and exact disk-absent
 replay. The selected inherited-script-source counter now also uses the configured
 fact ceiling, with its original declaration-visit/text guards. A focused native

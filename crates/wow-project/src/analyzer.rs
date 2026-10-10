@@ -378,7 +378,9 @@ pub(crate) fn build_analyzer_binding(
     let query_profile = wow_emmy::MemberCallSessionQueryProfile::new(queries, &callable_queries);
     let query_profile = match native_fact_limit {
         Some(limit) => query_profile
-            .with_query_limit(limit)
+            // Callable-only inputs are not charged as aggregate project facts.
+            // Preserve the existing input domain when that fact budget is small.
+            .with_query_limit(limit.max(4096))
             .map_err(|_| binding_inputs_invalid())?,
         None => query_profile,
     };
