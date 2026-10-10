@@ -70,5 +70,5 @@ jobs:
             ${{ runner.temp }}/TREE_SHA
             ${{ runner.temp }}/RUST_VERSION
             ${{ runner.temp }}/SHA256SUMS
-          retention-days: 3
+          retention-days: 14
           if-no-files-found: error
