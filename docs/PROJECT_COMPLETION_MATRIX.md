@@ -1,7 +1,7 @@
 # Project completion matrix
 
 **Audited:** 2026-09-19 America/New_York. Execution inventory refreshed 2026-10-09
-through the scoped W16 guarded cross-epoch selection checkpoint below.
+through the scoped W17 explicit platform-source byte admission checkpoint below.
 
 This is the current execution ledger. [IMPLEMENTATION_HANDOFF.md](IMPLEMENTATION_HANDOFF.md)
 remains the normative I0–I7 plan; do not restart its historical bootstrap steps.
@@ -61,8 +61,9 @@ no Rust implementation in the audited source. Their documentation is not a binar
 | E1-A–E1-C | Partial executable | Finish only verified missing contract/acceptance slices; do not recreate existing store/reference/annotation implementations |
 | E1-D | Partial executable Reference Pack service and active internal builder with durable materialization/finalization | Close external parity/license/rebuild evidence, Windows/process-loss acceptance and complete package gates; code presence is not `ValidatedLocal` |
 | E2-A–E2-B | Partial executable | All 26 active E2-B rule IDs are service-published after the W11 semantic repair, TOC, XML and state slices; close public CLI/full-pipeline fixtures and package acceptance |
-| E2-C–E2-D | Partial source index, manifested store, native live pair service/CLI, cancellable updates, exact Library/fact-profile generation binding, retained physical parser updates and durable physical update/removal publication; bounded retention/GC, backup/recovery, same-epoch replacement, inactive migration/READY preparation and portable source selector/hold authority | Dependency-specific fact reuse, standalone/package durable updates, live cross-epoch selection/reconciliation, portable full migration history and complete E2 acceptance remain open; see [REPLAY_PUBLICATION.md](../crates/wow-project/REPLAY_PUBLICATION.md) |
-| E3-A–E3-C | Not started | Exact Blizzard source universe, context owners and service/CLI after E2 closure |
+| E2-C–E2-D | Partial source index, manifested store, native live pair service/CLI, cancellable updates, exact Library/fact-profile binding, retained physical parser updates and durable physical update/removal publication; bounded retention/GC, recovery/replacement, inactive migration/READY preparation, portable source authority and guarded cross-epoch selection/reconciliation | Dependency-specific fact reuse, standalone/package durable updates, portable full migration history and complete E2 acceptance remain open; see [REPLAY_PUBLICATION.md](../crates/wow-project/REPLAY_PUBLICATION.md) |
+| E3-A | Partial explicit local platform-source byte admission | Exact platform project/package/load/analyzer/graph binding and bounded SkeletonInputView; raw admission is not a complete source universe |
+| E3-B–E3-C | Not started | Context owners and service/CLI after their actual producer inputs |
 | E4-A–E4-C | Not started | Search, lineage/migration/static impact and routing after A0 prerequisites |
 | E5-A–E5-C | Not started | Calibration, independent review/holdout and governed publication lifecycle |
 | E6-A–E6-B | Not started; optional/disabled | External candidates never block the local lane or gain exact/negative authority |
@@ -436,3 +437,22 @@ Portable entire migration history, arbitrary partial-copy/inside-write/power-los
 deletion/platform, payload/runtime transformation, domain quarantine and full
 W16/E2/source/runtime acceptance remain open. W17 source profile/inventory admission
 is the next functional owner; W18-W26 remain open.
+
+The first W17 source owner now validates a typed exact profile and the entire
+declared inventory before confined member reads. Included raw byte digests/lengths
+are mandatory; unknown or undecodable data is retained unchanged. Explicit exclusions,
+special/external/conflict/failed records, materializer/build/license assertions and
+per-root accounting survive in the serialize-only receipt. Reordered inputs and
+host-directory/provider-display changes preserve the scoped content/snapshot
+identities; full evidence has a separate digest. Inventory stays Partial, and root
+completeness, Git/client/security/license and semantic/runtime authority remain
+unevaluated. There is no source acquisition or parsing in this owner.
+
+Two native cases pass, covering immutable retained bytes, independent-copy/order
+identity, exact binding/accounting refusal, mutation/missing content, LFS, budgets
+and cancellation. Workspace policy, fmt, check, strict Clippy, tests (921 passed,
+1 ignored, 108 targets), strict rustdoc and build pass on 2026-10-09. See
+[PLATFORM_SOURCE_ADMISSION.md](PLATFORM_SOURCE_ADMISSION.md).
+Platform package/load/project/analyzer/graph/publication and SkeletonInputView,
+real mirror/performance/runtime and full W17 acceptance remain open. Next is a
+retained-byte package/load adapter with exact source binding; W18-W26 remain open.

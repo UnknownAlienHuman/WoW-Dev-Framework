@@ -41,10 +41,12 @@ W09 load closure is now an input to the W10 virtual-semantic path. Functional
 development continues through bounded W10 consumers; existing full acceptance and
 launch gates remain open.
 
-The active W14 physical path now retains native parser state and applies exact
-Main file deltas, with conservative complete semantic reindexing and fresh
-target-bound reports. Durable full-graph update/removal closure remains the
-next functional responsibility before W15 retention and W16 recovery.
+The physical update path retains native parser state and publishes exact final
+Main deltas through the complete graph producer chain. Bounded retention/GC,
+recovery, portable original-source authority and guarded cross-epoch selection
+are executable. The current functional frontier is W17: exact local platform-source
+byte admission is implemented; retained-byte package/load and exact platform
+project/analyzer/graph binding follow. Broad package acceptance remains open.
 
 ## W14 retained physical native analysis (2026-10-09)
 
@@ -964,3 +966,29 @@ inside-write/power-loss/deletion/platform and full W16/E2/Gethe/Ketho/runtime
 acceptance remain open. Next functional work is W17 exact materialized source
 profile/inventory admission. W18-W26 remain open; Gethe materialization follows
 product implementation/build.
+
+## W17 explicit local platform-source byte admission (2026-10-09)
+
+`ProjectInputDirectory::admit_platform_source` accepts a validated
+`BlizzardUiSourceProfile` and typed `PlatformSourceInventory`. Full target/profile,
+revision/class, root/path/case/extension, reviewed exclusions and count/byte/metadata
+admission precedes source IO. The existing confined no-follow raw reader verifies
+every declared included member against mandatory digest/length, retaining unknown
+and undecodable bytes. Standard unresolved LFS pointers reject. Source execution,
+network acquisition and directory scanning are absent.
+
+`AdmittedPlatformSource` privately retains exact immutable bytes. Its serialize-only
+receipt binds scoped content/snapshot identities separately from the entire caller
+evidence. Provider display labels and host directories are not content identity.
+All declared omissions and original provenance/materializer/compatibility/license
+assertions survive; included-byte verification never attests these assertions.
+Inventory coverage stays Partial; root/Git completeness, client/security/license
+and decoding/package/analyzer/graph/API/runtime authority remain unevaluated. See
+[PLATFORM_SOURCE_ADMISSION.md](PLATFORM_SOURCE_ADMISSION.md).
+
+Two native cases and workspace policy, fmt, all-target/all-feature check, strict
+Clippy, tests (921 passed, 1 ignored, 108 targets), strict rustdoc and build pass.
+The next owner consumes retained bytes through existing package/TOC/XML loaders
+and binds the exact platform source generation. Full W17 project/graph/publication,
+SkeletonInputView, real mirror/performance/runtime and E0/E2 acceptance remain open.
+Gethe materialization remains deferred until product implementation/build is complete.

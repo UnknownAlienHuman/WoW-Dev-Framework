@@ -18,6 +18,7 @@ mod identity;
 mod ids;
 mod inventory;
 pub mod load;
+pub mod platform_source;
 mod publication;
 mod registry;
 pub mod replay;
