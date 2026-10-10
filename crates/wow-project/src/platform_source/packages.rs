@@ -5,6 +5,8 @@ use std::{
     sync::{Arc, atomic::AtomicBool},
 };
 
+use serde::{Deserialize, Serialize};
+
 use super::{
     AdmittedPlatformSource, PlatformEntryDisposition, PlatformFileKind, invalid,
     package_binding::PlatformPackageBinding, path, under,
@@ -19,12 +21,33 @@ use crate::{
     },
 };
 
+/// Original caller declarations, not an admitted source or native owner receipt.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct PlatformPackageRequest {
+    packages: Vec<ProjectPackageInput>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    context: Option<TocLoadContext>,
+}
+
+impl PlatformPackageRequest {
+    /// Re-admit original roots, variant pins and selection through native owners.
+    pub(crate) fn rebuild(
+        &self,
+        source: &Arc<AdmittedPlatformSource>,
+        stop: &AtomicBool,
+    ) -> ProjectResult<PlatformPackageSpecialization> {
+        source.specialize_packages(&self.packages, self.context.as_ref(), stop)
+    }
+}
+
 /// Actual native package/Main owners bound to their retained original source.
 /// This is not a platform project/analyzer/graph or publication capability.
 pub struct PlatformPackageSpecialization {
     source: Arc<AdmittedPlatformSource>,
     binding: PlatformPackageBinding,
     main: ProjectPackageMainInput,
+    request: PlatformPackageRequest,
 }
 impl PlatformPackageSpecialization {
     #[must_use]
@@ -46,6 +69,10 @@ impl PlatformPackageSpecialization {
     #[must_use]
     pub fn main_plan(&self) -> &ProjectPackageMainPlan {
         self.main.main_plan()
+    }
+    #[must_use]
+    pub(crate) const fn request(&self) -> &PlatformPackageRequest {
+        &self.request
     }
 }
 
@@ -157,11 +184,16 @@ impl AdmittedPlatformSource {
         let main = loaded.into_namespaced_main()?;
         let binding = PlatformPackageBinding::new(self, main.load_plan(), main.main_plan())?;
         binding.validate(self, main.load_plan(), main.main_plan())?;
+        let request = PlatformPackageRequest {
+            packages: packages.to_vec(),
+            context: context.cloned(),
+        };
         disk::checkpoint(stop)?;
         Ok(PlatformPackageSpecialization {
             source: Arc::clone(self),
             binding,
             main,
+            request,
         })
     }
 

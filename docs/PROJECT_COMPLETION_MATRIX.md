@@ -62,7 +62,7 @@ no Rust implementation in the audited source. Their documentation is not a binar
 | E1-D | Partial executable Reference Pack service and active internal builder with durable materialization/finalization | Close external parity/license/rebuild evidence, Windows/process-loss acceptance and complete package gates; code presence is not `ValidatedLocal` |
 | E2-A–E2-B | Partial executable | All 26 active E2-B rule IDs are service-published after the W11 semantic repair, TOC, XML and state slices; close public CLI/full-pipeline fixtures and package acceptance |
 | E2-C–E2-D | Partial source index, manifested store, native live pair service/CLI, cancellable updates, exact Library/fact-profile binding, retained physical parser updates and durable physical update/removal publication; bounded retention/GC, recovery/replacement, inactive migration/READY preparation, portable source authority and guarded cross-epoch selection/reconciliation | Dependency-specific fact reuse, standalone/package durable updates, portable full migration history and complete E2 acceptance remain open; see [REPLAY_PUBLICATION.md](../crates/wow-project/REPLAY_PUBLICATION.md) |
-| E3-A | Partial exact raw/package admission, owner-bound platform configuration, native physical/XML Main, registry and source-graph identity/materialization | Genuine source/package replay, stable logical store namespace/publication, platform partitions/fingerprints and bounded SkeletonInputView; full source-universe acceptance remains open |
+| E3-A | Partial exact raw/package admission, owner-bound platform configuration, native physical/XML Main/source graph and genuine source/package replay with durable native publication/readback | Stable logical store namespace across source snapshots, platform partitions/fingerprints, bounded SkeletonInputView and service/CLI source transport; full source-universe acceptance remains open |
 | E3-B–E3-C | Not started | Context owners and service/CLI after their actual producer inputs |
 | E4-A–E4-C | Not started | Search, lineage/migration/static impact and routing after A0 prerequisites |
 | E5-A–E5-C | Not started | Calibration, independent review/holdout and governed publication lifecycle |
@@ -470,7 +470,7 @@ Three focused native cases and workspace policy, fmt, check, strict Clippy, test
 The new lifecycle loads TOC/XML/Main after physical source removal and checks pin,
 cancel and declared omission refusal. See
 [PLATFORM_SOURCE_PACKAGES.md](PLATFORM_SOURCE_PACKAGES.md).
-Exact platform configuration/project/analyzer/graph, native replay/publication,
+At this package-admission predecessor, exact platform configuration/project/analyzer/graph, native replay/publication,
 SkeletonInputView, real mirror/performance/runtime and full W17 acceptance remain
 open. W18-W26 remain open; Gethe materialization stays deferred.
 
@@ -488,9 +488,18 @@ refusal, exact source handles, and real guarded generation advancement for an
 inventory-only byte change with unchanged parsed inputs and a valid old snapshot.
 See [PLATFORM_SOURCE_CONFIGURATION.md](PLATFORM_SOURCE_CONFIGURATION.md).
 
-Native platform replay deliberately refuses before archive/store effects. Genuine
-source/package transport, logical store namespace/publication, platform partitions/
-fingerprints, bounded SkeletonInputView, real mirror/performance/runtime and full
-W17/E3 acceptance remain open. Admission inventory remains Partial; consumed-file
-checks do not prove source/Git/root/license/API/runtime authority. W18-W26 remain
-open; Gethe materialization remains deferred.
+Genuine platform replay now retains the original profile, complete inventory,
+Included binary members and explicit package/root/variant/pin/context request.
+Hydration re-admits source and package owners, restores exact platform configuration,
+rebuilds native Main/Library analysis and compares IDs plus full recapture. Native
+store publication/readback uses the additive v5 schema; ordinary v1-v4 recipes
+remain unchanged. Exact old V4 catalogs reopen and refuse v5 before Current changes.
+See [PLATFORM_SOURCE_REPLAY.md](PLATFORM_SOURCE_REPLAY.md).
+
+Fresh workspace policy, fmt, check, strict Clippy, tests (925 passed, 1 ignored,
+108 targets), strict rustdoc and build pass on 2026-10-10. Stable logical store
+namespace across source snapshots, platform partitions/fingerprints,
+SkeletonInputView, service/CLI source transport, real mirror/performance/runtime
+and full W17/E3 acceptance remain open. Admission inventory remains Partial;
+consumed-file checks do not prove source/Git/root/license/API/runtime authority.
+W18-W26 remain open; Gethe materialization remains deferred.

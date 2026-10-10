@@ -78,11 +78,13 @@ including TOC/XML definitions. Old ordinary registry bytes stay unchanged. This
 admits actual source graph materialization; independently owned platform producer
 partitions and structural fingerprints remain separate work.
 
-## Durable replay is deferred
+## Genuine durable replay
 
-Native replay capture refuses a platform configuration with `DeferredCapability` before
-any archive or store effect. No platform replay schema, transport or round trip is
-claimed, and the refusal is explicit rather than a silent empty result.
+The additive v5 channel retains original source and package requests plus every
+Included raw member. Hydration re-admits actual owners without disk, then rebuilds
+configuration and native analysis and compares exact IDs and full recapture.
+Durable native publication/readback is verified; ordinary v1-v4 recipes and frozen
+catalogs remain unchanged. See [PLATFORM_SOURCE_REPLAY.md](PLATFORM_SOURCE_REPLAY.md).
 
 ## Preserved schemas and recipes
 
@@ -95,24 +97,26 @@ configurations keep their exact bytes and their existing configuration digests.
 Root completeness, Git membership, materializer security, client compatibility, license
 permission, decoding, package load, analyzer, graph and runtime remain unverified from
 admission, and the platform Main universe does not by itself establish analyzer or graph
-coverage. Genuine raw/source/package replay, stable logical store namespace/publication,
+coverage. Stable logical store namespace across differing source snapshots,
 platform partitions/fingerprints, SkeletonInputView, and full W17 or E2 acceptance
 remain open.
 
 ## Executed validation
 
 Four native platform cases and workspace policy, fmt, all-target/all-feature check,
-strict Clippy, tests (923 passed, 1 ignored, 108 targets), strict rustdoc and build pass.
+strict Clippy, tests (925 passed, 1 ignored, 108 targets), strict rustdoc and build pass
+on 2026-10-10, including two new native service lifecycle/catalog cases.
 The new lifecycle removes its input directory before specialization, then publishes
 native physical/XML Main and materializes the source graph through actual owners.
 It verifies exact source handles, target/plan/naked-kind refusals, Main-as-Library
-and mixed physical/virtual class refusal, plus DeferredCapability at replay capture.
+and mixed physical/virtual class refusal, plus genuine disk-absent replay and
+malformed raw/request/channel rejection.
 
 Changing only a retained binary inventory member preserves native load/Main files
 and Library, but changes the bound configuration. The real guarded updater publishes
 a new generation rather than NoChange; Main workspace identity stays unchanged and
 the old snapshot still validates. Frozen ordinary replay fixtures also pass.
 
-These are synthetic in-memory owner checks. Full mirror, live source/network,
-durable platform replay/store, performance and WoW runtime acceptance are NotEvaluated
-for this checkpoint.
+These are synthetic native owner checks, including durable store publication and
+reopen. Full mirror, live source/network, performance and WoW runtime acceptance
+are NotEvaluated for this checkpoint.

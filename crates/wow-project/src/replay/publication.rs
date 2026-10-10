@@ -13,6 +13,7 @@ pub const STORAGE_SCHEMAS: &[&str] = &[
     "wow-project.live-replay.v2",
     "wow-project.live-replay.v3",
     "wow-project.live-replay.v4",
+    "wow-project.live-replay.v5",
     "wow-project.live-pair.v1",
 ];
 /// Exact catalog of already published physical-input epochs. It is never widened
@@ -27,6 +28,14 @@ pub const STORAGE_SCHEMAS_V3: &[&str] = &[
     "wow-project.live-replay.v1",
     "wow-project.live-replay.v2",
     "wow-project.live-replay.v3",
+    "wow-project.live-pair.v1",
+];
+/// Exact catalog before platform raw-source replay; retain these epoch identities.
+pub const STORAGE_SCHEMAS_V4: &[&str] = &[
+    "wow-project.live-replay.v1",
+    "wow-project.live-replay.v2",
+    "wow-project.live-replay.v3",
+    "wow-project.live-replay.v4",
     "wow-project.live-pair.v1",
 ];
 pub const STORAGE_CHECK: &str = "wow-project.live-pair-native-replay.v1";
@@ -131,6 +140,7 @@ impl AcquiredProjectPair {
                 | "wow-project.live-replay.v2"
                 | "wow-project.live-replay.v3"
                 | "wow-project.live-replay.v4"
+                | "wow-project.live-replay.v5"
         ) {
             return Err(invalid());
         }

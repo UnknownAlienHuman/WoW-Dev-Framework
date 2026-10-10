@@ -26,8 +26,8 @@ pub use migration::{
 };
 pub use model::{
     CurrentPublication, CurrentRecordId, EpochId, EpochManifest, GC_PHYSICAL_PROFILE,
-    GenerationManifest, PHYSICAL_PROFILE, PartitionMember, PartitionRecord, PartitionVersionId,
-    PublicationOperation, PublicationRequest, PublicationState, RECORD_PROFILE,
+    GenerationManifest, MAX_RECORD_BYTES, PHYSICAL_PROFILE, PartitionMember, PartitionRecord,
+    PartitionVersionId, PublicationOperation, PublicationRequest, PublicationState, RECORD_PROFILE,
     RETAINED_PHYSICAL_PROFILE, RecordCatalog, StoreGenerationId, ValidationId,
 };
 pub use quarantine::{

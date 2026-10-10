@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use cap_fs_ext::{DirExt, FollowSymlinks, OpenOptionsFollowExt};
 use cap_std::fs::{Dir, OpenOptions};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use wow_core::{ContentDigest, NormalizedSourcePath, SourceContent};
 
 use crate::{
@@ -26,13 +26,13 @@ pub const DISK_INVENTORY_MAX_FILES: usize = 1024;
 
 /// A logical file path, optionally bound to predeclared exact content.
 /// Construction/deserialization is followed by admission before any file open.
-#[derive(Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectDiskFile {
     path: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     content_digest: Option<ContentDigest<SourceContent>>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     byte_length: Option<u64>,
 }
 

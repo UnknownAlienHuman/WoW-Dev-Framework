@@ -129,11 +129,28 @@ the fact option cannot upgrade or downgrade an existing archive.
 project/graph owner checks before constructing a handoff from a retained archive.
 It cannot substitute metadata labels for a live analyzer session.
 
-New epochs admit v1/v2/v3/v4. Existing V1/V2/V3 epochs open only under their exact
+At the Library-bound checkpoint, new epochs admitted v1/v2/v3/v4. Existing V1/V2/V3 epochs open only under their exact
 frozen catalogs and reject v4 writes without changing current or epoch identity.
 Initialize a new private store for new publications; no epoch migration or catalog
 widening is provided. Frozen native compatibility fixtures were captured on
 `144761f` before the generation change and are never rewritten by tests.
+
+## Genuine platform source replay
+
+Platform inputs now use `wow-project/native-project-replay/5` and
+`wow-project.live-replay.v5`, retaining the original profile/inventory/package
+requests and every Included raw member. Real source/package/configuration/native
+analyzer owners rebuild the pair without disk; exact IDs and full recapture must
+match. Main remains separate from Library, and this channel grants no physical
+update capability. See [PLATFORM_SOURCE_REPLAY.md](../../docs/PLATFORM_SOURCE_REPLAY.md).
+
+New epochs admit v1-v5. The complete old V4 catalog is frozen and participates
+in exact legacy open, quarantine and migration fallback before V3/V2/V1.
+V4 reopening preserves epoch/Current/native pair identities; a v5 write refuses
+without changing Current. No existing catalog is widened. Native durable tests
+and all workspace gates/build pass on 2026-10-10 (925 passed, 1 ignored, 108 targets).
+Stable store namespace across differing source snapshots, independent platform
+producer partitions and full W17/E3 acceptance remain open.
 
 ## Retained owner updates
 

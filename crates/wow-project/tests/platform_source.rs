@@ -21,8 +21,7 @@ use wow_emmy::{
 use wow_project::{
     AnalyzerBindingDeclaration, ProjectBudgetPolicy, ProjectCapabilityPolicy,
     ProjectConfigurationBuilder, ProjectErrorCode, ProjectId, ProjectInputBundle, ProjectKind,
-    ProjectPhase, ProjectPublisher, ProjectSourceOriginId, ProjectSourceOriginKind,
-    ProjectWorkspaceId,
+    ProjectPublisher, ProjectSourceOriginId, ProjectSourceOriginKind, ProjectWorkspaceId,
     disk::ProjectInputDirectory,
     load::{ProjectPackageInput, ProjectPackageVariantInput},
     platform_source::{
@@ -33,6 +32,7 @@ use wow_project::{
         PlatformSpecialEntry, PlatformTarget, PlatformUnevaluatedCapability, ProfileExclusion,
         SourceAdmissionLimits,
     },
+    replay::ProjectReplay,
 };
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -520,7 +520,7 @@ fn platform_packages_reuse_native_load_from_retained_bytes_and_refuse_declared_o
 }
 
 #[test]
-fn platform_configuration_publishes_native_main_and_refuses_replay() -> TestResult {
+fn platform_configuration_publishes_native_main_and_replays_without_source() -> TestResult {
     let root = FixtureRoot::new()?;
     let stop = AtomicBool::new(false);
     let profile = BlizzardUiSourceProfile::new(profile_request()?)?;
@@ -840,11 +840,136 @@ fn platform_configuration_publishes_native_main_and_refuses_replay() -> TestResu
     )?;
     replacement.candidate().validate(&stop)?;
     assert!(!replacement.candidate().snapshot().nodes().is_empty());
-    let refused = wow_project::replay::ProjectReplay::capture(&publisher, &stop)
-        .err()
-        .ok_or_else(|| std::io::Error::other("platform replay was accepted"))?;
-    assert_eq!(refused.code(), ProjectErrorCode::DeferredCapability);
-    assert_eq!(refused.phase(), ProjectPhase::Publication);
+    assert!(!root.0.exists());
+    let replay = ProjectReplay::capture(&publisher, &stop)?;
+    let archive = serde_json::to_value(&replay)?;
+    assert_eq!(archive["schema"], "wow-project/native-project-replay/5");
+    assert_eq!(archive["generation_schema_version"], 2);
+    assert_eq!(archive["function_calls"], true);
+    assert!(archive["files"].as_array().is_some_and(Vec::is_empty));
+    assert!(archive.get("load").is_none());
+    assert!(archive.get("packages").is_none());
+    let raw_files = archive["platform"]["files"]
+        .as_array()
+        .ok_or_else(|| std::io::Error::other("platform raw archive missing"))?;
+    assert_eq!(raw_files.len(), 4);
+    let opaque_index = raw_files
+        .iter()
+        .position(|file| file["path"] == "UI/opaque.bin")
+        .ok_or_else(|| std::io::Error::other("archived binary member missing"))?;
+    assert_eq!(
+        raw_files[opaque_index]["bytes"],
+        serde_json::json!([255, 254, 0, 1])
+    );
+    let encoded = serde_json::to_vec(&replay)?;
+    let decoded = ProjectReplay::from_json(&encoded, &stop)?;
+    assert_eq!(decoded, replay);
+    let wire = std::str::from_utf8(&encoded)?;
+    for replacement in [
+        r#""bytes":[255,254,0,1],"bytes":[255,254,0,1]"#,
+        r#""bytes":[255,254,0,1],"unexpected":true"#,
+    ] {
+        let malformed = wire.replacen(r#""bytes":[255,254,0,1]"#, replacement, 1);
+        assert_ne!(malformed, wire);
+        assert!(ProjectReplay::from_json(malformed.as_bytes(), &stop).is_err());
+    }
+    let replayed = decoded.hydrate(&stop)?;
+    assert_eq!(replayed.snapshot(), &snapshot);
+    let replayed_packages = replayed
+        .configuration()
+        .platform_packages()
+        .ok_or_else(|| std::io::Error::other("replayed platform owner missing"))?;
+    assert_eq!(replayed_packages.binding(), loaded.binding());
+    assert_eq!(replayed_packages.source().receipt(), source.receipt());
+    assert_eq!(
+        replayed_packages.source().source_bytes("UI/opaque.bin")?,
+        &[0xff, 0xfe, 0, 1]
+    );
+    assert_eq!(replayed_packages.load_plan(), loaded.load_plan());
+    assert_eq!(replayed_packages.main_plan(), loaded.main_plan());
+    let mut recaptured = ProjectPublisher::with_function_call_facts();
+    recaptured.publish_initial_cancellable(
+        ProjectInputBundle::closed(
+            replayed.configuration().clone(),
+            replayed_packages.files().to_vec(),
+            vec![library.clone()],
+        )?,
+        &stop,
+    )?;
+    assert_eq!(ProjectReplay::capture(&recaptured, &stop)?, replay);
+    let mut mixed = archive.clone();
+    mixed["files"] = mixed["libraries"][0]["files"].clone();
+    assert!(
+        ProjectReplay::from_json(&serde_json::to_vec(&mixed)?, &stop)
+            .and_then(|replay| replay.hydrate(&stop))
+            .is_err()
+    );
+    let mut wrong_library = archive.clone();
+    wrong_library["libraries"][0]["universe"] = "blizzard_ui_main".into();
+    assert!(
+        ProjectReplay::from_json(&serde_json::to_vec(&wrong_library)?, &stop)
+            .and_then(|replay| replay.hydrate(&stop))
+            .is_err()
+    );
+    let changed_context = serde_json::to_value(wow_project::load::TocLoadContext {
+        game_types: std::collections::BTreeMap::new(),
+        family: Some("retail".into()),
+        game: None,
+        text_locale: None,
+        location: None,
+        environment: None,
+    })?;
+    for mutation in [
+        "duplicate raw member",
+        "surplus raw member",
+        "missing raw member",
+        "altered raw bytes",
+        "altered package root",
+        "altered TOC pin",
+        "altered load context",
+        "ordinary replay schema",
+    ] {
+        let mut changed = archive.clone();
+        match mutation {
+            "duplicate raw member" | "surplus raw member" => {
+                let files = changed["platform"]["files"]
+                    .as_array_mut()
+                    .ok_or_else(|| std::io::Error::other("raw archive missing"))?;
+                let mut extra = files[opaque_index].clone();
+                if mutation == "surplus raw member" {
+                    extra["path"] = "UI/surplus.bin".into();
+                }
+                files.push(extra);
+            }
+            "missing raw member" => {
+                changed["platform"]["files"]
+                    .as_array_mut()
+                    .ok_or_else(|| std::io::Error::other("raw archive missing"))?
+                    .remove(opaque_index);
+            }
+            "altered raw bytes" => {
+                changed["platform"]["files"][opaque_index]["bytes"][3] = 2.into();
+            }
+            "altered package root" => {
+                changed["platform"]["package_request"]["packages"][0]["root"] = "UI/other".into();
+            }
+            "altered TOC pin" => {
+                changed["platform"]["package_request"]["packages"][0]["variants"][0]["toc"]["content_digest"] =
+                    serde_json::to_value(raw_digest(b"wrong pin"))?;
+            }
+            "altered load context" => {
+                changed["platform"]["package_request"]["context"] = changed_context.clone();
+            }
+            _ => changed["schema"] = "wow-project/native-project-replay/4".into(),
+        }
+        assert!(
+            ProjectReplay::from_json(&serde_json::to_vec(&changed)?, &stop)
+                .and_then(|replay| replay.hydrate(&stop))
+                .is_err(),
+            "platform replay accepted {mutation}"
+        );
+    }
+    assert!(!root.0.exists());
     assert_eq!(
         publisher.open_current()?.snapshot_id(),
         snapshot.snapshot_id()

@@ -4,6 +4,10 @@ mod model;
 mod package_binding;
 mod packages;
 mod profile;
+mod retained;
+
+pub(crate) use packages::PlatformPackageRequest;
+pub(crate) use retained::RetainedPlatformFile;
 
 pub use package_binding::PlatformPackageBinding;
 pub use packages::PlatformPackageSpecialization;
@@ -26,7 +30,6 @@ use wow_core::{CanonicalResult, ContentDigest, CoverageStatus};
 use crate::{
     ProjectError, ProjectErrorCode, ProjectPhase, ProjectResult,
     disk::{self, ProjectDiskFile, ProjectInputDirectory},
-    identity,
 };
 
 /// Capabilities that byte admission does not evaluate or authorize.
@@ -201,70 +204,9 @@ impl ProjectInputDirectory {
                 files.insert(entry.path.clone(), bytes);
             }
         }
-        disk::checkpoint(stop)?;
-        let root_names: Vec<_> = inventory.roots.iter().map(|root| &root.root).collect();
-        let content_manifest_digest = identity::canonical_digest(
-            "wow-project/platform-source-content-manifest/1",
-            &(&root_names, &inventory.entries),
-            ProjectPhase::Inventory,
-        )?;
-        let source_snapshot_id = identity::canonical_id(
-            "blizzard-ui-source-snapshot:",
-            "wow-project/platform-source-snapshot/1",
-            &(
-                profile.digest(),
-                &inventory.target,
-                &inventory.origin.revision,
-                content_manifest_digest,
-            ),
-            ProjectPhase::Inventory,
-        )?;
-        let admission_digest = identity::canonical_digest(
-            "wow-project/platform-source-admission/1",
-            &inventory,
-            ProjectPhase::Inventory,
-        )?;
-        let coverage = PlatformAdmissionCoverage {
-            inventory: CoverageStatus::Partial,
-            declared_included_bytes: if files.is_empty() {
-                CoverageStatus::NotApplicable
-            } else {
-                CoverageStatus::Complete
-            },
-            verified_files: files.len(),
-            verified_bytes,
-            unevaluated: vec![
-                PlatformUnevaluatedCapability::RootCompleteness,
-                PlatformUnevaluatedCapability::GitMembership,
-                PlatformUnevaluatedCapability::MaterializerSecurity,
-                PlatformUnevaluatedCapability::ClientCompatibility,
-                PlatformUnevaluatedCapability::LicensePermission,
-                PlatformUnevaluatedCapability::Decoding,
-                PlatformUnevaluatedCapability::PackageLoad,
-                PlatformUnevaluatedCapability::Analyzer,
-                PlatformUnevaluatedCapability::Graph,
-                PlatformUnevaluatedCapability::ApiContract,
-                PlatformUnevaluatedCapability::Runtime,
-            ],
-        };
-        let receipt = PlatformSourceAdmissionReceipt {
-            schema: "wow-project/platform-source-admission/1",
-            profile_digest: profile.digest(),
-            content_manifest_digest,
-            source_snapshot_id,
-            admission_digest,
-            coverage,
-            inventory,
-        };
-        disk::checkpoint(stop)?;
-        Ok(AdmittedPlatformSource {
-            profile: profile.clone(),
-            receipt,
-            files,
-        })
+        retained::finish_admission(profile, inventory, files, stop)
     }
 }
-
 fn lfs_pointer(bytes: &[u8]) -> bool {
     let bytes = bytes.strip_prefix(&[0xef, 0xbb, 0xbf]).unwrap_or(bytes);
     bytes

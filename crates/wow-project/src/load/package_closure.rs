@@ -35,7 +35,7 @@ const MAX_PACKAGE_SOURCE_BYTES: usize = 64 * 1024 * 1024;
 /// One explicitly declared TOC variant. Exactly one variant per package must be
 /// marked selected. Other variants are retained by exact identity only and never
 /// contribute active files or metadata.
-#[derive(Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectPackageVariantInput {
     toc: ProjectDiskFile,
@@ -61,7 +61,7 @@ impl ProjectPackageVariantInput {
 
 /// One package inside an explicit package universe. `root` is a logical path
 /// below the already registered input directory, never an ambient host path.
-#[derive(Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectPackageInput {
     name: String,

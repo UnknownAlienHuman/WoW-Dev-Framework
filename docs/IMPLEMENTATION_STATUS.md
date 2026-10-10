@@ -46,7 +46,12 @@ Main deltas through the complete graph producer chain. Bounded retention/GC,
 recovery, portable original-source authority and guarded cross-epoch selection
 are executable. W17 now binds admitted platform source/package owners to exact
 configuration, native platform Main and source-graph identity/materialization.
-Genuine replay, logical store namespace, platform partitions/fingerprints and
+Genuine source/package replay and durable native publication/readback now use an
+additive v5 channel while ordinary v1-v4 recipes and exact catalogs remain intact.
+Fresh workspace policy, fmt, check, strict Clippy, tests (925 passed, 1 ignored,
+108 targets), strict rustdoc and build pass on 2026-10-10. See
+[PLATFORM_SOURCE_REPLAY.md](PLATFORM_SOURCE_REPLAY.md). Stable logical store
+namespace across source snapshots, platform partitions/fingerprints and
 SkeletonInputView follow. Broad package acceptance remains open.
 
 ## W14 retained physical native analysis (2026-10-09)

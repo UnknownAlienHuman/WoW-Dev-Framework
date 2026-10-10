@@ -542,6 +542,343 @@ fn standalone_toc_xml_pair_replays_without_disk_and_rejects_archive_substitution
 }
 
 #[test]
+fn platform_pair_publishes_retained_source_and_old_catalog_refuses_v5() -> TestResult {
+    use sha2::{Digest, Sha256};
+    use std::sync::Arc;
+    use wow_core::{CoverageStatus, SourceContent};
+    use wow_project::disk::{ProjectDiskFile, ProjectInputDirectory};
+    use wow_project::load::{ProjectPackageInput, ProjectPackageVariantInput};
+    use wow_project::platform_source::{
+        BlizzardUiSourceProfile, BlizzardUiSourceProfileRequest, PlatformEntryDisposition,
+        PlatformFileKind, PlatformInventoryEntry, PlatformInventoryScope, PlatformLicenseRecord,
+        PlatformLicenseState, PlatformMaterializer, PlatformRootInventory, PlatformRootSpec,
+        PlatformSourceClass, PlatformSourceInventory, PlatformSourceOrigin, PlatformSourceRevision,
+        PlatformTarget, ProfileExclusion, SourceAdmissionLimits,
+    };
+    use wow_project::replay::ProjectReplay;
+
+    let stop = AtomicBool::new(false);
+    let path = root("platform-replay-v5")?;
+    let source_root = path.join("input");
+    std::fs::create_dir_all(source_root.join("UI"))?;
+    let ordinary = input_bundle("return External()")?;
+    let metadata = ordinary.configuration();
+    let target = PlatformTarget {
+        product: "fixture".into(),
+        channel: "fixture".into(),
+        reference_profile: metadata.selected_profile().clone(),
+        reference_generation: metadata.reference_generation(),
+    };
+    let profile = BlizzardUiSourceProfile::new(BlizzardUiSourceProfileRequest {
+        profile_id: "profile:fixture:service-platform-replay-v1".parse()?,
+        source_class: PlatformSourceClass::SyntheticFixture,
+        target: target.clone(),
+        roots: vec![PlatformRootSpec {
+            root: "UI".into(),
+            selected_tocs: vec!["UI/Fixture.toc".into()],
+        }],
+        exclusions: vec![ProfileExclusion {
+            path: "UI/omitted.txt".into(),
+        }],
+        limits: SourceAdmissionLimits::new(16, 1024 * 1024, 1024 * 1024, 32 * 1024)?,
+    })?;
+    let raw_digest =
+        |bytes: &[u8]| ContentDigest::<SourceContent>::from_bytes(Sha256::digest(bytes).into());
+    let mut entries = Vec::new();
+    let members: [(&str, PlatformFileKind, &[u8]); 4] = [
+        (
+            "Fixture.toc",
+            PlatformFileKind::Toc,
+            include_bytes!("../../../wow-project/tests/data/xml-facts/Fixture.toc"),
+        ),
+        (
+            "frames.xml",
+            PlatformFileKind::Xml,
+            include_bytes!("../../../wow-project/tests/data/xml-facts/frames.xml"),
+        ),
+        (
+            "defs.lua",
+            PlatformFileKind::Lua,
+            include_bytes!("../../../wow-project/tests/data/xml-facts/defs.lua"),
+        ),
+        ("opaque.bin", PlatformFileKind::Unknown, &[0xff, 0xfe, 0, 1]),
+    ];
+    for (name, kind, bytes) in members {
+        std::fs::write(source_root.join("UI").join(name), bytes)?;
+        entries.push(PlatformInventoryEntry {
+            path: format!("UI/{name}"),
+            kind,
+            disposition: PlatformEntryDisposition::Included {
+                digest: raw_digest(bytes),
+                byte_length: bytes.len() as u64,
+                object_id: None,
+            },
+        });
+    }
+    entries.push(PlatformInventoryEntry {
+        path: "UI/omitted.txt".into(),
+        kind: PlatformFileKind::Unknown,
+        disposition: PlatformEntryDisposition::Excluded {
+            rule_path: "UI/omitted.txt".into(),
+        },
+    });
+    let inventory = PlatformSourceInventory {
+        schema: "wow-project/platform-source-inventory/1".into(),
+        profile_digest: profile.digest(),
+        target,
+        origin: PlatformSourceOrigin {
+            provider: "handwritten-fixture".into(),
+            repository: "service-platform-replay-fixture".into(),
+            revision: PlatformSourceRevision::Fixture {
+                digest: raw_digest(b"service-platform-replay-fixture-v1"),
+            },
+        },
+        materializer: PlatformMaterializer {
+            producer: "wow.fixture_materializer".parse()?,
+            version: "1.0.0".parse()?,
+            configuration_digest: ContentDigest::<CanonicalResult>::from_bytes([4; 32]),
+            report_digest: raw_digest(b"local handwritten source declaration"),
+        },
+        roots: vec![PlatformRootInventory {
+            root: "UI".into(),
+            declared_entries: entries.len() as u64,
+            scope: PlatformInventoryScope::DeclaredPartial,
+            evidence_digest: raw_digest(b"explicit partial inventory fixture"),
+        }],
+        entries,
+        license: PlatformLicenseRecord {
+            state: PlatformLicenseState::Unknown,
+            attribution: "project-owned handwritten fixture".into(),
+            evidence_digest: raw_digest(b"synthetic fixture notice"),
+        },
+        compatibility_evidence: raw_digest(b"local-only compatibility assertion"),
+    };
+    let source = Arc::new(
+        ProjectInputDirectory::open(&source_root)?
+            .admit_platform_source(&profile, inventory, &stop)?,
+    );
+    std::fs::remove_dir_all(&source_root)?;
+    let packages = Arc::new(source.specialize_packages(
+        &[ProjectPackageInput::new(
+            "Fixture",
+            "UI",
+            true,
+            vec![ProjectPackageVariantInput::new(
+                ProjectDiskFile::new("Fixture.toc"),
+                true,
+            )],
+        )],
+        None,
+        &stop,
+    )?);
+    let configuration = ProjectConfigurationBuilder::new(
+        metadata.project_id().clone(),
+        ProjectKind::BlizzardUiPlatformSource,
+        metadata.selected_profile().clone(),
+        metadata.reference_generation(),
+        metadata.analyzer_binding().clone(),
+    )
+    .workspace_id(metadata.workspace_id().clone())
+    .source_origin_id(metadata.source_origin_id().clone())
+    .logical_root(metadata.logical_root().as_str())
+    .capability_policy(metadata.capability_policy().clone())
+    .budget_policy(metadata.budget_policy())
+    .platform_packages(Arc::clone(&packages))?
+    .build()?;
+    let (publisher, graph) = owners_from_bundle(ProjectInputBundle::closed(
+        configuration.clone(),
+        packages.files().to_vec(),
+        ordinary.libraries().to_vec(),
+    )?)?;
+    let project = publisher.open_current()?;
+    let replay = ProjectReplay::capture(&publisher, &stop)?;
+    assert_eq!(
+        serde_json::to_value(&replay)?["schema"],
+        "wow-project/native-project-replay/5"
+    );
+    let store_path = path.join("store");
+    let mut store = LiveProjectStore::create(&store_path, graph.snapshot().universe().as_str())?;
+    let operation = store.publish(&publisher, &graph, "fixture:platform-v5", None, &stop)?;
+    assert_eq!(operation.state, PublicationState::Activated);
+    let current = store.current()?.ok_or("platform current missing")?;
+    let read = store.read(&ReadSelector::Current, &stop)?;
+    assert!(
+        read.read
+            .manifest()
+            .members
+            .iter()
+            .any(|member| member.key == "live.project.replay"
+                && member.schema == "wow-project.live-replay.v5")
+    );
+    assert_eq!(read.project().snapshot_id(), project.snapshot_id());
+    assert_eq!(read.graph(), &graph);
+    let set_id = read.publication_set_id().to_owned();
+    drop(read);
+    drop(store);
+
+    let store = LiveProjectStore::open(&store_path)?;
+    let read = store.read(&ReadSelector::Publication(current.record_id.clone()), &stop)?;
+    assert_eq!(read.store_generation_id(), &operation.generation_id);
+    assert_eq!(read.project().configuration(), &configuration);
+    assert_eq!(read.project().snapshot_id(), project.snapshot_id());
+    assert_eq!(read.graph(), &graph);
+    assert_eq!(read.publication_set_id(), set_id);
+    assert_eq!(read.current_at_acquisition(), Some(&current));
+    let restored = read
+        .project()
+        .configuration()
+        .platform_packages()
+        .ok_or("restored platform owner missing")?;
+    assert_eq!(restored.binding(), packages.binding());
+    assert_eq!(restored.source().receipt(), source.receipt());
+    assert_eq!(
+        restored.source().source_bytes("UI/opaque.bin")?,
+        &[0xff, 0xfe, 0, 1]
+    );
+    assert_eq!(
+        restored.source().receipt().coverage().inventory(),
+        CoverageStatus::Partial
+    );
+    assert_eq!(
+        read.project()
+            .snapshot()
+            .analyzer_binding()
+            .main_workspace()
+            .universe(),
+        LuaWorkspaceUniverse::BlizzardUiMain
+    );
+    assert_eq!(
+        read.project()
+            .snapshot()
+            .analyzer_binding()
+            .library_snapshot_ids()
+            .collect::<Vec<_>>(),
+        project
+            .snapshot()
+            .analyzer_binding()
+            .library_snapshot_ids()
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(
+        read.graph().snapshot().universe().as_str(),
+        packages.binding().universe_id()
+    );
+    assert_eq!(
+        read.into_update_publisher()
+            .err()
+            .ok_or("platform replay admitted physical-only update capability")?
+            .code(),
+        ServiceErrorCode::OperationNotImplementedForMilestone
+    );
+    drop(store);
+
+    // The public service rejection uses the exact platform owner in both epochs.
+    let mut legacy = LiveProjectStore {
+        store: ProjectStore::create_with_gc(
+            path.join("platform-v4"),
+            graph.snapshot().universe().as_str(),
+            catalog_for(publication::STORAGE_SCHEMAS_V4)?,
+        )?,
+    };
+    let epoch = legacy.store.epoch().clone();
+    let before = legacy.current()?;
+    assert_eq!(
+        legacy
+            .publish(&publisher, &graph, "fixture:v5-to-v4", None, &stop)
+            .err()
+            .ok_or("v4 catalog admitted platform v5")?
+            .code(),
+        ServiceErrorCode::IdentityMismatch
+    );
+    assert_eq!(legacy.current()?, before);
+    assert_eq!(legacy.store.epoch(), &epoch);
+    assert!(legacy.reconcile("fixture:v5-to-v4")?.is_none());
+    drop(legacy);
+
+    // Independently prove the catalog gate with an already populated v4 Current.
+    let (ordinary_publisher, ordinary_graph) = owners_from_bundle(ordinary)?;
+    let mut legacy = LiveProjectStore {
+        store: ProjectStore::create_with_gc(
+            path.join("populated-v4"),
+            ordinary_graph.snapshot().universe().as_str(),
+            catalog_for(publication::STORAGE_SCHEMAS_V4)?,
+        )?,
+    };
+    legacy.publish(
+        &ordinary_publisher,
+        &ordinary_graph,
+        "fixture:before-v5",
+        None,
+        &stop,
+    )?;
+    let before = legacy.current()?.ok_or("v4 current missing")?;
+    let epoch = legacy.store.epoch().clone();
+    let id = OperationId::new("fixture:v5-catalog-request")?;
+    let (records, bindings) =
+        ProjectPublicationBundle::build(&publisher, &graph, &stop)?.into_parts();
+    assert_eq!(
+        PublicationRequest::new(
+            &epoch,
+            id.clone(),
+            Some(before.record_id.clone()),
+            bindings,
+            records
+        )
+        .err()
+        .ok_or("v4 catalog admitted a real v5 replay record")?
+        .code(),
+        StoreErrorCode::IntegrityViolation
+    );
+    assert_eq!(legacy.current()?, Some(before));
+    assert_eq!(legacy.store.epoch(), &epoch);
+    assert!(legacy.store.operation(&id)?.is_none());
+    drop(legacy);
+    std::fs::remove_dir_all(path)?;
+    Ok(())
+}
+
+#[test]
+fn original_v4_catalog_reopens_exactly_without_relabeling() -> TestResult {
+    let stop = AtomicBool::new(false);
+    let path = root("legacy-v4-catalog")?;
+    let (publisher, graph) = owners("return External()")?;
+    let mut store = LiveProjectStore {
+        store: ProjectStore::create_with_gc(
+            &path,
+            graph.snapshot().universe().as_str(),
+            catalog_for(publication::STORAGE_SCHEMAS_V4)?,
+        )?,
+    };
+    let epoch = store.store.epoch().clone();
+    let operation = store.publish(&publisher, &graph, "fixture:original-v4", None, &stop)?;
+    let current = store.current()?.ok_or("missing v4 current")?;
+    let read = store.read(&ReadSelector::Current, &stop)?;
+    let snapshot_id = read.project().snapshot_id().to_owned();
+    let publication_set_id = read.publication_set_id().to_owned();
+    drop(read);
+    drop(store);
+    assert_eq!(
+        ProjectStore::open(&path, &catalog()?)
+            .err()
+            .ok_or("latest catalog opened an original v4 epoch")?
+            .code(),
+        StoreErrorCode::IntegrityViolation
+    );
+    let store = LiveProjectStore::open(&path)?;
+    assert_eq!(store.store.epoch(), &epoch);
+    assert_eq!(store.current()?, Some(current.clone()));
+    let read = store.read(&ReadSelector::Publication(current.record_id), &stop)?;
+    assert_eq!(read.store_generation_id(), &operation.generation_id);
+    assert_eq!(read.project().snapshot_id(), snapshot_id);
+    assert_eq!(read.graph(), &graph);
+    assert_eq!(read.publication_set_id(), publication_set_id);
+    drop(read);
+    drop(store);
+    std::fs::remove_dir_all(path)?;
+    Ok(())
+}
+
+#[test]
 fn original_epochs_reopen_exactly_and_refuse_new_generation_recipe() -> TestResult {
     use wow_project::replay::ProjectReplay;
     let stop = AtomicBool::new(false);

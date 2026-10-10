@@ -173,6 +173,9 @@ accessible, or that a Secret, taint, protected or forbidden behavior exists. It 
 prove that an implementation path is public or supported, and it grants no
 redistribution rights.
 
-Source acquisition, mirror materialization, package selection, graph publication,
-analyzer and replay wiring for platform sources, runtime acceptance, and full W17 or E2
-acceptance remain open. The passing workspace gates verify this bounded owner.
+Later [package specialization](PLATFORM_SOURCE_PACKAGES.md),
+[configuration/Main/source graph](PLATFORM_SOURCE_CONFIGURATION.md) and
+[genuine replay/durable publication](PLATFORM_SOURCE_REPLAY.md) now consume this
+bounded owner. Source acquisition, full mirror materialization, stable logical
+store namespace, platform partitions/fingerprints, SkeletonInputView, source
+service/CLI transport, runtime and full W17/E2 acceptance remain open.

@@ -3,8 +3,8 @@
 use super::invalid;
 use crate::{
     AnalyzerBindingDeclaration, ProjectBudgetPolicy, ProjectCapabilityPolicy, ProjectConfiguration,
-    ProjectConfigurationBuilder, ProjectError, ProjectErrorCode, ProjectId, ProjectKind,
-    ProjectPhase, ProjectResult, ProjectSourceOriginId, ProjectWorkspaceId,
+    ProjectConfigurationBuilder, ProjectId, ProjectKind, ProjectResult, ProjectSourceOriginId,
+    ProjectWorkspaceId,
 };
 use serde::{Deserialize, Serialize};
 use wow_core::{
@@ -128,6 +128,7 @@ impl ReplayBudgets {
 enum ReplayKind {
     Fixture,
     Repository,
+    BlizzardUiPlatformSource,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -150,13 +151,7 @@ impl ReplayConfiguration {
         let kind = match config.project_kind() {
             ProjectKind::Fixture => ReplayKind::Fixture,
             ProjectKind::Repository => ReplayKind::Repository,
-            ProjectKind::BlizzardUiPlatformSource => {
-                return Err(ProjectError::new(
-                    ProjectErrorCode::DeferredCapability,
-                    ProjectPhase::Publication,
-                    "native platform package replay transport is not implemented",
-                ));
-            }
+            ProjectKind::BlizzardUiPlatformSource => ReplayKind::BlizzardUiPlatformSource,
         };
         let capabilities = config.capability_policy();
         Ok(Self {
@@ -180,6 +175,9 @@ impl ReplayConfiguration {
     pub(super) fn profile(&self) -> &ProfileIdentity {
         &self.profile
     }
+    pub(super) fn is_platform(&self) -> bool {
+        self.kind == ReplayKind::BlizzardUiPlatformSource
+    }
     pub(super) fn rebuild(
         &self,
         load_plan: Option<&crate::load::ProjectLoadPlan>,
@@ -187,12 +185,19 @@ impl ReplayConfiguration {
             &crate::load::ProjectPackageLoadPlan,
             &crate::load::ProjectPackageMainPlan,
         )>,
+        platform: Option<std::sync::Arc<crate::platform_source::PlatformPackageSpecialization>>,
     ) -> ProjectResult<ProjectConfiguration> {
+        if self.is_platform() != platform.is_some()
+            || (platform.is_some() && (load_plan.is_some() || package_plans.is_some()))
+        {
+            return Err(invalid());
+        }
         let builder = ProjectConfigurationBuilder::new(
             self.project_id.clone(),
             match self.kind {
                 ReplayKind::Fixture => ProjectKind::Fixture,
                 ReplayKind::Repository => ProjectKind::Repository,
+                ReplayKind::BlizzardUiPlatformSource => ProjectKind::BlizzardUiPlatformSource,
             },
             self.profile.clone(),
             self.reference_generation,
@@ -213,6 +218,10 @@ impl ReplayConfiguration {
         };
         let builder = match package_plans {
             Some((load, main)) => builder.package_load_plan(load, main)?,
+            None => builder,
+        };
+        let builder = match platform {
+            Some(owner) => builder.platform_packages(owner)?,
             None => builder,
         };
         let config = builder.build()?;

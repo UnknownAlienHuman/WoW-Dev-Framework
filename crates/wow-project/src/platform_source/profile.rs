@@ -166,6 +166,9 @@ impl BlizzardUiSourceProfile {
     pub fn profile_id(&self) -> &ProfileId {
         &self.request.profile_id
     }
+    pub(crate) fn request(&self) -> &BlizzardUiSourceProfileRequest {
+        &self.request
+    }
     pub fn source_class(&self) -> PlatformSourceClass {
         self.request.source_class
     }
