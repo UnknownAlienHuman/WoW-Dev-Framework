@@ -25,6 +25,7 @@ mod reference_pack_license;
 pub mod reference_pack_materialization;
 mod service;
 pub mod source_census;
+pub mod source_reference;
 
 pub use backend::{OwnedServiceBackend, ServiceBackend, ServiceBackendStatus};
 pub use configuration::{

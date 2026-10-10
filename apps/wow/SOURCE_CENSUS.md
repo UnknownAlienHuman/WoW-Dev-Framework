@@ -24,6 +24,9 @@ Paths remain snapshot-relative. The selected reference profile supplies the
 exact flavor/Interface identity; the operation does not infer them from TOC names
 or a moving branch. Caller Git/version, materializer and root-completeness claims
 remain assertions. A fixture cannot become vendor-source evidence.
+An actual native source-only profile/generation can be obtained with
+[`wow source reference`](SOURCE_REFERENCE.md), without constructing Main or
+analyzer inputs. Its returned identities remain bound to its exact API selection.
 
 The same command also accepts `wow-service/source-census-manifest-input/1` with
 `profile`, `selection` and `source` instead of `inventory`. This uses the existing

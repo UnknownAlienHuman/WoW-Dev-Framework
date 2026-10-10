@@ -11,22 +11,20 @@ use wow_annotations::{
     compatibility::{NativeCompatibilityBinding, NativeCompatibilityEvidence},
     sidecars::NativeProjectionSidecars,
 };
-use wow_core::{
-    CanonicalResult, ContentDigest, CorrectionSet, ProfileId, ProfileIdentity,
-    ProfileIdentityBuilder, ProfileKind, ReferenceGenerationId, SchemaVersionEntry, SourceKind,
-    SourceLogicalSnapshot, ToolVersion,
-};
+use wow_core::{CanonicalResult, ContentDigest, ProfileIdentity};
 use wow_project::disk::{ProjectInputDirectory, SourceManifestReceipt};
 use wow_project::{
     ProjectFileRole, ProjectId, ProjectInputFile, ProjectLanguageKind, ProjectSourceOriginId,
     ProjectWorkspaceId,
 };
-use wow_reference::native::{NativeError, NativeErrorCode, ingest_document};
 
 use super::disk_input::{DiskAnalyzer, MainInventory};
 use super::input::{ProjectMetadata, invalid};
 use super::native_compatibility::{NativeCompatibilityInputs, NativeCompatibilitySelection};
 use super::native_distribution::{NativeDistributionInputs, NativeDistributionSelection};
+use super::native_reference::{
+    InputFailure, NativeProfile, NativeReferenceBuild, project_native_reference,
+};
 use super::native_resources::{NativeAnnotationInputs, NativeAnnotationInputsReceipt, present};
 use super::native_source::NativeSourceInput;
 use super::{LocalProjectInput, cancelled};
@@ -35,7 +33,6 @@ use crate::{ServiceError, ServiceErrorCode, ServiceResult};
 
 pub const LOCAL_NATIVE_SCHEMA: &str = "wow-service/local-project-native/1";
 const NATIVE_REPORT_LIMIT: usize = 64 * 1024 * 1024;
-const PROFILE_VERSION: &str = "1.0.0";
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -55,22 +52,6 @@ struct NativeInput {
     compatibility_evidence: Option<NativeCompatibilityInputs>,
     #[serde(default, deserialize_with = "present")]
     distribution_evidence: Option<NativeDistributionInputs>,
-}
-
-/// Labels describe an explicitly selected source corpus, not a currentness or
-/// release-acceptance claim. Identities are derived from the actual pinned bytes.
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct NativeProfile {
-    profile_id: ProfileId,
-    flavor: String,
-    #[serde(default)]
-    edition: Option<String>,
-    interface: u64,
-    client_version: ToolVersion,
-    client_build: u64,
-    revision: String,
-    environment: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -208,13 +189,6 @@ pub(super) struct NativeInputEvidence {
     distribution_evidence: Option<NativeDistributionManifest>,
 }
 
-#[derive(Serialize)]
-struct InputFailure {
-    path: String,
-    sha256: String,
-    error: NativeError,
-}
-
 impl LocalProjectInput {
     /// Original native raw metadata, source maps and loss/conflict records.
     /// This is data, never agent instructions or a semantic-acceptance report.
@@ -303,33 +277,6 @@ impl LocalProjectInput {
         } else {
             "explicit_digest_pinned_manifest"
         };
-        let source_files = captured
-            .iter()
-            .map(|file| NativeFileIdentity {
-                path: file.path().to_owned(),
-                sha256: file.content_digest().to_string(),
-                byte_length: file.text().len() as u64,
-            })
-            .collect::<Vec<_>>();
-        // Preserve the existing explicit-file identity profile. Manifested input
-        // also binds exact TOC/version/manifest bytes, source order and load context.
-        let selection = if let Some(receipt) = &source_manifest {
-            wow_core::canonical_json_bytes(&(
-                "wow-service/native-source-selection/2",
-                &input.profile.revision,
-                &input.profile.environment,
-                &source_files,
-                receipt,
-            ))
-        } else {
-            wow_core::canonical_json_bytes(&(
-                "wow-service/native-source-selection/1",
-                &input.profile.revision,
-                &input.profile.environment,
-                &source_files,
-            ))
-        }
-        .map_err(|_| invalid("native source selection cannot be canonicalized"))?;
         let annotation_inputs = input
             .annotation_inputs
             .as_ref()
@@ -340,60 +287,20 @@ impl LocalProjectInput {
             .map(|inputs| inputs.correction_digest())
             .transpose()?
             .flatten();
-        let profile = input.profile.build(
-            ContentDigest::from_bytes(Sha256::digest(&selection).into()),
+        let NativeReferenceBuild {
+            profile,
+            source_files,
+            documents,
+            failures,
+            reference,
+            ..
+        } = project_native_reference(
+            &input.profile,
+            &captured,
+            source_manifest.as_ref(),
             correction_digest,
-        )?;
-        let callable_corpus = source_manifest.as_ref().map_or_else(
-            wow_reference::native_view::NativeCallableCorpus::explicit_partial,
-            |receipt| {
-                wow_reference::native_view::NativeCallableCorpus::manifest_toc(
-                    receipt.declared_generated_api_files,
-                    receipt.selected_generated_api_files,
-                    receipt.generated_api_closure_complete,
-                )
-            },
-        );
-        let generation = ReferenceGenerationId::derive(&(callable_corpus.profile(), &profile))
-            .map_err(|_| invalid("native reference generation cannot be derived"))?;
-        let mut documents = Vec::new();
-        let mut failures = Vec::new();
-        for file in &captured {
-            cancelled(stop)?;
-            match ingest_document(
-                &input.profile.revision,
-                file.path(),
-                file.text(),
-                &file.content_digest().to_string(),
-                stop,
-            ) {
-                Ok(document) => documents.push(document),
-                Err(error)
-                    if matches!(
-                        error.code,
-                        NativeErrorCode::Cancelled | NativeErrorCode::Limit
-                    ) =>
-                {
-                    return Err(native_error(error));
-                }
-                Err(error) => failures.push(InputFailure {
-                    path: file.path().to_owned(),
-                    sha256: file.content_digest().to_string(),
-                    error,
-                }),
-            }
-        }
-        if documents.is_empty() {
-            return Err(invalid("no native documentation was admitted"));
-        }
-        let reference = wow_reference::native_view::project_callables(
-            &documents,
-            &input.profile.environment,
-            generation,
-            callable_corpus,
             stop,
-        )
-        .map_err(native_error)?;
+        )?;
         let aliases = annotation_inputs
             .as_ref()
             .map(|inputs| inputs.aliases.iter().collect::<Vec<_>>())
@@ -756,95 +663,6 @@ impl LocalProjectInput {
         }));
         cancelled(stop)?;
         Ok(assembled)
-    }
-}
-
-impl NativeProfile {
-    fn validate_selector(&self) -> ServiceResult<()> {
-        if self.profile_id.as_str() == wow_rules::FIXTURE_PROFILE_ID {
-            return Err(invalid(
-                "native production input cannot use the fixture rule profile",
-            ));
-        }
-        if !matches!(self.revision.len(), 40 | 64)
-            || !self
-                .revision
-                .bytes()
-                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
-            || self.environment.is_empty()
-            || self.environment.len() > 128
-            || !self
-                .environment
-                .bytes()
-                .all(|b| b.is_ascii_alphanumeric() || b == b'_')
-        {
-            return Err(invalid(
-                "native source requires an exact revision and explicit environment",
-            ));
-        }
-        Ok(())
-    }
-
-    fn build(
-        &self,
-        source_digest: ContentDigest<SourceLogicalSnapshot>,
-        correction_digest: Option<ContentDigest<CorrectionSet>>,
-    ) -> ServiceResult<ProfileIdentity> {
-        // Bind the canonical explicitly selected correction set; omission retains
-        // the original no-corrections identity. Raw source observations stay intact.
-        let corrections =
-            wow_core::canonical_json_bytes(&("wow-service/native-corrections/1", "none"))
-                .map_err(|_| invalid("native correction selection rejected"))?;
-        let mut builder = ProfileIdentityBuilder::new(
-            self.profile_id.clone(),
-            ProfileKind::Release,
-            self.flavor.clone(),
-            self.interface,
-            SourceKind::BlizzardSnapshot,
-            self.revision.clone(),
-            source_digest,
-        )
-        .client_version(self.client_version.clone())
-        .client_build(self.client_build)
-        .builder(
-            "wow.service.native"
-                .parse()
-                .map_err(|_| invalid("native builder identity rejected"))?,
-            PROFILE_VERSION
-                .parse()
-                .map_err(|_| invalid("native builder version rejected"))?,
-        )
-        .schema_versions(vec![SchemaVersionEntry::new(
-            "schema:wow:native-source-input"
-                .parse()
-                .map_err(|_| invalid("native schema identity rejected"))?,
-            PROFILE_VERSION
-                .parse()
-                .map_err(|_| invalid("native schema version rejected"))?,
-        )])
-        .correction_set_digest(correction_digest.unwrap_or_else(|| {
-            ContentDigest::<CorrectionSet>::from_bytes(Sha256::digest(&corrections).into())
-        }));
-        if let Some(edition) = &self.edition {
-            builder = builder.edition_id(edition.clone());
-        }
-        builder
-            .build()
-            .map_err(|_| invalid("native release profile rejected"))
-    }
-}
-
-fn native_error(error: NativeError) -> ServiceError {
-    match error.code {
-        NativeErrorCode::Cancelled => ServiceError::new(
-            ServiceErrorCode::Cancelled,
-            "native source operation cancelled",
-        ),
-        NativeErrorCode::Limit => ServiceError::new(
-            ServiceErrorCode::BudgetExceeded,
-            "native source operation exceeds budget",
-        ),
-        _ => invalid("native reference projection rejected"),
     }
 }
 

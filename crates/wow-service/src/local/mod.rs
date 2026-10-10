@@ -7,6 +7,7 @@ pub mod native_artifact;
 mod native_compatibility;
 mod native_distribution;
 mod native_input;
+mod native_reference;
 mod native_resources;
 mod native_source;
 mod projection;
@@ -24,6 +25,9 @@ pub use native_distribution::NativeDistributionSelection;
 pub use native_input::{
     LOCAL_NATIVE_SCHEMA, NativeAnnotationFile, NativeFileIdentity, NativeInputReceipt,
     NativeManifestIdentity, NativeRestrictionIdentity,
+};
+pub use native_reference::{
+    SOURCE_REFERENCE_INPUT_SCHEMA, SourceReferenceResult, read_local_source_reference,
 };
 pub use native_resources::{NativeAnnotationInputsReceipt, NativeAnnotationSelection};
 pub use projection::OwnerAnalysis;
