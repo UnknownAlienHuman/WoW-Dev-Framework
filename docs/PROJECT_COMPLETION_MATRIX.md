@@ -64,7 +64,7 @@ no Rust implementation in the audited source. Their documentation is not a binar
 | E1-D | Partial executable Reference Pack service and active internal builder with durable materialization/finalization | Close external parity/license/rebuild evidence, Windows/process-loss acceptance and complete package gates; code presence is not `ValidatedLocal` |
 | E2-A–E2-B | Partial executable | All 26 active E2-B rule IDs are service-published after the W11 semantic repair, TOC, XML and state slices; close public CLI/full-pipeline fixtures and package acceptance |
 | E2-C–E2-D | Partial source index, manifested store, native live pair service/CLI, cancellable updates, exact Library/fact-profile binding, retained physical parser updates and durable physical update/removal publication; bounded retention/GC, recovery/replacement, inactive migration/READY preparation, portable source authority and guarded cross-epoch selection/reconciliation | Dependency-specific fact reuse, standalone/package durable updates, portable full migration history and complete E2 acceptance remain open; see [REPLAY_PUBLICATION.md](../crates/wow-project/REPLAY_PUBLICATION.md) |
-| E3-A | Partial exact raw/package admission, owner-bound configuration, native Main/package graph, Included-member graph/native reads, genuine replay/stable namespace publication and selected native four-stage direct service/replay with exact assertion/evidence capability | Missing direct roles, fingerprints, bounded SkeletonInputView and source service/CLI transport; full source-universe acceptance remains open |
+| E3-A | Partial exact raw/package admission, owner-bound configuration, native Main/package graph, Included-member graph/native reads, genuine replay/stable namespace publication, selected native four-stage direct service/replay and additive native captured-span containment with exact assertion/evidence capability | Remaining project/full-inventory joins and direct TOC/XML roles, fingerprints, bounded SkeletonInputView and source service/CLI transport; full source-universe acceptance remains open |
 | E3-B–E3-C | Not started | Context owners and service/CLI after their actual producer inputs |
 | E4-A–E4-C | Not started | Search, lineage/migration/static impact and routing after A0 prerequisites |
 | E5-A–E5-C | Not started | Calibration, independent review/holdout and governed publication lifecycle |
@@ -671,3 +671,15 @@ fingerprints, SkeletonInputView and source transport still precede full W17/E3
 and later context work. Real corpus/performance/runtime and native fault timing
 remain NotEvaluated; Gethe materialization stays deferred. No full package gate
 advances from this scoped checkpoint.
+
+The additive native /2 Inventory span entry selects registry17 before input/raw
+construction and emits one exact captured span and file containment per known
+native handle. Unknown spans retain counted omissions; Contains stays Partial.
+The existing disk-absent lifecycle covers native handle/evidence/catalog closure,
+accepted assertion addresses, wrong-version/foreign-registry refusal and original
+/1 preservation. Source /22, service and replay/storage v9 remain on native /1.
+All workspace gates/build pass, completed 2026-10-10 10:31:01 UTC: 944 passed,
+0 failed, 1 ignored, 112 targets. See [Inventory spans](PLATFORM_INVENTORY_SPANS.md).
+Remaining direct roles, fingerprints, SkeletonInputView/source transport and full
+W17/E3 remain open. Real corpus/performance/runtime and W18-W26 are NotEvaluated;
+Gethe preparation remains deferred until product implementation/build.

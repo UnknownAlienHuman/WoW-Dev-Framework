@@ -1341,3 +1341,27 @@ Missing direct inventory/TOC/XML roles, fingerprints, SkeletonInputView and
 source transport remain open, along with full W17/E3 and later W18-W26. Real
 Gethe/Ketho corpus/performance, native fault timing and WoW runtime remain
 NotEvaluated. Gethe materialization follows product implementation/build.
+
+## W17 native captured Inventory spans (2026-10-10)
+
+`build_platform_graph_proposal_plan_with_inventory_spans` explicitly selects
+native /2, registry17 and direct stage version2 before input generation/raw
+admission. It joins original captured native handles/evidence to exact file and
+span proposals without another collector, parser or analyzer. Unknown spans
+retain counted omissions; Contains coverage is Partial. Exact ordered finish
+retains accepted Producer addresses and the genuine held evidence catalog.
+
+The original native /1 entry, source /22, selected service and replay/storage v9
+stay separate. No application/configuration/replay selector is introduced; the
+registry16 raw excerpt binding does not admit registry17. Shared 4 MiB metadata,
+node/edge and combined direct assertion limits remain unchanged.
+
+The existing disk-absent lifecycle now verifies known-span containment, native
+handle/evidence/catalog closure, WholeFile/ByteRange separation, version/registry
+refusals and exact original /1 owner plus replay8 preservation. Final policy,
+fmt, workspace check, strict Clippy, tests, strict rustdoc and build pass,
+completed 2026-10-10 10:31:01 UTC: 944 passed, 0 failed, 1 ignored, 112 targets.
+See [Inventory spans](PLATFORM_INVENTORY_SPANS.md). Remaining direct project/raw,
+TOC/XML roles, fingerprints, SkeletonInputView, transport, full W17/E3 and later
+W18-W26 remain open. Real Gethe/Ketho corpus/performance/runtime remain
+NotEvaluated; source acquisition still follows product implementation/build.

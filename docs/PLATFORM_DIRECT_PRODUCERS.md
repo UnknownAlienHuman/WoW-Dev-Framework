@@ -9,6 +9,13 @@ uses it for source /22 and native replay /9; older selections keep their layouts
 The native cases and final workspace gates/build pass on
 2026-10-10. Full W17/E3 acceptance remains open.
 
+The separate
+[`build_platform_graph_proposal_plan_with_inventory_spans`](PLATFORM_INVENTORY_SPANS.md)
+entry selects native /2, registry17 and stage version2 for captured known spans
+and exact file containment. The original entry below remains native /1. Both
+plan and finished capability expose `inventory_span_omissions()`: None for /1,
+Some(count) for /2. Application source /22 and replay/storage v9 use /1.
+
 ## Native inputs and API
 
 The APIs are exported from `wow_project::graph`. Construction requires a genuine
@@ -120,8 +127,8 @@ Scripts retain endpoint references in their recognition envelope; state/core
 retain actual graph derivation records. This native caller composition does not
 select the split in configuration, service publication or replay.
 
-Configuration/service/replay selection and remaining recognizer routes, missing
-selected-TOC/variant/load-unit, inventory/source-span and XML object/region/parent/span roles,
+Missing source-project/full-inventory joins, selected-TOC/variant/load-unit and
+XML object/region/parent/source-map roles,
 structural fingerprints, bounded `SkeletonInputView` and source service/CLI
 transport remain open. Full W17/E3/package, real Gethe/Ketho corpus, performance,
 native fault/exhaustion and WoW runtime acceptance remain NotEvaluated. Gethe

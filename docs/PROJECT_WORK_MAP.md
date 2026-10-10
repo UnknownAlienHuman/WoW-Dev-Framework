@@ -152,7 +152,16 @@ two budget/cancellation helpers pass. Final workspace gates/build completed
 2026-10-10 10:08:49 UTC: 944 passed, 0 failed, 1 ignored, 112 targets. See
 [selected direct service](PLATFORM_DIRECT_SERVICE.md).
 
-Next: supply missing direct inventory/TOC/XML roles, then implement fingerprints,
+The explicit native-only /2 entry now projects captured known source spans and
+exact file-to-span containment through Inventory, registry17 and stage version2.
+Unknown handles retain counted omissions; Contains stays Partial. The existing
+disk-absent lifecycle verifies exact native support/catalog closure, version and
+registry refusal and an unchanged original /1 owner. Source /22, service and
+replay/storage v9 still select /1. All workspace gates/build pass, completed
+2026-10-10 10:31:01 UTC: 944 passed, 0 failed, 1 ignored, 112 targets. See
+[captured Inventory spans](PLATFORM_INVENTORY_SPANS.md).
+
+Next: supply remaining project/full-inventory joins and direct TOC/XML roles, then implement fingerprints,
 bounded SkeletonInputView and source service/CLI transport. Full W17, E0/E2,
 real mirror/performance/runtime and
 W18-W26 remain open. Gethe preparation follows product implementation/build.

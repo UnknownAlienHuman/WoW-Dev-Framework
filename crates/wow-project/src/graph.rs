@@ -1,6 +1,7 @@
 //! Direct source/load/XML proposals. No recognizer inference or graph publication.
 mod derivations;
 mod functions;
+mod inventory_roles;
 mod load_inputs;
 mod packages;
 mod platform_producers;
@@ -8,8 +9,9 @@ mod producer_budget;
 mod producer_derivations;
 mod producer_evidence;
 pub use platform_producers::{
-    PLATFORM_DIRECT_GRAPH_PROFILE, PlatformGraphProducerProposals, PlatformGraphProposalPlan,
-    PlatformGraphProvenance, build_platform_graph_proposal_plan,
+    PLATFORM_DIRECT_GRAPH_PROFILE, PLATFORM_DIRECT_GRAPH_WITH_INVENTORY_SPANS_PROFILE,
+    PlatformGraphProducerProposals, PlatformGraphProposalPlan, PlatformGraphProvenance,
+    build_platform_graph_proposal_plan, build_platform_graph_proposal_plan_with_inventory_spans,
 };
 mod projection;
 pub use projection::PlatformGraphProducer;
@@ -365,6 +367,14 @@ fn charge(used: &mut usize, bytes: usize) -> ProjectResult<()> {
 }
 
 fn registry(project_kind: ProjectKind, raw_inventory: bool) -> ProjectResult<GraphRegistryBundle> {
+    registry_with_inventory_spans(project_kind, raw_inventory, false)
+}
+
+fn registry_with_inventory_spans(
+    project_kind: ProjectKind,
+    raw_inventory: bool,
+    inventory_spans: bool,
+) -> ProjectResult<GraphRegistryBundle> {
     let universe_class = match project_kind {
         ProjectKind::Fixture | ProjectKind::Repository => "project",
         ProjectKind::BlizzardUiPlatformSource => "blizzard_ui_source",
@@ -728,9 +738,39 @@ fn registry(project_kind: ProjectKind, raw_inventory: bool) -> ProjectResult<Gra
     if raw_inventory {
         raw_inventory::extend_registry(&mut entities)?;
     }
+    if inventory_spans {
+        if project_kind != ProjectKind::BlizzardUiPlatformSource {
+            return Err(invalid());
+        }
+        entities.push(
+            GraphEntityKindDefinition::new(
+                "source_span",
+                vec![universe_class.into()],
+                vec!["source_handle".into()],
+                vec![GraphConfidence::Proven],
+            )
+            .map_err(|_| invalid())?,
+        );
+        relations.push(
+            GraphRelationKindDefinition::new(
+                "source_file_contains_span",
+                GraphRelationKind::Contains,
+                vec!["source_file".into()],
+                vec!["source_span".into()],
+                vec![GraphConfidence::Proven],
+            )
+            .map_err(|_| invalid())?,
+        );
+    }
     GraphRegistryBundle::build(
         "wow-project.source-load",
-        if raw_inventory { "16" } else { "15" },
+        if inventory_spans {
+            "17"
+        } else if raw_inventory {
+            "16"
+        } else {
+            "15"
+        },
         entities,
         relations,
     )
@@ -873,6 +913,14 @@ fn collect_source_graph_proposals(
     project: &ProjectView,
     stop: &AtomicBool,
 ) -> ProjectResult<CollectedSourceGraph> {
+    collect_source_graph_proposals_with_inventory_spans(project, false, stop)
+}
+
+fn collect_source_graph_proposals_with_inventory_spans(
+    project: &ProjectView,
+    inventory_spans: bool,
+    stop: &AtomicBool,
+) -> ProjectResult<CollectedSourceGraph> {
     crate::analyzer::checkpoint(stop)?;
     project.snapshot().validate()?;
     crate::analyzer::checkpoint(stop)?;
@@ -999,7 +1047,8 @@ fn collect_source_graph_proposals(
         }
     }
     let raw_selected = raw_inventory::selected(config);
-    let registry = registry(config.project_kind(), raw_selected)?;
+    let registry =
+        registry_with_inventory_spans(config.project_kind(), raw_selected, inventory_spans)?;
     let universe = match config.project_kind() {
         ProjectKind::BlizzardUiPlatformSource => {
             let binding = config.platform_package_binding().ok_or_else(invalid)?;

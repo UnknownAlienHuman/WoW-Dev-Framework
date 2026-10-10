@@ -1,6 +1,6 @@
 //! Native direct stages over retained package input; no serialized owner admission.
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     error::Error,
     path::PathBuf,
     sync::{
@@ -12,16 +12,17 @@ use std::{
 use sha2::{Digest, Sha256};
 use wow_core::{
     CanonicalResult, ContentDigest, ProfileIdentityBuilder, ProfileKind, ReferenceGenerationId,
-    SchemaVersionEntry, SourceContent, SourceKind, SourceLogicalSnapshot,
+    SchemaVersionEntry, SourceContent, SourceKind, SourceLogicalSnapshot, SourceSpanKind,
 };
 use wow_emmy::{
     EMMYLUA_CODE_ANALYSIS_VERSION, EMMYLUA_REVISION, EMMYLUA_TREE, EmmyBackendIdentity,
     LuaWorkspaceFileInput, LuaWorkspaceLimits, LuaWorkspaceSnapshot, LuaWorkspaceUniverse,
 };
 use wow_graph::{
-    GraphAssertionKind, GraphAssertionRef, GraphCoverageRecord, GraphLocalAssertion,
-    GraphPartitionReplacement, GraphPartitionSnapshot, GraphProposalBatch, GraphProposalEndpoint,
-    GraphSnapshot,
+    GraphAssertionKind, GraphAssertionRef, GraphConfidence, GraphCoverageRecord,
+    GraphCoverageState, GraphEvidenceCatalog, GraphLocalAssertion, GraphPartitionReplacement,
+    GraphPartitionSnapshot, GraphProposalBatch, GraphProposalEndpoint, GraphProposalValue,
+    GraphRelationKind, GraphSnapshot,
 };
 use wow_project::{
     AnalyzerBindingDeclaration, PackageXmlBindingProfile, PlatformGraphProfile,
@@ -30,9 +31,11 @@ use wow_project::{
     ProjectView, ProjectWorkspaceId,
     disk::{ProjectDiskFile, ProjectInputDirectory},
     graph::{
+        PLATFORM_DIRECT_GRAPH_PROFILE, PLATFORM_DIRECT_GRAPH_WITH_INVENTORY_SPANS_PROFILE,
         PlatformGraphProducer, PlatformGraphProposalPlan, ProjectGraphPackageLoadOutcome,
-        ProjectGraphXmlReferenceOutcome, SOURCE_GRAPH_PARTITION,
-        build_platform_graph_proposal_plan, build_source_graph_proposals,
+        ProjectGraphProvenance, ProjectGraphXmlReferenceOutcome, SOURCE_GRAPH_PARTITION,
+        build_platform_graph_proposal_plan,
+        build_platform_graph_proposal_plan_with_inventory_spans, build_source_graph_proposals,
     },
     load::{ProjectPackageInput, ProjectPackageVariantInput},
     platform_source::{
@@ -378,6 +381,335 @@ fn refused<T>(result: wow_project::ProjectResult<T>) -> ResultOf {
         result.err().ok_or("unexpected direct-plan success")?.code(),
         ProjectErrorCode::SnapshotInvalid
     );
+    Ok(())
+}
+
+fn inventory_spans(
+    view: &ProjectView,
+    original: &GraphPartitionSnapshot,
+    source: &ProjectGraphProvenance,
+    stop: &AtomicBool,
+) -> ResultOf {
+    assert_eq!(original.registry().version(), "16");
+    assert_eq!(
+        wow_project::graph::source_graph_profile(view.configuration()),
+        "wow-project/source-load-proposals/21"
+    );
+    let known = source
+        .source_handles()
+        .iter()
+        .filter(|(_, handle)| handle.span().kind() != SourceSpanKind::Unknown)
+        .map(|(id, _)| *id)
+        .collect::<BTreeSet<_>>();
+    let omitted = source.source_handles().len() - known.len();
+    let mut plan = build_platform_graph_proposal_plan_with_inventory_spans(view, stop)?;
+    assert_eq!(
+        plan.profile(),
+        PLATFORM_DIRECT_GRAPH_WITH_INVENTORY_SPANS_PROFILE
+    );
+    assert_eq!(plan.registry().version(), "17");
+    assert_eq!(plan.inventory_span_omissions(), Some(omitted));
+    assert_eq!(plan.scope().universe, *original.foundation().universe());
+    assert_ne!(plan.scope().generation, *original.foundation().generation());
+    assert_eq!(plan.scope().source_context_id, original.source_context_id());
+    let scope = plan.scope().clone();
+    let raw = plan
+        .raw_inventory_batch()
+        .ok_or("spans raw prelude missing")?;
+    assert_eq!(raw.universe(), &scope.universe);
+    assert_eq!(raw.generation(), &scope.generation);
+    assert_eq!(raw.source_context_id(), scope.source_context_id);
+    assert_eq!(raw.registry_digest(), plan.registry().registry_digest());
+    let old_raw = original
+        .partition(wow_project::graph::PLATFORM_RAW_INVENTORY_PARTITION)
+        .ok_or("original raw prelude missing")?
+        .batch();
+    assert_ne!(raw, old_raw);
+    assert_eq!(raw.entity_proposals(), old_raw.entity_proposals());
+    refused(plan.build_stage(PlatformGraphProducer::Inventory, original, stop))?;
+    let mut owner = initial(&plan, stop)?;
+    for &producer in plan.producer_order() {
+        let stage = plan.build_stage(producer, &owner, stop)?;
+        assert_eq!(stage.producer_version(), "2");
+        let (batch, coverage) = stage.into_parts();
+        if producer == PlatformGraphProducer::Inventory {
+            let wrong_version = admit(&owner, batch.clone(), "1", coverage.clone(), stop)?;
+            refused(plan.build_stage(PlatformGraphProducer::TocLoad, &wrong_version, stop))?;
+        }
+        owner = admit(&owner, batch, "2", coverage, stop)?;
+    }
+    owner.validate(stop)?;
+    assert_eq!(
+        owner
+            .partitions()
+            .iter()
+            .map(|p| p.partition_id())
+            .collect::<BTreeSet<_>>(),
+        BTreeSet::from([
+            wow_project::graph::PLATFORM_RAW_INVENTORY_PARTITION,
+            PlatformGraphProducer::Inventory.partition_id(),
+            PlatformGraphProducer::TocLoad.partition_id(),
+            PlatformGraphProducer::AnalyzerStructure.partition_id(),
+            PlatformGraphProducer::XmlStructure.partition_id(),
+        ])
+    );
+    let finished = plan.finish(&owner, stop)?;
+    assert_eq!(
+        finished.profile(),
+        PLATFORM_DIRECT_GRAPH_WITH_INVENTORY_SPANS_PROFILE
+    );
+    assert_eq!(finished.inventory_span_omissions(), Some(omitted));
+    assert!(std::ptr::eq(finished.project(), view));
+    assert!(std::ptr::eq(finished.graph(), &owner));
+    assert_eq!(finished.source(), source);
+    let inventory = owner
+        .partition(PlatformGraphProducer::Inventory.partition_id())
+        .ok_or("spans Inventory missing")?;
+    let contains_coverage = inventory
+        .coverage()
+        .iter()
+        .find(|record| record.relation() == GraphRelationKind::Contains)
+        .ok_or("Inventory Contains coverage missing")?;
+    assert_eq!(contains_coverage.state(), GraphCoverageState::Partial);
+    assert!(!contains_coverage.negative_authority());
+
+    let mut handles = source.source_handles().clone();
+    let mut evidence = source.evidence().clone();
+    for member in source
+        .raw_inventory()
+        .ok_or("original raw manifest missing")?
+        .members()
+    {
+        if let Some(previous) = handles.insert(
+            member.source_handle.handle_id(),
+            member.source_handle.clone(),
+        ) {
+            assert_eq!(previous, member.source_handle);
+        }
+        if let Some(previous) =
+            evidence.insert(member.evidence.evidence_id(), member.evidence.clone())
+        {
+            assert_eq!(previous, member.evidence);
+        }
+    }
+    let expected_catalog = GraphEvidenceCatalog::new(
+        source.context().clone(),
+        evidence.clone(),
+        handles.clone(),
+        stop,
+    )?;
+    assert_eq!(
+        finished.evidence_catalog().context(),
+        expected_catalog.context()
+    );
+    assert_eq!(
+        finished.evidence_catalog().digest(),
+        expected_catalog.digest()
+    );
+    for (id, handle) in &handles {
+        assert_eq!(finished.evidence_catalog().source_handle(id), Some(handle));
+    }
+    for (id, record) in &evidence {
+        assert_eq!(finished.evidence_catalog().evidence(id), Some(record));
+    }
+
+    let lookup = owner.producer_lookup(stop)?;
+    assert_eq!(lookup.scope(), &scope);
+    let mut spans = BTreeMap::new();
+    let mut contained = BTreeSet::new();
+    for partition in owner.partitions() {
+        assert!(partition.report().rejections().is_empty());
+        assert_eq!(
+            partition.report().accepted_entities().len(),
+            partition.batch().entity_proposals().len()
+        );
+        for accepted in partition.report().accepted_entities() {
+            let address = finished
+                .assertion(&key(GraphAssertionKind::Entity, accepted.proposal_id()))
+                .ok_or("spans entity address missing")?;
+            let resolved = lookup.entity(finished.scope(), address, stop)?;
+            assert_eq!(resolved.reference(), *address);
+            assert_eq!(resolved.partition(), partition);
+            assert_eq!(resolved.accepted(), accepted);
+            let proposal = resolved.proposal();
+            assert_eq!(
+                partition.batch().entity_proposal(accepted.proposal_id()),
+                Some(proposal)
+            );
+            for id in proposal.source_handle_ids() {
+                assert_eq!(
+                    finished.evidence_catalog().source_handle(id),
+                    Some(handles.get(id).ok_or("entity handle missing")?)
+                );
+            }
+            for id in proposal.evidence_ids() {
+                assert_eq!(
+                    finished.evidence_catalog().evidence(id),
+                    Some(evidence.get(id).ok_or("entity evidence missing")?)
+                );
+            }
+            if proposal.entity_kind_id() != "source_span" {
+                continue;
+            }
+            assert_eq!(partition.partition_id(), inventory.partition_id());
+            let [handle_id] = proposal.source_handle_ids() else {
+                return Err("span must retain one original handle".into());
+            };
+            let [evidence_id] = proposal.evidence_ids() else {
+                return Err("span must retain one original evidence record".into());
+            };
+            let handle = source
+                .source_handles()
+                .get(handle_id)
+                .ok_or("original span handle missing")?;
+            let record = source
+                .evidence()
+                .get(evidence_id)
+                .ok_or("original span evidence missing")?;
+            assert_eq!(record.source_handle_ids(), std::slice::from_ref(handle_id));
+            assert_eq!(record.context_id(), scope.source_context_id);
+            assert_eq!(proposal.confidence(), GraphConfidence::Proven);
+            assert_eq!(
+                proposal.semantic_key(),
+                &BTreeMap::from([(
+                    "source_handle".into(),
+                    GraphProposalValue::String(handle_id.canonical().into())
+                )])
+            );
+            assert_eq!(
+                view.source_handle(
+                    handle.path().as_str(),
+                    handle.span(),
+                    handle.entity_key().cloned()
+                )?,
+                *handle
+            );
+            assert!(known.contains(handle_id));
+            if handle.span().kind() == SourceSpanKind::ByteRange {
+                let file = source
+                    .files()
+                    .iter()
+                    .find(|file| file.path == handle.path().as_str())
+                    .ok_or("span file missing")?;
+                let start = handle.span().byte_start().ok_or("span start missing")?;
+                let end = handle.span().byte_end().ok_or("span end missing")?;
+                assert!(start <= end && end <= file.byte_length);
+            }
+            assert!(
+                spans
+                    .insert(*handle_id, accepted.node().node_id())
+                    .is_none()
+            );
+        }
+        for accepted in partition.report().accepted_relations() {
+            let address = finished
+                .assertion(&key(GraphAssertionKind::Relation, accepted.proposal_id()))
+                .ok_or("spans relation address missing")?;
+            let resolved = lookup.relation(finished.scope(), address, stop)?;
+            assert_eq!(resolved.reference(), *address);
+            assert_eq!(resolved.partition(), partition);
+            assert_eq!(resolved.accepted(), accepted);
+            let proposal = resolved.proposal();
+            assert_eq!(
+                partition.batch().relation_proposal(accepted.proposal_id()),
+                Some(proposal)
+            );
+            for id in proposal.source_handle_ids() {
+                assert_eq!(
+                    finished.evidence_catalog().source_handle(id),
+                    Some(handles.get(id).ok_or("relation handle missing")?)
+                );
+            }
+            for id in proposal.evidence_ids() {
+                assert_eq!(
+                    finished.evidence_catalog().evidence(id),
+                    Some(evidence.get(id).ok_or("relation evidence missing")?)
+                );
+            }
+            if proposal.relation_kind_id() != "source_file_contains_span" {
+                continue;
+            }
+            assert_eq!(partition.partition_id(), inventory.partition_id());
+            let [handle_id] = proposal.source_handle_ids() else {
+                return Err("containment must retain one original handle".into());
+            };
+            let span = spans.get(handle_id).ok_or("contained span missing")?;
+            let handle = source
+                .source_handles()
+                .get(handle_id)
+                .ok_or("containment handle missing")?;
+            let file = source
+                .files()
+                .iter()
+                .find(|file| file.path == handle.path().as_str())
+                .ok_or("containing file missing")?;
+            let file_address = finished
+                .assertion(&key(GraphAssertionKind::Entity, &file.proposal_id))
+                .ok_or("file address missing")?;
+            let file_entity = lookup.entity(finished.scope(), file_address, stop)?;
+            assert_eq!(
+                file_entity.partition().partition_id(),
+                inventory.partition_id()
+            );
+            assert_eq!(file_entity.proposal().entity_kind_id(), "source_file");
+            assert_eq!(
+                accepted.edge().from(),
+                file_entity.accepted().node().node_id()
+            );
+            assert_eq!(accepted.edge().to(), *span);
+            assert_eq!(accepted.edge().relation(), GraphRelationKind::Contains);
+            assert_eq!(accepted.edge().confidence(), GraphConfidence::Proven);
+            let span_proposal = inventory
+                .batch()
+                .entity_proposals()
+                .iter()
+                .find(|p| {
+                    p.source_handle_ids() == proposal.source_handle_ids()
+                        && p.entity_kind_id() == "source_span"
+                })
+                .ok_or("span proposal missing")?;
+            assert_eq!(proposal.evidence_ids(), span_proposal.evidence_ids());
+            assert!(contained.insert(*handle_id));
+        }
+    }
+    assert_eq!(spans.keys().copied().collect::<BTreeSet<_>>(), known);
+    assert_eq!(contained, known);
+    let ranged = source
+        .source_handles()
+        .values()
+        .find(|handle| handle.span().kind() == SourceSpanKind::ByteRange)
+        .ok_or("native ByteRange witness missing")?;
+    let whole = source
+        .source_handles()
+        .values()
+        .find(|handle| {
+            handle.path() == ranged.path() && handle.span().kind() == SourceSpanKind::WholeFile
+        })
+        .ok_or("native WholeFile witness missing")?;
+    assert_eq!(whole.content_digest(), ranged.content_digest());
+    assert_ne!(whole.span(), ranged.span());
+    assert_ne!(whole.handle_id(), ranged.handle_id());
+    assert_ne!(
+        spans.get(&whole.handle_id()),
+        spans.get(&ranged.handle_id())
+    );
+
+    let mut legacy = build_platform_graph_proposal_plan(view, stop)?;
+    assert_eq!(legacy.profile(), PLATFORM_DIRECT_GRAPH_PROFILE);
+    assert_eq!(legacy.registry(), original.registry());
+    assert_eq!(legacy.inventory_span_omissions(), None);
+    let mut unchanged = initial(&legacy, stop)?;
+    for &producer in legacy.producer_order() {
+        let stage = legacy.build_stage(producer, &unchanged, stop)?;
+        assert_eq!(stage.producer_version(), "1");
+        let (batch, coverage) = stage.into_parts();
+        unchanged = admit(&unchanged, batch, "1", coverage, stop)?;
+    }
+    assert_eq!(&unchanged, original);
+    let legacy_finished = legacy.finish(&unchanged, stop)?;
+    assert_eq!(legacy_finished.profile(), PLATFORM_DIRECT_GRAPH_PROFILE);
+    assert_eq!(legacy_finished.inventory_span_omissions(), None);
+    assert_eq!(legacy_finished.source(), source);
     Ok(())
 }
 
@@ -800,6 +1132,8 @@ fn direct_package_stages_bind_native_predecessors_and_preserve_replay() -> Resul
             Some(&member.evidence)
         );
     }
+    inventory_spans(&raw_view, &raw_owner, &raw_source, &stop)?;
+    assert!(!root.0.exists());
     let unchanged_raw = build_source_graph_proposals(&raw_view, &stop)?;
     assert_eq!(unchanged_raw.inventory_batch(), Some(&raw_batch));
     let (_, unchanged_raw_batch, unchanged_raw_coverage, unchanged_raw_source, _) =

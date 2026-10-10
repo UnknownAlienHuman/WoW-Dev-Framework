@@ -8,7 +8,31 @@ use wow_graph::{
 };
 
 pub const PLATFORM_DIRECT_GRAPH_PROFILE: &str = "wow-project/platform-direct-producers/1";
-const PRODUCER_VERSION: &str = "1";
+pub const PLATFORM_DIRECT_GRAPH_WITH_INVENTORY_SPANS_PROFILE: &str =
+    "wow-project/platform-direct-producers/2";
+
+#[derive(Clone, Copy)]
+enum DirectRecipe {
+    Original,
+    InventorySpans,
+}
+impl DirectRecipe {
+    const fn profile(self) -> &'static str {
+        match self {
+            Self::Original => PLATFORM_DIRECT_GRAPH_PROFILE,
+            Self::InventorySpans => PLATFORM_DIRECT_GRAPH_WITH_INVENTORY_SPANS_PROFILE,
+        }
+    }
+    const fn producer_version(self) -> &'static str {
+        match self {
+            Self::Original => "1",
+            Self::InventorySpans => "2",
+        }
+    }
+    const fn inventory_spans(self) -> bool {
+        matches!(self, Self::InventorySpans)
+    }
+}
 const ORDER: [PlatformGraphProducer; 4] = [
     PlatformGraphProducer::Inventory,
     PlatformGraphProducer::TocLoad,
@@ -20,6 +44,8 @@ const MAX_DIRECT_ASSERTIONS: usize = 200_000;
 /// Constructed only from an immutable native platform project. Each stage waits
 /// for exact native admission of its predecessor; retries retain the same batch.
 pub struct PlatformGraphProposalPlan<'a> {
+    recipe: DirectRecipe,
+    inventory_span_omissions: Option<usize>,
     project: &'a ProjectView,
     collected: CollectedSourceGraph,
     scope: GraphAssertionRecordScope,
@@ -30,6 +56,8 @@ pub struct PlatformGraphProposalPlan<'a> {
 
 #[derive(Clone, Serialize)]
 pub struct PlatformGraphProducerProposals {
+    #[serde(skip)]
+    recipe: DirectRecipe,
     producer: PlatformGraphProducer,
     batch: GraphProposalBatch,
     coverage: Vec<GraphCoverageRecord>,
@@ -41,7 +69,7 @@ impl PlatformGraphProducerProposals {
     }
     #[must_use]
     pub const fn producer_version(&self) -> &'static str {
-        PRODUCER_VERSION
+        self.recipe.producer_version()
     }
     pub fn into_parts(self) -> (GraphProposalBatch, Vec<GraphCoverageRecord>) {
         (self.batch, self.coverage)
@@ -51,6 +79,8 @@ impl PlatformGraphProducerProposals {
 /// Exact addresses and source support bound to the original held native owners.
 /// Serialized reports cannot construct this capability.
 pub struct PlatformGraphProvenance<'a> {
+    recipe: DirectRecipe,
+    inventory_span_omissions: Option<usize>,
     project: &'a ProjectView,
     graph: &'a GraphPartitionSnapshot,
     scope: GraphAssertionRecordScope,
@@ -61,7 +91,12 @@ pub struct PlatformGraphProvenance<'a> {
 impl PlatformGraphProvenance<'_> {
     #[must_use]
     pub const fn profile(&self) -> &'static str {
-        PLATFORM_DIRECT_GRAPH_PROFILE
+        self.recipe.profile()
+    }
+    /// Count of retained Unknown spans omitted by native /2; /1 has no span role.
+    #[must_use]
+    pub const fn inventory_span_omissions(&self) -> Option<usize> {
+        self.inventory_span_omissions
     }
     #[must_use]
     pub const fn project(&self) -> &ProjectView {
@@ -93,6 +128,23 @@ pub fn build_platform_graph_proposal_plan<'a>(
     project: &'a ProjectView,
     stop: &AtomicBool,
 ) -> ProjectResult<PlatformGraphProposalPlan<'a>> {
+    build_plan(project, DirectRecipe::Original, stop)
+}
+
+/// Extend the captured Inventory stage with exact known source-span containment.
+/// This native-only recipe does not select an application or replay route.
+pub fn build_platform_graph_proposal_plan_with_inventory_spans<'a>(
+    project: &'a ProjectView,
+    stop: &AtomicBool,
+) -> ProjectResult<PlatformGraphProposalPlan<'a>> {
+    build_plan(project, DirectRecipe::InventorySpans, stop)
+}
+
+fn build_plan<'a>(
+    project: &'a ProjectView,
+    recipe: DirectRecipe,
+    stop: &AtomicBool,
+) -> ProjectResult<PlatformGraphProposalPlan<'a>> {
     crate::analyzer::checkpoint(stop)?;
     let config = project.configuration();
     if config.project_kind() != ProjectKind::BlizzardUiPlatformSource
@@ -104,7 +156,11 @@ pub fn build_platform_graph_proposal_plan<'a>(
             "direct platform stages require a selected genuine platform project",
         ));
     }
-    let collected = collect_source_graph_proposals(project, stop)?;
+    let mut collected = collect_source_graph_proposals_with_inventory_spans(
+        project,
+        recipe.inventory_spans(),
+        stop,
+    )?;
     if collected
         .entities
         .len()
@@ -118,6 +174,55 @@ pub fn build_platform_graph_proposal_plan<'a>(
     let mut exact = 0;
     raw_inventory::charge_serialized(&mut exact, &collected, stop)?;
     let mut budget = ProducerBudget::new(exact.max(collected.text_bytes))?;
+    let inventory_span_omissions = if recipe.inventory_spans() {
+        let omitted = inventory_roles::append_spans(
+            project,
+            &collected.provenance,
+            &mut collected.entities,
+            &mut collected.relations,
+            &mut budget,
+            stop,
+        )?;
+        if collected
+            .entities
+            .len()
+            .checked_add(
+                collected
+                    .inventory_batch
+                    .as_ref()
+                    .map_or(0, |batch| batch.entity_proposals().len()),
+            )
+            .ok_or_else(exhausted)?
+            > MAX_NODES
+            || collected.relations.len() > MAX_EDGES
+            || collected
+                .entities
+                .len()
+                .checked_add(collected.relations.len())
+                .ok_or_else(exhausted)?
+                > MAX_DIRECT_ASSERTIONS
+        {
+            return Err(exhausted());
+        }
+        let mut reasons = vec!["source_graph.captured_known_source_spans_only".into()];
+        if omitted > 0 {
+            reasons.push("source_graph.unknown_source_spans_omitted".into());
+        }
+        let coverage = GraphCoverageRecord::new(
+            GraphRelationKind::Contains,
+            GraphCoverageState::Partial,
+            false,
+            reasons,
+            collected.limits,
+        )
+        .map_err(graph_error)?;
+        budget.charge_serialized(&coverage, stop)?;
+        budget.charge_serialized(&omitted, stop)?;
+        collected.coverage.push(coverage);
+        Some(omitted)
+    } else {
+        None
+    };
     let scope = GraphAssertionRecordScope {
         universe: collected.universe.clone(),
         generation: collected.generation.clone(),
@@ -138,7 +243,7 @@ pub fn build_platform_graph_proposal_plan<'a>(
     let mut keys = BTreeSet::new();
     for draft in &collected.entities {
         crate::analyzer::checkpoint(stop)?;
-        if !entity_permission(draft.producer, draft.proposal.entity_kind_id())
+        if !entity_permission(recipe, draft.producer, draft.proposal.entity_kind_id())
             || !keys.insert(local(
                 GraphAssertionKind::Entity,
                 draft.proposal.proposal_id(),
@@ -152,7 +257,7 @@ pub fn build_platform_graph_proposal_plan<'a>(
     }
     for draft in &collected.relations {
         crate::analyzer::checkpoint(stop)?;
-        if !relation_permission(draft.producer, &draft.relation_kind_id)
+        if !relation_permission(recipe, draft.producer, &draft.relation_kind_id)
             || !keys.insert(local(GraphAssertionKind::Relation, &draft.proposal_id))
         {
             return Err(invalid());
@@ -177,6 +282,8 @@ pub fn build_platform_graph_proposal_plan<'a>(
     }
     crate::analyzer::checkpoint(stop)?;
     Ok(PlatformGraphProposalPlan {
+        recipe,
+        inventory_span_omissions,
         project,
         collected,
         scope,
@@ -189,7 +296,12 @@ pub fn build_platform_graph_proposal_plan<'a>(
 impl<'a> PlatformGraphProposalPlan<'a> {
     #[must_use]
     pub const fn profile(&self) -> &'static str {
-        PLATFORM_DIRECT_GRAPH_PROFILE
+        self.recipe.profile()
+    }
+    /// Count of retained Unknown spans omitted by native /2; /1 has no span role.
+    #[must_use]
+    pub const fn inventory_span_omissions(&self) -> Option<usize> {
+        self.inventory_span_omissions
     }
     #[must_use]
     pub fn registry(&self) -> &GraphRegistryBundle {
@@ -325,7 +437,7 @@ impl<'a> PlatformGraphProposalPlan<'a> {
         let mut kinds = BTreeSet::new();
         for definition in self.collected.registry.relation_kinds() {
             crate::analyzer::checkpoint(stop)?;
-            if relation_permission(producer, definition.relation_id()) {
+            if relation_permission(self.recipe, producer, definition.relation_id()) {
                 kinds.insert(definition.relation());
             }
         }
@@ -338,6 +450,7 @@ impl<'a> PlatformGraphProposalPlan<'a> {
             .collect::<Vec<_>>();
         coverage.sort_by_key(GraphCoverageRecord::relation);
         let stage = PlatformGraphProducerProposals {
+            recipe: self.recipe,
             producer,
             batch,
             coverage,
@@ -409,7 +522,7 @@ impl<'a> PlatformGraphProposalPlan<'a> {
                 let expected = self.stages.get(index).ok_or_else(invalid)?;
                 let actual = actual.ok_or_else(invalid)?;
                 if actual.batch() != &expected.batch
-                    || actual.producer_version() != PRODUCER_VERSION
+                    || actual.producer_version() != self.recipe.producer_version()
                     || actual.coverage() != expected.coverage
                     || actual.report().accepted_entities().len()
                         != expected.batch.entity_proposals().len()
@@ -511,6 +624,8 @@ impl<'a> PlatformGraphProposalPlan<'a> {
         )?;
         crate::analyzer::checkpoint(stop)?;
         Ok(PlatformGraphProvenance {
+            recipe: self.recipe,
+            inventory_span_omissions: self.inventory_span_omissions,
             project: self.project,
             graph: owner,
             scope: self.scope,
@@ -562,9 +677,12 @@ fn producer_reference(
         assertion,
     }
 }
-fn entity_permission(producer: PlatformGraphProducer, kind: &str) -> bool {
+fn entity_permission(recipe: DirectRecipe, producer: PlatformGraphProducer, kind: &str) -> bool {
     match producer {
-        PlatformGraphProducer::Inventory => matches!(kind, "source_file" | "source_package"),
+        PlatformGraphProducer::Inventory => {
+            matches!(kind, "source_file" | "source_package")
+                || (recipe.inventory_spans() && kind == "source_span")
+        }
         PlatformGraphProducer::TocLoad => kind == "state_root",
         PlatformGraphProducer::AnalyzerStructure => matches!(
             kind,
@@ -575,9 +693,12 @@ fn entity_permission(producer: PlatformGraphProducer, kind: &str) -> bool {
         }
     }
 }
-fn relation_permission(producer: PlatformGraphProducer, kind: &str) -> bool {
+fn relation_permission(recipe: DirectRecipe, producer: PlatformGraphProducer, kind: &str) -> bool {
     match producer {
-        PlatformGraphProducer::Inventory => kind == "source_package_owns",
+        PlatformGraphProducer::Inventory => {
+            kind == "source_package_owns"
+                || (recipe.inventory_spans() && kind == "source_file_contains_span")
+        }
         PlatformGraphProducer::TocLoad => matches!(
             kind,
             "source_loads"
