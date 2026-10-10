@@ -274,6 +274,7 @@ pub(crate) struct PreparedPackageBindings {
     main_digest: ContentDigest<CanonicalResult>,
     groups: Vec<PreparedGroup>,
     queries: Vec<String>,
+    binding_limit: Option<usize>,
 }
 impl PreparedPackageBindings {
     pub(crate) fn queries(&self) -> &[String] {
@@ -367,11 +368,14 @@ fn validate_inputs(
 pub(crate) fn prepare_packages(
     load: &ProjectPackageLoadPlan,
     main: &ProjectPackageMainPlan,
+    fact_limit: Option<usize>,
     stop: &AtomicBool,
 ) -> ProjectResult<PreparedPackageBindings> {
     validate_inputs(load, main, stop)?;
     let mut budget = PreparationBudget {
         limit_query_union: true,
+        binding_limit: fact_limit,
+        receivers: super::receivers::Budget::with_owner_limit(fact_limit),
         ..PreparationBudget::default()
     };
     let mut scopes = ScopeBudget::default();
@@ -430,6 +434,7 @@ pub(crate) fn prepare_packages(
     }
     crate::analyzer::checkpoint(stop)?;
     Ok(PreparedPackageBindings {
+        binding_limit: fact_limit,
         load_digest: load.digest(),
         main_digest: main.digest(),
         groups,
@@ -641,7 +646,10 @@ pub(crate) fn finish_packages(
         return Err(invalid());
     }
     let mut groups = Vec::new();
-    let mut budget = ClassificationBudget::default();
+    let mut budget = ClassificationBudget {
+        binding_limit: pending.binding_limit,
+        ..ClassificationBudget::default()
+    };
     for (mut group, node) in pending.groups.into_iter().zip(load.packages()) {
         crate::analyzer::checkpoint(stop)?;
         if group.scope != ProjectPackageXmlLuaBindingScope::from_node(node) {
@@ -737,7 +745,7 @@ fn serialized_size<T: Serialize>(value: &T, stop: &AtomicBool) -> ProjectResult<
     crate::analyzer::checkpoint(stop)?;
     result.map_err(|_| {
         budget_exhausted(
-            "serialized bytes retained before refused write",
+            "serialized bytes before serialization failure",
             counter.bytes,
             MAX_SERIALIZED_BYTES,
         )

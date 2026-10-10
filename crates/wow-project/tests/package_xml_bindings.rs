@@ -40,6 +40,213 @@ use wow_project::{
 };
 
 type TestResult = Result<(), Box<dyn Error>>;
+
+#[test]
+fn retained_native_bindings_use_the_fact_budget_and_replay_exactly() -> TestResult {
+    use wow_project::{ProjectErrorCode, platform_source::PlatformPackageRetentionLimits};
+
+    let stop = AtomicBool::new(false);
+    let create_packages = |per_package: usize,
+                           methods: bool|
+     -> Result<Arc<PlatformPackageSpecialization>, Box<dyn Error>> {
+        let root = FixtureRoot::new()?;
+        let xml = format!(
+            "<Ui xmlns=\"http://www.blizzard.com/wow/ui/\">{}</Ui>\n",
+            if methods {
+                "<Frame mixin=\"KnownMixin\"><Scripts><OnLoad method=\"OnLoad\"/></Scripts></Frame>"
+            } else {
+                "<Frame mixin=\"KnownMixin\"/>"
+            }
+            .repeat(per_package)
+        );
+        for package in ["Alpha", "Beta"] {
+            std::fs::write(root.0.join("UI").join(package).join("frames.xml"), &xml)?;
+        }
+        root.packages(&stop)
+    };
+    let input = |packages: &Arc<PlatformPackageSpecialization>,
+                 max_facts: u64|
+     -> Result<ProjectInputBundle, Box<dyn Error>> {
+        let budget = ProjectBudgetPolicy::fixture_e0()?;
+        let configuration = configuration_builder(
+            ProjectKind::BlizzardUiPlatformSource,
+            packages.source().profile().target(),
+        )?
+        .platform_packages(Arc::clone(packages))?
+        .with_package_xml_bindings(PackageXmlBindingProfile::SameSessionV1)
+        .budget_policy(ProjectBudgetPolicy::new(
+            budget.max_files(),
+            budget.max_total_source_bytes(),
+            budget.max_single_file_bytes(),
+            budget.max_update_operations(),
+            max_facts,
+            budget.max_generic_findings(),
+            budget.max_output_bytes(),
+        )?)
+        .build()?;
+        let library = LuaWorkspaceSnapshot::build(
+            configuration.analyzer_binding().backend().clone(),
+            LuaWorkspaceUniverse::Fixture,
+            vec![LuaWorkspaceFileInput::new(
+                "library/package-xml-capacity.lua",
+                "---@meta _\nKnownMixin = {}\nfunction KnownMixin:OnLoad() return self end\n",
+            )],
+            LuaWorkspaceLimits::new(8, 16_384, 256 * 1024, 512 * 1024)?,
+        )?;
+        Ok(ProjectInputBundle::closed(
+            configuration,
+            packages.files().to_vec(),
+            vec![library],
+        )?)
+    };
+    let row_count = |publisher: &ProjectPublisher| -> Result<usize, Box<dyn Error>> {
+        let view = publisher.open_current()?;
+        Ok(view
+            .snapshot()
+            .analyzer_binding()
+            .package_xml_bindings()
+            .ok_or("package bindings missing")?
+            .groups()
+            .iter()
+            .map(|group| group.bindings().len())
+            .sum())
+    };
+
+    // The ordinary route still admits exactly 4096 rows.
+    let exact = create_packages(2048, false)?;
+    let mut ordinary = ProjectPublisher::with_function_call_facts();
+    ordinary.publish_initial_cancellable(input(&exact, 8192)?, &stop)?;
+    assert_eq!(row_count(&ordinary)?, 4096);
+
+    let packages = create_packages(2049, false)?;
+    let mut ordinary = ProjectPublisher::with_function_call_facts();
+    let error = ordinary
+        .publish_initial_cancellable(input(&packages, 8192)?, &stop)
+        .err()
+        .ok_or("ordinary binding overflow admitted")?;
+    assert_eq!(error.code(), ProjectErrorCode::SourceBudgetExceeded);
+    assert!(
+        error
+            .message()
+            .contains("before next record=4096, limit=4096")
+    );
+
+    let declarations = PACKAGES
+        .iter()
+        .map(|package| {
+            ProjectPackageInput::new(
+                *package,
+                format!("UI/{package}"),
+                true,
+                vec![ProjectPackageVariantInput::new(
+                    ProjectDiskFile::new("Fixture.toc"),
+                    true,
+                )],
+            )
+        })
+        .collect::<Vec<_>>();
+    let specialize_native = |packages: &Arc<PlatformPackageSpecialization>| -> Result<Arc<PlatformPackageSpecialization>, Box<dyn Error>> {
+        let encoded = packages.load_plan().packages().iter().try_fold(0u64, |total, node| -> Result<u64, Box<dyn Error>> {
+            let plan = packages.load_plan().package_plan(&node.package).ok_or("package plan missing")?;
+            total.checked_add(u64::try_from(serde_json::to_vec(plan)?.len())?)
+                .ok_or_else(|| "fixture plan encoding overflow".into())
+        })?;
+        Ok(Arc::new(packages.source().specialize_packages_with_retention(
+            &declarations, None, PlatformPackageRetentionLimits::new(3, encoded)?, &stop,
+        )?))
+    };
+    let native = specialize_native(&packages)?;
+    // 4098 rows exceed the selected row ceiling by one; no project is published.
+    let mut bounded = ProjectPublisher::with_function_call_facts();
+    let error = bounded
+        .publish_initial_cancellable(input(&native, 4097)?, &stop)
+        .err()
+        .ok_or("native binding limit+1 admitted")?;
+    assert_eq!(error.code(), ProjectErrorCode::SourceBudgetExceeded);
+    assert!(
+        error
+            .message()
+            .contains("before next record=4097, limit=4097")
+    );
+    assert!(bounded.open_current().is_err());
+
+    // Exact binding-row admission cannot waive the combined native fact budget.
+    let mut combined = ProjectPublisher::with_function_call_facts();
+    let error = combined
+        .publish_initial_cancellable(input(&native, 4098)?, &stop)
+        .err()
+        .ok_or("combined fact overflow admitted")?;
+    assert_eq!(error.code(), ProjectErrorCode::UpdateBudgetExceeded);
+    assert!(
+        error
+            .message()
+            .contains("configured fact or finding budget")
+    );
+    assert!(combined.open_current().is_err());
+
+    let mut publisher = ProjectPublisher::with_function_call_facts();
+    publisher.publish_initial_cancellable(input(&native, 8192)?, &stop)?;
+    assert_eq!(row_count(&publisher)?, 4098);
+    let view = publisher.open_current()?;
+    let replay = ProjectReplay::capture(&publisher, &stop)?;
+    let bytes = serde_json::to_vec(&replay)?;
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&bytes)?["schema"],
+        "wow-project/native-project-replay/11"
+    );
+    let restored = ProjectReplay::from_json(&bytes, &stop)?.hydrate(&stop)?;
+    assert_eq!(restored.snapshot_id(), view.snapshot_id());
+    assert_eq!(restored.project_generation(), view.project_generation());
+    assert_eq!(restored.analyzer_snapshot_id(), view.analyzer_snapshot_id());
+    assert_eq!(
+        restored
+            .snapshot()
+            .analyzer_binding()
+            .package_xml_bindings(),
+        view.snapshot().analyzer_binding().package_xml_bindings()
+    );
+    let mut cancelled = ProjectPublisher::with_function_call_facts();
+    let error = cancelled
+        .publish_initial_cancellable(input(&native, 8192)?, &AtomicBool::new(true))
+        .err()
+        .ok_or("cancelled native input admitted")?;
+    assert_eq!(error.code(), ProjectErrorCode::AnalysisCancelled);
+    assert!(cancelled.open_current().is_err());
+
+    // The distinct receiver-owner population can also exceed ordinary4096.
+    let packages = create_packages(2049, true)?;
+    let native = specialize_native(&packages)?;
+    let mut publisher = ProjectPublisher::with_function_call_facts();
+    publisher.publish_initial_cancellable(input(&native, 32_768)?, &stop)?;
+    assert_eq!(row_count(&publisher)?, 8196);
+    let view = publisher.open_current()?;
+    let bindings = view
+        .snapshot()
+        .analyzer_binding()
+        .package_xml_bindings()
+        .ok_or("native receiver bindings missing")?;
+    assert_eq!(
+        bindings
+            .groups()
+            .iter()
+            .map(|group| group.receiver_sources().len())
+            .sum::<usize>(),
+        4098
+    );
+    let replay = ProjectReplay::capture(&publisher, &stop)?;
+    let restored =
+        ProjectReplay::from_json(&serde_json::to_vec(&replay)?, &stop)?.hydrate(&stop)?;
+    assert_eq!(restored.snapshot_id(), view.snapshot_id());
+    assert_eq!(
+        restored
+            .snapshot()
+            .analyzer_binding()
+            .package_xml_bindings(),
+        Some(bindings)
+    );
+    Ok(())
+}
+
 static NEXT_ROOT: AtomicUsize = AtomicUsize::new(0);
 const PACKAGES: [&str; 3] = ["Alpha", "Beta", "Empty"];
 const TOC: &str = "## Interface: 120100\ndefs.lua\nframes.xml\n";

@@ -95,11 +95,15 @@ incremental session observations. Generated report import and deterministic CLI
 output pass; fabricated/missing/oversized source, cancellation and a wrong Git
 root refuse. The existing report wire remains; E0-C P1-P12 and pin acceptance stay open.
 Native session cancellation now retains its cancellation class through the producer.
-The real 273-package operation first refuses the next XML Lua binding after
-retaining 4096 rows. Existing XML binding guards now name their resource,
-observed count and original limit without changing error codes, phase, identities
-or ceilings. Affected Tier S, the focused producer refusals and CLI build pass;
-full analysis/graph/maps/persistence capacity remains unqualified under #113.
+Real 273-package operations identify separate binding-row and receiver-owner
+4096 limits. XML guards now name their resource, observed count and ceiling.
+Explicit native package retention uses the existing configured fact budget as
+the separate row/owner preparation ceilings, retaining combined fact/output
+admission, all other independent guards, ordinary limits and replay identities.
+The focused ordinary/native/limit+1/combined-refusal/cancellation/replay lifecycle
+and affected Tier S pass. The latest native operation next refuses the distinct
+package query union at 4097 against 4096; native Emmy query capacity and full
+analysis/graph/maps/persistence remain unqualified under #113.
 Explicit retained XSD component admission is now executable through the existing
 XML owner, with root-only global symbols and final unsupported context propagation.
 See [schema components](PLATFORM_XML_SCHEMA_COMPONENTS.md) for its bounded scope.

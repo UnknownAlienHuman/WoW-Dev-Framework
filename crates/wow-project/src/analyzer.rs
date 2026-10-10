@@ -339,7 +339,19 @@ pub(crate) fn build_analyzer_binding(
             let main = configuration
                 .package_main_plan()
                 .ok_or_else(binding_inputs_invalid)?;
-            PendingXmlBindings::Packages(crate::xml_bindings::prepare_packages(load, main, stop)?)
+            // Only explicitly retained native package universes use the
+            // configured finite fact budget as an upper bound on separate
+            // binding/receiver-owner counters. Full combined admission remains.
+            let fact_limit = configuration
+                .platform_packages()
+                .and_then(|packages| packages.retention_limits())
+                .map(|_| {
+                    usize::try_from(configuration.budget_policy().max_analyzer_facts())
+                        .unwrap_or(usize::MAX)
+                });
+            PendingXmlBindings::Packages(crate::xml_bindings::prepare_packages(
+                load, main, fact_limit, stop,
+            )?)
         }
         None => match configuration.load_plan() {
             Some(plan) => PendingXmlBindings::Standalone(crate::xml_bindings::prepare(plan, stop)?),

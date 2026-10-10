@@ -156,6 +156,7 @@ impl PreparedBindings {
 #[derive(Default)]
 struct PreparationBudget {
     bindings: usize,
+    binding_limit: Option<usize>,
     query_refs: usize,
     query_visits: usize,
     text_bytes: usize,
@@ -399,11 +400,12 @@ fn prepare_with_budget(
         }
         for (kind, ordinal, span, mut queries, mut state, receiver_source_id) in pending {
             crate::analyzer::checkpoint(stop)?;
-            if budget.bindings >= MAX_BINDINGS {
+            let binding_limit = budget.binding_limit.unwrap_or(MAX_BINDINGS);
+            if budget.bindings >= binding_limit {
                 return Err(budget_exhausted(
                     "retained bindings before next record",
                     budget.bindings,
-                    MAX_BINDINGS,
+                    binding_limit,
                 ));
             }
             budget.bindings += 1;
@@ -493,6 +495,7 @@ fn prepare_with_budget(
 #[derive(Default)]
 struct ClassificationBudget {
     bindings: usize,
+    binding_limit: Option<usize>,
     query_refs: usize,
 }
 
@@ -509,11 +512,12 @@ fn classify(
             .query_refs
             .checked_add(binding.queries.len())
             .ok_or_else(exhausted)?;
-        if budget.bindings > MAX_BINDINGS {
+        let binding_limit = budget.binding_limit.unwrap_or(MAX_BINDINGS);
+        if budget.bindings > binding_limit {
             return Err(budget_exhausted(
                 "classified bindings",
                 budget.bindings,
-                MAX_BINDINGS,
+                binding_limit,
             ));
         }
         if budget.query_refs > MAX_QUERY_REFS {

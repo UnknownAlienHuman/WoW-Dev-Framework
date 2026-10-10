@@ -69,8 +69,16 @@ pub(super) struct Budget {
     records: usize,
     text_bytes: usize,
     owners: usize,
+    owner_limit: Option<usize>,
 }
 impl Budget {
+    pub(super) fn with_owner_limit(owner_limit: Option<usize>) -> Self {
+        Self {
+            owner_limit,
+            ..Self::default()
+        }
+    }
+
     fn step(&mut self) -> ProjectResult<()> {
         self.steps = self.steps.checked_add(1).ok_or_else(exhausted)?;
         if self.steps > MAX_EXPANSION_STEPS {
@@ -181,11 +189,12 @@ impl<'a, 'b> Resolver<'a, 'b> {
     ) -> ProjectResult<&XmlReceiverSources> {
         crate::analyzer::checkpoint(stop)?;
         if !self.receivers.contains_key(owner_id) {
-            if self.budget.owners >= MAX_BINDINGS {
+            let owner_limit = self.budget.owner_limit.unwrap_or(MAX_BINDINGS);
+            if self.budget.owners >= owner_limit {
                 return Err(budget_exhausted(
                     "receiver owners before next record",
                     self.budget.owners,
-                    MAX_BINDINGS,
+                    owner_limit,
                 ));
             }
             self.budget.owners += 1;

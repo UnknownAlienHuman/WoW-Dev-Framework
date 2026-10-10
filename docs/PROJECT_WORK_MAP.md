@@ -7,9 +7,9 @@ the work queue. Follow [the execution model](EXECUTION_MODEL.md).
 
 ## Verified routing base
 
-`main` checkpoint `c5361459c0f348f1a63f44310fb1197f0e3a9e1b`, tree
-`01545663b3970178f645e2c41b88500a62904b20`, was published and read back with all
-changed blobs. [Quick 38091717798](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/38091717798)
+`main` checkpoint `d0c13b9b1dad997eaaea68156f2f722555bd60fe`, tree
+`ea65547096cd4206fcefe871ca1b069125054855`, was published and read back with all
+changed blobs. [Quick 38092855375](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/38092855375)
 passed on that exact head. This is the verified base of this routing update;
 subsequent publication and gate evidence belong in the canonical Issue.
 
@@ -34,13 +34,15 @@ re-resolved 273-package native census now returns its exact measurements and
 Partial dependency/file-closure coverage. Explicit finite native package retention
 is executable beyond ordinary64 through the same Main owner and captured replay11
 limits. A genuine [compiled backend report producer](EMMYLUA_UPSTREAM.md) now
-supplies the existing analyzer input without fixture report fabrication. A real
-273-package native operation now identifies its first preparation refusal:
-4096 retained XML Lua bindings, with the next record refused at the original
-4096 ceiling. Existing binding, receiver, inheritance, query and package guards
-report their own counts and limits; no capacity or identity changes are implied.
-Graph construction was not reached. Actual whole Main/analysis, full graph/map
-population and persistence remain unqualified.
+supplies the existing analyzer input without fixture report fabrication. Real
+273-package operations identified separate 4096 binding-row and receiver-owner
+refusals. Explicit native retention now uses the existing configured fact ceiling
+as an upper bound on each of those distinct populations, preserving full combined
+admission, ordinary limits and exact replay. The latest operation next refuses
+the distinct package query union at 4097 against 4096. Native Emmy query capacity
+must be inspected before selecting a larger finite union; graph construction was
+not reached. Existing guards report their own counts and limits. Actual whole
+Main/analysis, full graph/map population and persistence remain unqualified.
 Do not infer the actual
 map-owner population from lexical script counts or compare XML-index JSON bytes
 with graph metadata bytes. Operation details belong in #113.

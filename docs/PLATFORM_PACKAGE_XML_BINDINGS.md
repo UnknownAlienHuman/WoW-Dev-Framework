@@ -55,7 +55,17 @@ declarations and source enumeration do not prove execution, cross-package load
 order or effective callback dispatch. Receiver semantics remain `not_evaluated`.
 
 Preparation and classification share the existing separate category bounds
-across all groups. Scope/document retention is also bounded. Cancellable
+across all groups. For a genuine platform universe with explicitly selected
+native package retention, the separate binding-row and receiver-owner ceilings
+use the configured `ProjectBudgetPolicy::max_analyzer_facts`; preparation carries
+the same binding ceiling to classification. Each counter is only one constituent
+of the final fact count: full
+combined fact and output admission still applies. Ordinary and standalone routes
+keep 4096 rows/owners. Receiver record/text/expansion, inheritance, query and serialization guards retain
+their own original limits. The existing configuration/replay records already bind
+the selected retention and budget; no additional wire selector is introduced.
+
+Scope/document retention is also bounded. Cancellable
 streaming counting precedes canonical allocation and seals the final report's
 byte length. Analyzer admission adds its retained records and report bytes to
 the configured fact/output budgets. The fixed 64 MiB owner ceiling does not
@@ -88,7 +98,11 @@ Current/epoch and no retained failed operation.
 Policy, fmt, all-target/all-feature check, strict Clippy, workspace tests
 (936 passed, 1 ignored, 111 targets), strict rustdoc and build pass. Independent
 static owner/replay/analyzer audits found no concrete P1/P2 defect. Native
-package budget-exhaustion/cancellation fault cases remain NotEvaluated.
+package budget-exhaustion/cancellation fault cases remain NotEvaluated at that
+historical checkpoint. The later focused native-retention lifecycle verifies
+ordinary 4096-row admission/refusal, native 4098-row and receiver-owner admission, selected limit+1,
+strict combined-fact refusal, cancellation and exact disk-absent replay11.
+Full real-corpus XML binding capacity remains unqualified under #113.
 
 The direct source producer remains monolithic `wow-project/source-load-proposals/19`.
 Package XML/state graph projection, complete raw-member graph/read bindings,
