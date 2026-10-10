@@ -231,6 +231,827 @@ fn configuration_builder(
 }
 
 #[test]
+fn native_selected_schema_binds_components_and_refuses_foreign_source() -> TestResult {
+    use std::collections::{BTreeMap, BTreeSet};
+    use wow_project::{
+        ProjectPhase, ProjectResult,
+        load::{
+            XmlSourceSpan,
+            schema::{
+                XML_SCHEMA_POLICY_PROFILE, XML_SCHEMA_PROFILE, XmlSchemaAttributeValue,
+                XmlSchemaComponentKind as Kind, XmlSchemaComponentState as State,
+                XmlSchemaIssueKind, XmlSchemaMemberSelection, XmlSchemaQNameState,
+                XmlSchemaReferenceKind as RefKind, XmlSchemaReferenceState, XmlSchemaSelection,
+                admit_xml_schema,
+            },
+        },
+    };
+
+    // Exact project-owned body, LF with one trailing LF; not a live vendor schema.
+    const XSD: &str = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns="http://www.blizzard.com/wow/ui/" xmlns:ui="http://www.blizzard.com/wow/ui/" targetNamespace="http://www.blizzard.com/wow/ui/" elementFormDefault="qualified" attributeFormDefault="unqualified">
+<xs:complexType name="LayoutFrameRefType"/>
+<xs:element name="LayoutFrameRef" type="LayoutFrameRefType" abstract="true"/>
+<xs:complexType name="FrameRefType"><xs:complexContent><xs:extension base="ui:LayoutFrameRefType"/></xs:complexContent></xs:complexType>
+<xs:element name="FrameRef" type="ui:FrameRefType" abstract="true" substitutionGroup="LayoutFrameRef"/>
+<xs:complexType name="FrameType"><xs:complexContent><xs:extension base="FrameRefType"/></xs:complexContent></xs:complexType>
+<xs:element name="Frame" type="FrameType" substitutionGroup="ui:FrameRef"/>
+<xs:complexType name="TextureType"><xs:complexContent><xs:extension base="LayoutFrameRefType"/></xs:complexContent></xs:complexType>
+<xs:element name="Texture" type="ui:TextureType" substitutionGroup="LayoutFrameRef"/>
+<xs:element name="Anonymous" substitutionGroup="ui:FrameRef"><xs:complexType><xs:complexContent><xs:extension base="FrameRefType"/></xs:complexContent></xs:complexType></xs:element>
+<xs:complexType name="OwnerAType"><xs:sequence><xs:element name="Slot" type="ui:FrameType"/></xs:sequence></xs:complexType>
+<xs:complexType name="OwnerBType"><xs:sequence><xs:element name="Slot" type="TextureType"/></xs:sequence></xs:complexType>
+<xs:element name="OwnerA" type="OwnerAType"/>
+<xs:element name="OwnerB" type="ui:OwnerBType"/>
+</xs:schema>
+"#;
+    const UI: &str = "http://www.blizzard.com/wow/ui/";
+    const MISLABELED_UI: &str = "<Ui><Script>\n</Script></Ui>";
+    const NESTED_TYPE: &str = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:ui="http://www.blizzard.com/wow/ui/" targetNamespace="http://www.blizzard.com/wow/ui/">
+<xs:complexType name="T"/>
+<xs:element name="Holder"><xs:complexType name="T"/></xs:element>
+<xs:element name="Uses" type="ui:T"/>
+<xs:annotation><xs:appinfo><xs:schema><xs:complexType name="T"/></xs:schema></xs:appinfo></xs:annotation>
+<xs:element name="Conflicted" type="ui:T"><xs:complexType><xs:complexContent><xs:extension base="ui:T"/></xs:complexContent></xs:complexType></xs:element>
+</xs:schema>
+"#;
+
+    fn span_text<'a>(text: &'a str, span: &XmlSourceSpan) -> Result<&'a str, Box<dyn Error>> {
+        assert!(span.byte_start < span.byte_end);
+        Ok(text
+            .get(usize::try_from(span.byte_start)?..usize::try_from(span.byte_end)?)
+            .ok_or("schema span escapes its original UTF-8 member")?)
+    }
+    fn refuses<T>(
+        result: ProjectResult<T>,
+        code: ProjectErrorCode,
+        phase: ProjectPhase,
+    ) -> TestResult {
+        let error = result.err().ok_or("schema guard unexpectedly succeeded")?;
+        assert_eq!(error.code(), code);
+        assert_eq!(error.phase(), phase);
+        Ok(())
+    }
+
+    assert_eq!(XSD.len(), 1_575);
+    let schema_digest: ContentDigest<SourceContent> =
+        "sha256:021ee75d13ed27ef8f327a1e9a3f3c4f4cf7e62c8f0e2138a2e41d103432f3c3".parse()?;
+    assert_eq!(raw_digest(XSD.as_bytes()), schema_digest);
+    let root = FixtureRoot::new()?;
+    let stop = AtomicBool::new(false);
+    let profile = BlizzardUiSourceProfile::new(profile_request()?)?;
+    std::fs::write(root.0.join("UI/schema.xsd"), XSD)?;
+    // Only this test extends inventory accounting; no TOC/Main registration.
+    let declare = |revision: &[u8]| -> Result<PlatformSourceInventory, Box<dyn Error>> {
+        let mut declared = inventory(&root, &profile)?;
+        let bytes = std::fs::read(root.0.join("UI/schema.xsd"))?;
+        declared.entries.push(PlatformInventoryEntry {
+            path: "UI/schema.xsd".into(),
+            kind: PlatformFileKind::Schema,
+            disposition: PlatformEntryDisposition::Included {
+                digest: raw_digest(&bytes),
+                byte_length: bytes.len() as u64,
+                object_id: None,
+            },
+        });
+        declared
+            .roots
+            .first_mut()
+            .ok_or("fixture root missing")?
+            .declared_entries = declared.entries.len() as u64;
+        declared.origin.revision = PlatformSourceRevision::Fixture {
+            digest: raw_digest(revision),
+        };
+        Ok(declared)
+    };
+    let source_a = Arc::new(root.directory()?.admit_platform_source(
+        &profile,
+        declare(b"schema-owner-source-a")?,
+        &stop,
+    )?);
+    let mut changed_lua = std::fs::read(root.0.join("UI/defs.lua"))?;
+    changed_lua.extend_from_slice(b"\n-- schema-owner foreign source witness\n");
+    std::fs::write(root.0.join("UI/defs.lua"), changed_lua)?;
+    let source_b = Arc::new(root.directory()?.admit_platform_source(
+        &profile,
+        declare(b"schema-owner-source-b")?,
+        &stop,
+    )?);
+    std::fs::write(root.0.join("UI/schema.xsd"), MISLABELED_UI)?;
+    let source_c = Arc::new(root.directory()?.admit_platform_source(
+        &profile,
+        declare(b"schema-owner-source-c")?,
+        &stop,
+    )?);
+    std::fs::write(root.0.join("UI/schema.xsd"), NESTED_TYPE)?;
+    let source_d = Arc::new(root.directory()?.admit_platform_source(
+        &profile,
+        declare(b"schema-owner-source-d")?,
+        &stop,
+    )?);
+    std::fs::remove_dir_all(&root.0)?;
+    assert!(!root.0.exists());
+
+    let original = source_a.raw_member("UI/schema.xsd", &stop)?;
+    let foreign = source_b.raw_member("UI/schema.xsd", &stop)?;
+    assert_eq!(original.kind(), PlatformFileKind::Schema);
+    assert_eq!(original.kind(), foreign.kind());
+    assert_eq!(original.path(), foreign.path());
+    assert_eq!(original.bytes(), XSD.as_bytes());
+    assert_eq!(original.bytes(), foreign.bytes());
+    assert_eq!(original.content_digest(), schema_digest);
+    assert_eq!(original.content_digest(), foreign.content_digest());
+    assert_eq!(original.byte_length(), foreign.byte_length());
+    assert_eq!(
+        source_a.receipt().profile_digest(),
+        source_b.receipt().profile_digest()
+    );
+    assert_ne!(
+        source_a.receipt().source_snapshot_id(),
+        source_b.receipt().source_snapshot_id()
+    );
+    assert_ne!(
+        source_a.receipt().content_manifest_digest(),
+        source_b.receipt().content_manifest_digest()
+    );
+    assert_ne!(
+        source_a.receipt().admission_digest(),
+        source_b.receipt().admission_digest()
+    );
+
+    let loaded =
+        Arc::new(source_a.specialize_packages(&fixture_packages("Fixture"), None, &stop)?);
+    assert!(Arc::ptr_eq(loaded.source(), &source_a));
+    assert_eq!(loaded.files().len(), 1);
+    assert_eq!(
+        loaded.files()[0].relative_path().as_str(),
+        "packages/Fixture/defs.lua"
+    );
+    let plan = loaded
+        .load_plan()
+        .package_plan("Fixture")
+        .ok_or("package plan missing")?;
+    assert!(
+        !plan
+            .sources()
+            .iter()
+            .any(|source| source.path == "schema.xsd")
+    );
+    assert_eq!(
+        loaded.main_plan().resolve_source("Fixture", "schema.xsd"),
+        None
+    );
+    let configuration =
+        configuration_builder(ProjectKind::BlizzardUiPlatformSource, profile.target())?
+            .platform_packages(Arc::clone(&loaded))?
+            .build()?;
+    let library = LuaWorkspaceSnapshot::build(
+        configuration.analyzer_binding().backend().clone(),
+        LuaWorkspaceUniverse::Fixture,
+        vec![LuaWorkspaceFileInput::new(
+            "library/schema-owner-fixture.lua",
+            "---@meta _\nSchemaOwnerLibraryFixture = {}\n",
+        )],
+        LuaWorkspaceLimits::new(8, 16_384, 256 * 1024, 512 * 1024)?,
+    )?;
+    let mut publisher = ProjectPublisher::new();
+    let snapshot = publisher.publish_initial_cancellable(
+        ProjectInputBundle::closed(configuration, loaded.files().to_vec(), vec![library])?,
+        &stop,
+    )?;
+    snapshot.validate()?;
+    let view = snapshot.open_view();
+    assert_eq!(view.file_manifest().len(), 1);
+    assert_eq!(
+        view.file_manifest()[0].relative_path(),
+        loaded.files()[0].relative_path()
+    );
+    assert!(view.source_artifact("UI/schema.xsd")?.is_none());
+    assert!(
+        view.source_artifact("packages/Fixture/schema.xsd")?
+            .is_none()
+    );
+    let main_before = view.file_manifest().to_vec();
+    let snapshot_before = view.snapshot_id().to_owned();
+    let load_before = loaded.load_plan().digest();
+
+    let selection = XmlSchemaSelection::for_source(&source_a, &["UI/schema.xsd"], &stop)?;
+    let schema = admit_xml_schema(&source_a, &selection, &stop)?;
+    assert!(std::ptr::eq(schema.source(), source_a.as_ref()));
+    schema.validate_source(&source_a, &stop)?;
+    let receipt = schema.receipt();
+    assert_eq!(receipt.profile(), XML_SCHEMA_PROFILE);
+    assert_eq!(receipt.policy_profile(), XML_SCHEMA_POLICY_PROFILE);
+    assert_eq!(
+        receipt.source_snapshot_id(),
+        source_a.receipt().source_snapshot_id()
+    );
+    assert_eq!(
+        receipt.source_profile_digest(),
+        source_a.receipt().profile_digest()
+    );
+    assert_eq!(
+        receipt.content_manifest_digest(),
+        source_a.receipt().content_manifest_digest()
+    );
+    assert_eq!(
+        receipt.admission_digest(),
+        source_a.receipt().admission_digest()
+    );
+    assert_eq!(receipt.members(), selection.members);
+    assert_eq!(receipt.component_count(), schema.components().len());
+    assert_eq!(receipt.reference_count(), schema.references().len());
+    assert_eq!(receipt.issue_count(), schema.issues().len());
+    assert_eq!(receipt.members().len(), 1);
+    assert_eq!(receipt.members()[0].path, original.path());
+    assert_eq!(
+        receipt.members()[0].content_digest,
+        original.content_digest()
+    );
+    assert_eq!(receipt.members()[0].byte_length, original.byte_length());
+    assert_eq!(schema.documents().len(), 1);
+    let document = schema
+        .documents()
+        .first()
+        .ok_or("schema document missing")?;
+    assert_eq!(document.document(), original.path());
+    assert_eq!(document.source_digest(), schema_digest);
+    assert!(document.scripts().next().is_none());
+    let by_id: BTreeMap<_, _> = schema
+        .components()
+        .iter()
+        .map(|component| (component.id(), component))
+        .collect();
+    assert_eq!(by_id.len(), schema.components().len());
+    let mut elements = BTreeMap::new();
+    let mut types = BTreeMap::new();
+    let mut anonymous = Vec::new();
+    let mut locals = Vec::new();
+    for component in schema.components() {
+        assert_eq!(component.document(), original.path());
+        assert_eq!(component.content_digest(), schema_digest);
+        let native = document
+            .element(component.occurrence())
+            .ok_or("component occurrence missing")?;
+        assert_eq!(component.span(), &native.span);
+        assert!(span_text(XSD, component.span())?.starts_with("<xs:"));
+        match component.parent() {
+            Some(parent) => {
+                let parent = by_id.get(&parent).ok_or("component parent missing")?;
+                assert_eq!(
+                    native.parent_occurrence_id.as_deref(),
+                    Some(parent.occurrence())
+                );
+                assert!(parent.span().byte_start < component.span().byte_start);
+                assert!(component.span().byte_end <= parent.span().byte_end);
+            }
+            None => {
+                assert_eq!(component.kind(), Kind::Schema);
+                assert!(native.parent_occurrence_id.is_none());
+            }
+        }
+        assert_eq!(component.attributes().len(), native.attributes.len());
+        for attribute in component.attributes() {
+            let native_attribute = native
+                .attributes
+                .iter()
+                .find(|value| value.qualified_name == attribute.qualified_name())
+                .ok_or("component attribute missing from native index")?;
+            assert_eq!(attribute.span(), &native_attribute.span);
+            assert_eq!(attribute.value_span(), &native_attribute.value_span);
+            assert_eq!(attribute.value(), native_attribute.value());
+            assert_eq!(span_text(XSD, attribute.value_span())?, attribute.value());
+            assert_eq!(
+                attribute.decoded_value_digest(),
+                native_attribute.decoded_value_digest
+            );
+            assert_eq!(
+                attribute.decoded_value_digest(),
+                raw_digest(attribute.value().as_bytes())
+            );
+        }
+        match component.kind() {
+            Kind::GlobalElement | Kind::NamedComplexType | Kind::LocalElement => {
+                assert_eq!(component.state(), State::Observed);
+                let name = component
+                    .name()
+                    .ok_or("named component has no expanded name")?;
+                assert_eq!(name.namespace(), Some(UI));
+                match component.kind() {
+                    Kind::GlobalElement => {
+                        assert!(elements.insert(name.local_name(), component).is_none());
+                    }
+                    Kind::NamedComplexType => {
+                        assert!(types.insert(name.local_name(), component).is_none());
+                    }
+                    _ => locals.push(component),
+                }
+            }
+            Kind::AnonymousComplexType => {
+                assert_eq!(component.state(), State::Observed);
+                assert!(component.name().is_none());
+                anonymous.push(component);
+            }
+            _ => {}
+        }
+    }
+    assert_eq!(
+        elements.keys().copied().collect::<BTreeSet<_>>(),
+        BTreeSet::from([
+            "LayoutFrameRef",
+            "FrameRef",
+            "Frame",
+            "Texture",
+            "Anonymous",
+            "OwnerA",
+            "OwnerB",
+        ])
+    );
+    assert_eq!(
+        types.keys().copied().collect::<BTreeSet<_>>(),
+        BTreeSet::from([
+            "LayoutFrameRefType",
+            "FrameRefType",
+            "FrameType",
+            "TextureType",
+            "OwnerAType",
+            "OwnerBType",
+        ])
+    );
+    for (name, element) in &elements {
+        let is_abstract = matches!(*name, "LayoutFrameRef" | "FrameRef");
+        assert_eq!(
+            element
+                .attribute("abstract")
+                .map(|attribute| attribute.interpretation()),
+            is_abstract.then_some(&XmlSchemaAttributeValue::Boolean(true))
+        );
+    }
+    assert_eq!(anonymous.len(), 1);
+    let anonymous_type = anonymous.first().ok_or("anonymous type missing")?;
+    let anonymous_element = elements
+        .get("Anonymous")
+        .ok_or("Anonymous element missing")?;
+    assert_eq!(anonymous_type.parent(), Some(anonymous_element.id()));
+    assert!(anonymous_element.attribute("type").is_none());
+    assert_eq!(locals.len(), 2);
+    let mut local_types = BTreeMap::new();
+    for local in &locals {
+        assert_eq!(
+            local.name().ok_or("local name missing")?.local_name(),
+            "Slot"
+        );
+        let sequence = by_id
+            .get(&local.parent().ok_or("local parent missing")?)
+            .ok_or("sequence missing")?;
+        assert_eq!(sequence.kind(), Kind::Sequence);
+        let owner = by_id
+            .get(&sequence.parent().ok_or("sequence parent missing")?)
+            .ok_or("local type owner missing")?;
+        assert_eq!(owner.kind(), Kind::NamedComplexType);
+        assert!(
+            local_types
+                .insert(
+                    owner.name().ok_or("owner type name missing")?.local_name(),
+                    local.id()
+                )
+                .is_none()
+        );
+    }
+    assert_eq!(
+        local_types.keys().copied().collect::<BTreeSet<_>>(),
+        BTreeSet::from(["OwnerAType", "OwnerBType"])
+    );
+    assert_ne!(locals[0].id(), locals[1].id());
+    assert!(locals[0].span().byte_end <= locals[1].span().byte_start);
+
+    let mut type_refs = BTreeSet::new();
+    let mut base_refs = BTreeSet::new();
+    let mut substitution_refs = BTreeSet::new();
+    for reference in schema.references() {
+        assert_eq!(reference.state(), XmlSchemaReferenceState::Unique);
+        assert_eq!(reference.target().state(), XmlSchemaQNameState::Expanded);
+        assert_eq!(reference.candidates().len(), 1);
+        let source = by_id
+            .get(&reference.source())
+            .ok_or("reference source missing")?;
+        let target = by_id
+            .get(
+                reference
+                    .candidates()
+                    .first()
+                    .ok_or("reference target missing")?,
+            )
+            .ok_or("target component missing")?;
+        assert_eq!(reference.target().name(), target.name());
+        let attribute = source
+            .attribute(reference.attribute())
+            .ok_or("reference attribute missing")?;
+        assert_eq!(reference.value_span(), attribute.value_span());
+        assert_eq!(
+            reference.decoded_value_digest(),
+            attribute.decoded_value_digest()
+        );
+        assert_eq!(
+            reference.target().lexical(),
+            span_text(XSD, reference.value_span())?
+        );
+        assert_eq!(
+            attribute.interpretation(),
+            &XmlSchemaAttributeValue::QName(reference.target().clone())
+        );
+        let binding = reference
+            .target()
+            .binding()
+            .ok_or("QName binding witness missing")?;
+        assert_eq!(binding.document(), original.path());
+        assert_eq!(binding.namespace(), UI);
+        assert_eq!(
+            binding.prefix(),
+            reference
+                .target()
+                .lexical()
+                .split_once(':')
+                .map(|(prefix, _)| prefix)
+        );
+        let root_record = document
+            .element(binding.occurrence())
+            .ok_or("namespace occurrence missing")?;
+        assert!(root_record.parent_occurrence_id.is_none());
+        let namespace_attribute = root_record
+            .attributes
+            .iter()
+            .find(|attribute| {
+                attribute.qualified_name
+                    == binding
+                        .prefix()
+                        .map_or_else(|| "xmlns".to_owned(), |prefix| format!("xmlns:{prefix}"))
+            })
+            .ok_or("namespace declaration missing")?;
+        assert_eq!(binding.span(), &namespace_attribute.span);
+        assert_eq!(binding.value_span(), &namespace_attribute.value_span);
+        assert_eq!(
+            binding.decoded_value_digest(),
+            namespace_attribute.decoded_value_digest
+        );
+        assert_eq!(span_text(XSD, binding.value_span())?, UI);
+        match reference.kind() {
+            RefKind::Type => {
+                assert_eq!(reference.attribute(), "type");
+                assert_eq!(target.kind(), Kind::NamedComplexType);
+                assert!(type_refs.insert((source.id(), target.id())));
+            }
+            RefKind::Base => {
+                assert_eq!(reference.attribute(), "base");
+                assert_eq!(source.kind(), Kind::Extension);
+                let content = by_id
+                    .get(&source.parent().ok_or("extension parent missing")?)
+                    .ok_or("complex content missing")?;
+                assert_eq!(content.kind(), Kind::ComplexContent);
+                let owner = by_id
+                    .get(&content.parent().ok_or("base owner missing")?)
+                    .ok_or("base type owner missing")?;
+                assert!(matches!(
+                    owner.kind(),
+                    Kind::NamedComplexType | Kind::AnonymousComplexType
+                ));
+                assert!(base_refs.insert((owner.id(), target.id())));
+            }
+            RefKind::SubstitutionGroup => {
+                assert_eq!(reference.attribute(), "substitutionGroup");
+                assert_eq!(source.kind(), Kind::GlobalElement);
+                assert_eq!(target.kind(), Kind::GlobalElement);
+                assert!(substitution_refs.insert((source.id(), target.id())));
+            }
+            _ => return Err("fixture has an unexpected schema reference kind".into()),
+        }
+    }
+    let mut expected_types = BTreeSet::new();
+    for (element, ty) in [
+        ("LayoutFrameRef", "LayoutFrameRefType"),
+        ("FrameRef", "FrameRefType"),
+        ("Frame", "FrameType"),
+        ("Texture", "TextureType"),
+        ("OwnerA", "OwnerAType"),
+        ("OwnerB", "OwnerBType"),
+    ] {
+        expected_types.insert((
+            elements
+                .get(element)
+                .ok_or("expected element missing")?
+                .id(),
+            types.get(ty).ok_or("expected type missing")?.id(),
+        ));
+    }
+    for (owner, ty) in [("OwnerAType", "FrameType"), ("OwnerBType", "TextureType")] {
+        expected_types.insert((
+            *local_types.get(owner).ok_or("expected local missing")?,
+            types.get(ty).ok_or("local target type missing")?.id(),
+        ));
+    }
+    assert_eq!(type_refs, expected_types);
+    let mut expected_bases = BTreeSet::new();
+    for (source, target) in [
+        ("FrameRefType", "LayoutFrameRefType"),
+        ("FrameType", "FrameRefType"),
+        ("TextureType", "LayoutFrameRefType"),
+    ] {
+        expected_bases.insert((
+            types.get(source).ok_or("derived type missing")?.id(),
+            types.get(target).ok_or("base type missing")?.id(),
+        ));
+    }
+    expected_bases.insert((
+        anonymous_type.id(),
+        types
+            .get("FrameRefType")
+            .ok_or("anonymous base missing")?
+            .id(),
+    ));
+    assert_eq!(base_refs, expected_bases);
+    let mut expected_substitutions = BTreeSet::new();
+    for (source, target) in [
+        ("FrameRef", "LayoutFrameRef"),
+        ("Frame", "FrameRef"),
+        ("Texture", "LayoutFrameRef"),
+        ("Anonymous", "FrameRef"),
+    ] {
+        expected_substitutions.insert((
+            elements
+                .get(source)
+                .ok_or("substitution element missing")?
+                .id(),
+            elements
+                .get(target)
+                .ok_or("substitution head missing")?
+                .id(),
+        ));
+    }
+    assert_eq!(substitution_refs, expected_substitutions);
+    assert_eq!(
+        schema.references().len(),
+        type_refs.len() + base_refs.len() + substitution_refs.len()
+    );
+    // Issues remain explicit observations; do not turn this subset into full XSD validity.
+    for issue in schema.issues() {
+        let component = by_id
+            .get(&issue.component())
+            .ok_or("issue component missing")?;
+        assert_eq!(issue.document(), original.path());
+        assert_eq!(issue.occurrence(), component.occurrence());
+        span_text(XSD, issue.span())?;
+    }
+
+    refuses(
+        admit_xml_schema(&source_b, &selection, &stop),
+        ProjectErrorCode::SourceRegistryInvalid,
+        ProjectPhase::Inventory,
+    )?;
+    refuses(
+        schema.validate_source(&source_b, &stop),
+        ProjectErrorCode::SourceRegistryInvalid,
+        ProjectPhase::Inventory,
+    )?;
+    refuses(
+        XmlSchemaSelection::for_source(&source_a, &["UI/frames.xml"], &stop),
+        ProjectErrorCode::InvalidFileLanguage,
+        ProjectPhase::Inventory,
+    )?;
+    let xml_member = source_a.raw_member("UI/frames.xml", &stop)?;
+    assert_eq!(xml_member.kind(), PlatformFileKind::Xml);
+    let wrong_kind = XmlSchemaSelection {
+        members: vec![XmlSchemaMemberSelection {
+            path: xml_member.path().to_owned(),
+            content_digest: xml_member.content_digest(),
+            byte_length: xml_member.byte_length(),
+        }],
+        ..selection.clone()
+    };
+    refuses(
+        admit_xml_schema(&source_a, &wrong_kind, &stop),
+        ProjectErrorCode::InvalidFileLanguage,
+        ProjectPhase::Inventory,
+    )?;
+    let ui_member = source_c.raw_member("UI/schema.xsd", &stop)?;
+    assert_eq!(ui_member.kind(), PlatformFileKind::Schema);
+    assert_eq!(ui_member.bytes(), MISLABELED_UI.as_bytes());
+    assert_eq!(
+        ui_member.content_digest(),
+        raw_digest(MISLABELED_UI.as_bytes())
+    );
+    let ui_selection = XmlSchemaSelection::for_source(&source_c, &[ui_member.path()], &stop)?;
+    // No capability containing the native inline Script payload may escape admission.
+    refuses(
+        admit_xml_schema(&source_c, &ui_selection, &stop),
+        ProjectErrorCode::SourceRegistryInvalid,
+        ProjectPhase::Inventory,
+    )?;
+
+    let nested_selection = XmlSchemaSelection::for_source(&source_d, &["UI/schema.xsd"], &stop)?;
+    let nested = admit_xml_schema(&source_d, &nested_selection, &stop)?;
+    nested.validate_source(&source_d, &stop)?;
+    let nested_ids: BTreeMap<_, _> = nested
+        .components()
+        .iter()
+        .map(|component| (component.id(), component))
+        .collect();
+    let schema_parent = nested
+        .components()
+        .iter()
+        .find(|component| component.kind() == Kind::Schema && component.parent().is_none())
+        .ok_or("nested fixture root missing")?;
+    let declarations: Vec<_> = nested
+        .components()
+        .iter()
+        .filter(|component| {
+            component.kind() == Kind::NamedComplexType
+                && component
+                    .name()
+                    .is_some_and(|name| name.local_name() == "T")
+        })
+        .collect();
+    assert_eq!(declarations.len(), 3);
+    let global = declarations
+        .iter()
+        .find(|component| component.parent() == Some(schema_parent.id()))
+        .ok_or("global T missing")?;
+    let illegal = declarations
+        .iter()
+        .find(|component| component.state() == State::Invalid)
+        .ok_or("nested T missing")?;
+    let unsupported = declarations
+        .iter()
+        .find(|component| component.state() == State::Unsupported)
+        .ok_or("nested-Schema T missing")?;
+    assert_eq!(global.state(), State::Observed);
+    assert_eq!(illegal.state(), State::Invalid);
+    assert_eq!(global.name(), illegal.name());
+    assert_eq!(global.name(), unsupported.name());
+    assert_ne!(global.id(), illegal.id());
+    assert_ne!(global.id(), unsupported.id());
+    let nested_schema = nested_ids
+        .get(&unsupported.parent().ok_or("nested Schema parent missing")?)
+        .ok_or("nested Schema missing")?;
+    assert_eq!(nested_schema.kind(), Kind::Schema);
+    assert!(nested_schema.parent().is_some());
+    assert_eq!(nested_schema.state(), State::Invalid);
+    let holder = nested_ids
+        .get(&illegal.parent().ok_or("illegal type parent missing")?)
+        .ok_or("Holder missing")?;
+    assert_eq!(holder.kind(), Kind::GlobalElement);
+    assert_eq!(
+        holder.name().ok_or("Holder name missing")?.local_name(),
+        "Holder"
+    );
+    let invalid_context = nested
+        .issues()
+        .iter()
+        .find(|issue| {
+            issue.component() == illegal.id() && issue.kind() == XmlSchemaIssueKind::InvalidContext
+        })
+        .ok_or("nested T lost its InvalidContext observation")?;
+    assert_eq!(invalid_context.document(), "UI/schema.xsd");
+    assert_eq!(invalid_context.occurrence(), illegal.occurrence());
+    assert_eq!(invalid_context.span(), illegal.span());
+    assert!(
+        !nested
+            .issues()
+            .iter()
+            .any(|issue| issue.kind() == XmlSchemaIssueKind::ConflictingDeclarations)
+    );
+    let uses = nested
+        .components()
+        .iter()
+        .find(|component| {
+            component.kind() == Kind::GlobalElement
+                && component
+                    .name()
+                    .is_some_and(|name| name.local_name() == "Uses")
+        })
+        .ok_or("Uses element missing")?;
+    assert_eq!(nested.references().len(), 3);
+    let reference = nested
+        .references()
+        .iter()
+        .find(|reference| reference.source() == uses.id())
+        .ok_or("Uses type reference missing")?;
+    assert_eq!(reference.source(), uses.id());
+    assert_eq!(reference.kind(), RefKind::Type);
+    assert_eq!(reference.state(), XmlSchemaReferenceState::Unique);
+    assert_eq!(reference.candidates(), &[global.id()]);
+    assert_eq!(reference.target().name(), global.name());
+    assert_eq!(reference.target().lexical(), "ui:T");
+    let uses_attribute = uses
+        .attribute("type")
+        .ok_or("Uses type attribute missing")?;
+    assert_eq!(reference.value_span(), uses_attribute.value_span());
+    assert_eq!(
+        reference.decoded_value_digest(),
+        uses_attribute.decoded_value_digest()
+    );
+    assert_eq!(span_text(NESTED_TYPE, reference.value_span())?, "ui:T");
+    let conflicted = nested
+        .components()
+        .iter()
+        .find(|component| {
+            component.kind() == Kind::GlobalElement
+                && component
+                    .name()
+                    .is_some_and(|name| name.local_name() == "Conflicted")
+        })
+        .ok_or("Conflicted element missing")?;
+    assert_eq!(conflicted.state(), State::Invalid);
+    let anonymous = nested
+        .components()
+        .iter()
+        .find(|component| {
+            component.kind() == Kind::AnonymousComplexType
+                && component.parent() == Some(conflicted.id())
+        })
+        .ok_or("conflicted anonymous type missing")?;
+    let content = nested
+        .components()
+        .iter()
+        .find(|component| {
+            component.kind() == Kind::ComplexContent && component.parent() == Some(anonymous.id())
+        })
+        .ok_or("conflicted complex content missing")?;
+    let extension = nested
+        .components()
+        .iter()
+        .find(|component| {
+            component.kind() == Kind::Extension && component.parent() == Some(content.id())
+        })
+        .ok_or("conflicted extension missing")?;
+    for component in [anonymous, content, extension] {
+        assert_eq!(component.state(), State::Unsupported);
+    }
+    for (source, kind) in [(conflicted, RefKind::Type), (extension, RefKind::Base)] {
+        let reference = nested
+            .references()
+            .iter()
+            .find(|reference| reference.source() == source.id())
+            .ok_or("conflicted reference missing")?;
+        assert_eq!(reference.kind(), kind);
+        assert_eq!(
+            reference.state(),
+            XmlSchemaReferenceState::UnsupportedContext
+        );
+        assert_eq!(reference.candidates(), &[global.id()]);
+        assert_eq!(reference.target().name(), global.name());
+        assert_eq!(span_text(NESTED_TYPE, reference.value_span())?, "ui:T");
+    }
+    let nested_document = nested
+        .documents()
+        .first()
+        .ok_or("nested fixture index missing")?;
+    for component in nested.components() {
+        assert_eq!(component.document(), "UI/schema.xsd");
+        assert_eq!(
+            component.content_digest(),
+            raw_digest(NESTED_TYPE.as_bytes())
+        );
+        assert_eq!(
+            component.span(),
+            &nested_document
+                .element(component.occurrence())
+                .ok_or("nested component index missing")?
+                .span
+        );
+        span_text(NESTED_TYPE, component.span())?;
+    }
+
+    let cancelled = AtomicBool::new(true);
+    let raw_cancel = source_a
+        .raw_member("UI/schema.xsd", &cancelled)
+        .err()
+        .ok_or("cancelled raw read succeeded")?;
+    assert_eq!(raw_cancel.code(), ProjectErrorCode::SourceReadCancelled);
+    assert_eq!(raw_cancel.phase(), ProjectPhase::Inventory);
+    refuses(
+        XmlSchemaSelection::for_source(&source_a, &["UI/schema.xsd"], &cancelled),
+        raw_cancel.code(),
+        raw_cancel.phase(),
+    )?;
+    refuses(
+        admit_xml_schema(&source_a, &selection, &cancelled),
+        raw_cancel.code(),
+        raw_cancel.phase(),
+    )?;
+    refuses(
+        schema.validate_source(&source_a, &cancelled),
+        raw_cancel.code(),
+        raw_cancel.phase(),
+    )?;
+    schema.validate_source(&source_a, &stop)?;
+    snapshot.validate()?;
+    assert_eq!(view.snapshot_id(), snapshot_before);
+    assert_eq!(view.file_manifest(), main_before);
+    assert_eq!(loaded.load_plan().digest(), load_before);
+    assert!(view.source_artifact("UI/schema.xsd")?.is_none());
+    Ok(())
+}
+
+#[test]
 fn native_admission_retains_bytes_and_separate_identity_scopes() -> TestResult {
     let root = FixtureRoot::new()?;
     let copied = FixtureRoot::new()?;

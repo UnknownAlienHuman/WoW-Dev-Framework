@@ -187,10 +187,17 @@ v9 remain on native /1. All workspace gates/build pass, completed
 mapping branches, fault/exhaustion and real-source/runtime qualification are not
 executed acceptance results of this fixture.
 
-Next: finish XML object/region classification, then implement fingerprints,
-bounded SkeletonInputView and source service/CLI transport. Full W17, E0/E2,
-real mirror/performance/runtime and
-W18-W26 remain open. Gethe preparation follows product implementation/build.
+The selected XSD component library prerequisite reuses the existing XML parser
+and holds exact schema/source witnesses; see [schema components](PLATFORM_XML_SCHEMA_COMPONENTS.md).
+It does not complete application classification or change graph/service/replay selection.
+
+Canonical W17 work: [Issue #106](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/106).
+Next: #113 corpus/profile limits, #114 definition-aware axes, #115 selected
+composition, #117 classification, #118 fingerprints, then #116 validated candidate,
+SkeletonInputView and source service/CLI. [Execution policy](EXECUTION_MODEL.md)
+requires Tier S during implementation and keeps Tier A/X acceptance separate.
+Full W17, E0/E2 and W18-W26 remain open. Gethe test-checkout preparation follows
+product implementation/build.
 
 W14 now publishes explicit final physical Main deltas through the retained native
 owner and the complete graph producer chain. It reuses unchanged parsed trees

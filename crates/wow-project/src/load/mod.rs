@@ -9,6 +9,7 @@ pub(crate) use package_closure::{
     read_admitted_packages, validate_declarations as validate_package_declarations,
 };
 mod saved_variables;
+pub mod schema;
 mod toc;
 pub use document_toc::DocumentTocSelection;
 pub use metadata::TocMetadata;

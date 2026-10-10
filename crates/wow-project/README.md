@@ -77,7 +77,7 @@ A repository, owner, package, path, name, signature, body digest, fingerprint, p
 
 ```text
 documentation frontier: E6-B project mapping seam
-implementation frontier: partial executable E0-D, including explicit disk inputs
+implementation frontier: partial executable E0-D/E2-C/E3-A; full acceptance remains open
 Cargo.toml: active root workspace member
 Rust source: src/
 CI/workflows: root workspace CI; full package acceptance is separate

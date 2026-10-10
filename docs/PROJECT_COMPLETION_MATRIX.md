@@ -2,7 +2,8 @@
 
 **Audited:** 2026-09-19 America/New_York. Execution inventory refreshed 2026-10-10
 through the scoped W17 replay/stable namespace, native lookup, raw traversal,
-selected package/raw graph, native direct-plan, assertion-adapter, selected direct-service and native XML source-map checkpoints
+selected package/raw graph, native direct-plan, assertion-adapter, selected
+direct-service, native XML source-map and selected XSD component checkpoints
 below, including their final workspace gate census.
 
 This is the current execution ledger. [IMPLEMENTATION_HANDOFF.md](IMPLEMENTATION_HANDOFF.md)
@@ -705,3 +706,8 @@ replay selection. XML object/region classification, virtual-Lua source mapping,
 fingerprints, SkeletonInputView and source transport still precede full W17/E3.
 Real Gethe/Ketho corpus, performance, runtime, full package acceptance and W18-W26
 remain open; Gethe preparation stays deferred until product implementation/build.
+
+The selected [schema component owner](PLATFORM_XML_SCHEMA_COMPONENTS.md) adds a
+source-bound library prerequisite. Application classification remains open;
+no package or launch gate advances. Canonical Issue #106 tracks the current
+#113-#119 blockers and exact-head verification without another per-slice test census.

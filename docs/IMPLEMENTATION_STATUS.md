@@ -76,6 +76,11 @@ recognizer chain now pass the native lifecycle and final workspace gates/build
 (944 passed, 0 failed, 1 ignored, 112 targets); see
 [selected direct service](PLATFORM_DIRECT_SERVICE.md). Missing direct roles,
 fingerprints, SkeletonInputView and source service/CLI transport follow.
+Explicit retained XSD component admission is now executable through the existing
+XML owner, with root-only global symbols and final unsupported context propagation.
+See [schema components](PLATFORM_XML_SCHEMA_COMPONENTS.md) for its bounded scope.
+Application classification, the #113-#116 blockers and full W17 acceptance remain open;
+the current work and exact-head evidence live in canonical Issue #106.
 Broad package acceptance remains open.
 
 ## W14 retained physical native analysis (2026-10-09)

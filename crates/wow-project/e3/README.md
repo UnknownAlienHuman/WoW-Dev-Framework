@@ -1,6 +1,9 @@
 # `wow-project` E3-A Blizzard UI source-universe index contract
 
-**Status:** implementation-ready documentation; no Rust code yet.
+**Status:** partial executable source/package, graph/publication and selected XML
+component slices; full E3-A acceptance remains open. See the
+[current census](../../../docs/PROJECT_COMPLETION_MATRIX.md) and
+[schema component owner](../../../docs/PLATFORM_XML_SCHEMA_COMPONENTS.md).
 
 **Contract ID:** `wow-project/e3-a/blizzard-ui-source-universe-index`
 
