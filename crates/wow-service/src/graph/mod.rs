@@ -2,6 +2,8 @@
 //! No ProjectStore, implicit current selector or analyzer. Source read-back needs
 //! the distinct explicit source-root route; metadata-only reads never open sources.
 mod build;
+#[cfg(test)]
+pub(crate) use build::verify_source_axes_through_service;
 pub(crate) use build::{live_publication, live_publication_from_backend};
 mod bundle;
 pub use bundle::GRAPH_BUNDLE_MAX_BYTES;

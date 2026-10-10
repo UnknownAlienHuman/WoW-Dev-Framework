@@ -27,21 +27,17 @@ use wow_graph::{
     GraphProposalValue, GraphRelationKind, GraphSnapshot,
 };
 use wow_project::{
-    AnalyzerBindingDeclaration, PackageXmlBindingProfile, PlatformGraphProfile,
-    ProjectBudgetPolicy, ProjectCapabilityPolicy, ProjectConfigurationBuilder, ProjectErrorCode,
-    ProjectId, ProjectInputBundle, ProjectKind, ProjectPublisher, ProjectSourceOriginId,
-    ProjectView, ProjectWorkspaceId,
+    AnalyzerBindingDeclaration, PackageXmlBindingProfile, PlatformGraphCapabilities,
+    PlatformGraphCapability, PlatformGraphProfile, ProjectBudgetPolicy, ProjectCapabilityPolicy,
+    ProjectConfigurationBuilder, ProjectErrorCode, ProjectId, ProjectInputBundle, ProjectKind,
+    ProjectPublisher, ProjectSourceOriginId, ProjectView, ProjectWorkspaceId,
     disk::{ProjectDiskFile, ProjectInputDirectory},
     graph::{
-        PLATFORM_DIRECT_GRAPH_PROFILE, PLATFORM_DIRECT_GRAPH_WITH_INVENTORY_SPANS_PROFILE,
-        PLATFORM_DIRECT_GRAPH_WITH_STRUCTURAL_ROLES_PROFILE,
-        PLATFORM_DIRECT_GRAPH_WITH_XML_SOURCE_MAPS_PROFILE, PlatformGraphProducer,
+        PLATFORM_CAPABILITIES_GRAPH_PROFILE, PLATFORM_DIRECT_GRAPH_PROFILE, PlatformGraphProducer,
         PlatformGraphProposalPlan, ProjectGraphPackageLoadOutcome, ProjectGraphProvenance,
         ProjectGraphXmlReferenceOutcome, ProjectTocFactKind, ProjectXmlFactKind,
         SOURCE_GRAPH_PARTITION, XmlSourceMapOmissionOutcome, build_platform_graph_proposal_plan,
-        build_platform_graph_proposal_plan_with_inventory_spans,
-        build_platform_graph_proposal_plan_with_structural_roles,
-        build_platform_graph_proposal_plan_with_xml_source_maps, build_source_graph_proposals,
+        build_platform_graph_proposal_plan_for_capabilities, build_source_graph_proposals,
     },
     load::{
         LoadIssueKind, LoadRecordKind, LoadSelection, ProjectPackageInput,
@@ -63,6 +59,55 @@ use wow_project::{
 };
 
 type ResultOf<T = ()> = Result<T, Box<dyn Error>>;
+
+fn span_capabilities() -> ResultOf<PlatformGraphCapabilities> {
+    Ok(PlatformGraphCapabilities::new(&[
+        PlatformGraphCapability::InventorySpansV1,
+    ])?)
+}
+fn role_capabilities() -> ResultOf<PlatformGraphCapabilities> {
+    Ok(PlatformGraphCapabilities::new(&[
+        PlatformGraphCapability::InventorySpansV1,
+        PlatformGraphCapability::StructuralRolesV1,
+    ])?)
+}
+fn map_capabilities() -> ResultOf<PlatformGraphCapabilities> {
+    Ok(PlatformGraphCapabilities::new(&[
+        PlatformGraphCapability::InventorySpansV1,
+        PlatformGraphCapability::StructuralRolesV1,
+        PlatformGraphCapability::XmlSourceMapsV1,
+    ])?)
+}
+fn inventory_span_plan<'a>(
+    view: &'a ProjectView,
+    stop: &AtomicBool,
+) -> ResultOf<PlatformGraphProposalPlan<'a>> {
+    Ok(build_platform_graph_proposal_plan_for_capabilities(
+        view,
+        span_capabilities()?,
+        stop,
+    )?)
+}
+fn structural_role_plan<'a>(
+    view: &'a ProjectView,
+    stop: &AtomicBool,
+) -> ResultOf<PlatformGraphProposalPlan<'a>> {
+    Ok(build_platform_graph_proposal_plan_for_capabilities(
+        view,
+        role_capabilities()?,
+        stop,
+    )?)
+}
+fn xml_source_map_plan<'a>(
+    view: &'a ProjectView,
+    stop: &AtomicBool,
+) -> ResultOf<PlatformGraphProposalPlan<'a>> {
+    Ok(build_platform_graph_proposal_plan_for_capabilities(
+        view,
+        map_capabilities()?,
+        stop,
+    )?)
+}
 static NEXT_ROOT: AtomicUsize = AtomicUsize::new(0);
 const PACKAGES: [&str; 2] = ["Alpha", "Beta"];
 const XML: &str = concat!(
@@ -425,13 +470,10 @@ fn inventory_spans(
         .map(|(id, _)| *id)
         .collect::<BTreeSet<_>>();
     let omitted = source.source_handles().len() - known.len();
-    let mut plan = build_platform_graph_proposal_plan_with_inventory_spans(view, stop)?;
+    let mut plan = inventory_span_plan(view, stop)?;
     assert!(plan.xml_source_maps().is_none());
-    assert_eq!(
-        plan.profile(),
-        PLATFORM_DIRECT_GRAPH_WITH_INVENTORY_SPANS_PROFILE
-    );
-    assert_eq!(plan.registry().version(), "17");
+    assert_eq!(plan.profile(), PLATFORM_CAPABILITIES_GRAPH_PROFILE);
+    assert_eq!(plan.registry().version(), span_capabilities()?.version_id());
     assert_eq!(plan.inventory_span_omissions(), Some(omitted));
     assert_eq!(plan.scope().universe, *original.foundation().universe());
     assert_ne!(plan.scope().generation, *original.foundation().generation());
@@ -454,13 +496,13 @@ fn inventory_spans(
     let mut owner = initial(&plan, stop)?;
     for &producer in plan.producer_order() {
         let stage = plan.build_stage(producer, &owner, stop)?;
-        assert_eq!(stage.producer_version(), "2");
+        let version = stage.producer_version().to_owned();
         let (batch, coverage) = stage.into_parts();
         if producer == PlatformGraphProducer::Inventory {
             let wrong_version = admit(&owner, batch.clone(), "1", coverage.clone(), stop)?;
             refused(plan.build_stage(PlatformGraphProducer::TocLoad, &wrong_version, stop))?;
         }
-        owner = admit(&owner, batch, "2", coverage, stop)?;
+        owner = admit(&owner, batch, &version, coverage, stop)?;
     }
     owner.validate(stop)?;
     assert_eq!(
@@ -478,10 +520,7 @@ fn inventory_spans(
         ])
     );
     let finished = plan.finish(&owner, stop)?;
-    assert_eq!(
-        finished.profile(),
-        PLATFORM_DIRECT_GRAPH_WITH_INVENTORY_SPANS_PROFILE
-    );
+    assert_eq!(finished.profile(), PLATFORM_CAPABILITIES_GRAPH_PROFILE);
     assert_eq!(finished.inventory_span_omissions(), Some(omitted));
     assert!(std::ptr::eq(finished.project(), view));
     assert!(std::ptr::eq(finished.graph(), &owner));
@@ -726,6 +765,11 @@ fn inventory_spans(
     for &producer in legacy.producer_order() {
         let stage = legacy.build_stage(producer, &unchanged, stop)?;
         assert_eq!(stage.producer_version(), "1");
+        assert!(
+            serde_json::to_value(&stage)?
+                .get("producer_version")
+                .is_none()
+        );
         let (batch, coverage) = stage.into_parts();
         unchanged = admit(&unchanged, batch, "1", coverage, stop)?;
     }
@@ -792,14 +836,14 @@ fn structural_roles(
     stop: &AtomicBool,
 ) -> ResultOf<GraphPartitionSnapshot> {
     assert_eq!(original.registry().version(), "16");
-    assert_eq!(spans.registry().version(), "17");
-    let mut plan = build_platform_graph_proposal_plan_with_structural_roles(view, stop)?;
-    assert!(plan.xml_source_maps().is_none());
     assert_eq!(
-        plan.profile(),
-        PLATFORM_DIRECT_GRAPH_WITH_STRUCTURAL_ROLES_PROFILE
+        spans.registry().version(),
+        span_capabilities()?.version_id()
     );
-    assert_eq!(plan.registry().version(), "18");
+    let mut plan = structural_role_plan(view, stop)?;
+    assert!(plan.xml_source_maps().is_none());
+    assert_eq!(plan.profile(), PLATFORM_CAPABILITIES_GRAPH_PROFILE);
+    assert_eq!(plan.registry().version(), role_capabilities()?.version_id());
     let omitted = source
         .source_handles()
         .values()
@@ -833,13 +877,13 @@ fn structural_roles(
     assert_eq!(owner.partitions().len(), 1);
     for &producer in plan.producer_order() {
         let stage = plan.build_stage(producer, &owner, stop)?;
-        assert_eq!(stage.producer_version(), "3");
+        let version = stage.producer_version().to_owned();
         let (batch, coverage) = stage.into_parts();
         if producer == PlatformGraphProducer::Inventory {
             let wrong_version = admit(&owner, batch.clone(), "2", coverage.clone(), stop)?;
             refused(plan.build_stage(PlatformGraphProducer::TocLoad, &wrong_version, stop))?;
         }
-        owner = admit(&owner, batch, "3", coverage, stop)?;
+        owner = admit(&owner, batch, &version, coverage, stop)?;
     }
     owner.validate(stop)?;
     assert_eq!(
@@ -858,10 +902,7 @@ fn structural_roles(
     );
     assert!(owner.partition(SOURCE_GRAPH_PARTITION).is_none());
     let finished = plan.finish(&owner, stop)?;
-    assert_eq!(
-        finished.profile(),
-        PLATFORM_DIRECT_GRAPH_WITH_STRUCTURAL_ROLES_PROFILE
-    );
+    assert_eq!(finished.profile(), PLATFORM_CAPABILITIES_GRAPH_PROFILE);
     assert_eq!(finished.inventory_span_omissions(), Some(omitted));
     assert!(std::ptr::eq(finished.project(), view));
     assert!(std::ptr::eq(finished.graph(), &owner));
@@ -965,7 +1006,11 @@ fn structural_roles(
             partition.batch().entity_proposals().len()
         );
         if partition.partition_id() != raw_id {
-            assert_eq!(partition.producer_version(), "3");
+            assert!(
+                partition
+                    .producer_version()
+                    .starts_with(partition.partition_id())
+            );
         }
         for coverage in partition.coverage() {
             assert!(!coverage.negative_authority());
@@ -1897,11 +1942,8 @@ fn structural_roles(
     // Both older native owners stay usable; /2 is retained, not reconstructed.
     original.validate(stop)?;
     spans.validate(stop)?;
-    let unchanged = build_platform_graph_proposal_plan_with_inventory_spans(view, stop)?;
-    assert_eq!(
-        unchanged.profile(),
-        PLATFORM_DIRECT_GRAPH_WITH_INVENTORY_SPANS_PROFILE
-    );
+    let unchanged = inventory_span_plan(view, stop)?;
+    assert_eq!(unchanged.profile(), PLATFORM_CAPABILITIES_GRAPH_PROFILE);
     assert_eq!(unchanged.registry(), spans.registry());
     assert_eq!(unchanged.foundation(), spans.foundation());
     assert_eq!(
@@ -1982,12 +2024,9 @@ fn xml_source_maps(
     );
     assert!(analysis.unresolved_scripts().is_empty());
 
-    let mut plan = build_platform_graph_proposal_plan_with_xml_source_maps(view, stop)?;
-    assert_eq!(
-        plan.profile(),
-        PLATFORM_DIRECT_GRAPH_WITH_XML_SOURCE_MAPS_PROFILE
-    );
-    assert_eq!(plan.registry().version(), "19");
+    let mut plan = xml_source_map_plan(view, stop)?;
+    assert_eq!(plan.profile(), PLATFORM_CAPABILITIES_GRAPH_PROFILE);
+    assert_eq!(plan.registry().version(), map_capabilities()?.version_id());
     let scope = plan.scope().clone();
     let summary = plan
         .xml_source_maps()
@@ -2001,7 +2040,11 @@ fn xml_source_maps(
     );
     assert_eq!(summary.unit_count(), analysis.units().len());
     assert!(summary.piece_count() > summary.unit_count());
-    for (prior, version) in priors.into_iter().zip(["16", "17", "18"]) {
+    for (prior, version) in priors.into_iter().zip([
+        "16".to_owned(),
+        span_capabilities()?.version_id(),
+        role_capabilities()?.version_id(),
+    ]) {
         assert_eq!(prior.registry().version(), version);
         assert_eq!(&scope.universe, prior.foundation().universe());
         assert_ne!(&scope.generation, prior.foundation().generation());
@@ -2025,13 +2068,13 @@ fn xml_source_maps(
     let mut owner = initial(&plan, stop)?;
     for &producer in plan.producer_order() {
         let stage = plan.build_stage(producer, &owner, stop)?;
-        assert_eq!(stage.producer_version(), "4");
+        let version = stage.producer_version().to_owned();
         let (batch, coverage) = stage.into_parts();
         if producer == PlatformGraphProducer::Inventory {
             let old_stage = admit(&owner, batch.clone(), "3", coverage.clone(), stop)?;
             refused(plan.build_stage(PlatformGraphProducer::TocLoad, &old_stage, stop))?;
         }
-        owner = admit(&owner, batch, "4", coverage, stop)?;
+        owner = admit(&owner, batch, &version, coverage, stop)?;
     }
     owner.validate(stop)?;
     assert_eq!(
@@ -2053,16 +2096,13 @@ fn xml_source_maps(
     assert!(std::ptr::eq(finished.project(), view));
     assert!(std::ptr::eq(finished.graph(), &owner));
     assert_eq!(finished.scope(), &scope);
-    assert_eq!(
-        finished.profile(),
-        PLATFORM_DIRECT_GRAPH_WITH_XML_SOURCE_MAPS_PROFILE
-    );
+    assert_eq!(finished.profile(), PLATFORM_CAPABILITIES_GRAPH_PROFILE);
     verify_definition_axes(&owner, stop)?;
     assert_eq!(finished.xml_source_maps(), Some(&summary));
     let augmented = finished.source();
     assert_eq!(
         serde_json::to_value(augmented)?["profile"],
-        PLATFORM_DIRECT_GRAPH_WITH_XML_SOURCE_MAPS_PROFILE
+        PLATFORM_CAPABILITIES_GRAPH_PROFILE
     );
     assert_eq!(augmented.context(), source.context());
     assert_eq!(augmented.files(), source.files());
@@ -2088,7 +2128,11 @@ fn xml_source_maps(
             partition.batch().entity_proposals().len()
         );
         if partition.partition_id() != raw_id {
-            assert_eq!(partition.producer_version(), "4");
+            assert!(
+                partition
+                    .producer_version()
+                    .starts_with(partition.partition_id())
+            );
         }
         for coverage in partition.coverage() {
             assert!(!coverage.negative_authority());
@@ -2874,11 +2918,8 @@ fn xml_source_maps(
     for prior in priors {
         prior.validate(stop)?;
     }
-    let unchanged = build_platform_graph_proposal_plan_with_structural_roles(view, stop)?;
-    assert_eq!(
-        unchanged.profile(),
-        PLATFORM_DIRECT_GRAPH_WITH_STRUCTURAL_ROLES_PROFILE
-    );
+    let unchanged = structural_role_plan(view, stop)?;
+    assert_eq!(unchanged.profile(), PLATFORM_CAPABILITIES_GRAPH_PROFILE);
     assert_eq!(unchanged.registry(), priors[2].registry());
     assert_eq!(unchanged.foundation(), priors[2].foundation());
     assert!(unchanged.xml_source_maps().is_none());
@@ -3022,7 +3063,7 @@ fn direct_package_stages_bind_native_predecessors_and_preserve_replay() -> Resul
     for &producer in plan.producer_order() {
         let stage = plan.build_stage(producer, &owner, &stop)?;
         assert_eq!(stage.producer(), producer);
-        let version = stage.producer_version();
+        let version = stage.producer_version().to_owned();
         let (batch, stage_coverage) = stage.into_parts();
         assert_eq!(
             plan.build_stage(producer, &owner, &stop)?.into_parts(),
@@ -3035,7 +3076,7 @@ fn direct_package_stages_bind_native_predecessors_and_preserve_replay() -> Resul
                 admit(&owner, batch.clone(), "2", stage_coverage.clone(), &stop)?;
             refused(plan.build_stage(PlatformGraphProducer::TocLoad, &different_current, &stop))?;
         }
-        owner = admit(&owner, batch, version, stage_coverage, &stop)?;
+        owner = admit(&owner, batch, &version, stage_coverage, &stop)?;
         let partition = owner
             .partition(producer.partition_id())
             .ok_or("stage partition missing")?;
@@ -3280,9 +3321,9 @@ fn direct_package_stages_bind_native_predecessors_and_preserve_replay() -> Resul
     let mut replay_owner = initial(&replay_plan, &stop)?;
     for &producer in replay_plan.producer_order() {
         let stage = replay_plan.build_stage(producer, &replay_owner, &stop)?;
-        let version = stage.producer_version();
+        let version = stage.producer_version().to_owned();
         let (batch, coverage) = stage.into_parts();
-        replay_owner = admit(&replay_owner, batch, version, coverage, &stop)?;
+        replay_owner = admit(&replay_owner, batch, &version, coverage, &stop)?;
     }
     assert_eq!(replay_owner, owner);
     let replay_finished = replay_plan.finish(&replay_owner, &stop)?;
@@ -3330,9 +3371,9 @@ fn direct_package_stages_bind_native_predecessors_and_preserve_replay() -> Resul
     assert_eq!(prelude.report().accepted_entities().len(), 6);
     for &producer in raw_plan.producer_order() {
         let stage = raw_plan.build_stage(producer, &raw_owner, &stop)?;
-        let version = stage.producer_version();
+        let version = stage.producer_version().to_owned();
         let (batch, coverage) = stage.into_parts();
-        raw_owner = admit(&raw_owner, batch, version, coverage, &stop)?;
+        raw_owner = admit(&raw_owner, batch, &version, coverage, &stop)?;
     }
     assert_eq!(raw_owner.partitions().len(), 5);
     let raw_finished = raw_plan.finish(&raw_owner, &stop)?;

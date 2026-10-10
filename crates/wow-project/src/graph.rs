@@ -14,13 +14,9 @@ mod producer_derivations;
 mod producer_evidence;
 use platform_producers::DirectRecipe;
 pub use platform_producers::{
-    PLATFORM_DIRECT_GRAPH_PROFILE, PLATFORM_DIRECT_GRAPH_WITH_INVENTORY_SPANS_PROFILE,
-    PLATFORM_DIRECT_GRAPH_WITH_STRUCTURAL_ROLES_PROFILE,
-    PLATFORM_DIRECT_GRAPH_WITH_XML_SOURCE_MAPS_PROFILE, PlatformGraphProducerProposals,
-    PlatformGraphProposalPlan, PlatformGraphProvenance, build_platform_graph_proposal_plan,
-    build_platform_graph_proposal_plan_with_inventory_spans,
-    build_platform_graph_proposal_plan_with_structural_roles,
-    build_platform_graph_proposal_plan_with_xml_source_maps,
+    PLATFORM_CAPABILITIES_GRAPH_PROFILE, PLATFORM_DIRECT_GRAPH_PROFILE,
+    PlatformGraphProducerProposals, PlatformGraphProposalPlan, PlatformGraphProvenance,
+    build_platform_graph_proposal_plan, build_platform_graph_proposal_plan_for_capabilities,
 };
 mod projection;
 mod structural_registry;
@@ -102,6 +98,7 @@ pub const SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/19";
 pub const PACKAGE_SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/20";
 pub const PACKAGE_RAW_SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/21";
 pub const DIRECT_PLATFORM_SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/22";
+pub const CAPABILITIES_SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-capabilities/1";
 pub const SOURCE_GRAPH_PARTITION: &str = "wow-project.source-load";
 
 /// Select the graph identity from the admitted configuration, never from source
@@ -116,6 +113,9 @@ pub fn source_graph_profile(configuration: &crate::ProjectConfiguration) -> &'st
         }
         Some(crate::PlatformGraphProfile::DirectPlatformProducersWithRawInventoryV1) => {
             DIRECT_PLATFORM_SOURCE_GRAPH_PROFILE
+        }
+        Some(crate::PlatformGraphProfile::DirectCapabilitiesV1(_)) => {
+            CAPABILITIES_SOURCE_GRAPH_PROFILE
         }
     }
 }
@@ -783,23 +783,13 @@ fn registry_for_recipe(
     if recipe.xml_source_maps() {
         xml_source_map_registry::extend(&mut entities, &mut relations)?;
     }
-    GraphRegistryBundle::build(
-        SOURCE_GRAPH_REGISTRY_ID,
-        if recipe.xml_source_maps() {
-            "19"
-        } else if recipe.structural_roles() {
-            "18"
-        } else if recipe.inventory_spans() {
-            "17"
-        } else if raw_inventory {
-            "16"
-        } else {
-            "15"
-        },
-        entities,
-        relations,
-    )
-    .map_err(|_| invalid())
+    let version = match recipe {
+        DirectRecipe::Capabilities(capabilities) => capabilities.version_id(),
+        DirectRecipe::Original if raw_inventory => "16".into(),
+        DirectRecipe::Original => "15".into(),
+    };
+    GraphRegistryBundle::build(SOURCE_GRAPH_REGISTRY_ID, version, entities, relations)
+        .map_err(|_| invalid())
 }
 
 fn support(
@@ -857,8 +847,10 @@ pub fn build_source_graph_proposals(
     stop: &AtomicBool,
 ) -> ProjectResult<ProjectSourceGraphProposals> {
     crate::analyzer::checkpoint(stop)?;
-    if project.configuration().platform_graph_profile()
-        == Some(crate::PlatformGraphProfile::DirectPlatformProducersWithRawInventoryV1)
+    if project
+        .configuration()
+        .platform_graph_profile()
+        .is_some_and(crate::PlatformGraphProfile::is_direct)
     {
         return Err(ProjectError::new(
             ProjectErrorCode::DeferredCapability,

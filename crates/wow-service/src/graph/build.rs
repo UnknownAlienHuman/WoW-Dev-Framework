@@ -45,12 +45,15 @@ use wow_recognizers::source_construction::SourceConstructionRecognition;
 use wow_recognizers::source_mixins::{SourceMixinAssignmentRecognition, SourceMixinRecognition};
 use wow_recognizers::source_scripts::{SourceScriptAssertionRecognition, SourceScriptRecognition};
 use wow_recognizers::source_state::{SourceStateAssertionRecognition, SourceStateRecognition};
+#[cfg(test)]
+pub(crate) use xml_tests::verify_source_axes_through_service;
 
 const MAX_BUNDLE_BYTES: usize = 32 * 1024 * 1024;
 pub(super) const GRAPH_BUILD_RESULT_SCHEMA: &str = "wow-service/graph-build-result/16";
 const PACKAGE_GRAPH_BUILD_RESULT_SCHEMA: &str = "wow-service/graph-build-result/17";
 const PACKAGE_RAW_GRAPH_BUILD_RESULT_SCHEMA: &str = "wow-service/graph-build-result/18";
 const DIRECT_PLATFORM_GRAPH_BUILD_RESULT_SCHEMA: &str = "wow-service/graph-build-result/19";
+const CAPABILITIES_GRAPH_BUILD_RESULT_SCHEMA: &str = "wow-service/graph-build-result/20";
 
 struct BuiltGraph {
     snapshot: GraphPartitionSnapshot,
@@ -105,6 +108,8 @@ pub struct GraphBuildRequest {
     project_id: String,
     selector: GenerationSelector,
     projection: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    capabilities: Option<wow_project::PlatformGraphCapabilities>,
 }
 impl GraphBuildRequest {
     pub fn new(project_id: String, generation: String) -> ServiceResult<Self> {
@@ -123,6 +128,7 @@ impl GraphBuildRequest {
             project_id,
             selector,
             projection: SOURCE_GRAPH_PROFILE,
+            capabilities: None,
         })
     }
 
@@ -133,6 +139,7 @@ impl GraphBuildRequest {
         mut self,
         profile: wow_project::PlatformGraphProfile,
     ) -> Self {
+        self.capabilities = None;
         match profile {
             wow_project::PlatformGraphProfile::PackageProjectionV1 => {
                 self.schema = "wow-service/graph-build-request/10";
@@ -145,6 +152,11 @@ impl GraphBuildRequest {
             wow_project::PlatformGraphProfile::DirectPlatformProducersWithRawInventoryV1 => {
                 self.schema = "wow-service/graph-build-request/12";
                 self.projection = wow_project::graph::DIRECT_PLATFORM_SOURCE_GRAPH_PROFILE;
+            }
+            wow_project::PlatformGraphProfile::DirectCapabilitiesV1(capabilities) => {
+                self.schema = "wow-service/graph-build-request/13";
+                self.projection = wow_project::graph::CAPABILITIES_SOURCE_GRAPH_PROFILE;
+                self.capabilities = Some(capabilities);
             }
         }
         self
@@ -161,6 +173,15 @@ impl GraphBuildRequest {
         }
         let project = backend.acquire_project(&self.selector, stop)?;
         if self.projection != wow_project::graph::source_graph_profile(project.configuration()) {
+            return Err(error(ServiceErrorCode::IdentityMismatch));
+        }
+        let selected = match project.configuration().platform_graph_profile() {
+            Some(wow_project::PlatformGraphProfile::DirectCapabilitiesV1(capabilities)) => {
+                Some(capabilities)
+            }
+            _ => None,
+        };
+        if self.capabilities != selected {
             return Err(error(ServiceErrorCode::IdentityMismatch));
         }
         Ok(project)
@@ -428,7 +449,9 @@ pub fn execute_graph_build(
 ) -> ServiceResult<GraphBuildResult> {
     let request_digest = super::hash(&bounded(request, super::GRAPH_REQUEST_MAX_BYTES)?);
     let mut result = GraphBuildResult {
-        schema: if request.projection == wow_project::graph::DIRECT_PLATFORM_SOURCE_GRAPH_PROFILE {
+        schema: if request.projection == wow_project::graph::CAPABILITIES_SOURCE_GRAPH_PROFILE {
+            CAPABILITIES_GRAPH_BUILD_RESULT_SCHEMA
+        } else if request.projection == wow_project::graph::DIRECT_PLATFORM_SOURCE_GRAPH_PROFILE {
             DIRECT_PLATFORM_GRAPH_BUILD_RESULT_SCHEMA
         } else if request.projection == wow_project::graph::PACKAGE_RAW_SOURCE_GRAPH_PROFILE {
             PACKAGE_RAW_GRAPH_BUILD_RESULT_SCHEMA

@@ -482,7 +482,7 @@ fn validate_project(
     stop: &AtomicBool,
 ) -> ProjectResult<()> {
     crate::analyzer::checkpoint(stop)?;
-    if source.profile != PLATFORM_DIRECT_GRAPH_WITH_XML_SOURCE_MAPS_PROFILE {
+    if source.profile != PLATFORM_CAPABILITIES_GRAPH_PROFILE {
         return Err(invalid());
     }
     let analyzer = project.snapshot().analyzer_binding();

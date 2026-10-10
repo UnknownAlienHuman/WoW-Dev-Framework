@@ -18,8 +18,10 @@ pub(super) fn prepare<'project>(
     stop: &AtomicBool,
 ) -> ServiceResult<SourcePrefix<'project>> {
     checkpoint(stop)?;
-    if project.configuration().platform_graph_profile()
-        == Some(wow_project::PlatformGraphProfile::DirectPlatformProducersWithRawInventoryV1)
+    if project
+        .configuration()
+        .platform_graph_profile()
+        .is_some_and(wow_project::PlatformGraphProfile::is_direct)
     {
         let mut plan = build_platform_graph_proposal_plan(project, stop).map_err(project_error)?;
         let mut owner = GraphPartitionSnapshot::new(
@@ -45,9 +47,9 @@ pub(super) fn prepare<'project>(
             let stage = plan
                 .build_stage(producer, &owner, stop)
                 .map_err(project_error)?;
-            let version = stage.producer_version();
+            let version = stage.producer_version().to_owned();
             let (batch, coverage) = stage.into_parts();
-            owner = admit(&owner, batch, coverage, version, stop)?;
+            owner = admit(&owner, batch, coverage, &version, stop)?;
         }
         Ok(SourcePrefix {
             owner,

@@ -9,29 +9,11 @@ uses it for source /22 and native replay /9; older selections keep their layouts
 The native cases and final workspace gates/build pass on
 2026-10-10. Full W17/E3 acceptance remains open.
 
-The separate
-[`build_platform_graph_proposal_plan_with_inventory_spans`](PLATFORM_INVENTORY_SPANS.md)
-entry selects native /2, registry17 and stage version2 for captured known spans
-and exact file containment. The original entry below remains native /1. Both
-plan and finished capability expose `inventory_span_omissions()`: None for /1,
-Some(count) for /2. Application source /22 and replay/storage v9 use /1.
-
-The separate
-[`build_platform_graph_proposal_plan_with_structural_roles`](PLATFORM_STRUCTURAL_ROLES.md)
-entry requires the existing raw-inventory selection and adds native /3,
-registry18 and stage version3. It extends captured spans with exact project/raw
-membership, selected TOC roles and lexical XML containment/script/reference roles.
-It retains `Some(count)` span omissions. Application and replay routes still
-select native /1; neither extension introduces an application selector.
-
-The separate
-[`build_platform_graph_proposal_plan_with_xml_source_maps`](PLATFORM_XML_SOURCE_MAPS.md)
-entry extends /3 with original XML-to-virtual-Lua unit/piece associations. Native
-/4 selects registry19 and stage version4. Preparation admits exact XML-piece
-support before Inventory spans; XmlStructure then joins the genuine script sites,
-units and spans. `xml_source_maps()` returns a read-only native summary on the
-plan and finished capability; /1-/3 retain None. Application/replay selection is
-unchanged.
+The selected [capability composition](PLATFORM_GRAPH_CAPABILITIES.md) now carries
+captured spans, structural roles and XML mapping as independently versioned
+capabilities through configuration, service and durable replay. The transient
+native /2-/4 constructors and registry identities are retired. The admitted /1
+service/replay path keeps its exact behavior.
 
 ## Native inputs and API
 
@@ -39,14 +21,14 @@ The APIs are exported from `wow_project::graph`. Construction requires a genuine
 `ProjectKind::BlizzardUiPlatformSource` with an existing selected platform graph
 profile. The common collector validates the held project, configuration,
 packages, retained load plans and same-session analyzer reports. Ordinary or
-unselected projects return `DeferredCapability`. No new configuration selector
-or serialized admission flag is introduced.
+unselected projects return `DeferredCapability`. The selected capability set is
+part of configuration identity; serialized reports cannot construct a native owner.
 
-The plan's separate library profile is
-`wow-project/platform-direct-producers/1`. `PlatformGraphProposalPlan` exposes
+The legacy profile is `wow-project/platform-direct-producers/1`; selected sets use
+`wow-project/platform-capabilities/1`. `PlatformGraphProposalPlan` exposes
 `profile()`, `registry()`, `scope()`, `limits()`, `foundation()`,
 `raw_inventory_batch()`, `raw_inventory_producer_version()` and
-`producer_order()`. One shared projection supplies either this plan or the
+`producer_order()` and `capabilities()`. One shared projection supplies either this plan or the
 existing flattened builder; the plan adds no parser, analyzer pass or temporary
 ProjectView.
 
@@ -144,9 +126,9 @@ Scripts retain endpoint references in their recognition envelope; state/core
 retain actual graph derivation records. This native caller composition does not
 select the split in configuration, service publication or replay.
 
-Native /3 now supplies project/raw membership, selected TOC/variant/load-unit
+The StructuralRolesV1 capability supplies project/raw membership, selected TOC/variant/load-unit
 and lexical XML/script/parent-reference roles over retained native receipts; see
-[structural roles](PLATFORM_STRUCTURAL_ROLES.md). Native /4 supplies
+[structural roles](PLATFORM_STRUCTURAL_ROLES.md). XmlSourceMapsV1 supplies
 [virtual-Lua source mapping](PLATFORM_XML_SOURCE_MAPS.md). Full XML object/region
 classification,
 structural fingerprints, bounded `SkeletonInputView` and source service/CLI
@@ -154,7 +136,7 @@ transport remain open. Full W17/E3/package, real Gethe/Ketho corpus, performance
 native fault/exhaustion and WoW runtime acceptance remain NotEvaluated. Gethe
 materialization stays deferred; W18-W26 are unchanged.
 
-## Scoped verification
+## Historical checkpoint verification
 
 The single [native synthetic test](../crates/wow-project/tests/platform_direct_producers.rs)
 `direct_package_stages_bind_native_predecessors_and_preserve_replay` passes. With

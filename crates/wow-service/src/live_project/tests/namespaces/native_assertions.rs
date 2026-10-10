@@ -278,9 +278,9 @@ fn native_assertion_chain_uses_exact_direct_predecessors() -> TestResult {
         )?;
         for &producer in plan.producer_order() {
             let stage = plan.build_stage(producer, &direct_owner, &stop)?;
-            let version = stage.producer_version();
+            let version = stage.producer_version().to_owned();
             let (batch, coverage) = stage.into_parts();
-            direct_owner = admit(&direct_owner, batch, coverage, version, &stop)?;
+            direct_owner = admit(&direct_owner, batch, coverage, &version, &stop)?;
         }
         assert_eq!(direct_owner.partitions().len(), 5);
         let direct = plan.finish(&direct_owner, &stop)?;

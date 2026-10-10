@@ -1,18 +1,12 @@
 # Captured Inventory spans in the native direct graph
 
-The explicit library entry
-`wow_project::graph::build_platform_graph_proposal_plan_with_inventory_spans`
-adds exact captured source-span entities and file-to-span containment. It requires
-one genuine retained platform ProjectView and uses the existing collector,
-source handles and evidence. No parser, analyzer or source acquisition is added.
-
-The entry selects native `wow-project/platform-direct-producers/2`, direct stage
-producer version `2`, and registry `wow-project.source-load` version `17` before
-input generation, foundation and raw prelude are constructed. Follow the same
-ordered native admission/finish protocol as
-[the direct producer plan](PLATFORM_DIRECT_PRODUCERS.md). Old accepted batches are
-not valid in the new registry scope.
-
+Select `inventory_spans_v1` through the exact
+[capability configuration](PLATFORM_GRAPH_CAPABILITIES.md). The native selected
+plan adds captured spans and file containment using the existing collector,
+source handles and evidence over one genuine retained platform ProjectView.
+The selected registry binds the exact set before input generation, foundation
+and raw prelude construction. Follow the existing ordered
+[admission/finish protocol](PLATFORM_DIRECT_PRODUCERS.md).
 | Role | Registry and owner | Exact support |
 | --- | --- | --- |
 | Captured span | `source_span`, Inventory, Proven | Semantic key `source_handle` is the original canonical handle ID; original handle and EvidenceRecord are retained. |
@@ -23,7 +17,7 @@ in full, including origin/revision, path/digest, generations, optional entity ke
 and span. ByteRange retains native half-open byte coordinates and file bounds;
 WholeFile remains WholeFile. Unknown handles emit no extent or containment row.
 `inventory_span_omissions()` on the plan and finished capability returns
-`Some(count)` for native /2, including Some(0), and None for native /1. The source
+`Some(count)` when InventorySpansV1 is selected, including Some(0); otherwise None. The source
 report retains the omitted handles and original source coverage.
 
 Contains coverage stays Partial with negative authority false. This indexes known
@@ -38,11 +32,11 @@ invalid/missing/conflicting support prevents finished capability construction.
 Finish resolves every admitted proposal and returns the genuine held evidence
 catalog; serializable proposal reports cannot construct that capability.
 
-The original native /1 entry and stage serialization remain unchanged. Source
-/22, selected service request12/result19 and native replay/storage v9 still use
-native /1. Native /2 adds no configuration, service, CLI or replay selector. The
-existing registry-16 raw excerpt binder does not admit registry17; new raw read
-binding is outside this slice.
+The admitted native /1 service/replay path retains its identities. The former
+native /2-only recipe is consolidated into the selected set; see
+[compatibility and remaining scope](PLATFORM_GRAPH_CAPABILITIES.md#compatibility-inventory).
+
+## Historical checkpoint verification
 
 The existing disk-absent
 [direct producer lifecycle](../crates/wow-project/tests/platform_direct_producers.rs)

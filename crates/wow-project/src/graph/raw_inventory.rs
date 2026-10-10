@@ -102,6 +102,7 @@ pub(super) fn selected(config: &crate::ProjectConfiguration) -> bool {
         Some(
             crate::PlatformGraphProfile::PackageProjectionWithRawInventoryV1
                 | crate::PlatformGraphProfile::DirectPlatformProducersWithRawInventoryV1
+                | crate::PlatformGraphProfile::DirectCapabilitiesV1(_)
         )
     )
 }

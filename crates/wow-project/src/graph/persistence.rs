@@ -169,7 +169,8 @@ fn validate(
         }
         Some(
             crate::PlatformGraphProfile::PackageProjectionWithRawInventoryV1
-            | crate::PlatformGraphProfile::DirectPlatformProducersWithRawInventoryV1,
+            | crate::PlatformGraphProfile::DirectPlatformProducersWithRawInventoryV1
+            | crate::PlatformGraphProfile::DirectCapabilitiesV1(_),
         ) => {
             return Err(ProjectError::new(
                 ProjectErrorCode::DeferredCapability,

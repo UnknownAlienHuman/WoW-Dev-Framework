@@ -60,7 +60,7 @@ pub(super) fn validate(
     for &producer in plan.producer_order() {
         crate::analyzer::checkpoint(stop)?;
         let stage = plan.build_stage(producer, &rebuilt, stop)?;
-        let producer_version = stage.producer_version();
+        let producer_version = stage.producer_version().to_owned();
         let (batch, coverage) = stage.into_parts();
         let prepared = rebuilt
             .prepare_replacement(

@@ -391,7 +391,7 @@ fn xml_pipeline_publishes_object_parentage_and_template_references() -> Result<(
     Ok(())
 }
 
-fn verify_source_axes_through_service(
+pub(crate) fn verify_source_axes_through_service(
     owner: &GraphPartitionSnapshot,
     stop: &AtomicBool,
 ) -> Result<(), Box<dyn Error>> {
@@ -405,16 +405,26 @@ fn verify_source_axes_through_service(
         (GraphAxis::Load, GraphRelationKind::Loads),
     ] {
         let profile = wow_project::graph::source_graph_axis_profile(owner.registry(), axis)?;
-        let edge = owner
+        let mut roots = owner
             .snapshot()
-            .edges()
+            .nodes()
             .iter()
-            .find(|edge| edge.relation() == kind)
-            .ok_or("axis root edge")?;
+            .filter(|node| node.kind() == "source_package")
+            .map(|node| node.node_id().clone())
+            .collect::<Vec<_>>();
+        if roots.is_empty() {
+            let edge = owner
+                .snapshot()
+                .edges()
+                .iter()
+                .find(|edge| edge.relation() == kind)
+                .ok_or("axis root edge")?;
+            roots.push(edge.from().clone());
+        }
         let query = GraphAxisQuery::new(
             owner.snapshot().snapshot_id().clone(),
             &profile,
-            vec![edge.from().clone()],
+            roots,
             GraphAxisTraversal::Forward,
             GraphSubgraphLimits::default(),
         )?;
@@ -422,6 +432,10 @@ fn verify_source_axes_through_service(
         let direct = query.execute(owner, &profile, stop)?;
         assert!(!direct.projection().edges().is_empty());
         assert!(!direct.edge_definitions().is_empty());
+        assert!(direct.edge_definitions().iter().all(|binding| !matches!(
+            binding.relation_id(),
+            "xml_occurrence_source_span" | "xml_map_piece_source_span"
+        )));
         let request = GraphReadRequest::new(GraphReadQuery::Axis(query));
         let result = execute_graph_read(
             GraphReadOperation::Axis,

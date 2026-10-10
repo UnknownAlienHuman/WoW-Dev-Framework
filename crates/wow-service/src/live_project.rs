@@ -83,17 +83,7 @@ impl LiveProjectStore {
     pub fn open(root: &Path) -> ServiceResult<Self> {
         // Each open requires an exact registered epoch. The store rejects a
         // catalog mismatch before opening SQLite writable; no migration occurs.
-        for schemas in [
-            publication::STORAGE_SCHEMAS,
-            publication::STORAGE_SCHEMAS_V8,
-            publication::STORAGE_SCHEMAS_V7,
-            publication::STORAGE_SCHEMAS_V6,
-            publication::STORAGE_SCHEMAS_V5,
-            publication::STORAGE_SCHEMAS_V4,
-            publication::STORAGE_SCHEMAS_V3,
-            publication::STORAGE_SCHEMAS_V2,
-            publication::STORAGE_SCHEMAS_V1,
-        ] {
+        for &schemas in publication::STORAGE_SCHEMA_CATALOGS {
             match ProjectStore::open(root, &catalog_for(schemas)?) {
                 Ok(store) => return Ok(Self { store }),
                 Err(error) if error.code() == StoreErrorCode::IntegrityViolation => {}

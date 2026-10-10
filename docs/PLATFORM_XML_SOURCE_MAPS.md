@@ -1,14 +1,11 @@
 # Native XML source maps
 
-The explicit library entry
-`wow_project::graph::build_platform_graph_proposal_plan_with_xml_source_maps`
-projects retained XML-to-virtual-Lua source associations over one genuine platform
-`ProjectView` with the existing selected raw-inventory configuration. It selects
-`PLATFORM_DIRECT_GRAPH_WITH_XML_SOURCE_MAPS_PROFILE`
-(`wow-project/platform-direct-producers/4`), registry `wow-project.source-load`
-version `19` and four direct producer stages at version `4`. The registry digest
-binds a distinct input generation, foundation and raw prelude. Follow the ordered
-[native admission and finish protocol](PLATFORM_DIRECT_PRODUCERS.md).
+Select `xml_source_maps_v1` with its exact span/structural dependencies through
+[capability configuration](PLATFORM_GRAPH_CAPABILITIES.md). The existing ordered
+native plan projects retained XML-to-virtual-Lua source associations over one
+genuine platform ProjectView. The exact set binds configuration, registry,
+service request and durable replay; the transient native /4 recipe is retired.
+Follow the [admission/finish protocol](PLATFORM_DIRECT_PRODUCERS.md).
 
 The owner borrows the existing package/load plans, XML lexical indexes and
 `ProjectXmlLuaAnalysis`; it adds no parser, analyzer session, source acquisition
@@ -27,7 +24,8 @@ retain `analysis_id() -> Option<&str>`, `semantic_state()`, `unit_count()`,
 `piece_count()` and `omissions()`. These observations cannot construct an analysis
 or substitute for a finished native capability.
 
-Native /1-/3 return no mapping summary. Native /4 retains a summary even with no
+Plans without XmlSourceMapsV1 return no mapping summary. A selected map capability
+retains a summary even with no
 units; an absent native analysis keeps `analysis_id == None` and
 `NotEvaluatedNoInlineUnits`. A captured empty InlineBody may retain a unit with
 zero pieces. These API branches are separate from the exercised fixture below.
@@ -40,7 +38,8 @@ Support enters the graph in two phases:
    `wow.project` ProjectSource/Proven/SourceObservation evidence recipe. Any
    existing handle/evidence pair must match completely; new pairs are charged
    before insertion. Virtual URI/path names never become source handles. Only
-   the augmented native /4 provenance is labeled /4 before precharge/admission.
+   the augmented provenance is labeled `wow-project/platform-capabilities/1`
+   before precharge/admission.
 2. Inventory projects spans from that admitted support. After the project, TOC
    and lexical XML roles, mapping output joins their genuine script-site and
    Inventory span proposals. Native stage admission and finish resolve exact
@@ -48,8 +47,8 @@ Support enters the graph in two phases:
    scope. Cross-stage endpoints use input-generation nodes; publication
    rebinding remains separate.
 
-The augmented native /4 source report preserves every original captured-source
-support record exactly and adds the XML-piece pairs. Its /4 profile and
+The augmented selected mapping source report preserves every original captured-source
+support record exactly and adds the XML-piece pairs. Its capability profile and
 additional support distinguish it from the older source report. The finished
 evidence catalog also retains every original raw-inventory handle and evidence
 record alongside the captured/piece support. Captured handles use exact qualified
@@ -57,7 +56,7 @@ project coordinates through `ProjectView::source_handle`; raw handles retain
 original inventory paths and genuine admitted raw-source authority. Equal bytes
 do not make these handle domains interchangeable.
 
-## Registry19 associations
+## Selected mapping associations
 
 Both entity kinds and all three relations belong to XmlStructure with Proven
 source-observation confidence. Entity identity includes every mandatory key:
@@ -129,18 +128,16 @@ candidate windows are charged before result copies. Oversized or incompatible
 input refuses rather than clipping data; typed cancellation prevents finish.
 Source graph coverage stays scoped Partial with negative authority false.
 
-Native /1, /2 and /3 retain their own recipes, registry scopes and identities.
-Only the explicit native library entry selects /4. Source /22, service
-request12/result19 and replay/storage v9 retain native /1 and are unchanged;
-this checkpoint adds no configuration, service, CLI or replay selector. The
-registry16 raw read binding remains separate and does not admit registry19.
-
+The admitted native /1 and replay v9 route retains its exact identities. Mapping
+is reachable through selected service request13/result20 and replay/storage v10.
+The metadata-only raw reader remains separate; it cannot admit a native owner.
+See [exact compatibility boundaries](PLATFORM_GRAPH_CAPABILITIES.md#compatibility-inventory).
 Full XML object/region classification, fingerprints, bounded SkeletonInputView,
 source transport, real Gethe/Ketho corpus/performance/runtime qualification and
 full W17/E3/package acceptance remain open, alongside W18-W26. This checkpoint
 does not acquire or execute external source or establish license permission.
 
-## Scoped verification
+## Historical checkpoint verification
 
 The expanded existing disk-absent
 [native lifecycle](../crates/wow-project/tests/platform_direct_producers.rs)

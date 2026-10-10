@@ -136,6 +136,7 @@ fn platform_bundle_with_profile_source(
         Some(
             PlatformGraphProfile::PackageProjectionWithRawInventoryV1
                 | PlatformGraphProfile::DirectPlatformProducersWithRawInventoryV1
+                | PlatformGraphProfile::DirectCapabilitiesV1(_)
         )
     ) {
         members.extend([

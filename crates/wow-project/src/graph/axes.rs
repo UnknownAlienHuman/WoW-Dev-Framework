@@ -152,14 +152,26 @@ mod tests {
     type ResultOf<T = ()> = Result<T, Box<dyn std::error::Error>>;
 
     #[test]
-    fn real_registry18_and_registry19_bind_exact_reviewed_definitions() -> ResultOf {
-        for (recipe, version, ownership_count) in [
-            (DirectRecipe::StructuralRoles, "18", 9),
-            (DirectRecipe::XmlSourceMaps, "19", 10),
+    fn real_capability_registries_bind_exact_reviewed_definitions() -> ResultOf {
+        use crate::{PlatformGraphCapabilities, PlatformGraphCapability::*};
+        for (capabilities, ownership_count) in [
+            (
+                PlatformGraphCapabilities::new(&[InventorySpansV1, StructuralRolesV1])?,
+                9,
+            ),
+            (
+                PlatformGraphCapabilities::new(&[
+                    InventorySpansV1,
+                    StructuralRolesV1,
+                    XmlSourceMapsV1,
+                ])?,
+                10,
+            ),
         ] {
+            let recipe = DirectRecipe::Capabilities(capabilities);
             let registry =
                 registry_for_recipe(ProjectKind::BlizzardUiPlatformSource, true, recipe)?;
-            assert_eq!(registry.version(), version);
+            assert_eq!(registry.version(), capabilities.version_id());
             let entities: Vec<wow_graph::GraphEntityKindDefinition> =
                 serde_json::from_value(serde_json::to_value(&registry)?["entity_kinds"].clone())?;
             for axis in [

@@ -16,8 +16,10 @@ use crate::{
     ProjectWorkspaceId,
 };
 
+mod graph_capabilities;
 mod platform;
 use crate::platform_source::{PlatformPackageBinding, PlatformPackageSpecialization};
+pub use graph_capabilities::{PlatformGraphCapabilities, PlatformGraphCapability};
 use platform::RetainedPlatformPackages;
 
 pub const PROJECT_CONFIGURATION_SCHEMA_VERSION: u64 = 1;
@@ -51,6 +53,17 @@ pub enum PlatformGraphProfile {
     PackageProjectionV1,
     PackageProjectionWithRawInventoryV1,
     DirectPlatformProducersWithRawInventoryV1,
+    DirectCapabilitiesV1(PlatformGraphCapabilities),
+}
+
+impl PlatformGraphProfile {
+    #[must_use]
+    pub const fn is_direct(self) -> bool {
+        matches!(
+            self,
+            Self::DirectPlatformProducersWithRawInventoryV1 | Self::DirectCapabilitiesV1(_)
+        )
+    }
 }
 
 /// Explicit publication capability policy.

@@ -217,7 +217,26 @@ fn signal_membership(record: &serde_json::Value, graph: &GraphPartitionSnapshot)
 
 #[test]
 fn direct_platform_service_reopens_v9_and_frozen_v8_refuses() -> TestResult {
-    let path = root("direct-platform-service-v9")?;
+    direct_platform_service_lifecycle(
+        PlatformGraphProfile::DirectPlatformProducersWithRawInventoryV1,
+    )
+}
+
+#[test]
+fn selected_capabilities_service_reopens_v10_and_frozen_v9_refuses() -> TestResult {
+    use wow_project::{PlatformGraphCapabilities, PlatformGraphCapability::*};
+    direct_platform_service_lifecycle(PlatformGraphProfile::DirectCapabilitiesV1(
+        PlatformGraphCapabilities::new(&[InventorySpansV1, StructuralRolesV1, XmlSourceMapsV1])?,
+    ))
+}
+
+fn direct_platform_service_lifecycle(profile: PlatformGraphProfile) -> TestResult {
+    let composed = matches!(profile, PlatformGraphProfile::DirectCapabilitiesV1(_));
+    let path = root(if composed {
+        "direct-platform-capabilities-v10"
+    } else {
+        "direct-platform-service-v9"
+    })?;
     {
         let stop = AtomicBool::new(false);
         let toc = format!(
@@ -238,7 +257,7 @@ fn direct_platform_service_reopens_v9_and_frozen_v8_refuses() -> TestResult {
             &source_path,
             1,
             true,
-            Some(PlatformGraphProfile::DirectPlatformProducersWithRawInventoryV1),
+            Some(profile),
             Some(&fixture),
             &stop,
         )?;
@@ -267,17 +286,19 @@ fn direct_platform_service_reopens_v9_and_frozen_v8_refuses() -> TestResult {
             bundle.configuration().project_id().as_str().into(),
             "current".into(),
         )?
-        .with_platform_graph_profile(
-            PlatformGraphProfile::DirectPlatformProducersWithRawInventoryV1,
-        );
+        .with_platform_graph_profile(profile);
         let request_record = serde_json::to_value(&request)?;
         assert_eq!(
             request_record["schema"],
-            "wow-service/graph-build-request/12"
+            if composed {
+                "wow-service/graph-build-request/13"
+            } else {
+                "wow-service/graph-build-request/12"
+            }
         );
         assert_eq!(
             request_record["projection"],
-            "wow-project/source-load-proposals/22"
+            wow_project::graph::source_graph_profile(bundle.configuration())
         );
         let (direct_publication, _) =
             request.live_publication_in_namespace(input(&bundle)?, selection.namespace(), &stop)?;
@@ -287,7 +308,11 @@ fn direct_platform_service_reopens_v9_and_frozen_v8_refuses() -> TestResult {
             serde_json::from_slice(&artifact.canonical_bytes()?)?;
         assert_eq!(
             artifact_record["schema"],
-            "wow-service/graph-build-result/19"
+            if composed {
+                "wow-service/graph-build-result/20"
+            } else {
+                "wow-service/graph-build-result/19"
+            }
         );
         assert!(artifact_record.get("failure").is_none());
         assert!(artifact_record.get("state_recognition").is_none());
@@ -329,7 +354,7 @@ fn direct_platform_service_reopens_v9_and_frozen_v8_refuses() -> TestResult {
         assert_eq!(read.project().configuration(), bundle.configuration());
         assert_eq!(
             wow_project::graph::source_graph_profile(read.project().configuration()),
-            "wow-project/source-load-proposals/22"
+            wow_project::graph::source_graph_profile(bundle.configuration())
         );
         assert_eq!(serde_json::to_value(read.graph())?, artifact_graph);
         assert_eq!(
@@ -346,6 +371,9 @@ fn direct_platform_service_reopens_v9_and_frozen_v8_refuses() -> TestResult {
                 .is_none()
         );
         final_membership(read.graph(), &stop)?;
+        if composed {
+            crate::graph::verify_source_axes_through_service(read.graph(), &stop)?;
+        }
         signal_membership(&artifact_record, read.graph())?;
         let library = read
             .graph()
@@ -418,14 +446,89 @@ fn direct_platform_service_reopens_v9_and_frozen_v8_refuses() -> TestResult {
                 .is_empty()
         );
         assert!(read.read.manifest().members.iter().any(|member| {
-            member.key == "live.project.replay" && member.schema == "wow-project.live-replay.v9"
+            member.key == "live.project.replay"
+                && member.schema
+                    == if composed {
+                        "wow-project.live-replay.v10"
+                    } else {
+                        "wow-project.live-replay.v9"
+                    }
         }));
         let replay: serde_json::Value = read
             .read
             .record("live.project.replay", &stop)?
             .ok_or("v9 replay missing")?
             .decode()?;
-        assert_eq!(replay["schema"], "wow-project/native-project-replay/9");
+        assert_eq!(
+            replay["schema"],
+            if composed {
+                "wow-project/native-project-replay/10"
+            } else {
+                "wow-project/native-project-replay/9"
+            }
+        );
+        if let PlatformGraphProfile::DirectCapabilitiesV1(capabilities) = profile {
+            assert_eq!(read.graph().registry().version(), capabilities.version_id());
+            assert_eq!(
+                request_record["capabilities"],
+                serde_json::to_value(capabilities)?
+            );
+            assert_eq!(
+                replay["configuration"]["platform_graph_profile"]["direct_capabilities_v1"],
+                serde_json::to_value(capabilities)?
+            );
+            for (producer, entity_kind) in [
+                (PlatformGraphProducer::Inventory, "source_span"),
+                (PlatformGraphProducer::Inventory, "source_project"),
+                (PlatformGraphProducer::TocLoad, "source_toc_manifest"),
+                (PlatformGraphProducer::XmlStructure, "xml_source_occurrence"),
+                (
+                    PlatformGraphProducer::XmlStructure,
+                    "xml_source_virtual_lua_unit",
+                ),
+                (
+                    PlatformGraphProducer::XmlStructure,
+                    "xml_source_virtual_lua_map_piece",
+                ),
+            ] {
+                let partition = read
+                    .graph()
+                    .partition(producer.partition_id())
+                    .ok_or("selected producer missing")?;
+                assert!(
+                    partition
+                        .batch()
+                        .entity_proposals()
+                        .iter()
+                        .any(|proposal| proposal.entity_kind_id() == entity_kind),
+                    "missing selected {entity_kind}"
+                );
+            }
+            let wrong_selection = crate::graph::GraphBuildRequest::new(
+                bundle.configuration().project_id().as_str().into(),
+                "current".into(),
+            )?
+            .with_platform_graph_profile(PlatformGraphProfile::DirectCapabilitiesV1(
+                wow_project::PlatformGraphCapabilities::default(),
+            ));
+            assert_eq!(
+                wrong_selection
+                    .live_publication_in_namespace(input(&bundle)?, selection.namespace(), &stop)
+                    .err()
+                    .ok_or("different selection admitted")?
+                    .code(),
+                ServiceErrorCode::IdentityMismatch
+            );
+            let mut downgrade = replay.clone();
+            downgrade["schema"] = serde_json::json!("wow-project/native-project-replay/9");
+            assert!(
+                wow_project::replay::ProjectReplay::from_json(
+                    &serde_json::to_vec(&downgrade)?,
+                    &stop
+                )
+                .is_err()
+            );
+        }
         let project_id = read.project().snapshot_id().to_owned();
         let analyzer_id = read.project().analyzer_snapshot_id().to_owned();
         let graph = read.graph().clone();
@@ -445,6 +548,9 @@ fn direct_platform_service_reopens_v9_and_frozen_v8_refuses() -> TestResult {
         assert_eq!(read.project().snapshot_id(), project_id);
         assert_eq!(read.project().analyzer_snapshot_id(), analyzer_id);
         assert_eq!(read.graph(), &graph);
+        if composed {
+            crate::graph::verify_source_axes_through_service(read.graph(), &stop)?;
+        }
         assert_eq!(read.read.manifest().members, members);
         assert_eq!(read.publication_set_id(), set_id);
         let reopened = read
@@ -474,11 +580,16 @@ fn direct_platform_service_reopens_v9_and_frozen_v8_refuses() -> TestResult {
         drop(store);
 
         let legacy_source_path = path.join("legacy-input");
+        let previous_profile = if composed {
+            PlatformGraphProfile::DirectPlatformProducersWithRawInventoryV1
+        } else {
+            PlatformGraphProfile::PackageProjectionWithRawInventoryV1
+        };
         let legacy_bundle = platform_bundle_with_profile_source(
             &legacy_source_path,
             1,
             true,
-            Some(PlatformGraphProfile::PackageProjectionWithRawInventoryV1),
+            Some(previous_profile),
             Some(&fixture),
             &stop,
         )?;
@@ -487,7 +598,7 @@ fn direct_platform_service_reopens_v9_and_frozen_v8_refuses() -> TestResult {
             legacy_bundle.configuration().project_id().as_str().into(),
             "current".into(),
         )?
-        .with_platform_graph_profile(PlatformGraphProfile::PackageProjectionWithRawInventoryV1);
+        .with_platform_graph_profile(previous_profile);
         let (baseline, _) = legacy_request.live_publication_in_namespace(
             input(&legacy_bundle)?,
             selection.namespace(),
@@ -498,7 +609,11 @@ fn direct_platform_service_reopens_v9_and_frozen_v8_refuses() -> TestResult {
             store: ProjectStore::create_with_namespace(
                 &legacy_path,
                 selection.namespace(),
-                catalog_for(publication::STORAGE_SCHEMAS_V8)?,
+                catalog_for(if composed {
+                    publication::STORAGE_SCHEMAS_V9
+                } else {
+                    publication::STORAGE_SCHEMAS_V8
+                })?,
             )?,
         };
         legacy.publish_bundle(baseline, "fixture:direct-v8-baseline", None, &stop)?;
@@ -512,13 +627,19 @@ fn direct_platform_service_reopens_v9_and_frozen_v8_refuses() -> TestResult {
                 .members
                 .iter()
                 .any(|member| member.key == "live.project.replay"
-                    && member.schema == "wow-project.live-replay.v8")
+                    && member.schema
+                        == if composed {
+                            "wow-project.live-replay.v9"
+                        } else {
+                            "wow-project.live-replay.v8"
+                        })
         );
-        assert!(
+        assert_eq!(
             old_read
                 .graph()
                 .partition(wow_project::graph::SOURCE_GRAPH_PARTITION)
-                .is_some()
+                .is_some(),
+            !composed
         );
         let old_project = old_read.project().snapshot_id().to_owned();
         let old_graph = old_read.graph().clone();

@@ -8,48 +8,64 @@ use wow_graph::{
 };
 
 pub const PLATFORM_DIRECT_GRAPH_PROFILE: &str = "wow-project/platform-direct-producers/1";
-pub const PLATFORM_DIRECT_GRAPH_WITH_INVENTORY_SPANS_PROFILE: &str =
-    "wow-project/platform-direct-producers/2";
-pub const PLATFORM_DIRECT_GRAPH_WITH_STRUCTURAL_ROLES_PROFILE: &str =
-    "wow-project/platform-direct-producers/3";
-pub const PLATFORM_DIRECT_GRAPH_WITH_XML_SOURCE_MAPS_PROFILE: &str =
-    "wow-project/platform-direct-producers/4";
+pub const PLATFORM_CAPABILITIES_GRAPH_PROFILE: &str = "wow-project/platform-capabilities/1";
 
 #[derive(Clone, Copy)]
 pub(super) enum DirectRecipe {
     Original,
-    InventorySpans,
-    StructuralRoles,
-    XmlSourceMaps,
+    Capabilities(crate::PlatformGraphCapabilities),
 }
 impl DirectRecipe {
+    const fn capabilities(self) -> Option<crate::PlatformGraphCapabilities> {
+        match self {
+            Self::Original => None,
+            Self::Capabilities(capabilities) => Some(capabilities),
+        }
+    }
     const fn profile(self) -> &'static str {
         match self {
             Self::Original => PLATFORM_DIRECT_GRAPH_PROFILE,
-            Self::InventorySpans => PLATFORM_DIRECT_GRAPH_WITH_INVENTORY_SPANS_PROFILE,
-            Self::StructuralRoles => PLATFORM_DIRECT_GRAPH_WITH_STRUCTURAL_ROLES_PROFILE,
-            Self::XmlSourceMaps => PLATFORM_DIRECT_GRAPH_WITH_XML_SOURCE_MAPS_PROFILE,
+            Self::Capabilities(_) => PLATFORM_CAPABILITIES_GRAPH_PROFILE,
         }
     }
-    const fn producer_version(self) -> &'static str {
+    fn producer_version(self, producer: PlatformGraphProducer) -> Option<String> {
         match self {
-            Self::Original => "1",
-            Self::InventorySpans => "2",
-            Self::StructuralRoles => "3",
-            Self::XmlSourceMaps => "4",
+            Self::Original => None,
+            Self::Capabilities(capabilities) => {
+                let mut version = format!("{}:v1", producer.partition_id());
+                for capability in capabilities.iter() {
+                    let affected = match capability {
+                        crate::PlatformGraphCapability::InventorySpansV1 => {
+                            producer == PlatformGraphProducer::Inventory
+                        }
+                        crate::PlatformGraphCapability::StructuralRolesV1 => matches!(
+                            producer,
+                            PlatformGraphProducer::Inventory
+                                | PlatformGraphProducer::TocLoad
+                                | PlatformGraphProducer::XmlStructure
+                        ),
+                        crate::PlatformGraphCapability::XmlSourceMapsV1 => matches!(
+                            producer,
+                            PlatformGraphProducer::Inventory | PlatformGraphProducer::XmlStructure
+                        ),
+                    };
+                    if affected {
+                        version.push(':');
+                        version.push_str(capability.id());
+                    }
+                }
+                Some(version)
+            }
         }
     }
     pub(super) const fn inventory_spans(self) -> bool {
-        matches!(
-            self,
-            Self::InventorySpans | Self::StructuralRoles | Self::XmlSourceMaps
-        )
+        matches!(self, Self::Capabilities(capabilities) if capabilities.contains(crate::PlatformGraphCapability::InventorySpansV1))
     }
     pub(super) const fn structural_roles(self) -> bool {
-        matches!(self, Self::StructuralRoles | Self::XmlSourceMaps)
+        matches!(self, Self::Capabilities(capabilities) if capabilities.contains(crate::PlatformGraphCapability::StructuralRolesV1))
     }
     pub(super) const fn xml_source_maps(self) -> bool {
-        matches!(self, Self::XmlSourceMaps)
+        matches!(self, Self::Capabilities(capabilities) if capabilities.contains(crate::PlatformGraphCapability::XmlSourceMapsV1))
     }
 }
 const ORDER: [PlatformGraphProducer; 4] = [
@@ -76,8 +92,8 @@ pub struct PlatformGraphProposalPlan<'a> {
 
 #[derive(Clone, Serialize)]
 pub struct PlatformGraphProducerProposals {
-    #[serde(skip)]
-    recipe: DirectRecipe,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    producer_version: Option<String>,
     producer: PlatformGraphProducer,
     batch: GraphProposalBatch,
     coverage: Vec<GraphCoverageRecord>,
@@ -88,8 +104,8 @@ impl PlatformGraphProducerProposals {
         self.producer
     }
     #[must_use]
-    pub const fn producer_version(&self) -> &'static str {
-        self.recipe.producer_version()
+    pub fn producer_version(&self) -> &str {
+        self.producer_version.as_deref().unwrap_or("1")
     }
     pub fn into_parts(self) -> (GraphProposalBatch, Vec<GraphCoverageRecord>) {
         (self.batch, self.coverage)
@@ -110,6 +126,10 @@ pub struct PlatformGraphProvenance<'a> {
     evidence: GraphEvidenceCatalog,
 }
 impl PlatformGraphProvenance<'_> {
+    #[must_use]
+    pub const fn capabilities(&self) -> Option<crate::PlatformGraphCapabilities> {
+        self.recipe.capabilities()
+    }
     #[must_use]
     pub const fn profile(&self) -> &'static str {
         self.recipe.profile()
@@ -154,34 +174,30 @@ pub fn build_platform_graph_proposal_plan<'a>(
     project: &'a ProjectView,
     stop: &AtomicBool,
 ) -> ProjectResult<PlatformGraphProposalPlan<'a>> {
-    build_plan(project, DirectRecipe::Original, stop)
+    let recipe = match project.configuration().platform_graph_profile() {
+        Some(crate::PlatformGraphProfile::DirectCapabilitiesV1(capabilities)) => {
+            DirectRecipe::Capabilities(capabilities)
+        }
+        _ => DirectRecipe::Original,
+    };
+    build_plan(project, recipe, stop)
 }
 
-/// Extend the captured Inventory stage with exact known source-span containment.
-/// This native-only recipe does not select an application or replay route.
-pub fn build_platform_graph_proposal_plan_with_inventory_spans<'a>(
+/// Native preparation with an explicit exact set. A selected application cannot
+/// substitute a different set. Legacy native inspection retains its own registry.
+pub fn build_platform_graph_proposal_plan_for_capabilities<'a>(
     project: &'a ProjectView,
+    capabilities: crate::PlatformGraphCapabilities,
     stop: &AtomicBool,
 ) -> ProjectResult<PlatformGraphProposalPlan<'a>> {
-    build_plan(project, DirectRecipe::InventorySpans, stop)
-}
-
-/// Project retained Inventory, TOC and lexical XML structural roles over the
-/// same native source owner. Application/replay selection remains explicit.
-pub fn build_platform_graph_proposal_plan_with_structural_roles<'a>(
-    project: &'a ProjectView,
-    stop: &AtomicBool,
-) -> ProjectResult<PlatformGraphProposalPlan<'a>> {
-    build_plan(project, DirectRecipe::StructuralRoles, stop)
-}
-
-/// Associate every retained registered inline Lua unit and exact XML mapping
-/// segment with the original script site and source support.
-pub fn build_platform_graph_proposal_plan_with_xml_source_maps<'a>(
-    project: &'a ProjectView,
-    stop: &AtomicBool,
-) -> ProjectResult<PlatformGraphProposalPlan<'a>> {
-    build_plan(project, DirectRecipe::XmlSourceMaps, stop)
+    crate::analyzer::checkpoint(stop)?;
+    if let Some(crate::PlatformGraphProfile::DirectCapabilitiesV1(selected)) =
+        project.configuration().platform_graph_profile()
+        && selected != capabilities
+    {
+        return Err(invalid());
+    }
+    build_plan(project, DirectRecipe::Capabilities(capabilities), stop)
 }
 
 fn build_plan<'a>(
@@ -496,6 +512,10 @@ fn build_plan<'a>(
 
 impl<'a> PlatformGraphProposalPlan<'a> {
     #[must_use]
+    pub const fn capabilities(&self) -> Option<crate::PlatformGraphCapabilities> {
+        self.recipe.capabilities()
+    }
+    #[must_use]
     pub const fn profile(&self) -> &'static str {
         self.recipe.profile()
     }
@@ -684,7 +704,7 @@ impl<'a> PlatformGraphProposalPlan<'a> {
             .collect::<Vec<_>>();
         coverage.sort_by_key(GraphCoverageRecord::relation);
         let stage = PlatformGraphProducerProposals {
-            recipe: self.recipe,
+            producer_version: self.recipe.producer_version(producer),
             producer,
             batch,
             coverage,
@@ -756,7 +776,7 @@ impl<'a> PlatformGraphProposalPlan<'a> {
                 let expected = self.stages.get(index).ok_or_else(invalid)?;
                 let actual = actual.ok_or_else(invalid)?;
                 if actual.batch() != &expected.batch
-                    || actual.producer_version() != self.recipe.producer_version()
+                    || actual.producer_version() != expected.producer_version()
                     || actual.coverage() != expected.coverage
                     || actual.report().accepted_entities().len()
                         != expected.batch.entity_proposals().len()

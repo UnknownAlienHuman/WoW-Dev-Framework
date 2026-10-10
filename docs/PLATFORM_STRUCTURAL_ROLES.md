@@ -1,14 +1,10 @@
 # Native project, TOC and lexical XML graph roles
 
-The explicit library entry
-`wow_project::graph::build_platform_graph_proposal_plan_with_structural_roles`
-extends the captured direct graph over one genuine retained platform ProjectView.
-It requires the existing raw-inventory configuration, selects native
-`wow-project/platform-direct-producers/3`, stage producer version `3` and registry
-`wow-project.source-load` version `18` before constructing the input generation,
-foundation or raw prelude. Follow the existing ordered
-[admission and finish protocol](PLATFORM_DIRECT_PRODUCERS.md).
-
+Select `structural_roles_v1` together with its exact `inventory_spans_v1`
+dependency through [capability configuration](PLATFORM_GRAPH_CAPABILITIES.md).
+The existing ordered native plan extends one genuine retained platform
+ProjectView, binding the complete set in configuration and registry identity.
+Follow the [admission/finish protocol](PLATFORM_DIRECT_PRODUCERS.md).
 The adapters consume the original source/package receipts, selected native load
 plans, TOC facts, XML lexical indexes and captured support. They add no parser,
 analyzer, source acquisition or disk fallback. Inventory spans are projected
@@ -60,16 +56,10 @@ allowance, node/edge caps and combined 200,000 assertion ceiling still apply;
 the allowance is not a process resident-memory bound. Cancellation, invalid
 support or incompatible predecessor admission prevents a finished capability.
 
-Native /1 and /2 remain separate. Source /22, service request12/result19 and
-replay/storage v9 retain native /1; /3 adds no configuration, service, CLI or
-replay selector. The registry-16 raw excerpt binder does not admit registry18.
-The separate [native /4 entry](PLATFORM_XML_SOURCE_MAPS.md) adds virtual-Lua source
-mapping; /3 retains its existing roles and recipe. Full XML object/region classification, fingerprints,
-bounded SkeletonInputView and source transport remain open, alongside full
-W17/E3/package acceptance and W18-W26. Gethe preparation remains deferred until
-the product implementation/build stage is complete.
-
-## Scoped verification
+The admitted native /1 service/replay path is preserved. The former /2-/4 native
+ladder is consolidated into explicit sets. XML mapping is independently selected
+with its exact dependencies; see [composition and remaining scope](PLATFORM_GRAPH_CAPABILITIES.md).
+## Historical checkpoint verification
 
 The existing disk-absent
 [native lifecycle](../crates/wow-project/tests/platform_direct_producers.rs)

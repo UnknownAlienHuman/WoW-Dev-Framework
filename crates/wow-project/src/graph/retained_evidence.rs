@@ -57,7 +57,8 @@ impl RetainedProjectGraphEvidence {
         let expected = match profile {
             crate::PlatformGraphProfile::PackageProjectionV1 => super::PACKAGE_SOURCE_GRAPH_PROFILE,
             crate::PlatformGraphProfile::PackageProjectionWithRawInventoryV1
-            | crate::PlatformGraphProfile::DirectPlatformProducersWithRawInventoryV1 => {
+            | crate::PlatformGraphProfile::DirectPlatformProducersWithRawInventoryV1
+            | crate::PlatformGraphProfile::DirectCapabilitiesV1(_) => {
                 return Err(crate::ProjectError::new(
                     crate::ProjectErrorCode::DeferredCapability,
                     crate::ProjectPhase::View,

@@ -15,17 +15,7 @@ pub struct LiveProjectQuarantineInspection {
 
 impl LiveProjectQuarantineInspection {
     pub fn open(root: &Path, stop: &AtomicBool) -> ServiceResult<Self> {
-        for schemas in [
-            publication::STORAGE_SCHEMAS,
-            publication::STORAGE_SCHEMAS_V8,
-            publication::STORAGE_SCHEMAS_V7,
-            publication::STORAGE_SCHEMAS_V6,
-            publication::STORAGE_SCHEMAS_V5,
-            publication::STORAGE_SCHEMAS_V4,
-            publication::STORAGE_SCHEMAS_V3,
-            publication::STORAGE_SCHEMAS_V2,
-            publication::STORAGE_SCHEMAS_V1,
-        ] {
+        for &schemas in publication::STORAGE_SCHEMA_CATALOGS {
             match QuarantineInspection::open(root, &catalog_for(schemas)?, stop) {
                 Ok(inspection) => return Ok(Self { inspection }),
                 Err(error) if error.code() == StoreErrorCode::IntegrityViolation => {}
@@ -107,17 +97,7 @@ impl QuarantinedLiveProject {
     }
 
     pub fn open(root: &Path, stop: &AtomicBool) -> ServiceResult<Self> {
-        for schemas in [
-            publication::STORAGE_SCHEMAS,
-            publication::STORAGE_SCHEMAS_V8,
-            publication::STORAGE_SCHEMAS_V7,
-            publication::STORAGE_SCHEMAS_V6,
-            publication::STORAGE_SCHEMAS_V5,
-            publication::STORAGE_SCHEMAS_V4,
-            publication::STORAGE_SCHEMAS_V3,
-            publication::STORAGE_SCHEMAS_V2,
-            publication::STORAGE_SCHEMAS_V1,
-        ] {
+        for &schemas in publication::STORAGE_SCHEMA_CATALOGS {
             match QuarantinedStore::open(root, &catalog_for(schemas)?, stop) {
                 Ok(store) => return Ok(Self { store }),
                 Err(error) if error.code() == StoreErrorCode::IntegrityViolation => {}

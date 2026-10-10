@@ -232,17 +232,7 @@ pub fn resume_live_project_migration(
     stop: &AtomicBool,
 ) -> ServiceResult<ValidatedMigration> {
     let id = OperationId::new(operation_id).map_err(store_error)?;
-    for schemas in [
-        publication::STORAGE_SCHEMAS,
-        publication::STORAGE_SCHEMAS_V8,
-        publication::STORAGE_SCHEMAS_V7,
-        publication::STORAGE_SCHEMAS_V6,
-        publication::STORAGE_SCHEMAS_V5,
-        publication::STORAGE_SCHEMAS_V4,
-        publication::STORAGE_SCHEMAS_V3,
-        publication::STORAGE_SCHEMAS_V2,
-        publication::STORAGE_SCHEMAS_V1,
-    ] {
+    for &schemas in publication::STORAGE_SCHEMA_CATALOGS {
         match MigrationCandidate::open(root, &catalog_for(schemas)?, &id, source_snapshot, stop) {
             Ok(candidate) => return validate_candidate(candidate, stop),
             Err(error) if error.code() == StoreErrorCode::IntegrityViolation => {}
