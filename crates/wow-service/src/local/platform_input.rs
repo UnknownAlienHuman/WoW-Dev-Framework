@@ -68,6 +68,8 @@ struct PlatformInput {
     physical_function_declarations:
         Option<wow_emmy::function_calls::PhysicalFunctionDeclarationRecipe>,
     #[serde(default, deserialize_with = "present")]
+    physical_function_signatures: Option<wow_emmy::function_calls::PhysicalFunctionSignatureRecipe>,
+    #[serde(default, deserialize_with = "present")]
     xml_schema_classification: Option<XmlClassificationInput>,
     #[serde(default)]
     library: Option<DiskInventory>,
@@ -253,6 +255,7 @@ impl LocalProjectInput {
                 graph_profile: input.graph_profile,
                 budgets: input.project_budgets,
                 physical_function_declarations: input.physical_function_declarations,
+                physical_function_signatures: input.physical_function_signatures,
                 xml_schema_classification,
             }),
             stop,

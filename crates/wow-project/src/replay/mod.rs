@@ -56,6 +56,10 @@ const XML_CLASSIFICATION_PHYSICAL_FUNCTION_BODY_SHAPE_REPLAY_SCHEMA: &str = "wow
 pub(super) const PHYSICAL_FUNCTION_BODY_SHAPE_STORAGE_SCHEMA: &str =
     "wow-project.live-replay.physical-function-declaration-syntax-and-body-shape.v1";
 pub(super) const XML_CLASSIFICATION_PHYSICAL_FUNCTION_BODY_SHAPE_STORAGE_SCHEMA: &str = "wow-project.live-replay.xml-schema-classification-and-physical-function-declaration-syntax-and-body-shape.v1";
+const SELECTED_COMPONENTS_REPLAY_SCHEMA: &str =
+    "wow-project/native-project-replay/selected-components/1";
+pub(super) const SELECTED_COMPONENTS_STORAGE_SCHEMA: &str =
+    "wow-project.live-replay.selected-components.v1";
 const MAX_FILES: usize = 8192;
 const MAX_LIBRARIES: usize = 64;
 const MAX_FILE_BYTES: usize = 16 * 1024 * 1024;
@@ -652,6 +656,7 @@ impl ProjectReplay {
             XML_CLASSIFICATION_PHYSICAL_FUNCTION_BODY_SHAPE_REPLAY_SCHEMA => {
                 Ok(XML_CLASSIFICATION_PHYSICAL_FUNCTION_BODY_SHAPE_STORAGE_SCHEMA)
             }
+            SELECTED_COMPONENTS_REPLAY_SCHEMA => Ok(SELECTED_COMPONENTS_STORAGE_SCHEMA),
             _ => Err(invalid()),
         }
     }
@@ -667,7 +672,8 @@ fn selected_component_schema(
     };
     let classification = configuration.has_xml_classification()?;
     let declarations = configuration.physical_function_declarations();
-    if declarations.is_some()
+    let signatures = configuration.physical_function_signatures();
+    if (declarations.is_some() || signatures.is_some())
         && (!function_calls
             || !configuration.is_platform()
             || configuration.package_xml_binding_profile()
@@ -678,6 +684,11 @@ fn selected_component_schema(
             ))
     {
         return Err(invalid());
+    }
+    if signatures == Some(wow_emmy::function_calls::PhysicalFunctionSignatureRecipe::IndexedTypesV1)
+    {
+        // One envelope family; exact component recipes remain in configuration.
+        return Ok(SELECTED_COMPONENTS_REPLAY_SCHEMA);
     }
     Ok(match (classification, declarations) {
         (false, None) => base,

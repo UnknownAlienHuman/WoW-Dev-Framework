@@ -8,6 +8,105 @@ use emmylua_parser::{LuaChunk, LuaLanguageLevel, LuaParser, ParserConfig};
 
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
 
+#[test]
+fn native_indexed_signature_keeps_union_order_empty_rows_and_unknown_types() -> TestResult {
+    let stop = AtomicBool::new(false);
+    let source = "---@param value number|string\n---@return number|string\nlocal function Typed(value) return value end\n---@param value number[]\n---@return number[]\nlocal function Array(value) return value end\nlocal function Empty() end\nlocal function Unknown(value) return value end\n";
+    let reordered = source.replace("number|string", "string|number");
+    let mut compared = Vec::new();
+    for source in [source, reordered.as_str()] {
+        let main = snapshot(vec![LuaWorkspaceFileInput::new(
+            "main/signature.lua",
+            source,
+        )])?;
+        let report = analyze_member_call_session_with_callable_queries(
+            &main,
+            &[],
+            MemberCallSessionQueryProfile::new(&[], &[])
+                .with_physical_function_signatures(PhysicalFunctionSignatureRecipe::IndexedTypesV1),
+            true,
+            &stop,
+        )?
+        .function_calls
+        .ok_or("native signature report")?;
+        assert!(report.source_health_complete());
+        assert_eq!(
+            report.signature_recipe(),
+            Some(PhysicalFunctionSignatureRecipe::IndexedTypesV1)
+        );
+        report.validate()?;
+        let closures = report
+            .functions()
+            .iter()
+            .filter(|fact| fact.kind() == SourceFunctionKind::Closure)
+            .map(|fact| fact.signature().ok_or("native closure observation"))
+            .collect::<Result<Vec<_>, _>>()?;
+        assert_eq!(closures.len(), 4);
+        let union = closures
+            .iter()
+            .find_map(|signature| {
+                signature.comparable().filter(|value| {
+                    value.parameters().first().is_some_and(|parameter| {
+                        matches!(parameter.type_shape(), SourceSignatureType::Union { .. })
+                    })
+                })
+            })
+            .ok_or("complete typed union")?;
+        assert_eq!(union.parameters().len(), 1);
+        assert_eq!(union.returns().len(), 1);
+        assert!(
+            matches!(union.returns()[0].types(), [SourceSignatureType::Union { members }] if members.len() == 2)
+        );
+        compared.push(union.clone());
+        let array = closures
+            .iter()
+            .find_map(|signature| {
+                signature.comparable().filter(|value| {
+                    value.parameters().first().is_some_and(|parameter| {
+                        matches!(parameter.type_shape(), SourceSignatureType::Array { .. })
+                    })
+                })
+            })
+            .ok_or("complete typed array")?;
+        assert!(
+            matches!(array.parameters()[0].type_shape(), SourceSignatureType::Array {
+            element, length: SourceSignatureArrayLength::Unspecified
+        } if **element == SourceSignatureType::Number)
+        );
+        let empty = closures
+            .iter()
+            .find_map(|signature| {
+                signature
+                    .comparable()
+                    .filter(|value| value.parameters().is_empty())
+            })
+            .ok_or("resolved empty native signature")?;
+        assert_eq!(empty.returns().len(), 1);
+        assert!(empty.returns()[0].types().is_empty());
+        let unknown = closures
+            .iter()
+            .find(|signature| signature.comparable().is_none())
+            .ok_or("unknown parameter remains unavailable")?;
+        assert!(
+            unknown
+                .unavailable_reasons()
+                .contains(&SourceSignatureUnavailable::UnresolvedOrUnsupportedType)
+        );
+        let chunk = report
+            .functions()
+            .iter()
+            .find(|fact| fact.kind() == SourceFunctionKind::Chunk)
+            .and_then(SourceFunctionFact::signature)
+            .ok_or("native chunk observation")?;
+        assert_eq!(
+            chunk.unavailable_reasons(),
+            &[SourceSignatureUnavailable::ChunkHasNoSignature]
+        );
+    }
+    assert_eq!(compared[0], compared[1]);
+    Ok(())
+}
+
 fn native_body_shape(
     source: &str,
     limits: FunctionCallBudget,

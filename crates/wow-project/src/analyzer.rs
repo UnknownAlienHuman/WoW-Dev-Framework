@@ -255,11 +255,12 @@ pub(crate) fn build_analyzer_binding(
     generation.validate_library_ids(libraries.iter().map(LuaWorkspaceSnapshot::snapshot_id))?;
     generation.validate_function_call_facts(function_calls)?;
     let declaration_recipe = configuration.physical_function_declarations();
-    if declaration_recipe.is_some() && !function_calls {
+    let signature_recipe = configuration.physical_function_signatures();
+    if (declaration_recipe.is_some() || signature_recipe.is_some()) && !function_calls {
         return Err(ProjectError::new(
             ProjectErrorCode::InvalidConfiguration,
             ProjectPhase::Analyzer,
-            "selected physical declarations require the function-call sidecar",
+            "selected physical function observations require the function-call sidecar",
         )
         .with_candidate_generation(generation.project_generation()));
     }
@@ -411,6 +412,10 @@ pub(crate) fn build_analyzer_binding(
         Some(recipe) => query_profile.with_physical_function_declarations(recipe),
         None => query_profile,
     };
+    let query_profile = match signature_recipe {
+        Some(recipe) => query_profile.with_physical_function_signatures(recipe),
+        None => query_profile,
+    };
     let (syntax_report, session, local_flow_report) =
         if configuration.load_plan().is_none() && configuration.package_load_plan().is_none() {
             if !cache
@@ -544,6 +549,10 @@ pub(crate) fn build_analyzer_binding(
         .as_ref()
         .and_then(|report| report.declaration_recipe())
         != declaration_recipe
+        || function_call_report
+            .as_ref()
+            .and_then(|report| report.signature_recipe())
+            != signature_recipe
     {
         return Err(ProjectError::new(
             ProjectErrorCode::AnalyzerSnapshotMismatch,

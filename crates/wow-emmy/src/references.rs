@@ -400,6 +400,7 @@ pub struct MemberCallSessionQueryProfile<'a> {
     function_call_budget: Option<crate::function_calls::FunctionCallBudget>,
     physical_function_declarations:
         Option<crate::function_calls::PhysicalFunctionDeclarationRecipe>,
+    physical_function_signatures: Option<crate::function_calls::PhysicalFunctionSignatureRecipe>,
 }
 
 impl<'a> MemberCallSessionQueryProfile<'a> {
@@ -412,6 +413,7 @@ impl<'a> MemberCallSessionQueryProfile<'a> {
             member_pair_limit: DEFAULT_MEMBER_PAIR_LIMIT,
             function_call_budget: None,
             physical_function_declarations: None,
+            physical_function_signatures: None,
         }
     }
 
@@ -468,6 +470,15 @@ impl<'a> MemberCallSessionQueryProfile<'a> {
         self
     }
 
+    #[must_use]
+    pub const fn with_physical_function_signatures(
+        mut self,
+        recipe: crate::function_calls::PhysicalFunctionSignatureRecipe,
+    ) -> Self {
+        self.physical_function_signatures = Some(recipe);
+        self
+    }
+
     fn input(self, names: &'a [String]) -> crate::bindings::QueryInput<'a> {
         crate::bindings::QueryInput {
             names,
@@ -490,10 +501,13 @@ impl<'a> MemberCallSessionQueryProfile<'a> {
                 None,
             ));
         }
-        if !include_function_calls && self.physical_function_declarations.is_some() {
+        if !include_function_calls
+            && (self.physical_function_declarations.is_some()
+                || self.physical_function_signatures.is_some())
+        {
             return Err(EmmyMemberCallError::new(
                 EmmyMemberCallErrorCode::InvalidMainWorkspace,
-                "physical-function declarations require the function-call sidecar",
+                "physical-function observations require the function-call sidecar",
                 None,
             ));
         }
@@ -896,29 +910,48 @@ impl RegisteredMemberAnalysis {
         lookup_analysis_ids.sort_unstable();
         lookup_analysis_ids.dedup();
         let function_calls = if include_function_calls {
-            Some(match profile.physical_function_declarations {
-                Some(recipe) => crate::function_calls::collect_with_declarations(
-                    analysis,
-                    main,
-                    main_root,
-                    &library_roots,
-                    &callable_signatures,
-                    &lookup_analysis_ids,
-                    profile.function_call_budget,
-                    Some(recipe),
-                    stop,
-                )?,
-                None => crate::function_calls::collect(
-                    analysis,
-                    main,
-                    main_root,
-                    &library_roots,
-                    &callable_signatures,
-                    &lookup_analysis_ids,
-                    profile.function_call_budget,
-                    stop,
-                )?,
-            })
+            Some(
+                match (
+                    profile.physical_function_signatures,
+                    profile.physical_function_declarations,
+                ) {
+                    (Some(signature_recipe), declaration_recipe) => {
+                        crate::function_calls::collect_with_components(
+                            analysis,
+                            main,
+                            main_root,
+                            &library_roots,
+                            &callable_signatures,
+                            &lookup_analysis_ids,
+                            profile.function_call_budget,
+                            declaration_recipe,
+                            Some(signature_recipe),
+                            stop,
+                        )?
+                    }
+                    (None, Some(recipe)) => crate::function_calls::collect_with_declarations(
+                        analysis,
+                        main,
+                        main_root,
+                        &library_roots,
+                        &callable_signatures,
+                        &lookup_analysis_ids,
+                        profile.function_call_budget,
+                        Some(recipe),
+                        stop,
+                    )?,
+                    (None, None) => crate::function_calls::collect(
+                        analysis,
+                        main,
+                        main_root,
+                        &library_roots,
+                        &callable_signatures,
+                        &lookup_analysis_ids,
+                        profile.function_call_budget,
+                        stop,
+                    )?,
+                },
+            )
         } else {
             None
         };

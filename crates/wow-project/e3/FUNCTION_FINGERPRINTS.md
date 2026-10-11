@@ -30,8 +30,9 @@ A whole-file Chunk may supply file content; a closure without an exact supported
 byte span reports `missing_exact_span`. The component makes no declaration-shape
 or semantic-signature claim.
 
-`signature` and `declaration_shape` remain explicitly `missing_signature` and
-`missing_shape` until their reviewed typed owner facts and recipes are selected.
+Unselected `signature` and `declaration_shape` retain the legacy strings
+`missing_signature` and `missing_shape`; the selected recipes below supply only
+their explicitly reviewed components.
 Direct neighborhood is `not_selected`; package/load role stays `not_selected`
 unless explicitly selected below. Incoming ownership is eligibility/evidence
 support, not a complete evaluated neighborhood. There is
@@ -133,6 +134,43 @@ corpus acceptance remains open; the named schema/profile and shape outcomes are
 not acceptance evidence. See
 [platform input](../../../apps/wow/PLATFORM_INPUT.md).
 
+## Selected indexed-type signature
+
+Native `PhysicalFunctionSignatureRecipe::IndexedTypesV1`, wire
+`wow-emmy/physical-function-indexed-types/1`, observes the held Main session's
+signature index. Local configuration selects `physical_function_signatures`;
+configuration/report/replay identities bind that exact recipe. The current
+`--fingerprints` query needs no new flag or signature selector.
+
+Comparable parameters preserve ordinal order, exact `backend_nullable` flags and
+colon definition; returns preserve the primary row followed by ordered alternative
+rows and ordered types. Backend nullable is not parameter-omissibility or source
+annotation proof. Resolved empty return rows stay empty, never synthesized Nil
+or proof that runtime returns nothing. The vocabulary is Nil/Boolean/Integer/
+Number/String/Thread/Userdata/Never, arrays with native length, ordered tuples and
+normalized unions. Unions flatten/deduplicate and collapse single members; the
+native owner orders members by its fixed typed SHA-256 keys and refuses unequal
+members sharing a key. This ordering key is not a signature fingerprint.
+
+Missing indexes/parameter types, unresolved returns, unknown/dynamic/nominal/
+callback/generic/literal/object/variadic or unsupported types, generic signatures,
+callable overloads, varargs and unmatched parameter documents remain unavailable.
+`FunctionSignatureComponent` exposes Available typed digest, Unavailable reasons,
+IncompleteSourceHealth or Conflict; absence keeps `"missing_signature"`. Native
+observations/support remain separate. Overall coverage is Partial, without full
+semantic, runtime, equivalence, parity or acceptance claims.
+
+Project comparison recipe `wow-project/physical-function-indexed-types/1` uses
+that domain plus NUL; colon:u8; parameter count:u64 BE; ordered parameters
+(nullable:u8, type); return-row count:u64 BE; each ordered row (type count:u64 BE,
+ordered types). Owned type tags 1–11 are respectively Nil, Boolean, Integer,
+Number, String, Thread, Userdata, Never, Array, Tuple, Union. Array length is tag
+0 for unspecified or tag 1 plus i64 BE maximum, then element type; tuples/unions
+carry u64 BE counts and ordered children. Names, paths, spans, IDs/generations,
+return-resolution and async labels are excluded from comparison bytes. The
+native finite work/byte limits, cancellation and cumulative final manifest
+metadata charge still apply. Final #118 acceptance is pending.
+
 ## Selected physical Lua package/load role
 
 Select this optional query component with
@@ -144,8 +182,9 @@ output; native configuration, analyzer report and replay remain unchanged.
 The selected manifest schema is
 `wow-project/function-fingerprint-records/selected-components/1`. Its explicit
 `selected_components` receipt retains optional native `physical_declarations`
-and the exact `package_load_role` recipe. Absence retains the previous manifest
-bytes and `not_selected` role output.
+and `physical_signatures`, plus optional `package_load_role`, each with its exact
+recipe. With signatures and load-role selection both absent, previous manifest
+bytes remain; an unselected role retains `not_selected`.
 
 Comparable data is static selected-package root status, known LoadOnDemand state,
 package phase/reachability and physical Lua role groups with exact occurrence

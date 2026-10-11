@@ -1,12 +1,14 @@
 //! Explicit logical platform-store selection, separate from source generations.
 use super::{
     LiveProjectRead, LiveProjectResult, LiveProjectStore, LiveProjectUpdateRequest, catalog,
-    catalog_components, catalog_for, fail, store_error,
+    catalog_accepts_components, catalog_for, fail, store_error,
 };
 use crate::{LocalProjectInput, ServiceErrorCode, ServiceResult, graph::GraphBuildRequest};
 use std::{path::Path, sync::atomic::AtomicBool};
 use wow_core::ProfileId;
-use wow_emmy::function_calls::PhysicalFunctionDeclarationRecipe;
+use wow_emmy::function_calls::{
+    PhysicalFunctionDeclarationRecipe, PhysicalFunctionSignatureRecipe,
+};
 use wow_graph::GraphPartitionSnapshot;
 use wow_project::{ProjectConfiguration, ProjectId, ProjectPublisher, replay::publication};
 use wow_store::project::{
@@ -21,6 +23,7 @@ pub struct PlatformStoreSelection {
     namespace: ProjectStoreNamespace,
     xml_classification_catalog: bool,
     physical_function_declarations_catalog: Option<PhysicalFunctionDeclarationRecipe>,
+    physical_function_signatures_catalog: Option<PhysicalFunctionSignatureRecipe>,
 }
 
 impl PlatformStoreSelection {
@@ -34,6 +37,7 @@ impl PlatformStoreSelection {
             namespace,
             xml_classification_catalog: false,
             physical_function_declarations_catalog: None,
+            physical_function_signatures_catalog: None,
         })
     }
 
@@ -62,7 +66,22 @@ impl PlatformStoreSelection {
         self
     }
 
+    /// Explicit signature recipe; configuration must retain exactly the same selection.
+    #[must_use]
+    pub fn with_physical_function_signatures_catalog(
+        mut self,
+        recipe: PhysicalFunctionSignatureRecipe,
+    ) -> Self {
+        self.physical_function_signatures_catalog = Some(recipe);
+        self
+    }
+
     fn catalog(&self) -> ServiceResult<RecordCatalog> {
+        if self.physical_function_signatures_catalog
+            == Some(PhysicalFunctionSignatureRecipe::IndexedTypesV1)
+        {
+            return catalog_for(publication::STORAGE_SCHEMAS_SELECTED_COMPONENTS_V1);
+        }
         use PhysicalFunctionDeclarationRecipe::{DeclaredSyntaxAndBodyShapeV1, DeclaredSyntaxV1};
         match (
             self.xml_classification_catalog,
@@ -87,12 +106,14 @@ impl PlatformStoreSelection {
 
     fn require_catalog(&self, actual: &RecordCatalog) -> ServiceResult<()> {
         for &schemas in publication::STORAGE_SCHEMA_CATALOGS {
-            if catalog_components(schemas)
-                == (
+            if catalog_accepts_components(
+                schemas,
+                (
                     self.xml_classification_catalog,
                     self.physical_function_declarations_catalog,
-                )
-                && &catalog_for(schemas)? == actual
+                    self.physical_function_signatures_catalog,
+                ),
+            ) && &catalog_for(schemas)? == actual
             {
                 return Ok(());
             }
@@ -120,6 +141,8 @@ impl PlatformStoreSelection {
                 != configuration.xml_classification_profile().is_some()
             || self.physical_function_declarations_catalog
                 != configuration.physical_function_declarations()
+            || self.physical_function_signatures_catalog
+                != configuration.physical_function_signatures()
             || self.namespace.owner_project_id() != configuration.project_id().as_str()
             || self.namespace.logical_namespace()
                 != packages.source().profile().profile_id().as_str()
@@ -166,6 +189,7 @@ impl LiveProjectStore {
             Some((
                 selection.xml_classification_catalog,
                 selection.physical_function_declarations_catalog,
+                selection.physical_function_signatures_catalog,
             )),
         )?;
         store.require_namespace(selection)?;

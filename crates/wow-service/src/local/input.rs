@@ -47,6 +47,8 @@ pub(super) struct PlatformAssembly {
     pub(super) budgets: Option<ProjectBudgetPolicy>,
     pub(super) physical_function_declarations:
         Option<wow_emmy::function_calls::PhysicalFunctionDeclarationRecipe>,
+    pub(super) physical_function_signatures:
+        Option<wow_emmy::function_calls::PhysicalFunctionSignatureRecipe>,
     pub(super) xml_schema_classification: Option<
         std::sync::Arc<wow_project::load::schema::classification::ReviewedXmlClassificationProfile>,
     >,
@@ -360,6 +362,10 @@ impl LocalProjectInput {
                 .with_platform_graph_profile(platform.graph_profile);
             let configuration = match platform.physical_function_declarations {
                 Some(recipe) => configuration.with_physical_function_declarations(recipe),
+                None => configuration,
+            };
+            let configuration = match platform.physical_function_signatures {
+                Some(recipe) => configuration.with_physical_function_signatures(recipe),
                 None => configuration,
             };
             match platform.xml_schema_classification {

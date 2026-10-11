@@ -1433,7 +1433,7 @@ fn observe_fixture_package_load_role(
         .selected_components()
         .ok_or("component selection receipt")?;
     assert_eq!(selected.physical_declarations(), None);
-    assert_eq!(selected.package_load_role(), recipe);
+    assert_eq!(selected.package_load_role(), Some(recipe));
     let selected_wire = serde_json::to_value(selected)?;
     assert!(selected_wire.get("physical_declarations").is_none());
     assert_eq!(
@@ -1565,5 +1565,390 @@ fn selected_package_load_role_tracks_lod_with_identical_physical_source() -> Tes
     assert_ne!(lod.selected_toc_digest, base.selected_toc_digest);
     assert_ne!(lod.project_snapshot_id, base.project_snapshot_id);
 
+    Ok(())
+}
+
+struct IndexedSignatureObservation {
+    signature_digest: ContentDigest<wow_project::graph::fingerprints::FunctionSignatureFingerprint>,
+    source_digest: ContentDigest<wow_project::graph::fingerprints::FunctionSourceSpanFingerprint>,
+    source_bytes: Vec<u8>,
+    function_id: Box<str>,
+    project_snapshot_id: Box<str>,
+    function_analysis_id: Box<str>,
+}
+
+fn observe_fixture_indexed_signature(
+    root: &FixtureRoot,
+    config: &mut Value,
+    lua: &str,
+    expected_type: wow_emmy::function_calls::SourceSignatureType,
+    stop: &AtomicBool,
+) -> TestResult<IndexedSignatureObservation> {
+    use wow_emmy::function_calls::{
+        PhysicalFunctionSignatureRecipe, SourceSignatureReturnResolution,
+        SourceSignatureUnavailable,
+    };
+    use wow_project::graph::fingerprints::{
+        FunctionSignatureComponent, FunctionSourceSpanComponent,
+    };
+
+    rewrite_declaration_lua(root, config, lua)?;
+    let path = root.0.join("project.json");
+    let (project, request, ids, _) = declaration_query(&path, stop)?;
+    let recipe = PhysicalFunctionSignatureRecipe::IndexedTypesV1;
+    assert_eq!(
+        project.configuration().physical_function_signatures(),
+        Some(recipe)
+    );
+    assert_eq!(
+        project.configuration().physical_function_declarations(),
+        None
+    );
+    let report = project
+        .snapshot()
+        .analyzer_binding()
+        .function_call_report()
+        .ok_or("selected native indexed-signature report")?;
+    assert_eq!(report.signature_recipe(), Some(recipe));
+    assert_eq!(report.declaration_recipe(), None);
+    assert!(report.source_health_complete());
+    let main = project
+        .configuration()
+        .platform_packages()
+        .ok_or("native package owners")?
+        .main_plan();
+    assert_eq!(main.files().len(), 1);
+    let file = main.files().first().ok_or("native physical Main file")?;
+    let mut closures = report.functions().iter().filter(|fact| {
+        fact.kind() == SourceFunctionKind::Closure && fact.path() == file.project_path
+    });
+    let fact = closures.next().ok_or("native physical fixture closure")?;
+    assert!(closures.next().is_none(), "one physical fixture closure");
+    assert!(fact.declaration().is_none());
+    assert!(fact.shape().is_none());
+    let signature = fact.signature().ok_or("selected native signature")?;
+    let comparable = signature
+        .comparable()
+        .ok_or("fixture indexed types were not comparable")?;
+    assert_eq!(signature.observed_types(), Some(comparable));
+    assert!(signature.unavailable_reasons().is_empty());
+    assert!(!comparable.colon_definition());
+    assert_eq!(comparable.parameters().len(), 1);
+    let parameter = comparable
+        .parameters()
+        .first()
+        .ok_or("ordered native parameter")?;
+    assert_eq!(parameter.backend_nullable(), Some(false));
+    assert_eq!(parameter.type_shape(), &expected_type);
+    assert_eq!(comparable.returns().len(), 1);
+    let returns = comparable
+        .returns()
+        .first()
+        .ok_or("primary native return row")?;
+    assert_eq!(returns.types(), std::slice::from_ref(&expected_type));
+    assert_eq!(
+        signature.return_resolution(),
+        Some(SourceSignatureReturnResolution::DocumentResolved)
+    );
+    assert_eq!(signature.vararg(), Some(false));
+    let chunk = report
+        .functions()
+        .iter()
+        .find(|fact| fact.kind() == SourceFunctionKind::Chunk && fact.path() == file.project_path)
+        .ok_or("native physical Chunk")?;
+    let chunk_signature = chunk.signature().ok_or("selected Chunk observation")?;
+    assert!(chunk_signature.comparable().is_none());
+    assert_eq!(
+        chunk_signature.unavailable_reasons(),
+        &[SourceSignatureUnavailable::ChunkHasNoSignature]
+    );
+    let source_bytes = span_bytes(&project, fact)?.to_vec();
+
+    let result = execute_graph_build(
+        LocalProjectInput::from_config_path(&path, stop)?,
+        &request,
+        stop,
+    )?;
+    assert_eq!(
+        result.status(),
+        GraphReadStatus::Partial,
+        "{:?}",
+        result.failure_message()
+    );
+    let wire = serde_json::to_value(&result)?;
+    assert_eq!(
+        wire["schema"],
+        "wow-service/graph-build-result/selected-function-components/1"
+    );
+    assert_eq!(
+        wire["request"]["schema"],
+        "wow-service/graph-build-request/selected-function-components/1"
+    );
+    assert_eq!(
+        wire["request"]["physical_function_signatures"],
+        serde_json::to_value(recipe)?
+    );
+    let manifest = result
+        .function_fingerprints()
+        .ok_or("selected service indexed-signature manifest")?;
+    assert_eq!(
+        manifest.schema(),
+        "wow-project/function-fingerprint-records/selected-components/1"
+    );
+    assert_eq!(
+        manifest.profile(),
+        "wow-project/physical-function-components/selected/1"
+    );
+    assert!(manifest.is_partial());
+    assert!(manifest.scope_conflicts().is_empty());
+    assert_eq!(manifest.records().len(), ids.len());
+    assert_eq!(
+        manifest.binding().project_snapshot_id(),
+        project.snapshot_id()
+    );
+    assert_eq!(
+        manifest.binding().function_analysis_id(),
+        report.analysis_id()
+    );
+    let selected = manifest
+        .selected_components()
+        .ok_or("native selection receipt")?;
+    assert_eq!(selected.physical_signatures(), Some(recipe));
+    assert_eq!(selected.physical_declarations(), None);
+    assert_eq!(selected.package_load_role(), None);
+    let selected_wire = serde_json::to_value(selected)?;
+    assert_eq!(
+        selected_wire["physical_signatures"],
+        serde_json::to_value(recipe)?
+    );
+    assert!(selected_wire.get("physical_declarations").is_none());
+    assert!(selected_wire.get("package_load_role").is_none());
+    let record = manifest
+        .records()
+        .iter()
+        .find(|record| record.function_id() == fact.fact_id())
+        .ok_or("selected genuine physical closure record")?;
+    let FunctionSignatureComponent::Available {
+        digest: signature_digest,
+    } = record.signature()
+    else {
+        return Err("fixture service indexed signature was not available".into());
+    };
+    let signature_wire = serde_json::to_value(record.signature())?;
+    assert_eq!(signature_wire["state"], "available");
+    assert_eq!(
+        signature_wire["recipe"],
+        "wow-project/physical-function-indexed-types/1"
+    );
+    assert!(record.declared_header().is_none());
+    let record_wire = serde_json::to_value(record)?;
+    assert_eq!(record_wire["declaration_shape"], "missing_shape");
+    assert_eq!(record_wire["package_load_role"], "not_selected");
+    let chunk_record = manifest
+        .records()
+        .iter()
+        .find(|record| record.function_id() == chunk.fact_id())
+        .ok_or("selected genuine Chunk record")?;
+    let FunctionSignatureComponent::Unavailable { reasons } = chunk_record.signature() else {
+        return Err("selected Chunk incorrectly admitted a signature digest".into());
+    };
+    assert_eq!(reasons.as_slice(), chunk_signature.unavailable_reasons());
+    assert!(chunk_record.signature().digest().is_none());
+    let FunctionSourceSpanComponent::Available {
+        digest: source_digest,
+        byte_length,
+        ..
+    } = record.source_span()
+    else {
+        return Err("fixture source-span component was not available".into());
+    };
+    assert_eq!(usize::try_from(*byte_length)?, source_bytes.len());
+
+    Ok(IndexedSignatureObservation {
+        signature_digest: *signature_digest,
+        source_digest: *source_digest,
+        source_bytes,
+        function_id: fact.fact_id().into(),
+        project_snapshot_id: project.snapshot_id().into(),
+        function_analysis_id: report.analysis_id().into(),
+    })
+}
+
+#[test]
+fn selected_indexed_signature_tracks_annotation_types_with_identical_body() -> TestResult {
+    use wow_emmy::function_calls::{PhysicalFunctionSignatureRecipe, SourceSignatureType};
+    use wow_project::graph::fingerprints::FunctionSignatureComponent;
+
+    let stop = AtomicBool::new(false);
+    let (root, mut config) = fixture()?;
+    config["physical_function_signatures"] =
+        serde_json::to_value(PhysicalFunctionSignatureRecipe::IndexedTypesV1)?;
+    // Legacy field bytes only, not a predecessor result or replay freeze.
+    assert_eq!(
+        serde_json::to_vec(&FunctionSignatureComponent::MissingSignature)?.as_slice(),
+        br#""missing_signature""#
+    );
+    let number = observe_fixture_indexed_signature(
+        &root,
+        &mut config,
+        "---@param value number\n---@return number\nlocal function TypedSignatureFixture(value)\n    return value\nend\n",
+        SourceSignatureType::Number,
+        &stop,
+    )?;
+    let string = observe_fixture_indexed_signature(
+        &root,
+        &mut config,
+        "---@param value string\n---@return string\nlocal function TypedSignatureFixture(value)\n    return value\nend\n",
+        SourceSignatureType::String,
+        &stop,
+    )?;
+    assert_ne!(string.signature_digest, number.signature_digest);
+    assert_eq!(string.source_bytes, number.source_bytes);
+    assert_eq!(string.source_digest, number.source_digest);
+    assert_ne!(string.function_id, number.function_id);
+    assert_ne!(string.project_snapshot_id, number.project_snapshot_id);
+    assert_ne!(string.function_analysis_id, number.function_analysis_id);
+    Ok(())
+}
+
+#[test]
+fn selected_indexed_signatures_survive_selected_replay_and_catalog_reopen() -> TestResult {
+    use crate::live_project::{
+        LiveProjectPublishRequest, LiveProjectStore, PlatformStoreSelection,
+        publish_input_in_namespace,
+    };
+    use wow_emmy::function_calls::{PhysicalFunctionSignatureRecipe, SourceFunctionSignature};
+    use wow_store::project::{PartitionRecord, ReadSelector};
+
+    let stop = AtomicBool::new(false);
+    let (root, mut config) = fixture()?;
+    let recipe = PhysicalFunctionSignatureRecipe::IndexedTypesV1;
+    config["physical_function_signatures"] = serde_json::to_value(recipe)?;
+    rewrite_declaration_lua(
+        &root,
+        &mut config,
+        "---@param value number\n---@return number\nlocal function TypedSignatureFixture(value)\n    return value\nend\n",
+    )?;
+    let path = root.0.join("project.json");
+    let (project, request, _, _) = declaration_query(&path, &stop)?;
+    let report = project
+        .snapshot()
+        .analyzer_binding()
+        .function_call_report()
+        .ok_or("original native signature report")?;
+    assert_eq!(report.signature_recipe(), Some(recipe));
+    assert!(report.source_health_complete());
+    assert!(report.functions().iter().any(|fact| {
+        fact.kind() == SourceFunctionKind::Closure
+            && fact
+                .signature()
+                .and_then(SourceFunctionSignature::comparable)
+                .is_some()
+    }));
+    let native_report_bytes = serde_json::to_vec(report)?;
+    let configuration_bytes = serde_json::to_vec(project.configuration())?;
+    let verify_native = |restored: &ProjectView| -> TestResult {
+        assert_eq!(restored.snapshot_id(), project.snapshot_id());
+        assert_eq!(
+            restored.configuration().physical_function_signatures(),
+            Some(recipe)
+        );
+        assert_eq!(
+            serde_json::to_vec(restored.configuration())?,
+            configuration_bytes
+        );
+        let restored_report = restored
+            .snapshot()
+            .analyzer_binding()
+            .function_call_report()
+            .ok_or("restored native signature report")?;
+        assert_eq!(restored_report.signature_recipe(), Some(recipe));
+        assert_eq!(serde_json::to_vec(restored_report)?, native_report_bytes);
+        Ok(())
+    };
+
+    let source_profile_id = project
+        .configuration()
+        .platform_packages()
+        .ok_or("native platform packages")?
+        .source()
+        .profile()
+        .profile_id()
+        .clone();
+    let ordinary_selection = PlatformStoreSelection::new(
+        project.configuration().project_id().clone(),
+        source_profile_id,
+    )?;
+    let selection = ordinary_selection
+        .clone()
+        .with_physical_function_signatures_catalog(recipe);
+    let replay_input = LocalProjectInput::from_config_path(&path, &stop)?;
+    let publication_input = LocalProjectInput::from_config_path(&path, &stop)?;
+
+    // Retained native inputs remain the proof; decoded rows do not mint signatures.
+    std::fs::remove_dir_all(root.0.join("UI"))?;
+    std::fs::remove_file(root.0.join("version.txt"))?;
+    assert!(!root.0.join("UI").exists());
+    assert!(!root.0.join("version.txt").exists());
+    let (bundle, _) =
+        request.live_publication_in_namespace(replay_input, selection.namespace(), &stop)?;
+    let (records, _) = bundle.into_parts();
+    let record = records
+        .iter()
+        .find(|record| record.key() == "live.project.replay")
+        .ok_or("selected signature replay record")?;
+    let replay: ProjectReplay = record.decode()?;
+    let expected_record = PartitionRecord::new(
+        record.key(),
+        "wow-project.live-replay.selected-components.v1",
+        &replay,
+    )?;
+    assert_eq!(record.version(), expected_record.version());
+    let wire = serde_json::to_value(&replay)?;
+    assert_eq!(
+        wire["schema"],
+        "wow-project/native-project-replay/selected-components/1"
+    );
+    assert_eq!(
+        wire["configuration"]["physical_function_signatures"],
+        "wow-emmy/physical-function-indexed-types/1"
+    );
+    assert!(wire.get("function_fingerprints").is_none());
+    let decoded = ProjectReplay::from_json(&serde_json::to_vec(&replay)?, &stop)?;
+    verify_native(&decoded.hydrate(&stop)?)?;
+
+    let store_root = root.0.join("signature-store");
+    let publish =
+        LiveProjectPublishRequest::new("fixture:indexed-signature-reopen", "absent", true, true)?;
+    let published = publish_input_in_namespace(
+        publication_input,
+        &request,
+        &store_root,
+        &selection,
+        &publish,
+        &stop,
+    )?;
+    assert_eq!(serde_json::to_value(&published)?["status"], "activated");
+    assert_eq!(
+        LiveProjectStore::open_in_namespace(&store_root, &ordinary_selection)
+            .err()
+            .ok_or("ordinary catalog admitted selected signature epoch")?
+            .code(),
+        ServiceErrorCode::IdentityMismatch
+    );
+
+    let store = LiveProjectStore::open_in_namespace(&store_root, &selection)?;
+    let current = store.current()?.ok_or("selected signature Current")?;
+    let read = store.read_in_namespace(&selection, &ReadSelector::Current, &stop)?;
+    verify_native(read.project())?;
+    let graph_snapshot_id = read.graph().snapshot().snapshot_id().clone();
+    drop(read);
+    drop(store);
+
+    let reopened = LiveProjectStore::open_in_namespace(&store_root, &selection)?;
+    assert_eq!(reopened.current()?, Some(current));
+    let read = reopened.read_in_namespace(&selection, &ReadSelector::Current, &stop)?;
+    verify_native(read.project())?;
+    assert_eq!(read.graph().snapshot().snapshot_id(), &graph_snapshot_id);
     Ok(())
 }

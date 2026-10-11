@@ -28,6 +28,7 @@ pub use load_role::{
     FunctionPackageLoadRoleWitness, FunctionPackageLoadUnitRole,
 };
 mod shape;
+mod signature;
 pub use declaration::{
     FunctionDeclaredHeader, FunctionDeclaredHeaderComponent, FunctionDeclaredHeaderFingerprint,
     FunctionDeclaredHeaderProfile,
@@ -36,6 +37,7 @@ pub use shape::{
     DECLARATION_BODY_SHAPE_RECIPE, FunctionDeclarationShapeComponent,
     FunctionDeclarationShapeFingerprint,
 };
+pub use signature::{FunctionSignatureComponent, FunctionSignatureFingerprint};
 
 pub const FUNCTION_FINGERPRINT_SCHEMA: &str = "wow-project/function-fingerprint-records/1";
 pub const FUNCTION_FINGERPRINT_PROFILE: &str = "wow-project/physical-function-source-span/1";
@@ -257,7 +259,7 @@ pub struct FunctionFingerprintRecord {
     source_span: FunctionSourceSpanComponent,
     #[serde(skip_serializing_if = "Option::is_none")]
     declared_header: Option<FunctionDeclaredHeader>,
-    signature: FunctionFingerprintUnavailable,
+    signature: FunctionSignatureComponent,
     declaration_shape: FunctionDeclarationShapeComponent,
     direct_neighborhood: FunctionFingerprintUnavailable,
     package_load_role: FunctionPackageLoadRoleSelection,
@@ -281,8 +283,8 @@ impl FunctionFingerprintRecord {
         self.declared_header.as_ref()
     }
     #[must_use]
-    pub const fn signature(&self) -> FunctionFingerprintUnavailable {
-        self.signature
+    pub const fn signature(&self) -> &FunctionSignatureComponent {
+        &self.signature
     }
     #[must_use]
     pub const fn declaration_shape(&self) -> &FunctionDeclarationShapeComponent {
@@ -351,7 +353,10 @@ pub enum FunctionFingerprintCoverage {
 pub struct FunctionFingerprintComponentSelection {
     #[serde(skip_serializing_if = "Option::is_none")]
     physical_declarations: Option<wow_emmy::function_calls::PhysicalFunctionDeclarationRecipe>,
-    package_load_role: FunctionPackageLoadRoleRecipe,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    physical_signatures: Option<wow_emmy::function_calls::PhysicalFunctionSignatureRecipe>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    package_load_role: Option<FunctionPackageLoadRoleRecipe>,
 }
 impl FunctionFingerprintComponentSelection {
     pub const fn physical_declarations(
@@ -359,7 +364,12 @@ impl FunctionFingerprintComponentSelection {
     ) -> Option<wow_emmy::function_calls::PhysicalFunctionDeclarationRecipe> {
         self.physical_declarations
     }
-    pub const fn package_load_role(&self) -> FunctionPackageLoadRoleRecipe {
+    pub const fn physical_signatures(
+        &self,
+    ) -> Option<wow_emmy::function_calls::PhysicalFunctionSignatureRecipe> {
+        self.physical_signatures
+    }
+    pub const fn package_load_role(&self) -> Option<FunctionPackageLoadRoleRecipe> {
         self.package_load_role
     }
 }
@@ -470,7 +480,7 @@ struct BorrowedFunctionFingerprintRecord<'a> {
     function_id: &'a str,
     kind: SourceFunctionKind,
     source_span: FunctionSourceSpanComponent,
-    signature: FunctionFingerprintUnavailable,
+    signature: FunctionSignatureComponent,
     declaration_shape: FunctionDeclarationShapeComponent,
     direct_neighborhood: FunctionFingerprintUnavailable,
     package_load_role: FunctionPackageLoadRoleSelection,
@@ -662,6 +672,7 @@ fn build_selected_function_fingerprints(
         || report.functions().len() != direct.source().functions().len()
         || report.budget() != config.budget_policy().function_call_budget()
         || report.declaration_recipe() != config.physical_function_declarations()
+        || report.signature_recipe() != config.physical_function_signatures()
     {
         return Err(invalid());
     }
@@ -866,7 +877,17 @@ fn build_selected_function_fingerprints(
             function_id: fact.fact_id(),
             kind: fact.kind(),
             source_span,
-            signature: FunctionFingerprintUnavailable::MissingSignature,
+            signature: match report.signature_recipe() {
+                Some(recipe) => signature::build_component(
+                    recipe,
+                    fact.signature().ok_or_else(invalid)?,
+                    report.source_health_complete(),
+                    scope_conflicts.is_empty(),
+                    &mut retained,
+                    stop,
+                )?,
+                None => FunctionSignatureComponent::MissingSignature,
+            },
             declaration_shape: FunctionDeclarationShapeComponent::MissingShape,
             direct_neighborhood: FunctionFingerprintUnavailable::NotSelected,
             package_load_role: FunctionPackageLoadRoleSelection::NotSelected,
@@ -885,9 +906,10 @@ fn build_selected_function_fingerprints(
         records.push(record.into_owned(stop)?);
     }
     let declarations_selected = report.declaration_recipe().is_some();
+    let signatures_selected = report.signature_recipe().is_some();
     let body_shape_selected = report.declaration_recipe() == Some(wow_emmy::function_calls::PhysicalFunctionDeclarationRecipe::DeclaredSyntaxAndBodyShapeV1);
     let mut manifest = FunctionFingerprintManifest {
-        schema: if load_roles.is_some() {
+        schema: if load_roles.is_some() || signatures_selected {
             SELECTED_COMPONENTS_FINGERPRINT_SCHEMA
         } else if body_shape_selected {
             BODY_SHAPE_FINGERPRINT_SCHEMA
@@ -896,7 +918,7 @@ fn build_selected_function_fingerprints(
         } else {
             FUNCTION_FINGERPRINT_SCHEMA
         },
-        profile: if load_roles.is_some() {
+        profile: if load_roles.is_some() || signatures_selected {
             SELECTED_COMPONENTS_FINGERPRINT_PROFILE
         } else if body_shape_selected {
             BODY_SHAPE_FINGERPRINT_PROFILE
@@ -906,10 +928,13 @@ fn build_selected_function_fingerprints(
             FUNCTION_FINGERPRINT_PROFILE
         },
         limits,
-        selected_components: load_roles.map(|recipe| FunctionFingerprintComponentSelection {
-            physical_declarations: report.declaration_recipe(),
-            package_load_role: recipe,
-        }),
+        selected_components: (load_roles.is_some() || signatures_selected).then_some(
+            FunctionFingerprintComponentSelection {
+                physical_declarations: report.declaration_recipe(),
+                physical_signatures: report.signature_recipe(),
+                package_load_role: load_roles,
+            },
+        ),
         coverage: FunctionFingerprintCoverage::Partial,
         available_functions: report.functions().len(),
         binding,
@@ -949,7 +974,7 @@ fn build_selected_function_fingerprints(
             record.package_load_role = FunctionPackageLoadRoleSelection::Selected(Box::new(row));
         }
     }
-    if body_shape_selected || load_roles.is_some() {
+    if body_shape_selected || load_roles.is_some() || signatures_selected {
         retained.charge_serialized(&manifest, stop)?;
     } else {
         // Preserve the admitted older recipe's exact output-ceiling check.

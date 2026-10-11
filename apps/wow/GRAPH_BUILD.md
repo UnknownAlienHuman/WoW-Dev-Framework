@@ -101,12 +101,30 @@ retains explicit native producer, function-query and XML-query fields; schema
 names do not enumerate their combinations. `function_fingerprints` uses manifest
 schema `wow-project/function-fingerprint-records/selected-components/1` with an
 explicit `selected_components` receipt: optional native `physical_declarations`
-and exact `package_load_role` recipe. Unselected query bytes remain unchanged;
-native configuration/report/replay and storage catalogs are untouched.
+and `physical_signatures`, plus optional exact `package_load_role` recipe. The
+load-role query alone leaves native configuration/report/replay and storage
+catalogs untouched; selection absence retains previous query bytes.
 
 Static role groups and exact native witnesses are described in
 [the component contract](../../crates/wow-project/e3/FUNCTION_FINGERPRINTS.md).
 Overall coverage stays Partial; final acceptance is pending.
+
+Native signature selection is local config
+`physical_function_signatures: "wow-emmy/physical-function-indexed-types/1"`
+(`PhysicalFunctionSignatureRecipe::IndexedTypesV1`); current `--fingerprints`
+needs no additional flag. The request retains the exact
+`physical_function_signatures` recipe and uses
+`wow-service/graph-build-request/selected-function-components/1`; the result uses
+`wow-service/graph-build-result/selected-function-components/1`, even without a
+fingerprint query. With that query, manifest
+`wow-project/function-fingerprint-records/selected-components/1` carries explicit
+`selected_components.physical_signatures` alongside any declaration/load-role
+recipes. Signature absence omits its fields and preserves the old schema routes.
+
+The typed indexed-parameter/return comparison is bounded and conservative; see
+[the component recipe](../../crates/wow-project/e3/FUNCTION_FINGERPRINTS.md) and
+[its native replay/catalog selection](PLATFORM_INPUT.md#indexed-type-signature-selection).
+Overall coverage stays Partial; semantic/runtime/parity acceptance is not claimed.
 
 The first recipe exposes the exact source-span component with native support
 and separate generation/profile bindings. Missing signature/shape and unselected

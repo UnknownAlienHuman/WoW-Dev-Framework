@@ -19,6 +19,7 @@ mod budget;
 mod declaration;
 mod location_index;
 mod shape;
+mod signature;
 #[cfg(test)]
 mod tests;
 use crate::{EmmyBackendIdentity, LuaWorkspaceFile, LuaWorkspaceSnapshot};
@@ -32,6 +33,12 @@ use location_index::AccessLocationIndex;
 pub use shape::{
     FunctionShapeEvent, FunctionShapeNode, FunctionShapeToken, SourceFunctionShape,
     SourceFunctionShapeUnavailable, SourceFunctionShapeUnsupported,
+};
+pub use signature::{
+    PhysicalFunctionSignatureRecipe, SourceFunctionSignature, SourceSignatureArrayLength,
+    SourceSignatureAsyncState, SourceSignatureComparable, SourceSignatureParameter,
+    SourceSignatureReturn, SourceSignatureReturnResolution, SourceSignatureType,
+    SourceSignatureTypeUnavailable, SourceSignatureUnavailable,
 };
 
 pub const FUNCTION_CALL_PROFILE: &str = "wow-emmy/function-call-facts/7";
@@ -70,6 +77,8 @@ pub struct SourceFunctionFact {
     declaration: Option<SourceFunctionDeclaration>,
     #[serde(skip_serializing_if = "Option::is_none")]
     shape: Option<SourceFunctionShape>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    signature: Option<SourceFunctionSignature>,
 }
 impl SourceFunctionFact {
     pub fn fact_id(&self) -> &str {
@@ -97,6 +106,10 @@ impl SourceFunctionFact {
     /// Selected full body syntax, without identifier/literal payloads or trivia.
     pub fn shape(&self) -> Option<&SourceFunctionShape> {
         self.shape.as_ref()
+    }
+    /// Selected typed observation from the same native signature index.
+    pub fn signature(&self) -> Option<&SourceFunctionSignature> {
+        self.signature.as_ref()
     }
 }
 
@@ -228,6 +241,8 @@ pub struct FunctionCallReport {
     budget: Option<FunctionCallBudget>,
     #[serde(skip_serializing_if = "Option::is_none")]
     declaration_recipe: Option<PhysicalFunctionDeclarationRecipe>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    signature_recipe: Option<PhysicalFunctionSignatureRecipe>,
     backend: EmmyBackendIdentity,
     main_snapshot_id: String,
     library_snapshot_ids: Vec<String>,
@@ -254,6 +269,10 @@ impl FunctionCallReport {
     #[must_use]
     pub const fn declaration_recipe(&self) -> Option<PhysicalFunctionDeclarationRecipe> {
         self.declaration_recipe
+    }
+    #[must_use]
+    pub const fn signature_recipe(&self) -> Option<PhysicalFunctionSignatureRecipe> {
+        self.signature_recipe
     }
     pub fn analysis_id(&self) -> &str {
         &self.analysis_id
@@ -336,6 +355,17 @@ impl FunctionCallReport {
             self.symbol_lookup_analysis_id.as_slice(),
             &self.symbol_lookup_analysis_ids,
         );
+        if let Some(recipe) = self.signature_recipe {
+            return canonical_id(
+                "emmy-function-calls:sha256:",
+                &(
+                    recipe,
+                    self.declaration_recipe.as_slice(),
+                    self.budget.as_slice(),
+                    facts,
+                ),
+            );
+        }
         match (self.declaration_recipe, self.budget) {
             (Some(recipe), Some(budget)) => {
                 canonical_id("emmy-function-calls:sha256:", &(recipe, budget, facts))
@@ -402,6 +432,13 @@ impl FunctionCallReport {
             .map(|f| (f.path.as_str(), f))
             .collect::<BTreeMap<_, _>>();
         for function in &self.functions {
+            match (self.signature_recipe, &function.signature) {
+                (None, None) => {}
+                (Some(_), Some(observation)) => {
+                    observation.validate(function.kind, limits, stop)?
+                }
+                _ => return Err(invalid()),
+            }
             match (self.declaration_recipe, &function.declaration) {
                 (None, None) => {}
                 (Some(_), Some(observation)) => {
@@ -751,6 +788,34 @@ pub(crate) fn collect_with_declarations(
     declaration_recipe: Option<PhysicalFunctionDeclarationRecipe>,
     stop: &AtomicBool,
 ) -> EmmyMemberCallResult<FunctionCallReport> {
+    collect_with_components(
+        analysis,
+        main,
+        main_root,
+        libraries,
+        callable_signatures,
+        symbol_lookup_analysis_ids,
+        selected_budget,
+        declaration_recipe,
+        None,
+        stop,
+    )
+}
+
+/// Select typed observations while retaining the same native session and ledgers.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn collect_with_components(
+    analysis: &EmmyLuaAnalysis,
+    main: &LuaWorkspaceSnapshot,
+    main_root: &Path,
+    libraries: &[(&LuaWorkspaceSnapshot, PathBuf)],
+    callable_signatures: &BTreeMap<String, LuaSignatureId>,
+    symbol_lookup_analysis_ids: &[&str],
+    selected_budget: Option<FunctionCallBudget>,
+    declaration_recipe: Option<PhysicalFunctionDeclarationRecipe>,
+    signature_recipe: Option<PhysicalFunctionSignatureRecipe>,
+    stop: &AtomicBool,
+) -> EmmyMemberCallResult<FunctionCallReport> {
     let limits = selected_budget.unwrap_or_default();
     let mut declaration_bytes = declaration::DeclarationBudget::new(limits.max_report_bytes());
     let mut signatures = HashMap::new();
@@ -813,6 +878,13 @@ pub(crate) fn collect_with_declarations(
                     kind: SourceFunctionKind::Chunk,
                     span: SourceSpan::whole_file(),
                     parent_function_id: None,
+                    signature: if signature_recipe.is_some() {
+                        let observation = SourceFunctionSignature::chunk();
+                        declaration_bytes.charge(&observation, stop)?;
+                        Some(observation)
+                    } else {
+                        None
+                    },
                     shape: if declaration_recipe
                         == Some(PhysicalFunctionDeclarationRecipe::DeclaredSyntaxAndBodyShapeV1)
                     {
@@ -880,6 +952,18 @@ pub(crate) fn collect_with_declarations(
                         })
                         .transpose()
                         .map_err(|error| crate::global_access::at_path(error, file.path()))?;
+                    let observed_signature = signature_recipe
+                        .map(|_| {
+                            signature::observe(
+                                model.get_db().get_signature_index().get(&signature),
+                                &mut visits,
+                                limits,
+                                &mut declaration_bytes,
+                                stop,
+                            )
+                        })
+                        .transpose()
+                        .map_err(|error| crate::global_access::at_path(error, file.path()))?;
                     let shape = if declaration_recipe
                         == Some(PhysicalFunctionDeclarationRecipe::DeclaredSyntaxAndBodyShapeV1)
                     {
@@ -910,6 +994,7 @@ pub(crate) fn collect_with_declarations(
                         )?),
                         declaration,
                         shape,
+                        signature: observed_signature,
                     });
                     files
                         .get_mut(file.path())
@@ -1167,6 +1252,7 @@ pub(crate) fn collect_with_declarations(
         },
         budget: selected_budget,
         declaration_recipe,
+        signature_recipe,
         backend: main.backend().clone(),
         main_snapshot_id: main.snapshot_id().into(),
         library_snapshot_ids,
@@ -1229,7 +1315,12 @@ pub(crate) fn collect_with_declarations(
     })?;
     checkpoint(stop)?;
     report.analysis_id = report.identity()?;
-    report.validate_with_declaration_stop(declaration_recipe.map(|_| stop))?;
+    if signature_recipe.is_some() {
+        declaration_bytes.charge(&report, stop)?;
+    }
+    report.validate_with_declaration_stop(
+        (declaration_recipe.is_some() || signature_recipe.is_some()).then_some(stop),
+    )?;
     checkpoint(stop)?;
     Ok(report)
 }

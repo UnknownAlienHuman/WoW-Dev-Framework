@@ -183,6 +183,12 @@ pub(super) struct ReplayConfiguration {
     )]
     physical_function_declarations:
         Option<wow_emmy::function_calls::PhysicalFunctionDeclarationRecipe>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "non_null_physical_function_signatures"
+    )]
+    physical_function_signatures: Option<wow_emmy::function_calls::PhysicalFunctionSignatureRecipe>,
 }
 
 fn non_null_xml_classification<'de, D: serde::Deserializer<'de>>(
@@ -197,7 +203,18 @@ fn non_null_physical_function_declarations<'de, D: serde::Deserializer<'de>>(
     wow_emmy::function_calls::PhysicalFunctionDeclarationRecipe::deserialize(deserializer).map(Some)
 }
 
+fn non_null_physical_function_signatures<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<wow_emmy::function_calls::PhysicalFunctionSignatureRecipe>, D::Error> {
+    wow_emmy::function_calls::PhysicalFunctionSignatureRecipe::deserialize(deserializer).map(Some)
+}
+
 impl ReplayConfiguration {
+    pub(super) const fn physical_function_signatures(
+        &self,
+    ) -> Option<wow_emmy::function_calls::PhysicalFunctionSignatureRecipe> {
+        self.physical_function_signatures
+    }
     pub(super) const fn physical_function_declarations(
         &self,
     ) -> Option<wow_emmy::function_calls::PhysicalFunctionDeclarationRecipe> {
@@ -241,6 +258,7 @@ impl ReplayConfiguration {
                 .xml_classification_profile()
                 .map(|profile| ReplayXmlClassification::capture(profile)),
             physical_function_declarations: config.physical_function_declarations(),
+            physical_function_signatures: config.physical_function_signatures(),
         })
     }
     pub(super) fn profile(&self) -> &ProfileIdentity {
@@ -333,6 +351,10 @@ impl ReplayConfiguration {
         };
         let builder = match self.physical_function_declarations {
             Some(recipe) => builder.with_physical_function_declarations(recipe),
+            None => builder,
+        };
+        let builder = match self.physical_function_signatures {
+            Some(recipe) => builder.with_physical_function_signatures(recipe),
             None => builder,
         };
         let builder = match classification {

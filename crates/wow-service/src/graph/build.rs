@@ -184,6 +184,8 @@ pub struct GraphBuildRequest {
     physical_function_declarations:
         Option<wow_emmy::function_calls::PhysicalFunctionDeclarationRecipe>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    physical_function_signatures: Option<wow_emmy::function_calls::PhysicalFunctionSignatureRecipe>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     function_fingerprints: Option<FunctionFingerprintSelection>,
     #[serde(skip_serializing_if = "Option::is_none")]
     xml_fingerprints: Option<XmlFingerprintSelection>,
@@ -208,6 +210,7 @@ impl GraphBuildRequest {
             capabilities: None,
             xml_classification_profile_digest: None,
             physical_function_declarations: None,
+            physical_function_signatures: None,
             function_fingerprints: None,
             xml_fingerprints: None,
         })
@@ -223,6 +226,7 @@ impl GraphBuildRequest {
         self.capabilities = None;
         self.xml_classification_profile_digest = None;
         self.physical_function_declarations = None;
+        self.physical_function_signatures = None;
         match profile {
             wow_project::PlatformGraphProfile::PackageProjectionV1 => {
                 self.schema = "wow-service/graph-build-request/10";
@@ -260,15 +264,17 @@ impl GraphBuildRequest {
             .xml_classification_profile()
             .map(|profile| profile.digest());
         request.physical_function_declarations = configuration.physical_function_declarations();
+        request.physical_function_signatures = configuration.physical_function_signatures();
         request.select_component_schema();
         request
     }
 
     fn select_component_schema(&mut self) {
-        if self
-            .function_fingerprints
-            .as_ref()
-            .is_some_and(|selection| selection.package_load_roles().is_some())
+        if self.physical_function_signatures.is_some()
+            || self
+                .function_fingerprints
+                .as_ref()
+                .is_some_and(|selection| selection.package_load_roles().is_some())
         {
             self.schema = "wow-service/graph-build-request/selected-function-components/1";
             return;
@@ -368,6 +374,8 @@ impl GraphBuildRequest {
         }
         if self.physical_function_declarations
             != project.configuration().physical_function_declarations()
+            || self.physical_function_signatures
+                != project.configuration().physical_function_signatures()
         {
             return Err(error(ServiceErrorCode::IdentityMismatch));
         }
@@ -681,7 +689,7 @@ pub fn execute_graph_build_diagnosed(
     diagnostics.reset();
     let request_digest = super::hash(&bounded(request, super::GRAPH_REQUEST_MAX_BYTES)?);
     let mut result = GraphBuildResult {
-        schema: if request.function_fingerprints.as_ref().is_some_and(|selection| selection.package_load_roles().is_some()) {
+        schema: if request.physical_function_signatures.is_some() || request.function_fingerprints.as_ref().is_some_and(|selection| selection.package_load_roles().is_some()) {
             "wow-service/graph-build-result/selected-function-components/1"
         } else if request.physical_function_declarations == Some(wow_emmy::function_calls::PhysicalFunctionDeclarationRecipe::DeclaredSyntaxAndBodyShapeV1) {
             body_shape_query_schemas(request.function_fingerprints.is_some(), request.xml_fingerprints.is_some()).1

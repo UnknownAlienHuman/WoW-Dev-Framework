@@ -123,7 +123,7 @@ with `PhysicalFunctionDeclarationRecipe::DeclaredSyntaxAndBodyShapeV1`, adding
 no-argument `with_physical_function_declarations_catalog()` selects header-only.
 Configuration and catalog intent must match; retained epochs are not widened.
 
-The replay schemas are
+With signatures absent, the replay schemas are
 `wow-project/native-project-replay/physical-function-declaration-syntax-and-body-shape/1`
 and, with XML classification,
 `wow-project/native-project-replay/xml-schema-classification-and-physical-function-declaration-syntax-and-body-shape/1`.
@@ -133,6 +133,29 @@ Their exact catalogs are `STORAGE_SCHEMAS_PHYSICAL_FUNCTION_BODY_SHAPE_V1` and
 and `wow-project.live-replay.xml-schema-classification-and-physical-function-declaration-syntax-and-body-shape.v1`,
 each paired only with `wow-project.live-pair.v1`. Full corpus/reopen acceptance
 remains open; these registered catalogs are not acceptance evidence.
+
+### Indexed-type signature selection
+
+Optional local field `physical_function_signatures` accepts
+`"wow-emmy/physical-function-indexed-types/1"`, native
+`PhysicalFunctionSignatureRecipe::IndexedTypesV1`. It requires genuine retained
+platform packages, `direct_capabilities_v1` and same-session XML binding. The
+native configuration builder exposes `with_physical_function_signatures(recipe)`.
+Absence omits the field and retains old identities; null/unknown recipes refuse.
+The held native signature index supplies typed observations, not a second parser.
+Existing `--fingerprints` exposes the selected component; see
+[the finite comparison recipe](../../crates/wow-project/e3/FUNCTION_FINGERPRINTS.md).
+
+Selected signatures use one replay family
+`wow-project/native-project-replay/selected-components/1` and exact catalog
+`STORAGE_SCHEMAS_SELECTED_COMPONENTS_V1`: `wow-project.live-replay.selected-components.v1`
+plus `wow-project.live-pair.v1`. Exact declaration/XML/signature selections remain
+in configuration; this family does not enumerate their combinations. Namespaced
+store intent uses `PlatformStoreSelection::with_physical_function_signatures_catalog`
+with `PhysicalFunctionSignatureRecipe::IndexedTypesV1`, alongside exact selected
+declaration/XML intent. Configuration/catalog admission must agree. All prior
+signature-None schemas, catalogs and omitted fields retain their old routes;
+retained epochs are not widened. Full replay/corpus acceptance remains pending.
 
 ## Native authority and bounds
 

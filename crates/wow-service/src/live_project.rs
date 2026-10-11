@@ -31,7 +31,9 @@ pub use operations::{
     update_input_in_namespace, update_local_project,
 };
 use std::{path::Path, sync::atomic::AtomicBool};
-use wow_emmy::function_calls::PhysicalFunctionDeclarationRecipe;
+use wow_emmy::function_calls::{
+    PhysicalFunctionDeclarationRecipe, PhysicalFunctionSignatureRecipe,
+};
 use wow_graph::GraphPartitionSnapshot;
 use wow_project::replay::publication::{self, AcquiredProjectPair, ProjectPublicationBundle};
 use wow_project::{ProjectPublisher, ProjectView};
@@ -85,15 +87,20 @@ impl LiveProjectStore {
         Self::open_selected(root, None)
     }
     // None preserves general open/recovery across every registered catalog.
-    // A platform selection admits exactly its XML/exact-declaration-recipe pair.
+    // Old catalogs bind the XML/declaration pair; selected-component catalogs
+    // retain exact recipes in configuration, validated on native pair readback.
     fn open_selected(
         root: &Path,
-        components: Option<(bool, Option<PhysicalFunctionDeclarationRecipe>)>,
+        components: Option<(
+            bool,
+            Option<PhysicalFunctionDeclarationRecipe>,
+            Option<PhysicalFunctionSignatureRecipe>,
+        )>,
     ) -> ServiceResult<Self> {
         // Each open requires an exact registered epoch. The store rejects a
         // catalog mismatch before opening SQLite writable; no migration occurs.
         for &schemas in publication::STORAGE_SCHEMA_CATALOGS {
-            if components.is_some_and(|selected| selected != catalog_components(schemas)) {
+            if components.is_some_and(|selected| !catalog_accepts_components(schemas, selected)) {
                 continue;
             }
             match ProjectStore::open(root, &catalog_for(schemas)?) {
@@ -219,8 +226,28 @@ impl LiveProjectStore {
 fn catalog() -> ServiceResult<RecordCatalog> {
     catalog_for(publication::STORAGE_SCHEMAS)
 }
-// Selected catalogs bind the exact recipe, never merely declaration presence.
-// Every other catalog in STORAGE_SCHEMA_CATALOGS is a retained unselected epoch.
+// The selected-component family cannot attest XML/declaration choices itself.
+// require_configuration checks those exact choices against reconstructed owners.
+fn catalog_accepts_components(
+    schemas: &[&str],
+    components: (
+        bool,
+        Option<PhysicalFunctionDeclarationRecipe>,
+        Option<PhysicalFunctionSignatureRecipe>,
+    ),
+) -> bool {
+    match components.2 {
+        Some(PhysicalFunctionSignatureRecipe::IndexedTypesV1) => {
+            schemas == publication::STORAGE_SCHEMAS_SELECTED_COMPONENTS_V1
+        }
+        None => {
+            schemas != publication::STORAGE_SCHEMAS_SELECTED_COMPONENTS_V1
+                && catalog_components(schemas) == (components.0, components.1)
+        }
+    }
+}
+// Retained signature-free catalogs bind exact XML/declaration recipes.
+// Called only after excluding the selected-component family.
 fn catalog_components(schemas: &[&str]) -> (bool, Option<PhysicalFunctionDeclarationRecipe>) {
     use PhysicalFunctionDeclarationRecipe::{DeclaredSyntaxAndBodyShapeV1, DeclaredSyntaxV1};
     if schemas == publication::STORAGE_SCHEMAS_XML_CLASSIFICATION_PHYSICAL_FUNCTION_BODY_SHAPE_V1 {

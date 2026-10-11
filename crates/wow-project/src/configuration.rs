@@ -8,7 +8,7 @@ use wow_core::{
 };
 use wow_emmy::{
     EMMYLUA_CODE_ANALYSIS_VERSION, EMMYLUA_REVISION, EMMYLUA_TREE, EmmyBackendIdentity,
-    function_calls::PhysicalFunctionDeclarationRecipe,
+    function_calls::{PhysicalFunctionDeclarationRecipe, PhysicalFunctionSignatureRecipe},
 };
 
 use crate::identity::canonical_digest;
@@ -541,6 +541,8 @@ pub struct ProjectConfiguration {
     xml_schema_classification: Option<RetainedXmlClassification>,
     #[serde(skip_serializing_if = "Option::is_none")]
     physical_function_declarations: Option<PhysicalFunctionDeclarationRecipe>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    physical_function_signatures: Option<PhysicalFunctionSignatureRecipe>,
 }
 
 impl ProjectConfiguration {
@@ -661,7 +663,8 @@ impl ProjectConfiguration {
         {
             return Err(platform::invalid());
         }
-        if self.physical_function_declarations.is_some()
+        if (self.physical_function_declarations.is_some()
+            || self.physical_function_signatures.is_some())
             && (self.platform_packages().is_none()
                 || !matches!(
                     self.platform_graph_profile,
@@ -723,6 +726,7 @@ impl ProjectConfiguration {
             self.platform_graph_profile,
             self.xml_schema_classification.as_ref(),
             self.physical_function_declarations,
+            self.physical_function_signatures,
         )?;
         if expected != self.configuration_digest {
             return Err(ProjectError::new(
@@ -852,6 +856,11 @@ impl ProjectConfiguration {
         self.physical_function_declarations
     }
 
+    #[must_use]
+    pub const fn physical_function_signatures(&self) -> Option<PhysicalFunctionSignatureRecipe> {
+        self.physical_function_signatures
+    }
+
     /// Sealed same-source classification owner, never reconstructed from receipt JSON.
     #[must_use]
     pub fn xml_classification_profile(
@@ -892,6 +901,7 @@ pub struct ProjectConfigurationBuilder {
     platform_graph_profile: Option<PlatformGraphProfile>,
     xml_schema_classification: Option<RetainedXmlClassification>,
     physical_function_declarations: Option<PhysicalFunctionDeclarationRecipe>,
+    physical_function_signatures: Option<PhysicalFunctionSignatureRecipe>,
 }
 
 impl ProjectConfigurationBuilder {
@@ -925,6 +935,7 @@ impl ProjectConfigurationBuilder {
             platform_graph_profile: None,
             xml_schema_classification: None,
             physical_function_declarations: None,
+            physical_function_signatures: None,
         }
     }
 
@@ -982,6 +993,15 @@ impl ProjectConfigurationBuilder {
         recipe: PhysicalFunctionDeclarationRecipe,
     ) -> Self {
         self.physical_function_declarations = Some(recipe);
+        self
+    }
+
+    #[must_use]
+    pub const fn with_physical_function_signatures(
+        mut self,
+        recipe: PhysicalFunctionSignatureRecipe,
+    ) -> Self {
+        self.physical_function_signatures = Some(recipe);
         self
     }
 
@@ -1135,6 +1155,7 @@ impl ProjectConfigurationBuilder {
             self.platform_graph_profile,
             self.xml_schema_classification.as_ref(),
             self.physical_function_declarations,
+            self.physical_function_signatures,
         )?;
         let configuration = ProjectConfiguration {
             project_id: self.project_id,
@@ -1161,6 +1182,7 @@ impl ProjectConfigurationBuilder {
             platform_graph_profile: self.platform_graph_profile,
             xml_schema_classification: self.xml_schema_classification,
             physical_function_declarations: self.physical_function_declarations,
+            physical_function_signatures: self.physical_function_signatures,
         };
         configuration.validate()?;
         Ok(configuration)
@@ -1187,6 +1209,7 @@ fn configuration_digest(
     platform_graph_profile: Option<PlatformGraphProfile>,
     xml_schema_classification: Option<&RetainedXmlClassification>,
     physical_function_declarations: Option<PhysicalFunctionDeclarationRecipe>,
+    physical_function_signatures: Option<PhysicalFunctionSignatureRecipe>,
 ) -> ProjectResult<ContentDigest<CanonicalResult>> {
     #[derive(Serialize)]
     struct Identity<'a> {
@@ -1221,6 +1244,8 @@ fn configuration_digest(
         xml_schema_classification: Option<&'a RetainedXmlClassification>,
         #[serde(skip_serializing_if = "Option::is_none")]
         physical_function_declarations: Option<PhysicalFunctionDeclarationRecipe>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        physical_function_signatures: Option<PhysicalFunctionSignatureRecipe>,
     }
     canonical_digest(
         "wow-project/configuration/e0-d/1",
@@ -1247,6 +1272,7 @@ fn configuration_digest(
             platform_graph_profile,
             xml_schema_classification,
             physical_function_declarations,
+            physical_function_signatures,
         },
         ProjectPhase::Configuration,
     )
