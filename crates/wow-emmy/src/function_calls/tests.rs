@@ -9,6 +9,141 @@ use emmylua_parser::{LuaChunk, LuaLanguageLevel, LuaParser, ParserConfig};
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
 
 #[test]
+fn lexical_global_access_indexed_global_prefix_keeps_its_own_cell() -> TestResult {
+    use crate::global_access::{GlobalAccessKey, GlobalAccessKind, GlobalAccessResolution};
+    let main = snapshot(vec![LuaWorkspaceFileInput::new(
+        "main/registry.lua",
+        "_G.SlashCmdList = {}\n",
+    )])?;
+    let report = analyze_member_call_session_with_callable_queries(
+        &main,
+        &[],
+        MemberCallSessionQueryProfile::new(&[], &[]),
+        true,
+        &AtomicBool::new(false),
+    )?
+    .function_calls
+    .ok_or("report")?;
+    let [access] = report.global_accesses() else {
+        return Err("missing exact root access".into());
+    };
+    assert_eq!(access.root_name(), "_G");
+    assert_eq!(
+        access.keys(),
+        &[GlobalAccessKey::String("SlashCmdList".into())]
+    );
+    assert_eq!(access.kind(), GlobalAccessKind::Write);
+    assert_eq!(access.resolution(), GlobalAccessResolution::Unresolved);
+    assert!(access.declaration().is_none() && !access.is_alias());
+    report.validate()?;
+    Ok(())
+}
+
+#[test]
+fn lexical_global_access_indexed_prefix_preserves_environment_and_shadow_boundaries() -> TestResult
+{
+    use crate::global_access::{GlobalAccessKey, GlobalAccessResolution};
+    let main = snapshot(vec![LuaWorkspaceFileInput::new(
+        "main/env.lua",
+        "_ENV.Registry = {}\n_G[\"StringRegistry\"] = {}\n_G[key] = {}\nRegistry.Value = 1\n",
+    )])?;
+    let report = analyze_member_call_session_with_callable_queries(
+        &main,
+        &[],
+        MemberCallSessionQueryProfile::new(&[], &[]),
+        true,
+        &AtomicBool::new(false),
+    )?
+    .function_calls
+    .ok_or("environment report")?;
+    let roots = report
+        .global_accesses()
+        .iter()
+        .filter(|access| matches!(access.root_name(), "_G" | "_ENV"))
+        .collect::<Vec<_>>();
+    assert_eq!(roots.len(), 3);
+    assert!(roots.iter().all(
+        |access| access.resolution() == GlobalAccessResolution::Unresolved
+            && access.declaration().is_none()
+    ));
+    assert!(roots.iter().any(|access| !access.path_complete()));
+    assert!(
+        report
+            .global_accesses()
+            .iter()
+            .any(|access| access.root_name() == "Registry"
+                && access.resolution() == GlobalAccessResolution::MainGlobal)
+    );
+    report.validate()?;
+    let source = concat!(
+        "Global = {}\ndo local _G = Global; _G.AliasSlot = {} end\n",
+        "do local _G = {}; _G.Hidden = {} end\n_G = {}\n_G.OwnSlot = {}\n",
+    );
+    let main = snapshot(vec![LuaWorkspaceFileInput::new("main/shadow.lua", source)])?;
+    let report = analyze_member_call_session_with_callable_queries(
+        &main,
+        &[],
+        MemberCallSessionQueryProfile::new(&[], &[]),
+        true,
+        &AtomicBool::new(false),
+    )?
+    .function_calls
+    .ok_or("shadow report")?;
+    let alias = report
+        .global_accesses()
+        .iter()
+        .find(|access| access.keys() == [GlobalAccessKey::String("AliasSlot".into())])
+        .ok_or("lexical alias discarded")?;
+    assert_eq!(alias.root_name(), "Global");
+    assert_eq!(alias.aliases().len(), 1);
+    assert_eq!(alias.aliases()[0].name, "_G");
+    assert_eq!(alias.resolution(), GlobalAccessResolution::MainGlobal);
+    assert!(
+        !report
+            .global_accesses()
+            .iter()
+            .any(|access| access.keys() == [GlobalAccessKey::String("Hidden".into())])
+    );
+    let own = report
+        .global_accesses()
+        .iter()
+        .find(|access| access.keys() == [GlobalAccessKey::String("OwnSlot".into())])
+        .ok_or("explicit root discarded")?;
+    assert_eq!(own.root_name(), "_G");
+    assert_eq!(own.resolution(), GlobalAccessResolution::MainGlobal);
+    assert_eq!(
+        own.declaration()
+            .ok_or("root declaration")?
+            .span
+            .byte_start(),
+        Some((source.find("\n_G = {}").ok_or("physical root")? + 1) as u64)
+    );
+    report.validate()?;
+    let main = snapshot(vec![
+        LuaWorkspaceFileInput::new("main/a.lua", "_G = {}\n"),
+        LuaWorkspaceFileInput::new("main/b.lua", "_G = {}\n_G.AmbiguousRoot = {}\n"),
+    ])?;
+    let report = analyze_member_call_session_with_callable_queries(
+        &main,
+        &[],
+        MemberCallSessionQueryProfile::new(&[], &[]),
+        true,
+        &AtomicBool::new(false),
+    )?
+    .function_calls
+    .ok_or("ambiguous report")?;
+    let ambiguous = report
+        .global_accesses()
+        .iter()
+        .find(|access| access.keys() == [GlobalAccessKey::String("AmbiguousRoot".into())])
+        .ok_or("ambiguous root omitted")?;
+    assert_eq!(ambiguous.resolution(), GlobalAccessResolution::Unresolved);
+    assert!(ambiguous.declaration().is_none());
+    report.validate()?;
+    Ok(())
+}
+
+#[test]
 fn selected_global_budget_strict_wire_preserves_omitted_shape() -> TestResult {
     use crate::global_access::GlobalAccessBudget;
     let plain = FunctionCallBudget::default();

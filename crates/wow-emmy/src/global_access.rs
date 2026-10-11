@@ -9,8 +9,10 @@ use crate::references::{
 use crate::{LuaWorkspaceFile, bindings::SymbolTarget};
 pub(crate) use aliases::AliasIndex;
 pub use budget::GlobalAccessBudget;
-use emmylua_code_analysis::{FileId, LuaSemanticDeclId, SemanticDeclLevel, SemanticModel};
-use emmylua_parser::{LuaAstNode, LuaNameExpr};
+use emmylua_code_analysis::{
+    FileId, LuaDeclId, LuaSemanticDeclId, SemanticDeclLevel, SemanticModel,
+};
+use emmylua_parser::{LuaAstNode, LuaIndexExpr, LuaNameExpr, LuaSyntaxKind};
 pub use path::GlobalAccessKey;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
@@ -358,6 +360,42 @@ pub(super) fn source_name_decl(
         if declaration.is_local() || declaration.is_implicit_self() {
             return Ok(Some(LuaSemanticDeclId::LuaDecl(id)));
         }
+    }
+    // An indexed global declaration spans the entire index expression, starting
+    // at its prefix. Upstream's position shortcut can return that field's cell
+    // for the root name, including when a lexical root shadows the environment.
+    // Only this exact native declaration/AST collision bypasses navigation.
+    let physical_id = LuaDeclId::new(model.get_file_id(), name.get_position());
+    if let Some(declaration) = db.get_decl_index().get_decl(&physical_id)
+        && declaration.is_global()
+        && declaration.get_syntax_id().get_kind() == LuaSyntaxKind::IndexExpr
+        && let Some(index) = name.get_parent::<LuaIndexExpr>()
+        && declaration.get_range() == index.get_range()
+        && index
+            .get_prefix_expr()
+            .is_some_and(|prefix| prefix.get_range() == name.get_range())
+    {
+        let spelling = name
+            .get_name_text()
+            .ok_or_else(|| invalid("root expression has no name"))?;
+        let tree = db
+            .get_decl_index()
+            .get_decl_tree(&model.get_file_id())
+            .ok_or_else(|| invalid("lexical declaration tree is absent from the index"))?;
+        if let Some(local) = tree.find_local_decl(&spelling, name.get_position())
+            && (local.is_local() || local.is_implicit_self())
+        {
+            return Ok(Some(LuaSemanticDeclId::LuaDecl(local.get_id())));
+        }
+        // Resolve only the root cell itself. No field-to-environment association
+        // or first-match global selection is invented for absent/ambiguous roots.
+        return Ok(db
+            .get_global_index()
+            .get_global_decl_ids(&spelling)
+            .and_then(|ids| match ids.as_slice() {
+                [id] => Some(LuaSemanticDeclId::LuaDecl(*id)),
+                _ => None,
+            }));
     }
     Ok(model.find_decl(name.syntax().clone().into(), SemanticDeclLevel::NoTrace))
 }

@@ -503,6 +503,12 @@ method's implicit `self` with its receiver; neither is a source-cell identity.
 Implicit receiver parameters and their captured aliases stay outside global-slot
 projection. Explicit rooted-path locals, including a local named `self`, retain
 their alias spans and conservative reassignment blockers.
+An indexed global declaration can occupy the prefix's starting position while
+spanning the whole index expression. That exact native AST/declaration collision
+is resolved against the actual lexical root, or one unique registered global
+root declaration. Absent or ambiguous roots remain unresolved; an environment
+field declaration is never substituted for its prefix or promoted to runtime
+environment authority. Unrelated declaration-name mismatches still refuse.
 An optional `FunctionCallBudget.global_access` selects cumulative positive work
 and text ceilings through `GlobalAccessBudget`; absence preserves the original
 2,000,000-work/8-MiB-text admission. Its explicit values bind report9, while

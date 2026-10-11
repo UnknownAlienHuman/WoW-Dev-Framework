@@ -168,6 +168,14 @@ Native above-default text/strict decoding and genuine retained v12/v13
 store/reopen/Current checks pass. The actual v12 catalog is frozen and refuses
 v13 before a retained operation or Current mutation. Other owner ceilings remain
 independent; completed semantic counts and full-corpus fit/peak are unqualified.
+The selected complete request next refused an indexed-global prefix in
+`SlashCommandsRegistry.lua`. Upstream's position shortcut returns the field
+declaration spanning the entire index expression for the root name. The source
+owner now recognizes that exact native AST/range collision and recovers the
+lexical root or a sole registered global root. Environment/literal/dynamic-index,
+local-shadow/alias, explicit-root and ambiguous-root cases pass; unavailable
+roots stay unresolved and arbitrary name mismatches still refuse. No budget or
+serialization recipe changes accompany this source-cell correction.
 The native error handoff retains actual member causes through session,
 Project/backend and CLI stderr while excluding explanatory text from graph wire,
 digest and records. Focused native budget/cause and cancellation cases pass;

@@ -47,6 +47,13 @@ and recipes. Exact location joins use one bounded runtime index. Native
 above-default text, strict decoding and genuine v12/v13 store/reopen checks pass;
 the frozen v12 catalog refuses v13 before operation/Current mutation. The next
 complete source operation still owns actual fit/census evidence in #113.
+That operation reached another precise native name mismatch in
+`SlashCommandsRegistry.lua`: upstream anchors an indexed global declaration at
+the same position as its prefix. The source owner now recognizes only that exact
+AST/range collision and keeps the lexical or unique registered root cell.
+Native environment/literal/dynamic-index, local-shadow/alias, explicit-root and
+ambiguous-root cases pass. Absent/ambiguous roots remain unresolved; budgets and
+identity recipes are unchanged. The next complete operation remains #113 evidence.
 
 Completed Main/reports, classification, graph/maps and persistence remain
 unqualified. Re-resolve the source on each complete operation and record the
