@@ -28,6 +28,7 @@ use wow_emmy::bindings::{SymbolLookupReport, SymbolLookupState, supported_path};
 pub const XML_LUA_BINDING_PROFILE: &str = "wow-project/xml-lua-bindings/3";
 const MAX_BINDINGS: usize = 4096;
 const MAX_QUERY_REFS: usize = 16_384;
+const MAX_BINDING_TEXT_BYTES: usize = 16 * 1024 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -158,6 +159,7 @@ struct PreparationBudget {
     bindings: usize,
     binding_limit: Option<usize>,
     query_limit: Option<usize>,
+    query_reference_limit: Option<usize>,
     query_refs: usize,
     query_visits: usize,
     text_bytes: usize,
@@ -352,11 +354,13 @@ fn prepare_with_budget(
                                 .text_bytes
                                 .checked_add(query_bytes)
                                 .ok_or_else(exhausted)?;
-                            if total_refs > MAX_QUERY_REFS {
+                            let reference_limit =
+                                budget.query_reference_limit.unwrap_or(MAX_QUERY_REFS);
+                            if total_refs > reference_limit {
                                 return Err(budget_exhausted(
                                     "expanded query references",
                                     total_refs,
-                                    MAX_QUERY_REFS,
+                                    reference_limit,
                                 ));
                             }
                             if distinct.len() > 4096 {
@@ -366,11 +370,11 @@ fn prepare_with_budget(
                                     4096,
                                 ));
                             }
-                            if total_bytes > 16 * 1024 * 1024 {
+                            if total_bytes > MAX_BINDING_TEXT_BYTES {
                                 return Err(budget_exhausted(
                                     "expanded query text bytes",
                                     total_bytes,
-                                    16 * 1024 * 1024,
+                                    MAX_BINDING_TEXT_BYTES,
                                 ));
                             }
                         }
@@ -435,18 +439,19 @@ fn prepare_with_budget(
                         + queries.iter().map(String::len).sum::<usize>(),
                 )
                 .ok_or_else(exhausted)?;
-            if budget.query_refs > MAX_QUERY_REFS {
+            let reference_limit = budget.query_reference_limit.unwrap_or(MAX_QUERY_REFS);
+            if budget.query_refs > reference_limit {
                 return Err(budget_exhausted(
                     "retained query references",
                     budget.query_refs,
-                    MAX_QUERY_REFS,
+                    reference_limit,
                 ));
             }
-            if budget.text_bytes > 16 * 1024 * 1024 {
+            if budget.text_bytes > MAX_BINDING_TEXT_BYTES {
                 return Err(budget_exhausted(
                     "retained binding text bytes",
                     budget.text_bytes,
-                    16 * 1024 * 1024,
+                    MAX_BINDING_TEXT_BYTES,
                 ));
             }
             all_queries.extend(queries.iter().cloned());
@@ -498,6 +503,7 @@ fn prepare_with_budget(
 struct ClassificationBudget {
     bindings: usize,
     binding_limit: Option<usize>,
+    query_reference_limit: Option<usize>,
     query_refs: usize,
 }
 
@@ -522,11 +528,12 @@ fn classify(
                 binding_limit,
             ));
         }
-        if budget.query_refs > MAX_QUERY_REFS {
+        let reference_limit = budget.query_reference_limit.unwrap_or(MAX_QUERY_REFS);
+        if budget.query_refs > reference_limit {
             return Err(budget_exhausted(
                 "classified query references",
                 budget.query_refs,
-                MAX_QUERY_REFS,
+                reference_limit,
             ));
         }
         if binding.queries.is_empty() {

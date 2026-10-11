@@ -110,8 +110,16 @@ The project lifecycle retains8194 rows/4097 distinct names and exact disk-absent
 replay. The selected inherited-script-source counter now also uses the configured
 fact ceiling, with its original declaration-visit/text guards. A focused native
 4098-source/combined-refusal/cancellation/replay case passes. The later native273
-operation next refuses expanded query references at16385 against16384;
-native Emmy and graph execution are still not reached.
+operation next refused expanded query references at16385 against16384.
+Selected native reference multiplicity now uses the configured output-byte ceiling
+with its original 16384 floor and 16-MiB text cap, carried through preparation and
+classification. A focused 16392-reference/four-name case preserves ambiguity and
+original lookup/callable IDs, checks exact/over/output refusal and cancellation,
+and replays exactly without disk; affected Tier S passes. The later freshly
+resolved 273-package operation completes preparation with 16995 references and
+8768 distinct queries, then refuses at native analyzer budget admission. Its exact internal
+resource/count remains unidentified; no complete native reports or graph result
+are claimed. Complete operation peak and downstream admission stay NotEvaluated.
 Full analysis/graph/maps/persistence remain unqualified under #113.
 Explicit retained XSD component admission is now executable through the existing
 XML owner, with root-only global symbols and final unsupported context propagation.

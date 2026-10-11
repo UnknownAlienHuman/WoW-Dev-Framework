@@ -275,6 +275,7 @@ pub(crate) struct PreparedPackageBindings {
     groups: Vec<PreparedGroup>,
     queries: Vec<String>,
     binding_limit: Option<usize>,
+    query_reference_limit: Option<usize>,
 }
 impl PreparedPackageBindings {
     pub(crate) fn queries(&self) -> &[String] {
@@ -369,13 +370,23 @@ pub(crate) fn prepare_packages(
     load: &ProjectPackageLoadPlan,
     main: &ProjectPackageMainPlan,
     fact_limit: Option<usize>,
+    output_limit: Option<u64>,
     stop: &AtomicBool,
 ) -> ProjectResult<PreparedPackageBindings> {
     validate_inputs(load, main, stop)?;
+    // Retained queries remain verbatim in the serialized report, so their
+    // count cannot exceed its admitted bytes. Expansion may later discard
+    // candidates; keep the original floor for that temporary work domain.
+    let query_reference_limit = output_limit.map(|bytes| {
+        usize::try_from(bytes)
+            .unwrap_or(usize::MAX)
+            .clamp(super::MAX_QUERY_REFS, super::MAX_BINDING_TEXT_BYTES)
+    });
     let mut budget = PreparationBudget {
         limit_query_union: true,
         binding_limit: fact_limit,
         query_limit: fact_limit,
+        query_reference_limit,
         receivers: super::receivers::Budget::with_owner_limit(fact_limit),
         scripts: super::scripts::Budget::with_inherited_limit(fact_limit),
         ..PreparationBudget::default()
@@ -437,6 +448,7 @@ pub(crate) fn prepare_packages(
     crate::analyzer::checkpoint(stop)?;
     Ok(PreparedPackageBindings {
         binding_limit: fact_limit,
+        query_reference_limit,
         load_digest: load.digest(),
         main_digest: main.digest(),
         groups,
@@ -650,6 +662,7 @@ pub(crate) fn finish_packages(
     let mut groups = Vec::new();
     let mut budget = ClassificationBudget {
         binding_limit: pending.binding_limit,
+        query_reference_limit: pending.query_reference_limit,
         ..ClassificationBudget::default()
     };
     for (mut group, node) in pending.groups.into_iter().zip(load.packages()) {

@@ -70,9 +70,19 @@ the configured fact ceiling is smaller: standard callable-only names are not
 charged by that aggregate fact budget. Final combined admission remains separate.
 Input counts include repeated names; each lane retains a
 cancellable checked 16-MiB input-text bound and 4096-byte individual name bound.
-Query references/visits, receiver record/text/expansion, inherited declaration
-visits/text, native lookup targets/text, callable named targets and serialization retain their
-own independent limits. The existing configuration/replay records already bind
+Repeated query references are a separate unit from distinct lookup rows and are
+not charged as analyzer facts. Only the explicitly retained native route selects
+their ceiling from the configured output bytes, clamped to the original 16384
+floor and the unchanged 16-MiB binding-text ceiling. Supported retained strings
+remain verbatim in `binding.queries`, so each reference occupies at least one
+serialized byte. Expanded candidates can later be discarded as unsupported or
+invalid; their guard bounds temporary work and does not prove final output size.
+The original floor preserves historical admission. One private ceiling reaches
+expansion, retention and classification; ordinary routes retain 16384 references.
+Method visits, per-method distinct names, receiver record/text/expansion,
+inherited declaration visits/text, native lookup targets/text, callable named
+targets and serialization retain their own independent limits.
+The existing configuration/replay records already bind
 the selected retention and budget; no additional wire selector is introduced.
 
 Scope/document retention is also bounded. Cancellable
@@ -125,9 +135,18 @@ The later real
 fixture retains 4098 inherited inline-handler source rows, refuses ordinary
 capacity and combined-fact overflow without publication, honors cancellation,
 and restores exact identities and full bindings without disk. The later real
-operation passes the inherited-source frontier and next refuses expanded query
-references at 16385 against 16384. Native Emmy and graph execution have not yet
-been reached by that real operation.
+operation passed the inherited-source frontier and next refused expanded query
+references at 16385 against 16384. A further focused native fixture retains
+16392 references with four distinct names, preserves two-method ambiguity and
+original lookup/callable IDs, and restores exact reports and snapshot identities
+without disk. Its exact reference ceiling reaches final serialized-output
+refusal; limit+1 refuses during expansion, and cancellation publishes nothing.
+The later freshly resolved 273-package operation completes preparation with
+13445 bindings, 16995 references, 8768 distinct queries, 11951 method visits and
+2091042 retained text bytes. Native analyzer budget admission then refuses with
+its existing generic error; the exact internal resource/count is still unknown.
+Complete native reports, classification and graph execution remain unqualified,
+as do the completed-operation memory peak and downstream persistence.
 Full real-corpus XML binding capacity remains unqualified under #113.
 
 The direct source producer remains monolithic `wow-project/source-load-proposals/19`.

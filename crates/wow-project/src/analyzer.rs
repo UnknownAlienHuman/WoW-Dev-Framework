@@ -352,6 +352,7 @@ pub(crate) fn build_analyzer_binding(
                 load,
                 main,
                 native_fact_limit,
+                native_fact_limit.map(|_| configuration.budget_policy().max_output_bytes()),
                 stop,
             )?)
         }

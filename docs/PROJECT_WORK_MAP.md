@@ -7,9 +7,9 @@ the work queue. Follow [the execution model](EXECUTION_MODEL.md).
 
 ## Verified routing base
 
-`main` checkpoint `b9ad046d0095db7ca21b067dc2bf16b9b03b4719`, tree
-`faed730d94b1789810e4726a850f34411f866182`, was published and read back with all
-changed blobs. [Quick 38095624482](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/38095624482)
+`main` checkpoint `5c91af7659b04cba695d17a0ea26215742d463a0`, tree
+`1dbf15b4b6e4f3ba2461ed25f26370df77b7b8c8`, was published and read back with all
+changed blobs. [Quick 38096823656](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/38096823656)
 passed on that exact head. This is the verified base of this routing update;
 subsequent publication and gate evidence belong in the canonical Issue.
 
@@ -48,8 +48,16 @@ selected inherited-source counter now also uses the configured fact ceiling,
 preserving declaration visits/text and full combined admission. A focused fixture
 retains4098 inherited source rows and exact disk-absent replay, with conservative
 ordinary/combined/cancellation refusal. The latest real operation next refuses
-expanded query references at16385 against16384. Native Emmy and graph construction
-were not reached. Existing guards report their own counts and limits. Actual whole
+expanded query references at16385 against16384. Selected native reference
+multiplicity now uses the configured output-byte ceiling with the original 16384
+floor and 16-MiB text cap, shared through preparation/pending/classification.
+The focused 16392-reference/four-name case preserves ambiguity, original IDs,
+exact replay and separate output/refusal/cancellation admission. The later freshly
+resolved 273-package operation completes preparation with 16995 references and
+8768 distinct queries. Native analyzer budget admission then refuses; its internal resource
+and observed count are unknown. Completed reports, classification and graph
+construction remain unqualified. Existing XML guards report their own counts and
+limits. Completed-operation peak remains NotEvaluated. Actual whole
 Main/analysis, full graph/map population and persistence remain unqualified.
 Do not infer the actual map-owner population from lexical script counts or compare XML-index JSON bytes
 with graph metadata bytes. Operation details belong in #113.

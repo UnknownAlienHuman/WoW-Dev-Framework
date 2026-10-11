@@ -449,6 +449,210 @@ fn retained_native_bindings_use_the_fact_budget_and_replay_exactly() -> TestResu
     Ok(())
 }
 
+#[test]
+fn retained_native_query_references_use_output_admission_and_replay_exactly() -> TestResult {
+    use wow_project::{ProjectErrorCode, platform_source::PlatformPackageRetentionLimits};
+
+    let stop = AtomicBool::new(false);
+    let root = FixtureRoot::new()?;
+    let xml = format!(
+        "<Ui xmlns=\"http://www.blizzard.com/wow/ui/\">{}</Ui>\n",
+        "<Frame mixin=\"KnownMixin,OtherMixin\"><Scripts><OnLoad method=\"OnLoad\"/></Scripts></Frame>"
+            .repeat(2049)
+    );
+    for package in ["Alpha", "Beta"] {
+        std::fs::write(root.0.join("UI").join(package).join("frames.xml"), &xml)?;
+    }
+    // Admission removes the fixture directory. All subsequent paths use held bytes.
+    let ordinary = root.packages(&stop)?;
+    let declarations = PACKAGES
+        .iter()
+        .map(|package| {
+            ProjectPackageInput::new(
+                *package,
+                format!("UI/{package}"),
+                true,
+                vec![ProjectPackageVariantInput::new(
+                    ProjectDiskFile::new("Fixture.toc"),
+                    true,
+                )],
+            )
+        })
+        .collect::<Vec<_>>();
+    let encoded = ordinary.load_plan().packages().iter().try_fold(
+        0u64,
+        |total, node| -> Result<u64, Box<dyn Error>> {
+            let plan = ordinary
+                .load_plan()
+                .package_plan(&node.package)
+                .ok_or("package plan missing")?;
+            total
+                .checked_add(u64::try_from(serde_json::to_vec(plan)?.len())?)
+                .ok_or_else(|| "fixture plan encoding overflow".into())
+        },
+    )?;
+    let native = Arc::new(ordinary.source().specialize_packages_with_retention(
+        &declarations,
+        None,
+        PlatformPackageRetentionLimits::new(3, encoded)?,
+        &stop,
+    )?);
+    let input = |packages: &Arc<PlatformPackageSpecialization>,
+                 max_output_bytes: u64|
+     -> Result<ProjectInputBundle, Box<dyn Error>> {
+        let budget = ProjectBudgetPolicy::fixture_e0()?;
+        let configuration = configuration_builder(
+            ProjectKind::BlizzardUiPlatformSource,
+            packages.source().profile().target(),
+        )?
+        .platform_packages(Arc::clone(packages))?
+        .with_package_xml_bindings(PackageXmlBindingProfile::SameSessionV1)
+        .budget_policy(ProjectBudgetPolicy::new(
+            budget.max_files(),
+            budget.max_total_source_bytes(),
+            budget.max_single_file_bytes(),
+            budget.max_update_operations(),
+            budget.max_analyzer_facts(),
+            budget.max_generic_findings(),
+            max_output_bytes,
+        )?)
+        .build()?;
+        let library = LuaWorkspaceSnapshot::build(
+            configuration.analyzer_binding().backend().clone(),
+            LuaWorkspaceUniverse::Fixture,
+            vec![LuaWorkspaceFileInput::new(
+                "library/package-xml-query-references.lua",
+                "---@meta _\nKnownMixin = {}\nfunction KnownMixin:OnLoad() return self end\nOtherMixin = {}\nfunction OtherMixin:OnLoad() return self end\n",
+            )],
+            LuaWorkspaceLimits::new(8, 16_384, 256 * 1024, 512 * 1024)?,
+        )?;
+        Ok(ProjectInputBundle::closed(
+            configuration,
+            packages.files().to_vec(),
+            vec![library],
+        )?)
+    };
+    let output_budget = ProjectBudgetPolicy::fixture_e0()?.max_output_bytes();
+    let mut unselected = ProjectPublisher::with_function_call_facts();
+    assert_eq!(
+        unselected
+            .publish_initial_cancellable(input(&ordinary, output_budget)?, &stop)
+            .err()
+            .ok_or("ordinary capacity unexpectedly admitted")?
+            .code(),
+        ProjectErrorCode::SourceBudgetExceeded
+    );
+    assert!(unselected.open_current().is_err());
+
+    // Two mixin queries plus two method candidates per Frame, repeated in two
+    // packages: 16392 references, but only four distinct lookup names.
+    let references = 2049 * 2 * 4;
+    let mut publisher = ProjectPublisher::with_function_call_facts();
+    publisher.publish_initial_cancellable(input(&native, output_budget)?, &stop)?;
+    let view = publisher.open_current()?;
+    let binding = view.snapshot().analyzer_binding();
+    let report = binding
+        .package_xml_bindings()
+        .ok_or("query-reference report missing")?;
+    assert_eq!(
+        report
+            .groups()
+            .iter()
+            .flat_map(|group| group.bindings())
+            .map(|row| row.queries.len())
+            .sum::<usize>(),
+        references
+    );
+    let lookup = report.symbol_lookup().ok_or("shared lookup missing")?;
+    assert_eq!(lookup.lookups().len(), 4);
+    for name in [
+        "KnownMixin",
+        "OtherMixin",
+        "KnownMixin.OnLoad",
+        "OtherMixin.OnLoad",
+    ] {
+        assert_eq!(
+            lookup.lookups()[name].state,
+            SymbolLookupState::UniqueAnalyzerDeclaration
+        );
+    }
+    assert!(
+        report
+            .groups()
+            .iter()
+            .flat_map(|group| group.bindings())
+            .filter(|row| row.kind == XmlLuaBindingKind::Method)
+            .all(|row| row.queries.len() == 2 && row.state == XmlLuaBindingState::Ambiguous)
+    );
+    let calls = binding
+        .function_call_report()
+        .ok_or("callable report missing")?;
+    assert!(
+        calls
+            .symbol_lookup_analysis_ids()
+            .iter()
+            .any(|id| id == lookup.analysis_id())
+    );
+    for name in ["KnownMixin.OnLoad", "OtherMixin.OnLoad"] {
+        assert!(matches!(
+            calls.named_targets()[name],
+            SourceCallTarget::LibraryFunction { .. }
+        ));
+    }
+    let replay = ProjectReplay::capture(&publisher, &stop)?;
+    let restored =
+        ProjectReplay::from_json(&serde_json::to_vec(&replay)?, &stop)?.hydrate(&stop)?;
+    assert_eq!(restored.snapshot_id(), view.snapshot_id());
+    assert_eq!(restored.project_generation(), view.project_generation());
+    assert_eq!(restored.analyzer_snapshot_id(), view.analyzer_snapshot_id());
+    assert_eq!(
+        restored
+            .snapshot()
+            .analyzer_binding()
+            .package_xml_bindings(),
+        Some(report)
+    );
+
+    // At the exact reference ceiling, preparation AND classification complete;
+    // final serialized-output admission still refuses this much larger report.
+    let mut exact = ProjectPublisher::with_function_call_facts();
+    let error = exact
+        .publish_initial_cancellable(input(&native, u64::try_from(references)?)?, &stop)
+        .err()
+        .ok_or("combined output overflow admitted")?;
+    assert_eq!(error.code(), ProjectErrorCode::UpdateBudgetExceeded);
+    assert!(
+        error
+            .message()
+            .contains("configured serialized-output budget")
+    );
+    assert!(exact.open_current().is_err());
+
+    let mut bounded = ProjectPublisher::with_function_call_facts();
+    let error = bounded
+        .publish_initial_cancellable(input(&native, u64::try_from(references - 1)?)?, &stop)
+        .err()
+        .ok_or("query-reference limit+1 admitted")?;
+    assert_eq!(error.code(), ProjectErrorCode::SourceBudgetExceeded);
+    assert!(
+        error
+            .message()
+            .contains("expanded query references=16392, limit=16391")
+    );
+    assert!(bounded.open_current().is_err());
+    let mut cancelled = ProjectPublisher::with_function_call_facts();
+    assert_eq!(
+        cancelled
+            .publish_initial_cancellable(input(&native, output_budget)?, &AtomicBool::new(true))
+            .err()
+            .ok_or("cancelled query-reference input admitted")?
+            .code(),
+        ProjectErrorCode::AnalysisCancelled
+    );
+    assert!(cancelled.open_current().is_err());
+    Ok(())
+}
+
 static NEXT_ROOT: AtomicUsize = AtomicUsize::new(0);
 const PACKAGES: [&str; 3] = ["Alpha", "Beta", "Empty"];
 const TOC: &str = "## Interface: 120100\ndefs.lua\nframes.xml\n";
