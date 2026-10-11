@@ -206,7 +206,9 @@ pub fn publish_local_project(
     stop: &AtomicBool,
 ) -> ServiceResult<LiveProjectResult> {
     let input = LocalProjectInput::from_config_path(config, stop)?;
-    publish_input(input, graph_request, root, request, stop)
+    let graph_request = graph_request.clone().with_input_profile(&input);
+    super::skeleton::preflight(&graph_request, crate::graph::GRAPH_REQUEST_MAX_BYTES, stop)?;
+    publish_input(input, &graph_request, root, request, stop)
 }
 
 pub(super) fn publish_input(
@@ -216,10 +218,22 @@ pub(super) fn publish_input(
     request: &LiveProjectPublishRequest,
     stop: &AtomicBool,
 ) -> ServiceResult<LiveProjectResult> {
+    // LocalProjectInput has already validated this immutable configuration.
+    // Select the ordinary catalog before graph composition consumes the input.
+    let configuration = input.project_bundle().configuration();
+    let primary_callables = matches!(
+        configuration.project_kind(),
+        wow_project::ProjectKind::Fixture | wow_project::ProjectKind::Repository
+    ) && (configuration.physical_function_declarations().is_some()
+        || configuration.physical_function_signatures().is_some());
     let (bundle, owner) = crate::graph::live_publication(input, graph_request, stop)?;
     super::publication_checkpoint(stop)?;
     let mut store = if request.initialize {
-        LiveProjectStore::create(root, &owner)?
+        if primary_callables {
+            LiveProjectStore::create_primary_callables(root, &owner)?
+        } else {
+            LiveProjectStore::create(root, &owner)?
+        }
     } else {
         LiveProjectStore::open(root)?
     };
@@ -307,7 +321,9 @@ pub fn update_local_project(
 ) -> ServiceResult<LiveProjectResult> {
     super::publication_checkpoint(stop)?;
     let input = LocalProjectInput::from_config_path(config, stop)?;
-    update_input(input, graph_request, root, request, stop)
+    let graph_request = graph_request.clone().with_input_profile(&input);
+    super::skeleton::preflight(&graph_request, crate::graph::GRAPH_REQUEST_MAX_BYTES, stop)?;
+    update_input(input, &graph_request, root, request, stop)
 }
 
 pub(super) fn update_input(

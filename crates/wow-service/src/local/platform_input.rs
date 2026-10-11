@@ -242,6 +242,8 @@ impl LocalProjectInput {
                 logical_root: input.logical_root,
                 profile: profile.target().reference_profile.clone(),
                 analyzer,
+                physical_function_declarations: None,
+                physical_function_signatures: None,
             },
             reference,
             packages.files().to_vec(),

@@ -60,6 +60,10 @@ const SELECTED_COMPONENTS_REPLAY_SCHEMA: &str =
     "wow-project/native-project-replay/selected-components/1";
 pub(super) const SELECTED_COMPONENTS_STORAGE_SCHEMA: &str =
     "wow-project.live-replay.selected-components.v1";
+const PRIMARY_CALLABLES_REPLAY_SCHEMA: &str =
+    "wow-project/native-project-replay/primary-callables/1";
+pub(super) const PRIMARY_CALLABLES_STORAGE_SCHEMA: &str =
+    "wow-project.live-replay.primary-callables.v1";
 const MAX_FILES: usize = 8192;
 const MAX_LIBRARIES: usize = 64;
 const MAX_FILE_BYTES: usize = 16 * 1024 * 1024;
@@ -311,15 +315,33 @@ impl ProjectReplay {
             } else {
                 platform_schema
             };
-        let platform_schema =
-            selected_component_schema(platform_schema, &configuration, function_calls)?;
+        let base_schema = if platform_owner.is_some() {
+            platform_schema
+        } else if generation_schema_version.is_some() {
+            LIBRARY_BOUND_REPLAY_SCHEMA
+        } else if packages.is_some() {
+            PACKAGE_REPLAY_SCHEMA
+        } else if load.is_some() {
+            LOAD_REPLAY_SCHEMA
+        } else {
+            REPLAY_SCHEMA
+        };
+        let schema = selected_component_schema(
+            base_schema,
+            &configuration,
+            function_calls,
+            generation_schema_version == Some(2)
+                && load.is_none()
+                && packages.is_none()
+                && platform_owner.is_none(),
+        )?;
         let platform = if let Some(owner) = platform_owner {
             if generation_schema_version != Some(2) {
                 return Err(invalid());
             }
             let envelope_size = encoded_size(
                 &PlatformEnvelopeBudget {
-                    schema: platform_schema,
+                    schema,
                     configuration: &configuration,
                     files: &files,
                     libraries: &retained_libraries,
@@ -343,18 +365,7 @@ impl ProjectReplay {
             None
         };
         let replay = Self {
-            schema: if platform.is_some() {
-                platform_schema
-            } else if generation_schema_version.is_some() {
-                LIBRARY_BOUND_REPLAY_SCHEMA
-            } else if packages.is_some() {
-                PACKAGE_REPLAY_SCHEMA
-            } else if load.is_some() {
-                LOAD_REPLAY_SCHEMA
-            } else {
-                REPLAY_SCHEMA
-            }
-            .into(),
+            schema: schema.into(),
             configuration,
             files,
             libraries: retained_libraries,
@@ -382,6 +393,7 @@ impl ProjectReplay {
                     graph_budget_schema(budget),
                     &self.configuration,
                     self.function_calls,
+                    false,
                 )
             } else {
                 Err(invalid())
@@ -401,7 +413,12 @@ impl ProjectReplay {
             (false, None) => Ok(schema),
             (false, Some(_)) => Err(invalid()),
         }?;
-        selected_component_schema(schema, &self.configuration, self.function_calls)
+        selected_component_schema(
+            schema,
+            &self.configuration,
+            self.function_calls,
+            self.supports_physical_update(),
+        )
     }
     fn expected_base_schema(&self) -> ProjectResult<&'static str> {
         if let Some(profile) = self.configuration.platform_graph_profile() {
@@ -657,6 +674,7 @@ impl ProjectReplay {
                 Ok(XML_CLASSIFICATION_PHYSICAL_FUNCTION_BODY_SHAPE_STORAGE_SCHEMA)
             }
             SELECTED_COMPONENTS_REPLAY_SCHEMA => Ok(SELECTED_COMPONENTS_STORAGE_SCHEMA),
+            PRIMARY_CALLABLES_REPLAY_SCHEMA => Ok(PRIMARY_CALLABLES_STORAGE_SCHEMA),
             _ => Err(invalid()),
         }
     }
@@ -666,6 +684,7 @@ fn selected_component_schema(
     base: &'static str,
     configuration: &ReplayConfiguration,
     function_calls: bool,
+    physical_primary: bool,
 ) -> ProjectResult<&'static str> {
     use wow_emmy::function_calls::PhysicalFunctionDeclarationRecipe::{
         DeclaredSyntaxAndBodyShapeV1, DeclaredSyntaxV1,
@@ -673,6 +692,25 @@ fn selected_component_schema(
     let classification = configuration.has_xml_classification()?;
     let declarations = configuration.physical_function_declarations();
     let signatures = configuration.physical_function_signatures();
+    if (declarations.is_some() || signatures.is_some()) && !configuration.is_platform() {
+        return if physical_primary
+            && base == LIBRARY_BOUND_REPLAY_SCHEMA
+            && function_calls
+            && !classification
+            && configuration.package_xml_binding_profile().is_none()
+            && configuration.platform_graph_profile().is_none()
+            && matches!(declarations, None | Some(DeclaredSyntaxV1))
+            && matches!(
+                signatures,
+                None | Some(
+                    wow_emmy::function_calls::PhysicalFunctionSignatureRecipe::IndexedTypesV1
+                )
+            ) {
+            Ok(PRIMARY_CALLABLES_REPLAY_SCHEMA)
+        } else {
+            Err(invalid())
+        };
+    }
     if (declarations.is_some() || signatures.is_some())
         && (!function_calls
             || !configuration.is_platform()

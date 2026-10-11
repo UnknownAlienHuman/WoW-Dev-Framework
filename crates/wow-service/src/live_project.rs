@@ -156,6 +156,17 @@ impl LiveProjectStore {
             store: ProjectStore::create_with_gc(root, owner, catalog()?).map_err(store_error)?,
         })
     }
+    // This ordinary recipe family never selects a platform or candidate namespace.
+    fn create_primary_callables(root: &Path, owner: &str) -> ServiceResult<Self> {
+        Ok(Self {
+            store: ProjectStore::create_with_gc(
+                root,
+                owner,
+                catalog_for(publication::STORAGE_SCHEMAS_PRIMARY_CALLABLES_V1)?,
+            )
+            .map_err(store_error)?,
+        })
+    }
     pub fn open(root: &Path) -> ServiceResult<Self> {
         Self::open_selected(root, None, None)
     }
@@ -178,6 +189,9 @@ impl LiveProjectStore {
                 continue;
             }
             for selected in [false, true] {
+                if selected && schemas == publication::STORAGE_SCHEMAS_PRIMARY_CALLABLES_V1 {
+                    continue;
+                }
                 if candidate_catalog.is_some_and(|expected| expected != selected) {
                     continue;
                 }
@@ -369,6 +383,9 @@ fn catalog_accepts_components(
         Option<PhysicalFunctionSignatureRecipe>,
     ),
 ) -> bool {
+    if schemas == publication::STORAGE_SCHEMAS_PRIMARY_CALLABLES_V1 {
+        return false;
+    }
     match components.2 {
         Some(PhysicalFunctionSignatureRecipe::IndexedTypesV1) => {
             schemas == publication::STORAGE_SCHEMAS_SELECTED_COMPONENTS_V1

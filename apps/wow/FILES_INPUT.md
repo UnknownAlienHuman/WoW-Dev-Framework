@@ -7,13 +7,15 @@ wow check --config workspace/project.json --project my-addon --format text
 wow check --config workspace/project.json --project my-addon --file project-file:Init.lua
 ```
 
-`--config` accepts either the existing inline `wow-service/local-project-input/1`
-package or `wow-service/local-project-files/1`. The new schema reads declared files
-from disk; no source bodies are embedded in configuration. The config's explicitly
-selected parent directory is registered once by `wow-project`. All manifest paths
-are relative to that retained directory, not cwd. Neither the CLI nor service
-opens individual source files. No directory scan, TOC/XML interpretation, glob,
-include expansion, environment substitution, URL fetch, source execution or write.
+The original status/check `--config` transports are inline
+`wow-service/local-project-input/1` and disk `wow-service/local-project-files/1`.
+Ordinary project publication also selects the closed
+[Primary callable files family](PRIMARY_CALLABLE_INPUT.md) below. Disk manifests
+read declared files; no source bodies are embedded in configuration. The config's
+explicitly selected parent directory is registered once by `wow-project`. Paths
+are relative to that retained directory, not cwd. Neither CLI nor service opens
+individual source files. No directory scan, TOC/XML interpretation, glob, include
+expansion, environment substitution, URL fetch, source execution or write.
 
 For selected TOC/XML source expansion use the separate [TOC_INPUT.md](TOC_INPUT.md)
 schema; the explicit-file schema below does not change.
@@ -50,6 +52,21 @@ files enter this E0 acquisition path. Omitted files are outside the supplied
 universe, not proven absent from an addon. Full TOC/XML/load completeness remains
 unavailable. Main and Library are independently admitted and never merged.
 
+## Selected ordinary Primary callables
+
+`wow-service/local-primary-callables-files/1` retains the file layout above and
+adds independent optional physical_function_declarations and
+physical_function_signatures fields. Their only admitted values are respectively
+`wow-emmy/physical-function-declaration-syntax/1` and
+`wow-emmy/physical-function-indexed-types/1`. At least one is present; omit the
+other. Explicit null, unknown/duplicate fields and unsupported recipes refuse.
+
+The family admits only ordinary Fixture/Repository physical Main with an exact
+separate Library. Selected TOC/load context, packages, platform/XML/candidate and
+body-shape selection are outside this route. Original unselected schemas remain
+unchanged. [PRIMARY_CALLABLE_INPUT.md](PRIMARY_CALLABLE_INPUT.md) records its
+bounded implementation status and existing publish/read/context grammar.
+
 ## Acquisition and limits
 
 `wow-project::disk::ProjectInputDirectory` owns a private `cap_std::fs::Dir`.
@@ -74,7 +91,7 @@ The caller-selected directory is an explicit capability: its own resolution and
 hard-linked regular files are not a sandbox against a hostile directory owner.
 Network filesystem calls and analyzer calls are not forcibly preemptible.
 
-Both transports use the same project/analyzer/reference/rule composition and
-existing output/exit semantics. The fixture-only WoW rule restriction is unchanged;
-unsupported live profiles remain `NotEvaluated`. No test matrix or fixture is
-changed by this implementation; full R0 and host-race acceptance remain separate.
+The original inline/files transports use the same project/analyzer/reference/rule
+composition and existing output/exit semantics. The fixture-only WoW rule
+restriction is unchanged; unsupported live profiles remain `NotEvaluated`.
+Full R0 and host-race acceptance remain separate from selected callable admission.

@@ -663,15 +663,37 @@ impl ProjectConfiguration {
         {
             return Err(platform::invalid());
         }
+        let primary_callables = matches!(
+            self.project_kind,
+            ProjectKind::Fixture | ProjectKind::Repository
+        ) && self.load_plan_digest.is_none()
+            && self.package_load_plan_digest.is_none()
+            && self.package_main_plan_digest.is_none()
+            && self.package_xml_binding_profile.is_none()
+            && self.platform_graph_profile.is_none()
+            && self.xml_schema_classification.is_none()
+            && matches!(
+                self.physical_function_declarations,
+                None | Some(PhysicalFunctionDeclarationRecipe::DeclaredSyntaxV1)
+            )
+            && matches!(
+                self.physical_function_signatures,
+                None | Some(PhysicalFunctionSignatureRecipe::IndexedTypesV1)
+            );
+        let platform_callables = self.platform_packages().is_some()
+            && matches!(
+                self.platform_graph_profile,
+                Some(PlatformGraphProfile::DirectCapabilitiesV1(_))
+            );
         if (self.physical_function_declarations.is_some()
             || self.physical_function_signatures.is_some())
-            && (self.platform_packages().is_none()
-                || !matches!(
-                    self.platform_graph_profile,
-                    Some(PlatformGraphProfile::DirectCapabilitiesV1(_))
-                ))
+            && !(primary_callables || platform_callables)
         {
-            return Err(platform::invalid());
+            return Err(ProjectError::new(
+                ProjectErrorCode::InvalidConfiguration,
+                ProjectPhase::Configuration,
+                "physical callable recipes require an admitted Primary or direct platform configuration",
+            ));
         }
         let classification_selected = matches!(
             self.platform_graph_profile,

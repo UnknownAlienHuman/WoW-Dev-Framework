@@ -209,6 +209,8 @@ impl LocalProjectInput {
                 logical_root: input.logical_root,
                 profile: artifact.profile,
                 analyzer,
+                physical_function_declarations: None,
+                physical_function_signatures: None,
             },
             artifact.reference_view,
             main,

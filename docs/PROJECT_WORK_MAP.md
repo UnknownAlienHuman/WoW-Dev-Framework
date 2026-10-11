@@ -29,9 +29,12 @@ route with exact containers/entities, original declaration metadata and one
 aggregate budget. The selected [semantic pack and renderers](../crates/wow-context/e3/NATIVE_PRIMARY_PACK.md)
 are reachable through [`wow context build`](../apps/wow/CONTEXT_BUILD.md): pack-only,
 lossless JSON, metadata-safe Markdown or both preserve the same pack identity and
-continue that budget. Primary declaration/signature recipe admission is the next
-owner slice; broader facets/scopes, expansion/excerpts/continuation, platform views
-and full acceptance remain open in #122 and the census.
+continue that budget. Ordinary physical Main+Library now explicitly selects
+[native declarations/signatures](../apps/wow/PRIMARY_CALLABLE_INPUT.md) through a
+strict files manifest and a separately registered replay/catalog. Source-absent
+reopen and update/removal retain those observations in the same context routes.
+Broader facets/scopes, Reference enrichment, expansion/excerpts/continuation,
+platform views and full acceptance remain open in #122 and the census.
 
 [#121](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/121) retains the
 latest full-corpus functions refusal and targeted capacity evidence.

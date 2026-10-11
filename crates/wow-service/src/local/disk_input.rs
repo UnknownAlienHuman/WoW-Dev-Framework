@@ -5,6 +5,9 @@ use std::sync::atomic::AtomicBool;
 
 use serde::Deserialize;
 use wow_core::{CanonicalResult, ContentDigest, ProfileIdentity};
+use wow_emmy::function_calls::{
+    PhysicalFunctionDeclarationRecipe, PhysicalFunctionSignatureRecipe,
+};
 use wow_project::disk::{ProjectDiskFile, ProjectInputDirectory};
 use wow_project::{
     ProjectError, ProjectErrorCode, ProjectFileRole, ProjectId, ProjectSourceOriginId,
@@ -17,6 +20,8 @@ use super::input::{AnalyzerInput, LOCAL_INPUT_SCHEMA, ProjectMetadata, invalid};
 use crate::{ServiceError, ServiceErrorCode, ServiceResult};
 
 pub const LOCAL_FILES_SCHEMA: &str = "wow-service/local-project-files/1";
+pub const LOCAL_PRIMARY_CALLABLES_FILES_SCHEMA: &str =
+    "wow-service/local-primary-callables-files/1";
 pub const LOCAL_TOC_SCHEMA: &str = "wow-service/local-project-toc/1";
 pub const LOCAL_PACKAGES_SCHEMA: &str = "wow-service/local-project-packages/1";
 
@@ -38,6 +43,10 @@ struct DiskInput {
     analyzer: DiskAnalyzer,
     main: MainInventory,
     library: DiskInventory,
+    #[serde(default, deserialize_with = "super::native_resources::present")]
+    physical_function_declarations: Option<PhysicalFunctionDeclarationRecipe>,
+    #[serde(default, deserialize_with = "super::native_resources::present")]
+    physical_function_signatures: Option<PhysicalFunctionSignatureRecipe>,
 }
 
 #[derive(Deserialize)]
@@ -115,7 +124,7 @@ impl LocalProjectInput {
             super::native_artifact::LOCAL_NATIVE_ARTIFACT_SCHEMA => {
                 Self::from_native_artifact(&bytes, &directory, stop)
             }
-            LOCAL_FILES_SCHEMA | LOCAL_TOC_SCHEMA => {
+            LOCAL_FILES_SCHEMA | LOCAL_TOC_SCHEMA | LOCAL_PRIMARY_CALLABLES_FILES_SCHEMA => {
                 Self::from_disk_manifest(&bytes, &directory, stop)
             }
             LOCAL_PACKAGES_SCHEMA => Self::from_package_manifest(&bytes, &directory, stop),
@@ -137,8 +146,33 @@ impl LocalProjectInput {
         let input: DiskInput =
             serde_json::from_slice(bytes).map_err(|_| invalid("invalid local file manifest"))?;
         let toc_mode = input.schema == LOCAL_TOC_SCHEMA;
+        let primary_callables = input.schema == LOCAL_PRIMARY_CALLABLES_FILES_SCHEMA;
+        if primary_callables {
+            if (input.physical_function_declarations.is_none()
+                && input.physical_function_signatures.is_none())
+                || !matches!(
+                    input.physical_function_declarations,
+                    None | Some(PhysicalFunctionDeclarationRecipe::DeclaredSyntaxV1)
+                )
+                || !matches!(
+                    input.physical_function_signatures,
+                    None | Some(PhysicalFunctionSignatureRecipe::IndexedTypesV1)
+                )
+            {
+                return Err(invalid(
+                    "primary callable input requires a supported selected recipe",
+                ));
+            }
+        } else if input.physical_function_declarations.is_some()
+            || input.physical_function_signatures.is_some()
+        {
+            return Err(invalid(
+                "callable recipes require the primary callable files schema",
+            ));
+        }
         match (input.schema.as_str(), &input.main.files, &input.main.toc) {
-            (LOCAL_FILES_SCHEMA, Some(_), None) | (LOCAL_TOC_SCHEMA, None, Some(_)) => {}
+            (LOCAL_FILES_SCHEMA | LOCAL_PRIMARY_CALLABLES_FILES_SCHEMA, Some(_), None)
+            | (LOCAL_TOC_SCHEMA, None, Some(_)) => {}
             _ => {
                 return Err(invalid(
                     "manifest must select either explicit files or one TOC, never both",
@@ -188,6 +222,8 @@ impl LocalProjectInput {
                 logical_root: input.logical_root,
                 profile,
                 analyzer,
+                physical_function_declarations: input.physical_function_declarations,
+                physical_function_signatures: input.physical_function_signatures,
             },
             reference,
             main,
@@ -256,6 +292,8 @@ impl LocalProjectInput {
                 logical_root: input.logical_root,
                 profile,
                 analyzer,
+                physical_function_declarations: None,
+                physical_function_signatures: None,
             },
             reference,
             main,

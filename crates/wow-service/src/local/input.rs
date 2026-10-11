@@ -1,5 +1,8 @@
 use serde::Deserialize;
 use wow_core::{CanonicalResult, ContentDigest, ProfileIdentity, ProfileKind, SourceContent};
+use wow_emmy::function_calls::{
+    PhysicalFunctionDeclarationRecipe, PhysicalFunctionSignatureRecipe,
+};
 use wow_emmy::{LuaWorkspaceLimits, LuaWorkspaceSnapshot, LuaWorkspaceUniverse};
 use wow_project::{
     AnalyzerBindingDeclaration, ProjectBudgetPolicy, ProjectCapabilityPolicy,
@@ -125,6 +128,8 @@ pub(super) struct ProjectMetadata {
     pub(super) logical_root: String,
     pub(super) profile: ProfileIdentity,
     pub(super) analyzer: AnalyzerInput,
+    pub(super) physical_function_declarations: Option<PhysicalFunctionDeclarationRecipe>,
+    pub(super) physical_function_signatures: Option<PhysicalFunctionSignatureRecipe>,
 }
 
 #[derive(Deserialize)]
@@ -164,6 +169,8 @@ impl LocalProjectInput {
                 logical_root: input.logical_root,
                 profile: input.profile,
                 analyzer: input.analyzer,
+                physical_function_declarations: None,
+                physical_function_signatures: None,
             },
             input.reference_view,
             admit_files(input.main_files, ProjectFileRole::FirstPartyMain)?,
@@ -245,6 +252,14 @@ impl LocalProjectInput {
         platform: Option<PlatformAssembly>,
         stop: &std::sync::atomic::AtomicBool,
     ) -> ServiceResult<Self> {
+        if (input.physical_function_declarations.is_some()
+            || input.physical_function_signatures.is_some())
+            && (platform.is_some() || !matches!(&load, LocalProjectLoad::Explicit))
+        {
+            return Err(invalid(
+                "primary callable recipes require explicit physical Main input",
+            ));
+        }
         match &load {
             LocalProjectLoad::Explicit => {}
             LocalProjectLoad::SelectedToc(plan) => {
@@ -353,6 +368,14 @@ impl LocalProjectInput {
             } => configuration
                 .package_load_plan(load_plan, main_plan)
                 .map_err(|_| invalid("package load plan target mismatch"))?,
+        };
+        let configuration = match input.physical_function_declarations {
+            Some(recipe) => configuration.with_physical_function_declarations(recipe),
+            None => configuration,
+        };
+        let configuration = match input.physical_function_signatures {
+            Some(recipe) => configuration.with_physical_function_signatures(recipe),
+            None => configuration,
         };
         let configuration = if let Some(platform) = platform {
             let configuration = configuration

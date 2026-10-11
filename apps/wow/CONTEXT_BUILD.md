@@ -106,8 +106,13 @@ unknown native closure is not treated as success.
 
 Every returned pack is Partial or Truncated with `absence_authoritative=false`.
 Original producer omissions remain scoped to their embedded maps/layers. Native
-recipe admission, Reference enrichment, excerpts/tokens, deeper expansion /
+additional recipe admission, Reference enrichment, excerpts/tokens, deeper expansion /
 continuation, platform composition and complete-corpus/runtime qualification
 remain open. The [selected synthetic fixture](../../crates/wow-service/e3/native-primary-pack/README.md)
 freezes the actual pack/render bytes; broad E3/Tier A/X acceptance remains open.
 Executed gate evidence belongs to the canonical #122 milestone.
+
+Ordinary physical Main+Library may explicitly select the
+[Primary callable files input](PRIMARY_CALLABLE_INPUT.md). Its retained native
+declaration/signature observations reach this same pack route; omitted selections
+still remain NotSelected and incomplete observations keep their uncertainty.

@@ -646,6 +646,8 @@ impl LocalProjectInput {
                 logical_root: input.logical_root,
                 profile,
                 analyzer,
+                physical_function_declarations: None,
+                physical_function_signatures: None,
             },
             reference.view,
             main,
