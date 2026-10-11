@@ -482,7 +482,7 @@ fn package_census_stream_preserves_native_records_and_retained_main() -> TestRes
                 if name == "C" {
                     "<Ui><Script file=\"missing.lua\"/></Ui>".into()
                 } else {
-                    "<Ui><Frame><Scripts><OnLoad>local value = 1</OnLoad></Scripts></Frame></Ui>"
+                    "<Ui><Frame name=\"Base\" virtual=\"true\"/><Frame name=\"Child\" inherits=\"Base, Missing\" parent=\"ParentMissing\"><Scripts><OnLoad>local value = 1</OnLoad></Scripts></Frame></Ui>"
                         .into()
                 },
             ),
@@ -524,6 +524,7 @@ fn package_census_stream_preserves_native_records_and_retained_main() -> TestRes
     let native = source.specialize_packages(&packages, None, &stop)?;
     let census = census_platform_packages(&source, &packages, None, &stop)?;
     let wire = serde_json::to_value(&census)?;
+    assert_eq!(wire["profile"], "wow-project/platform-package-census/2");
     let plan = native.load_plan();
     assert_eq!(
         wire["native_package_plan_digest"],
@@ -549,6 +550,10 @@ fn package_census_stream_preserves_native_records_and_retained_main() -> TestRes
     assert_eq!(census.loads().load_units, plan.units().len() as u64);
     assert_eq!(census.loads().main_lua_files, native.files().len() as u64);
     assert_eq!(census.loads().unselected_variants, 3);
+    // Repeated loads of one document do not duplicate its declarations; equal
+    // XML in different packages does. Missing Inherits still counts, Parent does not.
+    assert_eq!(census.loads().xml_reference_declarations, 4);
+    assert_eq!(census.loads().xml_inheritance_references, 4);
     assert!(census.loads().units_without_retained_target > 0);
     assert_eq!(census.coverage(), CensusCoverage::Partial);
     assert!(plan.order_groups().iter().any(|group| group.cyclic));
@@ -562,6 +567,18 @@ fn package_census_stream_preserves_native_records_and_retained_main() -> TestRes
             serde_json::to_vec(retained)?.len() as u64
         );
         assert_eq!(measurement.load_issues, retained.issues());
+        assert_eq!(
+            measurement.counts.xml_reference_declarations,
+            retained.xml_references().declarations().len() as u64
+        );
+        assert_eq!(
+            measurement.counts.xml_reference_declarations,
+            if measurement.package == "C" { 0 } else { 2 }
+        );
+        assert_eq!(
+            measurement.counts.xml_inheritance_references,
+            if measurement.package == "C" { 0 } else { 2 }
+        );
         assert!(
             native
                 .main_plan()

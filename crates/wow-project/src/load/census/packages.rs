@@ -9,6 +9,7 @@ use crate::{
         ProjectPackageLoadIssue, ProjectPackageOrderGroup, ProjectPackageReachability,
         TocDependencyDeclaration, TocDependencyKind, TocDependencyResolution, TocLoadContext,
         package_capacity::PackageLoadCapacity, package_closure::stream_admitted_package_census,
+        xml_references::XmlReferenceKind,
     },
     platform_source::AdmittedPlatformSource,
 };
@@ -19,7 +20,7 @@ use std::{
 };
 use wow_core::{CanonicalResult, ContentDigest, CoverageStatus};
 
-pub const PLATFORM_PACKAGE_CENSUS_PROFILE: &str = "wow-project/platform-package-census/1";
+pub const PLATFORM_PACKAGE_CENSUS_PROFILE: &str = "wow-project/platform-package-census/2";
 
 /// Sources are package-qualified retained occurrences, including selected TOCs.
 /// Expanded records include repeated includes; native units can retain a missing
@@ -39,6 +40,10 @@ pub struct PackageLoadCounts {
     pub load_issues: u64,
     pub xml_documents: u64,
     pub xml_elements: u64,
+    /// All native declaration entries, independent of validity or resolution.
+    pub xml_reference_declarations: u64,
+    /// All native Inherits records, including unresolved and cyclic references.
+    pub xml_inheritance_references: u64,
     pub xml_script_sites: u64,
     pub xml_inline_units: u64,
     pub xml_map_segments: u64,
@@ -61,6 +66,8 @@ impl PackageLoadCounts {
             load_issues,
             xml_documents,
             xml_elements,
+            xml_reference_declarations,
+            xml_inheritance_references,
             xml_script_sites,
             xml_inline_units,
             xml_map_segments,
@@ -315,6 +322,15 @@ fn measure_package(
         native_plan_json_bytes: plan_bytes,
         ..PackageLoadCounts::default()
     };
+    let references = plan.xml_references();
+    counts.xml_reference_declarations =
+        u64::try_from(references.declarations().len()).map_err(|_| crate::load::budget())?;
+    for reference in references.references() {
+        checkpoint(stop)?;
+        if reference.kind == XmlReferenceKind::Inherits {
+            measure::add(&mut counts.xml_inheritance_references, 1)?;
+        }
+    }
     let retained = plan
         .sources()
         .iter()

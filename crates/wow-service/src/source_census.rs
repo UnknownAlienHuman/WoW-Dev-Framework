@@ -30,7 +30,7 @@ pub const SOURCE_CENSUS_MANIFEST_INPUT_SCHEMA: &str = "wow-service/source-census
 pub const SOURCE_PACKAGE_CENSUS_INPUT_SCHEMA: &str = "wow-service/source-package-census-input/1";
 const RESULT_SCHEMA: &str = "wow-service/source-census-result/1";
 const MANIFEST_RESULT_SCHEMA: &str = "wow-service/source-census-manifest-result/1";
-const PACKAGE_RESULT_SCHEMA: &str = "wow-service/source-package-census-result/1";
+const PACKAGE_RESULT_SCHEMA: &str = "wow-service/source-package-census-result/2";
 const MAX_RESULT_BYTES: usize = 64 * 1024 * 1024;
 
 #[derive(Deserialize)]

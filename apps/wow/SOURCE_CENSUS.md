@@ -128,10 +128,13 @@ This route expands selected closures through the existing native loader, project
 already-normalized dependency metadata, and uses the native dependency/SCC/order
 owner. Iterative SCC traversal avoids package-depth recursion and checks
 cancellation. It does not execute includes or Lua. Its named result contract is
-`wow-service/source-package-census-result/1`; `package_loads` accompanies the
+`wow-service/source-package-census-result/2`; `package_loads` accompanies the
 unchanged lexical `census` and manifest receipt. Both input/result contracts and
-`wow-project/platform-package-census/1` are transient unreleased contracts.
-Legacy requests/results retain their serialization and reject the new field.
+`wow-project/platform-package-census/2` are transient unreleased contracts. The
+package input remains `/1`; ordinary lexical request/result bytes are unchanged.
+The previous package `/1` receipts lack the two XML-reference populations below;
+those populations are unknown in an old receipt, never measured zero. Census
+receipts are serialized observations, with no graph/replay/store reopen decoder.
 
 Empty or inline-only selected closures are measured through the same native
 loader with a private census purpose. Their physical `main_lua_files` count is
@@ -162,7 +165,14 @@ The receipt binds admitted source/profile/manifest identities, explicit physical
 package roots, context, selected TOCs and native load/package-plan digests. It
 reports per-package and aggregate retained source counts/bytes, unselected TOCs,
 Main Lua files, expanded records and native load units, XML script/inline/map
-counts, dependencies by kind/resolution and exact SCC/order groups. Dependency
+counts, native XML-reference populations, dependencies by kind/resolution and
+exact SCC/order groups. `xml_reference_declarations` counts every entry in the
+held `XmlReferenceReport` declaration map; `xml_inheritance_references` counts
+every `Inherits` record, including invalid, unresolved or cyclic observations.
+These match the source-graph XML preflight populations; they do not count only
+projected edges and are separate from lexical elements and script sites. Each
+package is measured before its native plan is dropped, and the aggregate uses
+checked addition without package-reachability filtering. Dependency
 declarations, native package issues and per-package load issues preserve their
 source identity/spans and coverage. Native units can refer to a missing target;
 `units_without_retained_target` exposes that distinction. Counts include repeated
