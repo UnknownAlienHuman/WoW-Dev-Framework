@@ -26,7 +26,7 @@
     {"contract_id":"wow-reference/e1-persistent-schema-and-build-plan","implementation_and_fixture_freeze_required":true},
     {"contract_id":"wow-project/e2-c/toc-xml-load-incremental-index","implementation_and_fixture_freeze_required":true},
     {"contract_id":"wow-graph/e2-a/typed-assertion-partition-query-core","implementation_and_fixture_freeze_required":true},
-    {"contract_id":"wow-project/e3-a/blizzard-ui-source-index","implementation_and_fixture_freeze_required":true,"relationship":"required for profiles binding Blizzard UI source"},
+    {"contract_id":"wow-project/e3-a/blizzard-ui-source-universe-index", "available_implementation": "partial-functional", "current_acceptance": "pending","implementation_and_fixture_freeze_required":true,"relationship":"required for profiles binding Blizzard UI source"},
     {"contract_id":"wow-context/e3-b/project-map-l0-l1-context-pack","implementation_and_fixture_freeze_required":true}
   ],
   "public_operations": [

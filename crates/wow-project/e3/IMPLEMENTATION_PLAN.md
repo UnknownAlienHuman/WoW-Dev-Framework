@@ -1,8 +1,12 @@
 # E3-A implementation plan
 
-**Status:** normative implementation order; Rust implementation has not started.
+**Status:** partial functional implementation; current acceptance freeze is open.
+The operation routing in `CONTRACT.json` is current. The phases below describe
+the target responsibilities, not a queue to recreate existing Rust owners.
+The original preimplementation freeze is missed/NotEvaluated; see
+`../../../docs/audits/E3_MACHINE_RECONCILIATION_2026-10-11.md`.
 
-## Phase 0 — prerequisite and byte freeze
+## Acceptance preparation — prerequisite and byte freeze
 
 - complete/freeze E0/E1/E2 implementations and fixtures;
 - pin exact SQLite/store, graph registry, recognizer, analyzer, annotation/reference profiles;
@@ -10,7 +14,8 @@
 - freeze synthetic platform-source corpus;
 - freeze one exact real mirror snapshot, complete content manifest, build/profile assertion, and license/provenance state;
 - freeze all normalized expected outputs and member/bundle SHA-256 values;
-- update implementation frontier before adding Cargo/Rust.
+- record actual owner routing and remaining acceptance blockers; never label the
+  missed historical gate as passed.
 
 ## Phase 1 — source profile and snapshot validation
 

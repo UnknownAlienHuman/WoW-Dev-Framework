@@ -6,15 +6,24 @@ Implement only the exact Blizzard UI source-profile extension, its E2-C pipeline
 
 Do not implement context rendering, search, lineage, diagnostics, rules, runtime probes, Git/network materialization, or storage internals.
 
-## Required sequence
+## Current routing
+
+Rust source admission, package binding, analyzer, graph and replay paths are
+partially implemented. Read Issue #106 and the one bounded active Issue, then
+`CONTRACT.json` operation routing and `examples/CHECKSUMS.json` pending acceptance.
+Do not recreate existing owners from the historical implementation sequence.
+The original preimplementation freeze was missed/NotEvaluated; current acceptance
+is open. See `../../../docs/audits/E3_MACHINE_RECONCILIATION_2026-10-11.md`.
+
+## Acceptance sequence
 
 1. Read repository, crate, E2-C, E2-D, graph, recognizer, and E3-A contracts.
 2. Read current KB router/task-specific source and security documents.
 3. Verify prerequisite implementation commits and fixture digests.
 4. Freeze exact source provider/revision/tree/content/license profile.
 5. Freeze exact client flavor, build, Interface, ReferenceProfile, analyzer, parser, recognizer, graph, and store profiles.
-6. Freeze synthetic and real-source fixture outputs before Rust implementation.
-7. Implement in the order in `IMPLEMENTATION_PLAN.md`.
+6. Freeze genuine synthetic and real-source outputs before claiming acceptance.
+7. Implement the active Issue's missing owner path under the root execution model.
 
 ## Source discipline
 

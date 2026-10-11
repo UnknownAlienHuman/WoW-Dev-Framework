@@ -4,6 +4,8 @@
 component slices; full E3-A acceptance remains open. See the
 [current census](../../../docs/PROJECT_COMPLETION_MATRIX.md) and
 [schema component owner](../../../docs/PLATFORM_XML_SCHEMA_COMPONENTS.md).
+`CONTRACT.json` records each nominal operation's actual owner/application route;
+`examples/CHECKSUMS.json` is a pending acceptance manifest, not a frozen bundle.
 
 **Contract ID:** `wow-project/e3-a/blizzard-ui-source-universe-index`
 

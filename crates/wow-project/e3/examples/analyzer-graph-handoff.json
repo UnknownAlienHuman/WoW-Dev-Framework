@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "fixture_id": "wow-project-e3-a-analyzer-graph-handoff-v1",
   "state": "documentation-only-pending-vector-freeze",
   "analyzer_plan": {
@@ -94,13 +94,18 @@
     }
   ],
   "freeze_gate": {
-    "required_before_first_rust_implementation": true,
     "required_non_null_values": [
       "analyzer_plan.*",
       "analyzer_snapshot.*",
       "fact_adapter.*",
       "recognizers.result-match-ambiguity-coverage-and-digests",
       "graph_proposals.registry-partitions-proposals-results-generations-and-digest"
-    ]
+    ],
+    "required_before_acceptance": true,
+    "acceptance_state": "pending",
+    "preimplementation_freeze": {
+      "status": "missed",
+      "evaluation": "NotEvaluated"
+    }
   }
 }

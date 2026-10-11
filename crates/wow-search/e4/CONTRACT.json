@@ -44,7 +44,7 @@
       "implementation_and_fixture_freeze_required": true
     },
     {
-      "contract_id": "wow-project/e3-a/blizzard-ui-source-index",
+      "contract_id": "wow-project/e3-a/blizzard-ui-source-universe-index", "available_implementation": "partial-functional", "current_acceptance": "pending",
       "implementation_and_fixture_freeze_required": true,
       "relationship": "required only for Blizzard UI search shards"
     }

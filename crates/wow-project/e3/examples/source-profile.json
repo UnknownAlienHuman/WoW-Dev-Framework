@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "fixture_id": "wow-project-e3-a-source-profile-v1",
   "state": "documentation-only-pending-profile-freeze",
   "source_profile": {
@@ -51,7 +51,6 @@
     "no Git network client discovery or source execution in wow-project"
   ],
   "freeze_gate": {
-    "required_before_first_rust_implementation": true,
     "required_non_null_values": [
       "source_profile.profile_id",
       "source_profile.provider.exact_commit_sha",
@@ -61,6 +60,12 @@
       "source_profile.*_profile_id",
       "source_profile.annotation_artifact_id",
       "source_profile.canonical_sha256"
-    ]
+    ],
+    "required_before_acceptance": true,
+    "acceptance_state": "pending",
+    "preimplementation_freeze": {
+      "status": "missed",
+      "evaluation": "NotEvaluated"
+    }
   }
 }

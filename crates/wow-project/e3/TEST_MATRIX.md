@@ -186,8 +186,8 @@
 | `BUI-DET-003` | Host/time/temp/WAL/checkpoint differences | excluded from IDs |
 | `BUI-DET-004` | Provider/path/package rename mutation | universal facts invariant |
 | `BUI-DET-005` | Byte/profile decisive change | expected IDs change |
-| `BUI-FIX-001` | Null pins while implementation not started | allowed |
-| `BUI-FIX-002` | First Rust commit with required null pins | fail |
+| `BUI-FIX-001` | Null pins in explicit pending acceptance | allowed as unaccepted data only |
+| `BUI-FIX-002` | Accepted bundle with required null pins | fail; historical preimplementation freeze remains missed/NotEvaluated |
 | `BUI-FIX-003` | Missing prerequisite implementation/fixture digest | block |
 | `BUI-FIX-004` | Missing real mirror source/license manifest | block |
 | `BUI-FIX-005` | Tests rewrite frozen fixtures | fail |

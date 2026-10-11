@@ -1,7 +1,7 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "contract_id": "wow-project/e3-a/blizzard-ui-source-universe-index",
-  "state": "implementation-ready-documentation-no-rust-code",
+  "state": "partial-functional-freeze-open",
   "work_package": "E3-A",
   "crate": "wow-project",
   "project_kind": "BlizzardUiPlatformSource",
@@ -42,7 +42,7 @@
   "candidate_source_provider": {
     "repository_full_name": "Gethe/wow-ui-source",
     "role": "materialization-mirror-candidate-not-floating-authority",
-    "exact_revision_required_before_implementation": true
+    "exact_revision_required_before_source_admission": true
   },
   "active_scope": [
     "exact-materialized-blizzard-ui-source-profile-and-snapshot",
@@ -146,16 +146,279 @@
     "crates/wow-project/e3/examples/publication-and-skeleton-input.json",
     "crates/wow-project/e3/examples/CHECKSUMS.json"
   ],
-  "freeze_gate": {
-    "implementation_state": "not-started",
-    "required_before_first_rust_implementation": [
-      "all E0 E1 E2 prerequisite implementation commits and fixture digests",
-      "exact source materializer implementation config security profile and platform adapter",
-      "exact Gethe wow-ui-source or alternate reviewed provider commit tree complete content manifest build mapping and license evidence",
-      "client flavor build Interface ReferenceProfile annotation analyzer parser recognizer graph and store profile IDs",
-      "all source package TOC XML load Lua analyzer fact recognizer graph candidate publication fingerprint and skeleton-input vectors",
-      "synthetic and real-source performance resource cancellation and rename-mutation reports",
-      "all member and bundle SHA-256 values"
-    ]
-  }
+  "implementation_status": "partial-functional",
+  "acceptance_status": "pending",
+  "preimplementation_freeze": {
+    "status": "missed",
+    "evaluation": "NotEvaluated"
+  },
+  "active_issues": [
+    106,
+    112,
+    113,
+    114,
+    115,
+    116,
+    117,
+    118,
+    119,
+    120
+  ],
+  "historical_freeze_record": "docs/audits/E3_MACHINE_RECONCILIATION_2026-10-11.md",
+  "operation_routing": {
+    "validate_blizzard_ui_index_request": {
+      "status": "application-selected",
+      "owners": [
+        {
+          "symbol": "LocalProjectInput::from_platform_manifest",
+          "path": "crates/wow-service/src/local/platform_input.rs"
+        }
+      ],
+      "application_routes": [
+        {
+          "symbol": "execute_graph_build",
+          "path": "crates/wow-service/src/graph/build.rs"
+        }
+      ],
+      "blocking_issues": []
+    },
+    "validate_blizzard_ui_source_profile": {
+      "status": "application-selected",
+      "owners": [
+        {
+          "symbol": "BlizzardUiSourceProfile::validate",
+          "path": "crates/wow-project/src/platform_source/profile.rs"
+        }
+      ],
+      "application_routes": [
+        {
+          "symbol": "LocalProjectInput::from_platform_manifest",
+          "path": "crates/wow-service/src/local/platform_input.rs"
+        }
+      ],
+      "blocking_issues": []
+    },
+    "validate_blizzard_ui_source_snapshot": {
+      "status": "partial",
+      "owners": [
+        {
+          "symbol": "ProjectInputDirectory::admit_platform_source_manifest",
+          "path": "crates/wow-project/src/disk/source_manifest/platform.rs"
+        }
+      ],
+      "application_routes": [
+        {
+          "symbol": "LocalProjectInput::from_platform_manifest",
+          "path": "crates/wow-service/src/local/platform_input.rs"
+        }
+      ],
+      "blocking_issues": [
+        113
+      ]
+    },
+    "select_blizzard_ui_packages_and_toc_variants": {
+      "status": "application-selected",
+      "owners": [
+        {
+          "symbol": "AdmittedPlatformSource::specialize_packages_with_retention",
+          "path": "crates/wow-project/src/platform_source/packages.rs"
+        }
+      ],
+      "application_routes": [
+        {
+          "symbol": "LocalProjectInput::from_platform_manifest",
+          "path": "crates/wow-service/src/local/platform_input.rs"
+        }
+      ],
+      "blocking_issues": []
+    },
+    "build_blizzard_ui_load_model": {
+      "status": "application-selected",
+      "owners": [
+        {
+          "symbol": "read_admitted_packages_with_capacity",
+          "path": "crates/wow-project/src/load/package_closure.rs"
+        }
+      ],
+      "application_routes": [
+        {
+          "symbol": "LocalProjectInput::from_platform_manifest",
+          "path": "crates/wow-service/src/local/platform_input.rs"
+        }
+      ],
+      "blocking_issues": []
+    },
+    "build_blizzard_ui_analyzer_plan": {
+      "status": "application-selected",
+      "owners": [
+        {
+          "symbol": "build_analyzer_binding",
+          "path": "crates/wow-project/src/analyzer.rs"
+        }
+      ],
+      "application_routes": [
+        {
+          "symbol": "GraphBuildRequest::acquire_project",
+          "path": "crates/wow-service/src/graph/build.rs"
+        }
+      ],
+      "blocking_issues": []
+    },
+    "validate_blizzard_ui_analyzer_snapshot": {
+      "status": "application-selected",
+      "owners": [
+        {
+          "symbol": "validate_workspace_manifest",
+          "path": "crates/wow-project/src/analyzer.rs"
+        }
+      ],
+      "application_routes": [
+        {
+          "symbol": "GraphBuildRequest::acquire_project",
+          "path": "crates/wow-service/src/graph/build.rs"
+        }
+      ],
+      "blocking_issues": []
+    },
+    "build_blizzard_ui_recognizer_fact_bundles": {
+      "status": "application-selected",
+      "owners": [
+        {
+          "symbol": "execute",
+          "path": "crates/wow-recognizers/src/source_xml/project.rs"
+        }
+      ],
+      "application_routes": [
+        {
+          "symbol": "publish_bound",
+          "path": "crates/wow-service/src/graph/build/xml.rs"
+        }
+      ],
+      "blocking_issues": []
+    },
+    "run_blizzard_ui_core_recognizers": {
+      "status": "application-selected",
+      "owners": [
+        {
+          "symbol": "execute_recognizer_plan",
+          "path": "crates/wow-recognizers/src/matcher.rs"
+        }
+      ],
+      "application_routes": [
+        {
+          "symbol": "execute_graph_build",
+          "path": "crates/wow-service/src/graph/build.rs"
+        }
+      ],
+      "blocking_issues": []
+    },
+    "validate_blizzard_ui_graph_proposals": {
+      "status": "application-selected",
+      "owners": [
+        {
+          "symbol": "PlatformGraphProposalPlan::finish",
+          "path": "crates/wow-project/src/graph/platform_producers.rs"
+        }
+      ],
+      "application_routes": [
+        {
+          "symbol": "prepare",
+          "path": "crates/wow-service/src/graph/build/source_prefix.rs"
+        }
+      ],
+      "blocking_issues": []
+    },
+    "assemble_blizzard_ui_index_candidate": {
+      "status": "specified-only",
+      "owners": [],
+      "application_routes": [],
+      "blocking_issues": []
+    },
+    "validate_blizzard_ui_index_candidate": {
+      "status": "blocked",
+      "owners": [],
+      "application_routes": [],
+      "blocking_issues": [
+        116
+      ]
+    },
+    "build_blizzard_ui_publication_bundle": {
+      "status": "partial",
+      "owners": [
+        {
+          "symbol": "ProjectPublicationBundle::build_in_namespace",
+          "path": "crates/wow-project/src/replay/publication.rs"
+        }
+      ],
+      "application_routes": [
+        {
+          "symbol": "live_publication_from_backend_in_namespace",
+          "path": "crates/wow-service/src/graph/build.rs"
+        }
+      ],
+      "blocking_issues": [
+        116,
+        117,
+        118
+      ]
+    },
+    "publish_blizzard_ui_index": {
+      "status": "partial",
+      "owners": [
+        {
+          "symbol": "LiveProjectStore::publish_bundle",
+          "path": "crates/wow-service/src/live_project.rs"
+        }
+      ],
+      "application_routes": [
+        {
+          "symbol": "publish_input_in_namespace",
+          "path": "crates/wow-service/src/live_project/operations.rs"
+        }
+      ],
+      "blocking_issues": [
+        116
+      ]
+    },
+    "open_blizzard_ui_project_view": {
+      "status": "partial",
+      "owners": [
+        {
+          "symbol": "AcquiredProjectPair::read",
+          "path": "crates/wow-project/src/replay/publication.rs"
+        }
+      ],
+      "application_routes": [
+        {
+          "symbol": "read_live_project_in_namespace",
+          "path": "crates/wow-service/src/live_project/operations.rs"
+        }
+      ],
+      "blocking_issues": [
+        116
+      ]
+    },
+    "open_blizzard_ui_skeleton_input_view": {
+      "status": "specified-only",
+      "owners": [],
+      "application_routes": [],
+      "blocking_issues": []
+    },
+    "plan_blizzard_ui_incremental_update": {
+      "status": "blocked",
+      "owners": [
+        {
+          "symbol": "ProjectPublisher::derive_update_request",
+          "path": "crates/wow-project/src/publication.rs"
+        }
+      ],
+      "application_routes": [],
+      "blocking_issues": [
+        109,
+        116
+      ]
+    }
+  },
+  "routing_scope": "Statuses describe the bounded selected owner/application responsibility, not complete nominal E3 acceptance. Graph build is an artifact operation. Native coherent pair publication lacks full candidate/fingerprint/Skeleton membership, and the CLI project-publish leaf does not select platform graph capabilities.",
+  "version_consumer_inventory": "docs/audits/E3_MACHINE_RECONCILIATION_2026-10-11.md"
 }

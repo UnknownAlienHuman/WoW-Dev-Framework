@@ -30,7 +30,7 @@
     {"contract_id": "wow-graph/e2-a/typed-assertion-partition-query-core", "implementation_and_fixture_freeze_required": true},
     {"contract_id": "wow-project/e2-c/toc-xml-load-incremental-index", "implementation_and_fixture_freeze_required": true},
     {"contract_id": "wow-store/e2-d/projectstore-coherent-publication", "implementation_and_fixture_freeze_required": true, "relationship": "indirect published-view prerequisite"},
-    {"contract_id": "wow-project/e3-a/blizzard-ui-source-index", "implementation_and_fixture_freeze_required": true, "relationship": "required only for profiles binding the Blizzard UI source universe"}
+    {"contract_id": "wow-project/e3-a/blizzard-ui-source-universe-index", "available_implementation": "partial-functional", "current_acceptance": "pending", "implementation_and_fixture_freeze_required": true, "relationship": "required only for profiles binding the Blizzard UI source universe"}
   ],
   "canonical_types": [
     "ContextUniverseSet",

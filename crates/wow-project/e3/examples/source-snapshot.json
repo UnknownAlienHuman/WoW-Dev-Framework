@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "fixture_id": "wow-project-e3-a-source-snapshot-v1",
   "state": "documentation-only-pending-source-freeze",
   "snapshot": {
@@ -82,7 +82,6 @@
     }
   ],
   "freeze_gate": {
-    "required_before_first_rust_implementation": true,
     "required_non_null_values": [
       "snapshot.source_snapshot_id",
       "snapshot.source_profile_id",
@@ -95,6 +94,12 @@
       "snapshot.inventory_coverage_record_ids",
       "snapshot.content_manifest_sha256",
       "snapshot.canonical_sha256"
-    ]
+    ],
+    "required_before_acceptance": true,
+    "acceptance_state": "pending",
+    "preimplementation_freeze": {
+      "status": "missed",
+      "evaluation": "NotEvaluated"
+    }
   }
 }

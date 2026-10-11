@@ -8,7 +8,10 @@
 universe_id = blizzard_ui_source:<source-profile-id>:<source-snapshot-id>
 ```
 
-The exact canonical representation freezes before implementation. It must distinguish product/flavor/build/profile/source content and must not depend on repository display name or local path.
+The exact canonical representation must be qualified and frozen before acceptance.
+The missed historical preimplementation freeze remains NotEvaluated. Identity must
+distinguish product/flavor/build/profile/source content and must not depend on
+repository display name or local path.
 
 ## Project kind
 

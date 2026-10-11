@@ -1,9 +1,8 @@
 {
-  "schema_version": 1,
-  "manifest_id": "wow-project-e3-a-checksums-v1",
+  "schema_version": 2,
+  "manifest_id": "wow-project-e3-a-pending-acceptance-v2",
   "algorithm": "sha256",
-  "state": "pending-byte-freeze-before-first-rust-implementation",
-  "implementation_state": "not-started",
+  "state": "pending-acceptance-freeze",
   "prerequisite_pins": {
     "wow_core_implementation_commit": null,
     "wow_core_fixture_bundle_sha256": null,
@@ -121,11 +120,17 @@
   ],
   "member_sha256": {},
   "bundle_sha256": null,
-  "freeze_rules": [
-    "nulls are allowed only while implementation_state is not-started",
-    "all prerequisite source provider profile synthetic real-mirror vector benchmark and checksum values freeze before the first E3-A Rust commit",
-    "tests verify committed fixtures and never rewrite them automatically",
-    "provider repository branch and latest state never replace exact revision and content identity",
-    "local structural indexing does not imply source redistribution permission"
+  "implementation_status": "partial-functional",
+  "acceptance_status": "pending",
+  "preimplementation_freeze": {
+    "status": "missed",
+    "evaluation": "NotEvaluated"
+  },
+  "acceptance_rules": [
+    "Pending pins and empty hashes cannot be admitted as an accepted bundle.",
+    "The missed preimplementation freeze is never retroactively passed.",
+    "An acceptance operation must resolve its own exact source/profile and record genuine native outputs.",
+    "Tests verify committed fixtures and never rewrite them automatically.",
+    "Local structural indexing does not grant redistribution permission."
   ]
 }

@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "fixture_id": "wow-project-e3-a-publication-skeleton-input-v1",
   "state": "documentation-only-pending-vector-freeze",
   "candidate": {
@@ -91,12 +91,17 @@
     }
   ],
   "freeze_gate": {
-    "required_before_first_rust_implementation": true,
     "required_non_null_values": [
       "candidate.*",
       "publication.*",
       "skeleton_input_cases[*].request-result-and-digest-fields",
       "publication_mutations[*].exact-input-and-result-IDs"
-    ]
+    ],
+    "required_before_acceptance": true,
+    "acceptance_state": "pending",
+    "preimplementation_freeze": {
+      "status": "missed",
+      "evaluation": "NotEvaluated"
+    }
   }
 }

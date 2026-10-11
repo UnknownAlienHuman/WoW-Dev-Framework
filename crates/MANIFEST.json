@@ -237,10 +237,11 @@
     {
       "work_package": "E3-A",
       "owner": "wow-project",
-      "contract_id": "wow-project/e3-a/blizzard-ui-source-index",
+      "contract_id": "wow-project/e3-a/blizzard-ui-source-universe-index",
       "manifest": "crates/wow-project/e3/CONTRACT.json",
       "documentation_state": "complete",
-      "implementation_state": "not-started"
+      "implementation_state": "partial-functional-freeze-open",
+      "acceptance_state": "pending"
     },
     {
       "work_package": "E3-B",

@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "fixture_id": "wow-project-e3-a-package-load-model-v1",
   "state": "documentation-only-pending-vector-freeze",
   "project": {
@@ -100,7 +100,6 @@
     }
   ],
   "freeze_gate": {
-    "required_before_first_rust_implementation": true,
     "required_non_null_values": [
       "project.*",
       "packages[*].ids-selection-and-coverage",
@@ -108,6 +107,12 @@
       "direct_edges[*].ids-evidence",
       "reachability[*].ids-and-reason-paths",
       "canonical_sha256"
-    ]
+    ],
+    "required_before_acceptance": true,
+    "acceptance_state": "pending",
+    "preimplementation_freeze": {
+      "status": "missed",
+      "evaluation": "NotEvaluated"
+    }
   }
 }
