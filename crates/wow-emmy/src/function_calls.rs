@@ -16,11 +16,17 @@ use crate::references::{
 };
 
 mod budget;
+mod declaration;
 mod location_index;
 #[cfg(test)]
 mod tests;
 use crate::{EmmyBackendIdentity, LuaWorkspaceFile, LuaWorkspaceSnapshot};
 pub use budget::FunctionCallBudget;
+pub use declaration::{
+    PhysicalFunctionDeclarationRecipe, SourceDeclaredParameter, SourceFunctionDeclaration,
+    SourceFunctionDeclarationForm, SourceFunctionDeclarationUnavailable,
+    SourceFunctionDeclarationUnsupported,
+};
 use location_index::AccessLocationIndex;
 
 pub const FUNCTION_CALL_PROFILE: &str = "wow-emmy/function-call-facts/7";
@@ -55,6 +61,8 @@ pub struct SourceFunctionFact {
     span: SourceSpan,
     #[serde(skip_serializing_if = "Option::is_none")]
     parent_function_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    declaration: Option<SourceFunctionDeclaration>,
 }
 impl SourceFunctionFact {
     pub fn fact_id(&self) -> &str {
@@ -74,6 +82,10 @@ impl SourceFunctionFact {
     }
     pub fn parent_function_id(&self) -> Option<&str> {
         self.parent_function_id.as_deref()
+    }
+    /// Selected syntactic header only; never a complete semantic signature.
+    pub fn declaration(&self) -> Option<&SourceFunctionDeclaration> {
+        self.declaration.as_ref()
     }
 }
 
@@ -203,6 +215,8 @@ pub struct FunctionCallReport {
     profile: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     budget: Option<FunctionCallBudget>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    declaration_recipe: Option<PhysicalFunctionDeclarationRecipe>,
     backend: EmmyBackendIdentity,
     main_snapshot_id: String,
     library_snapshot_ids: Vec<String>,
@@ -225,6 +239,10 @@ impl FunctionCallReport {
     #[must_use]
     pub const fn budget(&self) -> Option<FunctionCallBudget> {
         self.budget
+    }
+    #[must_use]
+    pub const fn declaration_recipe(&self) -> Option<PhysicalFunctionDeclarationRecipe> {
+        self.declaration_recipe
     }
     pub fn analysis_id(&self) -> &str {
         &self.analysis_id
@@ -307,12 +325,22 @@ impl FunctionCallReport {
             self.symbol_lookup_analysis_id.as_slice(),
             &self.symbol_lookup_analysis_ids,
         );
-        match self.budget {
-            Some(budget) => canonical_id("emmy-function-calls:sha256:", &(budget, facts)),
-            None => canonical_id("emmy-function-calls:sha256:", &facts),
+        match (self.declaration_recipe, self.budget) {
+            (Some(recipe), Some(budget)) => {
+                canonical_id("emmy-function-calls:sha256:", &(recipe, budget, facts))
+            }
+            (Some(recipe), None) => canonical_id("emmy-function-calls:sha256:", &(recipe, facts)),
+            (None, Some(budget)) => canonical_id("emmy-function-calls:sha256:", &(budget, facts)),
+            (None, None) => canonical_id("emmy-function-calls:sha256:", &facts),
         }
     }
     pub fn validate(&self) -> EmmyMemberCallResult<()> {
+        self.validate_with_declaration_stop(None)
+    }
+    fn validate_with_declaration_stop(
+        &self,
+        stop: Option<&AtomicBool>,
+    ) -> EmmyMemberCallResult<()> {
         let limits = match (self.profile, self.budget) {
             (FUNCTION_CALL_PROFILE, None) => FunctionCallBudget::default(),
             (FUNCTION_CALL_BUDGET_PROFILE, Some(limits))
@@ -363,6 +391,13 @@ impl FunctionCallReport {
             .map(|f| (f.path.as_str(), f))
             .collect::<BTreeMap<_, _>>();
         for function in &self.functions {
+            match (self.declaration_recipe, &function.declaration) {
+                (None, None) => {}
+                (Some(PhysicalFunctionDeclarationRecipe::DeclaredSyntaxV1), Some(observation)) => {
+                    observation.validate(function.kind, function.span, stop)?;
+                }
+                _ => return Err(invalid()),
+            }
             let file = files.get(function.path()).ok_or_else(invalid)?;
             if file.content_digest != function.content_digest || file.parse_error_count != 0 {
                 return Err(invalid());
@@ -668,7 +703,35 @@ pub(crate) fn collect(
     selected_budget: Option<FunctionCallBudget>,
     stop: &AtomicBool,
 ) -> EmmyMemberCallResult<FunctionCallReport> {
+    collect_with_declarations(
+        analysis,
+        main,
+        main_root,
+        libraries,
+        callable_signatures,
+        symbol_lookup_analysis_ids,
+        selected_budget,
+        None,
+        stop,
+    )
+}
+
+/// Collect selected declaration observations in this same registered analysis.
+/// An absent recipe preserves the existing report bytes and identity inputs.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn collect_with_declarations(
+    analysis: &EmmyLuaAnalysis,
+    main: &LuaWorkspaceSnapshot,
+    main_root: &Path,
+    libraries: &[(&LuaWorkspaceSnapshot, PathBuf)],
+    callable_signatures: &BTreeMap<String, LuaSignatureId>,
+    symbol_lookup_analysis_ids: &[&str],
+    selected_budget: Option<FunctionCallBudget>,
+    declaration_recipe: Option<PhysicalFunctionDeclarationRecipe>,
+    stop: &AtomicBool,
+) -> EmmyMemberCallResult<FunctionCallReport> {
     let limits = selected_budget.unwrap_or_default();
+    let mut declaration_bytes = declaration::DeclarationBudget::new(limits.max_report_bytes());
     let mut signatures = HashMap::new();
     let mut access_sources = HashMap::new();
     let mut functions = Vec::new();
@@ -729,6 +792,13 @@ pub(crate) fn collect(
                     kind: SourceFunctionKind::Chunk,
                     span: SourceSpan::whole_file(),
                     parent_function_id: None,
+                    declaration: if declaration_recipe.is_some() {
+                        let observation = SourceFunctionDeclaration::chunk();
+                        declaration_bytes.charge(&observation, stop)?;
+                        Some(observation)
+                    } else {
+                        None
+                    },
                 });
                 files
                     .get_mut(file.path())
@@ -778,6 +848,19 @@ pub(crate) fn collect(
                             file,
                             closure.syntax(),
                         )?),
+                        declaration: declaration_recipe
+                            .map(|_| {
+                                declaration::observe(
+                                    &closure,
+                                    file,
+                                    &mut visits,
+                                    limits,
+                                    &mut declaration_bytes,
+                                    stop,
+                                )
+                            })
+                            .transpose()
+                            .map_err(|error| crate::global_access::at_path(error, file.path()))?,
                     });
                     files
                         .get_mut(file.path())
@@ -1034,6 +1117,7 @@ pub(crate) fn collect(
             FUNCTION_CALL_PROFILE
         },
         budget: selected_budget,
+        declaration_recipe,
         backend: main.backend().clone(),
         main_snapshot_id: main.snapshot_id().into(),
         library_snapshot_ids,
@@ -1096,7 +1180,7 @@ pub(crate) fn collect(
     })?;
     checkpoint(stop)?;
     report.analysis_id = report.identity()?;
-    report.validate()?;
+    report.validate_with_declaration_stop(declaration_recipe.map(|_| stop))?;
     checkpoint(stop)?;
     Ok(report)
 }

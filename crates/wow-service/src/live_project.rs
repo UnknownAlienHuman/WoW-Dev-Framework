@@ -84,14 +84,12 @@ impl LiveProjectStore {
         Self::open_selected(root, None)
     }
     // None preserves general open/recovery across every registered catalog.
-    // A platform selection admits exactly the ordinary or classification family.
-    fn open_selected(root: &Path, xml_classification: Option<bool>) -> ServiceResult<Self> {
+    // A platform selection admits exactly its XML/declaration component pair.
+    fn open_selected(root: &Path, components: Option<(bool, bool)>) -> ServiceResult<Self> {
         // Each open requires an exact registered epoch. The store rejects a
         // catalog mismatch before opening SQLite writable; no migration occurs.
         for &schemas in publication::STORAGE_SCHEMA_CATALOGS {
-            if xml_classification.is_some_and(|selected| {
-                selected != (schemas == publication::STORAGE_SCHEMAS_XML_CLASSIFICATION_V1)
-            }) {
+            if components.is_some_and(|selected| selected != catalog_components(schemas)) {
                 continue;
             }
             match ProjectStore::open(root, &catalog_for(schemas)?) {
@@ -216,6 +214,20 @@ impl LiveProjectStore {
 }
 fn catalog() -> ServiceResult<RecordCatalog> {
     catalog_for(publication::STORAGE_SCHEMAS)
+}
+// Only the three named selected catalogs carry these component recipes.
+// Every other catalog in STORAGE_SCHEMA_CATALOGS is a retained unselected epoch.
+fn catalog_components(schemas: &[&str]) -> (bool, bool) {
+    if schemas == publication::STORAGE_SCHEMAS_XML_CLASSIFICATION_PHYSICAL_FUNCTION_DECLARATIONS_V1
+    {
+        (true, true)
+    } else if schemas == publication::STORAGE_SCHEMAS_PHYSICAL_FUNCTION_DECLARATIONS_V1 {
+        (false, true)
+    } else if schemas == publication::STORAGE_SCHEMAS_XML_CLASSIFICATION_V1 {
+        (true, false)
+    } else {
+        (false, false)
+    }
 }
 fn catalog_for(project_schemas: &[&'static str]) -> ServiceResult<RecordCatalog> {
     let mut schemas = GraphPartitionSnapshot::STORAGE_SCHEMAS.to_vec();

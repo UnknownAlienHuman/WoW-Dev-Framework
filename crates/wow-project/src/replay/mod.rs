@@ -43,6 +43,13 @@ const XML_CLASSIFICATION_REPLAY_SCHEMA: &str =
     "wow-project/native-project-replay/xml-schema-classification/1";
 pub(super) const XML_CLASSIFICATION_STORAGE_SCHEMA: &str =
     "wow-project.live-replay.xml-schema-classification.v1";
+const PHYSICAL_FUNCTION_DECLARATIONS_REPLAY_SCHEMA: &str =
+    "wow-project/native-project-replay/physical-function-declarations/1";
+const XML_CLASSIFICATION_PHYSICAL_FUNCTION_DECLARATIONS_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/xml-schema-classification-and-physical-function-declarations/1";
+pub(super) const PHYSICAL_FUNCTION_DECLARATIONS_STORAGE_SCHEMA: &str =
+    "wow-project.live-replay.physical-function-declarations.v1";
+pub(super) const XML_CLASSIFICATION_PHYSICAL_FUNCTION_DECLARATIONS_STORAGE_SCHEMA: &str =
+    "wow-project.live-replay.xml-schema-classification-and-physical-function-declarations.v1";
 const MAX_FILES: usize = 8192;
 const MAX_LIBRARIES: usize = 64;
 const MAX_FILE_BYTES: usize = 16 * 1024 * 1024;
@@ -294,11 +301,8 @@ impl ProjectReplay {
             } else {
                 platform_schema
             };
-        let platform_schema = if configuration.has_xml_classification()? {
-            XML_CLASSIFICATION_REPLAY_SCHEMA
-        } else {
-            platform_schema
-        };
+        let platform_schema =
+            selected_component_schema(platform_schema, &configuration, function_calls)?;
         let platform = if let Some(owner) = platform_owner {
             if generation_schema_version != Some(2) {
                 return Err(invalid());
@@ -357,7 +361,6 @@ impl ProjectReplay {
     }
     fn expected_schema(&self) -> ProjectResult<&'static str> {
         let schema = self.expected_base_schema()?;
-        let classification = self.configuration.has_xml_classification()?;
         if let Some(budget) = self.configuration.source_graph_budget() {
             return if self
                 .platform
@@ -365,11 +368,11 @@ impl ProjectReplay {
                 .is_some_and(ReplayPlatform::has_retention_limits)
                 && self.configuration.platform_graph_profile().is_some()
             {
-                Ok(if classification {
-                    XML_CLASSIFICATION_REPLAY_SCHEMA
-                } else {
-                    graph_budget_schema(budget)
-                })
+                selected_component_schema(
+                    graph_budget_schema(budget),
+                    &self.configuration,
+                    self.function_calls,
+                )
             } else {
                 Err(invalid())
             };
@@ -388,11 +391,7 @@ impl ProjectReplay {
             (false, None) => Ok(schema),
             (false, Some(_)) => Err(invalid()),
         }?;
-        Ok(if classification {
-            XML_CLASSIFICATION_REPLAY_SCHEMA
-        } else {
-            schema
-        })
+        selected_component_schema(schema, &self.configuration, self.function_calls)
     }
     fn expected_base_schema(&self) -> ProjectResult<&'static str> {
         if let Some(profile) = self.configuration.platform_graph_profile() {
@@ -635,10 +634,44 @@ impl ProjectReplay {
             GRAPH_METADATA_BUDGET_REPLAY_SCHEMA => Ok("wow-project.live-replay.v14"),
             GRAPH_XML_COUNT_BUDGET_REPLAY_SCHEMA => Ok("wow-project.live-replay.v15"),
             XML_CLASSIFICATION_REPLAY_SCHEMA => Ok(XML_CLASSIFICATION_STORAGE_SCHEMA),
+            PHYSICAL_FUNCTION_DECLARATIONS_REPLAY_SCHEMA => {
+                Ok(PHYSICAL_FUNCTION_DECLARATIONS_STORAGE_SCHEMA)
+            }
+            XML_CLASSIFICATION_PHYSICAL_FUNCTION_DECLARATIONS_REPLAY_SCHEMA => {
+                Ok(XML_CLASSIFICATION_PHYSICAL_FUNCTION_DECLARATIONS_STORAGE_SCHEMA)
+            }
             _ => Err(invalid()),
         }
     }
 }
+/// A finite recipe matrix shared by capture and exact expected-schema validation.
+fn selected_component_schema(
+    base: &'static str,
+    configuration: &ReplayConfiguration,
+    function_calls: bool,
+) -> ProjectResult<&'static str> {
+    let classification = configuration.has_xml_classification()?;
+    let declarations = configuration.physical_function_declarations().is_some();
+    if declarations
+        && (!function_calls
+            || !configuration.is_platform()
+            || configuration.package_xml_binding_profile()
+                != Some(PackageXmlBindingProfile::SameSessionV1)
+            || !matches!(
+                configuration.platform_graph_profile(),
+                Some(PlatformGraphProfile::DirectCapabilitiesV1(_))
+            ))
+    {
+        return Err(invalid());
+    }
+    Ok(match (classification, declarations) {
+        (false, false) => base,
+        (true, false) => XML_CLASSIFICATION_REPLAY_SCHEMA,
+        (false, true) => PHYSICAL_FUNCTION_DECLARATIONS_REPLAY_SCHEMA,
+        (true, true) => XML_CLASSIFICATION_PHYSICAL_FUNCTION_DECLARATIONS_REPLAY_SCHEMA,
+    })
+}
+
 fn graph_budget_schema(budget: crate::graph::SourceGraphBudget) -> &'static str {
     if budget.xml_counts().is_some() {
         GRAPH_XML_COUNT_BUDGET_REPLAY_SCHEMA

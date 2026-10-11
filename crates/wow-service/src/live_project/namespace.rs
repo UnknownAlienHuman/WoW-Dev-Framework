@@ -1,7 +1,7 @@
 //! Explicit logical platform-store selection, separate from source generations.
 use super::{
     LiveProjectRead, LiveProjectResult, LiveProjectStore, LiveProjectUpdateRequest, catalog,
-    catalog_for, fail, store_error,
+    catalog_components, catalog_for, fail, store_error,
 };
 use crate::{LocalProjectInput, ServiceErrorCode, ServiceResult, graph::GraphBuildRequest};
 use std::{path::Path, sync::atomic::AtomicBool};
@@ -19,6 +19,7 @@ use wow_store::project::{
 pub struct PlatformStoreSelection {
     namespace: ProjectStoreNamespace,
     xml_classification_catalog: bool,
+    physical_function_declarations_catalog: bool,
 }
 
 impl PlatformStoreSelection {
@@ -31,6 +32,7 @@ impl PlatformStoreSelection {
         Ok(Self {
             namespace,
             xml_classification_catalog: false,
+            physical_function_declarations_catalog: false,
         })
     }
 
@@ -41,18 +43,36 @@ impl PlatformStoreSelection {
         self
     }
 
+    /// Explicit declaration catalog intent; configuration must select the same recipe.
+    #[must_use]
+    pub fn with_physical_function_declarations_catalog(mut self) -> Self {
+        self.physical_function_declarations_catalog = true;
+        self
+    }
+
     fn catalog(&self) -> ServiceResult<RecordCatalog> {
-        if self.xml_classification_catalog {
-            catalog_for(publication::STORAGE_SCHEMAS_XML_CLASSIFICATION_V1)
-        } else {
-            catalog()
+        match (
+            self.xml_classification_catalog,
+            self.physical_function_declarations_catalog,
+        ) {
+            (false, false) => catalog(),
+            (true, false) => catalog_for(publication::STORAGE_SCHEMAS_XML_CLASSIFICATION_V1),
+            (false, true) => {
+                catalog_for(publication::STORAGE_SCHEMAS_PHYSICAL_FUNCTION_DECLARATIONS_V1)
+            }
+            (true, true) => catalog_for(
+                publication::STORAGE_SCHEMAS_XML_CLASSIFICATION_PHYSICAL_FUNCTION_DECLARATIONS_V1,
+            ),
         }
     }
 
     fn require_catalog(&self, actual: &RecordCatalog) -> ServiceResult<()> {
         for &schemas in publication::STORAGE_SCHEMA_CATALOGS {
-            if self.xml_classification_catalog
-                == (schemas == publication::STORAGE_SCHEMAS_XML_CLASSIFICATION_V1)
+            if catalog_components(schemas)
+                == (
+                    self.xml_classification_catalog,
+                    self.physical_function_declarations_catalog,
+                )
                 && &catalog_for(schemas)? == actual
             {
                 return Ok(());
@@ -79,6 +99,8 @@ impl PlatformStoreSelection {
         if self.xml_classification_catalog != classification_selected
             || self.xml_classification_catalog
                 != configuration.xml_classification_profile().is_some()
+            || self.physical_function_declarations_catalog
+                != configuration.physical_function_declarations().is_some()
             || self.namespace.owner_project_id() != configuration.project_id().as_str()
             || self.namespace.logical_namespace()
                 != packages.source().profile().profile_id().as_str()
@@ -120,7 +142,13 @@ impl LiveProjectStore {
         selection: &PlatformStoreSelection,
     ) -> ServiceResult<Self> {
         selection.validate()?;
-        let store = Self::open_selected(root, Some(selection.xml_classification_catalog))?;
+        let store = Self::open_selected(
+            root,
+            Some((
+                selection.xml_classification_catalog,
+                selection.physical_function_declarations_catalog,
+            )),
+        )?;
         store.require_namespace(selection)?;
         Ok(store)
     }
@@ -164,7 +192,9 @@ impl LiveProjectStore {
         stop: &AtomicBool,
     ) -> ServiceResult<LiveProjectRead> {
         self.require_namespace(selection)?;
-        self.read(selector, stop)
+        let read = self.read(selector, stop)?;
+        selection.require_configuration(read.project().configuration())?;
+        Ok(read)
     }
 
     pub fn reconcile_in_namespace(

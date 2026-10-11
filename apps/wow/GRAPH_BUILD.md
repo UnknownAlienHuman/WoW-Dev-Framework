@@ -49,6 +49,14 @@ existing graph request byte limit. JSON/text output uses the named
 `wow-service/graph-build-result/function-fingerprints/1` recipe and includes typed
 `function_fingerprints`. Snapshot format still emits only the bare graph.
 
+An input explicitly selecting `physical_function_declarations` uses the named
+`wow-service/graph-build-result/physical-function-declarations/1` recipe, or
+`wow-service/graph-build-result/physical-function-declarations-and-fingerprints/1`
+when this query is also selected. Its records add native declared-header
+observations and comparable digests. The request binds the configuration's exact
+recipe; a different or absent selection refuses. This syntax component does not
+fill missing semantic signature or whole-body shape.
+
 The first recipe exposes the exact source-span component with native support
 and separate generation/profile bindings. Missing signature/shape and unselected
 neighborhood/load-role remain explicit; equal digests do not prove identity or

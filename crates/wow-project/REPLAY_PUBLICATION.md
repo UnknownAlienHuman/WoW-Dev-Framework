@@ -93,6 +93,22 @@ Library binding and full acceptance remain open at this predecessor.
 
 ## Complete declared package corpus
 
+Selected declaration syntax uses
+`wow-project/native-project-replay/physical-function-declarations/1` and
+`wow-project.live-replay.physical-function-declarations.v1`. With reviewed XML
+classification, the exact family is
+`wow-project/native-project-replay/xml-schema-classification-and-physical-function-declarations/1`
+and `wow-project.live-replay.xml-schema-classification-and-physical-function-declarations.v1`.
+Capture and expected-schema validation share one finite selection matrix. Hydration
+rebuilds genuine source/configuration and recomputes declarations in the existing
+session; decoded observations cannot restore analyzer authority.
+
+`AcquiredProjectPair::read` admits these exact records. The explicit service
+`PlatformStoreSelection` chooses their declaration-only or combined catalog for
+create, publication, read and reopen. Old catalogs retain their bytes and refuse
+these writes. Absence retains previous identities; explicit null, unknown recipes
+and an old/different selected replay schema refuse.
+
 Legacy package replay uses `wow-project/native-project-replay/3` and
 `wow-project.live-replay.v3`. The package archive owns every selected closure's
 Lua/TOC/XML bytes, all declared variant TOCs, the shared explicit context and Main

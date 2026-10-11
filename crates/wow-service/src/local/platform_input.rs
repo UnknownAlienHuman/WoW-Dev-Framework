@@ -65,6 +65,9 @@ struct PlatformInput {
     load_context: Option<TocLoadContext>,
     graph_profile: PlatformGraphProfile,
     #[serde(default, deserialize_with = "present")]
+    physical_function_declarations:
+        Option<wow_emmy::function_calls::PhysicalFunctionDeclarationRecipe>,
+    #[serde(default, deserialize_with = "present")]
     xml_schema_classification: Option<XmlClassificationInput>,
     #[serde(default)]
     library: Option<DiskInventory>,
@@ -249,6 +252,7 @@ impl LocalProjectInput {
                 packages,
                 graph_profile: input.graph_profile,
                 budgets: input.project_budgets,
+                physical_function_declarations: input.physical_function_declarations,
                 xml_schema_classification,
             }),
             stop,

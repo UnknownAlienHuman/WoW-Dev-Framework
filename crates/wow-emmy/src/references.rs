@@ -398,6 +398,8 @@ pub struct MemberCallSessionQueryProfile<'a> {
     query_limit: usize,
     member_pair_limit: usize,
     function_call_budget: Option<crate::function_calls::FunctionCallBudget>,
+    physical_function_declarations:
+        Option<crate::function_calls::PhysicalFunctionDeclarationRecipe>,
 }
 
 impl<'a> MemberCallSessionQueryProfile<'a> {
@@ -409,6 +411,7 @@ impl<'a> MemberCallSessionQueryProfile<'a> {
             query_limit: crate::bindings::MAX_QUERIES,
             member_pair_limit: DEFAULT_MEMBER_PAIR_LIMIT,
             function_call_budget: None,
+            physical_function_declarations: None,
         }
     }
 
@@ -454,6 +457,17 @@ impl<'a> MemberCallSessionQueryProfile<'a> {
         self
     }
 
+    /// Select a physical declaration recipe in the same function-call sidecar.
+    /// Existing query/count/output budgets and the absent-recipe path are retained.
+    #[must_use]
+    pub const fn with_physical_function_declarations(
+        mut self,
+        recipe: crate::function_calls::PhysicalFunctionDeclarationRecipe,
+    ) -> Self {
+        self.physical_function_declarations = Some(recipe);
+        self
+    }
+
     fn input(self, names: &'a [String]) -> crate::bindings::QueryInput<'a> {
         crate::bindings::QueryInput {
             names,
@@ -473,6 +487,13 @@ impl<'a> MemberCallSessionQueryProfile<'a> {
             return Err(EmmyMemberCallError::new(
                 EmmyMemberCallErrorCode::InvalidMainWorkspace,
                 "callable-only queries require the function-call sidecar",
+                None,
+            ));
+        }
+        if !include_function_calls && self.physical_function_declarations.is_some() {
+            return Err(EmmyMemberCallError::new(
+                EmmyMemberCallErrorCode::InvalidMainWorkspace,
+                "physical-function declarations require the function-call sidecar",
                 None,
             ));
         }
@@ -875,16 +896,29 @@ impl RegisteredMemberAnalysis {
         lookup_analysis_ids.sort_unstable();
         lookup_analysis_ids.dedup();
         let function_calls = if include_function_calls {
-            Some(crate::function_calls::collect(
-                analysis,
-                main,
-                main_root,
-                &library_roots,
-                &callable_signatures,
-                &lookup_analysis_ids,
-                profile.function_call_budget,
-                stop,
-            )?)
+            Some(match profile.physical_function_declarations {
+                Some(recipe) => crate::function_calls::collect_with_declarations(
+                    analysis,
+                    main,
+                    main_root,
+                    &library_roots,
+                    &callable_signatures,
+                    &lookup_analysis_ids,
+                    profile.function_call_budget,
+                    Some(recipe),
+                    stop,
+                )?,
+                None => crate::function_calls::collect(
+                    analysis,
+                    main,
+                    main_root,
+                    &library_roots,
+                    &callable_signatures,
+                    &lookup_analysis_ids,
+                    profile.function_call_budget,
+                    stop,
+                )?,
+            })
         } else {
             None
         };

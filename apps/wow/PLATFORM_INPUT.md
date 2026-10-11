@@ -84,6 +84,18 @@ this chooses the registered classification catalog for create/open/publication.
 An ordinary epoch is not upgraded implicitly. The selector is catalog intent;
 publication still validates the genuine source-bound configuration and replay.
 
+To collect physical function declarations, explicitly provide
+`"physical_function_declarations":"wow-emmy/physical-function-declaration-syntax/1"`
+with a `direct_capabilities_v1` graph profile. Unknown recipes and explicit null
+refuse. The existing Main session emits form, ordered parameter/vararg tokens and
+explicit colon syntax; it supplies no inferred types/returns or runtime claim.
+The selection binds configuration, report and replay identity. Namespaced
+persistence requires `PlatformStoreSelection::with_physical_function_declarations_catalog()`,
+combined with `with_xml_classification_catalog()` when classification is selected.
+Create, publication and reopen require the exact combination; old epochs are not
+widened. `--fingerprints` then includes the selected declared-header component;
+see [the component policy](../../crates/wow-project/e3/FUNCTION_FINGERPRINTS.md).
+
 ## Native authority and bounds
 
 The configuration directory is registered once. The project disk owner validates

@@ -45,6 +45,8 @@ pub(super) struct PlatformAssembly {
         std::sync::Arc<wow_project::platform_source::PlatformPackageSpecialization>,
     pub(super) graph_profile: wow_project::PlatformGraphProfile,
     pub(super) budgets: Option<ProjectBudgetPolicy>,
+    pub(super) physical_function_declarations:
+        Option<wow_emmy::function_calls::PhysicalFunctionDeclarationRecipe>,
     pub(super) xml_schema_classification: Option<
         std::sync::Arc<wow_project::load::schema::classification::ReviewedXmlClassificationProfile>,
     >,
@@ -356,6 +358,10 @@ impl LocalProjectInput {
                 .map_err(|_| invalid("platform package target mismatch"))?
                 .with_package_xml_bindings(wow_project::PackageXmlBindingProfile::SameSessionV1)
                 .with_platform_graph_profile(platform.graph_profile);
+            let configuration = match platform.physical_function_declarations {
+                Some(recipe) => configuration.with_physical_function_declarations(recipe),
+                None => configuration,
+            };
             match platform.xml_schema_classification {
                 Some(profile) => configuration
                     .with_xml_classification(profile, stop)

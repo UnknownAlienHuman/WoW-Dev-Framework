@@ -8,6 +8,7 @@ use wow_core::{
 };
 use wow_emmy::{
     EMMYLUA_CODE_ANALYSIS_VERSION, EMMYLUA_REVISION, EMMYLUA_TREE, EmmyBackendIdentity,
+    function_calls::PhysicalFunctionDeclarationRecipe,
 };
 
 use crate::identity::canonical_digest;
@@ -538,6 +539,8 @@ pub struct ProjectConfiguration {
     platform_graph_profile: Option<PlatformGraphProfile>,
     #[serde(skip_serializing_if = "Option::is_none")]
     xml_schema_classification: Option<RetainedXmlClassification>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    physical_function_declarations: Option<PhysicalFunctionDeclarationRecipe>,
 }
 
 impl ProjectConfiguration {
@@ -658,6 +661,15 @@ impl ProjectConfiguration {
         {
             return Err(platform::invalid());
         }
+        if self.physical_function_declarations.is_some()
+            && (self.platform_packages().is_none()
+                || !matches!(
+                    self.platform_graph_profile,
+                    Some(PlatformGraphProfile::DirectCapabilitiesV1(_))
+                ))
+        {
+            return Err(platform::invalid());
+        }
         let classification_selected = matches!(
             self.platform_graph_profile,
             Some(PlatformGraphProfile::DirectCapabilitiesV1(capabilities))
@@ -710,6 +722,7 @@ impl ProjectConfiguration {
             self.package_xml_binding_profile,
             self.platform_graph_profile,
             self.xml_schema_classification.as_ref(),
+            self.physical_function_declarations,
         )?;
         if expected != self.configuration_digest {
             return Err(ProjectError::new(
@@ -831,6 +844,14 @@ impl ProjectConfiguration {
         self.platform_graph_profile
     }
 
+    /// Exact selected native Main declaration recipe. Absence preserves old reports.
+    #[must_use]
+    pub const fn physical_function_declarations(
+        &self,
+    ) -> Option<PhysicalFunctionDeclarationRecipe> {
+        self.physical_function_declarations
+    }
+
     /// Sealed same-source classification owner, never reconstructed from receipt JSON.
     #[must_use]
     pub fn xml_classification_profile(
@@ -870,6 +891,7 @@ pub struct ProjectConfigurationBuilder {
     package_xml_binding_profile: Option<PackageXmlBindingProfile>,
     platform_graph_profile: Option<PlatformGraphProfile>,
     xml_schema_classification: Option<RetainedXmlClassification>,
+    physical_function_declarations: Option<PhysicalFunctionDeclarationRecipe>,
 }
 
 impl ProjectConfigurationBuilder {
@@ -902,6 +924,7 @@ impl ProjectConfigurationBuilder {
             package_xml_binding_profile: None,
             platform_graph_profile: None,
             xml_schema_classification: None,
+            physical_function_declarations: None,
         }
     }
 
@@ -948,6 +971,17 @@ impl ProjectConfigurationBuilder {
     #[must_use]
     pub const fn with_platform_graph_profile(mut self, profile: PlatformGraphProfile) -> Self {
         self.platform_graph_profile = Some(profile);
+        self
+    }
+
+    /// Select native physical declaration syntax in the same function-call sidecar.
+    /// Build validates the genuine held platform owners and composed graph path.
+    #[must_use]
+    pub const fn with_physical_function_declarations(
+        mut self,
+        recipe: PhysicalFunctionDeclarationRecipe,
+    ) -> Self {
+        self.physical_function_declarations = Some(recipe);
         self
     }
 
@@ -1100,6 +1134,7 @@ impl ProjectConfigurationBuilder {
             self.package_xml_binding_profile,
             self.platform_graph_profile,
             self.xml_schema_classification.as_ref(),
+            self.physical_function_declarations,
         )?;
         let configuration = ProjectConfiguration {
             project_id: self.project_id,
@@ -1125,6 +1160,7 @@ impl ProjectConfigurationBuilder {
             package_xml_binding_profile: self.package_xml_binding_profile,
             platform_graph_profile: self.platform_graph_profile,
             xml_schema_classification: self.xml_schema_classification,
+            physical_function_declarations: self.physical_function_declarations,
         };
         configuration.validate()?;
         Ok(configuration)
@@ -1150,6 +1186,7 @@ fn configuration_digest(
     package_xml_binding_profile: Option<PackageXmlBindingProfile>,
     platform_graph_profile: Option<PlatformGraphProfile>,
     xml_schema_classification: Option<&RetainedXmlClassification>,
+    physical_function_declarations: Option<PhysicalFunctionDeclarationRecipe>,
 ) -> ProjectResult<ContentDigest<CanonicalResult>> {
     #[derive(Serialize)]
     struct Identity<'a> {
@@ -1182,6 +1219,8 @@ fn configuration_digest(
         platform_graph_profile: Option<PlatformGraphProfile>,
         #[serde(skip_serializing_if = "Option::is_none")]
         xml_schema_classification: Option<&'a RetainedXmlClassification>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        physical_function_declarations: Option<PhysicalFunctionDeclarationRecipe>,
     }
     canonical_digest(
         "wow-project/configuration/e0-d/1",
@@ -1207,6 +1246,7 @@ fn configuration_digest(
             package_xml_binding_profile,
             platform_graph_profile,
             xml_schema_classification,
+            physical_function_declarations,
         },
         ProjectPhase::Configuration,
     )

@@ -176,6 +176,13 @@ pub(super) struct ReplayConfiguration {
         deserialize_with = "non_null_xml_classification"
     )]
     xml_schema_classification: Option<ReplayXmlClassification>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "non_null_physical_function_declarations"
+    )]
+    physical_function_declarations:
+        Option<wow_emmy::function_calls::PhysicalFunctionDeclarationRecipe>,
 }
 
 fn non_null_xml_classification<'de, D: serde::Deserializer<'de>>(
@@ -184,7 +191,18 @@ fn non_null_xml_classification<'de, D: serde::Deserializer<'de>>(
     ReplayXmlClassification::deserialize(deserializer).map(Some)
 }
 
+fn non_null_physical_function_declarations<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<wow_emmy::function_calls::PhysicalFunctionDeclarationRecipe>, D::Error> {
+    wow_emmy::function_calls::PhysicalFunctionDeclarationRecipe::deserialize(deserializer).map(Some)
+}
+
 impl ReplayConfiguration {
+    pub(super) const fn physical_function_declarations(
+        &self,
+    ) -> Option<wow_emmy::function_calls::PhysicalFunctionDeclarationRecipe> {
+        self.physical_function_declarations
+    }
     pub(super) const fn source_graph_budget(&self) -> Option<crate::graph::SourceGraphBudget> {
         self.budgets.source_graph
     }
@@ -222,6 +240,7 @@ impl ReplayConfiguration {
             xml_schema_classification: config
                 .xml_classification_profile()
                 .map(|profile| ReplayXmlClassification::capture(profile)),
+            physical_function_declarations: config.physical_function_declarations(),
         })
     }
     pub(super) fn profile(&self) -> &ProfileIdentity {
@@ -310,6 +329,10 @@ impl ReplayConfiguration {
         };
         let builder = match self.platform_graph_profile {
             Some(profile) => builder.with_platform_graph_profile(profile),
+            None => builder,
+        };
+        let builder = match self.physical_function_declarations {
+            Some(recipe) => builder.with_physical_function_declarations(recipe),
             None => builder,
         };
         let builder = match classification {

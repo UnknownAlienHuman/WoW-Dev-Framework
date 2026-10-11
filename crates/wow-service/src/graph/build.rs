@@ -65,6 +65,14 @@ const FUNCTION_FINGERPRINT_GRAPH_BUILD_REQUEST_SCHEMA: &str =
     "wow-service/graph-build-request/function-fingerprints/1";
 const FUNCTION_FINGERPRINT_GRAPH_BUILD_RESULT_SCHEMA: &str =
     "wow-service/graph-build-result/function-fingerprints/1";
+const DECLARATION_GRAPH_BUILD_REQUEST_SCHEMA: &str =
+    "wow-service/graph-build-request/physical-function-declarations/1";
+const DECLARATION_GRAPH_BUILD_RESULT_SCHEMA: &str =
+    "wow-service/graph-build-result/physical-function-declarations/1";
+const DECLARATION_FINGERPRINT_GRAPH_BUILD_REQUEST_SCHEMA: &str =
+    "wow-service/graph-build-request/physical-function-declarations-and-fingerprints/1";
+const DECLARATION_FINGERPRINT_GRAPH_BUILD_RESULT_SCHEMA: &str =
+    "wow-service/graph-build-result/physical-function-declarations-and-fingerprints/1";
 
 struct BuiltGraph {
     snapshot: GraphPartitionSnapshot,
@@ -126,6 +134,9 @@ pub struct GraphBuildRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     xml_classification_profile_digest: Option<ContentDigest<CanonicalResult>>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    physical_function_declarations:
+        Option<wow_emmy::function_calls::PhysicalFunctionDeclarationRecipe>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     function_fingerprints: Option<FunctionFingerprintSelection>,
 }
 impl GraphBuildRequest {
@@ -147,6 +158,7 @@ impl GraphBuildRequest {
             projection: SOURCE_GRAPH_PROFILE,
             capabilities: None,
             xml_classification_profile_digest: None,
+            physical_function_declarations: None,
             function_fingerprints: None,
         })
     }
@@ -160,6 +172,7 @@ impl GraphBuildRequest {
     ) -> Self {
         self.capabilities = None;
         self.xml_classification_profile_digest = None;
+        self.physical_function_declarations = None;
         match profile {
             wow_project::PlatformGraphProfile::PackageProjectionV1 => {
                 self.schema = "wow-service/graph-build-request/10";
@@ -179,9 +192,7 @@ impl GraphBuildRequest {
                 self.capabilities = Some(capabilities);
             }
         }
-        if self.function_fingerprints.is_some() {
-            self.schema = FUNCTION_FINGERPRINT_GRAPH_BUILD_REQUEST_SCHEMA;
-        }
+        self.select_component_schema();
         self
     }
 
@@ -198,14 +209,24 @@ impl GraphBuildRequest {
         request.xml_classification_profile_digest = configuration
             .xml_classification_profile()
             .map(|profile| profile.digest());
-        if request.xml_classification_profile_digest.is_some() {
-            // A reviewed binding selects its named request recipe.
-            request.schema = XML_CLASSIFICATION_GRAPH_BUILD_REQUEST_SCHEMA;
-        }
-        if request.function_fingerprints.is_some() {
-            request.schema = FUNCTION_FINGERPRINT_GRAPH_BUILD_REQUEST_SCHEMA;
-        }
+        request.physical_function_declarations = configuration.physical_function_declarations();
+        request.select_component_schema();
         request
+    }
+
+    fn select_component_schema(&mut self) {
+        self.schema = match (
+            self.physical_function_declarations.is_some(),
+            self.function_fingerprints.is_some(),
+        ) {
+            (true, true) => DECLARATION_FINGERPRINT_GRAPH_BUILD_REQUEST_SCHEMA,
+            (true, false) => DECLARATION_GRAPH_BUILD_REQUEST_SCHEMA,
+            (false, true) => FUNCTION_FINGERPRINT_GRAPH_BUILD_REQUEST_SCHEMA,
+            (false, false) if self.xml_classification_profile_digest.is_some() => {
+                XML_CLASSIFICATION_GRAPH_BUILD_REQUEST_SCHEMA
+            }
+            (false, false) => self.schema,
+        };
     }
 
     /// Select comparison observations without changing the project or its graph recipe.
@@ -214,7 +235,7 @@ impl GraphBuildRequest {
         selection: FunctionFingerprintSelection,
     ) -> ServiceResult<Self> {
         self.function_fingerprints = Some(selection);
-        self.schema = FUNCTION_FINGERPRINT_GRAPH_BUILD_REQUEST_SCHEMA;
+        self.select_component_schema();
         preflight_cancellable(
             &self,
             super::GRAPH_REQUEST_MAX_BYTES,
@@ -253,6 +274,11 @@ impl GraphBuildRequest {
             .xml_classification_profile()
             .map(|profile| profile.digest());
         if self.xml_classification_profile_digest != classification_digest {
+            return Err(error(ServiceErrorCode::IdentityMismatch));
+        }
+        if self.physical_function_declarations
+            != project.configuration().physical_function_declarations()
+        {
             return Err(error(ServiceErrorCode::IdentityMismatch));
         }
         Ok(project)
@@ -558,7 +584,13 @@ pub fn execute_graph_build_diagnosed(
     diagnostics.reset();
     let request_digest = super::hash(&bounded(request, super::GRAPH_REQUEST_MAX_BYTES)?);
     let mut result = GraphBuildResult {
-        schema: if request.function_fingerprints.is_some() {
+        schema: if request.physical_function_declarations.is_some() {
+            if request.function_fingerprints.is_some() {
+                DECLARATION_FINGERPRINT_GRAPH_BUILD_RESULT_SCHEMA
+            } else {
+                DECLARATION_GRAPH_BUILD_RESULT_SCHEMA
+            }
+        } else if request.function_fingerprints.is_some() {
             FUNCTION_FINGERPRINT_GRAPH_BUILD_RESULT_SCHEMA
         } else if request.xml_classification_profile_digest.is_some() {
             XML_CLASSIFICATION_GRAPH_BUILD_RESULT_SCHEMA

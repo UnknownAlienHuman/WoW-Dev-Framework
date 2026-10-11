@@ -18,8 +18,18 @@ use wow_graph::{
 use super::{PlatformGraphProvenance, producer_budget::ProducerBudget};
 use crate::{PlatformGraphProfile, ProjectError, ProjectErrorCode, ProjectPhase, ProjectResult};
 
+mod declaration;
+pub use declaration::{
+    FunctionDeclaredHeader, FunctionDeclaredHeaderComponent, FunctionDeclaredHeaderFingerprint,
+    FunctionDeclaredHeaderProfile,
+};
+
 pub const FUNCTION_FINGERPRINT_SCHEMA: &str = "wow-project/function-fingerprint-records/1";
 pub const FUNCTION_FINGERPRINT_PROFILE: &str = "wow-project/physical-function-source-span/1";
+pub const DECLARED_HEADER_FINGERPRINT_SCHEMA: &str =
+    "wow-project/function-fingerprint-records/declared-header/1";
+pub const DECLARED_HEADER_FINGERPRINT_PROFILE: &str =
+    "wow-project/physical-function-components/declared-header/1";
 const SOURCE_SPAN_DOMAIN: &str = "wow.project.fingerprint.physical-function.source-span.v1";
 
 /// Local purpose: comparison component, not source/generation or manifest identity.
@@ -224,6 +234,8 @@ pub struct FunctionFingerprintRecord {
     function_id: Box<str>,
     kind: SourceFunctionKind,
     source_span: FunctionSourceSpanComponent,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    declared_header: Option<FunctionDeclaredHeader>,
     signature: FunctionFingerprintUnavailable,
     declaration_shape: FunctionFingerprintUnavailable,
     direct_neighborhood: FunctionFingerprintUnavailable,
@@ -242,6 +254,10 @@ impl FunctionFingerprintRecord {
     #[must_use]
     pub const fn source_span(&self) -> &FunctionSourceSpanComponent {
         &self.source_span
+    }
+    #[must_use]
+    pub const fn declared_header(&self) -> Option<&FunctionDeclaredHeader> {
+        self.declared_header.as_ref()
     }
     #[must_use]
     pub const fn signature(&self) -> FunctionFingerprintUnavailable {
@@ -470,6 +486,7 @@ impl BorrowedFunctionFingerprintRecord<'_> {
             function_id: self.function_id.into(),
             kind: self.kind,
             source_span: self.source_span,
+            declared_header: None,
             signature: self.signature,
             declaration_shape: self.declaration_shape,
             direct_neighborhood: self.direct_neighborhood,
@@ -580,6 +597,7 @@ pub fn build_platform_function_fingerprints(
     if report.main_snapshot_id() != analyzer.main_workspace().snapshot_id()
         || report.functions().len() != direct.source().functions().len()
         || report.budget() != config.budget_policy().function_call_budget()
+        || report.declaration_recipe() != config.physical_function_declarations()
     {
         return Err(invalid());
     }
@@ -802,9 +820,18 @@ pub fn build_platform_function_fingerprints(
         retained.charge_serialized(&record, stop)?;
         records.push(record.into_owned(stop)?);
     }
-    let manifest = FunctionFingerprintManifest {
-        schema: FUNCTION_FINGERPRINT_SCHEMA,
-        profile: FUNCTION_FINGERPRINT_PROFILE,
+    let declarations_selected = report.declaration_recipe().is_some();
+    let mut manifest = FunctionFingerprintManifest {
+        schema: if declarations_selected {
+            DECLARED_HEADER_FINGERPRINT_SCHEMA
+        } else {
+            FUNCTION_FINGERPRINT_SCHEMA
+        },
+        profile: if declarations_selected {
+            DECLARED_HEADER_FINGERPRINT_PROFILE
+        } else {
+            FUNCTION_FINGERPRINT_PROFILE
+        },
         limits,
         coverage: FunctionFingerprintCoverage::Partial,
         available_functions: report.functions().len(),
@@ -813,6 +840,18 @@ pub fn build_platform_function_fingerprints(
         scope_conflicts,
         records,
     };
+    if declarations_selected {
+        for index in 0..manifest.records.len() {
+            let header = declaration::build_declared_header_component(
+                report,
+                &manifest,
+                index,
+                &mut retained,
+                stop,
+            )?;
+            manifest.records[index].declared_header = Some(header);
+        }
+    }
     // Same cap, fresh exact output count including array/object framing, not a second allowance.
     ProducerBudget::new(0, limits.max_metadata_bytes)?.charge_serialized(&manifest, stop)?;
     crate::analyzer::checkpoint(stop)?;

@@ -64,6 +64,16 @@ partitions cannot silently narrow the graph.
 
 ## Compatibility inventory
 
+Physical declaration syntax is an explicit configuration producer selection,
+`wow-emmy/physical-function-declaration-syntax/1`, rather than another graph
+capability or aggregate profile. It shares the existing Main session, binds the
+configuration/report identities and composes with classification through exact
+named replay/storage catalogs. The selected service request/result recipes are
+`physical-function-declarations/1` and, for the optional query,
+`physical-function-declarations-and-fingerprints/1`. See
+[component semantics](../crates/wow-project/e3/FUNCTION_FINGERPRINTS.md) and
+[actual replay consumers](../crates/wow-project/REPLAY_PUBLICATION.md).
+
 Classification additionally retains one sealed reviewed profile in configuration
 before generation derivation. Its selection binds the same admitted source and
 catalog; native replay re-admits both owners and validates their exact digests.

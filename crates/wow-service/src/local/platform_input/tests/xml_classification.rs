@@ -21,6 +21,148 @@ const CLASSIFICATION_XSD: &str = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/
 </xs:schema>"#;
 const CLASSIFICATION_XML: &str = r#"<Ui xmlns="http://www.blizzard.com/wow/ui/"><Frame name="NativeFrame"><Scripts><OnLoad>local loaded = true</OnLoad></Scripts></Frame><Texture name="NativeRegion"/><Custom/><FrameRef/></Ui>"#;
 
+#[test]
+fn selected_declared_headers_compose_with_xml_classification_and_exact_catalog() -> TestResult {
+    use crate::graph::{GraphReadStatus, execute_graph_build};
+    use crate::live_project::{
+        LiveProjectPublishRequest, LiveProjectStore, PlatformStoreSelection,
+        publish_input_in_namespace,
+    };
+    use wow_emmy::function_calls::PhysicalFunctionDeclarationRecipe;
+    use wow_project::replay::ProjectReplay;
+    use wow_store::project::ReadSelector;
+
+    let stop = AtomicBool::new(false);
+    let (root, mut config) = classification_fixture(CLASSIFICATION_XSD)?;
+    let recipe = PhysicalFunctionDeclarationRecipe::DeclaredSyntaxV1;
+    config["physical_function_declarations"] = serde_json::to_value(recipe)?;
+    write_json(&root, "project.json", &config)?;
+    let path = root.0.join("project.json");
+    let (project, request, _, _) = super::function_fingerprints::declaration_query(&path, &stop)?;
+    let classifier_digest = project
+        .configuration()
+        .xml_classification_profile()
+        .ok_or("combined classifier")?
+        .digest();
+    let result = execute_graph_build(
+        LocalProjectInput::from_config_path(&path, &stop)?,
+        &request,
+        &stop,
+    )?;
+    assert_eq!(
+        result.status(),
+        GraphReadStatus::Partial,
+        "{:?}",
+        result.failure_message()
+    );
+    assert!(
+        result
+            .function_fingerprints()
+            .ok_or("combined fingerprints")?
+            .records()
+            .iter()
+            .all(|record| record.declared_header().is_some())
+    );
+    let wire = serde_json::to_value(&result)?;
+    assert!(!wire["provenance"]["xml_classification"].is_null());
+    assert!(!wire["xml_classification_membership"].is_null());
+    let ordinary = PlatformStoreSelection::new(
+        project.configuration().project_id().clone(),
+        project
+            .configuration()
+            .platform_packages()
+            .ok_or("combined packages")?
+            .source()
+            .profile()
+            .profile_id()
+            .clone(),
+    )?;
+    let xml_only = ordinary.clone().with_xml_classification_catalog();
+    let declaration_only = ordinary
+        .clone()
+        .with_physical_function_declarations_catalog();
+    let selection = xml_only
+        .clone()
+        .with_physical_function_declarations_catalog();
+    let captured_input = LocalProjectInput::from_config_path(&path, &stop)?;
+    let durable_input = LocalProjectInput::from_config_path(&path, &stop)?;
+    std::fs::remove_dir_all(root.0.join("UI"))?;
+    std::fs::remove_file(root.0.join("version.txt"))?;
+    let (bundle, _) =
+        request.live_publication_in_namespace(captured_input, selection.namespace(), &stop)?;
+    let (records, _) = bundle.into_parts();
+    let record = records
+        .iter()
+        .find(|record| record.key() == "live.project.replay")
+        .ok_or("combined replay record")?;
+    let replay: ProjectReplay = record.decode()?;
+    let expected_record = wow_store::project::PartitionRecord::new(
+        record.key(),
+        "wow-project.live-replay.xml-schema-classification-and-physical-function-declarations.v1",
+        &replay,
+    )?;
+    assert_eq!(record.version(), expected_record.version());
+    assert_eq!(
+        serde_json::to_value(&replay)?["schema"],
+        "wow-project/native-project-replay/xml-schema-classification-and-physical-function-declarations/1"
+    );
+    let decoded = ProjectReplay::from_json(&serde_json::to_vec(&replay)?, &stop)?;
+    let hydrated = decoded.hydrate(&stop)?;
+    assert_eq!(hydrated.snapshot_id(), project.snapshot_id());
+    assert_eq!(
+        hydrated.configuration().physical_function_declarations(),
+        Some(recipe)
+    );
+    assert_eq!(
+        hydrated
+            .configuration()
+            .xml_classification_profile()
+            .ok_or("hydrated classifier")?
+            .digest(),
+        classifier_digest
+    );
+
+    let store_root = root.0.join("combined-store");
+    let publish =
+        LiveProjectPublishRequest::new("fixture:combined-declarations", "absent", true, true)?;
+    let published = publish_input_in_namespace(
+        durable_input,
+        &request,
+        &store_root,
+        &selection,
+        &publish,
+        &stop,
+    )?;
+    assert_eq!(serde_json::to_value(published)?["status"], "activated");
+    for wrong in [&ordinary, &xml_only, &declaration_only] {
+        assert_eq!(
+            LiveProjectStore::open_in_namespace(&store_root, wrong)
+                .err()
+                .ok_or("different component catalog reopened combined epoch")?
+                .code(),
+            crate::ServiceErrorCode::IdentityMismatch
+        );
+    }
+    let store = LiveProjectStore::open_in_namespace(&store_root, &selection)?;
+    let read = store.read_in_namespace(&selection, &ReadSelector::Current, &stop)?;
+    assert_eq!(read.project().snapshot_id(), project.snapshot_id());
+    assert_eq!(
+        read.project()
+            .configuration()
+            .physical_function_declarations(),
+        Some(recipe)
+    );
+    assert_eq!(
+        read.project()
+            .configuration()
+            .xml_classification_profile()
+            .ok_or("read classifier")?
+            .digest(),
+        classifier_digest
+    );
+    Ok(())
+}
+
 fn classification_fixture(xsd: &str) -> TestResult<(FixtureRoot, Value)> {
     use wow_project::load::schema::XmlSchemaComponentKind as Kind;
     use wow_project::load::schema::{

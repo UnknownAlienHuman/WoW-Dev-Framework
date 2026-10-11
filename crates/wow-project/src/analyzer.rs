@@ -254,6 +254,15 @@ pub(crate) fn build_analyzer_binding(
     generation.validate(configuration, inventory)?;
     generation.validate_library_ids(libraries.iter().map(LuaWorkspaceSnapshot::snapshot_id))?;
     generation.validate_function_call_facts(function_calls)?;
+    let declaration_recipe = configuration.physical_function_declarations();
+    if declaration_recipe.is_some() && !function_calls {
+        return Err(ProjectError::new(
+            ProjectErrorCode::InvalidConfiguration,
+            ProjectPhase::Analyzer,
+            "selected physical declarations require the function-call sidecar",
+        )
+        .with_candidate_generation(generation.project_generation()));
+    }
     let main_universe = main_workspace_universe(configuration)
         .map_err(|error| error.with_candidate_generation(generation.project_generation()))?;
     if libraries.is_empty() {
@@ -398,6 +407,10 @@ pub(crate) fn build_analyzer_binding(
         Some(budget) => query_profile.with_function_call_budget(budget),
         None => query_profile,
     };
+    let query_profile = match declaration_recipe {
+        Some(recipe) => query_profile.with_physical_function_declarations(recipe),
+        None => query_profile,
+    };
     let (syntax_report, session, local_flow_report) =
         if configuration.load_plan().is_none() && configuration.package_load_plan().is_none() {
             if !cache
@@ -527,6 +540,18 @@ pub(crate) fn build_analyzer_binding(
         function_calls: function_call_report,
         virtual_semantics,
     } = session;
+    if function_call_report
+        .as_ref()
+        .and_then(|report| report.declaration_recipe())
+        != declaration_recipe
+    {
+        return Err(ProjectError::new(
+            ProjectErrorCode::AnalyzerSnapshotMismatch,
+            ProjectPhase::Analyzer,
+            "function-call declaration recipe differs from the exact project selection",
+        )
+        .with_candidate_generation(generation.project_generation()));
+    }
     if let Some(report) = &virtual_semantics {
         let expected_libraries = ordered_libraries
             .iter()
