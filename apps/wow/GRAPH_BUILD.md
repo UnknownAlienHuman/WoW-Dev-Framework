@@ -290,6 +290,38 @@ unchanged; no replay/catalog version is added. Existing unselected output
 recipes retain their bytes. See
 [component policy](../../crates/wow-project/e3/FUNCTION_FINGERPRINTS.md).
 
+### Selected whole XML type shape
+
+The same `--xml-fingerprints` flag accepts selection schema
+`wow-service/xml-fingerprint-selection/selected-components/1`. Its required
+`selected_components.type_shape` receipt is
+`wow-project/xml-schema-type-shape/closed-complex-tree/1`.
+
+Every target supplies `occurrence_id`, `class_id`, `type_reference_source` and
+`type_component`. The first two retain the exact scoped occurrence/class join.
+`type_reference_source` is the exact native GlobalElement component ID in that
+classified occurrence's candidates; `type_component` is the exact named
+simple/complex TYPE component ID. The service verifies the element's unique,
+expanded Type reference to that requested TYPE; caller IDs do not supply authority.
+Keep the same target ordering and positive finite limits. Schema/receipt pairing,
+both type IDs and the exact recipe are required; null and unknown fields refuse.
+
+The XML manifest family is
+`wow-service/xml-fingerprint-manifest/selected-components/1`. It retains one
+ordered unique `type_shapes` batch, each occurrence record's exact `type_handoff`
+and `type_shape_index`, and batch-aligned `type_shape_support` for all reached raw
+members. Repeated selected TYPE IDs share a batch row. An unsupported reached
+closure makes the whole TYPE row Unavailable without a supported-prefix digest;
+an invalid occurrence/class/element/TYPE handoff refuses the query.
+
+Class components, type traversal, added exact support and final envelope use the
+same cumulative `max_metadata_bytes` ledger. Budget/cancellation refusal returns
+no successful truncated handoff. The manifest stays Partial; supported closure
+coverage does not prove runtime or semantic equivalence. See the
+[whole-type owner contract](../../crates/wow-project/e3/FUNCTION_FINGERPRINTS.md#selected-whole-xml-type-shape-owner).
+Without type selection, the original selection/manifest `/1` omit these fields
+and retain their bytes. This query adds no native replay/catalog version.
+
 ## Selected-TOC core recognizers
 
 The five `core.toc.*@1` families publish independent package, file-order,

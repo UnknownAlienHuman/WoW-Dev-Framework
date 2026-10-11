@@ -1,5 +1,14 @@
 //! One reviewed schema-class comparison component from sealed native inclusion.
 //! No signature, body shape, neighborhood, lineage or runtime identity is supplied.
+mod type_shape;
+
+pub use type_shape::{
+    XML_SCHEMA_TYPE_SHAPE_RECIPE, XmlSchemaTypeShapeComparable, XmlSchemaTypeShapeComponent,
+    XmlSchemaTypeShapeEvent, XmlSchemaTypeShapeOccurs, XmlSchemaTypeShapeOmission,
+    XmlSchemaTypeShapeOmissionReason, XmlSchemaTypeShapeRecipe, XmlSchemaTypeShapeRecord,
+    XmlSchemaTypeShapeUnavailable, build_selected_xml_schema_type_shapes,
+};
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::AtomicBool;
 

@@ -1460,3 +1460,213 @@ fn selected_xml_schema_components_preserve_unknowns_and_prefix_alias_comparison(
     assert_eq!(normalized, renamed_normalized);
     Ok(())
 }
+
+fn selected_type_shape_fixture(xsd: &str) -> TestResult<crate::graph::GraphBuildResult> {
+    use crate::graph::{
+        GRAPH_RESULT_MAX_BYTES, GraphBuildRequest, GraphReadStatus, XmlFingerprintSelection,
+        XmlFingerprintTarget, XmlSchemaTypeShapeRecipe, execute_graph_build,
+    };
+    use wow_project::load::schema::classification::RegionTypeWitness;
+
+    let stop = AtomicBool::new(false);
+    let (root, config) = classification_fixture(xsd)?;
+    // This is the explicit Texture witness already admitted by the fixture's
+    // reviewed region policy, not a production by-name/first-target selection.
+    let intent: RegionTypeWitness = serde_json::from_value(
+        config["xml_schema_classification"]["profile_selection"]["region_like"]["members"][0]
+            .clone(),
+    )?;
+    let path = root.0.join("project.json");
+    let input = LocalProjectInput::from_config_path(&path, &stop)?;
+    let request = GraphBuildRequest::new("fixture-platform-transport".into(), "current".into())?
+        .with_input_profile(&input);
+    let ordinary = execute_graph_build(input, &request, &stop)?;
+    assert_eq!(ordinary.status(), GraphReadStatus::Partial);
+    let ordinary_wire = serde_json::to_value(&ordinary)?;
+    let documents = ordinary_wire["provenance"]["xml_classification"]["documents"]
+        .as_array()
+        .ok_or("native classification documents")?;
+    let [document] = documents.as_slice() else {
+        return Err("expected one classification document".into());
+    };
+    let observations = document["report"]["occurrences"]
+        .as_array()
+        .ok_or("native classification observations")?;
+    let projections = document["occurrences"]
+        .as_array()
+        .ok_or("native classification projections")?;
+    assert_eq!(observations.len(), projections.len());
+    let matches: Vec<_> = observations
+        .iter()
+        .zip(projections)
+        .filter(|(observation, _)| observation["qname"]["name"]["local_name"] == "Texture")
+        .collect();
+    let [(observation, projection)] = matches.as_slice() else {
+        return Err("expected one native Texture occurrence".into());
+    };
+    assert_eq!(observation["occurrence"], projection["occurrence"]);
+    let occurrence = projection["occurrence_proposal_id"]
+        .as_str()
+        .ok_or("native Texture proposal")?;
+    let class = projection["class_proposal_id"]
+        .as_str()
+        .ok_or("native Texture class")?;
+    let target = XmlFingerprintTarget::new(occurrence.into(), Some(class.into()))
+        .with_type_shape(intent.element, intent.type_component)?;
+    let selection = XmlFingerprintSelection::new_with_type_shapes(
+        vec![target],
+        1,
+        GRAPH_RESULT_MAX_BYTES,
+        XmlSchemaTypeShapeRecipe::ClosedComplexTreeV1,
+    )?;
+    let selection_wire = serde_json::to_value(&selection)?;
+    assert_eq!(
+        selection_wire["schema"],
+        "wow-service/xml-fingerprint-selection/selected-components/1"
+    );
+    let selection = XmlFingerprintSelection::from_json_slice(&serde_json::to_vec(&selection)?)?;
+    let selected = execute_graph_build(
+        LocalProjectInput::from_config_path(&path, &stop)?,
+        &request.with_xml_fingerprints(selection)?,
+        &stop,
+    )?;
+    assert_eq!(
+        selected.status(),
+        GraphReadStatus::Partial,
+        "{:?}",
+        selected.failure_message()
+    );
+    assert_eq!(selected.snapshot_bytes()?, ordinary.snapshot_bytes()?);
+    let manifest = selected
+        .xml_fingerprints()
+        .ok_or("selected type-shape manifest")?;
+    assert_eq!(manifest.coverage(), wow_graph::GraphCoverageState::Partial);
+    assert_eq!(manifest.records().len(), 1);
+    assert_eq!(manifest.type_shapes().ok_or("type batch")?.len(), 1);
+    let row = manifest
+        .type_shape_for(0)
+        .ok_or("exact occurrence/type mapping")?;
+    assert_eq!(row.type_component(), intent.type_component);
+    assert_eq!(manifest.records()[0].type_shape_index(), Some(0));
+    assert!(manifest.records()[0].type_handoff().is_some());
+    assert!(!row.witnesses().is_empty());
+    assert!(!row.references().is_empty());
+    let raw = manifest
+        .type_shape_support(0)
+        .ok_or("complete closure raw support")?;
+    assert_eq!(raw.len(), 1);
+    assert_eq!(raw[0].source().path().as_str(), "UI/classification.xsd");
+    assert_eq!(*raw[0].source().content_digest(), digest(xsd.as_bytes()));
+    assert!(
+        raw[0]
+            .evidence()
+            .source_handle_ids()
+            .contains(&raw[0].source().handle_id())
+    );
+    assert_eq!(
+        manifest.schema(),
+        "wow-service/xml-fingerprint-manifest/selected-components/1"
+    );
+    Ok(selected)
+}
+
+#[test]
+fn selected_xml_type_shape_tracks_nested_occurs_and_refuses_incoming_substitution() -> TestResult {
+    use crate::graph::{XmlSchemaTypeShapeEvent, XmlSchemaTypeShapeUnavailable};
+    use wow_project::load::schema::XmlSchemaReferenceKind;
+
+    let xsd = CLASSIFICATION_XSD.replace(
+        "<xs:complexType name=\"TextureType\"/>",
+        r#"<xs:complexType name="TextureType"><xs:sequence>
+          <xs:element ref="u:ShapeLeaf"/>
+        </xs:sequence></xs:complexType>
+        <xs:complexType name="ShapeLeafType"><xs:sequence>
+          <xs:element name="leaf" minOccurs="0" maxOccurs="2"><xs:complexType/></xs:element>
+        </xs:sequence></xs:complexType>
+        <xs:element name="ShapeLeaf" type="u:ShapeLeafType"/>"#,
+    );
+    let base = selected_type_shape_fixture(&xsd)?;
+    let base_row = base
+        .xml_fingerprints()
+        .ok_or("base manifest")?
+        .type_shape_for(0)
+        .ok_or("base type row")?;
+    let base_component = base_row.component();
+    let base_shape = base_component
+        .comparable()
+        .ok_or("base complete complex closure")?;
+    let base_digest = base_component.digest().ok_or("base digest")?;
+
+    // Only one supported nested particle bound changes; the QName/ref topology
+    // is unchanged. The finite whole-tree component must observe the mutation.
+    assert_eq!(xsd.matches("name=\"leaf\" minOccurs=\"0\"").count(), 1);
+    let mutated_xsd = xsd.replace(
+        "name=\"leaf\" minOccurs=\"0\"",
+        "name=\"leaf\" minOccurs=\"1\"",
+    );
+    let mutated = selected_type_shape_fixture(&mutated_xsd)?;
+    let mutated_component = mutated
+        .xml_fingerprints()
+        .ok_or("mutated manifest")?
+        .type_shape_for(0)
+        .ok_or("mutated type row")?
+        .component();
+    let mutated_shape = mutated_component
+        .comparable()
+        .ok_or("mutated complete complex closure")?;
+    assert_ne!(
+        base_digest,
+        mutated_component.digest().ok_or("mutated digest")?
+    );
+    assert_eq!(base_shape.events().len(), mutated_shape.events().len());
+    let changes: Vec<_> = base_shape
+        .events()
+        .iter()
+        .zip(mutated_shape.events())
+        .filter(|(before, after)| before != after)
+        .collect();
+    let [
+        (
+            XmlSchemaTypeShapeEvent::Element {
+                occurs: Some(before),
+                ..
+            },
+            XmlSchemaTypeShapeEvent::Element {
+                occurs: Some(after),
+                ..
+            },
+        ),
+    ] = changes.as_slice()
+    else {
+        return Err("expected exactly one nested element cardinality mutation".into());
+    };
+    assert_eq!(before.min_occurs(), 0);
+    assert_eq!(after.min_occurs(), 1);
+    assert_eq!(before.max_occurs(), after.max_occurs());
+
+    // A new incoming substitution member is outside the direct type tree, but
+    // changes the reached global head's schema context. Never hash its old prefix.
+    let substituted_xsd = xsd.replace("</xs:schema>",
+        r#"<xs:element name="ShapeLeafMember" type="u:ShapeLeafType" substitutionGroup="u:ShapeLeaf"/></xs:schema>"#);
+    let substituted = selected_type_shape_fixture(&substituted_xsd)?;
+    let substituted_row = substituted
+        .xml_fingerprints()
+        .ok_or("substitution manifest")?
+        .type_shape_for(0)
+        .ok_or("substitution type row")?;
+    assert_eq!(
+        substituted_row.component().unavailable_reason(),
+        Some(&XmlSchemaTypeShapeUnavailable::UnsupportedReferenceKind(
+            XmlSchemaReferenceKind::SubstitutionGroup
+        ))
+    );
+    assert!(substituted_row.component().digest().is_none());
+    assert!(substituted_row.component().comparable().is_none());
+    assert!(
+        substituted_row
+            .references()
+            .iter()
+            .any(|reference| reference.kind() == XmlSchemaReferenceKind::SubstitutionGroup)
+    );
+    Ok(())
+}

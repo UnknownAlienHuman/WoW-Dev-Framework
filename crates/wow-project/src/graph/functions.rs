@@ -5,6 +5,15 @@ use wow_emmy::function_calls::SourceFunctionKind;
 pub(super) const MAX_FUNCTIONS: usize = 8192;
 pub(super) const MAX_CALLS: usize = 8192;
 
+// Shared with the nonsemantic preflight; preserve the admitted row formulas.
+pub(super) fn function_metadata_charge_bytes(path: &str) -> usize {
+    path.len().saturating_mul(4).saturating_add(512)
+}
+
+pub(super) fn call_base_metadata_charge_bytes(path: &str) -> usize {
+    path.len().saturating_mul(2).saturating_add(256)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ProjectGraphFunction {
     pub function_id: String,
@@ -127,10 +136,7 @@ pub(super) fn project(
                     function.content_digest(),
                     function.span(),
                 )?;
-                charge(
-                    text_bytes,
-                    function.path().len().saturating_mul(4).saturating_add(512),
-                )?;
+                charge(text_bytes, function_metadata_charge_bytes(function.path()))?;
                 let file_id = file_ids.get(function.path()).ok_or_else(invalid)?;
                 let proposal_id = format!("function:{}", function.fact_id());
                 let ownership_id = format!("function-owner:{}", function.fact_id());
@@ -207,10 +213,7 @@ pub(super) fn project(
                     call.content_digest(),
                     call.call_span(),
                 )?;
-                charge(
-                    text_bytes,
-                    call.path().len().saturating_mul(2).saturating_add(256),
-                )?;
+                charge(text_bytes, call_base_metadata_charge_bytes(call.path()))?;
                 let (handle, evidence) = support(project, source, call.call_span(), provenance)?;
                 provenance.call_sites.push(ProjectGraphCallSite {
                     call_id: call.fact_id().into(),

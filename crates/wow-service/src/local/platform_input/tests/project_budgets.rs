@@ -583,6 +583,27 @@ fn graph_diagnostics_keep_results_exact_and_refusal_conservative() -> TestResult
     )?;
     assert_eq!(actual.canonical_bytes()?, expected.canonical_bytes()?);
     let observed: Value = serde_json::from_slice(&source_graph_diagnostics_bytes(&diagnostics)?)?;
+    let callable_estimates = [
+        observed["input"]["function_total_metadata_estimate_bytes"]
+            .as_u64()
+            .ok_or("function total missing")?,
+        observed["input"]["call_base_total_metadata_estimate_bytes"]
+            .as_u64()
+            .ok_or("call base total missing")?,
+        observed["input"]["callable_base_total_metadata_estimate_bytes"]
+            .as_u64()
+            .ok_or("combined callable base total missing")?,
+    ];
+    assert_eq!(
+        callable_estimates[0]
+            .checked_add(callable_estimates[1])
+            .ok_or("callable sum overflow")?,
+        callable_estimates[2]
+    );
+    assert_eq!(
+        observed["input"]["callable_charge_counting_method"],
+        "conservative_estimate"
+    );
     for name in [
         "collector_encoding",
         "direct_preparation",
@@ -617,6 +638,17 @@ fn graph_diagnostics_keep_results_exact_and_refusal_conservative() -> TestResult
     assert!(!std::str::from_utf8(&semantic)?.contains("elapsed_microseconds"));
     let observed: Value = serde_json::from_slice(&source_graph_diagnostics_bytes(&diagnostics)?)?;
     assert!(observed["input"]["functions"].is_number());
+    assert!(!std::str::from_utf8(&semantic)?.contains("function_total_metadata_estimate_bytes"));
+    for (field, total) in [
+        "function_total_metadata_estimate_bytes",
+        "call_base_total_metadata_estimate_bytes",
+        "callable_base_total_metadata_estimate_bytes",
+    ]
+    .into_iter()
+    .zip(callable_estimates)
+    {
+        assert_eq!(observed["input"][field].as_u64(), Some(total));
+    }
     let phases = observed["phases"].as_array().ok_or("phases")?;
     let first = &phases[0];
     assert_eq!(first["outcome"], "refused");

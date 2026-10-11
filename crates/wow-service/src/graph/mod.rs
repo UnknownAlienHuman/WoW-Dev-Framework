@@ -20,8 +20,16 @@ pub use persistence::{
     GraphStorePublishRequest, GraphStorePublishResult, execute_graph_store_read,
     publish_graph_bundle, reconcile_graph_publication,
 };
+// Native Serialize-only type-shape observations; selections cannot mint authority.
 pub use wow_project::graph::source_graph_axis_profile;
+pub use wow_project::graph::xml_fingerprints::{
+    XML_SCHEMA_TYPE_SHAPE_RECIPE, XmlSchemaTypeShapeComparable, XmlSchemaTypeShapeComponent,
+    XmlSchemaTypeShapeEvent, XmlSchemaTypeShapeOccurs, XmlSchemaTypeShapeOmission,
+    XmlSchemaTypeShapeOmissionReason, XmlSchemaTypeShapeRecipe, XmlSchemaTypeShapeRecord,
+    XmlSchemaTypeShapeUnavailable,
+};
 pub use wow_project::graph::{ProjectSourceReadLimits, SourceGraphDiagnostics};
+pub use wow_project::load::schema::classification::XmlClassificationWitness as XmlFingerprintTypeWitness;
 
 use crate::{ServiceError, ServiceErrorCode, ServiceResult};
 use serde::{Deserialize, Serialize};

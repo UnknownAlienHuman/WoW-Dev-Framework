@@ -327,6 +327,63 @@ native replay or the existing classification catalog. It adds no replay/catalog
 version and decoding output cannot construct native authority. See the
 [CLI query contract](../../../apps/wow/GRAPH_BUILD.md).
 
-Remaining #118 component coverage, whole XML type shape, the genuine
-#116 candidate/Skeleton handoff, mutation freeze and selected real-corpus Tier A
-remain required by #118. A verified source-span checkpoint does not accept them.
+## Selected whole XML type-shape owner
+
+`XmlSchemaTypeShapeRecipe::ClosedComplexTreeV1` is registered in
+`graph/xml_fingerprints/type_shape.rs` under
+`wow-project/xml-schema-type-shape/closed-complex-tree/1`. It is a distinct
+comparison recipe from `named-proof-witnesses/1`.
+
+The supported closure is a named or anonymous complex type with zero or one
+Sequence/Choice, containing ordered Sequence/Choice/local-element/element-reference
+particles. Choice must be nonempty. Each element has an explicit anonymous complex
+type or one uniquely resolved Type reference to a named complex type; an Element
+reference expands a unique global element and its complete explicit type closure.
+An explicit empty complex type is supported; implicit/untyped elements remain
+unavailable. Balanced node/reference/End events preserve Sequence and Choice
+branch order as structural syntax order.
+
+Comparable bytes retain node kinds, occurrence bounds (default 1, or unbounded),
+mixed/nillable/abstract flags (default false), semantic element expanded names and
+resolved Type/Element target expanded QNames. Named type declaration labels,
+prefix spelling, paths/spans, exact IDs, generations and storage identities are
+excluded. Attribute order and annotation position are excluded; annotation
+payloads retain exact omission witnesses. Absent expanded-name namespaces remain
+omitted. This structure does not establish XSD language or client/runtime equivalence.
+
+All/groups/attributes/simple types/derivation/substitution groups/facets/unions/
+lists/wildcards, schema dependency declarations, default/fixed values and nonempty
+derivation controls make the whole selected closure unavailable. Only typed empty
+`block`/`final`/`blockDefault`/`finalDefault` token sets mean no restriction. Reached
+native issues, unsupported/invalid descendants, unresolved or ambiguous references
+and active-path cycles prevent a digest; repeated DAG branches expand and are
+charged. Unavailable rows retain the first causal component/reason and reached
+reference observations/candidates, without claiming a complete diagnostic census.
+
+`build_selected_xml_schema_type_shapes` consumes strictly increasing unique native
+type IDs and the same sealed `PlatformGraphProvenance` catalog/inclusion. Exact
+classification/profile/scope/source-context joins and raw-member handles/evidence
+remain custody outside comparison. Parent consumers must retain the binding and
+validate all returned closure witnesses, including raw members beyond the original
+class proof.
+
+The child starts the existing cumulative `ProducerBudget` at parent `used`,
+charges borrowed inputs before owned retention, and charges indexes, tasks,
+repeated expansions, witnesses, events, rows and final output. It returns updated
+usage for the parent to carry into final envelope charging. Traversal and counting
+writes are cancellable; budget/cancellation/invalid-selection refusal returns no
+successful truncated rows. No new cap or per-row budget reset is introduced.
+
+Available coverage is Complete only for this supported closure; overall #118
+coverage remains Partial. Broader typed facet/value normalization is still missing:
+native `Facet` does not retain the specific facet discriminator, and Text values
+are not typed XSD value-space observations. The existing `--xml-fingerprints`
+query selects this recipe with an exact occurrence/class and declaration-to-type
+reference; its parent carries one ordered type batch, per-occurrence mapping and
+complete closure raw support into the same metadata ledger. Acceptance remains
+pending.
+
+Remaining #118 component coverage, broader XML type/value normalization, the
+genuine #116 candidate/Skeleton handoff, mutation freeze and selected real-corpus
+Tier A remain required by #118. A verified source-span checkpoint does not accept
+them.

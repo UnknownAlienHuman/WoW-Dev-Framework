@@ -1,9 +1,9 @@
 //! Fixed-size, nonsemantic observations of the existing metadata counter.
 //! Never persisted in a proposal, configuration, report, or replay recipe.
 use super::{ProducerBudget, ProjectResult, ProjectView};
-use crate::ProjectErrorCode;
+use crate::{ProjectError, ProjectErrorCode, ProjectPhase};
 use serde::Serialize;
-use std::time::Instant;
+use std::{sync::atomic::AtomicBool, time::Instant};
 
 #[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -138,6 +138,12 @@ struct InputPopulations {
     functions: Option<u64>,
     calls: Option<u64>,
     global_accesses: Option<u64>,
+    /// Complete available report, not completed or accepted collector records.
+    function_total_metadata_estimate_bytes: Option<u64>,
+    /// Excludes conditional Main declaration charges from call arguments.
+    call_base_total_metadata_estimate_bytes: Option<u64>,
+    callable_base_total_metadata_estimate_bytes: Option<u64>,
+    callable_charge_counting_method: CountingMethod,
 }
 
 /// Optional bounded sidecar. Times and counters never enter semantic identities.
@@ -167,9 +173,9 @@ impl SourceGraphDiagnostics {
         }
     }
 
-    pub(super) fn bind(&mut self, project: &ProjectView) {
+    pub(super) fn bind(&mut self, project: &ProjectView, stop: &AtomicBool) -> ProjectResult<()> {
         if !self.enabled {
-            return;
+            return Ok(());
         }
         self.reset();
         let report = project.snapshot().analyzer_binding().function_call_report();
@@ -185,7 +191,31 @@ impl SourceGraphDiagnostics {
             functions: report.map(|report| report.functions().len() as u64),
             calls: report.map(|report| report.calls().len() as u64),
             global_accesses: report.map(|report| report.global_accesses().len() as u64),
+            function_total_metadata_estimate_bytes: None,
+            call_base_total_metadata_estimate_bytes: None,
+            callable_base_total_metadata_estimate_bytes: None,
+            callable_charge_counting_method: CountingMethod::ConservativeEstimate,
         });
+        let Some(report) = report else {
+            return Ok(());
+        };
+        let input = self.input.as_mut().ok_or_else(super::invalid)?;
+        let functions = total_charge(
+            report.functions().iter().map(|fact| fact.path()),
+            super::functions::function_metadata_charge_bytes,
+            stop,
+        )?;
+        input.function_total_metadata_estimate_bytes = Some(functions);
+        let calls = total_charge(
+            report.calls().iter().map(|call| call.path()),
+            super::functions::call_base_metadata_charge_bytes,
+            stop,
+        )?;
+        input.call_base_total_metadata_estimate_bytes = Some(calls);
+        input.callable_base_total_metadata_estimate_bytes =
+            Some(functions.checked_add(calls).ok_or_else(estimate_overflow)?);
+        crate::analyzer::checkpoint(stop)?;
+        Ok(())
     }
 
     pub(super) fn measure<T>(
@@ -242,6 +272,31 @@ impl SourceGraphDiagnostics {
             self.phases[phase as usize].completed_records = Some(count as u64);
         }
     }
+}
+
+// Observe the same per-row charges without reserving, resetting or discounting
+// the collector ledger. Publish only complete sums; a cancelled prefix stays null.
+fn total_charge<'a>(
+    paths: impl Iterator<Item = &'a str>,
+    charge_bytes: fn(&str) -> usize,
+    stop: &AtomicBool,
+) -> ProjectResult<u64> {
+    let mut total = 0_u64;
+    for path in paths {
+        crate::analyzer::checkpoint(stop)?;
+        let bytes = u64::try_from(charge_bytes(path)).map_err(|_| estimate_overflow())?;
+        total = total.checked_add(bytes).ok_or_else(estimate_overflow)?;
+    }
+    crate::analyzer::checkpoint(stop)?;
+    Ok(total)
+}
+
+fn estimate_overflow() -> ProjectError {
+    ProjectError::new(
+        ProjectErrorCode::SourceBudgetExceeded,
+        ProjectPhase::View,
+        "source graph diagnostic metadata estimate exceeds u64",
+    )
 }
 
 /// Capture the actual local counter before the caller propagates either result.

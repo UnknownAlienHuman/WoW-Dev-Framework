@@ -1,7 +1,7 @@
 //! Explicit bounded XML observations; decoded selections cannot supply native authority.
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     io::Write,
     sync::atomic::{AtomicBool, Ordering},
 };
@@ -21,10 +21,18 @@ use wow_project::{
         XmlClassificationMembership,
         xml_fingerprints::{
             XML_SCHEMA_CLASS_COMPONENT_RECIPE, XmlSchemaClassComponentValue,
-            build_selected_xml_schema_class_components,
+            XmlSchemaTypeShapeRecipe, XmlSchemaTypeShapeRecord,
+            build_selected_xml_schema_class_components, build_selected_xml_schema_type_shapes,
         },
     },
-    load::schema::classification::{XmlClassificationBinding, XmlOccurrenceClassification},
+    load::schema::{
+        XmlSchemaComponentKind, XmlSchemaComponentState, XmlSchemaQNameState, XmlSchemaReference,
+        XmlSchemaReferenceKind, XmlSchemaReferenceState,
+        classification::{
+            XmlClassOutcome, XmlClassificationBinding, XmlClassificationWitness,
+            XmlOccurrenceClassification,
+        },
+    },
 };
 
 use super::{checkpoint, error, graph_error, project_error};
@@ -32,6 +40,9 @@ use crate::{ServiceErrorCode, ServiceResult};
 
 const SELECTION_SCHEMA: &str = "wow-service/xml-fingerprint-selection/1";
 const RESULT_SCHEMA: &str = "wow-service/xml-fingerprint-manifest/1";
+const COMPONENT_SELECTION_SCHEMA: &str =
+    "wow-service/xml-fingerprint-selection/selected-components/1";
+const COMPONENT_RESULT_SCHEMA: &str = "wow-service/xml-fingerprint-manifest/selected-components/1";
 const OCCURRENCE_KIND: &str = "xml_source_occurrence";
 const CLASS_KIND: &str = "xml_schema_class";
 const CLASSIFICATION_RELATION: &str = "xml_occurrence_schema_class";
@@ -44,6 +55,18 @@ pub struct XmlFingerprintTarget {
     occurrence_id: Box<str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     class_id: Option<Box<str>>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "non_null_type_id"
+    )]
+    type_reference_source: Option<ContentDigest<CanonicalResult>>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "non_null_type_id"
+    )]
+    type_component: Option<ContentDigest<CanonicalResult>>,
 }
 impl XmlFingerprintTarget {
     #[must_use]
@@ -51,8 +74,73 @@ impl XmlFingerprintTarget {
         Self {
             occurrence_id,
             class_id,
+            type_reference_source: None,
+            type_component: None,
         }
     }
+
+    /// Explicit IDs are intent. The genuine native reference is verified at build.
+    pub fn with_type_shape(
+        mut self,
+        declaration: ContentDigest<CanonicalResult>,
+        type_component: ContentDigest<CanonicalResult>,
+    ) -> ServiceResult<Self> {
+        if self.occurrence_id.is_empty() || self.class_id.as_ref().is_none_or(|id| id.is_empty()) {
+            return Err(error(ServiceErrorCode::InvalidRequest));
+        }
+        self.type_reference_source = Some(declaration);
+        self.type_component = Some(type_component);
+        Ok(self)
+    }
+    #[must_use]
+    pub fn occurrence_id(&self) -> &str {
+        &self.occurrence_id
+    }
+    #[must_use]
+    pub fn class_id(&self) -> Option<&str> {
+        self.class_id.as_deref()
+    }
+    #[must_use]
+    pub const fn type_reference_source(&self) -> Option<ContentDigest<CanonicalResult>> {
+        self.type_reference_source
+    }
+    #[must_use]
+    pub const fn type_component(&self) -> Option<ContentDigest<CanonicalResult>> {
+        self.type_component
+    }
+}
+
+fn non_null_type_id<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<ContentDigest<CanonicalResult>>, D::Error> {
+    ContentDigest::<CanonicalResult>::deserialize(deserializer).map(Some)
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct XmlSelectedComponents {
+    type_shape: XmlSchemaTypeShapeRecipe,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WireSelectedComponents {
+    #[serde(deserialize_with = "type_shape_recipe")]
+    type_shape: XmlSchemaTypeShapeRecipe,
+}
+fn type_shape_recipe<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<XmlSchemaTypeShapeRecipe, D::Error> {
+    let wire = String::deserialize(deserializer)?;
+    match wire.as_str() {
+        "wow-project/xml-schema-type-shape/closed-complex-tree/1" => {
+            Ok(XmlSchemaTypeShapeRecipe::ClosedComplexTreeV1)
+        }
+        _ => Err(serde::de::Error::custom("unknown XML type-shape recipe")),
+    }
+}
+fn non_null_components<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<WireSelectedComponents>, D::Error> {
+    WireSelectedComponents::deserialize(deserializer).map(Some)
 }
 
 /// Targets must be strictly ordered by exact occurrence proposal ID.
@@ -63,6 +151,8 @@ pub struct XmlFingerprintSelection {
     targets: Vec<XmlFingerprintTarget>,
     max_records: usize,
     max_metadata_bytes: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    selected_components: Option<XmlSelectedComponents>,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -71,12 +161,30 @@ struct WireSelection {
     targets: Vec<XmlFingerprintTarget>,
     max_records: usize,
     max_metadata_bytes: usize,
+    #[serde(default, deserialize_with = "non_null_components")]
+    selected_components: Option<WireSelectedComponents>,
 }
 impl XmlFingerprintSelection {
     pub fn new(
         targets: Vec<XmlFingerprintTarget>,
         max_records: usize,
         max_metadata_bytes: usize,
+    ) -> ServiceResult<Self> {
+        Self::create(targets, max_records, max_metadata_bytes, None)
+    }
+    pub fn new_with_type_shapes(
+        targets: Vec<XmlFingerprintTarget>,
+        max_records: usize,
+        max_metadata_bytes: usize,
+        recipe: XmlSchemaTypeShapeRecipe,
+    ) -> ServiceResult<Self> {
+        Self::create(targets, max_records, max_metadata_bytes, Some(recipe))
+    }
+    fn create(
+        targets: Vec<XmlFingerprintTarget>,
+        max_records: usize,
+        max_metadata_bytes: usize,
+        recipe: Option<XmlSchemaTypeShapeRecipe>,
     ) -> ServiceResult<Self> {
         if max_records == 0 || max_metadata_bytes == 0 {
             return Err(error(ServiceErrorCode::InvalidRequest));
@@ -93,11 +201,25 @@ impl XmlFingerprintSelection {
         {
             return Err(error(ServiceErrorCode::InvalidRequest));
         }
+        for target in &targets {
+            let expected = recipe.is_some();
+            if target.type_reference_source.is_some() != expected
+                || target.type_component.is_some() != expected
+                || (expected && target.class_id.is_none())
+            {
+                return Err(error(ServiceErrorCode::InvalidRequest));
+            }
+        }
         let selection = Self {
-            schema: SELECTION_SCHEMA,
+            schema: if recipe.is_some() {
+                COMPONENT_SELECTION_SCHEMA
+            } else {
+                SELECTION_SCHEMA
+            },
             targets,
             max_records,
             max_metadata_bytes,
+            selected_components: recipe.map(|type_shape| XmlSelectedComponents { type_shape }),
         };
         super::preflight_cancellable(
             &selection,
@@ -119,12 +241,42 @@ impl XmlFingerprintSelection {
             stop,
         )
         .map_err(|failure| error(failure.code))?;
-        if wire.schema != SELECTION_SCHEMA {
-            return Err(error(ServiceErrorCode::InvalidRequest));
-        }
-        let selection = Self::new(wire.targets, wire.max_records, wire.max_metadata_bytes)?;
+        let recipe = match (wire.schema.as_str(), wire.selected_components) {
+            (SELECTION_SCHEMA, None) => None,
+            (COMPONENT_SELECTION_SCHEMA, Some(components)) => Some(components.type_shape),
+            _ => return Err(error(ServiceErrorCode::InvalidRequest)),
+        };
+        let selection = Self::create(
+            wire.targets,
+            wire.max_records,
+            wire.max_metadata_bytes,
+            recipe,
+        )?;
         checkpoint(stop)?;
         Ok(selection)
+    }
+
+    #[must_use]
+    pub fn schema(&self) -> &str {
+        self.schema
+    }
+    #[must_use]
+    pub fn targets(&self) -> &[XmlFingerprintTarget] {
+        &self.targets
+    }
+    #[must_use]
+    pub const fn max_records(&self) -> usize {
+        self.max_records
+    }
+    #[must_use]
+    pub const fn max_metadata_bytes(&self) -> usize {
+        self.max_metadata_bytes
+    }
+    #[must_use]
+    pub fn type_shape_recipe(&self) -> Option<XmlSchemaTypeShapeRecipe> {
+        self.selected_components
+            .as_ref()
+            .map(|selected| selected.type_shape)
     }
 
     pub(super) fn build(
@@ -246,6 +398,16 @@ impl XmlFingerprintSelection {
                 catalog.insert(witness.source_handle_id, witness);
             }
         }
+        let type_catalog = if self.selected_components.is_some() {
+            Some(TypeShapeCatalog::new(
+                classification.catalog_support(),
+                &mut budget,
+                stop,
+            )?)
+        } else {
+            None
+        };
+        let mut type_ids = BTreeSet::new();
         let mut records = Vec::new();
         let mut selected_ids = Vec::new();
         for target in &self.targets {
@@ -271,12 +433,36 @@ impl XmlFingerprintSelection {
                 projected,
                 observation,
             ))?;
+            let type_handoff = if let Some(index) = &type_catalog {
+                let declaration = target
+                    .type_reference_source
+                    .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?;
+                let type_component = target
+                    .type_component
+                    .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?;
+                let handoff = index.type_handoff(
+                    observation,
+                    declaration,
+                    type_component,
+                    &mut budget,
+                    stop,
+                )?;
+                if !type_ids.contains(&type_component) {
+                    budget.charge(&("xml-type-shape-batch-key", type_component))?;
+                    type_ids.insert(type_component);
+                }
+                Some(handoff)
+            } else {
+                None
+            };
             let record = XmlFingerprintRecord {
                 scope: document.scope.clone(),
                 document: document.document.clone(),
                 projection: projected.clone(),
                 observation: observation.clone(),
                 support,
+                type_handoff,
+                type_shape_index: None,
             };
             budget.charge(&(
                 "xml-fingerprint-selected-component-id",
@@ -308,8 +494,81 @@ impl XmlFingerprintSelection {
                 return Err(error(ServiceErrorCode::InternalContractViolation));
             }
         }
+        let (type_shapes, type_shape_support) = if let Some(recipe) = self.type_shape_recipe() {
+            let index = type_catalog
+                .as_ref()
+                .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?;
+            budget.charge(&("xml-type-shape-batch-selection", &type_ids))?;
+            let ordered: Vec<_> = type_ids.iter().copied().collect();
+            if ordered.len() > self.max_records || ordered.len() > records.len() {
+                return Err(error(ServiceErrorCode::InternalContractViolation));
+            }
+            // Exactly ONE native batch, continuing the previous class-component ledger.
+            let (rows, next_used) = build_selected_xml_schema_type_shapes(
+                direct,
+                recipe,
+                &ordered,
+                budget.used,
+                self.max_metadata_bytes,
+                stop,
+            )
+            .map_err(project_error)?;
+            if next_used < budget.used || next_used > budget.limit || rows.len() != ordered.len() {
+                return Err(error(ServiceErrorCode::InternalContractViolation));
+            }
+            budget.used = next_used;
+            let mut positions = BTreeMap::new();
+            let mut closure_support = Vec::new();
+            for (position, (id, row)) in ordered.iter().zip(&rows).enumerate() {
+                checkpoint(stop)?;
+                if row.type_component() != *id {
+                    return Err(error(ServiceErrorCode::InternalContractViolation));
+                }
+                budget.charge(&("xml-type-shape-result-map", id, position))?;
+                if positions.insert(*id, position).is_some() {
+                    return Err(error(ServiceErrorCode::InternalContractViolation));
+                }
+                // The old class proof is NOT the complete type closure's raw support.
+                closure_support.push(index.closure_support(
+                    direct,
+                    &lookup,
+                    row,
+                    &mut budget,
+                    stop,
+                )?);
+            }
+            for record in &mut records {
+                checkpoint(stop)?;
+                let Some(XmlClassificationWitness::Reference {
+                    reference_kind: XmlSchemaReferenceKind::Type,
+                    target,
+                    ..
+                }) = &record.type_handoff
+                else {
+                    return Err(error(ServiceErrorCode::InternalContractViolation));
+                };
+                let position = *positions
+                    .get(target)
+                    .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?;
+                budget.charge(&(
+                    "xml-type-shape-occurrence-map",
+                    &record.projection.occurrence_proposal_id,
+                    target,
+                    position,
+                ))?;
+                record.type_shape_index = Some(position);
+            }
+            budget.charge(&closure_support)?;
+            (Some(rows), Some(closure_support))
+        } else {
+            (None, None)
+        };
         let manifest = XmlFingerprintManifest {
-            schema: RESULT_SCHEMA,
+            schema: if self.selected_components.is_some() {
+                COMPONENT_RESULT_SCHEMA
+            } else {
+                RESULT_SCHEMA
+            },
             component_recipe: XML_SCHEMA_CLASS_COMPONENT_RECIPE,
             max_records: self.max_records,
             max_metadata_bytes: self.max_metadata_bytes,
@@ -328,6 +587,9 @@ impl XmlFingerprintSelection {
             },
             records,
             components,
+            selected_components: self.selected_components.clone(),
+            type_shapes,
+            type_shape_support,
         };
         // Charge the complete encoded envelope, including framing, to the same
         // cumulative native/service ledger before returning an owned result.
@@ -377,6 +639,10 @@ pub struct XmlFingerprintRecord {
     projection: ProjectXmlClassificationOccurrence,
     observation: XmlOccurrenceClassification,
     support: XmlFingerprintSupport,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    type_handoff: Option<XmlClassificationWitness>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    type_shape_index: Option<usize>,
 }
 /// Serialize-only observation result: it cannot be reopened as native authority.
 /// components[i] belongs exactly to records[i]; neither list is a source universe.
@@ -390,9 +656,50 @@ pub struct XmlFingerprintManifest {
     binding: XmlFingerprintBinding,
     records: Vec<XmlFingerprintRecord>,
     components: Vec<(String, XmlSchemaClassComponentValue)>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    selected_components: Option<XmlSelectedComponents>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    type_shapes: Option<Vec<XmlSchemaTypeShapeRecord>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    type_shape_support: Option<Vec<Vec<XmlFingerprintRawSupport>>>,
 }
 
 impl XmlFingerprintManifest {
+    #[must_use]
+    pub fn schema(&self) -> &str {
+        self.schema
+    }
+    #[must_use]
+    pub fn type_shape_recipe(&self) -> Option<XmlSchemaTypeShapeRecipe> {
+        self.selected_components
+            .as_ref()
+            .map(|selected| selected.type_shape)
+    }
+    #[must_use]
+    pub fn type_shapes(&self) -> Option<&[XmlSchemaTypeShapeRecord]> {
+        self.type_shapes.as_deref()
+    }
+    #[must_use]
+    pub fn type_shape_support(&self, index: usize) -> Option<&[XmlFingerprintRawSupport]> {
+        self.type_shape_support
+            .as_ref()?
+            .get(index)
+            .map(Vec::as_slice)
+    }
+    #[must_use]
+    pub fn type_shape_for(&self, record_index: usize) -> Option<&XmlSchemaTypeShapeRecord> {
+        let record = self.records.get(record_index)?;
+        let row = self.type_shapes.as_ref()?.get(record.type_shape_index?)?;
+        let XmlClassificationWitness::Reference {
+            reference_kind: XmlSchemaReferenceKind::Type,
+            target,
+            ..
+        } = record.type_handoff.as_ref()?
+        else {
+            return None;
+        };
+        (row.type_component() == *target).then_some(row)
+    }
     #[must_use]
     pub fn records(&self) -> &[XmlFingerprintRecord] {
         &self.records
@@ -407,6 +714,14 @@ impl XmlFingerprintManifest {
     }
 }
 impl XmlFingerprintRecord {
+    #[must_use]
+    pub const fn type_handoff(&self) -> Option<&XmlClassificationWitness> {
+        self.type_handoff.as_ref()
+    }
+    #[must_use]
+    pub const fn type_shape_index(&self) -> Option<usize> {
+        self.type_shape_index
+    }
     #[must_use]
     pub const fn projection(&self) -> &ProjectXmlClassificationOccurrence {
         &self.projection
@@ -611,6 +926,321 @@ fn reference<'a>(
             proposal_id: proposal_id.into(),
         })
         .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))
+}
+
+/// Typed indexes borrow the complete sealed catalog. They do not reclassify or
+/// lower schema content, and are created only for explicitly selected type shape.
+struct TypeShapeCatalog<'a> {
+    components: BTreeMap<ContentDigest<CanonicalResult>, &'a XmlClassificationCatalogWitness>,
+    references: BTreeMap<
+        (ContentDigest<CanonicalResult>, XmlSchemaReferenceKind),
+        Vec<&'a XmlClassificationCatalogWitness>,
+    >,
+}
+impl<'a> TypeShapeCatalog<'a> {
+    fn new(
+        catalog: &'a XmlClassificationCatalogSupport,
+        budget: &mut MetadataBudget<'_>,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Self> {
+        let mut result = Self {
+            components: BTreeMap::new(),
+            references: BTreeMap::new(),
+        };
+        for witness in catalog.witnesses() {
+            checkpoint(stop)?;
+            budget.charge(&(
+                "xml-type-shape-catalog-index",
+                witness.component_id,
+                witness.reference.as_ref().map(XmlSchemaReference::kind),
+            ))?;
+            if let Some(reference) = &witness.reference {
+                if reference.source() != witness.component_id {
+                    return Err(error(ServiceErrorCode::InternalContractViolation));
+                }
+                result
+                    .references
+                    .entry((reference.source(), reference.kind()))
+                    .or_default()
+                    .push(witness);
+            } else if result
+                .components
+                .insert(witness.component_id, witness)
+                .is_some()
+            {
+                return Err(error(ServiceErrorCode::InternalContractViolation));
+            }
+        }
+        Ok(result)
+    }
+    fn component(
+        &self,
+        id: ContentDigest<CanonicalResult>,
+    ) -> ServiceResult<&'a XmlClassificationCatalogWitness> {
+        self.components
+            .get(&id)
+            .copied()
+            .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))
+    }
+
+    fn type_handoff(
+        &self,
+        observation: &XmlOccurrenceClassification,
+        declaration: ContentDigest<CanonicalResult>,
+        type_component: ContentDigest<CanonicalResult>,
+        budget: &mut MetadataBudget<'_>,
+        stop: &AtomicBool,
+    ) -> ServiceResult<XmlClassificationWitness> {
+        checkpoint(stop)?;
+        if !matches!(observation.outcome(), XmlClassOutcome::Classified(_))
+            || observation.qname().state() != XmlSchemaQNameState::Expanded
+        {
+            return Err(error(ServiceErrorCode::InvalidRequest));
+        }
+        let mut declared = false;
+        for candidate in observation.candidates() {
+            checkpoint(stop)?;
+            if *candidate == declaration {
+                declared = true;
+            }
+        }
+        if !declared {
+            return Err(error(ServiceErrorCode::InvalidRequest));
+        }
+        let source = self
+            .components
+            .get(&declaration)
+            .ok_or_else(|| error(ServiceErrorCode::InvalidRequest))?;
+        let target = self
+            .components
+            .get(&type_component)
+            .ok_or_else(|| error(ServiceErrorCode::InvalidRequest))?;
+        if source.component_kind != XmlSchemaComponentKind::GlobalElement
+            || source.component_state != XmlSchemaComponentState::Observed
+            || !matches!(
+                target.component_kind,
+                XmlSchemaComponentKind::NamedSimpleType | XmlSchemaComponentKind::NamedComplexType
+            )
+        {
+            return Err(error(ServiceErrorCode::InvalidRequest));
+        }
+        let mut exact = None;
+        for witness in self
+            .references
+            .get(&(declaration, XmlSchemaReferenceKind::Type))
+            .into_iter()
+            .flatten()
+        {
+            checkpoint(stop)?;
+            let reference = witness
+                .reference
+                .as_ref()
+                .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?;
+            // The caller supplied BOTH IDs. This verifies their exact edge;
+            // no inferred first/sole/by-name type is selected.
+            if reference.state() != XmlSchemaReferenceState::Unique
+                || reference.target().state() != XmlSchemaQNameState::Expanded
+                || reference.candidates() != [type_component]
+            {
+                return Err(error(ServiceErrorCode::InvalidRequest));
+            }
+            if exact.replace(reference).is_some() {
+                return Err(error(ServiceErrorCode::InvalidRequest));
+            }
+        }
+        let reference = exact.ok_or_else(|| error(ServiceErrorCode::InvalidRequest))?;
+        budget.charge(&(source, target, reference))?;
+        let handoff = XmlClassificationWitness::Reference {
+            source: declaration,
+            reference_kind: XmlSchemaReferenceKind::Type,
+            target: type_component,
+            value_span: reference.value_span().clone(),
+            decoded_value_digest: reference.decoded_value_digest(),
+        };
+        budget.charge(&handoff)?;
+        Ok(handoff)
+    }
+
+    fn reference(
+        &self,
+        selected: &XmlClassificationWitness,
+        budget: &mut MetadataBudget<'_>,
+        stop: &AtomicBool,
+    ) -> ServiceResult<&'a XmlClassificationCatalogWitness> {
+        let XmlClassificationWitness::Reference {
+            source,
+            reference_kind,
+            target,
+            value_span,
+            decoded_value_digest,
+        } = selected
+        else {
+            return Err(error(ServiceErrorCode::InternalContractViolation));
+        };
+        let mut exact = None;
+        for witness in self
+            .references
+            .get(&(*source, *reference_kind))
+            .into_iter()
+            .flatten()
+        {
+            checkpoint(stop)?;
+            budget.charge(&(
+                "xml-type-shape-reference-join",
+                witness.component_id,
+                witness.reference.as_ref(),
+            ))?;
+            let reference = witness
+                .reference
+                .as_ref()
+                .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?;
+            // Support proves the retained source observation, not Unique resolution.
+            // Conflicts and substitution candidates must retain their raw evidence.
+            if reference.value_span() == value_span
+                && reference.decoded_value_digest() == *decoded_value_digest
+            {
+                let mut candidate_found = false;
+                for candidate in reference.candidates() {
+                    checkpoint(stop)?;
+                    if candidate == target {
+                        candidate_found = true;
+                    }
+                }
+                if !candidate_found {
+                    continue;
+                }
+                if exact.replace(*witness).is_some() {
+                    return Err(error(ServiceErrorCode::InternalContractViolation));
+                }
+            }
+        }
+        exact.ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))
+    }
+
+    fn add_handle(
+        witness: &'a XmlClassificationCatalogWitness,
+        handles: &mut BTreeMap<StableHandleId, &'a XmlClassificationCatalogWitness>,
+        budget: &mut MetadataBudget<'_>,
+    ) -> ServiceResult<()> {
+        if let Some(previous) = handles.get(&witness.source_handle_id) {
+            if previous.raw_member_proposal_id != witness.raw_member_proposal_id
+                || previous.document != witness.document
+                || previous.content_digest != witness.content_digest
+                || previous.evidence_id != witness.evidence_id
+            {
+                return Err(error(ServiceErrorCode::InternalContractViolation));
+            }
+        } else {
+            budget.charge(&("xml-type-shape-closure-handle", witness.source_handle_id))?;
+            handles.insert(witness.source_handle_id, witness);
+        }
+        Ok(())
+    }
+
+    fn closure_support(
+        &self,
+        direct: &PlatformGraphProvenance<'_>,
+        lookup: &GraphProducerLookup<'_>,
+        row: &XmlSchemaTypeShapeRecord,
+        budget: &mut MetadataBudget<'_>,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Vec<XmlFingerprintRawSupport>> {
+        checkpoint(stop)?;
+        let mut handles = BTreeMap::new();
+        Self::add_handle(self.component(row.type_component())?, &mut handles, budget)?;
+        let mut root_witnessed = false;
+        for witness in row.witnesses() {
+            checkpoint(stop)?;
+            budget.charge(&("xml-type-shape-closure-witness", witness))?;
+            match witness {
+                XmlClassificationWitness::Component { component } => {
+                    root_witnessed |= *component == row.type_component();
+                    Self::add_handle(self.component(*component)?, &mut handles, budget)?;
+                }
+                XmlClassificationWitness::Parent { child, parent } => {
+                    let child = self.component(*child)?;
+                    if child.component_parent != Some(*parent) {
+                        return Err(error(ServiceErrorCode::InternalContractViolation));
+                    }
+                    Self::add_handle(child, &mut handles, budget)?;
+                    Self::add_handle(self.component(*parent)?, &mut handles, budget)?;
+                }
+                XmlClassificationWitness::Reference { source, target, .. } => {
+                    Self::add_handle(self.component(*source)?, &mut handles, budget)?;
+                    Self::add_handle(self.component(*target)?, &mut handles, budget)?;
+                    let reference = self.reference(witness, budget, stop)?;
+                    Self::add_handle(reference, &mut handles, budget)?;
+                }
+            }
+        }
+        if !root_witnessed {
+            return Err(error(ServiceErrorCode::InternalContractViolation));
+        }
+        // Includes unresolved/conflicting observations AND incoming substitution
+        // controls. Never assume each reference source is a selected type child.
+        for observation in row.references() {
+            checkpoint(stop)?;
+            budget.charge(&("xml-type-shape-reference-observation", observation))?;
+            let mut exact = None;
+            for witness in self
+                .references
+                .get(&(observation.source(), observation.kind()))
+                .into_iter()
+                .flatten()
+            {
+                checkpoint(stop)?;
+                budget.charge(&(
+                    "xml-type-shape-reference-observation-join",
+                    witness.component_id,
+                    witness.reference.as_ref(),
+                ))?;
+                if witness.reference.as_ref() != Some(observation) {
+                    continue;
+                }
+                if exact.replace(*witness).is_some() {
+                    return Err(error(ServiceErrorCode::InternalContractViolation));
+                }
+            }
+            Self::add_handle(
+                exact.ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?,
+                &mut handles,
+                budget,
+            )?;
+            Self::add_handle(self.component(observation.source())?, &mut handles, budget)?;
+            for candidate in observation.candidates() {
+                checkpoint(stop)?;
+                Self::add_handle(self.component(*candidate)?, &mut handles, budget)?;
+            }
+        }
+        for omission in row.omissions() {
+            checkpoint(stop)?;
+            budget.charge(&("xml-type-shape-omission-support", omission))?;
+            Self::add_handle(self.component(omission.component())?, &mut handles, budget)?;
+        }
+        let mut raw = Vec::new();
+        for witness in handles.values() {
+            checkpoint(stop)?;
+            // Existing exact raw partition/member/generation/evidence consumer.
+            raw.push(raw_support(direct, lookup, witness, budget, stop)?);
+        }
+        budget.charge(&raw)?;
+        Ok(raw)
+    }
+}
+
+impl XmlFingerprintRawSupport {
+    #[must_use]
+    pub const fn assertion(&self) -> &GraphAssertionRef {
+        &self.assertion
+    }
+    #[must_use]
+    pub const fn source(&self) -> &SourceHandle {
+        &self.source
+    }
+    #[must_use]
+    pub const fn evidence(&self) -> &EvidenceRecord {
+        &self.evidence
+    }
 }
 
 /// One operation ledger: no per-record allowance, cap reset, or charge discount.

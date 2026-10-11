@@ -978,7 +978,7 @@ fn collect_source_graph_proposals_for_recipe(
 ) -> ProjectResult<CollectedSourceGraph> {
     crate::analyzer::checkpoint(stop)?;
     project.snapshot().validate()?;
-    diagnostics.bind(project);
+    diagnostics.bind(project, stop)?;
     crate::analyzer::checkpoint(stop)?;
     let config = project.configuration();
     let profile = source_graph_profile(config);

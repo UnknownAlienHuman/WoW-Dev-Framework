@@ -195,3 +195,18 @@ has no measurement receipt, even when an earlier stage completed internally.
 
 These operations are measurement prerequisites in Issue #113; they do not close
 the measured-profile or W17 application/candidate/Skeleton acceptance gates.
+
+For the separate native graph build, existing `wow graph build --config <project.json>
+--project <ProjectId> --diagnostics` emits bounded nonsemantic JSON on stderr.
+Before collector metadata charges, its held native report supplies three input
+scalars: `function_total_metadata_estimate_bytes` sums every
+`4 * path.len() + 512` function charge; `call_base_total_metadata_estimate_bytes`
+sums every `2 * path.len() + 256` call base charge; and
+`callable_base_total_metadata_estimate_bytes` is their checked sum. The explicit
+counting method is `conservative_estimate`; exact sums of these formulas are
+neither serialized artifact sizes nor allocation/peak-memory measurements.
+Existing input populations and phase counters remain separate. Conditional Main
+declarations from call arguments are unmeasured by these base sums; later stages
+retain `not_evaluated` until executed. Cancellation never publishes a partial sum
+as a total; absent reports or unfinished sums remain null. This adds no source
+census result, graph/replay/configuration identity or corpus-capacity qualification.
