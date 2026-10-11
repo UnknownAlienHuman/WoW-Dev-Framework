@@ -214,6 +214,41 @@ catalog is frozen: it can reopen its retained records but refuses v13 before an
 operation or `Current` mutation. Choose finite values from observed owner guards;
 this selector does not establish complete-corpus fit or memory qualification.
 
+### Explicit source graph budgets
+
+Schema `/2` accepts `project_budgets.source_graph` only with genuine native
+retained packages and an explicit platform graph selection. Its required positive
+`max_metadata_bytes` selects the existing metadata allowance. Omission preserves
+the ordinary 4-MiB limit; metadata-only selection retains native replay `/14`.
+
+The optional `xml_counts` child selects the complete retained XML projection
+preflight populations, including invalid declarations and unresolved or cyclic
+`Inherits` records. Both positive `u64` fields are required:
+
+```json
+"source_graph": {
+  "max_metadata_bytes": 67108864,
+  "xml_counts": {
+    "max_declarations": 32768,
+    "max_inheritance_references": 8192
+  }
+}
+```
+
+These are explicit example selections, not a full-corpus capacity guarantee.
+Without `xml_counts`, the previous serialized bytes and declaration/inheritance
+limits of 4096/8192 remain. Explicit null, missing required counts, zero, invalid
+types, unknown fields and duplicate keys refuse. The selected child binds the
+configuration and native replay `/15`, stored as `live-replay.v15`; numeric
+changes stay within that shape and must match the captured configuration digest
+on hydration. The actual previous v14 catalog remains frozen and can reopen its
+populated records while refusing v15 before operation or `Current` mutation.
+
+This component does not widen XML-fact/containment, global node/edge/assertion,
+metadata, analyzer, map, output or store limits. Every independent guard must
+still admit the operation. Native preflight success alone is not complete graph,
+persistence or runtime acceptance.
+
 ## Scope
 
 `graph build` writes an available native owner failure explanation to stderr.

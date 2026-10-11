@@ -11,7 +11,10 @@ fn selected(config: &mut Value, policy: ProjectBudgetPolicy) -> TestResult {
 
 #[test]
 fn graph_metadata_budget_is_strict_and_requires_retained_graph_selection() -> TestResult {
-    use wow_project::{ProjectConfigurationBuilder, graph::SourceGraphBudget};
+    use wow_project::{
+        ProjectConfigurationBuilder,
+        graph::{SourceGraphBudget, SourceGraphXmlCountBudget},
+    };
     let ordinary = ProjectBudgetPolicy::new(8, 1024 * 1024, 1024 * 1024, 8, 512, 16, 64 * 1024)?;
     let absent = serde_json::to_value(ordinary)?;
     assert!(absent.get("source_graph").is_none());
@@ -20,12 +23,49 @@ fn graph_metadata_budget_is_strict_and_requires_retained_graph_selection() -> Te
         ordinary
     );
     let budget = SourceGraphBudget::new(32 * 1024 * 1024)?;
+    assert_eq!(
+        serde_json::to_string(&budget)?,
+        "{\"max_metadata_bytes\":33554432}"
+    );
+    assert_eq!(budget.xml_counts(), None);
     let selected_policy = ordinary.with_source_graph_budget(budget);
     assert_eq!(
         serde_json::from_value::<ProjectBudgetPolicy>(serde_json::to_value(selected_policy)?)?,
         selected_policy
     );
     assert!(SourceGraphBudget::new(0).is_err());
+    let xml = SourceGraphXmlCountBudget::new(32768, 8192)?;
+    let xml_budget = budget.with_xml_counts(xml);
+    assert_eq!(
+        serde_json::from_value::<SourceGraphBudget>(serde_json::to_value(xml_budget)?)?,
+        xml_budget
+    );
+    assert!(SourceGraphXmlCountBudget::new(0, 8192).is_err());
+    assert!(SourceGraphXmlCountBudget::new(32768, 0).is_err());
+    for value in [
+        Value::Null,
+        json!({}),
+        json!({"max_declarations":32768}),
+        json!({"max_inheritance_references":8192}),
+        json!({"max_declarations":0,"max_inheritance_references":8192}),
+        json!({"max_declarations":32768,"max_inheritance_references":0}),
+        json!({"max_declarations":-1,"max_inheritance_references":8192}),
+        json!({"max_declarations":1.5,"max_inheritance_references":8192}),
+        json!({"max_declarations":32768,"max_inheritance_references":8192,"unknown":1}),
+    ] {
+        let mut changed = serde_json::to_value(budget)?;
+        changed["xml_counts"] = value;
+        assert!(serde_json::from_value::<SourceGraphBudget>(changed).is_err());
+    }
+    for wire in [
+        "{\"max_declarations\":1,\"max_declarations\":2,\"max_inheritance_references\":1}",
+        "{\"max_declarations\":1,\"max_inheritance_references\":1,\"max_inheritance_references\":2}",
+    ] {
+        assert!(serde_json::from_str::<SourceGraphXmlCountBudget>(wire).is_err());
+    }
+    assert!(serde_json::from_str::<SourceGraphBudget>(
+        "{\"max_metadata_bytes\":1,\"xml_counts\":{\"max_declarations\":1,\"max_inheritance_references\":1},\"xml_counts\":{\"max_declarations\":2,\"max_inheritance_references\":1}}"
+    ).is_err());
     for value in [
         Value::Null,
         json!({}),
@@ -52,6 +92,7 @@ fn graph_metadata_budget_is_strict_and_requires_retained_graph_selection() -> Te
     );
     assert!(serde_json::from_str::<ProjectBudgetPolicy>(&duplicate).is_err());
 
+    let selected_policy = selected_policy.with_source_graph_budget(xml_budget);
     let (root, mut config) = fixture()?;
     let path = root.0.join("project.json");
     let stop = AtomicBool::new(false);
@@ -117,6 +158,15 @@ fn selected_graph_metadata_budget_replay14_and_frozen_v13_store_preserve_current
     ))
 }
 
+#[test]
+fn selected_xml_count_budget_replay15_and_frozen_v14_store_preserve_current() -> TestResult {
+    selected_budget_replay_and_frozen_store_preserve_current(Some(
+        wow_project::graph::SourceGraphBudget::new(32 * 1024 * 1024)?.with_xml_counts(
+            wow_project::graph::SourceGraphXmlCountBudget::new(32768, 8192)?,
+        ),
+    ))
+}
+
 fn selected_budget_replay_and_frozen_store_preserve_current(
     graph_budget: Option<wow_project::graph::SourceGraphBudget>,
 ) -> TestResult {
@@ -135,16 +185,46 @@ fn selected_budget_replay_and_frozen_store_preserve_current(
     let plain = FunctionCallBudget::new(64, 16, 16, 16, 32, 64 * 1024)?;
     let component = GlobalAccessBudget::new(1024, 128 * 1024)?;
     let nested = plain.with_global_access_budget(component);
+    let has_xml = graph_budget.is_some_and(|budget| budget.xml_counts().is_some());
+    let old_graph_budget = if has_xml {
+        Some(wow_project::graph::SourceGraphBudget::new(
+            graph_budget.ok_or("graph budget")?.max_metadata_bytes(),
+        )?)
+    } else {
+        None
+    };
+    let (old_schema, new_schema, frozen_schemas) = if has_xml {
+        (
+            "wow-project/native-project-replay/14",
+            "wow-project/native-project-replay/15",
+            publication::STORAGE_SCHEMAS_V14,
+        )
+    } else if graph_budget.is_some() {
+        (
+            "wow-project/native-project-replay/13",
+            "wow-project/native-project-replay/14",
+            publication::STORAGE_SCHEMAS_V13,
+        )
+    } else {
+        (
+            "wow-project/native-project-replay/12",
+            "wow-project/native-project-replay/13",
+            publication::STORAGE_SCHEMAS_V12,
+        )
+    };
     let old_sidecar = if graph_budget.is_some() {
         nested
     } else {
         plain
     };
-    let policy = ordinary
+    let mut policy = ordinary
         .bundle
         .configuration()
         .budget_policy()
         .with_function_call_budget(old_sidecar);
+    if let Some(budget) = old_graph_budget {
+        policy = policy.with_source_graph_budget(budget);
+    }
     selected(&mut config, policy)?;
     write_json(&root, "project.json", &config)?;
     let old_input = LocalProjectInput::from_config_path(&path, &stop)?;
@@ -173,14 +253,7 @@ fn selected_budget_replay_and_frozen_store_preserve_current(
         .find(|r| r.key() == "live.project.replay")
         .ok_or("old replay")?
         .decode()?;
-    assert_eq!(
-        serde_json::to_value(&old_replay)?["schema"],
-        if graph_budget.is_some() {
-            "wow-project/native-project-replay/13"
-        } else {
-            "wow-project/native-project-replay/12"
-        }
-    );
+    assert_eq!(serde_json::to_value(&old_replay)?["schema"], old_schema);
 
     let new_policy = match graph_budget {
         Some(budget) => policy.with_source_graph_budget(budget),
@@ -233,14 +306,7 @@ fn selected_budget_replay_and_frozen_store_preserve_current(
         .ok_or("new replay")?
         .decode()?;
     let wire = serde_json::to_value(&replay)?;
-    assert_eq!(
-        wire["schema"],
-        if graph_budget.is_some() {
-            "wow-project/native-project-replay/14"
-        } else {
-            "wow-project/native-project-replay/13"
-        }
-    );
+    assert_eq!(wire["schema"], new_schema);
     assert_eq!(
         wire["configuration"]["budgets"]["function_calls"],
         serde_json::to_value(nested)?
@@ -270,11 +336,7 @@ fn selected_budget_replay_and_frozen_store_preserve_current(
         publication::STORAGE_CHECK,
     ];
     let mut schemas = wow_graph::GraphPartitionSnapshot::STORAGE_SCHEMAS.to_vec();
-    schemas.extend_from_slice(if graph_budget.is_some() {
-        publication::STORAGE_SCHEMAS_V13
-    } else {
-        publication::STORAGE_SCHEMAS_V12
-    });
+    schemas.extend_from_slice(frozen_schemas);
     let old_catalog = RecordCatalog::new(&schemas, &checks)?;
     let old_root = root.0.join("frozen-store");
     let mut old =
@@ -293,6 +355,13 @@ fn selected_budget_replay_and_frozen_store_preserve_current(
         &stop,
     )?;
     let pair = AcquiredProjectPair::read(&read, &stop)?;
+    assert_eq!(
+        pair.project()
+            .configuration()
+            .budget_policy()
+            .source_graph_budget(),
+        old_graph_budget
+    );
     assert_eq!(
         pair.project()
             .configuration()
@@ -329,6 +398,18 @@ fn selected_budget_replay_and_frozen_store_preserve_current(
     drop(old);
     let live_old = LiveProjectStore::open_in_namespace(&old_root, &selection)?;
     let old_read = live_old.read_in_namespace(&selection, &ReadSelector::Current, &stop)?;
+    assert_eq!(
+        old_read
+            .project()
+            .configuration()
+            .budget_policy()
+            .source_graph_budget(),
+        old_graph_budget
+    );
+    assert_eq!(
+        old_read.project().snapshot_id(),
+        old_replay.hydrate(&stop)?.snapshot_id()
+    );
     assert_eq!(
         old_read
             .project()
@@ -375,14 +456,46 @@ fn selected_budget_replay_and_frozen_store_preserve_current(
     drop(store);
     let live = LiveProjectStore::open_in_namespace(&new_root, &selection)?;
     let read = live.read_in_namespace(&selection, &ReadSelector::Current, &stop)?;
+    assert_eq!(
+        read.project()
+            .configuration()
+            .budget_policy()
+            .source_graph_budget(),
+        graph_budget
+    );
     assert_eq!(read.project().snapshot_id(), reopened.snapshot_id());
     assert_eq!(
         read.project().snapshot().analyzer_binding(),
         reopened.snapshot().analyzer_binding()
     );
-    for mutation in 0..5 {
+    for mutation in 0..if has_xml { 6 } else { 5 } {
         let mut changed = wire.clone();
-        if graph_budget.is_some() {
+        if has_xml {
+            match mutation {
+                0 => changed["schema"] = json!(old_schema),
+                1 => {
+                    changed["configuration"]["budgets"]["source_graph"]
+                        .as_object_mut()
+                        .ok_or("graph budget")?
+                        .remove("xml_counts");
+                }
+                2 => {
+                    changed["configuration"]["budgets"]["source_graph"]["xml_counts"]["max_declarations"] =
+                        json!(32769)
+                }
+                3 => {
+                    changed["configuration"]["budgets"]["source_graph"]["xml_counts"]["max_inheritance_references"] =
+                        json!(0)
+                }
+                4 => {
+                    changed["configuration"]["budgets"]["source_graph"]["xml_counts"] = Value::Null
+                }
+                _ => {
+                    changed["configuration"]["budgets"]["source_graph"]["xml_counts"]["max_inheritance_references"] =
+                        json!(8193)
+                }
+            }
+        } else if graph_budget.is_some() {
             match mutation {
                 0 => changed["schema"] = json!("wow-project/native-project-replay/13"),
                 1 => {
@@ -425,8 +538,8 @@ fn selected_budget_replay_and_frozen_store_preserve_current(
             }
         }
         let decoded = ProjectReplay::from_json(&serde_json::to_vec(&changed)?, &stop);
-        if graph_budget.is_some() && mutation == 2 {
-            // Numeric drift still has the v14 shape. Hydration must reject the
+        if graph_budget.is_some() && (mutation == 2 || has_xml && mutation == 5) {
+            // Numeric drift keeps the selected shape. Hydration must reject the
             // changed configuration identity instead of a schema mismatch.
             assert!(decoded?.hydrate(&stop).is_err());
         } else {

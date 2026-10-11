@@ -9,6 +9,9 @@ use wow_core::{CanonicalResult, ContentDigest};
 pub(super) const MAX_DECLARATIONS: usize = 4096;
 pub(super) const MAX_INHERITANCE_REFERENCES: usize = 8192;
 
+#[cfg(test)]
+mod tests;
+
 /// Exact source occurrences stay distinct even when their display names coincide.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ProjectGraphXmlDeclaration {
@@ -110,6 +113,54 @@ fn target<'a>(
     Ok(Ok(target.occurrence_id.as_str()))
 }
 
+fn count_error(declarations: u128, inheritance: u128, limits: (u64, u64)) -> ProjectError {
+    ProjectError::new(
+        ProjectErrorCode::SourceBudgetExceeded,
+        ProjectPhase::View,
+        format!(
+            "source graph XML counts exceed their bounded profile: declarations {declarations}/{}, inheritance references {inheritance}/{}",
+            limits.0, limits.1,
+        ),
+    )
+}
+
+fn check_counts<'a>(
+    plans: impl IntoIterator<Item = &'a ProjectLoadPlan>,
+    budget: Option<SourceGraphXmlCountBudget>,
+    stop: &AtomicBool,
+) -> ProjectResult<()> {
+    let limits = budget.map_or(
+        (MAX_DECLARATIONS as u64, MAX_INHERITANCE_REFERENCES as u64),
+        |budget| {
+            (
+                budget.max_declarations(),
+                budget.max_inheritance_references(),
+            )
+        },
+    );
+    let mut declarations = 0u64;
+    let mut inheritance = 0u64;
+    for plan in plans {
+        crate::analyzer::checkpoint(stop)?;
+        let report = plan.xml_references();
+        let attempted = declarations as u128 + report.declarations().len() as u128;
+        declarations = u64::try_from(attempted)
+            .map_err(|_| count_error(attempted, inheritance.into(), limits))?;
+        for reference in report.references() {
+            crate::analyzer::checkpoint(stop)?;
+            if reference.kind == XmlReferenceKind::Inherits {
+                inheritance = inheritance.checked_add(1).ok_or_else(|| {
+                    count_error(declarations.into(), inheritance as u128 + 1, limits)
+                })?;
+            }
+        }
+        if declarations > limits.0 || inheritance > limits.1 {
+            return Err(count_error(declarations.into(), inheritance.into(), limits));
+        }
+    }
+    Ok(())
+}
+
 pub(super) fn project(
     project: &ProjectView,
     file_ids: &BTreeMap<&str, String>,
@@ -126,42 +177,15 @@ pub(super) fn project(
         return Ok(output);
     }
     // Bound the complete operation before retaining any package's proposals.
-    let mut declaration_count = 0usize;
-    let mut inheritance_count = 0usize;
-    for scope in &scopes {
-        crate::analyzer::checkpoint(stop)?;
-        let report = scope.plan().xml_references();
-        declaration_count = declaration_count
-            .checked_add(report.declarations().len())
-            .ok_or_else(|| {
-                resource_exhausted(
-                    "XML declarations",
-                    declaration_count as u128 + report.declarations().len() as u128,
-                    MAX_DECLARATIONS,
-                )
-            })?;
-        for reference in report.references() {
-            crate::analyzer::checkpoint(stop)?;
-            if reference.kind == XmlReferenceKind::Inherits {
-                inheritance_count = inheritance_count.checked_add(1).ok_or_else(|| {
-                    resource_exhausted(
-                        "XML inheritance references",
-                        inheritance_count as u128 + 1,
-                        MAX_INHERITANCE_REFERENCES,
-                    )
-                })?;
-            }
-        }
-        if declaration_count > MAX_DECLARATIONS || inheritance_count > MAX_INHERITANCE_REFERENCES {
-            return Err(ProjectError::new(
-                ProjectErrorCode::SourceBudgetExceeded,
-                ProjectPhase::View,
-                format!(
-                    "source graph XML counts exceed their bounded profile: declarations {declaration_count}/{MAX_DECLARATIONS}, inheritance references {inheritance_count}/{MAX_INHERITANCE_REFERENCES}",
-                ),
-            ));
-        }
-    }
+    check_counts(
+        scopes.iter().map(|scope| scope.plan()),
+        project
+            .configuration()
+            .budget_policy()
+            .source_graph_budget()
+            .and_then(SourceGraphBudget::xml_counts),
+        stop,
+    )?;
     for scope in scopes {
         let plan = scope.plan();
         let report = plan.xml_references();

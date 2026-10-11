@@ -27,6 +27,7 @@ pub const STORAGE_SCHEMAS: &[&str] = &[
     "wow-project.live-replay.v12",
     "wow-project.live-replay.v13",
     "wow-project.live-replay.v14",
+    "wow-project.live-replay.v15",
     "wow-project.live-pair.v1",
 ];
 /// Exact catalog of already published physical-input epochs. It is never widened
@@ -154,9 +155,28 @@ pub const STORAGE_SCHEMAS_V13: &[&str] = &[
     "wow-project.live-replay.v13",
     "wow-project.live-pair.v1",
 ];
+/// Frozen actual catalog before the optional native XML preflight count component.
+pub const STORAGE_SCHEMAS_V14: &[&str] = &[
+    "wow-project.live-replay.v1",
+    "wow-project.live-replay.v2",
+    "wow-project.live-replay.v3",
+    "wow-project.live-replay.v4",
+    "wow-project.live-replay.v5",
+    "wow-project.live-replay.v6",
+    "wow-project.live-replay.v7",
+    "wow-project.live-replay.v8",
+    "wow-project.live-replay.v9",
+    "wow-project.live-replay.v10",
+    "wow-project.live-replay.v11",
+    "wow-project.live-replay.v12",
+    "wow-project.live-replay.v13",
+    "wow-project.live-replay.v14",
+    "wow-project.live-pair.v1",
+];
 /// Exact catalogs admitted by open/recovery/migration. Never widen a retained epoch.
 pub const STORAGE_SCHEMA_CATALOGS: &[&[&str]] = &[
     STORAGE_SCHEMAS,
+    STORAGE_SCHEMAS_V14,
     STORAGE_SCHEMAS_V13,
     STORAGE_SCHEMAS_V12,
     STORAGE_SCHEMAS_V10,
@@ -308,6 +328,7 @@ impl AcquiredProjectPair {
                 | "wow-project.live-replay.v12"
                 | "wow-project.live-replay.v13"
                 | "wow-project.live-replay.v14"
+                | "wow-project.live-replay.v15"
         ) {
             return Err(invalid());
         }

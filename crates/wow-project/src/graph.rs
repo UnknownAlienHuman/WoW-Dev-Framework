@@ -1,7 +1,7 @@
 //! Direct source/load/XML proposals. No recognizer inference or graph publication.
 mod axes;
 mod budget;
-pub use budget::SourceGraphBudget;
+pub use budget::{SourceGraphBudget, SourceGraphXmlCountBudget};
 mod derivations;
 pub use axes::source_graph_axis_profile;
 pub const SOURCE_GRAPH_REGISTRY_ID: &str = "wow-project.source-load";

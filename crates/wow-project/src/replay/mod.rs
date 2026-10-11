@@ -35,6 +35,7 @@ const RETAINED_PLATFORM_REPLAY_SCHEMA: &str = "wow-project/native-project-replay
 const FUNCTION_BUDGET_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/12";
 const GLOBAL_ACCESS_BUDGET_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/13";
 const GRAPH_METADATA_BUDGET_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/14";
+const GRAPH_XML_COUNT_BUDGET_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/15";
 const MAX_FILES: usize = 8192;
 const MAX_LIBRARIES: usize = 64;
 const MAX_FILE_BYTES: usize = 16 * 1024 * 1024;
@@ -271,8 +272,8 @@ impl ProjectReplay {
         };
         let platform_schema =
             if platform_owner.is_some_and(|owner| owner.retention_limits().is_some()) {
-                if configuration.source_graph_budget().is_some() {
-                    GRAPH_METADATA_BUDGET_REPLAY_SCHEMA
+                if let Some(budget) = configuration.source_graph_budget() {
+                    graph_budget_schema(budget)
                 } else if configuration
                     .function_call_budget()
                     .is_some_and(|budget| budget.global_access_budget().is_some())
@@ -344,14 +345,14 @@ impl ProjectReplay {
     }
     fn expected_schema(&self) -> ProjectResult<&'static str> {
         let schema = self.expected_base_schema()?;
-        if self.configuration.source_graph_budget().is_some() {
+        if let Some(budget) = self.configuration.source_graph_budget() {
             return if self
                 .platform
                 .as_ref()
                 .is_some_and(ReplayPlatform::has_retention_limits)
                 && self.configuration.platform_graph_profile().is_some()
             {
-                Ok(GRAPH_METADATA_BUDGET_REPLAY_SCHEMA)
+                Ok(graph_budget_schema(budget))
             } else {
                 Err(invalid())
             };
@@ -609,8 +610,16 @@ impl ProjectReplay {
             FUNCTION_BUDGET_REPLAY_SCHEMA => Ok("wow-project.live-replay.v12"),
             GLOBAL_ACCESS_BUDGET_REPLAY_SCHEMA => Ok("wow-project.live-replay.v13"),
             GRAPH_METADATA_BUDGET_REPLAY_SCHEMA => Ok("wow-project.live-replay.v14"),
+            GRAPH_XML_COUNT_BUDGET_REPLAY_SCHEMA => Ok("wow-project.live-replay.v15"),
             _ => Err(invalid()),
         }
+    }
+}
+fn graph_budget_schema(budget: crate::graph::SourceGraphBudget) -> &'static str {
+    if budget.xml_counts().is_some() {
+        GRAPH_XML_COUNT_BUDGET_REPLAY_SCHEMA
+    } else {
+        GRAPH_METADATA_BUDGET_REPLAY_SCHEMA
     }
 }
 /// Same envelope shape as a platform archive, with a four-byte null in place of
