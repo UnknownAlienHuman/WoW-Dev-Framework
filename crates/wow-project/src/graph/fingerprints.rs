@@ -19,6 +19,14 @@ use super::{PlatformGraphProvenance, producer_budget::ProducerBudget};
 use crate::{PlatformGraphProfile, ProjectError, ProjectErrorCode, ProjectPhase, ProjectResult};
 
 mod declaration;
+mod load_role;
+pub use load_role::{
+    FUNCTION_PACKAGE_LOAD_ROLE_RECIPE, FunctionPackageLoadRole, FunctionPackageLoadRoleComparable,
+    FunctionPackageLoadRoleComponent, FunctionPackageLoadRoleCoverage,
+    FunctionPackageLoadRoleFingerprint, FunctionPackageLoadRoleRecipe,
+    FunctionPackageLoadRoleSelection, FunctionPackageLoadRoleUnavailable,
+    FunctionPackageLoadRoleWitness, FunctionPackageLoadUnitRole,
+};
 mod shape;
 pub use declaration::{
     FunctionDeclaredHeader, FunctionDeclaredHeaderComponent, FunctionDeclaredHeaderFingerprint,
@@ -40,6 +48,10 @@ pub const BODY_SHAPE_FINGERPRINT_SCHEMA: &str =
     "wow-project/function-fingerprint-records/declared-syntax-and-body-shape/1";
 pub const BODY_SHAPE_FINGERPRINT_PROFILE: &str =
     "wow-project/function-fingerprint/declaration-body-shape/1";
+pub const SELECTED_COMPONENTS_FINGERPRINT_SCHEMA: &str =
+    "wow-project/function-fingerprint-records/selected-components/1";
+pub const SELECTED_COMPONENTS_FINGERPRINT_PROFILE: &str =
+    "wow-project/physical-function-components/selected/1";
 
 /// Local purpose: comparison component, not source/generation or manifest identity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -248,7 +260,7 @@ pub struct FunctionFingerprintRecord {
     signature: FunctionFingerprintUnavailable,
     declaration_shape: FunctionDeclarationShapeComponent,
     direct_neighborhood: FunctionFingerprintUnavailable,
-    package_load_role: FunctionFingerprintUnavailable,
+    package_load_role: FunctionPackageLoadRoleSelection,
     support: FunctionFingerprintSupport,
 }
 impl FunctionFingerprintRecord {
@@ -281,8 +293,8 @@ impl FunctionFingerprintRecord {
         self.direct_neighborhood
     }
     #[must_use]
-    pub const fn package_load_role(&self) -> FunctionFingerprintUnavailable {
-        self.package_load_role
+    pub const fn package_load_role(&self) -> &FunctionPackageLoadRoleSelection {
+        &self.package_load_role
     }
     #[must_use]
     pub const fn support(&self) -> &FunctionFingerprintSupport {
@@ -336,9 +348,28 @@ pub enum FunctionFingerprintCoverage {
 /// Serialize-only owned receipt: it survives moving/dropping the native owners.
 /// No composite, empty-neighborhood proof, removed-entity or equivalence output.
 #[derive(Debug, Serialize)]
+pub struct FunctionFingerprintComponentSelection {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    physical_declarations: Option<wow_emmy::function_calls::PhysicalFunctionDeclarationRecipe>,
+    package_load_role: FunctionPackageLoadRoleRecipe,
+}
+impl FunctionFingerprintComponentSelection {
+    pub const fn physical_declarations(
+        &self,
+    ) -> Option<wow_emmy::function_calls::PhysicalFunctionDeclarationRecipe> {
+        self.physical_declarations
+    }
+    pub const fn package_load_role(&self) -> FunctionPackageLoadRoleRecipe {
+        self.package_load_role
+    }
+}
+
+#[derive(Debug, Serialize)]
 pub struct FunctionFingerprintManifest {
     schema: &'static str,
     profile: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    selected_components: Option<FunctionFingerprintComponentSelection>,
     limits: FunctionFingerprintLimits,
     coverage: FunctionFingerprintCoverage,
     available_functions: usize,
@@ -348,6 +379,9 @@ pub struct FunctionFingerprintManifest {
     records: Vec<FunctionFingerprintRecord>,
 }
 impl FunctionFingerprintManifest {
+    pub const fn selected_components(&self) -> Option<&FunctionFingerprintComponentSelection> {
+        self.selected_components.as_ref()
+    }
     #[must_use]
     pub const fn limits(&self) -> FunctionFingerprintLimits {
         self.limits
@@ -439,7 +473,7 @@ struct BorrowedFunctionFingerprintRecord<'a> {
     signature: FunctionFingerprintUnavailable,
     declaration_shape: FunctionDeclarationShapeComponent,
     direct_neighborhood: FunctionFingerprintUnavailable,
-    package_load_role: FunctionFingerprintUnavailable,
+    package_load_role: FunctionPackageLoadRoleSelection,
     support: BorrowedFunctionFingerprintSupport<'a>,
 }
 
@@ -578,6 +612,27 @@ pub fn build_platform_function_fingerprints(
     direct: &PlatformGraphProvenance<'_>,
     selected_function_ids: &[&str],
     limits: FunctionFingerprintLimits,
+    stop: &AtomicBool,
+) -> ProjectResult<FunctionFingerprintManifest> {
+    build_selected_function_fingerprints(direct, selected_function_ids, limits, None, stop)
+}
+
+/// Select genuine native static load roles without changing the source/graph recipe.
+pub fn build_platform_function_fingerprints_with_load_roles(
+    direct: &PlatformGraphProvenance<'_>,
+    selected_function_ids: &[&str],
+    limits: FunctionFingerprintLimits,
+    recipe: FunctionPackageLoadRoleRecipe,
+    stop: &AtomicBool,
+) -> ProjectResult<FunctionFingerprintManifest> {
+    build_selected_function_fingerprints(direct, selected_function_ids, limits, Some(recipe), stop)
+}
+
+fn build_selected_function_fingerprints(
+    direct: &PlatformGraphProvenance<'_>,
+    selected_function_ids: &[&str],
+    limits: FunctionFingerprintLimits,
+    load_roles: Option<FunctionPackageLoadRoleRecipe>,
     stop: &AtomicBool,
 ) -> ProjectResult<FunctionFingerprintManifest> {
     crate::analyzer::checkpoint(stop)?;
@@ -814,7 +869,7 @@ pub fn build_platform_function_fingerprints(
             signature: FunctionFingerprintUnavailable::MissingSignature,
             declaration_shape: FunctionDeclarationShapeComponent::MissingShape,
             direct_neighborhood: FunctionFingerprintUnavailable::NotSelected,
-            package_load_role: FunctionFingerprintUnavailable::NotSelected,
+            package_load_role: FunctionPackageLoadRoleSelection::NotSelected,
             support: BorrowedFunctionFingerprintSupport {
                 entity_assertion: entity_ref,
                 incoming_ownership_assertion: ownership_ref,
@@ -832,14 +887,18 @@ pub fn build_platform_function_fingerprints(
     let declarations_selected = report.declaration_recipe().is_some();
     let body_shape_selected = report.declaration_recipe() == Some(wow_emmy::function_calls::PhysicalFunctionDeclarationRecipe::DeclaredSyntaxAndBodyShapeV1);
     let mut manifest = FunctionFingerprintManifest {
-        schema: if body_shape_selected {
+        schema: if load_roles.is_some() {
+            SELECTED_COMPONENTS_FINGERPRINT_SCHEMA
+        } else if body_shape_selected {
             BODY_SHAPE_FINGERPRINT_SCHEMA
         } else if declarations_selected {
             DECLARED_HEADER_FINGERPRINT_SCHEMA
         } else {
             FUNCTION_FINGERPRINT_SCHEMA
         },
-        profile: if body_shape_selected {
+        profile: if load_roles.is_some() {
+            SELECTED_COMPONENTS_FINGERPRINT_PROFILE
+        } else if body_shape_selected {
             BODY_SHAPE_FINGERPRINT_PROFILE
         } else if declarations_selected {
             DECLARED_HEADER_FINGERPRINT_PROFILE
@@ -847,6 +906,10 @@ pub fn build_platform_function_fingerprints(
             FUNCTION_FINGERPRINT_PROFILE
         },
         limits,
+        selected_components: load_roles.map(|recipe| FunctionFingerprintComponentSelection {
+            physical_declarations: report.declaration_recipe(),
+            package_load_role: recipe,
+        }),
         coverage: FunctionFingerprintCoverage::Partial,
         available_functions: report.functions().len(),
         binding,
@@ -872,7 +935,21 @@ pub fn build_platform_function_fingerprints(
         }
     }
     // Same cap, fresh exact output count including array/object framing, not a second allowance.
-    if body_shape_selected {
+    if load_roles.is_some() {
+        let rows =
+            load_role::build_package_load_role_components(direct, &manifest, &mut retained, stop)?;
+        if rows.len() != manifest.records.len() {
+            return Err(invalid());
+        }
+        for (record, row) in manifest.records.iter_mut().zip(rows) {
+            crate::analyzer::checkpoint(stop)?;
+            // The private producer returns the same strict native record order.
+            // The native producer precharged the complete owned row before this
+            // fixed-size allocation; unselected records keep a small enum.
+            record.package_load_role = FunctionPackageLoadRoleSelection::Selected(Box::new(row));
+        }
+    }
+    if body_shape_selected || load_roles.is_some() {
         retained.charge_serialized(&manifest, stop)?;
     } else {
         // Preserve the admitted older recipe's exact output-ceiling check.

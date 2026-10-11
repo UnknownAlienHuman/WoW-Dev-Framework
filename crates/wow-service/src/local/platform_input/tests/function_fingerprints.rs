@@ -1280,3 +1280,290 @@ fn selected_body_shape_ignores_trivia_and_payloads_but_retains_operator() -> Tes
     assert_ne!(operator.project_snapshot_id, base.project_snapshot_id);
     Ok(())
 }
+
+fn rewrite_load_role_toc(root: &FixtureRoot, config: &mut Value, toc: &str) -> TestResult {
+    // Refresh the existing synthetic fixture; this does not attest Git membership.
+    let mut manifest: Value =
+        serde_json::from_slice(&std::fs::read(root.0.join("manifest.json"))?)?;
+    let files = manifest["files"].as_array_mut().ok_or("manifest files")?;
+    let member = files
+        .iter_mut()
+        .find(|file| file["path"] == "UI/Fixture.toc")
+        .ok_or("fixture TOC member")?;
+    member["bytes"] = json!(toc.len());
+    member["content_sha256"] = json!(format!("{:x}", Sha256::digest(toc.as_bytes())));
+    let total = files
+        .iter()
+        .try_fold(0_u64, |sum, file| -> TestResult<u64> {
+            Ok(sum
+                .checked_add(file["bytes"].as_u64().ok_or("manifest member bytes")?)
+                .ok_or("manifest byte sum")?)
+        })?;
+    manifest["coverage"]["included_bytes"] = json!(total);
+    manifest
+        .as_object_mut()
+        .ok_or("manifest object")?
+        .remove("manifest_sha256");
+    manifest["manifest_sha256"] = json!(format!(
+        "{:x}",
+        Sha256::digest(wow_core::canonical_json_bytes(&manifest)?)
+    ));
+    std::fs::write(root.0.join("UI/Fixture.toc"), toc)?;
+    config["source"]["manifest"] =
+        serde_json::to_value(write_json(root, "manifest.json", &manifest)?)?;
+    config["source"]["origin"]["revision"] =
+        serde_json::to_value(PlatformSourceRevision::Fixture {
+            digest: digest(&serde_json::to_vec(&manifest)?),
+        })?;
+    write_json(root, "project.json", config)?;
+    Ok(())
+}
+
+struct PackageLoadRoleObservation {
+    role_digest:
+        ContentDigest<wow_project::graph::fingerprints::FunctionPackageLoadRoleFingerprint>,
+    source_digest: ContentDigest<wow_project::graph::fingerprints::FunctionSourceSpanFingerprint>,
+    source_bytes: Vec<u8>,
+    load_on_demand: wow_project::load::TocLoadOnDemandState,
+    phase: wow_project::load::ProjectPackageLoadPhase,
+    load_plan_digest: ContentDigest<CanonicalResult>,
+    main_plan_digest: ContentDigest<CanonicalResult>,
+    selected_toc_digest: ContentDigest<SourceContent>,
+    project_snapshot_id: Box<str>,
+}
+
+fn observe_fixture_package_load_role(
+    root: &FixtureRoot,
+    config: &mut Value,
+    toc: &str,
+    stop: &AtomicBool,
+) -> TestResult<PackageLoadRoleObservation> {
+    use crate::graph::FunctionPackageLoadRoleRecipe;
+    use wow_project::{
+        graph::fingerprints::{
+            FunctionPackageLoadRoleComponent, FunctionPackageLoadRoleCoverage,
+            FunctionPackageLoadRoleSelection, FunctionSourceSpanComponent,
+        },
+        load::{LoadRecordKind, ProjectPackageReachability},
+    };
+
+    rewrite_load_role_toc(root, config, toc)?;
+    let path = root.0.join("project.json");
+    let (project, request, _, _) = declaration_query(&path, stop)?;
+    assert_eq!(
+        project.configuration().physical_function_declarations(),
+        None
+    );
+    let packages = project
+        .configuration()
+        .platform_packages()
+        .ok_or("native package owners")?;
+    let load = packages.load_plan();
+    let main = packages.main_plan();
+    assert!(load.coverage().complete(), "{:?}", load.issues());
+    assert_eq!(load.packages().len(), 1);
+    assert_eq!(main.files().len(), 1);
+    let node = load.packages().first().ok_or("native package node")?;
+    let file = main.files().first().ok_or("native physical Main file")?;
+    assert!(node.selected_root);
+    assert_eq!(node.reachability, ProjectPackageReachability::Reachable);
+    assert_eq!(file.package, node.package);
+    assert_eq!(file.source_path, "main.lua");
+    let report = project
+        .snapshot()
+        .analyzer_binding()
+        .function_call_report()
+        .ok_or("native physical function report")?;
+    assert_eq!(report.declaration_recipe(), None);
+    let mut closures = report.functions().iter().filter(|fact| {
+        fact.kind() == SourceFunctionKind::Closure && fact.path() == file.project_path
+    });
+    let fact = closures.next().ok_or("physical fixture closure")?;
+    assert!(closures.next().is_none(), "one physical fixture closure");
+    let source_bytes = span_bytes(&project, fact)?.to_vec();
+    let recipe = FunctionPackageLoadRoleRecipe::SelectedPhysicalLuaV1;
+    let selection = FunctionFingerprintSelection::new(
+        vec![fact.fact_id().into()],
+        1,
+        source_bytes.len(),
+        METADATA_BYTES,
+    )?
+    .with_package_load_roles(recipe)?;
+    assert_eq!(selection.package_load_roles(), Some(recipe));
+    let request = request.with_function_fingerprints(selection)?;
+    let result = execute_graph_build(
+        LocalProjectInput::from_config_path(&path, stop)?,
+        &request,
+        stop,
+    )?;
+    assert_eq!(
+        result.status(),
+        GraphReadStatus::Partial,
+        "{:?}",
+        result.failure_message()
+    );
+    let result_wire = serde_json::to_value(&result)?;
+    assert_eq!(
+        result_wire["schema"],
+        "wow-service/graph-build-result/selected-function-components/1"
+    );
+    assert_eq!(
+        result_wire["request"]["schema"],
+        "wow-service/graph-build-request/selected-function-components/1"
+    );
+    let manifest = result
+        .function_fingerprints()
+        .ok_or("selected service load-role manifest")?;
+    assert_eq!(
+        manifest.schema(),
+        "wow-project/function-fingerprint-records/selected-components/1"
+    );
+    assert!(manifest.is_partial());
+    assert!(manifest.scope_conflicts().is_empty());
+    assert_eq!(manifest.records().len(), 1);
+    assert_eq!(
+        manifest.binding().project_snapshot_id(),
+        project.snapshot_id()
+    );
+    assert_eq!(
+        manifest.binding().function_analysis_id(),
+        report.analysis_id()
+    );
+    let selected = manifest
+        .selected_components()
+        .ok_or("component selection receipt")?;
+    assert_eq!(selected.physical_declarations(), None);
+    assert_eq!(selected.package_load_role(), recipe);
+    let selected_wire = serde_json::to_value(selected)?;
+    assert!(selected_wire.get("physical_declarations").is_none());
+    assert_eq!(
+        selected_wire["package_load_role"],
+        serde_json::to_value(recipe)?
+    );
+    let record = manifest
+        .records()
+        .first()
+        .ok_or("selected physical record")?;
+    assert_eq!(record.function_id(), fact.fact_id());
+    assert!(record.declared_header().is_none());
+    assert_eq!(
+        serde_json::to_value(record)?["declaration_shape"],
+        "missing_shape"
+    );
+    let FunctionPackageLoadRoleSelection::Selected(role) = record.package_load_role() else {
+        return Err("fixture package/load role was not selected".into());
+    };
+    assert_eq!(role.coverage(), FunctionPackageLoadRoleCoverage::Complete);
+    assert_eq!(role.native_load_coverage(), load.coverage());
+    assert_eq!(serde_json::to_value(recipe)?, role.recipe());
+    let FunctionPackageLoadRoleComponent::Comparable {
+        digest: role_digest,
+        value,
+    } = role.component()
+    else {
+        return Err("complete fixture package/load role was not comparable".into());
+    };
+    assert_eq!(value.selected_root(), node.selected_root);
+    assert_eq!(value.load_on_demand(), node.load_on_demand);
+    assert_eq!(value.package_phase(), node.phase);
+    assert_eq!(value.package_reachability(), node.reachability);
+    let witness = role.witness().ok_or("native package/load witness")?;
+    assert_eq!(witness.package_load_plan_digest(), load.digest());
+    assert_eq!(witness.package_main_plan_digest(), main.digest());
+    assert_eq!(witness.selected_plan_digest(), node.selected_plan_digest);
+    assert_eq!(witness.main_file(), file);
+    let selected_toc = node
+        .variants
+        .iter()
+        .find(|variant| variant.selected)
+        .ok_or("native selected TOC")?;
+    assert_eq!(witness.selected_toc(), selected_toc);
+    let mut units = load.units().iter().filter(|unit| {
+        unit.kind == LoadRecordKind::LuaFile
+            && unit.package == file.package
+            && unit.target == file.source_path
+    });
+    let unit = units.next().ok_or("native physical Lua load unit")?;
+    assert!(units.next().is_none(), "one physical Lua load occurrence");
+    assert_eq!(witness.load_units().len(), 1);
+    assert_eq!(witness.load_units().first(), Some(unit));
+    assert_eq!(value.lua_load_roles().len(), 1);
+    let group = value
+        .lua_load_roles()
+        .first()
+        .ok_or("typed Lua role group")?;
+    assert_eq!(group.phase(), unit.phase);
+    assert_eq!(group.reachability(), unit.reachability);
+    assert_eq!(group.bootstrap(), unit.bootstrap);
+    assert!(!group.bootstrap());
+    assert_eq!(group.occurrences(), 1);
+    let FunctionSourceSpanComponent::Available {
+        digest: source_digest,
+        byte_length,
+        ..
+    } = record.source_span()
+    else {
+        return Err("fixture source span was not available".into());
+    };
+    assert_eq!(usize::try_from(*byte_length)?, source_bytes.len());
+
+    Ok(PackageLoadRoleObservation {
+        role_digest: *role_digest,
+        source_digest: *source_digest,
+        source_bytes,
+        load_on_demand: value.load_on_demand(),
+        phase: value.package_phase(),
+        load_plan_digest: witness.package_load_plan_digest(),
+        main_plan_digest: witness.package_main_plan_digest(),
+        selected_toc_digest: witness.selected_toc().content_digest,
+        project_snapshot_id: project.snapshot_id().into(),
+    })
+}
+
+#[test]
+fn selected_package_load_role_tracks_lod_with_identical_physical_source() -> TestResult {
+    use wow_project::{
+        graph::fingerprints::FunctionPackageLoadRoleSelection,
+        load::{ProjectPackageLoadPhase, TocLoadOnDemandState},
+    };
+
+    let stop = AtomicBool::new(false);
+    let (root, mut config) = fixture()?;
+    config["graph_profile"] = serde_json::to_value(PlatformGraphProfile::DirectCapabilitiesV1(
+        PlatformGraphCapabilities::new(&[
+            PlatformGraphCapability::InventorySpansV1,
+            PlatformGraphCapability::StructuralRolesV1,
+        ])?,
+    ))?;
+    // Field-byte compatibility only; this is not a predecessor manifest/result freeze.
+    assert_eq!(
+        serde_json::to_vec(&FunctionPackageLoadRoleSelection::NotSelected)?.as_slice(),
+        br#""not_selected""#
+    );
+    // Interface is the explicit synthetic fixture target; the loaded XML stays out of this case.
+    let base = observe_fixture_package_load_role(
+        &root,
+        &mut config,
+        "## Interface: 120100\nmain.lua\n",
+        &stop,
+    )?;
+    assert_eq!(base.load_on_demand, TocLoadOnDemandState::NotDeclared);
+    assert_eq!(base.phase, ProjectPackageLoadPhase::Normal);
+    let lod = observe_fixture_package_load_role(
+        &root,
+        &mut config,
+        "## Interface: 120100\n## LoadOnDemand: 1\nmain.lua\n",
+        &stop,
+    )?;
+    assert_eq!(lod.load_on_demand, TocLoadOnDemandState::True);
+    assert_eq!(lod.phase, ProjectPackageLoadPhase::Deferred);
+    assert_ne!(lod.role_digest, base.role_digest);
+    assert_eq!(lod.source_bytes, base.source_bytes);
+    assert_eq!(lod.source_digest, base.source_digest);
+    assert_ne!(lod.load_plan_digest, base.load_plan_digest);
+    assert_ne!(lod.main_plan_digest, base.main_plan_digest);
+    assert_ne!(lod.selected_toc_digest, base.selected_toc_digest);
+    assert_ne!(lod.project_snapshot_id, base.project_snapshot_id);
+
+    Ok(())
+}

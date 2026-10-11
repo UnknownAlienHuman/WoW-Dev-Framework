@@ -18,7 +18,7 @@ mod assembly_budget;
 mod calls;
 mod construction;
 mod fingerprints;
-pub use fingerprints::FunctionFingerprintSelection;
+pub use fingerprints::{FunctionFingerprintSelection, FunctionPackageLoadRoleRecipe};
 mod xml_fingerprints;
 pub use xml_fingerprints::{
     XmlFingerprintManifest, XmlFingerprintRecord, XmlFingerprintSelection, XmlFingerprintTarget,
@@ -265,6 +265,14 @@ impl GraphBuildRequest {
     }
 
     fn select_component_schema(&mut self) {
+        if self
+            .function_fingerprints
+            .as_ref()
+            .is_some_and(|selection| selection.package_load_roles().is_some())
+        {
+            self.schema = "wow-service/graph-build-request/selected-function-components/1";
+            return;
+        }
         if self.physical_function_declarations == Some(wow_emmy::function_calls::PhysicalFunctionDeclarationRecipe::DeclaredSyntaxAndBodyShapeV1) {
             self.schema = body_shape_query_schemas(self.function_fingerprints.is_some(), self.xml_fingerprints.is_some()).0;
             return;
@@ -673,7 +681,9 @@ pub fn execute_graph_build_diagnosed(
     diagnostics.reset();
     let request_digest = super::hash(&bounded(request, super::GRAPH_REQUEST_MAX_BYTES)?);
     let mut result = GraphBuildResult {
-        schema: if request.physical_function_declarations == Some(wow_emmy::function_calls::PhysicalFunctionDeclarationRecipe::DeclaredSyntaxAndBodyShapeV1) {
+        schema: if request.function_fingerprints.as_ref().is_some_and(|selection| selection.package_load_roles().is_some()) {
+            "wow-service/graph-build-result/selected-function-components/1"
+        } else if request.physical_function_declarations == Some(wow_emmy::function_calls::PhysicalFunctionDeclarationRecipe::DeclaredSyntaxAndBodyShapeV1) {
             body_shape_query_schemas(request.function_fingerprints.is_some(), request.xml_fingerprints.is_some()).1
         } else if request.xml_fingerprints.is_some() {
             xml_query_schemas(

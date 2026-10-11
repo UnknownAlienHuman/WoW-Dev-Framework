@@ -32,8 +32,9 @@ or semantic-signature claim.
 
 `signature` and `declaration_shape` remain explicitly `missing_signature` and
 `missing_shape` until their reviewed typed owner facts and recipes are selected.
-Direct neighborhood and package/load role are `not_selected`; incoming ownership
-is eligibility/evidence support, not a complete evaluated neighborhood. There is
+Direct neighborhood is `not_selected`; package/load role stays `not_selected`
+unless explicitly selected below. Incoming ownership is eligibility/evidence
+support, not a complete evaluated neighborhood. There is
 no composite fingerprint while required components are unavailable. Manifest
 coverage is Partial even for an empty explicit selection.
 
@@ -132,6 +133,33 @@ corpus acceptance remains open; the named schema/profile and shape outcomes are
 not acceptance evidence. See
 [platform input](../../../apps/wow/PLATFORM_INPUT.md).
 
+## Selected physical Lua package/load role
+
+Select this optional query component with
+`FunctionFingerprintSelection::with_package_load_roles(FunctionPackageLoadRoleRecipe::SelectedPhysicalLuaV1)`.
+The wire field `package_load_roles` carries
+`wow-project/physical-function-package-load-role/1`. This selects comparison
+output; native configuration, analyzer report and replay remain unchanged.
+
+The selected manifest schema is
+`wow-project/function-fingerprint-records/selected-components/1`. Its explicit
+`selected_components` receipt retains optional native `physical_declarations`
+and the exact `package_load_role` recipe. Absence retains the previous manifest
+bytes and `not_selected` role output.
+
+Comparable data is static selected-package root status, known LoadOnDemand state,
+package phase/reachability and physical Lua role groups with exact occurrence
+multiplicity. Groups retain phase/reachability/bootstrap; multiplicity is neither
+function count nor runtime execution count. Exact package/selected-TOC variant,
+Main-file, load-unit and plan receipts remain witness data, outside comparison.
+There is no runtime-loaded, relative-order or filename/flavor inference.
+
+Incomplete native closure, scope conflicts, unknown LoadOnDemand or missing
+physical-file/load-unit joins remain unavailable with explicit coverage. The
+existing cumulative metadata ledger and cancellation cover inputs, retained
+witnesses/components and final output. Overall fingerprints remain Partial;
+final #118 acceptance is pending.
+
 ## Selection, support and bounds
 
 The query names strictly increasing exact current native function IDs and finite
@@ -205,6 +233,6 @@ native replay or the existing classification catalog. It adds no replay/catalog
 version and decoding output cannot construct native authority. See the
 [CLI query contract](../../../apps/wow/GRAPH_BUILD.md).
 
-Full signature/shape/neighborhood/load-role recipes, whole XML type shape, the genuine
+Remaining #118 component coverage, whole XML type shape, the genuine
 #116 candidate/Skeleton handoff, mutation freeze and selected real-corpus Tier A
 remain required by #118. A verified source-span checkpoint does not accept them.

@@ -89,6 +89,25 @@ Normalized structure proves no semantic signature or body equivalence; overall
 fingerprints remain Partial. Full component/corpus acceptance remains open; see
 [the component contract](../../crates/wow-project/e3/FUNCTION_FINGERPRINTS.md).
 
+For optional physical Lua package/load roles, `--fingerprints` uses selection
+schema `wow-service/function-fingerprint-selection/package-load-roles/1` and
+`package_load_roles: "wow-project/physical-function-package-load-role/1"` alongside
+the same exact sorted function IDs and positive finite limits. The typed selector
+is `FunctionFingerprintSelection::with_package_load_roles(FunctionPackageLoadRoleRecipe::SelectedPhysicalLuaV1)`.
+
+This query uses `wow-service/graph-build-request/selected-function-components/1`
+and `wow-service/graph-build-result/selected-function-components/1`. The request
+retains explicit native producer, function-query and XML-query fields; schema
+names do not enumerate their combinations. `function_fingerprints` uses manifest
+schema `wow-project/function-fingerprint-records/selected-components/1` with an
+explicit `selected_components` receipt: optional native `physical_declarations`
+and exact `package_load_role` recipe. Unselected query bytes remain unchanged;
+native configuration/report/replay and storage catalogs are untouched.
+
+Static role groups and exact native witnesses are described in
+[the component contract](../../crates/wow-project/e3/FUNCTION_FINGERPRINTS.md).
+Overall coverage stays Partial; final acceptance is pending.
+
 The first recipe exposes the exact source-span component with native support
 and separate generation/profile bindings. Missing signature/shape and unselected
 neighborhood/load-role remain explicit; equal digests do not prove identity or
