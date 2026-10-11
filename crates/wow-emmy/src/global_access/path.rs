@@ -71,9 +71,15 @@ pub(super) fn from_expr(
             }
             LuaExpr::IndexExpr(index) => {
                 reversed.push(index_key(&index, limits)?);
-                expr = index.get_prefix_expr().ok_or_else(invalid)?;
+                expr = index
+                    .get_prefix_expr()
+                    .ok_or_else(|| invalid("index expression has no prefix"))?;
             }
-            LuaExpr::ParenExpr(paren) => expr = paren.get_expr().ok_or_else(invalid)?,
+            LuaExpr::ParenExpr(paren) => {
+                expr = paren
+                    .get_expr()
+                    .ok_or_else(|| invalid("parenthesized path has no expression"))?
+            }
             _ => return Ok(None),
         }
     }
@@ -110,8 +116,10 @@ fn finish(
     current: LuaSyntaxNode,
     limits: &mut AccessBudget,
 ) -> EmmyMemberCallResult<(LuaSyntaxNode, SourcePath)> {
-    let expr = LuaExpr::cast(current.clone()).ok_or_else(invalid)?;
-    let path = from_expr(expr, limits)?.ok_or_else(invalid)?;
+    let expr = LuaExpr::cast(current.clone())
+        .ok_or_else(|| invalid("maximal access is not an expression"))?;
+    let path =
+        from_expr(expr, limits)?.ok_or_else(|| invalid("maximal access has no rooted path"))?;
     Ok((current, path))
 }
 
@@ -147,7 +155,11 @@ fn literal(
     for _ in 0..MAX_PATH_DEPTH {
         limits.step()?;
         match expr {
-            LuaExpr::ParenExpr(paren) => expr = paren.get_expr().ok_or_else(invalid)?,
+            LuaExpr::ParenExpr(paren) => {
+                expr = paren
+                    .get_expr()
+                    .ok_or_else(|| invalid("parenthesized key has no expression"))?
+            }
             LuaExpr::UnaryExpr(unary)
                 if !negative
                     && unary
@@ -155,7 +167,9 @@ fn literal(
                         .is_some_and(|op| op.syntax().text() == "-") =>
             {
                 negative = true;
-                expr = unary.get_expr().ok_or_else(invalid)?;
+                expr = unary
+                    .get_expr()
+                    .ok_or_else(|| invalid("unary key has no expression"))?;
             }
             LuaExpr::LiteralExpr(value) => {
                 return Ok(match value.get_literal() {

@@ -1,5 +1,5 @@
 //! Same-file lexical alias index. This is source provenance, not a runtime heap.
-use super::{AccessBudget, SourceAliasHop, budget, invalid, path};
+use super::{AccessBudget, SourceAliasHop, budget, invalid, path, source_name_decl};
 use crate::LuaWorkspaceFile;
 use crate::bindings::checkpoint;
 use crate::references::{EmmyMemberCallResult, ast_span};
@@ -45,7 +45,7 @@ impl AliasIndex {
                     {
                         limits.step()?;
                         let Some(LuaSemanticDeclId::LuaDecl(id)) = model
-                            .find_decl(name.syntax().clone().into(), SemanticDeclLevel::default())
+                            .find_decl(name.syntax().clone().into(), SemanticDeclLevel::NoTrace)
                         else {
                             continue;
                         };
@@ -53,7 +53,7 @@ impl AliasIndex {
                             .get_db()
                             .get_decl_index()
                             .get_decl(&id)
-                            .ok_or_else(invalid)?;
+                            .ok_or_else(|| invalid("alias declaration is absent from the index"))?;
                         if !declaration.is_local() || declaration.is_param() {
                             continue;
                         }
@@ -81,7 +81,7 @@ impl AliasIndex {
                             .insert(id, AliasCandidate { path, hop })
                             .is_some()
                         {
-                            return Err(invalid());
+                            return Err(invalid("duplicate lexical alias declaration"));
                         }
                     }
                 }
@@ -109,14 +109,12 @@ impl AliasIndex {
         file: &LuaWorkspaceFile,
         name: &LuaNameExpr,
     ) -> EmmyMemberCallResult<()> {
-        if let Some(LuaSemanticDeclId::LuaDecl(id)) =
-            model.find_decl(name.syntax().clone().into(), SemanticDeclLevel::default())
-        {
+        if let Some(LuaSemanticDeclId::LuaDecl(id)) = source_name_decl(model, name)? {
             let declaration = model
                 .get_db()
                 .get_decl_index()
                 .get_decl(&id)
-                .ok_or_else(invalid)?;
+                .ok_or_else(|| invalid("alias write declaration is absent from the index"))?;
             if declaration.is_local() && !declaration.is_param() {
                 if self.writes.len() >= MAX_ALIAS_DEFINITIONS && !self.writes.contains_key(&id) {
                     return Err(budget());

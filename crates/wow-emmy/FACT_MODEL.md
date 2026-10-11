@@ -497,5 +497,11 @@ rebinding is an explicit blocker. Parameters, implicit self, same-spelling
 shadowing locals and arbitrary call results are not global slots. These facts
 are source provenance only; consumers must not promote aliases above Possible.
 Ordinary E0 status/check collection and the separate local-flow report are unchanged.
+Source accesses use exact lexical reference IDs before the nontracing semantic
+fallback. Upstream navigation can trace function-valued aliases or substitute a
+method's implicit `self` with its receiver; neither is a source-cell identity.
+Implicit receiver parameters and their captured aliases stay outside global-slot
+projection. Explicit rooted-path locals, including a local named `self`, retain
+their alias spans and conservative reassignment blockers.
 See [the source-state route](../../apps/wow/GRAPH_BUILD.md#typed-literal-keys-and-lexical-aliases)
 for admission limits, serialization versions and deferred cases.

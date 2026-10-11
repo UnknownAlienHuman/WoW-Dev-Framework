@@ -774,7 +774,8 @@ pub(crate) fn collect(
         }
         let model = semantic_model(analysis, main_root, file)?;
         let aliases =
-            crate::global_access::AliasIndex::collect(&model, file, &mut access_budget, stop)?;
+            crate::global_access::AliasIndex::collect(&model, file, &mut access_budget, stop)
+                .map_err(|error| crate::global_access::at_path(error, file.path()))?;
         for ast in model.get_root().descendants::<LuaAst>() {
             checkpoint(stop)?;
             visit(&mut visits, limits.max_ast_visits())?;
@@ -790,7 +791,9 @@ pub(crate) fn collect(
                     &access_sources,
                     &aliases,
                     &mut access_budget,
-                )? {
+                )
+                .map_err(|error| crate::global_access::at_path(error, file.path()))?
+                {
                     global_accesses.push(access);
                 }
             }

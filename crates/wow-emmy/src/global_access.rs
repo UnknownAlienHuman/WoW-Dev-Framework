@@ -84,13 +84,31 @@ pub struct SourceAliasHop {
     pub first_reassignment: Option<SourceSpan>,
 }
 impl SourceAliasHop {
-    fn valid(&self) -> bool {
-        !self.name.is_empty()
-            && self.name.len() <= 1024
-            && contains(self.statement_span, self.declaration_span)
-            && contains(self.statement_span, self.initializer_span)
-            && self.declaration_span.byte_end() <= self.initializer_span.byte_start()
-            && self.first_reassignment.is_none_or(nonempty)
+    fn invalid_reason(&self) -> Option<&'static str> {
+        [
+            (
+                self.name.is_empty() || self.name.len() > 1024,
+                "invalid alias name",
+            ),
+            (
+                !contains(self.statement_span, self.declaration_span),
+                "alias statement does not contain its declaration",
+            ),
+            (
+                !contains(self.statement_span, self.initializer_span),
+                "alias statement does not contain its initializer",
+            ),
+            (
+                self.declaration_span.byte_end() > self.initializer_span.byte_start(),
+                "alias declaration follows its initializer",
+            ),
+            (
+                !self.first_reassignment.is_none_or(nonempty),
+                "empty alias reassignment span",
+            ),
+        ]
+        .into_iter()
+        .find_map(|(failed, reason)| failed.then_some(reason))
     }
 }
 fn nonempty(span: SourceSpan) -> bool {
@@ -190,35 +208,82 @@ impl SourceGlobalAccess {
         )
     }
     pub(crate) fn validate(&self, main: &str) -> EmmyMemberCallResult<()> {
-        if self.identity(main)? != self.fact_id
-            || self.keys.len() > MAX_PATH_DEPTH
-            || self.root_name.len() > 1024
-            || self.root_name.is_empty()
-            || self.keys.iter().any(|key| !key.valid())
-            || self.aliases.len() > MAX_ALIAS_DEPTH
-            || self.aliases.iter().any(|hop| !hop.valid())
-            || !contains(self.span, self.root_span)
-            || (self.resolution == GlobalAccessResolution::Unresolved) != self.declaration.is_none()
-            || (!self.is_alias() && self.alias_blocker.is_some())
-        {
-            return Err(invalid());
+        for (failed, reason) in [
+            (
+                self.identity(main)? != self.fact_id,
+                "fact identity mismatch",
+            ),
+            (
+                self.keys.len() > MAX_PATH_DEPTH,
+                "path depth exceeds profile",
+            ),
+            (
+                self.root_name.is_empty() || self.root_name.len() > 1024,
+                "invalid global root name",
+            ),
+            (
+                self.keys.iter().any(|key| !key.valid()),
+                "invalid literal key",
+            ),
+            (
+                self.aliases.len() > MAX_ALIAS_DEPTH,
+                "alias depth exceeds profile",
+            ),
+            (
+                !contains(self.span, self.root_span),
+                "access does not contain its physical root",
+            ),
+            (
+                (self.resolution == GlobalAccessResolution::Unresolved)
+                    != self.declaration.is_none(),
+                "resolution and declaration disagree",
+            ),
+            (
+                !self.is_alias() && self.alias_blocker.is_some(),
+                "alias blocker without an alias",
+            ),
+        ] {
+            if failed {
+                return Err(at_path(invalid(reason), &self.path));
+            }
+        }
+        for hop in &self.aliases {
+            if let Some(reason) = hop.invalid_reason() {
+                return Err(at_path(invalid(reason), &self.path));
+            }
         }
         let reassigned = self
             .aliases
             .iter()
             .any(|hop| hop.first_reassignment.is_some());
         match self.alias_blocker {
-            Some(AliasAccessBlocker::ReassignedBinding) if !reassigned => return Err(invalid()),
-            Some(AliasAccessBlocker::LocalBindingWrite) if self.kind == GlobalAccessKind::Read => {
-                return Err(invalid());
+            Some(AliasAccessBlocker::ReassignedBinding) if !reassigned => {
+                return Err(at_path(
+                    invalid("reassigned blocker without a reassignment"),
+                    &self.path,
+                ));
             }
-            None if reassigned => return Err(invalid()),
+            Some(AliasAccessBlocker::LocalBindingWrite) if self.kind == GlobalAccessKind::Read => {
+                return Err(at_path(
+                    invalid("local-write blocker on a read"),
+                    &self.path,
+                ));
+            }
+            None if reassigned => {
+                return Err(at_path(
+                    invalid("reassigned alias without a blocker"),
+                    &self.path,
+                ));
+            }
             _ => {}
         }
         let mut declarations = HashSet::new();
         for hop in &self.aliases {
             if !declarations.insert(hop.declaration_span) {
-                return Err(invalid());
+                return Err(at_path(
+                    invalid("duplicate alias declaration span"),
+                    &self.path,
+                ));
             }
         }
         if let Some(target) = &self.declaration
@@ -227,7 +292,10 @@ impl SourceGlobalAccess {
                 || self.resolution == GlobalAccessResolution::LibraryGlobal
                     && target.role != "library")
         {
-            return Err(invalid());
+            return Err(at_path(
+                invalid("global declaration role or workspace mismatch"),
+                &self.path,
+            ));
         }
         Ok(())
     }
@@ -237,6 +305,30 @@ pub(crate) struct AccessSource<'a> {
     pub workspace_id: &'a str,
     pub file: &'a LuaWorkspaceFile,
     pub is_main: bool,
+}
+
+/// Source provenance needs the lexical cell, not a navigation target obtained
+/// by tracing its value. In particular upstream semantic lookup substitutes an
+/// implicit method `self` with the receiver declaration, even with NoTrace.
+pub(super) fn source_name_decl(
+    model: &SemanticModel<'_>,
+    name: &LuaNameExpr,
+) -> EmmyMemberCallResult<Option<LuaSemanticDeclId>> {
+    let db = model.get_db();
+    if let Some(id) = db
+        .get_reference_index()
+        .get_local_reference(&model.get_file_id())
+        .and_then(|references| references.get_decl_id(&name.get_range()))
+    {
+        let declaration = db
+            .get_decl_index()
+            .get_decl(&id)
+            .ok_or_else(|| invalid("lexical declaration is absent from the index"))?;
+        if declaration.is_local() || declaration.is_implicit_self() {
+            return Ok(Some(LuaSemanticDeclId::LuaDecl(id)));
+        }
+    }
+    Ok(model.find_decl(name.syntax().clone().into(), SemanticDeclLevel::NoTrace))
 }
 
 /// Follow only exact lexical declaration IDs and rooted-path initializers. No
@@ -262,11 +354,13 @@ pub(crate) fn collect_one(
     let mut alias_blocker = None;
     let (root_name, resolution, declaration) = loop {
         limits.step()?;
-        let spelling = root.get_name_text().ok_or_else(invalid)?;
+        let spelling = root
+            .get_name_text()
+            .ok_or_else(|| invalid("root expression has no name"))?;
         if spelling.is_empty() || spelling.len() > 1024 {
             return Err(budget());
         }
-        let found = model.find_decl(root.syntax().clone().into(), SemanticDeclLevel::default());
+        let found = source_name_decl(model, &root)?;
         let Some(LuaSemanticDeclId::LuaDecl(id)) = found else {
             break (spelling, GlobalAccessResolution::Unresolved, None);
         };
@@ -274,10 +368,10 @@ pub(crate) fn collect_one(
             .get_db()
             .get_decl_index()
             .get_decl(&id)
-            .ok_or_else(invalid)?;
+            .ok_or_else(|| invalid("resolved declaration is absent from the index"))?;
         if declaration.is_global() {
             if declaration.get_name() != spelling {
-                return Err(invalid());
+                return Err(invalid("global declaration name differs from its use"));
             }
             let Some(source) = sources.get(&id.file_id) else {
                 break (spelling, GlobalAccessResolution::Unresolved, None);
@@ -303,7 +397,7 @@ pub(crate) fn collect_one(
             return Ok(None);
         };
         if !visited.insert(candidate.hop.declaration_span) {
-            return Err(invalid());
+            return Err(invalid("alias traversal repeats a declaration span"));
         }
         if hops.len() >= MAX_ALIAS_DEPTH {
             return Err(budget());
@@ -376,10 +470,17 @@ pub(crate) fn collect_one(
     access.validate(main)?;
     Ok(Some(access))
 }
-fn invalid() -> EmmyMemberCallError {
+pub(crate) fn at_path(error: EmmyMemberCallError, path: &str) -> EmmyMemberCallError {
+    if error.path().is_some() {
+        error
+    } else {
+        EmmyMemberCallError::new(error.code(), error.message(), Some(path))
+    }
+}
+fn invalid(reason: &'static str) -> EmmyMemberCallError {
     EmmyMemberCallError::new(
         EmmyMemberCallErrorCode::SemanticModelUnavailable,
-        "global access facts disagree with the captured semantic session",
+        format!("global access facts disagree with the captured semantic session: {reason}"),
         None,
     )
 }

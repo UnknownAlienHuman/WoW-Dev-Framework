@@ -9,6 +9,97 @@ use emmylua_parser::{LuaChunk, LuaLanguageLevel, LuaParser, ParserConfig};
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
 
 #[test]
+fn lexical_global_access_excludes_implicit_and_explicit_method_parameters() -> TestResult {
+    let source = concat!(
+        "Object = {}\n",
+        "function Object:GetName()\n",
+        " local alias = self\n",
+        " return function() return self.Name, alias.Name end\n",
+        "end\n",
+        "function Object.Explicit(self) return self.Name end\n",
+        "do\n local self = Object\n self.Name = 1\n",
+        " do local self = {} self.Other = 2 end\nend\n",
+        "self = {}\nreturn self.Name\n",
+    );
+    let main = snapshot(vec![LuaWorkspaceFileInput::new("main/method.lua", source)])?;
+    let report = analyze_member_call_session_with_callable_queries(
+        &main,
+        &[],
+        MemberCallSessionQueryProfile::new(&[], &[]),
+        true,
+        &AtomicBool::new(false),
+    )?
+    .function_calls
+    .ok_or("function report")?;
+    assert!(
+        report
+            .global_accesses()
+            .iter()
+            .any(|access| access.root_name() == "Object")
+    );
+    // Only the explicit local alias has global provenance. Method parameters,
+    // their nested captures/aliases and a shadowing table local do not.
+    let aliases = report
+        .global_accesses()
+        .iter()
+        .filter(|access| access.is_alias())
+        .collect::<Vec<_>>();
+    assert_eq!(aliases.len(), 1);
+    assert_eq!(aliases[0].root_name(), "Object");
+    assert_eq!(aliases[0].aliases()[0].name, "self");
+    assert_eq!(
+        aliases[0].keys(),
+        &[crate::global_access::GlobalAccessKey::String("Name".into())]
+    );
+    assert!(
+        report
+            .global_accesses()
+            .iter()
+            .any(|access| access.root_name() == "self")
+    );
+    Ok(())
+}
+
+#[test]
+fn lexical_global_access_retains_function_alias_and_rebinding_provenance() -> TestResult {
+    use crate::global_access::{AliasAccessBlocker, GlobalAccessKind};
+    let main = snapshot(vec![LuaWorkspaceFileInput::new(
+        "main/alias.lua",
+        "function GlobalFunction() end\nlocal alias = GlobalFunction\nalias()\nalias = GlobalFunction\nalias()\n",
+    )])?;
+    let report = analyze_member_call_session_with_callable_queries(
+        &main,
+        &[],
+        MemberCallSessionQueryProfile::new(&[], &[]),
+        true,
+        &AtomicBool::new(false),
+    )?
+    .function_calls
+    .ok_or("function report")?;
+    let aliases = report
+        .global_accesses()
+        .iter()
+        .filter(|access| access.is_alias())
+        .collect::<Vec<_>>();
+    assert_eq!(aliases.len(), 3);
+    for access in aliases {
+        assert_eq!(access.root_name(), "GlobalFunction");
+        assert_eq!(access.aliases().len(), 1);
+        assert_eq!(access.aliases()[0].name, "alias");
+        assert!(access.aliases()[0].first_reassignment.is_some());
+        assert_eq!(
+            access.alias_blocker(),
+            Some(if access.kind() == GlobalAccessKind::Read {
+                AliasAccessBlocker::ReassignedBinding
+            } else {
+                AliasAccessBlocker::LocalBindingWrite
+            })
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn selected_function_budget_has_strict_wire_and_independent_target_access_bounds() -> TestResult {
     let budget = FunctionCallBudget::default();
     let wire = serde_json::to_value(budget)?;

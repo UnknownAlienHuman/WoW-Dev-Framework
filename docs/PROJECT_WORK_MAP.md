@@ -7,9 +7,9 @@ the work queue. Follow [the execution model](EXECUTION_MODEL.md).
 
 ## Verified routing base
 
-`main` checkpoint `d32c3a253e8b20c5e50bdaff4b2e9c38aaff9dbe`, tree
-`f20a7c0c5c28e783b9f0a3e6b628044171e5a1a7`, was published and read back with all
-changed blobs. [Quick 38097939461](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/38097939461)
+`main` checkpoint `27e96ee958f497acd70c47a9204cab58d5654455`, tree
+`1dc66fcfe77f8fd8656701f3c22910cffd64f23d`, was published and read back with all
+changed blobs. [Quick 38104634909](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/38104634909)
 passed on that exact head. This is the verified base of this routing update;
 subsequent publication and gate evidence belong in the canonical Issue.
 
@@ -26,33 +26,26 @@ They describe one selected operation, not permanent client/source defaults.
 full-corpus qualification. The selected273-package native census, finite retained
 Main, exact replay and compiled backend report producer are executable; detailed
 scope lives in [implementation status](IMPLEMENTATION_STATUS.md) and the canonical
-Issue. Preparation now passes the observed binding/query-reference refusals.
-The last real operation reaches the physical report-cumulative member guard
-before pair65537. Explicit native retention now carries a raw pair ceiling from
-half the configured fact budget with the original65536 floor through physical,
-virtual and combined collection. The cold flow consumer uses the same session
-and physical report. Focused65537-pair and131081-aggregate-fact native/replay
-cases pass, preserving independent final admission and ordinary limits. The
-freshly resolved unchanged real request now reaches the function-call sidecar's
-first closure-capture walk and refuses at AST visit2000001 against2000000.
-Actual completed Main/reports, classification, graph/maps and persistence remain
-unqualified; completed-operation peak is NotEvaluated. Re-resolve the source on
-each real operation and retain the actual next refusing owner before changing
-another ceiling. Do not infer map-owner populations from lexical counts or compare
-XML-index bytes with graph metadata bytes. Operation evidence belongs in #113.
-The same-source private census measures a population requiring4131790 raw AST
-visits for the two planned passes and119391257 physical member-report bytes;
-function semantic output and
-the complete operation remain unqualified. Retained platform transport `/2`
-admits explicit finite project budgets through the existing configuration/replay
-identity, while `/1` keeps its fixed policy. This supplies a reviewed admission
-seam; independent sidecar/map/graph/store bounds still require qualification.
-An optional six-field function-call budget now carries measured work/count/output
-capacity into the same native session. Selected report8 and retained replay12
-bind its exact values; default report7 and older replay recipes remain unchanged.
-Focused above-default AST/call admission, exact-work refusal, cancellation and
-disk-absent service/replay cases pass. Independent alias/flow/map/graph/store
-guards and complete-corpus/peak qualification remain open under #113.
+Issue. The finite project and function-call budget selections, retained native
+Main and exact replay are executable. Selected report8/replay12 bind the six
+sidecar limits; default report7 and older replay recipes remain unchanged.
+Meaningful above-default work/count, cancellation, output, replay and actual
+store-reopen checks pass at their recorded checkpoints.
+
+The latest complete request exposed a native global-access consistency failure
+in a method receiver. Source projection now uses lexical declaration IDs instead
+of navigation's implicit `self` substitution or function-value tracing. Native
+method/capture/shadow and alias/reassignment regressions pass, with precise
+invariant reasons and logical file paths. This corrects the existing source-fact
+contract without raising capacities or changing wire recipes.
+
+Completed Main/reports, classification, graph/maps and persistence remain
+unqualified. Re-resolve the source on each complete operation and record the
+actual next refusing owner before changing a ceiling. Independent alias/work/text,
+flow, aggregate, graph, map and store guards remain active. Do not infer semantic
+populations from lexical counts or compare XML-index bytes with graph metadata.
+Exact operation counts, failures, identities and limited OS high-water observations
+belong in #113; complete-corpus and allocator peak acceptance remain NotEvaluated.
 
 | Order | Bounded functional responsibility | Required boundary |
 |---|---|---|
