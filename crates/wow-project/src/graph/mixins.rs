@@ -182,7 +182,11 @@ pub(super) fn add_declaration(
         return Ok(index);
     }
     if provenance.lua_declarations.len() >= MAX_DECLARATIONS {
-        return Err(exhausted());
+        return Err(resource_exhausted(
+            "Lua source declarations",
+            provenance.lua_declarations.len() as u128 + 1,
+            MAX_DECLARATIONS,
+        ));
     }
     let file = project.file_by_path(&target.path)?.ok_or_else(invalid)?;
     let file_id = file_ids.get(target.path.as_str()).ok_or_else(invalid)?;
@@ -270,7 +274,11 @@ pub(super) fn project(
     // Count the whole operation before retaining any proposals or references.
     let mut count = provenance.xml_mixins.len();
     if count > MAX_REFERENCES {
-        return Err(exhausted());
+        return Err(resource_exhausted(
+            "XML mixin references",
+            count as u128,
+            MAX_REFERENCES,
+        ));
     }
     for scope in &scopes {
         crate::analyzer::checkpoint(stop)?;
@@ -278,9 +286,15 @@ pub(super) fn project(
         for binding in report.bindings {
             crate::analyzer::checkpoint(stop)?;
             if binding.kind == XmlLuaBindingKind::Mixin {
-                count = count.checked_add(1).ok_or_else(exhausted)?;
+                count = count.checked_add(1).ok_or_else(|| {
+                    resource_exhausted("XML mixin references", count as u128 + 1, MAX_REFERENCES)
+                })?;
                 if count > MAX_REFERENCES {
-                    return Err(exhausted());
+                    return Err(resource_exhausted(
+                        "XML mixin references",
+                        count as u128,
+                        MAX_REFERENCES,
+                    ));
                 }
             }
         }

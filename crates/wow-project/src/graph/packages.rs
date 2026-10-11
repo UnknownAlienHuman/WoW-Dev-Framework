@@ -200,7 +200,11 @@ pub(super) fn project(
                 continue;
             }
             if output.relations.len() >= MAX_PACKAGE_RELATIONS {
-                return Err(exhausted());
+                return Err(resource_exhausted(
+                    "package relations while adding file ownership",
+                    output.relations.len() as u128 + 1,
+                    MAX_PACKAGE_RELATIONS,
+                ));
             }
             let package_record = package_support
                 .get(package.package.as_str())
@@ -295,7 +299,11 @@ pub(super) fn project(
                     )?;
                     let proposal_id = format!("package-dependency:{key}");
                     if output.relations.len() >= MAX_PACKAGE_RELATIONS {
-                        return Err(exhausted());
+                        return Err(resource_exhausted(
+                            "package relations while adding a dependency",
+                            output.relations.len() as u128 + 1,
+                            MAX_PACKAGE_RELATIONS,
+                        ));
                     }
                     output.relations.push(
                         RelationDraft::new(
@@ -385,7 +393,11 @@ pub(super) fn project(
             };
             let proposal_id = format!("package-load:{}", unit.unit_digest);
             if output.relations.len() >= MAX_PACKAGE_RELATIONS {
-                return Err(exhausted());
+                return Err(resource_exhausted(
+                    "package relations while adding a load",
+                    output.relations.len() as u128 + 1,
+                    MAX_PACKAGE_RELATIONS,
+                ));
             }
             output.relations.push(
                 RelationDraft::new(

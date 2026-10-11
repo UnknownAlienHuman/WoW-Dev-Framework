@@ -133,15 +133,33 @@ pub(super) fn project(
         let report = scope.plan().xml_references();
         declaration_count = declaration_count
             .checked_add(report.declarations().len())
-            .ok_or_else(exhausted)?;
+            .ok_or_else(|| {
+                resource_exhausted(
+                    "XML declarations",
+                    declaration_count as u128 + report.declarations().len() as u128,
+                    MAX_DECLARATIONS,
+                )
+            })?;
         for reference in report.references() {
             crate::analyzer::checkpoint(stop)?;
             if reference.kind == XmlReferenceKind::Inherits {
-                inheritance_count = inheritance_count.checked_add(1).ok_or_else(exhausted)?;
+                inheritance_count = inheritance_count.checked_add(1).ok_or_else(|| {
+                    resource_exhausted(
+                        "XML inheritance references",
+                        inheritance_count as u128 + 1,
+                        MAX_INHERITANCE_REFERENCES,
+                    )
+                })?;
             }
         }
         if declaration_count > MAX_DECLARATIONS || inheritance_count > MAX_INHERITANCE_REFERENCES {
-            return Err(exhausted());
+            return Err(ProjectError::new(
+                ProjectErrorCode::SourceBudgetExceeded,
+                ProjectPhase::View,
+                format!(
+                    "source graph XML counts exceed their bounded profile: declarations {declaration_count}/{MAX_DECLARATIONS}, inheritance references {inheritance_count}/{MAX_INHERITANCE_REFERENCES}",
+                ),
+            ));
         }
     }
     for scope in scopes {
