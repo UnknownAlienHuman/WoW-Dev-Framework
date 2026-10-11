@@ -840,6 +840,227 @@ fn retained_native_query_references_use_output_admission_and_replay_exactly() ->
     Ok(())
 }
 
+#[test]
+fn selected_callable_graph_counts() -> TestResult {
+    use wow_emmy::function_calls::FunctionCallBudget;
+    use wow_project::{
+        ProjectErrorCode, ProjectPhase,
+        graph::{SourceGraphBudget, build_source_graph_proposals},
+        platform_source::PlatformPackageRetentionLimits,
+    };
+
+    const ROW: &str = "do local f=function()end;f()end\n";
+    const EXTRA_CALLS: &str = "do local f=function()end;f();f();f();f()end\n";
+
+    let stop = AtomicBool::new(false);
+    let packages =
+        |above_default: bool| -> Result<Arc<PlatformPackageSpecialization>, Box<dyn Error>> {
+            let root = FixtureRoot::new()?;
+            for package in PACKAGES {
+                std::fs::write(
+                    root.0.join("UI").join(package).join("frames.xml"),
+                    "<Ui xmlns=\"http://www.blizzard.com/wow/ui/\"/>\n",
+                )?;
+            }
+            let alpha = format!(
+                "{}{EXTRA_CALLS}",
+                ROW.repeat(if above_default { 4094 } else { 4093 }),
+            );
+            let beta = ROW.repeat(4095);
+            let parent = ProjectBudgetPolicy::fixture_e0()?;
+            for (package, text) in [
+                ("Alpha", alpha),
+                ("Beta", beta),
+                ("Empty", "return true\n".into()),
+            ] {
+                assert!(u64::try_from(text.len())? <= parent.max_single_file_bytes());
+                std::fs::write(root.0.join("UI").join(package).join("defs.lua"), text)?;
+            }
+            let ordinary = root.packages(&stop)?;
+            assert!(!root.0.exists());
+            let declarations = PACKAGES
+                .iter()
+                .map(|package| {
+                    ProjectPackageInput::new(
+                        *package,
+                        format!("UI/{package}"),
+                        true,
+                        vec![ProjectPackageVariantInput::new(
+                            ProjectDiskFile::new("Fixture.toc"),
+                            true,
+                        )],
+                    )
+                })
+                .collect::<Vec<_>>();
+            let encoded = ordinary.load_plan().packages().iter().try_fold(
+                0u64,
+                |total, node| -> Result<u64, Box<dyn Error>> {
+                    let plan = ordinary
+                        .load_plan()
+                        .package_plan(&node.package)
+                        .ok_or("native callable package plan missing")?;
+                    total
+                        .checked_add(u64::try_from(serde_json::to_vec(plan)?.len())?)
+                        .ok_or_else(|| "native callable plan encoding overflow".into())
+                },
+            )?;
+            Ok(Arc::new(
+                ordinary.source().specialize_packages_with_retention(
+                    &declarations,
+                    None,
+                    PlatformPackageRetentionLimits::new(3, encoded)?,
+                    &stop,
+                )?,
+            ))
+        };
+    // Keep the existing finite parent fact/output/source policy. Only the
+    // already-supported metadata component is selected for these pressure rows.
+    let policy = ProjectBudgetPolicy::fixture_e0()?
+        .with_source_graph_budget(SourceGraphBudget::new(32 * 1024 * 1024)?);
+    assert_eq!(policy.function_call_budget(), None);
+
+    {
+        let packages = packages(false)?;
+        let publisher = publish_graph_with_policy(
+            &packages,
+            Some(PackageXmlBindingProfile::SameSessionV1),
+            true,
+            policy,
+            &stop,
+        )?;
+        let view = publisher.open_current()?;
+        let report = view
+            .snapshot()
+            .analyzer_binding()
+            .function_call_report()
+            .ok_or("exact native callable report missing")?;
+        report.validate()?;
+        assert!(report.source_health_complete());
+        assert_eq!(report.files().len(), 3);
+        assert_eq!(report.functions().len(), 8192);
+        assert_eq!(report.calls().len(), 8192);
+        assert_eq!(
+            report.budget(),
+            view.configuration().budget_policy().function_call_budget()
+        );
+        assert_eq!(report.budget(), None);
+        let (_, _, _, provenance, _) = build_source_graph_proposals(&view, &stop)?.into_parts();
+        assert_eq!(provenance.functions().len(), 8192);
+        assert_eq!(provenance.call_sites().len(), 8192);
+        assert_eq!(provenance.function_call_report(), Some(report));
+    }
+
+    let packages = packages(true)?;
+    {
+        let publisher = publish_graph_with_policy(
+            &packages,
+            Some(PackageXmlBindingProfile::SameSessionV1),
+            true,
+            policy,
+            &stop,
+        )?;
+        let view = publisher.open_current()?;
+        let report = view
+            .snapshot()
+            .analyzer_binding()
+            .function_call_report()
+            .ok_or("default native callable report missing")?;
+        report.validate()?;
+        assert!(report.source_health_complete());
+        assert_eq!(report.functions().len(), 8193);
+        assert_eq!(report.calls().len(), 8193);
+        assert_eq!(report.budget(), None);
+        let error = build_source_graph_proposals(&view, &stop)
+            .err()
+            .ok_or("default graph callable count overflow admitted")?;
+        assert_eq!(error.code(), ProjectErrorCode::SourceBudgetExceeded);
+        assert_eq!(error.phase(), ProjectPhase::View);
+        assert_eq!(
+            error.message(),
+            "source graph callable counts exceed their bounded profile: functions 8193/8192, calls 8193/8192",
+        );
+        assert_eq!(publisher.open_current()?.snapshot_id(), view.snapshot_id());
+    }
+
+    let defaults = FunctionCallBudget::default();
+    let selected = FunctionCallBudget::new(
+        defaults.max_ast_visits(),
+        8193,
+        8193,
+        defaults.max_global_accesses(),
+        defaults.max_named_targets(),
+        defaults.max_report_bytes(),
+    )?;
+    let publisher = publish_graph_with_policy(
+        &packages,
+        Some(PackageXmlBindingProfile::SameSessionV1),
+        true,
+        policy.with_function_call_budget(selected),
+        &stop,
+    )?;
+    let view = publisher.open_current()?;
+    let report = view
+        .snapshot()
+        .analyzer_binding()
+        .function_call_report()
+        .ok_or("selected native callable report missing")?;
+    report.validate()?;
+    assert!(report.source_health_complete());
+    assert_eq!(report.files().len(), 3);
+    assert_eq!(report.functions().len(), 8193);
+    assert_eq!(
+        report
+            .functions()
+            .iter()
+            .filter(|function| function.kind() == SourceFunctionKind::Chunk)
+            .count(),
+        3,
+    );
+    assert_eq!(report.calls().len(), 8193);
+    assert_eq!(report.budget(), Some(selected));
+    assert_eq!(
+        report.budget(),
+        view.configuration().budget_policy().function_call_budget()
+    );
+
+    let (_, _, _, provenance, _) = build_source_graph_proposals(&view, &stop)?.into_parts();
+    assert_eq!(provenance.functions().len(), 8193);
+    assert_eq!(provenance.call_sites().len(), 8193);
+    assert_eq!(provenance.function_call_report(), Some(report));
+    assert_eq!(
+        provenance
+            .functions()
+            .iter()
+            .map(|function| function.function_id.as_str())
+            .collect::<BTreeSet<_>>(),
+        report
+            .functions()
+            .iter()
+            .map(|function| function.fact_id())
+            .collect::<BTreeSet<_>>(),
+    );
+    assert_eq!(
+        provenance
+            .call_sites()
+            .iter()
+            .map(|call| call.call_id.as_str())
+            .collect::<BTreeSet<_>>(),
+        report
+            .calls()
+            .iter()
+            .map(|call| call.fact_id())
+            .collect::<BTreeSet<_>>(),
+    );
+
+    let error = build_source_graph_proposals(&view, &AtomicBool::new(true))
+        .err()
+        .ok_or("cancelled native callable graph admitted")?;
+    assert_eq!(error.code(), ProjectErrorCode::AnalysisCancelled);
+    assert_eq!(publisher.open_current()?.snapshot_id(), view.snapshot_id());
+
+    Ok(())
+}
+
 static NEXT_ROOT: AtomicUsize = AtomicUsize::new(0);
 const PACKAGES: [&str; 3] = ["Alpha", "Beta", "Empty"];
 const TOC: &str = "## Interface: 120100\ndefs.lua\nframes.xml\n";
@@ -1091,10 +1312,27 @@ fn publish_graph(
     graph: bool,
     stop: &AtomicBool,
 ) -> Result<ProjectPublisher, Box<dyn Error>> {
+    publish_graph_with_policy(
+        packages,
+        selected,
+        graph,
+        ProjectBudgetPolicy::fixture_e0()?,
+        stop,
+    )
+}
+
+fn publish_graph_with_policy(
+    packages: &Arc<PlatformPackageSpecialization>,
+    selected: Option<PackageXmlBindingProfile>,
+    graph: bool,
+    policy: ProjectBudgetPolicy,
+    stop: &AtomicBool,
+) -> Result<ProjectPublisher, Box<dyn Error>> {
     let builder = configuration_builder(
         ProjectKind::BlizzardUiPlatformSource,
         packages.source().profile().target(),
     )?
+    .budget_policy(policy)
     .platform_packages(Arc::clone(packages))?;
     let builder = match selected {
         Some(profile) => builder.with_package_xml_bindings(profile),

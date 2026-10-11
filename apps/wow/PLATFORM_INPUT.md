@@ -190,8 +190,16 @@ identity both retain the selected values. Hydration rebuilds them without source
 files and refuses removal, downgrade or changed values against the original
 identities. Ordinary replay1-11 recipes remain unchanged.
 
+The graph callable projector reuses explicitly selected `max_functions` and
+`max_calls` for the same physical Main report arrays after verifying the report
+budget equals the configuration budget. Without selection, its ordinary limits
+remain 8192/8192, independently of the native sidecar's defaults. This count
+admission preserves previously successful fact bytes and identity recipes;
+numeric selection already binds the configuration and native report/replay.
+
 The six fields alone do not widen alias work/text, scope, argument/literal,
-callable-input, flow, graph/map or replay/store budgets. Choose finite values from
+callable-input, flow, aggregate graph nodes/edges, metadata, other graph/map or
+replay/store budgets. Choose finite values from
 the actual selected operation; neither this selector nor a synthetic boundary
 case qualifies the full corpus or its peak memory.
 

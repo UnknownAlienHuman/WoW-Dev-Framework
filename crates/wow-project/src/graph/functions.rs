@@ -44,6 +44,10 @@ pub(super) fn project(
         });
     };
     report.validate().map_err(|_| invalid())?;
+    let selected = project
+        .configuration()
+        .budget_policy()
+        .function_call_budget();
     if report.main_snapshot_id() != analyzer.main_workspace().snapshot_id()
         || report
             .library_snapshot_ids()
@@ -52,15 +56,24 @@ pub(super) fn project(
             .collect::<Vec<_>>()
             != analyzer.library_snapshot_ids().collect::<Vec<_>>()
         || report.files().len() != project.file_manifest().len()
+        || report.budget() != selected
     {
         return Err(invalid());
     }
-    if report.functions().len() > MAX_FUNCTIONS || report.calls().len() > MAX_CALLS {
+    // These are the same physical Main report rows bounded by the native owner.
+    // Keep ordinary graph limits distinct from that owner's larger defaults.
+    let (max_functions, max_calls) = selected
+        .map_or((MAX_FUNCTIONS as u64, MAX_CALLS as u64), |budget| {
+            (budget.max_functions(), budget.max_calls())
+        });
+    if report.functions().len() as u128 > u128::from(max_functions)
+        || report.calls().len() as u128 > u128::from(max_calls)
+    {
         return Err(ProjectError::new(
             ProjectErrorCode::SourceBudgetExceeded,
             ProjectPhase::View,
             format!(
-                "source graph callable counts exceed their bounded profile: functions {}/{MAX_FUNCTIONS}, calls {}/{MAX_CALLS}",
+                "source graph callable counts exceed their bounded profile: functions {}/{max_functions}, calls {}/{max_calls}",
                 report.functions().len(),
                 report.calls().len(),
             ),
