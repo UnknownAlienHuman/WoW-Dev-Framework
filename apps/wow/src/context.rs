@@ -12,7 +12,8 @@ use wow_service::{
         CONTEXT_MAP_HOST_INPUT_MAX_BYTES, CONTEXT_MAP_ID_MAX_BYTES, CONTEXT_MAP_RESULT_MAX_BYTES,
         ContextMapCurrentGuard, ContextMapHostInput, ContextMapPublication,
         ContextMapReferenceGuard, ContextMapRequest, ContextMapRoot, ContextMapStatus,
-        PRIMARY_NAVIGATION_MAP_PROFILE_ID, execute_context_map,
+        PRIMARY_NAVIGATION_MAP_PROFILE_ID, PRIMARY_PROJECT_NAVIGATION_MAP_PROFILE_ID,
+        execute_context_map,
     },
 };
 
@@ -25,8 +26,11 @@ const HELP: &str = concat!(
     "  [--expect-profile <id> --expect-reference-generation <id> --expect-reference-view <id>]\n",
     "  [--output envelope-json]\n",
     "The native host document is explicit transport configuration, separate from semantic ",
-    "store IDs. No source discovery or execution. This first route supports only the closed ",
-    "primary map profile, omitted platform and canonical envelope JSON.\n",
+    "store IDs. No source discovery or execution. Only the reviewed primary direct-navigation ",
+    "and project-navigation map profiles, omitted platform and canonical envelope JSON are supported.\n",
+    "Use an explicit graph-entity@ root with wow-context/primary-direct-navigation/1, ",
+    "or an explicit project@ root with wow-context/primary-project-navigation/1.\n",
+    "Service validates the selected profile/root pair; the CLI never infers a root.\n",
 );
 
 // Preserve the existing app argv/individual-path transport maxima.
@@ -239,7 +243,9 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
             }
             "--root" => set(&mut root, parse_root(&value)?)?,
             "--map-profile-id" => {
-                if value != PRIMARY_NAVIGATION_MAP_PROFILE_ID {
+                if value != PRIMARY_NAVIGATION_MAP_PROFILE_ID
+                    && value != PRIMARY_PROJECT_NAVIGATION_MAP_PROFILE_ID
+                {
                     return Err("unsupported exact context map profile");
                 }
                 set(&mut map_profile, value)?;
@@ -498,6 +504,33 @@ mod tests {
             generation["publication"]["id"],
             &STORE_GENERATION["store-generation:".len()..]
         );
+        Ok(())
+    }
+
+    #[test]
+    fn context_map_project_profile_preserves_exact_project_root() -> Result<(), &'static str> {
+        assert_eq!(
+            PRIMARY_PROJECT_NAVIGATION_MAP_PROFILE_ID,
+            "wow-context/primary-project-navigation/1"
+        );
+        let mut values = arguments();
+        replace(
+            &mut values,
+            "--map-profile-id",
+            PRIMARY_PROJECT_NAVIGATION_MAP_PROFILE_ID,
+        )?;
+        push(&mut values, "--root", PROJECT_ROOT);
+        let request = request_json(values)?;
+        assert_eq!(
+            request["map_profile_id"],
+            PRIMARY_PROJECT_NAVIGATION_MAP_PROFILE_ID
+        );
+        assert_eq!(
+            request["root"],
+            serde_json::json!({"kind": "project", "id": "context-cli"})
+        );
+        assert_eq!(request["publication"]["kind"], "current");
+        assert_eq!(request["platform"], "omitted");
         Ok(())
     }
 

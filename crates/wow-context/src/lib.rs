@@ -11,8 +11,13 @@ mod universe;
 pub use budget::PrimaryMapLimits;
 pub use error::{ContextError, ContextErrorCode, ContextResult};
 pub use map::{
-    PROJECT_MAP_SCHEMA, ProjectMap, ProjectMapSelection, ProjectMapState, ProjectMapView,
-    build_project_map, open_project_map_view, prepare_project_map, primary_navigation_query,
+    PRIMARY_PROJECT_MAP_SCHEMA, PROJECT_MAP_SCHEMA, ProjectMap, ProjectMapSelection,
+    ProjectMapState, ProjectMapView, ProjectNavigationRequest, build_project_map,
+    open_project_map_view, prepare_primary_project_map, prepare_project_map,
+    primary_navigation_query, primary_project_navigation_queries,
 };
-pub use profile::{PRIMARY_MAP_PROFILE, PRIMARY_MAP_PROFILE_BYTES};
+pub use profile::{
+    PRIMARY_MAP_PROFILE, PRIMARY_MAP_PROFILE_BYTES, PRIMARY_PROJECT_MAP_PROFILE,
+    PRIMARY_PROJECT_MAP_PROFILE_BYTES,
+};
 pub use universe::{ContextUniverseSet, bind_context_universe_set};

@@ -2,6 +2,8 @@ use serde::Serialize;
 use wow_graph::GraphRelationKind;
 
 pub const PRIMARY_MAP_PROFILE: &str = "wow-context/primary-direct-navigation/1";
+pub const PRIMARY_PROJECT_MAP_PROFILE: &str = "wow-context/primary-project-navigation/1";
+pub const PRIMARY_PROJECT_MAP_PROFILE_BYTES: &[u8] = br#"{"confidence":"include_candidate","direction":"both","edges":["contains","defines","depends_on","optional_depends_on","owns","loads","loads_before"],"nodes":"project_container_and_all_source_file_direct_endpoints","ordering":"node_id_then_edge_id","platform":"absent_profile_excluded","privacy":"local_metadata_only","profile":"wow-context/primary-project-navigation/1","reference":"binding_and_coverage_only","source":"handles_and_load_custody_only","tokens":"unavailable"}"#;
 
 /// Frozen canonical descriptor. Node ordering is exact node ID; direct parallel
 /// edges retain native edge-ID order. No grouping, source-text labels, or paths.
@@ -43,4 +45,9 @@ pub(crate) const PROFILE: ProfileDescription = ProfileDescription {
     reference: "binding_and_coverage_only",
     source: "handles_and_load_custody_only",
     tokens: "unavailable",
+};
+pub(crate) const PROJECT_PROFILE: ProfileDescription = ProfileDescription {
+    nodes: "project_container_and_all_source_file_direct_endpoints",
+    profile: PRIMARY_PROJECT_MAP_PROFILE,
+    ..PROFILE
 };

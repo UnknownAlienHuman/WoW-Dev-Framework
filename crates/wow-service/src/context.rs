@@ -14,6 +14,8 @@ pub use request::{
 };
 
 pub const PRIMARY_NAVIGATION_MAP_PROFILE_ID: &str = wow_context::PRIMARY_MAP_PROFILE;
+pub const PRIMARY_PROJECT_NAVIGATION_MAP_PROFILE_ID: &str =
+    wow_context::PRIMARY_PROJECT_MAP_PROFILE;
 pub const CONTEXT_MAP_ID_MAX_BYTES: usize = 512;
 pub const CONTEXT_MAP_RESULT_MAX_BYTES: usize = 16 * 1024 * 1024;
 pub const CONTEXT_MAP_RESULT_SCHEMA: &str = "wow-service/context-map-result/1";

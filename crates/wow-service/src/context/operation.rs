@@ -8,8 +8,8 @@ use wow_store::project::{CurrentPublication, ReadSelector};
 
 use super::{
     CONTEXT_MAP_RESULT_MAX_BYTES, CONTEXT_MAP_RESULT_SCHEMA, ContextMapHostInput,
-    ContextMapPublication, ContextMapRequest, ContextMapRoot, checkpoint, context_error, failure,
-    graph_error,
+    ContextMapPublication, ContextMapRequest, ContextMapRoot,
+    PRIMARY_PROJECT_NAVIGATION_MAP_PROFILE_ID, checkpoint, context_error, failure, graph_error,
 };
 use crate::{
     ServiceErrorCode, ServiceResult,
@@ -184,10 +184,15 @@ fn build(
         stop,
     )
     .map_err(context_error)?;
+    let project_profile = request.map_profile_id == PRIMARY_PROJECT_NAVIGATION_MAP_PROFILE_ID;
     let root = match &request.root {
-        Some(ContextMapRoot::GraphEntity(id)) => id.clone(),
+        Some(ContextMapRoot::GraphEntity(id)) => ContextMapRoot::GraphEntity(id.clone()),
         Some(ContextMapRoot::Project(id)) if id != project.configuration().project_id() => {
             return Err(failure(ServiceErrorCode::InvalidRequest));
+        }
+        Some(ContextMapRoot::Project(id)) if project_profile => ContextMapRoot::Project(id.clone()),
+        None if project_profile => {
+            ContextMapRoot::Project(project.configuration().project_id().clone())
         }
         // The selected ordinary source owner has no project graph entity. The
         // original project container is retained by the map independently; no
@@ -205,7 +210,9 @@ fn build(
             host.reference_profile.profile_id(),
             host.reference.generation_id(),
             host.reference.self_digest(),
-            &root,
+            // Preserve the frozen direct profile's exact identity material;
+            // a project container has a distinct tagged material/algorithm.
+            resolved_root(&root),
             &host.limits,
         ),
     )
@@ -215,8 +222,6 @@ fn build(
         ContentDigest::<CanonicalResult>::from_bytes(resolved_digest)
     )
     .into_boxed_str();
-    let query = wow_context::primary_navigation_query(&universe, root.clone(), stop)
-        .map_err(context_error)?;
     let provenance = read
         .pair()
         .source_provenance()
@@ -245,17 +250,45 @@ fn build(
     )
     .map_err(graph_error)?;
     let graph = read.pair().graph_read(stop).map_err(graph_error)?;
-    let neighbors = graph.neighbors(&query, stop).map_err(graph_error)?;
-    let selection = wow_context::prepare_project_map(&universe, root, neighbors, stop)
-        .map_err(context_error)?;
+    let mut selection = match root {
+        ContextMapRoot::GraphEntity(id) => {
+            let query = wow_context::primary_navigation_query(&universe, id.clone(), stop)
+                .map_err(context_error)?;
+            let neighbors = graph.neighbors(&query, stop).map_err(graph_error)?;
+            wow_context::prepare_project_map(&universe, id, neighbors, stop)
+                .map_err(context_error)?
+        }
+        ContextMapRoot::Project(id) => {
+            let mut request =
+                wow_context::primary_project_navigation_queries(&universe, &id, &graph, stop)
+                    .map_err(context_error)?;
+            for index in 0..request.navigation_queries().len() {
+                checkpoint(stop)?;
+                let view = graph
+                    .neighbors(&request.navigation_queries()[index], stop)
+                    .map_err(graph_error)?;
+                request
+                    .admit_neighborhood(view, stop)
+                    .map_err(context_error)?;
+            }
+            wow_context::prepare_primary_project_map(request, stop).map_err(context_error)?
+        }
+    };
     let mut receipts = Vec::with_capacity(selection.explanation_queries().len());
-    for query in selection.explanation_queries() {
+    for index in 0..selection.explanation_queries().len() {
         checkpoint(stop)?;
-        receipts.push(
-            graph
-                .explain_with_evidence(query, &catalog, host.limits.evidence, stop)
-                .map_err(graph_error)?,
-        );
+        let receipt = graph
+            .explain_with_evidence(
+                &selection.explanation_queries()[index],
+                &catalog,
+                host.limits.evidence,
+                stop,
+            )
+            .map_err(graph_error)?;
+        selection
+            .admit_explanation(&receipt, stop)
+            .map_err(context_error)?;
+        receipts.push(receipt);
     }
     let map = wow_context::build_project_map(selection, &receipts, stop).map_err(context_error)?;
     let status = match map.state() {
@@ -299,6 +332,19 @@ fn current_record_digest(current: &CurrentPublication) -> ServiceResult<Box<str>
             .to_string()
             .into(),
     )
+}
+
+#[derive(Serialize)]
+#[serde(untagged)]
+enum ResolvedRoot<'a> {
+    Graph(&'a wow_graph::GraphNodeId),
+    Project(&'a ContextMapRoot),
+}
+fn resolved_root(root: &ContextMapRoot) -> ResolvedRoot<'_> {
+    match root {
+        ContextMapRoot::GraphEntity(id) => ResolvedRoot::Graph(id),
+        ContextMapRoot::Project(_) => ResolvedRoot::Project(root),
+    }
 }
 
 fn failed(

@@ -4,11 +4,12 @@
   "state": "partial-functional-freeze-open",
   "implemented_slice": {
     "profile_id": "wow-context/primary-direct-navigation/1",
+    "additional_profile_ids": ["wow-context/primary-project-navigation/1"],
     "route": "crates/wow-context/e3/NATIVE_PRIMARY_MAP.md",
     "tracker": "https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122",
-    "scope": "exact primary universe, direct map and immutable read view",
+    "scope": "exact primary universe, direct and retained project-root maps and immutable read view",
     "acceptance": "pending",
-    "remaining": ["project-container root projection", "L0", "L1", "platform and combined maps", "semantic pack", "rendering", "Tier A and required Tier X"]
+    "remaining": ["L0", "L1", "platform and combined maps", "semantic pack", "rendering", "Tier A and required Tier X"]
   },
   "work_package": "E3-B",
   "crate": "wow-context",

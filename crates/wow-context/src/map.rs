@@ -17,11 +17,65 @@ use wow_reference::ReferenceConflict;
 
 use crate::budget::{Budget, canonical, checkpoint, encoded_len, exhausted, identity};
 use crate::error::graph_error;
-use crate::profile::{PROFILE, RELATIONS};
+use crate::profile::{PROFILE, PROJECT_PROFILE, RELATIONS};
 use crate::universe::{ContextUniverseSet, ReferenceCoverage, UniverseBinding};
 use crate::{ContextError, ContextErrorCode, ContextResult, PrimaryMapLimits};
 
 pub const PROJECT_MAP_SCHEMA: &str = "wow-context/project-map/primary-direct-navigation/1";
+pub const PRIMARY_PROJECT_MAP_SCHEMA: &str = "wow-context/project-map/primary-project-navigation/1";
+
+mod project_navigation;
+pub use project_navigation::{
+    ProjectNavigationRequest, prepare_primary_project_map, primary_project_navigation_queries,
+};
+
+/// Both projections retain original native views. The direct variant keeps its
+/// frozen native JSON shape; project navigation adds no synthetic graph entity.
+#[derive(Serialize)]
+#[serde(untagged)]
+enum MapNavigation<'a> {
+    Direct(GraphNeighborView<'a>),
+    Project(project_navigation::ProjectNavigation<'a>),
+}
+impl MapNavigation<'_> {
+    fn truncated(&self) -> bool {
+        match self {
+            Self::Direct(view) => view.state() == GraphQueryState::Truncated,
+            Self::Project(view) => view
+                .neighborhoods
+                .iter()
+                .any(|read| read.state() == GraphQueryState::Truncated),
+        }
+    }
+    fn omitted_edges(&self) -> ContextResult<u64> {
+        match self {
+            Self::Direct(view) => Ok(u64::from(view.omitted_edges())),
+            Self::Project(view) => view.neighborhoods.iter().try_fold(0_u64, |count, read| {
+                count
+                    .checked_add(u64::from(read.omitted_edges()))
+                    .ok_or_else(exhausted)
+            }),
+        }
+    }
+    fn schema(&self) -> &'static str {
+        match self {
+            Self::Direct(_) => PROJECT_MAP_SCHEMA,
+            Self::Project(_) => PRIMARY_PROJECT_MAP_SCHEMA,
+        }
+    }
+    fn profile(&self) -> &'static crate::profile::ProfileDescription {
+        match self {
+            Self::Direct(_) => &PROFILE,
+            Self::Project(_) => &PROJECT_PROFILE,
+        }
+    }
+    fn omission_enumeration(&self) -> &'static str {
+        match self {
+            Self::Direct(_) => "complete_match_count_under_native_query",
+            Self::Project(_) => "sum_of_complete_match_counts_under_native_queries",
+        }
+    }
+}
 
 /// Broader context capabilities are excluded; no navigation output is promoted
 /// to a complete corpus, L0/L1 pack, token fit, or runtime claim.
@@ -108,11 +162,13 @@ struct BudgetReport {
 /// support queries; a caller may not substitute transport-decoded assertions.
 pub struct ProjectMapSelection<'a> {
     universe: &'a ContextUniverseSet<'a>,
-    neighbors: GraphNeighborView<'a>,
+    navigation: MapNavigation<'a>,
     nodes: Vec<&'a GraphNode>,
+    edges: Vec<&'a GraphEdge>,
     queries: Vec<GraphExplainQuery>,
     budget: Budget,
     native_receipt_bytes_upper_bound: u64,
+    admitted_receipt_bytes: u64,
 }
 impl ProjectMapSelection<'_> {
     #[must_use]
@@ -122,6 +178,34 @@ impl ProjectMapSelection<'_> {
     #[must_use]
     pub const fn native_receipt_bytes_upper_bound(&self) -> u64 {
         self.native_receipt_bytes_upper_bound
+    }
+    /// Reserve each complete resolved receipt before the driver retains its
+    /// batch. Evidence resolution has its own limit, so an explanation-only
+    /// upper bound is insufficient to bound the aggregate resolved output.
+    /// Build still independently validates and charges the actual receipts.
+    pub fn admit_explanation(
+        &mut self,
+        receipt: &GraphResolvedExplanation<'_>,
+        stop: &AtomicBool,
+    ) -> ContextResult<()> {
+        let left = self
+            .universe
+            .limits
+            .max_metadata_bytes
+            .checked_sub(self.budget.retained_bytes)
+            .and_then(|n| n.checked_sub(self.admitted_receipt_bytes))
+            .ok_or_else(exhausted)?
+            .min(
+                self.native_receipt_bytes_upper_bound
+                    .checked_sub(self.admitted_receipt_bytes)
+                    .ok_or_else(exhausted)?,
+            );
+        let bytes = encoded_len(receipt, left, stop)?;
+        self.admitted_receipt_bytes = self
+            .admitted_receipt_bytes
+            .checked_add(bytes)
+            .ok_or_else(exhausted)?;
+        Ok(())
     }
 }
 
@@ -134,17 +218,36 @@ pub fn primary_navigation_query(
     root: GraphNodeId,
     stop: &AtomicBool,
 ) -> ContextResult<GraphNeighborReadQuery> {
-    checkpoint(stop)?;
-    let snapshot = universe.pair.graph().snapshot();
-    if snapshot.node(&root).is_none() {
+    if universe.pair.graph().snapshot().node(&root).is_none() {
         return Err(root_invalid());
     }
+    validate_navigation_input(universe, stop)?;
+    navigation_query(universe, root, stop)
+}
+fn validate_navigation_input(
+    universe: &ContextUniverseSet<'_>,
+    stop: &AtomicBool,
+) -> ContextResult<()> {
+    checkpoint(stop)?;
+    let snapshot = universe.pair.graph().snapshot();
     let left = universe
         .limits
         .max_input_bytes
         .checked_sub(universe.input_bytes_reserved)
         .ok_or_else(exhausted)?;
     encoded_len(snapshot, left, stop)?;
+    Ok(())
+}
+fn navigation_query(
+    universe: &ContextUniverseSet<'_>,
+    root: GraphNodeId,
+    stop: &AtomicBool,
+) -> ContextResult<GraphNeighborReadQuery> {
+    checkpoint(stop)?;
+    let snapshot = universe.pair.graph().snapshot();
+    if snapshot.node(&root).is_none() {
+        return Err(root_invalid());
+    }
     let query = GraphNeighborQuery::new(
         root,
         GraphDirection::Both,
@@ -171,7 +274,6 @@ pub fn prepare_project_map<'a>(
 ) -> ContextResult<ProjectMapSelection<'a>> {
     checkpoint(stop)?;
     let snapshot = universe.pair.graph().snapshot();
-    let limits = universe.limits;
     let expected = primary_navigation_query(universe, root, stop)?;
     if neighbors.query() != &expected
         || !std::ptr::eq(
@@ -183,7 +285,7 @@ pub fn prepare_project_map<'a>(
     {
         return Err(support_mismatch());
     }
-    let mut budget = Budget::new(limits);
+    let mut budget = Budget::new(universe.limits);
     budget.retain(&neighbors, stop)?;
     budget.work(neighbors.scanned_edges() as usize, stop)?;
     let mut nodes = Vec::new();
@@ -203,10 +305,28 @@ pub fn prepare_project_map<'a>(
     {
         return Err(support_mismatch());
     }
-    let count = nodes
-        .len()
-        .checked_add(neighbors.edges().len())
-        .ok_or_else(exhausted)?;
+    let edges = neighbors.edges().to_vec();
+    finish_selection(
+        universe,
+        MapNavigation::Direct(neighbors),
+        nodes,
+        edges,
+        budget,
+        stop,
+    )
+}
+
+fn finish_selection<'a>(
+    universe: &'a ContextUniverseSet<'a>,
+    navigation: MapNavigation<'a>,
+    nodes: Vec<&'a GraphNode>,
+    edges: Vec<&'a GraphEdge>,
+    mut budget: Budget,
+    stop: &AtomicBool,
+) -> ContextResult<ProjectMapSelection<'a>> {
+    let snapshot = universe.pair.graph().snapshot();
+    let limits = universe.limits;
+    let count = nodes.len().checked_add(edges.len()).ok_or_else(exhausted)?;
     budget.work(count, stop)?;
     // Each real resolved explanation obeys the original explain output limit.
     // Refuse before asking the application to materialize their whole batch.
@@ -235,7 +355,7 @@ pub fn prepare_project_map<'a>(
             .map_err(graph_error)?,
         );
     }
-    for edge in neighbors.edges() {
+    for edge in &edges {
         let actual = snapshot.edge(edge.edge_id()).ok_or_else(support_mismatch)?;
         if !std::ptr::eq(*edge, actual)
             || nodes
@@ -265,11 +385,13 @@ pub fn prepare_project_map<'a>(
     }
     Ok(ProjectMapSelection {
         universe,
-        neighbors,
+        navigation,
         nodes,
+        edges,
         queries,
         budget,
         native_receipt_bytes_upper_bound,
+        admitted_receipt_bytes: 0,
     })
 }
 
@@ -311,7 +433,7 @@ struct MapCore<'a> {
     universe_set_id: &'a str,
     binding: &'a UniverseBinding<'a>,
     project_container: &'a ProjectSourceOrigin,
-    navigation: GraphNeighborView<'a>,
+    navigation: MapNavigation<'a>,
     supports: Vec<&'a GraphResolvedExplanation<'a>>,
     source_custody: Vec<SourceCustody<'a>>,
     load_custody: LoadCustody<'a>,
@@ -333,6 +455,8 @@ pub struct ProjectMap<'a> {
     core: MapCore<'a>,
     #[serde(skip)]
     nodes: Vec<&'a GraphNode>,
+    #[serde(skip)]
+    edges: Vec<&'a GraphEdge>,
     #[serde(skip)]
     canonical_bytes: Box<[u8]>,
 }
@@ -375,8 +499,14 @@ pub fn build_project_map<'a>(
     }
     selection.budget.work(receipts.len(), stop)?;
     let mut index = BTreeMap::new();
+    let mut receipt_bytes = 0_u64;
     for receipt in receipts {
+        let before = selection.budget.retained_bytes;
         selection.budget.retain(receipt, stop)?;
+        receipt_bytes = receipt_bytes
+            .checked_add(selection.budget.retained_bytes - before)
+            .filter(|n| *n <= selection.native_receipt_bytes_upper_bound)
+            .ok_or_else(exhausted)?;
         let explanation = receipt.explanation();
         let key = subject_key(explanation.query().subject());
         if index.insert(key, receipt).is_some() {
@@ -553,7 +683,7 @@ pub fn build_project_map<'a>(
     selection
         .budget
         .retain(universe.reference.conflicts(), stop)?;
-    let state = if selection.neighbors.state() == GraphQueryState::Truncated {
+    let state = if selection.navigation.truncated() {
         ProjectMapState::Truncated
     } else {
         ProjectMapState::Partial
@@ -591,18 +721,19 @@ pub fn build_project_map<'a>(
             scope: "direct_navigation_prefix",
             reason: "native_budget_pruned",
             affected_capability: "selected_direct_navigation",
-            known_omitted: Some(u64::from(selection.neighbors.omitted_edges())),
-            enumeration: "complete_match_count_under_native_query",
+            known_omitted: Some(selection.navigation.omitted_edges()?),
+            enumeration: selection.navigation.omission_enumeration(),
         },
     ];
     selection.budget.retain(&omissions, stop)?;
+    let schema = selection.navigation.schema();
     let core = MapCore {
-        schema: PROJECT_MAP_SCHEMA,
-        profile: &PROFILE,
+        schema,
+        profile: selection.navigation.profile(),
         universe_set_id: universe.universe_set_id(),
         binding: &universe.binding,
         project_container: project.snapshot().source_registry().source_origin(),
-        navigation: selection.neighbors,
+        navigation: selection.navigation,
         supports,
         source_custody,
         load_custody,
@@ -623,7 +754,7 @@ pub fn build_project_map<'a>(
         },
     };
     let project_map_id = identity(
-        PROJECT_MAP_SCHEMA,
+        schema,
         "project-map:sha256:",
         &core,
         limits.max_metadata_bytes,
@@ -633,6 +764,7 @@ pub fn build_project_map<'a>(
         project_map_id,
         core,
         nodes: selection.nodes,
+        edges: selection.edges,
         canonical_bytes: Box::new([]),
     };
     // ID excludes itself and the final-byte accessor. The whole ID+core envelope
@@ -709,12 +841,10 @@ impl<'a> ProjectMapView<'_, 'a> {
     #[must_use]
     pub fn edge(&self, id: &GraphEdgeId) -> Option<&'a GraphEdge> {
         self.map
-            .core
-            .navigation
-            .edges()
+            .edges
             .binary_search_by(|edge| edge.edge_id().cmp(id))
             .ok()
-            .map(|index| self.map.core.navigation.edges()[index])
+            .map(|index| self.map.edges[index])
     }
     #[must_use]
     pub fn project_container(&self) -> &'a ProjectSourceOrigin {

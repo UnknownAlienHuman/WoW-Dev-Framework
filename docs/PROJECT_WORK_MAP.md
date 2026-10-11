@@ -18,12 +18,13 @@ have a bounded native lifecycle. Actual CLI and publication evidence is retained
 in #116; this does not establish full E3 acceptance.
 
 [#122](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122) owns the
-W18 Project Map and its service/CLI route. The first
-[primary direct profile](../crates/wow-context/e3/NATIVE_PRIMARY_MAP.md) and
+W18 Project Map and its service/CLI route. The reviewed
+[primary direct and project-root profiles](../crates/wow-context/e3/NATIVE_PRIMARY_MAP.md) and
 [`wow context map`](../apps/wow/CONTEXT_MAP.md) now have executable owners.
-The profile requires an exact graph-entity root and explicitly omits the optional
-platform universe. Project-container roots, broader context layers and acceptance
-remain open in #122 and the completion census.
+The direct profile uses an exact graph entity; the project profile enumerates
+every genuine retained source-file root and its bounded native neighborhood.
+Both explicitly omit the optional platform universe. L0/L1, packs/rendering,
+broader context layers and acceptance remain open in #122 and the completion census.
 
 [#121](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/121) retains the
 latest full-corpus functions refusal and targeted capacity evidence.

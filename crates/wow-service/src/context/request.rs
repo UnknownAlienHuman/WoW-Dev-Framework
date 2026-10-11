@@ -4,7 +4,10 @@ use wow_graph::GraphNodeId;
 use wow_project::ProjectId;
 use wow_store::project::{CurrentRecordId, StoreGenerationId};
 
-use super::{CONTEXT_MAP_ID_MAX_BYTES, PRIMARY_NAVIGATION_MAP_PROFILE_ID, failure};
+use super::{
+    CONTEXT_MAP_ID_MAX_BYTES, PRIMARY_NAVIGATION_MAP_PROFILE_ID,
+    PRIMARY_PROJECT_NAVIGATION_MAP_PROFILE_ID, failure,
+};
 use crate::{ServiceErrorCode, ServiceResult};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -90,7 +93,7 @@ pub struct ContextMapRequest {
     schema: &'static str,
     pub(super) project_store_id: Box<str>,
     pub(super) publication: ContextMapPublication,
-    map_profile_id: &'static str,
+    pub(super) map_profile_id: &'static str,
     platform: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(super) root: Option<ContextMapRoot>,
@@ -109,7 +112,13 @@ impl ContextMapRequest {
         reference: Option<ContextMapReferenceGuard>,
     ) -> ServiceResult<Self> {
         registration_id(store)?;
-        if profile != PRIMARY_NAVIGATION_MAP_PROFILE_ID
+        let map_profile_id = match profile {
+            PRIMARY_NAVIGATION_MAP_PROFILE_ID => PRIMARY_NAVIGATION_MAP_PROFILE_ID,
+            PRIMARY_PROJECT_NAVIGATION_MAP_PROFILE_ID => PRIMARY_PROJECT_NAVIGATION_MAP_PROFILE_ID,
+            _ => return Err(invalid()),
+        };
+        if (map_profile_id == PRIMARY_PROJECT_NAVIGATION_MAP_PROFILE_ID
+            && matches!(root, Some(ContextMapRoot::GraphEntity(_))))
             || (current.is_some() && !matches!(publication, ContextMapPublication::Current))
         {
             return Err(invalid());
@@ -118,7 +127,7 @@ impl ContextMapRequest {
             schema: "wow-service/context-map-request/1",
             project_store_id: store.into(),
             publication,
-            map_profile_id: PRIMARY_NAVIGATION_MAP_PROFILE_ID,
+            map_profile_id,
             platform: "omitted",
             root,
             current,

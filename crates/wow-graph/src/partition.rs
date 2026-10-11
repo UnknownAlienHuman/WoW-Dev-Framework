@@ -13,9 +13,9 @@ use sha2::{Digest, Sha256};
 use wow_core::{GenerationContextId, canonical_json_bytes};
 
 use crate::{
-    GraphCoverageRecord, GraphError, GraphErrorCode, GraphGenerationId, GraphProposalBatch,
-    GraphProposalValidationReport, GraphRegistryBundle, GraphResult, GraphSnapshot,
-    GraphSnapshotId, validate_graph_proposal_batch,
+    GraphCoverageRecord, GraphError, GraphErrorCode, GraphGenerationId, GraphNode,
+    GraphProposalBatch, GraphProposalValidationReport, GraphRegistryBundle, GraphResult,
+    GraphSnapshot, GraphSnapshotId, validate_graph_proposal_batch,
 };
 
 pub const GRAPH_PARTITION_SNAPSHOT_SCHEMA: &str = "wow-graph/partition-snapshot/e2-a/1";
@@ -100,6 +100,57 @@ impl<'a> GraphPartitionRead<'a> {
     #[must_use]
     pub const fn owner(&self) -> &'a GraphPartitionSnapshot {
         self.owner
+    }
+
+    /// Resolve one accepted producer entity into its exact published native node.
+    /// This read reuses the sealed owner and rebinds only the selected record.
+    pub fn published_entity(
+        &self,
+        partition_id: &str,
+        proposal_id: &str,
+        stop: &AtomicBool,
+    ) -> GraphResult<&'a GraphNode> {
+        check_cancelled(stop)?;
+        let partition = self
+            .owner
+            .partition(partition_id)
+            .ok_or_else(|| invalid("published entity producer partition is absent"))?;
+        partition
+            .batch()
+            .entity_proposal(proposal_id)
+            .ok_or_else(|| invalid("published entity proposal is absent"))?;
+        let entries = partition.report().accepted_entities();
+        let index = entries
+            .binary_search_by(|entry| entry.proposal_id().cmp(proposal_id))
+            .map_err(|_| invalid("published entity proposal was not accepted"))?;
+        let accepted = entries[index].node();
+        let snapshot = self.owner.snapshot();
+        let rebound = GraphNode::new(
+            snapshot.universe().clone(),
+            snapshot.generation().clone(),
+            accepted.kind(),
+            accepted.owner_key(),
+            accepted.evidence_ids().to_vec(),
+            snapshot.limits(),
+        )?;
+        let node = snapshot
+            .node(rebound.node_id())
+            .ok_or_else(|| invalid("published entity is absent from the final snapshot"))?;
+        if node.kind() != accepted.kind() || node.owner_key() != accepted.owner_key() {
+            return Err(invalid(
+                "published entity differs from its accepted native node",
+            ));
+        }
+        // Materialization legitimately unions support for the same identity.
+        // Retain that exact final record, requiring every original receipt item.
+        for evidence in accepted.evidence_ids() {
+            check_cancelled(stop)?;
+            if node.evidence_ids().binary_search(evidence).is_err() {
+                return Err(invalid("published entity lost accepted evidence"));
+            }
+        }
+        check_cancelled(stop)?;
+        Ok(node)
     }
 
     /// Reuse admission while retaining every exact-ID/work/output query guard.

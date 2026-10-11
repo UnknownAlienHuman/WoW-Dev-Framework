@@ -1,0 +1,22 @@
+{
+  "schema": "wow-service/context-map-synthetic-fixture-freeze/1",
+  "reviewed": "2026-10-11",
+  "members": [
+    {
+      "byte_length": 149406,
+      "path": "envelope.json",
+      "sha256": "a0eb4f9b14ff24503741199607e9e776bc884d9f6f06530567b9b96c2d1c4e5e"
+    },
+    {
+      "byte_length": 474,
+      "path": "profile.json",
+      "sha256": "7c20c7e818f129d54198777c73d3bdea3fe2dd8fb30c8758c623b29ea96cb459"
+    },
+    {
+      "byte_length": 644,
+      "path": "request.json",
+      "sha256": "550824f1702c42c643b2a26e7a483ccfa2e10d44ef5debee533f28602e2ac06f"
+    }
+  ],
+  "authority": "fixture_only_not_live_or_ketho"
+}

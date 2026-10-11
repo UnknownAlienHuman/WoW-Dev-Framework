@@ -40,6 +40,10 @@ const STORE_ID: &str = "project-store:fixture-context-primary";
 const LUA: &str = "local function ContextFixture(value)\n    return value\nend\n";
 
 fn input_bundle(source: &str) -> TestResult<ProjectInputBundle> {
+    input_bundle_files(vec![ProjectInputFile::new("main.lua", source)?])
+}
+
+fn input_bundle_files(files: Vec<ProjectInputFile>) -> TestResult<ProjectInputBundle> {
     // Same real backend/configuration/Library constructors as live_project/tests.rs.
     // These declared fixture identities convey no live compatibility authority.
     let backend = EmmyBackendIdentity::new(
@@ -100,11 +104,7 @@ fn input_bundle(source: &str) -> TestResult<ProjectInputBundle> {
         )],
         LuaWorkspaceLimits::new(8, 4096, 16384, 65536)?,
     )?;
-    Ok(ProjectInputBundle::closed(
-        config,
-        vec![ProjectInputFile::new("main.lua", source)?],
-        vec![library],
-    )?)
+    Ok(ProjectInputBundle::closed(config, files, vec![library])?)
 }
 
 fn owners(
@@ -116,7 +116,18 @@ fn owners(
     ReferenceView,
     ProfileIdentity,
 )> {
-    let bundle = input_bundle(source)?;
+    owners_from_bundle(input_bundle(source)?, stop)
+}
+
+fn owners_from_bundle(
+    bundle: ProjectInputBundle,
+    stop: &AtomicBool,
+) -> TestResult<(
+    ProjectPublisher,
+    GraphPartitionSnapshot,
+    ReferenceView,
+    ProfileIdentity,
+)> {
     let reference = ReferenceView::new(
         bundle.configuration().reference_generation().to_string(),
         Vec::new(),
@@ -628,10 +639,14 @@ fn write_export(root: &Path, name: &str, bytes: &[u8], limit: usize) -> TestResu
 }
 
 fn root_token(id: &GraphNodeId) -> String {
+    format!("graph-entity@{}", encoded_root_id(id.as_str()))
+}
+
+fn encoded_root_id(id: &str) -> String {
     // Mechanical CLI transport encoding of the genuine native ID; no semantic lookup.
     const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
     let mut encoded = String::new();
-    for group in id.as_str().as_bytes().chunks(3) {
+    for group in id.as_bytes().chunks(3) {
         encoded.push(ALPHABET[(group[0] >> 2) as usize] as char);
         encoded.push(
             ALPHABET[(((group[0] & 3) << 4) | group.get(1).map_or(0, |b| *b >> 4)) as usize]
@@ -647,7 +662,7 @@ fn root_token(id: &GraphNodeId) -> String {
             encoded.push(ALPHABET[(third & 63) as usize] as char);
         }
     }
-    format!("graph-entity@{encoded}")
+    encoded
 }
 
 fn export_fixture(
@@ -664,8 +679,18 @@ fn export_fixture(
     let ContextMapPublication::StoreGeneration(generation) = &request.publication else {
         return Err("fixture export requires its exact retained generation".into());
     };
-    let Some(ContextMapRoot::GraphEntity(root)) = &request.root else {
-        return Err("fixture export requires its exact graph root".into());
+    let (root_token_text, map_profile, selection_note) = match &request.root {
+        Some(ContextMapRoot::GraphEntity(root)) => (
+            root_token(root),
+            PRIMARY_NAVIGATION_MAP_PROFILE_ID,
+            "exact retained store generation after both fixture publications",
+        ),
+        Some(ContextMapRoot::Project(project)) => (
+            format!("project@{}", encoded_root_id(project.as_str())),
+            PRIMARY_PROJECT_NAVIGATION_MAP_PROFILE_ID,
+            "exact retained project-root publication",
+        ),
+        None => return Err("fixture export requires its exact explicit root".into()),
     };
     let arguments = json!([
         "context",
@@ -679,9 +704,9 @@ fn export_fixture(
         "--map-target",
         "primary",
         "--map-profile-id",
-        PRIMARY_NAVIGATION_MAP_PROFILE_ID,
+        map_profile,
         "--root",
-        root_token(root),
+        root_token_text,
         "--platform",
         "omitted",
         "--expect-profile",
@@ -717,7 +742,7 @@ fn export_fixture(
                 "authority": "fixture_only_not_live_or_ketho",
                 "expected_cli_exit": 2,
                 "cli_stdout": "expected-envelope.json followed by one LF",
-                "selection": "exact retained store generation after both fixture publications",
+                "selection": selection_note,
                 "semantic_host_paths": "excluded"
             }))?,
             64 * 1024,
@@ -964,5 +989,562 @@ fn retained_native_primary_map_is_exact_repeatable_and_refuses_mixed_or_missing_
             &scratch, &host_json, &request, &frozen, &profile, &reference,
         )?;
     }
+    Ok(())
+}
+
+const PROJECT_OTHER_LUA: &str =
+    "local function OtherContextFixture(value)\n    return value + 1\nend\n";
+
+fn retained_project_expectation(
+    store_root: &Path,
+    generation: &wow_store::project::StoreGenerationId,
+    stop: &AtomicBool,
+) -> TestResult<Value> {
+    let store = LiveProjectStore::open(store_root)?;
+    let read = store.read(&ReadSelector::Exact(generation.clone()), stop)?;
+    let graph = read.graph();
+    let source = graph
+        .partition(SOURCE_GRAPH_PARTITION)
+        .ok_or("retained source partition")?;
+    let provenance = read
+        .pair()
+        .source_provenance()
+        .ok_or("retained native provenance")?;
+    assert_eq!(provenance.files().len(), 2);
+    assert!(
+        graph
+            .snapshot()
+            .nodes()
+            .iter()
+            .all(|node| node.kind() != "project")
+    );
+    let mut files = Vec::new();
+    let mut nodes = std::collections::BTreeMap::new();
+    let mut edges = std::collections::BTreeMap::new();
+    for file in provenance.files() {
+        let proposal = source
+            .batch()
+            .entity_proposal(&file.proposal_id)
+            .ok_or("retained physical file proposal")?;
+        assert_eq!(proposal.entity_kind_id(), "source_file");
+        let index = source
+            .report()
+            .accepted_entities()
+            .binary_search_by(|accepted| accepted.proposal_id().cmp(file.proposal_id.as_str()))
+            .map_err(|_| "physical file proposal not accepted")?;
+        let input = source.report().accepted_entities()[index].node();
+        let rebound = GraphNode::new(
+            graph.snapshot().universe().clone(),
+            graph.snapshot().generation().clone(),
+            input.kind(),
+            input.owner_key(),
+            input.evidence_ids().to_vec(),
+            graph.snapshot().limits(),
+        )?;
+        let node = graph
+            .snapshot()
+            .node(rebound.node_id())
+            .ok_or("exact final physical file root")?;
+        let root = serde_json::to_value(node)?;
+        nodes.insert(node.node_id().to_string(), root.clone());
+        let incident = graph
+            .snapshot()
+            .edges()
+            .iter()
+            .filter(|edge| edge.from() == node.node_id() || edge.to() == node.node_id())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            incident.len(),
+            2,
+            "genuine Chunk plus function ownership per physical file"
+        );
+        assert!(
+            incident
+                .iter()
+                .all(|edge| edge.relation() == GraphRelationKind::Owns)
+        );
+        let adjacent_ids = incident
+            .iter()
+            .flat_map(|edge| [edge.from(), edge.to()])
+            .filter(|id| *id != node.node_id())
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        let adjacent = adjacent_ids
+            .iter()
+            .map(|id| {
+                let endpoint = graph.snapshot().node(id).ok_or("final direct endpoint")?;
+                let value = serde_json::to_value(endpoint)?;
+                nodes.insert(id.to_string(), value.clone());
+                Ok(value)
+            })
+            .collect::<TestResult<Vec<Value>>>()?;
+        let incident = incident
+            .into_iter()
+            .map(|edge| {
+                let value = serde_json::to_value(edge)?;
+                edges.insert(edge.edge_id().to_string(), value.clone());
+                Ok(value)
+            })
+            .collect::<TestResult<Vec<Value>>>()?;
+        files.push(json!({ "file": file, "node": root, "edges": incident, "adjacent": adjacent }));
+    }
+    let entity_proposals = source
+        .batch()
+        .entity_proposals()
+        .iter()
+        .map(serde_json::to_value)
+        .collect::<Result<Vec<_>, _>>()?;
+    let accepted_entities = source
+        .report()
+        .accepted_entities()
+        .iter()
+        .map(serde_json::to_value)
+        .collect::<Result<Vec<_>, _>>()?;
+    let accepted_relations = source
+        .report()
+        .accepted_relations()
+        .iter()
+        .map(serde_json::to_value)
+        .collect::<Result<Vec<_>, _>>()?;
+    let relation_proposals = source
+        .report()
+        .accepted_relations()
+        .iter()
+        .map(|accepted| {
+            let proposal = source
+                .batch()
+                .relation_proposal(accepted.proposal_id())
+                .ok_or("accepted relation missing native proposal")?;
+            Ok(serde_json::to_value(proposal)?)
+        })
+        .collect::<TestResult<Vec<Value>>>()?;
+    let evidence = provenance
+        .evidence()
+        .values()
+        .map(serde_json::to_value)
+        .collect::<Result<Vec<_>, _>>()?;
+    let handles = provenance
+        .source_handles()
+        .values()
+        .map(serde_json::to_value)
+        .collect::<Result<Vec<_>, _>>()?;
+    let expected = json!({
+        "project_id": read.project().configuration().project_id(),
+        "publication_set_id": read.publication_set_id(),
+        "store_generation_id": generation.as_str(),
+        "current": read.current_at_acquisition().ok_or("retained Current observation")?,
+        "source_context_id": graph.source_context_id(),
+        "files": files,
+        "nodes": nodes.into_values().collect::<Vec<_>>(),
+        "edges": edges.into_values().collect::<Vec<_>>(),
+        "entity_proposals": entity_proposals,
+        "accepted_entities": accepted_entities,
+        "relation_proposals": relation_proposals,
+        "accepted_relations": accepted_relations,
+        "evidence": evidence,
+        "handles": handles
+    });
+    read.close()?;
+    store.close()?;
+    Ok(expected)
+}
+
+fn assert_project_map(
+    result: &ContextMapResult,
+    expected: &Value,
+    host_root: &Path,
+    state: ContextMapStatus,
+) -> TestResult<Value> {
+    assert_eq!(result.status(), state);
+    assert_eq!(result.failure_code(), None);
+    let envelope: Value = serde_json::from_slice(result.canonical_bytes())?;
+    assert_eq!(envelope["resource_closure"], "closed");
+    assert!(envelope.get("failure_code").is_none());
+    let payload = &envelope["payload"];
+    assert_eq!(
+        payload["publication_set_id"],
+        expected["publication_set_id"]
+    );
+    assert_eq!(
+        payload["store_generation_id"],
+        expected["store_generation_id"]
+    );
+    assert_eq!(payload["current_at_acquisition"], expected["current"]);
+    let map = &payload["project_map"];
+    assert_eq!(
+        payload["project_map_byte_length"].as_u64(),
+        Some(wow_core::canonical_json_bytes(map)?.len() as u64)
+    );
+    let core = &map["core"];
+    assert_eq!(core["state"], serde_json::to_value(state)?);
+    assert_eq!(core["absence_authoritative"], false);
+    let navigation = &core["navigation"];
+    assert_eq!(navigation["schema"], "wow-context/project-navigation/1");
+    assert_eq!(navigation["project_id"], expected["project_id"]);
+    assert_eq!(
+        navigation["root_enumeration"],
+        "complete_for_retained_primary_source_files"
+    );
+    let files = expected["files"]
+        .as_array()
+        .ok_or("expected genuine files")?;
+    let roots = navigation["source_file_roots"]
+        .as_array()
+        .ok_or("mandatory physical roots")?;
+    let neighborhoods = navigation["neighborhoods"]
+        .as_array()
+        .ok_or("native neighborhoods")?;
+    assert_eq!(roots.len(), files.len());
+    assert_eq!(neighborhoods.len(), files.len());
+    let mut seen_roots = BTreeSet::new();
+    let mut total_edges = 0;
+    let mut selected_records = BTreeSet::new();
+    for file in files {
+        assert!(
+            roots
+                .iter()
+                .any(|root| root["file"] == file["file"] && root["node"] == file["node"]),
+            "every actual ProjectGraphFile retains its exact final GraphNode"
+        );
+        let mut matching = neighborhoods
+            .iter()
+            .filter(|view| view["root"] == file["node"]);
+        let view = matching
+            .next()
+            .ok_or("mandatory native file neighborhood")?;
+        assert!(matching.next().is_none());
+        assert!(seen_roots.insert(view["root"]["node_id"].as_str().ok_or("final root ID")?));
+        let all_edges = file["edges"].as_array().ok_or("retained own edges")?;
+        let count = view["edges"].as_array().ok_or("native direct edges")?.len();
+        if state == ContextMapStatus::Truncated {
+            assert_eq!(count, 1);
+            assert_eq!(view["state"], "truncated");
+            assert_eq!(view["edges"], json!([all_edges[0]]));
+            let edge = &all_edges[0];
+            let endpoint = if edge["from"] == file["node"]["node_id"] {
+                &edge["to"]
+            } else {
+                &edge["from"]
+            };
+            let node = expected["nodes"]
+                .as_array()
+                .ok_or("native nodes")?
+                .iter()
+                .find(|node| &node["node_id"] == endpoint)
+                .ok_or("retained truncated endpoint")?;
+            assert_eq!(view["adjacent_nodes"], json!([node]));
+            assert_eq!(view["matching_edges"], all_edges.len());
+            assert_eq!(view["omitted_edges"], all_edges.len() - count);
+            assert!(
+                !view["truncations"]
+                    .as_array()
+                    .ok_or("native truncations")?
+                    .is_empty()
+            );
+        } else {
+            assert_eq!(count, 2);
+            assert_eq!(view["edges"], file["edges"]);
+            assert_eq!(view["adjacent_nodes"], file["adjacent"]);
+            assert!(
+                view["truncations"]
+                    .as_array()
+                    .ok_or("native truncations")?
+                    .is_empty()
+            );
+            assert_eq!(view["omitted_edges"], 0);
+        }
+        for node in std::iter::once(&view["root"]).chain(
+            view["adjacent_nodes"]
+                .as_array()
+                .ok_or("native endpoints")?
+                .iter(),
+        ) {
+            selected_records.insert((
+                "entity".to_string(),
+                node["node_id"]
+                    .as_str()
+                    .ok_or("native node ID")?
+                    .to_string(),
+            ));
+        }
+        for edge in view["edges"].as_array().ok_or("selected native edges")? {
+            selected_records.insert((
+                "relation".to_string(),
+                edge["edge_id"]
+                    .as_str()
+                    .ok_or("native edge ID")?
+                    .to_string(),
+            ));
+        }
+        total_edges += count;
+    }
+    assert_eq!(
+        total_edges,
+        if state == ContextMapStatus::Truncated {
+            2
+        } else {
+            4
+        },
+        "per-query edge cap must not become a project-wide/root prefix"
+    );
+    let edge_omission = core["omissions"]
+        .as_array()
+        .ok_or("map omission accounting")?
+        .iter()
+        .find(|row| row["scope"] == "direct_navigation_prefix")
+        .ok_or("native prefix omission")?;
+    assert_eq!(edge_omission["known_omitted"], 4 - total_edges);
+    assert_eq!(
+        edge_omission["enumeration"],
+        "sum_of_complete_match_counts_under_native_queries"
+    );
+    let nodes = expected["nodes"].as_array().ok_or("retained nodes")?;
+    let edges = expected["edges"].as_array().ok_or("retained edges")?;
+    let supports = core["supports"]
+        .as_array()
+        .ok_or("deduplicated mandatory supports")?;
+    assert_eq!(supports.len(), selected_records.len());
+    let mut seen = BTreeSet::new();
+    for receipt in supports {
+        let explanation = &receipt["explanation"];
+        assert_eq!(
+            explanation["source_context_id"],
+            expected["source_context_id"]
+        );
+        assert_eq!(explanation["support_complete"], true);
+        let record = &explanation["record"];
+        let (kind, id) = match record["kind"].as_str().ok_or("native record kind")? {
+            "entity" => {
+                assert!(nodes.contains(&record["node"]));
+                (
+                    "entity",
+                    record["node"]["node_id"].as_str().ok_or("native node ID")?,
+                )
+            }
+            "relation" => {
+                assert!(edges.contains(&record["edge"]));
+                (
+                    "relation",
+                    record["edge"]["edge_id"].as_str().ok_or("native edge ID")?,
+                )
+            }
+            _ => return Err("non-native map record".into()),
+        };
+        assert!(
+            seen.insert((kind, id)),
+            "support dedup is by actual node/edge identity"
+        );
+        assert!(
+            selected_records.remove(&(kind.to_string(), id.to_string())),
+            "exact selected support union"
+        );
+        let original = explanation["supports"]
+            .as_array()
+            .ok_or("original native support")?;
+        assert!(!original.is_empty());
+        for support in original {
+            assert_eq!(support["producer"]["partition_id"], SOURCE_GRAPH_PARTITION);
+            let (proposals, accepted) = match support["origin"].as_str() {
+                Some("producer_entity") => ("entity_proposals", "accepted_entities"),
+                Some("producer_relation") => ("relation_proposals", "accepted_relations"),
+                _ => return Err("fixture has no synthetic foundation support".into()),
+            };
+            assert!(
+                expected[proposals]
+                    .as_array()
+                    .ok_or("native proposals")?
+                    .contains(&support["proposal"])
+            );
+            assert!(
+                expected[accepted]
+                    .as_array()
+                    .ok_or("native acceptance")?
+                    .contains(&support["accepted"])
+            );
+        }
+        let resolution = &receipt["evidence_resolution"];
+        assert_eq!(resolution["closure_complete"], true);
+        assert!(
+            resolution["unresolved"]
+                .as_array()
+                .ok_or("unresolved")?
+                .is_empty()
+        );
+        for (actual, retained) in [
+            ("evidence_records", "evidence"),
+            ("source_handles", "handles"),
+        ] {
+            let rows = resolution[actual]
+                .as_array()
+                .ok_or("native evidence rows")?;
+            assert!(!rows.is_empty());
+            for row in rows {
+                assert!(
+                    expected[retained]
+                        .as_array()
+                        .ok_or("retained evidence")?
+                        .contains(row)
+                );
+            }
+        }
+    }
+    assert!(
+        selected_records.is_empty(),
+        "every selected actual node/edge has mandatory support"
+    );
+    let text = std::str::from_utf8(result.canonical_bytes())?;
+    for body in [LUA, PROJECT_OTHER_LUA] {
+        assert!(
+            !text.contains(&serde_json::to_string(body)?),
+            "raw Lua body is not map metadata"
+        );
+        assert!(
+            !text.contains(body.lines().next().ok_or("fixture Lua declaration")?),
+            "no Lua body prefix"
+        );
+    }
+    assert!(
+        !text.contains(&serde_json::to_string(&host_root.join("registered-store"))?),
+        "no absolute store path"
+    );
+    assert!(!text.contains("project_store_root"));
+    assert!(
+        !text.contains(
+            host_root
+                .file_name()
+                .ok_or("scratch name")?
+                .to_str()
+                .ok_or("UTF-8 scratch")?
+        )
+    );
+    Ok(map.clone())
+}
+
+#[test]
+fn retained_project_root_enumerates_both_files_and_refuses_required_aggregate_budget() -> TestResult
+{
+    let stop = AtomicBool::new(false);
+    let scratch = Scratch::new()?;
+    let store_root = scratch.root.join("registered-store");
+    let (publisher, graph, reference, profile) = owners_from_bundle(
+        input_bundle_files(vec![
+            ProjectInputFile::new("main.lua", LUA)?,
+            ProjectInputFile::new("other.lua", PROJECT_OTHER_LUA)?,
+        ])?,
+        &stop,
+    )?;
+    let project_id = publisher
+        .current_snapshot()
+        .ok_or("published native snapshot")?
+        .open_view()
+        .configuration()
+        .project_id()
+        .clone();
+    let mut store = LiveProjectStore::create(&store_root, graph.snapshot().universe().as_str())?;
+    let published = store.publish(
+        &publisher,
+        &graph,
+        "fixture-context-project-root",
+        None,
+        &stop,
+    )?;
+    store.close()?;
+    drop(graph);
+    drop(publisher);
+    let expected = retained_project_expectation(&store_root, &published.generation_id, &stop)?;
+    assert_eq!(expected["project_id"], serde_json::to_value(&project_id)?);
+    let mut host_json = host_value(&store_root, &profile, &reference);
+    host_json["limits"]["max_direct_edges"] = json!(2);
+    let host = decode_host(&host_json, &stop)?;
+    let request = ContextMapRequest::primary(
+        STORE_ID,
+        ContextMapPublication::store_generation(published.generation_id.as_str())?,
+        PRIMARY_PROJECT_NAVIGATION_MAP_PROFILE_ID,
+        Some(ContextMapRoot::project(project_id.as_str())?),
+        None,
+        Some(reference_guard(&profile, &reference)?),
+    )?;
+    let first = execute_context_map(&host, &request, &stop)?;
+    let explicit = assert_project_map(&first, &expected, &scratch.root, ContextMapStatus::Partial)?;
+    let repeated = execute_context_map(&host, &request, &stop)?;
+    assert_eq!(first.canonical_bytes(), repeated.canonical_bytes());
+    let derived_request = ContextMapRequest::primary(
+        STORE_ID,
+        ContextMapPublication::store_generation(published.generation_id.as_str())?,
+        PRIMARY_PROJECT_NAVIGATION_MAP_PROFILE_ID,
+        None,
+        None,
+        Some(reference_guard(&profile, &reference)?),
+    )?;
+    let derived = execute_context_map(&host, &derived_request, &stop)?;
+    let implicit = assert_project_map(
+        &derived,
+        &expected,
+        &scratch.root,
+        ContextMapStatus::Partial,
+    )?;
+    assert_eq!(
+        explicit, implicit,
+        "same exact acquired project root yields same map artifact"
+    );
+    let mut truncated_host_json = host_json.clone();
+    truncated_host_json["limits"]["max_direct_edges"] = json!(1);
+    let truncated =
+        execute_context_map(&decode_host(&truncated_host_json, &stop)?, &request, &stop)?;
+    assert_project_map(
+        &truncated,
+        &expected,
+        &scratch.root,
+        ContextMapStatus::Truncated,
+    )?;
+
+    let mismatch = ContextMapRequest::primary(
+        STORE_ID,
+        ContextMapPublication::store_generation(published.generation_id.as_str())?,
+        PRIMARY_PROJECT_NAVIGATION_MAP_PROFILE_ID,
+        Some(ContextMapRoot::project("fixture-context-unselected")?),
+        None,
+        Some(reference_guard(&profile, &reference)?),
+    )?;
+    assert_refused(
+        &host,
+        &mismatch,
+        ServiceErrorCode::InvalidRequest,
+        "closed",
+        &stop,
+    )?;
+    let mut low_work = host_json.clone();
+    low_work["limits"]["max_context_work"] = json!(1);
+    assert_refused(
+        &decode_host(&low_work, &stop)?,
+        &request,
+        ServiceErrorCode::BudgetExceeded,
+        "closed",
+        &stop,
+    )?;
+    let mut low_output = host_json.clone();
+    // One native explanation allowance cannot fund the mandatory project support batch.
+    low_output["limits"]["max_metadata_bytes"] =
+        host_json["limits"]["explain"]["max_output_bytes"].clone();
+    assert_refused(
+        &decode_host(&low_output, &stop)?,
+        &request,
+        ServiceErrorCode::BudgetExceeded,
+        "closed",
+        &stop,
+    )?;
+    assert_eq!(
+        first.canonical_bytes(),
+        include_bytes!("../../e3/native-primary-project-map/envelope.json")
+    );
+    assert_eq!(
+        wow_core::canonical_json_bytes(&request)?,
+        include_bytes!("../../e3/native-primary-project-map/request.json")
+    );
+    assert_eq!(
+        wow_context::PRIMARY_PROJECT_MAP_PROFILE_BYTES,
+        include_bytes!("../../e3/native-primary-project-map/profile.json")
+    );
+    export_fixture(&scratch, &host_json, &request, &first, &profile, &reference)?;
     Ok(())
 }
