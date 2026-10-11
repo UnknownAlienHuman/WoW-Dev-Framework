@@ -1,6 +1,6 @@
 //! Explicit logical platform-store selection, separate from source generations.
 use super::{
-    LiveProjectRead, LiveProjectResult, LiveProjectStore, LiveProjectUpdateRequest, catalog,
+    LiveProjectRead, LiveProjectResult, LiveProjectStore, LiveProjectUpdateRequest,
     catalog_accepts_components, catalog_for, fail, store_error,
 };
 use crate::{LocalProjectInput, ServiceErrorCode, ServiceResult, graph::GraphBuildRequest};
@@ -24,6 +24,7 @@ pub struct PlatformStoreSelection {
     xml_classification_catalog: bool,
     physical_function_declarations_catalog: Option<PhysicalFunctionDeclarationRecipe>,
     physical_function_signatures_catalog: Option<PhysicalFunctionSignatureRecipe>,
+    composed_candidate_catalog: bool,
 }
 
 impl PlatformStoreSelection {
@@ -38,6 +39,7 @@ impl PlatformStoreSelection {
             xml_classification_catalog: false,
             physical_function_declarations_catalog: None,
             physical_function_signatures_catalog: None,
+            composed_candidate_catalog: false,
         })
     }
 
@@ -76,29 +78,47 @@ impl PlatformStoreSelection {
         self
     }
 
+    /// Require the selected service candidate owner on publication and reopen.
+    #[must_use]
+    pub fn with_composed_candidate_catalog(mut self) -> Self {
+        self.composed_candidate_catalog = true;
+        self
+    }
+    pub(super) const fn composed_candidate_selected(&self) -> bool {
+        self.composed_candidate_catalog
+    }
+    fn selected_catalog(&self, schemas: &[&'static str]) -> ServiceResult<RecordCatalog> {
+        if self.composed_candidate_catalog {
+            super::candidate::catalog(schemas)
+        } else {
+            catalog_for(schemas)
+        }
+    }
+
     fn catalog(&self) -> ServiceResult<RecordCatalog> {
         if self.physical_function_signatures_catalog
             == Some(PhysicalFunctionSignatureRecipe::IndexedTypesV1)
         {
-            return catalog_for(publication::STORAGE_SCHEMAS_SELECTED_COMPONENTS_V1);
+            return self.selected_catalog(publication::STORAGE_SCHEMAS_SELECTED_COMPONENTS_V1);
         }
         use PhysicalFunctionDeclarationRecipe::{DeclaredSyntaxAndBodyShapeV1, DeclaredSyntaxV1};
         match (
             self.xml_classification_catalog,
             self.physical_function_declarations_catalog,
         ) {
-            (false, None) => catalog(),
-            (true, None) => catalog_for(publication::STORAGE_SCHEMAS_XML_CLASSIFICATION_V1),
-            (false, Some(DeclaredSyntaxV1)) => {
-                catalog_for(publication::STORAGE_SCHEMAS_PHYSICAL_FUNCTION_DECLARATIONS_V1)
+            (false, None) => self.selected_catalog(publication::STORAGE_SCHEMAS),
+            (true, None) => {
+                self.selected_catalog(publication::STORAGE_SCHEMAS_XML_CLASSIFICATION_V1)
             }
-            (true, Some(DeclaredSyntaxV1)) => catalog_for(
+            (false, Some(DeclaredSyntaxV1)) => self
+                .selected_catalog(publication::STORAGE_SCHEMAS_PHYSICAL_FUNCTION_DECLARATIONS_V1),
+            (true, Some(DeclaredSyntaxV1)) => self.selected_catalog(
                 publication::STORAGE_SCHEMAS_XML_CLASSIFICATION_PHYSICAL_FUNCTION_DECLARATIONS_V1,
             ),
             (false, Some(DeclaredSyntaxAndBodyShapeV1)) => {
-                catalog_for(publication::STORAGE_SCHEMAS_PHYSICAL_FUNCTION_BODY_SHAPE_V1)
+                self.selected_catalog(publication::STORAGE_SCHEMAS_PHYSICAL_FUNCTION_BODY_SHAPE_V1)
             }
-            (true, Some(DeclaredSyntaxAndBodyShapeV1)) => catalog_for(
+            (true, Some(DeclaredSyntaxAndBodyShapeV1)) => self.selected_catalog(
                 publication::STORAGE_SCHEMAS_XML_CLASSIFICATION_PHYSICAL_FUNCTION_BODY_SHAPE_V1,
             ),
         }
@@ -113,7 +133,7 @@ impl PlatformStoreSelection {
                     self.physical_function_declarations_catalog,
                     self.physical_function_signatures_catalog,
                 ),
-            ) && &catalog_for(schemas)? == actual
+            ) && &self.selected_catalog(schemas)? == actual
             {
                 return Ok(());
             }
@@ -128,6 +148,14 @@ impl PlatformStoreSelection {
         configuration: &ProjectConfiguration,
     ) -> ServiceResult<()> {
         self.validate()?;
+        if self.composed_candidate_catalog
+            && !matches!(
+                configuration.platform_graph_profile(),
+                Some(wow_project::PlatformGraphProfile::DirectCapabilitiesV1(_))
+            )
+        {
+            return Err(fail(ServiceErrorCode::IdentityMismatch));
+        }
         let classification_selected = matches!(
             configuration.platform_graph_profile(),
             Some(wow_project::PlatformGraphProfile::DirectCapabilitiesV1(capabilities))
@@ -191,6 +219,7 @@ impl LiveProjectStore {
                 selection.physical_function_declarations_catalog,
                 selection.physical_function_signatures_catalog,
             )),
+            Some(selection.composed_candidate_catalog),
         )?;
         store.require_namespace(selection)?;
         Ok(store)
@@ -260,6 +289,9 @@ impl LiveProjectStore {
     ) -> ServiceResult<LiveProjectResult> {
         self.require_namespace(selection)?;
         selection.require_configuration(input.project_bundle().configuration())?;
+        if selection.composed_candidate_selected() {
+            return self.update_candidate(selection, input, graph_request, request, stop);
+        }
         self.update(input, graph_request, request, stop)
     }
 }

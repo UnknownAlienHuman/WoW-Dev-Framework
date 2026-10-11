@@ -1,5 +1,6 @@
-//! One-shot composition of project-owned source proposals and graph materialization.
-//! Emits artifacts only; no current pointer, ProjectStore write or source mutation.
+//! Composition of project-owned source proposals and graph materialization.
+//! Artifact builds are read-only. Explicit live publication uses the sealed
+//! candidate adapter and existing store owner; source inputs remain immutable.
 use super::{GRAPH_INPUT_MAX_BYTES, GraphReadStage, GraphReadStatus};
 use crate::{
     GenerationSelector, LocalProjectBackend, LocalProjectInput, ServiceError, ServiceErrorCode,
@@ -20,6 +21,13 @@ use wow_project::graph::{
 use wow_recognizers::source_calls::SourceCallOutcome;
 
 mod assembly_budget;
+mod candidate;
+mod candidate_store;
+pub use candidate::{BlizzardUiIndexCandidate, BlizzardUiIndexManifest, CoreRecognizerReports};
+pub(crate) use candidate_store::{
+    CANDIDATE_RECORD_KEY, CANDIDATE_STORAGE_CHECK, CANDIDATE_STORAGE_SCHEMA,
+    candidate_storage_record, capture_candidate_from_backend, read_candidate_pair,
+};
 mod calls;
 mod construction;
 mod fingerprints;

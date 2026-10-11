@@ -256,8 +256,17 @@ pub fn publish_input_in_namespace(
     } else {
         Some(LiveProjectStore::open_in_namespace(root, selection)?)
     };
-    let (bundle, owner) =
-        graph_request.live_publication_in_namespace(input, selection.namespace(), stop)?;
+    let (bundle, owner) = if selection.composed_candidate_selected() {
+        let bundle = super::candidate::capture_input(input, graph_request, selection, stop)?;
+        (
+            super::candidate::PublicationHandoff::Candidate(bundle),
+            selection.namespace().id().as_str().into(),
+        )
+    } else {
+        let (bundle, owner) =
+            graph_request.live_publication_in_namespace(input, selection.namespace(), stop)?;
+        (super::candidate::PublicationHandoff::Pair(bundle), owner)
+    };
     super::publication_checkpoint(stop)?;
     let mut store = match existing {
         Some(store) => store,
@@ -267,12 +276,20 @@ pub fn publish_input_in_namespace(
     if store.store.epoch().owner() != owner {
         return Err(fail(ServiceErrorCode::IdentityMismatch));
     }
-    let operation = store.publish_bundle(
-        bundle,
-        request.operation_id.as_str(),
-        request.expected.clone(),
-        stop,
-    )?;
+    let operation = match bundle {
+        super::candidate::PublicationHandoff::Pair(bundle) => store.publish_bundle(
+            bundle,
+            request.operation_id.as_str(),
+            request.expected.clone(),
+            stop,
+        )?,
+        super::candidate::PublicationHandoff::Candidate(bundle) => store.publish_candidate_bundle(
+            bundle,
+            request.operation_id.as_str(),
+            request.expected.clone(),
+            stop,
+        )?,
+    };
     let mut result = LiveProjectResult::new("activated");
     result.operation = Some(operation);
     result.bind_admitted_namespace(store.store.epoch().namespace())?;
@@ -329,6 +346,11 @@ impl LiveProjectStore {
         stop: &AtomicBool,
     ) -> ServiceResult<LiveProjectResult> {
         super::publication_checkpoint(stop)?;
+        // NoChange must not discard selected comparison queries. Physical
+        // incremental candidate update is a separate owner slice; no effects.
+        if super::candidate::is_selected(self.store.epoch().catalog())? {
+            return Err(fail(ServiceErrorCode::OperationNotImplementedForMilestone));
+        }
         let target = input.project_bundle();
         if let Some(namespace) = self.store.epoch().namespace() {
             namespace.validate().map_err(super::store_error)?;
@@ -420,6 +442,100 @@ impl LiveProjectStore {
     }
 }
 
+impl LiveProjectStore {
+    /// Apply the real final-input delta, then rebuild every selected owner/query.
+    /// Project NoChange alone cannot attest unchanged candidate query selections.
+    pub(super) fn update_candidate(
+        &mut self,
+        selection: &PlatformStoreSelection,
+        input: LocalProjectInput,
+        graph_request: &GraphBuildRequest,
+        request: &LiveProjectUpdateRequest,
+        stop: &AtomicBool,
+    ) -> ServiceResult<LiveProjectResult> {
+        super::publication_checkpoint(stop)?;
+        self.require_namespace(selection)?;
+        if !selection.composed_candidate_selected()
+            || !super::candidate::is_selected(self.store.epoch().catalog())?
+        {
+            return Err(fail(ServiceErrorCode::IdentityMismatch));
+        }
+        let target = input.project_bundle();
+        selection.require_configuration(target.configuration())?;
+        let retained_operation = self.reconcile(request.operation_id.as_str())?;
+        if retained_operation
+            .as_ref()
+            .is_some_and(|operation| operation.release.is_some())
+        {
+            return Err(fail(ServiceErrorCode::OperationReleased));
+        }
+        if retained_operation.is_none()
+            && self.current()?.as_ref().map(|current| &current.record_id) != Some(&request.expected)
+        {
+            return Err(fail(ServiceErrorCode::StoreCurrentConflict));
+        }
+        let read = self.read_in_namespace(
+            selection,
+            &ReadSelector::Publication(request.expected.clone()),
+            stop,
+        )?;
+        let base_summary = PairSummary::from_read(&read);
+        let (mut publisher, _base_lease, previous_receipt) =
+            read.into_candidate_update_publisher(stop)?;
+        let libraries = match request.libraries {
+            LiveProjectLibraryMode::Keep => wow_project::ProjectLibraryOperation::Keep,
+            LiveProjectLibraryMode::Replace => {
+                wow_project::ProjectLibraryOperation::Replace(target.libraries().to_vec())
+            }
+            LiveProjectLibraryMode::Clear => wow_project::ProjectLibraryOperation::Clear,
+        };
+        let update = publisher
+            .derive_update_request(target, libraries)
+            .map_err(super::project_error)?;
+        super::publication_checkpoint(stop)?;
+        let outcome = publisher
+            .apply_update_cancellable(update, stop)
+            .map_err(super::project_error)?;
+        let backend = crate::LocalProjectBackend::for_graph_with_publisher(input, publisher, stop)?;
+        super::publication_checkpoint(stop)?;
+        // One native prefix/core/query composition on the updated held snapshot.
+        // No prior graph, fingerprint manifest or candidate authority is reused.
+        let candidate =
+            crate::graph::capture_candidate_from_backend(&backend, graph_request, stop)?;
+        selection.require_configuration(candidate.native().project().configuration())?;
+        let bundle =
+            backend.capture_candidate_publication(candidate, selection.namespace(), stop)?;
+        super::publication_checkpoint(stop)?;
+        if !outcome.changed() && bundle.matches_receipt(&previous_receipt) {
+            if retained_operation.is_some() {
+                return Err(fail(ServiceErrorCode::OperationConflict));
+            }
+            let current = self.current()?;
+            if current.as_ref().map(|value| &value.record_id) != Some(&request.expected) {
+                return Err(fail(ServiceErrorCode::StoreCurrentConflict));
+            }
+            super::publication_checkpoint(stop)?;
+            let mut result = LiveProjectResult::new("no_change");
+            result.scope = "native-live-project-update-v1";
+            result.current = current;
+            result.pair = Some(base_summary);
+            result.bind_admitted_namespace(self.store.epoch().namespace())?;
+            return Ok(result);
+        }
+        let operation = self.publish_candidate_bundle(
+            bundle,
+            request.operation_id.as_str(),
+            Some(request.expected.clone()),
+            stop,
+        )?;
+        let mut result = LiveProjectResult::new("activated");
+        result.scope = "native-live-project-update-v1";
+        result.operation = Some(operation);
+        result.bind_admitted_namespace(self.store.epoch().namespace())?;
+        Ok(result)
+    }
+}
+
 pub fn read_live_project(
     root: &Path,
     generation: &str,
@@ -444,7 +560,7 @@ pub fn read_live_project_in_namespace(
     read_result(read, stop)
 }
 
-fn read_selector(generation: &str) -> ServiceResult<ReadSelector> {
+pub(super) fn read_selector(generation: &str) -> ServiceResult<ReadSelector> {
     if generation == "current" {
         Ok(ReadSelector::Current)
     } else {

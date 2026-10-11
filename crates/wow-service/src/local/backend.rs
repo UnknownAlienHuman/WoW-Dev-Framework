@@ -289,6 +289,36 @@ impl LocalProjectBackend {
             .map_err(crate::live_project::project_error)
     }
 
+    /// Selected service capture from the identical held native snapshot. The
+    /// candidate is consumed after its receipt is encoded, before store reopen.
+    pub(crate) fn capture_candidate_publication(
+        &self,
+        candidate: crate::graph::BlizzardUiIndexCandidate,
+        namespace: &ProjectStoreNamespace,
+        stop: &AtomicBool,
+    ) -> ServiceResult<crate::live_project::candidate::CandidatePublication> {
+        cancelled(stop)?;
+        let retained = self
+            .published
+            .lock()
+            .map_err(|_| owner_error("project publication lock poisoned"))?;
+        let project = retained
+            .as_ref()
+            .ok_or_else(|| owner_error("project must be materialized before native publication"))?;
+        if !std::sync::Arc::ptr_eq(
+            project.view.snapshot(),
+            candidate.native().project().snapshot(),
+        ) {
+            return Err(owner_error("candidate and retained publisher differ"));
+        }
+        crate::live_project::candidate::CandidatePublication::capture(
+            &project.publisher,
+            candidate,
+            namespace,
+            stop,
+        )
+    }
+
     fn acquire(
         &self,
         selector: &GenerationSelector,

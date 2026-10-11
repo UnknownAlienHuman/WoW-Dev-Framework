@@ -7,6 +7,14 @@ component slices; full E3-A acceptance remains open. See the
 `CONTRACT.json` records each nominal operation's actual owner/application route;
 `examples/CHECKSUMS.json` is a pending acceptance manifest, not a frozen bundle.
 
+The selected candidate/publication/reopen and first Skeleton route are described
+in [live project commands](../../../apps/wow/LIVE_PROJECT.md). The native one-hop
+handles profile remains Partial/Truncated with broader projections NotEvaluated.
+[#116](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/116) retains
+candidate/Skeleton acceptance and selected-update lifecycle qualification;
+[#106](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/106) owns the
+current bounded implementation claim.
+
 **Contract ID:** `wow-project/e3-a/blizzard-ui-source-universe-index`
 
 ## Mission

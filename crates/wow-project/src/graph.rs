@@ -24,7 +24,8 @@ use platform_producers::DirectRecipe;
 pub use platform_producers::{
     PLATFORM_CAPABILITIES_GRAPH_PROFILE, PLATFORM_DIRECT_GRAPH_PROFILE,
     PlatformGraphProducerProposals, PlatformGraphProposalPlan, PlatformGraphProvenance,
-    build_platform_graph_proposal_plan, build_platform_graph_proposal_plan_diagnosed,
+    PlatformIndexSourceParts, build_platform_graph_proposal_plan,
+    build_platform_graph_proposal_plan_diagnosed,
     build_platform_graph_proposal_plan_for_capabilities,
 };
 mod projection;

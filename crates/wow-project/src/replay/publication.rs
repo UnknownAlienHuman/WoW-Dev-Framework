@@ -346,6 +346,21 @@ impl ProjectPublicationBundle {
         validate_pair(&project, graph, stop)?;
         plan_in_namespace(replay, &project, graph, Some(namespace), stop)
     }
+    /// Use the already finished native proof without rebuilding its projection.
+    /// This remains a generic project/graph bundle; service records are separate.
+    pub fn build_with_native_parts(
+        publisher: &ProjectPublisher,
+        graph: &GraphPartitionSnapshot,
+        native: &crate::graph::PlatformIndexSourceParts,
+        namespace: Option<&ProjectStoreNamespace>,
+        stop: &AtomicBool,
+    ) -> ProjectResult<Self> {
+        let project = publisher.open_current()?;
+        validate_native_parts(&project, graph, native, stop)?;
+        let replay = ProjectReplay::capture(publisher, stop)?;
+        plan_in_namespace(&replay, &project, graph, namespace, stop)
+    }
+
     pub fn into_parts(self) -> (Vec<PartitionRecord>, BTreeMap<String, String>) {
         (self.records, self.bindings)
     }
@@ -382,11 +397,90 @@ impl AcquiredProjectPair {
         }
         Ok(self.publisher)
     }
+    /// Consume this exact rebuilt native pair for a retained-platform update.
+    /// The proof must own the same snapshot and validated native graph prefix.
+    /// Ordinary physical/legacy admission remains in into_update_publisher.
+    pub fn into_platform_update_publisher(
+        self,
+        native: &crate::graph::PlatformIndexSourceParts,
+        stop: &AtomicBool,
+    ) -> ProjectResult<ProjectPublisher> {
+        crate::analyzer::checkpoint(stop)?;
+        let configuration = self.project.configuration();
+        if !matches!(
+            configuration.platform_graph_profile(),
+            Some(crate::PlatformGraphProfile::DirectCapabilitiesV1(_))
+        ) || configuration.platform_packages().is_none()
+            || configuration.package_load_plan().is_none()
+            || configuration.package_main_plan().is_none()
+            || self
+                .project
+                .snapshot()
+                .generation_candidate()
+                .project_generation_schema_version()
+                != 2
+            || self
+                .project
+                .snapshot()
+                .analyzer_binding()
+                .function_call_report()
+                .is_none()
+        {
+            return Err(invalid());
+        }
+        validate_native_parts(&self.project, &self.graph, native, stop)?;
+        crate::analyzer::checkpoint(stop)?;
+        Ok(self.publisher)
+    }
+
     pub fn read(read: &ReadSnapshot, stop: &AtomicBool) -> ProjectResult<Self> {
+        Self::read_owner(
+            read,
+            stop,
+            |_, _| Ok(((), Vec::new())),
+            |project, graph, _, stop| validate_pair(project, graph, stop),
+        )
+        .map(|(pair, ())| pair)
+    }
+
+    /// A compiled companion owner rebuilds on this one hydrated native view.
+    /// Its additional records must match exact manifested membership. This
+    /// does not decode or attest the companion owner's semantic authority.
+    pub fn read_with_native_owner_records<T, E>(
+        read: &ReadSnapshot,
+        stop: &AtomicBool,
+        rebuild: impl FnOnce(
+            &ProjectView,
+            &GraphPartitionSnapshot,
+        ) -> Result<(T, Vec<PartitionRecord>), E>,
+    ) -> Result<(Self, T), E>
+    where
+        T: AsRef<crate::graph::PlatformIndexSourceParts>,
+        E: From<crate::ProjectError>,
+    {
+        Self::read_owner(read, stop, rebuild, |project, graph, owner: &T, stop| {
+            validate_native_parts(project, graph, owner.as_ref(), stop)
+        })
+    }
+
+    fn read_owner<T, E: From<crate::ProjectError>>(
+        read: &ReadSnapshot,
+        stop: &AtomicBool,
+        rebuild: impl FnOnce(
+            &ProjectView,
+            &GraphPartitionSnapshot,
+        ) -> Result<(T, Vec<PartitionRecord>), E>,
+        validate: impl FnOnce(
+            &ProjectView,
+            &GraphPartitionSnapshot,
+            &T,
+            &AtomicBool,
+        ) -> ProjectResult<()>,
+    ) -> Result<(Self, T), E> {
         crate::analyzer::checkpoint(stop)?;
         let header: PairHeader = load(read, HEADER_KEY, "wow-project.live-pair.v1", stop)?;
         if header.schema != HEADER_SCHEMA {
-            return Err(invalid());
+            return Err(invalid().into());
         }
         let replay_schema = read
             .manifest()
@@ -419,20 +513,41 @@ impl AcquiredProjectPair {
                 | super::XML_CLASSIFICATION_PHYSICAL_FUNCTION_BODY_SHAPE_STORAGE_SCHEMA
                 | super::SELECTED_COMPONENTS_STORAGE_SCHEMA
         ) {
-            return Err(invalid());
+            return Err(invalid().into());
         }
         let replay: ProjectReplay = load(read, REPLAY_KEY, replay_schema, stop)?;
         if replay.storage_schema()? != replay_schema {
-            return Err(invalid());
+            return Err(invalid().into());
         }
         let graph = GraphPartitionSnapshot::read_stored(read, stop).map_err(graph_error)?;
         let publisher = replay.hydrate_owner(stop)?;
         let project = publisher.open_current()?;
-        validate_pair(&project, &graph, stop)?;
+        let (owner, companion_records) = rebuild(&project, &graph)?;
+        validate(&project, &graph, &owner, stop)?;
         // Dispatch from the actual epoch retained by this read lease. A failed
         // namespace check cannot fall back to the legacy graph-universe mode.
         let namespace = read.epoch().namespace();
-        let expected = plan_in_namespace(&replay, &project, &graph, namespace, stop)?;
+        let mut expected = plan_in_namespace(&replay, &project, &graph, namespace, stop)?;
+        if expected
+            .records
+            .len()
+            .checked_add(companion_records.len())
+            .is_none_or(|count| count != read.manifest().members.len())
+        {
+            return Err(invalid().into());
+        }
+        for record in companion_records {
+            crate::analyzer::checkpoint(stop)?;
+            if expected
+                .records
+                .iter()
+                .any(|existing| existing.key() == record.key())
+            {
+                return Err(invalid().into());
+            }
+            expected.records.push(record);
+        }
+        expected.records.sort_by(|a, b| a.key().cmp(b.key()));
         let expected_owner = namespace.map_or_else(
             || graph.snapshot().universe().as_str(),
             |namespace| namespace.id().as_str(),
@@ -442,12 +557,12 @@ impl AcquiredProjectPair {
             || read.manifest().owner != expected_owner
             || read.epoch().owner() != expected_owner
         {
-            return Err(invalid());
+            return Err(invalid().into());
         }
         for (record, member) in expected.records.iter().zip(&read.manifest().members) {
             crate::analyzer::checkpoint(stop)?;
             if record.key() != member.key || record.version() != &member.version {
-                return Err(invalid());
+                return Err(invalid().into());
             }
         }
         let expected_header: PairHeader = expected
@@ -458,16 +573,65 @@ impl AcquiredProjectPair {
             .decode()
             .map_err(|_| invalid())?;
         if header != expected_header {
+            return Err(invalid().into());
+        }
+        crate::analyzer::checkpoint(stop)?;
+        Ok((
+            Self {
+                project,
+                publisher,
+                supports_physical_update: replay.supports_physical_update(),
+                graph,
+                publication_set_id: header.publication_set_id,
+            },
+            owner,
+        ))
+    }
+}
+
+/// Only a genuine consumed native owner supplies these prefix commitments.
+/// Pointer equality requires the same immutable snapshot, not matching text IDs.
+fn validate_native_parts(
+    project: &ProjectView,
+    graph: &GraphPartitionSnapshot,
+    native: &crate::graph::PlatformIndexSourceParts,
+    stop: &AtomicBool,
+) -> ProjectResult<()> {
+    crate::analyzer::checkpoint(stop)?;
+    project.snapshot().validate()?;
+    graph.validate(stop).map_err(graph_error)?;
+    let profile = match project.configuration().platform_graph_profile() {
+        Some(crate::PlatformGraphProfile::DirectCapabilitiesV1(selected))
+            if native.capabilities() == Some(selected) =>
+        {
+            crate::graph::PLATFORM_CAPABILITIES_GRAPH_PROFILE
+        }
+        Some(crate::PlatformGraphProfile::DirectPlatformProducersWithRawInventoryV1)
+            if native.capabilities().is_none() =>
+        {
+            crate::graph::PLATFORM_DIRECT_GRAPH_PROFILE
+        }
+        _ => return Err(invalid()),
+    };
+    if !std::sync::Arc::ptr_eq(project.snapshot(), native.project().snapshot())
+        || profile != native.profile()
+        || graph.registry().registry_digest() != native.registry_digest()
+        || graph.foundation().snapshot_id() != native.foundation_snapshot_id()
+        || graph.source_context_id() != native.scope().source_context_id
+        || graph.partition(SOURCE_GRAPH_PARTITION).is_some()
+    {
+        return Err(invalid());
+    }
+    for (id, digest) in native.native_prefix_partitions() {
+        crate::analyzer::checkpoint(stop)?;
+        if graph
+            .partition(id)
+            .is_none_or(|partition| partition.partition_digest() != digest)
+        {
             return Err(invalid());
         }
-        Ok(Self {
-            project,
-            publisher,
-            supports_physical_update: replay.supports_physical_update(),
-            graph,
-            publication_set_id: header.publication_set_id,
-        })
     }
+    crate::analyzer::checkpoint(stop)
 }
 
 fn validate_pair(

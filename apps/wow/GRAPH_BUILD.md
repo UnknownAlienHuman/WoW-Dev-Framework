@@ -184,8 +184,9 @@ unselected output recipes retain their existing identities. See
 [component policy](../../crates/wow-project/e3/FUNCTION_FINGERPRINTS.md).
 
 These comparison records do not widen the frozen v16 graph-bundle reader or
-construct a validated E3 candidate from JSON. The real #116 candidate handoff
-and full #118 acceptance remain required.
+construct a validated E3 candidate from JSON. The explicit native candidate,
+publication/reopen and bounded Skeleton route use the owning
+[live project commands](LIVE_PROJECT.md). Full #116/#118 acceptance remains open.
 
 Selected `xml_schema_classification_v1` emits
 `wow-service/graph-build-result/xml-schema-classification/1` through this command.

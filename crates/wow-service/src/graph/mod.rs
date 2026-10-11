@@ -4,13 +4,18 @@
 mod build;
 #[cfg(test)]
 pub(crate) use build::verify_source_axes_through_service;
-pub(crate) use build::{live_publication, live_publication_from_backend};
+pub(crate) use build::{
+    CANDIDATE_RECORD_KEY, CANDIDATE_STORAGE_CHECK, CANDIDATE_STORAGE_SCHEMA,
+    candidate_storage_record, capture_candidate_from_backend, live_publication,
+    live_publication_from_backend, read_candidate_pair,
+};
 mod bundle;
 pub use bundle::GRAPH_BUNDLE_MAX_BYTES;
-mod input;
+pub(crate) mod input;
 mod persistence;
 mod sources;
 pub use build::{
+    BlizzardUiIndexCandidate, BlizzardUiIndexManifest, CoreRecognizerReports,
     FunctionCompositeRecipe, FunctionDirectNeighborhoodRecipe, FunctionFingerprintSelection,
     FunctionPackageLoadRoleRecipe, GraphBuildRequest, GraphBuildResult, XmlFingerprintManifest,
     XmlFingerprintRecord, XmlFingerprintSelection, XmlFingerprintTarget, execute_graph_build,

@@ -22,6 +22,7 @@ pub mod platform_source;
 mod publication;
 mod registry;
 pub mod replay;
+pub mod skeleton_input;
 mod snapshot;
 mod update;
 pub mod xml_bindings;

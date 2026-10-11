@@ -1,5 +1,6 @@
 //! Strict transport for live project publication, acquisition and physical recovery.
 use crate::args::Format;
+mod selected;
 use std::{
     collections::BTreeMap,
     ffi::{OsStr, OsString},
@@ -13,12 +14,15 @@ use wow_service::{
     live_project::{
         CurrentDomainObservation, CurrentState, LiveProjectLibraryMode, LiveProjectPublishRequest,
         LiveProjectUpdateRequest, RecoveryReport, ScopeState, publish_local_project,
-        read_live_project, reconcile_live_project, recover_current_live_project,
-        recover_live_project, update_local_project,
+        publish_selected_local_project, read_live_project, reconcile_live_project,
+        recover_current_live_project, recover_live_project, update_local_project,
+        update_selected_local_project,
     },
 };
 
 const HELP: &str = concat!(
+    "wow project skeleton --selection <selection.json> --store-root <directory> --store-generation current|<generation-id> --request <skeleton.json> [--format json|text]\n",
+    "Platform publish/update/read: --selection <selection.json> selects exact namespace/catalog intent. Publish/update may also supply --function-fingerprints <query.json> and --xml-fingerprints <query.json>. Skeleton requires composed_candidate=true; source-free reopen still rebuilds native/core owners from retained records. Partial/truncated exits 2.\n",
     "wow project publish --config <project.json> --project <ProjectId> [--generation current|<ProjectGenerationId>] --store-root <private-directory> --operation-id <id> --expected-current absent|<record-id> --allow-partial [--initialize] [--format json|text]\n",
     "wow project update --config <final-project.json> --project <ProjectId> [--generation current|<ProjectGenerationId>] --store-root <directory> --operation-id <id> --expected-current <record-id> --library keep|replace|clear --allow-partial [--format json|text]\n",
     "wow project read --store-root <directory> --store-generation current|<generation-id> [--format json|text]\n",
@@ -34,14 +38,22 @@ enum Command {
         config: PathBuf,
         graph: GraphBuildRequest,
         request: LiveProjectPublishRequest,
+        functions: Option<PathBuf>,
+        xml: Option<PathBuf>,
     },
     Update {
         config: PathBuf,
         graph: GraphBuildRequest,
         request: LiveProjectUpdateRequest,
+        functions: Option<PathBuf>,
+        xml: Option<PathBuf>,
     },
     Read {
         generation: String,
+    },
+    Skeleton {
+        generation: String,
+        request: PathBuf,
     },
     Reconcile {
         operation: String,
@@ -54,13 +66,19 @@ struct Arguments {
     root: PathBuf,
     command: Command,
     format: Format,
+    selection: Option<PathBuf>,
 }
 
 pub fn run(values: Vec<OsString>) -> u8 {
     if (values.len() == 2
         || (values.len() == 3
             && values.get(1).is_some_and(|v| {
-                v == "publish" || v == "update" || v == "read" || v == "reconcile" || v == "recover"
+                v == "publish"
+                    || v == "update"
+                    || v == "read"
+                    || v == "reconcile"
+                    || v == "recover"
+                    || v == "skeleton"
             })))
         && values.last().is_some_and(|v| v == "--help" || v == "-h")
     {
@@ -77,18 +95,74 @@ pub fn run(values: Vec<OsString>) -> u8 {
     let Some(stop) = super::cancellation_flag() else {
         return 64;
     };
+    let selection = match args.selection.as_deref() {
+        Some(path) => match selected::load_selection(path, &stop) {
+            Ok(selection) => Some(selection),
+            Err(error) => return selected::input_failure(error, &stop),
+        },
+        None => None,
+    };
     let result = match args.command {
         Command::Publish {
             config,
             graph,
             request,
-        } => publish_local_project(&config, &graph, &args.root, &request, &stop),
+            functions,
+            xml,
+        } => {
+            let graph =
+                match selected::build_queries(graph, functions.as_deref(), xml.as_deref(), &stop) {
+                    Ok(graph) => graph,
+                    Err(error) => return selected::input_failure(error, &stop),
+                };
+            match selection.as_ref() {
+                Some(selection) => publish_selected_local_project(
+                    &config, &graph, &args.root, selection, &request, &stop,
+                ),
+                None => publish_local_project(&config, &graph, &args.root, &request, &stop),
+            }
+        }
         Command::Update {
             config,
             graph,
             request,
-        } => update_local_project(&config, &graph, &args.root, &request, &stop),
-        Command::Read { generation } => read_live_project(&args.root, &generation, &stop),
+            functions,
+            xml,
+        } => {
+            let graph =
+                match selected::build_queries(graph, functions.as_deref(), xml.as_deref(), &stop) {
+                    Ok(graph) => graph,
+                    Err(error) => return selected::input_failure(error, &stop),
+                };
+            match selection.as_ref() {
+                Some(selection) => update_selected_local_project(
+                    &config, &graph, &args.root, selection, &request, &stop,
+                ),
+                None => update_local_project(&config, &graph, &args.root, &request, &stop),
+            }
+        }
+        Command::Read { generation } => match selection.as_ref() {
+            Some(selection) => {
+                return selected::read(&args.root, selection, &generation, args.format, &stop);
+            }
+            None => read_live_project(&args.root, &generation, &stop),
+        },
+        Command::Skeleton {
+            generation,
+            request,
+        } => {
+            let Some(selection) = selection.as_ref() else {
+                return super::usage("Skeleton requires --selection");
+            };
+            return selected::skeleton(
+                &args.root,
+                selection,
+                &generation,
+                &request,
+                args.format,
+                &stop,
+            );
+        }
         Command::Reconcile { operation } => reconcile_live_project(&args.root, &operation, &stop),
         Command::Recover { domain_current } => {
             return run_recovery(&args.root, domain_current, args.format, &stop);
@@ -253,7 +327,7 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
     let action = action.to_str().ok_or("invalid project operation")?;
     if !matches!(
         action,
-        "publish" | "update" | "read" | "reconcile" | "recover"
+        "publish" | "update" | "read" | "reconcile" | "recover" | "skeleton"
     ) {
         return Err("unknown project operation");
     }
@@ -279,7 +353,11 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
                 if matches!(action, "publish" | "update") => {}
             "--library" if action == "update" => {}
             "--operation-id" if matches!(action, "publish" | "update" | "reconcile") => {}
-            "--store-generation" if action == "read" => {}
+            "--store-generation" if matches!(action, "read" | "skeleton") => {}
+            "--selection" if matches!(action, "publish" | "update" | "read" | "skeleton") => {}
+            "--request" if action == "skeleton" => {}
+            "--function-fingerprints" | "--xml-fingerprints"
+                if matches!(action, "publish" | "update") => {}
             _ => return Err("unknown or duplicate project option"),
         }
         let value = values.next().ok_or("missing project option value")?;
@@ -300,6 +378,16 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
         "text" => Format::Text,
         _ => return Err("invalid project format"),
     };
+    let selection = options.remove("--selection").map(PathBuf::from);
+    if action == "skeleton" && selection.is_none() {
+        return Err("Skeleton requires --selection with composed_candidate catalog");
+    }
+    if selection.is_none()
+        && (options.contains_key("--function-fingerprints")
+            || options.contains_key("--xml-fingerprints"))
+    {
+        return Err("project fingerprint queries require explicit --selection");
+    }
     let command = match action {
         "publish" => {
             let config = PathBuf::from(
@@ -323,6 +411,8 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
                 config,
                 graph,
                 request,
+                functions: options.remove("--function-fingerprints").map(PathBuf::from),
+                xml: options.remove("--xml-fingerprints").map(PathBuf::from),
             }
         }
         "update" => {
@@ -353,10 +443,20 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
                 config,
                 graph,
                 request,
+                functions: options.remove("--function-fingerprints").map(PathBuf::from),
+                xml: options.remove("--xml-fingerprints").map(PathBuf::from),
             }
         }
         "read" => Command::Read {
             generation: required_text(&mut options, "--store-generation")?,
+        },
+        "skeleton" => Command::Skeleton {
+            generation: required_text(&mut options, "--store-generation")?,
+            request: PathBuf::from(
+                options
+                    .remove("--request")
+                    .ok_or("Skeleton requires --request")?,
+            ),
         },
         "reconcile" => Command::Reconcile {
             operation: required_text(&mut options, "--operation-id")?,
@@ -364,10 +464,14 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
         "recover" => Command::Recover { domain_current },
         _ => return Err("unknown project operation"),
     };
+    if !options.is_empty() {
+        return Err("unexpected project options");
+    }
     Ok(Arguments {
         root,
         command,
         format,
+        selection,
     })
 }
 fn text(

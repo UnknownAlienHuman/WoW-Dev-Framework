@@ -1,5 +1,7 @@
-//! Coherent native project/graph publication through the existing manifested
-//! store. Current resolves once; actual replay and all owner checks hold its lease.
+//! Native project/graph and explicitly selected candidate publication through
+//! the existing manifested store. Current resolves once; replay, candidate and
+//! Skeleton reads retain the exact generation lease through owner validation.
+pub(crate) mod candidate;
 mod current_recovery;
 mod gc;
 pub use current_recovery::{
@@ -14,6 +16,17 @@ pub use migration::{
 mod namespace;
 pub use namespace::PlatformStoreSelection;
 mod operations;
+mod selection;
+mod skeleton;
+pub use selection::{
+    PLATFORM_PROJECT_SELECTION_MAX_BYTES, PLATFORM_PROJECT_SELECTION_SCHEMA,
+    PlatformProjectSelection, SelectedLiveProjectReadResult, publish_selected_local_project,
+    read_selected_live_project, update_selected_local_project,
+};
+pub use skeleton::{
+    LIVE_SKELETON_REQUEST_MAX_BYTES, LIVE_SKELETON_REQUEST_SCHEMA, LIVE_SKELETON_RESULT_SCHEMA,
+    LiveSkeletonReadResult, execute_live_skeleton_read,
+};
 mod quarantine;
 pub use quarantine::{LiveProjectQuarantineInspection, QuarantinedLiveProject};
 mod recovery;
@@ -51,9 +64,14 @@ pub struct LiveProjectStore {
 /// Immutable executable pair plus the original transaction and generation lease.
 pub struct LiveProjectRead {
     pair: AcquiredProjectPair,
+    candidate: Option<crate::graph::BlizzardUiIndexCandidate>,
     read: ReadSnapshot,
 }
 impl LiveProjectRead {
+    /// Later Skeleton owners consume this genuine sealed candidate, never a DTO.
+    pub fn candidate(&self) -> Option<&crate::graph::BlizzardUiIndexCandidate> {
+        self.candidate.as_ref()
+    }
     pub fn project(&self) -> &ProjectView {
         self.pair.project()
     }
@@ -72,6 +90,31 @@ impl LiveProjectRead {
     pub fn namespace(&self) -> Option<&ProjectStoreNamespace> {
         self.read.epoch().namespace()
     }
+    // Only a selected, rebuilt candidate can enter the native update seam.
+    // Keep its original exact lease; the receipt is comparison data, not authority.
+    fn into_candidate_update_publisher(
+        self,
+        stop: &AtomicBool,
+    ) -> ServiceResult<(
+        ProjectPublisher,
+        ReadSnapshot,
+        wow_store::project::PartitionRecord,
+    )> {
+        publication_checkpoint(stop)?;
+        let Self {
+            pair,
+            candidate,
+            read,
+        } = self;
+        let candidate = candidate.ok_or_else(|| fail(ServiceErrorCode::IdentityMismatch))?;
+        let receipt = crate::graph::candidate_storage_record(&candidate, stop)?;
+        let publisher = pair
+            .into_platform_update_publisher(candidate.native(), stop)
+            .map_err(project_error)?;
+        drop(candidate);
+        publication_checkpoint(stop)?;
+        Ok((publisher, read, receipt))
+    }
     fn into_update_publisher(self) -> ServiceResult<(ProjectPublisher, ReadSnapshot)> {
         let publisher = self.pair.into_update_publisher().map_err(project_error)?;
         Ok((publisher, self.read))
@@ -84,7 +127,7 @@ impl LiveProjectStore {
         })
     }
     pub fn open(root: &Path) -> ServiceResult<Self> {
-        Self::open_selected(root, None)
+        Self::open_selected(root, None, None)
     }
     // None preserves general open/recovery across every registered catalog.
     // Old catalogs bind the XML/declaration pair; selected-component catalogs
@@ -96,6 +139,7 @@ impl LiveProjectStore {
             Option<PhysicalFunctionDeclarationRecipe>,
             Option<PhysicalFunctionSignatureRecipe>,
         )>,
+        candidate_catalog: Option<bool>,
     ) -> ServiceResult<Self> {
         // Each open requires an exact registered epoch. The store rejects a
         // catalog mismatch before opening SQLite writable; no migration occurs.
@@ -103,10 +147,20 @@ impl LiveProjectStore {
             if components.is_some_and(|selected| !catalog_accepts_components(schemas, selected)) {
                 continue;
             }
-            match ProjectStore::open(root, &catalog_for(schemas)?) {
-                Ok(store) => return Ok(Self { store }),
-                Err(error) if error.code() == StoreErrorCode::IntegrityViolation => {}
-                Err(error) => return Err(store_error(error)),
+            for selected in [false, true] {
+                if candidate_catalog.is_some_and(|expected| expected != selected) {
+                    continue;
+                }
+                let catalog = if selected {
+                    candidate::catalog(schemas)?
+                } else {
+                    catalog_for(schemas)?
+                };
+                match ProjectStore::open(root, &catalog) {
+                    Ok(store) => return Ok(Self { store }),
+                    Err(error) if error.code() == StoreErrorCode::IntegrityViolation => {}
+                    Err(error) => return Err(store_error(error)),
+                }
             }
         }
         Err(fail(ServiceErrorCode::IdentityMismatch))
@@ -124,6 +178,9 @@ impl LiveProjectStore {
         expected_current: Option<CurrentRecordId>,
         stop: &AtomicBool,
     ) -> ServiceResult<PublicationOperation> {
+        if candidate::is_selected(self.store.epoch().catalog())? {
+            return Err(fail(ServiceErrorCode::IdentityMismatch));
+        }
         let bundle = match self.store.epoch().namespace() {
             Some(namespace) => {
                 ProjectPublicationBundle::build_in_namespace(publisher, graph, namespace, stop)
@@ -145,7 +202,21 @@ impl LiveProjectStore {
         expected_current: Option<CurrentRecordId>,
         stop: &AtomicBool,
     ) -> ServiceResult<PublicationOperation> {
+        if candidate::is_selected(self.store.epoch().catalog())? {
+            return Err(fail(ServiceErrorCode::IdentityMismatch));
+        }
         let (records, bindings) = bundle.into_parts();
+        self.publish_parts(records, bindings, operation_id, expected_current, stop)
+    }
+    // One physical publication path for ordinary and explicitly selected owners.
+    fn publish_parts(
+        &mut self,
+        records: Vec<wow_store::project::PartitionRecord>,
+        bindings: std::collections::BTreeMap<String, String>,
+        operation_id: &str,
+        expected_current: Option<CurrentRecordId>,
+        stop: &AtomicBool,
+    ) -> ServiceResult<PublicationOperation> {
         let id = OperationId::new(operation_id).map_err(store_error)?;
         let request = PublicationRequest::new(
             self.store.epoch(),
@@ -175,13 +246,13 @@ impl LiveProjectStore {
                     stop,
                 )
                 .map_err(store_error)?;
-            AcquiredProjectPair::read(&read, stop).map_err(project_error)?;
+            let (pair, candidate) = candidate::read_owners(&read, stop)?;
+            let selected = candidate.is_some();
             let validated = read
-                .owner_validation(&[
-                    GraphPartitionSnapshot::STORAGE_CHECK,
-                    publication::STORAGE_CHECK,
-                ])
+                .owner_validation(&candidate::completed_checks(selected))
                 .map_err(store_error)?;
+            drop(candidate);
+            drop(pair);
             drop(read);
             if operation.state == PublicationState::Activated {
                 return Ok(operation);
@@ -215,8 +286,12 @@ impl LiveProjectStore {
         stop: &AtomicBool,
     ) -> ServiceResult<LiveProjectRead> {
         let read = self.store.read(selector, stop).map_err(store_error)?;
-        let pair = AcquiredProjectPair::read(&read, stop).map_err(project_error)?;
-        Ok(LiveProjectRead { pair, read })
+        let (pair, candidate) = candidate::read_owners(&read, stop)?;
+        Ok(LiveProjectRead {
+            pair,
+            candidate,
+            read,
+        })
     }
     pub fn reconcile(&self, operation_id: &str) -> ServiceResult<Option<PublicationOperation>> {
         let id = OperationId::new(operation_id).map_err(store_error)?;
@@ -291,7 +366,7 @@ pub(crate) fn project_error(error: wow_project::ProjectError) -> ServiceError {
         _ => ServiceErrorCode::IdentityMismatch,
     })
 }
-fn store_error(error: StoreError) -> ServiceError {
+pub(crate) fn store_error(error: StoreError) -> ServiceError {
     fail(match error.code() {
         StoreErrorCode::Cancelled => ServiceErrorCode::Cancelled,
         StoreErrorCode::CurrentConflict => ServiceErrorCode::StoreCurrentConflict,

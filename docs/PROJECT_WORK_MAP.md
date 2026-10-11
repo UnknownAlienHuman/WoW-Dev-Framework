@@ -1,104 +1,38 @@
 # Current project work map
 
-Routing refreshed 2026-10-10, America/New_York. The one active implementation
-package is **W17**, tracked by [#106](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/106).
-Use its current bounded claim before editing; historical PRs are evidence, not
-the work queue. Follow [the execution model](EXECUTION_MODEL.md).
+The active implementation package is **W17**, tracked by
+[#106](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/106).
+Use its current bounded sole-writer claim and
+[the execution model](EXECUTION_MODEL.md); historical checkpoints are evidence.
 
-## Verified routing base
+## Current bounded work and qualification
 
-`main` checkpoint `d3f8e350b41d134a735653de1a010b1f51764807`, tree
-`96c63486afab6b6475dc9421a35409ebbb485110`, was published and read back with all
-changed blobs. [Quick 38113305095](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/38113305095)
-passed on that exact head. This is the verified base of this routing update;
-subsequent publication and gate evidence belong in the canonical Issue.
+[#116](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/116) integrates
+the genuine composed candidate, selected publication/reopen and first bounded
+Skeleton route. Its one-hop handles profile remains Partial/Truncated; broader
+projections are NotEvaluated. See [live project commands](../apps/wow/LIVE_PROJECT.md).
+Selected retained content/query update, NoChange, removal and source-absent reopen
+have a bounded native lifecycle. Actual CLI and publication evidence is retained
+in #116; this does not establish full E3 acceptance.
 
-The source-only Reference and manifest/TOC/XML census application paths are
-functional and independently verified at their recorded checkpoints. **W17 is
-not accepted**, and no package or launch gate is closed by these observations.
-The exact real-corpus identities, counts, refusals and limited host observations
-are retained once in [the #113 report](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/113#issuecomment-6100987407).
-They describe one selected operation, not permanent client/source defaults.
+[#122](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122) owns the
+missing W18 Project Map and its service/CLI route. Its first primary-user profile
+explicitly omits the optional platform universe; broader context layers remain
+in the completion census. Do not infer an implemented map from its specification.
 
-## Current blocker and next slices
+[#121](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/121) retains the
+latest full-corpus functions refusal and targeted capacity evidence.
+[#113](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/113) owns
+complete-corpus qualification. Unreached scopes remain NotEvaluated. That
+qualification debt blocks its corpus claim; independent bounded implementation
+follows the current #106 claim.
 
-[#113](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/113) blocks
-full-corpus qualification. The latest retained operation reached graph metadata
-at 23,399,533/4,194,304 attempted bytes after package-count admission. The explicit
-graph metadata component now binds one shared collector/direct/map allowance and
-replay14; absence preserves old bytes and 4 MiB. Its native boundaries and exact
-replay/store cases pass. The next freshly resolved complete request must measure
-actual fit and the next refusal; independent counts and downstream caps remain.
-See [the current #113 checkpoint](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/113#issuecomment-6105640575).
-The selected273-package native census, finite retained
-Main, exact replay and compiled backend report producer are executable; detailed
-scope lives in [implementation status](IMPLEMENTATION_STATUS.md) and the canonical
-Issue. The finite project and function-call budget selections, retained native
-Main and exact replay are executable. Selected report8/replay12 bind the six
-sidecar limits; default report7 and older replay recipes remain unchanged.
-Meaningful above-default work/count, cancellation, output, replay and actual
-store-reopen checks pass at their recorded checkpoints.
-
-The latest complete request exposed a native global-access consistency failure
-in a method receiver. Source projection now uses lexical declaration IDs instead
-of navigation's implicit `self` substitution or function-value tracing. Native
-method/capture/shadow and alias/reassignment regressions pass, with precise
-invariant reasons and logical file paths. This corrects the existing source-fact
-contract without raising capacities or changing wire recipes.
-
-The subsequent unchanged complete request measured the global-access text guard:
-8,389,139/8,388,608 bytes, with work618,056/2,000,000. An optional two-field
-global-access component now reaches the existing native sidecar and retained
-replay. Explicit selection binds report9/replay13; omission keeps prior defaults
-and recipes. Exact location joins use one bounded runtime index. Native
-above-default text, strict decoding and genuine v12/v13 store/reopen checks pass;
-the frozen v12 catalog refuses v13 before operation/Current mutation. The next
-complete source operation still owns actual fit/census evidence in #113.
-That operation reached another precise native name mismatch in
-`SlashCommandsRegistry.lua`: upstream anchors an indexed global declaration at
-the same position as its prefix. The source owner now recognizes only that exact
-AST/range collision and keeps the lexical or unique registered root cell.
-Native environment/literal/dynamic-index, local-shadow/alias, explicit-root and
-ambiguous-root cases pass. Absent/ambiguous roots remain unresolved; budgets and
-identity recipes are unchanged. The next complete operation remains #113 evidence.
-That operation reached a generic function-sidecar budget refusal. Diagnostics now
-name the actual resource, attempted count and ceiling without changing admission
-or successful bytes; output refusal includes the already collected populations.
-Native count/output and successful-wire checks pass. Measure the actual refusing
-resource before changing any selected ceiling; complete encoded size and later
-producer populations remain unknown until admitted.
-
-Completed Main/reports, classification, graph/maps and persistence remain
-unqualified. Re-resolve the source on each complete operation and record the
-actual next refusing owner before changing a ceiling. Independent alias/work/text,
-flow, aggregate, graph, map and store guards remain active. Do not infer semantic
-populations from lexical counts or compare XML-index bytes with graph metadata.
-Exact operation counts, failures, identities and limited OS high-water observations
-belong in #113; complete-corpus and allocator peak acceptance remain NotEvaluated.
-
-| Order | Bounded functional responsibility | Required boundary |
-|---|---|---|
-| 1 — #113 | Qualify remaining actual map/graph/Main scopes and choose finite capacity or an explicit partition strategy | Selected native load measurements exist; use actual downstream owner counts, checked arithmetic, cancellation and exact identities; no arbitrary cap increase or clipping |
-| 3 — [#114](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/114) | Exact axes reach the selected rich service and durable reopen; full-corpus qualification stays open | Retain distinct bindings on colliding edges, exclude span mappings from Ownership, refuse ambiguous foundation authority |
-| 4 — [#115](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/115) | Exact capability selection is integrated into configuration/service/replay; transient /2–/4 variants are consolidated | [Typed versioned set and exact consumers](PLATFORM_GRAPH_CAPABILITIES.md); old /9 opens under its frozen catalog, new /10 requires its exact catalog |
-| 5 — [#117](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/117) | Freeze XML object/region classification authority | Current exact source/schema evidence, conservative unknowns; no runtime inference |
-
-The [axis query contract](../crates/wow-graph/AXIS_USAGE.md) names the read-only
-profile/query versions and exact service recipe. The query layer preserves edge,
-report and partition storage schemas; retained proposals reconstruct definition
-associations on reopen. Selected spans/roles/maps bind one exact capability set
-through the configuration, registry, service and replay. Their native-only
-`/2`–`/4` ladder is retired. #113 still blocks full-corpus qualification; fixture
-service/reopen evidence does not close source CLI handoff or W17 acceptance.
-
-Then freeze structural fingerprint semantics in
-[#118](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/118), validate
-one complete BlizzardUiIndexCandidate in
-[#116](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/116), and only
-then admit SkeletonInputView and the source service/publication handoff.
-[#119](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/119) blocks
-candidate/freeze and W18 handoff until the stale E3-A machine contract and missed
-historical freeze are reconciled honestly. Code presence is not accepted freeze.
+Classification and fingerprint acceptance remain in
+[#117](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/117) and
+[#118](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/118).
+[#119](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/119) retains
+machine-contract/freeze and downstream handoff obligations. **W17 is not
+accepted**; a published checkpoint or Quick pass does not close these scopes.
 
 ## Existing owner and application routes
 

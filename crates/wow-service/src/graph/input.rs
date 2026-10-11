@@ -11,7 +11,7 @@ use crate::ServiceErrorCode;
 const MAX_DEPTH: usize = 64;
 const MAX_STRING_BYTES: usize = 16 * 1024;
 
-pub(super) fn decode<T: DeserializeOwned>(
+pub(crate) fn decode<T: DeserializeOwned>(
     bytes: &[u8],
     max_bytes: usize,
     max_tokens: usize,

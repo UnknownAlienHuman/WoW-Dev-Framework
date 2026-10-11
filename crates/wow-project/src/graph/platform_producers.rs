@@ -5,7 +5,8 @@ use producer_budget::ProducerBudget;
 use std::collections::BTreeSet;
 use wow_graph::{
     GraphAssertionKind, GraphAssertionRecordScope, GraphAssertionRef, GraphEvidenceCatalog,
-    GraphLocalAssertion, GraphPartitionSnapshot, GraphProducerLookup, GraphSnapshot,
+    GraphGenerationId, GraphLocalAssertion, GraphPartitionSnapshot, GraphProducerLookup,
+    GraphSnapshot, GraphSnapshotId,
 };
 
 pub const PLATFORM_DIRECT_GRAPH_PROFILE: &str = "wow-project/platform-direct-producers/1";
@@ -130,7 +131,122 @@ pub struct PlatformGraphProvenance<'a> {
     source: ProjectGraphProvenance,
     addresses: BTreeMap<GraphLocalAssertion, GraphAssertionRef>,
     evidence: GraphEvidenceCatalog,
+    budget: ProducerBudget,
 }
+
+/// Owned native source/support capability moved from a finished native prefix.
+/// No data constructor or deserializer can recreate this authority. This is a
+/// prerequisite for a composed candidate, not composed-candidate validation.
+pub struct PlatformIndexSourceParts {
+    recipe: DirectRecipe,
+    inventory_span_omissions: Option<usize>,
+    xml_source_maps: Option<XmlSourceMapSummary>,
+    project: ProjectView,
+    native_prefix_snapshot_id: GraphSnapshotId,
+    native_prefix_generation: GraphGenerationId,
+    foundation_snapshot_id: GraphSnapshotId,
+    registry_digest: Box<str>,
+    native_prefix_partitions: Vec<(Box<str>, Box<str>)>,
+    xml_classification_membership: Option<xml_classification::XmlClassificationMembership>,
+    scope: GraphAssertionRecordScope,
+    source: ProjectGraphProvenance,
+    addresses: BTreeMap<GraphLocalAssertion, GraphAssertionRef>,
+    evidence: GraphEvidenceCatalog,
+    budget: ProducerBudget,
+}
+impl PlatformIndexSourceParts {
+    #[must_use]
+    pub const fn capabilities(&self) -> Option<crate::PlatformGraphCapabilities> {
+        self.recipe.capabilities()
+    }
+    #[must_use]
+    pub const fn profile(&self) -> &'static str {
+        self.recipe.profile()
+    }
+    #[must_use]
+    pub const fn inventory_span_omissions(&self) -> Option<usize> {
+        self.inventory_span_omissions
+    }
+    #[must_use]
+    pub const fn xml_source_maps(&self) -> Option<&XmlSourceMapSummary> {
+        self.xml_source_maps.as_ref()
+    }
+    #[must_use]
+    pub const fn project(&self) -> &ProjectView {
+        &self.project
+    }
+    /// Identity of the original native prefix, not a later composed snapshot.
+    #[must_use]
+    pub const fn native_prefix_snapshot_id(&self) -> &GraphSnapshotId {
+        &self.native_prefix_snapshot_id
+    }
+    #[must_use]
+    pub const fn native_prefix_generation(&self) -> &GraphGenerationId {
+        &self.native_prefix_generation
+    }
+    #[must_use]
+    pub const fn foundation_snapshot_id(&self) -> &GraphSnapshotId {
+        &self.foundation_snapshot_id
+    }
+    #[must_use]
+    pub fn registry_digest(&self) -> &str {
+        &self.registry_digest
+    }
+    /// Canonical native partition order; each digest binds its actual version,
+    /// batch, admission report and coverage under the graph owner's contract.
+    pub fn native_prefix_partitions(&self) -> impl ExactSizeIterator<Item = (&str, &str)> {
+        self.native_prefix_partitions
+            .iter()
+            .map(|(id, digest)| (id.as_ref(), digest.as_ref()))
+    }
+    #[must_use]
+    pub const fn scope(&self) -> &GraphAssertionRecordScope {
+        &self.scope
+    }
+    #[must_use]
+    pub const fn source(&self) -> &ProjectGraphProvenance {
+        &self.source
+    }
+    #[must_use]
+    pub fn assertion(&self, assertion: &GraphLocalAssertion) -> Option<&GraphAssertionRef> {
+        self.addresses.get(assertion)
+    }
+    #[must_use]
+    pub fn xml_classification_inclusion(&self) -> Option<XmlClassificationInclusionManifest<'_>> {
+        Some(XmlClassificationInclusionManifest::new(
+            self.source.xml_classification()?,
+            self.xml_classification_membership.as_ref()?,
+        ))
+    }
+    #[must_use]
+    pub const fn evidence_catalog(&self) -> &GraphEvidenceCatalog {
+        &self.evidence
+    }
+    /// Cumulative producer metadata accounting, including the compact seal.
+    /// This is neither an allocator measurement nor a complete memory bound.
+    #[must_use]
+    pub const fn charged_metadata_bytes(&self) -> usize {
+        self.budget.used()
+    }
+    #[must_use]
+    pub const fn metadata_limit_bytes(&self) -> usize {
+        self.budget.limit()
+    }
+}
+
+// Borrow only the already-admitted partition index when counting the compact
+// identity. This emits no report/source bodies and allocates no identity vector.
+struct NativePrefixPartitions<'a>(&'a [wow_graph::GraphProducerPartition]);
+impl Serialize for NativePrefixPartitions<'_> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_seq(
+            self.0
+                .iter()
+                .map(|partition| (partition.partition_id(), partition.partition_digest())),
+        )
+    }
+}
+
 impl PlatformGraphProvenance<'_> {
     #[must_use]
     pub const fn capabilities(&self) -> Option<crate::PlatformGraphCapabilities> {
@@ -165,6 +281,58 @@ impl PlatformGraphProvenance<'_> {
     #[must_use]
     pub const fn source(&self) -> &ProjectGraphProvenance {
         &self.source
+    }
+    /// Consume the finished native proof and release its project/graph borrows.
+    /// The original support, scope and reports move unchanged. Only compact
+    /// prefix identities are copied, after charging the existing finish ledger.
+    pub fn into_index_source_parts(
+        self,
+        stop: &AtomicBool,
+    ) -> ProjectResult<PlatformIndexSourceParts> {
+        crate::analyzer::checkpoint(stop)?;
+        let mut budget = self.budget;
+        budget.charge_serialized(
+            &(
+                self.graph.snapshot().snapshot_id(),
+                self.graph.snapshot().generation(),
+                self.graph.foundation().snapshot_id(),
+                self.graph.registry().registry_digest(),
+                NativePrefixPartitions(self.graph.partitions()),
+            ),
+            stop,
+        )?;
+        // Native finish has validated the closed ORDER plus optional raw
+        // inventory, within the existing graph partition bound. Preserve its
+        // canonical order without another graph validation/rebuild or lookup.
+        let mut native_prefix_partitions = Vec::with_capacity(self.graph.partitions().len());
+        for partition in self.graph.partitions() {
+            crate::analyzer::checkpoint(stop)?;
+            native_prefix_partitions.push((
+                partition.partition_id().into(),
+                partition.partition_digest().into(),
+            ));
+        }
+        let parts = PlatformIndexSourceParts {
+            recipe: self.recipe,
+            inventory_span_omissions: self.inventory_span_omissions,
+            xml_source_maps: self.xml_source_maps,
+            // ProjectView owns one Arc<ProjectSnapshot>; this clones only the
+            // immutable handle, never its source, syntax or analyzer bodies.
+            project: ProjectView::clone(self.project),
+            native_prefix_snapshot_id: self.graph.snapshot().snapshot_id().clone(),
+            native_prefix_generation: self.graph.snapshot().generation().clone(),
+            foundation_snapshot_id: self.graph.foundation().snapshot_id().clone(),
+            registry_digest: self.graph.registry().registry_digest().into(),
+            native_prefix_partitions,
+            xml_classification_membership: self.xml_classification_membership,
+            scope: self.scope,
+            source: self.source,
+            addresses: self.addresses,
+            evidence: self.evidence,
+            budget,
+        };
+        crate::analyzer::checkpoint(stop)?;
+        Ok(parts)
     }
     /// Consumes native authority and returns the same owned source report.
     /// The returned report cannot recreate the native project/graph capability.
@@ -1118,6 +1286,7 @@ impl<'a> PlatformGraphProposalPlan<'a> {
             source: self.collected.provenance,
             addresses,
             evidence,
+            budget,
         })
     }
 }

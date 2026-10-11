@@ -329,15 +329,35 @@
       "blocking_issues": []
     },
     "assemble_blizzard_ui_index_candidate": {
-      "status": "specified-only",
-      "owners": [],
-      "application_routes": [],
-      "blocking_issues": []
+      "status": "partial",
+      "owners": [
+        {
+          "symbol": "capture_once",
+          "path": "crates/wow-service/src/graph/build/candidate.rs"
+        }
+      ],
+      "application_routes": [
+        {
+          "symbol": "capture_candidate_from_backend",
+          "path": "crates/wow-service/src/graph/build/candidate_store.rs"
+        }
+      ],
+      "blocking_issues": [116, 113, 118]
     },
     "validate_blizzard_ui_index_candidate": {
-      "status": "blocked",
-      "owners": [],
-      "application_routes": [],
+      "status": "partial",
+      "owners": [
+        {
+          "symbol": "PreparedNativeCandidate::seal",
+          "path": "crates/wow-service/src/graph/build/candidate.rs"
+        }
+      ],
+      "application_routes": [
+        {
+          "symbol": "read_candidate_pair",
+          "path": "crates/wow-service/src/graph/build/candidate_store.rs"
+        }
+      ],
       "blocking_issues": [
         116
       ]
@@ -346,14 +366,14 @@
       "status": "partial",
       "owners": [
         {
-          "symbol": "ProjectPublicationBundle::build_in_namespace",
+          "symbol": "ProjectPublicationBundle::build_with_native_parts",
           "path": "crates/wow-project/src/replay/publication.rs"
         }
       ],
       "application_routes": [
         {
-          "symbol": "live_publication_from_backend_in_namespace",
-          "path": "crates/wow-service/src/graph/build.rs"
+          "symbol": "CandidatePublication::capture",
+          "path": "crates/wow-service/src/live_project/candidate.rs"
         }
       ],
       "blocking_issues": [
@@ -366,14 +386,14 @@
       "status": "partial",
       "owners": [
         {
-          "symbol": "LiveProjectStore::publish_bundle",
-          "path": "crates/wow-service/src/live_project.rs"
+          "symbol": "LiveProjectStore::publish_candidate_bundle",
+          "path": "crates/wow-service/src/live_project/candidate.rs"
         }
       ],
       "application_routes": [
         {
-          "symbol": "publish_input_in_namespace",
-          "path": "crates/wow-service/src/live_project/operations.rs"
+          "symbol": "publish_selected_local_project",
+          "path": "crates/wow-service/src/live_project/selection.rs"
         }
       ],
       "blocking_issues": [
@@ -384,14 +404,14 @@
       "status": "partial",
       "owners": [
         {
-          "symbol": "AcquiredProjectPair::read",
+          "symbol": "AcquiredProjectPair::read_with_native_owner_records",
           "path": "crates/wow-project/src/replay/publication.rs"
         }
       ],
       "application_routes": [
         {
-          "symbol": "read_live_project_in_namespace",
-          "path": "crates/wow-service/src/live_project/operations.rs"
+          "symbol": "read_selected_live_project",
+          "path": "crates/wow-service/src/live_project/selection.rs"
         }
       ],
       "blocking_issues": [
@@ -399,26 +419,41 @@
       ]
     },
     "open_blizzard_ui_skeleton_input_view": {
-      "status": "specified-only",
-      "owners": [],
-      "application_routes": [],
-      "blocking_issues": []
+      "status": "partial",
+      "owners": [
+        {
+          "symbol": "open_skeleton_input_view",
+          "path": "crates/wow-project/src/skeleton_input/mod.rs"
+        }
+      ],
+      "application_routes": [
+        {
+          "symbol": "execute_live_skeleton_read",
+          "path": "crates/wow-service/src/live_project/skeleton.rs"
+        }
+      ],
+      "blocking_issues": [116]
     },
     "plan_blizzard_ui_incremental_update": {
-      "status": "blocked",
+      "status": "partial",
       "owners": [
         {
           "symbol": "ProjectPublisher::derive_update_request",
           "path": "crates/wow-project/src/publication.rs"
         }
       ],
-      "application_routes": [],
+      "application_routes": [
+        {
+          "symbol": "update_selected_local_project",
+          "path": "crates/wow-service/src/live_project/selection.rs"
+        }
+      ],
       "blocking_issues": [
         109,
         116
       ]
     }
   },
-  "routing_scope": "Statuses describe the bounded selected owner/application responsibility, not complete nominal E3 acceptance. Graph build is an artifact operation. Native coherent pair publication lacks full candidate/fingerprint/Skeleton membership, and the CLI project-publish leaf does not select platform graph capabilities.",
+  "routing_scope": "Statuses describe bounded selected owner/application responsibility, not nominal E3 acceptance. Graph build remains an artifact operation. Explicit selected live publication/reopen rebuilds the genuine composed candidate; the first Skeleton profile returns Partial/Truncated one-hop metadata and handles with broader projections NotEvaluated. Selected native update recomposes final owner/query inputs and retains separate lifecycle and corpus qualification. Ordinary epochs are not implicitly widened; historical missed freeze and current pending acceptance remain unchanged.",
   "version_consumer_inventory": "docs/audits/E3_MACHINE_RECONCILIATION_2026-10-11.md"
 }

@@ -5,10 +5,11 @@ profiles expose coherent publication and acquisition through
 `wow-service::live_project`. The app remains a transport over one service operation
 per command. Full W13/E2 acceptance remains open.
 
-New publications use native/storage replay v4 and generation recipe v2, binding
-exact Library snapshot identities and the function-call-facts profile. Existing
-V1/V2/V3 stores remain readable under their exact catalogs but reject v4 writes;
-initialize a new private store for new publications. No migration occurs.
+The original ordinary publication profile uses native/storage replay v4 and
+generation recipe v2, binding exact Library snapshot identities and the
+function-call-facts profile. V1/V2/V3 stores retain their exact catalogs and reject
+v4 writes. Selected native recipes require their explicitly matched catalogs;
+there is no automatic migration.
 
 ```text
 wow project publish --config project.json --project <ProjectId> --store-root <new-private-directory> --operation-id <id> --expected-current absent --initialize --allow-partial
@@ -19,6 +20,44 @@ wow project recover --store-root <directory> --format json
 wow project recover --store-root <directory> --domain-current --format json
 wow project update --config final-project.json --project <ProjectId> --store-root <directory> --operation-id <id> --expected-current <record-id> --library keep --allow-partial
 ```
+
+## Selected native candidate and first Skeleton profile
+
+Selected publication/read uses `--selection <selection.json>` with schema
+`wow-service/platform-project-selection/1`, exact `owner_project_id`,
+`source_profile_id` and catalog intent. `composed_candidate=true` selects the
+genuine `BlizzardUiIndexCandidate` with moved native source authority, final
+composed graph and explicit selected fingerprint manifests. Inactive readback
+and later reopen rebuild the native/core/query owners and compare the final
+graph and candidate receipt under the original lease before activation/read.
+
+Selected publication may supply `--function-fingerprints <query.json>` and
+`--xml-fingerprints <query.json>`. Selected read returns candidate id/digest and
+an inert `skeleton_binding`; decoded receipts cannot construct a native owner.
+
+```text
+wow project skeleton --selection <selection.json> --store-root <directory> --store-generation current|<generation-id> --request <skeleton.json> [--format json|text]
+```
+
+The request schema is `wow-service/live-skeleton-read-request/1`, with
+`candidate_id`, `candidate_digest` and `input`. Current/Exact resolves once;
+service requires the rebuilt candidate and exact identity before the native read.
+The first profile, `wow-project/skeleton-input/native-one-hop-handles/1`, exposes
+one exact entity root, root support/evidence/handles and a bounded direct
+neighborhood. Typed declarations/signatures/types, package/load-role projection,
+neighborhood evidence closure, source excerpts, axes/paths and continuation
+remain `NotEvaluated`. Results are Partial or Truncated and exit 2.
+
+Selected update uses the retained native publisher, derives the actual final
+Add/Update/Remove intent and recomposes native/core/query owners before publication.
+Project NoChange also requires an identical rebuilt candidate receipt; a change
+only to selected fingerprint queries publishes a new candidate. Existing expected
+Current, operation identity and cancellation fences remain in force. The bounded
+source-absent content/query/removal lifecycle is recorded in
+[#116](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/116);
+the ordinary physical update contract below is a separate route.
+Full E3 acceptance remains open. Follow the current bounded claim in
+[#106](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/106).
 
 `recover` observes one held physical store snapshot, including complete current
 membership/seals, canonical receipts and scope coverage. It performs no repair or
@@ -61,8 +100,8 @@ The store contains source text and belongs in an explicitly owned private
 directory. Source files are neither executed nor changed. One owning process
 uses a store at a time; another owner receives a typed busy result.
 
-`update` requires an existing modern physical-Lua publication and an explicit
-final input configuration. The service derives Add/Update/Remove against the
+On the ordinary route, `update` requires an existing modern physical-Lua
+publication and an explicit final input configuration. The service derives Add/Update/Remove against the
 exact expected publication record, retains its actual native owner under a lease,
 and rebuilds the complete graph producer chain before inactive validation and
 current CAS. Standalone TOC/XML, package and legacy archives remain unavailable
@@ -73,8 +112,8 @@ Library inventory to match the retained owner; Replace uses the supplied Library
 set. Clear and empty replacement reject through the current mandatory-Library
 policy. They cannot silently become Keep. There is no update initialization.
 
-A NoChange result validates project/generation selection, keeps the original
-current record and consumes no operation ID. It exits 2 for Partial coverage.
+On the ordinary physical route, NoChange validates project/generation selection,
+keeps the original current record and consumes no operation ID. It exits 2 for Partial coverage.
 Changed requests retain the existing operation fingerprint: the same ID/base/
 target returns its original receipt even after another activation, while a
 different target conflicts. Reconstructing that exact request may perform native

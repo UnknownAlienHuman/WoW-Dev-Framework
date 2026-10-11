@@ -1,4 +1,5 @@
 use super::*;
+mod skeleton_lifecycle;
 
 const CLASSIFICATION_XSD: &str = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
     xmlns:u="http://www.blizzard.com/wow/ui/" targetNamespace="http://www.blizzard.com/wow/ui/">
@@ -184,6 +185,18 @@ fn classification_fixture_schema_members(
     lua: Option<&str>,
     toc: Option<&str>,
 ) -> TestResult<(FixtureRoot, Value)> {
+    classification_fixture_schema_and_main_members(schema_members, xml_text, lua, toc, &[])
+}
+
+// Additional physical Main members are admitted by the same fixture manifest,
+// schema and profile builder; existing callers retain their exact old bytes.
+fn classification_fixture_schema_and_main_members(
+    schema_members: &[(&str, &str)],
+    xml_text: &str,
+    lua: Option<&str>,
+    toc: Option<&str>,
+    extra_main: &[(&str, &str)],
+) -> TestResult<(FixtureRoot, Value)> {
     use wow_project::load::schema::XmlSchemaComponentKind as Kind;
     use wow_project::load::schema::{
         XmlSchemaMemberSelection, XmlSchemaSelection, admit_xml_schema, classification::*,
@@ -210,6 +223,20 @@ fn classification_fixture_schema_members(
         member["bytes"] = json!(text.len());
         member["content_sha256"] = json!(format!("{:x}", Sha256::digest(text.as_bytes())));
     }
+    let lua_template = files
+        .iter()
+        .find(|file| file["path"] == "UI/main.lua")
+        .ok_or("fixture Lua member")?
+        .clone();
+    for &(path, text) in extra_main {
+        assert!(!files.iter().any(|file| file["path"] == path));
+        std::fs::write(root.0.join(path), text)?;
+        let mut member = lua_template.clone();
+        member["path"] = json!(path);
+        member["bytes"] = json!(text.len());
+        member["content_sha256"] = json!(format!("{:x}", Sha256::digest(text.as_bytes())));
+        files.push(member);
+    }
     for &(path, text) in schema_members {
         std::fs::write(root.0.join(path), text)?;
         files.push(json!({"path":path,"kind":"schema","bytes":text.len(),
@@ -224,9 +251,9 @@ fn classification_fixture_schema_members(
                 .checked_add(file["bytes"].as_u64().ok_or("member bytes")?)
                 .ok_or("fixture byte sum")?)
         })?;
-    assert_eq!(files.len(), 4 + schema_members.len());
+    assert_eq!(files.len(), 4 + schema_members.len() + extra_main.len());
     manifest["coverage"] = json!({"tracked_files":files.len(),"included_files":files.len(),"excluded_files":0,
-        "included_bytes":total,"kind_version":1,"kind_lua":1,"kind_toc":1,"kind_xml":1,"kind_schema":schema_members.len()});
+        "included_bytes":total,"kind_version":1,"kind_lua":1 + extra_main.len(),"kind_toc":1,"kind_xml":1,"kind_schema":schema_members.len()});
     manifest
         .as_object_mut()
         .ok_or("manifest object")?
