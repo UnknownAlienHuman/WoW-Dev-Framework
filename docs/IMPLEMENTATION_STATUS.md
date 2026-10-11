@@ -198,6 +198,11 @@ aggregate/direct/XML-map counts. Existing limits and admission predicates remain
 the counted writer's exact-limit, plus-one, overflow and cancellation case passes,
 alongside focused Project/Service/CLI checks. Unvisited generic guards and complete
 corpus fit remain unqualified; actual operation measurements stay in #113.
+Graph package-count validation consumes the same explicit native retention limit
+as package admission; ordinary inputs keep 64. The existing 65-package native
+retention case now reaches source graph collection and structural direct
+preparation. Independent raw/file/node/edge/metadata and remaining limits stay
+active; no serialized recipe or identity changes accompany this correction.
 Full analysis/graph/maps/persistence remain unqualified under #113.
 Explicit retained XSD component admission is now executable through the existing
 XML owner, with root-only global symbols and final unsupported context propagation.

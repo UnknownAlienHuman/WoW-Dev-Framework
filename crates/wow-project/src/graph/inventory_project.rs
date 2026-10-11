@@ -51,11 +51,21 @@ pub(super) fn append_project(
     {
         return Err(invalid());
     }
+    let package_limit = packages::package_node_limit(config);
     if manifest.members().len() > MAX_RAW_MEMBERS
         || source.files().len() > MAX_FILES
-        || source.packages().len() > packages::MAX_PACKAGE_NODES
+        || source.packages().len() > package_limit
     {
-        return Err(exhausted());
+        return Err(ProjectError::new(
+            ProjectErrorCode::SourceBudgetExceeded,
+            ProjectPhase::View,
+            format!(
+                "source graph Inventory counts exceed their bounded profile: raw members {}/{MAX_RAW_MEMBERS}, files {}/{MAX_FILES}, packages {}/{package_limit}",
+                manifest.members().len(),
+                source.files().len(),
+                source.packages().len()
+            ),
+        ));
     }
 
     // Original raw paths never become package-qualified Main coordinates.

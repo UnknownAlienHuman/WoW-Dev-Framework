@@ -13,6 +13,13 @@ use wow_core::{CanonicalResult, ContentDigest};
 pub(super) const MAX_PACKAGE_NODES: usize = 64;
 pub(super) const MAX_PACKAGE_RELATIONS: usize = 12_288;
 
+pub(super) fn package_node_limit(configuration: &crate::ProjectConfiguration) -> usize {
+    configuration
+        .platform_packages()
+        .and_then(|packages| packages.retention_limits())
+        .map_or(MAX_PACKAGE_NODES, |limits| limits.max_packages())
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ProjectGraphPackage {
     pub package: String,
@@ -102,8 +109,13 @@ pub(super) fn project(
     };
     plan.validate_profile(config.selected_profile())?;
     main_plan.validate_load_plan(plan)?;
-    if plan.packages().len() > MAX_PACKAGE_NODES {
-        return Err(exhausted());
+    let package_limit = package_node_limit(config);
+    if plan.packages().len() > package_limit {
+        return Err(resource_exhausted(
+            "packages",
+            plan.packages().len() as u128,
+            package_limit,
+        ));
     }
 
     let group_by_package = plan

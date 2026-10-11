@@ -336,6 +336,44 @@ fn retained_package_profile_admits_65_members_under_exact_encoding_budget() -> T
             .is_err()
     );
     assert!(Limits::new(1024, 256 * 1024 * 1024).is_ok());
+    // The same native retention receipt must reach its graph consumers.
+    let retained = Arc::new(exact);
+    let configuration =
+        configuration_builder(ProjectKind::BlizzardUiPlatformSource, profile.target())?
+            .platform_packages(Arc::clone(&retained))?
+            .with_package_xml_bindings(wow_project::PackageXmlBindingProfile::SameSessionV1)
+            .with_platform_graph_profile(
+                wow_project::PlatformGraphProfile::PackageProjectionWithRawInventoryV1,
+            )
+            .build()?;
+    let library = LuaWorkspaceSnapshot::build(
+        configuration.analyzer_binding().backend().clone(),
+        LuaWorkspaceUniverse::Fixture,
+        vec![LuaWorkspaceFileInput::new(
+            "library/package-capacity-fixture.lua",
+            "---@meta _\nPackageCapacityFixture = {}\n",
+        )],
+        LuaWorkspaceLimits::new(8, 16_384, 256 * 1024, 512 * 1024)?,
+    )?;
+    let mut publisher = ProjectPublisher::with_function_call_facts();
+    let snapshot = publisher.publish_initial_cancellable(
+        ProjectInputBundle::closed(configuration, retained.files().to_vec(), vec![library])?,
+        &stop,
+    )?;
+    let view = snapshot.open_view();
+    let graph = wow_project::graph::build_source_graph_proposals(&view, &stop)?;
+    assert_eq!(graph.into_parts().3.packages().len(), 65);
+    let capabilities = wow_project::PlatformGraphCapabilities::new(&[
+        wow_project::PlatformGraphCapability::InventorySpansV1,
+        wow_project::PlatformGraphCapability::StructuralRolesV1,
+    ])?;
+    let direct = wow_project::graph::build_platform_graph_proposal_plan_for_capabilities(
+        &view,
+        capabilities,
+        &stop,
+    )?;
+    assert_eq!(direct.capabilities(), Some(capabilities));
+    assert!(direct.raw_inventory_batch().is_some());
     Ok(())
 }
 

@@ -238,8 +238,13 @@ pub(super) fn scopes<'a>(
     {
         return Err(invalid());
     }
-    if packages.packages().len() > super::packages::MAX_PACKAGE_NODES {
-        return Err(exhausted());
+    let package_limit = super::packages::package_node_limit(config);
+    if packages.packages().len() > package_limit {
+        return Err(resource_exhausted(
+            "packages",
+            packages.packages().len() as u128,
+            package_limit,
+        ));
     }
     let mut result = Vec::with_capacity(packages.packages().len());
     for node in packages.packages() {
