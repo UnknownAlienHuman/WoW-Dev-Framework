@@ -131,7 +131,7 @@ pub(super) fn project(
     project: &ProjectView,
     file_ids: &BTreeMap<&str, String>,
     provenance: &mut ProjectGraphProvenance,
-    text_bytes: &mut usize,
+    text_bytes: &mut ProducerBudget,
     stop: &AtomicBool,
 ) -> ProjectResult<ScriptProposals> {
     let mut output = ScriptProposals {
@@ -511,7 +511,7 @@ fn collect_site(
     inputs: &Inputs<'_>,
     site: Site<'_>,
     provenance: &mut ProjectGraphProvenance,
-    text_bytes: &mut usize,
+    text_bytes: &mut ProducerBudget,
     query_visits: &mut usize,
     stop: &AtomicBool,
 ) -> ProjectResult<()> {
@@ -779,7 +779,7 @@ fn add_binding(
     confidence: GraphConfidence,
     receipt: &mut ProjectGraphScriptSite,
     provenance: &mut ProjectGraphProvenance,
-    text_bytes: &mut usize,
+    text_bytes: &mut ProducerBudget,
 ) -> ProjectResult<()> {
     if provenance.script_bindings.len() >= MAX_BINDINGS {
         return Err(exhausted());

@@ -147,7 +147,7 @@ pub(super) fn add_declaration(
     target: &SymbolTarget,
     file_ids: &BTreeMap<&str, String>,
     provenance: &mut ProjectGraphProvenance,
-    text_bytes: &mut usize,
+    text_bytes: &mut ProducerBudget,
     entities: &mut Vec<EntityDraft>,
     relations: &mut Vec<RelationDraft>,
 ) -> ProjectResult<usize> {
@@ -259,7 +259,7 @@ pub(super) fn project(
     project: &ProjectView,
     file_ids: &BTreeMap<&str, String>,
     provenance: &mut ProjectGraphProvenance,
-    text_bytes: &mut usize,
+    text_bytes: &mut ProducerBudget,
     stop: &AtomicBool,
 ) -> ProjectResult<MixinProposals> {
     let mut output = MixinProposals {

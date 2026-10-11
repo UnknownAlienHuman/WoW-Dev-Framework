@@ -131,7 +131,7 @@ pub(super) fn project(
     registry: &GraphRegistryBundle,
     universe: &GraphUniverseId,
     generation: &GraphGenerationId,
-    text_bytes: &mut usize,
+    text_bytes: &mut ProducerBudget,
     stop: &AtomicBool,
 ) -> ProjectResult<(GraphProposalBatch, ProjectRawInventoryManifest)> {
     crate::analyzer::checkpoint(stop)?;
@@ -310,7 +310,7 @@ pub(super) fn project(
 }
 
 pub(super) fn charge_serialized<T: Serialize>(
-    used: &mut usize,
+    used: &mut ProducerBudget,
     value: &T,
     stop: &AtomicBool,
 ) -> ProjectResult<()> {
@@ -346,9 +346,9 @@ pub(super) fn charge_serialized<T: Serialize>(
     let mut counter = Counter {
         bytes: 0,
         attempted: 0,
-        limit: MAX_TEXT_BYTES
-            .checked_sub(*used)
-            .ok_or_else(|| resource_exhausted("metadata bytes", *used as u128, MAX_TEXT_BYTES))?,
+        limit: used.limit().checked_sub(used.used()).ok_or_else(|| {
+            resource_exhausted("metadata bytes", used.used() as u128, used.limit())
+        })?,
         exceeded: false,
         stop,
     };
@@ -358,8 +358,8 @@ pub(super) fn charge_serialized<T: Serialize>(
         return Err(if counter.exceeded {
             resource_exhausted(
                 "metadata bytes",
-                *used as u128 + counter.attempted,
-                MAX_TEXT_BYTES,
+                used.used() as u128 + counter.attempted,
+                used.limit(),
             )
         } else {
             invalid()
@@ -468,7 +468,15 @@ fn expected(
     let packages = config.platform_packages().ok_or_else(invalid)?;
     let universe = GraphUniverseId::new(packages.binding().universe_id()).map_err(|_| invalid())?;
     let generation = input_generation(project, &registry)?;
-    self::project(project, &registry, &universe, &generation, &mut 0, stop)
+    let mut budget = ProducerBudget::for_configuration(config, 0)?;
+    self::project(
+        project,
+        &registry,
+        &universe,
+        &generation,
+        &mut budget,
+        stop,
+    )
 }
 
 pub fn bind_platform_raw_member<'a>(
@@ -554,12 +562,12 @@ mod budget_tests {
         let stop = AtomicBool::new(false);
         let value = "metadata";
         let encoded = serde_json::to_vec(value)?.len();
-        let mut used = MAX_TEXT_BYTES - encoded;
+        let mut used = ProducerBudget::new(MAX_TEXT_BYTES - encoded, MAX_TEXT_BYTES)?;
         charge_serialized(&mut used, &value, &stop)?;
-        assert_eq!(used, MAX_TEXT_BYTES);
+        assert_eq!(used.used(), MAX_TEXT_BYTES);
 
-        let mut used = MAX_TEXT_BYTES - encoded + 1;
-        let prior = used;
+        let mut used = ProducerBudget::new(MAX_TEXT_BYTES - encoded + 1, MAX_TEXT_BYTES)?;
+        let prior = used.used();
         let error = charge_serialized(&mut used, &value, &stop)
             .err()
             .ok_or("one byte over limit must refuse")?;
@@ -572,9 +580,17 @@ mod budget_tests {
                 MAX_TEXT_BYTES
             )
         );
-        assert_eq!(used, prior);
+        assert_eq!(used.used(), prior);
 
-        let mut used = usize::MAX;
+        let mut used = ProducerBudget::new(0, MAX_TEXT_BYTES)?;
+        let error = charge(&mut used, MAX_TEXT_BYTES + 1)
+            .err()
+            .ok_or("representable over-limit sum must refuse")?;
+        assert_eq!(error.code(), ProjectErrorCode::SourceBudgetExceeded);
+        assert_eq!(used.used(), MAX_TEXT_BYTES + 1);
+        let remaining = usize::MAX - used.used();
+        let _ = charge(&mut used, remaining);
+        assert_eq!(used.used(), usize::MAX);
         let error = charge(&mut used, 1).err().ok_or("overflow must refuse")?;
         assert_eq!(error.code(), ProjectErrorCode::SourceBudgetExceeded);
         assert_eq!(
@@ -585,7 +601,28 @@ mod budget_tests {
                 MAX_TEXT_BYTES
             )
         );
-        assert_eq!(used, usize::MAX);
+        assert_eq!(used.used(), usize::MAX);
+
+        // The selected cap uses the same scratch/commit rules at its boundary.
+        let selected_limit = MAX_TEXT_BYTES * 2;
+        let mut selected = ProducerBudget::new(selected_limit - encoded, selected_limit)?;
+        selected.charge_serialized(&value, &stop)?;
+        assert_eq!(selected.used(), selected_limit);
+        let mut selected = ProducerBudget::new(selected_limit - encoded + 1, selected_limit)?;
+        let prior = selected.used();
+        let error = selected
+            .charge_serialized(&value, &stop)
+            .err()
+            .ok_or("selected cap exceeded")?;
+        assert_eq!(selected.used(), prior);
+        assert_eq!(
+            error.message(),
+            format!(
+                "source graph metadata bytes exceeds its bounded profile: {}/{}",
+                selected_limit + 1,
+                selected_limit
+            )
+        );
 
         stop.store(true, std::sync::atomic::Ordering::Release);
         let error = charge_serialized(&mut used, &value, &stop)

@@ -114,7 +114,7 @@ pub(super) fn project(
     project: &ProjectView,
     file_ids: &BTreeMap<&str, String>,
     provenance: &mut ProjectGraphProvenance,
-    text_bytes: &mut usize,
+    text_bytes: &mut ProducerBudget,
     stop: &AtomicBool,
 ) -> ProjectResult<XmlProposals> {
     let mut output = XmlProposals {

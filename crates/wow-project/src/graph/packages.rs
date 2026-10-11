@@ -95,7 +95,7 @@ pub(super) fn project(
     file_ids: &BTreeMap<&str, String>,
     sources: &BTreeMap<&str, &LoadSource>,
     provenance: &mut ProjectGraphProvenance,
-    text_bytes: &mut usize,
+    text_bytes: &mut ProducerBudget,
     stop: &AtomicBool,
 ) -> ProjectResult<PackageProposals> {
     let mut output = PackageProposals {

@@ -34,6 +34,16 @@ Library sources remain separate from Main. The resulting ProjectView offers the
 existing freshly recomputed report capabilities; no additional semantic operation
 or target-client runtime capability follows.
 
+Genuine retained native platform graph configuration may select a positive
+`ProjectBudgetPolicy.source_graph.max_metadata_bytes` component. It applies to
+collection and native producer metadata accounting, separately from analyzer
+output, package-plan encoding and store limits. Absence retains the 4 MiB default
+and existing serialized bytes. Presence selects `native-project-replay/14` and
+`live-replay.v14`; numeric changes retain that shape and must reproduce their
+configuration/generation identity on hydration. The actual v13 catalog is frozen
+as `STORAGE_SCHEMAS_V13`: old epochs reopen under their exact catalog and refuse
+v14 writes before changing an operation or Current. No catalog widening occurs.
+
 `ProjectPublicationBundle::build` validates the live project and graph, recomputes
 the configured source proposals through the existing source owner (`/19` by default,
 `/20` for explicit package graph selection, `/21` with raw inventory) and requires

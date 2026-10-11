@@ -1,5 +1,7 @@
 //! Direct source/load/XML proposals. No recognizer inference or graph publication.
 mod axes;
+mod budget;
+pub use budget::SourceGraphBudget;
 mod derivations;
 pub use axes::source_graph_axis_profile;
 pub const SOURCE_GRAPH_REGISTRY_ID: &str = "wow-project.source-load";
@@ -10,6 +12,7 @@ mod load_inputs;
 mod packages;
 mod platform_producers;
 mod producer_budget;
+use producer_budget::ProducerBudget;
 mod producer_derivations;
 mod producer_evidence;
 use platform_producers::DirectRecipe;
@@ -380,19 +383,8 @@ fn resource_exhausted(resource: &str, attempted: u128, limit: usize) -> ProjectE
         format!("source graph {resource} exceeds its bounded profile: {attempted}/{limit}"),
     )
 }
-fn charge(used: &mut usize, bytes: usize) -> ProjectResult<()> {
-    let attempted = *used as u128 + bytes as u128;
-    *used = used
-        .checked_add(bytes)
-        .ok_or_else(|| resource_exhausted("metadata bytes", attempted, MAX_TEXT_BYTES))?;
-    if *used > MAX_TEXT_BYTES {
-        return Err(resource_exhausted(
-            "metadata bytes",
-            attempted,
-            MAX_TEXT_BYTES,
-        ));
-    }
-    Ok(())
+fn charge(used: &mut ProducerBudget, bytes: usize) -> ProjectResult<()> {
+    used.charge(bytes)
 }
 
 fn registry(project_kind: ProjectKind, raw_inventory: bool) -> ProjectResult<GraphRegistryBundle> {
@@ -937,7 +929,7 @@ struct CollectedSourceGraph {
     limits: GraphLimits,
     inventory_batch: Option<GraphProposalBatch>,
     #[serde(skip)]
-    text_bytes: usize,
+    text_bytes: ProducerBudget,
 }
 
 fn collect_source_graph_proposals(
@@ -1047,7 +1039,7 @@ fn collect_source_graph_proposals_for_recipe(
         ));
     }
     let mut source_by_path = BTreeMap::new();
-    let mut text_bytes = 0;
+    let mut text_bytes = ProducerBudget::for_configuration(config, 0)?;
     for source in &sources {
         crate::analyzer::checkpoint(stop)?;
         charge(&mut text_bytes, source.path.len().saturating_mul(8))?;

@@ -175,7 +175,7 @@ struct XmlFactInputs<'a> {
     document_digest: ContentDigest<CanonicalResult>,
 }
 impl XmlFactInputs<'_> {
-    fn charge(&self, text_bytes: &mut usize) -> ProjectResult<()> {
+    fn charge(&self, text_bytes: &mut ProducerBudget) -> ProjectResult<()> {
         charge(
             text_bytes,
             self.document
@@ -200,7 +200,7 @@ impl XmlFactInputs<'_> {
         self,
         document_digest: ContentDigest<CanonicalResult>,
         kind: ProjectXmlFactKind,
-        text_bytes: &mut usize,
+        text_bytes: &mut ProducerBudget,
     ) -> ProjectResult<ProjectXmlFact> {
         self.charge(text_bytes)?;
         let kind_bytes = wow_core::canonical_json_bytes(&kind).map_err(|_| invalid())?;
@@ -341,7 +341,7 @@ fn script_state(script: &XmlScriptRecord, element_name: &str) -> ProjectXmlFactK
 pub(super) fn project(
     project: &ProjectView,
     provenance: &mut ProjectGraphProvenance,
-    text_bytes: &mut usize,
+    text_bytes: &mut ProducerBudget,
     stop: &AtomicBool,
 ) -> ProjectResult<(Vec<ProjectXmlFact>, Vec<ProjectXmlContainment>)> {
     const MAX_CONTAINMENT_FACTS: usize = 32_768;

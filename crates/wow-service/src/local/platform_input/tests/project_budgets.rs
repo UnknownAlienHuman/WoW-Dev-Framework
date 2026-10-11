@@ -10,7 +10,116 @@ fn selected(config: &mut Value, policy: ProjectBudgetPolicy) -> TestResult {
 }
 
 #[test]
+fn graph_metadata_budget_is_strict_and_requires_retained_graph_selection() -> TestResult {
+    use wow_project::{ProjectConfigurationBuilder, graph::SourceGraphBudget};
+    let ordinary = ProjectBudgetPolicy::new(8, 1024 * 1024, 1024 * 1024, 8, 512, 16, 64 * 1024)?;
+    let absent = serde_json::to_value(ordinary)?;
+    assert!(absent.get("source_graph").is_none());
+    assert_eq!(
+        serde_json::from_value::<ProjectBudgetPolicy>(absent.clone())?,
+        ordinary
+    );
+    let budget = SourceGraphBudget::new(32 * 1024 * 1024)?;
+    let selected_policy = ordinary.with_source_graph_budget(budget);
+    assert_eq!(
+        serde_json::from_value::<ProjectBudgetPolicy>(serde_json::to_value(selected_policy)?)?,
+        selected_policy
+    );
+    assert!(SourceGraphBudget::new(0).is_err());
+    for value in [
+        Value::Null,
+        json!({}),
+        json!({"max_metadata_bytes":0}),
+        json!({"max_metadata_bytes":-1}),
+        json!({"max_metadata_bytes":1.5}),
+        json!({"max_metadata_bytes":1,"unknown":1}),
+    ] {
+        let mut changed = absent.clone();
+        changed["source_graph"] = value;
+        assert!(serde_json::from_value::<ProjectBudgetPolicy>(changed).is_err());
+    }
+    assert!(
+        serde_json::from_str::<SourceGraphBudget>(
+            "{\"max_metadata_bytes\":1,\"max_metadata_bytes\":2}"
+        )
+        .is_err()
+    );
+    let duplicate = format!(
+        "{{\"source_graph\":{{\"max_metadata_bytes\":1}},{}",
+        serde_json::to_string(&selected_policy)?
+            .strip_prefix('{')
+            .ok_or("policy object")?
+    );
+    assert!(serde_json::from_str::<ProjectBudgetPolicy>(&duplicate).is_err());
+
+    let (root, mut config) = fixture()?;
+    let path = root.0.join("project.json");
+    let stop = AtomicBool::new(false);
+    let unretained = LocalProjectInput::from_config_path(&path, &stop)?;
+    selected(&mut config, selected_policy)?;
+    write_json(&root, "project.json", &config)?;
+    let retained = LocalProjectInput::from_config_path(&path, &stop)?;
+    let declarations: Vec<ProjectPackageInput> =
+        serde_json::from_value(config["packages"].clone())?;
+    for previous in [
+        unretained.bundle.configuration(),
+        retained.bundle.configuration(),
+    ] {
+        let owner = previous.platform_packages().ok_or("platform")?;
+        let packages = Arc::new(match owner.retention_limits() {
+            Some(limits) => owner.source().specialize_packages_with_retention(
+                &declarations,
+                None,
+                limits,
+                &stop,
+            )?,
+            None => owner
+                .source()
+                .specialize_packages(&declarations, None, &stop)?,
+        });
+        // An ordinary native platform input lacks retention; the retained one
+        // below lacks graph selection. Neither may consume this component.
+        let refused = ProjectConfigurationBuilder::new(
+            previous.project_id().clone(),
+            previous.project_kind(),
+            previous.selected_profile().clone(),
+            previous.reference_generation(),
+            previous.analyzer_binding().clone(),
+        )
+        .workspace_id(previous.workspace_id().clone())
+        .source_origin_id(previous.source_origin_id().clone())
+        .logical_root(previous.logical_root().as_str())
+        .capability_policy(previous.capability_policy().clone())
+        .budget_policy(selected_policy)
+        .platform_packages(packages)?
+        .with_package_xml_bindings(wow_project::PackageXmlBindingProfile::SameSessionV1)
+        .build();
+        assert_eq!(
+            refused
+                .err()
+                .ok_or("unsupported component admitted")?
+                .code(),
+            ProjectErrorCode::InvalidBudgetPolicy
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn selected_global_budget_replay13_and_frozen_v12_store_preserve_current() -> TestResult {
+    selected_budget_replay_and_frozen_store_preserve_current(None)
+}
+
+#[test]
+fn selected_graph_metadata_budget_replay14_and_frozen_v13_store_preserve_current() -> TestResult {
+    selected_budget_replay_and_frozen_store_preserve_current(Some(
+        wow_project::graph::SourceGraphBudget::new(32 * 1024 * 1024)?,
+    ))
+}
+
+fn selected_budget_replay_and_frozen_store_preserve_current(
+    graph_budget: Option<wow_project::graph::SourceGraphBudget>,
+) -> TestResult {
     use crate::live_project::{LiveProjectStore, PlatformStoreSelection};
     use wow_emmy::{
         function_calls::{FUNCTION_CALL_GLOBAL_BUDGET_PROFILE, FunctionCallBudget},
@@ -24,11 +133,18 @@ fn selected_global_budget_replay13_and_frozen_v12_store_preserve_current() -> Te
     let stop = AtomicBool::new(false);
     let ordinary = LocalProjectInput::from_config_path(&path, &stop)?;
     let plain = FunctionCallBudget::new(64, 16, 16, 16, 32, 64 * 1024)?;
+    let component = GlobalAccessBudget::new(1024, 128 * 1024)?;
+    let nested = plain.with_global_access_budget(component);
+    let old_sidecar = if graph_budget.is_some() {
+        nested
+    } else {
+        plain
+    };
     let policy = ordinary
         .bundle
         .configuration()
         .budget_policy()
-        .with_function_call_budget(plain);
+        .with_function_call_budget(old_sidecar);
     selected(&mut config, policy)?;
     write_json(&root, "project.json", &config)?;
     let old_input = LocalProjectInput::from_config_path(&path, &stop)?;
@@ -59,14 +175,47 @@ fn selected_global_budget_replay13_and_frozen_v12_store_preserve_current() -> Te
         .decode()?;
     assert_eq!(
         serde_json::to_value(&old_replay)?["schema"],
-        "wow-project/native-project-replay/12"
+        if graph_budget.is_some() {
+            "wow-project/native-project-replay/13"
+        } else {
+            "wow-project/native-project-replay/12"
+        }
     );
 
-    let component = GlobalAccessBudget::new(1024, 128 * 1024)?;
-    let nested = plain.with_global_access_budget(component);
-    selected(&mut config, policy.with_function_call_budget(nested))?;
+    let new_policy = match graph_budget {
+        Some(budget) => policy.with_source_graph_budget(budget),
+        None => policy.with_function_call_budget(nested),
+    };
+    selected(&mut config, new_policy)?;
     write_json(&root, "project.json", &config)?;
     let input = LocalProjectInput::from_config_path(&path, &stop)?;
+    assert_ne!(
+        input.bundle.configuration().configuration_digest(),
+        old_replay
+            .hydrate(&stop)?
+            .configuration()
+            .configuration_digest()
+    );
+    if graph_budget.is_some() {
+        let mut refused_config = config.clone();
+        refused_config["project_budgets"]["source_graph"]["max_metadata_bytes"] = json!(1);
+        write_json(&root, "project.json", &refused_config)?;
+        let refused_input = LocalProjectInput::from_config_path(&path, &stop)?;
+        let request = crate::graph::GraphBuildRequest::new(
+            "fixture-platform-transport".into(),
+            "current".into(),
+        )?
+        .with_input_profile(&refused_input);
+        let refused = crate::graph::execute_graph_build(refused_input, &request, &stop)?;
+        assert_eq!(refused.status(), crate::graph::GraphReadStatus::Failed);
+        assert!(refused.snapshot_bytes()?.is_none());
+        let cause = refused
+            .failure_message()
+            .ok_or("graph metadata cause lost")?;
+        assert!(cause.contains("source graph metadata bytes exceeds its bounded profile"));
+        assert!(cause.ends_with("/1"));
+        write_json(&root, "project.json", &config)?;
+    }
     let new_request = crate::graph::GraphBuildRequest::new(
         "fixture-platform-transport".into(),
         "current".into(),
@@ -84,12 +233,26 @@ fn selected_global_budget_replay13_and_frozen_v12_store_preserve_current() -> Te
         .ok_or("new replay")?
         .decode()?;
     let wire = serde_json::to_value(&replay)?;
-    assert_eq!(wire["schema"], "wow-project/native-project-replay/13");
+    assert_eq!(
+        wire["schema"],
+        if graph_budget.is_some() {
+            "wow-project/native-project-replay/14"
+        } else {
+            "wow-project/native-project-replay/13"
+        }
+    );
     assert_eq!(
         wire["configuration"]["budgets"]["function_calls"],
         serde_json::to_value(nested)?
     );
     let reopened = ProjectReplay::from_json(&serde_json::to_vec(&wire)?, &stop)?.hydrate(&stop)?;
+    assert_eq!(
+        reopened
+            .configuration()
+            .budget_policy()
+            .source_graph_budget(),
+        graph_budget
+    );
     let report = reopened
         .snapshot()
         .analyzer_binding()
@@ -107,9 +270,13 @@ fn selected_global_budget_replay13_and_frozen_v12_store_preserve_current() -> Te
         publication::STORAGE_CHECK,
     ];
     let mut schemas = wow_graph::GraphPartitionSnapshot::STORAGE_SCHEMAS.to_vec();
-    schemas.extend_from_slice(publication::STORAGE_SCHEMAS_V12);
+    schemas.extend_from_slice(if graph_budget.is_some() {
+        publication::STORAGE_SCHEMAS_V13
+    } else {
+        publication::STORAGE_SCHEMAS_V12
+    });
     let old_catalog = RecordCatalog::new(&schemas, &checks)?;
-    let old_root = root.0.join("old-v12-store");
+    let old_root = root.0.join("frozen-store");
     let mut old =
         ProjectStore::create_with_namespace(&old_root, selection.namespace(), old_catalog.clone())?;
     let epoch = old.epoch().clone();
@@ -131,7 +298,7 @@ fn selected_global_budget_replay13_and_frozen_v12_store_preserve_current() -> Te
             .configuration()
             .budget_policy()
             .function_call_budget(),
-        Some(plain)
+        Some(old_sidecar)
     );
     let validation = read.owner_validation(&checks)?;
     drop(read);
@@ -168,7 +335,7 @@ fn selected_global_budget_replay13_and_frozen_v12_store_preserve_current() -> Te
             .configuration()
             .budget_policy()
             .function_call_budget(),
-        Some(plain)
+        Some(old_sidecar)
     );
     drop(old_read);
     drop(live_old);
@@ -176,7 +343,7 @@ fn selected_global_budget_replay13_and_frozen_v12_store_preserve_current() -> Te
     let mut schemas = wow_graph::GraphPartitionSnapshot::STORAGE_SCHEMAS.to_vec();
     schemas.extend_from_slice(publication::STORAGE_SCHEMAS);
     let catalog = RecordCatalog::new(&schemas, &checks)?;
-    let new_root = root.0.join("new-v13-store");
+    let new_root = root.0.join("selected-store");
     let mut store = ProjectStore::create_with_namespace(&new_root, selection.namespace(), catalog)?;
     let write = PublicationRequest::new(
         store.epoch(),
@@ -215,32 +382,59 @@ fn selected_global_budget_replay13_and_frozen_v12_store_preserve_current() -> Te
     );
     for mutation in 0..5 {
         let mut changed = wire.clone();
-        match mutation {
-            0 => changed["schema"] = json!("wow-project/native-project-replay/12"),
-            1 => {
-                changed["configuration"]["budgets"]["function_calls"]
-                    .as_object_mut()
-                    .ok_or("function budget")?
-                    .remove("global_access");
+        if graph_budget.is_some() {
+            match mutation {
+                0 => changed["schema"] = json!("wow-project/native-project-replay/13"),
+                1 => {
+                    changed["configuration"]["budgets"]
+                        .as_object_mut()
+                        .ok_or("budgets")?
+                        .remove("source_graph");
+                }
+                2 => {
+                    changed["configuration"]["budgets"]["source_graph"]["max_metadata_bytes"] =
+                        json!(32 * 1024 * 1024 + 1)
+                }
+                3 => {
+                    changed["configuration"]["budgets"]["source_graph"]["max_metadata_bytes"] =
+                        json!(0)
+                }
+                _ => changed["configuration"]["budgets"]["source_graph"] = Value::Null,
             }
-            2 => {
-                changed["configuration"]["budgets"]["function_calls"]["global_access"]["max_work"] =
-                    json!(1025)
-            }
-            3 => {
-                changed["configuration"]["budgets"]["function_calls"]["global_access"]["max_work"] =
-                    json!(0)
-            }
-            _ => {
-                changed["configuration"]["budgets"]["function_calls"]["global_access"] = Value::Null
+        } else {
+            match mutation {
+                0 => changed["schema"] = json!("wow-project/native-project-replay/12"),
+                1 => {
+                    changed["configuration"]["budgets"]["function_calls"]
+                        .as_object_mut()
+                        .ok_or("function budget")?
+                        .remove("global_access");
+                }
+                2 => {
+                    changed["configuration"]["budgets"]["function_calls"]["global_access"]["max_work"] =
+                        json!(1025)
+                }
+                3 => {
+                    changed["configuration"]["budgets"]["function_calls"]["global_access"]["max_work"] =
+                        json!(0)
+                }
+                _ => {
+                    changed["configuration"]["budgets"]["function_calls"]["global_access"] =
+                        Value::Null
+                }
             }
         }
-        assert!(
-            ProjectReplay::from_json(&serde_json::to_vec(&changed)?, &stop)
-                .and_then(|r| r.hydrate(&stop))
-                .is_err(),
-            "mutation admitted: {mutation}"
-        );
+        let decoded = ProjectReplay::from_json(&serde_json::to_vec(&changed)?, &stop);
+        if graph_budget.is_some() && mutation == 2 {
+            // Numeric drift still has the v14 shape. Hydration must reject the
+            // changed configuration identity instead of a schema mismatch.
+            assert!(decoded?.hydrate(&stop).is_err());
+        } else {
+            assert!(
+                decoded.and_then(|r| r.hydrate(&stop)).is_err(),
+                "mutation admitted: {mutation}"
+            );
+        }
     }
     Ok(())
 }

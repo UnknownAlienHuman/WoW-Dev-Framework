@@ -204,6 +204,13 @@ retention case now reaches source graph collection and structural direct
 preparation. Independent raw/file/node/edge/metadata and remaining limits stay
 active; no serialized recipe or identity changes accompany this correction.
 Full analysis/graph/maps/persistence remain unqualified under #113.
+An optional positive `source_graph.max_metadata_bytes` policy now selects the
+shared graph metadata allowance for genuine retained native platform input.
+Collection, direct preparation, maps and retained stage copies use that same cap;
+absence keeps 4 MiB and old bytes. The component binds configuration/replay14,
+with the actual v13 store catalog frozen. Native boundary/overflow/cancellation,
+strict decoding, selected replay/store/Current and numeric identity-mutation
+cases pass alongside affected Tier S. Other caps and full-corpus fit remain #113.
 Explicit retained XSD component admission is now executable through the existing
 XML owner, with root-only global symbols and final unsupported context propagation.
 See [schema components](PLATFORM_XML_SCHEMA_COMPONENTS.md) for its bounded scope.

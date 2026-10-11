@@ -7,9 +7,9 @@ the work queue. Follow [the execution model](EXECUTION_MODEL.md).
 
 ## Verified routing base
 
-`main` checkpoint `27e96ee958f497acd70c47a9204cab58d5654455`, tree
-`1dc66fcfe77f8fd8656701f3c22910cffd64f23d`, was published and read back with all
-changed blobs. [Quick 38104634909](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/38104634909)
+`main` checkpoint `d3f8e350b41d134a735653de1a010b1f51764807`, tree
+`96c63486afab6b6475dc9421a35409ebbb485110`, was published and read back with all
+changed blobs. [Quick 38113305095](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/38113305095)
 passed on that exact head. This is the verified base of this routing update;
 subsequent publication and gate evidence belong in the canonical Issue.
 
@@ -23,7 +23,14 @@ They describe one selected operation, not permanent client/source defaults.
 ## Current blocker and next slices
 
 [#113](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/113) blocks
-full-corpus qualification. The selected273-package native census, finite retained
+full-corpus qualification. The latest retained operation reached graph metadata
+at 23,399,533/4,194,304 attempted bytes after package-count admission. The explicit
+graph metadata component now binds one shared collector/direct/map allowance and
+replay14; absence preserves old bytes and 4 MiB. Its native boundaries and exact
+replay/store cases pass. The next freshly resolved complete request must measure
+actual fit and the next refusal; independent counts and downstream caps remain.
+See [the current #113 checkpoint](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/113#issuecomment-6105640575).
+The selected273-package native census, finite retained
 Main, exact replay and compiled backend report producer are executable; detailed
 scope lives in [implementation status](IMPLEMENTATION_STATUS.md) and the canonical
 Issue. The finite project and function-call budget selections, retained native

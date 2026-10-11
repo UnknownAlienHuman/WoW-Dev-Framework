@@ -72,7 +72,7 @@ pub(super) fn project(
     project: &ProjectView,
     sources: &BTreeMap<&str, &LoadSource>,
     provenance: &mut ProjectGraphProvenance,
-    text_bytes: &mut usize,
+    text_bytes: &mut ProducerBudget,
     stop: &AtomicBool,
 ) -> ProjectResult<Vec<ProjectTocFact>> {
     let mut output = Vec::new();
@@ -123,7 +123,7 @@ fn append_plan(
     package: Option<&str>,
     sources: &BTreeMap<&str, &LoadSource>,
     provenance: &mut ProjectGraphProvenance,
-    text_bytes: &mut usize,
+    text_bytes: &mut ProducerBudget,
     output: &mut Vec<ProjectTocFact>,
     stop: &AtomicBool,
 ) -> ProjectResult<()> {
@@ -288,7 +288,7 @@ struct FactBuilder<'a> {
     document: &'a str,
     source: &'a LoadSource,
     provenance: &'a mut ProjectGraphProvenance,
-    text_bytes: &'a mut usize,
+    text_bytes: &'a mut ProducerBudget,
     output: &'a mut Vec<ProjectTocFact>,
     stop: &'a AtomicBool,
 }

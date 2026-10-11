@@ -218,6 +218,8 @@ pub struct ProjectBudgetPolicy {
     max_output_bytes: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     function_calls: Option<wow_emmy::function_calls::FunctionCallBudget>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    source_graph: Option<crate::graph::SourceGraphBudget>,
 }
 
 #[derive(Deserialize)]
@@ -232,6 +234,17 @@ struct ProjectBudgetPolicyInput {
     max_output_bytes: u64,
     #[serde(default, deserialize_with = "present_function_call_budget")]
     function_calls: Option<wow_emmy::function_calls::FunctionCallBudget>,
+    #[serde(default, deserialize_with = "present_source_graph_budget")]
+    source_graph: Option<crate::graph::SourceGraphBudget>,
+}
+
+pub(crate) fn present_source_graph_budget<'de, D>(
+    deserializer: D,
+) -> Result<Option<crate::graph::SourceGraphBudget>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    crate::graph::SourceGraphBudget::deserialize(deserializer).map(Some)
 }
 
 pub(crate) fn present_function_call_budget<'de, D>(
@@ -256,8 +269,12 @@ impl TryFrom<ProjectBudgetPolicyInput> for ProjectBudgetPolicy {
             input.max_generic_findings,
             input.max_output_bytes,
         )?;
-        Ok(match input.function_calls {
+        let policy = match input.function_calls {
             Some(budget) => policy.with_function_call_budget(budget),
+            None => policy,
+        };
+        Ok(match input.source_graph {
+            Some(budget) => policy.with_source_graph_budget(budget),
             None => policy,
         })
     }
@@ -298,6 +315,7 @@ impl ProjectBudgetPolicy {
             max_generic_findings,
             max_output_bytes,
             function_calls: None,
+            source_graph: None,
         })
     }
 
@@ -363,6 +381,20 @@ impl ProjectBudgetPolicy {
         self,
     ) -> Option<wow_emmy::function_calls::FunctionCallBudget> {
         self.function_calls
+    }
+
+    #[must_use]
+    pub const fn with_source_graph_budget(
+        mut self,
+        budget: crate::graph::SourceGraphBudget,
+    ) -> Self {
+        self.source_graph = Some(budget);
+        self
+    }
+
+    #[must_use]
+    pub const fn source_graph_budget(self) -> Option<crate::graph::SourceGraphBudget> {
+        self.source_graph
     }
 }
 
@@ -593,6 +625,19 @@ impl ProjectConfiguration {
                 ProjectErrorCode::InvalidBudgetPolicy,
                 ProjectPhase::Configuration,
                 "selected function-call budgets require native retained packages",
+            ));
+        }
+        if self.budget_policy.source_graph_budget().is_some()
+            && (self.platform_graph_profile.is_none()
+                || self
+                    .platform_packages()
+                    .and_then(|packages| packages.retention_limits())
+                    .is_none())
+        {
+            return Err(ProjectError::new(
+                ProjectErrorCode::InvalidBudgetPolicy,
+                ProjectPhase::Configuration,
+                "selected graph metadata budgets require native retained platform graph input",
             ));
         }
         if self.package_xml_binding_profile.is_some()

@@ -239,9 +239,10 @@ fn build_plan<'a>(
     }
     // Refine the collector's provisional tally with complete borrowed metadata.
     // Shared raw/provenance bodies are counted once, under the same operation cap.
-    let mut exact = 0;
+    let mut exact = ProducerBudget::for_configuration(config, 0)?;
     raw_inventory::charge_serialized(&mut exact, &collected, stop)?;
-    let mut budget = ProducerBudget::new(exact.max(collected.text_bytes))?;
+    let mut budget =
+        ProducerBudget::for_configuration(config, exact.used().max(collected.text_bytes.used()))?;
     // New source pieces must enter the native catalog before Inventory spans.
     let prepared_maps = if recipe.xml_source_maps() {
         Some(xml_source_maps::prepare(

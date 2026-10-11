@@ -34,6 +34,7 @@ const CAPABILITIES_GRAPH_REPLAY_SCHEMA: &str = "wow-project/native-project-repla
 const RETAINED_PLATFORM_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/11";
 const FUNCTION_BUDGET_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/12";
 const GLOBAL_ACCESS_BUDGET_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/13";
+const GRAPH_METADATA_BUDGET_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/14";
 const MAX_FILES: usize = 8192;
 const MAX_LIBRARIES: usize = 64;
 const MAX_FILE_BYTES: usize = 16 * 1024 * 1024;
@@ -270,7 +271,9 @@ impl ProjectReplay {
         };
         let platform_schema =
             if platform_owner.is_some_and(|owner| owner.retention_limits().is_some()) {
-                if configuration
+                if configuration.source_graph_budget().is_some() {
+                    GRAPH_METADATA_BUDGET_REPLAY_SCHEMA
+                } else if configuration
                     .function_call_budget()
                     .is_some_and(|budget| budget.global_access_budget().is_some())
                 {
@@ -341,6 +344,18 @@ impl ProjectReplay {
     }
     fn expected_schema(&self) -> ProjectResult<&'static str> {
         let schema = self.expected_base_schema()?;
+        if self.configuration.source_graph_budget().is_some() {
+            return if self
+                .platform
+                .as_ref()
+                .is_some_and(ReplayPlatform::has_retention_limits)
+                && self.configuration.platform_graph_profile().is_some()
+            {
+                Ok(GRAPH_METADATA_BUDGET_REPLAY_SCHEMA)
+            } else {
+                Err(invalid())
+            };
+        }
         match (
             self.platform
                 .as_ref()
@@ -593,6 +608,7 @@ impl ProjectReplay {
             RETAINED_PLATFORM_REPLAY_SCHEMA => Ok("wow-project.live-replay.v11"),
             FUNCTION_BUDGET_REPLAY_SCHEMA => Ok("wow-project.live-replay.v12"),
             GLOBAL_ACCESS_BUDGET_REPLAY_SCHEMA => Ok("wow-project.live-replay.v13"),
+            GRAPH_METADATA_BUDGET_REPLAY_SCHEMA => Ok("wow-project.live-replay.v14"),
             _ => Err(invalid()),
         }
     }

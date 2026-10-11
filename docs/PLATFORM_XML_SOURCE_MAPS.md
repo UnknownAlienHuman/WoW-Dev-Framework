@@ -118,9 +118,12 @@ remain accessible through the held owners.
 
 ## Bounds and compatibility
 
-The existing shared conservative 4 MiB serialized metadata allowance covers
+The shared conservative metadata allowance defaults to 4 MiB and covers
 preparation indexes, support, drafts, summaries, omissions and final native
-bodies. It is an operation accounting limit, not a resident-memory guarantee.
+bodies. Genuine retained native platform graph input may select the positive
+`source_graph.max_metadata_bytes` component through its Project budget policy;
+collection, direct preparation and maps consume the same selected allowance.
+It is an operation accounting limit, not a resident-memory guarantee.
 Mapping visits/candidate windows and emitted pieces have cumulative 200,000
 ceilings across the operation; the inherited combined assertion/node/edge caps,
 4096-site bound and 4096-byte graph-value limit also apply. Native mapping
