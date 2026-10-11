@@ -4,18 +4,36 @@ use std::sync::atomic::AtomicBool;
 use wow_project::graph::{
     PlatformGraphProvenance,
     fingerprints::{
-        FunctionFingerprintLimits, FunctionFingerprintManifest,
-        build_platform_function_fingerprints, build_platform_function_fingerprints_with_load_roles,
+        FunctionFingerprintLimits, FunctionFingerprintManifest, FunctionNeighborhoodComposition,
+        build_platform_function_fingerprints, build_platform_function_fingerprints_composed,
+        build_platform_function_fingerprints_with_load_roles,
     },
 };
 
 use super::{checkpoint, error, project_error};
 use crate::{ServiceErrorCode, ServiceResult};
-pub use wow_project::graph::fingerprints::FunctionPackageLoadRoleRecipe;
+pub use wow_project::graph::fingerprints::{
+    FunctionDirectNeighborhoodRecipe, FunctionPackageLoadRoleRecipe,
+};
 
 const SELECTION_SCHEMA: &str = "wow-service/function-fingerprint-selection/1";
 const LOAD_ROLE_SELECTION_SCHEMA: &str =
     "wow-service/function-fingerprint-selection/package-load-roles/1";
+const SELECTED_COMPONENTS_SELECTION_SCHEMA: &str =
+    "wow-service/function-fingerprint-selection/selected-components/1";
+
+fn selection_schema(
+    load_roles: Option<FunctionPackageLoadRoleRecipe>,
+    neighborhood: Option<FunctionDirectNeighborhoodRecipe>,
+) -> &'static str {
+    if neighborhood.is_some() {
+        SELECTED_COMPONENTS_SELECTION_SCHEMA
+    } else if load_roles.is_some() {
+        LOAD_ROLE_SELECTION_SCHEMA
+    } else {
+        SELECTION_SCHEMA
+    }
+}
 
 /// Exact current physical function IDs and cumulative observation limits.
 /// Selection says nothing about functions omitted from this request.
@@ -28,6 +46,8 @@ pub struct FunctionFingerprintSelection {
     max_metadata_bytes: usize,
     #[serde(skip_serializing_if = "Option::is_none")]
     package_load_roles: Option<FunctionPackageLoadRoleRecipe>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    direct_neighborhood: Option<FunctionDirectNeighborhoodRecipe>,
 }
 
 #[derive(Deserialize)]
@@ -40,6 +60,14 @@ struct WireSelection {
     max_metadata_bytes: usize,
     #[serde(default, deserialize_with = "non_null_load_roles")]
     package_load_roles: Option<FunctionPackageLoadRoleRecipe>,
+    #[serde(default, deserialize_with = "non_null_neighborhood")]
+    direct_neighborhood: Option<FunctionDirectNeighborhoodRecipe>,
+}
+
+fn non_null_neighborhood<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<FunctionDirectNeighborhoodRecipe>, D::Error> {
+    FunctionDirectNeighborhoodRecipe::deserialize(deserializer).map(Some)
 }
 
 fn non_null_load_roles<'de, D: serde::Deserializer<'de>>(
@@ -68,6 +96,7 @@ impl FunctionFingerprintSelection {
             max_source_bytes,
             max_metadata_bytes,
             package_load_roles: None,
+            direct_neighborhood: None,
         };
         // Bound the entire selection before any later request clone or native lookup.
         super::preflight_cancellable(
@@ -82,14 +111,32 @@ impl FunctionFingerprintSelection {
         mut self,
         recipe: FunctionPackageLoadRoleRecipe,
     ) -> ServiceResult<Self> {
-        self.schema = LOAD_ROLE_SELECTION_SCHEMA;
         self.package_load_roles = Some(recipe);
+        self.schema = selection_schema(self.package_load_roles, self.direct_neighborhood);
         super::preflight_cancellable(
             &self,
             super::super::GRAPH_REQUEST_MAX_BYTES,
             &AtomicBool::new(false),
         )?;
         Ok(self)
+    }
+
+    pub fn with_direct_neighborhood(
+        mut self,
+        recipe: FunctionDirectNeighborhoodRecipe,
+    ) -> ServiceResult<Self> {
+        self.direct_neighborhood = Some(recipe);
+        self.schema = selection_schema(self.package_load_roles, self.direct_neighborhood);
+        super::preflight_cancellable(
+            &self,
+            super::super::GRAPH_REQUEST_MAX_BYTES,
+            &AtomicBool::new(false),
+        )?;
+        Ok(self)
+    }
+
+    pub const fn direct_neighborhood(&self) -> Option<FunctionDirectNeighborhoodRecipe> {
+        self.direct_neighborhood
     }
 
     pub const fn package_load_roles(&self) -> Option<FunctionPackageLoadRoleRecipe> {
@@ -110,11 +157,7 @@ impl FunctionFingerprintSelection {
             stop,
         )
         .map_err(|failure| error(failure.code))?;
-        let expected_schema = if wire.package_load_roles.is_some() {
-            LOAD_ROLE_SELECTION_SCHEMA
-        } else {
-            SELECTION_SCHEMA
-        };
+        let expected_schema = selection_schema(wire.package_load_roles, wire.direct_neighborhood);
         if wire.schema != expected_schema {
             return Err(error(ServiceErrorCode::InvalidRequest));
         }
@@ -127,6 +170,9 @@ impl FunctionFingerprintSelection {
         if let Some(recipe) = wire.package_load_roles {
             selection = selection.with_package_load_roles(recipe)?;
         }
+        if let Some(recipe) = wire.direct_neighborhood {
+            selection = selection.with_direct_neighborhood(recipe)?;
+        }
         checkpoint(stop)?;
         Ok(selection)
     }
@@ -136,7 +182,28 @@ impl FunctionFingerprintSelection {
         direct: &PlatformGraphProvenance<'_>,
         stop: &AtomicBool,
     ) -> ServiceResult<FunctionFingerprintManifest> {
+        self.build_with_composition(direct, None, stop)
+    }
+
+    pub(super) fn build_composed(
+        &self,
+        direct: &PlatformGraphProvenance<'_>,
+        composition: &FunctionNeighborhoodComposition<'_>,
+        stop: &AtomicBool,
+    ) -> ServiceResult<FunctionFingerprintManifest> {
+        self.build_with_composition(direct, Some(composition), stop)
+    }
+
+    fn build_with_composition(
+        &self,
+        direct: &PlatformGraphProvenance<'_>,
+        composition: Option<&FunctionNeighborhoodComposition<'_>>,
+        stop: &AtomicBool,
+    ) -> ServiceResult<FunctionFingerprintManifest> {
         checkpoint(stop)?;
+        if self.direct_neighborhood.is_some() != composition.is_some() {
+            return Err(error(ServiceErrorCode::IdentityMismatch));
+        }
         let ids = self
             .function_ids
             .iter()
@@ -148,11 +215,27 @@ impl FunctionFingerprintSelection {
             self.max_metadata_bytes,
         )
         .map_err(project_error)?;
-        let result = match self.package_load_roles {
-            None => build_platform_function_fingerprints(direct, &ids, limits, stop),
-            Some(recipe) => build_platform_function_fingerprints_with_load_roles(
+        let result = match (
+            self.direct_neighborhood,
+            composition,
+            self.package_load_roles,
+        ) {
+            (Some(recipe), Some(composition), load_roles) => {
+                build_platform_function_fingerprints_composed(
+                    direct,
+                    &ids,
+                    limits,
+                    load_roles,
+                    recipe,
+                    composition,
+                    stop,
+                )
+            }
+            (None, None, None) => build_platform_function_fingerprints(direct, &ids, limits, stop),
+            (None, None, Some(recipe)) => build_platform_function_fingerprints_with_load_roles(
                 direct, &ids, limits, recipe, stop,
             ),
+            _ => return Err(error(ServiceErrorCode::IdentityMismatch)),
         };
         result.map_err(|failure| {
             if failure.code() == wow_project::ProjectErrorCode::InvalidFingerprintSelection {
@@ -168,6 +251,54 @@ impl FunctionFingerprintSelection {
 mod tests {
     use super::*;
     type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    #[test]
+    fn selected_neighborhood_requires_exact_recipe_and_preserves_selector_order() -> TestResult {
+        let plain = FunctionFingerprintSelection::new(Vec::new(), 1, 1, 4096)?;
+        let old = serde_json::to_value(&plain)?;
+        assert_eq!(old["schema"], SELECTION_SCHEMA);
+        assert!(old.get("direct_neighborhood").is_none());
+        let recipe = FunctionDirectNeighborhoodRecipe::ComposedCallsAndXmlHandlersV1;
+        let selected = plain.clone().with_direct_neighborhood(recipe)?;
+        let bytes = serde_json::to_vec(&selected)?;
+        let restored = FunctionFingerprintSelection::from_json_slice(&bytes)?;
+        assert_eq!(restored.direct_neighborhood(), Some(recipe));
+        assert_eq!(restored.package_load_roles(), None);
+        let wire = serde_json::to_value(&selected)?;
+        assert_eq!(wire["schema"], SELECTED_COMPONENTS_SELECTION_SCHEMA);
+        for (field, value) in [
+            ("schema", serde_json::json!(SELECTION_SCHEMA)),
+            ("direct_neighborhood", serde_json::Value::Null),
+            ("direct_neighborhood", serde_json::json!("unsupported")),
+        ] {
+            let mut invalid = wire.clone();
+            invalid[field] = value;
+            assert_eq!(
+                FunctionFingerprintSelection::from_json_slice(&serde_json::to_vec(&invalid)?)
+                    .err()
+                    .ok_or("invalid neighborhood selector admitted")?
+                    .code(),
+                ServiceErrorCode::InvalidRequest
+            );
+        }
+        let role = FunctionPackageLoadRoleRecipe::SelectedPhysicalLuaV1;
+        let role_first = plain
+            .clone()
+            .with_package_load_roles(role)?
+            .with_direct_neighborhood(recipe)?;
+        let neighborhood_first = plain
+            .with_direct_neighborhood(recipe)?
+            .with_package_load_roles(role)?;
+        assert_eq!(
+            serde_json::to_vec(&role_first)?,
+            serde_json::to_vec(&neighborhood_first)?
+        );
+        let restored =
+            FunctionFingerprintSelection::from_json_slice(&serde_json::to_vec(&role_first)?)?;
+        assert_eq!(restored.direct_neighborhood(), Some(recipe));
+        assert_eq!(restored.package_load_roles(), Some(role));
+        Ok(())
+    }
 
     #[test]
     fn selected_load_roles_require_exact_schema_recipe_and_non_null_input() -> TestResult {

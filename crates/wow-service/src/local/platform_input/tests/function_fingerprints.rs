@@ -1952,3 +1952,457 @@ fn selected_indexed_signatures_survive_selected_replay_and_catalog_reopen() -> T
     assert_eq!(read.graph().snapshot().snapshot_id(), &graph_snapshot_id);
     Ok(())
 }
+
+#[test]
+fn selected_composed_neighborhood_tracks_incoming_call_with_unchanged_callee() -> TestResult {
+    use crate::graph::FunctionDirectNeighborhoodRecipe;
+    use wow_emmy::function_calls::SourceCallTarget;
+    use wow_graph::{GraphAssertionRef, GraphConfidence, GraphEdge, GraphNode, GraphRelationKind};
+    use wow_project::graph::fingerprints::{
+        FunctionDirectNeighborhoodSelection, FunctionNeighborDirection, FunctionNeighborKind,
+        FunctionNeighborhoodComponent, FunctionNeighborhoodUnavailable,
+        FunctionSourceSpanComponent,
+    };
+
+    const CALLEE: &str = "local function Callee()\n    return true\nend\n";
+    let stop = AtomicBool::new(false);
+    let (root, mut config) = fixture()?;
+    let path = root.0.join("project.json");
+    let recipe = FunctionDirectNeighborhoodRecipe::ComposedCallsAndXmlHandlersV1;
+    let mut span_observation = None;
+    let mut comparable_digests = Vec::new();
+    // Select a closed physical Lua scope. The fixture's unselected XML keeps
+    // its unresolved load semantics and supplies no complete handler census.
+    rewrite_load_role_toc(&root, &mut config, "## Interface: 120100\nmain.lua\n")?;
+
+    // Add the FIRST distinct Caller -> Callee relation, not a duplicate call.
+    // The callback control keeps the same finite selected package scope.
+    for (caller, incoming) in [
+        (
+            "local function Caller()\n    return true\nend\n",
+            Some(0_u64),
+        ),
+        (
+            "local function Caller()\n    return Callee()\nend\n",
+            Some(1),
+        ),
+        (
+            "local function Caller(callback)\n    return callback()\nend\n",
+            None,
+        ),
+    ] {
+        rewrite_declaration_lua(&root, &mut config, &format!("{CALLEE}{caller}"))?;
+        let (project, request, ids, source_bytes) = declaration_query(&path, &stop)?;
+        assert_eq!(
+            project.configuration().physical_function_declarations(),
+            None
+        );
+        assert_eq!(project.configuration().physical_function_signatures(), None);
+        let packages = project
+            .configuration()
+            .platform_packages()
+            .ok_or("native package owners")?;
+        assert!(
+            packages.load_plan().coverage().complete(),
+            "{:?}",
+            packages.load_plan().issues()
+        );
+        assert_eq!(packages.main_plan().files().len(), 1);
+        let main_file = packages
+            .main_plan()
+            .files()
+            .first()
+            .ok_or("physical Main file")?;
+        let report = project
+            .snapshot()
+            .analyzer_binding()
+            .function_call_report()
+            .ok_or("genuine native function-call report")?;
+        report.validate()?;
+        assert!(report.source_health_complete());
+        let mut closures = report
+            .functions()
+            .iter()
+            .filter(|fact| {
+                fact.kind() == SourceFunctionKind::Closure && fact.path() == main_file.project_path
+            })
+            .collect::<Vec<_>>();
+        closures.sort_by_key(|fact| fact.span().byte_start());
+        assert_eq!(closures.len(), 2, "Callee then Caller in the physical file");
+        let callee_fact = closures[0];
+        let caller_fact = closures[1];
+        let callee_bytes = span_bytes(&project, callee_fact)?.to_vec();
+
+        // One ordinary observation checks that adding the read-side selection
+        // changes neither the graph nor the unselected component bytes.
+        let ordinary = if incoming == Some(0) {
+            Some(execute_graph_build(
+                LocalProjectInput::from_config_path(&path, &stop)?,
+                &request,
+                &stop,
+            )?)
+        } else {
+            None
+        };
+        let selection = FunctionFingerprintSelection::new(
+            ids.clone(),
+            ids.len(),
+            source_bytes,
+            METADATA_BYTES,
+        )?
+        .with_direct_neighborhood(recipe)?;
+        let request = request.with_function_fingerprints(selection)?;
+        let result = execute_graph_build(
+            LocalProjectInput::from_config_path(&path, &stop)?,
+            &request,
+            &stop,
+        )?;
+        assert_eq!(
+            result.status(),
+            GraphReadStatus::Partial,
+            "{:?}",
+            result.failure_message()
+        );
+        let manifest = result.function_fingerprints().ok_or("composed manifest")?;
+        assert!(manifest.is_partial());
+        assert!(manifest.scope_conflicts().is_empty());
+        assert_eq!(
+            manifest.binding().project_snapshot_id(),
+            project.snapshot_id()
+        );
+        assert_eq!(
+            manifest.binding().function_analysis_id(),
+            report.analysis_id()
+        );
+        let selected = manifest
+            .selected_components()
+            .ok_or("selected component receipt")?;
+        assert_eq!(selected.direct_neighborhood(), Some(recipe));
+        assert_eq!(selected.physical_declarations(), None);
+        assert_eq!(selected.physical_signatures(), None);
+        assert_eq!(selected.package_load_role(), None);
+        let callee = manifest
+            .records()
+            .iter()
+            .find(|record| record.function_id() == callee_fact.fact_id())
+            .ok_or("Callee record")?;
+        let caller = manifest
+            .records()
+            .iter()
+            .find(|record| record.function_id() == caller_fact.fact_id())
+            .ok_or("Caller record")?;
+        for record in manifest.records() {
+            assert!(record.declared_header().is_none());
+            assert_eq!(
+                serde_json::to_value(record.signature())?,
+                "missing_signature"
+            );
+            assert_eq!(
+                serde_json::to_value(record.declaration_shape())?,
+                "missing_shape"
+            );
+            assert_eq!(
+                serde_json::to_value(record.package_load_role())?,
+                "not_selected"
+            );
+        }
+        let FunctionSourceSpanComponent::Available {
+            digest,
+            content_sha256,
+            byte_length,
+        } = callee.source_span()
+        else {
+            return Err("Callee's exact native span was not available".into());
+        };
+        assert_eq!(usize::try_from(*byte_length)?, callee_bytes.len());
+        let observed_span = (*digest, *content_sha256, *byte_length);
+        if let Some((bytes, span)) = &span_observation {
+            assert_eq!(
+                &callee_bytes, bytes,
+                "Callee's exact source bytes stay fixed"
+            );
+            assert_eq!(
+                &observed_span, span,
+                "including the Callee source-span digest"
+            );
+        } else {
+            span_observation = Some((callee_bytes, observed_span));
+        }
+
+        let graph: GraphPartitionSnapshot =
+            serde_json::from_slice(&result.snapshot_bytes()?.ok_or("final graph")?)?;
+        let lookup = graph.producer_lookup(&stop)?;
+        assert_eq!(lookup.scope(), manifest.binding().graph_scope());
+        let calls = graph
+            .partition("wow-recognizers.lua-direct-calls")
+            .ok_or("accepted call partition")?;
+        let scripts = graph
+            .partition("wow-recognizers.xml-script-bindings")
+            .ok_or("accepted script partition")?;
+        assert!(calls.report().ready_for_publication());
+        assert!(scripts.report().ready_for_publication());
+        let binding = manifest
+            .neighborhood_binding()
+            .ok_or("shared neighborhood binding")?;
+        assert_eq!(binding.recipe(), recipe);
+        assert_eq!(
+            binding.prefix_snapshot_id(),
+            manifest.binding().published_graph_snapshot_id()
+        );
+        assert_eq!(binding.final_snapshot_id(), graph.snapshot().snapshot_id());
+        assert_eq!(binding.final_generation(), graph.snapshot().generation());
+        assert_eq!(
+            binding.registry_digest(),
+            graph.registry().registry_digest()
+        );
+        assert_eq!(binding.call_partition_digest(), calls.partition_digest());
+        assert_eq!(
+            binding.call_validation_report_id(),
+            calls.report().report_id()
+        );
+        assert_eq!(
+            binding.script_partition_digest(),
+            scripts.partition_digest()
+        );
+        assert_eq!(
+            binding.script_validation_report_id(),
+            scripts.report().report_id()
+        );
+
+        // Prefix producer assertions still resolve exactly in the FINAL owner.
+        // Native constructors bind their accepted input nodes to final generation.
+        let mut published_nodes = Vec::new();
+        for record in [callee, caller] {
+            let entity = lookup.entity(
+                manifest.binding().graph_scope(),
+                record.support().entity_assertion(),
+                &stop,
+            )?;
+            let ownership = lookup.relation(
+                manifest.binding().graph_scope(),
+                record.support().incoming_ownership_assertion(),
+                &stop,
+            )?;
+            let node = entity.accepted().node();
+            assert_eq!(node.node_id(), record.exact_owner().node_id());
+            assert_eq!(
+                ownership.proposal().relation_kind_id(),
+                "source_declaration_owns"
+            );
+            assert_eq!(ownership.accepted().edge().to(), node.node_id());
+            let published = GraphNode::new(
+                graph.snapshot().universe().clone(),
+                graph.snapshot().generation().clone(),
+                node.kind(),
+                node.owner_key(),
+                node.evidence_ids().to_vec(),
+                graph.snapshot().limits(),
+            )?;
+            let final_node = graph
+                .snapshot()
+                .node(published.node_id())
+                .ok_or("materialized physical function")?;
+            assert_eq!(final_node.kind(), node.kind());
+            assert_eq!(final_node.owner_key(), node.owner_key());
+            published_nodes.push(published.node_id().clone());
+        }
+        if let Some(ordinary) = ordinary {
+            assert_eq!(
+                ordinary.status(),
+                GraphReadStatus::Partial,
+                "{:?}",
+                ordinary.failure_message()
+            );
+            assert_eq!(ordinary.snapshot_bytes()?, result.snapshot_bytes()?);
+            let old = ordinary
+                .function_fingerprints()
+                .ok_or("ordinary manifest")?;
+            assert!(old.selected_components().is_none());
+            assert!(old.neighborhood_binding().is_none());
+            assert_eq!(old.binding(), manifest.binding());
+            for record in manifest.records() {
+                let old_record = old
+                    .records()
+                    .iter()
+                    .find(|old| old.function_id() == record.function_id())
+                    .ok_or("same ordinary physical function")?;
+                assert!(matches!(
+                    old_record.direct_neighborhood(),
+                    FunctionDirectNeighborhoodSelection::NotSelected
+                ));
+                assert_eq!(
+                    serde_json::to_value(old_record.source_span())?,
+                    serde_json::to_value(record.source_span())?
+                );
+                assert_eq!(
+                    serde_json::to_value(old_record.signature())?,
+                    serde_json::to_value(record.signature())?
+                );
+                assert_eq!(
+                    serde_json::to_value(old_record.declaration_shape())?,
+                    serde_json::to_value(record.declaration_shape())?
+                );
+                assert_eq!(
+                    serde_json::to_value(old_record.package_load_role())?,
+                    serde_json::to_value(record.package_load_role())?
+                );
+            }
+        }
+
+        if let Some(incoming) = incoming {
+            assert_eq!(u64::try_from(report.calls().len())?, incoming);
+            assert_eq!(
+                u64::try_from(calls.report().accepted_relations().len())?,
+                incoming
+            );
+            for (record, expected_incoming, expected_outgoing) in
+                [(callee, incoming, 0_u64), (caller, 0, incoming)]
+            {
+                let FunctionDirectNeighborhoodSelection::Selected(component) =
+                    record.direct_neighborhood()
+                else {
+                    return Err("native neighborhood was not selected".into());
+                };
+                let FunctionNeighborhoodComponent::Comparable { digest, groups } =
+                    component.as_ref()
+                else {
+                    return Err("closed native fixture neighborhood was not comparable".into());
+                };
+                assert_eq!(groups[0].relation_definition_id(), "lua_direct_calls");
+                assert!(matches!(
+                    groups[0].direction(),
+                    FunctionNeighborDirection::Incoming
+                ));
+                assert!(matches!(
+                    groups[0].neighbor_kind(),
+                    FunctionNeighborKind::LuaSourceFunction
+                ));
+                assert_eq!(groups[0].multiplicity(), expected_incoming);
+                assert_eq!(groups[1].relation_definition_id(), "lua_direct_calls");
+                assert!(matches!(
+                    groups[1].direction(),
+                    FunctionNeighborDirection::Outgoing
+                ));
+                assert!(matches!(
+                    groups[1].neighbor_kind(),
+                    FunctionNeighborKind::LuaSourceFunction
+                ));
+                assert_eq!(groups[1].multiplicity(), expected_outgoing);
+                assert_eq!(groups[2].relation_definition_id(), "source_xml_sets_script");
+                assert!(matches!(
+                    groups[2].direction(),
+                    FunctionNeighborDirection::Incoming
+                ));
+                assert!(matches!(
+                    groups[2].neighbor_kind(),
+                    FunctionNeighborKind::XmlSourceDeclaration
+                ));
+                assert_eq!(
+                    groups[2].multiplicity(),
+                    0,
+                    "inline XML is outside physical targets"
+                );
+                if record.function_id() == callee_fact.fact_id() {
+                    comparable_digests.push(*digest);
+                }
+            }
+            if incoming == 1 {
+                let call = report.calls().first().ok_or("native direct call")?;
+                assert_eq!(call.caller_function_id(), caller_fact.fact_id());
+                assert!(
+                    matches!(call.target(), SourceCallTarget::MainFunction { function_id }
+                    if function_id.as_str() == callee_fact.fact_id())
+                );
+                let accepted = calls
+                    .report()
+                    .accepted_relations()
+                    .first()
+                    .ok_or("accepted distinct Caller -> Callee relation")?;
+                let address = GraphAssertionRef::Producer {
+                    partition_id: calls.partition_id().into(),
+                    batch_id: calls.batch().batch_id().into(),
+                    assertion: GraphLocalAssertion {
+                        kind: GraphAssertionKind::Relation,
+                        proposal_id: accepted.proposal_id().into(),
+                    },
+                };
+                let resolved = lookup.relation(lookup.scope(), &address, &stop)?;
+                assert_eq!(resolved.proposal().relation_kind_id(), "lua_direct_calls");
+                assert_eq!(resolved.accepted().edge(), accepted.edge());
+                let edge = accepted.edge();
+                assert_eq!(edge.relation(), GraphRelationKind::Calls);
+                assert_eq!(edge.confidence(), GraphConfidence::Derived);
+                assert_eq!(edge.from(), caller.exact_owner().node_id());
+                assert_eq!(edge.to(), callee.exact_owner().node_id());
+                for record in [callee, caller] {
+                    assert!(
+                        resolved
+                            .proposal()
+                            .source_handle_ids()
+                            .contains(&record.support().source_handle_id())
+                    );
+                    assert!(
+                        resolved
+                            .proposal()
+                            .evidence_ids()
+                            .contains(&record.support().evidence_id())
+                    );
+                }
+                let wire = serde_json::to_value(&result)?;
+                let receipts = wire["call_recognition"]["receipts"]
+                    .as_array()
+                    .ok_or("real call recognizer receipts")?;
+                assert_eq!(receipts.len(), 1);
+                assert_eq!(receipts[0]["call_id"], call.fact_id());
+                assert_eq!(receipts[0]["outcome"]["state"], "projected");
+                assert_eq!(
+                    receipts[0]["outcome"]["proposal_id"],
+                    accepted.proposal_id()
+                );
+                let final_edge = GraphEdge::new(
+                    published_nodes[1].clone(),
+                    published_nodes[0].clone(),
+                    edge.relation(),
+                    edge.confidence(),
+                    edge.evidence_ids().to_vec(),
+                    graph.snapshot().limits(),
+                )?;
+                assert_eq!(
+                    graph.snapshot().edge(final_edge.edge_id()),
+                    Some(&final_edge)
+                );
+            }
+        } else {
+            assert_eq!(report.calls().len(), 1, "one genuine callback call");
+            assert!(matches!(
+                report.calls()[0].target(),
+                SourceCallTarget::SignatureNotCaptured
+                    | SourceCallTarget::Unresolved
+                    | SourceCallTarget::Indeterminate
+            ));
+            assert!(calls.report().accepted_relations().is_empty());
+            for record in manifest.records() {
+                let FunctionDirectNeighborhoodSelection::Selected(component) =
+                    record.direct_neighborhood()
+                else {
+                    return Err("callback control neighborhood was not selected".into());
+                };
+                assert!(matches!(
+                    component.as_ref(),
+                    FunctionNeighborhoodComponent::Unavailable {
+                        reason: FunctionNeighborhoodUnavailable::UnknownCallTarget,
+                    }
+                ));
+                let wire = serde_json::to_value(component)?;
+                assert!(wire.get("digest").is_none());
+                assert!(
+                    wire.get("groups").is_none(),
+                    "no invented empty neighborhood"
+                );
+            }
+        }
+    }
+    assert_eq!(comparable_digests.len(), 2);
+    assert_ne!(comparable_digests[0], comparable_digests[1]);
+    Ok(())
+}

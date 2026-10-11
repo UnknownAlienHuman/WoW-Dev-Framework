@@ -33,8 +33,8 @@ or semantic-signature claim.
 Unselected `signature` and `declaration_shape` retain the legacy strings
 `missing_signature` and `missing_shape`; the selected recipes below supply only
 their explicitly reviewed components.
-Direct neighborhood is `not_selected`; package/load role stays `not_selected`
-unless explicitly selected below. Incoming ownership is eligibility/evidence
+Direct neighborhood and package/load role default to `not_selected` unless
+explicitly selected below. Incoming ownership is eligibility/evidence
 support, not a complete evaluated neighborhood. There is
 no composite fingerprint while required components are unavailable. Manifest
 coverage is Partial even for an empty explicit selection.
@@ -182,9 +182,10 @@ output; native configuration, analyzer report and replay remain unchanged.
 The selected manifest schema is
 `wow-project/function-fingerprint-records/selected-components/1`. Its explicit
 `selected_components` receipt retains optional native `physical_declarations`
-and `physical_signatures`, plus optional `package_load_role`, each with its exact
-recipe. With signatures and load-role selection both absent, previous manifest
-bytes remain; an unselected role retains `not_selected`.
+and `physical_signatures`, plus optional query `package_load_role` and
+`direct_neighborhood`, each with its exact recipe. With signatures and both query
+components absent, previous manifest bytes remain; an unselected role retains
+`not_selected`.
 
 Comparable data is static selected-package root status, known LoadOnDemand state,
 package phase/reachability and physical Lua role groups with exact occurrence
@@ -198,6 +199,60 @@ physical-file/load-unit joins remain unavailable with explicit coverage. The
 existing cumulative metadata ledger and cancellation cover inputs, retained
 witnesses/components and final output. Overall fingerprints remain Partial;
 final #118 acceptance is pending.
+
+## Composed direct Calls/XML neighborhood
+
+Select with `FunctionFingerprintSelection::with_direct_neighborhood` and
+`FunctionDirectNeighborhoodRecipe::ComposedCallsAndXmlHandlersV1`. Native
+`build_platform_function_fingerprints_composed` requires the held
+`FunctionNeighborhoodComposition`; the service supplies it after composition.
+
+Recipe `wow-project/physical-function-composed-calls-and-xml-handlers/1` measures
+only these three groups, in this canonical order, for selected physical Main roots:
+
+| Definition / native partition | Direction | Neighbor kind |
+|---|---|---|
+| `lua_direct_calls` / `wow-recognizers.lua-direct-calls` | incoming | `lua_source_function` |
+| `lua_direct_calls` / `wow-recognizers.lua-direct-calls` | outgoing | `lua_source_function` |
+| `source_xml_sets_script` / `wow-recognizers.xml-script-bindings` | incoming | `xml_source_declaration` |
+
+Multiplicity is the number of distinct accepted edge/definition pairs in each
+relative direction. The comparison contains only definition ID, owned direction/
+neighbor-kind tags and multiplicity, under domain
+`wow.project.fingerprint.physical-function.composed-calls-and-xml-handlers.v1`.
+Exact endpoints, names/labels, paths/spans, support/evidence IDs, confidence
+ordinals and graph/profile/generation identities are excluded. Zero groups are
+available only after this finite static census closes; equal degrees prove no
+endpoint continuity, complete equivalence or runtime dispatch.
+
+Evaluation requires the final composed native owner. Every native call receipt
+joins its original report call and held callsite support; every XML receipt joins
+its original binding, exact endpoints and source-handle/evidence support. The
+final producer lookup must resolve accepted proposals in the fixed partition and
+definition, with complete receipt cardinality and ready validation reports.
+The original physical-root/support proof remains in the parent. Manifest schema
+`wow-project/function-fingerprint-records/selected-components/1` retains the exact
+recipe in `selected_components.direct_neighborhood`. One optional manifest-level
+`neighborhood_binding` retains prefix/final snapshot, final generation, registry
+and call/XML partition/validation-report digests. Assertion scope, registry/foundation and
+every retained source-prefix partition digest must agree. No enum-based relabel,
+endpoint-name join or decoded receipt supplies native authority. An unselected
+query omits both new receipt/binding fields and retains `"not_selected"` rows.
+
+Library calls are outside this recipe; unsupported self-recursion suppresses its
+selected root. Uncaptured/unresolved/indeterminate calls suppress all selected
+roots because incoming absence is unknown. Parse failures and scope conflicts
+suppress comparison. Incomplete native load/XML health, unresolved ReferenceOnly
+queries or inherited/method blockers prevent a closed XML census; Possible incoming
+XML bindings suppress the affected root. Inline/external and virtual-handler roots
+are outside this physical-function recipe. Broad Calls/SetsScript coverage and
+overall fingerprints remain Partial even when a finite component is comparable.
+
+The original cumulative metadata ledger charges scanned inputs, temporary indexes,
+accepted-pair insertions, shared binding, selected rows and final output; all loops
+remain cancellable. It grants no second allowance or new ceiling. This optional
+query changes no native producer, replay or storage catalog. Final acceptance
+remains pending.
 
 ## Selection, support and bounds
 

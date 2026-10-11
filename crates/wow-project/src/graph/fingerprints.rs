@@ -20,12 +20,21 @@ use crate::{PlatformGraphProfile, ProjectError, ProjectErrorCode, ProjectPhase, 
 
 mod declaration;
 mod load_role;
+mod neighborhood;
 pub use load_role::{
     FUNCTION_PACKAGE_LOAD_ROLE_RECIPE, FunctionPackageLoadRole, FunctionPackageLoadRoleComparable,
     FunctionPackageLoadRoleComponent, FunctionPackageLoadRoleCoverage,
     FunctionPackageLoadRoleFingerprint, FunctionPackageLoadRoleRecipe,
     FunctionPackageLoadRoleSelection, FunctionPackageLoadRoleUnavailable,
     FunctionPackageLoadRoleWitness, FunctionPackageLoadUnitRole,
+};
+pub use neighborhood::{
+    ComposedCallOutcome, ComposedCallReceipt, ComposedScriptReceipt,
+    FUNCTION_DIRECT_NEIGHBORHOOD_RECIPE, FunctionDirectNeighborhoodFingerprint,
+    FunctionDirectNeighborhoodRecipe, FunctionDirectNeighborhoodSelection,
+    FunctionNeighborDirection, FunctionNeighborGroup, FunctionNeighborKind,
+    FunctionNeighborhoodBinding, FunctionNeighborhoodComponent, FunctionNeighborhoodComposition,
+    FunctionNeighborhoodUnavailable,
 };
 mod shape;
 mod signature;
@@ -261,7 +270,7 @@ pub struct FunctionFingerprintRecord {
     declared_header: Option<FunctionDeclaredHeader>,
     signature: FunctionSignatureComponent,
     declaration_shape: FunctionDeclarationShapeComponent,
-    direct_neighborhood: FunctionFingerprintUnavailable,
+    direct_neighborhood: FunctionDirectNeighborhoodSelection,
     package_load_role: FunctionPackageLoadRoleSelection,
     support: FunctionFingerprintSupport,
 }
@@ -291,8 +300,8 @@ impl FunctionFingerprintRecord {
         &self.declaration_shape
     }
     #[must_use]
-    pub const fn direct_neighborhood(&self) -> FunctionFingerprintUnavailable {
-        self.direct_neighborhood
+    pub const fn direct_neighborhood(&self) -> &FunctionDirectNeighborhoodSelection {
+        &self.direct_neighborhood
     }
     #[must_use]
     pub const fn package_load_role(&self) -> &FunctionPackageLoadRoleSelection {
@@ -348,7 +357,7 @@ pub enum FunctionFingerprintCoverage {
 }
 
 /// Serialize-only owned receipt: it survives moving/dropping the native owners.
-/// No composite, empty-neighborhood proof, removed-entity or equivalence output.
+/// No composite, removed-entity or equivalence output; selected components stay bounded.
 #[derive(Debug, Serialize)]
 pub struct FunctionFingerprintComponentSelection {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -357,6 +366,8 @@ pub struct FunctionFingerprintComponentSelection {
     physical_signatures: Option<wow_emmy::function_calls::PhysicalFunctionSignatureRecipe>,
     #[serde(skip_serializing_if = "Option::is_none")]
     package_load_role: Option<FunctionPackageLoadRoleRecipe>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    direct_neighborhood: Option<FunctionDirectNeighborhoodRecipe>,
 }
 impl FunctionFingerprintComponentSelection {
     pub const fn physical_declarations(
@@ -372,6 +383,9 @@ impl FunctionFingerprintComponentSelection {
     pub const fn package_load_role(&self) -> Option<FunctionPackageLoadRoleRecipe> {
         self.package_load_role
     }
+    pub const fn direct_neighborhood(&self) -> Option<FunctionDirectNeighborhoodRecipe> {
+        self.direct_neighborhood
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -384,6 +398,8 @@ pub struct FunctionFingerprintManifest {
     coverage: FunctionFingerprintCoverage,
     available_functions: usize,
     binding: FunctionFingerprintBinding,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    neighborhood_binding: Option<Box<FunctionNeighborhoodBinding>>,
     partition_coverage: Vec<FunctionFingerprintPartitionCoverage>,
     scope_conflicts: Vec<FunctionFingerprintScopeConflict>,
     records: Vec<FunctionFingerprintRecord>,
@@ -423,6 +439,10 @@ impl FunctionFingerprintManifest {
     #[must_use]
     pub const fn binding(&self) -> &FunctionFingerprintBinding {
         &self.binding
+    }
+    #[must_use]
+    pub fn neighborhood_binding(&self) -> Option<&FunctionNeighborhoodBinding> {
+        self.neighborhood_binding.as_deref()
     }
     #[must_use]
     pub fn partition_coverage(&self) -> &[FunctionFingerprintPartitionCoverage] {
@@ -482,7 +502,7 @@ struct BorrowedFunctionFingerprintRecord<'a> {
     source_span: FunctionSourceSpanComponent,
     signature: FunctionSignatureComponent,
     declaration_shape: FunctionDeclarationShapeComponent,
-    direct_neighborhood: FunctionFingerprintUnavailable,
+    direct_neighborhood: FunctionDirectNeighborhoodSelection,
     package_load_role: FunctionPackageLoadRoleSelection,
     support: BorrowedFunctionFingerprintSupport<'a>,
 }
@@ -624,7 +644,7 @@ pub fn build_platform_function_fingerprints(
     limits: FunctionFingerprintLimits,
     stop: &AtomicBool,
 ) -> ProjectResult<FunctionFingerprintManifest> {
-    build_selected_function_fingerprints(direct, selected_function_ids, limits, None, stop)
+    build_selected_function_fingerprints(direct, selected_function_ids, limits, None, None, stop)
 }
 
 /// Select genuine native static load roles without changing the source/graph recipe.
@@ -635,7 +655,35 @@ pub fn build_platform_function_fingerprints_with_load_roles(
     recipe: FunctionPackageLoadRoleRecipe,
     stop: &AtomicBool,
 ) -> ProjectResult<FunctionFingerprintManifest> {
-    build_selected_function_fingerprints(direct, selected_function_ids, limits, Some(recipe), stop)
+    build_selected_function_fingerprints(
+        direct,
+        selected_function_ids,
+        limits,
+        Some(recipe),
+        None,
+        stop,
+    )
+}
+
+/// One selected query over the held source prefix and final native composition.
+/// Span/header/signature/shape/load-role/neighborhood share one cumulative ledger.
+pub fn build_platform_function_fingerprints_composed(
+    direct: &PlatformGraphProvenance<'_>,
+    selected_function_ids: &[&str],
+    limits: FunctionFingerprintLimits,
+    load_roles: Option<FunctionPackageLoadRoleRecipe>,
+    recipe: FunctionDirectNeighborhoodRecipe,
+    composition: &FunctionNeighborhoodComposition<'_>,
+    stop: &AtomicBool,
+) -> ProjectResult<FunctionFingerprintManifest> {
+    build_selected_function_fingerprints(
+        direct,
+        selected_function_ids,
+        limits,
+        load_roles,
+        Some((recipe, composition)),
+        stop,
+    )
 }
 
 fn build_selected_function_fingerprints(
@@ -643,9 +691,14 @@ fn build_selected_function_fingerprints(
     selected_function_ids: &[&str],
     limits: FunctionFingerprintLimits,
     load_roles: Option<FunctionPackageLoadRoleRecipe>,
+    neighborhood: Option<(
+        FunctionDirectNeighborhoodRecipe,
+        &FunctionNeighborhoodComposition<'_>,
+    )>,
     stop: &AtomicBool,
 ) -> ProjectResult<FunctionFingerprintManifest> {
     crate::analyzer::checkpoint(stop)?;
+    let neighborhood_recipe = neighborhood.map(|(recipe, _)| recipe);
     if selected_function_ids.len() > limits.max_records {
         return Err(exhausted(
             "records",
@@ -889,7 +942,7 @@ fn build_selected_function_fingerprints(
                 None => FunctionSignatureComponent::MissingSignature,
             },
             declaration_shape: FunctionDeclarationShapeComponent::MissingShape,
-            direct_neighborhood: FunctionFingerprintUnavailable::NotSelected,
+            direct_neighborhood: FunctionDirectNeighborhoodSelection::NotSelected,
             package_load_role: FunctionPackageLoadRoleSelection::NotSelected,
             support: BorrowedFunctionFingerprintSupport {
                 entity_assertion: entity_ref,
@@ -909,7 +962,7 @@ fn build_selected_function_fingerprints(
     let signatures_selected = report.signature_recipe().is_some();
     let body_shape_selected = report.declaration_recipe() == Some(wow_emmy::function_calls::PhysicalFunctionDeclarationRecipe::DeclaredSyntaxAndBodyShapeV1);
     let mut manifest = FunctionFingerprintManifest {
-        schema: if load_roles.is_some() || signatures_selected {
+        schema: if load_roles.is_some() || signatures_selected || neighborhood_recipe.is_some() {
             SELECTED_COMPONENTS_FINGERPRINT_SCHEMA
         } else if body_shape_selected {
             BODY_SHAPE_FINGERPRINT_SCHEMA
@@ -918,7 +971,7 @@ fn build_selected_function_fingerprints(
         } else {
             FUNCTION_FINGERPRINT_SCHEMA
         },
-        profile: if load_roles.is_some() || signatures_selected {
+        profile: if load_roles.is_some() || signatures_selected || neighborhood_recipe.is_some() {
             SELECTED_COMPONENTS_FINGERPRINT_PROFILE
         } else if body_shape_selected {
             BODY_SHAPE_FINGERPRINT_PROFILE
@@ -928,16 +981,19 @@ fn build_selected_function_fingerprints(
             FUNCTION_FINGERPRINT_PROFILE
         },
         limits,
-        selected_components: (load_roles.is_some() || signatures_selected).then_some(
-            FunctionFingerprintComponentSelection {
-                physical_declarations: report.declaration_recipe(),
-                physical_signatures: report.signature_recipe(),
-                package_load_role: load_roles,
-            },
-        ),
+        selected_components: (load_roles.is_some()
+            || signatures_selected
+            || neighborhood_recipe.is_some())
+        .then_some(FunctionFingerprintComponentSelection {
+            physical_declarations: report.declaration_recipe(),
+            physical_signatures: report.signature_recipe(),
+            package_load_role: load_roles,
+            direct_neighborhood: neighborhood_recipe,
+        }),
         coverage: FunctionFingerprintCoverage::Partial,
         available_functions: report.functions().len(),
         binding,
+        neighborhood_binding: None,
         partition_coverage,
         scope_conflicts,
         records,
@@ -974,7 +1030,32 @@ fn build_selected_function_fingerprints(
             record.package_load_role = FunctionPackageLoadRoleSelection::Selected(Box::new(row));
         }
     }
-    if body_shape_selected || load_roles.is_some() || signatures_selected {
+    if let Some((FunctionDirectNeighborhoodRecipe::ComposedCallsAndXmlHandlersV1, composition)) =
+        neighborhood
+    {
+        // Reuse the original lookup and SAME still-live ledger; no prefix-only build/rebuild.
+        let batch = neighborhood::build_direct_neighborhood_components(
+            direct,
+            &manifest,
+            &lookup,
+            composition,
+            &mut retained,
+            stop,
+        )?;
+        if batch.rows.len() != manifest.records.len() {
+            return Err(invalid());
+        }
+        for (record, row) in manifest.records.iter_mut().zip(batch.rows) {
+            crate::analyzer::checkpoint(stop)?;
+            record.direct_neighborhood = row;
+        }
+        manifest.neighborhood_binding = Some(batch.binding);
+    }
+    if body_shape_selected
+        || load_roles.is_some()
+        || signatures_selected
+        || neighborhood_recipe.is_some()
+    {
         retained.charge_serialized(&manifest, stop)?;
     } else {
         // Preserve the admitted older recipe's exact output-ceiling check.

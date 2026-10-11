@@ -12,13 +12,20 @@ use wow_graph::{GraphPartitionReplacement, GraphPartitionSnapshot, GraphSnapshot
 use wow_project::graph::{
     ProjectGraphPackageDependencyOutcome, ProjectGraphPackageLoadOutcome, ProjectGraphProvenance,
     SOURCE_GRAPH_PROFILE, SourceGraphDiagnostics, XmlClassificationMembership,
+    fingerprints::{
+        ComposedCallOutcome, ComposedCallReceipt, ComposedScriptReceipt,
+        FunctionNeighborhoodComposition,
+    },
 };
+use wow_recognizers::source_calls::SourceCallOutcome;
 
 mod assembly_budget;
 mod calls;
 mod construction;
 mod fingerprints;
-pub use fingerprints::{FunctionFingerprintSelection, FunctionPackageLoadRoleRecipe};
+pub use fingerprints::{
+    FunctionDirectNeighborhoodRecipe, FunctionFingerprintSelection, FunctionPackageLoadRoleRecipe,
+};
 mod xml_fingerprints;
 pub use xml_fingerprints::{
     XmlFingerprintManifest, XmlFingerprintRecord, XmlFingerprintSelection, XmlFingerprintTarget,
@@ -274,7 +281,10 @@ impl GraphBuildRequest {
             || self
                 .function_fingerprints
                 .as_ref()
-                .is_some_and(|selection| selection.package_load_roles().is_some())
+                .is_some_and(|selection| {
+                    selection.package_load_roles().is_some()
+                        || selection.direct_neighborhood().is_some()
+                })
         {
             self.schema = "wow-service/graph-build-request/selected-function-components/1";
             return;
@@ -689,7 +699,11 @@ pub fn execute_graph_build_diagnosed(
     diagnostics.reset();
     let request_digest = super::hash(&bounded(request, super::GRAPH_REQUEST_MAX_BYTES)?);
     let mut result = GraphBuildResult {
-        schema: if request.physical_function_signatures.is_some() || request.function_fingerprints.as_ref().is_some_and(|selection| selection.package_load_roles().is_some()) {
+        schema: if request.physical_function_signatures.is_some()
+            || request.function_fingerprints.as_ref().is_some_and(|selection| {
+                selection.package_load_roles().is_some() || selection.direct_neighborhood().is_some()
+            })
+        {
             "wow-service/graph-build-result/selected-function-components/1"
         } else if request.physical_function_declarations == Some(wow_emmy::function_calls::PhysicalFunctionDeclarationRecipe::DeclaredSyntaxAndBodyShapeV1) {
             body_shape_query_schemas(request.function_fingerprints.is_some(), request.xml_fingerprints.is_some()).1
@@ -1027,9 +1041,11 @@ fn compose_backend_diagnosed(
         _ => return Err(error(ServiceErrorCode::InternalContractViolation)),
     };
     addresses.reserve("request", request, stop)?;
-    let function_fingerprints = request
+    let mut function_fingerprints = request
         .function_fingerprints
         .as_ref()
+        // Neighborhood queries run once, only after the genuine producers compose.
+        .filter(|selection| selection.direct_neighborhood().is_none())
         .map(|selection| {
             selection.build(
                 direct
@@ -1156,6 +1172,71 @@ fn compose_backend_diagnosed(
     checkpoint(stop)?;
     let source_nodes = materialized::nodes(&snapshot, stop)?;
     let source_lookup = snapshot.producer_lookup(stop).map_err(graph_error)?;
+    if let Some(selection) = request
+        .function_fingerprints
+        .as_ref()
+        .filter(|selection| selection.direct_neighborhood().is_some())
+    {
+        // Existing application allowance charges borrowed adapter scratch before allocation.
+        // The parent query below separately retains its ONE cumulative ProducerBudget.
+        addresses.reserve(
+            "neighborhood_call_scratch",
+            &call_recognition.receipts(),
+            stop,
+        )?;
+        let mut call_receipts = Vec::new();
+        for receipt in call_recognition.receipts() {
+            checkpoint(stop)?;
+            let outcome = match &receipt.outcome {
+                SourceCallOutcome::Projected { proposal_id, .. } => {
+                    ComposedCallOutcome::Projected { proposal_id }
+                }
+                SourceCallOutcome::LibraryTarget => ComposedCallOutcome::LibraryTarget,
+                SourceCallOutcome::SelfRecursionUnsupported => {
+                    ComposedCallOutcome::SelfRecursionUnsupported
+                }
+                SourceCallOutcome::SignatureNotCaptured
+                | SourceCallOutcome::Unresolved
+                | SourceCallOutcome::Indeterminate => ComposedCallOutcome::Unknown,
+            };
+            call_receipts.push(ComposedCallReceipt {
+                call_id: &receipt.call_id,
+                outcome,
+            });
+        }
+        let ScriptRecognition::Assertions(native_scripts) = &script_recognition else {
+            return Err(error(ServiceErrorCode::IdentityMismatch));
+        };
+        addresses.reserve(
+            "neighborhood_script_scratch",
+            &native_scripts.receipts(),
+            stop,
+        )?;
+        let mut script_receipts = Vec::new();
+        for receipt in native_scripts.receipts() {
+            checkpoint(stop)?;
+            script_receipts.push(ComposedScriptReceipt {
+                binding_id: &receipt.binding_id,
+                proposal_id: &receipt.proposal_id,
+            });
+        }
+        let composition = FunctionNeighborhoodComposition {
+            final_lookup: &source_lookup,
+            call_input_snapshot_id: call_recognition.recognition().source_snapshot_id(),
+            calls: &call_receipts,
+            script_scope: native_scripts.scope(),
+            scripts: &script_receipts,
+        };
+        let manifest = selection.build_composed(
+            direct
+                .as_ref()
+                .ok_or_else(|| error(ServiceErrorCode::IdentityMismatch))?,
+            &composition,
+            stop,
+        )?;
+        addresses.reserve("function_fingerprints", &manifest, stop)?;
+        function_fingerprints = Some(manifest);
+    }
     let mut file_nodes = Vec::new();
     for file in provenance.files() {
         checkpoint(stop)?;

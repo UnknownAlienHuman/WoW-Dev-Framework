@@ -126,6 +126,38 @@ The typed indexed-parameter/return comparison is bounded and conservative; see
 [its native replay/catalog selection](PLATFORM_INPUT.md#indexed-type-signature-selection).
 Overall coverage stays Partial; semantic/runtime/parity acceptance is not claimed.
 
+The existing `--fingerprints` decoder accepts optional `direct_neighborhood`:
+`"wow-project/physical-function-composed-calls-and-xml-handlers/1"`. Presence uses
+selection schema `wow-service/function-fingerprint-selection/selected-components/1`;
+absence keeps the existing base/load-role selection schemas. The typed builder is
+`FunctionFingerprintSelection::with_direct_neighborhood` with
+`FunctionDirectNeighborhoodRecipe::ComposedCallsAndXmlHandlersV1`.
+`with_package_load_roles` preserves this schema and both recipes in either builder
+order. Null/unknown recipes or a mismatched selection schema refuse; exact sorted
+function IDs and positive finite limits remain required. No CLI flag is added.
+
+Request/result use `wow-service/graph-build-request/selected-function-components/1`
+and `wow-service/graph-build-result/selected-function-components/1`. Manifest schema
+`wow-project/function-fingerprint-records/selected-components/1` carries explicit
+`selected_components.direct_neighborhood` and one optional `neighborhood_binding`
+shared by all selected records, alongside other exact selected component receipts.
+
+The optional composed neighborhood recipe
+`wow-project/physical-function-composed-calls-and-xml-handlers/1` evaluates incoming/
+outgoing `lua_direct_calls` and incoming `source_xml_sets_script` degree for physical
+Main functions. It requires native post-composition receipt/support validation;
+comparison excludes exact endpoints and identities. See
+[the closed component recipe](../../crates/wow-project/e3/FUNCTION_FINGERPRINTS.md#composed-direct-callsxml-neighborhood).
+
+Neighborhood-selected manifest construction waits for all native producers and
+the final producer lookup, while retaining the original source-prefix owner and
+one cumulative metadata ledger. One shared binding proves prefix-to-final
+association; the original physical records are not relabeled or copied into a
+second build. Unknown calls, incomplete XML scope and Possible associations cannot
+supply clean-negative degrees. Producer/replay/catalog selections remain unchanged;
+unselected requests retain their old path and omit the new fields. Overall
+coverage stays Partial, without runtime or full #118 acceptance claims.
+
 The first recipe exposes the exact source-span component with native support
 and separate generation/profile bindings. Missing signature/shape and unselected
 neighborhood/load-role remain explicit; equal digests do not prove identity or

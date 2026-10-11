@@ -36,6 +36,12 @@ impl GraphPartitionSnapshot {
 }
 
 impl<'a> GraphProducerLookup<'a> {
+    /// The same immutable owner validated while constructing this lookup.
+    #[must_use]
+    pub const fn owner(&self) -> &'a GraphPartitionSnapshot {
+        self.owner
+    }
+
     #[must_use]
     pub fn scope(&self) -> &GraphAssertionRecordScope {
         &self.scope
