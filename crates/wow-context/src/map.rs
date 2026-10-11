@@ -17,7 +17,7 @@ use wow_reference::ReferenceConflict;
 
 use crate::budget::{Budget, canonical, checkpoint, encoded_len, exhausted, identity};
 use crate::error::graph_error;
-use crate::profile::{PROFILE, PROJECT_PROFILE, RELATIONS};
+use crate::profile::{DETAIL_PROFILE, DETAIL_RELATIONS, PROFILE, PROJECT_PROFILE, RELATIONS};
 use crate::universe::{ContextUniverseSet, ReferenceCoverage, UniverseBinding};
 use crate::{ContextError, ContextErrorCode, ContextResult, PrimaryMapLimits};
 
@@ -35,12 +35,13 @@ pub use project_navigation::{
 #[serde(untagged)]
 enum MapNavigation<'a> {
     Direct(GraphNeighborView<'a>),
+    Detail(GraphNeighborView<'a>),
     Project(project_navigation::ProjectNavigation<'a>),
 }
 impl MapNavigation<'_> {
     fn truncated(&self) -> bool {
         match self {
-            Self::Direct(view) => view.state() == GraphQueryState::Truncated,
+            Self::Direct(view) | Self::Detail(view) => view.state() == GraphQueryState::Truncated,
             Self::Project(view) => view
                 .neighborhoods
                 .iter()
@@ -49,7 +50,7 @@ impl MapNavigation<'_> {
     }
     fn omitted_edges(&self) -> ContextResult<u64> {
         match self {
-            Self::Direct(view) => Ok(u64::from(view.omitted_edges())),
+            Self::Direct(view) | Self::Detail(view) => Ok(u64::from(view.omitted_edges())),
             Self::Project(view) => view.neighborhoods.iter().try_fold(0_u64, |count, read| {
                 count
                     .checked_add(u64::from(read.omitted_edges()))
@@ -60,18 +61,20 @@ impl MapNavigation<'_> {
     fn schema(&self) -> &'static str {
         match self {
             Self::Direct(_) => PROJECT_MAP_SCHEMA,
+            Self::Detail(_) => "wow-context/project-map/primary-entity-detail-origins/1",
             Self::Project(_) => PRIMARY_PROJECT_MAP_SCHEMA,
         }
     }
     fn profile(&self) -> &'static crate::profile::ProfileDescription {
         match self {
             Self::Direct(_) => &PROFILE,
+            Self::Detail(_) => &DETAIL_PROFILE,
             Self::Project(_) => &PROJECT_PROFILE,
         }
     }
     fn omission_enumeration(&self) -> &'static str {
         match self {
-            Self::Direct(_) => "complete_match_count_under_native_query",
+            Self::Direct(_) | Self::Detail(_) => "complete_match_count_under_native_query",
             Self::Project(_) => "sum_of_complete_match_counts_under_native_queries",
         }
     }
@@ -243,6 +246,25 @@ fn navigation_query(
     root: GraphNodeId,
     stop: &AtomicBool,
 ) -> ContextResult<GraphNeighborReadQuery> {
+    navigation_query_for(universe, root, &RELATIONS, stop)
+}
+
+/// Exact direct detail query for L1; preserves each native relation kind and
+/// confidence rather than restricting detail to the map's structural vocabulary.
+pub fn primary_detail_query(
+    universe: &ContextUniverseSet<'_>,
+    root: GraphNodeId,
+    stop: &AtomicBool,
+) -> ContextResult<GraphNeighborReadQuery> {
+    validate_navigation_input(universe, stop)?;
+    navigation_query_for(universe, root, &DETAIL_RELATIONS, stop)
+}
+fn navigation_query_for(
+    universe: &ContextUniverseSet<'_>,
+    root: GraphNodeId,
+    relations: &[wow_graph::GraphRelationKind],
+    stop: &AtomicBool,
+) -> ContextResult<GraphNeighborReadQuery> {
     checkpoint(stop)?;
     let snapshot = universe.pair.graph().snapshot();
     if snapshot.node(&root).is_none() {
@@ -251,7 +273,7 @@ fn navigation_query(
     let query = GraphNeighborQuery::new(
         root,
         GraphDirection::Both,
-        RELATIONS.to_vec(),
+        relations.to_vec(),
         universe.limits.max_direct_edges,
     )
     .map_err(graph_error)?;
@@ -272,9 +294,30 @@ pub fn prepare_project_map<'a>(
     neighbors: GraphNeighborView<'a>,
     stop: &AtomicBool,
 ) -> ContextResult<ProjectMapSelection<'a>> {
+    prepare_native_map(universe, root, neighbors, false, stop)
+}
+pub fn prepare_detail_map<'a>(
+    universe: &'a ContextUniverseSet<'a>,
+    root: GraphNodeId,
+    neighbors: GraphNeighborView<'a>,
+    stop: &AtomicBool,
+) -> ContextResult<ProjectMapSelection<'a>> {
+    prepare_native_map(universe, root, neighbors, true, stop)
+}
+fn prepare_native_map<'a>(
+    universe: &'a ContextUniverseSet<'a>,
+    root: GraphNodeId,
+    neighbors: GraphNeighborView<'a>,
+    detail: bool,
+    stop: &AtomicBool,
+) -> ContextResult<ProjectMapSelection<'a>> {
     checkpoint(stop)?;
     let snapshot = universe.pair.graph().snapshot();
-    let expected = primary_navigation_query(universe, root, stop)?;
+    let expected = if detail {
+        primary_detail_query(universe, root, stop)?
+    } else {
+        primary_navigation_query(universe, root, stop)?
+    };
     if neighbors.query() != &expected
         || !std::ptr::eq(
             neighbors.root(),
@@ -308,7 +351,11 @@ pub fn prepare_project_map<'a>(
     let edges = neighbors.edges().to_vec();
     finish_selection(
         universe,
-        MapNavigation::Direct(neighbors),
+        if detail {
+            MapNavigation::Detail(neighbors)
+        } else {
+            MapNavigation::Direct(neighbors)
+        },
         nodes,
         edges,
         budget,
@@ -476,6 +523,15 @@ impl ProjectMap<'_> {
     #[must_use]
     pub const fn state(&self) -> ProjectMapState {
         self.core.state
+    }
+}
+
+impl<'a> ProjectMap<'a> {
+    pub(crate) fn native_nodes(&self) -> &[&'a GraphNode] {
+        &self.nodes
+    }
+    pub(crate) fn native_edges(&self) -> &[&'a GraphEdge] {
+        &self.edges
     }
 }
 
@@ -830,6 +886,30 @@ pub fn open_project_map_view<'m, 'a>(
     Ok(ProjectMapView { map })
 }
 impl<'a> ProjectMapView<'_, 'a> {
+    #[must_use]
+    pub fn nodes(&self) -> &[&'a GraphNode] {
+        &self.map.nodes
+    }
+    #[must_use]
+    pub fn edges(&self) -> &[&'a GraphEdge] {
+        &self.map.edges
+    }
+    #[must_use]
+    pub fn root_node(&self) -> Option<&'a GraphNode> {
+        match &self.map.core.navigation {
+            MapNavigation::Direct(view) | MapNavigation::Detail(view) => Some(view.root()),
+            MapNavigation::Project(_) => None,
+        }
+    }
+    pub(crate) fn has_detail_vocabulary(&self) -> bool {
+        matches!(self.map.core.navigation, MapNavigation::Detail(_))
+    }
+    pub(crate) fn bound_to(&self, universe: &ContextUniverseSet<'a>) -> bool {
+        std::ptr::eq(self.map.core.binding, &universe.binding)
+    }
+    pub(crate) fn work_reserved(&self) -> u64 {
+        self.map.core.budget.context_work_reserved
+    }
     #[must_use]
     pub fn node(&self, id: &GraphNodeId) -> Option<&'a GraphNode> {
         self.map

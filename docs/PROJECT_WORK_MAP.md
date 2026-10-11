@@ -1,6 +1,6 @@
 # Current project work map
 
-The active implementation slice is **W18 Project Map**, tracked by
+The active implementation slice is **primary Project Map and L0/L1 inspection**, tracked by
 [#122](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122).
 The W17 queue and qualification debt remain in
 [#106](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/106).
@@ -23,8 +23,11 @@ W18 Project Map and its service/CLI route. The reviewed
 [`wow context map`](../apps/wow/CONTEXT_MAP.md) now have executable owners.
 The direct profile uses an exact graph entity; the project profile enumerates
 every genuine retained source-file root and its bounded native neighborhood.
-Both explicitly omit the optional platform universe. L0/L1, packs/rendering,
-broader context layers and acceptance remain open in #122 and the completion census.
+Both explicitly omit the optional platform universe. Selected native
+[L0/L1 inspection](../apps/wow/CONTEXT_INSPECT.md) has a distinct owner/service/CLI
+route with exact containers/entities, original declaration metadata and one
+aggregate budget. Primary declaration/signature recipe admission, broader
+facets/scopes, packs/rendering and acceptance remain open in #122 and the census.
 
 [#121](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/121) retains the
 latest full-corpus functions refusal and targeted capacity evidence.

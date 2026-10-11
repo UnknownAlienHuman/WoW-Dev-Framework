@@ -1,4 +1,6 @@
 //! One small synthetic retained native service lifecycle, not live/Ketho evidence.
+mod inspect;
+
 use super::*;
 use crate::ServiceErrorCode;
 use crate::live_project::LiveProjectStore;
@@ -718,6 +720,20 @@ fn export_fixture(
         "--output",
         "envelope-json"
     ]);
+    export_native_fixture(scratch, host, request, &arguments, result, selection_note)
+}
+
+fn export_native_fixture(
+    scratch: &Scratch,
+    host: &Value,
+    request: &impl serde::Serialize,
+    arguments: &Value,
+    result: &ContextMapResult,
+    selection_note: &str,
+) -> TestResult {
+    if !scratch.export {
+        return Ok(());
+    }
     // Transport paths are allowed only in these private host/argv inputs.
     let files = [
         (
@@ -732,7 +748,7 @@ fn export_fixture(
         ),
         (
             "cli-arguments.json",
-            wow_core::canonical_json_bytes(&arguments)?,
+            wow_core::canonical_json_bytes(arguments)?,
             64 * 1024,
         ),
         (

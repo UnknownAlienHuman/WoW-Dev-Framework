@@ -1,5 +1,7 @@
-//! First closed E3 context-map projection. Acquisition and map semantics are service-owned.
+//! Closed E3 context-map and inspect projections. Acquisition and semantics are service-owned.
 //! The native host document is a separate transport input, never an E3 semantic selector.
+mod inspect;
+
 use std::{
     ffi::{OsStr, OsString},
     io::Write,
@@ -10,10 +12,10 @@ use wow_service::{
     ServiceErrorCode,
     context::{
         CONTEXT_MAP_HOST_INPUT_MAX_BYTES, CONTEXT_MAP_ID_MAX_BYTES, CONTEXT_MAP_RESULT_MAX_BYTES,
-        ContextMapCurrentGuard, ContextMapHostInput, ContextMapPublication,
+        ContextInspectRequest, ContextMapCurrentGuard, ContextMapHostInput, ContextMapPublication,
         ContextMapReferenceGuard, ContextMapRequest, ContextMapRoot, ContextMapStatus,
         PRIMARY_NAVIGATION_MAP_PROFILE_ID, PRIMARY_PROJECT_NAVIGATION_MAP_PROFILE_ID,
-        execute_context_map,
+        execute_context_inspect, execute_context_map,
     },
 };
 
@@ -31,6 +33,15 @@ const HELP: &str = concat!(
     "Use an explicit graph-entity@ root with wow-context/primary-direct-navigation/1, ",
     "or an explicit project@ root with wow-context/primary-project-navigation/1.\n",
     "Service validates the selected profile/root pair; the CLI never infers a root.\n",
+    "wow context inspect --native-host-config <host.json> --project-store <registration-key> ",
+    "--publication current|store-generation:<ProjectStoreGenerationId> ",
+    "--root <exact-root-token> --level l0|l1|both\n",
+    "  [--l0-profile-id wow-context/primary-l0/1] ",
+    "[--l1-profile-id wow-context/primary-l1/1]\n",
+    "  Same omitted-platform, complete reference/current guards and envelope-json transport. ",
+    "L0 accepts project@ or an exact container graph-entity@; L1 accepts graph-entity@; ",
+    "both requires an exact container graph-entity@. Service validates kind/existence ",
+    "and keeps the two artifacts distinct.\n",
 );
 
 // Preserve the existing app argv/individual-path transport maxima.
@@ -38,15 +49,29 @@ const MAX_ARGUMENTS: usize = 4096;
 const MAX_ARGUMENT_BYTES: usize = 1024 * 1024;
 const MAX_VALUE_BYTES: usize = 32768;
 
+#[derive(Clone, Copy)]
+enum Command {
+    Map,
+    Inspect,
+}
+
+enum Request {
+    Map(ContextMapRequest),
+    Inspect(ContextInspectRequest),
+}
+
 struct Arguments {
     host_config: PathBuf,
-    request: ContextMapRequest,
+    request: Request,
 }
 
 pub fn run(values: Vec<OsString>) -> u8 {
     if values.first().is_some_and(|value| value == "context")
         && (values.len() == 2
-            || (values.len() == 3 && values.get(1).is_some_and(|value| value == "map")))
+            || (values.len() == 3
+                && values
+                    .get(1)
+                    .is_some_and(|value| value == "map" || value == "inspect")))
         && values
             .last()
             .is_some_and(|value| value == "--help" || value == "-h")
@@ -83,17 +108,21 @@ pub fn run(values: Vec<OsString>) -> u8 {
     }
 
     // Exactly one semantic operation. Service pins Current once and closes resources.
-    let result = match execute_context_map(&host, &arguments.request, &stop) {
+    let operation = match &arguments.request {
+        Request::Map(request) => execute_context_map(&host, request, &stop),
+        Request::Inspect(request) => execute_context_inspect(&host, request, &stop),
+    };
+    let result = match operation {
         Ok(result) => result,
         Err(error) if error.code() == ServiceErrorCode::Cancelled => return 130,
         Err(_) => {
-            crate::diagnostic("context map operation could not finalize a result");
+            crate::diagnostic("context operation could not finalize a result");
             return 4;
         }
     };
     let bytes = result.canonical_bytes();
     if bytes.is_empty() || bytes.len() > CONTEXT_MAP_RESULT_MAX_BYTES {
-        crate::diagnostic("context map result byte limit or encoding failure");
+        crate::diagnostic("context result byte limit or encoding failure");
         return 4;
     }
     let exit = match result.status() {
@@ -116,7 +145,7 @@ pub fn run(values: Vec<OsString>) -> u8 {
         .and_then(|()| output.flush())
         .is_err()
     {
-        crate::diagnostic("context map output failed");
+        crate::diagnostic("context output failed");
         return if stop.load(Ordering::Acquire) { 130 } else { 4 };
     }
     exit
@@ -139,11 +168,14 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
         return Err("context argument limit exceeded");
     }
     let mut values = values.into_iter();
-    if values.next().as_deref() != Some(OsStr::new("context"))
-        || values.next().as_deref() != Some(OsStr::new("map"))
-    {
-        return Err("expected context map");
+    if values.next().as_deref() != Some(OsStr::new("context")) {
+        return Err("expected context map or inspect");
     }
+    let command = match values.next().as_deref().and_then(OsStr::to_str) {
+        Some("map") => Command::Map,
+        Some("inspect") => Command::Inspect,
+        _ => return Err("expected context map or inspect"),
+    };
     let mut host_config = None;
     let mut project_store = None;
     let mut publication = None;
@@ -157,10 +189,11 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
     let mut root = None;
     let mut map_profile = None;
     let mut output = None;
+    let mut inspect_options = inspect::Options::default();
 
     while let Some(option) = values.next() {
         let option = option.to_str().ok_or("invalid context option encoding")?;
-        if !matches!(
+        let common = matches!(
             option,
             "--native-host-config"
                 | "--project-store"
@@ -171,19 +204,25 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
                 | "--expect-profile"
                 | "--expect-reference-generation"
                 | "--expect-reference-view"
-                | "--map-target"
                 | "--root"
-                | "--map-profile-id"
                 | "--output"
-        ) {
-            return Err("unknown context map option");
+        );
+        let selected = match command {
+            Command::Map => matches!(option, "--map-target" | "--map-profile-id"),
+            Command::Inspect => inspect::Options::accepts(option),
+        };
+        if !common && !selected {
+            return Err(match command {
+                Command::Map => "unknown context map option",
+                Command::Inspect => "unknown context inspect option",
+            });
         }
         let value = values.next().ok_or("missing context option value")?;
         if value.is_empty() || value.len() > MAX_VALUE_BYTES {
             return Err("invalid context option length");
         }
         if option == "--native-host-config" {
-            set(&mut host_config, PathBuf::from(value))?;
+            set(&mut host_config, PathBuf::from(value), command)?;
             continue;
         }
         let value = value
@@ -195,7 +234,7 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
         match option {
             "--project-store" => {
                 id_syntax(&value)?;
-                set(&mut project_store, value)?;
+                set(&mut project_store, value, command)?;
             }
             "--publication" => {
                 let selected = if value == "current" {
@@ -207,63 +246,69 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
                 } else {
                     return Err("unsupported context publication selector");
                 };
-                set(&mut publication, selected)?;
+                set(&mut publication, selected, command)?;
             }
             "--expect-current-record" => {
                 id_syntax(&value)?;
-                set(&mut current_record, value)?;
+                set(&mut current_record, value, command)?;
             }
             "--expect-current-digest" => {
                 id_syntax(&value)?;
-                set(&mut current_digest, value)?;
+                set(&mut current_digest, value, command)?;
             }
             "--platform" => {
                 if value != "omitted" {
-                    return Err("context map requires omitted platform");
+                    return Err("context requires omitted platform");
                 }
-                set(&mut platform, ())?;
+                set(&mut platform, (), command)?;
             }
             "--expect-profile" => {
                 id_syntax(&value)?;
-                set(&mut reference_profile, value)?;
+                set(&mut reference_profile, value, command)?;
             }
             "--expect-reference-generation" => {
                 id_syntax(&value)?;
-                set(&mut reference_generation, value)?;
+                set(&mut reference_generation, value, command)?;
             }
             "--expect-reference-view" => {
                 id_syntax(&value)?;
-                set(&mut reference_view, value)?;
+                set(&mut reference_view, value, command)?;
             }
             "--map-target" => {
                 if value != "primary" {
                     return Err("context map requires primary target");
                 }
-                set(&mut map_target, ())?;
+                set(&mut map_target, (), command)?;
             }
-            "--root" => set(&mut root, parse_root(&value)?)?,
+            "--root" => set(&mut root, parse_root(&value)?, command)?,
             "--map-profile-id" => {
                 if value != PRIMARY_NAVIGATION_MAP_PROFILE_ID
                     && value != PRIMARY_PROJECT_NAVIGATION_MAP_PROFILE_ID
                 {
                     return Err("unsupported exact context map profile");
                 }
-                set(&mut map_profile, value)?;
+                set(&mut map_profile, value, command)?;
             }
             "--output" => {
                 if value != "envelope-json" {
-                    return Err("context map supports envelope-json only");
+                    return Err("context supports envelope-json only");
                 }
-                set(&mut output, ())?;
+                set(&mut output, (), command)?;
             }
-            _ => return Err("unknown context map option"),
+            "--level" | "--l0-profile-id" | "--l1-profile-id" => {
+                inspect_options.option(option, &value)?;
+            }
+            _ => {
+                return Err(match command {
+                    Command::Map => "unknown context map option",
+                    Command::Inspect => "unknown context inspect option",
+                });
+            }
         }
     }
-    let host_config = host_config.ok_or("context map requires explicit native host input")?;
-    let project_store = project_store.ok_or("context map requires --project-store")?;
-    let publication = publication.ok_or("context map requires --publication")?;
-    map_target.ok_or("context map requires --map-target primary")?;
-    let map_profile = map_profile.ok_or("context map requires --map-profile-id")?;
+    let host_config = host_config.ok_or("context requires explicit native host input")?;
+    let project_store = project_store.ok_or("context requires --project-store")?;
+    let publication = publication.ok_or("context requires --publication")?;
     let current_guard = if current_record.is_some() || current_digest.is_some() {
         if !matches!(&publication, ContextMapPublication::Current) {
             return Err("current guards require --publication current");
@@ -285,24 +330,42 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
     };
     // These constructors validate syntax/canonical bytes only. They do not resolve
     // existence, aliases, Current, owner compatibility or filesystem identities.
-    let request = ContextMapRequest::primary(
-        &project_store,
-        publication,
-        &map_profile,
-        root,
-        current_guard,
-        reference_guard,
-    )
-    .map_err(|_| "invalid context map request syntax")?;
+    let request = match command {
+        Command::Map => {
+            map_target.ok_or("context map requires --map-target primary")?;
+            let profile = map_profile.ok_or("context map requires --map-profile-id")?;
+            Request::Map(
+                ContextMapRequest::primary(
+                    &project_store,
+                    publication,
+                    &profile,
+                    root,
+                    current_guard,
+                    reference_guard,
+                )
+                .map_err(|_| "invalid context map request syntax")?,
+            )
+        }
+        Command::Inspect => Request::Inspect(inspect_options.request(
+            &project_store,
+            publication,
+            root,
+            current_guard,
+            reference_guard,
+        )?),
+    };
     Ok(Arguments {
         host_config,
         request,
     })
 }
 
-fn set<T>(slot: &mut Option<T>, value: T) -> Result<(), &'static str> {
+fn set<T>(slot: &mut Option<T>, value: T, command: Command) -> Result<(), &'static str> {
     if slot.is_some() {
-        return Err("duplicate context map option");
+        return Err(match command {
+            Command::Map => "duplicate context map option",
+            Command::Inspect => "duplicate context inspect option",
+        });
     }
     *slot = Some(value);
     Ok(())
@@ -433,7 +496,11 @@ mod tests {
 
     fn request_json(values: Vec<OsString>) -> Result<serde_json::Value, &'static str> {
         let arguments = parse(values)?;
-        serde_json::to_value(&arguments.request).map_err(|_| "request serialization failed")
+        match arguments.request {
+            Request::Map(request) => serde_json::to_value(request),
+            Request::Inspect(request) => serde_json::to_value(request),
+        }
+        .map_err(|_| "request serialization failed")
     }
 
     #[test]
@@ -531,6 +598,66 @@ mod tests {
         );
         assert_eq!(request["publication"]["kind"], "current");
         assert_eq!(request["platform"], "omitted");
+        Ok(())
+    }
+
+    #[test]
+    fn context_inspect_grammar_preserves_explicit_project_root() -> Result<(), &'static str> {
+        let mut values = arguments();
+        let command = values.get_mut(1).ok_or("missing fixture command")?;
+        *command = "inspect".into();
+        for flag in ["--map-target", "--map-profile-id"] {
+            let index = values
+                .iter()
+                .position(|value| value == flag)
+                .ok_or("missing fixture map option")?;
+            values.drain(index..index + 2);
+        }
+        push(&mut values, "--root", PROJECT_ROOT);
+        push(&mut values, "--level", "l0");
+        push(
+            &mut values,
+            "--l0-profile-id",
+            wow_service::context::PRIMARY_L0_PROFILE_ID,
+        );
+        push(&mut values, "--platform", "omitted");
+        push(&mut values, "--output", "envelope-json");
+        push(&mut values, "--expect-profile", PROFILE);
+        push(
+            &mut values,
+            "--expect-reference-generation",
+            REFERENCE_GENERATION,
+        );
+        push(&mut values, "--expect-reference-view", DIGEST);
+        // A valid token/level pair reaches service even when that exact scope
+        // cannot supply the selected level; semantic refusal keeps an envelope.
+        let mut incompatible_scope = values.clone();
+        replace(&mut incompatible_scope, "--level", "both")?;
+        assert!(parse(incompatible_scope).is_ok());
+        let arguments = parse(values)?;
+        let Request::Inspect(request) = arguments.request else {
+            return Err("inspect parser selected the wrong typed operation");
+        };
+        let request = serde_json::to_value(request).map_err(|_| "request serialization failed")?;
+        assert_eq!(
+            request["root"],
+            serde_json::json!({"kind": "project", "id": "context-cli"})
+        );
+        assert_eq!(request["schema"], "wow-service/context-inspect-request/1");
+        assert_eq!(request["project_store_id"], "context-cli-store");
+        assert_eq!(request["publication"]["kind"], "current");
+        assert_eq!(request["platform"], "omitted");
+        assert_eq!(request["level"], "l0");
+        assert_eq!(
+            request["l0_profile_id"],
+            wow_service::context::PRIMARY_L0_PROFILE_ID
+        );
+        assert!(request.get("l1_profile_id").is_none());
+        assert_eq!(request["reference"]["profile"], PROFILE);
+        assert_eq!(request["reference"]["generation"], REFERENCE_GENERATION);
+        assert_eq!(request["reference"]["view"], DIGEST);
+        assert!(request.get("project_store_root").is_none());
+        assert!(request.get("native_host_config").is_none());
         Ok(())
     }
 

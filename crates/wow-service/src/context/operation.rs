@@ -27,9 +27,9 @@ pub enum ContextMapStatus {
 
 /// Final inert envelope bytes; executable owner/read/lease handles never escape.
 pub struct ContextMapResult {
-    bytes: Box<[u8]>,
-    status: ContextMapStatus,
-    code: Option<ServiceErrorCode>,
+    pub(super) bytes: Box<[u8]>,
+    pub(super) status: ContextMapStatus,
+    pub(super) code: Option<ServiceErrorCode>,
 }
 impl ContextMapResult {
     pub fn canonical_bytes(&self) -> &[u8] {
@@ -55,22 +55,43 @@ pub fn execute_context_map(
         "context-map-request:{}",
         ContentDigest::<CanonicalResult>::from_bytes(request_digest)
     );
+    let selector = match &request.publication {
+        ContextMapPublication::Current => ReadSelector::Current,
+        ContextMapPublication::StoreGeneration(id) => ReadSelector::Exact(id.clone()),
+    };
+    let (outcome, closure) =
+        with_checked_context_read(host, &request.project_store_id, &selector, stop, |read| {
+            build(read, host, request, &request_id, stop)
+        });
+    match outcome {
+        Ok((bytes, status)) => Ok(ContextMapResult {
+            bytes: bytes.into_boxed_slice(),
+            status,
+            code: None,
+        }),
+        Err(error) => failed(request, &request_id, error.code(), closure),
+    }
+}
+
+pub(super) fn with_checked_context_read<T>(
+    host: &ContextMapHostInput,
+    registration: &str,
+    selector: &ReadSelector,
+    stop: &AtomicBool,
+    build: impl FnOnce(&LiveProjectRead) -> ServiceResult<T>,
+) -> (ServiceResult<T>, &'static str) {
     let closure = Cell::new("not_acquired");
     let outcome = (|| {
         host.validate(stop)?;
-        if host.project_store_id != request.project_store_id {
+        if host.project_store_id.as_ref() != registration {
             return Err(failure(ServiceErrorCode::InvalidConfiguration));
         }
-        let selector = match &request.publication {
-            ContextMapPublication::Current => ReadSelector::Current,
-            ContextMapPublication::StoreGeneration(id) => ReadSelector::Exact(id.clone()),
-        };
         let store = LiveProjectStore::open(&host.project_store_root)?;
         closure.set("pending");
-        let acquired = store.read_checked(&selector, stop);
+        let acquired = store.read_checked(selector, stop);
         let draft = match acquired {
             Ok(read) => {
-                let draft = build(&read, host, request, &request_id, stop);
+                let draft = build(&read);
                 // Close failures supersede a draft or an earlier semantic refusal.
                 let closed = read.close();
                 match closed {
@@ -100,28 +121,21 @@ pub fn execute_context_map(
         checkpoint(stop)?;
         draft
     })();
-    match outcome {
-        Ok((bytes, status)) => Ok(ContextMapResult {
-            bytes: bytes.into_boxed_slice(),
-            status,
-            code: None,
-        }),
-        Err(error) => failed(request, &request_id, error.code(), closure.get()),
-    }
+    (outcome, closure.get())
 }
 
 #[derive(Serialize)]
-struct Envelope<'a, T: Serialize> {
-    schema: &'static str,
-    operation: &'static str,
-    request_id: &'a str,
-    request: &'a ContextMapRequest,
-    status: ContextMapStatus,
-    resource_closure: &'static str,
+pub(super) struct Envelope<'a, R: Serialize, T: Serialize> {
+    pub(super) schema: &'static str,
+    pub(super) operation: &'static str,
+    pub(super) request_id: &'a str,
+    pub(super) request: &'a R,
+    pub(super) status: ContextMapStatus,
+    pub(super) resource_closure: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
-    failure_code: Option<ServiceErrorCode>,
+    pub(super) failure_code: Option<ServiceErrorCode>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    payload: Option<T>,
+    pub(super) payload: Option<T>,
 }
 #[derive(Serialize)]
 struct Payload<'a, 'map> {
@@ -222,6 +236,50 @@ fn build(
         ContentDigest::<CanonicalResult>::from_bytes(resolved_digest)
     )
     .into_boxed_str();
+    with_native_origins(&universe, read, host, root, false, stop, |map, _graph| {
+        let status = match map.state() {
+            wow_context::ProjectMapState::Partial => ContextMapStatus::Partial,
+            wow_context::ProjectMapState::Truncated => ContextMapStatus::Truncated,
+        };
+        let payload = Payload {
+            resolved_request_id,
+            publication_set_id: read.publication_set_id(),
+            store_generation_id: read.store_generation_id().as_str(),
+            current_at_acquisition: current,
+            current_record_digest: current_digest,
+            configured_registration_id: &host.project_store_id,
+            native_project_store_id: read.namespace().map(|namespace| namespace.id().as_str()),
+            project_map_byte_length: map.canonical_byte_length(),
+            project_map: map,
+        };
+        let envelope = Envelope {
+            schema: CONTEXT_MAP_RESULT_SCHEMA,
+            operation: "context_map",
+            request_id,
+            request,
+            status,
+            resource_closure: "closed",
+            failure_code: None,
+            payload: Some(payload),
+        };
+        let limit = usize::try_from(host.limits.max_metadata_bytes)
+            .map_err(|_| failure(ServiceErrorCode::BudgetExceeded))?;
+        Ok((encode(&envelope, limit, stop)?, status))
+    })
+}
+
+pub(super) fn with_native_origins<T>(
+    universe: &wow_context::ContextUniverseSet<'_>,
+    read: &LiveProjectRead,
+    host: &ContextMapHostInput,
+    root: ContextMapRoot,
+    detail: bool,
+    stop: &AtomicBool,
+    build: impl FnOnce(
+        &wow_context::ProjectMap<'_>,
+        &wow_graph::GraphPartitionRead<'_>,
+    ) -> ServiceResult<T>,
+) -> ServiceResult<T> {
     let provenance = read
         .pair()
         .source_provenance()
@@ -252,15 +310,23 @@ fn build(
     let graph = read.pair().graph_read(stop).map_err(graph_error)?;
     let mut selection = match root {
         ContextMapRoot::GraphEntity(id) => {
-            let query = wow_context::primary_navigation_query(&universe, id.clone(), stop)
-                .map_err(context_error)?;
+            let query = if detail {
+                wow_context::primary_detail_query(universe, id.clone(), stop)
+            } else {
+                wow_context::primary_navigation_query(universe, id.clone(), stop)
+            }
+            .map_err(context_error)?;
             let neighbors = graph.neighbors(&query, stop).map_err(graph_error)?;
-            wow_context::prepare_project_map(&universe, id, neighbors, stop)
-                .map_err(context_error)?
+            (if detail {
+                wow_context::prepare_detail_map(universe, id, neighbors, stop)
+            } else {
+                wow_context::prepare_project_map(universe, id, neighbors, stop)
+            })
+            .map_err(context_error)?
         }
         ContextMapRoot::Project(id) => {
             let mut request =
-                wow_context::primary_project_navigation_queries(&universe, &id, &graph, stop)
+                wow_context::primary_project_navigation_queries(universe, &id, &graph, stop)
                     .map_err(context_error)?;
             for index in 0..request.navigation_queries().len() {
                 checkpoint(stop)?;
@@ -291,40 +357,12 @@ fn build(
         receipts.push(receipt);
     }
     let map = wow_context::build_project_map(selection, &receipts, stop).map_err(context_error)?;
-    let status = match map.state() {
-        wow_context::ProjectMapState::Partial => ContextMapStatus::Partial,
-        wow_context::ProjectMapState::Truncated => ContextMapStatus::Truncated,
-    };
-    let payload = Payload {
-        resolved_request_id,
-        publication_set_id: read.publication_set_id(),
-        store_generation_id: read.store_generation_id().as_str(),
-        current_at_acquisition: current,
-        current_record_digest: current_digest,
-        configured_registration_id: &host.project_store_id,
-        native_project_store_id: read.namespace().map(|namespace| namespace.id().as_str()),
-        project_map_byte_length: map.canonical_byte_length(),
-        project_map: &map,
-    };
-    // These bytes remain a private draft until explicit checked native close.
-    let envelope = Envelope {
-        schema: CONTEXT_MAP_RESULT_SCHEMA,
-        operation: "context_map",
-        request_id,
-        request,
-        status,
-        resource_closure: "closed",
-        failure_code: None,
-        payload: Some(payload),
-    };
-    let limit = usize::try_from(host.limits.max_metadata_bytes)
-        .map_err(|_| failure(ServiceErrorCode::BudgetExceeded))?;
-    Ok((encode(&envelope, limit, stop)?, status))
+    build(&map, &graph)
 }
 
 /// Digest of the exact native CurrentPublication canonical observation, not
 /// its record-ID derivation material. A guard compares this same frozen encoding.
-fn current_record_digest(current: &CurrentPublication) -> ServiceResult<Box<str>> {
+pub(super) fn current_record_digest(current: &CurrentPublication) -> ServiceResult<Box<str>> {
     let bytes = wow_core::canonical_json_bytes(current)
         .map_err(|_| failure(ServiceErrorCode::CanonicalizationFailed))?;
     Ok(
@@ -353,14 +391,31 @@ fn failed(
     code: ServiceErrorCode,
     closure: &'static str,
 ) -> ServiceResult<ContextMapResult> {
+    failed_operation(
+        request,
+        request_id,
+        code,
+        closure,
+        CONTEXT_MAP_RESULT_SCHEMA,
+        "context_map",
+    )
+}
+pub(super) fn failed_operation<R: Serialize>(
+    request: &R,
+    request_id: &str,
+    code: ServiceErrorCode,
+    closure: &'static str,
+    schema: &'static str,
+    operation: &'static str,
+) -> ServiceResult<ContextMapResult> {
     let status = if code == ServiceErrorCode::Cancelled {
         ContextMapStatus::Cancelled
     } else {
         ContextMapStatus::Failed
     };
-    let envelope = Envelope::<()> {
-        schema: CONTEXT_MAP_RESULT_SCHEMA,
-        operation: "context_map",
+    let envelope = Envelope::<_, ()> {
+        schema,
+        operation,
         request_id,
         request,
         status,
@@ -421,7 +476,11 @@ fn preflight(value: &impl Serialize, limit: usize, stop: &AtomicBool) -> Service
     encoded.map_err(|_| failure(ServiceErrorCode::CanonicalizationFailed))?;
     Ok(counter.bytes)
 }
-fn encode(value: &impl Serialize, limit: usize, stop: &AtomicBool) -> ServiceResult<Vec<u8>> {
+pub(super) fn encode(
+    value: &impl Serialize,
+    limit: usize,
+    stop: &AtomicBool,
+) -> ServiceResult<Vec<u8>> {
     let size = preflight(value, limit, stop)?;
     let bytes = wow_core::canonical_json_bytes(value)
         .map_err(|_| failure(ServiceErrorCode::CanonicalizationFailed))?;

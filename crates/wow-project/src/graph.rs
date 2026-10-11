@@ -1,7 +1,11 @@
 //! Direct source/load/XML proposals. No recognizer inference or graph publication.
 mod axes;
 mod budget;
+mod callable_metadata;
 pub use budget::{SourceGraphBudget, SourceGraphXmlCountBudget};
+pub use callable_metadata::{
+    ProjectCallableFacetState, ProjectCallableMetadata, ProjectCallableScope,
+};
 mod derivations;
 pub use axes::source_graph_axis_profile;
 pub const SOURCE_GRAPH_REGISTRY_ID: &str = "wow-project.source-load";

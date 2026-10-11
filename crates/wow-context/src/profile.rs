@@ -51,3 +51,40 @@ pub(crate) const PROJECT_PROFILE: ProfileDescription = ProfileDescription {
     profile: PRIMARY_PROJECT_MAP_PROFILE,
     ..PROFILE
 };
+
+/// The complete reviewed native direct relation vocabulary. This does not assert
+/// that every producer/capability was evaluated in the retained generation.
+pub(crate) const DETAIL_RELATIONS: [GraphRelationKind; 27] = [
+    GraphRelationKind::Calls,
+    GraphRelationKind::ReadsState,
+    GraphRelationKind::WritesState,
+    GraphRelationKind::RegistersNativeEvent,
+    GraphRelationKind::HandlesNativeEvent,
+    GraphRelationKind::BridgesNativeEvent,
+    GraphRelationKind::EmitsCustomSignal,
+    GraphRelationKind::HandlesCustomSignal,
+    GraphRelationKind::RegistersCvarCallback,
+    GraphRelationKind::SetsScript,
+    GraphRelationKind::HooksScript,
+    GraphRelationKind::SecureHooksFunction,
+    GraphRelationKind::Contains,
+    GraphRelationKind::Defines,
+    GraphRelationKind::DependsOn,
+    GraphRelationKind::OptionalDependsOn,
+    GraphRelationKind::Owns,
+    GraphRelationKind::Loads,
+    GraphRelationKind::LoadsBefore,
+    GraphRelationKind::Inherits,
+    GraphRelationKind::ParentOf,
+    GraphRelationKind::ReferencesTemplate,
+    GraphRelationKind::MixesIn,
+    GraphRelationKind::Instantiates,
+    GraphRelationKind::FactoryCreates,
+    GraphRelationKind::UsesApi,
+    GraphRelationKind::HasSchemaClass,
+];
+pub(crate) const DETAIL_PROFILE: ProfileDescription = ProfileDescription {
+    profile: "wow-context/primary-entity-detail-origins/1",
+    edges: &DETAIL_RELATIONS,
+    ..PROFILE
+};
