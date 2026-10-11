@@ -1,4 +1,5 @@
 //! One small synthetic retained native service lifecycle, not live/Ketho evidence.
+mod build;
 mod inspect;
 
 use super::*;

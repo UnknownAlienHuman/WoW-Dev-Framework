@@ -1,5 +1,6 @@
 //! Exact primary-map orchestration over retained native owners.
 //! Host registration and filesystem locations are separate from semantic requests.
+mod build;
 mod host;
 mod inspect;
 mod operation;
@@ -7,9 +8,15 @@ mod request;
 #[cfg(test)]
 mod tests;
 
+pub use build::{
+    ContextBuildRequest, PRIMARY_CONTEXT_JSON_RENDERER_PROFILE_ID,
+    PRIMARY_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID, PRIMARY_CONTEXT_PACK_PROFILE_ID,
+    execute_context_build,
+};
 pub use host::{CONTEXT_MAP_HOST_INPUT_MAX_BYTES, CONTEXT_MAP_HOST_SCHEMA, ContextMapHostInput};
 pub use inspect::{ContextInspectRequest, execute_context_inspect};
 pub use operation::{ContextMapResult, ContextMapStatus, execute_context_map};
+pub use wow_context::RenderSelection as ContextRenderSelection;
 pub use wow_context::SkeletonLevel as ContextInspectLevel;
 pub const PRIMARY_L0_PROFILE_ID: &str = wow_context::PRIMARY_L0_PROFILE;
 pub const PRIMARY_L1_PROFILE_ID: &str = wow_context::PRIMARY_L1_PROFILE;

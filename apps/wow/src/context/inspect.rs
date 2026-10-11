@@ -1,4 +1,4 @@
-//! Closed inspect-only grammar. Common transport and root decoding stay in the parent.
+//! Closed inspect grammar and shared typed level/root extraction for build.
 use super::{Command, set};
 use wow_service::context::{
     ContextInspectLevel, ContextInspectRequest, ContextMapCurrentGuard, ContextMapPublication,
@@ -17,31 +17,75 @@ impl Options {
         matches!(option, "--level" | "--l0-profile-id" | "--l1-profile-id")
     }
 
-    pub(super) fn option(&mut self, option: &str, value: &str) -> Result<(), &'static str> {
+    pub(super) fn option(
+        &mut self,
+        option: &str,
+        value: &str,
+        command: Command,
+    ) -> Result<(), &'static str> {
         match option {
             "--level" => {
                 let level = match value {
                     "l0" => ContextInspectLevel::L0,
                     "l1" => ContextInspectLevel::L1,
                     "both" => ContextInspectLevel::Both,
-                    _ => return Err("unsupported context inspect level"),
+                    _ => {
+                        return Err(match command {
+                            Command::Build => "unsupported context build level",
+                            _ => "unsupported context inspect level",
+                        });
+                    }
                 };
-                set(&mut self.level, level, Command::Inspect)
+                set(&mut self.level, level, command)
             }
             "--l0-profile-id" => {
                 if value != PRIMARY_L0_PROFILE_ID {
                     return Err("unsupported exact context L0 profile");
                 }
-                set(&mut self.l0_profile, (), Command::Inspect)
+                set(&mut self.l0_profile, (), command)
             }
             "--l1-profile-id" => {
                 if value != PRIMARY_L1_PROFILE_ID {
                     return Err("unsupported exact context L1 profile");
                 }
-                set(&mut self.l1_profile, (), Command::Inspect)
+                set(&mut self.l1_profile, (), command)
             }
-            _ => Err("unknown context inspect option"),
+            _ => Err(match command {
+                Command::Build => "unknown context build option",
+                _ => "unknown context inspect option",
+            }),
         }
+    }
+
+    pub(super) fn selection(
+        self,
+        root: Option<ContextMapRoot>,
+        command: Command,
+    ) -> Result<(ContextInspectLevel, ContextMapRoot), &'static str> {
+        let level = self.level.ok_or(match command {
+            Command::Build => "context build requires --level",
+            _ => "context inspect requires --level",
+        })?;
+        let root = root.ok_or(match command {
+            Command::Build => "context build requires an explicit --root",
+            _ => "context inspect requires an explicit --root",
+        })?;
+        match level {
+            ContextInspectLevel::L0 if self.l1_profile.is_some() => {
+                return Err(match command {
+                    Command::Build => "L1 profile conflicts with context build level l0",
+                    _ => "L1 profile conflicts with context inspect level l0",
+                });
+            }
+            ContextInspectLevel::L1 if self.l0_profile.is_some() => {
+                return Err(match command {
+                    Command::Build => "L0 profile conflicts with context build level l1",
+                    _ => "L0 profile conflicts with context inspect level l1",
+                });
+            }
+            _ => {}
+        }
+        Ok((level, root))
     }
 
     pub(super) fn request(
@@ -52,17 +96,7 @@ impl Options {
         current: Option<ContextMapCurrentGuard>,
         reference: Option<ContextMapReferenceGuard>,
     ) -> Result<ContextInspectRequest, &'static str> {
-        let level = self.level.ok_or("context inspect requires --level")?;
-        let root = root.ok_or("context inspect requires an explicit --root")?;
-        match level {
-            ContextInspectLevel::L0 if self.l1_profile.is_some() => {
-                return Err("L1 profile conflicts with context inspect level l0");
-            }
-            ContextInspectLevel::L1 if self.l0_profile.is_some() => {
-                return Err("L0 profile conflicts with context inspect level l1");
-            }
-            _ => {}
-        }
+        let (level, root) = self.selection(root, Command::Inspect)?;
         // The service selects the fixed recipes and validates level/root compatibility.
         // No graph kind, owner existence or container selection is inferred here.
         ContextInspectRequest::primary(store, publication, level, root, current, reference)

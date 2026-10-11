@@ -1,0 +1,22 @@
+{
+  "artifact.md": {
+    "bytes": 302654,
+    "sha256": "e616423e06261ea1bc623fb81459138553c57f1709734770700feda5a6269587"
+  },
+  "envelope.json": {
+    "bytes": 754449,
+    "sha256": "320f333fbd25811b9049377a240a60a50c5ad00bbfaed86bdc274db0cd266199"
+  },
+  "profiles.json": {
+    "bytes": 1563,
+    "sha256": "6edf39881f15d15db520d6c4703ea2cb2b2a401d7ee2093f1f2981872fdd606b"
+  },
+  "request.json": {
+    "bytes": 921,
+    "sha256": "55376d79386ab85516700cd0f49f41bb20e47972bf2c7ce5983d2c244d017203"
+  },
+  "semantic-pack.json": {
+    "bytes": 192655,
+    "sha256": "35ff73a38fe8658cff250642c1068bfe66f5f9b6c48279ed3156190ccea95806"
+  }
+}

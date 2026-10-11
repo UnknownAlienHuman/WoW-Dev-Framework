@@ -1,6 +1,6 @@
 # Current project work map
 
-The active implementation slice is **primary Project Map and L0/L1 inspection**, tracked by
+The active implementation slice is **primary maps, inspection and context packs**, tracked by
 [#122](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122).
 The W17 queue and qualification debt remain in
 [#106](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/106).
@@ -26,8 +26,12 @@ every genuine retained source-file root and its bounded native neighborhood.
 Both explicitly omit the optional platform universe. Selected native
 [L0/L1 inspection](../apps/wow/CONTEXT_INSPECT.md) has a distinct owner/service/CLI
 route with exact containers/entities, original declaration metadata and one
-aggregate budget. Primary declaration/signature recipe admission, broader
-facets/scopes, packs/rendering and acceptance remain open in #122 and the census.
+aggregate budget. The selected [semantic pack and renderers](../crates/wow-context/e3/NATIVE_PRIMARY_PACK.md)
+are reachable through [`wow context build`](../apps/wow/CONTEXT_BUILD.md): pack-only,
+lossless JSON, metadata-safe Markdown or both preserve the same pack identity and
+continue that budget. Primary declaration/signature recipe admission is the next
+owner slice; broader facets/scopes, expansion/excerpts/continuation, platform views
+and full acceptance remain open in #122 and the census.
 
 [#121](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/121) retains the
 latest full-corpus functions refusal and targeted capacity evidence.

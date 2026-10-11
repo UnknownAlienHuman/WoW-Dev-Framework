@@ -1,5 +1,6 @@
-//! Closed E3 context-map and inspect projections. Acquisition and semantics are service-owned.
+//! Closed E3 context-map, inspect and build projections. Semantics are service-owned.
 //! The native host document is a separate transport input, never an E3 semantic selector.
+mod build;
 mod inspect;
 
 use std::{
@@ -12,10 +13,11 @@ use wow_service::{
     ServiceErrorCode,
     context::{
         CONTEXT_MAP_HOST_INPUT_MAX_BYTES, CONTEXT_MAP_ID_MAX_BYTES, CONTEXT_MAP_RESULT_MAX_BYTES,
-        ContextInspectRequest, ContextMapCurrentGuard, ContextMapHostInput, ContextMapPublication,
-        ContextMapReferenceGuard, ContextMapRequest, ContextMapRoot, ContextMapStatus,
-        PRIMARY_NAVIGATION_MAP_PROFILE_ID, PRIMARY_PROJECT_NAVIGATION_MAP_PROFILE_ID,
-        execute_context_inspect, execute_context_map,
+        ContextBuildRequest, ContextInspectRequest, ContextMapCurrentGuard, ContextMapHostInput,
+        ContextMapPublication, ContextMapReferenceGuard, ContextMapRequest, ContextMapRoot,
+        ContextMapStatus, PRIMARY_NAVIGATION_MAP_PROFILE_ID,
+        PRIMARY_PROJECT_NAVIGATION_MAP_PROFILE_ID, execute_context_build, execute_context_inspect,
+        execute_context_map,
     },
 };
 
@@ -42,6 +44,18 @@ const HELP: &str = concat!(
     "L0 accepts project@ or an exact container graph-entity@; L1 accepts graph-entity@; ",
     "both requires an exact container graph-entity@. Service validates kind/existence ",
     "and keeps the two artifacts distinct.\n",
+    "wow context build --native-host-config <host.json> --project-store <registration-key> ",
+    "--publication current|store-generation:<ProjectStoreGenerationId> ",
+    "--root <exact-root-token> --level l0|l1|both\n",
+    "  --context-profile-id wow-context/primary-structural-pack/1\n",
+    "  [--l0-profile-id wow-context/primary-l0/1] ",
+    "[--l1-profile-id wow-context/primary-l1/1]\n",
+    "  [--renderer-profile-id wow-context/primary-pack-json/1]\n",
+    "  [--renderer-profile-id wow-context/primary-pack-markdown/1]\n",
+    "  Select zero or one of each renderer; a duplicate renderer refuses syntax. ",
+    "Both renderers are ordered JSON then Markdown independent of argv order.\n",
+    "  Same explicit host/root, omitted platform, optional current guards, complete reference ",
+    "guard group and envelope-json output. Service owns root/level compatibility.\n",
 );
 
 // Preserve the existing app argv/individual-path transport maxima.
@@ -53,11 +67,13 @@ const MAX_VALUE_BYTES: usize = 32768;
 enum Command {
     Map,
     Inspect,
+    Build,
 }
 
 enum Request {
     Map(ContextMapRequest),
     Inspect(ContextInspectRequest),
+    Build(ContextBuildRequest),
 }
 
 struct Arguments {
@@ -71,7 +87,7 @@ pub fn run(values: Vec<OsString>) -> u8 {
             || (values.len() == 3
                 && values
                     .get(1)
-                    .is_some_and(|value| value == "map" || value == "inspect")))
+                    .is_some_and(|value| value == "map" || value == "inspect" || value == "build")))
         && values
             .last()
             .is_some_and(|value| value == "--help" || value == "-h")
@@ -111,6 +127,7 @@ pub fn run(values: Vec<OsString>) -> u8 {
     let operation = match &arguments.request {
         Request::Map(request) => execute_context_map(&host, request, &stop),
         Request::Inspect(request) => execute_context_inspect(&host, request, &stop),
+        Request::Build(request) => execute_context_build(&host, request, &stop),
     };
     let result = match operation {
         Ok(result) => result,
@@ -169,12 +186,13 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
     }
     let mut values = values.into_iter();
     if values.next().as_deref() != Some(OsStr::new("context")) {
-        return Err("expected context map or inspect");
+        return Err("expected context map, inspect or build");
     }
     let command = match values.next().as_deref().and_then(OsStr::to_str) {
         Some("map") => Command::Map,
         Some("inspect") => Command::Inspect,
-        _ => return Err("expected context map or inspect"),
+        Some("build") => Command::Build,
+        _ => return Err("expected context map, inspect or build"),
     };
     let mut host_config = None;
     let mut project_store = None;
@@ -190,6 +208,7 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
     let mut map_profile = None;
     let mut output = None;
     let mut inspect_options = inspect::Options::default();
+    let mut build_options = build::Options::default();
 
     while let Some(option) = values.next() {
         let option = option.to_str().ok_or("invalid context option encoding")?;
@@ -210,11 +229,13 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
         let selected = match command {
             Command::Map => matches!(option, "--map-target" | "--map-profile-id"),
             Command::Inspect => inspect::Options::accepts(option),
+            Command::Build => inspect::Options::accepts(option) || build::Options::accepts(option),
         };
         if !common && !selected {
             return Err(match command {
                 Command::Map => "unknown context map option",
                 Command::Inspect => "unknown context inspect option",
+                Command::Build => "unknown context build option",
             });
         }
         let value = values.next().ok_or("missing context option value")?;
@@ -296,12 +317,16 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
                 set(&mut output, (), command)?;
             }
             "--level" | "--l0-profile-id" | "--l1-profile-id" => {
-                inspect_options.option(option, &value)?;
+                inspect_options.option(option, &value, command)?;
+            }
+            "--context-profile-id" | "--renderer-profile-id" => {
+                build_options.option(option, &value)?;
             }
             _ => {
                 return Err(match command {
                     Command::Map => "unknown context map option",
                     Command::Inspect => "unknown context inspect option",
+                    Command::Build => "unknown context build option",
                 });
             }
         }
@@ -353,6 +378,13 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
             current_guard,
             reference_guard,
         )?),
+        Command::Build => Request::Build(build_options.request(
+            &project_store,
+            publication,
+            inspect_options.selection(root, Command::Build)?,
+            current_guard,
+            reference_guard,
+        )?),
     };
     Ok(Arguments {
         host_config,
@@ -365,6 +397,7 @@ fn set<T>(slot: &mut Option<T>, value: T, command: Command) -> Result<(), &'stat
         return Err(match command {
             Command::Map => "duplicate context map option",
             Command::Inspect => "duplicate context inspect option",
+            Command::Build => "duplicate context build option",
         });
     }
     *slot = Some(value);
@@ -499,6 +532,7 @@ mod tests {
         match arguments.request {
             Request::Map(request) => serde_json::to_value(request),
             Request::Inspect(request) => serde_json::to_value(request),
+            Request::Build(request) => serde_json::to_value(request),
         }
         .map_err(|_| "request serialization failed")
     }
@@ -818,6 +852,142 @@ mod tests {
             "a".repeat(CONTEXT_MAP_ID_MAX_BYTES)
         );
         assert!(decode_root_id(&repeated_a(CONTEXT_MAP_ID_MAX_BYTES + 1)).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn context_build_grammar_preserves_profiles_render_order_and_service_fences()
+    -> Result<(), &'static str> {
+        use wow_service::context::{
+            ContextBuildRequest, ContextInspectLevel, ContextRenderSelection,
+            PRIMARY_CONTEXT_JSON_RENDERER_PROFILE_ID, PRIMARY_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
+            PRIMARY_CONTEXT_PACK_PROFILE_ID,
+        };
+
+        let mut values = arguments();
+        let command = values.get_mut(1).ok_or("missing fixture command")?;
+        *command = "build".into();
+        for flag in ["--map-target", "--map-profile-id"] {
+            let index = values
+                .iter()
+                .position(|value| value == flag)
+                .ok_or("missing fixture map option")?;
+            values.drain(index..index + 2);
+        }
+        push(&mut values, "--root", PROJECT_ROOT);
+        push(&mut values, "--level", "l0");
+        push(
+            &mut values,
+            "--context-profile-id",
+            PRIMARY_CONTEXT_PACK_PROFILE_ID,
+        );
+
+        let expected = |render| -> Result<serde_json::Value, &'static str> {
+            let request = ContextBuildRequest::primary(
+                "context-cli-store",
+                ContextMapPublication::Current,
+                ContextInspectLevel::L0,
+                parse_root(PROJECT_ROOT)?,
+                render,
+                None,
+                None,
+            )
+            .map_err(|_| "expected build fixture request refused")?;
+            serde_json::to_value(request).map_err(|_| "request serialization failed")
+        };
+        // No renderer is a genuine typed None selection, not an app-selected default.
+        let no_renderer = request_json(values.clone())?;
+        assert_eq!(no_renderer, expected(ContextRenderSelection::None)?);
+        assert_eq!(
+            no_renderer["context_profile_id"],
+            PRIMARY_CONTEXT_PACK_PROFILE_ID
+        );
+
+        let mut reverse = values.clone();
+        push(
+            &mut reverse,
+            "--renderer-profile-id",
+            PRIMARY_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
+        );
+        push(
+            &mut reverse,
+            "--renderer-profile-id",
+            PRIMARY_CONTEXT_JSON_RENDERER_PROFILE_ID,
+        );
+        let reverse = request_json(reverse)?;
+        assert_eq!(reverse, expected(ContextRenderSelection::Both)?);
+        assert_eq!(
+            reverse["renderer_profile_ids"],
+            serde_json::json!([
+                PRIMARY_CONTEXT_JSON_RENDERER_PROFILE_ID,
+                PRIMARY_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
+            ])
+        );
+        let mut forward = values.clone();
+        push(
+            &mut forward,
+            "--renderer-profile-id",
+            PRIMARY_CONTEXT_JSON_RENDERER_PROFILE_ID,
+        );
+        push(
+            &mut forward,
+            "--renderer-profile-id",
+            PRIMARY_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
+        );
+        assert_eq!(reverse, request_json(forward.clone())?);
+
+        push(
+            &mut forward,
+            "--renderer-profile-id",
+            PRIMARY_CONTEXT_JSON_RENDERER_PROFILE_ID,
+        );
+        assert!(matches!(
+            parse(forward),
+            Err("duplicate context build option")
+        ));
+        let mut unknown_profile = values.clone();
+        replace(
+            &mut unknown_profile,
+            "--context-profile-id",
+            "wow-context/unreviewed-pack/1",
+        )?;
+        assert!(matches!(
+            parse(unknown_profile),
+            Err("unsupported exact context pack profile")
+        ));
+        let mut unknown_renderer = values.clone();
+        push(
+            &mut unknown_renderer,
+            "--renderer-profile-id",
+            "wow-context/unreviewed-renderer/1",
+        );
+        assert!(matches!(
+            parse(unknown_renderer),
+            Err("unsupported exact context renderer profile")
+        ));
+        let mut missing_profile = values.clone();
+        let index = missing_profile
+            .iter()
+            .position(|value| value == "--context-profile-id")
+            .ok_or("missing fixture context profile option")?;
+        missing_profile.drain(index..index + 2);
+        assert!(matches!(
+            parse(missing_profile),
+            Err("context build requires --context-profile-id")
+        ));
+
+        // Individually valid Project+Both syntax reaches the service refusal boundary.
+        replace(&mut values, "--level", "both")?;
+        let arguments = parse(values)?;
+        let Request::Build(request) = arguments.request else {
+            return Err("build parser selected the wrong typed operation");
+        };
+        let request = serde_json::to_value(request).map_err(|_| "request serialization failed")?;
+        assert_eq!(request["level"], "both");
+        assert_eq!(
+            request["root"],
+            serde_json::json!({"kind": "project", "id": "context-cli"})
+        );
         Ok(())
     }
 }

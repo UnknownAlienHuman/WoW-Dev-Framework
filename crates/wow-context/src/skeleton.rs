@@ -57,7 +57,8 @@ const L1_PROFILE: SkeletonProfile = SkeletonProfile {
     ..L0_PROFILE
 };
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", content = "id", rename_all = "snake_case")]
 pub enum L0Scope {
     Project(ProjectId),
     Entity(GraphNodeId),
@@ -83,6 +84,12 @@ pub struct PrimarySkeletons<'m, 'a> {
     bytes_reserved: u64,
 }
 impl PrimarySkeletons<'_, '_> {
+    pub(crate) fn l0_id(&self) -> Option<&str> {
+        self.l0.as_ref().map(L0Skeleton::l0_skeleton_id)
+    }
+    pub(crate) fn l1_id(&self) -> Option<&str> {
+        self.l1.as_ref().map(L1Skeleton::l1_skeleton_id)
+    }
     pub fn state(&self) -> ProjectMapState {
         if self
             .l0
@@ -580,6 +587,19 @@ pub fn build_primary_skeletons<'m, 'a>(
     level: SkeletonLevel,
     stop: &AtomicBool,
 ) -> ContextResult<PrimarySkeletons<'m, 'a>> {
+    build_primary_skeletons_with_budget(universe, map, graph, root, level, stop)
+        .map(|(result, _)| result)
+}
+
+/// Return the existing aggregate reservation ledger for continued pack construction.
+pub(crate) fn build_primary_skeletons_with_budget<'m, 'a>(
+    universe: &'m ContextUniverseSet<'a>,
+    map: &'m ProjectMap<'a>,
+    graph: &GraphPartitionRead<'a>,
+    root: &L0Scope,
+    level: SkeletonLevel,
+    stop: &AtomicBool,
+) -> ContextResult<(PrimarySkeletons<'m, 'a>, Budget)> {
     let (view, mut budget) = input(universe, map, graph, stop)?;
     let l0 = if matches!(level, SkeletonLevel::L0 | SkeletonLevel::Both) {
         Some(l0(universe, map, graph, root, &view, &mut budget, stop)?)
@@ -603,5 +623,5 @@ pub fn build_primary_skeletons<'m, 'a>(
         bytes_reserved: budget.retained_bytes,
     };
     crate::budget::encoded_len(&result, universe.limits.max_metadata_bytes, stop)?;
-    Ok(result)
+    Ok((result, budget))
 }
