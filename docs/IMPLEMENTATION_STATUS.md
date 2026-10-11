@@ -192,6 +192,12 @@ fact/finding counts and serialized-output bytes on refusal. Existing native
 aggregate/output/replay checks pass; predicates, capacities, candidate generation
 and successful identities are unchanged. Function/global sidecar budgets remain
 independent. Full-corpus measurements and later owner qualification stay in #113.
+Graph projection refusals now retain their budget reason through Service and name
+attempted metadata bytes, file/raw-member/load/callable counts and selected
+aggregate/direct/XML-map counts. Existing limits and admission predicates remain;
+the counted writer's exact-limit, plus-one, overflow and cancellation case passes,
+alongside focused Project/Service/CLI checks. Unvisited generic guards and complete
+corpus fit remain unqualified; actual operation measurements stay in #113.
 Full analysis/graph/maps/persistence remain unqualified under #113.
 Explicit retained XSD component admission is now executable through the existing
 XML owner, with root-only global symbols and final unsupported context propagation.

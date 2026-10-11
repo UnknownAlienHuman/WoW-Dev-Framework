@@ -231,7 +231,11 @@ fn build_plan<'a>(
         .saturating_add(collected.relations.len())
         > MAX_DIRECT_ASSERTIONS
     {
-        return Err(exhausted());
+        return Err(resource_exhausted(
+            "direct assertions",
+            collected.entities.len() as u128 + collected.relations.len() as u128,
+            MAX_DIRECT_ASSERTIONS,
+        ));
     }
     // Refine the collector's provisional tally with complete borrowed metadata.
     // Shared raw/provenance bodies are counted once, under the same operation cap.
@@ -277,7 +281,7 @@ fn build_plan<'a>(
                 .ok_or_else(exhausted)?
                 > MAX_DIRECT_ASSERTIONS
         {
-            return Err(exhausted());
+            return Err(direct_counts_exhausted(&collected, false));
         }
         let mut reasons = vec!["source_graph.captured_known_source_spans_only".into()];
         if omitted > 0 {
@@ -353,7 +357,7 @@ fn build_plan<'a>(
                 .ok_or_else(exhausted)?
                 > MAX_DIRECT_ASSERTIONS
         {
-            return Err(exhausted());
+            return Err(direct_counts_exhausted(&collected, true));
         }
         let contains = collected
             .coverage
@@ -1036,6 +1040,28 @@ fn relation_permission(recipe: DirectRecipe, producer: PlatformGraphProducer, ki
         }
     }
 }
+fn direct_counts_exhausted(
+    collected: &CollectedSourceGraph,
+    include_raw_assertions: bool,
+) -> ProjectError {
+    let raw = collected
+        .inventory_batch
+        .as_ref()
+        .map_or(0, |batch| batch.entity_proposals().len()) as u128;
+    let nodes = collected.entities.len() as u128 + raw;
+    let edges = collected.relations.len();
+    let assertions = collected.entities.len() as u128
+        + edges as u128
+        + if include_raw_assertions { raw } else { 0 };
+    ProjectError::new(
+        ProjectErrorCode::SourceBudgetExceeded,
+        ProjectPhase::View,
+        format!(
+            "source graph direct counts exceed their bounded profile: nodes {nodes}/{MAX_NODES}, edges {edges}/{MAX_EDGES}, assertions {assertions}/{MAX_DIRECT_ASSERTIONS}"
+        ),
+    )
+}
+
 pub(super) fn graph_error(error: wow_graph::GraphError) -> ProjectError {
     ProjectError::new(
         match error.code() {
@@ -1044,6 +1070,13 @@ pub(super) fn graph_error(error: wow_graph::GraphError) -> ProjectError {
             _ => ProjectErrorCode::SnapshotInvalid,
         },
         ProjectPhase::View,
-        "native direct producer validation failed",
+        if error.code() == wow_graph::GraphErrorCode::BudgetExceeded {
+            format!(
+                "native direct producer validation failed: {}",
+                error.message()
+            )
+        } else {
+            "native direct producer validation failed".into()
+        },
     )
 }

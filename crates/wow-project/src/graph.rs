@@ -373,10 +373,24 @@ fn exhausted() -> ProjectError {
         "source graph projection exceeds its bounded profile",
     )
 }
+fn resource_exhausted(resource: &str, attempted: u128, limit: usize) -> ProjectError {
+    ProjectError::new(
+        ProjectErrorCode::SourceBudgetExceeded,
+        ProjectPhase::View,
+        format!("source graph {resource} exceeds its bounded profile: {attempted}/{limit}"),
+    )
+}
 fn charge(used: &mut usize, bytes: usize) -> ProjectResult<()> {
-    *used = used.checked_add(bytes).ok_or_else(exhausted)?;
+    let attempted = *used as u128 + bytes as u128;
+    *used = used
+        .checked_add(bytes)
+        .ok_or_else(|| resource_exhausted("metadata bytes", attempted, MAX_TEXT_BYTES))?;
     if *used > MAX_TEXT_BYTES {
-        return Err(exhausted());
+        return Err(resource_exhausted(
+            "metadata bytes",
+            attempted,
+            MAX_TEXT_BYTES,
+        ));
     }
     Ok(())
 }
@@ -1026,7 +1040,11 @@ fn collect_source_graph_proposals_for_recipe(
     }
     let sources = projected_sources.into_values().collect::<Vec<_>>();
     if sources.is_empty() || sources.len() > MAX_FILES {
-        return Err(exhausted());
+        return Err(resource_exhausted(
+            "files",
+            sources.len() as u128,
+            MAX_FILES,
+        ));
     }
     let mut source_by_path = BTreeMap::new();
     let mut text_bytes = 0;
@@ -1223,7 +1241,11 @@ fn collect_source_graph_proposals_for_recipe(
                 continue;
             }
             if relations.len() >= MAX_LOADS {
-                return Err(exhausted());
+                return Err(resource_exhausted(
+                    "load relations",
+                    relations.len() as u128 + 1,
+                    MAX_LOADS,
+                ));
             }
             let source = source_by_path
                 .get(record.document.as_str())
@@ -1309,7 +1331,19 @@ fn collect_source_graph_proposals_for_recipe(
     ) > MAX_NODES
         || relations.len() > MAX_EDGES
     {
-        return Err(exhausted());
+        return Err(ProjectError::new(
+            ProjectErrorCode::SourceBudgetExceeded,
+            ProjectPhase::View,
+            format!(
+                "source graph counts exceed their bounded profile: nodes {}/{MAX_NODES}, edges {}/{MAX_EDGES}",
+                entities.len() as u128
+                    + inventory_batch
+                        .as_ref()
+                        .map_or(0, |batch| batch.entity_proposals().len())
+                        as u128,
+                relations.len(),
+            ),
+        ));
     }
     let xml_state = if load_scopes
         .iter()

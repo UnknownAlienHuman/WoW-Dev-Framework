@@ -3,7 +3,7 @@ use std::sync::atomic::AtomicBool;
 
 use serde::Serialize;
 
-use super::{MAX_TEXT_BYTES, ProjectResult, exhausted, raw_inventory};
+use super::{MAX_TEXT_BYTES, ProjectResult, raw_inventory, resource_exhausted};
 
 #[derive(Clone, Copy)]
 pub(super) struct ProducerBudget {
@@ -13,7 +13,11 @@ pub(super) struct ProducerBudget {
 impl ProducerBudget {
     pub(super) fn new(used: usize) -> ProjectResult<Self> {
         if used > MAX_TEXT_BYTES {
-            return Err(exhausted());
+            return Err(resource_exhausted(
+                "producer metadata bytes",
+                used as u128,
+                MAX_TEXT_BYTES,
+            ));
         }
         Ok(Self { used })
     }

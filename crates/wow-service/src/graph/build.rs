@@ -1180,7 +1180,15 @@ fn project_error(e: wow_project::ProjectError) -> ServiceError {
             wow_project::ProjectErrorCode::SourceBudgetExceeded => ServiceErrorCode::BudgetExceeded,
             _ => ServiceErrorCode::InternalContractViolation,
         },
-        format!("native source graph projection rejected ({:?})", e.code()),
+        if e.code() == wow_project::ProjectErrorCode::SourceBudgetExceeded {
+            format!(
+                "native source graph projection rejected ({:?}): {}",
+                e.code(),
+                e.message()
+            )
+        } else {
+            format!("native source graph projection rejected ({:?})", e.code())
+        },
     )
 }
 

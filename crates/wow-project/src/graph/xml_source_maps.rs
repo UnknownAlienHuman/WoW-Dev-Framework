@@ -162,7 +162,15 @@ pub(super) fn prepare<'a>(
     let mut virtual_paths = BTreeSet::new();
     if let Some(analysis) = analysis {
         if analysis.units().len() > MAX_SITES || analysis.unresolved_scripts().len() > MAX_SITES {
-            return Err(exhausted());
+            return Err(ProjectError::new(
+                ProjectErrorCode::SourceBudgetExceeded,
+                ProjectPhase::View,
+                format!(
+                    "source graph XML-map indexes exceed their bounded profile: native units {}/{MAX_SITES}, unresolved scripts {}/{MAX_SITES}",
+                    analysis.units().len(),
+                    analysis.unresolved_scripts().len()
+                ),
+            ));
         }
         for unit in analysis.units() {
             crate::analyzer::checkpoint(stop)?;
@@ -213,7 +221,11 @@ pub(super) fn prepare<'a>(
             continue;
         }
         if facts.len() >= MAX_SITES {
-            return Err(exhausted());
+            return Err(resource_exhausted(
+                "XML-map script facts",
+                facts.len() as u128 + 1,
+                MAX_SITES,
+            ));
         }
         let address = owned_site(
             fact.scope.package.as_deref(),
@@ -404,7 +416,14 @@ pub(super) fn prepare<'a>(
                                 .checked_add(pieces.len())
                                 .ok_or_else(exhausted)?;
                             if piece_count > MAX_PIECES || units.len() >= MAX_SITES {
-                                return Err(exhausted());
+                                return Err(ProjectError::new(
+                                    ProjectErrorCode::SourceBudgetExceeded,
+                                    ProjectPhase::View,
+                                    format!(
+                                        "source graph XML-map prepared counts exceed their bounded profile: pieces {piece_count}/{MAX_PIECES}, units {}/{MAX_SITES}",
+                                        units.len() as u128 + 1
+                                    ),
+                                ));
                             }
                             budget.charge_serialized(
                                 &(
@@ -518,7 +537,16 @@ fn validate_project(
         || source.source_handles().len() > MAX_PIECES
         || source.evidence().len() > MAX_PIECES
     {
-        return Err(exhausted());
+        return Err(ProjectError::new(
+            ProjectErrorCode::SourceBudgetExceeded,
+            ProjectPhase::View,
+            format!(
+                "source graph XML-map source counts exceed their bounded profile: files {}/{MAX_FILES}, handles {}/{MAX_PIECES}, evidence {}/{MAX_PIECES}",
+                source.files().len(),
+                source.source_handles().len(),
+                source.evidence().len()
+            ),
+        ));
     }
     Ok(())
 }

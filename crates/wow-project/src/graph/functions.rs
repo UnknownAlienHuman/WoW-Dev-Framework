@@ -56,7 +56,15 @@ pub(super) fn project(
         return Err(invalid());
     }
     if report.functions().len() > MAX_FUNCTIONS || report.calls().len() > MAX_CALLS {
-        return Err(exhausted());
+        return Err(ProjectError::new(
+            ProjectErrorCode::SourceBudgetExceeded,
+            ProjectPhase::View,
+            format!(
+                "source graph callable counts exceed their bounded profile: functions {}/{MAX_FUNCTIONS}, calls {}/{MAX_CALLS}",
+                report.functions().len(),
+                report.calls().len(),
+            ),
+        ));
     }
     for file in report.files() {
         crate::analyzer::checkpoint(stop)?;

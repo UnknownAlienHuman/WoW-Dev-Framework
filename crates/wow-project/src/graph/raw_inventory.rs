@@ -147,7 +147,11 @@ pub(super) fn project(
         || receipt.coverage().verified_files() > MAX_MEMBERS
     {
         return Err(if receipt.coverage().verified_files() > MAX_MEMBERS {
-            exhausted()
+            resource_exhausted(
+                "raw members",
+                receipt.coverage().verified_files() as u128,
+                MAX_MEMBERS,
+            )
         } else {
             invalid()
         });
@@ -187,7 +191,11 @@ pub(super) fn project(
     while let Some(member) = cursor.next(stop)? {
         crate::analyzer::checkpoint(stop)?;
         if members.len() >= MAX_MEMBERS {
-            return Err(exhausted());
+            return Err(resource_exhausted(
+                "raw members",
+                members.len() as u128 + 1,
+                MAX_MEMBERS,
+            ));
         }
         let digest = crate::identity::canonical_digest(
             "wow-project/platform-raw-member/1",
@@ -308,6 +316,7 @@ pub(super) fn charge_serialized<T: Serialize>(
 ) -> ProjectResult<()> {
     struct Counter<'a> {
         bytes: usize,
+        attempted: u128,
         limit: usize,
         exceeded: bool,
         stop: &'a AtomicBool,
@@ -317,6 +326,7 @@ pub(super) fn charge_serialized<T: Serialize>(
             if self.stop.load(std::sync::atomic::Ordering::Acquire) {
                 return Err(std::io::Error::other("cancelled"));
             }
+            self.attempted = self.bytes as u128 + bytes.len() as u128;
             let next = self
                 .bytes
                 .checked_add(bytes.len())
@@ -335,7 +345,10 @@ pub(super) fn charge_serialized<T: Serialize>(
     crate::analyzer::checkpoint(stop)?;
     let mut counter = Counter {
         bytes: 0,
-        limit: MAX_TEXT_BYTES.checked_sub(*used).ok_or_else(exhausted)?,
+        attempted: 0,
+        limit: MAX_TEXT_BYTES
+            .checked_sub(*used)
+            .ok_or_else(|| resource_exhausted("metadata bytes", *used as u128, MAX_TEXT_BYTES))?,
         exceeded: false,
         stop,
     };
@@ -343,7 +356,11 @@ pub(super) fn charge_serialized<T: Serialize>(
     crate::analyzer::checkpoint(stop)?;
     if result.is_err() {
         return Err(if counter.exceeded {
-            exhausted()
+            resource_exhausted(
+                "metadata bytes",
+                *used as u128 + counter.attempted,
+                MAX_TEXT_BYTES,
+            )
         } else {
             invalid()
         });
@@ -516,6 +533,65 @@ fn graph_error(error: wow_graph::GraphError) -> ProjectError {
             _ => ProjectErrorCode::SnapshotInvalid,
         },
         ProjectPhase::View,
-        "native raw inventory graph validation failed",
+        if error.code() == wow_graph::GraphErrorCode::BudgetExceeded {
+            format!(
+                "native raw inventory graph validation failed: {}",
+                error.message()
+            )
+        } else {
+            "native raw inventory graph validation failed".into()
+        },
     )
+}
+
+#[cfg(test)]
+mod budget_tests {
+    use super::*;
+
+    #[test]
+    fn metadata_budget_reports_attempted_bytes_without_changing_admission()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let stop = AtomicBool::new(false);
+        let value = "metadata";
+        let encoded = serde_json::to_vec(value)?.len();
+        let mut used = MAX_TEXT_BYTES - encoded;
+        charge_serialized(&mut used, &value, &stop)?;
+        assert_eq!(used, MAX_TEXT_BYTES);
+
+        let mut used = MAX_TEXT_BYTES - encoded + 1;
+        let prior = used;
+        let error = charge_serialized(&mut used, &value, &stop)
+            .err()
+            .ok_or("one byte over limit must refuse")?;
+        assert_eq!(error.code(), ProjectErrorCode::SourceBudgetExceeded);
+        assert_eq!(
+            error.message(),
+            format!(
+                "source graph metadata bytes exceeds its bounded profile: {}/{}",
+                MAX_TEXT_BYTES as u128 + 1,
+                MAX_TEXT_BYTES
+            )
+        );
+        assert_eq!(used, prior);
+
+        let mut used = usize::MAX;
+        let error = charge(&mut used, 1).err().ok_or("overflow must refuse")?;
+        assert_eq!(error.code(), ProjectErrorCode::SourceBudgetExceeded);
+        assert_eq!(
+            error.message(),
+            format!(
+                "source graph metadata bytes exceeds its bounded profile: {}/{}",
+                usize::MAX as u128 + 1,
+                MAX_TEXT_BYTES
+            )
+        );
+        assert_eq!(used, usize::MAX);
+
+        stop.store(true, std::sync::atomic::Ordering::Release);
+        let error = charge_serialized(&mut used, &value, &stop)
+            .err()
+            .ok_or("cancellation must take precedence")?;
+        assert_eq!(error.code(), ProjectErrorCode::AnalysisCancelled);
+        Ok(())
+    }
 }
