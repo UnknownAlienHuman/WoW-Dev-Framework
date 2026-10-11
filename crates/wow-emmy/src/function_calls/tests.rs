@@ -499,19 +499,21 @@ fn selected_function_budget_has_strict_wire_and_independent_target_access_bounds
     assert_eq!(report.named_targets().len(), 2);
     assert!(report.calls().is_empty() && report.global_accesses().is_empty());
     let short = FunctionCallBudget::new(256, 16, 1, 1, 1, 64 * 1024)?;
+    let error = analyze_member_call_session_with_callable_queries(
+        &main,
+        &[&library],
+        profile.with_function_call_budget(short),
+        true,
+        &stop,
+    )
+    .err()
+    .ok_or("named target ceiling ignored")?;
+    assert_eq!(error.code(), EmmyMemberCallErrorCode::FactBudgetExceeded);
     assert_eq!(
-        analyze_member_call_session_with_callable_queries(
-            &main,
-            &[&library],
-            profile.with_function_call_budget(short),
-            true,
-            &stop,
-        )
-        .err()
-        .ok_or("named target ceiling ignored")?
-        .code(),
-        EmmyMemberCallErrorCode::FactBudgetExceeded
+        error.message(),
+        "function-call named targets budget exceeded: observed 2, limit 1"
     );
+    assert_eq!(error.path(), None);
 
     let globals = snapshot(vec![LuaWorkspaceFileInput::new(
         "main/globals.lua",
@@ -531,19 +533,21 @@ fn selected_function_budget_has_strict_wire_and_independent_target_access_bounds
     assert_eq!(report.global_accesses().len(), 2);
     assert!(report.calls().is_empty() && report.named_targets().is_empty());
     let short = FunctionCallBudget::new(64, 1, 1, 1, 1, 64 * 1024)?;
+    let error = analyze_member_call_session_with_callable_queries(
+        &globals,
+        &[],
+        profile.with_function_call_budget(short),
+        true,
+        &stop,
+    )
+    .err()
+    .ok_or("global access ceiling ignored")?;
+    assert_eq!(error.code(), EmmyMemberCallErrorCode::FactBudgetExceeded);
     assert_eq!(
-        analyze_member_call_session_with_callable_queries(
-            &globals,
-            &[],
-            profile.with_function_call_budget(short),
-            true,
-            &stop,
-        )
-        .err()
-        .ok_or("global access ceiling ignored")?
-        .code(),
-        EmmyMemberCallErrorCode::FactBudgetExceeded
+        error.message(),
+        "function-call global-access candidates budget exceeded: observed 2, limit 1"
     );
+    assert_eq!(error.path(), Some("main/globals.lua"));
     Ok(())
 }
 
@@ -707,20 +711,30 @@ fn selected_function_counts_and_output_keep_default_facts_and_refuse_limits() ->
     }
     assert_eq!(ordinary_wire, selected_wire);
     let tiny = FunctionCallBudget::new(2_000_000, 1, 1, 1, 1, 1)?;
-    for limits in [tiny, FunctionCallBudget::new(2_000_000, 64, 64, 64, 64, 1)?] {
-        assert_eq!(
-            analyze_member_call_session_with_callable_queries(
-                &main,
-                &[],
-                profile.with_function_call_budget(limits),
-                true,
-                &stop
-            )
-            .err()
-            .ok_or("count/output limit ignored")?
-            .code(),
-            EmmyMemberCallErrorCode::FactBudgetExceeded
-        );
+    for (limits, message, path) in [
+        (
+            tiny,
+            "function-call functions budget exceeded: observed 2, limit 1",
+            Some("main/calls.lua"),
+        ),
+        (
+            FunctionCallBudget::new(2_000_000, 64, 64, 64, 64, 1)?,
+            "function-call report bytes budget exceeded: observed 129, limit 1; functions 2, calls 1, global accesses 0, named targets 0",
+            None,
+        ),
+    ] {
+        let error = analyze_member_call_session_with_callable_queries(
+            &main,
+            &[],
+            profile.with_function_call_budget(limits),
+            true,
+            &stop,
+        )
+        .err()
+        .ok_or("count/output limit ignored")?;
+        assert_eq!(error.code(), EmmyMemberCallErrorCode::FactBudgetExceeded);
+        assert_eq!(error.message(), message);
+        assert_eq!(error.path(), path);
     }
     let wire = serde_json::to_value(budget)?;
     for field in wire.as_object().ok_or("budget")?.keys() {

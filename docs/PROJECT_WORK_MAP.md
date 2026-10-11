@@ -54,6 +54,12 @@ AST/range collision and keeps the lexical or unique registered root cell.
 Native environment/literal/dynamic-index, local-shadow/alias, explicit-root and
 ambiguous-root cases pass. Absent/ambiguous roots remain unresolved; budgets and
 identity recipes are unchanged. The next complete operation remains #113 evidence.
+That operation reached a generic function-sidecar budget refusal. Diagnostics now
+name the actual resource, attempted count and ceiling without changing admission
+or successful bytes; output refusal includes the already collected populations.
+Native count/output and successful-wire checks pass. Measure the actual refusing
+resource before changing any selected ceiling; complete encoded size and later
+producer populations remain unknown until admitted.
 
 Completed Main/reports, classification, graph/maps and persistence remain
 unqualified. Re-resolve the source on each complete operation and record the

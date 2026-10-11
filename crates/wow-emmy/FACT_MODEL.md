@@ -516,5 +516,11 @@ omitted report7/8 recipes remain unchanged. A private immutable location index
 serves exact callee/argument/receiver joins by file, function and span. It is
 excluded from serialization and identity, preserves every observation and
 refuses the same post-filter ambiguities. It grants no new source authority.
+Function-sidecar budget refusals identify the resource, attempted count and
+ceiling, with a logical snapshot path for file-local work. The global-access
+candidate guard still runs before resolution. Encoded-output refusal retains the
+original 128-byte identity reserve and reports the counts already collected;
+the attempted byte count is a lower bound, not the complete encoded size.
+Successful bytes, identities, capacities and cancellation behavior are unchanged.
 See [the source-state route](../../apps/wow/GRAPH_BUILD.md#typed-literal-keys-and-lexical-aliases)
 for admission limits, serialization versions and deferred cases.

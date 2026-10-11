@@ -580,10 +580,25 @@ fn budget() -> EmmyMemberCallError {
         None,
     )
 }
+fn resource_budget(
+    resource: &str,
+    observed: u128,
+    limit: u64,
+    path: Option<&str>,
+) -> EmmyMemberCallError {
+    EmmyMemberCallError::new(
+        EmmyMemberCallErrorCode::FactBudgetExceeded,
+        format!("function-call {resource} budget exceeded: observed {observed}, limit {limit}"),
+        path,
+    )
+}
 fn visit(count: &mut u64, limit: u64) -> EmmyMemberCallResult<()> {
-    *count = count.checked_add(1).ok_or_else(budget)?;
+    let next = u128::from(*count) + 1;
+    *count = count
+        .checked_add(1)
+        .ok_or_else(|| resource_budget("AST visits", next, limit, None))?;
     if *count > limit {
-        return Err(budget());
+        return Err(resource_budget("AST visits", next, limit, None));
     }
     Ok(())
 }
@@ -613,7 +628,12 @@ pub(crate) fn caller(
     // Ancestors are bounded independently; no recursive walk or source parsing.
     for (depth, ancestor) in syntax.ancestors().skip(1).enumerate() {
         if depth >= MAX_SCOPE_DEPTH {
-            return Err(budget());
+            return Err(resource_budget(
+                "scope depth",
+                depth as u128 + 1,
+                MAX_SCOPE_DEPTH as u64,
+                Some(file.path()),
+            ));
         }
         if let Some(closure) = LuaClosureExpr::cast(ancestor) {
             return function_id(
@@ -690,7 +710,12 @@ pub(crate) fn collect(
             }
             if is_main {
                 if functions.len() as u128 >= u128::from(limits.max_functions()) {
-                    return Err(budget());
+                    return Err(resource_budget(
+                        "functions",
+                        functions.len() as u128 + 1,
+                        limits.max_functions(),
+                        Some(file.path()),
+                    ));
                 }
                 functions.push(SourceFunctionFact {
                     fact_id: function_id(
@@ -712,14 +737,26 @@ pub(crate) fn collect(
             }
             for ast in model.get_root().descendants::<LuaAst>() {
                 checkpoint(stop)?;
-                visit(&mut visits, limits.max_ast_visits())?;
+                visit(&mut visits, limits.max_ast_visits())
+                    .map_err(|error| crate::global_access::at_path(error, file.path()))?;
                 let LuaAst::LuaClosureExpr(closure) = ast else {
                     continue;
                 };
-                if signatures.len() as u128 >= u128::from(limits.max_functions())
-                    || functions.len() as u128 >= u128::from(limits.max_functions())
-                {
-                    return Err(budget());
+                if signatures.len() as u128 >= u128::from(limits.max_functions()) {
+                    return Err(resource_budget(
+                        "captured signatures",
+                        signatures.len() as u128 + 1,
+                        limits.max_functions(),
+                        Some(file.path()),
+                    ));
+                }
+                if functions.len() as u128 >= u128::from(limits.max_functions()) {
+                    return Err(resource_budget(
+                        "functions",
+                        functions.len() as u128 + 1,
+                        limits.max_functions(),
+                        Some(file.path()),
+                    ));
                 }
                 let span = ast_span(file, closure.get_range())?;
                 let signature = LuaSignatureId::from_closure(model.get_file_id(), &closure);
@@ -795,10 +832,16 @@ pub(crate) fn collect(
                 .map_err(|error| crate::global_access::at_path(error, file.path()))?;
         for ast in model.get_root().descendants::<LuaAst>() {
             checkpoint(stop)?;
-            visit(&mut visits, limits.max_ast_visits())?;
+            visit(&mut visits, limits.max_ast_visits())
+                .map_err(|error| crate::global_access::at_path(error, file.path()))?;
             if let LuaAst::LuaNameExpr(name) = &ast {
                 if global_accesses.len() as u128 >= u128::from(limits.max_global_accesses()) {
-                    return Err(budget());
+                    return Err(resource_budget(
+                        "global-access candidates",
+                        global_accesses.len() as u128 + 1,
+                        limits.max_global_accesses(),
+                        Some(file.path()),
+                    ));
                 }
                 if let Some(access) = crate::global_access::collect_one(
                     &model,
@@ -818,7 +861,12 @@ pub(crate) fn collect(
                 continue;
             };
             if calls.len() as u128 >= u128::from(limits.max_calls()) {
-                return Err(budget());
+                return Err(resource_budget(
+                    "calls",
+                    calls.len() as u128 + 1,
+                    limits.max_calls(),
+                    Some(file.path()),
+                ));
             }
             let prefix = call.get_prefix_expr().ok_or_else(invalid)?;
             let call_span = ast_span(file, call.get_range())?;
@@ -863,7 +911,12 @@ pub(crate) fn collect(
                 .transpose()?
                 .unwrap_or_default();
             if arguments.len() > MAX_CALL_ARGUMENTS {
-                return Err(budget());
+                return Err(resource_budget(
+                    "call arguments",
+                    arguments.len() as u128,
+                    MAX_CALL_ARGUMENTS as u64,
+                    Some(file.path()),
+                ));
             }
             let colon_call = call.is_colon_call();
             let fact_id = canonical_id(
@@ -953,7 +1006,12 @@ pub(crate) fn collect(
     let mut named_targets = BTreeMap::new();
     for (query, signature) in callable_signatures {
         if named_targets.len() as u128 >= u128::from(limits.max_named_targets()) {
-            return Err(budget());
+            return Err(resource_budget(
+                "named targets",
+                named_targets.len() as u128 + 1,
+                limits.max_named_targets(),
+                None,
+            ));
         }
         checkpoint(stop)?;
         let target = match signatures.get(signature) {
@@ -995,9 +1053,11 @@ pub(crate) fn collect(
     struct Count {
         used: u64,
         limit: u64,
+        attempted: u128,
     }
     impl std::io::Write for Count {
         fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            self.attempted = u128::from(self.used) + bytes.len() as u128;
             let length = u64::try_from(bytes.len())
                 .map_err(|_| std::io::Error::other("function-call report limit"))?;
             let next = self
@@ -1014,14 +1074,26 @@ pub(crate) fn collect(
             Ok(())
         }
     }
-    serde_json::to_writer(
-        Count {
-            used: 128,
-            limit: limits.max_report_bytes(),
-        },
-        &report,
-    )
-    .map_err(|_| budget())?;
+    let mut count = Count {
+        used: 128,
+        limit: limits.max_report_bytes(),
+        attempted: 128,
+    };
+    serde_json::to_writer(&mut count, &report).map_err(|_| {
+        EmmyMemberCallError::new(
+            EmmyMemberCallErrorCode::FactBudgetExceeded,
+            format!(
+                "function-call report bytes budget exceeded: observed {}, limit {}; functions {}, calls {}, global accesses {}, named targets {}",
+                count.attempted,
+                count.limit,
+                report.functions.len(),
+                report.calls.len(),
+                report.global_accesses.len(),
+                report.named_targets.len(),
+            ),
+            None,
+        )
+    })?;
     checkpoint(stop)?;
     report.analysis_id = report.identity()?;
     report.validate()?;

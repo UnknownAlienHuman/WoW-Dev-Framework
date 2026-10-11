@@ -176,6 +176,12 @@ lexical root or a sole registered global root. Environment/literal/dynamic-index
 local-shadow/alias, explicit-root and ambiguous-root cases pass; unavailable
 roots stay unresolved and arbitrary name mismatches still refuse. No budget or
 serialization recipe changes accompany this source-cell correction.
+Its next unchanged complete request reached a generic function-sidecar budget
+refusal. Collection refusals now identify the resource, attempted count, ceiling
+and logical path; bounded output refusal also reports the collected populations.
+Existing native count/output and successful-wire cases pass. Admission predicates,
+capacities, the output identity reserve and successful identity recipes remain.
+The actual complete request and remaining census/fit evidence belong in #113.
 The native error handoff retains actual member causes through session,
 Project/backend and CLI stderr while excluding explanatory text from graph wire,
 digest and records. Focused native budget/cause and cancellation cases pass;
