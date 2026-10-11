@@ -48,7 +48,7 @@ full-platform negative authority.
 actually empty Library snapshot. It inserts no dummy Lua or generated annotation
 and does not establish annotation or external Library completeness.
 
-For all three currently available capabilities, `graph_profile` is:
+For the inventory, structural-role and XML-map capabilities, `graph_profile` is:
 
 ```json
 {
@@ -64,6 +64,25 @@ The [capability contract](../../docs/PLATFORM_GRAPH_CAPABILITIES.md) defines
 independent versions, canonical ordering and dependencies. Invalid sets refuse
 without expansion. Fixture profile, Interface, revision and analyzer identities
 are test inputs, never permanent product defaults.
+
+To add reviewed static XML classification, include
+`xml_schema_classification_v1` in that exact capability set and provide
+`xml_schema_classification: {"schema_selection": ..., "profile_selection": ...}`.
+Both fields are strict native-owner selections. The schema selection names exact
+manifested XSD members; the classification selection binds their admitted catalog
+and source identities plus reviewed component anchors. Derive those anchors
+through the schema owner described in
+[the classification contract](../../crates/wow-project/e3/XML_SCHEMA_CLASSIFICATION.md).
+Names, decoded receipts and an arbitrary type table cannot supply authority.
+Capability without the reviewed owner, owner without the capability, explicit
+null and mismatched source/catalog/profile identities refuse.
+
+The same `wow graph build` route emits the selected classification result schema.
+Native namespaced persistence additionally requires
+`PlatformStoreSelection::with_xml_classification_catalog()` on the exact selection;
+this chooses the registered classification catalog for create/open/publication.
+An ordinary epoch is not upgraded implicitly. The selector is catalog intent;
+publication still validates the genuine source-bound configuration and replay.
 
 ## Native authority and bounds
 

@@ -113,6 +113,8 @@ pub enum GraphRelationKind {
     Instantiates,
     FactoryCreates,
     UsesApi,
+    /// Selected static schema classification, never runtime class/instance proof.
+    HasSchemaClass,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]

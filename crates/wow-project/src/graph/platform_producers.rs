@@ -45,7 +45,8 @@ impl DirectRecipe {
                                 | PlatformGraphProducer::TocLoad
                                 | PlatformGraphProducer::XmlStructure
                         ),
-                        crate::PlatformGraphCapability::XmlSourceMapsV1 => matches!(
+                        crate::PlatformGraphCapability::XmlSourceMapsV1
+                        | crate::PlatformGraphCapability::XmlSchemaClassificationV1 => matches!(
                             producer,
                             PlatformGraphProducer::Inventory | PlatformGraphProducer::XmlStructure
                         ),
@@ -67,6 +68,9 @@ impl DirectRecipe {
     }
     pub(super) const fn xml_source_maps(self) -> bool {
         matches!(self, Self::Capabilities(capabilities) if capabilities.contains(crate::PlatformGraphCapability::XmlSourceMapsV1))
+    }
+    pub(super) const fn xml_schema_classification(self) -> bool {
+        matches!(self, Self::Capabilities(capabilities) if capabilities.contains(crate::PlatformGraphCapability::XmlSchemaClassificationV1))
     }
 }
 const ORDER: [PlatformGraphProducer; 4] = [
@@ -121,6 +125,7 @@ pub struct PlatformGraphProvenance<'a> {
     xml_source_maps: Option<XmlSourceMapSummary>,
     project: &'a ProjectView,
     graph: &'a GraphPartitionSnapshot,
+    xml_classification_membership: Option<xml_classification::XmlClassificationMembership>,
     scope: GraphAssertionRecordScope,
     source: ProjectGraphProvenance,
     addresses: BTreeMap<GraphLocalAssertion, GraphAssertionRef>,
@@ -167,9 +172,23 @@ impl PlatformGraphProvenance<'_> {
     pub fn into_source(self) -> ProjectGraphProvenance {
         self.source
     }
+    /// Move the descriptive admission handoff after all native consumers finish.
+    #[must_use]
+    pub fn into_source_and_xml_classification_membership(
+        self,
+    ) -> (ProjectGraphProvenance, Option<XmlClassificationMembership>) {
+        (self.source, self.xml_classification_membership)
+    }
     #[must_use]
     pub fn assertion(&self, assertion: &GraphLocalAssertion) -> Option<&GraphAssertionRef> {
         self.addresses.get(assertion)
+    }
+    #[must_use]
+    pub fn xml_classification_inclusion(&self) -> Option<XmlClassificationInclusionManifest<'_>> {
+        Some(XmlClassificationInclusionManifest::new(
+            self.source.xml_classification()?,
+            self.xml_classification_membership.as_ref()?,
+        ))
     }
     #[must_use]
     pub const fn evidence_catalog(&self) -> &GraphEvidenceCatalog {
@@ -246,7 +265,7 @@ fn build_plan<'a>(
     }
     let mut collected =
         collect_source_graph_proposals_for_recipe(project, recipe, stop, diagnostics)?;
-    if recipe.xml_source_maps() {
+    if recipe.xml_source_maps() || recipe.xml_schema_classification() {
         if collected.provenance.profile != source_graph_profile(config) {
             return Err(invalid());
         }
@@ -294,6 +313,19 @@ fn build_plan<'a>(
                     budget,
                     stop,
                 )?)
+            } else {
+                None
+            };
+            let prepared_classification = if recipe.xml_schema_classification() {
+                let reviewed = config.xml_classification_profile().ok_or_else(invalid)?;
+                let prepared = xml_classification::prepare(
+                    project,
+                    &collected.provenance,
+                    reviewed,
+                    budget,
+                    stop,
+                )?;
+                Some(prepared)
             } else {
                 None
             };
@@ -372,6 +404,32 @@ fn build_plan<'a>(
                     budget,
                     stop,
                 )?;
+                if let Some(prepared) = prepared_classification {
+                    collected.provenance.xml_classification = Some(xml_classification::append(
+                        project,
+                        &collected.provenance,
+                        prepared,
+                        &mut collected.entities,
+                        &mut collected.relations,
+                        budget,
+                        stop,
+                    )?);
+                    let coverage = GraphCoverageRecord::new(
+                        GraphRelationKind::HasSchemaClass,
+                        GraphCoverageState::Partial,
+                        false,
+                        vec![
+                            "source_graph.selected_schema_policy_only".into(),
+                            "source_graph.schema_unknown_conflict_and_catalog_issues_retained"
+                                .into(),
+                            "source_graph.runtime_class_not_evaluated".into(),
+                        ],
+                        collected.limits,
+                    )
+                    .map_err(graph_error)?;
+                    budget.charge_serialized(&coverage, stop)?;
+                    collected.coverage.push(coverage);
+                }
                 if let Some(prepared) = prepared_maps {
                     xml_source_maps = Some(xml_source_maps::append(
                         project,
@@ -1042,6 +1100,12 @@ impl<'a> PlatformGraphProposalPlan<'a> {
                 stop,
             )
         })?;
+        let xml_classification_membership = match self.collected.provenance.xml_classification() {
+            Some(report) => Some(capture_scratch(observation, &mut budget, |budget| {
+                xml_classification::membership(report, owner, &self.scope, &addresses, budget, stop)
+            })?),
+            None => None,
+        };
         crate::analyzer::checkpoint(stop)?;
         Ok(PlatformGraphProvenance {
             recipe: self.recipe,
@@ -1049,6 +1113,7 @@ impl<'a> PlatformGraphProposalPlan<'a> {
             xml_source_maps: self.xml_source_maps,
             project: self.project,
             graph: owner,
+            xml_classification_membership,
             scope: self.scope,
             source: self.collected.provenance,
             addresses,
@@ -1122,6 +1187,7 @@ fn entity_permission(recipe: DirectRecipe, producer: PlatformGraphProducer, kind
         ),
         PlatformGraphProducer::XmlStructure => {
             matches!(kind, "xml_source_declaration" | "xml_source_handler")
+                || (recipe.xml_schema_classification() && kind == xml_classification::CLASS_KIND)
                 || (recipe.structural_roles()
                     && matches!(
                         kind,
@@ -1192,6 +1258,8 @@ fn relation_permission(recipe: DirectRecipe, producer: PlatformGraphProducer, ki
                         | "xml_external_script_target"
                         | "xml_occurrence_owns_parent_reference"
                 ))
+                || (recipe.xml_schema_classification()
+                    && kind == xml_classification::CLASSIFICATION_RELATION)
                 || (recipe.xml_source_maps()
                     && matches!(
                         kind,

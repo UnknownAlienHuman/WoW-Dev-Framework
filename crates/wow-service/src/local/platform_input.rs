@@ -7,9 +7,19 @@ use wow_project::{
     PlatformGraphProfile, ProjectBudgetPolicy, ProjectFileRole, ProjectId, ProjectSourceOriginId,
     ProjectWorkspaceId,
     disk::{ManifestedPlatformInput, ProjectDiskFile, ProjectInputDirectory},
-    load::{ProjectPackageInput, TocLoadContext},
+    load::{
+        ProjectPackageInput, TocLoadContext,
+        schema::{
+            XmlSchemaSelection, admit_xml_schema,
+            classification::{
+                ReviewedXmlClassificationProfile, XmlClassificationProfileSelection,
+                admit_xml_classification_profile,
+            },
+        },
+    },
     platform_source::{
-        BlizzardUiSourceProfile, BlizzardUiSourceProfileRequest, PlatformPackageRetentionLimits,
+        AdmittedPlatformSource, BlizzardUiSourceProfile, BlizzardUiSourceProfileRequest,
+        PlatformPackageRetentionLimits,
     },
 };
 use wow_reference::ReferenceView;
@@ -54,8 +64,31 @@ struct PlatformInput {
     #[serde(default)]
     load_context: Option<TocLoadContext>,
     graph_profile: PlatformGraphProfile,
+    #[serde(default, deserialize_with = "present")]
+    xml_schema_classification: Option<XmlClassificationInput>,
     #[serde(default)]
     library: Option<DiskInventory>,
+}
+
+/// Explicit intent only: neither decoded field reconstructs a native owner.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct XmlClassificationInput {
+    schema_selection: XmlSchemaSelection,
+    profile_selection: XmlClassificationProfileSelection,
+}
+impl XmlClassificationInput {
+    fn admit(
+        self,
+        source: &Arc<AdmittedPlatformSource>,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Arc<ReviewedXmlClassificationProfile>> {
+        let catalog = Arc::new(
+            admit_xml_schema(source, &self.schema_selection, stop).map_err(acquisition_error)?,
+        );
+        admit_xml_classification_profile(&catalog, source.as_ref(), &self.profile_selection, stop)
+            .map_err(acquisition_error)
+    }
 }
 
 #[derive(Deserialize)]
@@ -162,6 +195,12 @@ impl LocalProjectInput {
                 .into_parts()
                 .0,
         );
+        // Admit against the exact held source before configuration/generation.
+        // Capability/binding equality remains the configuration owner's gate.
+        let xml_schema_classification = input
+            .xml_schema_classification
+            .map(|selection| selection.admit(&source, stop))
+            .transpose()?;
         let packages = Arc::new(
             match input.retained_package_limits {
                 Some(limits) => source.specialize_packages_with_retention(
@@ -210,7 +249,9 @@ impl LocalProjectInput {
                 packages,
                 graph_profile: input.graph_profile,
                 budgets: input.project_budgets,
+                xml_schema_classification,
             }),
+            stop,
         )
     }
 }

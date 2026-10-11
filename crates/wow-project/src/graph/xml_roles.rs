@@ -787,7 +787,7 @@ fn load_target<'a>(
     Ok((LoadOutcome::Projected, Some(*file)))
 }
 
-fn role_name(role: XmlElementRole) -> &'static str {
+pub(super) fn role_name(role: XmlElementRole) -> &'static str {
     match role {
         XmlElementRole::Ui => "ui",
         XmlElementRole::Include => "include",

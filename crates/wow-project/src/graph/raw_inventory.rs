@@ -460,7 +460,16 @@ fn expected(
             "native raw graph selection is required for raw byte binding",
         ));
     }
-    let registry = registry(config.project_kind(), true)?;
+    let registry = match config.platform_graph_profile() {
+        Some(crate::PlatformGraphProfile::DirectCapabilitiesV1(capabilities)) => {
+            registry_for_recipe(
+                config.project_kind(),
+                true,
+                DirectRecipe::Capabilities(capabilities),
+            )?
+        }
+        _ => registry(config.project_kind(), true)?,
+    };
     if graph.registry() != &registry
         || graph.source_context_id() != project.snapshot().generation_context().context_id()
     {

@@ -265,6 +265,11 @@ impl EpochManifest {
             security_limit_digest: Some(security_limit_digest),
         })
     }
+    /// Exact registered catalog already bound into this immutable epoch identity.
+    #[must_use]
+    pub const fn catalog(&self) -> &RecordCatalog {
+        &self.catalog
+    }
     pub fn epoch_id(&self) -> &EpochId {
         &self.epoch_id
     }

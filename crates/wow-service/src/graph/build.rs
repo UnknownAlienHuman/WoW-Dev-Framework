@@ -7,10 +7,11 @@ use crate::{
 };
 use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
+use wow_core::{CanonicalResult, ContentDigest};
 use wow_graph::{GraphPartitionReplacement, GraphPartitionSnapshot, GraphSnapshot};
 use wow_project::graph::{
     ProjectGraphPackageDependencyOutcome, ProjectGraphPackageLoadOutcome, ProjectGraphProvenance,
-    SOURCE_GRAPH_PROFILE, SourceGraphDiagnostics,
+    SOURCE_GRAPH_PROFILE, SourceGraphDiagnostics, XmlClassificationMembership,
 };
 
 mod assembly_budget;
@@ -54,10 +55,15 @@ const PACKAGE_GRAPH_BUILD_RESULT_SCHEMA: &str = "wow-service/graph-build-result/
 const PACKAGE_RAW_GRAPH_BUILD_RESULT_SCHEMA: &str = "wow-service/graph-build-result/18";
 const DIRECT_PLATFORM_GRAPH_BUILD_RESULT_SCHEMA: &str = "wow-service/graph-build-result/19";
 const CAPABILITIES_GRAPH_BUILD_RESULT_SCHEMA: &str = "wow-service/graph-build-result/20";
+const XML_CLASSIFICATION_GRAPH_BUILD_REQUEST_SCHEMA: &str =
+    "wow-service/graph-build-request/xml-schema-classification/1";
+const XML_CLASSIFICATION_GRAPH_BUILD_RESULT_SCHEMA: &str =
+    "wow-service/graph-build-result/xml-schema-classification/1";
 
 struct BuiltGraph {
     snapshot: GraphPartitionSnapshot,
     provenance: ProjectGraphProvenance,
+    xml_classification_membership: Option<XmlClassificationMembership>,
     call_recognition: SourceCallRecognition,
     construction_recognition: SourceConstructionRecognition,
     mixin_recognition: SourceMixinRecognition,
@@ -110,6 +116,8 @@ pub struct GraphBuildRequest {
     projection: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     capabilities: Option<wow_project::PlatformGraphCapabilities>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    xml_classification_profile_digest: Option<ContentDigest<CanonicalResult>>,
 }
 impl GraphBuildRequest {
     pub fn new(project_id: String, generation: String) -> ServiceResult<Self> {
@@ -129,6 +137,7 @@ impl GraphBuildRequest {
             selector,
             projection: SOURCE_GRAPH_PROFILE,
             capabilities: None,
+            xml_classification_profile_digest: None,
         })
     }
 
@@ -140,6 +149,7 @@ impl GraphBuildRequest {
         profile: wow_project::PlatformGraphProfile,
     ) -> Self {
         self.capabilities = None;
+        self.xml_classification_profile_digest = None;
         match profile {
             wow_project::PlatformGraphProfile::PackageProjectionV1 => {
                 self.schema = "wow-service/graph-build-request/10";
@@ -167,14 +177,19 @@ impl GraphBuildRequest {
     /// admission; execution never changes their selected capabilities.
     #[must_use]
     pub fn with_input_profile(self, input: &LocalProjectInput) -> Self {
-        match input
-            .project_bundle()
-            .configuration()
-            .platform_graph_profile()
-        {
+        let configuration = input.project_bundle().configuration();
+        let mut request = match configuration.platform_graph_profile() {
             Some(profile) => self.with_platform_graph_profile(profile),
             None => self,
+        };
+        request.xml_classification_profile_digest = configuration
+            .xml_classification_profile()
+            .map(|profile| profile.digest());
+        if request.xml_classification_profile_digest.is_some() {
+            // A reviewed binding selects its named request recipe.
+            request.schema = XML_CLASSIFICATION_GRAPH_BUILD_REQUEST_SCHEMA;
         }
+        request
     }
 
     pub(crate) fn acquire_project(
@@ -197,6 +212,13 @@ impl GraphBuildRequest {
             _ => None,
         };
         if self.capabilities != selected {
+            return Err(error(ServiceErrorCode::IdentityMismatch));
+        }
+        let classification_digest = project
+            .configuration()
+            .xml_classification_profile()
+            .map(|profile| profile.digest());
+        if self.xml_classification_profile_digest != classification_digest {
             return Err(error(ServiceErrorCode::IdentityMismatch));
         }
         Ok(project)
@@ -346,6 +368,8 @@ pub struct GraphBuildResult {
     #[serde(skip_serializing_if = "Option::is_none")]
     provenance: Option<ProjectGraphProvenance>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    xml_classification_membership: Option<XmlClassificationMembership>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     call_recognition: Option<SourceCallRecognition>,
     #[serde(skip_serializing_if = "Option::is_none")]
     construction_recognition: Option<SourceConstructionRecognition>,
@@ -440,6 +464,7 @@ impl GraphBuildResult {
         self.snapshot = None;
         self.snapshot_input_digest = None;
         self.provenance = None;
+        self.xml_classification_membership = None;
         self.failure = Some(code);
         self.status = if code == ServiceErrorCode::Cancelled {
             GraphReadStatus::Cancelled
@@ -490,7 +515,9 @@ pub fn execute_graph_build_diagnosed(
     diagnostics.reset();
     let request_digest = super::hash(&bounded(request, super::GRAPH_REQUEST_MAX_BYTES)?);
     let mut result = GraphBuildResult {
-        schema: if request.projection == wow_project::graph::CAPABILITIES_SOURCE_GRAPH_PROFILE {
+        schema: if request.xml_classification_profile_digest.is_some() {
+            XML_CLASSIFICATION_GRAPH_BUILD_RESULT_SCHEMA
+        } else if request.projection == wow_project::graph::CAPABILITIES_SOURCE_GRAPH_PROFILE {
             CAPABILITIES_GRAPH_BUILD_RESULT_SCHEMA
         } else if request.projection == wow_project::graph::DIRECT_PLATFORM_SOURCE_GRAPH_PROFILE {
             DIRECT_PLATFORM_GRAPH_BUILD_RESULT_SCHEMA
@@ -550,6 +577,7 @@ pub fn execute_graph_build_diagnosed(
         snapshot: None,
         snapshot_input_digest: None,
         provenance: None,
+        xml_classification_membership: None,
         failure: None,
         failure_error: None,
         result_digest: None,
@@ -580,6 +608,7 @@ pub fn execute_graph_build_diagnosed(
         Ok(BuiltGraph {
             snapshot,
             provenance,
+            xml_classification_membership,
             digest,
             file_nodes,
             package_nodes,
@@ -670,6 +699,7 @@ pub fn execute_graph_build_diagnosed(
             result.script_edges = script_edges;
             result.snapshot = Some(snapshot);
             result.provenance = Some(provenance);
+            result.xml_classification_membership = xml_classification_membership;
             result.snapshot_input_digest = Some(digest);
         }
         Err(failure) => result.fail_with_error(failure),
@@ -799,6 +829,16 @@ fn compose_backend_diagnosed(
         _ => return Err(error(ServiceErrorCode::InternalContractViolation)),
     };
     addresses.reserve("request", request, stop)?;
+    if let Some(inclusion) = direct
+        .as_ref()
+        .and_then(|owner| owner.xml_classification_inclusion())
+    {
+        addresses.reserve(
+            "xml_classification_membership",
+            inclusion.membership(),
+            stop,
+        )?;
+    }
     let provenance = addresses.source();
     let (calls_snapshot, call_recognition) =
         calls::publish(&source_owner, &addresses, stop).map_err(|e| stage_error("calls", e))?;
@@ -1059,14 +1099,14 @@ fn compose_backend_diagnosed(
         ));
     }
     checkpoint(stop)?;
-    let provenance = if let Some(value) = legacy_provenance {
-        value
+    let (provenance, xml_classification_membership) = if let Some(value) = legacy_provenance {
+        (value, None)
     } else {
         // Both report reservations remain charged before recognizers.
         // All crosswalk consumers have completed; move the held source report.
         let value = direct
             .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?
-            .into_source();
+            .into_source_and_xml_classification_membership();
         checkpoint(stop)?;
         value
     };
@@ -1075,6 +1115,7 @@ fn compose_backend_diagnosed(
     Ok(BuiltGraph {
         snapshot,
         provenance,
+        xml_classification_membership,
         digest,
         file_nodes,
         package_nodes,

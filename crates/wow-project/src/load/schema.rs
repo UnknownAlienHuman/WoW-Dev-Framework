@@ -1,6 +1,7 @@
 //! Explicit same-source XSD component admission through the existing XML owner.
 //! The capability records source structure, not XSD instance or runtime validity.
 mod budget;
+pub mod classification;
 mod components;
 mod model;
 mod names;

@@ -8,6 +8,7 @@ pub enum PlatformGraphCapability {
     InventorySpansV1,
     StructuralRolesV1,
     XmlSourceMapsV1,
+    XmlSchemaClassificationV1,
 }
 impl PlatformGraphCapability {
     #[must_use]
@@ -16,6 +17,7 @@ impl PlatformGraphCapability {
             Self::InventorySpansV1 => "inventory_spans_v1",
             Self::StructuralRolesV1 => "structural_roles_v1",
             Self::XmlSourceMapsV1 => "xml_source_maps_v1",
+            Self::XmlSchemaClassificationV1 => "xml_schema_classification_v1",
         }
     }
     #[must_use]
@@ -23,7 +25,9 @@ impl PlatformGraphCapability {
         match self {
             Self::InventorySpansV1 => &[],
             Self::StructuralRolesV1 => &[Self::InventorySpansV1],
-            Self::XmlSourceMapsV1 => &[Self::InventorySpansV1, Self::StructuralRolesV1],
+            Self::XmlSourceMapsV1 | Self::XmlSchemaClassificationV1 => {
+                &[Self::InventorySpansV1, Self::StructuralRolesV1]
+            }
         }
     }
 }
@@ -34,6 +38,7 @@ pub struct PlatformGraphCapabilities {
     inventory_spans: bool,
     structural_roles: bool,
     xml_source_maps: bool,
+    xml_schema_classification: bool,
 }
 impl PlatformGraphCapabilities {
     pub fn new(capabilities: &[PlatformGraphCapability]) -> ProjectResult<Self> {
@@ -44,7 +49,7 @@ impl PlatformGraphCapabilities {
                 "graph capability selection contains duplicate or missing dependencies",
             )
         };
-        if capabilities.len() > 3 {
+        if capabilities.len() > 4 {
             return Err(invalid());
         }
         let mut selected = Self::default();
@@ -56,6 +61,9 @@ impl PlatformGraphCapabilities {
                 PlatformGraphCapability::InventorySpansV1 => selected.inventory_spans = true,
                 PlatformGraphCapability::StructuralRolesV1 => selected.structural_roles = true,
                 PlatformGraphCapability::XmlSourceMapsV1 => selected.xml_source_maps = true,
+                PlatformGraphCapability::XmlSchemaClassificationV1 => {
+                    selected.xml_schema_classification = true;
+                }
             }
         }
         for &capability in capabilities {
@@ -75,6 +83,7 @@ impl PlatformGraphCapabilities {
             PlatformGraphCapability::InventorySpansV1 => self.inventory_spans,
             PlatformGraphCapability::StructuralRolesV1 => self.structural_roles,
             PlatformGraphCapability::XmlSourceMapsV1 => self.xml_source_maps,
+            PlatformGraphCapability::XmlSchemaClassificationV1 => self.xml_schema_classification,
         }
     }
     pub fn iter(self) -> impl Iterator<Item = PlatformGraphCapability> {
@@ -82,6 +91,7 @@ impl PlatformGraphCapabilities {
             PlatformGraphCapability::InventorySpansV1,
             PlatformGraphCapability::StructuralRolesV1,
             PlatformGraphCapability::XmlSourceMapsV1,
+            PlatformGraphCapability::XmlSchemaClassificationV1,
         ]
         .into_iter()
         .filter(move |&capability| self.contains(capability))
@@ -109,15 +119,15 @@ impl<'de> Deserialize<'de> for PlatformGraphCapabilities {
             type Value = PlatformGraphCapabilities;
             fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 formatter
-                    .write_str("at most three distinct graph capabilities with exact dependencies")
+                    .write_str("at most four distinct graph capabilities with exact dependencies")
             }
             fn visit_seq<A: serde::de::SeqAccess<'de>>(
                 self,
                 mut sequence: A,
             ) -> Result<Self::Value, A::Error> {
-                let mut capabilities = Vec::with_capacity(3);
+                let mut capabilities = Vec::with_capacity(4);
                 while let Some(capability) = sequence.next_element::<PlatformGraphCapability>()? {
-                    if capabilities.len() == 3 {
+                    if capabilities.len() == 4 {
                         return Err(serde::de::Error::custom("graph capability count exceeded"));
                     }
                     capabilities.push(capability);

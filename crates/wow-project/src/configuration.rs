@@ -18,9 +18,11 @@ use crate::{
 
 mod graph_capabilities;
 mod platform;
+mod xml_classification;
 use crate::platform_source::{PlatformPackageBinding, PlatformPackageSpecialization};
 pub use graph_capabilities::{PlatformGraphCapabilities, PlatformGraphCapability};
 use platform::RetainedPlatformPackages;
+use xml_classification::RetainedXmlClassification;
 
 pub const PROJECT_CONFIGURATION_SCHEMA_VERSION: u64 = 1;
 /// Frozen legacy receipt recipe. New publication selects generation v2 explicitly.
@@ -534,6 +536,8 @@ pub struct ProjectConfiguration {
     package_xml_binding_profile: Option<PackageXmlBindingProfile>,
     #[serde(skip_serializing_if = "Option::is_none")]
     platform_graph_profile: Option<PlatformGraphProfile>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    xml_schema_classification: Option<RetainedXmlClassification>,
 }
 
 impl ProjectConfiguration {
@@ -654,6 +658,17 @@ impl ProjectConfiguration {
         {
             return Err(platform::invalid());
         }
+        let classification_selected = matches!(
+            self.platform_graph_profile,
+            Some(PlatformGraphProfile::DirectCapabilitiesV1(capabilities))
+                if capabilities.contains(PlatformGraphCapability::XmlSchemaClassificationV1)
+        );
+        if classification_selected != self.xml_schema_classification.is_some() {
+            return Err(platform::invalid());
+        }
+        if let Some(classification) = &self.xml_schema_classification {
+            classification.validate(self.platform_packages().ok_or_else(platform::invalid)?)?;
+        }
         if self.configuration_schema_version != PROJECT_CONFIGURATION_SCHEMA_VERSION {
             return Err(ProjectError::new(
                 ProjectErrorCode::InvalidConfiguration,
@@ -694,6 +709,7 @@ impl ProjectConfiguration {
             self.platform_package_binding_digest,
             self.package_xml_binding_profile,
             self.platform_graph_profile,
+            self.xml_schema_classification.as_ref(),
         )?;
         if expected != self.configuration_digest {
             return Err(ProjectError::new(
@@ -815,6 +831,16 @@ impl ProjectConfiguration {
         self.platform_graph_profile
     }
 
+    /// Sealed same-source classification owner, never reconstructed from receipt JSON.
+    #[must_use]
+    pub fn xml_classification_profile(
+        &self,
+    ) -> Option<&Arc<crate::load::schema::classification::ReviewedXmlClassificationProfile>> {
+        self.xml_schema_classification
+            .as_ref()
+            .map(RetainedXmlClassification::owner)
+    }
+
     #[must_use]
     pub const fn configuration_digest(&self) -> ContentDigest<CanonicalResult> {
         self.configuration_digest
@@ -843,6 +869,7 @@ pub struct ProjectConfigurationBuilder {
     retained_platform_packages: Option<RetainedPlatformPackages>,
     package_xml_binding_profile: Option<PackageXmlBindingProfile>,
     platform_graph_profile: Option<PlatformGraphProfile>,
+    xml_schema_classification: Option<RetainedXmlClassification>,
 }
 
 impl ProjectConfigurationBuilder {
@@ -874,6 +901,7 @@ impl ProjectConfigurationBuilder {
             retained_platform_packages: None,
             package_xml_binding_profile: None,
             platform_graph_profile: None,
+            xml_schema_classification: None,
         }
     }
 
@@ -921,6 +949,30 @@ impl ProjectConfigurationBuilder {
     pub const fn with_platform_graph_profile(mut self, profile: PlatformGraphProfile) -> Self {
         self.platform_graph_profile = Some(profile);
         self
+    }
+
+    /// Retain an already reviewed classifier on the genuine held package source.
+    /// The matching capability must be explicitly selected when building.
+    pub fn with_xml_classification(
+        mut self,
+        profile: Arc<crate::load::schema::classification::ReviewedXmlClassificationProfile>,
+        stop: &std::sync::atomic::AtomicBool,
+    ) -> ProjectResult<Self> {
+        let packages = self
+            .retained_platform_packages
+            .as_ref()
+            .ok_or_else(platform::invalid)?
+            .owner();
+        let retained = RetainedXmlClassification::new(profile, packages, stop)?;
+        if self
+            .xml_schema_classification
+            .as_ref()
+            .is_some_and(|held| held != &retained)
+        {
+            return Err(platform::invalid());
+        }
+        self.xml_schema_classification = Some(retained);
+        Ok(self)
     }
 
     /// Bind the actual selected TOC/XML receipt without changing E0 identities.
@@ -1047,6 +1099,7 @@ impl ProjectConfigurationBuilder {
             platform_package_binding_digest,
             self.package_xml_binding_profile,
             self.platform_graph_profile,
+            self.xml_schema_classification.as_ref(),
         )?;
         let configuration = ProjectConfiguration {
             project_id: self.project_id,
@@ -1071,6 +1124,7 @@ impl ProjectConfigurationBuilder {
             retained_platform_packages: self.retained_platform_packages,
             package_xml_binding_profile: self.package_xml_binding_profile,
             platform_graph_profile: self.platform_graph_profile,
+            xml_schema_classification: self.xml_schema_classification,
         };
         configuration.validate()?;
         Ok(configuration)
@@ -1095,6 +1149,7 @@ fn configuration_digest(
     platform_package_binding_digest: Option<ContentDigest<CanonicalResult>>,
     package_xml_binding_profile: Option<PackageXmlBindingProfile>,
     platform_graph_profile: Option<PlatformGraphProfile>,
+    xml_schema_classification: Option<&RetainedXmlClassification>,
 ) -> ProjectResult<ContentDigest<CanonicalResult>> {
     #[derive(Serialize)]
     struct Identity<'a> {
@@ -1125,6 +1180,8 @@ fn configuration_digest(
         package_xml_binding_profile: Option<PackageXmlBindingProfile>,
         #[serde(skip_serializing_if = "Option::is_none")]
         platform_graph_profile: Option<PlatformGraphProfile>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        xml_schema_classification: Option<&'a RetainedXmlClassification>,
     }
     canonical_digest(
         "wow-project/configuration/e0-d/1",
@@ -1149,6 +1206,7 @@ fn configuration_digest(
             platform_package_binding_digest,
             package_xml_binding_profile,
             platform_graph_profile,
+            xml_schema_classification,
         },
         ProjectPhase::Configuration,
     )

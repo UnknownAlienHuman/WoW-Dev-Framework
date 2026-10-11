@@ -250,6 +250,7 @@ pub fn publish_input_in_namespace(
 ) -> ServiceResult<LiveProjectResult> {
     super::publication_checkpoint(stop)?;
     selection.validate()?;
+    selection.require_configuration(input.project_bundle().configuration())?;
     let existing = if request.initialize {
         None
     } else {

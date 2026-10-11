@@ -45,6 +45,9 @@ pub(super) struct PlatformAssembly {
         std::sync::Arc<wow_project::platform_source::PlatformPackageSpecialization>,
     pub(super) graph_profile: wow_project::PlatformGraphProfile,
     pub(super) budgets: Option<ProjectBudgetPolicy>,
+    pub(super) xml_schema_classification: Option<
+        std::sync::Arc<wow_project::load::schema::classification::ReviewedXmlClassificationProfile>,
+    >,
 }
 
 #[derive(Clone, Copy)]
@@ -218,7 +221,15 @@ impl LocalProjectInput {
         libraries: Vec<ProjectInputFile>,
         load: LocalProjectLoad,
     ) -> ServiceResult<Self> {
-        Self::assemble_with_platform(input, reference, main, libraries, load, None)
+        Self::assemble_with_platform(
+            input,
+            reference,
+            main,
+            libraries,
+            load,
+            None,
+            &std::sync::atomic::AtomicBool::new(false),
+        )
     }
 
     pub(super) fn assemble_with_platform(
@@ -228,6 +239,7 @@ impl LocalProjectInput {
         libraries: Vec<ProjectInputFile>,
         load: LocalProjectLoad,
         platform: Option<PlatformAssembly>,
+        stop: &std::sync::atomic::AtomicBool,
     ) -> ServiceResult<Self> {
         match &load {
             LocalProjectLoad::Explicit => {}
@@ -339,11 +351,17 @@ impl LocalProjectInput {
                 .map_err(|_| invalid("package load plan target mismatch"))?,
         };
         let configuration = if let Some(platform) = platform {
-            configuration
+            let configuration = configuration
                 .platform_packages(platform.packages)
                 .map_err(|_| invalid("platform package target mismatch"))?
                 .with_package_xml_bindings(wow_project::PackageXmlBindingProfile::SameSessionV1)
-                .with_platform_graph_profile(platform.graph_profile)
+                .with_platform_graph_profile(platform.graph_profile);
+            match platform.xml_schema_classification {
+                Some(profile) => configuration
+                    .with_xml_classification(profile, stop)
+                    .map_err(super::disk_input::acquisition_error)?,
+                None => configuration,
+            }
         } else {
             configuration
         };

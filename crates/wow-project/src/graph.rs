@@ -28,7 +28,15 @@ pub use platform_producers::{
 mod projection;
 mod structural_registry;
 mod toc_roles;
+mod xml_classification;
 mod xml_roles;
+pub use xml_classification::{
+    ProjectScopedXmlClassification, ProjectXmlClassification, ProjectXmlClassificationOccurrence,
+    XmlClassificationCatalogSupport, XmlClassificationCatalogWitness,
+    XmlClassificationInclusionManifest, XmlClassificationMembership,
+    XmlClassificationPartitionIdentity, XmlClassificationProposalDisposition,
+    XmlUnmatchedNameCount,
+};
 mod xml_source_map_registry;
 mod xml_source_maps;
 pub use projection::PlatformGraphProducer;
@@ -221,6 +229,8 @@ pub struct ProjectGraphProvenance {
     package_xml_binding_report: Option<crate::xml_bindings::ProjectPackageXmlLuaBindings>,
     #[serde(skip_serializing_if = "Option::is_none")]
     raw_inventory: Option<ProjectRawInventoryManifest>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    xml_classification: Option<ProjectXmlClassification>,
     source_handles: BTreeMap<StableHandleId, SourceHandle>,
     evidence: BTreeMap<EvidenceId, EvidenceRecord>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -234,6 +244,10 @@ pub struct ProjectGraphProvenance {
 }
 
 impl ProjectGraphProvenance {
+    #[must_use]
+    pub const fn xml_classification(&self) -> Option<&ProjectXmlClassification> {
+        self.xml_classification.as_ref()
+    }
     #[must_use]
     pub fn raw_inventory(&self) -> Option<&ProjectRawInventoryManifest> {
         self.raw_inventory.as_ref()
@@ -793,6 +807,9 @@ fn registry_for_recipe(
     if recipe.xml_source_maps() {
         xml_source_map_registry::extend(&mut entities, &mut relations)?;
     }
+    if recipe.xml_schema_classification() {
+        xml_classification::extend_registry(&mut entities, &mut relations)?;
+    }
     let version = match recipe {
         DirectRecipe::Capabilities(capabilities) => capabilities.version_id(),
         DirectRecipe::Original if raw_inventory => "16".into(),
@@ -1162,6 +1179,7 @@ fn collect_source_graph_proposals_for_recipe(
         xml_binding_report: None,
         package_xml_binding_report: None,
         raw_inventory: None,
+        xml_classification: None,
         source_handles: BTreeMap::new(),
         evidence: BTreeMap::new(),
         load_plan: plan.cloned(),

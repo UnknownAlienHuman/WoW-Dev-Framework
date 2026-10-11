@@ -27,6 +27,18 @@ pub(super) fn records(
         if entity.confidence() == GraphConfidence::Proven {
             continue;
         }
+        let output = GraphLocalAssertion {
+            kind: GraphAssertionKind::Entity,
+            proposal_id: entity.proposal_id().into(),
+        };
+        if let Some(inputs) = provenance
+            .xml_classification()
+            .and_then(|report| report.derivation(&output))
+        {
+            let record = classification_record(output, inputs, addresses, budget, stop)?;
+            records.push(record);
+            continue;
+        }
         let mut inputs = BTreeSet::new();
         for id in entity.source_handle_ids() {
             crate::analyzer::checkpoint(stop)?;
@@ -56,6 +68,18 @@ pub(super) fn records(
     for relation in relations {
         crate::analyzer::checkpoint(stop)?;
         if relation.input.confidence == GraphConfidence::Proven {
+            continue;
+        }
+        let output = GraphLocalAssertion {
+            kind: GraphAssertionKind::Relation,
+            proposal_id: relation.proposal_id.clone(),
+        };
+        if let Some(inputs) = provenance
+            .xml_classification()
+            .and_then(|report| report.derivation(&output))
+        {
+            let record = classification_record(output, inputs, addresses, budget, stop)?;
+            records.push(record);
             continue;
         }
         let mut inputs = BTreeSet::new();
@@ -96,6 +120,38 @@ pub(super) fn records(
         .map_err(platform_producers::graph_error)?;
     crate::analyzer::checkpoint(stop)?;
     Ok(result)
+}
+
+fn classification_record(
+    output: GraphLocalAssertion,
+    native_inputs: &[GraphLocalAssertion],
+    addresses: &BTreeMap<Box<str>, GraphAssertionRef>,
+    budget: &mut producer_budget::ProducerBudget,
+    stop: &AtomicBool,
+) -> ProjectResult<GraphDerivationRecord> {
+    let mut inputs = BTreeSet::new();
+    for input in native_inputs {
+        crate::analyzer::checkpoint(stop)?;
+        if input.kind != GraphAssertionKind::Entity {
+            return Err(invalid());
+        }
+        budget.charge_serialized(&("xml-classification-derivation-address", input), stop)?;
+        inputs.insert(entity_address(&input.proposal_id, addresses)?);
+    }
+    if inputs.is_empty() {
+        return Err(invalid());
+    }
+    let record = GraphDerivationRecord {
+        output,
+        rule_id: "wow-project.source-graph.xml-schema-classification".into(),
+        rule_version: 1,
+        inputs: inputs.into_iter().collect(),
+        rebuttals: Vec::new(),
+        missing: Vec::new(),
+    };
+    budget.charge_serialized(&record, stop)?;
+    crate::analyzer::checkpoint(stop)?;
+    Ok(record)
 }
 
 fn entity_address(

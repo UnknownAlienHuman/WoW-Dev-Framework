@@ -30,6 +30,24 @@ required by this export route.
 
 ## Implemented graph
 
+Selected `xml_schema_classification_v1` emits
+`wow-service/graph-build-result/xml-schema-classification/1` through this command.
+`provenance.xml_classification` retains per-occurrence schema outcomes, exact
+qualified unmatched-name counts, class counts, catalog coordinates and native
+raw XSD evidence. `xml_classification_membership` retains the accepted source
+predecessor's exact registry, scope, partitions and assertion addresses. The
+final graph also contains the independent recognizer partitions. These records
+are descriptive handoffs; decoding them cannot construct a reviewed owner or a
+validated E3 candidate.
+
+The exact `xml_occurrence_schema_class` definition uses `HasSchemaClass`, joining
+the retained XML occurrence to a distinct schema-class entity. Unknown and
+conflicted occurrences retain their outcomes and produce no class edge.
+Classification is static schema evidence; full candidate/Skeleton, complete
+corpus and runtime acceptance remain tracked in #116 and #113. See
+[platform selection](PLATFORM_INPUT.md) and
+[reviewed classification policy](../../crates/wow-project/e3/XML_SCHEMA_CLASSIFICATION.md).
+
 `--diagnostics` emits one JSON sidecar of at most 64 KiB on stderr, followed by
 the ordinary failure diagnostic when applicable. It observes the same acquired
 ProjectView and the existing source metadata accounting; graph stdout, identities,

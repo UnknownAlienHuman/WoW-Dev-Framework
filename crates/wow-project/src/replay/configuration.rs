@@ -1,6 +1,6 @@
 //! Input DTOs rebuild through existing owner validators. Load receipts are
 //! reconstructed from source bytes before being attached to the configuration.
-use super::invalid;
+use super::{invalid, xml_classification::ReplayXmlClassification};
 use crate::{
     AnalyzerBindingDeclaration, PackageXmlBindingProfile, ProjectBudgetPolicy,
     ProjectCapabilityPolicy, ProjectConfiguration, ProjectConfigurationBuilder, ProjectId,
@@ -170,7 +170,20 @@ pub(super) struct ReplayConfiguration {
     package_xml_binding_profile: Option<PackageXmlBindingProfile>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     platform_graph_profile: Option<crate::PlatformGraphProfile>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "non_null_xml_classification"
+    )]
+    xml_schema_classification: Option<ReplayXmlClassification>,
 }
+
+fn non_null_xml_classification<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<ReplayXmlClassification>, D::Error> {
+    ReplayXmlClassification::deserialize(deserializer).map(Some)
+}
+
 impl ReplayConfiguration {
     pub(super) const fn source_graph_budget(&self) -> Option<crate::graph::SourceGraphBudget> {
         self.budgets.source_graph
@@ -206,6 +219,9 @@ impl ReplayConfiguration {
             expected_configuration_digest: config.configuration_digest(),
             package_xml_binding_profile: config.package_xml_binding_profile(),
             platform_graph_profile: config.platform_graph_profile(),
+            xml_schema_classification: config
+                .xml_classification_profile()
+                .map(|profile| ReplayXmlClassification::capture(profile)),
         })
     }
     pub(super) fn profile(&self) -> &ProfileIdentity {
@@ -220,6 +236,19 @@ impl ReplayConfiguration {
     pub(super) fn platform_graph_profile(&self) -> Option<crate::PlatformGraphProfile> {
         self.platform_graph_profile
     }
+
+    /// Refuse missing intent, a stray binding, or downgrade to an unselected recipe.
+    pub(super) fn has_xml_classification(&self) -> ProjectResult<bool> {
+        let selected = matches!(
+            self.platform_graph_profile,
+            Some(crate::PlatformGraphProfile::DirectCapabilitiesV1(capabilities))
+                if capabilities.contains(crate::PlatformGraphCapability::XmlSchemaClassificationV1)
+        );
+        if selected != self.xml_schema_classification.is_some() {
+            return Err(invalid());
+        }
+        Ok(selected)
+    }
     pub(super) fn rebuild(
         &self,
         load_plan: Option<&crate::load::ProjectLoadPlan>,
@@ -228,12 +257,21 @@ impl ReplayConfiguration {
             &crate::load::ProjectPackageMainPlan,
         )>,
         platform: Option<std::sync::Arc<crate::platform_source::PlatformPackageSpecialization>>,
+        stop: &std::sync::atomic::AtomicBool,
     ) -> ProjectResult<ProjectConfiguration> {
         if self.is_platform() != platform.is_some()
             || (platform.is_some() && (load_plan.is_some() || package_plans.is_some()))
         {
             return Err(invalid());
         }
+        self.has_xml_classification()?;
+        let classification = self
+            .xml_schema_classification
+            .as_ref()
+            .map(|selection| {
+                selection.rebuild(platform.as_ref().ok_or_else(invalid)?.source(), stop)
+            })
+            .transpose()?;
         let builder = ProjectConfigurationBuilder::new(
             self.project_id.clone(),
             match self.kind {
@@ -272,6 +310,10 @@ impl ReplayConfiguration {
         };
         let builder = match self.platform_graph_profile {
             Some(profile) => builder.with_platform_graph_profile(profile),
+            None => builder,
+        };
+        let builder = match classification {
+            Some(profile) => builder.with_xml_classification(profile, stop)?,
             None => builder,
         };
         let config = builder.build()?;

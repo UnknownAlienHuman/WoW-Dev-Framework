@@ -81,9 +81,19 @@ impl LiveProjectStore {
         })
     }
     pub fn open(root: &Path) -> ServiceResult<Self> {
+        Self::open_selected(root, None)
+    }
+    // None preserves general open/recovery across every registered catalog.
+    // A platform selection admits exactly the ordinary or classification family.
+    fn open_selected(root: &Path, xml_classification: Option<bool>) -> ServiceResult<Self> {
         // Each open requires an exact registered epoch. The store rejects a
         // catalog mismatch before opening SQLite writable; no migration occurs.
         for &schemas in publication::STORAGE_SCHEMA_CATALOGS {
+            if xml_classification.is_some_and(|selected| {
+                selected != (schemas == publication::STORAGE_SCHEMAS_XML_CLASSIFICATION_V1)
+            }) {
+                continue;
+            }
             match ProjectStore::open(root, &catalog_for(schemas)?) {
                 Ok(store) => return Ok(Self { store }),
                 Err(error) if error.code() == StoreErrorCode::IntegrityViolation => {}

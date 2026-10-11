@@ -192,6 +192,12 @@ pub(super) fn catalog(
             }
         }
     }
+    if let Some(classification) = provenance.xml_classification() {
+        let support = classification.catalog_support();
+        support.validate_native(
+            project, provenance, owner, &lookup, scope, addresses, budget, stop,
+        )?;
+    }
     for (key, reference) in addresses {
         crate::analyzer::checkpoint(stop)?;
         let (handle_ids, evidence_ids) = match key.kind {

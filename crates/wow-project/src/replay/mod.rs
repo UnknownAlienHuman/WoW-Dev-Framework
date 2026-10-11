@@ -5,6 +5,7 @@ mod load;
 mod packages;
 mod platform;
 pub mod publication;
+mod xml_classification;
 
 use crate::{
     PackageXmlBindingProfile, PlatformGraphProfile, ProjectError, ProjectErrorCode,
@@ -36,6 +37,12 @@ const FUNCTION_BUDGET_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/1
 const GLOBAL_ACCESS_BUDGET_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/13";
 const GRAPH_METADATA_BUDGET_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/14";
 const GRAPH_XML_COUNT_BUDGET_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/15";
+// New selection is a named component recipe, not a renumbered aggregate ladder.
+// Actual consumers are expected_schema, hydrate and publication storage catalogs.
+const XML_CLASSIFICATION_REPLAY_SCHEMA: &str =
+    "wow-project/native-project-replay/xml-schema-classification/1";
+pub(super) const XML_CLASSIFICATION_STORAGE_SCHEMA: &str =
+    "wow-project.live-replay.xml-schema-classification.v1";
 const MAX_FILES: usize = 8192;
 const MAX_LIBRARIES: usize = 64;
 const MAX_FILE_BYTES: usize = 16 * 1024 * 1024;
@@ -287,6 +294,11 @@ impl ProjectReplay {
             } else {
                 platform_schema
             };
+        let platform_schema = if configuration.has_xml_classification()? {
+            XML_CLASSIFICATION_REPLAY_SCHEMA
+        } else {
+            platform_schema
+        };
         let platform = if let Some(owner) = platform_owner {
             if generation_schema_version != Some(2) {
                 return Err(invalid());
@@ -345,6 +357,7 @@ impl ProjectReplay {
     }
     fn expected_schema(&self) -> ProjectResult<&'static str> {
         let schema = self.expected_base_schema()?;
+        let classification = self.configuration.has_xml_classification()?;
         if let Some(budget) = self.configuration.source_graph_budget() {
             return if self
                 .platform
@@ -352,12 +365,16 @@ impl ProjectReplay {
                 .is_some_and(ReplayPlatform::has_retention_limits)
                 && self.configuration.platform_graph_profile().is_some()
             {
-                Ok(graph_budget_schema(budget))
+                Ok(if classification {
+                    XML_CLASSIFICATION_REPLAY_SCHEMA
+                } else {
+                    graph_budget_schema(budget)
+                })
             } else {
                 Err(invalid())
             };
         }
-        match (
+        let schema = match (
             self.platform
                 .as_ref()
                 .is_some_and(ReplayPlatform::has_retention_limits),
@@ -370,7 +387,12 @@ impl ProjectReplay {
             (true, None) => Ok(RETAINED_PLATFORM_REPLAY_SCHEMA),
             (false, None) => Ok(schema),
             (false, Some(_)) => Err(invalid()),
-        }
+        }?;
+        Ok(if classification {
+            XML_CLASSIFICATION_REPLAY_SCHEMA
+        } else {
+            schema
+        })
     }
     fn expected_base_schema(&self) -> ProjectResult<&'static str> {
         if let Some(profile) = self.configuration.platform_graph_profile() {
@@ -511,6 +533,7 @@ impl ProjectReplay {
             load_plan.as_ref(),
             package_parts.as_ref().map(|(_, load, main)| (load, main)),
             platform_owner.clone(),
+            stop,
         )?;
         let backend = config.analyzer_binding().backend().clone();
         let limits = LuaWorkspaceLimits::new(
@@ -611,6 +634,7 @@ impl ProjectReplay {
             GLOBAL_ACCESS_BUDGET_REPLAY_SCHEMA => Ok("wow-project.live-replay.v13"),
             GRAPH_METADATA_BUDGET_REPLAY_SCHEMA => Ok("wow-project.live-replay.v14"),
             GRAPH_XML_COUNT_BUDGET_REPLAY_SCHEMA => Ok("wow-project.live-replay.v15"),
+            XML_CLASSIFICATION_REPLAY_SCHEMA => Ok(XML_CLASSIFICATION_STORAGE_SCHEMA),
             _ => Err(invalid()),
         }
     }

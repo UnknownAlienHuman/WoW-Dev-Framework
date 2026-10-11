@@ -11,6 +11,7 @@ not select these producers.
 | `inventory_spans_v1` | none | Known captured source spans and file containment |
 | `structural_roles_v1` | `inventory_spans_v1` | Project/raw membership, TOC/load roles, lexical XML/site/reference roles |
 | `xml_source_maps_v1` | `inventory_spans_v1`, `structural_roles_v1` | Retained virtual Lua units, XML mapping pieces and exact span associations |
+| `xml_schema_classification_v1` | `inventory_spans_v1`, `structural_roles_v1` | Reviewed exact XSD class outcomes and occurrence/class evidence |
 
 Construction and bounded deserialization reject duplicates, unknown versions and
 missing dependencies. They do not expand a selection. Serialization emits the
@@ -56,6 +57,20 @@ partitions cannot silently narrow the graph.
 
 ## Compatibility inventory
 
+Classification additionally retains one sealed reviewed profile in configuration
+before generation derivation. Its selection binds the same admitted source and
+catalog; native replay re-admits both owners and validates their exact digests.
+The selected recipes are `wow-project/native-project-replay/xml-schema-classification/1`
+and `wow-project.live-replay.xml-schema-classification.v1`. The explicit
+`STORAGE_SCHEMAS_XML_CLASSIFICATION_V1` catalog has a real service create/open/
+publication consumer; prior catalogs and unselected bytes remain unchanged.
+Selecting classification does not add another cumulative direct profile.
+Service request/result use `wow-service/graph-build-{request,result}/xml-schema-classification/1`.
+The result includes the typed classification report and actual source-predecessor
+membership; the future #116 candidate must consume this handoff. Policy and
+conservative unknown cases are defined in
+[the owner contract](../crates/wow-project/e3/XML_SCHEMA_CLASSIFICATION.md).
+
 | Former direct recipe | Classification and consumer | Current treatment |
 | --- | --- | --- |
 | `/1` | Reachable service request12/result19, source `/22`, persisted native replay `/9` and storage v9; existing fixture and exact epoch consumer | Preserved with its original config selector, registry16 and stage version1 |
@@ -81,7 +96,7 @@ explicit migration exists.
 
 The same exact-definition axis recipe is reconstructed for the selected registry;
 span-map associations remain excluded from Ownership. Full corpus capacity,
-classification, fingerprints, candidate freeze, SkeletonInputView and public CLI
+classification acceptance, fingerprints, candidate freeze, SkeletonInputView and public CLI
 source handoff remain tracked in #113 and #116–#120. This composition is not full
 W17, package, runtime or launch acceptance. New capabilities extend the typed
 identities and dependency rules; they do not add another cumulative profile.
