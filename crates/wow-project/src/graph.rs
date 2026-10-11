@@ -13,6 +13,7 @@ mod load_inputs;
 mod packages;
 mod platform_producers;
 mod producer_budget;
+pub mod xml_fingerprints;
 use producer_budget::ProducerBudget;
 mod diagnostics;
 pub use diagnostics::SourceGraphDiagnostics;

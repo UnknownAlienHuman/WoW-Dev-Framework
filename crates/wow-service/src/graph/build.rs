@@ -19,6 +19,10 @@ mod calls;
 mod construction;
 mod fingerprints;
 pub use fingerprints::FunctionFingerprintSelection;
+mod xml_fingerprints;
+pub use xml_fingerprints::{
+    XmlFingerprintManifest, XmlFingerprintRecord, XmlFingerprintSelection, XmlFingerprintTarget,
+};
 mod lua_mixins;
 mod materialized;
 mod scripts;
@@ -74,11 +78,33 @@ const DECLARATION_FINGERPRINT_GRAPH_BUILD_REQUEST_SCHEMA: &str =
 const DECLARATION_FINGERPRINT_GRAPH_BUILD_RESULT_SCHEMA: &str =
     "wow-service/graph-build-result/physical-function-declarations-and-fingerprints/1";
 
+fn xml_query_schemas(declarations: bool, functions: bool) -> (&'static str, &'static str) {
+    match (declarations, functions) {
+        (false, false) => (
+            "wow-service/graph-build-request/xml-fingerprints/1",
+            "wow-service/graph-build-result/xml-fingerprints/1",
+        ),
+        (false, true) => (
+            "wow-service/graph-build-request/function-and-xml-fingerprints/1",
+            "wow-service/graph-build-result/function-and-xml-fingerprints/1",
+        ),
+        (true, false) => (
+            "wow-service/graph-build-request/physical-function-declarations-and-xml-fingerprints/1",
+            "wow-service/graph-build-result/physical-function-declarations-and-xml-fingerprints/1",
+        ),
+        (true, true) => (
+            "wow-service/graph-build-request/physical-function-declarations-and-function-and-xml-fingerprints/1",
+            "wow-service/graph-build-result/physical-function-declarations-and-function-and-xml-fingerprints/1",
+        ),
+    }
+}
+
 struct BuiltGraph {
     snapshot: GraphPartitionSnapshot,
     provenance: ProjectGraphProvenance,
     xml_classification_membership: Option<XmlClassificationMembership>,
     function_fingerprints: Option<wow_project::graph::fingerprints::FunctionFingerprintManifest>,
+    xml_fingerprints: Option<XmlFingerprintManifest>,
     call_recognition: SourceCallRecognition,
     construction_recognition: SourceConstructionRecognition,
     mixin_recognition: SourceMixinRecognition,
@@ -138,6 +164,8 @@ pub struct GraphBuildRequest {
         Option<wow_emmy::function_calls::PhysicalFunctionDeclarationRecipe>,
     #[serde(skip_serializing_if = "Option::is_none")]
     function_fingerprints: Option<FunctionFingerprintSelection>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    xml_fingerprints: Option<XmlFingerprintSelection>,
 }
 impl GraphBuildRequest {
     pub fn new(project_id: String, generation: String) -> ServiceResult<Self> {
@@ -160,6 +188,7 @@ impl GraphBuildRequest {
             xml_classification_profile_digest: None,
             physical_function_declarations: None,
             function_fingerprints: None,
+            xml_fingerprints: None,
         })
     }
 
@@ -215,6 +244,14 @@ impl GraphBuildRequest {
     }
 
     fn select_component_schema(&mut self) {
+        if self.xml_fingerprints.is_some() {
+            self.schema = xml_query_schemas(
+                self.physical_function_declarations.is_some(),
+                self.function_fingerprints.is_some(),
+            )
+            .0;
+            return;
+        }
         self.schema = match (
             self.physical_function_declarations.is_some(),
             self.function_fingerprints.is_some(),
@@ -235,6 +272,21 @@ impl GraphBuildRequest {
         selection: FunctionFingerprintSelection,
     ) -> ServiceResult<Self> {
         self.function_fingerprints = Some(selection);
+        self.select_component_schema();
+        preflight_cancellable(
+            &self,
+            super::GRAPH_REQUEST_MAX_BYTES,
+            &AtomicBool::new(false),
+        )?;
+        Ok(self)
+    }
+
+    /// Observe explicitly selected native XML classifications and their comparison components.
+    pub fn with_xml_fingerprints(
+        mut self,
+        selection: XmlFingerprintSelection,
+    ) -> ServiceResult<Self> {
+        self.xml_fingerprints = Some(selection);
         self.select_component_schema();
         preflight_cancellable(
             &self,
@@ -274,6 +326,11 @@ impl GraphBuildRequest {
             .xml_classification_profile()
             .map(|profile| profile.digest());
         if self.xml_classification_profile_digest != classification_digest {
+            return Err(error(ServiceErrorCode::IdentityMismatch));
+        }
+        if self.xml_fingerprints.is_some()
+            && (selected.is_none() || classification_digest.is_none())
+        {
             return Err(error(ServiceErrorCode::IdentityMismatch));
         }
         if self.physical_function_declarations
@@ -432,6 +489,8 @@ pub struct GraphBuildResult {
     #[serde(skip_serializing_if = "Option::is_none")]
     function_fingerprints: Option<wow_project::graph::fingerprints::FunctionFingerprintManifest>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    xml_fingerprints: Option<XmlFingerprintManifest>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     call_recognition: Option<SourceCallRecognition>,
     #[serde(skip_serializing_if = "Option::is_none")]
     construction_recognition: Option<SourceConstructionRecognition>,
@@ -449,6 +508,10 @@ pub struct GraphBuildResult {
     result_digest: Option<Box<str>>,
 }
 impl GraphBuildResult {
+    #[must_use]
+    pub fn xml_fingerprints(&self) -> Option<&XmlFingerprintManifest> {
+        self.xml_fingerprints.as_ref()
+    }
     #[must_use]
     pub fn function_fingerprints(
         &self,
@@ -534,6 +597,7 @@ impl GraphBuildResult {
         self.provenance = None;
         self.xml_classification_membership = None;
         self.function_fingerprints = None;
+        self.xml_fingerprints = None;
         self.failure = Some(code);
         self.status = if code == ServiceErrorCode::Cancelled {
             GraphReadStatus::Cancelled
@@ -584,7 +648,13 @@ pub fn execute_graph_build_diagnosed(
     diagnostics.reset();
     let request_digest = super::hash(&bounded(request, super::GRAPH_REQUEST_MAX_BYTES)?);
     let mut result = GraphBuildResult {
-        schema: if request.physical_function_declarations.is_some() {
+        schema: if request.xml_fingerprints.is_some() {
+            xml_query_schemas(
+                request.physical_function_declarations.is_some(),
+                request.function_fingerprints.is_some(),
+            )
+            .1
+        } else if request.physical_function_declarations.is_some() {
             if request.function_fingerprints.is_some() {
                 DECLARATION_FINGERPRINT_GRAPH_BUILD_RESULT_SCHEMA
             } else {
@@ -656,6 +726,7 @@ pub fn execute_graph_build_diagnosed(
         provenance: None,
         xml_classification_membership: None,
         function_fingerprints: None,
+        xml_fingerprints: None,
         failure: None,
         failure_error: None,
         result_digest: None,
@@ -688,6 +759,7 @@ pub fn execute_graph_build_diagnosed(
             provenance,
             xml_classification_membership,
             function_fingerprints,
+            xml_fingerprints,
             digest,
             file_nodes,
             package_nodes,
@@ -780,6 +852,7 @@ pub fn execute_graph_build_diagnosed(
             result.provenance = Some(provenance);
             result.xml_classification_membership = xml_classification_membership;
             result.function_fingerprints = function_fingerprints;
+            result.xml_fingerprints = xml_fingerprints;
             result.snapshot_input_digest = Some(digest);
         }
         Err(failure) => result.fail_with_error(failure),
@@ -923,6 +996,21 @@ fn compose_backend_diagnosed(
         .transpose()?;
     if let Some(manifest) = &function_fingerprints {
         addresses.reserve("function_fingerprints", manifest, stop)?;
+    }
+    let xml_fingerprints = request
+        .xml_fingerprints
+        .as_ref()
+        .map(|selection| {
+            selection.build(
+                direct
+                    .as_ref()
+                    .ok_or_else(|| error(ServiceErrorCode::IdentityMismatch))?,
+                stop,
+            )
+        })
+        .transpose()?;
+    if let Some(manifest) = &xml_fingerprints {
+        addresses.reserve("xml_fingerprints", manifest, stop)?;
     }
     if let Some(inclusion) = direct
         .as_ref()
@@ -1212,6 +1300,7 @@ fn compose_backend_diagnosed(
         provenance,
         xml_classification_membership,
         function_fingerprints,
+        xml_fingerprints,
         digest,
         file_nodes,
         package_nodes,

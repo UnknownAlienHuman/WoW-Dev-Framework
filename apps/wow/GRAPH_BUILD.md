@@ -136,6 +136,59 @@ XML runtime objects and
 runtime relationships are not generated.
 Captured Lua functions and direct calls are projected as described below. Source XML declarations and explicit inheritance are projected below. Negative authority is false throughout this route.
 
+## Selected XML fingerprint query
+
+The query reuses the same graph operation and acquired native owners:
+`wow graph build --config platform.json --project <project-id> --xml-fingerprints <selection.json> --format json`.
+It may be combined with `--fingerprints`; both queries use the same acquired project and graph operation.
+
+The selection has this shape; angle-bracket values stand for exact proposal IDs
+from the retained native classification:
+
+```json
+{
+  "schema": "wow-service/xml-fingerprint-selection/1",
+  "targets": [
+    {
+      "occurrence_id": "<exact occurrence_proposal_id>",
+      "class_id": "<its exact class_proposal_id>"
+    }
+  ],
+  "max_records": 8,
+  "max_metadata_bytes": 1048576
+}
+```
+
+Both limits are required positive finite integers; example values are not
+defaults. Targets must be distinct and strictly increasing by `occurrence_id`;
+the service does not sort or expand them. These are scoped occurrence/class
+proposal IDs, not accepted node IDs, tag names or unscoped index IDs. The class
+must match that exact native occurrence. For an unclassified occurrence, omit
+`class_id`; its absent value is omitted in the canonical request. Explicit null
+is rejected by the existing strict input scanner, with no decoder widening.
+Unknown fields and duplicate, unordered, foreign or mismatched targets refuse.
+
+The input must already select genuine XML classification and
+`direct_capabilities_v1` with `xml_schema_classification_v1` and its required
+dependencies; the flag does not select source, schema or profile data. See
+[platform input](PLATFORM_INPUT.md). JSON/text carry the selected typed handoff;
+bare snapshot format continues to emit only the graph.
+
+The query is Partial over that genuine classification. Native unknown, conflict
+and unavailable proof outcomes and exact support/bindings stay visible. The
+finite `wow-project/xml-schema-class-component/named-proof-witnesses/1` recipe
+compares reviewed class, expanded declaration QName and sorted distinct qualified
+positive proof targets; it supplies no complete type shape, runtime identity or
+lineage. Its cumulative metadata cap covers input, native indexing/normalization,
+owned support/output and final framing. Existing outer guards remain; refusal or
+cancellation returns no successful truncated handoff.
+
+Only service query/result identity gains the selection. Source/analyzer/project
+configuration, graph identity, native replay and classification catalog remain
+unchanged; no replay/catalog version is added. Existing unselected output
+recipes retain their bytes. See
+[component policy](../../crates/wow-project/e3/FUNCTION_FINGERPRINTS.md).
+
 ## Selected-TOC core recognizers
 
 The five `core.toc.*@1` families publish independent package, file-order,

@@ -1,4 +1,4 @@
-# Physical function comparison components
+# Native comparison components
 
 Issue [#118](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/118)
 owns implementation and acceptance. The first selected recipe consumes the
@@ -90,6 +90,55 @@ serialized comparison output cannot reconstruct native authority. The selected
 declaration producer additionally changes semantic configuration/report identity
 and binds its named replay/storage consumers in `REPLAY_PUBLICATION.md`.
 
-Full signature/shape/neighborhood/load-role recipes, XML components, the genuine
+## Selected XML schema-class component
+
+The `--xml-fingerprints <selection.json>` query uses schema
+`wow-service/xml-fingerprint-selection/1`. It requires genuine selected native XML classification and
+`direct_capabilities_v1` containing `xml_schema_classification_v1` with its
+existing dependencies. Decoded reports, tag names and class names supply no
+native classification authority.
+
+Targets name exact scoped `occurrence_proposal_id` values as `occurrence_id`,
+with each matching native `class_proposal_id` as optional `class_id`. Targets
+must be distinct and strictly increasing by occurrence ID, not node IDs or
+unscoped occurrence labels. A classified occurrence requires its exact class ID.
+For an unclassified native occurrence, omit `class_id`; canonical request
+serialization omits the absent field. Explicit `class_id: null` is refused by
+the existing strict input scanner; this query does not widen that decoder.
+`max_records` and `max_metadata_bytes` are required positive finite integers.
+
+The finite recipe is
+`wow-project/xml-schema-class-component/named-proof-witnesses/1`. Comparable
+bytes contain only the reviewed class category, expanded declaration QName and
+sorted distinct qualified positive Type/Base/Element/SubstitutionGroup proof
+targets, retaining reference kind, named target kind and expanded QName.
+Supported target kinds are named simple/complex types and global elements;
+missing named type support stays unavailable. This proof-target set does not
+describe witness order, complete XSD topology or whole-type shape.
+
+Original observations, accepted occurrence/class/relation support, raw schema
+evidence and exact source/profile/catalog/generation bindings stay separate.
+Proposal/node IDs, paths/spans, content digests, selection limits and stored rows
+do not enter comparable bytes. Unknown, conflict, missing, ambiguous and
+unsupported proofs retain explicit unavailable outcomes. There is no second
+parser or generic hash fallback. An absent expanded-name namespace is already
+omitted by the native `XmlExpandedName` serializer; no comparable serializer
+change is introduced.
+
+The selected handoff stays Partial over genuine retained classification, even
+with Available components or an explicit empty selection. It never expands to
+every occurrence of a class or proves absence, runtime identity, equivalence or
+lineage. Cumulative metadata accounting covers input, native indexes,
+normalization and retained support/output; final framing fits the same selected
+cap. Existing outer guards remain. Refusal/cancellation yields no successful
+truncated manifest.
+
+Exact targets/limits bind service request/result identity. This observation
+query does not change source, analyzer, project configuration or graph identity,
+native replay or the existing classification catalog. It adds no replay/catalog
+version and decoding output cannot construct native authority. See the
+[CLI query contract](../../../apps/wow/GRAPH_BUILD.md).
+
+Full signature/shape/neighborhood/load-role recipes, whole XML type shape, the genuine
 #116 candidate/Skeleton handoff, mutation freeze and selected real-corpus Tier A
 remain required by #118. A verified source-span checkpoint does not accept them.

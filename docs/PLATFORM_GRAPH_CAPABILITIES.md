@@ -111,6 +111,12 @@ explicit migration exists.
 
 ## Remaining scope
 
+Explicit function and XML comparison queries consume the acquired capabilities
+without extending their set or changing native replay/catalog identity. The XML
+query requires selected classification and retains accepted support and unavailable
+outcomes. See the [query contract](../apps/wow/GRAPH_BUILD.md) and
+[component recipes](../crates/wow-project/e3/FUNCTION_FINGERPRINTS.md).
+
 The same exact-definition axis recipe is reconstructed for the selected registry;
 span-map associations remain excluded from Ownership. Full corpus capacity,
 classification acceptance, fingerprints, candidate freeze, SkeletonInputView and public CLI

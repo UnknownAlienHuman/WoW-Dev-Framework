@@ -50,6 +50,18 @@ the [native documentation input](NATIVE_INPUT.md). This inline
 schema remains supported for embedders. Neither mode infers inputs from cwd,
 editor configuration, addon folders or a client installation.
 
+## Selected XML graph observation
+
+The `wow graph build --xml-fingerprints <selection.json>` query reuses
+the [manifest-bound platform input](PLATFORM_INPUT.md), its selected native XML
+classification and exact `direct_capabilities_v1` set containing
+`xml_schema_classification_v1`. Inline Main/Library input or decoded
+classification output cannot replace that native owner.
+
+This query does not alter the materialized input schema or select source, schema
+or profile data. It remains Partial and adds no replay/catalog version. See [query shape and bounds](GRAPH_BUILD.md)
+and [the finite proof recipe](../../crates/wow-project/e3/FUNCTION_FINGERPRINTS.md).
+
 ## Execution
 
 `status` validates input/configuration and reports components without running the

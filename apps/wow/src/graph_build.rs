@@ -1,15 +1,16 @@
 //! Thin transport for the service-owned source graph build operation.
 use std::ffi::OsString;
 use std::io::Write;
-use std::path::PathBuf;
-use std::sync::atomic::Ordering;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use wow_service::graph::{
     FunctionFingerprintSelection, GRAPH_REQUEST_MAX_BYTES, GraphBuildRequest, GraphReadStatus,
-    SourceGraphDiagnostics, execute_graph_build_diagnosed, source_graph_diagnostics_bytes,
+    SourceGraphDiagnostics, XmlFingerprintSelection, execute_graph_build_diagnosed,
+    source_graph_diagnostics_bytes,
 };
 use wow_service::{LocalProjectInput, ServiceErrorCode};
 
-const HELP: &str = "wow graph build --config <project.json> --project <ProjectId> [--generation current|<ProjectGenerationId>] [--format json|snapshot|text] [--diagnostics] [--fingerprints <selection.json>]\n\nBuild the bounded first-party source/file-load graph using the same materialization path as wow check. JSON includes provenance; snapshot emits the bare artifact for graph subgraph/axis/explain/path. Partial source graphs exit 2. No files or ProjectStore pointers are written. --diagnostics emits one bounded source metadata sidecar on stderr, outside graph identities. --fingerprints selects an explicit service-owned function fingerprint query in JSON output; snapshot remains the bare graph artifact.\n";
+const HELP: &str = "wow graph build --config <project.json> --project <ProjectId> [--generation current|<ProjectGenerationId>] [--format json|snapshot|text] [--diagnostics] [--fingerprints <selection.json>] [--xml-fingerprints <selection.json>]\n\nBuild the bounded first-party source/file-load graph using the same materialization path as wow check. JSON includes provenance; snapshot emits the bare artifact for graph subgraph/axis/explain/path. Partial source graphs exit 2. No files or ProjectStore pointers are written. --diagnostics emits one bounded source metadata sidecar on stderr, outside graph identities. --fingerprints selects an explicit service-owned function fingerprint query in JSON output. --xml-fingerprints selects native XML classification comparison components; its project must select XML classification. Both queries may be combined; snapshot remains the bare graph artifact.\n";
 
 #[derive(Clone, Copy)]
 enum Format {
@@ -20,6 +21,7 @@ enum Format {
 struct Arguments {
     config: PathBuf,
     fingerprints: Option<PathBuf>,
+    xml_fingerprints: Option<PathBuf>,
     request: GraphBuildRequest,
     format: Format,
     diagnostics: bool,
@@ -39,39 +41,21 @@ pub fn run(values: Vec<OsString>) -> u8 {
     let Some(stop) = super::cancellation_flag() else {
         return 64;
     };
-    let fingerprints = match args.fingerprints.as_deref() {
-        Some(path) => {
-            let bytes = match super::graph::read_file(path, GRAPH_REQUEST_MAX_BYTES, &stop) {
-                Ok(bytes) => bytes,
-                Err(message) => {
-                    super::diagnostic(message);
-                    return if stop.load(Ordering::Acquire) {
-                        130
-                    } else {
-                        64
-                    };
-                }
-            };
-            let selection =
-                match FunctionFingerprintSelection::from_json_slice_cancellable(&bytes, &stop) {
-                    Ok(selection) => selection,
-                    Err(error) => {
-                        super::diagnostic(error.message());
-                        return if stop.load(Ordering::Acquire)
-                            || error.code() == ServiceErrorCode::Cancelled
-                        {
-                            130
-                        } else {
-                            64
-                        };
-                    }
-                };
-            if stop.load(Ordering::Acquire) {
-                return 130;
-            }
-            Some(selection)
-        }
-        None => None,
+    let fingerprints = match read_selection(
+        args.fingerprints.as_deref(),
+        FunctionFingerprintSelection::from_json_slice_cancellable,
+        &stop,
+    ) {
+        Ok(selection) => selection,
+        Err(exit) => return exit,
+    };
+    let xml_fingerprints = match read_selection(
+        args.xml_fingerprints.as_deref(),
+        XmlFingerprintSelection::from_json_slice_cancellable,
+        &stop,
+    ) {
+        Ok(selection) => selection,
+        Err(exit) => return exit,
     };
     let input = match LocalProjectInput::from_config_path(&args.config, &stop) {
         Ok(input) => input,
@@ -88,16 +72,14 @@ pub fn run(values: Vec<OsString>) -> u8 {
     let request = match fingerprints {
         Some(selection) => match request.with_function_fingerprints(selection) {
             Ok(request) => request,
-            Err(error) => {
-                super::diagnostic(error.message());
-                return if stop.load(Ordering::Acquire)
-                    || error.code() == ServiceErrorCode::Cancelled
-                {
-                    130
-                } else {
-                    64
-                };
-            }
+            Err(error) => return selection_failure(&error, &stop),
+        },
+        None => request,
+    };
+    let request = match xml_fingerprints {
+        Some(selection) => match request.with_xml_fingerprints(selection) {
+            Ok(request) => request,
+            Err(error) => return selection_failure(&error, &stop),
         },
         None => request,
     };
@@ -197,6 +179,39 @@ fn emit_diagnostics(diagnostics: &SourceGraphDiagnostics) {
     }
 }
 
+fn read_selection<T>(
+    path: Option<&Path>,
+    decode: fn(&[u8], &AtomicBool) -> wow_service::ServiceResult<T>,
+    stop: &AtomicBool,
+) -> Result<Option<T>, u8> {
+    let Some(path) = path else {
+        return Ok(None);
+    };
+    let bytes =
+        super::graph::read_file(path, GRAPH_REQUEST_MAX_BYTES, stop).map_err(|message| {
+            super::diagnostic(message);
+            if stop.load(Ordering::Acquire) {
+                130
+            } else {
+                64
+            }
+        })?;
+    let selection = decode(&bytes, stop).map_err(|error| selection_failure(&error, stop))?;
+    if stop.load(Ordering::Acquire) {
+        return Err(130);
+    }
+    Ok(Some(selection))
+}
+
+fn selection_failure(error: &wow_service::ServiceError, stop: &AtomicBool) -> u8 {
+    super::diagnostic(error.message());
+    if stop.load(Ordering::Acquire) || error.code() == ServiceErrorCode::Cancelled {
+        130
+    } else {
+        64
+    }
+}
+
 fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
     let total = values
         .iter()
@@ -213,6 +228,7 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
     }
     let (mut config, mut project, mut generation, mut format) = (None, None, None, None);
     let mut fingerprints = None;
+    let mut xml_fingerprints = None;
     let mut diagnostics = false;
     while let Some(option) = values.next() {
         let option = option.to_str().ok_or("invalid option encoding")?;
@@ -225,7 +241,12 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
         }
         if !matches!(
             option,
-            "--config" | "--project" | "--generation" | "--format" | "--fingerprints"
+            "--config"
+                | "--project"
+                | "--generation"
+                | "--format"
+                | "--fingerprints"
+                | "--xml-fingerprints"
         ) {
             return Err("unknown graph build option");
         }
@@ -233,12 +254,21 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
         if value.is_empty() || value.len() > 32768 {
             return Err("invalid option length");
         }
-        if option == "--fingerprints" {
+        if option == "--fingerprints" || option == "--xml-fingerprints" {
             if value.to_str().is_some_and(|value| value.starts_with("--")) {
                 return Err("missing graph build option value");
             }
-            if fingerprints.replace(PathBuf::from(value)).is_some() {
-                return Err("duplicate --fingerprints");
+            let selected = if option == "--fingerprints" {
+                &mut fingerprints
+            } else {
+                &mut xml_fingerprints
+            };
+            if selected.replace(PathBuf::from(value)).is_some() {
+                return Err(if option == "--fingerprints" {
+                    "duplicate --fingerprints"
+                } else {
+                    "duplicate --xml-fingerprints"
+                });
             }
             continue;
         }
@@ -287,6 +317,7 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
     Ok(Arguments {
         config: config.ok_or("graph build requires --config")?,
         fingerprints,
+        xml_fingerprints,
         request,
         format,
         diagnostics,
@@ -316,13 +347,24 @@ mod tests {
         let ordinary = parse(build_arguments())?;
         assert!(!ordinary.diagnostics);
         assert!(ordinary.fingerprints.is_none());
+        assert!(ordinary.xml_fingerprints.is_none());
         let mut values = build_arguments();
         values.push("--diagnostics".into());
         assert!(parse(values)?.diagnostics);
         let mut values = build_arguments();
-        values.extend(["--fingerprints", "selection.json", "--diagnostics"].map(OsString::from));
+        values.extend(
+            [
+                "--fingerprints",
+                "selection.json",
+                "--xml-fingerprints",
+                "xml.json",
+                "--diagnostics",
+            ]
+            .map(OsString::from),
+        );
         let selected = parse(values)?;
         assert_eq!(selected.fingerprints, Some(PathBuf::from("selection.json")));
+        assert_eq!(selected.xml_fingerprints, Some(PathBuf::from("xml.json")));
         assert!(selected.diagnostics);
         Ok(())
     }
@@ -342,6 +384,25 @@ mod tests {
 
         let mut values = build_arguments();
         values.push("--fingerprints".into());
+        assert_eq!(
+            parse(values).err(),
+            Some("missing graph build option value")
+        );
+
+        let mut values = build_arguments();
+        values.extend(
+            [
+                "--xml-fingerprints",
+                "one.json",
+                "--xml-fingerprints",
+                "two.json",
+            ]
+            .map(OsString::from),
+        );
+        assert_eq!(parse(values).err(), Some("duplicate --xml-fingerprints"));
+
+        let mut values = build_arguments();
+        values.extend(["--xml-fingerprints", "--diagnostics"].map(OsString::from));
         assert_eq!(
             parse(values).err(),
             Some("missing graph build option value")

@@ -1141,3 +1141,322 @@ fn selected_xml_classification_reaches_service_replay_and_publication() -> TestR
     );
     Ok(())
 }
+
+fn native_xml_fingerprint_targets(
+    report: &Value,
+) -> TestResult<Vec<crate::graph::XmlFingerprintTarget>> {
+    let mut ids = Vec::new();
+    for document in report["documents"]
+        .as_array()
+        .ok_or("native XML documents")?
+    {
+        for row in document["occurrences"]
+            .as_array()
+            .ok_or("native XML occurrences")?
+        {
+            let occurrence: Box<str> = row["occurrence_proposal_id"]
+                .as_str()
+                .ok_or("native occurrence proposal ID")?
+                .into();
+            let class = row
+                .get("class_proposal_id")
+                .map(|id| {
+                    id.as_str()
+                        .map(Box::<str>::from)
+                        .ok_or("native class proposal ID")
+                })
+                .transpose()?;
+            ids.push((occurrence, class));
+        }
+    }
+    ids.sort_by(|left, right| left.0.cmp(&right.0));
+    assert!(!ids.is_empty());
+    assert!(ids.windows(2).all(|pair| pair[0].0 < pair[1].0));
+    Ok(ids
+        .into_iter()
+        .map(|(occurrence, class)| crate::graph::XmlFingerprintTarget::new(occurrence, class))
+        .collect())
+}
+
+type XmlQueryComparables = std::collections::BTreeMap<
+    String,
+    (
+        wow_project::graph::xml_fingerprints::XmlSchemaClassComparable,
+        ContentDigest<CanonicalResult>,
+    ),
+>;
+
+fn fixture_xml_query_components(
+    manifest: &crate::graph::XmlFingerprintManifest,
+) -> TestResult<XmlQueryComparables> {
+    use wow_graph::GraphCoverageState;
+    use wow_project::graph::xml_fingerprints::XmlSchemaClassUnavailable;
+    use wow_project::load::schema::classification::{
+        XmlClassOutcome, XmlClassificationUnknown, XmlSchemaClass,
+    };
+
+    assert_eq!(manifest.coverage(), GraphCoverageState::Partial);
+    assert_eq!(manifest.records().len(), 7);
+    assert_eq!(manifest.records().len(), manifest.components().len());
+    let mut comparables = XmlQueryComparables::new();
+    let mut missing_named_type = 0;
+    let mut unknown = 0;
+    for (record, (id, component)) in manifest.records().iter().zip(manifest.components()) {
+        assert_eq!(id, &record.projection().occurrence_proposal_id);
+        let observation = record.observation();
+        let name = observation.qname().name().ok_or("expanded fixture QName")?;
+        assert_eq!(name.namespace(), Some("http://www.blizzard.com/wow/ui/"));
+        match name.local_name() {
+            "Frame" | "Texture" => {
+                let comparable = component
+                    .comparable()
+                    .ok_or("named-type component unavailable")?;
+                let expected = if name.local_name() == "Frame" {
+                    XmlSchemaClass::FrameLike
+                } else {
+                    XmlSchemaClass::RegionLike
+                };
+                assert_eq!(observation.outcome(), XmlClassOutcome::Classified(expected));
+                assert_eq!(comparable.class(), expected);
+                assert_eq!(comparable.declaration(), name);
+                assert!(!comparable.qualified_proof_targets().is_empty());
+                assert_eq!(component.coverage(), GraphCoverageState::Complete);
+                assert!(component.unavailable_reason().is_none());
+                assert!(
+                    comparables
+                        .insert(
+                            name.local_name().into(),
+                            (
+                                comparable.clone(),
+                                component.component_digest().ok_or("available digest")?,
+                            )
+                        )
+                        .is_none()
+                );
+            }
+            "Ui" | "Scripts" | "OnLoad" => {
+                let expected = if name.local_name() == "OnLoad" {
+                    XmlSchemaClass::Script
+                } else {
+                    XmlSchemaClass::Structural
+                };
+                assert_eq!(observation.outcome(), XmlClassOutcome::Classified(expected));
+                assert!(matches!(
+                    component.unavailable_reason(),
+                    Some(XmlSchemaClassUnavailable::MissingNamedTypeWitness)
+                ));
+                assert!(component.comparable().is_none());
+                assert!(component.component_digest().is_none());
+                assert_eq!(component.coverage(), GraphCoverageState::Partial);
+                missing_named_type += 1;
+            }
+            "Custom" | "FrameRef" => {
+                let expected = if name.local_name() == "Custom" {
+                    XmlClassificationUnknown::MissingGlobalDeclaration
+                } else {
+                    XmlClassificationUnknown::AbstractOccurrence
+                };
+                assert_eq!(observation.outcome(), XmlClassOutcome::Unknown(expected));
+                assert!(matches!(component.unavailable_reason(),
+                    Some(XmlSchemaClassUnavailable::ClassificationUnknown(reason)) if reason == expected));
+                assert!(component.comparable().is_none());
+                assert!(component.component_digest().is_none());
+                assert_eq!(component.coverage(), GraphCoverageState::Partial);
+                assert!(record.projection().class_proposal_id.is_none());
+                assert!(record.projection().relation_proposal_id.is_none());
+                unknown += 1;
+            }
+            _ => return Err("unexpected native fixture occurrence".into()),
+        }
+    }
+    assert_eq!(comparables.len(), 2);
+    assert_eq!(missing_named_type, 3);
+    assert_eq!(unknown, 2);
+    Ok(comparables)
+}
+
+#[test]
+fn selected_xml_schema_components_preserve_unknowns_and_prefix_alias_comparison() -> TestResult {
+    use crate::{
+        ServiceErrorCode,
+        graph::{
+            GRAPH_RESULT_MAX_BYTES, GraphBuildRequest, GraphReadStatus, XmlFingerprintSelection,
+            execute_graph_build,
+        },
+    };
+
+    let stop = AtomicBool::new(false);
+    let (root, _) = classification_fixture(CLASSIFICATION_XSD)?;
+    let path = root.0.join("project.json");
+    let input = LocalProjectInput::from_config_path(&path, &stop)?;
+    let request = GraphBuildRequest::new("fixture-platform-transport".into(), "current".into())?
+        .with_input_profile(&input);
+    let ordinary = execute_graph_build(input, &request, &stop)?;
+    assert_eq!(
+        ordinary.status(),
+        GraphReadStatus::Partial,
+        "{:?}",
+        ordinary.failure_message()
+    );
+    assert!(ordinary.xml_fingerprints().is_none());
+    let ordinary_wire = serde_json::to_value(&ordinary)?;
+    assert!(ordinary_wire.get("xml_fingerprints").is_none());
+    assert!(ordinary_wire["request"].get("xml_fingerprints").is_none());
+    let targets =
+        native_xml_fingerprint_targets(&ordinary_wire["provenance"]["xml_classification"])?;
+    // Reuse one existing finite service ceiling for the cumulative binding/index/output ledger.
+    let limit = GRAPH_RESULT_MAX_BYTES;
+    let selection = XmlFingerprintSelection::new(targets.clone(), targets.len(), limit)?;
+    let selection_wire = serde_json::to_value(&selection)?;
+    let selection_bytes = serde_json::to_vec(&selection)?;
+    let selected_request = request
+        .clone()
+        .with_xml_fingerprints(XmlFingerprintSelection::from_json_slice(&selection_bytes)?)?;
+    let result = execute_graph_build(
+        LocalProjectInput::from_config_path(&path, &stop)?,
+        &selected_request,
+        &stop,
+    )?;
+    assert_eq!(
+        result.status(),
+        GraphReadStatus::Partial,
+        "{:?}",
+        result.failure_message()
+    );
+    let manifest = result
+        .xml_fingerprints()
+        .ok_or("selected native XML manifest")?;
+    let normalized = fixture_xml_query_components(manifest)?;
+    let result_wire: Value = serde_json::from_slice(&result.canonical_bytes()?)?;
+    assert_eq!(
+        result_wire["schema"],
+        "wow-service/graph-build-result/xml-fingerprints/1"
+    );
+    assert_eq!(
+        result_wire["request"]["schema"],
+        "wow-service/graph-build-request/xml-fingerprints/1"
+    );
+    assert_eq!(result_wire["request"]["xml_fingerprints"], selection_wire);
+    assert_eq!(
+        result_wire["xml_fingerprints"]["component_recipe"],
+        "wow-project/xml-schema-class-component/named-proof-witnesses/1"
+    );
+    // Existing verifier and native service joins own the support closure.
+    let graph: wow_graph::GraphPartitionSnapshot =
+        serde_json::from_slice(&result.snapshot_bytes()?.ok_or("selected graph")?)?;
+    verify_classification_membership(
+        &result_wire["provenance"]["xml_classification"],
+        &result_wire["xml_classification_membership"],
+        &graph,
+        &stop,
+    )?;
+    // Query/nonquery comparison on this build; no predecessor byte-freeze claim.
+    assert_eq!(result.snapshot_bytes()?, ordinary.snapshot_bytes()?);
+    for row in result_wire["xml_fingerprints"]["records"]
+        .as_array()
+        .ok_or("canonical records")?
+    {
+        if row["projection"].get("class_proposal_id").is_none() {
+            assert!(row["projection"].get("relation_proposal_id").is_none());
+            assert!(row["support"].get("class_assertion").is_none());
+            assert!(row["support"].get("class_node_id").is_none());
+            assert!(row["support"].get("classification_assertion").is_none());
+        }
+    }
+    let mut null = selection_wire.clone();
+    let unknown = null["targets"]
+        .as_array_mut()
+        .ok_or("targets")?
+        .iter_mut()
+        .find(|target| target.get("class_id").is_none())
+        .ok_or("unclassified target")?;
+    unknown["class_id"] = Value::Null;
+    assert_eq!(
+        XmlFingerprintSelection::from_json_slice(&serde_json::to_vec(&null)?)
+            .err()
+            .ok_or("strict scanner admitted null class ID")?
+            .code(),
+        ServiceErrorCode::InvalidRequest
+    );
+    assert_eq!(
+        XmlFingerprintSelection::new(vec![targets[0].clone(), targets[0].clone()], 2, limit)
+            .err()
+            .ok_or("duplicate IDs admitted")?
+            .code(),
+        ServiceErrorCode::InvalidRequest
+    );
+    assert_eq!(
+        XmlFingerprintSelection::new(targets.clone(), targets.len(), 0)
+            .err()
+            .ok_or("zero metadata limit admitted")?
+            .code(),
+        ServiceErrorCode::InvalidRequest
+    );
+    assert_eq!(
+        XmlFingerprintSelection::from_json_slice_cancellable(
+            &selection_bytes,
+            &AtomicBool::new(true),
+        )
+        .err()
+        .ok_or("cancelled decoder continued")?
+        .code(),
+        ServiceErrorCode::Cancelled
+    );
+
+    // One meaningful mutation: only QName prefix aliases change in the synthetic XSD.
+    assert!(CLASSIFICATION_XSD.contains("xmlns:u="));
+    assert!(CLASSIFICATION_XSD.contains("\"u:"));
+    let renamed_xsd = CLASSIFICATION_XSD
+        .replace("xmlns:u=", "xmlns:v=")
+        .replace("\"u:", "\"v:");
+    let (renamed_root, _) = classification_fixture(&renamed_xsd)?;
+    let renamed_path = renamed_root.0.join("project.json");
+    let input = LocalProjectInput::from_config_path(&renamed_path, &stop)?;
+    let renamed_request =
+        GraphBuildRequest::new("fixture-platform-transport".into(), "current".into())?
+            .with_input_profile(&input);
+    let renamed_ordinary = execute_graph_build(input, &renamed_request, &stop)?;
+    assert_eq!(
+        renamed_ordinary.status(),
+        GraphReadStatus::Partial,
+        "{:?}",
+        renamed_ordinary.failure_message()
+    );
+    let renamed_wire = serde_json::to_value(&renamed_ordinary)?;
+    let renamed_targets =
+        native_xml_fingerprint_targets(&renamed_wire["provenance"]["xml_classification"])?;
+    let count = renamed_targets.len();
+    let renamed_request = renamed_request.with_xml_fingerprints(XmlFingerprintSelection::new(
+        renamed_targets,
+        count,
+        limit,
+    )?)?;
+    let renamed = execute_graph_build(
+        LocalProjectInput::from_config_path(&renamed_path, &stop)?,
+        &renamed_request,
+        &stop,
+    )?;
+    assert_eq!(
+        renamed.status(),
+        GraphReadStatus::Partial,
+        "{:?}",
+        renamed.failure_message()
+    );
+    let renamed_normalized = fixture_xml_query_components(
+        renamed
+            .xml_fingerprints()
+            .ok_or("renamed native XML manifest")?,
+    )?;
+    let renamed_wire: Value = serde_json::from_slice(&renamed.canonical_bytes()?)?;
+    assert_ne!(
+        result_wire["xml_fingerprints"]["binding"]["source"]["source_snapshot_id"],
+        renamed_wire["xml_fingerprints"]["binding"]["source"]["source_snapshot_id"]
+    );
+    assert_ne!(
+        result_wire["xml_fingerprints"]["binding"]["source"]["catalog_digest"],
+        renamed_wire["xml_fingerprints"]["binding"]["source"]["catalog_digest"]
+    );
+    // Fresh native IDs/support are custody; comparable fields/digests keep the same recipe.
+    assert_eq!(normalized, renamed_normalized);
+    Ok(())
+}
