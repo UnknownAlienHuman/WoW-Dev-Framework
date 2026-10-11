@@ -1,5 +1,6 @@
 use super::*;
 mod empty_packages;
+mod project_budgets;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::{

@@ -4,7 +4,8 @@ use std::{sync::Arc, sync::atomic::AtomicBool};
 
 use serde::Deserialize;
 use wow_project::{
-    PlatformGraphProfile, ProjectFileRole, ProjectId, ProjectSourceOriginId, ProjectWorkspaceId,
+    PlatformGraphProfile, ProjectBudgetPolicy, ProjectFileRole, ProjectId, ProjectSourceOriginId,
+    ProjectWorkspaceId,
     disk::{ManifestedPlatformInput, ProjectDiskFile, ProjectInputDirectory},
     load::{ProjectPackageInput, TocLoadContext},
     platform_source::{
@@ -16,7 +17,7 @@ use wow_reference::ReferenceView;
 use super::{
     LocalProjectInput,
     disk_input::{DiskAnalyzer, DiskInventory, acquisition_error},
-    input::{LocalProjectLoad, ProjectMetadata, invalid},
+    input::{LocalProjectLoad, PlatformAssembly, ProjectMetadata, invalid},
     native_reference::{NativeProfile, project_native_reference},
     native_resources::present,
     native_source::NativeSourceInput,
@@ -24,6 +25,8 @@ use super::{
 use crate::ServiceResult;
 
 pub const LOCAL_PLATFORM_SCHEMA: &str = "wow-service/local-platform-source/1";
+/// Retained native platform input with explicit validated project budgets.
+pub const LOCAL_PLATFORM_BUDGET_SCHEMA: &str = "wow-service/local-platform-source/2";
 
 #[cfg(test)]
 mod tests;
@@ -46,6 +49,8 @@ struct PlatformInput {
     packages: Vec<ProjectPackageInput>,
     #[serde(default, deserialize_with = "present")]
     retained_package_limits: Option<PlatformPackageRetentionLimits>,
+    #[serde(default, deserialize_with = "present")]
+    project_budgets: Option<ProjectBudgetPolicy>,
     #[serde(default)]
     load_context: Option<TocLoadContext>,
     graph_profile: PlatformGraphProfile,
@@ -130,8 +135,14 @@ impl LocalProjectInput {
         super::cancelled(stop)?;
         let input: PlatformInput =
             serde_json::from_slice(bytes).map_err(|_| invalid("invalid platform source input"))?;
-        if input.schema != LOCAL_PLATFORM_SCHEMA {
-            return Err(invalid("unsupported platform source input schema"));
+        match (
+            input.schema.as_str(),
+            input.project_budgets,
+            input.retained_package_limits,
+        ) {
+            (LOCAL_PLATFORM_SCHEMA, None, _) => {}
+            (LOCAL_PLATFORM_BUDGET_SCHEMA, Some(_), Some(_)) => {}
+            _ => return Err(invalid("unsupported platform source budget selection")),
         }
         let reference_input = match (input.reference_view, input.native_reference) {
             (Some(file), None) => ReferenceInput::Artifact(file),
@@ -195,7 +206,11 @@ impl LocalProjectInput {
                 load_plan: packages.load_plan().clone(),
                 main_plan: packages.main_plan().clone(),
             },
-            Some((packages, input.graph_profile)),
+            Some(PlatformAssembly {
+                packages,
+                graph_profile: input.graph_profile,
+                budgets: input.project_budgets,
+            }),
         )
     }
 }

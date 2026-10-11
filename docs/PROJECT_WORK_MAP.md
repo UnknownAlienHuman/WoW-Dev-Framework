@@ -40,6 +40,13 @@ unqualified; completed-operation peak is NotEvaluated. Re-resolve the source on
 each real operation and retain the actual next refusing owner before changing
 another ceiling. Do not infer map-owner populations from lexical counts or compare
 XML-index bytes with graph metadata bytes. Operation evidence belongs in #113.
+The same-source private census measures a population requiring4131790 raw AST
+visits for the two planned passes and119391257 physical member-report bytes;
+function semantic output and
+the complete operation remain unqualified. Retained platform transport `/2`
+admits explicit finite project budgets through the existing configuration/replay
+identity, while `/1` keeps its fixed policy. This supplies a reviewed admission
+seam; independent sidecar/map/graph/store bounds still require qualification.
 
 | Order | Bounded functional responsibility | Required boundary |
 |---|---|---|

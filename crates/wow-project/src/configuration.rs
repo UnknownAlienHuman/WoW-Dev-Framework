@@ -205,9 +205,9 @@ impl ProjectCapabilityPolicy {
     }
 }
 
-/// Explicit E0 source/analysis/output limits.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(deny_unknown_fields)]
+/// Explicit source/analysis/output limits, validated on construction and decode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields, try_from = "ProjectBudgetPolicyInput")]
 pub struct ProjectBudgetPolicy {
     max_files: u64,
     max_total_source_bytes: u64,
@@ -216,6 +216,34 @@ pub struct ProjectBudgetPolicy {
     max_analyzer_facts: u64,
     max_generic_findings: u64,
     max_output_bytes: u64,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProjectBudgetPolicyInput {
+    max_files: u64,
+    max_total_source_bytes: u64,
+    max_single_file_bytes: u64,
+    max_update_operations: u64,
+    max_analyzer_facts: u64,
+    max_generic_findings: u64,
+    max_output_bytes: u64,
+}
+
+impl TryFrom<ProjectBudgetPolicyInput> for ProjectBudgetPolicy {
+    type Error = ProjectError;
+
+    fn try_from(input: ProjectBudgetPolicyInput) -> ProjectResult<Self> {
+        Self::new(
+            input.max_files,
+            input.max_total_source_bytes,
+            input.max_single_file_bytes,
+            input.max_update_operations,
+            input.max_analyzer_facts,
+            input.max_generic_findings,
+            input.max_output_bytes,
+        )
+    }
 }
 
 impl ProjectBudgetPolicy {

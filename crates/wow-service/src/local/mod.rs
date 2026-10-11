@@ -31,7 +31,7 @@ pub use native_reference::{
     SOURCE_REFERENCE_INPUT_SCHEMA, SourceReferenceResult, read_local_source_reference,
 };
 pub use native_resources::{NativeAnnotationInputsReceipt, NativeAnnotationSelection};
-pub use platform_input::LOCAL_PLATFORM_SCHEMA;
+pub use platform_input::{LOCAL_PLATFORM_BUDGET_SCHEMA, LOCAL_PLATFORM_SCHEMA};
 pub use projection::OwnerAnalysis;
 pub use response::{
     LocalCommand, LocalOperationResult, LocalOutcome, OperationFailure, execute_local,

@@ -40,6 +40,13 @@ pub(super) enum LocalProjectLoad {
     },
 }
 
+pub(super) struct PlatformAssembly {
+    pub(super) packages:
+        std::sync::Arc<wow_project::platform_source::PlatformPackageSpecialization>,
+    pub(super) graph_profile: wow_project::PlatformGraphProfile,
+    pub(super) budgets: Option<ProjectBudgetPolicy>,
+}
+
 #[derive(Clone, Copy)]
 pub(super) enum LocalProjectLoadEvidence<'a> {
     Explicit,
@@ -220,10 +227,7 @@ impl LocalProjectInput {
         main: Vec<ProjectInputFile>,
         libraries: Vec<ProjectInputFile>,
         load: LocalProjectLoad,
-        platform: Option<(
-            std::sync::Arc<wow_project::platform_source::PlatformPackageSpecialization>,
-            wow_project::PlatformGraphProfile,
-        )>,
+        platform: Option<PlatformAssembly>,
     ) -> ServiceResult<Self> {
         match &load {
             LocalProjectLoad::Explicit => {}
@@ -286,16 +290,27 @@ impl LocalProjectInput {
                 (1024, 16 * 1024 * 1024)
             }
         };
-        let policy = ProjectBudgetPolicy::new(
-            max_files,
-            max_total_source_bytes,
-            1024 * 1024,
-            max_files,
-            262_144,
-            65_536,
-            16 * 1024 * 1024,
-        )
-        .map_err(|_| invalid("invalid local project budgets"))?;
+        let policy = match platform.as_ref().and_then(|input| input.budgets) {
+            Some(policy) => {
+                if platform
+                    .as_ref()
+                    .is_none_or(|input| input.packages.retention_limits().is_none())
+                {
+                    return Err(invalid("explicit project budgets require native retention"));
+                }
+                policy
+            }
+            None => ProjectBudgetPolicy::new(
+                max_files,
+                max_total_source_bytes,
+                1024 * 1024,
+                max_files,
+                262_144,
+                65_536,
+                16 * 1024 * 1024,
+            )
+            .map_err(|_| invalid("invalid local project budgets"))?,
+        };
         let configuration = ProjectConfigurationBuilder::new(
             input.project_id,
             kind,
@@ -323,12 +338,12 @@ impl LocalProjectInput {
                 .package_load_plan(load_plan, main_plan)
                 .map_err(|_| invalid("package load plan target mismatch"))?,
         };
-        let configuration = if let Some((packages, graph_profile)) = platform {
+        let configuration = if let Some(platform) = platform {
             configuration
-                .platform_packages(packages)
+                .platform_packages(platform.packages)
                 .map_err(|_| invalid("platform package target mismatch"))?
                 .with_package_xml_bindings(wow_project::PackageXmlBindingProfile::SameSessionV1)
-                .with_platform_graph_profile(graph_profile)
+                .with_platform_graph_profile(platform.graph_profile)
         } else {
             configuration
         };

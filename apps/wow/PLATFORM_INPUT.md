@@ -1,7 +1,7 @@
 # Manifest-bound platform graph input
 
 `wow graph build --config project.json --project <ProjectId> --format json`
-accepts `wow-service/local-platform-source/1` through the existing local input
+accepts `wow-service/local-platform-source/1` and `/2` through the existing local input
 service. This explicit read-only source/package/Main/graph route does not acquire
 source, discover packages or resolve a moving selector.
 
@@ -11,7 +11,7 @@ The JSON object rejects unknown and duplicate fields. Required fields are:
 
 | Field | Meaning |
 |---|---|
-| `schema` | `wow-service/local-platform-source/1` |
+| `schema` | `wow-service/local-platform-source/1`, or `/2` with explicit retained project budgets below |
 | `project_id`, `workspace_id`, `source_origin_id`, `logical_root` | Existing validated project identities and logical root |
 | `source_profile` | Existing `BlizzardUiSourceProfileRequest`: exact target Reference profile/generation, admitted roots, selected TOCs, exclusions and finite source limits |
 | `source` | Existing `ManifestedPlatformInput`: confined source root, pinned xtask manifest, exact revision/version, origin/materializer/license assertions and compatibility evidence |
@@ -131,6 +131,40 @@ replay1-10 retain their bytes and selection. Hydration re-admits the exact sourc
 and package owners under the captured limits. Changed limits or schema downgrade
 refuse. A successful retained Main is not full graph or persistence acceptance:
 the existing raw replay and record32MiB limits can still refuse a larger corpus.
+
+### Explicit project budgets
+
+`wow-service/local-platform-source/2` requires both `retained_package_limits`
+and `project_budgets`. The latter is the existing `ProjectBudgetPolicy` object:
+
+| Required field | Accounting unit |
+|---|---|
+| `max_files` | Physical Main files |
+| `max_total_source_bytes` | Retained physical Main UTF-8 source bytes |
+| `max_single_file_bytes` | Bytes of one physical Main file |
+| `max_update_operations` | Operations in one project update |
+| `max_analyzer_facts` | Existing aggregate member/flow/XML/package-binding facts |
+| `max_generic_findings` | Existing aggregate syntax/XML diagnostics |
+| `max_output_bytes` | Existing serialized syntax/member/flow/XML and package-binding reports |
+
+Every field is a positive `u64`; the single-file limit must not exceed the total.
+Missing, unknown, duplicate, invalid and explicit `null` values refuse before
+source acquisition. Schema `/1` rejects `project_budgets` and keeps its fixed
+policy, including the16-MiB analyzer-output ceiling. Schema `/2` without native
+retention refuses. The service passes the selected policy to native configuration
+and the existing inventory/publication gates; it does not reinterpret it as facts.
+
+All seven values already enter the configuration digest and are captured/rebuilt
+by native replay. Equal values in `/1` and `/2` preserve the same owner bundle;
+changed values change configuration identity. Retained replay remains `/11`,
+and hydration rejects changed budgets against the captured configuration digest.
+Transport selection does not change an analyzer report recipe.
+
+These budgets do not widen source admission, disk acquisition, Library, sidecar,
+graph/map or replay/store bounds. In particular the function-call sidecar has
+separate work/count/report limits and is outside this aggregate output accounting.
+Select a finite policy from actual owner measurements; this route alone does not
+qualify a complete current corpus or its allocator/peak memory.
 
 ## Scope
 

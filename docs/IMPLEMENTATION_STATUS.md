@@ -135,6 +135,13 @@ walk: `visit` increments to2000001 against `MAX_AST_VISITS=2000000` (the observe
 guard and counter invariant, not a finished-corpus count). Final session, flow,
 classification and graph remain unqualified. Exact operation evidence belongs
 in #113; other function-call guards are unchanged.
+Retained platform transport `/2` now requires an explicit validated seven-field
+`ProjectBudgetPolicy` and passes it through existing native configuration,
+inventory/publication and replay. `/1` rejects the selector and retains its fixed
+policy. Focused schema/refusal, exact-output-boundary and disk-absent replay cases
+pass; equal policies preserve the owner bundle and changed policies alter its
+configuration digest. The report recipes and replay11 grammar remain unchanged.
+See [platform input](../apps/wow/PLATFORM_INPUT.md#explicit-project-budgets).
 Full analysis/graph/maps/persistence remain unqualified under #113.
 Explicit retained XSD component admission is now executable through the existing
 XML owner, with root-only global symbols and final unsupported context propagation.
