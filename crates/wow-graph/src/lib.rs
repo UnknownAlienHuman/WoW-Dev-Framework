@@ -34,10 +34,11 @@ pub use model::{
     GraphConfidence, GraphCoverageRecord, GraphCoverageState, GraphEdge, GraphLimits, GraphNode,
     GraphRelationKind, GraphSnapshot,
 };
+pub use partition::ValidatedGraphPartitionSnapshot;
 pub use partition::{
     GRAPH_PARTITION_SNAPSHOT_SCHEMA, GRAPH_PARTITION_SNAPSHOT_SCHEMA_V2, GraphPartitionChange,
-    GraphPartitionReplacement, GraphPartitionReplacementPlan, GraphPartitionSnapshot,
-    GraphProducerPartition, MAX_GRAPH_PRODUCER_PARTITIONS,
+    GraphPartitionRead, GraphPartitionReplacement, GraphPartitionReplacementPlan,
+    GraphPartitionSnapshot, GraphProducerPartition, MAX_GRAPH_PRODUCER_PARTITIONS,
 };
 pub use partition_session::GraphPartitionSession;
 pub use paths::{

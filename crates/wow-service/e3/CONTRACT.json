@@ -1,7 +1,16 @@
 {
   "schema_version": 1,
   "contract_id": "wow-service/e3-c/context-acquisition-and-use-cases",
-  "state": "implementation-ready-documentation-no-rust-code",
+  "state": "partial-functional-freeze-open",
+  "implemented_slice": {
+    "operation": "context_map",
+    "host_schema": "wow-service/context-map-native-host/1",
+    "request_schema": "wow-service/context-map-request/1",
+    "result_schema": "wow-service/context-map-result/1",
+    "route": "apps/wow/CONTEXT_MAP.md",
+    "tracker": "https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122",
+    "acceptance": "pending"
+  },
   "work_package": "E3-C",
   "crate": "wow-service",
   "context_path_direct_dependencies": [
@@ -186,7 +195,7 @@
     "apps/wow/e3/CONTRACT.json"
   ],
   "freeze_gate": {
-    "implementation_state": "not-started",
+    "implementation_state": "partial-functional-selected-profile-freeze",
     "required_before_first_rust_implementation": [
       "all prerequisite implementation commits and fixture bundle digests",
       "exact store project graph reference and context owner-port catalog IDs",

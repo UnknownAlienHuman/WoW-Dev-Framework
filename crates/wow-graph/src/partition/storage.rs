@@ -71,6 +71,16 @@ impl GraphPartitionSnapshot {
     /// Restore only from this exact generation's complete membership, then replay
     /// the existing registry/proposal/materialization validator, not Lua analysis.
     pub fn read_stored(read: &ReadSnapshot, stop: &AtomicBool) -> GraphResult<Self> {
+        Self::read_stored_validated(read, stop).map(ValidatedGraphPartitionSnapshot::into_raw)
+    }
+
+    /// Same exact manifested read and validation, retaining its owned proof.
+    /// Acquisition can move this owner, then borrow it for many bounded queries
+    /// without running graph validation again at the read-batch boundary.
+    pub fn read_stored_validated(
+        read: &ReadSnapshot,
+        stop: &AtomicBool,
+    ) -> GraphResult<ValidatedGraphPartitionSnapshot> {
         check_cancelled(stop)?;
         let header_schema = read
             .manifest()
@@ -154,7 +164,8 @@ impl GraphPartitionSnapshot {
             )?,
         };
         result.validate(stop)?;
-        Ok(result)
+        check_cancelled(stop)?;
+        Ok(ValidatedGraphPartitionSnapshot { owner: result })
     }
 }
 fn producer_key(id: &str) -> GraphResult<String> {

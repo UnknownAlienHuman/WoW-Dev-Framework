@@ -80,6 +80,65 @@ fn publish(
     Ok((request, current))
 }
 
+#[test]
+fn checked_close_preserves_live_reader_and_releases_only_its_lease() -> TestResult {
+    let stop = AtomicBool::new(false);
+    let (root, mut store, catalog) = new_store("checked-close")?;
+    let source = root.join("source");
+    let epoch = store.epoch().clone();
+    let (request, current) = publish(&mut store, "checked-close-generation", 11, &stop)?;
+    let read = store.read(&ReadSelector::Current, &stop)?;
+    assert_eq!(store.checkpoint(&stop)?.active_readers, 1);
+
+    // Closing one native snapshot must leave the other generation lease intact.
+    let sibling = store.read(
+        &ReadSelector::Exact(request.generation().generation_id.clone()),
+        &stop,
+    )?;
+    assert_eq!(store.checkpoint(&stop)?.active_readers, 2);
+    sibling.close()?;
+    assert_eq!(store.checkpoint(&stop)?.active_readers, 1);
+    check_fixture(&read, 11, &stop)?;
+
+    assert_eq!(
+        store
+            .close()
+            .err()
+            .ok_or("store close accepted an active reader")?
+            .code(),
+        StoreErrorCode::LeaseConflict
+    );
+    // The writer was consumed, so this lock must now be held by the native read.
+    assert_eq!(
+        ProjectStore::open(&source, &catalog)
+            .err()
+            .ok_or("reader lost the OS-held writer lock after close refusal")?
+            .code(),
+        StoreErrorCode::WriterBusy
+    );
+    assert_eq!(read.epoch(), &epoch);
+    assert_eq!(read.manifest(), request.generation());
+    assert_eq!(read.current_at_acquisition(), Some(&current));
+    check_fixture(&read, 11, &stop)?;
+    read.close()?;
+
+    let reopened = ProjectStore::open(&source, &catalog)?;
+    assert_eq!(reopened.epoch(), &epoch);
+    assert_eq!(reopened.current()?, Some(current.clone()));
+    assert_eq!(reopened.checkpoint(&stop)?.active_readers, 0);
+    let reopened_read = reopened.read(&ReadSelector::Current, &stop)?;
+    assert_eq!(reopened_read.epoch(), &epoch);
+    assert_eq!(reopened_read.manifest(), request.generation());
+    assert_eq!(reopened_read.current_at_acquisition(), Some(&current));
+    check_fixture(&reopened_read, 11, &stop)?;
+    assert_eq!(reopened.checkpoint(&stop)?.active_readers, 1);
+    reopened_read.close()?;
+    assert_eq!(reopened.checkpoint(&stop)?.active_readers, 0);
+    reopened.close()?;
+    fs::remove_dir_all(root)?;
+    Ok(())
+}
+
 fn owners(
     backup: &VerifiedBackup,
     request: &PublicationRequest,

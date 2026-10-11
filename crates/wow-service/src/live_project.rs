@@ -67,7 +67,33 @@ pub struct LiveProjectRead {
     candidate: Option<crate::graph::BlizzardUiIndexCandidate>,
     read: ReadSnapshot,
 }
+/// Checked reconstruction unwind is distinct from native acquisition failures,
+/// whose lower-level close outcome is not exposed by the current store API.
+pub(crate) enum ReadFailureClosure {
+    Closed,
+    Failed,
+    NotEvaluated,
+}
+pub(crate) struct LiveProjectReadFailure {
+    pub error: ServiceError,
+    pub closure: ReadFailureClosure,
+}
 impl LiveProjectRead {
+    /// Release retained domain owners before checking transaction/lease closure.
+    pub fn close(self) -> ServiceResult<()> {
+        let Self {
+            pair,
+            candidate,
+            read,
+        } = self;
+        drop(candidate);
+        drop(pair);
+        read.close().map_err(store_error)
+    }
+    /// Genuine immutable pair held by this exact store read and generation lease.
+    pub fn pair(&self) -> &AcquiredProjectPair {
+        &self.pair
+    }
     /// Later Skeleton owners consume this genuine sealed candidate, never a DTO.
     pub fn candidate(&self) -> Option<&crate::graph::BlizzardUiIndexCandidate> {
         self.candidate.as_ref()
@@ -121,6 +147,10 @@ impl LiveProjectRead {
     }
 }
 impl LiveProjectStore {
+    /// Check native store closure without revoking another live reader.
+    pub fn close(self) -> ServiceResult<()> {
+        self.store.close().map_err(store_error)
+    }
     pub fn create(root: &Path, owner: &str) -> ServiceResult<Self> {
         Ok(Self {
             store: ProjectStore::create_with_gc(root, owner, catalog()?).map_err(store_error)?,
@@ -285,8 +315,36 @@ impl LiveProjectStore {
         selector: &ReadSelector,
         stop: &AtomicBool,
     ) -> ServiceResult<LiveProjectRead> {
-        let read = self.store.read(selector, stop).map_err(store_error)?;
-        let (pair, candidate) = candidate::read_owners(&read, stop)?;
+        self.read_checked(selector, stop)
+            .map_err(|failure| failure.error)
+    }
+    pub(crate) fn read_checked(
+        &self,
+        selector: &ReadSelector,
+        stop: &AtomicBool,
+    ) -> Result<LiveProjectRead, LiveProjectReadFailure> {
+        let read = self
+            .store
+            .read(selector, stop)
+            .map_err(|error| LiveProjectReadFailure {
+                error: store_error(error),
+                closure: ReadFailureClosure::NotEvaluated,
+            })?;
+        let (pair, candidate) = match candidate::read_owners(&read, stop) {
+            Ok(owners) => owners,
+            Err(error) => {
+                return Err(match read.close() {
+                    Ok(()) => LiveProjectReadFailure {
+                        error,
+                        closure: ReadFailureClosure::Closed,
+                    },
+                    Err(_) => LiveProjectReadFailure {
+                        error: fail(ServiceErrorCode::InternalContractViolation),
+                        closure: ReadFailureClosure::Failed,
+                    },
+                });
+            }
+        };
         Ok(LiveProjectRead {
             pair,
             candidate,

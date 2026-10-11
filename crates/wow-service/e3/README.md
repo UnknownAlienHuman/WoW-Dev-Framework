@@ -1,6 +1,9 @@
 # `wow-service` E3-C context acquisition and use-case orchestration
 
-**Status:** implementation-ready documentation; no Rust code yet.
+**Status:** partial executable `context_map` over a retained native primary pair.
+The [native route](../../../apps/wow/CONTEXT_MAP.md) freezes explicit host admission,
+selectors, guards, canonical results and checked close behavior. Other E3-C
+operations and complete acquisition/qualification gates remain pending in #122.
 
 **Contract ID:** `wow-service/e3-c/context-acquisition-and-use-cases`
 

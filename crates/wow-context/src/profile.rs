@@ -1,0 +1,46 @@
+use serde::Serialize;
+use wow_graph::GraphRelationKind;
+
+pub const PRIMARY_MAP_PROFILE: &str = "wow-context/primary-direct-navigation/1";
+
+/// Frozen canonical descriptor. Node ordering is exact node ID; direct parallel
+/// edges retain native edge-ID order. No grouping, source-text labels, or paths.
+pub const PRIMARY_MAP_PROFILE_BYTES: &[u8] = br#"{"confidence":"include_candidate","direction":"both","edges":["contains","defines","depends_on","optional_depends_on","owns","loads","loads_before"],"nodes":"exact_root_and_direct_endpoints","ordering":"node_id_then_edge_id","platform":"absent_profile_excluded","privacy":"local_metadata_only","profile":"wow-context/primary-direct-navigation/1","reference":"binding_and_coverage_only","source":"handles_and_load_custody_only","tokens":"unavailable"}"#;
+
+pub(crate) const RELATIONS: [GraphRelationKind; 7] = [
+    GraphRelationKind::Contains,
+    GraphRelationKind::Defines,
+    GraphRelationKind::DependsOn,
+    GraphRelationKind::OptionalDependsOn,
+    GraphRelationKind::Owns,
+    GraphRelationKind::Loads,
+    GraphRelationKind::LoadsBefore,
+];
+
+#[derive(Serialize)]
+pub(crate) struct ProfileDescription {
+    confidence: &'static str,
+    direction: &'static str,
+    edges: &'static [GraphRelationKind],
+    nodes: &'static str,
+    ordering: &'static str,
+    platform: &'static str,
+    privacy: &'static str,
+    profile: &'static str,
+    reference: &'static str,
+    source: &'static str,
+    tokens: &'static str,
+}
+pub(crate) const PROFILE: ProfileDescription = ProfileDescription {
+    confidence: "include_candidate",
+    direction: "both",
+    edges: &RELATIONS,
+    nodes: "exact_root_and_direct_endpoints",
+    ordering: "node_id_then_edge_id",
+    platform: "absent_profile_excluded",
+    privacy: "local_metadata_only",
+    profile: PRIMARY_MAP_PROFILE,
+    reference: "binding_and_coverage_only",
+    source: "handles_and_load_custody_only",
+    tokens: "unavailable",
+};

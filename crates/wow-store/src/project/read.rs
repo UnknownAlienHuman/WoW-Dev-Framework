@@ -19,7 +19,7 @@ pub enum ReadSelector {
 /// A real SQLite read transaction plus process-local generation lease. The
 /// writer may activate another generation; this snapshot does not move with it.
 pub struct ReadSnapshot {
-    connection: Connection,
+    connection: Option<Connection>,
     manifest: GenerationManifest,
     current_at_acquisition: Option<CurrentPublication>,
     epoch: EpochManifest,
@@ -77,12 +77,27 @@ impl ReadSnapshot {
             .entry(manifest.generation_id.clone())
             .or_default() += 1;
         Ok(Self {
-            connection,
+            connection: Some(connection),
             manifest,
             current_at_acquisition: current,
             epoch: db.epoch.clone(),
             life: Rc::clone(&db.life),
         })
+    }
+    /// End this read transaction and check native connection closure. The lease
+    /// is released even when rollback or close fails; neither error is success.
+    pub fn close(mut self) -> StoreResult<()> {
+        let connection = self.connection.take().ok_or_else(invalid)?;
+        let rollback = connection
+            .execute_batch("ROLLBACK")
+            .map_err(StoreError::database);
+        // Do not short-circuit on rollback failure: close remains mandatory.
+        let close = connection.close().map_err(|(connection, error)| {
+            drop(connection);
+            StoreError::database(error)
+        });
+        self.release_lease();
+        rollback.and(close)
     }
     pub fn manifest(&self) -> &GenerationManifest {
         &self.manifest
@@ -103,7 +118,8 @@ impl ReadSnapshot {
             return Ok(None);
         };
         let member = self.manifest.members.get(index).ok_or_else(invalid)?;
-        let record = read_partition(&self.connection, member)?;
+        let connection = self.connection.as_ref().ok_or_else(invalid)?;
+        let record = read_partition(connection, member)?;
         checkpoint(stop)?;
         Ok(Some(record))
     }
@@ -122,22 +138,28 @@ impl ReadSnapshot {
             validation: ValidationRecord::new(&self.manifest, checks)?,
         })
     }
-}
-impl Drop for ReadSnapshot {
-    fn drop(&mut self) {
+    fn release_lease(&mut self) {
         self.life
             .reader_admissions
             .set(self.life.reader_admissions.get().saturating_sub(1));
         self.life
             .lease_revision
             .set(self.life.lease_revision.get().saturating_add(1));
-        let _ = self.connection.execute_batch("ROLLBACK");
         let mut leases = self.life.leases.borrow_mut();
         if let Some(n) = leases.get_mut(&self.manifest.generation_id) {
             *n = n.saturating_sub(1);
             if *n == 0 {
                 leases.remove(&self.manifest.generation_id);
             }
+        }
+    }
+}
+impl Drop for ReadSnapshot {
+    fn drop(&mut self) {
+        // Taking the connection makes explicit close and fallback one-shot.
+        if let Some(connection) = self.connection.take() {
+            let _ = connection.execute_batch("ROLLBACK");
+            self.release_lease();
         }
     }
 }

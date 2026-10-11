@@ -1,6 +1,8 @@
 # Current project work map
 
-The active implementation package is **W17**, tracked by
+The active implementation slice is **W18 Project Map**, tracked by
+[#122](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122).
+The W17 queue and qualification debt remain in
 [#106](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/106).
 Use its current bounded sole-writer claim and
 [the execution model](EXECUTION_MODEL.md); historical checkpoints are evidence.
@@ -16,9 +18,12 @@ have a bounded native lifecycle. Actual CLI and publication evidence is retained
 in #116; this does not establish full E3 acceptance.
 
 [#122](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122) owns the
-missing W18 Project Map and its service/CLI route. Its first primary-user profile
-explicitly omits the optional platform universe; broader context layers remain
-in the completion census. Do not infer an implemented map from its specification.
+W18 Project Map and its service/CLI route. The first
+[primary direct profile](../crates/wow-context/e3/NATIVE_PRIMARY_MAP.md) and
+[`wow context map`](../apps/wow/CONTEXT_MAP.md) now have executable owners.
+The profile requires an exact graph-entity root and explicitly omits the optional
+platform universe. Project-container roots, broader context layers and acceptance
+remain open in #122 and the completion census.
 
 [#121](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/121) retains the
 latest full-corpus functions refusal and targeted capacity evidence.

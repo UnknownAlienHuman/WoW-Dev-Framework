@@ -95,6 +95,22 @@ pub(super) struct Database {
 }
 
 impl Database {
+    pub fn close(self) -> StoreResult<()> {
+        // Admission is shared across replacement epochs, including old readers.
+        if self.life.reader_admissions.get() != 0 {
+            return Err(failure(StoreErrorCode::LeaseConflict));
+        }
+        let Self {
+            connection, life, ..
+        } = self;
+        // Keep the OS-held writer locks through the checked close and fallback.
+        let result = connection.close().map_err(|(connection, error)| {
+            drop(connection);
+            StoreError::database(error)
+        });
+        drop(life);
+        result
+    }
     pub fn create(root: &Path, owner: &str, catalog: RecordCatalog) -> StoreResult<Self> {
         Self::create_profile(root, owner, catalog, PHYSICAL_PROFILE)
     }

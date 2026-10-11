@@ -116,6 +116,32 @@ impl GraphExplainQuery {
             return Err(super::invalid());
         }
         let explanation = self.execute(owner, stop)?;
+        self.resolve_explanation(explanation, catalog, limits, stop)
+    }
+
+    pub(crate) fn execute_with_evidence_on_read<'a>(
+        &self,
+        read: &crate::GraphPartitionRead<'a>,
+        catalog: &'a GraphEvidenceCatalog,
+        limits: GraphEvidenceResolveLimits,
+        stop: &AtomicBool,
+    ) -> GraphResult<GraphResolvedExplanation<'a>> {
+        checkpoint(stop)?;
+        limits.validate()?;
+        if read.owner().source_context_id() != catalog.context().context_id() {
+            return Err(super::invalid());
+        }
+        let explanation = self.execute_on_read(read, stop)?;
+        self.resolve_explanation(explanation, catalog, limits, stop)
+    }
+
+    fn resolve_explanation<'a>(
+        &self,
+        explanation: GraphExplanation<'a>,
+        catalog: &'a GraphEvidenceCatalog,
+        limits: GraphEvidenceResolveLimits,
+        stop: &AtomicBool,
+    ) -> GraphResult<GraphResolvedExplanation<'a>> {
         let mut evidence_roots = BTreeSet::new();
         let mut source_roots = BTreeSet::new();
         let mut work = 0u32;

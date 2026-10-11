@@ -106,6 +106,23 @@ impl GraphNeighborReadQuery {
         snapshot: &'a GraphSnapshot,
         stop: &AtomicBool,
     ) -> GraphResult<GraphNeighborView<'a>> {
+        self.preflight(snapshot, stop)?;
+        admit_snapshot(&self.snapshot_id, snapshot, stop)?;
+        self.collect(snapshot, stop)
+    }
+
+    // Only the graph-owned sealed read proof can reach this alternative entry.
+    pub(crate) fn execute_on_read<'a>(
+        &self,
+        read: &crate::GraphPartitionRead<'a>,
+        stop: &AtomicBool,
+    ) -> GraphResult<GraphNeighborView<'a>> {
+        let snapshot = read.owner().snapshot();
+        self.preflight(snapshot, stop)?;
+        self.collect(snapshot, stop)
+    }
+
+    fn preflight(&self, snapshot: &GraphSnapshot, stop: &AtomicBool) -> GraphResult<()> {
         checkpoint(stop)?;
         self.validate()?;
         if self.snapshot_id != *snapshot.snapshot_id() {
@@ -120,7 +137,14 @@ impl GraphNeighborReadQuery {
         {
             return Err(budget());
         }
-        admit_snapshot(&self.snapshot_id, snapshot, stop)?;
+        Ok(())
+    }
+
+    fn collect<'a>(
+        &self,
+        snapshot: &'a GraphSnapshot,
+        stop: &AtomicBool,
+    ) -> GraphResult<GraphNeighborView<'a>> {
         let root = snapshot
             .node(self.query.node_id())
             .ok_or_else(|| invalid("neighbor root is absent from the selected snapshot"))?;

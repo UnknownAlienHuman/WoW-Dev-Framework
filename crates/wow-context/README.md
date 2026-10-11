@@ -1,6 +1,12 @@
 # `wow-context` contract router
 
-**Status:** E3-B Project Map/L0/L1/context-pack contract and the E6-B exact mapped-root handoff seam are implementation-ready documentation; no Rust code exists.
+**Status:** partial executable E3-B primary Project Map. L0/L1, context packs, renderers and the E6-B mapped-root handoff remain specified and unimplemented.
+
+The first implemented profile is documented in
+[`e3/NATIVE_PRIMARY_MAP.md`](e3/NATIVE_PRIMARY_MAP.md). It binds genuine retained
+project/graph owners and an exact configured Reference view, then preserves native
+direct nodes, edges, support and load/source custody in one immutable bounded map.
+Broader E3-B and launch acceptance remain open in Issue #122.
 
 `wow-context` converts exact published project, Blizzard UI source, graph, analyzer-derived, and reference views into deterministic bounded context artifacts. It does not parse source, own graph/search/storage, infer facts with a model, consume external-provider semantics, or mutate projects.
 
@@ -56,14 +62,13 @@ No direct dependency on `wow-store`, `wow-emmy`, `wow-recognizers`, `wow-rules`,
 - no unbounded source/graph export;
 - no physical cache/persistence implementation;
 - no diagnostics, remediation, edits, lineage, impact, external-candidate verification, or runtime truth;
-- no Cargo/Rust/CI activation during this documentation phase.
 
 ## Current implementation state
 
 ```text
 documentation frontier: E6-B exact mapped-root handoff seam
-implementation frontier: not started
-Cargo.toml: absent
-Rust source: absent
-CI/workflows: absent
+implementation frontier: bounded primary direct navigation
+Cargo.toml: active root workspace member
+Rust source: universe, profile, map, budget and typed errors
+remaining scope: L0/L1, packs/rendering, platform/combined maps and acceptance
 ```

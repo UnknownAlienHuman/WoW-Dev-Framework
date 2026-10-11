@@ -372,7 +372,8 @@ pub struct AcquiredProjectPair {
     project: ProjectView,
     publisher: ProjectPublisher,
     supports_physical_update: bool,
-    graph: GraphPartitionSnapshot,
+    graph: wow_graph::ValidatedGraphPartitionSnapshot,
+    source_provenance: Option<Box<crate::graph::ProjectGraphProvenance>>,
     publication_set_id: String,
 }
 impl AcquiredProjectPair {
@@ -380,7 +381,21 @@ impl AcquiredProjectPair {
         &self.project
     }
     pub fn graph(&self) -> &GraphPartitionSnapshot {
-        &self.graph
+        self.graph.as_snapshot()
+    }
+    /// Borrow the retained graph owner's proof without a new rebuild or clone.
+    pub fn graph_read(
+        &self,
+        stop: &AtomicBool,
+    ) -> wow_graph::GraphResult<wow_graph::GraphPartitionRead<'_>> {
+        self.graph.borrow_read(stop)
+    }
+    /// Exact source-owner provenance rebuilt while validating this acquired pair.
+    /// Only the ordinary source branch retains it; direct/native acquisition
+    /// returns None. This accessor does not construct an evidence catalog.
+    #[must_use]
+    pub fn source_provenance(&self) -> Option<&crate::graph::ProjectGraphProvenance> {
+        self.source_provenance.as_deref()
     }
     pub fn publication_set_id(&self) -> &str {
         &self.publication_set_id
@@ -428,7 +443,7 @@ impl AcquiredProjectPair {
         {
             return Err(invalid());
         }
-        validate_native_parts(&self.project, &self.graph, native, stop)?;
+        validate_native_parts(&self.project, self.graph(), native, stop)?;
         crate::analyzer::checkpoint(stop)?;
         Ok(self.publisher)
     }
@@ -438,7 +453,7 @@ impl AcquiredProjectPair {
             read,
             stop,
             |_, _| Ok(((), Vec::new())),
-            |project, graph, _, stop| validate_pair(project, graph, stop),
+            |project, graph, _, stop| validate_pair_with_source_provenance(project, graph, stop),
         )
         .map(|(pair, ())| pair)
     }
@@ -459,7 +474,7 @@ impl AcquiredProjectPair {
         E: From<crate::ProjectError>,
     {
         Self::read_owner(read, stop, rebuild, |project, graph, owner: &T, stop| {
-            validate_native_parts(project, graph, owner.as_ref(), stop)
+            validate_native_parts(project, graph, owner.as_ref(), stop).map(|()| None)
         })
     }
 
@@ -475,7 +490,7 @@ impl AcquiredProjectPair {
             &GraphPartitionSnapshot,
             &T,
             &AtomicBool,
-        ) -> ProjectResult<()>,
+        ) -> ProjectResult<Option<crate::graph::ProjectGraphProvenance>>,
     ) -> Result<(Self, T), E> {
         crate::analyzer::checkpoint(stop)?;
         let header: PairHeader = load(read, HEADER_KEY, "wow-project.live-pair.v1", stop)?;
@@ -519,15 +534,17 @@ impl AcquiredProjectPair {
         if replay.storage_schema()? != replay_schema {
             return Err(invalid().into());
         }
-        let graph = GraphPartitionSnapshot::read_stored(read, stop).map_err(graph_error)?;
+        let graph =
+            GraphPartitionSnapshot::read_stored_validated(read, stop).map_err(graph_error)?;
         let publisher = replay.hydrate_owner(stop)?;
         let project = publisher.open_current()?;
-        let (owner, companion_records) = rebuild(&project, &graph)?;
-        validate(&project, &graph, &owner, stop)?;
+        let (owner, companion_records) = rebuild(&project, graph.as_snapshot())?;
+        let source_provenance = validate(&project, graph.as_snapshot(), &owner, stop)?;
         // Dispatch from the actual epoch retained by this read lease. A failed
         // namespace check cannot fall back to the legacy graph-universe mode.
         let namespace = read.epoch().namespace();
-        let mut expected = plan_in_namespace(&replay, &project, &graph, namespace, stop)?;
+        let mut expected =
+            plan_in_namespace(&replay, &project, graph.as_snapshot(), namespace, stop)?;
         if expected
             .records
             .len()
@@ -549,7 +566,7 @@ impl AcquiredProjectPair {
         }
         expected.records.sort_by(|a, b| a.key().cmp(b.key()));
         let expected_owner = namespace.map_or_else(
-            || graph.snapshot().universe().as_str(),
+            || graph.as_snapshot().snapshot().universe().as_str(),
             |namespace| namespace.id().as_str(),
         );
         if expected.bindings != read.manifest().bindings
@@ -582,6 +599,7 @@ impl AcquiredProjectPair {
                 publisher,
                 supports_physical_update: replay.supports_physical_update(),
                 graph,
+                source_provenance: source_provenance.map(Box::new),
                 publication_set_id: header.publication_set_id,
             },
             owner,
@@ -639,6 +657,14 @@ fn validate_pair(
     graph: &GraphPartitionSnapshot,
     stop: &AtomicBool,
 ) -> ProjectResult<()> {
+    validate_pair_with_source_provenance(project, graph, stop).map(|_| ())
+}
+
+fn validate_pair_with_source_provenance(
+    project: &ProjectView,
+    graph: &GraphPartitionSnapshot,
+    stop: &AtomicBool,
+) -> ProjectResult<Option<crate::graph::ProjectGraphProvenance>> {
     crate::analyzer::checkpoint(stop)?;
     project.snapshot().validate()?;
     graph.validate(stop).map_err(graph_error)?;
@@ -647,7 +673,7 @@ fn validate_pair(
         .platform_graph_profile()
         .is_some_and(crate::PlatformGraphProfile::is_direct)
     {
-        return direct::validate(project, graph, stop);
+        return direct::validate(project, graph, stop).map(|()| None);
     }
     if direct::has_direct_partitions(graph) {
         return Err(invalid());
@@ -656,7 +682,7 @@ fn validate_pair(
     // is relabeled as a live project or treated as an executable analyzer.
     let proposals = build_source_graph_proposals(project, stop)?;
     let inventory_batch = proposals.inventory_batch().cloned();
-    let (registry, batch, mut coverage, _, limits) = proposals.into_parts();
+    let (registry, batch, mut coverage, provenance, limits) = proposals.into_parts();
     // Partition publication canonically orders this exact owner-provided set.
     coverage.sort_by_key(wow_graph::GraphCoverageRecord::relation);
     let source = graph
@@ -694,7 +720,7 @@ fn validate_pair(
                 && partition.report().accepted_relations().is_empty() => {}
         _ => return Err(invalid()),
     }
-    Ok(())
+    Ok(Some(provenance))
 }
 
 fn plan_in_namespace(

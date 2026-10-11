@@ -1,6 +1,9 @@
 # `apps/wow` E3-C context CLI contract
 
-**Status:** implementation-ready documentation; no Rust code yet.
+**Status:** partial executable `context map` in canonical envelope JSON mode.
+[`../CONTEXT_MAP.md`](../CONTEXT_MAP.md) defines the implemented grammar and
+remaining root/profile limits. Other commands, output modes and E3-C acceptance
+remain specified and unimplemented under Issue #122.
 
 **Contract ID:** `apps/wow/e3-c/context-cli`
 

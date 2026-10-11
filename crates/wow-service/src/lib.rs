@@ -10,6 +10,7 @@
 pub mod annotation_admin;
 mod backend;
 mod configuration;
+pub mod context;
 mod error;
 pub mod graph;
 mod identity;

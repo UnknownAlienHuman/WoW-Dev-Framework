@@ -125,6 +125,24 @@ impl GraphExplainQuery {
         owner: &'a GraphPartitionSnapshot,
         cancelled: &AtomicBool,
     ) -> GraphResult<GraphExplanation<'a>> {
+        self.preflight(owner, cancelled)?;
+        owner.validate(cancelled)?;
+        checkpoint(cancelled)?;
+        collect::execute(self, owner, cancelled)
+    }
+
+    pub(crate) fn execute_on_read<'a>(
+        &self,
+        read: &crate::GraphPartitionRead<'a>,
+        cancelled: &AtomicBool,
+    ) -> GraphResult<GraphExplanation<'a>> {
+        let owner = read.owner();
+        self.preflight(owner, cancelled)?;
+        checkpoint(cancelled)?;
+        collect::execute(self, owner, cancelled)
+    }
+
+    fn preflight(&self, owner: &GraphPartitionSnapshot, cancelled: &AtomicBool) -> GraphResult<()> {
         checkpoint(cancelled)?;
         self.validate()?;
         if owner.snapshot().snapshot_id() != &self.snapshot_id {
@@ -156,9 +174,7 @@ impl GraphExplainQuery {
                 ));
             }
         }
-        owner.validate(cancelled)?;
-        checkpoint(cancelled)?;
-        collect::execute(self, owner, cancelled)
+        Ok(())
     }
 }
 

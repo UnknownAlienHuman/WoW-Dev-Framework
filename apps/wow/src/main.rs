@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 mod args;
+mod context;
 mod graph;
 mod graph_build;
 mod graph_store;
@@ -32,6 +33,9 @@ fn run() -> u8 {
             Ok(()) => 0,
             Err(_) => 4,
         };
+    }
+    if arguments.first().is_some_and(|value| value == "context") {
+        return context::run(arguments);
     }
     if arguments.first().is_some_and(|value| value == "native") {
         return native::run(arguments);

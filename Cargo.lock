@@ -2543,6 +2543,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "wow-context"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "wow-core",
+ "wow-graph",
+ "wow-project",
+ "wow-reference",
+]
+
+[[package]]
 name = "wow-core"
 version = "0.1.0"
 dependencies = [
@@ -2672,6 +2684,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "wow-annotations",
+ "wow-context",
  "wow-core",
  "wow-emmy",
  "wow-graph",

@@ -55,6 +55,10 @@ pub struct ProjectStore {
     db: Database,
 }
 impl ProjectStore {
+    /// Check native writer closure. Active readers are not revoked to close it.
+    pub fn close(self) -> StoreResult<()> {
+        self.db.close()
+    }
     pub fn create(
         root: impl AsRef<Path>,
         owner: &str,

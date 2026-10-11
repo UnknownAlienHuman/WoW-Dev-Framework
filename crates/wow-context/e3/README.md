@@ -1,6 +1,9 @@
 # `wow-context` E3-B Project Map, L0/L1, and context-pack contract
 
-**Status:** implementation-ready documentation; no Rust code yet.
+**Status:** partial executable primary direct navigation. See
+[`NATIVE_PRIMARY_MAP.md`](NATIVE_PRIMARY_MAP.md) for the implemented profile and
+its precise input/output boundaries. The complete E3-B contract below remains
+the target; broader operations and acceptance are pending under Issue #122.
 
 **Contract ID:** `wow-context/e3-b/project-map-l0-l1-context-pack`
 

@@ -87,6 +87,82 @@ pub struct GraphPartitionSnapshot {
     snapshot: GraphSnapshot,
 }
 
+/// Graph-owned proof that one exact immutable partition passed full validation.
+/// The proof and its results borrow the owner. It has no decoded/caller-supplied
+/// constructor, serialization, cache flag or authority over project acquisition.
+#[derive(Debug)]
+pub struct GraphPartitionRead<'a> {
+    owner: &'a GraphPartitionSnapshot,
+}
+
+impl<'a> GraphPartitionRead<'a> {
+    /// The exact immutable owner whose partition closure was validated.
+    #[must_use]
+    pub const fn owner(&self) -> &'a GraphPartitionSnapshot {
+        self.owner
+    }
+
+    /// Reuse admission while retaining every exact-ID/work/output query guard.
+    pub fn neighbors(
+        &self,
+        query: &crate::GraphNeighborReadQuery,
+        stop: &AtomicBool,
+    ) -> GraphResult<crate::GraphNeighborView<'a>> {
+        query.execute_on_read(self, stop)
+    }
+
+    /// Original retained support and admitted evidence; no source is reopened.
+    pub fn explain_with_evidence(
+        &self,
+        query: &crate::GraphExplainQuery,
+        catalog: &'a crate::GraphEvidenceCatalog,
+        limits: crate::GraphEvidenceResolveLimits,
+        stop: &AtomicBool,
+    ) -> GraphResult<crate::GraphResolvedExplanation<'a>> {
+        query.execute_with_evidence_on_read(self, catalog, limits, stop)
+    }
+}
+
+impl<'a> crate::GraphProducerLookup<'a> {
+    /// This sealed lookup already validated this exact owner in input_view.
+    /// Reusing its proof does not retain or clone the lookup's input projection.
+    pub fn open_read_view(&self, stop: &AtomicBool) -> GraphResult<GraphPartitionRead<'a>> {
+        check_cancelled(stop)?;
+        Ok(GraphPartitionRead {
+            owner: self.owner(),
+        })
+    }
+}
+
+/// Immutable owned proof emitted only after the retained-storage owner has
+/// validated its exact partition closure. No raw/decoded constructor, mutable
+/// accessor, serialization or cloning can mint or retarget this proof.
+#[derive(Debug)]
+pub struct ValidatedGraphPartitionSnapshot {
+    owner: GraphPartitionSnapshot,
+}
+
+impl ValidatedGraphPartitionSnapshot {
+    /// Existing graph readers see the identical immutable records.
+    #[must_use]
+    pub const fn as_snapshot(&self) -> &GraphPartitionSnapshot {
+        &self.owner
+    }
+
+    /// Consume the proof without copying its owner. The resulting raw snapshot
+    /// still requires independent admission for raw query/read entry points.
+    #[must_use]
+    pub fn into_raw(self) -> GraphPartitionSnapshot {
+        self.owner
+    }
+
+    /// Borrow the already validated retained owner; no rebuild or graph clone.
+    pub fn borrow_read(&self, stop: &AtomicBool) -> GraphResult<GraphPartitionRead<'_>> {
+        check_cancelled(stop)?;
+        Ok(GraphPartitionRead { owner: &self.owner })
+    }
+}
+
 /// One partition is replaced, never merged with its previous output. `None`
 /// means the partition must be absent; `Some` binds its exact previous digest,
 /// including the previous producer version. Empty batches retain a tombstone.
@@ -209,6 +285,15 @@ impl GraphPartitionSnapshot {
     pub fn input_view(&self, cancelled: &AtomicBool) -> GraphResult<GraphSnapshot> {
         self.validate(cancelled)?;
         materialize::input_view(&self.foundation, &self.partitions, false, cancelled)
+    }
+
+    /// Validate once, then borrow this exact partition for a bounded read batch.
+    /// Raw/deserialized snapshots receive the same full independent validation;
+    /// ordinary query execute methods continue to validate on every raw entry.
+    pub fn open_read_view(&self, stop: &AtomicBool) -> GraphResult<GraphPartitionRead<'_>> {
+        self.validate(stop)?;
+        check_cancelled(stop)?;
+        Ok(GraphPartitionRead { owner: self })
     }
 
     pub fn validate(&self, cancelled: &AtomicBool) -> GraphResult<()> {

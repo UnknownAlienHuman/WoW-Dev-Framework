@@ -1,7 +1,15 @@
 {
   "schema_version": 1,
   "contract_id": "apps/wow/e3-c/context-cli",
-  "state": "implementation-ready-documentation-no-rust-code",
+  "state": "partial-functional-freeze-open",
+  "implemented_slice": {
+    "command": "context map",
+    "output": "envelope-json",
+    "explicit_host_flag": "--native-host-config",
+    "route": "apps/wow/CONTEXT_MAP.md",
+    "tracker": "https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122",
+    "acceptance": "pending"
+  },
   "work_package": "E3-C",
   "application": "wow",
   "framework_dependencies": [
@@ -138,7 +146,7 @@
     "no Cargo Rust source or CI during documentation phase"
   ],
   "freeze_gate": {
-    "implementation_state": "not-started",
+    "implementation_state": "partial-functional-selected-profile-freeze",
     "required_before_first_rust_implementation": [
       "implemented and frozen wow-service E3-C request result and error contracts",
       "frozen command selector root profile config artifact input output exit signal and platform adapter profiles",
