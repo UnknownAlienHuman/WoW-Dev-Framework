@@ -418,3 +418,27 @@ lookup IDs, Main/Library identities, ambiguity and coverage semantics. Candidate
 target, retained-text, callable named-target and other report/work guards remain
 independent. A larger input count does not certify that its output fits those
 guards, and no reports or independent analyzer sessions are combined.
+
+## 19. Bounded member pairs and cold flow consumption
+
+`MemberCallSessionQueryProfile::new` retains the65536 direct-member pair limit.
+`with_member_pair_limit` selects a positive finite count shared by physical,
+virtual and combined raw collection. Each completed eligible call contributes
+one reference and one call; the limit admits an exact count and refuses the next
+pair. Combined arithmetic overflow refuses. Receiver/member text limits,
+function-call, query, local-flow and downstream aggregate/output guards remain
+independent. This is a collection-work bound; virtual projection may filter raw
+records before final fact admission.
+
+`session::analyze_member_call_session_with_local_flow` returns the existing
+member/query/callable/virtual reports and physical local flow from one cold
+registered semantic session. Flow consumes that session's exact physical member
+report and root, rather than starting another default member collector. Virtual
+reports remain separate. Input validation, cancellation and panic isolation use
+the existing session owner; successful report/profile/identity recipes are
+unchanged. No admission field enters serialized reports or replay.
+Physical flow now observes the same mixed physical/virtual semantic environment
+as its member prerequisite. This can affect facts in the selected native cohort;
+unchanged recipes do not prove universal equality with the previous physical-only
+flow session. Ordinary/standalone paths are retained, and the native cohort's
+fixture freeze and full acceptance remain open under W17.

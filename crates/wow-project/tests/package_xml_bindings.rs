@@ -128,6 +128,181 @@ fn small_native_fact_budget_preserves_default_callable_admission_and_replay() ->
 }
 
 #[test]
+fn retained_native_member_pairs_use_the_fact_budget_and_replay_exactly() -> TestResult {
+    use wow_project::{ProjectErrorCode, platform_source::PlatformPackageRetentionLimits};
+
+    let stop = AtomicBool::new(false);
+    let root = FixtureRoot::new()?;
+    for package in PACKAGES {
+        std::fs::write(
+            root.0.join("UI").join(package).join("frames.xml"),
+            "<Ui xmlns=\"http://www.blizzard.com/wow/ui/\"/>\n",
+        )?;
+    }
+    std::fs::write(root.0.join("UI/Empty/defs.lua"), "return true\n")?;
+    for package in ["Alpha", "Beta"] {
+        let source = if package == "Alpha" {
+            // One binding also proves flow consumes the admitted member report.
+            format!(
+                "local retained = Lib.Step(1)\n{}",
+                "Lib.Step(1)\n".repeat(32_767)
+            )
+        } else {
+            "Lib.Step(1)\n".repeat(32_769)
+        };
+        std::fs::write(root.0.join("UI").join(package).join("defs.lua"), source)?;
+    }
+    let ordinary = root.packages(&stop)?;
+    let declarations = PACKAGES
+        .iter()
+        .map(|package| {
+            ProjectPackageInput::new(
+                *package,
+                format!("UI/{package}"),
+                true,
+                vec![ProjectPackageVariantInput::new(
+                    ProjectDiskFile::new("Fixture.toc"),
+                    true,
+                )],
+            )
+        })
+        .collect::<Vec<_>>();
+    let encoded = ordinary.load_plan().packages().iter().try_fold(
+        0u64,
+        |total, node| -> Result<u64, Box<dyn Error>> {
+            let plan = ordinary
+                .load_plan()
+                .package_plan(&node.package)
+                .ok_or("plan missing")?;
+            total
+                .checked_add(u64::try_from(serde_json::to_vec(plan)?.len())?)
+                .ok_or_else(|| "fixture plan overflow".into())
+        },
+    )?;
+    let native = Arc::new(ordinary.source().specialize_packages_with_retention(
+        &declarations,
+        None,
+        PlatformPackageRetentionLimits::new(3, encoded)?,
+        &stop,
+    )?);
+    let input = |packages: &Arc<PlatformPackageSpecialization>,
+                 max_facts|
+     -> Result<ProjectInputBundle, Box<dyn Error>> {
+        let configuration = configuration_builder(
+            ProjectKind::BlizzardUiPlatformSource,
+            packages.source().profile().target(),
+        )?
+        .platform_packages(Arc::clone(packages))?
+        .with_package_xml_bindings(PackageXmlBindingProfile::SameSessionV1)
+        .budget_policy(ProjectBudgetPolicy::new(
+            16,
+            2 * 1024 * 1024,
+            1024 * 1024,
+            16,
+            max_facts,
+            1024,
+            128 * 1024 * 1024,
+        )?)
+        .build()?;
+        let library = LuaWorkspaceSnapshot::build(
+            configuration.analyzer_binding().backend().clone(),
+            LuaWorkspaceUniverse::Fixture,
+            vec![LuaWorkspaceFileInput::new(
+                "library/Lib.lua",
+                "---@meta _\nLib = {}\nfunction Lib.Step(value) return value end\n",
+            )],
+            LuaWorkspaceLimits::new(8, 16_384, 1024 * 1024, 2 * 1024 * 1024)?,
+        )?;
+        Ok(ProjectInputBundle::closed(
+            configuration,
+            packages.files().to_vec(),
+            vec![library],
+        )?)
+    };
+    let pairs = 65_537;
+    // Three package groups and their three XML documents are also charged.
+    let facts = u64::try_from(pairs * 2 + 1 + 6)?;
+    let mut ordinary_publisher = ProjectPublisher::new();
+    assert_eq!(
+        ordinary_publisher
+            .publish_initial_cancellable(input(&ordinary, facts)?, &stop)
+            .err()
+            .ok_or("ordinary member capacity admitted")?
+            .code(),
+        ProjectErrorCode::SourceBudgetExceeded
+    );
+    assert!(ordinary_publisher.open_current().is_err());
+
+    let mut publisher = ProjectPublisher::new();
+    publisher.publish_initial_cancellable(input(&native, facts)?, &stop)?;
+    let view = publisher.open_current()?;
+    let binding = view.snapshot().analyzer_binding();
+    assert_eq!(binding.member_call_report().references().len(), pairs);
+    assert_eq!(binding.member_call_report().calls().len(), pairs);
+    let flow = binding.local_flow_report();
+    assert_eq!(flow.bindings().len(), 1);
+    assert_eq!(
+        flow.member_call_analysis_id(),
+        binding.member_call_report().analysis_id()
+    );
+    assert!(flow.bindings()[0].initializer_call_fact_id().is_some());
+    assert!(flow.uses().is_empty());
+    assert!(flow.operations().is_empty());
+    assert!(flow.guards().is_empty());
+    assert!(flow.control_flow().is_empty());
+    let package_bindings = binding
+        .package_xml_bindings()
+        .ok_or("package bindings missing")?;
+    assert_eq!(package_bindings.groups().len(), 3);
+    assert_eq!(
+        package_bindings
+            .groups()
+            .iter()
+            .map(|group| group.documents().len())
+            .sum::<usize>(),
+        3
+    );
+    assert!(package_bindings.symbol_lookup().is_none());
+    for group in package_bindings.groups() {
+        assert!(group.bindings().is_empty());
+        assert!(group.inherited_script_sources().is_empty());
+        assert!(group.receiver_sources().is_empty());
+    }
+    let replay = ProjectReplay::capture(&publisher, &stop)?;
+    let restored =
+        ProjectReplay::from_json(&serde_json::to_vec(&replay)?, &stop)?.hydrate(&stop)?;
+    assert_eq!(restored.snapshot_id(), view.snapshot_id());
+    assert_eq!(restored.project_generation(), view.project_generation());
+    assert_eq!(restored.analyzer_snapshot_id(), view.analyzer_snapshot_id());
+    assert_eq!(restored.snapshot().analyzer_binding(), binding);
+
+    // Both budgets admit65537 raw pairs. Only the aggregate131081-fact gate
+    // distinguishes them: flow and package facts cannot be waived by selection.
+    let mut aggregate_refusal = ProjectPublisher::new();
+    let error = aggregate_refusal
+        .publish_initial_cancellable(input(&native, facts - 1)?, &stop)
+        .err()
+        .ok_or("aggregate fact overflow admitted")?;
+    assert_eq!(error.code(), ProjectErrorCode::UpdateBudgetExceeded);
+    assert_eq!(
+        error.message(),
+        "analyzer output exceeds the configured fact or finding budget"
+    );
+    assert!(aggregate_refusal.open_current().is_err());
+    let mut cancelled = ProjectPublisher::new();
+    assert_eq!(
+        cancelled
+            .publish_initial_cancellable(input(&native, facts)?, &AtomicBool::new(true))
+            .err()
+            .ok_or("cancelled native input admitted")?
+            .code(),
+        ProjectErrorCode::AnalysisCancelled
+    );
+    assert!(cancelled.open_current().is_err());
+    Ok(())
+}
+
+#[test]
 fn retained_native_bindings_use_the_fact_budget_and_replay_exactly() -> TestResult {
     use wow_project::{ProjectErrorCode, platform_source::PlatformPackageRetentionLimits};
 

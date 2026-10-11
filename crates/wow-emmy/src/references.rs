@@ -24,7 +24,7 @@ use crate::{LuaWorkspaceFile, LuaWorkspaceSnapshot};
 const REPORT_SCHEMA: &str = "wow-emmy/member-call-facts/1";
 const REFERENCE_CAPABILITY: &str = "emmy.fact.references";
 const CALL_CAPABILITY: &str = "emmy.fact.calls";
-const MAX_FACTS: usize = 65_536;
+const DEFAULT_MEMBER_PAIR_LIMIT: usize = 65_536;
 const MAX_RECEIVER_BYTES: usize = 4_096;
 const MAX_MEMBER_BYTES: usize = 1_024;
 
@@ -396,6 +396,7 @@ pub struct MemberCallSessionQueryProfile<'a> {
     symbol_queries: &'a [String],
     callable_queries: &'a [String],
     query_limit: usize,
+    member_pair_limit: usize,
 }
 
 impl<'a> MemberCallSessionQueryProfile<'a> {
@@ -405,6 +406,7 @@ impl<'a> MemberCallSessionQueryProfile<'a> {
             symbol_queries,
             callable_queries,
             query_limit: crate::bindings::MAX_QUERIES,
+            member_pair_limit: DEFAULT_MEMBER_PAIR_LIMIT,
         }
     }
 
@@ -422,11 +424,45 @@ impl<'a> MemberCallSessionQueryProfile<'a> {
         Ok(self)
     }
 
+    /// Select a positive limit on raw direct-member reference/call pairs across
+    /// physical and virtual Main inputs. The default is 65536. This bounds
+    /// collection work; downstream projection and aggregate fact admission
+    /// remain separate, and all other adapter guards still apply.
+    pub fn with_member_pair_limit(mut self, limit: usize) -> EmmyMemberCallResult<Self> {
+        if limit == 0 {
+            return Err(EmmyMemberCallError::new(
+                EmmyMemberCallErrorCode::FactBudgetExceeded,
+                "member pair count limit must be positive",
+                None,
+            ));
+        }
+        self.member_pair_limit = limit;
+        Ok(self)
+    }
+
     fn input(self, names: &'a [String]) -> crate::bindings::QueryInput<'a> {
         crate::bindings::QueryInput {
             names,
             limit: self.query_limit,
         }
+    }
+
+    pub(crate) fn validate(
+        self,
+        include_function_calls: bool,
+        stop: &std::sync::atomic::AtomicBool,
+    ) -> EmmyMemberCallResult<()> {
+        crate::bindings::checkpoint(stop)?;
+        crate::bindings::validate_queries(self.input(self.symbol_queries), stop)?;
+        crate::bindings::validate_queries(self.input(self.callable_queries), stop)?;
+        if !include_function_calls && !self.callable_queries.is_empty() {
+            return Err(EmmyMemberCallError::new(
+                EmmyMemberCallErrorCode::InvalidMainWorkspace,
+                "callable-only queries require the function-call sidecar",
+                None,
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -506,16 +542,7 @@ fn analyze_member_call_session_impl(
     include_function_calls: bool,
     stop: &std::sync::atomic::AtomicBool,
 ) -> EmmyMemberCallResult<MemberCallSession> {
-    crate::bindings::checkpoint(stop)?;
-    crate::bindings::validate_queries(query_profile.input(query_profile.symbol_queries), stop)?;
-    crate::bindings::validate_queries(query_profile.input(query_profile.callable_queries), stop)?;
-    if !include_function_calls && !query_profile.callable_queries.is_empty() {
-        return Err(EmmyMemberCallError::new(
-            EmmyMemberCallErrorCode::InvalidMainWorkspace,
-            "callable-only queries require the function-call sidecar",
-            None,
-        ));
-    }
+    query_profile.validate(include_function_calls, stop)?;
     if virtual_units.is_some() != project_generation.is_some() {
         return Err(EmmyMemberCallError::new(
             EmmyMemberCallErrorCode::InvalidMainWorkspace,
@@ -722,16 +749,7 @@ impl RegisteredMemberAnalysis {
         include_function_calls: bool,
         stop: &std::sync::atomic::AtomicBool,
     ) -> EmmyMemberCallResult<MemberCallSession> {
-        crate::bindings::checkpoint(stop)?;
-        crate::bindings::validate_queries(profile.input(profile.symbol_queries), stop)?;
-        crate::bindings::validate_queries(profile.input(profile.callable_queries), stop)?;
-        if !include_function_calls && !profile.callable_queries.is_empty() {
-            return Err(EmmyMemberCallError::new(
-                EmmyMemberCallErrorCode::InvalidMainWorkspace,
-                "callable-only queries require the function-call sidecar",
-                None,
-            ));
-        }
+        profile.validate(include_function_calls, stop)?;
         let analysis = &self.analysis;
         let main_root = &self.main_root;
         let virtual_main_root = &self.virtual_main_root;
@@ -746,8 +764,14 @@ impl RegisteredMemberAnalysis {
             .iter()
             .map(|(snapshot, _)| snapshot.snapshot_id().into())
             .collect::<Vec<Box<str>>>();
-        let report =
-            collect_member_call_report(analysis, main, main_root, &library_snapshot_ids, stop)?;
+        let report = collect_member_call_report(
+            analysis,
+            main,
+            main_root,
+            &library_snapshot_ids,
+            profile.member_pair_limit,
+            stop,
+        )?;
         let virtual_semantics = match (
             virtual_units,
             virtual_main_root.as_ref(),
@@ -763,18 +787,19 @@ impl RegisteredMemberAnalysis {
                     snapshot,
                     root,
                     &library_snapshot_ids,
+                    profile.member_pair_limit,
                     stop,
                 )?;
                 if report
                     .references
                     .len()
-                    .saturating_add(virtual_member_calls.references.len())
-                    > MAX_FACTS
+                    .checked_add(virtual_member_calls.references.len())
+                    .is_none_or(|count| count > profile.member_pair_limit)
                     || report
                         .calls
                         .len()
-                        .saturating_add(virtual_member_calls.calls.len())
-                        > MAX_FACTS
+                        .checked_add(virtual_member_calls.calls.len())
+                        .is_none_or(|count| count > profile.member_pair_limit)
                 {
                     return Err(EmmyMemberCallError::new(
                         EmmyMemberCallErrorCode::FactBudgetExceeded,
@@ -862,6 +887,7 @@ fn collect_member_call_report(
     snapshot: &LuaWorkspaceSnapshot,
     root_path: &Path,
     library_snapshot_ids: &[Box<str>],
+    member_pair_limit: usize,
     stop: &std::sync::atomic::AtomicBool,
 ) -> EmmyMemberCallResult<EmmyMemberCallReport> {
     let mut files = Vec::with_capacity(snapshot.files().len());
@@ -918,7 +944,7 @@ fn collect_member_call_report(
                     Some(file.path()),
                 ));
             }
-            if references.len() >= MAX_FACTS || calls.len() >= MAX_FACTS {
+            if references.len() >= member_pair_limit || calls.len() >= member_pair_limit {
                 return Err(EmmyMemberCallError::new(
                     EmmyMemberCallErrorCode::FactBudgetExceeded,
                     "direct-member fact count exceeds the adapter budget",

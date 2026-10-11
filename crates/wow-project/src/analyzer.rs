@@ -382,6 +382,15 @@ pub(crate) fn build_analyzer_binding(
             // Callable-only inputs are not charged as aggregate project facts.
             // Preserve the existing input domain when that fact budget is small.
             .with_query_limit(limit.max(4096))
+            .map_err(|_| binding_inputs_invalid())?
+            // Raw virtual pairs may be filtered during XML projection. This
+            // is a collection-work ceiling, not the final aggregate fact gate.
+            // Convert after division and retain the default admission domain.
+            .with_member_pair_limit(
+                usize::try_from(budget.max_analyzer_facts() / 2)
+                    .unwrap_or(usize::MAX)
+                    .max(65_536),
+            )
             .map_err(|_| binding_inputs_invalid())?,
         None => query_profile,
     };
@@ -441,7 +450,22 @@ pub(crate) fn build_analyzer_binding(
                 .with_candidate_generation(generation.project_generation())
             })?;
             checkpoint(stop)?;
-            let session = match pending_xml_lua
+            let (session, local_flow_report) = if native_fact_limit.is_some() {
+                let virtual_units = pending_xml_lua
+                    .as_ref()
+                    .and_then(crate::xml_lua::PreparedProjectXmlLuaAnalysis::virtual_workspace)
+                    .map(|snapshot| (snapshot, generation.project_generation()));
+                wow_emmy::session::analyze_member_call_session_with_local_flow(
+                    &main_workspace,
+                    &library_refs,
+                    virtual_units,
+                    query_profile,
+                    function_calls,
+                    stop,
+                )
+                .map_err(|source| session_error(source, generation.project_generation()))?
+            } else {
+                let session = match pending_xml_lua
             .as_ref()
             .and_then(crate::xml_lua::PreparedProjectXmlLuaAnalysis::virtual_workspace)
         {
@@ -479,15 +503,17 @@ pub(crate) fn build_analyzer_binding(
             )
             .with_candidate_generation(generation.project_generation())
         })?;
-            let local_flow_report =
-                analyze_local_flow(&main_workspace, &library_refs).map_err(|source| {
-                    ProjectError::new(
-                        ProjectErrorCode::AnalyzerFailed,
-                        ProjectPhase::Analyzer,
-                        format!("local-flow analysis failed: {source}"),
-                    )
-                    .with_candidate_generation(generation.project_generation())
-                })?;
+                let local_flow_report = analyze_local_flow(&main_workspace, &library_refs)
+                    .map_err(|source| {
+                        ProjectError::new(
+                            ProjectErrorCode::AnalyzerFailed,
+                            ProjectPhase::Analyzer,
+                            format!("local-flow analysis failed: {source}"),
+                        )
+                        .with_candidate_generation(generation.project_generation())
+                    })?;
+                (session, local_flow_report)
+            };
 
             (syntax_report, session, local_flow_report)
         };

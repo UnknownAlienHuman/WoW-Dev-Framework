@@ -79,6 +79,18 @@ serialized byte. Expanded candidates can later be discarded as unsupported or
 invalid; their guard bounds temporary work and does not prove final output size.
 The original floor preserves historical admission. One private ceiling reaches
 expansion, retention and classification; ordinary routes retain 16384 references.
+The same explicit retained native route selects a raw direct-member pair ceiling
+from `max_analyzer_facts / 2`, converting after division and retaining the original
+65536 floor. Physical, virtual and combined collectors share it, with checked
+combined arithmetic. It bounds collection work rather than proving the final fact
+count: virtual projection can filter raw records. The native cold flow consumer
+uses the same registered semantic session and physical member prerequisite, so a
+second default collector cannot reimpose65536. Ordinary/standalone routes remain
+on their existing path. Aggregate fact/output admission and local-flow guards
+remain independent; successful wire/profile/identity recipes are unchanged.
+Physical flow shares the mixed native physical/virtual semantic environment;
+no universal old-cohort report equality is claimed. Its full fixture freeze
+remains open in [#119](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/119).
 Method visits, per-method distinct names, receiver record/text/expansion,
 inherited declaration visits/text, native lookup targets/text, callable named
 targets and serialization retain their own independent limits.

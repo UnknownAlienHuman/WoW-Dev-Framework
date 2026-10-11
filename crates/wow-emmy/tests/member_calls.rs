@@ -189,6 +189,20 @@ fn broken_library_blocks_resolution_dependent_facts() -> TestResult {
         .ok_or("expected library health failure")?;
     assert_eq!(error.code(), EmmyMemberCallErrorCode::LibraryHealthFailed);
     assert_eq!(error.path(), Some("library/broken.lua"));
+    let cold_error = wow_emmy::session::analyze_member_call_session_with_local_flow(
+        &main,
+        &[&broken],
+        None,
+        wow_emmy::MemberCallSessionQueryProfile::new(&[], &[]).with_member_pair_limit(65_537)?,
+        false,
+        &std::sync::atomic::AtomicBool::new(false),
+    )
+    .err()
+    .ok_or("cold flow route admitted a broken Library")?;
+    assert_eq!(
+        cold_error.code(),
+        wow_emmy::session::AnalyzerSessionErrorCode::NativeFailure
+    );
     Ok(())
 }
 
@@ -226,5 +240,177 @@ fn compiled_adapter_rejects_mismatched_backend_before_semantics() -> TestResult 
         .ok_or("expected incompatible backend")?;
     assert_eq!(error.code(), EmmyMemberCallErrorCode::IncompatibleBackend);
     assert!(error.path().is_none());
+    Ok(())
+}
+
+#[test]
+fn selected_member_pair_limit_bounds_physical_virtual_and_combined_reports() -> TestResult {
+    use std::sync::atomic::AtomicBool;
+    use wow_core::ProjectGenerationId;
+    use wow_emmy::{
+        MemberCallSessionQueryProfile,
+        references::{
+            analyze_member_call_session_with_callable_queries,
+            analyze_member_call_session_with_virtual_and_callable_queries,
+        },
+        session::analyze_member_call_session_with_local_flow,
+    };
+
+    let stop = AtomicBool::new(false);
+    let profile = MemberCallSessionQueryProfile::new(&[], &[]);
+    assert_eq!(
+        profile
+            .with_member_pair_limit(0)
+            .err()
+            .ok_or("zero limit admitted")?
+            .code(),
+        EmmyMemberCallErrorCode::FactBudgetExceeded
+    );
+    let build = |inputs| -> TestResult<LuaWorkspaceSnapshot> {
+        Ok(LuaWorkspaceSnapshot::build(
+            backend(EMMYLUA_CODE_ANALYSIS_VERSION)?,
+            LuaWorkspaceUniverse::Fixture,
+            inputs,
+            LuaWorkspaceLimits::new(8, 16_384, 1024 * 1024, 4 * 1024 * 1024)?,
+        )?)
+    };
+    let library = build(vec![LuaWorkspaceFileInput::new(
+        "library/RealLib.lua",
+        "---@meta _\nRealLib = {}\nfunction RealLib.Step(value) return value end\n",
+    )])?;
+    let large = build(vec![
+        LuaWorkspaceFileInput::new("main/a.lua", "RealLib.Step(1)\n".repeat(32_768)),
+        LuaWorkspaceFileInput::new("main/b.lua", "RealLib.Step(1)\n".repeat(32_769)),
+    ])?;
+    let small = build(vec![LuaWorkspaceFileInput::new(
+        "main/small.lua",
+        "RealLib.Step(1)\n",
+    )])?;
+    let pairs = 65_537;
+    let selected = profile.with_member_pair_limit(pairs)?;
+    let refused = analyze_member_call_session_with_callable_queries(
+        &large,
+        &[&library],
+        profile,
+        false,
+        &stop,
+    )
+    .err()
+    .ok_or("ordinary limit+1 admitted")?;
+    assert_eq!(refused.code(), EmmyMemberCallErrorCode::FactBudgetExceeded);
+    assert_eq!(refused.path(), Some("main/b.lua"));
+    assert_eq!(
+        refused.message(),
+        "direct-member fact count exceeds the adapter budget"
+    );
+
+    // The cold project consumer uses this same registered analysis and physical
+    // member prerequisite; no second default member collector can reimpose65536.
+    let (exact, flow) = analyze_member_call_session_with_local_flow(
+        &large,
+        &[&library],
+        None,
+        selected,
+        false,
+        &stop,
+    )?;
+    assert_eq!(exact.member_calls.references().len(), pairs);
+    assert_eq!(exact.member_calls.calls().len(), pairs);
+    assert!(
+        exact
+            .member_calls
+            .references()
+            .iter()
+            .all(|reference| reference.resolution() == EmmyReferenceResolution::Resolved)
+    );
+    assert_eq!(exact.member_calls.main_snapshot_id(), large.snapshot_id());
+    assert_eq!(flow.main_snapshot_id(), large.snapshot_id());
+    assert!(flow.bindings().is_empty());
+
+    let generation = ProjectGenerationId::derive(&"member-pair-limit-fixture")?;
+    let combined = analyze_member_call_session_with_virtual_and_callable_queries(
+        &large,
+        &[&library],
+        &small,
+        generation,
+        selected,
+        false,
+        &stop,
+    )
+    .err()
+    .ok_or("combined limit+1 admitted")?;
+    assert_eq!(combined.code(), EmmyMemberCallErrorCode::FactBudgetExceeded);
+    assert_eq!(combined.path(), None);
+    assert_eq!(
+        combined.message(),
+        "physical and virtual direct-member facts exceed the session budget"
+    );
+
+    // Reverse roles: the virtual collector itself crosses the original cap,
+    // while physical+virtual is admitted exactly at the selected shared limit.
+    let virtual_exact = analyze_member_call_session_with_virtual_and_callable_queries(
+        &small,
+        &[&library],
+        &large,
+        generation,
+        profile.with_member_pair_limit(pairs + 1)?,
+        false,
+        &stop,
+    )?;
+    let virtual_report = virtual_exact
+        .virtual_semantics
+        .ok_or("virtual report missing")?;
+    assert_eq!(virtual_exact.member_calls.calls().len(), 1);
+    assert_eq!(
+        virtual_report.member_call_report().references().len(),
+        pairs
+    );
+    assert_eq!(virtual_report.member_call_report().calls().len(), pairs);
+    assert_eq!(virtual_report.project_generation(), generation);
+
+    let cancelled = AtomicBool::new(true);
+    assert_eq!(
+        analyze_member_call_session_with_callable_queries(
+            &large,
+            &[&library],
+            selected,
+            false,
+            &cancelled,
+        )
+        .err()
+        .ok_or("cancelled report admitted")?
+        .code(),
+        EmmyMemberCallErrorCode::Cancelled
+    );
+    let ordinary_small = analyze_member_call_session_with_callable_queries(
+        &small,
+        &[&library],
+        profile,
+        false,
+        &stop,
+    )?;
+    let (selected_small, selected_flow) = analyze_member_call_session_with_local_flow(
+        &small,
+        &[&library],
+        None,
+        selected,
+        false,
+        &stop,
+    )?;
+    assert_eq!(ordinary_small.member_calls, selected_small.member_calls);
+    assert_eq!(
+        serde_json::to_vec(&ordinary_small.member_calls)?,
+        serde_json::to_vec(&selected_small.member_calls)?
+    );
+    assert_eq!(ordinary_small.symbol_lookup, selected_small.symbol_lookup);
+    assert_eq!(ordinary_small.function_calls, selected_small.function_calls);
+    assert_eq!(
+        ordinary_small.virtual_semantics,
+        selected_small.virtual_semantics
+    );
+    assert_eq!(
+        selected_flow,
+        wow_emmy::analyze_local_flow(&small, &[&library])?
+    );
     Ok(())
 }

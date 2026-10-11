@@ -117,9 +117,24 @@ classification. A focused 16392-reference/four-name case preserves ambiguity and
 original lookup/callable IDs, checks exact/over/output refusal and cancellation,
 and replays exactly without disk; affected Tier S passes. The later freshly
 resolved 273-package operation completes preparation with 16995 references and
-8768 distinct queries, then refuses at native analyzer budget admission. Its exact internal
-resource/count remains unidentified; no complete native reports or graph result
-are claimed. Complete operation peak and downstream admission stay NotEvaluated.
+8768 distinct queries, then refuses at the physical report-cumulative member
+guard before pair65537 (65536 references and65536 calls already retained,
+proved by the observed guard's invariant, not a complete-corpus total).
+Explicit native retention now selects one raw pair ceiling from half the
+configured fact budget with the original65536 floor, through physical/virtual/
+combined collection. The cold flow consumer shares that exact semantic session
+and physical member prerequisite. The65537-pair adapter case and native project
+case pass, including exact disk-absent replay and aggregate131081-fact admission;
+131080 refuses without publication despite admitting the raw pairs. Ordinary
+limits, other guards and successful identity recipes remain unchanged.
+No complete real-corpus native reports or graph result are claimed. Complete
+operation peak and downstream admission stay NotEvaluated.
+The freshly resolved unchanged native request now passes member/virtual/query
+collection and next refuses in the function-call sidecar's first closure-capture
+walk: `visit` increments to2000001 against `MAX_AST_VISITS=2000000` (the observed
+guard and counter invariant, not a finished-corpus count). Final session, flow,
+classification and graph remain unqualified. Exact operation evidence belongs
+in #113; other function-call guards are unchanged.
 Full analysis/graph/maps/persistence remain unqualified under #113.
 Explicit retained XSD component admission is now executable through the existing
 XML owner, with root-only global symbols and final unsupported context propagation.

@@ -7,9 +7,9 @@ the work queue. Follow [the execution model](EXECUTION_MODEL.md).
 
 ## Verified routing base
 
-`main` checkpoint `5c91af7659b04cba695d17a0ea26215742d463a0`, tree
-`1dbf15b4b6e4f3ba2461ed25f26370df77b7b8c8`, was published and read back with all
-changed blobs. [Quick 38096823656](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/38096823656)
+`main` checkpoint `d32c3a253e8b20c5e50bdaff4b2e9c38aaff9dbe`, tree
+`f20a7c0c5c28e783b9f0a3e6b628044171e5a1a7`, was published and read back with all
+changed blobs. [Quick 38097939461](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/38097939461)
 passed on that exact head. This is the verified base of this routing update;
 subsequent publication and gate evidence belong in the canonical Issue.
 
@@ -23,44 +23,23 @@ They describe one selected operation, not permanent client/source defaults.
 ## Current blocker and next slices
 
 [#113](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/113) blocks
-full-corpus qualification. Lexical source measurement returns honest Partial
-coverage. Original-byte BOM positions are corrected: all 1091 XML documents in
-the re-resolved corpus parse. Empty physical-Lua package members now compose
-metadata and inline XML with a genuine nonempty aggregate Main through the native
-graph/replay path; standalone and aggregate empty Main still refuse. The cumulative
-64-MiB census syntax-plan encoding guard was identified
-and replaced by one-package streaming with bounded compact retention. The newly
-re-resolved 273-package native census now returns its exact measurements and
-Partial dependency/file-closure coverage. Explicit finite native package retention
-is executable beyond ordinary64 through the same Main owner and captured replay11
-limits. A genuine [compiled backend report producer](EMMYLUA_UPSTREAM.md) now
-supplies the existing analyzer input without fixture report fabrication. Real
-273-package operations identified separate 4096 binding-row and receiver-owner
-refusals. Explicit native retention now uses the existing configured fact ceiling
-as an upper bound on each of those distinct populations, preserving full combined
-admission, ordinary limits and exact replay. Selected native XML query union and
-both original Emmy query input lanes now use that same finite ceiling in one
-session, keeping the original4096 input floor for smaller fact budgets because
-standard callable-only names are not aggregate project facts. A16-fact native
-configuration and exact replay pass. A focused fixture retains4097 distinct names and exact replay; separate
-input-text, query-reference, native target/output and work guards remain. The
-selected inherited-source counter now also uses the configured fact ceiling,
-preserving declaration visits/text and full combined admission. A focused fixture
-retains4098 inherited source rows and exact disk-absent replay, with conservative
-ordinary/combined/cancellation refusal. The latest real operation next refuses
-expanded query references at16385 against16384. Selected native reference
-multiplicity now uses the configured output-byte ceiling with the original 16384
-floor and 16-MiB text cap, shared through preparation/pending/classification.
-The focused 16392-reference/four-name case preserves ambiguity, original IDs,
-exact replay and separate output/refusal/cancellation admission. The later freshly
-resolved 273-package operation completes preparation with 16995 references and
-8768 distinct queries. Native analyzer budget admission then refuses; its internal resource
-and observed count are unknown. Completed reports, classification and graph
-construction remain unqualified. Existing XML guards report their own counts and
-limits. Completed-operation peak remains NotEvaluated. Actual whole
-Main/analysis, full graph/map population and persistence remain unqualified.
-Do not infer the actual map-owner population from lexical script counts or compare XML-index JSON bytes
-with graph metadata bytes. Operation details belong in #113.
+full-corpus qualification. The selected273-package native census, finite retained
+Main, exact replay and compiled backend report producer are executable; detailed
+scope lives in [implementation status](IMPLEMENTATION_STATUS.md) and the canonical
+Issue. Preparation now passes the observed binding/query-reference refusals.
+The last real operation reaches the physical report-cumulative member guard
+before pair65537. Explicit native retention now carries a raw pair ceiling from
+half the configured fact budget with the original65536 floor through physical,
+virtual and combined collection. The cold flow consumer uses the same session
+and physical report. Focused65537-pair and131081-aggregate-fact native/replay
+cases pass, preserving independent final admission and ordinary limits. The
+freshly resolved unchanged real request now reaches the function-call sidecar's
+first closure-capture walk and refuses at AST visit2000001 against2000000.
+Actual completed Main/reports, classification, graph/maps and persistence remain
+unqualified; completed-operation peak is NotEvaluated. Re-resolve the source on
+each real operation and retain the actual next refusing owner before changing
+another ceiling. Do not infer map-owner populations from lexical counts or compare
+XML-index bytes with graph metadata bytes. Operation evidence belongs in #113.
 
 | Order | Bounded functional responsibility | Required boundary |
 |---|---|---|

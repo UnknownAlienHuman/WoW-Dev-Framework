@@ -16,6 +16,52 @@ use wow_core::ProjectGenerationId;
 use crate::references::{MemberCallSessionQueryProfile, RegisteredMemberAnalysis};
 use crate::{EmmyLocalFlowReport, EmmyMemberCallReport, EmmySyntaxReport, LuaWorkspaceSnapshot};
 
+/// Collect member, query and optional callable reports plus their local-flow
+/// consumer from one exact cold semantic session. Virtual Main units remain
+/// a separate report; local flow consumes only the physical member prerequisite.
+pub fn analyze_member_call_session_with_local_flow(
+    main: &LuaWorkspaceSnapshot,
+    libraries: &[&LuaWorkspaceSnapshot],
+    virtual_units: Option<(&LuaWorkspaceSnapshot, ProjectGenerationId)>,
+    profile: MemberCallSessionQueryProfile<'_>,
+    include_function_calls: bool,
+    stop: &AtomicBool,
+) -> Result<(crate::references::MemberCallSession, EmmyLocalFlowReport), AnalyzerSessionError> {
+    profile
+        .validate(include_function_calls, stop)
+        .map_err(member_error)?;
+    catch_unwind(AssertUnwindSafe(|| {
+        let registered = RegisteredMemberAnalysis::new(
+            main,
+            libraries,
+            virtual_units.map(|(snapshot, _)| snapshot),
+            stop,
+        )
+        .map_err(member_error)?;
+        let session = registered
+            .collect(
+                main,
+                virtual_units.map(|(snapshot, _)| snapshot),
+                virtual_units.map(|(_, generation)| generation),
+                profile,
+                include_function_calls,
+                stop,
+            )
+            .map_err(member_error)?;
+        checkpoint(stop)?;
+        let local_flow = crate::flow::collect_registered(
+            &registered.analysis,
+            main,
+            &registered.main_root,
+            &session.member_calls,
+        )
+        .map_err(|_| error(AnalyzerSessionErrorCode::NativeFailure))?;
+        checkpoint(stop)?;
+        Ok((session, local_flow))
+    }))
+    .unwrap_or_else(|_| Err(error(AnalyzerSessionErrorCode::NativeFailure)))
+}
+
 /// Exact changes to one canonical logical Main path. New bytes come from target.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AnalyzerFileOperation {
