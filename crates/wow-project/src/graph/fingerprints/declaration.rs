@@ -140,7 +140,13 @@ pub(super) fn build_declared_header_component(
     let native_recipe = report.declaration_recipe();
     let observation = match (native_recipe, fact.declaration()) {
         (None, None) => None,
-        (Some(PhysicalFunctionDeclarationRecipe::DeclaredSyntaxV1), Some(observation)) => {
+        (
+            Some(
+                PhysicalFunctionDeclarationRecipe::DeclaredSyntaxV1
+                | PhysicalFunctionDeclarationRecipe::DeclaredSyntaxAndBodyShapeV1,
+            ),
+            Some(observation),
+        ) => {
             // Charge the borrowed native observation before projection/hash work.
             // This also bounds every later token/string clone and cancels on writes.
             retained.charge_serialized(observation, stop)?;

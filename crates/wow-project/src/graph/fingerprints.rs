@@ -19,9 +19,14 @@ use super::{PlatformGraphProvenance, producer_budget::ProducerBudget};
 use crate::{PlatformGraphProfile, ProjectError, ProjectErrorCode, ProjectPhase, ProjectResult};
 
 mod declaration;
+mod shape;
 pub use declaration::{
     FunctionDeclaredHeader, FunctionDeclaredHeaderComponent, FunctionDeclaredHeaderFingerprint,
     FunctionDeclaredHeaderProfile,
+};
+pub use shape::{
+    DECLARATION_BODY_SHAPE_RECIPE, FunctionDeclarationShapeComponent,
+    FunctionDeclarationShapeFingerprint,
 };
 
 pub const FUNCTION_FINGERPRINT_SCHEMA: &str = "wow-project/function-fingerprint-records/1";
@@ -31,6 +36,10 @@ pub const DECLARED_HEADER_FINGERPRINT_SCHEMA: &str =
 pub const DECLARED_HEADER_FINGERPRINT_PROFILE: &str =
     "wow-project/physical-function-components/declared-header/1";
 const SOURCE_SPAN_DOMAIN: &str = "wow.project.fingerprint.physical-function.source-span.v1";
+pub const BODY_SHAPE_FINGERPRINT_SCHEMA: &str =
+    "wow-project/function-fingerprint-records/declared-syntax-and-body-shape/1";
+pub const BODY_SHAPE_FINGERPRINT_PROFILE: &str =
+    "wow-project/function-fingerprint/declaration-body-shape/1";
 
 /// Local purpose: comparison component, not source/generation or manifest identity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -237,7 +246,7 @@ pub struct FunctionFingerprintRecord {
     #[serde(skip_serializing_if = "Option::is_none")]
     declared_header: Option<FunctionDeclaredHeader>,
     signature: FunctionFingerprintUnavailable,
-    declaration_shape: FunctionFingerprintUnavailable,
+    declaration_shape: FunctionDeclarationShapeComponent,
     direct_neighborhood: FunctionFingerprintUnavailable,
     package_load_role: FunctionFingerprintUnavailable,
     support: FunctionFingerprintSupport,
@@ -264,8 +273,8 @@ impl FunctionFingerprintRecord {
         self.signature
     }
     #[must_use]
-    pub const fn declaration_shape(&self) -> FunctionFingerprintUnavailable {
-        self.declaration_shape
+    pub const fn declaration_shape(&self) -> &FunctionDeclarationShapeComponent {
+        &self.declaration_shape
     }
     #[must_use]
     pub const fn direct_neighborhood(&self) -> FunctionFingerprintUnavailable {
@@ -428,7 +437,7 @@ struct BorrowedFunctionFingerprintRecord<'a> {
     kind: SourceFunctionKind,
     source_span: FunctionSourceSpanComponent,
     signature: FunctionFingerprintUnavailable,
-    declaration_shape: FunctionFingerprintUnavailable,
+    declaration_shape: FunctionDeclarationShapeComponent,
     direct_neighborhood: FunctionFingerprintUnavailable,
     package_load_role: FunctionFingerprintUnavailable,
     support: BorrowedFunctionFingerprintSupport<'a>,
@@ -803,7 +812,7 @@ pub fn build_platform_function_fingerprints(
             kind: fact.kind(),
             source_span,
             signature: FunctionFingerprintUnavailable::MissingSignature,
-            declaration_shape: FunctionFingerprintUnavailable::MissingShape,
+            declaration_shape: FunctionDeclarationShapeComponent::MissingShape,
             direct_neighborhood: FunctionFingerprintUnavailable::NotSelected,
             package_load_role: FunctionFingerprintUnavailable::NotSelected,
             support: BorrowedFunctionFingerprintSupport {
@@ -821,13 +830,18 @@ pub fn build_platform_function_fingerprints(
         records.push(record.into_owned(stop)?);
     }
     let declarations_selected = report.declaration_recipe().is_some();
+    let body_shape_selected = report.declaration_recipe() == Some(wow_emmy::function_calls::PhysicalFunctionDeclarationRecipe::DeclaredSyntaxAndBodyShapeV1);
     let mut manifest = FunctionFingerprintManifest {
-        schema: if declarations_selected {
+        schema: if body_shape_selected {
+            BODY_SHAPE_FINGERPRINT_SCHEMA
+        } else if declarations_selected {
             DECLARED_HEADER_FINGERPRINT_SCHEMA
         } else {
             FUNCTION_FINGERPRINT_SCHEMA
         },
-        profile: if declarations_selected {
+        profile: if body_shape_selected {
+            BODY_SHAPE_FINGERPRINT_PROFILE
+        } else if declarations_selected {
             DECLARED_HEADER_FINGERPRINT_PROFILE
         } else {
             FUNCTION_FINGERPRINT_PROFILE
@@ -850,10 +864,20 @@ pub fn build_platform_function_fingerprints(
                 stop,
             )?;
             manifest.records[index].declared_header = Some(header);
+            if body_shape_selected {
+                let shape =
+                    shape::build_shape_component(report, &manifest, index, &mut retained, stop)?;
+                manifest.records[index].declaration_shape = shape;
+            }
         }
     }
     // Same cap, fresh exact output count including array/object framing, not a second allowance.
-    ProducerBudget::new(0, limits.max_metadata_bytes)?.charge_serialized(&manifest, stop)?;
+    if body_shape_selected {
+        retained.charge_serialized(&manifest, stop)?;
+    } else {
+        // Preserve the admitted older recipe's exact output-ceiling check.
+        ProducerBudget::new(0, limits.max_metadata_bytes)?.charge_serialized(&manifest, stop)?;
+    }
     crate::analyzer::checkpoint(stop)?;
     Ok(manifest)
 }

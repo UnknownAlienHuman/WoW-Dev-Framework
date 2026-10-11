@@ -50,6 +50,12 @@ pub(super) const PHYSICAL_FUNCTION_DECLARATIONS_STORAGE_SCHEMA: &str =
     "wow-project.live-replay.physical-function-declarations.v1";
 pub(super) const XML_CLASSIFICATION_PHYSICAL_FUNCTION_DECLARATIONS_STORAGE_SCHEMA: &str =
     "wow-project.live-replay.xml-schema-classification-and-physical-function-declarations.v1";
+const PHYSICAL_FUNCTION_BODY_SHAPE_REPLAY_SCHEMA: &str =
+    "wow-project/native-project-replay/physical-function-declaration-syntax-and-body-shape/1";
+const XML_CLASSIFICATION_PHYSICAL_FUNCTION_BODY_SHAPE_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/xml-schema-classification-and-physical-function-declaration-syntax-and-body-shape/1";
+pub(super) const PHYSICAL_FUNCTION_BODY_SHAPE_STORAGE_SCHEMA: &str =
+    "wow-project.live-replay.physical-function-declaration-syntax-and-body-shape.v1";
+pub(super) const XML_CLASSIFICATION_PHYSICAL_FUNCTION_BODY_SHAPE_STORAGE_SCHEMA: &str = "wow-project.live-replay.xml-schema-classification-and-physical-function-declaration-syntax-and-body-shape.v1";
 const MAX_FILES: usize = 8192;
 const MAX_LIBRARIES: usize = 64;
 const MAX_FILE_BYTES: usize = 16 * 1024 * 1024;
@@ -640,6 +646,12 @@ impl ProjectReplay {
             XML_CLASSIFICATION_PHYSICAL_FUNCTION_DECLARATIONS_REPLAY_SCHEMA => {
                 Ok(XML_CLASSIFICATION_PHYSICAL_FUNCTION_DECLARATIONS_STORAGE_SCHEMA)
             }
+            PHYSICAL_FUNCTION_BODY_SHAPE_REPLAY_SCHEMA => {
+                Ok(PHYSICAL_FUNCTION_BODY_SHAPE_STORAGE_SCHEMA)
+            }
+            XML_CLASSIFICATION_PHYSICAL_FUNCTION_BODY_SHAPE_REPLAY_SCHEMA => {
+                Ok(XML_CLASSIFICATION_PHYSICAL_FUNCTION_BODY_SHAPE_STORAGE_SCHEMA)
+            }
             _ => Err(invalid()),
         }
     }
@@ -650,9 +662,12 @@ fn selected_component_schema(
     configuration: &ReplayConfiguration,
     function_calls: bool,
 ) -> ProjectResult<&'static str> {
+    use wow_emmy::function_calls::PhysicalFunctionDeclarationRecipe::{
+        DeclaredSyntaxAndBodyShapeV1, DeclaredSyntaxV1,
+    };
     let classification = configuration.has_xml_classification()?;
-    let declarations = configuration.physical_function_declarations().is_some();
-    if declarations
+    let declarations = configuration.physical_function_declarations();
+    if declarations.is_some()
         && (!function_calls
             || !configuration.is_platform()
             || configuration.package_xml_binding_profile()
@@ -665,10 +680,16 @@ fn selected_component_schema(
         return Err(invalid());
     }
     Ok(match (classification, declarations) {
-        (false, false) => base,
-        (true, false) => XML_CLASSIFICATION_REPLAY_SCHEMA,
-        (false, true) => PHYSICAL_FUNCTION_DECLARATIONS_REPLAY_SCHEMA,
-        (true, true) => XML_CLASSIFICATION_PHYSICAL_FUNCTION_DECLARATIONS_REPLAY_SCHEMA,
+        (false, None) => base,
+        (true, None) => XML_CLASSIFICATION_REPLAY_SCHEMA,
+        (false, Some(DeclaredSyntaxV1)) => PHYSICAL_FUNCTION_DECLARATIONS_REPLAY_SCHEMA,
+        (true, Some(DeclaredSyntaxV1)) => {
+            XML_CLASSIFICATION_PHYSICAL_FUNCTION_DECLARATIONS_REPLAY_SCHEMA
+        }
+        (false, Some(DeclaredSyntaxAndBodyShapeV1)) => PHYSICAL_FUNCTION_BODY_SHAPE_REPLAY_SCHEMA,
+        (true, Some(DeclaredSyntaxAndBodyShapeV1)) => {
+            XML_CLASSIFICATION_PHYSICAL_FUNCTION_BODY_SHAPE_REPLAY_SCHEMA
+        }
     })
 }
 

@@ -31,6 +31,7 @@ pub use operations::{
     update_input_in_namespace, update_local_project,
 };
 use std::{path::Path, sync::atomic::AtomicBool};
+use wow_emmy::function_calls::PhysicalFunctionDeclarationRecipe;
 use wow_graph::GraphPartitionSnapshot;
 use wow_project::replay::publication::{self, AcquiredProjectPair, ProjectPublicationBundle};
 use wow_project::{ProjectPublisher, ProjectView};
@@ -84,8 +85,11 @@ impl LiveProjectStore {
         Self::open_selected(root, None)
     }
     // None preserves general open/recovery across every registered catalog.
-    // A platform selection admits exactly its XML/declaration component pair.
-    fn open_selected(root: &Path, components: Option<(bool, bool)>) -> ServiceResult<Self> {
+    // A platform selection admits exactly its XML/exact-declaration-recipe pair.
+    fn open_selected(
+        root: &Path,
+        components: Option<(bool, Option<PhysicalFunctionDeclarationRecipe>)>,
+    ) -> ServiceResult<Self> {
         // Each open requires an exact registered epoch. The store rejects a
         // catalog mismatch before opening SQLite writable; no migration occurs.
         for &schemas in publication::STORAGE_SCHEMA_CATALOGS {
@@ -215,18 +219,24 @@ impl LiveProjectStore {
 fn catalog() -> ServiceResult<RecordCatalog> {
     catalog_for(publication::STORAGE_SCHEMAS)
 }
-// Only the three named selected catalogs carry these component recipes.
+// Selected catalogs bind the exact recipe, never merely declaration presence.
 // Every other catalog in STORAGE_SCHEMA_CATALOGS is a retained unselected epoch.
-fn catalog_components(schemas: &[&str]) -> (bool, bool) {
-    if schemas == publication::STORAGE_SCHEMAS_XML_CLASSIFICATION_PHYSICAL_FUNCTION_DECLARATIONS_V1
+fn catalog_components(schemas: &[&str]) -> (bool, Option<PhysicalFunctionDeclarationRecipe>) {
+    use PhysicalFunctionDeclarationRecipe::{DeclaredSyntaxAndBodyShapeV1, DeclaredSyntaxV1};
+    if schemas == publication::STORAGE_SCHEMAS_XML_CLASSIFICATION_PHYSICAL_FUNCTION_BODY_SHAPE_V1 {
+        (true, Some(DeclaredSyntaxAndBodyShapeV1))
+    } else if schemas == publication::STORAGE_SCHEMAS_PHYSICAL_FUNCTION_BODY_SHAPE_V1 {
+        (false, Some(DeclaredSyntaxAndBodyShapeV1))
+    } else if schemas
+        == publication::STORAGE_SCHEMAS_XML_CLASSIFICATION_PHYSICAL_FUNCTION_DECLARATIONS_V1
     {
-        (true, true)
+        (true, Some(DeclaredSyntaxV1))
     } else if schemas == publication::STORAGE_SCHEMAS_PHYSICAL_FUNCTION_DECLARATIONS_V1 {
-        (false, true)
+        (false, Some(DeclaredSyntaxV1))
     } else if schemas == publication::STORAGE_SCHEMAS_XML_CLASSIFICATION_V1 {
-        (true, false)
+        (true, None)
     } else {
-        (false, false)
+        (false, None)
     }
 }
 fn catalog_for(project_schemas: &[&'static str]) -> ServiceResult<RecordCatalog> {

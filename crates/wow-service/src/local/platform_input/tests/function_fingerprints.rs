@@ -1046,3 +1046,237 @@ fn selected_declared_headers_survive_native_replay_and_selected_durable_reopen()
     cleared(&cancelled)?;
     Ok(())
 }
+
+struct BodyShapeObservation {
+    events: Vec<wow_emmy::function_calls::FunctionShapeEvent>,
+    shape_digest:
+        ContentDigest<wow_project::graph::fingerprints::FunctionDeclarationShapeFingerprint>,
+    source_digest: ContentDigest<wow_project::graph::fingerprints::FunctionSourceSpanFingerprint>,
+    source_bytes: Vec<u8>,
+    function_id: Box<str>,
+    project_snapshot_id: Box<str>,
+}
+
+fn selected_fixture_body_shape(
+    root: &FixtureRoot,
+    config: &mut Value,
+    lua: &str,
+    stop: &AtomicBool,
+) -> TestResult<BodyShapeObservation> {
+    use wow_emmy::function_calls::{
+        PhysicalFunctionDeclarationRecipe, SourceFunctionDeclaration,
+        SourceFunctionDeclarationForm, SourceFunctionShape,
+    };
+    use wow_project::graph::fingerprints::{
+        FunctionDeclarationShapeComponent, FunctionSourceSpanComponent,
+    };
+
+    rewrite_declaration_lua(root, config, lua)?;
+    let path = root.0.join("project.json");
+    let (project, request, _, _) = declaration_query(&path, stop)?;
+    let recipe = PhysicalFunctionDeclarationRecipe::DeclaredSyntaxAndBodyShapeV1;
+    assert_eq!(
+        project.configuration().physical_function_declarations(),
+        Some(recipe)
+    );
+    let report = project
+        .snapshot()
+        .analyzer_binding()
+        .function_call_report()
+        .ok_or("selected native body-shape report")?;
+    assert_eq!(report.declaration_recipe(), Some(recipe));
+    let mut closures = report.functions().iter().filter(|fact| {
+        matches!(
+            fact.declaration(),
+            Some(SourceFunctionDeclaration::Observed {
+                form: SourceFunctionDeclarationForm::LocalFunction,
+                ..
+            })
+        )
+    });
+    let fact = closures
+        .next()
+        .ok_or("fixture local-function declaration")?;
+    assert!(
+        closures.next().is_none(),
+        "one genuine local-function target"
+    );
+    assert_eq!(fact.kind(), SourceFunctionKind::Closure);
+    let SourceFunctionShape::Observed { events } =
+        fact.shape().ok_or("selected native body shape")?
+    else {
+        return Err("fixture native body shape was not observed".into());
+    };
+    let source_bytes = span_bytes(&project, fact)?.to_vec();
+    let function_id = Box::<str>::from(fact.fact_id());
+    let request = request.with_function_fingerprints(FunctionFingerprintSelection::new(
+        vec![function_id.clone()],
+        1,
+        source_bytes.len(),
+        METADATA_BYTES,
+    )?)?;
+    let result = execute_graph_build(
+        LocalProjectInput::from_config_path(&path, stop)?,
+        &request,
+        stop,
+    )?;
+    assert_eq!(
+        result.status(),
+        GraphReadStatus::Partial,
+        "{:?}",
+        result.failure_message()
+    );
+    let manifest = result
+        .function_fingerprints()
+        .ok_or("selected service body-shape manifest")?;
+    assert_eq!(
+        manifest.profile(),
+        "wow-project/function-fingerprint/declaration-body-shape/1"
+    );
+    assert!(manifest.is_partial());
+    assert_eq!(manifest.records().len(), 1);
+    assert_eq!(
+        manifest.binding().project_snapshot_id(),
+        project.snapshot_id()
+    );
+    assert_eq!(
+        manifest.binding().function_analysis_id(),
+        report.analysis_id()
+    );
+    let record = manifest.records().first().ok_or("selected shape record")?;
+    assert_eq!(record.function_id(), function_id.as_ref());
+    let header = record.declared_header().ok_or("retained declared header")?;
+    assert_eq!(header.native_recipe(), Some(recipe));
+    assert_eq!(header.native_observation(), fact.declaration());
+    let FunctionDeclarationShapeComponent::Available {
+        digest: shape_digest,
+    } = record.declaration_shape()
+    else {
+        return Err("fixture service body-shape component was not available".into());
+    };
+    let FunctionSourceSpanComponent::Available {
+        digest: source_digest,
+        byte_length,
+        ..
+    } = record.source_span()
+    else {
+        return Err("fixture source-span component was not available".into());
+    };
+    assert_eq!(usize::try_from(*byte_length)?, source_bytes.len());
+    let wire = serde_json::to_value(record)?;
+    assert_eq!(wire["declaration_shape"]["state"], "available");
+    assert_eq!(wire["signature"], "missing_signature");
+
+    Ok(BodyShapeObservation {
+        events: events.clone(),
+        shape_digest: *shape_digest,
+        source_digest: *source_digest,
+        source_bytes,
+        function_id,
+        project_snapshot_id: project.snapshot_id().into(),
+    })
+}
+
+#[test]
+fn selected_body_shape_ignores_trivia_and_payloads_but_retains_operator() -> TestResult {
+    use wow_emmy::function_calls::{
+        FunctionShapeEvent, FunctionShapeNode, FunctionShapeToken,
+        PhysicalFunctionDeclarationRecipe,
+    };
+    use wow_project::graph::fingerprints::FunctionDeclarationShapeComponent;
+
+    let stop = AtomicBool::new(false);
+    let (root, mut config) = fixture()?;
+    config["graph_profile"] = serde_json::to_value(PlatformGraphProfile::DirectCapabilitiesV1(
+        PlatformGraphCapabilities::new(&[
+            PlatformGraphCapability::InventorySpansV1,
+            PlatformGraphCapability::StructuralRolesV1,
+        ])?,
+    ))?;
+    let recipe = PhysicalFunctionDeclarationRecipe::DeclaredSyntaxAndBodyShapeV1;
+    assert_eq!(
+        serde_json::to_value(recipe)?,
+        "wow-emmy/physical-function-declaration-syntax-and-body-shape/1"
+    );
+    config["physical_function_declarations"] = serde_json::to_value(recipe)?;
+    // This pins the legacy field encoding only, not predecessor manifest/result bytes.
+    assert_eq!(
+        serde_json::to_vec(&FunctionDeclarationShapeComponent::MissingShape)?,
+        br#""missing_shape""#
+    );
+
+    let base = selected_fixture_body_shape(
+        &root,
+        &mut config,
+        "local function ShapeFixture(value)\n    local adjusted = value + 1\n    return adjusted\nend\n",
+        &stop,
+    )?;
+    assert_eq!(
+        base.events.first(),
+        Some(&FunctionShapeEvent::Enter(FunctionShapeNode::Block))
+    );
+    assert_eq!(
+        base.events.last(),
+        Some(&FunctionShapeEvent::Leave(FunctionShapeNode::Block))
+    );
+    assert!(base.events.contains(&FunctionShapeEvent::Enter(
+        FunctionShapeNode::LocalStatement
+    )));
+    assert!(base.events.contains(&FunctionShapeEvent::Enter(
+        FunctionShapeNode::BinaryExpression
+    )));
+    assert!(base.events.contains(&FunctionShapeEvent::Enter(
+        FunctionShapeNode::ReturnStatement
+    )));
+    assert!(
+        base.events
+            .contains(&FunctionShapeEvent::Token(FunctionShapeToken::Name))
+    );
+    assert!(
+        base.events
+            .contains(&FunctionShapeEvent::Token(FunctionShapeToken::Number))
+    );
+    assert!(
+        base.events
+            .contains(&FunctionShapeEvent::Token(FunctionShapeToken::Plus))
+    );
+
+    // One neutral mutation changes trivia, local spelling, and a number's spelling/value.
+    let neutral = selected_fixture_body_shape(
+        &root,
+        &mut config,
+        "-- fixture trivia\nlocal function ShapeFixture(value)\n    -- body trivia\n    local renamed = value    +    2.0\n    return renamed\nend\n",
+        &stop,
+    )?;
+    assert_eq!(neutral.events, base.events);
+    assert_eq!(neutral.shape_digest, base.shape_digest);
+    assert_ne!(neutral.source_bytes, base.source_bytes);
+    assert_ne!(neutral.source_digest, base.source_digest);
+    assert_ne!(neutral.function_id, base.function_id);
+    assert_ne!(neutral.project_snapshot_id, base.project_snapshot_id);
+
+    // The only change from the baseline is the retained binary operator.
+    let operator = selected_fixture_body_shape(
+        &root,
+        &mut config,
+        "local function ShapeFixture(value)\n    local adjusted = value - 1\n    return adjusted\nend\n",
+        &stop,
+    )?;
+    assert!(
+        operator
+            .events
+            .contains(&FunctionShapeEvent::Token(FunctionShapeToken::Minus))
+    );
+    assert!(
+        !operator
+            .events
+            .contains(&FunctionShapeEvent::Token(FunctionShapeToken::Plus))
+    );
+    assert_ne!(operator.events, base.events);
+    assert_ne!(operator.shape_digest, base.shape_digest);
+    assert_ne!(operator.source_bytes, base.source_bytes);
+    assert_ne!(operator.source_digest, base.source_digest);
+    assert_ne!(operator.function_id, base.function_id);
+    assert_ne!(operator.project_snapshot_id, base.project_snapshot_id);
+    Ok(())
+}

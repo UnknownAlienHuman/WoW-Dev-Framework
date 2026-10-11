@@ -234,8 +234,20 @@ pub const STORAGE_SCHEMAS_XML_CLASSIFICATION_PHYSICAL_FUNCTION_DECLARATIONS_V1: 
     super::XML_CLASSIFICATION_PHYSICAL_FUNCTION_DECLARATIONS_STORAGE_SCHEMA,
     "wow-project.live-pair.v1",
 ];
+/// Exact body-shape recipe catalog. Old recipes retain their separate catalogs.
+pub const STORAGE_SCHEMAS_PHYSICAL_FUNCTION_BODY_SHAPE_V1: &[&str] = &[
+    super::PHYSICAL_FUNCTION_BODY_SHAPE_STORAGE_SCHEMA,
+    "wow-project.live-pair.v1",
+];
+/// Exact composed XML/body-shape catalog; no prior selected epoch is widened.
+pub const STORAGE_SCHEMAS_XML_CLASSIFICATION_PHYSICAL_FUNCTION_BODY_SHAPE_V1: &[&str] = &[
+    super::XML_CLASSIFICATION_PHYSICAL_FUNCTION_BODY_SHAPE_STORAGE_SCHEMA,
+    "wow-project.live-pair.v1",
+];
 /// Exact catalogs admitted by open/recovery/migration. Never widen a retained epoch.
 pub const STORAGE_SCHEMA_CATALOGS: &[&[&str]] = &[
+    STORAGE_SCHEMAS_PHYSICAL_FUNCTION_BODY_SHAPE_V1,
+    STORAGE_SCHEMAS_XML_CLASSIFICATION_PHYSICAL_FUNCTION_BODY_SHAPE_V1,
     STORAGE_SCHEMAS_PHYSICAL_FUNCTION_DECLARATIONS_V1,
     STORAGE_SCHEMAS_XML_CLASSIFICATION_PHYSICAL_FUNCTION_DECLARATIONS_V1,
     STORAGE_SCHEMAS_XML_CLASSIFICATION_V1,
@@ -396,6 +408,8 @@ impl AcquiredProjectPair {
                 | super::XML_CLASSIFICATION_STORAGE_SCHEMA
                 | super::PHYSICAL_FUNCTION_DECLARATIONS_STORAGE_SCHEMA
                 | super::XML_CLASSIFICATION_PHYSICAL_FUNCTION_DECLARATIONS_STORAGE_SCHEMA
+                | super::PHYSICAL_FUNCTION_BODY_SHAPE_STORAGE_SCHEMA
+                | super::XML_CLASSIFICATION_PHYSICAL_FUNCTION_BODY_SHAPE_STORAGE_SCHEMA
         ) {
             return Err(invalid());
         }

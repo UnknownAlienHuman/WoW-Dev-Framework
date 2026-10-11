@@ -8,6 +8,130 @@ use emmylua_parser::{LuaChunk, LuaLanguageLevel, LuaParser, ParserConfig};
 
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
 
+fn native_body_shape(
+    source: &str,
+    limits: FunctionCallBudget,
+    stop: &AtomicBool,
+) -> TestResult<SourceFunctionShape> {
+    let main = snapshot(vec![LuaWorkspaceFileInput::new("main/shape.lua", source)])?;
+    let file = main.files().first().ok_or("native shape file")?;
+    let tree = LuaParser::parse(source, ParserConfig::with_level(LuaLanguageLevel::Lua54));
+    assert!(tree.get_errors().is_empty(), "{:?}", tree.get_errors());
+    let chunk = LuaChunk::cast(tree.get_red_root()).ok_or("native chunk")?;
+    let closure = chunk
+        .descendants::<LuaClosureExpr>()
+        .next()
+        .ok_or("native closure")?;
+    let mut visits = 0;
+    let mut bytes = declaration::DeclarationBudget::new(limits.max_report_bytes());
+    let declaration = declaration::observe(&closure, file, &mut visits, limits, &mut bytes, stop)?;
+    Ok(shape::observe(
+        &closure,
+        &declaration,
+        &mut visits,
+        limits,
+        &mut bytes,
+        stop,
+    )?)
+}
+
+#[test]
+fn native_body_shape_preserves_tree_and_normalizes_trivia_names_literals() -> TestResult {
+    let stop = AtomicBool::new(false);
+    let limits = FunctionCallBudget::default();
+    let base = native_body_shape(
+        "local function A(a) local f = function(b) return b * 2 end; return a + f(1) end",
+        limits,
+        &stop,
+    )?;
+    assert!(
+        matches!(&base, SourceFunctionShape::Observed { events } if events.contains(&FunctionShapeEvent::Enter(FunctionShapeNode::ClosureExpression)))
+    );
+    let trivia = native_body_shape(
+        "-- trivia\nlocal function Z(z)\n local g = function(y) -- nested\n return y * 30 end; return z + g(90) end",
+        limits,
+        &stop,
+    )?;
+    assert_eq!(base, trivia);
+    let changed = native_body_shape(
+        "local function A(a) local f = function(b) return b - 2 end; return a + f(1) end",
+        limits,
+        &stop,
+    )?;
+    assert_ne!(base, changed);
+    let special = native_body_shape("local function A() return require('a') end", limits, &stop)?;
+    let renamed = native_body_shape("local function A() return other('b') end", limits, &stop)?;
+    assert_eq!(special, renamed);
+    let empty = native_body_shape("local function A() end", limits, &stop)?;
+    assert_eq!(
+        empty,
+        SourceFunctionShape::Observed {
+            events: vec![
+                FunctionShapeEvent::Enter(FunctionShapeNode::Block),
+                FunctionShapeEvent::Leave(FunctionShapeNode::Block),
+            ]
+        }
+    );
+    assert_eq!(
+        empty,
+        native_body_shape("local function A() -- empty body\nend", limits, &stop)?
+    );
+    Ok(())
+}
+
+#[test]
+fn native_body_shape_refuses_unsupported_cancelled_and_bounded_work() -> TestResult {
+    let limits = FunctionCallBudget::default();
+    let source = "local function A(a) local x <const> = 1; return a + x end";
+    let unsupported = native_body_shape(source, limits, &AtomicBool::new(false))?;
+    assert_eq!(
+        unsupported,
+        SourceFunctionShape::Unsupported {
+            reason: SourceFunctionShapeUnsupported::UnsupportedSyntax
+        }
+    );
+    let error = native_body_shape(source, limits, &AtomicBool::new(true))
+        .err()
+        .ok_or("expected shape cancellation")?;
+    assert_eq!(
+        error
+            .downcast_ref::<EmmyMemberCallError>()
+            .ok_or("cancellation type")?
+            .code(),
+        EmmyMemberCallErrorCode::Cancelled
+    );
+    for small in [
+        FunctionCallBudget::new(
+            1,
+            limits.max_functions(),
+            limits.max_calls(),
+            limits.max_global_accesses(),
+            limits.max_named_targets(),
+            limits.max_report_bytes(),
+        )?,
+        FunctionCallBudget::new(
+            limits.max_ast_visits(),
+            limits.max_functions(),
+            limits.max_calls(),
+            limits.max_global_accesses(),
+            limits.max_named_targets(),
+            1,
+        )?,
+    ] {
+        let error = native_body_shape(source, small, &AtomicBool::new(false))
+            .err()
+            .ok_or("expected shape budget refusal")?;
+        assert_eq!(
+            error
+                .downcast_ref::<EmmyMemberCallError>()
+                .ok_or("budget type")?
+                .code(),
+            EmmyMemberCallErrorCode::FactBudgetExceeded
+        );
+    }
+    Ok(())
+}
+
 #[test]
 fn lexical_global_access_indexed_global_prefix_keeps_its_own_cell() -> TestResult {
     use crate::global_access::{GlobalAccessKey, GlobalAccessKind, GlobalAccessResolution};

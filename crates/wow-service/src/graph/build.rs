@@ -99,6 +99,27 @@ fn xml_query_schemas(declarations: bool, functions: bool) -> (&'static str, &'st
     }
 }
 
+fn body_shape_query_schemas(functions: bool, xml: bool) -> (&'static str, &'static str) {
+    match (functions, xml) {
+        (false, false) => (
+            "wow-service/graph-build-request/physical-function-body-shape/1",
+            "wow-service/graph-build-result/physical-function-body-shape/1",
+        ),
+        (true, false) => (
+            "wow-service/graph-build-request/physical-function-body-shape-and-fingerprints/1",
+            "wow-service/graph-build-result/physical-function-body-shape-and-fingerprints/1",
+        ),
+        (false, true) => (
+            "wow-service/graph-build-request/physical-function-body-shape-and-xml-fingerprints/1",
+            "wow-service/graph-build-result/physical-function-body-shape-and-xml-fingerprints/1",
+        ),
+        (true, true) => (
+            "wow-service/graph-build-request/physical-function-body-shape-and-function-and-xml-fingerprints/1",
+            "wow-service/graph-build-result/physical-function-body-shape-and-function-and-xml-fingerprints/1",
+        ),
+    }
+}
+
 struct BuiltGraph {
     snapshot: GraphPartitionSnapshot,
     provenance: ProjectGraphProvenance,
@@ -244,6 +265,10 @@ impl GraphBuildRequest {
     }
 
     fn select_component_schema(&mut self) {
+        if self.physical_function_declarations == Some(wow_emmy::function_calls::PhysicalFunctionDeclarationRecipe::DeclaredSyntaxAndBodyShapeV1) {
+            self.schema = body_shape_query_schemas(self.function_fingerprints.is_some(), self.xml_fingerprints.is_some()).0;
+            return;
+        }
         if self.xml_fingerprints.is_some() {
             self.schema = xml_query_schemas(
                 self.physical_function_declarations.is_some(),
@@ -648,7 +673,9 @@ pub fn execute_graph_build_diagnosed(
     diagnostics.reset();
     let request_digest = super::hash(&bounded(request, super::GRAPH_REQUEST_MAX_BYTES)?);
     let mut result = GraphBuildResult {
-        schema: if request.xml_fingerprints.is_some() {
+        schema: if request.physical_function_declarations == Some(wow_emmy::function_calls::PhysicalFunctionDeclarationRecipe::DeclaredSyntaxAndBodyShapeV1) {
+            body_shape_query_schemas(request.function_fingerprints.is_some(), request.xml_fingerprints.is_some()).1
+        } else if request.xml_fingerprints.is_some() {
             xml_query_schemas(
                 request.physical_function_declarations.is_some(),
                 request.function_fingerprints.is_some(),

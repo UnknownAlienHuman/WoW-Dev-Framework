@@ -96,6 +96,44 @@ Create, publication and reopen require the exact combination; old epochs are not
 widened. `--fingerprints` then includes the selected declared-header component;
 see [the component policy](../../crates/wow-project/e3/FUNCTION_FINGERPRINTS.md).
 
+### Declaration/body shape selection
+
+`physical_function_declarations` also selects
+`wow-emmy/physical-function-declaration-syntax-and-body-shape/1`, corresponding
+to `DeclaredSyntaxAndBodyShapeV1`, on the genuine native
+`direct_capabilities_v1` route. The same Main session supplies a separate
+optional `SourceFunctionFact.shape` only for this combined producer.
+The existing `wow-emmy/physical-function-declaration-syntax/1` remains the exact
+header-only selection; the CLI does not parse Lua or promote it implicitly.
+
+The complete body preserves ordered Enter/Leave/Token events and nested closures,
+finite owned structural/operator/punctuation tags, anonymous names and only
+Number/String/Boolean/Nil literal categories. Built-in special calls normalize
+to Call. Trivia, source identities, identifier names and literal payloads are
+excluded from shape comparison; dialect/unknown/attributes are unsupported.
+
+The normalization recipe, native manifest schema/profile and typed project
+shape outcomes are defined in
+[the component contract](../../crates/wow-project/e3/FUNCTION_FINGERPRINTS.md).
+Configuration/report and cold/retained/replay bind this exact producer selection.
+Namespaced persistence selects
+`PlatformStoreSelection::with_physical_function_declarations_recipe_catalog`
+with `PhysicalFunctionDeclarationRecipe::DeclaredSyntaxAndBodyShapeV1`, adding
+`with_xml_classification_catalog()` for selected XML classification. The existing
+no-argument `with_physical_function_declarations_catalog()` selects header-only.
+Configuration and catalog intent must match; retained epochs are not widened.
+
+The replay schemas are
+`wow-project/native-project-replay/physical-function-declaration-syntax-and-body-shape/1`
+and, with XML classification,
+`wow-project/native-project-replay/xml-schema-classification-and-physical-function-declaration-syntax-and-body-shape/1`.
+Their exact catalogs are `STORAGE_SCHEMAS_PHYSICAL_FUNCTION_BODY_SHAPE_V1` and
+`STORAGE_SCHEMAS_XML_CLASSIFICATION_PHYSICAL_FUNCTION_BODY_SHAPE_V1`: respectively
+`wow-project.live-replay.physical-function-declaration-syntax-and-body-shape.v1`
+and `wow-project.live-replay.xml-schema-classification-and-physical-function-declaration-syntax-and-body-shape.v1`,
+each paired only with `wow-project.live-pair.v1`. Full corpus/reopen acceptance
+remains open; these registered catalogs are not acceptance evidence.
+
 ## Native authority and bounds
 
 The configuration directory is registered once. The project disk owner validates

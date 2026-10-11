@@ -18,6 +18,7 @@ use crate::references::{
 mod budget;
 mod declaration;
 mod location_index;
+mod shape;
 #[cfg(test)]
 mod tests;
 use crate::{EmmyBackendIdentity, LuaWorkspaceFile, LuaWorkspaceSnapshot};
@@ -28,6 +29,10 @@ pub use declaration::{
     SourceFunctionDeclarationUnsupported,
 };
 use location_index::AccessLocationIndex;
+pub use shape::{
+    FunctionShapeEvent, FunctionShapeNode, FunctionShapeToken, SourceFunctionShape,
+    SourceFunctionShapeUnavailable, SourceFunctionShapeUnsupported,
+};
 
 pub const FUNCTION_CALL_PROFILE: &str = "wow-emmy/function-call-facts/7";
 /// Explicit budget-bound sidecar; absent selection preserves profile7.
@@ -63,6 +68,8 @@ pub struct SourceFunctionFact {
     parent_function_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     declaration: Option<SourceFunctionDeclaration>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    shape: Option<SourceFunctionShape>,
 }
 impl SourceFunctionFact {
     pub fn fact_id(&self) -> &str {
@@ -86,6 +93,10 @@ impl SourceFunctionFact {
     /// Selected syntactic header only; never a complete semantic signature.
     pub fn declaration(&self) -> Option<&SourceFunctionDeclaration> {
         self.declaration.as_ref()
+    }
+    /// Selected full body syntax, without identifier/literal payloads or trivia.
+    pub fn shape(&self) -> Option<&SourceFunctionShape> {
+        self.shape.as_ref()
     }
 }
 
@@ -393,9 +404,19 @@ impl FunctionCallReport {
         for function in &self.functions {
             match (self.declaration_recipe, &function.declaration) {
                 (None, None) => {}
-                (Some(PhysicalFunctionDeclarationRecipe::DeclaredSyntaxV1), Some(observation)) => {
+                (Some(_), Some(observation)) => {
                     observation.validate(function.kind, function.span, stop)?;
                 }
+                _ => return Err(invalid()),
+            }
+            match (self.declaration_recipe, &function.shape) {
+                (
+                    Some(PhysicalFunctionDeclarationRecipe::DeclaredSyntaxAndBodyShapeV1),
+                    Some(shape),
+                ) => {
+                    shape.validate(function.kind, limits, stop)?;
+                }
+                (None | Some(PhysicalFunctionDeclarationRecipe::DeclaredSyntaxV1), None) => {}
                 _ => return Err(invalid()),
             }
             let file = files.get(function.path()).ok_or_else(invalid)?;
@@ -792,6 +813,15 @@ pub(crate) fn collect_with_declarations(
                     kind: SourceFunctionKind::Chunk,
                     span: SourceSpan::whole_file(),
                     parent_function_id: None,
+                    shape: if declaration_recipe
+                        == Some(PhysicalFunctionDeclarationRecipe::DeclaredSyntaxAndBodyShapeV1)
+                    {
+                        let observation = SourceFunctionShape::chunk();
+                        declaration_bytes.charge(&observation, stop)?;
+                        Some(observation)
+                    } else {
+                        None
+                    },
                     declaration: if declaration_recipe.is_some() {
                         let observation = SourceFunctionDeclaration::chunk();
                         declaration_bytes.charge(&observation, stop)?;
@@ -837,6 +867,36 @@ pub(crate) fn collect_with_declarations(
                         SourceFunctionKind::Closure,
                         span,
                     )?;
+                    let declaration = declaration_recipe
+                        .map(|_| {
+                            declaration::observe(
+                                &closure,
+                                file,
+                                &mut visits,
+                                limits,
+                                &mut declaration_bytes,
+                                stop,
+                            )
+                        })
+                        .transpose()
+                        .map_err(|error| crate::global_access::at_path(error, file.path()))?;
+                    let shape = if declaration_recipe
+                        == Some(PhysicalFunctionDeclarationRecipe::DeclaredSyntaxAndBodyShapeV1)
+                    {
+                        Some(
+                            shape::observe(
+                                &closure,
+                                declaration.as_ref().ok_or_else(invalid)?,
+                                &mut visits,
+                                limits,
+                                &mut declaration_bytes,
+                                stop,
+                            )
+                            .map_err(|error| crate::global_access::at_path(error, file.path()))?,
+                        )
+                    } else {
+                        None
+                    };
                     functions.push(SourceFunctionFact {
                         fact_id: id.clone(),
                         path: file.path().into(),
@@ -848,19 +908,8 @@ pub(crate) fn collect_with_declarations(
                             file,
                             closure.syntax(),
                         )?),
-                        declaration: declaration_recipe
-                            .map(|_| {
-                                declaration::observe(
-                                    &closure,
-                                    file,
-                                    &mut visits,
-                                    limits,
-                                    &mut declaration_bytes,
-                                    stop,
-                                )
-                            })
-                            .transpose()
-                            .map_err(|error| crate::global_access::at_path(error, file.path()))?,
+                        declaration,
+                        shape,
                     });
                     files
                         .get_mut(file.path())

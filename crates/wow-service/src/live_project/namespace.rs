@@ -6,6 +6,7 @@ use super::{
 use crate::{LocalProjectInput, ServiceErrorCode, ServiceResult, graph::GraphBuildRequest};
 use std::{path::Path, sync::atomic::AtomicBool};
 use wow_core::ProfileId;
+use wow_emmy::function_calls::PhysicalFunctionDeclarationRecipe;
 use wow_graph::GraphPartitionSnapshot;
 use wow_project::{ProjectConfiguration, ProjectId, ProjectPublisher, replay::publication};
 use wow_store::project::{
@@ -19,7 +20,7 @@ use wow_store::project::{
 pub struct PlatformStoreSelection {
     namespace: ProjectStoreNamespace,
     xml_classification_catalog: bool,
-    physical_function_declarations_catalog: bool,
+    physical_function_declarations_catalog: Option<PhysicalFunctionDeclarationRecipe>,
 }
 
 impl PlatformStoreSelection {
@@ -32,7 +33,7 @@ impl PlatformStoreSelection {
         Ok(Self {
             namespace,
             xml_classification_catalog: false,
-            physical_function_declarations_catalog: false,
+            physical_function_declarations_catalog: None,
         })
     }
 
@@ -46,22 +47,40 @@ impl PlatformStoreSelection {
     /// Explicit declaration catalog intent; configuration must select the same recipe.
     #[must_use]
     pub fn with_physical_function_declarations_catalog(mut self) -> Self {
-        self.physical_function_declarations_catalog = true;
+        self.physical_function_declarations_catalog =
+            Some(PhysicalFunctionDeclarationRecipe::DeclaredSyntaxV1);
+        self
+    }
+
+    /// Select one exact native declaration recipe without widening old catalogs.
+    #[must_use]
+    pub fn with_physical_function_declarations_recipe_catalog(
+        mut self,
+        recipe: PhysicalFunctionDeclarationRecipe,
+    ) -> Self {
+        self.physical_function_declarations_catalog = Some(recipe);
         self
     }
 
     fn catalog(&self) -> ServiceResult<RecordCatalog> {
+        use PhysicalFunctionDeclarationRecipe::{DeclaredSyntaxAndBodyShapeV1, DeclaredSyntaxV1};
         match (
             self.xml_classification_catalog,
             self.physical_function_declarations_catalog,
         ) {
-            (false, false) => catalog(),
-            (true, false) => catalog_for(publication::STORAGE_SCHEMAS_XML_CLASSIFICATION_V1),
-            (false, true) => {
+            (false, None) => catalog(),
+            (true, None) => catalog_for(publication::STORAGE_SCHEMAS_XML_CLASSIFICATION_V1),
+            (false, Some(DeclaredSyntaxV1)) => {
                 catalog_for(publication::STORAGE_SCHEMAS_PHYSICAL_FUNCTION_DECLARATIONS_V1)
             }
-            (true, true) => catalog_for(
+            (true, Some(DeclaredSyntaxV1)) => catalog_for(
                 publication::STORAGE_SCHEMAS_XML_CLASSIFICATION_PHYSICAL_FUNCTION_DECLARATIONS_V1,
+            ),
+            (false, Some(DeclaredSyntaxAndBodyShapeV1)) => {
+                catalog_for(publication::STORAGE_SCHEMAS_PHYSICAL_FUNCTION_BODY_SHAPE_V1)
+            }
+            (true, Some(DeclaredSyntaxAndBodyShapeV1)) => catalog_for(
+                publication::STORAGE_SCHEMAS_XML_CLASSIFICATION_PHYSICAL_FUNCTION_BODY_SHAPE_V1,
             ),
         }
     }
@@ -100,7 +119,7 @@ impl PlatformStoreSelection {
             || self.xml_classification_catalog
                 != configuration.xml_classification_profile().is_some()
             || self.physical_function_declarations_catalog
-                != configuration.physical_function_declarations().is_some()
+                != configuration.physical_function_declarations()
             || self.namespace.owner_project_id() != configuration.project_id().as_str()
             || self.namespace.logical_namespace()
                 != packages.source().profile().profile_id().as_str()

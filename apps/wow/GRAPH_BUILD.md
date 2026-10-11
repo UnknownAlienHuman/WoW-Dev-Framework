@@ -57,6 +57,38 @@ observations and comparable digests. The request binds the configuration's exact
 recipe; a different or absent selection refuses. This syntax component does not
 fill missing semantic signature or whole-body shape.
 
+The combined producer `DeclaredSyntaxAndBodyShapeV1` /
+`wow-emmy/physical-function-declaration-syntax-and-body-shape/1` reuses the same
+Main AST/session and exact function selection. Only it populates the separate
+optional `SourceFunctionFact.shape`; the existing header recipe stays exact.
+The complete body emits ordered Enter/Leave/Token events including nested
+closures, with finite tags, anonymous names and Number/String/Boolean/Nil literal
+categories. Built-in special call nodes normalize to Call; trivia, paths/spans/
+IDs, identifier names and literal payloads are excluded from comparable bytes.
+Dialect syntax, unknown nodes/tokens and attributes cannot supply Available shape.
+
+`declaration_shape` is the typed `FunctionDeclarationShapeComponent`, with
+Available digest/MissingShape/Unavailable/Unsupported/Conflict outcomes. Its
+normalization recipe is `wow-project/physical-function-declaration-body-shape/1`
+with fixed tags and explicit big-endian encoding. The combined native manifest
+schema is `wow-project/function-fingerprint-records/declared-syntax-and-body-shape/1`
+and profile is `wow-project/function-fingerprint/declaration-body-shape/1`.
+The service result names above describe the existing header-only route. For the
+combined producer, request/result schemas use respectively the prefixes
+`wow-service/graph-build-request/` and `wow-service/graph-build-result/`, with
+these exact suffixes selected by the optional queries:
+
+| Function query | XML query | Schema suffix |
+|---|---|---|
+| absent | absent | `physical-function-body-shape/1` |
+| present | absent | `physical-function-body-shape-and-fingerprints/1` |
+| absent | present | `physical-function-body-shape-and-xml-fingerprints/1` |
+| present | present | `physical-function-body-shape-and-function-and-xml-fingerprints/1` |
+
+Normalized structure proves no semantic signature or body equivalence; overall
+fingerprints remain Partial. Full component/corpus acceptance remains open; see
+[the component contract](../../crates/wow-project/e3/FUNCTION_FINGERPRINTS.md).
+
 The first recipe exposes the exact source-span component with native support
 and separate generation/profile bindings. Missing signature/shape and unselected
 neighborhood/load-role remain explicit; equal digests do not prove identity or

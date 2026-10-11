@@ -17,12 +17,17 @@ use crate::references::{EmmyMemberCallResult, ast_span};
 pub enum PhysicalFunctionDeclarationRecipe {
     #[serde(rename = "wow-emmy/physical-function-declaration-syntax/1")]
     DeclaredSyntaxV1,
+    #[serde(rename = "wow-emmy/physical-function-declaration-syntax-and-body-shape/1")]
+    DeclaredSyntaxAndBodyShapeV1,
 }
 impl<'de> Deserialize<'de> for PhysicalFunctionDeclarationRecipe {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let recipe = String::deserialize(deserializer)?;
         match recipe.as_str() {
             "wow-emmy/physical-function-declaration-syntax/1" => Ok(Self::DeclaredSyntaxV1),
+            "wow-emmy/physical-function-declaration-syntax-and-body-shape/1" => {
+                Ok(Self::DeclaredSyntaxAndBodyShapeV1)
+            }
             _ => Err(serde::de::Error::custom(
                 "unsupported physical-function declaration recipe",
             )),

@@ -61,10 +61,76 @@ No inferred parameter/return types or body equivalence are claimed.
 Native unavailable/unsupported reasons remain typed outcomes. A containing native
 scope conflict suppresses the digest without asserting a declaration conflict for
 a particular function. A Chunk has no declaration. Missing facts never trigger
-source parsing or a generic hash. The same cumulative metadata ceiling precharges
-observations/output and checks the enlarged envelope; cancellation/refusal returns
-no successful truncated manifest. The exact source-span component stays separate.
+source parsing or a generic hash. Observations/output use a cumulative metadata
+ledger; the older recipe separately checks the final envelope against the same
+cap. Cancellation/refusal returns no successful truncated manifest. The exact
+source-span component stays separate.
 Semantic signature, whole declaration shape and overall coverage remain Partial.
+
+## Typed declaration/body shape
+
+`DeclaredSyntaxAndBodyShapeV1` selects
+`wow-emmy/physical-function-declaration-syntax-and-body-shape/1` in the same
+registered Main session as the function report. `SourceFunctionFact.shape` is
+a separate optional native observation populated only under this producer.
+Header-only `wow-emmy/physical-function-declaration-syntax/1` keeps its exact
+declared-header recipe; shape does not replace header observation or comparison.
+The exact source-span component remains independent.
+
+The shape represents the complete ordered body as `Enter(node)`, `Leave(node)`
+and `Token(tag)` events, including nested closures. Explicit finite owned tags
+retain nesting, child order, operators and punctuation. Names are anonymous;
+literals retain only Number/String/Boolean/Nil categories, not their spellings
+or values. Built-in special call node kinds normalize to `Call`.
+Whitespace/comments, paths/spans, function/proposal/generation IDs and support
+identities do not enter comparable shape bytes. Events are never sorted.
+Parameter names remain significant in the separate existing header component;
+comments/whitespace remain significant in exact source-span content.
+
+The pinned parser omits Block for a valid empty ordinary closure. Its observed
+header and native closing end normalize to an empty balanced Block; missing
+closing syntax remains unavailable. No source-text test supplies that result.
+
+Dialect syntax, unknown nodes/tokens and attributes are unsupported. They cannot
+supply an Available shape through a skipped descendant, prefix, generic enum
+or Debug hash. Native observations/support and exact bindings remain separately
+retained; decoded comparison data cannot reconstruct AST authority.
+
+Project `declaration_shape` returns `FunctionDeclarationShapeComponent`:
+`Available` carries a typed digest; `MissingShape`, `Unavailable`, `Unsupported`
+and `Conflict` remain explicit outcomes without an available shape digest.
+The normalization recipe is
+`wow-project/physical-function-declaration-body-shape/1`. Digest framing is domain
+`wow.project.fingerprint.physical-function.declaration-body-shape.v1` plus a zero
+byte; form:u8 (local=0, named=1, closure=2); colon:u8; parameter count:u64 BE;
+ordered parameter kinds:u8 (anonymous Name=0, Vararg=1); event count:u64 BE;
+then each event kind:u8 (Enter=0, Leave=1, Token=2) and owned tag:u16 BE.
+`FunctionShapeNode` explicitly assigns tags 1–36; `FunctionShapeToken` assigns
+1–57. Parameter count/order/kinds remain significant, while parameter and body
+name spellings are omitted; the separate header keeps exact parameter names.
+No upstream enum ordinals, Debug text or serialized AST enter the digest.
+`MissingShape` retains the legacy JSON string `"missing_shape"`; absent native
+`SourceFunctionFact.shape` is omitted. The combined native manifest uses
+schema `wow-project/function-fingerprint-records/declared-syntax-and-body-shape/1`
+and profile `wow-project/function-fingerprint/declaration-body-shape/1`.
+
+Traversal, normalization and owned output obey finite selected work/byte limits
+and cancellation. Retained representation is charged before owned custody. Only
+the combined body-shape recipe also charges the complete final manifest, including
+framing, to that same cumulative metadata ledger; older recipes retain their
+separate final-output check against the same cap. Resource refusal or cancellation
+returns no successful truncated shape.
+
+A shape digest describes only this normalized body structure. It supplies no
+semantic type/signature, inferred return, body equivalence, runtime behavior or
+lineage claim. Overall function fingerprint coverage stays Partial; Available
+header and shape do not produce a complete composite.
+
+Configuration/report and cold/retained/replay consumers bind the exact selected
+producer. The old header comparison encoding remains exact. Full component and
+corpus acceptance remains open; the named schema/profile and shape outcomes are
+not acceptance evidence. See
+[platform input](../../../apps/wow/PLATFORM_INPUT.md).
 
 ## Selection, support and bounds
 
