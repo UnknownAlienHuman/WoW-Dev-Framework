@@ -1,5 +1,6 @@
 //! Native stage plans over one retained project projection, never a wire owner.
 use super::*;
+use diagnostics::capture_scratch;
 use producer_budget::ProducerBudget;
 use std::collections::BTreeSet;
 use wow_graph::{
@@ -160,6 +161,12 @@ impl PlatformGraphProvenance<'_> {
     pub const fn source(&self) -> &ProjectGraphProvenance {
         &self.source
     }
+    /// Consumes native authority and returns the same owned source report.
+    /// The returned report cannot recreate the native project/graph capability.
+    #[must_use]
+    pub fn into_source(self) -> ProjectGraphProvenance {
+        self.source
+    }
     #[must_use]
     pub fn assertion(&self, assertion: &GraphLocalAssertion) -> Option<&GraphAssertionRef> {
         self.addresses.get(assertion)
@@ -174,13 +181,27 @@ pub fn build_platform_graph_proposal_plan<'a>(
     project: &'a ProjectView,
     stop: &AtomicBool,
 ) -> ProjectResult<PlatformGraphProposalPlan<'a>> {
+    build_platform_graph_proposal_plan_diagnosed(
+        project,
+        stop,
+        &mut SourceGraphDiagnostics::default(),
+    )
+}
+
+/// Diagnose this operation without changing admission, configuration or bytes.
+pub fn build_platform_graph_proposal_plan_diagnosed<'a>(
+    project: &'a ProjectView,
+    stop: &AtomicBool,
+    diagnostics: &mut SourceGraphDiagnostics,
+) -> ProjectResult<PlatformGraphProposalPlan<'a>> {
+    diagnostics.reset();
     let recipe = match project.configuration().platform_graph_profile() {
         Some(crate::PlatformGraphProfile::DirectCapabilitiesV1(capabilities)) => {
             DirectRecipe::Capabilities(capabilities)
         }
         _ => DirectRecipe::Original,
     };
-    build_plan(project, recipe, stop)
+    build_plan(project, recipe, stop, diagnostics)
 }
 
 /// Native preparation with an explicit exact set. A selected application cannot
@@ -197,13 +218,19 @@ pub fn build_platform_graph_proposal_plan_for_capabilities<'a>(
     {
         return Err(invalid());
     }
-    build_plan(project, DirectRecipe::Capabilities(capabilities), stop)
+    build_plan(
+        project,
+        DirectRecipe::Capabilities(capabilities),
+        stop,
+        &mut SourceGraphDiagnostics::default(),
+    )
 }
 
 fn build_plan<'a>(
     project: &'a ProjectView,
     recipe: DirectRecipe,
     stop: &AtomicBool,
+    diagnostics: &mut SourceGraphDiagnostics,
 ) -> ProjectResult<PlatformGraphProposalPlan<'a>> {
     crate::analyzer::checkpoint(stop)?;
     let config = project.configuration();
@@ -217,7 +244,8 @@ fn build_plan<'a>(
             "direct platform stages require a selected genuine platform project",
         ));
     }
-    let mut collected = collect_source_graph_proposals_for_recipe(project, recipe, stop)?;
+    let mut collected =
+        collect_source_graph_proposals_for_recipe(project, recipe, stop, diagnostics)?;
     if recipe.xml_source_maps() {
         if collected.provenance.profile != source_graph_profile(config) {
             return Err(invalid());
@@ -240,279 +268,297 @@ fn build_plan<'a>(
     // Refine the collector's provisional tally with complete borrowed metadata.
     // Shared raw/provenance bodies are counted once, under the same operation cap.
     let mut exact = ProducerBudget::for_configuration(config, 0)?;
-    raw_inventory::charge_serialized(&mut exact, &collected, stop)?;
+    diagnostics.measure(
+        DiagnosticPhase::CollectorEncoding,
+        &mut exact,
+        collected
+            .entities
+            .len()
+            .checked_add(collected.relations.len()),
+        CountingMethod::SerializedBytes,
+        |budget| raw_inventory::charge_serialized(budget, &collected, stop),
+    )?;
     let mut budget =
         ProducerBudget::for_configuration(config, exact.used().max(collected.text_bytes.used()))?;
-    // New source pieces must enter the native catalog before Inventory spans.
-    let prepared_maps = if recipe.xml_source_maps() {
-        Some(xml_source_maps::prepare(
-            project,
-            &mut collected.provenance,
-            &mut budget,
-            stop,
-        )?)
-    } else {
-        None
-    };
-    let inventory_span_omissions = if recipe.inventory_spans() {
-        let omitted = inventory_roles::append_spans(
-            project,
-            &collected.provenance,
-            &mut collected.entities,
-            &mut collected.relations,
-            &mut budget,
-            stop,
-        )?;
-        if collected
-            .entities
-            .len()
-            .checked_add(
-                collected
+    diagnostics.measure(
+        DiagnosticPhase::DirectPreparation,
+        &mut budget,
+        None,
+        CountingMethod::SerializedBytes,
+        |budget| {
+            // New source pieces must enter the native catalog before Inventory spans.
+            let prepared_maps = if recipe.xml_source_maps() {
+                Some(xml_source_maps::prepare(
+                    project,
+                    &mut collected.provenance,
+                    budget,
+                    stop,
+                )?)
+            } else {
+                None
+            };
+            let inventory_span_omissions = if recipe.inventory_spans() {
+                let omitted = inventory_roles::append_spans(
+                    project,
+                    &collected.provenance,
+                    &mut collected.entities,
+                    &mut collected.relations,
+                    budget,
+                    stop,
+                )?;
+                if collected
+                    .entities
+                    .len()
+                    .checked_add(
+                        collected
+                            .inventory_batch
+                            .as_ref()
+                            .map_or(0, |batch| batch.entity_proposals().len()),
+                    )
+                    .ok_or_else(exhausted)?
+                    > MAX_NODES
+                    || collected.relations.len() > MAX_EDGES
+                    || collected
+                        .entities
+                        .len()
+                        .checked_add(collected.relations.len())
+                        .ok_or_else(exhausted)?
+                        > MAX_DIRECT_ASSERTIONS
+                {
+                    return Err(direct_counts_exhausted(&collected, false));
+                }
+                let mut reasons = vec!["source_graph.captured_known_source_spans_only".into()];
+                if omitted > 0 {
+                    reasons.push("source_graph.unknown_source_spans_omitted".into());
+                }
+                let coverage = GraphCoverageRecord::new(
+                    GraphRelationKind::Contains,
+                    GraphCoverageState::Partial,
+                    false,
+                    reasons,
+                    collected.limits,
+                )
+                .map_err(graph_error)?;
+                budget.charge_serialized(&coverage, stop)?;
+                budget.charge_serialized(&omitted, stop)?;
+                collected.coverage.push(coverage);
+                Some(omitted)
+            } else {
+                None
+            };
+            let mut xml_source_maps = None;
+            if recipe.structural_roles() {
+                inventory_project::append_project(
+                    project,
+                    &collected.provenance,
+                    &mut collected.entities,
+                    &mut collected.relations,
+                    budget,
+                    stop,
+                )?;
+                toc_roles::append(
+                    project,
+                    &collected.provenance,
+                    &mut collected.entities,
+                    &mut collected.relations,
+                    budget,
+                    stop,
+                )?;
+                xml_roles::append(
+                    project,
+                    &collected.provenance,
+                    &mut collected.entities,
+                    &mut collected.relations,
+                    budget,
+                    stop,
+                )?;
+                if let Some(prepared) = prepared_maps {
+                    xml_source_maps = Some(xml_source_maps::append(
+                        project,
+                        &collected.provenance,
+                        prepared,
+                        &mut collected.entities,
+                        &mut collected.relations,
+                        budget,
+                        stop,
+                    )?);
+                }
+                let raw_count = collected
                     .inventory_batch
                     .as_ref()
-                    .map_or(0, |batch| batch.entity_proposals().len()),
-            )
-            .ok_or_else(exhausted)?
-            > MAX_NODES
-            || collected.relations.len() > MAX_EDGES
-            || collected
-                .entities
-                .len()
-                .checked_add(collected.relations.len())
-                .ok_or_else(exhausted)?
-                > MAX_DIRECT_ASSERTIONS
-        {
-            return Err(direct_counts_exhausted(&collected, false));
-        }
-        let mut reasons = vec!["source_graph.captured_known_source_spans_only".into()];
-        if omitted > 0 {
-            reasons.push("source_graph.unknown_source_spans_omitted".into());
-        }
-        let coverage = GraphCoverageRecord::new(
-            GraphRelationKind::Contains,
-            GraphCoverageState::Partial,
-            false,
-            reasons,
-            collected.limits,
-        )
-        .map_err(graph_error)?;
-        budget.charge_serialized(&coverage, stop)?;
-        budget.charge_serialized(&omitted, stop)?;
-        collected.coverage.push(coverage);
-        Some(omitted)
-    } else {
-        None
-    };
-    let mut xml_source_maps = None;
-    if recipe.structural_roles() {
-        inventory_project::append_project(
-            project,
-            &collected.provenance,
-            &mut collected.entities,
-            &mut collected.relations,
-            &mut budget,
-            stop,
-        )?;
-        toc_roles::append(
-            project,
-            &collected.provenance,
-            &mut collected.entities,
-            &mut collected.relations,
-            &mut budget,
-            stop,
-        )?;
-        xml_roles::append(
-            project,
-            &collected.provenance,
-            &mut collected.entities,
-            &mut collected.relations,
-            &mut budget,
-            stop,
-        )?;
-        if let Some(prepared) = prepared_maps {
-            xml_source_maps = Some(xml_source_maps::append(
-                project,
-                &collected.provenance,
-                prepared,
-                &mut collected.entities,
-                &mut collected.relations,
-                &mut budget,
-                stop,
-            )?);
-        }
-        let raw_count = collected
-            .inventory_batch
-            .as_ref()
-            .ok_or_else(invalid)?
-            .entity_proposals()
-            .len();
-        let all_entities = collected
-            .entities
-            .len()
-            .checked_add(raw_count)
-            .ok_or_else(exhausted)?;
-        if all_entities > MAX_NODES
-            || collected.relations.len() > MAX_EDGES
-            || all_entities
-                .checked_add(collected.relations.len())
-                .ok_or_else(exhausted)?
-                > MAX_DIRECT_ASSERTIONS
-        {
-            return Err(direct_counts_exhausted(&collected, true));
-        }
-        let contains = collected
-            .coverage
-            .iter_mut()
-            .find(|record| record.relation() == GraphRelationKind::Contains)
-            .ok_or_else(invalid)?;
-        let mut reasons = vec![
-            "source_graph.native_captured_spans_and_declared_inventory_membership_only".into(),
-            "source_graph.native_selected_toc_and_lexical_xml_containment_only".into(),
-            "source_graph.original_inventory_omissions_and_span_omissions_retained".into(),
-        ];
-        if recipe.xml_source_maps() {
-            reasons.push("source_graph.native_xml_map_segment_containment_only".into());
-        }
-        let coverage = GraphCoverageRecord::new(
-            GraphRelationKind::Contains,
-            GraphCoverageState::Partial,
-            false,
-            reasons,
-            collected.limits,
-        )
-        .map_err(graph_error)?;
-        budget.charge_serialized(&coverage, stop)?;
-        *contains = coverage;
-        for (relation, blocker) in [
-            (
-                GraphRelationKind::Defines,
-                "source_graph.native_selected_toc_definitions_only",
-            ),
-            (
-                GraphRelationKind::LoadsBefore,
-                "source_graph.native_toc_lexical_order_is_not_runtime_execution_order",
-            ),
-        ] {
-            let coverage = GraphCoverageRecord::new(
-                relation,
-                GraphCoverageState::Partial,
-                false,
-                vec![blocker.into()],
-                collected.limits,
-            )
-            .map_err(graph_error)?;
-            budget.charge_serialized(&coverage, stop)?;
-            collected.coverage.push(coverage);
-        }
-        if recipe.xml_source_maps() {
-            let owns = collected
-                .coverage
-                .iter_mut()
-                .find(|record| record.relation() == GraphRelationKind::Owns)
-                .ok_or_else(invalid)?;
-            let mut reasons = owns.blocker_ids().to_vec();
-            reasons.push("source_graph.native_xml_virtual_mapping_only".into());
-            reasons.push("source_graph.xml_virtual_receiver_dispatch_not_evaluated".into());
-            let coverage = GraphCoverageRecord::new(
-                GraphRelationKind::Owns,
-                GraphCoverageState::Partial,
-                false,
-                reasons,
-                collected.limits,
-            )
-            .map_err(graph_error)?;
-            budget.charge_serialized(&coverage, stop)?;
-            *owns = coverage;
-        }
-    }
-    let scope = GraphAssertionRecordScope {
-        universe: collected.universe.clone(),
-        generation: collected.generation.clone(),
-        source_context_id: collected.provenance.context.context_id(),
-    };
-    let foundation = GraphSnapshot::build(
-        collected.universe.clone(),
-        collected.generation.clone(),
-        collected.limits,
-        Vec::new(),
-        Vec::new(),
-        collected.coverage.clone(),
-    )
-    .map_err(graph_error)?;
-    budget.charge_serialized(&scope, stop)?;
-    budget.charge_serialized(&foundation, stop)?;
-    let mut owners = BTreeMap::<Box<str>, PlatformGraphProducer>::new();
-    let mut keys = BTreeSet::new();
-    if recipe.structural_roles() {
-        let raw = collected.inventory_batch.as_ref().ok_or_else(invalid)?;
-        for proposal in raw.entity_proposals() {
-            crate::analyzer::checkpoint(stop)?;
-            budget.charge_serialized(
-                &(proposal.proposal_id(), PlatformGraphProducer::Inventory),
-                stop,
-            )?;
-            if owners
-                .insert(
-                    proposal.proposal_id().into(),
-                    PlatformGraphProducer::Inventory,
+                    .ok_or_else(invalid)?
+                    .entity_proposals()
+                    .len();
+                let all_entities = collected
+                    .entities
+                    .len()
+                    .checked_add(raw_count)
+                    .ok_or_else(exhausted)?;
+                if all_entities > MAX_NODES
+                    || collected.relations.len() > MAX_EDGES
+                    || all_entities
+                        .checked_add(collected.relations.len())
+                        .ok_or_else(exhausted)?
+                        > MAX_DIRECT_ASSERTIONS
+                {
+                    return Err(direct_counts_exhausted(&collected, true));
+                }
+                let contains = collected
+                    .coverage
+                    .iter_mut()
+                    .find(|record| record.relation() == GraphRelationKind::Contains)
+                    .ok_or_else(invalid)?;
+                let mut reasons = vec![
+                    "source_graph.native_captured_spans_and_declared_inventory_membership_only"
+                        .into(),
+                    "source_graph.native_selected_toc_and_lexical_xml_containment_only".into(),
+                    "source_graph.original_inventory_omissions_and_span_omissions_retained".into(),
+                ];
+                if recipe.xml_source_maps() {
+                    reasons.push("source_graph.native_xml_map_segment_containment_only".into());
+                }
+                let coverage = GraphCoverageRecord::new(
+                    GraphRelationKind::Contains,
+                    GraphCoverageState::Partial,
+                    false,
+                    reasons,
+                    collected.limits,
                 )
-                .is_some()
-            {
-                return Err(invalid());
+                .map_err(graph_error)?;
+                budget.charge_serialized(&coverage, stop)?;
+                *contains = coverage;
+                for (relation, blocker) in [
+                    (
+                        GraphRelationKind::Defines,
+                        "source_graph.native_selected_toc_definitions_only",
+                    ),
+                    (
+                        GraphRelationKind::LoadsBefore,
+                        "source_graph.native_toc_lexical_order_is_not_runtime_execution_order",
+                    ),
+                ] {
+                    let coverage = GraphCoverageRecord::new(
+                        relation,
+                        GraphCoverageState::Partial,
+                        false,
+                        vec![blocker.into()],
+                        collected.limits,
+                    )
+                    .map_err(graph_error)?;
+                    budget.charge_serialized(&coverage, stop)?;
+                    collected.coverage.push(coverage);
+                }
+                if recipe.xml_source_maps() {
+                    let owns = collected
+                        .coverage
+                        .iter_mut()
+                        .find(|record| record.relation() == GraphRelationKind::Owns)
+                        .ok_or_else(invalid)?;
+                    let mut reasons = owns.blocker_ids().to_vec();
+                    reasons.push("source_graph.native_xml_virtual_mapping_only".into());
+                    reasons.push("source_graph.xml_virtual_receiver_dispatch_not_evaluated".into());
+                    let coverage = GraphCoverageRecord::new(
+                        GraphRelationKind::Owns,
+                        GraphCoverageState::Partial,
+                        false,
+                        reasons,
+                        collected.limits,
+                    )
+                    .map_err(graph_error)?;
+                    budget.charge_serialized(&coverage, stop)?;
+                    *owns = coverage;
+                }
             }
-        }
-    }
-    for draft in &collected.entities {
-        crate::analyzer::checkpoint(stop)?;
-        if !entity_permission(recipe, draft.producer, draft.proposal.entity_kind_id())
-            || !keys.insert(local(
-                GraphAssertionKind::Entity,
-                draft.proposal.proposal_id(),
-            ))
-            || owners
-                .insert(draft.proposal.proposal_id().into(), draft.producer)
-                .is_some()
-        {
-            return Err(invalid());
-        }
-    }
-    for draft in &collected.relations {
-        crate::analyzer::checkpoint(stop)?;
-        if !relation_permission(recipe, draft.producer, &draft.relation_kind_id)
-            || !keys.insert(local(GraphAssertionKind::Relation, &draft.proposal_id))
-        {
-            return Err(invalid());
-        }
-        for endpoint in [&draft.input.source, &draft.input.target] {
-            let GraphProposalEndpoint::Proposed(id) = endpoint else {
-                return Err(invalid());
+            let scope = GraphAssertionRecordScope {
+                universe: collected.universe.clone(),
+                generation: collected.generation.clone(),
+                source_context_id: collected.provenance.context.context_id(),
             };
-            let owner = owners.get(id).ok_or_else(invalid)?;
-            if owner > &draft.producer {
-                return Err(invalid());
+            let foundation = GraphSnapshot::build(
+                collected.universe.clone(),
+                collected.generation.clone(),
+                collected.limits,
+                Vec::new(),
+                Vec::new(),
+                collected.coverage.clone(),
+            )
+            .map_err(graph_error)?;
+            budget.charge_serialized(&scope, stop)?;
+            budget.charge_serialized(&foundation, stop)?;
+            let mut owners = BTreeMap::<Box<str>, PlatformGraphProducer>::new();
+            let mut keys = BTreeSet::new();
+            if recipe.structural_roles() {
+                let raw = collected.inventory_batch.as_ref().ok_or_else(invalid)?;
+                for proposal in raw.entity_proposals() {
+                    crate::analyzer::checkpoint(stop)?;
+                    budget.charge_serialized(
+                        &(proposal.proposal_id(), PlatformGraphProducer::Inventory),
+                        stop,
+                    )?;
+                    if owners
+                        .insert(
+                            proposal.proposal_id().into(),
+                            PlatformGraphProducer::Inventory,
+                        )
+                        .is_some()
+                    {
+                        return Err(invalid());
+                    }
+                }
             }
-        }
-        if draft.relation_kind_id.as_ref() == "source_declaration_owns" {
-            let GraphProposalEndpoint::Proposed(target) = &draft.input.target else {
-                return Err(invalid());
-            };
-            if owners.get(target) != Some(&draft.producer) {
-                return Err(invalid());
+            for draft in &collected.entities {
+                crate::analyzer::checkpoint(stop)?;
+                if !entity_permission(recipe, draft.producer, draft.proposal.entity_kind_id())
+                    || !keys.insert(local(
+                        GraphAssertionKind::Entity,
+                        draft.proposal.proposal_id(),
+                    ))
+                    || owners
+                        .insert(draft.proposal.proposal_id().into(), draft.producer)
+                        .is_some()
+                {
+                    return Err(invalid());
+                }
             }
-        }
-    }
-    crate::analyzer::checkpoint(stop)?;
-    Ok(PlatformGraphProposalPlan {
-        recipe,
-        inventory_span_omissions,
-        xml_source_maps,
-        project,
-        collected,
-        scope,
-        foundation,
-        stages: Vec::new(),
-        budget,
-    })
+            for draft in &collected.relations {
+                crate::analyzer::checkpoint(stop)?;
+                if !relation_permission(recipe, draft.producer, &draft.relation_kind_id)
+                    || !keys.insert(local(GraphAssertionKind::Relation, &draft.proposal_id))
+                {
+                    return Err(invalid());
+                }
+                for endpoint in [&draft.input.source, &draft.input.target] {
+                    let GraphProposalEndpoint::Proposed(id) = endpoint else {
+                        return Err(invalid());
+                    };
+                    let owner = owners.get(id).ok_or_else(invalid)?;
+                    if owner > &draft.producer {
+                        return Err(invalid());
+                    }
+                }
+                if draft.relation_kind_id.as_ref() == "source_declaration_owns" {
+                    let GraphProposalEndpoint::Proposed(target) = &draft.input.target else {
+                        return Err(invalid());
+                    };
+                    if owners.get(target) != Some(&draft.producer) {
+                        return Err(invalid());
+                    }
+                }
+            }
+            crate::analyzer::checkpoint(stop)?;
+            Ok(PlatformGraphProposalPlan {
+                recipe,
+                inventory_span_omissions,
+                xml_source_maps,
+                project,
+                collected,
+                scope,
+                foundation,
+                stages: Vec::new(),
+                budget: *budget,
+            })
+        },
+    )
 }
 
 impl<'a> PlatformGraphProposalPlan<'a> {
@@ -569,6 +615,54 @@ impl<'a> PlatformGraphProposalPlan<'a> {
         owner: &GraphPartitionSnapshot,
         stop: &AtomicBool,
     ) -> ProjectResult<PlatformGraphProducerProposals> {
+        self.build_stage_diagnosed(
+            producer,
+            owner,
+            stop,
+            &mut SourceGraphDiagnostics::default(),
+        )
+    }
+
+    /// Observe one fixed producer slot without changing reservation or retry input.
+    /// Repeated calls replace that slot; no per-charge or per-retry trace is retained.
+    pub fn build_stage_diagnosed(
+        &mut self,
+        producer: PlatformGraphProducer,
+        owner: &GraphPartitionSnapshot,
+        stop: &AtomicBool,
+        diagnostics: &mut SourceGraphDiagnostics,
+    ) -> ProjectResult<PlatformGraphProducerProposals> {
+        let phase = match producer {
+            PlatformGraphProducer::Inventory => DiagnosticPhase::InventoryStage,
+            PlatformGraphProducer::TocLoad => DiagnosticPhase::TocLoadStage,
+            PlatformGraphProducer::AnalyzerStructure => DiagnosticPhase::AnalyzerStructureStage,
+            PlatformGraphProducer::XmlStructure => DiagnosticPhase::XmlStructureStage,
+        };
+        let mut observation = self.budget;
+        let mut completed = None;
+        let result = diagnostics.measure(
+            phase,
+            &mut observation,
+            None,
+            CountingMethod::SerializedBytes,
+            |observation| {
+                self.build_stage_observed(producer, owner, stop, observation, &mut completed)
+            },
+        );
+        if let Some(count) = completed {
+            diagnostics.completed_records(phase, count);
+        }
+        result
+    }
+
+    fn build_stage_observed(
+        &mut self,
+        producer: PlatformGraphProducer,
+        owner: &GraphPartitionSnapshot,
+        stop: &AtomicBool,
+        observation: &mut ProducerBudget,
+        completed: &mut Option<usize>,
+    ) -> ProjectResult<PlatformGraphProducerProposals> {
         crate::analyzer::checkpoint(stop)?;
         let index = ORDER
             .iter()
@@ -577,7 +671,9 @@ impl<'a> PlatformGraphProposalPlan<'a> {
         if index + 1 == self.stages.len() {
             self.validate_predecessor(owner, index, true, stop)?;
             let mut retry_budget = self.budget;
-            retry_budget.charge_serialized(&self.stages[index], stop)?;
+            capture_scratch(observation, &mut retry_budget, |budget| {
+                budget.charge_serialized(&self.stages[index], stop)
+            })?;
             let retry = self.stages[index].clone();
             crate::analyzer::checkpoint(stop)?;
             return Ok(retry);
@@ -607,7 +703,9 @@ impl<'a> PlatformGraphProposalPlan<'a> {
                 if resolved.proposal() != proposal {
                     return Err(invalid());
                 }
-                address_budget.charge_serialized(&(&reference, proposal.proposal_id()), stop)?;
+                capture_scratch(observation, &mut address_budget, |budget| {
+                    budget.charge_serialized(&(&reference, proposal.proposal_id()), stop)
+                })?;
                 if addresses
                     .insert(proposal.proposal_id().into(), resolved.reference())
                     .is_some()
@@ -646,11 +744,17 @@ impl<'a> PlatformGraphProposalPlan<'a> {
         let mut original_relations = Vec::new();
         let base = address_budget;
         let mut provisional = base;
+        // This prefix counts copied entity/relation drafts, not address entries
+        // or derivation records. Retry/predecessor-only paths leave it unknown.
+        *completed = Some(0);
         for draft in &self.collected.entities {
             crate::analyzer::checkpoint(stop)?;
             if draft.producer == producer {
-                provisional.charge_serialized(&draft.proposal, stop)?;
+                capture_scratch(observation, &mut provisional, |budget| {
+                    budget.charge_serialized(&draft.proposal, stop)
+                })?;
                 entities.push(draft.proposal.clone());
+                *completed = Some(entities.len());
             }
         }
         for draft in &self.collected.relations {
@@ -658,7 +762,9 @@ impl<'a> PlatformGraphProposalPlan<'a> {
             if draft.producer != producer {
                 continue;
             }
-            provisional.charge_serialized(&draft.input, stop)?;
+            capture_scratch(observation, &mut provisional, |budget| {
+                budget.charge_serialized(&draft.input, stop)
+            })?;
             let mut input = draft.input.clone();
             input.source = endpoint(&input.source, &addresses, &lookup, &self.scope, stop)?;
             input.target = endpoint(&input.target, &addresses, &lookup, &self.scope, stop)?;
@@ -668,19 +774,25 @@ impl<'a> PlatformGraphProposalPlan<'a> {
                 input,
             )
             .map_err(graph_error)?;
-            provisional.charge_serialized(&relation, stop)?;
+            capture_scratch(observation, &mut provisional, |budget| {
+                budget.charge_serialized(&relation, stop)
+            })?;
             relations.push(relation);
             original_relations.push(draft);
+            // Combined drafts already passed MAX_DIRECT_ASSERTIONS preflight.
+            *completed = Some(entities.len() + relations.len());
         }
-        let records = producer_derivations::records(
-            &self.collected.provenance,
-            &self.scope,
-            &entities,
-            &original_relations,
-            &addresses,
-            &mut provisional,
-            stop,
-        )?;
+        let records = capture_scratch(observation, &mut provisional, |budget| {
+            producer_derivations::records(
+                &self.collected.provenance,
+                &self.scope,
+                &entities,
+                &original_relations,
+                &addresses,
+                budget,
+                stop,
+            )
+        })?;
         let batch = GraphProposalBatch::build(
             self.collected.registry.bundle_id(),
             self.collected.registry.registry_digest(),
@@ -717,10 +829,14 @@ impl<'a> PlatformGraphProposalPlan<'a> {
         // Replace provisional body charges with the complete retained stage.
         // The shared base includes every previously retained stage and draft.
         let mut exact = base;
-        exact.charge_serialized(&stage, stop)?;
+        capture_scratch(observation, &mut exact, |budget| {
+            budget.charge_serialized(&stage, stop)
+        })?;
         // The plan retains its retry input while returning a separate native
         // batch to the caller. Both owner-created bodies use this allowance.
-        exact.charge_serialized(&stage, stop)?;
+        capture_scratch(observation, &mut exact, |budget| {
+            budget.charge_serialized(&stage, stop)
+        })?;
         let cached = stage.clone();
         crate::analyzer::checkpoint(stop)?;
         self.stages.push(cached);
@@ -807,6 +923,38 @@ impl<'a> PlatformGraphProposalPlan<'a> {
         owner: &'a GraphPartitionSnapshot,
         stop: &AtomicBool,
     ) -> ProjectResult<PlatformGraphProvenance<'a>> {
+        self.finish_diagnosed(owner, stop, &mut SourceGraphDiagnostics::default())
+    }
+
+    /// Observe address/support assembly against the same retained native owner.
+    pub fn finish_diagnosed(
+        self,
+        owner: &'a GraphPartitionSnapshot,
+        stop: &AtomicBool,
+        diagnostics: &mut SourceGraphDiagnostics,
+    ) -> ProjectResult<PlatformGraphProvenance<'a>> {
+        let mut observation = self.budget;
+        let mut completed = None;
+        let result = diagnostics.measure(
+            DiagnosticPhase::DirectSupport,
+            &mut observation,
+            None,
+            CountingMethod::SerializedBytes,
+            |observation| self.finish_observed(owner, stop, observation, &mut completed),
+        );
+        if let Some(count) = completed {
+            diagnostics.completed_records(DiagnosticPhase::DirectSupport, count);
+        }
+        result
+    }
+
+    fn finish_observed(
+        self,
+        owner: &'a GraphPartitionSnapshot,
+        stop: &AtomicBool,
+        observation: &mut ProducerBudget,
+        completed: &mut Option<usize>,
+    ) -> ProjectResult<PlatformGraphProvenance<'a>> {
         if self.stages.len() != ORDER.len() {
             return Err(invalid());
         }
@@ -814,6 +962,8 @@ impl<'a> PlatformGraphProposalPlan<'a> {
         let lookup = owner.producer_lookup(stop).map_err(graph_error)?;
         let mut addresses = BTreeMap::new();
         let mut budget = self.budget;
+        // Only accepted address-map rows are counted here, not catalog evidence.
+        *completed = Some(0);
         for stage in &self.stages {
             for proposal in stage.batch.entity_proposals() {
                 crate::analyzer::checkpoint(stop)?;
@@ -825,10 +975,13 @@ impl<'a> PlatformGraphProposalPlan<'a> {
                 if resolved.proposal() != proposal {
                     return Err(invalid());
                 }
-                budget.charge_serialized(&(&key, &reference), stop)?;
+                capture_scratch(observation, &mut budget, |budget| {
+                    budget.charge_serialized(&(&key, &reference), stop)
+                })?;
                 if addresses.insert(key, resolved.reference()).is_some() {
                     return Err(invalid());
                 }
+                *completed = Some(addresses.len());
             }
             for draft in self
                 .collected
@@ -849,10 +1002,13 @@ impl<'a> PlatformGraphProposalPlan<'a> {
                 if resolved.proposal() != proposal {
                     return Err(invalid());
                 }
-                budget.charge_serialized(&(&key, &reference), stop)?;
+                capture_scratch(observation, &mut budget, |budget| {
+                    budget.charge_serialized(&(&key, &reference), stop)
+                })?;
                 if addresses.insert(key, resolved.reference()).is_some() {
                     return Err(invalid());
                 }
+                *completed = Some(addresses.len());
             }
         }
         if let Some(batch) = &self.collected.inventory_batch {
@@ -866,21 +1022,26 @@ impl<'a> PlatformGraphProposalPlan<'a> {
                 if resolved.proposal() != proposal {
                     return Err(invalid());
                 }
-                budget.charge_serialized(&(&key, &reference), stop)?;
+                capture_scratch(observation, &mut budget, |budget| {
+                    budget.charge_serialized(&(&key, &reference), stop)
+                })?;
                 if addresses.insert(key, resolved.reference()).is_some() {
                     return Err(invalid());
                 }
+                *completed = Some(addresses.len());
             }
         }
-        let evidence = producer_evidence::catalog(
-            self.project,
-            owner,
-            &self.collected.provenance,
-            &self.scope,
-            &addresses,
-            &mut budget,
-            stop,
-        )?;
+        let evidence = capture_scratch(observation, &mut budget, |budget| {
+            producer_evidence::catalog(
+                self.project,
+                owner,
+                &self.collected.provenance,
+                &self.scope,
+                &addresses,
+                budget,
+                stop,
+            )
+        })?;
         crate::analyzer::checkpoint(stop)?;
         Ok(PlatformGraphProvenance {
             recipe: self.recipe,

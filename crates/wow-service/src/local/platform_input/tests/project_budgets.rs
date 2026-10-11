@@ -553,6 +553,103 @@ fn selected_budget_replay_and_frozen_store_preserve_current(
 }
 
 #[test]
+fn graph_diagnostics_keep_results_exact_and_refusal_conservative() -> TestResult {
+    use crate::graph::{
+        GraphBuildRequest, GraphReadStatus, SourceGraphDiagnostics, execute_graph_build,
+        execute_graph_build_diagnosed, source_graph_diagnostics_bytes,
+    };
+    use wow_project::graph::SourceGraphBudget;
+    let (root, mut config) = fixture()?;
+    let path = root.0.join("project.json");
+    let stop = AtomicBool::new(false);
+    let ordinary = LocalProjectInput::from_config_path(&path, &stop)?;
+    let policy = ordinary.bundle.configuration().budget_policy();
+    selected(
+        &mut config,
+        policy.with_source_graph_budget(SourceGraphBudget::new(32 * 1024 * 1024)?),
+    )?;
+    write_json(&root, "project.json", &config)?;
+    let input = LocalProjectInput::from_config_path(&path, &stop)?;
+    let request = GraphBuildRequest::new("fixture-platform-transport".into(), "current".into())?
+        .with_input_profile(&input);
+    let expected = execute_graph_build(input, &request, &stop)?;
+    assert_eq!(expected.status(), GraphReadStatus::Partial);
+    let mut diagnostics = SourceGraphDiagnostics::enabled();
+    let actual = execute_graph_build_diagnosed(
+        LocalProjectInput::from_config_path(&path, &stop)?,
+        &request,
+        &stop,
+        &mut diagnostics,
+    )?;
+    assert_eq!(actual.canonical_bytes()?, expected.canonical_bytes()?);
+    let observed: Value = serde_json::from_slice(&source_graph_diagnostics_bytes(&diagnostics)?)?;
+    for name in [
+        "collector_encoding",
+        "direct_preparation",
+        "inventory_stage",
+        "toc_load_stage",
+        "analyzer_structure_stage",
+        "xml_structure_stage",
+        "direct_support",
+    ] {
+        let phase = observed["phases"]
+            .as_array()
+            .ok_or("phases")?
+            .iter()
+            .find(|phase| phase["phase"] == name)
+            .ok_or("phase missing")?;
+        assert_eq!(phase["outcome"], "completed", "{name}");
+        assert!(phase["metadata_refusal"].is_null());
+        assert!(phase["elapsed_microseconds"].is_number());
+    }
+    selected(
+        &mut config,
+        policy.with_source_graph_budget(SourceGraphBudget::new(1)?),
+    )?;
+    write_json(&root, "project.json", &config)?;
+    let input = LocalProjectInput::from_config_path(&path, &stop)?;
+    let request = GraphBuildRequest::new("fixture-platform-transport".into(), "current".into())?
+        .with_input_profile(&input);
+    let refused = execute_graph_build_diagnosed(input, &request, &stop, &mut diagnostics)?;
+    assert_eq!(refused.status(), GraphReadStatus::Failed);
+    assert!(refused.snapshot_bytes()?.is_none());
+    let semantic = refused.canonical_bytes()?;
+    assert!(!std::str::from_utf8(&semantic)?.contains("elapsed_microseconds"));
+    let observed: Value = serde_json::from_slice(&source_graph_diagnostics_bytes(&diagnostics)?)?;
+    assert!(observed["input"]["functions"].is_number());
+    let phases = observed["phases"].as_array().ok_or("phases")?;
+    let first = &phases[0];
+    assert_eq!(first["outcome"], "refused");
+    assert_eq!(first["metadata_refusal"]["configured_limit_bytes"], 1);
+    assert_eq!(
+        first["metadata_refusal"]["attempted_bytes"],
+        first["counter_after_bytes"]
+    );
+    assert!(
+        phases
+            .iter()
+            .skip(1)
+            .all(|phase| phase["outcome"] == "not_evaluated")
+    );
+    let input = LocalProjectInput::from_config_path(&path, &stop)?;
+    stop.store(true, std::sync::atomic::Ordering::Release);
+    let cancelled = execute_graph_build_diagnosed(input, &request, &stop, &mut diagnostics)?;
+    assert_eq!(cancelled.status(), GraphReadStatus::Cancelled);
+    let cancelled_observation: Value =
+        serde_json::from_slice(&source_graph_diagnostics_bytes(&diagnostics)?)?;
+    assert!(cancelled_observation["input"].is_null());
+    assert!(
+        cancelled_observation["phases"]
+            .as_array()
+            .ok_or("phases")?
+            .iter()
+            .all(|phase| phase["outcome"] == "not_evaluated"
+                && phase["counter_after_bytes"].is_null())
+    );
+    Ok(())
+}
+
+#[test]
 fn native_publication_refusal_preserves_runtime_cause_outside_graph_wire() -> TestResult {
     let (root, mut config) = fixture()?;
     let path = root.0.join("project.json");

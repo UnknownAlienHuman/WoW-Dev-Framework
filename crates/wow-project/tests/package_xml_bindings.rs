@@ -1362,6 +1362,67 @@ fn publish_graph_with_policy(
 }
 
 #[test]
+fn source_graph_diagnostics_preserve_native_semantic_bytes() -> TestResult {
+    use wow_project::graph::{
+        SourceGraphDiagnostics, build_source_graph_proposals,
+        build_source_graph_proposals_diagnosed,
+    };
+    let stop = AtomicBool::new(false);
+    let root = FixtureRoot::new()?;
+    let packages = root.packages(&stop)?;
+    assert!(!root.0.exists());
+    let publisher = publish_graph(
+        &packages,
+        Some(PackageXmlBindingProfile::SameSessionV1),
+        true,
+        &stop,
+    )?;
+    let view = publisher.open_current()?;
+    let expected = serde_json::to_vec(&build_source_graph_proposals(&view, &stop)?.into_parts())?;
+    let mut diagnostics = SourceGraphDiagnostics::enabled();
+    let actual = build_source_graph_proposals_diagnosed(&view, &stop, &mut diagnostics)?;
+    assert_eq!(serde_json::to_vec(&actual.into_parts())?, expected);
+    let observation = serde_json::to_value(&diagnostics)?;
+    assert_eq!(
+        observation["input"]["project_snapshot_id"],
+        view.snapshot_id()
+    );
+    let report = view
+        .snapshot()
+        .analyzer_binding()
+        .function_call_report()
+        .ok_or("report")?;
+    assert_eq!(observation["input"]["functions"], report.functions().len());
+    assert_eq!(observation["input"]["calls"], report.calls().len());
+    let phases = observation["phases"].as_array().ok_or("phases")?;
+    for name in ["functions", "calls"] {
+        let phase = phases
+            .iter()
+            .find(|phase| phase["phase"] == name)
+            .ok_or("phase missing")?;
+        assert_eq!(phase["outcome"], "completed");
+        assert_eq!(phase["completed_records"], phase["available_input_records"]);
+        assert!(phase["elapsed_microseconds"].is_number());
+        assert!(phase["metadata_refusal"].is_null());
+    }
+    let encoded = serde_json::to_string(&diagnostics)?;
+    assert!(encoded.len() < 64 * 1024);
+    assert!(!encoded.contains("UI/Alpha") && !encoded.contains("function "));
+    diagnostics.reset();
+    let reset = serde_json::to_value(&diagnostics)?;
+    assert!(reset["input"].is_null());
+    assert!(
+        reset["phases"]
+            .as_array()
+            .ok_or("phases")?
+            .iter()
+            .all(|phase| phase["outcome"] == "not_evaluated"
+                && phase["counter_after_bytes"].is_null())
+    );
+    Ok(())
+}
+
+#[test]
 fn selected_package_graph_preserves_local_ids_shared_globals_and_native_replay() -> TestResult {
     use wow_project::graph::{
         ProjectGraphMixinOutcome, ProjectGraphScriptQueryOutcome, ProjectGraphStateOutcome,

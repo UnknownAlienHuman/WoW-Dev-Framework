@@ -356,6 +356,7 @@ pub(super) fn charge_serialized<T: Serialize>(
     crate::analyzer::checkpoint(stop)?;
     if result.is_err() {
         return Err(if counter.exceeded {
+            used.note_refusal(used.used() as u128 + counter.attempted);
             resource_exhausted(
                 "metadata bytes",
                 used.used() as u128 + counter.attempted,
@@ -615,6 +616,10 @@ mod budget_tests {
             .err()
             .ok_or("selected cap exceeded")?;
         assert_eq!(selected.used(), prior);
+        let observed = serde_json::to_value(selected.refusal())?;
+        assert_eq!(observed["counter_before_charge_bytes"], prior);
+        assert_eq!(observed["attempted_bytes"], selected_limit + 1);
+        assert_eq!(observed["configured_limit_bytes"], selected_limit);
         assert_eq!(
             error.message(),
             format!(

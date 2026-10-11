@@ -30,6 +30,30 @@ required by this export route.
 
 ## Implemented graph
 
+`--diagnostics` emits one JSON sidecar of at most 64 KiB on stderr, followed by
+the ordinary failure diagnostic when applicable. It observes the same acquired
+ProjectView and the existing source metadata accounting; graph stdout, identities,
+configuration, replay and publication semantics stay unchanged. The existing
+[`wow source census`](SOURCE_CENSUS.md) remains the manifest/package measurement
+route; this flag adds phase evidence to graph construction without another census.
+
+The fixed phase table records monotonic elapsed microseconds, counter before/after,
+configured bytes, counting method, available input population, completed prefix
+where observed, and the original failure class. Unreached phases have
+`not_evaluated` with null measurements. Prefix counts have phase-specific units:
+functions/calls are retained source rows, direct producers are copied proposal
+drafts, and direct support counts accepted address rows. They do not count the
+entire upstream report or establish published graph completeness.
+
+Conservative allowances, counting-serializer bytes and native scratch counters
+are distinct observations. Scratch refusal leaves the ordinary committed budget
+unchanged; `metadata_refusal.attempted_bytes` records the first crossing, including
+the refused increment. Neither that crossing nor a charged allowance is a final
+encoded size or allocation/RSS measurement. Graph validation/recognizer/service
+encoding, persistence and runtime resource measurements are outside this sidecar.
+Diagnostic output contains no source text or file paths. Diagnostic output loss
+does not repeat the operation or change its semantic result.
+
 Each captured first-party Lua, TOC and XML file becomes a `source_file` node.
 Every admitted direct TOC or XML file reference produces a `Loads` proposal from
 its containing document to its target file. Source handles and EvidenceRecords

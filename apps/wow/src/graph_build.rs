@@ -3,10 +3,13 @@ use std::ffi::OsString;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::atomic::Ordering;
-use wow_service::graph::{GraphBuildRequest, GraphReadStatus, execute_graph_build};
+use wow_service::graph::{
+    GraphBuildRequest, GraphReadStatus, SourceGraphDiagnostics, execute_graph_build_diagnosed,
+    source_graph_diagnostics_bytes,
+};
 use wow_service::{LocalProjectInput, ServiceErrorCode};
 
-const HELP: &str = "wow graph build --config <project.json> --project <ProjectId> [--generation current|<ProjectGenerationId>] [--format json|snapshot|text]\n\nBuild the bounded first-party source/file-load graph using the same materialization path as wow check. JSON includes provenance; snapshot emits the bare artifact for graph subgraph/axis/explain/path. Partial source graphs exit 2. No files or ProjectStore pointers are written.\n";
+const HELP: &str = "wow graph build --config <project.json> --project <ProjectId> [--generation current|<ProjectGenerationId>] [--format json|snapshot|text] [--diagnostics]\n\nBuild the bounded first-party source/file-load graph using the same materialization path as wow check. JSON includes provenance; snapshot emits the bare artifact for graph subgraph/axis/explain/path. Partial source graphs exit 2. No files or ProjectStore pointers are written. --diagnostics emits one bounded source metadata sidecar on stderr, outside graph identities.\n";
 
 #[derive(Clone, Copy)]
 enum Format {
@@ -18,6 +21,7 @@ struct Arguments {
     config: PathBuf,
     request: GraphBuildRequest,
     format: Format,
+    diagnostics: bool,
 }
 
 pub fn run(values: Vec<OsString>) -> u8 {
@@ -46,13 +50,22 @@ pub fn run(values: Vec<OsString>) -> u8 {
         }
     };
     let request = args.request.with_input_profile(&input);
-    let result = execute_graph_build(input, &request, &stop).and_then(|r| {
-        if stop.load(Ordering::Acquire) {
-            r.into_cancelled()
-        } else {
-            Ok(r)
-        }
-    });
+    let mut diagnostics = if args.diagnostics {
+        SourceGraphDiagnostics::enabled()
+    } else {
+        SourceGraphDiagnostics::default()
+    };
+    let result =
+        execute_graph_build_diagnosed(input, &request, &stop, &mut diagnostics).and_then(|r| {
+            if stop.load(Ordering::Acquire) {
+                r.into_cancelled()
+            } else {
+                Ok(r)
+            }
+        });
+    if args.diagnostics {
+        emit_diagnostics(&diagnostics);
+    }
     let result = match result {
         Ok(result) => result,
         Err(_) => {
@@ -112,6 +125,27 @@ pub fn run(values: Vec<OsString>) -> u8 {
     exit
 }
 
+// Diagnostic encoding/output is best effort and never changes owner status or retries.
+fn emit_diagnostics(diagnostics: &SourceGraphDiagnostics) {
+    let mut bytes = match source_graph_diagnostics_bytes(diagnostics) {
+        Ok(bytes) => bytes,
+        Err(_) => {
+            super::diagnostic("graph diagnostics encoding failed");
+            return;
+        }
+    };
+    bytes.push(b'\n');
+    let output = {
+        let mut stderr = std::io::stderr().lock();
+        stderr.write_all(&bytes).and_then(|()| stderr.flush())
+    };
+    if let Err(error) = output
+        && error.kind() != std::io::ErrorKind::BrokenPipe
+    {
+        super::diagnostic("graph diagnostics output failed");
+    }
+}
+
 fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
     let total = values
         .iter()
@@ -127,8 +161,16 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
         return Err("expected graph build");
     }
     let (mut config, mut project, mut generation, mut format) = (None, None, None, None);
+    let mut diagnostics = false;
     while let Some(option) = values.next() {
         let option = option.to_str().ok_or("invalid option encoding")?;
+        if option == "--diagnostics" {
+            if diagnostics {
+                return Err("duplicate --diagnostics");
+            }
+            diagnostics = true;
+            continue;
+        }
         if !matches!(
             option,
             "--config" | "--project" | "--generation" | "--format"
@@ -185,5 +227,42 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
         config: config.ok_or("graph build requires --config")?,
         request,
         format,
+        diagnostics,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn build_arguments() -> Vec<OsString> {
+        [
+            "graph",
+            "build",
+            "--config",
+            "project.json",
+            "--project",
+            "test-project",
+        ]
+        .into_iter()
+        .map(OsString::from)
+        .collect()
+    }
+
+    #[test]
+    fn diagnostics_is_an_optional_valueless_flag() -> Result<(), &'static str> {
+        assert!(!parse(build_arguments())?.diagnostics);
+        let mut values = build_arguments();
+        values.push("--diagnostics".into());
+        assert!(parse(values)?.diagnostics);
+        Ok(())
+    }
+
+    #[test]
+    fn duplicate_diagnostics_flag_is_refused() {
+        let mut values = build_arguments();
+        values.push("--diagnostics".into());
+        values.push("--diagnostics".into());
+        assert_eq!(parse(values).err(), Some("duplicate --diagnostics"));
+    }
 }

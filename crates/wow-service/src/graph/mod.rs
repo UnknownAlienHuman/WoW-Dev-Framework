@@ -10,13 +10,16 @@ pub use bundle::GRAPH_BUNDLE_MAX_BYTES;
 mod input;
 mod persistence;
 mod sources;
-pub use build::{GraphBuildRequest, GraphBuildResult, execute_graph_build};
+pub use build::{
+    GraphBuildRequest, GraphBuildResult, execute_graph_build, execute_graph_build_diagnosed,
+    source_graph_diagnostics_bytes,
+};
 pub use persistence::{
     GraphStorePublishRequest, GraphStorePublishResult, execute_graph_store_read,
     publish_graph_bundle, reconcile_graph_publication,
 };
-pub use wow_project::graph::ProjectSourceReadLimits;
 pub use wow_project::graph::source_graph_axis_profile;
+pub use wow_project::graph::{ProjectSourceReadLimits, SourceGraphDiagnostics};
 
 use crate::{ServiceError, ServiceErrorCode, ServiceResult};
 use serde::{Deserialize, Serialize};

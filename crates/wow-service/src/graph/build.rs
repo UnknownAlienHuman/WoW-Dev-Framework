@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use wow_graph::{GraphPartitionReplacement, GraphPartitionSnapshot, GraphSnapshot};
 use wow_project::graph::{
     ProjectGraphPackageDependencyOutcome, ProjectGraphPackageLoadOutcome, ProjectGraphProvenance,
-    SOURCE_GRAPH_PROFILE, build_source_graph_proposals,
+    SOURCE_GRAPH_PROFILE, SourceGraphDiagnostics,
 };
 
 mod assembly_budget;
@@ -476,6 +476,18 @@ pub fn execute_graph_build(
     request: &GraphBuildRequest,
     stop: &AtomicBool,
 ) -> ServiceResult<GraphBuildResult> {
+    execute_graph_build_diagnosed(input, request, stop, &mut SourceGraphDiagnostics::default())
+}
+
+/// The same graph build with caller-owned, nonsemantic source metadata diagnostics.
+/// Observations survive owner refusal and never enter request/result identities.
+pub fn execute_graph_build_diagnosed(
+    input: LocalProjectInput,
+    request: &GraphBuildRequest,
+    stop: &AtomicBool,
+    diagnostics: &mut SourceGraphDiagnostics,
+) -> ServiceResult<GraphBuildResult> {
+    diagnostics.reset();
     let request_digest = super::hash(&bounded(request, super::GRAPH_REQUEST_MAX_BYTES)?);
     let mut result = GraphBuildResult {
         schema: if request.projection == wow_project::graph::CAPABILITIES_SOURCE_GRAPH_PROFILE {
@@ -564,7 +576,7 @@ pub fn execute_graph_build(
             "no_negative_authority",
         ],
     };
-    match compose(input, request, stop) {
+    match compose(input, request, stop, diagnostics) {
         Ok(BuiltGraph {
             snapshot,
             provenance,
@@ -680,10 +692,11 @@ fn compose(
     input: LocalProjectInput,
     request: &GraphBuildRequest,
     stop: &AtomicBool,
+    diagnostics: &mut SourceGraphDiagnostics,
 ) -> ServiceResult<BuiltGraph> {
     checkpoint(stop)?;
     let backend = LocalProjectBackend::for_graph(input)?;
-    compose_backend(&backend, request, stop)
+    compose_backend_diagnosed(&backend, request, stop, diagnostics)
 }
 
 /// Uses the same materialization and producer chain as the artifact command,
@@ -751,16 +764,32 @@ fn compose_backend(
     request: &GraphBuildRequest,
     stop: &AtomicBool,
 ) -> ServiceResult<BuiltGraph> {
+    compose_backend_diagnosed(
+        backend,
+        request,
+        stop,
+        &mut SourceGraphDiagnostics::default(),
+    )
+}
+
+fn compose_backend_diagnosed(
+    backend: &LocalProjectBackend,
+    request: &GraphBuildRequest,
+    stop: &AtomicBool,
+    diagnostics: &mut SourceGraphDiagnostics,
+) -> ServiceResult<BuiltGraph> {
     checkpoint(stop)?;
     let project = request.acquire_project(backend, stop)?;
     let source_prefix::SourcePrefix {
         owner: source_owner,
         projection,
-    } = source_prefix::prepare(&project, stop)?;
+    } = source_prefix::prepare(&project, stop, diagnostics)?;
     let (legacy_provenance, direct) = match projection {
         source_prefix::SourceProjection::Legacy(provenance) => (Some(*provenance), None),
         source_prefix::SourceProjection::Direct(plan) => {
-            let direct = (*plan).finish(&source_owner, stop).map_err(project_error)?;
+            let direct = (*plan)
+                .finish_diagnosed(&source_owner, stop, diagnostics)
+                .map_err(project_error)?;
             (None, Some(direct))
         }
     };
@@ -1033,8 +1062,11 @@ fn compose_backend(
     let provenance = if let Some(value) = legacy_provenance {
         value
     } else {
-        // The shared assembly budget reserved both copies before recognizers.
-        let value = provenance.clone();
+        // Both report reservations remain charged before recognizers.
+        // All crosswalk consumers have completed; move the held source report.
+        let value = direct
+            .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?
+            .into_source();
         checkpoint(stop)?;
         value
     };
@@ -1239,6 +1271,24 @@ fn preflight_cancellable(
         ));
     }
     checkpoint(stop)
+}
+
+/// Encode only the caller-owned diagnostic leaf, separately from semantic output.
+/// Reserve one LF so the complete frontend sidecar stays within 64 KiB.
+/// This finite final observation remains printable when the operation was cancelled.
+pub fn source_graph_diagnostics_bytes(
+    diagnostics: &SourceGraphDiagnostics,
+) -> ServiceResult<Vec<u8>> {
+    // Unmeasured fields are JSON null. This sidecar is outside the canonical
+    // semantic subset, which deliberately rejects null values.
+    let limit = 64 * 1024 - 1;
+    preflight_cancellable(diagnostics, limit, &AtomicBool::new(false))?;
+    let bytes = serde_json::to_vec(diagnostics)
+        .map_err(|_| error(ServiceErrorCode::CanonicalizationFailed))?;
+    if bytes.len() > limit {
+        return Err(error(ServiceErrorCode::BudgetExceeded));
+    }
+    Ok(bytes)
 }
 
 fn bounded(value: &impl Serialize, limit: usize) -> ServiceResult<Vec<u8>> {

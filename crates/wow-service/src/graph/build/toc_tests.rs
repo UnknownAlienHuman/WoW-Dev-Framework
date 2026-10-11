@@ -9,6 +9,7 @@ use wow_emmy::{
     LuaWorkspaceFileInput, LuaWorkspaceLimits, LuaWorkspaceSnapshot, LuaWorkspaceUniverse,
 };
 use wow_project::disk::{ProjectDiskFile, ProjectInputDirectory};
+use wow_project::graph::build_source_graph_proposals;
 use wow_project::load::{ProjectPackageInput, ProjectPackageVariantInput, TocLoadContext};
 use wow_project::{
     AnalyzerBindingDeclaration, ProjectBudgetPolicy, ProjectCapabilityPolicy,

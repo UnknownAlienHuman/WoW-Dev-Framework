@@ -35,6 +35,7 @@ pub(super) fn project(
     provenance: &mut ProjectGraphProvenance,
     text_bytes: &mut ProducerBudget,
     stop: &AtomicBool,
+    diagnostics: &mut SourceGraphDiagnostics,
 ) -> ProjectResult<FunctionProposals> {
     let analyzer = project.snapshot().analyzer_binding();
     let Some(report) = analyzer.function_call_report() else {
@@ -111,113 +112,140 @@ pub(super) fn project(
         entities: Vec::new(),
         relations: Vec::new(),
     };
-    for function in report.functions() {
-        crate::analyzer::checkpoint(stop)?;
-        let source = source(
-            &sources,
-            function.path(),
-            function.content_digest(),
-            function.span(),
-        )?;
-        charge(
-            text_bytes,
-            function.path().len().saturating_mul(4).saturating_add(512),
-        )?;
-        let file_id = file_ids.get(function.path()).ok_or_else(invalid)?;
-        let proposal_id = format!("function:{}", function.fact_id());
-        let ownership_id = format!("function-owner:{}", function.fact_id());
-        let (handle, evidence) = support(project, source, function.span(), provenance)?;
-        result.entities.push(EntityDraft::new(
-            PlatformGraphProducer::AnalyzerStructure,
-            GraphEntityProposal::new(
-                proposal_id.as_str(),
-                "lua_source_function",
-                BTreeMap::from([
-                    (
-                        "document".into(),
-                        GraphProposalValue::String(function.path().into()),
-                    ),
-                    (
-                        "function".into(),
-                        GraphProposalValue::String(function.fact_id().into()),
-                    ),
-                ]),
-                GraphConfidence::Derived,
-                vec![handle],
-                vec![evidence],
-                Vec::new(),
-            )
-            .map_err(|_| invalid())?,
-        ));
-        result.relations.push(
-            RelationDraft::new(
-                PlatformGraphProducer::AnalyzerStructure,
-                ownership_id.as_str(),
-                "source_declaration_owns",
-                GraphRelationProposalInput {
-                    source: GraphProposalEndpoint::Proposed(file_id.clone().into()),
-                    target: GraphProposalEndpoint::Proposed(proposal_id.clone().into()),
-                    confidence: GraphConfidence::Derived,
-                    source_handle_ids: vec![handle],
-                    evidence_ids: vec![evidence],
-                    coverage_ids: Vec::new(),
-                },
-            )
-            .map_err(|_| invalid())?,
-        );
-        provenance.functions.push(ProjectGraphFunction {
-            function_id: function.fact_id().into(),
-            path: function.path().into(),
-            kind: function.kind(),
-            span: function.span(),
-            proposal_id,
-            ownership_proposal_id: ownership_id,
-            source_handle_id: handle,
-            evidence_id: evidence,
-        });
-    }
-    for call in report.calls() {
-        crate::analyzer::checkpoint(stop)?;
-        let source = source(
-            &sources,
-            call.path(),
-            call.content_digest(),
-            call.call_span(),
-        )?;
-        charge(
-            text_bytes,
-            call.path().len().saturating_mul(2).saturating_add(256),
-        )?;
-        let (handle, evidence) = support(project, source, call.call_span(), provenance)?;
-        provenance.call_sites.push(ProjectGraphCallSite {
-            call_id: call.fact_id().into(),
-            source_handle_id: handle,
-            evidence_id: evidence,
-        });
-        for argument in call.arguments() {
-            let Some(target) = argument.reference_target() else {
-                continue;
-            };
-            match target.role {
-                "main" => {
-                    mixins::add_declaration(
-                        project,
-                        target,
-                        file_ids,
-                        provenance,
-                        text_bytes,
-                        &mut result.entities,
-                        &mut result.relations,
-                    )?;
-                }
-                "library"
-                    if analyzer
-                        .library_snapshot_ids()
-                        .any(|snapshot| snapshot == target.workspace_id) => {}
-                _ => return Err(invalid()),
+    let before = provenance.functions.len();
+    let measured = diagnostics.measure(
+        DiagnosticPhase::Functions,
+        text_bytes,
+        Some(report.functions().len()),
+        CountingMethod::ConservativeEstimate,
+        |text_bytes| {
+            for function in report.functions() {
+                crate::analyzer::checkpoint(stop)?;
+                let source = source(
+                    &sources,
+                    function.path(),
+                    function.content_digest(),
+                    function.span(),
+                )?;
+                charge(
+                    text_bytes,
+                    function.path().len().saturating_mul(4).saturating_add(512),
+                )?;
+                let file_id = file_ids.get(function.path()).ok_or_else(invalid)?;
+                let proposal_id = format!("function:{}", function.fact_id());
+                let ownership_id = format!("function-owner:{}", function.fact_id());
+                let (handle, evidence) = support(project, source, function.span(), provenance)?;
+                result.entities.push(EntityDraft::new(
+                    PlatformGraphProducer::AnalyzerStructure,
+                    GraphEntityProposal::new(
+                        proposal_id.as_str(),
+                        "lua_source_function",
+                        BTreeMap::from([
+                            (
+                                "document".into(),
+                                GraphProposalValue::String(function.path().into()),
+                            ),
+                            (
+                                "function".into(),
+                                GraphProposalValue::String(function.fact_id().into()),
+                            ),
+                        ]),
+                        GraphConfidence::Derived,
+                        vec![handle],
+                        vec![evidence],
+                        Vec::new(),
+                    )
+                    .map_err(|_| invalid())?,
+                ));
+                result.relations.push(
+                    RelationDraft::new(
+                        PlatformGraphProducer::AnalyzerStructure,
+                        ownership_id.as_str(),
+                        "source_declaration_owns",
+                        GraphRelationProposalInput {
+                            source: GraphProposalEndpoint::Proposed(file_id.clone().into()),
+                            target: GraphProposalEndpoint::Proposed(proposal_id.clone().into()),
+                            confidence: GraphConfidence::Derived,
+                            source_handle_ids: vec![handle],
+                            evidence_ids: vec![evidence],
+                            coverage_ids: Vec::new(),
+                        },
+                    )
+                    .map_err(|_| invalid())?,
+                );
+                provenance.functions.push(ProjectGraphFunction {
+                    function_id: function.fact_id().into(),
+                    path: function.path().into(),
+                    kind: function.kind(),
+                    span: function.span(),
+                    proposal_id,
+                    ownership_proposal_id: ownership_id,
+                    source_handle_id: handle,
+                    evidence_id: evidence,
+                });
             }
-        }
-    }
+            Ok(())
+        },
+    );
+    diagnostics.completed_records(
+        DiagnosticPhase::Functions,
+        provenance.functions.len() - before,
+    );
+    measured?;
+    let before = provenance.call_sites.len();
+    let measured = diagnostics.measure(
+        DiagnosticPhase::Calls,
+        text_bytes,
+        Some(report.calls().len()),
+        CountingMethod::ConservativeEstimate,
+        |text_bytes| {
+            for call in report.calls() {
+                crate::analyzer::checkpoint(stop)?;
+                let source = source(
+                    &sources,
+                    call.path(),
+                    call.content_digest(),
+                    call.call_span(),
+                )?;
+                charge(
+                    text_bytes,
+                    call.path().len().saturating_mul(2).saturating_add(256),
+                )?;
+                let (handle, evidence) = support(project, source, call.call_span(), provenance)?;
+                provenance.call_sites.push(ProjectGraphCallSite {
+                    call_id: call.fact_id().into(),
+                    source_handle_id: handle,
+                    evidence_id: evidence,
+                });
+                for argument in call.arguments() {
+                    let Some(target) = argument.reference_target() else {
+                        continue;
+                    };
+                    match target.role {
+                        "main" => {
+                            mixins::add_declaration(
+                                project,
+                                target,
+                                file_ids,
+                                provenance,
+                                text_bytes,
+                                &mut result.entities,
+                                &mut result.relations,
+                            )?;
+                        }
+                        "library"
+                            if analyzer
+                                .library_snapshot_ids()
+                                .any(|snapshot| snapshot == target.workspace_id) => {}
+                        _ => return Err(invalid()),
+                    }
+                }
+            }
+            Ok(())
+        },
+    );
+    diagnostics.completed_records(DiagnosticPhase::Calls, provenance.call_sites.len() - before);
+    measured?;
     provenance.function_call_report = Some(report.clone());
     Ok(result)
 }

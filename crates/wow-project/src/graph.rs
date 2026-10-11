@@ -13,13 +13,17 @@ mod packages;
 mod platform_producers;
 mod producer_budget;
 use producer_budget::ProducerBudget;
+mod diagnostics;
+pub use diagnostics::SourceGraphDiagnostics;
+use diagnostics::{CountingMethod, Phase as DiagnosticPhase};
 mod producer_derivations;
 mod producer_evidence;
 use platform_producers::DirectRecipe;
 pub use platform_producers::{
     PLATFORM_CAPABILITIES_GRAPH_PROFILE, PLATFORM_DIRECT_GRAPH_PROFILE,
     PlatformGraphProducerProposals, PlatformGraphProposalPlan, PlatformGraphProvenance,
-    build_platform_graph_proposal_plan, build_platform_graph_proposal_plan_for_capabilities,
+    build_platform_graph_proposal_plan, build_platform_graph_proposal_plan_diagnosed,
+    build_platform_graph_proposal_plan_for_capabilities,
 };
 mod projection;
 mod structural_registry;
@@ -852,6 +856,16 @@ pub fn build_source_graph_proposals(
     project: &ProjectView,
     stop: &AtomicBool,
 ) -> ProjectResult<ProjectSourceGraphProposals> {
+    build_source_graph_proposals_diagnosed(project, stop, &mut SourceGraphDiagnostics::default())
+}
+
+/// Same operation and semantic bytes, with a separate bounded metadata sidecar.
+pub fn build_source_graph_proposals_diagnosed(
+    project: &ProjectView,
+    stop: &AtomicBool,
+    diagnostics: &mut SourceGraphDiagnostics,
+) -> ProjectResult<ProjectSourceGraphProposals> {
+    diagnostics.reset();
     crate::analyzer::checkpoint(stop)?;
     if project
         .configuration()
@@ -875,7 +889,12 @@ pub fn build_source_graph_proposals(
         limits,
         inventory_batch,
         text_bytes: _,
-    } = collect_source_graph_proposals(project, stop)?;
+    } = collect_source_graph_proposals_for_recipe(
+        project,
+        DirectRecipe::Original,
+        stop,
+        diagnostics,
+    )?;
     let mut native_entities = Vec::new();
     for entity in entities {
         crate::analyzer::checkpoint(stop)?;
@@ -932,20 +951,15 @@ struct CollectedSourceGraph {
     text_bytes: ProducerBudget,
 }
 
-fn collect_source_graph_proposals(
-    project: &ProjectView,
-    stop: &AtomicBool,
-) -> ProjectResult<CollectedSourceGraph> {
-    collect_source_graph_proposals_for_recipe(project, DirectRecipe::Original, stop)
-}
-
 fn collect_source_graph_proposals_for_recipe(
     project: &ProjectView,
     recipe: DirectRecipe,
     stop: &AtomicBool,
+    diagnostics: &mut SourceGraphDiagnostics,
 ) -> ProjectResult<CollectedSourceGraph> {
     crate::analyzer::checkpoint(stop)?;
     project.snapshot().validate()?;
+    diagnostics.bind(project);
     crate::analyzer::checkpoint(stop)?;
     let config = project.configuration();
     let profile = source_graph_profile(config);
@@ -1040,39 +1054,48 @@ fn collect_source_graph_proposals_for_recipe(
     }
     let mut source_by_path = BTreeMap::new();
     let mut text_bytes = ProducerBudget::for_configuration(config, 0)?;
-    for source in &sources {
-        crate::analyzer::checkpoint(stop)?;
-        charge(&mut text_bytes, source.path.len().saturating_mul(8))?;
-        if source_by_path
-            .insert(source.path.as_str(), source)
-            .is_some()
-        {
-            return Err(invalid());
-        }
-        if let Some(file) = project.file_by_path(&source.path)? {
-            if file.content_digest() != source.content_digest
-                || file.byte_length() != source.byte_length
-            {
-                return Err(invalid());
+    diagnostics.measure(
+        DiagnosticPhase::SelectedSources,
+        &mut text_bytes,
+        Some(sources.len()),
+        CountingMethod::ConservativeEstimate,
+        |text_bytes| {
+            for source in &sources {
+                crate::analyzer::checkpoint(stop)?;
+                charge(text_bytes, source.path.len().saturating_mul(8))?;
+                if source_by_path
+                    .insert(source.path.as_str(), source)
+                    .is_some()
+                {
+                    return Err(invalid());
+                }
+                if let Some(file) = project.file_by_path(&source.path)? {
+                    if file.content_digest() != source.content_digest
+                        || file.byte_length() != source.byte_length
+                    {
+                        return Err(invalid());
+                    }
+                } else {
+                    let text = retained_documents
+                        .get(&source.path)
+                        .copied()
+                        .ok_or_else(invalid)?;
+                    if text.len() as u64 != source.byte_length
+                        || crate::identity::source_digest(text.as_bytes()) != source.content_digest
+                    {
+                        return Err(invalid());
+                    }
+                }
             }
-        } else {
-            let text = retained_documents
-                .get(&source.path)
-                .copied()
-                .ok_or_else(invalid)?;
-            if text.len() as u64 != source.byte_length
-                || crate::identity::source_digest(text.as_bytes()) != source.content_digest
-            {
-                return Err(invalid());
+            for file in project.file_manifest() {
+                crate::analyzer::checkpoint(stop)?;
+                if !source_by_path.contains_key(file.relative_path().as_str()) {
+                    return Err(invalid());
+                }
             }
-        }
-    }
-    for file in project.file_manifest() {
-        crate::analyzer::checkpoint(stop)?;
-        if !source_by_path.contains_key(file.relative_path().as_str()) {
-            return Err(invalid());
-        }
-    }
+            Ok(())
+        },
+    )?;
     let raw_selected = raw_inventory::selected(config);
     let registry = registry_for_recipe(config.project_kind(), raw_selected, recipe)?;
     let universe = match config.project_kind() {
@@ -1153,167 +1176,229 @@ fn collect_source_graph_proposals_for_recipe(
             .analyzer_binding()
             .package_xml_bindings()
             .ok_or_else(invalid)?;
-        charge(&mut text_bytes, bindings.serialized_byte_length())?;
-        provenance.package_xml_binding_report = Some(bindings.clone());
+        provenance.package_xml_binding_report = Some(diagnostics.measure(
+            DiagnosticPhase::PackageXmlBindings,
+            &mut text_bytes,
+            None,
+            CountingMethod::SerializedBytes,
+            |budget| {
+                charge(budget, bindings.serialized_byte_length())?;
+                Ok(bindings.clone())
+            },
+        )?);
     }
     let inventory_batch = if raw_selected {
-        let (batch, manifest) = raw_inventory::project(
-            project,
-            &registry,
-            &universe,
-            &generation,
+        let (batch, manifest) = diagnostics.measure(
+            DiagnosticPhase::RawInventory,
             &mut text_bytes,
-            stop,
+            None,
+            CountingMethod::Mixed,
+            |budget| {
+                raw_inventory::project(project, &registry, &universe, &generation, budget, stop)
+            },
         )?;
         provenance.raw_inventory = Some(manifest);
         Some(batch)
     } else {
         None
     };
-    let mut entities = Vec::new();
-    let mut ids = BTreeMap::new();
-    for source in source_by_path.values() {
-        crate::analyzer::checkpoint(stop)?;
-        let key = crate::identity::canonical_digest(
-            "wow-project/source-file-proposal/1",
-            &source.path,
-            ProjectPhase::View,
-        )?;
-        let id = format!("file:{key}");
-        let (handle, evidence) =
-            support(project, source, SourceSpan::whole_file(), &mut provenance)?;
-        entities.push(EntityDraft::new(
-            PlatformGraphProducer::Inventory,
-            GraphEntityProposal::new(
-                id.as_str(),
-                "source_file",
-                BTreeMap::from([(
-                    "path".into(),
-                    GraphProposalValue::String(source.path.clone().into()),
-                )]),
-                GraphConfidence::Proven,
-                vec![handle],
-                vec![evidence],
-                Vec::new(),
-            )
-            .map_err(|_| invalid())?,
-        ));
-        ids.insert(source.path.as_str(), id.clone());
-        provenance.files.push(ProjectGraphFile {
-            path: source.path.clone(),
-            content_digest: source.content_digest,
-            byte_length: source.byte_length,
-            proposal_id: id,
-            source_handle_id: handle,
-            evidence_id: evidence,
-        });
-    }
-    let mut relations = Vec::new();
-    if let Some(plan) = plan {
-        for record in plan.records() {
-            crate::analyzer::checkpoint(stop)?;
-            if !matches!(
-                record.kind,
-                LoadRecordKind::LuaFile | LoadRecordKind::XmlFile
-            ) || record.selection != LoadSelection::Included
-            {
-                continue;
-            }
-            let Some(target) = record.target.as_deref() else {
-                continue;
-            };
-            if !ids.contains_key(target) {
-                provenance.skipped_missing_targets += 1;
-                continue;
-            }
-            // The stored graph profile rejects self-edges. Retain the loader's
-            // cycle/occurrence receipt, never erase the limitation from coverage.
-            if target == record.document {
-                provenance.skipped_self_loads += 1;
-                continue;
-            }
-            if relations.len() >= MAX_LOADS {
-                return Err(resource_exhausted(
-                    "load relations",
-                    relations.len() as u128 + 1,
-                    MAX_LOADS,
-                ));
-            }
-            let source = source_by_path
-                .get(record.document.as_str())
-                .ok_or_else(invalid)?;
-            let text = plan.document_text(&record.document).ok_or_else(invalid)?;
-            let start = usize::try_from(record.byte_start).map_err(|_| invalid())?;
-            let end = usize::try_from(record.byte_end).map_err(|_| invalid())?;
-            let raw = text.get(start..end).ok_or_else(invalid)?;
-            if crate::identity::source_digest(raw.as_bytes()) != record.raw_digest {
-                return Err(invalid());
-            }
-            charge(&mut text_bytes, record.document.len().saturating_mul(4))?;
-            let span = SourceSpan::byte_range(record.byte_start, record.byte_end)
-                .map_err(|_| invalid())?;
-            let (handle, evidence) = support(project, source, span, &mut provenance)?;
-            let producer = if record.document == plan.selected_toc() {
-                PlatformGraphProducer::TocLoad
-            } else if plan.xml_documents().contains_key(&record.document) {
-                PlatformGraphProducer::XmlStructure
-            } else {
-                return Err(invalid());
-            };
-            relations.push(
-                RelationDraft::new(
-                    producer,
-                    format!("load:{}", record.ordinal),
-                    "source_loads",
-                    GraphRelationProposalInput {
-                        source: GraphProposalEndpoint::Proposed(
-                            ids[record.document.as_str()].clone().into(),
-                        ),
-                        target: GraphProposalEndpoint::Proposed(ids[target].clone().into()),
-                        confidence: GraphConfidence::Proven,
-                        source_handle_ids: vec![handle],
-                        evidence_ids: vec![evidence],
-                        coverage_ids: Vec::new(),
-                    },
-                )
-                .map_err(|_| invalid())?,
-            );
-        }
-    }
-    let packages = packages::project(
-        project,
-        &ids,
-        &source_by_path,
-        &mut provenance,
+    let (mut entities, ids, mut relations) = diagnostics.measure(
+        DiagnosticPhase::FilesAndLoads,
         &mut text_bytes,
-        stop,
+        Some(sources.len()),
+        CountingMethod::ConservativeEstimate,
+        |text_bytes| {
+            let mut entities = Vec::new();
+            let mut ids = BTreeMap::new();
+            for source in source_by_path.values() {
+                crate::analyzer::checkpoint(stop)?;
+                let key = crate::identity::canonical_digest(
+                    "wow-project/source-file-proposal/1",
+                    &source.path,
+                    ProjectPhase::View,
+                )?;
+                let id = format!("file:{key}");
+                let (handle, evidence) =
+                    support(project, source, SourceSpan::whole_file(), &mut provenance)?;
+                entities.push(EntityDraft::new(
+                    PlatformGraphProducer::Inventory,
+                    GraphEntityProposal::new(
+                        id.as_str(),
+                        "source_file",
+                        BTreeMap::from([(
+                            "path".into(),
+                            GraphProposalValue::String(source.path.clone().into()),
+                        )]),
+                        GraphConfidence::Proven,
+                        vec![handle],
+                        vec![evidence],
+                        Vec::new(),
+                    )
+                    .map_err(|_| invalid())?,
+                ));
+                ids.insert(source.path.as_str(), id.clone());
+                provenance.files.push(ProjectGraphFile {
+                    path: source.path.clone(),
+                    content_digest: source.content_digest,
+                    byte_length: source.byte_length,
+                    proposal_id: id,
+                    source_handle_id: handle,
+                    evidence_id: evidence,
+                });
+            }
+            let mut relations = Vec::new();
+            if let Some(plan) = plan {
+                for record in plan.records() {
+                    crate::analyzer::checkpoint(stop)?;
+                    if !matches!(
+                        record.kind,
+                        LoadRecordKind::LuaFile | LoadRecordKind::XmlFile
+                    ) || record.selection != LoadSelection::Included
+                    {
+                        continue;
+                    }
+                    let Some(target) = record.target.as_deref() else {
+                        continue;
+                    };
+                    if !ids.contains_key(target) {
+                        provenance.skipped_missing_targets += 1;
+                        continue;
+                    }
+                    // The stored graph profile rejects self-edges. Retain the loader's
+                    // cycle/occurrence receipt, never erase the limitation from coverage.
+                    if target == record.document {
+                        provenance.skipped_self_loads += 1;
+                        continue;
+                    }
+                    if relations.len() >= MAX_LOADS {
+                        return Err(resource_exhausted(
+                            "load relations",
+                            relations.len() as u128 + 1,
+                            MAX_LOADS,
+                        ));
+                    }
+                    let source = source_by_path
+                        .get(record.document.as_str())
+                        .ok_or_else(invalid)?;
+                    let text = plan.document_text(&record.document).ok_or_else(invalid)?;
+                    let start = usize::try_from(record.byte_start).map_err(|_| invalid())?;
+                    let end = usize::try_from(record.byte_end).map_err(|_| invalid())?;
+                    let raw = text.get(start..end).ok_or_else(invalid)?;
+                    if crate::identity::source_digest(raw.as_bytes()) != record.raw_digest {
+                        return Err(invalid());
+                    }
+                    charge(text_bytes, record.document.len().saturating_mul(4))?;
+                    let span = SourceSpan::byte_range(record.byte_start, record.byte_end)
+                        .map_err(|_| invalid())?;
+                    let (handle, evidence) = support(project, source, span, &mut provenance)?;
+                    let producer = if record.document == plan.selected_toc() {
+                        PlatformGraphProducer::TocLoad
+                    } else if plan.xml_documents().contains_key(&record.document) {
+                        PlatformGraphProducer::XmlStructure
+                    } else {
+                        return Err(invalid());
+                    };
+                    relations.push(
+                        RelationDraft::new(
+                            producer,
+                            format!("load:{}", record.ordinal),
+                            "source_loads",
+                            GraphRelationProposalInput {
+                                source: GraphProposalEndpoint::Proposed(
+                                    ids[record.document.as_str()].clone().into(),
+                                ),
+                                target: GraphProposalEndpoint::Proposed(ids[target].clone().into()),
+                                confidence: GraphConfidence::Proven,
+                                source_handle_ids: vec![handle],
+                                evidence_ids: vec![evidence],
+                                coverage_ids: Vec::new(),
+                            },
+                        )
+                        .map_err(|_| invalid())?,
+                    );
+                }
+            }
+            Ok((entities, ids, relations))
+        },
+    )?;
+    let packages = diagnostics.measure(
+        DiagnosticPhase::Packages,
+        &mut text_bytes,
+        package_plan.map(|plan| plan.packages().len()),
+        CountingMethod::Mixed,
+        |budget| {
+            packages::project(
+                project,
+                &ids,
+                &source_by_path,
+                &mut provenance,
+                budget,
+                stop,
+            )
+        },
     )?;
     entities.extend(packages.entities);
     relations.extend(packages.relations);
-    let xml = xml::project(project, &ids, &mut provenance, &mut text_bytes, stop)?;
+    let xml = diagnostics.measure(
+        DiagnosticPhase::Xml,
+        &mut text_bytes,
+        None,
+        CountingMethod::ConservativeEstimate,
+        |budget| xml::project(project, &ids, &mut provenance, budget, stop),
+    )?;
     entities.extend(xml.entities);
     relations.extend(xml.relations);
-    let mixins = mixins::project(project, &ids, &mut provenance, &mut text_bytes, stop)?;
+    let mixins = diagnostics.measure(
+        DiagnosticPhase::Mixins,
+        &mut text_bytes,
+        None,
+        CountingMethod::ConservativeEstimate,
+        |budget| mixins::project(project, &ids, &mut provenance, budget, stop),
+    )?;
     entities.extend(mixins.entities);
     relations.extend(mixins.relations);
-    let functions = functions::project(project, &ids, &mut provenance, &mut text_bytes, stop)?;
-    entities.extend(functions.entities);
-    relations.extend(functions.relations);
-    let scripts = scripts::project(project, &ids, &mut provenance, &mut text_bytes, stop)?;
-    entities.extend(scripts.entities);
-    relations.extend(scripts.relations);
-    let state = state::project(project, &ids, &mut provenance, &mut text_bytes, stop)?;
-    entities.extend(state.entities);
-    relations.extend(state.relations);
-    provenance.toc_facts = toc_facts::project(
+    let functions = functions::project(
         project,
-        &source_by_path,
+        &ids,
         &mut provenance,
         &mut text_bytes,
         stop,
+        diagnostics,
     )?;
-    let (xml_facts, xml_containment) =
-        xml_facts::project(project, &mut provenance, &mut text_bytes, stop)?;
+    entities.extend(functions.entities);
+    relations.extend(functions.relations);
+    let scripts = diagnostics.measure(
+        DiagnosticPhase::Scripts,
+        &mut text_bytes,
+        None,
+        CountingMethod::ConservativeEstimate,
+        |budget| scripts::project(project, &ids, &mut provenance, budget, stop),
+    )?;
+    entities.extend(scripts.entities);
+    relations.extend(scripts.relations);
+    let state = diagnostics.measure(
+        DiagnosticPhase::State,
+        &mut text_bytes,
+        None,
+        CountingMethod::ConservativeEstimate,
+        |budget| state::project(project, &ids, &mut provenance, budget, stop),
+    )?;
+    entities.extend(state.entities);
+    relations.extend(state.relations);
+    provenance.toc_facts = diagnostics.measure(
+        DiagnosticPhase::TocFacts,
+        &mut text_bytes,
+        None,
+        CountingMethod::ConservativeEstimate,
+        |budget| toc_facts::project(project, &source_by_path, &mut provenance, budget, stop),
+    )?;
+    let (xml_facts, xml_containment) = diagnostics.measure(
+        DiagnosticPhase::XmlFacts,
+        &mut text_bytes,
+        None,
+        CountingMethod::ConservativeEstimate,
+        |budget| xml_facts::project(project, &mut provenance, budget, stop),
+    )?;
     provenance.xml_facts = xml_facts;
     provenance.xml_containment = xml_containment;
     if entities.len().saturating_add(

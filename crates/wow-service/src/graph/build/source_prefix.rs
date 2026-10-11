@@ -1,7 +1,10 @@
 //! Prepare one source-only predecessor. Native direct authority is finished by
 //! the caller while this graph remains held, before recognizers are admitted.
 use super::*;
-use wow_project::graph::{PlatformGraphProposalPlan, build_platform_graph_proposal_plan};
+use wow_project::graph::{
+    PlatformGraphProposalPlan, build_platform_graph_proposal_plan_diagnosed,
+    build_source_graph_proposals_diagnosed,
+};
 
 pub(super) enum SourceProjection<'project> {
     Legacy(Box<ProjectGraphProvenance>),
@@ -16,6 +19,7 @@ pub(super) struct SourcePrefix<'project> {
 pub(super) fn prepare<'project>(
     project: &'project wow_project::ProjectView,
     stop: &AtomicBool,
+    diagnostics: &mut SourceGraphDiagnostics,
 ) -> ServiceResult<SourcePrefix<'project>> {
     checkpoint(stop)?;
     if project
@@ -23,7 +27,8 @@ pub(super) fn prepare<'project>(
         .platform_graph_profile()
         .is_some_and(wow_project::PlatformGraphProfile::is_direct)
     {
-        let mut plan = build_platform_graph_proposal_plan(project, stop).map_err(project_error)?;
+        let mut plan = build_platform_graph_proposal_plan_diagnosed(project, stop, diagnostics)
+            .map_err(project_error)?;
         let mut owner = GraphPartitionSnapshot::new(
             plan.registry().clone(),
             plan.foundation().clone(),
@@ -45,7 +50,7 @@ pub(super) fn prepare<'project>(
         )?;
         for &producer in plan.producer_order() {
             let stage = plan
-                .build_stage(producer, &owner, stop)
+                .build_stage_diagnosed(producer, &owner, stop, diagnostics)
                 .map_err(project_error)?;
             let version = stage.producer_version().to_owned();
             let (batch, coverage) = stage.into_parts();
@@ -56,7 +61,8 @@ pub(super) fn prepare<'project>(
             projection: SourceProjection::Direct(Box::new(plan)),
         })
     } else {
-        let proposals = build_source_graph_proposals(project, stop).map_err(project_error)?;
+        let proposals = build_source_graph_proposals_diagnosed(project, stop, diagnostics)
+            .map_err(project_error)?;
         let inventory_batch = proposals.inventory_batch().cloned();
         if inventory_batch.is_some()
             != (project.configuration().platform_graph_profile()
