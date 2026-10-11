@@ -156,7 +156,8 @@ and the existing inventory/publication gates; it does not reinterpret it as fact
 
 All seven values already enter the configuration digest and are captured/rebuilt
 by native replay. Equal values in `/1` and `/2` preserve the same owner bundle;
-changed values change configuration identity. Retained replay remains `/11`,
+changed values change configuration identity. Without a sidecar selection,
+retained replay remains `/11`,
 and hydration rejects changed budgets against the captured configuration digest.
 Transport selection does not change an analyzer report recipe.
 
@@ -165,6 +166,34 @@ graph/map or replay/store bounds. In particular the function-call sidecar has
 separate work/count/report limits and is outside this aggregate output accounting.
 Select a finite policy from actual owner measurements; this route alone does not
 qualify a complete current corpus or its allocator/peak memory.
+
+### Explicit function-call budget
+
+Schema `/2` also accepts an optional `project_budgets.function_calls` object.
+All six fields are required positive `u64` values:
+
+| Field | Independent accounting unit |
+|---|---|
+| `max_ast_visits` | Cumulative first Main/Library and second Main AST visits |
+| `max_functions` | Main functions and, separately, temporary captured signatures |
+| `max_calls` | Physical Main call facts |
+| `max_global_accesses` | Physical Main global-access facts |
+| `max_named_targets` | Retained concrete callable lookup targets |
+| `max_report_bytes` | Encoded function-call report, including the original ID allowance |
+
+Missing fields, unknown/duplicate keys, zero, invalid types and explicit `null`
+refuse. Omission preserves the previous policy, report `/7` and replay `/11`.
+Selection requires genuine native retained packages, reaches the same semantic
+session, and produces budget-bound `wow-emmy/function-call-facts/8` and
+`wow-project/native-project-replay/12`. The configuration digest and report
+identity both retain the selected values. Hydration rebuilds them without source
+files and refuses removal, downgrade or changed values against the original
+identities. Ordinary replay1-11 recipes remain unchanged.
+
+This component does not widen alias work/text, scope, argument/literal,
+callable-input, flow, graph/map or replay/store budgets. Choose finite values from
+the actual selected operation; neither this selector nor a synthetic boundary
+case qualifies the full corpus or its peak memory.
 
 ## Scope
 

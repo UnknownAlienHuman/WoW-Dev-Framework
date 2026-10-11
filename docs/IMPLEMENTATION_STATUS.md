@@ -134,14 +134,23 @@ collection and next refuses in the function-call sidecar's first closure-capture
 walk: `visit` increments to2000001 against `MAX_AST_VISITS=2000000` (the observed
 guard and counter invariant, not a finished-corpus count). Final session, flow,
 classification and graph remain unqualified. Exact operation evidence belongs
-in #113; other function-call guards are unchanged.
+in #113; default function-call guards are unchanged.
 Retained platform transport `/2` now requires an explicit validated seven-field
 `ProjectBudgetPolicy` and passes it through existing native configuration,
 inventory/publication and replay. `/1` rejects the selector and retains its fixed
 policy. Focused schema/refusal, exact-output-boundary and disk-absent replay cases
 pass; equal policies preserve the owner bundle and changed policies alter its
-configuration digest. The report recipes and replay11 grammar remain unchanged.
+configuration digest. Without a sidecar selection, the report recipes and
+replay11 grammar remain unchanged.
 See [platform input](../apps/wow/PLATFORM_INPUT.md#explicit-project-budgets).
+The optional six-field function-call budget now reaches cumulative two-pass
+Main/Library work, function/signature/call/global/named-target counts and encoded
+sidecar output. Selected report8 binds the budget; retained replay12 captures and
+rebuilds it exactly. Default report7 and replay1-11 retain their recipes. Focused
+above-default work/call, exact-work/limit-1, cancellation/output refusal and
+disk-absent service/replay identity/downgrade/tamper cases pass. Alias work/text
+and all other owner limits remain independent. This is an admission seam;
+no selected complete real-corpus result or peak is claimed.
 Full analysis/graph/maps/persistence remain unqualified under #113.
 Explicit retained XSD component admission is now executable through the existing
 XML owner, with root-only global symbols and final unsupported context propagation.

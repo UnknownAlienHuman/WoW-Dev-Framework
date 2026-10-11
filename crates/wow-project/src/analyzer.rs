@@ -394,6 +394,10 @@ pub(crate) fn build_analyzer_binding(
             .map_err(|_| binding_inputs_invalid())?,
         None => query_profile,
     };
+    let query_profile = match budget.function_call_budget() {
+        Some(budget) => query_profile.with_function_call_budget(budget),
+        None => query_profile,
+    };
     let (syntax_report, session, local_flow_report) =
         if configuration.load_plan().is_none() && configuration.package_load_plan().is_none() {
             if !cache

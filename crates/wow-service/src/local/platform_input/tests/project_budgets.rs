@@ -10,6 +10,203 @@ fn selected(config: &mut Value, policy: ProjectBudgetPolicy) -> TestResult {
 }
 
 #[test]
+fn selected_sidecar_budget_binds_native_report_and_replay_without_downgrade() -> TestResult {
+    use crate::live_project::{
+        LiveProjectPublishRequest, LiveProjectStore, PlatformStoreSelection,
+        publish_input_in_namespace,
+    };
+    use wow_emmy::function_calls::{FUNCTION_CALL_BUDGET_PROFILE, FunctionCallBudget};
+    use wow_project::ProjectConfigurationBuilder;
+    use wow_project::replay::publication;
+    use wow_store::project::{ProjectStore, PublicationRequest, ReadSelector, RecordCatalog};
+
+    let (root, mut config) = fixture()?;
+    let path = root.0.join("project.json");
+    let stop = AtomicBool::new(false);
+    let ordinary = LocalProjectInput::from_config_path(&path, &stop)?;
+    let budgets = ordinary.bundle.configuration().budget_policy();
+    let sidecar = FunctionCallBudget::new(64, 16, 16, 16, 32, 64 * 1024)?;
+    let selected_budgets = budgets.with_function_call_budget(sidecar);
+    assert_eq!(
+        serde_json::from_value::<ProjectBudgetPolicy>(serde_json::to_value(selected_budgets)?)?,
+        selected_budgets
+    );
+    let mut null = serde_json::to_value(budgets)?;
+    null["function_calls"] = Value::Null;
+    assert!(serde_json::from_value::<ProjectBudgetPolicy>(null).is_err());
+    // Public configuration must reject the extension on an ordinary platform
+    // owner, independently of the service transport's own retention check.
+    let previous = ordinary.bundle.configuration();
+    let declarations: Vec<ProjectPackageInput> =
+        serde_json::from_value(config["packages"].clone())?;
+    let packages = Arc::new(
+        previous
+            .platform_packages()
+            .ok_or("platform owner")?
+            .source()
+            .specialize_packages(&declarations, None, &stop)?,
+    );
+    let invalid = ProjectConfigurationBuilder::new(
+        previous.project_id().clone(),
+        previous.project_kind(),
+        previous.selected_profile().clone(),
+        previous.reference_generation(),
+        previous.analyzer_binding().clone(),
+    )
+    .workspace_id(previous.workspace_id().clone())
+    .source_origin_id(previous.source_origin_id().clone())
+    .logical_root(previous.logical_root().as_str())
+    .capability_policy(previous.capability_policy().clone())
+    .budget_policy(selected_budgets)
+    .platform_packages(packages)?
+    .build();
+    assert_eq!(
+        invalid.err().ok_or("unretained budget admitted")?.code(),
+        ProjectErrorCode::InvalidBudgetPolicy
+    );
+
+    selected(&mut config, selected_budgets)?;
+    write_json(&root, "project.json", &config)?;
+    let input = LocalProjectInput::from_config_path(&path, &stop)?;
+    let store_input = LocalProjectInput::from_config_path(&path, &stop)?;
+    let selection = PlatformStoreSelection::new(
+        input.bundle.configuration().project_id().clone(),
+        input
+            .bundle
+            .configuration()
+            .platform_packages()
+            .ok_or("platform owner")?
+            .source()
+            .profile()
+            .profile_id()
+            .clone(),
+    )?;
+    let request = crate::graph::GraphBuildRequest::new(
+        "fixture-platform-transport".into(),
+        "current".into(),
+    )?
+    .with_input_profile(&input);
+    // The service must own and retain the same data, rather than reopen files.
+    std::fs::remove_file(root.0.join("UI/main.lua"))?;
+    std::fs::remove_file(root.0.join("UI/frames.xml"))?;
+    let (publication, _) = crate::graph::live_publication(input, &request, &stop)?;
+    let (records, bindings) = publication.into_parts();
+    let replay: ProjectReplay = records
+        .iter()
+        .find(|record| record.key() == "live.project.replay")
+        .ok_or("replay record")?
+        .decode()?;
+    let wire = serde_json::to_value(&replay)?;
+    assert_eq!(wire["schema"], "wow-project/native-project-replay/12");
+    assert_eq!(
+        wire["configuration"]["budgets"]["function_calls"],
+        serde_json::to_value(sidecar)?
+    );
+    let reopened = ProjectReplay::from_json(&serde_json::to_vec(&wire)?, &stop)?.hydrate(&stop)?;
+    assert_eq!(reopened.configuration().budget_policy(), selected_budgets);
+    assert_eq!(
+        Some(reopened.snapshot_id()),
+        bindings.get("project_snapshot_id").map(String::as_str)
+    );
+    assert_eq!(
+        Some(reopened.analyzer_snapshot_id()),
+        bindings.get("analyzer_snapshot_id").map(String::as_str)
+    );
+    let report = reopened
+        .snapshot()
+        .analyzer_binding()
+        .function_call_report()
+        .ok_or("sidecar report")?;
+    assert_eq!(report.budget(), Some(sidecar));
+    assert_eq!(
+        serde_json::to_value(report)?["profile"],
+        FUNCTION_CALL_BUDGET_PROFILE
+    );
+    report.validate()?;
+    let second = replay.hydrate(&stop)?;
+    assert_eq!(
+        second.snapshot().analyzer_binding(),
+        reopened.snapshot().analyzer_binding()
+    );
+
+    // A real previous epoch must refuse the new record without changing Current,
+    // and must remain openable under its exact frozen catalog.
+    let mut schemas = wow_graph::GraphPartitionSnapshot::STORAGE_SCHEMAS.to_vec();
+    schemas.extend_from_slice(publication::STORAGE_SCHEMAS_V10);
+    let old_catalog = RecordCatalog::new(
+        &schemas,
+        &[
+            wow_graph::GraphPartitionSnapshot::STORAGE_CHECK,
+            publication::STORAGE_CHECK,
+        ],
+    )?;
+    let old_root = root.0.join("old-store");
+    let mut old =
+        ProjectStore::create_with_namespace(&old_root, selection.namespace(), old_catalog.clone())?;
+    let epoch = old.epoch().clone();
+    let id = wow_store::OperationId::new("fixture:budget-old-epoch")?;
+    let refused = PublicationRequest::new(old.epoch(), id.clone(), None, bindings, records)
+        .and_then(|request| old.prepare(&request, &stop));
+    assert!(refused.is_err());
+    assert!(old.current()?.is_none() && old.operation(&id)?.is_none());
+    drop(old);
+    let old = ProjectStore::open(&old_root, &old_catalog)?;
+    assert_eq!(old.epoch(), &epoch);
+    drop(old);
+    assert!(
+        LiveProjectStore::open_in_namespace(&old_root, &selection)?
+            .current()?
+            .is_none()
+    );
+
+    let store_root = root.0.join("selected-store");
+    let publish = LiveProjectPublishRequest::new("fixture:budget-current", "absent", true, true)?;
+    publish_input_in_namespace(
+        store_input,
+        &request,
+        &store_root,
+        &selection,
+        &publish,
+        &stop,
+    )?;
+    let store = LiveProjectStore::open_in_namespace(&store_root, &selection)?;
+    let read = store.read_in_namespace(&selection, &ReadSelector::Current, &stop)?;
+    assert_eq!(read.project().snapshot_id(), reopened.snapshot_id());
+    assert_eq!(
+        read.project().snapshot().analyzer_binding(),
+        reopened.snapshot().analyzer_binding()
+    );
+    assert_eq!(
+        read.project().configuration().budget_policy(),
+        selected_budgets
+    );
+    drop(read);
+    drop(store);
+
+    for mutation in 0..5 {
+        let mut changed = wire.clone();
+        match mutation {
+            0 => changed["schema"] = json!("wow-project/native-project-replay/11"),
+            1 => {
+                changed["configuration"]["budgets"]
+                    .as_object_mut()
+                    .ok_or("budgets")?
+                    .remove("function_calls");
+            }
+            2 => {
+                changed["configuration"]["budgets"]["function_calls"]["max_ast_visits"] = json!(65)
+            }
+            3 => changed["configuration"]["budgets"]["function_calls"]["max_calls"] = json!(0),
+            _ => changed["configuration"]["budgets"]["function_calls"] = Value::Null,
+        }
+        let rejected = ProjectReplay::from_json(&serde_json::to_vec(&changed)?, &stop)
+            .and_then(|replay| replay.hydrate(&stop));
+        assert!(rejected.is_err(), "replay mutation admitted: {mutation}");
+    }
+    Ok(())
+}
+
+#[test]
 fn explicit_project_budgets_reject_invalid_decode_and_schema_selection() -> TestResult {
     let policy = ProjectBudgetPolicy::new(8, 1024 * 1024, 1024 * 1024, 8, 512, 16, 64 * 1024)?;
     let wire = serde_json::to_value(policy)?;

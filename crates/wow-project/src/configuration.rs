@@ -216,6 +216,8 @@ pub struct ProjectBudgetPolicy {
     max_analyzer_facts: u64,
     max_generic_findings: u64,
     max_output_bytes: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    function_calls: Option<wow_emmy::function_calls::FunctionCallBudget>,
 }
 
 #[derive(Deserialize)]
@@ -228,13 +230,24 @@ struct ProjectBudgetPolicyInput {
     max_analyzer_facts: u64,
     max_generic_findings: u64,
     max_output_bytes: u64,
+    #[serde(default, deserialize_with = "present_function_call_budget")]
+    function_calls: Option<wow_emmy::function_calls::FunctionCallBudget>,
+}
+
+pub(crate) fn present_function_call_budget<'de, D>(
+    deserializer: D,
+) -> Result<Option<wow_emmy::function_calls::FunctionCallBudget>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    wow_emmy::function_calls::FunctionCallBudget::deserialize(deserializer).map(Some)
 }
 
 impl TryFrom<ProjectBudgetPolicyInput> for ProjectBudgetPolicy {
     type Error = ProjectError;
 
     fn try_from(input: ProjectBudgetPolicyInput) -> ProjectResult<Self> {
-        Self::new(
+        let policy = Self::new(
             input.max_files,
             input.max_total_source_bytes,
             input.max_single_file_bytes,
@@ -242,7 +255,11 @@ impl TryFrom<ProjectBudgetPolicyInput> for ProjectBudgetPolicy {
             input.max_analyzer_facts,
             input.max_generic_findings,
             input.max_output_bytes,
-        )
+        )?;
+        Ok(match input.function_calls {
+            Some(budget) => policy.with_function_call_budget(budget),
+            None => policy,
+        })
     }
 }
 
@@ -280,6 +297,7 @@ impl ProjectBudgetPolicy {
             max_analyzer_facts,
             max_generic_findings,
             max_output_bytes,
+            function_calls: None,
         })
     }
 
@@ -328,6 +346,23 @@ impl ProjectBudgetPolicy {
     #[must_use]
     pub const fn max_output_bytes(self) -> u64 {
         self.max_output_bytes
+    }
+
+    /// Selected sidecar capacity is independent of aggregate project facts/output.
+    #[must_use]
+    pub const fn with_function_call_budget(
+        mut self,
+        budget: wow_emmy::function_calls::FunctionCallBudget,
+    ) -> Self {
+        self.function_calls = Some(budget);
+        self
+    }
+
+    #[must_use]
+    pub const fn function_call_budget(
+        self,
+    ) -> Option<wow_emmy::function_calls::FunctionCallBudget> {
+        self.function_calls
     }
 }
 
@@ -547,6 +582,18 @@ impl ProjectConfiguration {
                 self.package_load_plan(),
                 self.package_main_plan(),
             )?;
+        }
+        if self.budget_policy.function_call_budget().is_some()
+            && self
+                .platform_packages()
+                .and_then(|packages| packages.retention_limits())
+                .is_none()
+        {
+            return Err(ProjectError::new(
+                ProjectErrorCode::InvalidBudgetPolicy,
+                ProjectPhase::Configuration,
+                "selected function-call budgets require native retained packages",
+            ));
         }
         if self.package_xml_binding_profile.is_some()
             && (self.project_kind != ProjectKind::BlizzardUiPlatformSource

@@ -397,6 +397,7 @@ pub struct MemberCallSessionQueryProfile<'a> {
     callable_queries: &'a [String],
     query_limit: usize,
     member_pair_limit: usize,
+    function_call_budget: Option<crate::function_calls::FunctionCallBudget>,
 }
 
 impl<'a> MemberCallSessionQueryProfile<'a> {
@@ -407,6 +408,7 @@ impl<'a> MemberCallSessionQueryProfile<'a> {
             callable_queries,
             query_limit: crate::bindings::MAX_QUERIES,
             member_pair_limit: DEFAULT_MEMBER_PAIR_LIMIT,
+            function_call_budget: None,
         }
     }
 
@@ -438,6 +440,18 @@ impl<'a> MemberCallSessionQueryProfile<'a> {
         }
         self.member_pair_limit = limit;
         Ok(self)
+    }
+
+    /// Select independent positive work/count/output limits for the sidecar.
+    /// The selection is visible and identity-bound in profile8; other limits
+    /// and the ordinary absent-selection profile7 remain unchanged.
+    #[must_use]
+    pub const fn with_function_call_budget(
+        mut self,
+        budget: crate::function_calls::FunctionCallBudget,
+    ) -> Self {
+        self.function_call_budget = Some(budget);
+        self
     }
 
     fn input(self, names: &'a [String]) -> crate::bindings::QueryInput<'a> {
@@ -868,6 +882,7 @@ impl RegisteredMemberAnalysis {
                 &library_roots,
                 &callable_signatures,
                 &lookup_analysis_ids,
+                profile.function_call_budget,
                 stop,
             )?)
         } else {

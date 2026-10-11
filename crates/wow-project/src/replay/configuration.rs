@@ -98,6 +98,12 @@ struct ReplayBudgets {
     max_analyzer_facts: u64,
     max_generic_findings: u64,
     max_output_bytes: u64,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "crate::configuration::present_function_call_budget"
+    )]
+    function_calls: Option<wow_emmy::function_calls::FunctionCallBudget>,
 }
 impl ReplayBudgets {
     fn capture(b: ProjectBudgetPolicy) -> Self {
@@ -109,10 +115,11 @@ impl ReplayBudgets {
             max_analyzer_facts: b.max_analyzer_facts(),
             max_generic_findings: b.max_generic_findings(),
             max_output_bytes: b.max_output_bytes(),
+            function_calls: b.function_call_budget(),
         }
     }
     fn rebuild(&self) -> ProjectResult<ProjectBudgetPolicy> {
-        ProjectBudgetPolicy::new(
+        let policy = ProjectBudgetPolicy::new(
             self.max_files,
             self.max_total_source_bytes,
             self.max_single_file_bytes,
@@ -120,7 +127,11 @@ impl ReplayBudgets {
             self.max_analyzer_facts,
             self.max_generic_findings,
             self.max_output_bytes,
-        )
+        )?;
+        Ok(match self.function_calls {
+            Some(budget) => policy.with_function_call_budget(budget),
+            None => policy,
+        })
     }
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -150,6 +161,11 @@ pub(super) struct ReplayConfiguration {
     platform_graph_profile: Option<crate::PlatformGraphProfile>,
 }
 impl ReplayConfiguration {
+    pub(super) const fn function_call_budget(
+        &self,
+    ) -> Option<wow_emmy::function_calls::FunctionCallBudget> {
+        self.budgets.function_calls
+    }
     pub(super) fn from_configuration(config: &ProjectConfiguration) -> ProjectResult<Self> {
         config.validate()?;
         let kind = match config.project_kind() {

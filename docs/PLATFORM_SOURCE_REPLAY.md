@@ -119,6 +119,27 @@ epoch refuses v8 without changing Current, epoch or membership and retains no
 operation for the refused request. This is scoped compatibility evidence, not
 catalog migration or full replay fault acceptance.
 
+## Retained packages and selected function-call capacity
+
+Explicit native package retention selects `wow-project/native-project-replay/11`
+and `wow-project.live-replay.v11`. A retained configuration with the optional
+typed `ProjectBudgetPolicy.function_calls` component instead selects replay `/12`
+and `wow-project.live-replay.v12`. Capture, expected schema and storage selection
+use the same retained-owner/budget pair. The six positive limits enter the
+configuration digest and are captured/rebuilt exactly; see
+[platform input](../apps/wow/PLATFORM_INPUT.md#explicit-function-call-budget).
+
+The selected report is budget-bound function-call `/8`. Omission keeps default
+report `/7`, earlier replay recipes and configuration bytes. A `/12` archive with
+the budget removed, a selected budget without retained native packages, schema
+downgrade and budget tampering refuse. Genuine disk-absent service publication,
+store reopen/read and replay verify the same project/analyzer identities. New
+epochs admit v11/v12; the original v10 catalog is frozen separately and reopens
+unchanged. It refuses the selected record before retaining an operation or
+changing Current. This does not raise the
+independent raw-source or encoded store record ceilings, qualify full-corpus
+persistence, or establish historical fixture acceptance.
+
 ## Update capability is not granted
 
 A platform archive is a read-only compatibility record for the update protocol. Only the

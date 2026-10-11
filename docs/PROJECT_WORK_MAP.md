@@ -47,6 +47,12 @@ the complete operation remain unqualified. Retained platform transport `/2`
 admits explicit finite project budgets through the existing configuration/replay
 identity, while `/1` keeps its fixed policy. This supplies a reviewed admission
 seam; independent sidecar/map/graph/store bounds still require qualification.
+An optional six-field function-call budget now carries measured work/count/output
+capacity into the same native session. Selected report8 and retained replay12
+bind its exact values; default report7 and older replay recipes remain unchanged.
+Focused above-default AST/call admission, exact-work refusal, cancellation and
+disk-absent service/replay cases pass. Independent alias/flow/map/graph/store
+guards and complete-corpus/peak qualification remain open under #113.
 
 | Order | Bounded functional responsibility | Required boundary |
 |---|---|---|

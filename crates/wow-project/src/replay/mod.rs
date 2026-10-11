@@ -32,6 +32,7 @@ const RAW_INVENTORY_GRAPH_REPLAY_SCHEMA: &str = "wow-project/native-project-repl
 const DIRECT_PLATFORM_GRAPH_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/9";
 const CAPABILITIES_GRAPH_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/10";
 const RETAINED_PLATFORM_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/11";
+const FUNCTION_BUDGET_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/12";
 const MAX_FILES: usize = 8192;
 const MAX_LIBRARIES: usize = 64;
 const MAX_FILE_BYTES: usize = 16 * 1024 * 1024;
@@ -268,7 +269,11 @@ impl ProjectReplay {
         };
         let platform_schema =
             if platform_owner.is_some_and(|owner| owner.retention_limits().is_some()) {
-                RETAINED_PLATFORM_REPLAY_SCHEMA
+                if configuration.function_call_budget().is_some() {
+                    FUNCTION_BUDGET_REPLAY_SCHEMA
+                } else {
+                    RETAINED_PLATFORM_REPLAY_SCHEMA
+                }
             } else {
                 platform_schema
             };
@@ -330,17 +335,17 @@ impl ProjectReplay {
     }
     fn expected_schema(&self) -> ProjectResult<&'static str> {
         let schema = self.expected_base_schema()?;
-        Ok(
-            if self
-                .platform
+        match (
+            self.platform
                 .as_ref()
-                .is_some_and(ReplayPlatform::has_retention_limits)
-            {
-                RETAINED_PLATFORM_REPLAY_SCHEMA
-            } else {
-                schema
-            },
-        )
+                .is_some_and(ReplayPlatform::has_retention_limits),
+            self.configuration.function_call_budget().is_some(),
+        ) {
+            (true, true) => Ok(FUNCTION_BUDGET_REPLAY_SCHEMA),
+            (true, false) => Ok(RETAINED_PLATFORM_REPLAY_SCHEMA),
+            (false, false) => Ok(schema),
+            (false, true) => Err(invalid()),
+        }
     }
     fn expected_base_schema(&self) -> ProjectResult<&'static str> {
         if let Some(profile) = self.configuration.platform_graph_profile() {
@@ -577,6 +582,7 @@ impl ProjectReplay {
             DIRECT_PLATFORM_GRAPH_REPLAY_SCHEMA => Ok("wow-project.live-replay.v9"),
             CAPABILITIES_GRAPH_REPLAY_SCHEMA => Ok("wow-project.live-replay.v10"),
             RETAINED_PLATFORM_REPLAY_SCHEMA => Ok("wow-project.live-replay.v11"),
+            FUNCTION_BUDGET_REPLAY_SCHEMA => Ok("wow-project.live-replay.v12"),
             _ => Err(invalid()),
         }
     }

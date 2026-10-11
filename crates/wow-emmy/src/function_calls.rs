@@ -14,9 +14,16 @@ use crate::references::{
     EmmyMemberCallError, EmmyMemberCallErrorCode, EmmyMemberCallResult, ast_span, canonical_id,
     semantic_model,
 };
+
+mod budget;
+#[cfg(test)]
+mod tests;
 use crate::{EmmyBackendIdentity, LuaWorkspaceFile, LuaWorkspaceSnapshot};
+pub use budget::FunctionCallBudget;
 
 pub const FUNCTION_CALL_PROFILE: &str = "wow-emmy/function-call-facts/7";
+/// Explicit budget-bound sidecar; absent selection preserves profile7.
+pub const FUNCTION_CALL_BUDGET_PROFILE: &str = "wow-emmy/function-call-facts/8";
 // Existing callable/call occurrence keys keep their original recipe. Added
 // normalized call arguments/callable keys change report identity, not old occurrence keys.
 const OCCURRENCE_PROFILE: &str = "wow-emmy/function-call-facts/1";
@@ -190,6 +197,8 @@ pub struct SourceFunctionFile {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct FunctionCallReport {
     profile: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    budget: Option<FunctionCallBudget>,
     backend: EmmyBackendIdentity,
     main_snapshot_id: String,
     library_snapshot_ids: Vec<String>,
@@ -207,6 +216,10 @@ pub struct FunctionCallReport {
     analysis_id: String,
 }
 impl FunctionCallReport {
+    #[must_use]
+    pub const fn budget(&self) -> Option<FunctionCallBudget> {
+        self.budget
+    }
     pub fn analysis_id(&self) -> &str {
         &self.analysis_id
     }
@@ -275,36 +288,41 @@ impl FunctionCallReport {
         self.files.iter().all(|file| file.parse_error_count == 0)
     }
     fn identity(&self) -> EmmyMemberCallResult<String> {
-        canonical_id(
-            "emmy-function-calls:sha256:",
-            &(
-                self.profile,
-                &self.backend,
-                &self.main_snapshot_id,
-                &self.library_snapshot_ids,
-                &self.files,
-                &self.functions,
-                &self.calls,
-                &self.global_accesses,
-                &self.named_targets,
-                self.symbol_lookup_analysis_id.as_slice(),
-                &self.symbol_lookup_analysis_ids,
-            ),
-        )
+        let facts = (
+            self.profile,
+            &self.backend,
+            &self.main_snapshot_id,
+            &self.library_snapshot_ids,
+            &self.files,
+            &self.functions,
+            &self.calls,
+            &self.global_accesses,
+            &self.named_targets,
+            self.symbol_lookup_analysis_id.as_slice(),
+            &self.symbol_lookup_analysis_ids,
+        );
+        match self.budget {
+            Some(budget) => canonical_id("emmy-function-calls:sha256:", &(budget, facts)),
+            None => canonical_id("emmy-function-calls:sha256:", &facts),
+        }
     }
     pub fn validate(&self) -> EmmyMemberCallResult<()> {
+        let limits = match (self.profile, self.budget) {
+            (FUNCTION_CALL_PROFILE, None) => FunctionCallBudget::default(),
+            (FUNCTION_CALL_BUDGET_PROFILE, Some(limits)) => limits,
+            _ => return Err(invalid()),
+        };
         let lookup_ids = self
             .symbol_lookup_analysis_ids
             .iter()
             .map(String::as_str)
             .collect::<Vec<_>>();
         let expected_lookup_id = lookup_identity(&self.main_snapshot_id, &lookup_ids)?;
-        if self.profile != FUNCTION_CALL_PROFILE
-            || self.identity()? != self.analysis_id
+        if self.identity()? != self.analysis_id
             || self.symbol_lookup_analysis_id != expected_lookup_id
-            || self.functions.len() > MAX_FUNCTIONS
-            || self.calls.len() > MAX_CALLS
-            || self.global_accesses.len() > crate::global_access::MAX_ACCESSES
+            || self.functions.len() as u128 > u128::from(limits.max_functions())
+            || self.calls.len() as u128 > u128::from(limits.max_calls())
+            || self.global_accesses.len() as u128 > u128::from(limits.max_global_accesses())
             || self
                 .global_accesses
                 .windows(2)
@@ -440,7 +458,7 @@ impl FunctionCallReport {
                 }
             }
         }
-        if self.named_targets.len() > 4096
+        if self.named_targets.len() as u128 > u128::from(limits.max_named_targets())
             || (!self.named_targets.is_empty() && self.symbol_lookup_analysis_id.is_none())
         {
             return Err(invalid());
@@ -546,9 +564,9 @@ fn budget() -> EmmyMemberCallError {
         None,
     )
 }
-fn visit(count: &mut usize) -> EmmyMemberCallResult<()> {
+fn visit(count: &mut u64, limit: u64) -> EmmyMemberCallResult<()> {
     *count = count.checked_add(1).ok_or_else(budget)?;
-    if *count > MAX_AST_VISITS {
+    if *count > limit {
         return Err(budget());
     }
     Ok(())
@@ -603,6 +621,7 @@ enum CapturedFunction {
     Library(SymbolTarget),
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn collect(
     analysis: &EmmyLuaAnalysis,
     main: &LuaWorkspaceSnapshot,
@@ -610,13 +629,15 @@ pub(crate) fn collect(
     libraries: &[(&LuaWorkspaceSnapshot, PathBuf)],
     callable_signatures: &BTreeMap<String, LuaSignatureId>,
     symbol_lookup_analysis_ids: &[&str],
+    selected_budget: Option<FunctionCallBudget>,
     stop: &AtomicBool,
 ) -> EmmyMemberCallResult<FunctionCallReport> {
+    let limits = selected_budget.unwrap_or_default();
     let mut signatures = HashMap::new();
     let mut access_sources = HashMap::new();
     let mut functions = Vec::new();
     let mut files = BTreeMap::new();
-    let mut visits = 0usize;
+    let mut visits = 0u64;
     // Capture actual closure positions first, so forward/cross-file calls never
     // depend on traversal order. Library closures remain foreign targets only.
     for (workspace, root, is_main) in std::iter::once((main, main_root, true))
@@ -652,7 +673,7 @@ pub(crate) fn collect(
                 continue;
             }
             if is_main {
-                if functions.len() >= MAX_FUNCTIONS {
+                if functions.len() as u128 >= u128::from(limits.max_functions()) {
                     return Err(budget());
                 }
                 functions.push(SourceFunctionFact {
@@ -675,11 +696,13 @@ pub(crate) fn collect(
             }
             for ast in model.get_root().descendants::<LuaAst>() {
                 checkpoint(stop)?;
-                visit(&mut visits)?;
+                visit(&mut visits, limits.max_ast_visits())?;
                 let LuaAst::LuaClosureExpr(closure) = ast else {
                     continue;
                 };
-                if signatures.len() >= MAX_FUNCTIONS || functions.len() >= MAX_FUNCTIONS {
+                if signatures.len() as u128 >= u128::from(limits.max_functions())
+                    || functions.len() as u128 >= u128::from(limits.max_functions())
+                {
                     return Err(budget());
                 }
                 let span = ast_span(file, closure.get_range())?;
@@ -754,9 +777,9 @@ pub(crate) fn collect(
             crate::global_access::AliasIndex::collect(&model, file, &mut access_budget, stop)?;
         for ast in model.get_root().descendants::<LuaAst>() {
             checkpoint(stop)?;
-            visit(&mut visits)?;
+            visit(&mut visits, limits.max_ast_visits())?;
             if let LuaAst::LuaNameExpr(name) = &ast {
-                if global_accesses.len() >= crate::global_access::MAX_ACCESSES {
+                if global_accesses.len() as u128 >= u128::from(limits.max_global_accesses()) {
                     return Err(budget());
                 }
                 if let Some(access) = crate::global_access::collect_one(
@@ -774,7 +797,7 @@ pub(crate) fn collect(
             let LuaAst::LuaCallExpr(call) = ast else {
                 continue;
             };
-            if calls.len() >= MAX_CALLS {
+            if calls.len() as u128 >= u128::from(limits.max_calls()) {
                 return Err(budget());
             }
             let prefix = call.get_prefix_expr().ok_or_else(invalid)?;
@@ -902,6 +925,9 @@ pub(crate) fn collect(
         .collect();
     let mut named_targets = BTreeMap::new();
     for (query, signature) in callable_signatures {
+        if named_targets.len() as u128 >= u128::from(limits.max_named_targets()) {
+            return Err(budget());
+        }
         checkpoint(stop)?;
         let target = match signatures.get(signature) {
             Some(CapturedFunction::Main(id)) => SourceCallTarget::MainFunction {
@@ -915,7 +941,12 @@ pub(crate) fn collect(
         named_targets.insert(query.clone(), target);
     }
     let mut report = FunctionCallReport {
-        profile: FUNCTION_CALL_PROFILE,
+        profile: if selected_budget.is_some() {
+            FUNCTION_CALL_BUDGET_PROFILE
+        } else {
+            FUNCTION_CALL_PROFILE
+        },
+        budget: selected_budget,
         backend: main.backend().clone(),
         main_snapshot_id: main.snapshot_id().into(),
         library_snapshot_ids,
@@ -931,20 +962,36 @@ pub(crate) fn collect(
             .collect(),
         analysis_id: String::new(),
     };
-    struct Count(usize);
+    struct Count {
+        used: u64,
+        limit: u64,
+    }
     impl std::io::Write for Count {
         fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-            if bytes.len() > MAX_REPORT_BYTES.saturating_sub(self.0) {
+            let length = u64::try_from(bytes.len())
+                .map_err(|_| std::io::Error::other("function-call report limit"))?;
+            let next = self
+                .used
+                .checked_add(length)
+                .ok_or_else(|| std::io::Error::other("function-call report limit"))?;
+            if next > self.limit {
                 return Err(std::io::Error::other("function-call report limit"));
             }
-            self.0 += bytes.len();
+            self.used = next;
             Ok(bytes.len())
         }
         fn flush(&mut self) -> std::io::Result<()> {
             Ok(())
         }
     }
-    serde_json::to_writer(Count(128), &report).map_err(|_| budget())?;
+    serde_json::to_writer(
+        Count {
+            used: 128,
+            limit: limits.max_report_bytes(),
+        },
+        &report,
+    )
+    .map_err(|_| budget())?;
     checkpoint(stop)?;
     report.analysis_id = report.identity()?;
     report.validate()?;

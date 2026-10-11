@@ -442,3 +442,24 @@ as its member prerequisite. This can affect facts in the selected native cohort;
 unchanged recipes do not prove universal equality with the previous physical-only
 flow session. Ordinary/standalone paths are retained, and the native cohort's
 fixture freeze and full acceptance remain open under W17.
+
+## 20. Explicit function-call sidecar budget
+
+`MemberCallSessionQueryProfile::with_function_call_budget` selects one validated
+`FunctionCallBudget` with six positive `u64` limits: cumulative AST visits,
+functions/signatures, calls, global accesses, named targets and encoded report
+bytes. The visit counter spans the first Main/Library walk and second Main walk;
+it is never reset per file or pass. Functions and temporary captured signatures
+each use the function ceiling. Count/work overflow or a refused next fact returns
+`FactBudgetExceeded`; no partial sidecar is published.
+
+The selected report uses `wow-emmy/function-call-facts/8`, serializes its budget
+and binds it in its analysis identity. Without selection, report `/7` keeps the
+old wire shape, identity tuple and default limits. Output accounting retains the
+original 128-byte allowance for the analysis ID. Alias work/text, scope depth,
+arguments/literals, callable input, member pairs and consumer limits remain
+independent. A larger AST budget alone does not prove a real corpus fits.
+
+Retained native project configuration carries this component explicitly and
+replay captures/rebuilds its exact values; see
+[platform input](../../apps/wow/PLATFORM_INPUT.md#explicit-function-call-budget).
