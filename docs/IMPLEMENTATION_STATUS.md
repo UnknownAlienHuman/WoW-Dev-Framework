@@ -187,6 +187,11 @@ Project/backend and CLI stderr while excluding explanatory text from graph wire,
 digest and records. Focused native budget/cause and cancellation cases pass;
 codes and capacities remain unchanged. A caught panic stays opaque. Exact real
 operation outcomes and remaining unknowns are tracked in #113.
+Project's separate member/local-flow/XML/binding aggregate now exposes actual
+fact/finding counts and serialized-output bytes on refusal. Existing native
+aggregate/output/replay checks pass; predicates, capacities, candidate generation
+and successful identities are unchanged. Function/global sidecar budgets remain
+independent. Full-corpus measurements and later owner qualification stay in #113.
 Full analysis/graph/maps/persistence remain unqualified under #113.
 Explicit retained XSD component admission is now executable through the existing
 XML owner, with root-only global symbols and final unsupported context propagation.

@@ -598,17 +598,19 @@ pub(crate) fn build_analyzer_binding(
         );
     }
     checkpoint(stop)?;
-    if syntax_report.diagnostics().len().saturating_add(
+    let diagnostics = syntax_report.diagnostics().len().saturating_add(
         xml_lua_analysis
             .as_ref()
             .map_or(0, |report| report.diagnostic_count()),
-    ) as u64
-        > budget.max_generic_findings()
-    {
+    );
+    if diagnostics as u64 > budget.max_generic_findings() {
         return Err(ProjectError::new(
             ProjectErrorCode::SourceBudgetExceeded,
             ProjectPhase::Analyzer,
-            "combined physical and XML Lua diagnostic budget exceeded",
+            format!(
+                "combined physical and XML Lua diagnostic budget exceeded: observed {diagnostics}, limit {}",
+                budget.max_generic_findings()
+            ),
         ));
     }
     validate_report_bindings(
@@ -865,7 +867,11 @@ fn enforce_analyzer_budgets(
         return Err(ProjectError::new(
             ProjectErrorCode::UpdateBudgetExceeded,
             ProjectPhase::Analyzer,
-            "analyzer output exceeds the configured fact or finding budget",
+            format!(
+                "analyzer output exceeds the configured fact or finding budget: facts {facts}/{}, findings {diagnostics}/{}",
+                budget.max_analyzer_facts(),
+                budget.max_generic_findings()
+            ),
         )
         .with_candidate_generation(generation));
     }
@@ -883,7 +889,10 @@ fn enforce_analyzer_budgets(
         return Err(ProjectError::new(
             ProjectErrorCode::UpdateBudgetExceeded,
             ProjectPhase::Analyzer,
-            "analyzer output exceeds the configured serialized-output budget",
+            format!(
+                "analyzer output exceeds the configured serialized-output budget: observed {output_bytes}, limit {}",
+                budget.max_output_bytes()
+            ),
         )
         .with_candidate_generation(generation));
     }

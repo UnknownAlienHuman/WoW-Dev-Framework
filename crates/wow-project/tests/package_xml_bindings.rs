@@ -279,14 +279,23 @@ fn retained_native_member_pairs_use_the_fact_budget_and_replay_exactly() -> Test
     // Both budgets admit65537 raw pairs. Only the aggregate131081-fact gate
     // distinguishes them: flow and package facts cannot be waived by selection.
     let mut aggregate_refusal = ProjectPublisher::new();
+    let refused_input = input(&native, facts - 1)?;
+    let finding_limit = refused_input
+        .configuration()
+        .budget_policy()
+        .max_generic_findings();
     let error = aggregate_refusal
-        .publish_initial_cancellable(input(&native, facts - 1)?, &stop)
+        .publish_initial_cancellable(refused_input, &stop)
         .err()
         .ok_or("aggregate fact overflow admitted")?;
     assert_eq!(error.code(), ProjectErrorCode::UpdateBudgetExceeded);
     assert_eq!(
         error.message(),
-        "analyzer output exceeds the configured fact or finding budget"
+        format!(
+            "analyzer output exceeds the configured fact or finding budget: facts {facts}/{}, findings 0/{}",
+            facts - 1,
+            finding_limit
+        )
     );
     assert!(aggregate_refusal.open_current().is_err());
     let mut cancelled = ProjectPublisher::new();
@@ -796,11 +805,14 @@ fn retained_native_query_references_use_output_admission_and_replay_exactly() ->
         .err()
         .ok_or("combined output overflow admitted")?;
     assert_eq!(error.code(), ProjectErrorCode::UpdateBudgetExceeded);
-    assert!(
-        error
-            .message()
-            .contains("configured serialized-output budget")
-    );
+    let (observed, limit) = error
+        .message()
+        .strip_prefix("analyzer output exceeds the configured serialized-output budget: observed ")
+        .ok_or("serialized output count missing")?
+        .split_once(", limit ")
+        .ok_or("serialized output limit missing")?;
+    assert_eq!(limit.parse::<u64>()?, u64::try_from(references)?);
+    assert!(observed.parse::<u64>()? > u64::try_from(references)?);
     assert!(exact.open_current().is_err());
 
     let mut bounded = ProjectPublisher::with_function_call_facts();
