@@ -16,10 +16,12 @@ pub use build::{
 pub use host::{CONTEXT_MAP_HOST_INPUT_MAX_BYTES, CONTEXT_MAP_HOST_SCHEMA, ContextMapHostInput};
 pub use inspect::{ContextInspectRequest, execute_context_inspect};
 pub use operation::{ContextMapResult, ContextMapStatus, execute_context_map};
+pub use wow_context::PrimaryL0Profile as ContextL0Profile;
 pub use wow_context::RenderSelection as ContextRenderSelection;
 pub use wow_context::SkeletonLevel as ContextInspectLevel;
 pub const PRIMARY_L0_PROFILE_ID: &str = wow_context::PRIMARY_L0_PROFILE;
 pub const PRIMARY_L1_PROFILE_ID: &str = wow_context::PRIMARY_L1_PROFILE;
+pub const PRIMARY_STATE_ROOT_L0_PROFILE_ID: &str = wow_context::PRIMARY_STATE_ROOT_L0_PROFILE;
 pub use request::{
     ContextMapCurrentGuard, ContextMapPublication, ContextMapReferenceGuard, ContextMapRequest,
     ContextMapRoot,
@@ -43,6 +45,14 @@ fn checkpoint(stop: &AtomicBool) -> ServiceResult<()> {
         Err(failure(ServiceErrorCode::Cancelled))
     } else {
         Ok(())
+    }
+}
+// Requests retain only the exact selected ID; execution passes the closed owner enum.
+fn l0_profile_from_id(profile_id: Option<&str>) -> ServiceResult<ContextL0Profile> {
+    match profile_id {
+        None | Some(PRIMARY_L0_PROFILE_ID) => Ok(ContextL0Profile::ContainersV1),
+        Some(PRIMARY_STATE_ROOT_L0_PROFILE_ID) => Ok(ContextL0Profile::StateRootV1),
+        Some(_) => Err(failure(ServiceErrorCode::InvalidRequest)),
     }
 }
 fn graph_error(error: wow_graph::GraphError) -> ServiceError {

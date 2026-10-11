@@ -16,7 +16,7 @@ wow context inspect --native-host-config <host.json>
   --publication current|store-generation:<ProjectStoreGenerationId>
   --root project@<base64url-id>|graph-entity@<base64url-id>
   --level l0|l1|both
-  [--l0-profile-id wow-context/primary-l0/1]
+  [--l0-profile-id wow-context/primary-l0/1|wow-context/primary-state-root-l0/1]
   [--l1-profile-id wow-context/primary-l1/1]
   [--platform omitted] [--output envelope-json]
   [--expect-current-record <id>] [--expect-current-digest <digest>]
@@ -27,18 +27,27 @@ Roots encode one exact UTF-8 ID with canonical unpadded base64url. The CLI does
 not infer kinds/existence or choose a root. Both `--root` and `--level` are
 required; there is no omitted-root shortcut for inspect.
 
-| Level | Accepted acquired root | Fixed service profile(s) |
+| Level | Accepted acquired root | Selected service profile(s) |
 |---|---|---|
-| `l0` | Matching project ID, or exact source_file/source_package graph container | `wow-context/primary-l0/1` |
+| `l0` default | Matching project ID, or exact source_file/source_package graph container | `wow-context/primary-l0/1` |
+| `l0` state | Exact original ordinary TOC state_root GraphEntity | `wow-context/primary-state-root-l0/1` |
 | `l1` | Exact native graph entity | `wow-context/primary-l1/1` |
-| `both` | One explicit source_file/source_package graph container | Both profiles, with distinct artifact IDs |
+| `both` default | One explicit source_file/source_package graph container | Default L0 + old L1, distinct artifact IDs |
+| `both` state | One exact original ordinary TOC state_root GraphEntity | Selected state L0 + old L1, distinct artifact IDs |
 
-Profile flags are optional assertions of these exact IDs. An L1 profile flag
-conflicts with level l0, and an L0 flag conflicts with level l1. Unknown/duplicate
-options and other profiles/platform/output modes refuse; map-target/profile
-flags are not inspect options. Service validates actual kind/existence and
-project identity after acquisition. A method/function graph root can select L1
-but cannot silently become an L0 container for Both.
+An omitted/default L0 flag preserves primary-l0/1. To select state-root L0, pass
+`--l0-profile-id wow-context/primary-state-root-l0/1` with level l0 or both and
+an explicit graph-entity root. The retained ordinary selected-TOC Main/Library
+owner supplies the root, every exact supporting typed declaration and selected
+literal state_path members; there is no name lookup or exhaustive-field claim.
+Bounded execution evidence is recorded in #122.
+
+L1 profile flags remain exact assertions. An L1 flag conflicts with level l0,
+and an L0 flag conflicts with level l1. Unknown/duplicate options and other
+profiles/platform/output modes refuse; map-target/profile flags are not inspect
+options. Service checks actual root kind/existence, original custody and project
+identity after acquisition. A method/function cannot silently become an L0
+container. Old default /1 requests and artifacts retain their behavior/bytes.
 
 Current guards require publication current. Reference guards require all three
 options together. Service pins Current once or reads the exact store generation;
@@ -50,9 +59,9 @@ Inspect reuses the strict `wow-service/context-map-native-host/1` transport
 [document and limits](CONTEXT_MAP.md), including explicit store registration /
 host path, ProjectId, complete ProfileIdentity and exact ReferenceView. The
 host path is transport-only and is absent from semantic requests/results.
-`ContextInspectRequest::primary` constructs the Serialize-only request with
-schema `wow-service/context-inspect-request/1`, publication, explicit root,
-level, platform="omitted", applicable fixed profile IDs and optional guards.
+The Serialize-only request uses schema `wow-service/context-inspect-request/1`,
+publication, explicit root, level, platform="omitted", applicable selected profile
+IDs and optional guards. ContextInspectRequest::primary keeps the default /1 choice.
 Absent profiles/guards are omitted. There is no arbitrary-profile JSON authority.
 
 The result schema is `wow-service/context-inspect-result/1`, operation
@@ -60,9 +69,12 @@ The result schema is `wow-service/context-inspect-result/1`, operation
 store-generation IDs, exact Current observation/digest where applicable,
 configured registration and native namespace ID where available, and
 `skeletons` with schema `wow-context/primary-skeleton-inspection/1`.
-L0/L1 nested schemas are `wow-context/l0-skeleton/primary/1` and
-`wow-context/l1-skeleton/primary/1`; each carries its static descriptor, exact
-origin-map custody, selected native metadata and explicit omissions.
+Default nested schemas remain `wow-context/l0-skeleton/primary/1` and
+`wow-context/l1-skeleton/primary/1`. Selected state L0 uses
+`wow-context/l0-skeleton/primary-state-root/1`; Both retains the existing combined
+schema and old L1. Each layer carries its descriptor, original typed records,
+exact origin-map support/custody and explicit omissions. Root declarations are
+plural, retaining repeated supporting TOC rows, account/character and ambiguity.
 
 The intent request ID binds symbolic request bytes. The resolved request ID
 additionally binds exact publication, store generation, universe, root and all

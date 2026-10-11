@@ -22,7 +22,8 @@ pub use map::{
 pub use pack::{
     ContextOperationBudgetUsage, ContextSemanticPack, PRIMARY_CONTEXT_JSON_RENDERER_PROFILE,
     PRIMARY_CONTEXT_MARKDOWN_RENDERER_PROFILE, PRIMARY_CONTEXT_PACK_PROFILE,
-    PRIMARY_CONTEXT_PROFILES_BYTES, build_context_semantic_pack, validate_context_semantic_pack,
+    PRIMARY_CONTEXT_PROFILES_BYTES, build_context_semantic_pack,
+    build_context_semantic_pack_with_profile, validate_context_semantic_pack,
 };
 pub use profile::{
     PRIMARY_MAP_PROFILE, PRIMARY_MAP_PROFILE_BYTES, PRIMARY_PROJECT_MAP_PROFILE,
@@ -33,7 +34,9 @@ pub use render::{
     render_context_pack_markdown, validate_rendered_context_artifact,
 };
 pub use skeleton::{
-    L0Scope, L0Skeleton, L1Skeleton, PRIMARY_L0_PROFILE, PRIMARY_L1_PROFILE, PrimarySkeletons,
-    SkeletonLevel, build_l0_skeleton, build_l1_skeleton, build_primary_skeletons,
+    L0Scope, L0Skeleton, L1Skeleton, PRIMARY_L0_PROFILE, PRIMARY_L1_PROFILE,
+    PRIMARY_STATE_ROOT_L0_PROFILE, PrimaryL0Profile, PrimarySkeletons, SkeletonLevel,
+    build_l0_skeleton, build_l0_skeleton_with_profile, build_l1_skeleton, build_primary_skeletons,
+    build_primary_skeletons_with_profile,
 };
 pub use universe::{ContextUniverseSet, bind_context_universe_set};

@@ -8,8 +8,9 @@ use crate::budget::{Budget, canonical, checkpoint, exhausted, identity};
 use crate::skeleton::build_primary_skeletons_with_budget;
 use crate::universe::UniverseBinding;
 use crate::{
-    ContextError, ContextErrorCode, ContextResult, ContextUniverseSet, L0Scope, PrimaryMapLimits,
-    PrimarySkeletons, ProjectMap, ProjectMapState, SkeletonLevel, open_project_map_view,
+    ContextError, ContextErrorCode, ContextResult, ContextUniverseSet, L0Scope, PrimaryL0Profile,
+    PrimaryMapLimits, PrimarySkeletons, ProjectMap, ProjectMapState, SkeletonLevel,
+    open_project_map_view,
 };
 
 pub const PRIMARY_CONTEXT_PACK_PROFILE: &str = "wow-context/primary-structural-pack/1";
@@ -136,6 +137,8 @@ pub(crate) struct PackRequestCore<'m> {
     level: SkeletonLevel,
     profile_id: &'static str,
     limits: PrimaryMapLimits,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    l0_profile_id: Option<&'static str>,
 }
 #[derive(Serialize)]
 pub(crate) struct PackRequest<'m> {
@@ -337,10 +340,30 @@ pub fn build_context_semantic_pack<'m, 'a>(
     level: SkeletonLevel,
     stop: &AtomicBool,
 ) -> ContextResult<ContextSemanticPack<'m, 'a>> {
+    build_context_semantic_pack_with_profile(
+        universe,
+        map,
+        graph,
+        root,
+        level,
+        PrimaryL0Profile::ContainersV1,
+        stop,
+    )
+}
+
+pub fn build_context_semantic_pack_with_profile<'m, 'a>(
+    universe: &'m ContextUniverseSet<'a>,
+    map: &'m ProjectMap<'a>,
+    graph: &GraphPartitionRead<'a>,
+    root: &'m L0Scope,
+    level: SkeletonLevel,
+    profile: PrimaryL0Profile,
+    stop: &AtomicBool,
+) -> ContextResult<ContextSemanticPack<'m, 'a>> {
     checkpoint(stop)?;
     validate_profiles(universe.limits.max_metadata_bytes, stop)?;
     let (skeletons, mut budget) =
-        build_primary_skeletons_with_budget(universe, map, graph, root, level, stop)?;
+        build_primary_skeletons_with_budget(universe, map, graph, root, level, profile, stop)?;
     let request_core = PackRequestCore {
         schema: "wow-context/primary-pack-request/1",
         universe_set_id: universe.universe_set_id(),
@@ -348,6 +371,7 @@ pub fn build_context_semantic_pack<'m, 'a>(
         level,
         profile_id: PRIMARY_CONTEXT_PACK_PROFILE,
         limits: universe.limits,
+        l0_profile_id: (profile != PrimaryL0Profile::ContainersV1).then_some(profile.profile_id()),
     };
     budget.retain(&request_core, stop)?;
     let context_request_id = identity(

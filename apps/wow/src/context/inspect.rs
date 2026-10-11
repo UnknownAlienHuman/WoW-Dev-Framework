@@ -1,14 +1,15 @@
 //! Closed inspect grammar and shared typed level/root extraction for build.
 use super::{Command, set};
 use wow_service::context::{
-    ContextInspectLevel, ContextInspectRequest, ContextMapCurrentGuard, ContextMapPublication,
-    ContextMapReferenceGuard, ContextMapRoot, PRIMARY_L0_PROFILE_ID, PRIMARY_L1_PROFILE_ID,
+    ContextInspectLevel, ContextInspectRequest, ContextL0Profile, ContextMapCurrentGuard,
+    ContextMapPublication, ContextMapReferenceGuard, ContextMapRoot, PRIMARY_L0_PROFILE_ID,
+    PRIMARY_L1_PROFILE_ID, PRIMARY_STATE_ROOT_L0_PROFILE_ID,
 };
 
 #[derive(Default)]
 pub(super) struct Options {
     level: Option<ContextInspectLevel>,
-    l0_profile: Option<()>,
+    l0_profile: Option<ContextL0Profile>,
     l1_profile: Option<()>,
 }
 
@@ -39,10 +40,12 @@ impl Options {
                 set(&mut self.level, level, command)
             }
             "--l0-profile-id" => {
-                if value != PRIMARY_L0_PROFILE_ID {
-                    return Err("unsupported exact context L0 profile");
-                }
-                set(&mut self.l0_profile, (), command)
+                let profile = match value {
+                    PRIMARY_L0_PROFILE_ID => ContextL0Profile::ContainersV1,
+                    PRIMARY_STATE_ROOT_L0_PROFILE_ID => ContextL0Profile::StateRootV1,
+                    _ => return Err("unsupported exact context L0 profile"),
+                };
+                set(&mut self.l0_profile, profile, command)
             }
             "--l1-profile-id" => {
                 if value != PRIMARY_L1_PROFILE_ID {
@@ -61,7 +64,14 @@ impl Options {
         self,
         root: Option<ContextMapRoot>,
         command: Command,
-    ) -> Result<(ContextInspectLevel, ContextMapRoot), &'static str> {
+    ) -> Result<
+        (
+            ContextInspectLevel,
+            ContextMapRoot,
+            Option<ContextL0Profile>,
+        ),
+        &'static str,
+    > {
         let level = self.level.ok_or(match command {
             Command::Build => "context build requires --level",
             _ => "context inspect requires --level",
@@ -85,7 +95,7 @@ impl Options {
             }
             _ => {}
         }
-        Ok((level, root))
+        Ok((level, root, self.l0_profile))
     }
 
     pub(super) fn request(
@@ -96,10 +106,17 @@ impl Options {
         current: Option<ContextMapCurrentGuard>,
         reference: Option<ContextMapReferenceGuard>,
     ) -> Result<ContextInspectRequest, &'static str> {
-        let (level, root) = self.selection(root, Command::Inspect)?;
+        let (level, root, l0_profile) = self.selection(root, Command::Inspect)?;
         // The service selects the fixed recipes and validates level/root compatibility.
-        // No graph kind, owner existence or container selection is inferred here.
-        ContextInspectRequest::primary(store, publication, level, root, current, reference)
-            .map_err(|_| "invalid context inspect request syntax")
+        // No graph kind, owner existence or root selection is inferred here.
+        let request =
+            ContextInspectRequest::primary(store, publication, level, root, current, reference)
+                .map_err(|_| "invalid context inspect request syntax")?;
+        match l0_profile {
+            Some(profile) => request
+                .with_l0_profile(profile)
+                .map_err(|_| "invalid context inspect request syntax"),
+            None => Ok(request),
+        }
     }
 }

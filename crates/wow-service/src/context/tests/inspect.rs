@@ -854,3 +854,575 @@ fn retained_native_inspect_projects_exact_file_and_closure_without_losing_custod
     )?;
     Ok(())
 }
+
+// Existing synthetic TOC/state fixture, admitted by the real ordinary load owner.
+const STATE_TOC: &str = include_str!("../../../tests/data/state-core-pipeline/StateCore.toc");
+const STATE_LUA: &str = include_str!("../../../tests/data/state-core-pipeline/state.lua");
+const STATE_L0_PROFILE: &str = "wow-context/primary-state-root-l0/1";
+
+fn state_consumer_bundle(input: &Path, stop: &AtomicBool) -> TestResult<ProjectInputBundle> {
+    use wow_project::disk::{ProjectDiskFile, ProjectInputDirectory};
+    use wow_project::load::TocLoadContext;
+    std::fs::create_dir(input)?;
+    write_export(input, "StateCore.toc", STATE_TOC.as_bytes(), 8192)?;
+    write_export(input, "state.lua", STATE_LUA.as_bytes(), 8192)?;
+    let base = input_bundle(LUA)?;
+    let original = base.configuration();
+    let directory = ProjectInputDirectory::open(input)?;
+    let (files, plan) = directory
+        .read_toc_project_with_context(
+            ".",
+            &ProjectDiskFile::new("StateCore.toc"),
+            original.selected_profile(),
+            Some(&TocLoadContext {
+                game_types: BTreeMap::from([("retail".into(), true)]),
+                family: None,
+                game: None,
+                text_locale: None,
+                location: None,
+                environment: None,
+            }),
+            stop,
+        )?
+        .into_parts();
+    let configuration = ProjectConfigurationBuilder::new(
+        original.project_id().clone(),
+        original.project_kind(),
+        original.selected_profile().clone(),
+        original.reference_generation(),
+        original.analyzer_binding().clone(),
+    )
+    .workspace_id(original.workspace_id().clone())
+    .source_origin_id(original.source_origin_id().clone())
+    .logical_root(original.logical_root().as_str())
+    .capability_policy(original.capability_policy().clone())
+    .budget_policy(original.budget_policy())
+    .load_plan(&plan)?
+    .build()?;
+    Ok(ProjectInputBundle::closed(
+        configuration,
+        files,
+        base.libraries().to_vec(),
+    )?)
+}
+
+struct StateConsumerExpected {
+    current: CurrentPublication,
+    root_ids: Vec<GraphNodeId>,
+    unrelated: GraphNodeId,
+    records: Value,
+}
+
+fn retained_state_consumer(
+    store_root: &Path,
+    selector: &ReadSelector,
+    stop: &AtomicBool,
+) -> TestResult<StateConsumerExpected> {
+    use wow_project::load::{TocSavedVariableScope, TocSavedVariableState};
+    let store = LiveProjectStore::open(store_root)?;
+    let read = store.read(selector, stop)?;
+    let graph = read.graph();
+    let proof = read.pair().graph_read(stop)?;
+    let provenance = read
+        .pair()
+        .source_provenance()
+        .ok_or("original native state provenance")?;
+    let source = graph
+        .partition(SOURCE_GRAPH_PARTITION)
+        .ok_or("original source partition")?;
+    let plan = read
+        .project()
+        .configuration()
+        .load_plan()
+        .ok_or("retained ordinary TOC plan")?;
+    assert_eq!(plan.selected_toc(), "StateCore.toc");
+    assert!(read.namespace().is_none() && read.candidate().is_none());
+    assert!(read.project().configuration().package_load_plan().is_none());
+    assert_eq!(provenance.state_roots().len(), 2);
+    let mut root_ids = Vec::new();
+    let mut roots = Vec::new();
+    for origin in provenance.state_roots() {
+        assert!(!origin.ambiguous);
+        match origin.scope {
+            TocSavedVariableScope::Account => assert_eq!(origin.name, "StateCoreAccountDB"),
+            TocSavedVariableScope::Character => assert_eq!(origin.name, "StateCoreCharacterDB"),
+        }
+        let node = proof.published_entity(SOURCE_GRAPH_PARTITION, &origin.proposal_id, stop)?;
+        assert_eq!(node.kind(), "state_root");
+        assert!(graph.snapshot().node(node.node_id()).is_some());
+        let declarations = provenance
+            .state_declarations()
+            .iter()
+            .filter(|row| {
+                row.state == TocSavedVariableState::Declared
+                    && row.name == origin.name
+                    && row.scope == origin.scope
+                    && origin.source_handle_ids.contains(&row.source_handle_id)
+                    && origin.evidence_ids.contains(&row.evidence_id)
+            })
+            .collect::<Vec<_>>();
+        assert!(!declarations.is_empty());
+        let mut paths = Vec::new();
+        for path in provenance
+            .state_paths()
+            .iter()
+            .filter(|row| row.root_id == origin.root_id)
+        {
+            let path_node =
+                proof.published_entity(SOURCE_GRAPH_PARTITION, &path.proposal_id, stop)?;
+            assert_eq!(path_node.kind(), "state_path");
+            assert!(graph.snapshot().edges().iter().any(|edge| {
+                edge.from() == node.node_id()
+                    && edge.to() == path_node.node_id()
+                    && edge.relation() == GraphRelationKind::Owns
+            }));
+            paths.push(json!({"node":path_node,"origin":path}));
+        }
+        assert!(!paths.is_empty());
+        root_ids.push(node.node_id().clone());
+        roots.push(json!({"node":node,"origin":origin,"declarations":declarations,"paths":paths}));
+    }
+    let file = provenance
+        .files()
+        .iter()
+        .find(|file| file.path == "state.lua")
+        .ok_or("exact unrelated native file")?;
+    let unrelated = proof
+        .published_entity(SOURCE_GRAPH_PARTITION, &file.proposal_id, stop)?
+        .node_id()
+        .clone();
+    let relations = source
+        .report()
+        .accepted_relations()
+        .iter()
+        .map(|accepted| {
+            let proposal = source
+                .batch()
+                .relation_proposal(accepted.proposal_id())
+                .ok_or("original accepted relation")?;
+            Ok(serde_json::to_value(proposal)?)
+        })
+        .collect::<TestResult<Vec<_>>>()?;
+    let current = read
+        .current_at_acquisition()
+        .ok_or("retained Current")?
+        .clone();
+    let records = json!({
+        "roots":roots,"nodes":graph.snapshot().nodes(),"edges":graph.snapshot().edges(),
+        "publication_set_id":read.publication_set_id(),"source_context_id":graph.source_context_id(),
+        "entity_proposals":source.batch().entity_proposals(),
+        "accepted_entities":source.report().accepted_entities(),
+        "relation_proposals":relations,"accepted_relations":source.report().accepted_relations(),
+        "evidence":provenance.evidence().values().collect::<Vec<_>>(),
+        "handles":provenance.source_handles().values().collect::<Vec<_>>(),
+        "load":{"digest":plan.digest(),"selected_toc":plan.selected_toc(),
+            "load_context":plan.load_context(),"sources":plan.sources(),
+            "records":plan.records(),"issues":plan.issues()}
+    });
+    read.close()?;
+    store.close()?;
+    Ok(StateConsumerExpected {
+        current,
+        root_ids,
+        unrelated,
+        records,
+    })
+}
+
+fn assert_state_consumer_l0(
+    l0: &Value,
+    selected: &Value,
+    expected: &StateConsumerExpected,
+) -> TestResult {
+    let core = &l0["core"];
+    assert_eq!(
+        core["schema"],
+        "wow-context/l0-skeleton/primary-state-root/1"
+    );
+    assert_eq!(core["profile"], STATE_L0_PROFILE);
+    assert_eq!(core["profile_descriptor"]["profile_id"], STATE_L0_PROFILE);
+    assert_eq!(core["scope"]["node"], selected["node"]);
+    assert_eq!(core["context"]["absence_authoritative"], false);
+    assert_eq!(core["context"]["source_bodies"], "excluded");
+    assert_eq!(core["context"]["tokens"], "unavailable");
+    assert!(rows(&core["not_evaluated"])?.contains(&json!("complete_corpus_or_runtime_behavior")));
+    let paths = rows(&selected["paths"])?;
+    let members = paths
+        .iter()
+        .map(|row| row["node"].clone())
+        .collect::<Vec<_>>();
+    exact_rows(&core["direct_members"], &members)?;
+    assert_eq!(core["selected_member_count"], members.len());
+    let declarations = rows(&core["declarations"])?;
+    assert_eq!(declarations.len(), paths.len() + 1);
+    let roots = declarations
+        .iter()
+        .filter(|row| row["kind"] == "state_root")
+        .collect::<Vec<_>>();
+    assert_eq!(roots.len(), 1);
+    assert_eq!(roots[0]["node"], selected["node"]);
+    assert_eq!(roots[0]["origin"], selected["origin"]);
+    exact_rows(&roots[0]["declarations"], rows(&selected["declarations"])?)?;
+    let actual_paths = declarations
+        .iter()
+        .filter(|row| row["kind"] == "state_path")
+        .collect::<Vec<_>>();
+    assert_eq!(actual_paths.len(), paths.len());
+    for path in paths {
+        assert_eq!(
+            actual_paths
+                .iter()
+                .filter(|row| { row["node"] == path["node"] && row["origin"] == path["origin"] })
+                .count(),
+            1
+        );
+    }
+    // Positive literal witnesses, not an exhaustive field/runtime census.
+    let required: Vec<Vec<&str>> = match selected["origin"]["scope"].as_str() {
+        Some("account") => vec![
+            vec!["profile"],
+            vec!["profile", "name"],
+            vec!["settings", "volume"],
+        ],
+        Some("character") => vec![vec!["gold"]],
+        _ => return Err("unexpected native SavedVariables scope".into()),
+    };
+    for keys in required {
+        let keys = keys
+            .iter()
+            .map(|value| json!({"kind":"string","value":value}))
+            .collect::<Vec<_>>();
+        assert!(
+            paths
+                .iter()
+                .any(|path| path["origin"]["keys"] == json!(keys))
+        );
+    }
+    let root = &selected["node"]["node_id"];
+    let edges = rows(&expected.records["edges"])?
+        .iter()
+        .filter(|edge| {
+            (&edge["from"] == root || &edge["to"] == root)
+                && matches!(edge["relation"].as_str(), Some("owns" | "contains"))
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    exact_rows(&core["direct_relations"], &edges)?;
+    let mut nodes = rows(&expected.records["nodes"])?
+        .iter()
+        .filter(|node| {
+            &node["node_id"] == root
+                || edges
+                    .iter()
+                    .any(|edge| node["node_id"] == edge["from"] || node["node_id"] == edge["to"])
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    nodes.sort_by(|a, b| a["node_id"].as_str().cmp(&b["node_id"].as_str()));
+    let origins = &core["context"]["origins"]["core"];
+    assert_eq!(origins["absence_authoritative"], false);
+    assert_eq!(
+        origins["load_custody"]["selected_toc"],
+        expected.records["load"]
+    );
+    let mut pending = BTreeSet::new();
+    for (kind, records, field) in [
+        ("entity", nodes.as_slice(), "node_id"),
+        ("relation", edges.as_slice(), "edge_id"),
+    ] {
+        for row in records {
+            assert!(pending.insert((
+                kind.to_owned(),
+                row[field].as_str().ok_or("native ID")?.to_owned()
+            )));
+        }
+    }
+    for receipt in rows(&origins["supports"])? {
+        let explanation = &receipt["explanation"];
+        assert_eq!(explanation["support_complete"], true);
+        assert_eq!(
+            explanation["source_context_id"],
+            expected.records["source_context_id"]
+        );
+        let record = &explanation["record"];
+        let (kind, id) = match record["kind"].as_str() {
+            Some("entity") => {
+                assert!(nodes.contains(&record["node"]));
+                (
+                    "entity",
+                    record["node"]["node_id"].as_str().ok_or("node ID")?,
+                )
+            }
+            Some("relation") => {
+                assert!(edges.contains(&record["edge"]));
+                (
+                    "relation",
+                    record["edge"]["edge_id"].as_str().ok_or("edge ID")?,
+                )
+            }
+            _ => return Err("unexpected nonnative support".into()),
+        };
+        assert!(pending.remove(&(kind.to_owned(), id.to_owned())));
+        assert!(!rows(&explanation["supports"])?.is_empty());
+        for support in rows(&explanation["supports"])? {
+            assert_eq!(support["producer"]["partition_id"], SOURCE_GRAPH_PARTITION);
+            let (proposals, accepted) = match support["origin"].as_str() {
+                Some("producer_entity") => ("entity_proposals", "accepted_entities"),
+                Some("producer_relation") => ("relation_proposals", "accepted_relations"),
+                _ => return Err("unexpected foundation support".into()),
+            };
+            assert!(rows(&expected.records[proposals])?.contains(&support["proposal"]));
+            assert!(rows(&expected.records[accepted])?.contains(&support["accepted"]));
+        }
+        let resolution = &receipt["evidence_resolution"];
+        assert_eq!(resolution["closure_complete"], true);
+        assert!(rows(&resolution["unresolved"])?.is_empty());
+        for (actual, retained) in [
+            ("evidence_records", "evidence"),
+            ("source_handles", "handles"),
+        ] {
+            for row in rows(&resolution[actual])? {
+                assert!(rows(&expected.records[retained])?.contains(row));
+            }
+        }
+    }
+    assert!(pending.is_empty());
+    Ok(())
+}
+
+#[test]
+fn retained_native_state_root_l0_preserves_toc_scopes_paths_and_source_absent_custody() -> TestResult
+{
+    use crate::context::ContextL0Profile;
+    let stop = AtomicBool::new(false);
+    let scratch = Scratch::new()?;
+    let input = scratch.root.join("state-input");
+    let (publisher, graph, reference, profile) =
+        owners_from_bundle(state_consumer_bundle(&input, &stop)?, &stop)?;
+    let store_root = scratch.root.join("registered-store");
+    let mut store = LiveProjectStore::create(&store_root, graph.snapshot().universe().as_str())?;
+    let publication = store.publish(
+        &publisher,
+        &graph,
+        "fixture-context-state-root",
+        None,
+        &stop,
+    )?;
+    store.close()?;
+    drop(graph);
+    drop(publisher);
+    std::fs::remove_dir_all(&input)?;
+    assert!(!input.exists());
+    let current = retained_state_consumer(&store_root, &ReadSelector::Current, &stop)?;
+    let expected = retained_state_consumer(
+        &store_root,
+        &ReadSelector::Exact(publication.generation_id.clone()),
+        &stop,
+    )?;
+    assert_eq!(current.current, expected.current);
+    assert_eq!(current.records, expected.records);
+    assert_eq!(current.root_ids, expected.root_ids);
+    let mut host_json = host_value(&store_root, &profile, &reference);
+    // One finite caller fixture selection, shared by inspect/build/JSON render.
+    host_json["limits"]["max_context_work"] = json!(8_000_000);
+    host_json["limits"]["max_metadata_bytes"] = json!(4 * 1024 * 1024);
+    let host = decode_host(&host_json, &stop)?;
+    let mut selected_requests = Vec::new();
+    let mut selected_results = Vec::new();
+    for (root, selected) in expected
+        .root_ids
+        .iter()
+        .zip(rows(&expected.records["roots"])?)
+    {
+        let default = exact_inspect_request(
+            &publication.generation_id,
+            ContextInspectLevel::L0,
+            ContextMapRoot::graph_entity(root.as_str())?,
+            &profile,
+            &reference,
+        )?;
+        assert_eq!(
+            wow_core::canonical_json_bytes(&default)?,
+            wow_core::canonical_json_bytes(
+                &default
+                    .clone()
+                    .with_l0_profile(ContextL0Profile::ContainersV1)?
+            )?
+        );
+        assert_inspect_refused(
+            &host,
+            &default,
+            ServiceErrorCode::InvalidRequest,
+            "closed",
+            &stop,
+        )?;
+        let request = default.with_l0_profile(ContextL0Profile::StateRootV1)?;
+        let result = execute_context_inspect(&host, &request, &stop)?;
+        assert_eq!(result.status(), ContextMapStatus::Partial);
+        assert_eq!(result.failure_code(), None);
+        let envelope: Value = serde_json::from_slice(result.canonical_bytes())?;
+        assert_eq!(envelope["resource_closure"], "closed");
+        assert_eq!(
+            envelope["payload"]["publication_set_id"],
+            expected.records["publication_set_id"]
+        );
+        assert_state_consumer_l0(&envelope["payload"]["skeletons"]["l0"], selected, &expected)?;
+        assert!(envelope["payload"]["skeletons"].get("l1").is_none());
+        let text = std::str::from_utf8(result.canonical_bytes())?;
+        for body in [STATE_LUA, STATE_TOC] {
+            assert!(!text.contains(&serde_json::to_string(body)?));
+        }
+        assert!(!text.contains("StateCoreAccountDB = {}"));
+        assert!(!text.contains("project_store_root"));
+        assert!(
+            !text.contains(
+                scratch
+                    .root
+                    .file_name()
+                    .ok_or("scratch name")?
+                    .to_str()
+                    .ok_or("UTF-8")?
+            )
+        );
+        selected_requests.push(request);
+        selected_results.push(result);
+    }
+    let request = &selected_requests[0];
+    let result = &selected_results[0];
+    assert_eq!(
+        result.canonical_bytes(),
+        execute_context_inspect(&host, request, &stop)?.canonical_bytes()
+    );
+    let unrelated = exact_inspect_request(
+        &publication.generation_id,
+        ContextInspectLevel::L0,
+        ContextMapRoot::graph_entity(expected.unrelated.as_str())?,
+        &profile,
+        &reference,
+    )?
+    .with_l0_profile(ContextL0Profile::StateRootV1)?;
+    assert_inspect_refused(
+        &host,
+        &unrelated,
+        ServiceErrorCode::InvalidRequest,
+        "closed",
+        &stop,
+    )?;
+    for field in ["max_context_work", "max_metadata_bytes"] {
+        let mut low = host_json.clone();
+        low["limits"][field] = json!(1);
+        assert_inspect_refused(
+            &decode_host(&low, &stop)?,
+            request,
+            ServiceErrorCode::BudgetExceeded,
+            "closed",
+            &stop,
+        )?;
+    }
+    assert_inspect_refused(
+        &host,
+        request,
+        ServiceErrorCode::Cancelled,
+        "not_acquired",
+        &AtomicBool::new(true),
+    )?;
+    let build = ContextBuildRequest::primary(
+        STORE_ID,
+        ContextMapPublication::store_generation(publication.generation_id.as_str())?,
+        ContextInspectLevel::L0,
+        ContextMapRoot::graph_entity(expected.root_ids[0].as_str())?,
+        ContextRenderSelection::Json,
+        None,
+        Some(reference_guard(&profile, &reference)?),
+    )?
+    .with_l0_profile(ContextL0Profile::StateRootV1)?;
+    let built = execute_context_build(&host, &build, &stop)?;
+    assert_eq!(built.status(), ContextMapStatus::Partial);
+    assert_eq!(built.failure_code(), None);
+    let envelope: Value = serde_json::from_slice(built.canonical_bytes())?;
+    assert_eq!(envelope["resource_closure"], "closed");
+    let payload = &envelope["payload"];
+    let pack = &payload["semantic_pack"];
+    assert_state_consumer_l0(
+        &pack["core"]["skeletons"]["l0"],
+        &expected.records["roots"][0],
+        &expected,
+    )?;
+    assert_eq!(pack["core"]["absence_authoritative"], false);
+    let artifacts = rows(&payload["rendered_artifacts"])?;
+    assert_eq!(artifacts.len(), 1);
+    assert_eq!(
+        artifacts[0]["core"]["profile"]["profile_id"],
+        PRIMARY_CONTEXT_JSON_RENDERER_PROFILE_ID
+    );
+    let content = artifacts[0]["core"]["content"]
+        .as_str()
+        .ok_or("JSON renderer content")?;
+    assert_eq!(serde_json::from_str::<Value>(content)?, *pack);
+    assert_eq!(content.as_bytes(), wow_core::canonical_json_bytes(pack)?);
+    if scratch.export {
+        let common = json!([
+            "--native-host-config",
+            scratch.root.join("host.json"),
+            "--project-store",
+            STORE_ID,
+            "--publication",
+            format!("store-generation:{}", publication.generation_id.as_str()),
+            "--root",
+            root_token(&expected.root_ids[0]),
+            "--level",
+            "l0",
+            "--l0-profile-id",
+            STATE_L0_PROFILE,
+            "--platform",
+            "omitted",
+            "--expect-profile",
+            profile.profile_id().as_str(),
+            "--expect-reference-generation",
+            reference.generation_id(),
+            "--expect-reference-view",
+            reference.self_digest(),
+            "--output",
+            "envelope-json"
+        ]);
+        let mut inspect_args = vec![json!("context"), json!("inspect")];
+        inspect_args.extend(rows(&common)?.iter().cloned());
+        export_native_fixture(
+            &scratch,
+            &host_json,
+            request,
+            &json!(inspect_args),
+            result,
+            "synthetic ordinary selected-TOC state-root L0; source-absent retained Current/Exact",
+        )?;
+        let mut build_args = vec![json!("context"), json!("build")];
+        build_args.extend(rows(&common)?.iter().cloned());
+        build_args.extend([
+            json!("--context-profile-id"),
+            json!(PRIMARY_CONTEXT_PACK_PROFILE_ID),
+            json!("--renderer-profile-id"),
+            json!(PRIMARY_CONTEXT_JSON_RENDERER_PROFILE_ID),
+        ]);
+        for (name, bytes, limit) in [
+            (
+                "build-request.json",
+                wow_core::canonical_json_bytes(&build)?,
+                64 * 1024,
+            ),
+            (
+                "build-cli-arguments.json",
+                wow_core::canonical_json_bytes(&json!(build_args))?,
+                64 * 1024,
+            ),
+            (
+                "expected-build-envelope.json",
+                built.canonical_bytes().to_vec(),
+                CONTEXT_MAP_RESULT_MAX_BYTES,
+            ),
+        ] {
+            write_export(&scratch.root, name, &bytes, limit)?;
+        }
+    }
+    assert!(!input.exists());
+    Ok(())
+}

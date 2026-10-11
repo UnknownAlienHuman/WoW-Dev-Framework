@@ -5,10 +5,10 @@ use super::operation::{
     with_native_origins,
 };
 use super::{
-    ContextInspectLevel, ContextMapCurrentGuard, ContextMapHostInput, ContextMapPublication,
-    ContextMapReferenceGuard, ContextMapResult, ContextMapRoot, ContextMapStatus,
-    ContextRenderSelection, PRIMARY_L0_PROFILE_ID, PRIMARY_L1_PROFILE_ID, checkpoint,
-    context_error, failure,
+    ContextInspectLevel, ContextL0Profile, ContextMapCurrentGuard, ContextMapHostInput,
+    ContextMapPublication, ContextMapReferenceGuard, ContextMapResult, ContextMapRoot,
+    ContextMapStatus, ContextRenderSelection, PRIMARY_L0_PROFILE_ID, PRIMARY_L1_PROFILE_ID,
+    checkpoint, context_error, failure,
 };
 use crate::{ServiceErrorCode, ServiceResult, live_project::LiveProjectRead};
 use serde::Serialize;
@@ -89,6 +89,17 @@ impl ContextBuildRequest {
             reference,
         })
     }
+
+    pub fn with_l0_profile(mut self, profile: ContextL0Profile) -> ServiceResult<Self> {
+        if self.level == ContextInspectLevel::L1
+            || (profile == ContextL0Profile::StateRootV1
+                && matches!(&self.root, ContextMapRoot::Project(_)))
+        {
+            return Err(failure(ServiceErrorCode::InvalidRequest));
+        }
+        self.l0_profile_id = Some(profile.profile_id());
+        Ok(self)
+    }
 }
 
 pub fn execute_context_build(
@@ -96,6 +107,7 @@ pub fn execute_context_build(
     request: &ContextBuildRequest,
     stop: &AtomicBool,
 ) -> ServiceResult<ContextMapResult> {
+    let l0_profile = super::l0_profile_from_id(request.l0_profile_id)?;
     let digest = wow_core::domain_separated_digest(CONTEXT_BUILD_REQUEST_SCHEMA, request)
         .map_err(|_| failure(ServiceErrorCode::CanonicalizationFailed))?;
     let id = format!(
@@ -108,7 +120,7 @@ pub fn execute_context_build(
     };
     let (result, closure) =
         with_checked_context_read(host, &request.project_store_id, &selector, stop, |read| {
-            build(read, host, request, &id, stop)
+            build(read, host, request, &id, l0_profile, stop)
         });
     match result {
         Ok((bytes, status)) => Ok(ContextMapResult {
@@ -153,6 +165,7 @@ fn build(
     host: &ContextMapHostInput,
     request: &ContextBuildRequest,
     request_id: &str,
+    l0_profile: ContextL0Profile,
     stop: &AtomicBool,
 ) -> ServiceResult<(Vec<u8>, ContextMapStatus)> {
     checkpoint(stop)?;
@@ -229,12 +242,13 @@ fn build(
         stop,
         |map, graph| {
             // Renderer selection is intentionally absent from this owner request.
-            let mut pack = wow_context::build_context_semantic_pack(
+            let mut pack = wow_context::build_context_semantic_pack_with_profile(
                 &universe,
                 map,
                 graph,
                 &scope,
                 request.level,
+                l0_profile,
                 stop,
             )
             .map_err(context_error)?;

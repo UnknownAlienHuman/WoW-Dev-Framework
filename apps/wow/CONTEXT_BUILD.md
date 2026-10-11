@@ -16,7 +16,7 @@ wow context build --native-host-config <host.json>
   --root project@<unpadded-base64url-of-exact-ProjectId>|graph-entity@<unpadded-base64url-of-exact-node-id>
   --level l0|l1|both
   --context-profile-id wow-context/primary-structural-pack/1
-  [--l0-profile-id wow-context/primary-l0/1]
+  [--l0-profile-id wow-context/primary-l0/1|wow-context/primary-state-root-l0/1]
   [--l1-profile-id wow-context/primary-l1/1]
   [--renderer-profile-id wow-context/primary-pack-json/1]
   [--renderer-profile-id wow-context/primary-pack-markdown/1]
@@ -25,14 +25,22 @@ wow context build --native-host-config <host.json>
   [--expect-profile <id> --expect-reference-generation <id> --expect-reference-view <sha256:digest>]
 ```
 
-Context profile, level and exact root are mandatory. L0 accepts the acquired
+Context profile, level and exact root are mandatory. Default L0 accepts the acquired
 ProjectId or an exact native `source_file` / `source_package` container. L1 accepts
-an exact Primary graph entity. Both requires one explicit graph container admitted
-by L0, shared unchanged by both layers. Root existence/kind and level compatibility
-are service checks against acquired owners; the CLI does not infer a root.
+an exact Primary graph entity. Both requires one explicit graph entity admitted
+by the selected L0 profile, shared unchanged by both layers. Root existence/kind
+and level compatibility are service checks; the CLI does not infer a root.
+
+Explicit `--l0-profile-id wow-context/primary-state-root-l0/1` selects L0 or Both
+over an exact original ordinary selected-TOC state_root GraphEntity. It retains
+the [typed root/declarations and selected literal paths](CONTEXT_INSPECT.md),
+with all repeated support and account/character/ambiguity preserved. Both still
+uses old primary-l1/1 detail. No runtime values or exhaustive-field authority is
+added. Bounded execution evidence is recorded in #122.
 
 Root tokens are canonical unpadded base64url UTF-8 IDs, with no lookup or search.
-L0/L1 profile options are optional exact assertions for the selected level.
+L0 options select one closed profile; omission/default preserves primary-l0/1.
+The L1 option remains an optional exact assertion for the selected level.
 Current guards require `--publication current`; Reference guards form one complete
 three-option group. Unknown options/profiles, duplicate options and incompatible
 level/profile assertions refuse before invocation.
@@ -75,7 +83,11 @@ is `wow-service/context-build-request/1`; result schema is
 `wow-service/context-build-result/1`, with operation `context_build`.
 The request retains store/publication, `platform="omitted"`, level/root, render
 selection, exact context profile and normalized renderer-profile array. Selected
-L0/L1 profiles are recorded; absent guard/profile fields are omitted.
+L0/L1 profiles are recorded; absent guard/profile fields are omitted. The native
+pack request's selected l0_profile_id binds the explicit state-root selection
+into its request/pack identity. Default ContainersV1 retains None, omitted from
+serialization, preserving old pack bytes. Pack/renderer profile IDs stay the
+existing choices; no source, producer, storage or replay selection is introduced.
 
 The envelope retains request identity/bytes, status, resource closure and optional
 failure/payload. Payload contains resolved request, publication/store generation,
@@ -108,7 +120,7 @@ Every returned pack is Partial or Truncated with `absence_authoritative=false`.
 Original producer omissions remain scoped to their embedded maps/layers. Native
 additional recipe admission, Reference enrichment, excerpts/tokens, deeper expansion /
 continuation, platform composition and complete-corpus/runtime qualification
-remain open. The [selected synthetic fixture](../../crates/wow-service/e3/native-primary-pack/README.md)
+remain open. The [default-profile synthetic fixture](../../crates/wow-service/e3/native-primary-pack/README.md)
 freezes the actual pack/render bytes; broad E3/Tier A/X acceptance remains open.
 Executed gate evidence belongs to the canonical #122 milestone.
 

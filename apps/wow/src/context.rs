@@ -38,24 +38,26 @@ const HELP: &str = concat!(
     "wow context inspect --native-host-config <host.json> --project-store <registration-key> ",
     "--publication current|store-generation:<ProjectStoreGenerationId> ",
     "--root <exact-root-token> --level l0|l1|both\n",
-    "  [--l0-profile-id wow-context/primary-l0/1] ",
+    "  [--l0-profile-id wow-context/primary-l0/1|wow-context/primary-state-root-l0/1] ",
     "[--l1-profile-id wow-context/primary-l1/1]\n",
     "  Same omitted-platform, complete reference/current guards and envelope-json transport. ",
-    "L0 accepts project@ or an exact container graph-entity@; L1 accepts graph-entity@; ",
-    "both requires an exact container graph-entity@. Service validates kind/existence ",
-    "and keeps the two artifacts distinct.\n",
+    "Default L0 accepts project@ or an exact container graph-entity@. Select ",
+    "wow-context/primary-state-root-l0/1 for an exact SavedVariables state-root graph-entity@; ",
+    "this profile does not attest runtime values or exhaustive fields. L1 accepts graph-entity@. ",
+    "Service validates the selected profile/root for l0 or both and keeps artifacts distinct.\n",
     "wow context build --native-host-config <host.json> --project-store <registration-key> ",
     "--publication current|store-generation:<ProjectStoreGenerationId> ",
     "--root <exact-root-token> --level l0|l1|both\n",
     "  --context-profile-id wow-context/primary-structural-pack/1\n",
-    "  [--l0-profile-id wow-context/primary-l0/1] ",
+    "  [--l0-profile-id wow-context/primary-l0/1|wow-context/primary-state-root-l0/1] ",
     "[--l1-profile-id wow-context/primary-l1/1]\n",
     "  [--renderer-profile-id wow-context/primary-pack-json/1]\n",
     "  [--renderer-profile-id wow-context/primary-pack-markdown/1]\n",
     "  Select zero or one of each renderer; a duplicate renderer refuses syntax. ",
     "Both renderers are ordered JSON then Markdown independent of argv order.\n",
     "  Same explicit host/root, omitted platform, optional current guards, complete reference ",
-    "guard group and envelope-json output. Service owns root/level compatibility.\n",
+    "guard group and envelope-json output. Build supports the same explicit state-root L0 profile; ",
+    "service owns profile/root/level compatibility.\n",
 );
 
 // Preserve the existing app argv/individual-path transport maxima.
@@ -637,6 +639,8 @@ mod tests {
 
     #[test]
     fn context_inspect_grammar_preserves_explicit_project_root() -> Result<(), &'static str> {
+        use wow_service::context::{PRIMARY_L0_PROFILE_ID, PRIMARY_STATE_ROOT_L0_PROFILE_ID};
+
         let mut values = arguments();
         let command = values.get_mut(1).ok_or("missing fixture command")?;
         *command = "inspect".into();
@@ -668,6 +672,64 @@ mod tests {
         let mut incompatible_scope = values.clone();
         replace(&mut incompatible_scope, "--level", "both")?;
         assert!(parse(incompatible_scope).is_ok());
+
+        let mut omitted_profile = values.clone();
+        let index = omitted_profile
+            .iter()
+            .position(|value| value == "--l0-profile-id")
+            .ok_or("missing fixture L0 profile option")?;
+        omitted_profile.drain(index..index + 2);
+        let Request::Inspect(omitted) = parse(omitted_profile)?.request else {
+            return Err("inspect parser selected the wrong typed operation");
+        };
+        let Request::Inspect(explicit) = parse(values.clone())?.request else {
+            return Err("inspect parser selected the wrong typed operation");
+        };
+        assert_eq!(
+            serde_json::to_vec(&omitted).map_err(|_| "request serialization failed")?,
+            serde_json::to_vec(&explicit).map_err(|_| "request serialization failed")?
+        );
+
+        let mut state_root = values.clone();
+        replace(&mut state_root, "--root", GRAPH_ROOT)?;
+        replace(
+            &mut state_root,
+            "--l0-profile-id",
+            PRIMARY_STATE_ROOT_L0_PROFILE_ID,
+        )?;
+        let selected = request_json(state_root.clone())?;
+        assert_eq!(selected["l0_profile_id"], PRIMARY_STATE_ROOT_L0_PROFILE_ID);
+        assert_eq!(
+            selected["root"],
+            serde_json::json!({"kind": "graph_entity", "id": GRAPH_ID})
+        );
+        replace(&mut state_root, "--level", "both")?;
+        assert_eq!(
+            request_json(state_root.clone())?["l0_profile_id"],
+            PRIMARY_STATE_ROOT_L0_PROFILE_ID
+        );
+        let mut duplicate = state_root.clone();
+        push(&mut duplicate, "--l0-profile-id", PRIMARY_L0_PROFILE_ID);
+        assert!(matches!(
+            parse(duplicate),
+            Err("duplicate context inspect option")
+        ));
+        let mut conflict = state_root.clone();
+        replace(&mut conflict, "--level", "l1")?;
+        assert!(matches!(
+            parse(conflict),
+            Err("L0 profile conflicts with context inspect level l1")
+        ));
+        replace(
+            &mut state_root,
+            "--l0-profile-id",
+            "wow-context/unreviewed-l0/1",
+        )?;
+        assert!(matches!(
+            parse(state_root),
+            Err("unsupported exact context L0 profile")
+        ));
+
         let arguments = parse(values)?;
         let Request::Inspect(request) = arguments.request else {
             return Err("inspect parser selected the wrong typed operation");
@@ -861,7 +923,8 @@ mod tests {
         use wow_service::context::{
             ContextBuildRequest, ContextInspectLevel, ContextRenderSelection,
             PRIMARY_CONTEXT_JSON_RENDERER_PROFILE_ID, PRIMARY_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
-            PRIMARY_CONTEXT_PACK_PROFILE_ID,
+            PRIMARY_CONTEXT_PACK_PROFILE_ID, PRIMARY_L0_PROFILE_ID,
+            PRIMARY_STATE_ROOT_L0_PROFILE_ID,
         };
 
         let mut values = arguments();
@@ -902,6 +965,64 @@ mod tests {
             no_renderer["context_profile_id"],
             PRIMARY_CONTEXT_PACK_PROFILE_ID
         );
+
+        let mut explicit_profile = values.clone();
+        push(
+            &mut explicit_profile,
+            "--l0-profile-id",
+            PRIMARY_L0_PROFILE_ID,
+        );
+        let Request::Build(omitted) = parse(values.clone())?.request else {
+            return Err("build parser selected the wrong typed operation");
+        };
+        let Request::Build(explicit) = parse(explicit_profile)?.request else {
+            return Err("build parser selected the wrong typed operation");
+        };
+        assert_eq!(
+            serde_json::to_vec(&omitted).map_err(|_| "request serialization failed")?,
+            serde_json::to_vec(&explicit).map_err(|_| "request serialization failed")?
+        );
+
+        let mut state_root = values.clone();
+        replace(&mut state_root, "--root", GRAPH_ROOT)?;
+        push(
+            &mut state_root,
+            "--l0-profile-id",
+            PRIMARY_STATE_ROOT_L0_PROFILE_ID,
+        );
+        let selected = request_json(state_root.clone())?;
+        assert_eq!(selected["l0_profile_id"], PRIMARY_STATE_ROOT_L0_PROFILE_ID);
+        assert_eq!(selected["render"], "none");
+        assert_eq!(
+            selected["root"],
+            serde_json::json!({"kind": "graph_entity", "id": GRAPH_ID})
+        );
+        replace(&mut state_root, "--level", "both")?;
+        assert_eq!(
+            request_json(state_root.clone())?["l0_profile_id"],
+            PRIMARY_STATE_ROOT_L0_PROFILE_ID
+        );
+        let mut duplicate = state_root.clone();
+        push(&mut duplicate, "--l0-profile-id", PRIMARY_L0_PROFILE_ID);
+        assert!(matches!(
+            parse(duplicate),
+            Err("duplicate context build option")
+        ));
+        let mut conflict = state_root.clone();
+        replace(&mut conflict, "--level", "l1")?;
+        assert!(matches!(
+            parse(conflict),
+            Err("L0 profile conflicts with context build level l1")
+        ));
+        replace(
+            &mut state_root,
+            "--l0-profile-id",
+            "wow-context/unreviewed-l0/1",
+        )?;
+        assert!(matches!(
+            parse(state_root),
+            Err("unsupported exact context L0 profile")
+        ));
 
         let mut reverse = values.clone();
         push(

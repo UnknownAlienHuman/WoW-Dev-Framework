@@ -1,8 +1,8 @@
 //! Closed build-only grammar. Shared transport, level/root parsing and output stay in the parent.
 use super::{Command, set};
 use wow_service::context::{
-    ContextBuildRequest, ContextInspectLevel, ContextMapCurrentGuard, ContextMapPublication,
-    ContextMapReferenceGuard, ContextMapRoot, ContextRenderSelection,
+    ContextBuildRequest, ContextInspectLevel, ContextL0Profile, ContextMapCurrentGuard,
+    ContextMapPublication, ContextMapReferenceGuard, ContextMapRoot, ContextRenderSelection,
     PRIMARY_CONTEXT_JSON_RENDERER_PROFILE_ID, PRIMARY_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
     PRIMARY_CONTEXT_PACK_PROFILE_ID,
 };
@@ -44,7 +44,11 @@ impl Options {
         self,
         store: &str,
         publication: ContextMapPublication,
-        selection: (ContextInspectLevel, ContextMapRoot),
+        selection: (
+            ContextInspectLevel,
+            ContextMapRoot,
+            Option<ContextL0Profile>,
+        ),
         current: Option<ContextMapCurrentGuard>,
         reference: Option<ContextMapReferenceGuard>,
     ) -> Result<ContextBuildRequest, &'static str> {
@@ -60,9 +64,23 @@ impl Options {
             (false, true) => ContextRenderSelection::Markdown,
             (true, true) => ContextRenderSelection::Both,
         };
-        let (level, root) = selection;
+        let (level, root, l0_profile) = selection;
         // The service owns fixed profiles, root compatibility and artifact production.
-        ContextBuildRequest::primary(store, publication, level, root, render, current, reference)
-            .map_err(|_| "invalid context build request syntax")
+        let request = ContextBuildRequest::primary(
+            store,
+            publication,
+            level,
+            root,
+            render,
+            current,
+            reference,
+        )
+        .map_err(|_| "invalid context build request syntax")?;
+        match l0_profile {
+            Some(profile) => request
+                .with_l0_profile(profile)
+                .map_err(|_| "invalid context build request syntax"),
+            None => Ok(request),
+        }
     }
 }

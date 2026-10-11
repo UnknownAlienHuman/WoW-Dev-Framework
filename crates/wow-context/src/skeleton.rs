@@ -7,7 +7,8 @@ use wow_graph::{GraphEdge, GraphNode, GraphNodeId, GraphPartitionRead, GraphRela
 use wow_project::{
     ProjectId,
     graph::{
-        ProjectCallableMetadata, ProjectGraphLuaDeclaration, ProjectGraphXmlDeclaration,
+        ProjectCallableMetadata, ProjectGraphLuaDeclaration, ProjectGraphStateDeclaration,
+        ProjectGraphStatePath, ProjectGraphStateRoot, ProjectGraphXmlDeclaration,
         SOURCE_GRAPH_PARTITION,
     },
 };
@@ -20,6 +21,26 @@ use crate::{
 
 pub const PRIMARY_L0_PROFILE: &str = "wow-context/primary-l0/1";
 pub const PRIMARY_L1_PROFILE: &str = "wow-context/primary-l1/1";
+pub const PRIMARY_STATE_ROOT_L0_PROFILE: &str = "wow-context/primary-state-root-l0/1";
+
+/// Closed container selections. The existing descriptor and default bytes are
+/// preserved; the state-root descriptor adds only original native state facets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PrimaryL0Profile {
+    ContainersV1,
+    StateRootV1,
+}
+impl PrimaryL0Profile {
+    pub const fn profile_id(self) -> &'static str {
+        self.descriptor().profile_id
+    }
+    const fn descriptor(self) -> &'static SkeletonProfile {
+        match self {
+            Self::ContainersV1 => &L0_PROFILE,
+            Self::StateRootV1 => &STATE_ROOT_L0_PROFILE,
+        }
+    }
+}
 
 #[derive(Serialize)]
 struct SkeletonProfile {
@@ -54,6 +75,13 @@ const L1_PROFILE: SkeletonProfile = SkeletonProfile {
     profile_id: PRIMARY_L1_PROFILE,
     scope_kinds: &["native_graph_entity"],
     relations: &crate::profile::DETAIL_RELATIONS,
+    ..L0_PROFILE
+};
+const STATE_ROOT_L0_PROFILE: SkeletonProfile = SkeletonProfile {
+    profile_id: PRIMARY_STATE_ROOT_L0_PROFILE,
+    scope_kinds: &["state_root"],
+    declarations: "selected_native_saved_variable_root_and_literal_path_metadata",
+    types: "symbolic_literal_keys_only_no_runtime_values",
     ..L0_PROFILE
 };
 
@@ -128,6 +156,15 @@ enum Declaration<'a> {
     Xml {
         node: &'a GraphNode,
         origin: &'a ProjectGraphXmlDeclaration,
+    },
+    StateRoot {
+        node: &'a GraphNode,
+        origin: &'a ProjectGraphStateRoot,
+        declarations: Vec<&'a ProjectGraphStateDeclaration>,
+    },
+    StatePath {
+        node: &'a GraphNode,
+        origin: &'a ProjectGraphStatePath,
     },
 }
 
@@ -268,6 +305,28 @@ fn context<'m, 'a>(
     }
 }
 
+fn published_lookup_work(graph: &GraphPartitionRead<'_>) -> ContextResult<usize> {
+    let partition = graph
+        .owner()
+        .partition(SOURCE_GRAPH_PARTITION)
+        .ok_or_else(missing)?;
+    Ok(
+        partition.batch().entity_proposals().len().max(1).ilog2() as usize
+            + partition.report().accepted_entities().len().max(1).ilog2() as usize
+            + graph.owner().snapshot().nodes().len().max(1).ilog2() as usize
+            + graph.owner().snapshot().limits().max_evidence_per_record as usize
+                * (graph
+                    .owner()
+                    .snapshot()
+                    .limits()
+                    .max_evidence_per_record
+                    .max(1)
+                    .ilog2() as usize
+                    + 1)
+            + 4,
+    )
+}
+
 fn declarations<'a>(
     universe: &ContextUniverseSet<'a>,
     view: &ProjectMapView<'_, 'a>,
@@ -282,23 +341,7 @@ fn declarations<'a>(
     let report_rows = provenance
         .function_call_report()
         .map_or(0, |r| r.functions().len());
-    let partition = graph
-        .owner()
-        .partition(SOURCE_GRAPH_PARTITION)
-        .ok_or_else(missing)?;
-    let lookup_work = partition.batch().entity_proposals().len().max(1).ilog2() as usize
-        + partition.report().accepted_entities().len().max(1).ilog2() as usize
-        + graph.owner().snapshot().nodes().len().max(1).ilog2() as usize
-        + (graph.owner().snapshot().limits().max_evidence_per_record as usize)
-            * (graph
-                .owner()
-                .snapshot()
-                .limits()
-                .max_evidence_per_record
-                .max(1)
-                .ilog2() as usize
-                + 1)
-        + 4;
+    let lookup_work = published_lookup_work(graph)?;
     let row_count = provenance
         .functions()
         .len()
@@ -391,8 +434,140 @@ fn declaration_node<'a>(row: &Declaration<'a>) -> &'a GraphNode {
     match row {
         Declaration::Callable { node, .. }
         | Declaration::Lua { node, .. }
-        | Declaration::Xml { node, .. } => node,
+        | Declaration::Xml { node, .. }
+        | Declaration::StateRoot { node, .. }
+        | Declaration::StatePath { node, .. } => node,
     }
+}
+
+fn state_declarations<'a>(
+    universe: &ContextUniverseSet<'a>,
+    view: &ProjectMapView<'_, 'a>,
+    graph: &GraphPartitionRead<'a>,
+    members: &[&'a GraphNode],
+    budget: &mut Budget,
+    stop: &AtomicBool,
+) -> ContextResult<Vec<Declaration<'a>>> {
+    let provenance = universe.pair.source_provenance().ok_or_else(missing)?;
+    let root_node = view.root_node().ok_or_else(invalid)?;
+    let lookup_work = published_lookup_work(graph)?;
+    budget.work(
+        provenance
+            .state_roots()
+            .len()
+            .checked_mul(lookup_work)
+            .ok_or_else(exhausted)?,
+        stop,
+    )?;
+    let mut root = None;
+    for origin in provenance.state_roots() {
+        budget.work(1, stop)?;
+        let node = graph
+            .published_entity(SOURCE_GRAPH_PARTITION, &origin.proposal_id, stop)
+            .map_err(crate::error::graph_error)?;
+        if std::ptr::eq(node, root_node) && root.replace(origin).is_some() {
+            return Err(ContextError::new(ContextErrorCode::SupportMismatch));
+        }
+    }
+    let root = root.ok_or_else(missing)?;
+    let declaration_work = root
+        .source_handle_ids
+        .len()
+        .checked_add(root.evidence_ids.len())
+        .and_then(|n| n.checked_add(3))
+        .ok_or_else(exhausted)?;
+    budget.work(
+        provenance
+            .state_declarations()
+            .len()
+            .checked_mul(declaration_work)
+            .ok_or_else(exhausted)?,
+        stop,
+    )?;
+    let mut declarations = Vec::new();
+    for declaration in provenance.state_declarations() {
+        budget.work(1, stop)?;
+        // This is the exact native producer join, including each original
+        // support pair. Repeated declarations and ambiguity are preserved.
+        if declaration.name == root.name
+            && declaration.scope == root.scope
+            && declaration.state == wow_project::load::TocSavedVariableState::Declared
+            && root
+                .source_handle_ids
+                .contains(&declaration.source_handle_id)
+            && root.evidence_ids.contains(&declaration.evidence_id)
+        {
+            budget.retain(declaration, stop)?;
+            declarations.push(declaration);
+        }
+    }
+    if declarations.is_empty() {
+        return Err(missing());
+    }
+    let row = Declaration::StateRoot {
+        node: root_node,
+        origin: root,
+        declarations,
+    };
+    budget.retain(&row, stop)?;
+    let mut rows = vec![row];
+    let path_lookup_work = lookup_work
+        .checked_add(members.len().max(1).ilog2() as usize + 2)
+        .ok_or_else(exhausted)?;
+    budget.work(
+        provenance
+            .state_paths()
+            .len()
+            .checked_mul(path_lookup_work)
+            .ok_or_else(exhausted)?,
+        stop,
+    )?;
+    for origin in provenance.state_paths() {
+        budget.work(1, stop)?;
+        if origin.root_id != root.root_id {
+            continue;
+        }
+        let node = graph
+            .published_entity(SOURCE_GRAPH_PARTITION, &origin.proposal_id, stop)
+            .map_err(crate::error::graph_error)?;
+        if members
+            .binary_search_by(|member| member.node_id().cmp(node.node_id()))
+            .is_ok()
+        {
+            if !view
+                .node(node.node_id())
+                .is_some_and(|selected| std::ptr::eq(selected, node))
+            {
+                return Err(missing());
+            }
+            let row = Declaration::StatePath { node, origin };
+            budget.retain(&row, stop)?;
+            rows.push(row);
+        }
+    }
+    // Every selected membership row requires its original typed path custody.
+    // Omitted/dynamic/unresolved paths remain the original owner's omissions.
+    if rows.len().checked_sub(1) != Some(members.len()) {
+        return Err(missing());
+    }
+    budget.work(
+        rows.len()
+            .checked_mul(rows.len().max(1).ilog2() as usize + 1)
+            .ok_or_else(exhausted)?,
+        stop,
+    )?;
+    rows.sort_by(|a, b| {
+        declaration_node(a)
+            .node_id()
+            .cmp(declaration_node(b).node_id())
+    });
+    if rows
+        .windows(2)
+        .any(|pair| declaration_node(&pair[0]).node_id() == declaration_node(&pair[1]).node_id())
+    {
+        return Err(ContextError::new(ContextErrorCode::SupportMismatch));
+    }
+    Ok(rows)
 }
 
 pub fn build_l0_skeleton<'m, 'a>(
@@ -402,21 +577,50 @@ pub fn build_l0_skeleton<'m, 'a>(
     scope: &L0Scope,
     stop: &AtomicBool,
 ) -> ContextResult<L0Skeleton<'m, 'a>> {
+    build_l0_skeleton_with_profile(
+        universe,
+        map,
+        graph,
+        scope,
+        PrimaryL0Profile::ContainersV1,
+        stop,
+    )
+}
+
+pub fn build_l0_skeleton_with_profile<'m, 'a>(
+    universe: &'m ContextUniverseSet<'a>,
+    map: &'m ProjectMap<'a>,
+    graph: &GraphPartitionRead<'a>,
+    scope: &L0Scope,
+    profile: PrimaryL0Profile,
+    stop: &AtomicBool,
+) -> ContextResult<L0Skeleton<'m, 'a>> {
     let (view, mut budget) = input(universe, map, graph, stop)?;
-    l0(universe, map, graph, scope, &view, &mut budget, stop)
+    l0(
+        universe,
+        map,
+        graph,
+        (scope, profile),
+        &view,
+        &mut budget,
+        stop,
+    )
 }
 fn l0<'m, 'a>(
     universe: &'m ContextUniverseSet<'a>,
     map: &'m ProjectMap<'a>,
     graph: &GraphPartitionRead<'a>,
-    scope: &L0Scope,
+    selection: (&L0Scope, PrimaryL0Profile),
     view: &ProjectMapView<'m, 'a>,
     budget: &mut Budget,
     stop: &AtomicBool,
 ) -> ContextResult<L0Skeleton<'m, 'a>> {
+    let (scope, profile) = selection;
+    let descriptor = profile.descriptor();
     let (scope, membership) = match scope {
         L0Scope::Project(id)
-            if id == universe.pair.project().configuration().project_id()
+            if profile == PrimaryL0Profile::ContainersV1
+                && id == universe.pair.project().configuration().project_id()
                 && view.root_node().is_none() =>
         {
             (
@@ -431,7 +635,13 @@ fn l0<'m, 'a>(
                 .root_node()
                 .filter(|node| node.node_id() == id)
                 .ok_or_else(invalid)?;
-            if !matches!(node.kind(), "source_file" | "source_package") {
+            let eligible = match profile {
+                PrimaryL0Profile::ContainersV1 => {
+                    matches!(node.kind(), "source_file" | "source_package")
+                }
+                PrimaryL0Profile::StateRootV1 => node.kind() == "state_root",
+            };
+            if !eligible {
                 return Err(invalid());
             }
             (
@@ -441,7 +651,7 @@ fn l0<'m, 'a>(
         }
         _ => return Err(invalid()),
     };
-    budget.retain(&L0_PROFILE, stop)?;
+    budget.retain(descriptor, stop)?;
     let mut members = Vec::new();
     for node in view.nodes() {
         budget.work(1, stop)?;
@@ -462,11 +672,16 @@ fn l0<'m, 'a>(
             members.push(*node);
         }
     }
-    let rows = declarations(universe, view, graph, budget, stop)?;
+    let rows = match profile {
+        PrimaryL0Profile::ContainersV1 => declarations(universe, view, graph, budget, stop)?,
+        PrimaryL0Profile::StateRootV1 => {
+            state_declarations(universe, view, graph, &members, budget, stop)?
+        }
+    };
     let mut relations = Vec::new();
     for edge in view.edges() {
         budget.work(1, stop)?;
-        if L0_PROFILE.relations.contains(&edge.relation()) {
+        if descriptor.relations.contains(&edge.relation()) {
             budget.retain(edge, stop)?;
             relations.push(*edge);
         }
@@ -478,9 +693,12 @@ fn l0<'m, 'a>(
         routes.push(node.node_id());
     }
     let core = L0Core {
-        schema: "wow-context/l0-skeleton/primary/1",
-        profile: PRIMARY_L0_PROFILE,
-        profile_descriptor: &L0_PROFILE,
+        schema: match profile {
+            PrimaryL0Profile::ContainersV1 => "wow-context/l0-skeleton/primary/1",
+            PrimaryL0Profile::StateRootV1 => "wow-context/l0-skeleton/primary-state-root/1",
+        },
+        profile: descriptor.profile_id,
+        profile_descriptor: descriptor,
         context: context(universe, map, budget),
         scope,
         selected_member_count: members.len(),
@@ -587,7 +805,27 @@ pub fn build_primary_skeletons<'m, 'a>(
     level: SkeletonLevel,
     stop: &AtomicBool,
 ) -> ContextResult<PrimarySkeletons<'m, 'a>> {
-    build_primary_skeletons_with_budget(universe, map, graph, root, level, stop)
+    build_primary_skeletons_with_profile(
+        universe,
+        map,
+        graph,
+        root,
+        level,
+        PrimaryL0Profile::ContainersV1,
+        stop,
+    )
+}
+
+pub fn build_primary_skeletons_with_profile<'m, 'a>(
+    universe: &'m ContextUniverseSet<'a>,
+    map: &'m ProjectMap<'a>,
+    graph: &GraphPartitionRead<'a>,
+    root: &L0Scope,
+    level: SkeletonLevel,
+    profile: PrimaryL0Profile,
+    stop: &AtomicBool,
+) -> ContextResult<PrimarySkeletons<'m, 'a>> {
+    build_primary_skeletons_with_budget(universe, map, graph, root, level, profile, stop)
         .map(|(result, _)| result)
 }
 
@@ -598,11 +836,25 @@ pub(crate) fn build_primary_skeletons_with_budget<'m, 'a>(
     graph: &GraphPartitionRead<'a>,
     root: &L0Scope,
     level: SkeletonLevel,
+    profile: PrimaryL0Profile,
     stop: &AtomicBool,
 ) -> ContextResult<(PrimarySkeletons<'m, 'a>, Budget)> {
+    if profile == PrimaryL0Profile::StateRootV1
+        && (level == SkeletonLevel::L1 || !matches!(root, L0Scope::Entity(_)))
+    {
+        return Err(invalid());
+    }
     let (view, mut budget) = input(universe, map, graph, stop)?;
     let l0 = if matches!(level, SkeletonLevel::L0 | SkeletonLevel::Both) {
-        Some(l0(universe, map, graph, root, &view, &mut budget, stop)?)
+        Some(l0(
+            universe,
+            map,
+            graph,
+            (root, profile),
+            &view,
+            &mut budget,
+            stop,
+        )?)
     } else {
         None
     };
