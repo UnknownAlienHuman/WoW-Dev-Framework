@@ -88,3 +88,9 @@ pub(crate) const DETAIL_PROFILE: ProfileDescription = ProfileDescription {
     edges: &DETAIL_RELATIONS,
     ..PROFILE
 };
+pub(crate) const FRONTIER_PROFILE: ProfileDescription = ProfileDescription {
+    profile: "wow-context/primary-frontier-origins/1",
+    nodes: "initial_detail_and_explicit_frontier_direct_endpoints",
+    edges: &DETAIL_RELATIONS,
+    ..PROFILE
+};

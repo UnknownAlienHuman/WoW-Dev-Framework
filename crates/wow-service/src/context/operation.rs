@@ -280,6 +280,31 @@ pub(super) fn with_native_origins<T>(
         &wow_graph::GraphPartitionRead<'_>,
     ) -> ServiceResult<T>,
 ) -> ServiceResult<T> {
+    with_native_origins_with_catalog(
+        universe,
+        read,
+        host,
+        root,
+        detail,
+        stop,
+        |map, graph, _catalog| build(map, graph),
+    )
+}
+
+/// Selected orchestration borrows the same admitted catalog and native read.
+pub(super) fn with_native_origins_with_catalog<T>(
+    universe: &wow_context::ContextUniverseSet<'_>,
+    read: &LiveProjectRead,
+    host: &ContextMapHostInput,
+    root: ContextMapRoot,
+    detail: bool,
+    stop: &AtomicBool,
+    build: impl FnOnce(
+        &wow_context::ProjectMap<'_>,
+        &wow_graph::GraphPartitionRead<'_>,
+        &GraphEvidenceCatalog,
+    ) -> ServiceResult<T>,
+) -> ServiceResult<T> {
     let provenance = read
         .pair()
         .source_provenance()
@@ -357,7 +382,7 @@ pub(super) fn with_native_origins<T>(
         receipts.push(receipt);
     }
     let map = wow_context::build_project_map(selection, &receipts, stop).map_err(context_error)?;
-    build(&map, &graph)
+    build(&map, &graph, &catalog)
 }
 
 /// Digest of the exact native CurrentPublication canonical observation, not

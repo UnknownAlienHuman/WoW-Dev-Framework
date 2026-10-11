@@ -14,10 +14,13 @@ mod universe;
 pub use budget::PrimaryMapLimits;
 pub use error::{ContextError, ContextErrorCode, ContextResult};
 pub use map::{
-    PRIMARY_PROJECT_MAP_SCHEMA, PROJECT_MAP_SCHEMA, ProjectMap, ProjectMapSelection,
-    ProjectMapState, ProjectMapView, ProjectNavigationRequest, build_project_map,
-    open_project_map_view, prepare_detail_map, prepare_primary_project_map, prepare_project_map,
-    primary_detail_query, primary_navigation_query, primary_project_navigation_queries,
+    ContextExpansionPlan, ContextExpansionPreparation, ContextExpansionStep,
+    PRIMARY_FRONTIER_EXPANSION_PROFILE, PRIMARY_PROJECT_MAP_SCHEMA, PROJECT_MAP_SCHEMA, ProjectMap,
+    ProjectMapSelection, ProjectMapState, ProjectMapView, ProjectNavigationRequest,
+    build_project_map, expand_context_frontier, open_project_map_view, plan_context_expansion,
+    prepare_context_expansion, prepare_detail_map, prepare_primary_project_map,
+    prepare_project_map, primary_detail_query, primary_navigation_query,
+    primary_project_navigation_queries,
 };
 pub use pack::{
     ContextOperationBudgetUsage, ContextSemanticPack, PRIMARY_CONTEXT_JSON_RENDERER_PROFILE,

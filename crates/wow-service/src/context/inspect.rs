@@ -2,13 +2,13 @@
 //! this operation selects typed context artifacts, never a second semantic map call.
 use super::operation::{
     Envelope, current_record_digest, encode, failed_operation, with_checked_context_read,
-    with_native_origins,
+    with_native_origins_with_catalog,
 };
 use super::{
     ContextInspectLevel, ContextL0Profile, ContextMapCurrentGuard, ContextMapHostInput,
     ContextMapPublication, ContextMapReferenceGuard, ContextMapResult, ContextMapRoot,
-    ContextMapStatus, PRIMARY_L0_PROFILE_ID, PRIMARY_L1_PROFILE_ID, checkpoint, context_error,
-    failure,
+    ContextMapStatus, PRIMARY_FRONTIER_EXPANSION_PROFILE_ID, PRIMARY_L0_PROFILE_ID,
+    PRIMARY_L1_PROFILE_ID, checkpoint, context_error, failure, graph_error,
 };
 use crate::{ServiceErrorCode, ServiceResult, live_project::LiveProjectRead};
 use serde::Serialize;
@@ -17,6 +17,12 @@ use wow_core::{CanonicalResult, ContentDigest};
 use wow_store::project::ReadSelector;
 
 const RESULT_SCHEMA: &str = "wow-service/context-inspect-result/1";
+
+#[derive(Debug, Clone, Serialize)]
+struct FrontierExpansion {
+    profile_id: &'static str,
+    frontier: Vec<wow_graph::GraphNodeId>,
+}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ContextInspectRequest {
@@ -30,6 +36,8 @@ pub struct ContextInspectRequest {
     l0_profile_id: Option<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     l1_profile_id: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    expansion: Option<FrontierExpansion>,
     #[serde(skip_serializing_if = "Option::is_none")]
     current: Option<ContextMapCurrentGuard>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -59,6 +67,7 @@ impl ContextInspectRequest {
                 .then_some(PRIMARY_L0_PROFILE_ID),
             l1_profile_id: matches!(level, ContextInspectLevel::L1 | ContextInspectLevel::Both)
                 .then_some(PRIMARY_L1_PROFILE_ID),
+            expansion: None,
             current,
             reference,
         })
@@ -72,6 +81,34 @@ impl ContextInspectRequest {
             return Err(failure(ServiceErrorCode::InvalidRequest));
         }
         self.l0_profile_id = Some(profile.profile_id());
+        Ok(self)
+    }
+
+    pub fn with_frontier_expansion(mut self, frontier: Vec<ContextMapRoot>) -> ServiceResult<Self> {
+        if self.level != ContextInspectLevel::L1
+            || !matches!(&self.root, ContextMapRoot::GraphEntity(_))
+            || frontier.is_empty()
+            || frontier.len() > 32
+        {
+            return Err(failure(ServiceErrorCode::InvalidRequest));
+        }
+        let mut ids = frontier
+            .into_iter()
+            .map(|root| match root {
+                ContextMapRoot::GraphEntity(id) => Ok(id),
+                ContextMapRoot::Project(_) => Err(failure(ServiceErrorCode::InvalidRequest)),
+            })
+            .collect::<ServiceResult<Vec<_>>>()?;
+        ids.sort();
+        if ids.windows(2).any(|pair| pair[0] == pair[1])
+            || matches!(&self.root, ContextMapRoot::GraphEntity(root) if ids.contains(root))
+        {
+            return Err(failure(ServiceErrorCode::InvalidRequest));
+        }
+        self.expansion = Some(FrontierExpansion {
+            profile_id: PRIMARY_FRONTIER_EXPANSION_PROFILE_ID,
+            frontier: ids,
+        });
         Ok(self)
     }
 }
@@ -127,6 +164,8 @@ struct Payload<'a, 'm, 'view> {
     #[serde(skip_serializing_if = "Option::is_none")]
     native_project_store_id: Option<&'a str>,
     skeletons: &'a wow_context::PrimarySkeletons<'m, 'view>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    expansion: Option<&'a wow_context::ContextExpansionStep<'view>>,
 }
 
 fn build(
@@ -202,25 +241,78 @@ fn build(
         ContentDigest::<CanonicalResult>::from_bytes(resolved)
     )
     .into_boxed_str();
-    with_native_origins(
+    with_native_origins_with_catalog(
         &universe,
         read,
         host,
         request.root.clone(),
         request.level != ContextInspectLevel::L0,
         stop,
-        |map, graph| {
-            let skeletons = wow_context::build_primary_skeletons_with_profile(
-                &universe,
-                map,
-                graph,
-                &scope,
-                request.level,
-                l0_profile,
-                stop,
-            )
-            .map_err(context_error)?;
-            let status = match skeletons.state() {
+        |map, graph, catalog| {
+            // Keep native receipts borrowed by the selected step through encoding.
+            let mut receipts;
+            let expansion = if let Some(selection) = &request.expansion {
+                let mut plan = wow_context::plan_context_expansion(
+                    &universe,
+                    map,
+                    graph,
+                    &selection.frontier,
+                    stop,
+                )
+                .map_err(context_error)?;
+                for index in 0..plan.navigation_queries().len() {
+                    checkpoint(stop)?;
+                    let view = graph
+                        .neighbors(&plan.navigation_queries()[index], stop)
+                        .map_err(graph_error)?;
+                    plan.admit_neighborhood(view, stop).map_err(context_error)?;
+                }
+                let mut prepared =
+                    wow_context::prepare_context_expansion(plan, stop).map_err(context_error)?;
+                receipts = Vec::with_capacity(prepared.explanation_queries().len());
+                for index in 0..prepared.explanation_queries().len() {
+                    checkpoint(stop)?;
+                    let receipt = graph
+                        .explain_with_evidence(
+                            &prepared.explanation_queries()[index],
+                            catalog,
+                            host.limits.evidence,
+                            stop,
+                        )
+                        .map_err(graph_error)?;
+                    prepared
+                        .admit_explanation(&receipt, stop)
+                        .map_err(context_error)?;
+                    receipts.push(receipt);
+                }
+                Some(
+                    wow_context::expand_context_frontier(prepared, &receipts, stop)
+                        .map_err(context_error)?,
+                )
+            } else {
+                None
+            };
+            let unexpanded;
+            let skeletons = if let Some(step) = &expansion {
+                step.skeletons()
+            } else {
+                unexpanded = wow_context::build_primary_skeletons_with_profile(
+                    &universe,
+                    map,
+                    graph,
+                    &scope,
+                    request.level,
+                    l0_profile,
+                    stop,
+                )
+                .map_err(context_error)?;
+                &unexpanded
+            };
+            let state = match &expansion {
+                Some(step) => step.state(),
+                None => skeletons.state(),
+            };
+            let status = match state {
                 wow_context::ProjectMapState::Partial => ContextMapStatus::Partial,
                 wow_context::ProjectMapState::Truncated => ContextMapStatus::Truncated,
             };
@@ -232,7 +324,8 @@ fn build(
                 current_record_digest: current_digest,
                 configured_registration_id: &host.project_store_id,
                 native_project_store_id: read.namespace().map(|namespace| namespace.id().as_str()),
-                skeletons: &skeletons,
+                skeletons,
+                expansion: expansion.as_ref(),
             };
             let envelope = Envelope {
                 schema: RESULT_SCHEMA,
@@ -244,7 +337,12 @@ fn build(
                 failure_code: None,
                 payload: Some(payload),
             };
-            let limit = usize::try_from(host.limits.max_metadata_bytes)
+            let remaining = expansion
+                .as_ref()
+                .map_or(host.limits.max_metadata_bytes, |step| {
+                    step.remaining_metadata_bytes()
+                });
+            let limit = usize::try_from(remaining)
                 .map_err(|_| failure(ServiceErrorCode::BudgetExceeded))?;
             Ok((encode(&envelope, limit, stop)?, status))
         },

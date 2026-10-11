@@ -24,7 +24,13 @@ use crate::{ContextError, ContextErrorCode, ContextResult, PrimaryMapLimits};
 pub const PROJECT_MAP_SCHEMA: &str = "wow-context/project-map/primary-direct-navigation/1";
 pub const PRIMARY_PROJECT_MAP_SCHEMA: &str = "wow-context/project-map/primary-project-navigation/1";
 
+mod expansion;
 mod project_navigation;
+pub use expansion::{
+    ContextExpansionPlan, ContextExpansionPreparation, ContextExpansionStep,
+    PRIMARY_FRONTIER_EXPANSION_PROFILE, expand_context_frontier, plan_context_expansion,
+    prepare_context_expansion,
+};
 pub use project_navigation::{
     ProjectNavigationRequest, prepare_primary_project_map, primary_project_navigation_queries,
 };
@@ -37,6 +43,7 @@ enum MapNavigation<'a> {
     Direct(GraphNeighborView<'a>),
     Detail(GraphNeighborView<'a>),
     Project(project_navigation::ProjectNavigation<'a>),
+    Expansion(expansion::ExpansionNavigation<'a>),
 }
 impl MapNavigation<'_> {
     fn truncated(&self) -> bool {
@@ -46,6 +53,7 @@ impl MapNavigation<'_> {
                 .neighborhoods
                 .iter()
                 .any(|read| read.state() == GraphQueryState::Truncated),
+            Self::Expansion(view) => view.truncated(),
         }
     }
     fn omitted_edges(&self) -> ContextResult<u64> {
@@ -56,6 +64,7 @@ impl MapNavigation<'_> {
                     .checked_add(u64::from(read.omitted_edges()))
                     .ok_or_else(exhausted)
             }),
+            Self::Expansion(view) => view.omitted_edges(),
         }
     }
     fn schema(&self) -> &'static str {
@@ -63,6 +72,7 @@ impl MapNavigation<'_> {
             Self::Direct(_) => PROJECT_MAP_SCHEMA,
             Self::Detail(_) => "wow-context/project-map/primary-entity-detail-origins/1",
             Self::Project(_) => PRIMARY_PROJECT_MAP_SCHEMA,
+            Self::Expansion(_) => "wow-context/project-map/primary-frontier-origins/1",
         }
     }
     fn profile(&self) -> &'static crate::profile::ProfileDescription {
@@ -70,12 +80,14 @@ impl MapNavigation<'_> {
             Self::Direct(_) => &PROFILE,
             Self::Detail(_) => &DETAIL_PROFILE,
             Self::Project(_) => &PROJECT_PROFILE,
+            Self::Expansion(_) => &crate::profile::FRONTIER_PROFILE,
         }
     }
     fn omission_enumeration(&self) -> &'static str {
         match self {
             Self::Direct(_) | Self::Detail(_) => "complete_match_count_under_native_query",
             Self::Project(_) => "sum_of_complete_match_counts_under_native_queries",
+            Self::Expansion(_) => "sum_of_initial_and_selected_frontier_native_query_omissions",
         }
     }
 }
@@ -541,10 +553,19 @@ impl<'a> ProjectMap<'a> {
 /// All selected support is mandatory.
 /// No receipt is decoded as authority; missing/truncated custody refuses.
 pub fn build_project_map<'a>(
-    mut selection: ProjectMapSelection<'a>,
+    selection: ProjectMapSelection<'a>,
     receipts: &'a [GraphResolvedExplanation<'a>],
     stop: &AtomicBool,
 ) -> ContextResult<ProjectMap<'a>> {
+    build_project_map_with_budget(selection, receipts.iter(), false, stop).map(|(map, _)| map)
+}
+
+fn build_project_map_with_budget<'a>(
+    mut selection: ProjectMapSelection<'a>,
+    receipts: impl ExactSizeIterator<Item = &'a GraphResolvedExplanation<'a>>,
+    reserve_final: bool,
+    stop: &AtomicBool,
+) -> ContextResult<(ProjectMap<'a>, Budget)> {
     checkpoint(stop)?;
     let universe = selection.universe;
     let project = universe.pair.project();
@@ -825,8 +846,11 @@ pub fn build_project_map<'a>(
     };
     // ID excludes itself and the final-byte accessor. The whole ID+core envelope
     // is checked, then retained exactly; no circular byte-count/hash field.
+    if reserve_final {
+        selection.budget.retain(&map, stop)?;
+    }
     map.canonical_bytes = canonical(&map, limits.max_metadata_bytes, stop)?.into_boxed_slice();
-    Ok(map)
+    Ok((map, selection.budget))
 }
 
 fn subject_key(subject: &GraphExplainSubject) -> (u8, &str) {
@@ -899,10 +923,14 @@ impl<'a> ProjectMapView<'_, 'a> {
         match &self.map.core.navigation {
             MapNavigation::Direct(view) | MapNavigation::Detail(view) => Some(view.root()),
             MapNavigation::Project(_) => None,
+            MapNavigation::Expansion(view) => Some(view.root),
         }
     }
     pub(crate) fn has_detail_vocabulary(&self) -> bool {
         matches!(self.map.core.navigation, MapNavigation::Detail(_))
+    }
+    pub(crate) fn is_skeleton_origin(&self) -> bool {
+        !matches!(self.map.core.navigation, MapNavigation::Expansion(_))
     }
     pub(crate) fn bound_to(&self, universe: &ContextUniverseSet<'a>) -> bool {
         std::ptr::eq(self.map.core.binding, &universe.binding)

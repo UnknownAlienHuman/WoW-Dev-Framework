@@ -22,6 +22,8 @@ pub use wow_context::SkeletonLevel as ContextInspectLevel;
 pub const PRIMARY_L0_PROFILE_ID: &str = wow_context::PRIMARY_L0_PROFILE;
 pub const PRIMARY_L1_PROFILE_ID: &str = wow_context::PRIMARY_L1_PROFILE;
 pub const PRIMARY_STATE_ROOT_L0_PROFILE_ID: &str = wow_context::PRIMARY_STATE_ROOT_L0_PROFILE;
+pub const PRIMARY_FRONTIER_EXPANSION_PROFILE_ID: &str =
+    wow_context::PRIMARY_FRONTIER_EXPANSION_PROFILE;
 pub use request::{
     ContextMapCurrentGuard, ContextMapPublication, ContextMapReferenceGuard, ContextMapRequest,
     ContextMapRoot,

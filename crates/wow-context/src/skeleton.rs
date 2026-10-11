@@ -274,6 +274,9 @@ fn input<'m, 'a>(
 ) -> ContextResult<(ProjectMapView<'m, 'a>, Budget)> {
     checkpoint(stop)?;
     let view = open_project_map_view(map, stop)?;
+    if !view.is_skeleton_origin() {
+        return Err(ContextError::new(ContextErrorCode::SupportMismatch));
+    }
     if !view.bound_to(universe) || !std::ptr::eq(graph.owner(), universe.pair.graph()) {
         return Err(ContextError::new(ContextErrorCode::UniverseMismatch));
     }

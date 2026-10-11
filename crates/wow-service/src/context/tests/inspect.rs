@@ -1426,3 +1426,522 @@ fn retained_native_state_root_l0_preserves_toc_scopes_paths_and_source_absent_cu
     assert!(!input.exists());
     Ok(())
 }
+
+const FRONTIER_PROFILE: &str = "wow-context/primary-native-frontier/1";
+
+struct StateFrontierExpected {
+    initial: Value,
+    frontier: Value,
+    items: Vec<Value>,
+    added_entities: usize,
+    added_relations: usize,
+}
+
+fn retained_state_frontier_views(
+    store_root: &Path,
+    generation: &wow_store::project::StoreGenerationId,
+    initial: &GraphNodeId,
+    frontier: &GraphNodeId,
+    host: &ContextMapHostInput,
+    stop: &AtomicBool,
+) -> TestResult<StateFrontierExpected> {
+    let store = LiveProjectStore::open(store_root)?;
+    let read = store.read(&ReadSelector::Exact(generation.clone()), stop)?;
+    let universe = wow_context::bind_context_universe_set(
+        read.pair(),
+        &host.reference,
+        &host.reference_profile,
+        host.limits.owner_limits()?,
+        stop,
+    )?;
+    let graph = read.pair().graph_read(stop)?;
+    let initial_view = graph.neighbors(
+        &wow_context::primary_detail_query(&universe, initial.clone(), stop)?,
+        stop,
+    )?;
+    let frontier_view = graph.neighbors(
+        &wow_context::primary_detail_query(&universe, frontier.clone(), stop)?,
+        stop,
+    )?;
+    let mut items = BTreeMap::<(String, String), Value>::new();
+    for (reason, view) in [
+        ("initial_selection", &initial_view),
+        ("frontier_selection", &frontier_view),
+    ] {
+        let root_id = view.root().node_id();
+        for node in std::iter::once(view.root()).chain(view.adjacent_nodes().iter().copied()) {
+            let row = items.entry(("entity".into(),node.node_id().to_string())).or_insert_with(|| {
+                json!({"kind":"entity","node":node,"previously_selected":false,"reasons":[]})
+            });
+            if reason == "initial_selection" {
+                row["previously_selected"] = json!(true);
+            }
+            row["reasons"]
+                .as_array_mut()
+                .ok_or("native reasons")?
+                .push(json!({"kind":reason,"root_id":root_id}));
+        }
+        for edge in view.edges() {
+            let row = items.entry(("relation".into(),edge.edge_id().to_string())).or_insert_with(|| {
+                json!({"kind":"relation","edge":edge,"previously_selected":false,"reasons":[]})
+            });
+            if reason == "initial_selection" {
+                row["previously_selected"] = json!(true);
+            }
+            row["reasons"]
+                .as_array_mut()
+                .ok_or("native reasons")?
+                .push(json!({"kind":reason,"root_id":root_id}));
+        }
+    }
+    let added = |kind: &str| {
+        items
+            .values()
+            .filter(|row| row["kind"] == kind && row["previously_selected"] == false)
+            .count()
+    };
+    let expected = StateFrontierExpected {
+        initial: serde_json::to_value(&initial_view)?,
+        frontier: serde_json::to_value(&frontier_view)?,
+        added_entities: added("entity"),
+        added_relations: added("relation"),
+        items: items.into_values().collect(),
+    };
+    read.close()?;
+    store.close()?;
+    Ok(expected)
+}
+
+fn assert_state_frontier_expansion(
+    result: &ContextMapResult,
+    initial_payload: &Value,
+    native: &StateConsumerExpected,
+    expected: &StateFrontierExpected,
+    state: ContextMapStatus,
+) -> TestResult<Value> {
+    assert_eq!(result.status(), state);
+    assert_eq!(result.failure_code(), None);
+    let envelope: Value = serde_json::from_slice(result.canonical_bytes())?;
+    assert_eq!(envelope["schema"], "wow-service/context-inspect-result/1");
+    assert_eq!(envelope["resource_closure"], "closed");
+    let payload = &envelope["payload"];
+    assert_eq!(
+        payload["publication_set_id"],
+        native.records["publication_set_id"]
+    );
+    assert_eq!(
+        payload["skeletons"], initial_payload["skeletons"],
+        "expansion retains the original initial L1 artifact"
+    );
+    let expansion = &payload["expansion"];
+    assert!(
+        expansion["expansion_id"]
+            .as_str()
+            .ok_or("sealed expansion ID")?
+            .len()
+            > 32
+    );
+    let core = &expansion["core"];
+    assert_eq!(core["schema"], "wow-context/primary-frontier-expansion/1");
+    assert_eq!(core["profile"]["profile_id"], FRONTIER_PROFILE);
+    let l1 = &initial_payload["skeletons"]["l1"];
+    assert_eq!(core["initial_l1_id"], l1["l1_skeleton_id"]);
+    assert_eq!(
+        core["initial_map_id"],
+        l1["core"]["context"]["origins"]["project_map_id"]
+    );
+    assert_eq!(core["root"], expected.initial["root"]);
+    exact_rows(&core["frontier"], &[expected.frontier["root"].clone()])?;
+    assert_eq!(core["added_entity_count"], expected.added_entities);
+    assert_eq!(core["added_relation_count"], expected.added_relations);
+    assert_eq!(core["state"], serde_json::to_value(state)?);
+    assert_eq!(core["absence_authoritative"], false);
+    assert_eq!(core["stop_reason"], "one_round_profile_bound");
+    assert_eq!(core["continuation"], "not_evaluated");
+    let actual = rows(&core["items"])?;
+    assert_eq!(actual.len(), expected.items.len());
+    let mut pending = BTreeSet::new();
+    for wanted in &expected.items {
+        let (kind, field, id_field) = match wanted["kind"].as_str() {
+            Some("entity") => ("entity", "node", "node_id"),
+            Some("relation") => ("relation", "edge", "edge_id"),
+            _ => return Err("unexpected native item kind".into()),
+        };
+        let id = wanted[field][id_field].as_str().ok_or("native item ID")?;
+        let matches = actual
+            .iter()
+            .filter(|row| row["kind"] == kind && row[field][id_field] == id)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            matches.len(),
+            1,
+            "dedup is the exact original node/edge identity"
+        );
+        let row = matches[0];
+        assert_eq!(
+            row[field], wanted[field],
+            "no synthesized or transitive graph record"
+        );
+        assert_eq!(row["previously_selected"], wanted["previously_selected"]);
+        exact_rows(&row["reasons"], rows(&wanted["reasons"])?)?;
+        assert!(pending.insert((kind.to_owned(), id.to_owned())));
+    }
+    let origins = &core["origins"]["core"];
+    assert_eq!(
+        origins["schema"],
+        "wow-context/project-map/primary-frontier-origins/1"
+    );
+    assert_eq!(origins["state"], serde_json::to_value(state)?);
+    assert_eq!(origins["absence_authoritative"], false);
+    assert_eq!(
+        origins["profile"]["profile"],
+        "wow-context/primary-frontier-origins/1"
+    );
+    assert_eq!(
+        origins["navigation"]["initial_map_id"],
+        core["initial_map_id"]
+    );
+    exact_rows(
+        &origins["navigation"]["neighborhoods"],
+        std::slice::from_ref(&expected.frontier),
+    )?;
+    assert!(
+        core["budget"]["work_reserved"]
+            .as_u64()
+            .ok_or("continued expansion work")?
+            > initial_payload["skeletons"]["work_reserved"]
+                .as_u64()
+                .ok_or("initial work")?
+    );
+    assert_eq!(
+        core["budget"]["reservation_basis"],
+        "before_expansion_finalization"
+    );
+    assert_eq!(
+        origins["load_custody"]["selected_toc"],
+        native.records["load"]
+    );
+    for receipt in rows(&origins["supports"])? {
+        let explanation = &receipt["explanation"];
+        assert_eq!(explanation["support_complete"], true);
+        assert_eq!(
+            explanation["source_context_id"],
+            native.records["source_context_id"]
+        );
+        let record = &explanation["record"];
+        let (kind, field, id_field) = match record["kind"].as_str() {
+            Some("entity") => ("entity", "node", "node_id"),
+            Some("relation") => ("relation", "edge", "edge_id"),
+            _ => return Err("unexpected explained item".into()),
+        };
+        let id = record[field][id_field]
+            .as_str()
+            .ok_or("explained native ID")?;
+        assert!(pending.remove(&(kind.to_owned(), id.to_owned())));
+        assert!(
+            expected
+                .items
+                .iter()
+                .any(|row| row["kind"] == kind && row[field] == record[field])
+        );
+        assert!(!rows(&explanation["supports"])?.is_empty());
+        for support in rows(&explanation["supports"])? {
+            assert_eq!(support["producer"]["partition_id"], SOURCE_GRAPH_PARTITION);
+            let (proposals, accepted) = match support["origin"].as_str() {
+                Some("producer_entity") => ("entity_proposals", "accepted_entities"),
+                Some("producer_relation") => ("relation_proposals", "accepted_relations"),
+                _ => return Err("unexpected foundation support".into()),
+            };
+            assert!(rows(&native.records[proposals])?.contains(&support["proposal"]));
+            assert!(rows(&native.records[accepted])?.contains(&support["accepted"]));
+        }
+        let resolution = &receipt["evidence_resolution"];
+        assert_eq!(resolution["closure_complete"], true);
+        assert!(rows(&resolution["unresolved"])?.is_empty());
+        for (actual, retained) in [
+            ("evidence_records", "evidence"),
+            ("source_handles", "handles"),
+        ] {
+            for row in rows(&resolution[actual])? {
+                assert!(rows(&native.records[retained])?.contains(row));
+            }
+        }
+    }
+    assert!(
+        pending.is_empty(),
+        "every native selected record retains original support"
+    );
+    for row in rows(&origins["source_custody"])? {
+        assert_eq!(row["scope"], "primary");
+        assert!(rows(&native.records["handles"])?.contains(&row["handle"]));
+    }
+    let text = std::str::from_utf8(result.canonical_bytes())?;
+    assert!(!text.contains("project_store_root"));
+    assert!(!text.contains("StateCoreAccountDB = {}"));
+    for body in [STATE_TOC, STATE_LUA] {
+        assert!(!text.contains(&serde_json::to_string(body)?));
+    }
+    Ok(payload.clone())
+}
+
+#[test]
+fn retained_native_state_path_frontier_adds_exact_siblings_under_one_inspect_budget() -> TestResult
+{
+    let stop = AtomicBool::new(false);
+    let scratch = Scratch::new()?;
+    let input = scratch.root.join("state-input");
+    let (publisher, graph, reference, profile) =
+        owners_from_bundle(state_consumer_bundle(&input, &stop)?, &stop)?;
+    let store_root = scratch.root.join("registered-store");
+    let mut store = LiveProjectStore::create(&store_root, graph.snapshot().universe().as_str())?;
+    let publication = store.publish(&publisher, &graph, "fixture-context-frontier", None, &stop)?;
+    store.close()?;
+    drop(graph);
+    drop(publisher);
+    std::fs::remove_dir_all(&input)?;
+    assert!(!input.exists());
+    let native = retained_state_consumer(
+        &store_root,
+        &ReadSelector::Exact(publication.generation_id.clone()),
+        &stop,
+    )?;
+    let current = retained_state_consumer(&store_root, &ReadSelector::Current, &stop)?;
+    assert_eq!(native.records, current.records);
+    assert_eq!(native.current, current.current);
+    let roots = rows(&native.records["roots"])?;
+    let account = roots
+        .iter()
+        .find(|root| root["origin"]["scope"] == "account")
+        .ok_or("explicit account fixture root")?;
+    let character = roots
+        .iter()
+        .find(|root| root["origin"]["scope"] == "character")
+        .ok_or("explicit character fixture root")?;
+    let profile_path = rows(&account["paths"])?
+        .iter()
+        .find(|path| path["origin"]["keys"] == json!([{"kind":"string","value":"profile"}]))
+        .ok_or("exact native profile path")?;
+    let initial: GraphNodeId = serde_json::from_value(profile_path["node"]["node_id"].clone())?;
+    let frontier: GraphNodeId = serde_json::from_value(account["node"]["node_id"].clone())?;
+    let outside: GraphNodeId = serde_json::from_value(character["node"]["node_id"].clone())?;
+    let mut host_json = host_value(&store_root, &profile, &reference);
+    host_json["limits"]["max_context_work"] = json!(8_000_000);
+    host_json["limits"]["max_metadata_bytes"] = json!(4 * 1024 * 1024);
+    let host = decode_host(&host_json, &stop)?;
+    let baseline_request = exact_inspect_request(
+        &publication.generation_id,
+        ContextInspectLevel::L1,
+        ContextMapRoot::graph_entity(initial.as_str())?,
+        &profile,
+        &reference,
+    )?;
+    let baseline = execute_context_inspect(&host, &baseline_request, &stop)?;
+    assert_eq!(baseline.status(), ContextMapStatus::Partial);
+    assert_eq!(baseline.failure_code(), None);
+    let baseline_envelope: Value = serde_json::from_slice(baseline.canonical_bytes())?;
+    let baseline_payload = &baseline_envelope["payload"];
+    assert!(baseline_payload.get("expansion").is_none());
+    let expected = retained_state_frontier_views(
+        &store_root,
+        &publication.generation_id,
+        &initial,
+        &frontier,
+        &host,
+        &stop,
+    )?;
+    assert!(
+        rows(&baseline_payload["skeletons"]["l1"]["core"]["local_entities"])?
+            .contains(&account["node"]),
+        "frontier already belongs to the genuine initial map"
+    );
+    let request = baseline_request
+        .clone()
+        .with_frontier_expansion(vec![ContextMapRoot::graph_entity(frontier.as_str())?])?;
+    let result = execute_context_inspect(&host, &request, &stop)?;
+    let payload = assert_state_frontier_expansion(
+        &result,
+        baseline_payload,
+        &native,
+        &expected,
+        ContextMapStatus::Partial,
+    )?;
+    let held_bytes = payload["expansion"]["core"]["budget"]["bytes_reserved"]
+        .as_u64()
+        .ok_or("actual expansion reservation")?
+        .checked_add(u64::try_from(
+            wow_core::canonical_json_bytes(&payload["expansion"])?.len(),
+        )?)
+        .ok_or("expansion reservation overflow")?;
+    let envelope_bytes = u64::try_from(result.canonical_bytes().len())?;
+    assert!(
+        held_bytes + envelope_bytes
+            <= host_json["limits"]["max_metadata_bytes"]
+                .as_u64()
+                .ok_or("selected metadata bound")?
+    );
+    // Each retained stage and the envelope fit independently; their sum must
+    // still refuse when the final consumer would exceed the continuing ledger.
+    let envelope_limit = held_bytes + envelope_bytes / 2;
+    assert!(envelope_limit > held_bytes && envelope_limit > envelope_bytes);
+    let mut envelope_bound = host_json.clone();
+    envelope_bound["limits"]["max_metadata_bytes"] = json!(envelope_limit);
+    assert_inspect_refused(
+        &decode_host(&envelope_bound, &stop)?,
+        &request,
+        ServiceErrorCode::BudgetExceeded,
+        "closed",
+        &stop,
+    )?;
+    assert_eq!(
+        result.canonical_bytes(),
+        execute_context_inspect(&host, &request, &stop)?.canonical_bytes()
+    );
+    assert!(expected.added_entities > 0 && expected.added_relations > 0);
+    let items = rows(&payload["expansion"]["core"]["items"])?;
+    for sibling in rows(&account["paths"])? {
+        if sibling["node"] != profile_path["node"] {
+            let item = items
+                .iter()
+                .find(|row| row["kind"] == "entity" && row["node"] == sibling["node"])
+                .ok_or("exact newly admitted sibling")?;
+            assert_eq!(item["previously_selected"], false);
+            exact_rows(
+                &item["reasons"],
+                &[json!({"kind":"frontier_selection","root_id":frontier})],
+            )?;
+        }
+    }
+    assert!(
+        !items
+            .iter()
+            .any(|row| row["kind"] == "entity" && row["node"] == character["node"]),
+        "one round does not expand the new TOC-file neighbor"
+    );
+    for frontier_selection in [
+        Vec::new(),
+        vec![
+            ContextMapRoot::graph_entity(frontier.as_str())?,
+            ContextMapRoot::graph_entity(frontier.as_str())?,
+        ],
+        vec![ContextMapRoot::project("fixture-context-primary-map")?],
+        vec![ContextMapRoot::graph_entity(initial.as_str())?],
+    ] {
+        assert_eq!(
+            baseline_request
+                .clone()
+                .with_frontier_expansion(frontier_selection)
+                .err()
+                .ok_or("invalid frontier admitted")?
+                .code(),
+            ServiceErrorCode::InvalidRequest
+        );
+    }
+    let outside_request = baseline_request
+        .clone()
+        .with_frontier_expansion(vec![ContextMapRoot::graph_entity(outside.as_str())?])?;
+    assert_inspect_refused(
+        &host,
+        &outside_request,
+        ServiceErrorCode::InvalidRequest,
+        "closed",
+        &stop,
+    )?;
+    let work = baseline_payload["skeletons"]["work_reserved"]
+        .as_u64()
+        .ok_or("actual initial work")?;
+    assert!(work > 0);
+    let mut low = host_json.clone();
+    low["limits"]["max_context_work"] = json!(work);
+    let low_host = decode_host(&low, &stop)?;
+    let fits = execute_context_inspect(&low_host, &baseline_request, &stop)?;
+    assert_eq!(fits.status(), ContextMapStatus::Partial);
+    assert_eq!(
+        fits.failure_code(),
+        None,
+        "the actual initial operation fits this selected work bound"
+    );
+    assert_inspect_refused(
+        &low_host,
+        &request,
+        ServiceErrorCode::BudgetExceeded,
+        "closed",
+        &stop,
+    )?;
+    let mut low_bytes = host_json.clone();
+    low_bytes["limits"]["max_metadata_bytes"] = json!(1);
+    assert_inspect_refused(
+        &decode_host(&low_bytes, &stop)?,
+        &request,
+        ServiceErrorCode::BudgetExceeded,
+        "closed",
+        &stop,
+    )?;
+    assert_inspect_refused(
+        &host,
+        &request,
+        ServiceErrorCode::Cancelled,
+        "not_acquired",
+        &AtomicBool::new(true),
+    )?;
+    let after = retained_state_consumer(&store_root, &ReadSelector::Current, &stop)?;
+    assert_eq!(after.current, native.current);
+    assert_eq!(after.records, native.records);
+    assert_eq!(
+        baseline.canonical_bytes(),
+        execute_context_inspect(&host, &baseline_request, &stop)?.canonical_bytes()
+    );
+    if scratch.export {
+        let arguments = json!([
+            "context",
+            "inspect",
+            "--native-host-config",
+            scratch.root.join("host.json"),
+            "--project-store",
+            STORE_ID,
+            "--publication",
+            format!("store-generation:{}", publication.generation_id.as_str()),
+            "--root",
+            root_token(&initial),
+            "--level",
+            "l1",
+            "--l1-profile-id",
+            PRIMARY_L1_PROFILE_ID,
+            "--expansion-profile-id",
+            FRONTIER_PROFILE,
+            "--frontier",
+            root_token(&frontier),
+            "--platform",
+            "omitted",
+            "--expect-profile",
+            profile.profile_id().as_str(),
+            "--expect-reference-generation",
+            reference.generation_id(),
+            "--expect-reference-view",
+            reference.self_digest(),
+            "--output",
+            "envelope-json"
+        ]);
+        export_native_fixture(
+            &scratch,
+            &host_json,
+            &request,
+            &arguments,
+            &result,
+            "synthetic ordinary source-absent native state_path L1; one explicit account-root frontier",
+        )?;
+        write_export(
+            &scratch.root,
+            "initial-request.json",
+            &wow_core::canonical_json_bytes(&baseline_request)?,
+            64 * 1024,
+        )?;
+        write_export(
+            &scratch.root,
+            "initial-envelope.json",
+            baseline.canonical_bytes(),
+            CONTEXT_MAP_RESULT_MAX_BYTES,
+        )?;
+    }
+    assert!(!input.exists());
+    Ok(())
+}

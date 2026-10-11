@@ -40,6 +40,10 @@ const HELP: &str = concat!(
     "--root <exact-root-token> --level l0|l1|both\n",
     "  [--l0-profile-id wow-context/primary-l0/1|wow-context/primary-state-root-l0/1] ",
     "[--l1-profile-id wow-context/primary-l1/1]\n",
+    "  [--expansion-profile-id wow-context/primary-native-frontier/1 ",
+    "--frontier graph-entity@<base64url-id> ...]\n",
+    "  Expansion requires l1, an exact graph-entity@ root and 1..32 distinct frontiers; ",
+    "service validates initial-map membership. Inspect only.\n",
     "  Same omitted-platform, complete reference/current guards and envelope-json transport. ",
     "Default L0 accepts project@ or an exact container graph-entity@. Select ",
     "wow-context/primary-state-root-l0/1 for an exact SavedVariables state-root graph-entity@; ",
@@ -230,7 +234,9 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
         );
         let selected = match command {
             Command::Map => matches!(option, "--map-target" | "--map-profile-id"),
-            Command::Inspect => inspect::Options::accepts(option),
+            Command::Inspect => {
+                inspect::Options::accepts(option) || inspect::Options::accepts_expansion(option)
+            }
             Command::Build => inspect::Options::accepts(option) || build::Options::accepts(option),
         };
         if !common && !selected {
@@ -318,7 +324,11 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
                 }
                 set(&mut output, (), command)?;
             }
-            "--level" | "--l0-profile-id" | "--l1-profile-id" => {
+            "--level"
+            | "--l0-profile-id"
+            | "--l1-profile-id"
+            | "--expansion-profile-id"
+            | "--frontier" => {
                 inspect_options.option(option, &value, command)?;
             }
             "--context-profile-id" | "--renderer-profile-id" => {
@@ -639,7 +649,10 @@ mod tests {
 
     #[test]
     fn context_inspect_grammar_preserves_explicit_project_root() -> Result<(), &'static str> {
-        use wow_service::context::{PRIMARY_L0_PROFILE_ID, PRIMARY_STATE_ROOT_L0_PROFILE_ID};
+        use wow_service::context::{
+            PRIMARY_FRONTIER_EXPANSION_PROFILE_ID, PRIMARY_L0_PROFILE_ID,
+            PRIMARY_STATE_ROOT_L0_PROFILE_ID,
+        };
 
         let mut values = arguments();
         let command = values.get_mut(1).ok_or("missing fixture command")?;
@@ -729,6 +742,146 @@ mod tests {
             parse(state_root),
             Err("unsupported exact context L0 profile")
         ));
+
+        let mut expansion_base = values.clone();
+        let index = expansion_base
+            .iter()
+            .position(|value| value == "--l0-profile-id")
+            .ok_or("missing fixture L0 profile option")?;
+        expansion_base.drain(index..index + 2);
+        replace(&mut expansion_base, "--root", GRAPH_ROOT)?;
+        replace(&mut expansion_base, "--level", "l1")?;
+        let Request::Inspect(unexpanded) = parse(expansion_base.clone())?.request else {
+            return Err("inspect parser selected the wrong typed operation");
+        };
+        // Inert exact tokens only; native initial-map membership is not asserted here.
+        let frontier_b = format!(
+            "graph-entity@Z3JhcGgtbm9kZTpzaGEyNTY6{}Yg",
+            "YmJi".repeat(21)
+        );
+        let frontier_c = format!(
+            "graph-entity@Z3JhcGgtbm9kZTpzaGEyNTY6{}Yw",
+            "Y2Nj".repeat(21)
+        );
+        let expected = unexpanded
+            .clone()
+            .with_frontier_expansion(vec![parse_root(&frontier_b)?, parse_root(&frontier_c)?])
+            .map_err(|_| "expected inspect expansion request refused")?;
+        let mut expansion = expansion_base.clone();
+        push(
+            &mut expansion,
+            "--expansion-profile-id",
+            PRIMARY_FRONTIER_EXPANSION_PROFILE_ID,
+        );
+        push(&mut expansion, "--frontier", &frontier_c);
+        push(&mut expansion, "--frontier", &frontier_b);
+        let Request::Inspect(expanded) = parse(expansion.clone())?.request else {
+            return Err("inspect parser selected the wrong typed operation");
+        };
+        // Reverse argv order yields the same request as sorted exact frontier IDs.
+        assert_eq!(
+            serde_json::to_vec(&expanded).map_err(|_| "request serialization failed")?,
+            serde_json::to_vec(&expected).map_err(|_| "request serialization failed")?
+        );
+        let expected_unexpanded = ContextInspectRequest::primary(
+            "context-cli-store",
+            ContextMapPublication::Current,
+            wow_service::context::ContextInspectLevel::L1,
+            parse_root(GRAPH_ROOT)?,
+            None,
+            Some(
+                ContextMapReferenceGuard::new(PROFILE, REFERENCE_GENERATION, DIGEST)
+                    .map_err(|_| "expected inspect reference guard refused")?,
+            ),
+        )
+        .map_err(|_| "expected unexpanded inspect request refused")?;
+        assert_eq!(
+            serde_json::to_vec(&unexpanded).map_err(|_| "request serialization failed")?,
+            serde_json::to_vec(&expected_unexpanded).map_err(|_| "request serialization failed")?
+        );
+        let mut duplicate_frontier = expansion.clone();
+        push(&mut duplicate_frontier, "--frontier", &frontier_b);
+        assert!(matches!(
+            parse(duplicate_frontier),
+            Err("duplicate context inspect frontier")
+        ));
+        let mut duplicate_profile = expansion.clone();
+        push(
+            &mut duplicate_profile,
+            "--expansion-profile-id",
+            PRIMARY_FRONTIER_EXPANSION_PROFILE_ID,
+        );
+        assert!(matches!(
+            parse(duplicate_profile),
+            Err("duplicate context inspect option")
+        ));
+        let mut unknown_profile = expansion.clone();
+        replace(
+            &mut unknown_profile,
+            "--expansion-profile-id",
+            "wow-context/unreviewed-expansion/1",
+        )?;
+        assert!(matches!(
+            parse(unknown_profile),
+            Err("unsupported exact context expansion profile")
+        ));
+        let mut profile_only = expansion_base.clone();
+        push(
+            &mut profile_only,
+            "--expansion-profile-id",
+            PRIMARY_FRONTIER_EXPANSION_PROFILE_ID,
+        );
+        assert!(matches!(
+            parse(profile_only),
+            Err("context inspect expansion requires profile and frontier together")
+        ));
+        let mut frontier_only = expansion_base.clone();
+        push(&mut frontier_only, "--frontier", &frontier_b);
+        assert!(matches!(
+            parse(frontier_only),
+            Err("context inspect expansion requires profile and frontier together")
+        ));
+        let mut project_frontier = expansion.clone();
+        replace(&mut project_frontier, "--frontier", PROJECT_ROOT)?;
+        assert!(matches!(
+            parse(project_frontier),
+            Err("context inspect frontier requires graph-entity token")
+        ));
+        let mut own_root = expansion.clone();
+        replace(&mut own_root, "--frontier", GRAPH_ROOT)?;
+        assert!(matches!(
+            parse(own_root),
+            Err("context inspect frontier must exclude its initial root")
+        ));
+        let mut project_scope = expansion.clone();
+        replace(&mut project_scope, "--root", PROJECT_ROOT)?;
+        assert!(matches!(
+            parse(project_scope),
+            Err("context inspect expansion requires l1 and graph-entity root")
+        ));
+        for level in ["l0", "both"] {
+            let mut conflict = expansion.clone();
+            replace(&mut conflict, "--level", level)?;
+            assert!(matches!(
+                parse(conflict),
+                Err("context inspect expansion requires l1 and graph-entity root")
+            ));
+        }
+        for (flag, value) in [
+            (
+                "--expansion-profile-id",
+                PRIMARY_FRONTIER_EXPANSION_PROFILE_ID,
+            ),
+            ("--frontier", frontier_b.as_str()),
+        ] {
+            let mut build = expansion_base.clone();
+            *build.get_mut(1).ok_or("missing fixture command")? = "build".into();
+            push(&mut build, flag, value);
+            assert!(matches!(parse(build), Err("unknown context build option")));
+            let mut map = arguments();
+            push(&mut map, flag, value);
+            assert!(matches!(parse(map), Err("unknown context map option")));
+        }
 
         let arguments = parse(values)?;
         let Request::Inspect(request) = arguments.request else {
