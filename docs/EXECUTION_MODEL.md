@@ -1,101 +1,101 @@
 # Contributor execution and acceptance model
 
-**Status:** normative contributor process for humans and automated agents.
+**Status:** normative contributor process. The operational clarification of
+2026-10-11 removes global audit pauses and duplicate work, not product safety or
+acceptance requirements. Read this with `AGENTS.md`; package behavior, source
+safety and admitted compatibility contracts remain in force.
 
-This document separates fast functional implementation from milestone verification
-and final acceptance. Package contracts and source-authority rules remain normative
-for product behavior.
+## 1. Small context, one current task
 
-## 1. Agent context packet
+Start with `AGENTS.md`, this file, the current body of the canonical Issue, its
+latest claim, and the target owner's instructions/contracts. Read historical
+comments only for the exact evidence needed. Do not reconstruct the queue from
+old PR bodies, every audit or a chronological checkpoint diary.
 
-An implementation agent starts from the smallest sufficient context:
+The Issue identifies the goal, current bounded slice, inputs/outputs, owner paths,
+actual dependencies, nonclaims, validation and next code action. A later queue
+correction explicitly supersedes stale instructions; an old stop comment is not
+an additional gate. Do not recreate implemented owners because an old contract
+or audit says they are absent: reconcile the discrepancy first at that owner.
 
-```text
-AGENTS.md
-this execution model
-one canonical active GitHub Issue
-target owner package instructions/contracts
-exact external evidence required by that slice
-```
+Progress means a usable application capability or a demonstrated defect removed.
+Commit count, test count, agent count and new profile numbers are not progress
+metrics. Research ends in a decision or patch, not another general audit project.
 
-Do not make the agent read every historical PR, checkpoint diary, or full work map
-before coding. Historical records are evidence, not the active prompt.
-
-A work item is ready only when the Issue states:
-
-```text
-work package and bounded current slice
-manager/session label and one worktree
-exact remote base commit
-owned crates/modules/public contracts
-inputs, outputs and explicit nonclaims
-hard blockers and stop conditions
-Tier S affected owner chain
-functional completion criteria
-acceptance debt kept open
-lease expiry and heartbeat cadence
-```
-
-## 2. Canonical Issue and work states
-
-Every active work package has exactly one canonical Issue. A pull request is a
-mergeable code-review object, not a permanent ledger. When equivalent/newer code
-is already in `main`, transfer remaining debt to Issues and close the obsolete PR
-without merging its branch.
-
-Use these states:
-
-| State | Meaning |
-|---|---|
-| `specified` | Scope and dependency order exist; no implementation claim. |
-| `claimed` | One manager owns an exact base and bounded write lease. |
-| `functional` | Reachable owner/application path exists and Tier S passes. |
-| `verified` | Independent exact-head Tier M passes and evidence is retained. |
-| `accepted` | Required Tier A and Tier X gates for the selected scope pass. |
-| `closed` | Work is accepted or every remaining obligation moved to named Issues. |
-
-Never collapse `functional`, `verified`, and `accepted` into “done”. Publication,
-compilation, package acceptance, platform acceptance, runtime evidence and launch
-readiness are different claims.
-
-## 3. Writer ownership and lease
+## 2. One manager, one worktree, bounded ownership
 
 One integration manager owns one worktree and one write lease for the active
-slice. Worker agents may research, audit, review, or prepare patches, but do not
-independently publish overlapping changes to the same owner or contract.
+slice. Before editing, record in one claim:
 
-Before editing, post the claim described above. A normal transitional lease is at
-most two hours and is refreshed at publication or every 60–90 minutes. Release it
-explicitly when stopping.
+```text
+manager/session label and worktree
+exact remote base SHA
+owned paths/contracts and forbidden overlaps
+next integrated slice and functional outcome
+Tier S affected owner chain
+hard blockers / stop conditions
+lease expiry and heartbeat
+```
 
-Before publication, reread remote `main`:
+Normally a lease is at most two hours; refresh it on publication or every 60–90
+minutes, and release it when stopping. Workers can read, review or prepare
+patches but cannot publish overlapping owner/registry/replay/service changes.
+Separate managers require genuinely disjoint ownership, not different task names
+for the same files. Never overwrite another manager's unpublished state.
 
-- unchanged: publish through exact expected-head/CAS;
-- moved with disjoint compatible work: reconcile and rerun the gate;
-- overlapping or contract-changing work: stop and resolve ownership;
-- never force-push over another contributor.
+On crash/takeover, read remote HEAD, Quick and the current claim. Unpublished work
+is unverified, not disposable: inspect any surviving dirty worktree and retain
+its diff before reconciliation. Do not reset, clean, stash, or erase it. Use an
+identified patch/artifact only after reading it. Post takeover before writing;
+do not presume that missing chat context proves local files were lost.
 
-Until protected PR publication is enabled, direct-to-main is transitional
-single-writer mode, not permission for several agents to race.
+## 3. Parallelize useful work, not ceremonies
 
-### Crash and takeover
+The manager integrates one coherent patch at a time. Give each needed worker a
+distinct deliverable: exact source evidence, a counter/copy-cost table, an owned
+patch, or an independent review of the selected diff. Reuse completed findings.
+Do not spawn agents to fill slots or require every worker to repeat every audit.
+No fixed all-worker approval quorum or model switch is a prerequisite to coding.
 
-If the chat, host, worktree, or tool session disappears, a replacement manager:
+A worker returns: base SHA, evidence/file ranges, conclusion or patch, preserved
+invariants, checks and uncertainty. The manager resolves actual disagreements,
+integrates useful work and redirects redundant workers. Missing results block
+only the decision that genuinely depends on them.
 
-1. reads remote `main` and its latest quick result;
-2. reads the canonical Issue claim/log;
-3. assumes unpublished local state is lost;
-4. uses a patch/artifact only when its exact identity is recorded and read back;
-5. posts takeover/release before writing.
+While remote Quick is pending, the manager may read, review and prepare the next
+patch in the same owned worktree. The prohibition is on publishing the next
+product commit over pending/failed Quick, not on all productive work. Keep the
+next patch separate from the exact already-tested revision.
 
-A stale claim is not silently inherited. Do not guess what the previous agent
-“probably” changed.
+## 4. Scoped blockers and functional completion
 
-## 4. Validation tiers
+A hard blocker stops the consumer that requires the broken contract:
 
-### Tier S — functional slice
+- mixed/stale identities presented as exact;
+- missing evidence/support or unreachable required positive path;
+- fabricated endpoint, runtime claim or clean negative;
+- invalid relation definitions or broken admitted replay/migration;
+- unsafe/unbounded materialization;
+- overlapping writer ownership.
 
-Run after each coherent implementation slice:
+Name the consumer, evidence and unblock condition. An open Issue is not by itself
+a global lock. A corpus exceeding a selected bound blocks that full-corpus claim;
+it need not block independent code on an explicitly bounded representative input.
+A subset never becomes evidence of complete roots/dependencies or full-mirror fit.
+Missing candidate validation still blocks publication that requires the candidate.
+
+Separate bounded functional unblock from final composed-corpus acceptance. Do not
+require unfinished producers to pass final capacity qualification before coding
+them. Equally, do not close acceptance debt just to resume implementation. Keep
+actual incompatible interfaces blocked; work on independent paths meanwhile.
+
+The current W17 queue is Issue #106. Its immediate capacity repair is #121;
+final corpus qualification remains #113. Read their current bodies, not copied
+historical SHAs or obsolete ordering in an audit index.
+
+## 5. Validation: code first, smallest sufficient gate
+
+### Tier S — coherent functional slice
 
 ```text
 cargo xtask check
@@ -104,193 +104,139 @@ cargo check --locked -p <affected crates> --all-targets --all-features
 cargo clippy --locked -p <affected crates> --all-targets --all-features -- -D warnings
 ```
 
-Use the smallest complete owner chain. Widen when a shared public type, wire
-schema, graph registry, persistence layout, migration boundary, or service/app
-composition changes. Do not run workspace tests, release tests, strict rustdoc,
-and a second full build after every micro-slice.
+Use the smallest complete affected owner chain. Widen for actual shared public
+wire/registry/store/migration/application changes. Preserve existing tests; use an
+existing focused reproduction when checking a concrete defect. Do not expand
+whole fixture matrices or repeat workspace/release tests, rustdoc and another
+full build after every internal counter or helper change. Build an executable
+when needed to run changed code, not because unrelated documentation changed.
+Record tests not run; compile-only is never behavioral proof.
 
-Tier S passes before publication. Do not stack another product commit while the
-current `main` quick gate is pending or failed. A failed quick gate blocks further
-product publication until repaired on the observed head.
+Tier S passes before product publication. A pending/failed current-head Quick
+blocks another product publication until resolved. Local tool absence is an
+explicit limitation, never a pass; use available exact-head verification rather
+than inventing a successful local run.
 
-### Tier M — milestone exact-head gate
+### Tier M — exact-head verification
 
-At a coherent functional milestone, run the lightweight remote workflow on the
-exact published head:
+The existing Quick workflow checks repository policy, formatting, workspace
+compilation and strict Clippy and retains commit/tree/toolchain evidence. Retain
+its exact result. This is independent build evidence, not package acceptance.
+Do not add another checkpoint workflow for each slice.
 
-```text
-cargo xtask check
-cargo fmt --all --check
-cargo check --locked --workspace --all-targets --all-features
-cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
-```
+### Tier A — functional milestone acceptance
 
-Retain commit/tree/toolchain and actual outcomes. Tier M is independent build
-evidence, not full behavioral acceptance.
+After the chosen functional scope is ready, run the required debug/release tests,
+rustdoc, Linux/Windows matrix, real application pipelines, fixture/checksum freeze,
+fault/cancellation/update/removal and persistence/reopen cases. Tests must reach
+the advertised consumer, not just an analyzer sidecar. Preserve failures; do not
+weaken expectations or auto-bless identities to produce a green result.
 
-### Tier A — package acceptance
+### Tier X — current/external/runtime acceptance
 
-Run once when the selected product scope is functionally ready, or when explicitly
-requested:
+Use the same flavor, exact Gethe revision, admitted corpus and normalization on
+both sides of the required Ketho and **WoW API Ketho MCP** comparison. Retain a
+discrepancy matrix and named-client runtime evidence where static facts cannot
+answer. Missing tooling, credentials, source or runtime remains `NotEvaluated`.
+No final semantic or launch claim bypasses its named external/runtime gates.
 
-```text
-workspace debug tests
-workspace release tests where required
-strict rustdoc
-selected Linux/Windows matrix
-real CLI/application pipeline fixtures
-fixture/checksum/identity freeze
-fault, cancellation and persistence compatibility cases
-```
+## 6. Measurement without a new subsystem
 
-The heavyweight manual CI lane owns this tier. Failure returns the package to
-`functional`; do not weaken fixtures or relabel gaps.
+For a slow/refusing path, first locate its actual stage and existing counters.
+Reuse typed owner reports, existing census commands and counting sinks. A bounded
+diagnostic records phase time, counts, charged bytes/method and the refusal;
+unreached phases remain `NotEvaluated`. Report all safely available counts, not
+one guessed next limit. Diagnostic output must not leak source text, host paths
+or private context or silently alter persisted semantic output.
 
-### Tier X — current/external/runtime qualification
+A fail-fast crossing is a lower bound at interruption, not final required size.
+Distinguish estimates, serialized bytes, retained allocation and OS sampled peak.
+Do not call every charged copy a bug or remove accounting without a valid bound.
+Measure before claiming CPU, memory, compilation or a specific algorithm is the
+bottleneck. Record phase wall times; mark unavailable telemetry as unmeasured.
 
-Run only where the contract requires it:
+After two failures of the same hypothesis, write a short correction in the same
+Issue: evidence, failed assumption and next code change. Do not restart an entire
+research programme. A further expensive run needs a changed, named hypothesis.
 
-```text
-one freshly resolved exact Gethe revision
-native Ketho donor/parity comparison
-WoW API Ketho MCP discrepancy matrix
-named-client WoW runtime probes
-external consumer or distribution evidence
-```
+Prefer the smallest supported repair: reuse an existing bounded owner, eliminate
+a demonstrated redundant copy, stream through an existing bounded sink, or select
+an existing finite capacity with justified headroom. A new general profiler,
+cache, checkpoint system or sharding architecture is not a default prerequisite.
+Sharding requires measured need and an explicit cross-package semantics decision.
 
-Use the same flavor, exact source revision, admitted corpus, and normalization
-profile on both sides. Missing tooling/runtime is `NotEvaluated`, never pass.
+## 7. Source batches, reuse and compatibility
 
-## 5. Current-source routing
+Resolve current Gethe/Ketho selectors only when correctness needs current source
+or Tier X. Generic process, CI, graph mechanics and store work do not require
+unrelated source acquisition. Follow all `AGENTS.md` source-as-data restrictions
+and existing materializers; never execute donor Lua/scripts or reset foreign state.
 
-Resolve moving Gethe/Ketho/client selectors only when correctness depends on
-current WoW source/API semantics or the Issue explicitly requires Tier X.
-Generic process, documentation, store, graph-mechanics, CI, and branch work must
-not contact unrelated source providers.
+A diagnostic batch may pin one recorded revision/profile/input set across
+hypothesis changes. Record each changed request; such attempts are not fresh
+current-source qualifications. Re-resolve for the next qualification or when the
+source itself is the changed input. Do not rerun source/analyzer work merely due
+to an unrelated documentation SHA.
 
-When current source is required, resolve the selector once at operation start,
-record the exact revision, and read all relevant docs/implementation/XML/TOC from
-that same revision. Re-resolve later; do not hard-code moving truth.
+Reuse an acquired immutable view only while all required source/configuration/
+report identities remain valid. If reuse is unavailable, record it and rebuild
+honestly; do not create a persistent cache or relabel reports just for measurement.
 
-The native Ketho annotation driver is required for annotation,
-source-normalization/type-lowering changes or named parity gates. A project/graph
-source-universe structural task uses its exact manifest and owner contract unless
-the Issue specifically requires the annotation driver.
+Classify touched limits by actual behavior: output-changing budget, fail-fast
+execution ceiling or implementation invariant. This classification is a design
+aid, not permission to remove currently admitted digest/replay fields. Such a
+change needs its own consumer/compatibility proof. Diagnostic-only observations
+do not require a new persisted schema. Preserve exact existing wire bytes when
+claiming backward compatibility.
 
-## 6. Hard blockers and acceptance debt
+Mint a profile/schema/replay/storage version only for changed bytes, interpretation
+or admitted compatibility, naming the real consumer. Consolidate transient
+unreleased variants deliberately, not by dropping durable readers. Do not create
+an aggregate `/N+1` for each internal stage of an already selected capability set.
 
-A hard blocker stops dependent implementation:
+## 8. Publication, compact evidence and work states
 
-- contradictory owner/wire semantics;
-- missing identity, evidence, support, or a reachable positive path;
-- broken admitted migration/replay compatibility;
-- stale/ambiguous generation presented as exact;
-- fabricated endpoint or false negative authority;
-- a selected real corpus that cannot fit the claimed bounded profile;
-- unresolved concurrent ownership;
-- a downstream named query/axis that cannot bind the actual registry.
+Before publication reread remote `main`. Publish only an authorized coherent
+change through expected-head/CAS, without force. Reconcile a moved head; rerun the
+applicable checks for the reconciled tree. Direct-to-main remains transitional
+single-writer mode until protected PR publication is enabled.
 
-Acceptance debt may remain only when it cannot change the consumed contract.
-Examples: later Windows/runtime qualification, performance measurement, broad
-corpus coverage, and additional near-negative fixtures. Track it in a named Issue
-and keep the relevant package/launch gate blocked.
+Verify the remote commit/tree and changed blob identities plus the named Quick
+result. An exact Git readback can verify the tree; do not require both individual
+blob refetches and a full artifact download on every ordinary slice. Download and
+inspect artifacts when needed for a discrepancy, recovery or milestone review.
+Never label an unchecked artifact verified. Preserve milestone evidence beyond
+short artifact expiry, with immutable identifiers and actual outcomes.
 
-## 7. Failure-loop rule
-
-After two failed attempts at the same approach, stop and record:
-
-```text
-attempts and exact failures
-assumption that failed
-owners/contracts touched
-evidence that invalidated the route
-new route or explicit blocker
-```
-
-Do not keep adding exceptions around a broken owner contract. Update/create a
-blocking Issue before continuing dependent work.
-
-## 8. Slice and version discipline
-
-A slice implements one coherent owner responsibility and its minimum downstream
-handoff. Do not create a commit merely to update prose or increment a profile.
-
-Mint a new schema/profile/storage/replay version only when bytes, identity inputs,
-interpretation, persistence, or compatibility behavior change. A commit number is
-not a schema version. Name the actual consumer and migration/reopen obligation.
-
-Classify every retained version as:
+Keep one editable current-status/claim comment and one concise milestone result:
 
 ```text
-released/external
-persisted and admitted
-frozen fixture
-transient unreleased development variant
+base -> result SHA / exact Quick result
+capability or defect changed
+next code action and ownership
+measured stage/counter outcome, or unmeasured
+checks run / not run
+remaining blocker or acceptance Issue
+lease and worker handoff
 ```
 
-Consolidate transient variants before acceptance. Do not create a monotonically
-increasing aggregate profile for every internal stage when explicit capability
-composition or one selected final profile is the real product contract.
+Do not recopy detailed hashes, every check and every nonclaim into the Issue,
+work map, status file and a new audit. Hot work maps route to the canonical Issue;
+update capability/completion documents at a meaningful milestone. A process-only
+change must name its product unblock and cannot automatically reset product work.
 
-A slice is functionally complete only when:
+States remain distinct:
 
-- the intended positive path is reachable through the owning application route;
-- dynamic, ambiguous, incomplete, budget, and cancellation cases are conservative;
-- Tier S passes;
-- exact-head/CAS publication and read-back succeed;
-- the Issue receives one concise state/evidence update.
+- `specified` / `claimed`: scope exists / an identified manager owns the work;
+- `functional`: required owner/application path exists and Tier S passed;
+- `verified`: independent exact-head Tier M passed;
+- `accepted`: selected Tier A and required Tier X passed;
+- `closed`: scope accepted or explicitly transferred obligations to named Issues;
+- `launch-ready`: the separate named launch gate passed.
 
-## 9. Documentation and evidence
-
-Keep hot routing concise:
-
-- `PROJECT_WORK_MAP.md`: exact current verified head, one active Issue, blockers,
-  dependencies, next 3–5 slices, links to backlog/evidence;
-- `IMPLEMENTATION_STATUS.md`: executable capability census and nonclaims;
-- `PROJECT_COMPLETION_MATRIX.md`: package/launch states and named blockers;
-- canonical Issue: current work log and acceptance debt;
-- historical evidence: bounded checkpoint file, Issue comment, or workflow artifact.
-
-Do not repeat the same test count, profile ladder, toolchain text, and nonclaims in
-several documents after each commit. Preserve unique future task specifications
-before closing/deleting old PR branches.
-
-Milestone evidence must remain recoverable after short workflow-artifact expiry.
-Record immutable commit/tree/toolchain/artifact digest in the Issue or checkpoint,
-or retain the artifact long enough for the selected review lifecycle.
-
-## 10. Publication, PRs, and branches
-
-Publish only a coherent authorized slice. Read back:
-
-```text
-remote commit SHA
-remote tree SHA
-changed blob identities
-named workflow/check outcome
-```
-
-A local commit, detached object, patch, or download is not branch publication. A
-published commit is not verified until its gate passes.
-
-Issues are canonical trackers. PRs contain code intended to merge. Never merge an
-obsolete specification branch after equivalent/newer code is in `main`. Close it
-after transferring debt, then archive/read back history and delete only reconciled
-branches. Unreconciled history remains explicit.
-
-Protect `main` from force-push/deletion and require linear history. When PR-based
-publication is enabled, require the lightweight gate, not the heavyweight
-acceptance matrix, before merge.
-
-## 11. Completion rule
-
-Report only:
-
-```text
-functional   — application path exists and Tier S passed
-verified     — exact-head Tier M passed
-accepted     — selected Tier A and required Tier X passed
-launch-ready — named launch gate independently closed
-```
-
-Anything else names the missing gate, blocker, or follow-up Issue.
+PRs are mergeable code review, not permanent journals for code already in `main`.
+Preserve unique specifications and move remaining debt before closing stale PRs
+without merge. Delete only explicitly authorized, reconciled branches after safe
+history retention/readback. Keep protection of `main` against force/deletion and
+the transition to protected PRs in the control-plane owner, not a recurring
+unrelated detour for every product slice.
