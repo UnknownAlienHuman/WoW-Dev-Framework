@@ -159,8 +159,14 @@ pub struct XmlDocumentIndex {
     source_digest: ContentDigest<SourceContent>,
     elements: Vec<XmlElementRecord>,
     digest: ContentDigest<CanonicalResult>,
+    /// Single-tokenizer observation. Not part of index/load encoding or identity.
+    #[serde(skip)]
+    outside_script_non_whitespace: bool,
 }
 impl XmlDocumentIndex {
+    pub(crate) const fn outside_script_content_clear(&self) -> bool {
+        !self.outside_script_non_whitespace
+    }
     #[must_use]
     pub fn document(&self) -> &str {
         &self.document

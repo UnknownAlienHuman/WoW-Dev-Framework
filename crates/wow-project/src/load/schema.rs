@@ -3,6 +3,7 @@
 mod budget;
 pub mod classification;
 mod components;
+pub(crate) mod members;
 mod model;
 mod names;
 

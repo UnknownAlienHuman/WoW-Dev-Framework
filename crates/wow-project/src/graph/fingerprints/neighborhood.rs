@@ -421,36 +421,13 @@ pub(super) fn build_direct_neighborhood_components(
     {
         return Err(invalid());
     }
-    let packages = direct
-        .project()
-        .configuration()
-        .platform_packages()
-        .ok_or_else(invalid)?;
-    let load = packages.load_plan();
-    if !load.coverage().complete() {
+    // No legacy error/coverage exception: consume the independent sealed native census.
+    let xml_census = super::xml_census::admit(direct, retained, stop)?;
+    if match xml_census {
+        Some(proof) => !proof.is_for(direct, stop)?,
+        None => true,
+    } {
         global = Some(FunctionNeighborhoodUnavailable::IncompleteXmlScope);
-    }
-    for package in load.packages() {
-        crate::analyzer::checkpoint(stop)?;
-        let plan = load.package_plan(&package.package).ok_or_else(invalid)?;
-        for issue in plan.issues() {
-            crate::analyzer::checkpoint(stop)?;
-            retained
-                .charge_serialized(&("neighborhood-load-issue", issue.blocks_complete), stop)?;
-            if issue.blocks_complete {
-                global = Some(FunctionNeighborhoodUnavailable::IncompleteXmlScope);
-            }
-        }
-        for document in plan.xml_documents().values() {
-            for element in document.elements() {
-                crate::analyzer::checkpoint(stop)?;
-                retained
-                    .charge_serialized(&("neighborhood-xml-health", element.issues.len()), stop)?;
-                if !element.issues.is_empty() {
-                    global = Some(FunctionNeighborhoodUnavailable::IncompleteXmlScope);
-                }
-            }
-        }
     }
     let mut sources = BTreeMap::new();
     for source in direct.source().script_sources() {

@@ -182,10 +182,10 @@ output; native configuration, analyzer report and replay remain unchanged.
 The selected manifest schema is
 `wow-project/function-fingerprint-records/selected-components/1`. Its explicit
 `selected_components` receipt retains optional native `physical_declarations`
-and `physical_signatures`, plus optional query `package_load_role` and
-`direct_neighborhood`, each with its exact recipe. With signatures and both query
-components absent, previous manifest bytes remain; an unselected role retains
-`not_selected`.
+and `physical_signatures`, plus optional query `package_load_role`,
+`direct_neighborhood` and `composite`, each with its exact recipe. With signatures
+and all query components absent, previous manifest bytes remain; an unselected
+role retains `not_selected`.
 
 Comparable data is static selected-package root status, known LoadOnDemand state,
 package phase/reachability and physical Lua role groups with exact occurrence
@@ -242,17 +242,62 @@ query omits both new receipt/binding fields and retains `"not_selected"` rows.
 Library calls are outside this recipe; unsupported self-recursion suppresses its
 selected root. Uncaptured/unresolved/indeterminate calls suppress all selected
 roots because incoming absence is unknown. Parse failures and scope conflicts
-suppress comparison. Incomplete native load/XML health, unresolved ReferenceOnly
-queries or inherited/method blockers prevent a closed XML census; Possible incoming
-XML bindings suppress the affected root. Inline/external and virtual-handler roots
-are outside this physical-function recipe. Broad Calls/SetsScript coverage and
-overall fingerprints remain Partial even when a finite component is comparable.
+suppress comparison. Inline/external and virtual-handler roots are outside this
+physical-function recipe. Broad Calls/SetsScript and manifest coverage stay Partial.
+
+### Native XML member/parent census
+
+`load/schema/members.rs` proves instance placement against the same sealed native
+catalog: a unique expanded global root, exact declaration/type/member/parent hops,
+ordered Sequence/Choice with optional/single particles, unique group references
+and complex-content extension. Attribute/group references prove only declared
+presence/use, never typed value validity. All alternatives require supported
+types; repetition/All, wildcards, restrictions, typed-value/default controls,
+non-false mixed/nillable/abstract flags, external dependencies, unknown names,
+ambiguous placement and cycles remain unavailable. This finite permission is
+separate from the whole-type shape recipe.
+
+`fingerprints/xml_census.rs` requires complete variant/dependency/order selection,
+reachable native file enumeration, Included target joins and a witness for every
+XML occurrence. Qualified source/site sets, package binding addresses, exact
+lookup query union, unique Main function targets and Derived binding sets must
+agree. Explicit `parent_reference`, `parent_key`, `parent_array`, `inherits` and
+`mixins`, inherited/method/inline/external handlers and uncertain/Library/Possible
+targets cannot establish that census.
+The proof stays bound to the same project/generation/catalog; it neither filters
+legacy issues nor reinterprets `file_closure_complete` or legacy Partial coverage.
+Missing permission/enumeration makes the neighborhood Unavailable, never a clean
+zero degree. Existing native row/work/depth guards and cancellation remain.
 
 The original cumulative metadata ledger charges scanned inputs, temporary indexes,
 accepted-pair insertions, shared binding, selected rows and final output; all loops
 remain cancellable. It grants no second allowance or new ceiling. This optional
 query changes no native producer, replay or storage catalog. Final acceptance
 remains pending.
+
+## Selected five-component composite
+
+`FunctionFingerprintSelection::with_composite(FunctionCompositeRecipe::FiveCompleteComponentsV1)`
+selects `wow-project/physical-function-composite/five-complete-components/1`.
+Native `build_platform_function_fingerprints_with_composite` consumes the existing
+record components; it selects no missing producer or query prerequisite.
+All five typed component digests must be complete, in fixed order: indexed
+signature, declaration/body shape, composed direct neighborhood, exact source
+span, selected physical package/load role. Otherwise `composite` is Unavailable
+with ordered `incomplete_components`, no digest and the original component reasons.
+
+SHA-256 framing is the composite recipe/domain UTF-8 plus NUL, count:u8=5, then
+ordinals:u8=1..5; each part carries recipe length:u64 BE and UTF-8, digest-domain
+length:u64 BE and UTF-8, then its existing raw 32-byte digest. Only these fixed
+recipe/domain/digest parts enter comparison; exact IDs, support and generation
+bindings remain separate. Exact source-span content still changes with comments.
+
+Manifest `selected_components.composite` and each selected record's `composite`
+retain the receipt/output; absence omits both new fields from prior wire recipes.
+The same live metadata ledger charges component inputs, unavailable/available
+output and final envelope, with cancellation. An Available composite does not
+upgrade Partial manifest coverage or prove entity identity, lineage, semantic/
+runtime equivalence or #118 acceptance.
 
 ## Selection, support and bounds
 

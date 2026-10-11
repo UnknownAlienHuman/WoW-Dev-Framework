@@ -163,32 +163,59 @@ fn selected_declared_headers_compose_with_xml_classification_and_exact_catalog()
     Ok(())
 }
 
+mod xml_enumeration;
+
 fn classification_fixture(xsd: &str) -> TestResult<(FixtureRoot, Value)> {
+    classification_fixture_members(xsd, CLASSIFICATION_XML, None, None)
+}
+
+fn classification_fixture_members(
+    xsd: &str,
+    xml_text: &str,
+    lua: Option<&str>,
+    toc: Option<&str>,
+) -> TestResult<(FixtureRoot, Value)> {
+    classification_fixture_schema_members(&[("UI/classification.xsd", xsd)], xml_text, lua, toc)
+}
+
+fn classification_fixture_schema_members(
+    schema_members: &[(&str, &str)],
+    xml_text: &str,
+    lua: Option<&str>,
+    toc: Option<&str>,
+) -> TestResult<(FixtureRoot, Value)> {
     use wow_project::load::schema::XmlSchemaComponentKind as Kind;
     use wow_project::load::schema::{
         XmlSchemaMemberSelection, XmlSchemaSelection, admit_xml_schema, classification::*,
     };
 
     let (root, mut config) = fixture()?;
-    std::fs::write(root.0.join("UI/frames.xml"), CLASSIFICATION_XML)?;
-    std::fs::write(root.0.join("UI/classification.xsd"), xsd)?;
+    std::fs::write(root.0.join("UI/frames.xml"), xml_text)?;
     let mut manifest: Value =
         serde_json::from_slice(&std::fs::read(root.0.join("manifest.json"))?)?;
     let files = manifest["files"].as_array_mut().ok_or("manifest files")?;
-    let xml = files
-        .iter_mut()
-        .find(|file| file["path"] == "UI/frames.xml")
-        .ok_or("fixture XML member")?;
-    xml["bytes"] = json!(CLASSIFICATION_XML.len());
-    xml["content_sha256"] = json!(format!(
-        "{:x}",
-        Sha256::digest(CLASSIFICATION_XML.as_bytes())
-    ));
-    files.push(
-        json!({"path":"UI/classification.xsd","kind":"schema","bytes":xsd.len(),
-        "git_blob_algorithm":"sha1","git_blob_id":"2".repeat(40),
-        "content_sha256":format!("{:x}",Sha256::digest(xsd.as_bytes()))}),
-    );
+    // All changed members precede native source/catalog/profile admission.
+    // Never relabel a sealed catalog after changing its source manifest.
+    for (path, text) in [
+        ("UI/frames.xml", Some(xml_text)),
+        ("UI/main.lua", lua),
+        ("UI/Fixture.toc", toc),
+    ] {
+        let Some(text) = text else { continue };
+        std::fs::write(root.0.join(path), text)?;
+        let member = files
+            .iter_mut()
+            .find(|file| file["path"] == path)
+            .ok_or("fixture member")?;
+        member["bytes"] = json!(text.len());
+        member["content_sha256"] = json!(format!("{:x}", Sha256::digest(text.as_bytes())));
+    }
+    for &(path, text) in schema_members {
+        std::fs::write(root.0.join(path), text)?;
+        files.push(json!({"path":path,"kind":"schema","bytes":text.len(),
+            "git_blob_algorithm":"sha1","git_blob_id":"2".repeat(40),
+            "content_sha256":format!("{:x}",Sha256::digest(text.as_bytes()))}));
+    }
     files.sort_by(|a, b| a["path"].as_str().cmp(&b["path"].as_str()));
     let total = files
         .iter()
@@ -197,9 +224,9 @@ fn classification_fixture(xsd: &str) -> TestResult<(FixtureRoot, Value)> {
                 .checked_add(file["bytes"].as_u64().ok_or("member bytes")?)
                 .ok_or("fixture byte sum")?)
         })?;
-    assert_eq!(files.len(), 5);
-    manifest["coverage"] = json!({"tracked_files":5,"included_files":5,"excluded_files":0,
-        "included_bytes":total,"kind_version":1,"kind_lua":1,"kind_toc":1,"kind_xml":1,"kind_schema":1});
+    assert_eq!(files.len(), 4 + schema_members.len());
+    manifest["coverage"] = json!({"tracked_files":files.len(),"included_files":files.len(),"excluded_files":0,
+        "included_bytes":total,"kind_version":1,"kind_lua":1,"kind_toc":1,"kind_xml":1,"kind_schema":schema_members.len()});
     manifest
         .as_object_mut()
         .ok_or("manifest object")?
@@ -234,11 +261,16 @@ fn classification_fixture(xsd: &str) -> TestResult<(FixtureRoot, Value)> {
         profile_digest: receipt.profile_digest(),
         content_manifest_digest: receipt.content_manifest_digest(),
         admission_digest: receipt.admission_digest(),
-        members: vec![XmlSchemaMemberSelection {
-            path: "UI/classification.xsd".into(),
-            content_digest: digest(xsd.as_bytes()),
-            byte_length: u64::try_from(xsd.len())?,
-        }],
+        members: schema_members
+            .iter()
+            .map(|&(path, text)| -> TestResult<XmlSchemaMemberSelection> {
+                Ok(XmlSchemaMemberSelection {
+                    path: path.into(),
+                    content_digest: digest(text.as_bytes()),
+                    byte_length: u64::try_from(text.len())?,
+                })
+            })
+            .collect::<TestResult<Vec<_>>>()?,
     };
     let catalog = Arc::new(admit_xml_schema(&source, &schema_selection, &stop)?);
     assert!(catalog.issues().is_empty(), "{:?}", catalog.issues());

@@ -51,6 +51,8 @@ pub(super) fn parse(
         }
         let empty = matches!(&event, Event::Empty(_));
         let mut record = Record::new(Kind::XmlElement, start, end);
+        // XML element/site permission is proved separately from the same native index.
+        record.file_enumeration_complete = true;
         match event {
             Event::Start(element) | Event::Empty(element) => {
                 if stack.len() >= 64 || element.name().as_ref().len() > 256 {
@@ -112,10 +114,12 @@ pub(super) fn parse(
                     && matches!(name, b"Include" | b"Script");
                 if is_ui {
                     if extra_attributes || file.is_some() {
+                        record.file_enumeration_complete = false;
                         record.issues.push(Issue::UnsupportedXmlAttributes);
                     }
                 } else if load_element {
                     if extra_attributes {
+                        record.file_enumeration_complete = false;
                         record.issues.push(Issue::UnsupportedXmlAttributes);
                     } else if let Some(file) = file {
                         let xml = name == b"Include";
@@ -123,14 +127,18 @@ pub(super) fn parse(
                             record.kind = if xml { Kind::XmlFile } else { Kind::LuaFile };
                             record.target = Some(file);
                         } else {
+                            record.file_enumeration_complete = false;
                             record.issues.push(Issue::UnsupportedFileKind);
                         }
                     } else if name == b"Script" {
                         record.issues.push(Issue::InlineLuaNotAnalyzed);
                     } else {
+                        record.file_enumeration_complete = false;
                         record.issues.push(Issue::UnsupportedXmlAttributes);
                     }
                 } else {
+                    record.file_enumeration_complete =
+                        ui_namespace && !name.contains(&b':') && file.is_none();
                     record
                         .issues
                         .push(if !ui_namespace || name.contains(&b':') {
@@ -164,7 +172,7 @@ pub(super) fn parse(
                 record.kind = Kind::XmlEnd;
             }
             Event::Text(text) => {
-                index.literal(start, end)?;
+                index.literal(start, end, stop)?;
                 record.kind = Kind::XmlText;
                 let nonempty = text.iter().any(|b| !b.is_ascii_whitespace());
                 if nonempty {
@@ -184,7 +192,7 @@ pub(super) fn parse(
                 {
                     return Err(invalid("XML CDATA source span does not match its token"));
                 }
-                index.literal(start + 9, end - 3)?;
+                index.literal(start + 9, end - 3, stop)?;
                 record.kind = Kind::XmlText;
                 record.issues.push(Issue::InlineLuaNotAnalyzed);
             }
@@ -197,7 +205,7 @@ pub(super) fn parse(
                 let encoded = format!("&{name};");
                 let value = quick_xml::escape::unescape(&encoded)
                     .map_err(|_| invalid("custom XML entities are disabled"))?;
-                index.entity(&value, start, end)?;
+                index.entity(&value, start, end, stop)?;
                 record.kind = Kind::XmlText;
                 record.issues.push(Issue::InlineLuaNotAnalyzed);
             }

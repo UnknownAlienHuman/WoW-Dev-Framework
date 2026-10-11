@@ -160,9 +160,15 @@ pub struct ProjectLoadPlan {
     digest: ContentDigest<CanonicalResult>,
     #[serde(skip)]
     captured_sources: Arc<BTreeMap<String, Arc<str>>>,
+    /// Independent tokenizer/acquisition observation; never a legacy error filter.
+    #[serde(skip)]
+    native_file_enumeration_complete: bool,
 }
 
 impl ProjectLoadPlan {
+    pub(crate) const fn native_file_enumeration_complete(&self) -> bool {
+        self.native_file_enumeration_complete
+    }
     #[must_use]
     pub const fn digest(&self) -> ContentDigest<CanonicalResult> {
         self.digest
@@ -502,6 +508,7 @@ fn read_toc_source(
         xml_nodes: 0,
         xml_attributes: 0,
         xml_segments: 0,
+        native_file_enumeration_complete: true,
     };
     let path = selected_toc.path();
     let text = loader.capture(selected_toc)?;
@@ -578,6 +585,7 @@ fn read_toc_source(
             xml_references,
             digest,
             captured_sources: Arc::new(loader.captured),
+            native_file_enumeration_complete: loader.native_file_enumeration_complete,
         },
     })
 }
@@ -597,6 +605,7 @@ struct Loader<'a> {
     xml_nodes: usize,
     xml_attributes: usize,
     xml_segments: usize,
+    native_file_enumeration_complete: bool,
 }
 
 impl Loader<'_> {
@@ -685,6 +694,7 @@ impl Loader<'_> {
         }
         self.active.insert(document.to_owned());
         for mut record in parsed {
+            self.native_file_enumeration_complete &= record.file_enumeration_complete;
             record.bootstrap |= bootstrap;
             checkpoint(self.stop)?;
             if self.records.len() >= MAX_RECORDS {
@@ -720,6 +730,7 @@ impl Loader<'_> {
                 continue;
             };
             if self.active.contains(&target) {
+                self.native_file_enumeration_complete = false;
                 self.issue(
                     LoadIssueKind::IncludeCycle,
                     document,
@@ -731,6 +742,7 @@ impl Loader<'_> {
             if self.captured.contains_key(&target) {
                 // Occurrences remain in the plan; the analyzer only registers one
                 // immutable physical file. Repeated execution is not certified.
+                self.native_file_enumeration_complete = false;
                 self.issue(
                     LoadIssueKind::RepeatedLoad,
                     document,
@@ -744,6 +756,7 @@ impl Loader<'_> {
             let content = match self.capture(&ProjectDiskFile::new(&target)) {
                 Ok(content) => content,
                 Err(error) if error.code() == ProjectErrorCode::MissingDeclaredFile => {
+                    self.native_file_enumeration_complete = false;
                     self.issue(
                         LoadIssueKind::MissingFile,
                         document,
@@ -816,6 +829,7 @@ struct Record {
     metadata: Option<TocMetadata>,
     issues: Vec<LoadIssueKind>,
     saved_variables: Vec<TocSavedVariable>,
+    file_enumeration_complete: bool,
 }
 impl Record {
     fn new(kind: LoadRecordKind, start: usize, end: usize) -> Self {
@@ -831,6 +845,7 @@ impl Record {
             metadata: None,
             issues: Vec::new(),
             saved_variables: Vec::new(),
+            file_enumeration_complete: false,
         }
     }
     fn issue(mut self, issue: LoadIssueKind) -> Self {

@@ -24,7 +24,8 @@ mod calls;
 mod construction;
 mod fingerprints;
 pub use fingerprints::{
-    FunctionDirectNeighborhoodRecipe, FunctionFingerprintSelection, FunctionPackageLoadRoleRecipe,
+    FunctionCompositeRecipe, FunctionDirectNeighborhoodRecipe, FunctionFingerprintSelection,
+    FunctionPackageLoadRoleRecipe,
 };
 mod xml_fingerprints;
 pub use xml_fingerprints::{

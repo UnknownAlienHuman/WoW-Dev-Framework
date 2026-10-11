@@ -20,6 +20,7 @@ pub(in crate::load) struct Builder<'a> {
     bodies: std::collections::BTreeMap<usize, InlineBuilder>,
     attribute_count: usize,
     segment_count: usize,
+    outside_script_non_whitespace: bool,
 }
 
 impl<'a> Builder<'a> {
@@ -41,6 +42,7 @@ impl<'a> Builder<'a> {
             bodies: std::collections::BTreeMap::new(),
             attribute_count: 0,
             segment_count: 0,
+            outside_script_non_whitespace: false,
         }
     }
 
@@ -224,7 +226,12 @@ impl<'a> Builder<'a> {
         self.finish_script(open.index, start)
     }
 
-    pub(in crate::load) fn literal(&mut self, start: usize, end: usize) -> ProjectResult<()> {
+    pub(in crate::load) fn literal(
+        &mut self,
+        start: usize,
+        end: usize,
+        stop: &std::sync::atomic::AtomicBool,
+    ) -> ProjectResult<()> {
         let text = self
             .text
             .get(start..end)
@@ -234,6 +241,14 @@ impl<'a> Builder<'a> {
             && let Some(body) = self.bodies.get_mut(&index)
         {
             body.literal(text, start)?;
+        } else {
+            for character in text.chars() {
+                crate::disk::checkpoint(stop)?;
+                if !matches!(character, ' ' | '\t' | '\r' | '\n') {
+                    self.outside_script_non_whitespace = true;
+                    break;
+                }
+            }
         }
         Ok(())
     }
@@ -242,12 +257,21 @@ impl<'a> Builder<'a> {
         value: &str,
         start: usize,
         end: usize,
+        stop: &std::sync::atomic::AtomicBool,
     ) -> ProjectResult<()> {
         valid_characters(value)?;
         if let Some(index) = self.stack.last().map(|parent| parent.index)
             && let Some(body) = self.bodies.get_mut(&index)
         {
             body.entity(value, start, end)?;
+        } else {
+            for character in value.chars() {
+                crate::disk::checkpoint(stop)?;
+                if !matches!(character, ' ' | '\t' | '\r' | '\n') {
+                    self.outside_script_non_whitespace = true;
+                    break;
+                }
+            }
         }
         Ok(())
     }
@@ -319,6 +343,7 @@ impl<'a> Builder<'a> {
             source_digest: self.source_digest,
             elements: self.elements,
             digest,
+            outside_script_non_whitespace: self.outside_script_non_whitespace,
         })
     }
 }

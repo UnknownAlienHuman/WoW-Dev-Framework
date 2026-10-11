@@ -11,8 +11,8 @@ use crate::disk::checkpoint;
 
 pub(super) const MAX_DOCUMENTS: usize = 64;
 pub(super) const MAX_COMPONENTS: usize = 32_768;
-pub(super) const MAX_ROWS: usize = 65_536;
-const MAX_WORK: usize = 1_048_576;
+pub(crate) const MAX_ROWS: usize = 65_536;
+pub(crate) const MAX_WORK: usize = 1_048_576;
 const MAX_METADATA: usize = 16 * 1024 * 1024;
 
 pub(super) struct SchemaBudget {
@@ -70,6 +70,24 @@ impl SchemaBudget {
         result.map_err(|_| invalid("schema metadata cannot be canonically encoded"))?;
         self.metadata = counter.used;
         Ok(())
+    }
+}
+
+/// Internal reuse seam: namespace/member walks charge their caller's SAME ledger.
+pub(crate) trait SchemaLedger {
+    fn visit(&mut self, count: usize, stop: &AtomicBool) -> ProjectResult<()>;
+    fn rows(&mut self, count: usize, stop: &AtomicBool) -> ProjectResult<()>;
+    fn charge<T: Serialize + ?Sized>(&mut self, value: &T, stop: &AtomicBool) -> ProjectResult<()>;
+}
+impl SchemaLedger for SchemaBudget {
+    fn visit(&mut self, count: usize, stop: &AtomicBool) -> ProjectResult<()> {
+        SchemaBudget::visit(self, count, stop)
+    }
+    fn rows(&mut self, count: usize, stop: &AtomicBool) -> ProjectResult<()> {
+        SchemaBudget::rows(self, count, stop)
+    }
+    fn charge<T: Serialize + ?Sized>(&mut self, value: &T, stop: &AtomicBool) -> ProjectResult<()> {
+        SchemaBudget::charge(self, value, stop)
     }
 }
 

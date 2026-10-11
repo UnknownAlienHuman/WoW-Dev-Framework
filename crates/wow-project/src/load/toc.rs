@@ -130,6 +130,8 @@ pub(super) fn parse(
                 record.issues.push(Issue::UnsupportedFileKind);
             }
         }
+        record.file_enumeration_complete =
+            record.selection == LoadSelection::Included && record.issues.is_empty();
         records.push(record);
         offset = end;
     }

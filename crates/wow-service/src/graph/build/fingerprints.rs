@@ -6,6 +6,7 @@ use wow_project::graph::{
     fingerprints::{
         FunctionFingerprintLimits, FunctionFingerprintManifest, FunctionNeighborhoodComposition,
         build_platform_function_fingerprints, build_platform_function_fingerprints_composed,
+        build_platform_function_fingerprints_with_composite,
         build_platform_function_fingerprints_with_load_roles,
     },
 };
@@ -13,7 +14,7 @@ use wow_project::graph::{
 use super::{checkpoint, error, project_error};
 use crate::{ServiceErrorCode, ServiceResult};
 pub use wow_project::graph::fingerprints::{
-    FunctionDirectNeighborhoodRecipe, FunctionPackageLoadRoleRecipe,
+    FunctionCompositeRecipe, FunctionDirectNeighborhoodRecipe, FunctionPackageLoadRoleRecipe,
 };
 
 const SELECTION_SCHEMA: &str = "wow-service/function-fingerprint-selection/1";
@@ -25,8 +26,9 @@ const SELECTED_COMPONENTS_SELECTION_SCHEMA: &str =
 fn selection_schema(
     load_roles: Option<FunctionPackageLoadRoleRecipe>,
     neighborhood: Option<FunctionDirectNeighborhoodRecipe>,
+    composite: Option<FunctionCompositeRecipe>,
 ) -> &'static str {
-    if neighborhood.is_some() {
+    if neighborhood.is_some() || composite.is_some() {
         SELECTED_COMPONENTS_SELECTION_SCHEMA
     } else if load_roles.is_some() {
         LOAD_ROLE_SELECTION_SCHEMA
@@ -48,6 +50,8 @@ pub struct FunctionFingerprintSelection {
     package_load_roles: Option<FunctionPackageLoadRoleRecipe>,
     #[serde(skip_serializing_if = "Option::is_none")]
     direct_neighborhood: Option<FunctionDirectNeighborhoodRecipe>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    composite: Option<FunctionCompositeRecipe>,
 }
 
 #[derive(Deserialize)]
@@ -62,6 +66,14 @@ struct WireSelection {
     package_load_roles: Option<FunctionPackageLoadRoleRecipe>,
     #[serde(default, deserialize_with = "non_null_neighborhood")]
     direct_neighborhood: Option<FunctionDirectNeighborhoodRecipe>,
+    #[serde(default, deserialize_with = "non_null_composite")]
+    composite: Option<FunctionCompositeRecipe>,
+}
+
+fn non_null_composite<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<FunctionCompositeRecipe>, D::Error> {
+    FunctionCompositeRecipe::deserialize(deserializer).map(Some)
 }
 
 fn non_null_neighborhood<'de, D: serde::Deserializer<'de>>(
@@ -97,6 +109,7 @@ impl FunctionFingerprintSelection {
             max_metadata_bytes,
             package_load_roles: None,
             direct_neighborhood: None,
+            composite: None,
         };
         // Bound the entire selection before any later request clone or native lookup.
         super::preflight_cancellable(
@@ -112,7 +125,11 @@ impl FunctionFingerprintSelection {
         recipe: FunctionPackageLoadRoleRecipe,
     ) -> ServiceResult<Self> {
         self.package_load_roles = Some(recipe);
-        self.schema = selection_schema(self.package_load_roles, self.direct_neighborhood);
+        self.schema = selection_schema(
+            self.package_load_roles,
+            self.direct_neighborhood,
+            self.composite,
+        );
         super::preflight_cancellable(
             &self,
             super::super::GRAPH_REQUEST_MAX_BYTES,
@@ -126,13 +143,37 @@ impl FunctionFingerprintSelection {
         recipe: FunctionDirectNeighborhoodRecipe,
     ) -> ServiceResult<Self> {
         self.direct_neighborhood = Some(recipe);
-        self.schema = selection_schema(self.package_load_roles, self.direct_neighborhood);
+        self.schema = selection_schema(
+            self.package_load_roles,
+            self.direct_neighborhood,
+            self.composite,
+        );
         super::preflight_cancellable(
             &self,
             super::super::GRAPH_REQUEST_MAX_BYTES,
             &AtomicBool::new(false),
         )?;
         Ok(self)
+    }
+
+    /// Select only the composite. Its required components remain explicit selections.
+    pub fn with_composite(mut self, recipe: FunctionCompositeRecipe) -> ServiceResult<Self> {
+        self.composite = Some(recipe);
+        self.schema = selection_schema(
+            self.package_load_roles,
+            self.direct_neighborhood,
+            self.composite,
+        );
+        super::preflight_cancellable(
+            &self,
+            super::super::GRAPH_REQUEST_MAX_BYTES,
+            &AtomicBool::new(false),
+        )?;
+        Ok(self)
+    }
+
+    pub const fn composite(&self) -> Option<FunctionCompositeRecipe> {
+        self.composite
     }
 
     pub const fn direct_neighborhood(&self) -> Option<FunctionDirectNeighborhoodRecipe> {
@@ -157,7 +198,11 @@ impl FunctionFingerprintSelection {
             stop,
         )
         .map_err(|failure| error(failure.code))?;
-        let expected_schema = selection_schema(wire.package_load_roles, wire.direct_neighborhood);
+        let expected_schema = selection_schema(
+            wire.package_load_roles,
+            wire.direct_neighborhood,
+            wire.composite,
+        );
         if wire.schema != expected_schema {
             return Err(error(ServiceErrorCode::InvalidRequest));
         }
@@ -172,6 +217,9 @@ impl FunctionFingerprintSelection {
         }
         if let Some(recipe) = wire.direct_neighborhood {
             selection = selection.with_direct_neighborhood(recipe)?;
+        }
+        if let Some(recipe) = wire.composite {
+            selection = selection.with_composite(recipe)?;
         }
         checkpoint(stop)?;
         Ok(selection)
@@ -215,27 +263,41 @@ impl FunctionFingerprintSelection {
             self.max_metadata_bytes,
         )
         .map_err(project_error)?;
-        let result = match (
-            self.direct_neighborhood,
-            composition,
-            self.package_load_roles,
-        ) {
-            (Some(recipe), Some(composition), load_roles) => {
-                build_platform_function_fingerprints_composed(
-                    direct,
-                    &ids,
-                    limits,
-                    load_roles,
-                    recipe,
-                    composition,
-                    stop,
-                )
+        let result = if let Some(recipe) = self.composite {
+            build_platform_function_fingerprints_with_composite(
+                direct,
+                &ids,
+                limits,
+                self.package_load_roles,
+                self.direct_neighborhood.zip(composition),
+                recipe,
+                stop,
+            )
+        } else {
+            match (
+                self.direct_neighborhood,
+                composition,
+                self.package_load_roles,
+            ) {
+                (Some(recipe), Some(composition), load_roles) => {
+                    build_platform_function_fingerprints_composed(
+                        direct,
+                        &ids,
+                        limits,
+                        load_roles,
+                        recipe,
+                        composition,
+                        stop,
+                    )
+                }
+                (None, None, None) => {
+                    build_platform_function_fingerprints(direct, &ids, limits, stop)
+                }
+                (None, None, Some(recipe)) => build_platform_function_fingerprints_with_load_roles(
+                    direct, &ids, limits, recipe, stop,
+                ),
+                _ => return Err(error(ServiceErrorCode::IdentityMismatch)),
             }
-            (None, None, None) => build_platform_function_fingerprints(direct, &ids, limits, stop),
-            (None, None, Some(recipe)) => build_platform_function_fingerprints_with_load_roles(
-                direct, &ids, limits, recipe, stop,
-            ),
-            _ => return Err(error(ServiceErrorCode::IdentityMismatch)),
         };
         result.map_err(|failure| {
             if failure.code() == wow_project::ProjectErrorCode::InvalidFingerprintSelection {

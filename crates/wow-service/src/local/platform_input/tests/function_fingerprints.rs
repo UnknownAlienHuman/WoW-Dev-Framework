@@ -2406,3 +2406,273 @@ fn selected_composed_neighborhood_tracks_incoming_call_with_unchanged_callee() -
     assert_ne!(comparable_digests[0], comparable_digests[1]);
     Ok(())
 }
+
+#[test]
+fn selected_five_component_composite_tracks_signature_and_refuses_chunk() -> TestResult {
+    use crate::graph::{
+        FunctionCompositeRecipe, FunctionDirectNeighborhoodRecipe, FunctionPackageLoadRoleRecipe,
+    };
+    use wow_emmy::function_calls::{
+        PhysicalFunctionDeclarationRecipe, PhysicalFunctionSignatureRecipe, SourceSignatureType,
+        SourceSignatureUnavailable,
+    };
+    use wow_project::graph::fingerprints::{
+        FunctionCompositeRequiredComponent, FunctionDirectNeighborhoodSelection,
+        FunctionNeighborhoodComponent, FunctionPackageLoadRoleComponent,
+        FunctionPackageLoadRoleCoverage, FunctionPackageLoadRoleSelection,
+        FunctionSignatureComponent, FunctionSourceSpanComponent,
+    };
+
+    let stop = AtomicBool::new(false);
+    let (root, mut config) = fixture()?;
+    let path = root.0.join("project.json");
+    let declarations = PhysicalFunctionDeclarationRecipe::DeclaredSyntaxAndBodyShapeV1;
+    let signatures = PhysicalFunctionSignatureRecipe::IndexedTypesV1;
+    let neighborhood = FunctionDirectNeighborhoodRecipe::ComposedCallsAndXmlHandlersV1;
+    let load_role = FunctionPackageLoadRoleRecipe::SelectedPhysicalLuaV1;
+    let composite_recipe = FunctionCompositeRecipe::FiveCompleteComponentsV1;
+    config["physical_function_declarations"] = serde_json::to_value(declarations)?;
+    config["physical_function_signatures"] = serde_json::to_value(signatures)?;
+    // Reuse the proven closed Lua-only fixture scope, not the unselected XML.
+    rewrite_load_role_toc(&root, &mut config, "## Interface: 120100\nmain.lua\n")?;
+
+    let mut observations = Vec::new();
+    for (lua, expected_type) in [
+        (
+            "---@param value number\n---@return number\nlocal function TypedSignatureFixture(value)\n    return value\nend\n",
+            SourceSignatureType::Number,
+        ),
+        (
+            "---@param value string\n---@return string\nlocal function TypedSignatureFixture(value)\n    return value\nend\n",
+            SourceSignatureType::String,
+        ),
+    ] {
+        rewrite_declaration_lua(&root, &mut config, lua)?;
+        let (project, request, ids, source_bytes) = declaration_query(&path, &stop)?;
+        let packages = project
+            .configuration()
+            .platform_packages()
+            .ok_or("native package owners")?;
+        assert!(packages.load_plan().coverage().complete());
+        assert_eq!(packages.main_plan().files().len(), 1);
+        let file = packages
+            .main_plan()
+            .files()
+            .first()
+            .ok_or("native Main file")?;
+        let report = project
+            .snapshot()
+            .analyzer_binding()
+            .function_call_report()
+            .ok_or("selected native report")?;
+        report.validate()?;
+        assert!(report.source_health_complete());
+        assert_eq!(report.declaration_recipe(), Some(declarations));
+        assert_eq!(report.signature_recipe(), Some(signatures));
+        assert!(report.calls().is_empty());
+        let mut closures = report.functions().iter().filter(|fact| {
+            fact.kind() == SourceFunctionKind::Closure && fact.path() == file.project_path
+        });
+        let fact = closures.next().ok_or("native physical closure")?;
+        assert!(closures.next().is_none(), "one physical fixture closure");
+        let native_signature = fact.signature().ok_or("native indexed signature")?;
+        let typed = native_signature
+            .comparable()
+            .ok_or("genuine supported native signature")?;
+        assert!(native_signature.unavailable_reasons().is_empty());
+        assert_eq!(typed.parameters().len(), 1);
+        assert_eq!(
+            typed
+                .parameters()
+                .first()
+                .ok_or("native parameter")?
+                .type_shape(),
+            &expected_type
+        );
+        assert_eq!(typed.returns().len(), 1);
+        assert_eq!(
+            typed.returns().first().ok_or("native return")?.types(),
+            std::slice::from_ref(&expected_type)
+        );
+        let physical_bytes = span_bytes(&project, fact)?.to_vec();
+        let chunk = report
+            .functions()
+            .iter()
+            .find(|fact| {
+                fact.kind() == SourceFunctionKind::Chunk && fact.path() == file.project_path
+            })
+            .ok_or("genuine physical Chunk")?;
+        let chunk_signature = chunk.signature().ok_or("native Chunk observation")?;
+        assert!(chunk_signature.comparable().is_none());
+        assert_eq!(
+            chunk_signature.unavailable_reasons(),
+            &[SourceSignatureUnavailable::ChunkHasNoSignature]
+        );
+
+        // Exact native IDs select the real report; no component DTO is supplied.
+        let selection = FunctionFingerprintSelection::new(
+            ids.clone(),
+            ids.len(),
+            source_bytes,
+            METADATA_BYTES,
+        )?
+        .with_package_load_roles(load_role)?
+        .with_direct_neighborhood(neighborhood)?
+        .with_composite(composite_recipe)?;
+        let result = execute_graph_build(
+            LocalProjectInput::from_config_path(&path, &stop)?,
+            &request.with_function_fingerprints(selection)?,
+            &stop,
+        )?;
+        assert_eq!(
+            result.status(),
+            GraphReadStatus::Partial,
+            "{:?}",
+            result.failure_message()
+        );
+        let manifest = result
+            .function_fingerprints()
+            .ok_or("selected service composite manifest")?;
+        assert_eq!(
+            manifest.schema(),
+            "wow-project/function-fingerprint-records/selected-components/1"
+        );
+        assert!(manifest.is_partial());
+        assert!(manifest.scope_conflicts().is_empty());
+        assert_eq!(manifest.records().len(), ids.len());
+        assert_eq!(
+            manifest.binding().project_snapshot_id(),
+            project.snapshot_id()
+        );
+        assert_eq!(
+            manifest.binding().function_analysis_id(),
+            report.analysis_id()
+        );
+        assert_eq!(
+            manifest
+                .neighborhood_binding()
+                .ok_or("composed native binding")?
+                .recipe(),
+            neighborhood
+        );
+        let selected = manifest
+            .selected_components()
+            .ok_or("explicit selected recipe receipt")?;
+        assert_eq!(selected.physical_declarations(), Some(declarations));
+        assert_eq!(selected.physical_signatures(), Some(signatures));
+        assert_eq!(selected.direct_neighborhood(), Some(neighborhood));
+        assert_eq!(selected.package_load_role(), Some(load_role));
+        assert_eq!(selected.composite(), Some(composite_recipe));
+        let record = manifest
+            .records()
+            .iter()
+            .find(|record| record.function_id() == fact.fact_id())
+            .ok_or("genuine selected physical closure")?;
+        let signature_digest = record.signature().digest().ok_or("complete signature")?;
+        let shape_digest = record
+            .declaration_shape()
+            .digest()
+            .ok_or("complete native declaration/body shape")?;
+        let FunctionSourceSpanComponent::Available {
+            digest: source_digest,
+            byte_length,
+            ..
+        } = record.source_span()
+        else {
+            return Err("exact physical source span unavailable".into());
+        };
+        assert_eq!(usize::try_from(*byte_length)?, physical_bytes.len());
+        let FunctionDirectNeighborhoodSelection::Selected(neighbors) = record.direct_neighborhood()
+        else {
+            return Err("direct neighborhood not selected".into());
+        };
+        let FunctionNeighborhoodComponent::Comparable {
+            digest: neighborhood_digest,
+            groups,
+        } = neighbors.as_ref()
+        else {
+            return Err("closed native neighborhood unavailable".into());
+        };
+        assert!(groups.iter().all(|group| group.multiplicity() == 0));
+        let FunctionPackageLoadRoleSelection::Selected(role) = record.package_load_role() else {
+            return Err("package/load role not selected".into());
+        };
+        assert_eq!(role.coverage(), FunctionPackageLoadRoleCoverage::Complete);
+        assert_eq!(role.native_load_coverage(), packages.load_plan().coverage());
+        assert_eq!(
+            role.witness().ok_or("native role witness")?.main_file(),
+            file
+        );
+        let FunctionPackageLoadRoleComponent::Comparable {
+            digest: role_digest,
+            ..
+        } = role.component()
+        else {
+            return Err("complete native package/load role unavailable".into());
+        };
+        let composite = record.composite().ok_or("selected composite")?;
+        assert_eq!(composite.recipe(), composite_recipe);
+        assert!(composite.incomplete_components().is_empty());
+        let value = composite.comparable().ok_or("five complete inputs")?;
+        let composite_digest = composite.digest().ok_or("complete composite digest")?;
+        // Bind every comparable part to its actual component, never a blessed hash.
+        assert_eq!(value.indexed_signature().digest(), signature_digest);
+        assert_eq!(value.declaration_body_shape().digest(), shape_digest);
+        assert_eq!(value.direct_neighborhood().digest(), *neighborhood_digest);
+        assert_eq!(value.exact_source_span().digest(), *source_digest);
+        assert_eq!(value.package_load_role().digest(), *role_digest);
+
+        // The same genuine service observation supplies the unavailable control.
+        let chunk_record = manifest
+            .records()
+            .iter()
+            .find(|record| record.function_id() == chunk.fact_id())
+            .ok_or("selected native Chunk record")?;
+        let FunctionSignatureComponent::Unavailable { reasons } = chunk_record.signature() else {
+            return Err("Chunk supplied an invented signature digest".into());
+        };
+        assert_eq!(reasons.as_slice(), chunk_signature.unavailable_reasons());
+        assert!(chunk_record.signature().digest().is_none());
+        assert!(matches!(
+            chunk_record.source_span(),
+            FunctionSourceSpanComponent::Available { .. }
+        ));
+        let refused = chunk_record.composite().ok_or("selected Chunk composite")?;
+        assert_eq!(refused.recipe(), composite_recipe);
+        assert!(
+            refused
+                .incomplete_components()
+                .contains(&FunctionCompositeRequiredComponent::IndexedSignature)
+        );
+        assert!(refused.digest().is_none());
+        assert!(refused.comparable().is_none());
+        let refused_wire = serde_json::to_value(refused)?;
+        assert_eq!(refused_wire["state"], "unavailable");
+        assert!(refused_wire.get("digest").is_none());
+        assert!(refused_wire.get("comparable").is_none());
+        observations.push((
+            signature_digest,
+            shape_digest,
+            *neighborhood_digest,
+            *source_digest,
+            *role_digest,
+            composite_digest,
+            physical_bytes,
+        ));
+    }
+
+    let [number, string] = observations.as_slice() else {
+        return Err("two native mutation observations required".into());
+    };
+    assert_ne!(number.0, string.0, "annotation types change signature");
+    assert_eq!(number.1, string.1, "native declaration/body shape fixed");
+    assert_eq!(number.2, string.2, "closed direct neighborhood fixed");
+    assert_eq!(number.3, string.3, "exact physical span component fixed");
+    assert_eq!(number.4, string.4, "selected package/load role fixed");
+    assert_ne!(
+        number.5, string.5,
+        "composite follows the changed component"
+    );
+    assert_eq!(number.6, string.6, "exact closure body bytes fixed");
+    Ok(())
+}

@@ -11,9 +11,9 @@ mod input;
 mod persistence;
 mod sources;
 pub use build::{
-    FunctionDirectNeighborhoodRecipe, FunctionFingerprintSelection, FunctionPackageLoadRoleRecipe,
-    GraphBuildRequest, GraphBuildResult, XmlFingerprintManifest, XmlFingerprintRecord,
-    XmlFingerprintSelection, XmlFingerprintTarget, execute_graph_build,
+    FunctionCompositeRecipe, FunctionDirectNeighborhoodRecipe, FunctionFingerprintSelection,
+    FunctionPackageLoadRoleRecipe, GraphBuildRequest, GraphBuildResult, XmlFingerprintManifest,
+    XmlFingerprintRecord, XmlFingerprintSelection, XmlFingerprintTarget, execute_graph_build,
     execute_graph_build_diagnosed, source_graph_diagnostics_bytes,
 };
 pub use persistence::{

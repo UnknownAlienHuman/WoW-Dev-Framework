@@ -7,7 +7,8 @@ use crate::{
 };
 
 use super::{
-    SchemaBudget, invalid,
+    budget::SchemaLedger,
+    invalid,
     model::{XmlExpandedName, XmlSchemaNamespaceBinding, XmlSchemaQName, XmlSchemaQNameState},
 };
 
@@ -43,7 +44,7 @@ pub(super) struct ResolvedName<'a> {
 impl ResolvedName<'_> {
     pub(super) fn own(
         self,
-        budget: &mut SchemaBudget,
+        budget: &mut impl SchemaLedger,
         stop: &AtomicBool,
     ) -> ProjectResult<XmlExpandedName> {
         budget.charge(&(self.namespace, self.local), stop)?;
@@ -66,7 +67,7 @@ impl<'a> Names<'a> {
     pub(super) fn enter(
         &mut self,
         record: &'a XmlElementRecord,
-        budget: &mut SchemaBudget,
+        budget: &mut impl SchemaLedger,
         stop: &AtomicBool,
     ) -> ProjectResult<()> {
         budget.visit(1, stop)?;
@@ -153,7 +154,7 @@ impl<'a> Names<'a> {
     pub(super) fn element(
         &self,
         record: &'a XmlElementRecord,
-        budget: &mut SchemaBudget,
+        budget: &mut impl SchemaLedger,
         stop: &AtomicBool,
     ) -> ProjectResult<ResolvedName<'a>> {
         let (resolved, _) = self.resolve(&record.qualified_name, true, budget, stop)?;
@@ -168,7 +169,7 @@ impl<'a> Names<'a> {
     pub(super) fn attribute(
         &self,
         attribute: &'a XmlAttributeRecord,
-        budget: &mut SchemaBudget,
+        budget: &mut impl SchemaLedger,
         stop: &AtomicBool,
     ) -> ProjectResult<ResolvedName<'a>> {
         let spelling = attribute.qualified_name.as_str();
@@ -196,7 +197,7 @@ impl<'a> Names<'a> {
     pub(super) fn qname(
         &self,
         lexical: &'a str,
-        budget: &mut SchemaBudget,
+        budget: &mut impl SchemaLedger,
         stop: &AtomicBool,
     ) -> ProjectResult<XmlSchemaQName> {
         let token = lexical.trim_matches(xml_space);
@@ -246,7 +247,7 @@ impl<'a> Names<'a> {
         &self,
         name: &'a str,
         use_default: bool,
-        budget: &mut SchemaBudget,
+        budget: &mut impl SchemaLedger,
         stop: &AtomicBool,
     ) -> ProjectResult<(Option<ResolvedName<'a>>, XmlSchemaQNameState)> {
         budget.visit(1, stop)?;
@@ -327,7 +328,7 @@ pub(super) fn xml_space(character: char) -> bool {
 /// XML 1.0 NCName syntax; this validates names, not source XML tokenization.
 pub(super) fn ncname(
     name: &str,
-    budget: &mut SchemaBudget,
+    budget: &mut impl SchemaLedger,
     stop: &AtomicBool,
 ) -> ProjectResult<bool> {
     let mut characters = name.chars();

@@ -129,7 +129,8 @@ Overall coverage stays Partial; semantic/runtime/parity acceptance is not claime
 The existing `--fingerprints` decoder accepts optional `direct_neighborhood`:
 `"wow-project/physical-function-composed-calls-and-xml-handlers/1"`. Presence uses
 selection schema `wow-service/function-fingerprint-selection/selected-components/1`;
-absence keeps the existing base/load-role selection schemas. The typed builder is
+without neighborhood or composite selection, the base/load-role schemas remain.
+The typed builder is
 `FunctionFingerprintSelection::with_direct_neighborhood` with
 `FunctionDirectNeighborhoodRecipe::ComposedCallsAndXmlHandlersV1`.
 `with_package_load_roles` preserves this schema and both recipes in either builder
@@ -153,10 +154,26 @@ Neighborhood-selected manifest construction waits for all native producers and
 the final producer lookup, while retaining the original source-prefix owner and
 one cumulative metadata ledger. One shared binding proves prefix-to-final
 association; the original physical records are not relabeled or copied into a
-second build. Unknown calls, incomplete XML scope and Possible associations cannot
-supply clean-negative degrees. Producer/replay/catalog selections remain unchanged;
-unselected requests retain their old path and omit the new fields. Overall
-coverage stays Partial, without runtime or full #118 acceptance claims.
+second build. Native XML member/parent permission and exact selected file/site/
+binding/query enumeration establish the finite census independently of legacy
+load issues/Partial coverage. Unsupported or uncertain scope cannot supply zero
+degrees; legacy coverage is never upgraded. Producer/replay/catalog selections
+remain unchanged; unselected requests retain their existing wire recipes. See the
+[native census contract](../../crates/wow-project/e3/FUNCTION_FINGERPRINTS.md#native-xml-memberparent-census).
+
+The optional `composite` field selects
+`wow-project/physical-function-composite/five-complete-components/1` with selection
+schema `wow-service/function-fingerprint-selection/selected-components/1`.
+The typed builder is `FunctionFingerprintSelection::with_composite` with
+`FunctionCompositeRecipe::FiveCompleteComponentsV1`. Null/unknown recipe or wrong
+schema refuses. Existing `--fingerprints` needs no new flag. Producer configuration
+and package/load-role/neighborhood query prerequisites remain explicit selections.
+Manifest `selected_components.composite` and per-record `composite` retain the
+result. All five complete typed digests are required; missing components retain
+Unavailable/no digest. See the [fixed order and encoding](../../crates/wow-project/e3/FUNCTION_FINGERPRINTS.md#selected-five-component-composite).
+The same metadata ledger includes composite output and final framing. An absent
+composite omits new fields. Coverage stays Partial; no exact identity,
+runtime equivalence or full #118 acceptance is claimed.
 
 The first recipe exposes the exact source-span component with native support
 and separate generation/profile bindings. Missing signature/shape and unselected

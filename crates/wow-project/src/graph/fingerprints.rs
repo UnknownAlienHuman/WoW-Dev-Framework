@@ -18,9 +18,16 @@ use wow_graph::{
 use super::{PlatformGraphProvenance, producer_budget::ProducerBudget};
 use crate::{PlatformGraphProfile, ProjectError, ProjectErrorCode, ProjectPhase, ProjectResult};
 
+mod composite;
+pub use composite::{
+    FUNCTION_COMPOSITE_RECIPE, FunctionCompositeComparable, FunctionCompositeComponent,
+    FunctionCompositeFingerprint, FunctionCompositePart, FunctionCompositeRecipe,
+    FunctionCompositeRequiredComponent,
+};
 mod declaration;
 mod load_role;
 mod neighborhood;
+mod xml_census;
 pub use load_role::{
     FUNCTION_PACKAGE_LOAD_ROLE_RECIPE, FunctionPackageLoadRole, FunctionPackageLoadRoleComparable,
     FunctionPackageLoadRoleComponent, FunctionPackageLoadRoleCoverage,
@@ -273,6 +280,8 @@ pub struct FunctionFingerprintRecord {
     direct_neighborhood: FunctionDirectNeighborhoodSelection,
     package_load_role: FunctionPackageLoadRoleSelection,
     support: FunctionFingerprintSupport,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    composite: Option<FunctionCompositeComponent>,
 }
 impl FunctionFingerprintRecord {
     #[must_use]
@@ -310,6 +319,10 @@ impl FunctionFingerprintRecord {
     #[must_use]
     pub const fn support(&self) -> &FunctionFingerprintSupport {
         &self.support
+    }
+    #[must_use]
+    pub const fn composite(&self) -> Option<&FunctionCompositeComponent> {
+        self.composite.as_ref()
     }
 }
 
@@ -357,7 +370,7 @@ pub enum FunctionFingerprintCoverage {
 }
 
 /// Serialize-only owned receipt: it survives moving/dropping the native owners.
-/// No composite, removed-entity or equivalence output; selected components stay bounded.
+/// Selected components/composites stay bounded; no removed-entity or equivalence output.
 #[derive(Debug, Serialize)]
 pub struct FunctionFingerprintComponentSelection {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -368,6 +381,8 @@ pub struct FunctionFingerprintComponentSelection {
     package_load_role: Option<FunctionPackageLoadRoleRecipe>,
     #[serde(skip_serializing_if = "Option::is_none")]
     direct_neighborhood: Option<FunctionDirectNeighborhoodRecipe>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    composite: Option<FunctionCompositeRecipe>,
 }
 impl FunctionFingerprintComponentSelection {
     pub const fn physical_declarations(
@@ -385,6 +400,10 @@ impl FunctionFingerprintComponentSelection {
     }
     pub const fn direct_neighborhood(&self) -> Option<FunctionDirectNeighborhoodRecipe> {
         self.direct_neighborhood
+    }
+    #[must_use]
+    pub const fn composite(&self) -> Option<FunctionCompositeRecipe> {
+        self.composite
     }
 }
 
@@ -574,6 +593,7 @@ impl BorrowedFunctionFingerprintRecord<'_> {
                 span: self.support.span,
                 file_content_digest: self.support.file_content_digest,
             },
+            composite: None,
         };
         crate::analyzer::checkpoint(stop)?;
         Ok(record)
@@ -644,7 +664,15 @@ pub fn build_platform_function_fingerprints(
     limits: FunctionFingerprintLimits,
     stop: &AtomicBool,
 ) -> ProjectResult<FunctionFingerprintManifest> {
-    build_selected_function_fingerprints(direct, selected_function_ids, limits, None, None, stop)
+    build_selected_function_fingerprints(
+        direct,
+        selected_function_ids,
+        limits,
+        None,
+        None,
+        None,
+        stop,
+    )
 }
 
 /// Select genuine native static load roles without changing the source/graph recipe.
@@ -660,6 +688,7 @@ pub fn build_platform_function_fingerprints_with_load_roles(
         selected_function_ids,
         limits,
         Some(recipe),
+        None,
         None,
         stop,
     )
@@ -682,6 +711,32 @@ pub fn build_platform_function_fingerprints_composed(
         limits,
         load_roles,
         Some((recipe, composition)),
+        None,
+        stop,
+    )
+}
+
+/// Explicit comparison selection; missing prerequisites remain unavailable.
+/// Existing native producers/replay supply authority; this query changes none.
+pub fn build_platform_function_fingerprints_with_composite(
+    direct: &PlatformGraphProvenance<'_>,
+    selected_function_ids: &[&str],
+    limits: FunctionFingerprintLimits,
+    load_roles: Option<FunctionPackageLoadRoleRecipe>,
+    neighborhood: Option<(
+        FunctionDirectNeighborhoodRecipe,
+        &FunctionNeighborhoodComposition<'_>,
+    )>,
+    recipe: FunctionCompositeRecipe,
+    stop: &AtomicBool,
+) -> ProjectResult<FunctionFingerprintManifest> {
+    build_selected_function_fingerprints(
+        direct,
+        selected_function_ids,
+        limits,
+        load_roles,
+        neighborhood,
+        Some(recipe),
         stop,
     )
 }
@@ -695,6 +750,7 @@ fn build_selected_function_fingerprints(
         FunctionDirectNeighborhoodRecipe,
         &FunctionNeighborhoodComposition<'_>,
     )>,
+    composite_recipe: Option<FunctionCompositeRecipe>,
     stop: &AtomicBool,
 ) -> ProjectResult<FunctionFingerprintManifest> {
     crate::analyzer::checkpoint(stop)?;
@@ -962,7 +1018,11 @@ fn build_selected_function_fingerprints(
     let signatures_selected = report.signature_recipe().is_some();
     let body_shape_selected = report.declaration_recipe() == Some(wow_emmy::function_calls::PhysicalFunctionDeclarationRecipe::DeclaredSyntaxAndBodyShapeV1);
     let mut manifest = FunctionFingerprintManifest {
-        schema: if load_roles.is_some() || signatures_selected || neighborhood_recipe.is_some() {
+        schema: if load_roles.is_some()
+            || signatures_selected
+            || neighborhood_recipe.is_some()
+            || composite_recipe.is_some()
+        {
             SELECTED_COMPONENTS_FINGERPRINT_SCHEMA
         } else if body_shape_selected {
             BODY_SHAPE_FINGERPRINT_SCHEMA
@@ -971,7 +1031,11 @@ fn build_selected_function_fingerprints(
         } else {
             FUNCTION_FINGERPRINT_SCHEMA
         },
-        profile: if load_roles.is_some() || signatures_selected || neighborhood_recipe.is_some() {
+        profile: if load_roles.is_some()
+            || signatures_selected
+            || neighborhood_recipe.is_some()
+            || composite_recipe.is_some()
+        {
             SELECTED_COMPONENTS_FINGERPRINT_PROFILE
         } else if body_shape_selected {
             BODY_SHAPE_FINGERPRINT_PROFILE
@@ -983,12 +1047,14 @@ fn build_selected_function_fingerprints(
         limits,
         selected_components: (load_roles.is_some()
             || signatures_selected
-            || neighborhood_recipe.is_some())
+            || neighborhood_recipe.is_some()
+            || composite_recipe.is_some())
         .then_some(FunctionFingerprintComponentSelection {
             physical_declarations: report.declaration_recipe(),
             physical_signatures: report.signature_recipe(),
             package_load_role: load_roles,
             direct_neighborhood: neighborhood_recipe,
+            composite: composite_recipe,
         }),
         coverage: FunctionFingerprintCoverage::Partial,
         available_functions: report.functions().len(),
@@ -1051,10 +1117,20 @@ fn build_selected_function_fingerprints(
         }
         manifest.neighborhood_binding = Some(batch.binding);
     }
+    if let Some(recipe) = composite_recipe {
+        retained.charge_serialized(&recipe, stop)?;
+        for record in &mut manifest.records {
+            crate::analyzer::checkpoint(stop)?;
+            // Final typed inputs are ready; no revalidation, clone or new ledger.
+            let component = composite::build_component(recipe, record, &mut retained, stop)?;
+            record.composite = Some(component);
+        }
+    }
     if body_shape_selected
         || load_roles.is_some()
         || signatures_selected
         || neighborhood_recipe.is_some()
+        || composite_recipe.is_some()
     {
         retained.charge_serialized(&manifest, stop)?;
     } else {
