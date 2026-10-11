@@ -503,7 +503,7 @@ pub(crate) fn build_analyzer_binding(
             ProjectError::new(
                 code,
                 ProjectPhase::Analyzer,
-                "member and symbol lookup analysis failed",
+                format!("member and symbol lookup analysis failed: {source}"),
             )
             .with_candidate_generation(generation.project_generation())
         })?;

@@ -3,6 +3,42 @@ use crate::{EmmyBackendIdentity, LuaWorkspaceFileInput, LuaWorkspaceLimits, LuaW
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
+#[test]
+fn native_member_failure_retains_typed_source_without_panic_payload() -> TestResult {
+    let main = snapshot(&[("main.lua", "return true\n")])?;
+    let limits = crate::function_calls::FunctionCallBudget::new(1, 1, 1, 1, 1, 64 * 1024)?;
+    let failure = analyze_member_call_session_with_local_flow(
+        &main,
+        &[],
+        None,
+        MemberCallSessionQueryProfile::new(&[], &[]).with_function_call_budget(limits),
+        true,
+        &AtomicBool::new(false),
+    )
+    .err()
+    .ok_or("bounded collection admitted")?;
+    assert_eq!(
+        failure.code(),
+        AnalyzerSessionErrorCode::OutputBudgetExceeded
+    );
+    let cause = std::error::Error::source(&failure)
+        .ok_or("missing member cause")?
+        .downcast_ref::<crate::EmmyMemberCallError>()
+        .ok_or("wrong typed cause")?;
+    assert_eq!(
+        cause.code(),
+        crate::EmmyMemberCallErrorCode::FactBudgetExceeded
+    );
+    assert!(failure.to_string().contains(cause.message()));
+    let panic = error(AnalyzerSessionErrorCode::NativeFailure);
+    assert!(std::error::Error::source(&panic).is_none());
+    assert_eq!(
+        panic.to_string(),
+        "native analysis failed; session unavailable"
+    );
+    Ok(())
+}
+
 fn snapshot(files: &[(&str, &str)]) -> Result<LuaWorkspaceSnapshot, Box<dyn std::error::Error>> {
     Ok(LuaWorkspaceSnapshot::build(
         EmmyBackendIdentity::new(

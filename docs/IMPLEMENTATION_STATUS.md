@@ -151,6 +151,13 @@ above-default work/call, exact-work/limit-1, cancellation/output refusal and
 disk-absent service/replay identity/downgrade/tamper cases pass. Alias work/text
 and all other owner limits remain independent. This is an admission seam;
 no selected complete real-corpus result or peak is claimed.
+The later selected finite-budget native request exits3 with a failed graph result
+whose `internal_contract_violation` alone does not identify the deepest refusing
+owner. The native error handoff now retains actual member causes through session,
+Project/backend and CLI stderr while excluding explanatory text from graph wire,
+digest and records. Focused native budget/cause and cancellation cases pass;
+codes and capacities remain unchanged. A caught panic stays opaque. Exact real
+operation outcomes and remaining unknowns are tracked in #113.
 Full analysis/graph/maps/persistence remain unqualified under #113.
 Explicit retained XSD component admission is now executable through the existing
 XML owner, with root-only global symbols and final unsupported context propagation.

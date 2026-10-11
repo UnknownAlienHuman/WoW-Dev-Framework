@@ -356,10 +356,18 @@ pub struct GraphBuildResult {
     boundaries: Vec<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     failure: Option<ServiceErrorCode>,
+    /// Runtime explanation for the calling frontend; never archive or hash text.
+    #[serde(skip)]
+    failure_error: Option<ServiceError>,
     #[serde(skip_serializing_if = "Option::is_none")]
     result_digest: Option<Box<str>>,
 }
 impl GraphBuildResult {
+    /// Explanatory owner cause for local diagnostics, outside the canonical wire.
+    #[must_use]
+    pub fn failure_message(&self) -> Option<&str> {
+        self.failure_error.as_ref().map(ServiceError::message)
+    }
     #[must_use]
     pub const fn status(&self) -> GraphReadStatus {
         self.status
@@ -385,6 +393,7 @@ impl GraphBuildResult {
     }
 
     fn fail(&mut self, code: ServiceErrorCode) {
+        self.failure_error = None;
         self.file_nodes.clear();
         self.package_nodes.clear();
         self.package_file_edges.clear();
@@ -438,6 +447,11 @@ impl GraphBuildResult {
             GraphReadStatus::Failed
         };
         self.result_digest = None;
+    }
+
+    fn fail_with_error(&mut self, failure: ServiceError) {
+        self.fail(failure.code());
+        self.failure_error = Some(failure);
     }
 
     fn seal(&mut self) -> ServiceResult<()> {
@@ -525,6 +539,7 @@ pub fn execute_graph_build(
         snapshot_input_digest: None,
         provenance: None,
         failure: None,
+        failure_error: None,
         result_digest: None,
         boundaries: vec![
             "captured_source_topology_calls_xml_handlers_and_saved_variable_slots",
@@ -645,13 +660,13 @@ pub fn execute_graph_build(
             result.provenance = Some(provenance);
             result.snapshot_input_digest = Some(digest);
         }
-        Err(failure) => result.fail(failure.code()),
+        Err(failure) => result.fail_with_error(failure),
     }
     if stop.load(Ordering::Acquire) {
         result.fail(ServiceErrorCode::Cancelled);
     }
     if let Err(failure) = result.seal_cancellable(stop) {
-        result.fail(failure.code());
+        result.fail_with_error(failure);
         result.seal()?;
     }
     if stop.load(Ordering::Acquire) && result.status != GraphReadStatus::Cancelled {

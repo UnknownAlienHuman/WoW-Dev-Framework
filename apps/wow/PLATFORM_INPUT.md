@@ -197,6 +197,14 @@ case qualifies the full corpus or its peak memory.
 
 ## Scope
 
+`graph build` writes an available native owner failure explanation to stderr.
+The session retains the typed member cause, and Project/backend preserve its
+message through the calling frontend. This runtime explanation is excluded from
+the canonical graph result, digest and stored records; normalized failure codes
+remain unchanged. Cancellation or result-sealing failure replaces the earlier
+explanation. A caught upstream panic remains opaque. A generic failed result
+without an available cause does not identify a particular budget or owner.
+
 Shared acquisition also makes this input available to ordinary local
 `status`/`check`. The selected CLI graph route is a bounded prerequisite for actual
 owner measurement. It does not implement full-source capacity, partition

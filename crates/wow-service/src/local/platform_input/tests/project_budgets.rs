@@ -10,6 +10,49 @@ fn selected(config: &mut Value, policy: ProjectBudgetPolicy) -> TestResult {
 }
 
 #[test]
+fn native_publication_refusal_preserves_runtime_cause_outside_graph_wire() -> TestResult {
+    let (root, mut config) = fixture()?;
+    let path = root.0.join("project.json");
+    let stop = AtomicBool::new(false);
+    let ordinary = LocalProjectInput::from_config_path(&path, &stop)?;
+    let budget = wow_emmy::function_calls::FunctionCallBudget::new(1, 16, 16, 16, 16, 64 * 1024)?;
+    selected(
+        &mut config,
+        ordinary
+            .bundle
+            .configuration()
+            .budget_policy()
+            .with_function_call_budget(budget),
+    )?;
+    write_json(&root, "project.json", &config)?;
+    let input = LocalProjectInput::from_config_path(&path, &stop)?;
+    let request = crate::graph::GraphBuildRequest::new(
+        "fixture-platform-transport".into(),
+        "current".into(),
+    )?
+    .with_input_profile(&input);
+    let result = crate::graph::execute_graph_build(input, &request, &stop)?;
+    assert_eq!(result.status(), crate::graph::GraphReadStatus::Failed);
+    assert!(result.snapshot_bytes()?.is_none());
+    let message = result.failure_message().ok_or("owner cause discarded")?;
+    assert!(
+        message.contains("SourceBudgetExceeded")
+            && message.contains("function-call facts exceed their bounded profile")
+    );
+    let bytes = result.canonical_bytes()?;
+    let wire: Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(wire["failure"], "budget_exceeded");
+    assert_eq!(wire["schema"], "wow-service/graph-build-result/20");
+    assert!(wire.get("failure_error").is_none());
+    assert!(!std::str::from_utf8(&bytes)?.contains(message));
+    let cancelled = result.into_cancelled()?;
+    assert!(cancelled.failure_message().is_none());
+    assert_eq!(cancelled.status(), crate::graph::GraphReadStatus::Cancelled);
+    assert_eq!(serde_json::to_value(cancelled)?["failure"], "cancelled");
+    Ok(())
+}
+
+#[test]
 fn selected_sidecar_budget_binds_native_report_and_replay_without_downgrade() -> TestResult {
     use crate::live_project::{
         LiveProjectPublishRequest, LiveProjectStore, PlatformStoreSelection,

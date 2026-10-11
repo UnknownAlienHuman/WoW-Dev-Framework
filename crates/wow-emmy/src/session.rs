@@ -166,6 +166,7 @@ pub enum AnalyzerSessionErrorCode {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AnalyzerSessionError {
     code: AnalyzerSessionErrorCode,
+    member_failure: Option<crate::EmmyMemberCallError>,
 }
 impl AnalyzerSessionError {
     #[must_use]
@@ -190,12 +191,24 @@ impl fmt::Display for AnalyzerSessionError {
             AnalyzerSessionErrorCode::Poisoned => {
                 "native analysis session is unavailable after failure"
             }
-        })
+        })?;
+        if let Some(source) = &self.member_failure {
+            write!(f, ": {source}")
+        } else {
+            Ok(())
+        }
     }
 }
-impl std::error::Error for AnalyzerSessionError {}
+impl std::error::Error for AnalyzerSessionError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.member_failure.as_ref().map(|source| source as _)
+    }
+}
 fn error(code: AnalyzerSessionErrorCode) -> AnalyzerSessionError {
-    AnalyzerSessionError { code }
+    AnalyzerSessionError {
+        code,
+        member_failure: None,
+    }
 }
 fn checkpoint(stop: &AtomicBool) -> Result<(), AnalyzerSessionError> {
     if stop.load(Ordering::Relaxed) {
@@ -206,13 +219,15 @@ fn checkpoint(stop: &AtomicBool) -> Result<(), AnalyzerSessionError> {
 }
 
 fn member_error(source: crate::EmmyMemberCallError) -> AnalyzerSessionError {
-    error(match source.code() {
+    let mut failure = error(match source.code() {
         crate::EmmyMemberCallErrorCode::Cancelled => AnalyzerSessionErrorCode::Cancelled,
         crate::EmmyMemberCallErrorCode::FactBudgetExceeded => {
             AnalyzerSessionErrorCode::OutputBudgetExceeded
         }
         _ => AnalyzerSessionErrorCode::NativeFailure,
-    })
+    });
+    failure.member_failure = Some(source);
+    failure
 }
 
 /// Fresh immutable reports extracted against the target identities.

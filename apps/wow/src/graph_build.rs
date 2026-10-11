@@ -66,6 +66,9 @@ pub fn run(values: Vec<OsString>) -> u8 {
         GraphReadStatus::Failed => 3,
         GraphReadStatus::Cancelled => 130,
     };
+    if let Some(message) = result.failure_message() {
+        super::diagnostic(message);
+    }
     let bytes = match args.format {
         Format::Snapshot => match result.snapshot_bytes() {
             Ok(Some(bytes)) => bytes,

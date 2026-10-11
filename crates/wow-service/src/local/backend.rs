@@ -216,21 +216,24 @@ impl LocalProjectBackend {
                 let snapshot = publisher
                     .publish_initial_cancellable(self.input.clone(), stop)
                     .map_err(|error| {
-                        if error.code() == wow_project::ProjectErrorCode::AnalysisCancelled {
-                            ServiceError::new(
-                                ServiceErrorCode::Cancelled,
-                                "project analysis cancelled",
-                            )
-                        } else if error.code()
-                            == wow_project::ProjectErrorCode::SourceBudgetExceeded
-                        {
-                            ServiceError::new(
-                                ServiceErrorCode::BudgetExceeded,
-                                "project analysis budget exceeded",
-                            )
-                        } else {
-                            owner_error("project/analyzer could not publish a coherent snapshot")
-                        }
+                        let code = match error.code() {
+                            wow_project::ProjectErrorCode::AnalysisCancelled => {
+                                ServiceErrorCode::Cancelled
+                            }
+                            wow_project::ProjectErrorCode::SourceBudgetExceeded => {
+                                ServiceErrorCode::BudgetExceeded
+                            }
+                            _ => ServiceErrorCode::InternalContractViolation,
+                        };
+                        ServiceError::new(
+                            code,
+                            format!(
+                                "project/analyzer publication failed ({:?}, {:?}): {}",
+                                error.phase(),
+                                error.code(),
+                                error.message(),
+                            ),
+                        )
                     })?;
                 cancelled(stop)?;
                 let view = snapshot.open_view();
