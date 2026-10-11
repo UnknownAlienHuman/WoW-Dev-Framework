@@ -1,12 +1,14 @@
 //! Source-level global-slot accesses from the existing semantic session.
 //! This module knows nothing about WoW, TOC declarations or graph identities.
 mod aliases;
+mod budget;
 mod path;
 use crate::references::{
     EmmyMemberCallError, EmmyMemberCallErrorCode, EmmyMemberCallResult, ast_span, canonical_id,
 };
 use crate::{LuaWorkspaceFile, bindings::SymbolTarget};
 pub(crate) use aliases::AliasIndex;
+pub use budget::GlobalAccessBudget;
 use emmylua_code_analysis::{FileId, LuaSemanticDeclId, SemanticDeclLevel, SemanticModel};
 use emmylua_parser::{LuaAstNode, LuaNameExpr};
 pub use path::GlobalAccessKey;
@@ -25,23 +27,52 @@ const MAX_ACCESS_WORK: usize = 2_000_000;
 /// report. It is not reset for each use or each alias in a long chain.
 #[derive(Default)]
 pub(crate) struct AccessBudget {
-    work: usize,
-    text: usize,
+    work: u64,
+    text: u64,
+    limits: GlobalAccessBudget,
 }
 impl AccessBudget {
+    pub(crate) fn new(limits: GlobalAccessBudget) -> Self {
+        Self {
+            work: 0,
+            text: 0,
+            limits,
+        }
+    }
     fn step(&mut self) -> EmmyMemberCallResult<()> {
-        self.work = self.work.checked_add(1).ok_or_else(budget)?;
-        if self.work > MAX_ACCESS_WORK {
-            return Err(budget());
+        self.work = self
+            .work
+            .checked_add(1)
+            .ok_or_else(|| self.exceeded("work accounting overflow"))?;
+        if self.work > self.limits.max_work() {
+            return Err(self.exceeded("work limit"));
         }
         Ok(())
     }
     fn text(&mut self, amount: usize) -> EmmyMemberCallResult<()> {
-        self.text = self.text.checked_add(amount).ok_or_else(budget)?;
-        if self.text > MAX_TEXT_BYTES {
-            return Err(budget());
+        let amount =
+            u64::try_from(amount).map_err(|_| self.exceeded("text accounting overflow"))?;
+        self.text = self
+            .text
+            .checked_add(amount)
+            .ok_or_else(|| self.exceeded("text accounting overflow"))?;
+        if self.text > self.limits.max_text_bytes() {
+            return Err(self.exceeded("text limit"));
         }
         Ok(())
+    }
+    fn exceeded(&self, reason: &str) -> EmmyMemberCallError {
+        EmmyMemberCallError::new(
+            EmmyMemberCallErrorCode::FactBudgetExceeded,
+            format!(
+                "global access and alias projection exceeds its bounded profile: {reason}; work={}/{}, text_bytes={}/{}",
+                self.work,
+                self.limits.max_work(),
+                self.text,
+                self.limits.max_text_bytes()
+            ),
+            None,
+        )
     }
 }
 

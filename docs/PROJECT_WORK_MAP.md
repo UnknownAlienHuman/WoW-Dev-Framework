@@ -39,6 +39,15 @@ method/capture/shadow and alias/reassignment regressions pass, with precise
 invariant reasons and logical file paths. This corrects the existing source-fact
 contract without raising capacities or changing wire recipes.
 
+The subsequent unchanged complete request measured the global-access text guard:
+8,389,139/8,388,608 bytes, with work618,056/2,000,000. An optional two-field
+global-access component now reaches the existing native sidecar and retained
+replay. Explicit selection binds report9/replay13; omission keeps prior defaults
+and recipes. Exact location joins use one bounded runtime index. Native
+above-default text, strict decoding and genuine v12/v13 store/reopen checks pass;
+the frozen v12 catalog refuses v13 before operation/Current mutation. The next
+complete source operation still owns actual fit/census evidence in #113.
+
 Completed Main/reports, classification, graph/maps and persistence remain
 unqualified. Re-resolve the source on each complete operation and record the
 actual next refusing owner before changing a ceiling. Independent alias/work/text,

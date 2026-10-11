@@ -503,5 +503,12 @@ method's implicit `self` with its receiver; neither is a source-cell identity.
 Implicit receiver parameters and their captured aliases stay outside global-slot
 projection. Explicit rooted-path locals, including a local named `self`, retain
 their alias spans and conservative reassignment blockers.
+An optional `FunctionCallBudget.global_access` selects cumulative positive work
+and text ceilings through `GlobalAccessBudget`; absence preserves the original
+2,000,000-work/8-MiB-text admission. Its explicit values bind report9, while
+omitted report7/8 recipes remain unchanged. A private immutable location index
+serves exact callee/argument/receiver joins by file, function and span. It is
+excluded from serialization and identity, preserves every observation and
+refuses the same post-filter ambiguities. It grants no new source authority.
 See [the source-state route](../../apps/wow/GRAPH_BUILD.md#typed-literal-keys-and-lexical-aliases)
 for admission limits, serialization versions and deferred cases.

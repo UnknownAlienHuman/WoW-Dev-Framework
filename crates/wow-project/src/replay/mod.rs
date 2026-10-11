@@ -33,6 +33,7 @@ const DIRECT_PLATFORM_GRAPH_REPLAY_SCHEMA: &str = "wow-project/native-project-re
 const CAPABILITIES_GRAPH_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/10";
 const RETAINED_PLATFORM_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/11";
 const FUNCTION_BUDGET_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/12";
+const GLOBAL_ACCESS_BUDGET_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/13";
 const MAX_FILES: usize = 8192;
 const MAX_LIBRARIES: usize = 64;
 const MAX_FILE_BYTES: usize = 16 * 1024 * 1024;
@@ -269,7 +270,12 @@ impl ProjectReplay {
         };
         let platform_schema =
             if platform_owner.is_some_and(|owner| owner.retention_limits().is_some()) {
-                if configuration.function_call_budget().is_some() {
+                if configuration
+                    .function_call_budget()
+                    .is_some_and(|budget| budget.global_access_budget().is_some())
+                {
+                    GLOBAL_ACCESS_BUDGET_REPLAY_SCHEMA
+                } else if configuration.function_call_budget().is_some() {
                     FUNCTION_BUDGET_REPLAY_SCHEMA
                 } else {
                     RETAINED_PLATFORM_REPLAY_SCHEMA
@@ -339,12 +345,15 @@ impl ProjectReplay {
             self.platform
                 .as_ref()
                 .is_some_and(ReplayPlatform::has_retention_limits),
-            self.configuration.function_call_budget().is_some(),
+            self.configuration.function_call_budget(),
         ) {
-            (true, true) => Ok(FUNCTION_BUDGET_REPLAY_SCHEMA),
-            (true, false) => Ok(RETAINED_PLATFORM_REPLAY_SCHEMA),
-            (false, false) => Ok(schema),
-            (false, true) => Err(invalid()),
+            (true, Some(budget)) if budget.global_access_budget().is_some() => {
+                Ok(GLOBAL_ACCESS_BUDGET_REPLAY_SCHEMA)
+            }
+            (true, Some(_)) => Ok(FUNCTION_BUDGET_REPLAY_SCHEMA),
+            (true, None) => Ok(RETAINED_PLATFORM_REPLAY_SCHEMA),
+            (false, None) => Ok(schema),
+            (false, Some(_)) => Err(invalid()),
         }
     }
     fn expected_base_schema(&self) -> ProjectResult<&'static str> {
@@ -583,6 +592,7 @@ impl ProjectReplay {
             CAPABILITIES_GRAPH_REPLAY_SCHEMA => Ok("wow-project.live-replay.v10"),
             RETAINED_PLATFORM_REPLAY_SCHEMA => Ok("wow-project.live-replay.v11"),
             FUNCTION_BUDGET_REPLAY_SCHEMA => Ok("wow-project.live-replay.v12"),
+            GLOBAL_ACCESS_BUDGET_REPLAY_SCHEMA => Ok("wow-project.live-replay.v13"),
             _ => Err(invalid()),
         }
     }

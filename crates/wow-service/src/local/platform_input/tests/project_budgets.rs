@@ -10,6 +10,242 @@ fn selected(config: &mut Value, policy: ProjectBudgetPolicy) -> TestResult {
 }
 
 #[test]
+fn selected_global_budget_replay13_and_frozen_v12_store_preserve_current() -> TestResult {
+    use crate::live_project::{LiveProjectStore, PlatformStoreSelection};
+    use wow_emmy::{
+        function_calls::{FUNCTION_CALL_GLOBAL_BUDGET_PROFILE, FunctionCallBudget},
+        global_access::GlobalAccessBudget,
+    };
+    use wow_project::replay::publication::{self, AcquiredProjectPair};
+    use wow_store::project::{ProjectStore, PublicationRequest, ReadSelector, RecordCatalog};
+
+    let (root, mut config) = fixture()?;
+    let path = root.0.join("project.json");
+    let stop = AtomicBool::new(false);
+    let ordinary = LocalProjectInput::from_config_path(&path, &stop)?;
+    let plain = FunctionCallBudget::new(64, 16, 16, 16, 32, 64 * 1024)?;
+    let policy = ordinary
+        .bundle
+        .configuration()
+        .budget_policy()
+        .with_function_call_budget(plain);
+    selected(&mut config, policy)?;
+    write_json(&root, "project.json", &config)?;
+    let old_input = LocalProjectInput::from_config_path(&path, &stop)?;
+    let selection = PlatformStoreSelection::new(
+        old_input.bundle.configuration().project_id().clone(),
+        old_input
+            .bundle
+            .configuration()
+            .platform_packages()
+            .ok_or("platform")?
+            .source()
+            .profile()
+            .profile_id()
+            .clone(),
+    )?;
+    let old_request = crate::graph::GraphBuildRequest::new(
+        "fixture-platform-transport".into(),
+        "current".into(),
+    )?
+    .with_input_profile(&old_input);
+    let (old_bundle, _) =
+        old_request.live_publication_in_namespace(old_input, selection.namespace(), &stop)?;
+    let (old_records, old_bindings) = old_bundle.into_parts();
+    let old_replay: ProjectReplay = old_records
+        .iter()
+        .find(|r| r.key() == "live.project.replay")
+        .ok_or("old replay")?
+        .decode()?;
+    assert_eq!(
+        serde_json::to_value(&old_replay)?["schema"],
+        "wow-project/native-project-replay/12"
+    );
+
+    let component = GlobalAccessBudget::new(1024, 128 * 1024)?;
+    let nested = plain.with_global_access_budget(component);
+    selected(&mut config, policy.with_function_call_budget(nested))?;
+    write_json(&root, "project.json", &config)?;
+    let input = LocalProjectInput::from_config_path(&path, &stop)?;
+    let new_request = crate::graph::GraphBuildRequest::new(
+        "fixture-platform-transport".into(),
+        "current".into(),
+    )?
+    .with_input_profile(&input);
+    // Captured source must suffice for all subsequent native replay/store reads.
+    std::fs::remove_file(root.0.join("UI/main.lua"))?;
+    std::fs::remove_file(root.0.join("UI/frames.xml"))?;
+    let (bundle, _) =
+        new_request.live_publication_in_namespace(input, selection.namespace(), &stop)?;
+    let (records, bindings) = bundle.into_parts();
+    let replay: ProjectReplay = records
+        .iter()
+        .find(|r| r.key() == "live.project.replay")
+        .ok_or("new replay")?
+        .decode()?;
+    let wire = serde_json::to_value(&replay)?;
+    assert_eq!(wire["schema"], "wow-project/native-project-replay/13");
+    assert_eq!(
+        wire["configuration"]["budgets"]["function_calls"],
+        serde_json::to_value(nested)?
+    );
+    let reopened = ProjectReplay::from_json(&serde_json::to_vec(&wire)?, &stop)?.hydrate(&stop)?;
+    let report = reopened
+        .snapshot()
+        .analyzer_binding()
+        .function_call_report()
+        .ok_or("report")?;
+    assert_eq!(report.budget(), Some(nested));
+    assert_eq!(
+        serde_json::to_value(report)?["profile"],
+        FUNCTION_CALL_GLOBAL_BUDGET_PROFILE
+    );
+    report.validate()?;
+
+    let checks = [
+        wow_graph::GraphPartitionSnapshot::STORAGE_CHECK,
+        publication::STORAGE_CHECK,
+    ];
+    let mut schemas = wow_graph::GraphPartitionSnapshot::STORAGE_SCHEMAS.to_vec();
+    schemas.extend_from_slice(publication::STORAGE_SCHEMAS_V12);
+    let old_catalog = RecordCatalog::new(&schemas, &checks)?;
+    let old_root = root.0.join("old-v12-store");
+    let mut old =
+        ProjectStore::create_with_namespace(&old_root, selection.namespace(), old_catalog.clone())?;
+    let epoch = old.epoch().clone();
+    let old_write = PublicationRequest::new(
+        old.epoch(),
+        wow_store::OperationId::new("fixture:global-old")?,
+        None,
+        old_bindings,
+        old_records,
+    )?;
+    old.prepare(&old_write, &stop)?;
+    let read = old.read(
+        &ReadSelector::Exact(old_write.generation().generation_id.clone()),
+        &stop,
+    )?;
+    let pair = AcquiredProjectPair::read(&read, &stop)?;
+    assert_eq!(
+        pair.project()
+            .configuration()
+            .budget_policy()
+            .function_call_budget(),
+        Some(plain)
+    );
+    let validation = read.owner_validation(&checks)?;
+    drop(read);
+    old.validate_inactive(
+        old_write.operation_id(),
+        old_write.request_digest(),
+        validation,
+        &stop,
+    )?;
+    old.activate(old_write.operation_id(), old_write.request_digest(), &stop)?;
+    let current = old.current()?.ok_or("old Current")?;
+    let id = wow_store::OperationId::new("fixture:global-refused")?;
+    let refused = PublicationRequest::new(
+        old.epoch(),
+        id.clone(),
+        Some(current.record_id.clone()),
+        bindings.clone(),
+        records.clone(),
+    )
+    .and_then(|write| old.prepare(&write, &stop));
+    assert!(refused.is_err());
+    assert_eq!(old.current()?.as_ref(), Some(&current));
+    assert!(old.operation(&id)?.is_none());
+    drop(old);
+    let old = ProjectStore::open(&old_root, &old_catalog)?;
+    assert_eq!(old.epoch(), &epoch);
+    assert_eq!(old.current()?.as_ref(), Some(&current));
+    drop(old);
+    let live_old = LiveProjectStore::open_in_namespace(&old_root, &selection)?;
+    let old_read = live_old.read_in_namespace(&selection, &ReadSelector::Current, &stop)?;
+    assert_eq!(
+        old_read
+            .project()
+            .configuration()
+            .budget_policy()
+            .function_call_budget(),
+        Some(plain)
+    );
+    drop(old_read);
+    drop(live_old);
+
+    let mut schemas = wow_graph::GraphPartitionSnapshot::STORAGE_SCHEMAS.to_vec();
+    schemas.extend_from_slice(publication::STORAGE_SCHEMAS);
+    let catalog = RecordCatalog::new(&schemas, &checks)?;
+    let new_root = root.0.join("new-v13-store");
+    let mut store = ProjectStore::create_with_namespace(&new_root, selection.namespace(), catalog)?;
+    let write = PublicationRequest::new(
+        store.epoch(),
+        wow_store::OperationId::new("fixture:global-selected")?,
+        None,
+        bindings,
+        records,
+    )?;
+    store.prepare(&write, &stop)?;
+    let read = store.read(
+        &ReadSelector::Exact(write.generation().generation_id.clone()),
+        &stop,
+    )?;
+    assert_eq!(
+        AcquiredProjectPair::read(&read, &stop)?
+            .project()
+            .snapshot_id(),
+        reopened.snapshot_id()
+    );
+    let validation = read.owner_validation(&checks)?;
+    drop(read);
+    store.validate_inactive(
+        write.operation_id(),
+        write.request_digest(),
+        validation,
+        &stop,
+    )?;
+    store.activate(write.operation_id(), write.request_digest(), &stop)?;
+    drop(store);
+    let live = LiveProjectStore::open_in_namespace(&new_root, &selection)?;
+    let read = live.read_in_namespace(&selection, &ReadSelector::Current, &stop)?;
+    assert_eq!(read.project().snapshot_id(), reopened.snapshot_id());
+    assert_eq!(
+        read.project().snapshot().analyzer_binding(),
+        reopened.snapshot().analyzer_binding()
+    );
+    for mutation in 0..5 {
+        let mut changed = wire.clone();
+        match mutation {
+            0 => changed["schema"] = json!("wow-project/native-project-replay/12"),
+            1 => {
+                changed["configuration"]["budgets"]["function_calls"]
+                    .as_object_mut()
+                    .ok_or("function budget")?
+                    .remove("global_access");
+            }
+            2 => {
+                changed["configuration"]["budgets"]["function_calls"]["global_access"]["max_work"] =
+                    json!(1025)
+            }
+            3 => {
+                changed["configuration"]["budgets"]["function_calls"]["global_access"]["max_work"] =
+                    json!(0)
+            }
+            _ => {
+                changed["configuration"]["budgets"]["function_calls"]["global_access"] = Value::Null
+            }
+        }
+        assert!(
+            ProjectReplay::from_json(&serde_json::to_vec(&changed)?, &stop)
+                .and_then(|r| r.hydrate(&stop))
+                .is_err(),
+            "mutation admitted: {mutation}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn native_publication_refusal_preserves_runtime_cause_outside_graph_wire() -> TestResult {
     let (root, mut config) = fixture()?;
     let path = root.0.join("project.json");

@@ -190,10 +190,29 @@ identity both retain the selected values. Hydration rebuilds them without source
 files and refuses removal, downgrade or changed values against the original
 identities. Ordinary replay1-11 recipes remain unchanged.
 
-This component does not widen alias work/text, scope, argument/literal,
+The six fields alone do not widen alias work/text, scope, argument/literal,
 callable-input, flow, graph/map or replay/store budgets. Choose finite values from
 the actual selected operation; neither this selector nor a synthetic boundary
 case qualifies the full corpus or its peak memory.
+
+#### Independent global-access work and text
+
+An optional `project_budgets.function_calls.global_access` object selects two
+required positive `u64` fields: `max_work` and `max_text_bytes`. Work is cumulative
+alias-index traversal and path expansion across all healthy Main files; text
+accounts the existing path/alias/access projection charges. This is separate from
+function AST visits, access population and encoded sidecar bytes. Other owner
+limits remain independent.
+
+Omission preserves the original six-field bytes and the 2,000,000-work/8-MiB-text
+defaults. Explicit selection uses report `/9`, native replay `/13` and stored
+`live-replay.v13`; configuration/report identity retains both values. Missing,
+unknown or duplicate fields, zero, invalid types and explicit `null` refuse.
+Replay rejects component removal, downgrade or changed values. Report `/7` and
+`/8` and replay1-12 retain their identity recipes. The actual previous v12 store
+catalog is frozen: it can reopen its retained records but refuses v13 before an
+operation or `Current` mutation. Choose finite values from observed owner guards;
+this selector does not establish complete-corpus fit or memory qualification.
 
 ## Scope
 

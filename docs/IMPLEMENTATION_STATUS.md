@@ -158,6 +158,16 @@ receiver IDs and uses a nontracing fallback, preserving function-alias and write
 provenance. Native method/capture/shadow and alias/reassignment cases pass; the
 existing source-fact contract, successful wire recipes and capacities remain.
 Relevant invariant errors now identify their predicate and logical file path.
+The unchanged post-fix complete request then measured global-access text
+8,389,139/8,388,608 bytes and work618,056/2,000,000. The existing sidecar budget
+now accepts an optional positive work/text `global_access` component; explicit
+selection binds report9/replay13 and omission preserves prior bytes/defaults.
+Exact callee/argument/receiver joins use a bounded immutable runtime index,
+excluded from serialization/identity and preserving post-filter ambiguity.
+Native above-default text/strict decoding and genuine retained v12/v13
+store/reopen/Current checks pass. The actual v12 catalog is frozen and refuses
+v13 before a retained operation or Current mutation. Other owner ceilings remain
+independent; completed semantic counts and full-corpus fit/peak are unqualified.
 The native error handoff retains actual member causes through session,
 Project/backend and CLI stderr while excluding explanatory text from graph wire,
 digest and records. Focused native budget/cause and cancellation cases pass;

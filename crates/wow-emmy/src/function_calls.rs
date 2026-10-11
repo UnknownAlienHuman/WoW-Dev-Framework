@@ -16,14 +16,18 @@ use crate::references::{
 };
 
 mod budget;
+mod location_index;
 #[cfg(test)]
 mod tests;
 use crate::{EmmyBackendIdentity, LuaWorkspaceFile, LuaWorkspaceSnapshot};
 pub use budget::FunctionCallBudget;
+use location_index::AccessLocationIndex;
 
 pub const FUNCTION_CALL_PROFILE: &str = "wow-emmy/function-call-facts/7";
 /// Explicit budget-bound sidecar; absent selection preserves profile7.
 pub const FUNCTION_CALL_BUDGET_PROFILE: &str = "wow-emmy/function-call-facts/8";
+/// Explicit independent global-access work/text selection, retained by replay13.
+pub const FUNCTION_CALL_GLOBAL_BUDGET_PROFILE: &str = "wow-emmy/function-call-facts/9";
 // Existing callable/call occurrence keys keep their original recipe. Added
 // normalized call arguments/callable keys change report identity, not old occurrence keys.
 const OCCURRENCE_PROFILE: &str = "wow-emmy/function-call-facts/1";
@@ -206,6 +210,8 @@ pub struct FunctionCallReport {
     functions: Vec<SourceFunctionFact>,
     calls: Vec<SourceCallFact>,
     global_accesses: Vec<crate::global_access::SourceGlobalAccess>,
+    #[serde(skip)]
+    access_locations: std::sync::Arc<AccessLocationIndex>,
     /// Only unique full-path lookups with a concrete signature enter this map.
     /// Missing names are not proven non-callable; inspect the symbol report.
     named_targets: BTreeMap<String, SourceCallTarget>,
@@ -255,13 +261,13 @@ impl FunctionCallReport {
             return None;
         }
         let mut receivers = self
-            .global_accesses
-            .iter()
-            .filter(|access| {
-                access.path() == call.path()
-                    && access.function_id() == call.caller_function_id()
-                    && access.span() == call.callee_span()
-            })
+            .access_locations
+            .at(
+                &self.global_accesses,
+                call.path(),
+                call.caller_function_id(),
+                call.callee_span(),
+            )
             .filter_map(|access| {
                 let [crate::global_access::GlobalAccessKey::String(_member)] = access.keys() else {
                     return None;
@@ -309,7 +315,16 @@ impl FunctionCallReport {
     pub fn validate(&self) -> EmmyMemberCallResult<()> {
         let limits = match (self.profile, self.budget) {
             (FUNCTION_CALL_PROFILE, None) => FunctionCallBudget::default(),
-            (FUNCTION_CALL_BUDGET_PROFILE, Some(limits)) => limits,
+            (FUNCTION_CALL_BUDGET_PROFILE, Some(limits))
+                if limits.global_access_budget().is_none() =>
+            {
+                limits
+            }
+            (FUNCTION_CALL_GLOBAL_BUDGET_PROFILE, Some(limits))
+                if limits.global_access_budget().is_some() =>
+            {
+                limits
+            }
             _ => return Err(invalid()),
         };
         let lookup_ids = self
@@ -336,6 +351,7 @@ impl FunctionCallReport {
         {
             return Err(invalid());
         }
+        self.access_locations.validate(&self.global_accesses)?;
         let functions = self
             .functions
             .iter()
@@ -444,13 +460,13 @@ impl FunctionCallReport {
                     continue;
                 };
                 let mut observed = self
-                    .global_accesses
-                    .iter()
-                    .filter(|access| {
-                        access.path() == call.path
-                            && access.function_id() == call.caller_function_id
-                            && access.span() == argument.span
-                    })
+                    .access_locations
+                    .at(
+                        &self.global_accesses,
+                        &call.path,
+                        &call.caller_function_id,
+                        argument.span,
+                    )
                     .filter_map(exact_access_reference)
                     .filter(|actual| actual.0 == *expected.0 && actual.1 == *expected.1);
                 if observed.next().is_none() || observed.next().is_some() {
@@ -761,7 +777,8 @@ pub(crate) fn collect(
     }
     let mut calls = Vec::new();
     let mut global_accesses = Vec::new();
-    let mut access_budget = crate::global_access::AccessBudget::default();
+    let mut access_budget =
+        crate::global_access::AccessBudget::new(limits.global_access_budget().unwrap_or_default());
     for file in main.files() {
         checkpoint(stop)?;
         if files
@@ -879,14 +896,20 @@ pub(crate) fn collect(
         }
     }
     global_accesses.sort_by(|a, b| a.fact_id().cmp(b.fact_id()));
+    let access_locations = std::sync::Arc::new(AccessLocationIndex::build(
+        &global_accesses,
+        limits.max_global_accesses(),
+        stop,
+    )?);
     for call in &mut calls {
-        let mut observed = global_accesses
-            .iter()
-            .filter(|access| {
-                access.path() == call.path
-                    && access.function_id() == call.caller_function_id
-                    && access.span() == call.callee_span
-            })
+        checkpoint(stop)?;
+        let mut observed = access_locations
+            .at(
+                &global_accesses,
+                &call.path,
+                &call.caller_function_id,
+                call.callee_span,
+            )
             .filter_map(exact_callable_access_key);
         let access_key = observed.next();
         if observed.next().is_some() {
@@ -901,13 +924,14 @@ pub(crate) fn collect(
             if argument.literal.is_some() {
                 continue;
             }
-            let mut references = global_accesses
-                .iter()
-                .filter(|access| {
-                    access.path() == call.path
-                        && access.function_id() == call.caller_function_id
-                        && access.span() == argument.span
-                })
+            checkpoint(stop)?;
+            let mut references = access_locations
+                .at(
+                    &global_accesses,
+                    &call.path,
+                    &call.caller_function_id,
+                    argument.span,
+                )
                 .filter_map(exact_access_reference);
             if let Some((key, target)) = references.next() {
                 argument.reference_key = Some(key);
@@ -944,7 +968,9 @@ pub(crate) fn collect(
         named_targets.insert(query.clone(), target);
     }
     let mut report = FunctionCallReport {
-        profile: if selected_budget.is_some() {
+        profile: if selected_budget.is_some_and(|budget| budget.global_access_budget().is_some()) {
+            FUNCTION_CALL_GLOBAL_BUDGET_PROFILE
+        } else if selected_budget.is_some() {
             FUNCTION_CALL_BUDGET_PROFILE
         } else {
             FUNCTION_CALL_PROFILE
@@ -957,6 +983,7 @@ pub(crate) fn collect(
         functions,
         calls,
         global_accesses,
+        access_locations,
         named_targets,
         symbol_lookup_analysis_id: lookup_identity(main.snapshot_id(), symbol_lookup_analysis_ids)?,
         symbol_lookup_analysis_ids: symbol_lookup_analysis_ids

@@ -9,6 +9,220 @@ use emmylua_parser::{LuaChunk, LuaLanguageLevel, LuaParser, ParserConfig};
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
 
 #[test]
+fn selected_global_budget_strict_wire_preserves_omitted_shape() -> TestResult {
+    use crate::global_access::GlobalAccessBudget;
+    let plain = FunctionCallBudget::default();
+    let old_bytes = serde_json::to_vec(&plain)?;
+    let old_wire = serde_json::to_value(plain)?;
+    assert_eq!(old_wire.as_object().ok_or("budget")?.len(), 6);
+    assert_eq!(
+        serde_json::to_vec(&serde_json::from_slice::<FunctionCallBudget>(&old_bytes)?)?,
+        old_bytes
+    );
+    let component = GlobalAccessBudget::new(5_000_000, 128 * 1024 * 1024)?;
+    let selected = plain.with_global_access_budget(component);
+    let wire = serde_json::to_value(selected)?;
+    assert_eq!(
+        serde_json::from_value::<FunctionCallBudget>(wire.clone())?,
+        selected
+    );
+    let global = wire["global_access"].clone();
+    for (field, value) in [
+        ("max_work", serde_json::json!(0)),
+        ("max_text_bytes", serde_json::json!(-1)),
+        ("max_work", serde_json::json!(1.5)),
+        ("max_text_bytes", serde_json::Value::Null),
+        ("unknown", serde_json::json!(1)),
+    ] {
+        let mut bad = wire.clone();
+        bad["global_access"][field] = value;
+        assert!(serde_json::from_value::<FunctionCallBudget>(bad).is_err());
+    }
+    for field in ["max_work", "max_text_bytes"] {
+        let mut missing = global.clone();
+        missing
+            .as_object_mut()
+            .ok_or("global budget")?
+            .remove(field);
+        assert!(serde_json::from_value::<GlobalAccessBudget>(missing).is_err());
+    }
+    let mut null = wire.clone();
+    null["global_access"] = serde_json::Value::Null;
+    assert!(serde_json::from_value::<FunctionCallBudget>(null).is_err());
+    let duplicate_global = format!(
+        "{{\"max_work\":1,{}",
+        serde_json::to_string(&global)?
+            .strip_prefix('{')
+            .ok_or("global")?
+    );
+    assert!(serde_json::from_str::<GlobalAccessBudget>(&duplicate_global).is_err());
+    let duplicate = format!(
+        "{{\"global_access\":{},{}",
+        global,
+        serde_json::to_string(&wire)?
+            .strip_prefix('{')
+            .ok_or("budget")?
+    );
+    assert!(serde_json::from_str::<FunctionCallBudget>(&duplicate).is_err());
+    assert!(GlobalAccessBudget::new(0, 1).is_err());
+    assert!(GlobalAccessBudget::new(1, 0).is_err());
+    Ok(())
+}
+
+#[test]
+fn selected_global_budget_admits_native_text_above_default() -> TestResult {
+    use crate::global_access::GlobalAccessBudget;
+    let text = "do local value = Global end\n".repeat(9000);
+    let main = snapshot(vec![
+        LuaWorkspaceFileInput::new("main/a.lua", format!("Global = {{}}\n{text}")),
+        LuaWorkspaceFileInput::new("main/b.lua", text),
+    ])?;
+    let stop = AtomicBool::new(false);
+    let default = analyze_member_call_session_with_callable_queries(
+        &main,
+        &[],
+        MemberCallSessionQueryProfile::new(&[], &[]),
+        true,
+        &stop,
+    )
+    .err()
+    .ok_or("default text guard not reached")?;
+    assert_eq!(default.code(), EmmyMemberCallErrorCode::FactBudgetExceeded);
+    assert!(default.message().contains("text limit"), "{default:?}");
+    let selected = FunctionCallBudget::default()
+        .with_global_access_budget(GlobalAccessBudget::new(2_000_000, 32 * 1024 * 1024)?);
+    let report = analyze_member_call_session_with_callable_queries(
+        &main,
+        &[],
+        MemberCallSessionQueryProfile::new(&[], &[]).with_function_call_budget(selected),
+        true,
+        &stop,
+    )?
+    .function_calls
+    .ok_or("selected report")?;
+    assert_eq!(report.profile, FUNCTION_CALL_GLOBAL_BUDGET_PROFILE);
+    assert_eq!(report.budget(), Some(selected));
+    assert_eq!(report.global_accesses().len(), 18_001);
+    assert_eq!(report.files().len(), 2);
+    report.validate()?;
+    let mut downgrade = report.clone();
+    downgrade.profile = FUNCTION_CALL_BUDGET_PROFILE;
+    downgrade.analysis_id = downgrade.identity()?;
+    assert!(downgrade.validate().is_err());
+    downgrade = report.clone();
+    downgrade.budget = Some(FunctionCallBudget::default());
+    downgrade.analysis_id = downgrade.identity()?;
+    assert!(downgrade.validate().is_err());
+    Ok(())
+}
+
+#[test]
+fn selected_global_budget_location_index_preserves_exact_joins_and_ambiguity() -> TestResult {
+    let main = snapshot(vec![LuaWorkspaceFileInput::new(
+        "main/calls.lua",
+        "Receiver = {}\nfunction Receiver:Handle(value) end\nTarget = {}\nReceiver:Handle(Target)\nlocal receiver = Receiver\nreceiver:Handle(Target)\n",
+    )])?;
+    let report = analyze_member_call_session_with_callable_queries(
+        &main,
+        &[],
+        MemberCallSessionQueryProfile::new(&[], &[]),
+        true,
+        &AtomicBool::new(false),
+    )?
+    .function_calls
+    .ok_or("report")?;
+    for call in report.calls() {
+        for span in std::iter::once(call.callee_span())
+            .chain(call.arguments().iter().map(SourceCallArgument::span))
+        {
+            let scan = report
+                .global_accesses()
+                .iter()
+                .filter(|access| {
+                    access.path() == call.path()
+                        && access.function_id() == call.caller_function_id()
+                        && access.span() == span
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(
+                report
+                    .access_locations
+                    .at(
+                        report.global_accesses(),
+                        call.path(),
+                        call.caller_function_id(),
+                        span
+                    )
+                    .collect::<Vec<_>>(),
+                scan
+            );
+        }
+    }
+    let call = report
+        .calls()
+        .iter()
+        .find(|call| report.exact_call_receiver(call).is_some())
+        .ok_or("global receiver")?;
+    assert_eq!(
+        report.exact_call_receiver(call).ok_or("receiver")?.key(),
+        "Receiver"
+    );
+    assert!(
+        report
+            .calls()
+            .iter()
+            .any(|call| report.exact_call_receiver(call).is_none())
+    );
+    let bytes = serde_json::to_vec(&report)?;
+    let mut rebuilt = report.clone();
+    rebuilt.access_locations = std::sync::Arc::new(AccessLocationIndex::build(
+        rebuilt.global_accesses(),
+        u64::MAX,
+        &AtomicBool::new(false),
+    )?);
+    assert_eq!(serde_json::to_vec(&rebuilt)?, bytes);
+    assert_eq!(rebuilt.identity()?, report.analysis_id());
+    rebuilt.validate()?;
+    let access = rebuilt
+        .access_locations
+        .at(
+            rebuilt.global_accesses(),
+            call.path(),
+            call.caller_function_id(),
+            call.callee_span(),
+        )
+        .next()
+        .ok_or("callee access")?
+        .clone();
+    rebuilt.global_accesses.push(access);
+    rebuilt.access_locations = std::sync::Arc::new(AccessLocationIndex::build(
+        rebuilt.global_accesses(),
+        u64::MAX,
+        &AtomicBool::new(false),
+    )?);
+    assert!(
+        rebuilt.exact_call_receiver(call).is_none(),
+        "duplicate exact receiver was deduplicated"
+    );
+    let mut stale = report.clone();
+    stale.global_accesses.swap(0, 1);
+    assert!(
+        stale
+            .access_locations
+            .validate(stale.global_accesses())
+            .is_err()
+    );
+    assert_eq!(
+        AccessLocationIndex::build(report.global_accesses(), u64::MAX, &AtomicBool::new(true))
+            .err()
+            .ok_or("cancelled index")?
+            .code(),
+        EmmyMemberCallErrorCode::Cancelled
+    );
+    Ok(())
+}
+
+#[test]
 fn lexical_global_access_excludes_implicit_and_explicit_method_parameters() -> TestResult {
     let source = concat!(
         "Object = {}\n",
