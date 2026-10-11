@@ -1,5 +1,6 @@
 use super::*;
 mod empty_packages;
+mod function_fingerprints;
 mod project_budgets;
 mod xml_classification;
 use serde_json::{Value, json};

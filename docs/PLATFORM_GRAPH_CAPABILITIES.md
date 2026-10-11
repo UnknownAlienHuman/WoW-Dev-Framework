@@ -26,6 +26,13 @@ budgets, cancellation and native finish validation.
 
 ## Exact consumers and identity
 
+The selected service route can observe exact physical-function source-span
+components without adding a graph capability or changing native project/replay
+identity. Its explicit query and typed result are defined by
+[the fingerprint recipe](../crates/wow-project/e3/FUNCTION_FINGERPRINTS.md).
+Comparison bindings preserve the direct predecessor scope; they do not relabel
+the service's final composed graph or supply a validated candidate.
+
 `build_platform_graph_proposal_plan(project, stop)` reads the held configuration's
 exact set. `build_platform_graph_proposal_plan_for_capabilities` supports explicit
 native inspection; when the project selects this dialect, a different requested

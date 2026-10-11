@@ -5,6 +5,7 @@ pub use budget::{SourceGraphBudget, SourceGraphXmlCountBudget};
 mod derivations;
 pub use axes::source_graph_axis_profile;
 pub const SOURCE_GRAPH_REGISTRY_ID: &str = "wow-project.source-load";
+pub mod fingerprints;
 mod functions;
 mod inventory_project;
 mod inventory_roles;

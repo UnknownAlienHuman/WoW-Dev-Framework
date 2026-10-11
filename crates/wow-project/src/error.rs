@@ -25,6 +25,7 @@ pub enum ProjectErrorCode {
     InvalidAnalyzerBinding,
     InvalidCapabilityPolicy,
     InvalidBudgetPolicy,
+    InvalidFingerprintSelection,
     InvalidInputInventory,
     MissingDeclaredFile,
     PackageTargetExcluded,

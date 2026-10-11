@@ -11,8 +11,8 @@ mod input;
 mod persistence;
 mod sources;
 pub use build::{
-    GraphBuildRequest, GraphBuildResult, execute_graph_build, execute_graph_build_diagnosed,
-    source_graph_diagnostics_bytes,
+    FunctionFingerprintSelection, GraphBuildRequest, GraphBuildResult, execute_graph_build,
+    execute_graph_build_diagnosed, source_graph_diagnostics_bytes,
 };
 pub use persistence::{
     GraphStorePublishRequest, GraphStorePublishResult, execute_graph_store_read,

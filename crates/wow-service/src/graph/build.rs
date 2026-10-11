@@ -17,6 +17,8 @@ use wow_project::graph::{
 mod assembly_budget;
 mod calls;
 mod construction;
+mod fingerprints;
+pub use fingerprints::FunctionFingerprintSelection;
 mod lua_mixins;
 mod materialized;
 mod scripts;
@@ -59,11 +61,16 @@ const XML_CLASSIFICATION_GRAPH_BUILD_REQUEST_SCHEMA: &str =
     "wow-service/graph-build-request/xml-schema-classification/1";
 const XML_CLASSIFICATION_GRAPH_BUILD_RESULT_SCHEMA: &str =
     "wow-service/graph-build-result/xml-schema-classification/1";
+const FUNCTION_FINGERPRINT_GRAPH_BUILD_REQUEST_SCHEMA: &str =
+    "wow-service/graph-build-request/function-fingerprints/1";
+const FUNCTION_FINGERPRINT_GRAPH_BUILD_RESULT_SCHEMA: &str =
+    "wow-service/graph-build-result/function-fingerprints/1";
 
 struct BuiltGraph {
     snapshot: GraphPartitionSnapshot,
     provenance: ProjectGraphProvenance,
     xml_classification_membership: Option<XmlClassificationMembership>,
+    function_fingerprints: Option<wow_project::graph::fingerprints::FunctionFingerprintManifest>,
     call_recognition: SourceCallRecognition,
     construction_recognition: SourceConstructionRecognition,
     mixin_recognition: SourceMixinRecognition,
@@ -118,6 +125,8 @@ pub struct GraphBuildRequest {
     capabilities: Option<wow_project::PlatformGraphCapabilities>,
     #[serde(skip_serializing_if = "Option::is_none")]
     xml_classification_profile_digest: Option<ContentDigest<CanonicalResult>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    function_fingerprints: Option<FunctionFingerprintSelection>,
 }
 impl GraphBuildRequest {
     pub fn new(project_id: String, generation: String) -> ServiceResult<Self> {
@@ -138,6 +147,7 @@ impl GraphBuildRequest {
             projection: SOURCE_GRAPH_PROFILE,
             capabilities: None,
             xml_classification_profile_digest: None,
+            function_fingerprints: None,
         })
     }
 
@@ -169,6 +179,9 @@ impl GraphBuildRequest {
                 self.capabilities = Some(capabilities);
             }
         }
+        if self.function_fingerprints.is_some() {
+            self.schema = FUNCTION_FINGERPRINT_GRAPH_BUILD_REQUEST_SCHEMA;
+        }
         self
     }
 
@@ -189,7 +202,25 @@ impl GraphBuildRequest {
             // A reviewed binding selects its named request recipe.
             request.schema = XML_CLASSIFICATION_GRAPH_BUILD_REQUEST_SCHEMA;
         }
+        if request.function_fingerprints.is_some() {
+            request.schema = FUNCTION_FINGERPRINT_GRAPH_BUILD_REQUEST_SCHEMA;
+        }
         request
+    }
+
+    /// Select comparison observations without changing the project or its graph recipe.
+    pub fn with_function_fingerprints(
+        mut self,
+        selection: FunctionFingerprintSelection,
+    ) -> ServiceResult<Self> {
+        self.function_fingerprints = Some(selection);
+        self.schema = FUNCTION_FINGERPRINT_GRAPH_BUILD_REQUEST_SCHEMA;
+        preflight_cancellable(
+            &self,
+            super::GRAPH_REQUEST_MAX_BYTES,
+            &AtomicBool::new(false),
+        )?;
+        Ok(self)
     }
 
     pub(crate) fn acquire_project(
@@ -212,6 +243,9 @@ impl GraphBuildRequest {
             _ => None,
         };
         if self.capabilities != selected {
+            return Err(error(ServiceErrorCode::IdentityMismatch));
+        }
+        if self.function_fingerprints.is_some() && selected.is_none() {
             return Err(error(ServiceErrorCode::IdentityMismatch));
         }
         let classification_digest = project
@@ -370,6 +404,8 @@ pub struct GraphBuildResult {
     #[serde(skip_serializing_if = "Option::is_none")]
     xml_classification_membership: Option<XmlClassificationMembership>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    function_fingerprints: Option<wow_project::graph::fingerprints::FunctionFingerprintManifest>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     call_recognition: Option<SourceCallRecognition>,
     #[serde(skip_serializing_if = "Option::is_none")]
     construction_recognition: Option<SourceConstructionRecognition>,
@@ -387,6 +423,12 @@ pub struct GraphBuildResult {
     result_digest: Option<Box<str>>,
 }
 impl GraphBuildResult {
+    #[must_use]
+    pub fn function_fingerprints(
+        &self,
+    ) -> Option<&wow_project::graph::fingerprints::FunctionFingerprintManifest> {
+        self.function_fingerprints.as_ref()
+    }
     /// Explanatory owner cause for local diagnostics, outside the canonical wire.
     #[must_use]
     pub fn failure_message(&self) -> Option<&str> {
@@ -465,6 +507,7 @@ impl GraphBuildResult {
         self.snapshot_input_digest = None;
         self.provenance = None;
         self.xml_classification_membership = None;
+        self.function_fingerprints = None;
         self.failure = Some(code);
         self.status = if code == ServiceErrorCode::Cancelled {
             GraphReadStatus::Cancelled
@@ -515,7 +558,9 @@ pub fn execute_graph_build_diagnosed(
     diagnostics.reset();
     let request_digest = super::hash(&bounded(request, super::GRAPH_REQUEST_MAX_BYTES)?);
     let mut result = GraphBuildResult {
-        schema: if request.xml_classification_profile_digest.is_some() {
+        schema: if request.function_fingerprints.is_some() {
+            FUNCTION_FINGERPRINT_GRAPH_BUILD_RESULT_SCHEMA
+        } else if request.xml_classification_profile_digest.is_some() {
             XML_CLASSIFICATION_GRAPH_BUILD_RESULT_SCHEMA
         } else if request.projection == wow_project::graph::CAPABILITIES_SOURCE_GRAPH_PROFILE {
             CAPABILITIES_GRAPH_BUILD_RESULT_SCHEMA
@@ -578,6 +623,7 @@ pub fn execute_graph_build_diagnosed(
         snapshot_input_digest: None,
         provenance: None,
         xml_classification_membership: None,
+        function_fingerprints: None,
         failure: None,
         failure_error: None,
         result_digest: None,
@@ -609,6 +655,7 @@ pub fn execute_graph_build_diagnosed(
             snapshot,
             provenance,
             xml_classification_membership,
+            function_fingerprints,
             digest,
             file_nodes,
             package_nodes,
@@ -700,6 +747,7 @@ pub fn execute_graph_build_diagnosed(
             result.snapshot = Some(snapshot);
             result.provenance = Some(provenance);
             result.xml_classification_membership = xml_classification_membership;
+            result.function_fingerprints = function_fingerprints;
             result.snapshot_input_digest = Some(digest);
         }
         Err(failure) => result.fail_with_error(failure),
@@ -829,6 +877,21 @@ fn compose_backend_diagnosed(
         _ => return Err(error(ServiceErrorCode::InternalContractViolation)),
     };
     addresses.reserve("request", request, stop)?;
+    let function_fingerprints = request
+        .function_fingerprints
+        .as_ref()
+        .map(|selection| {
+            selection.build(
+                direct
+                    .as_ref()
+                    .ok_or_else(|| error(ServiceErrorCode::IdentityMismatch))?,
+                stop,
+            )
+        })
+        .transpose()?;
+    if let Some(manifest) = &function_fingerprints {
+        addresses.reserve("function_fingerprints", manifest, stop)?;
+    }
     if let Some(inclusion) = direct
         .as_ref()
         .and_then(|owner| owner.xml_classification_inclusion())
@@ -1116,6 +1179,7 @@ fn compose_backend_diagnosed(
         snapshot,
         provenance,
         xml_classification_membership,
+        function_fingerprints,
         digest,
         file_nodes,
         package_nodes,

@@ -30,6 +30,37 @@ required by this export route.
 
 ## Implemented graph
 
+The selected native capability route also accepts
+`--fingerprints <selection.json>` with this explicit service query:
+
+```json
+{
+  "schema": "wow-service/function-fingerprint-selection/1",
+  "function_ids": ["<exact function_id from function_nodes>"],
+  "max_records": 8,
+  "max_source_bytes": 262144,
+  "max_metadata_bytes": 1048576
+}
+```
+
+Function IDs must be strictly increasing members of the same native Main report.
+All limits are required and positive; the selection transport is bounded by the
+existing graph request byte limit. JSON/text output uses the named
+`wow-service/graph-build-result/function-fingerprints/1` recipe and includes typed
+`function_fingerprints`. Snapshot format still emits only the bare graph.
+
+The first recipe exposes the exact source-span component with native support
+and separate generation/profile bindings. Missing signature/shape and unselected
+neighborhood/load-role remain explicit; equal digests do not prove identity or
+lineage. The component identifies its direct native predecessor, alongside the
+separately identified final composed graph. Source/project/native replay and
+unselected output recipes retain their existing identities. See
+[component policy](../../crates/wow-project/e3/FUNCTION_FINGERPRINTS.md).
+
+These comparison records do not widen the frozen v16 graph-bundle reader or
+construct a validated E3 candidate from JSON. The real #116 candidate handoff
+and full #118 acceptance remain required.
+
 Selected `xml_schema_classification_v1` emits
 `wow-service/graph-build-result/xml-schema-classification/1` through this command.
 `provenance.xml_classification` retains per-occurrence schema outcomes, exact
